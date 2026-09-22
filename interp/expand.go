@@ -5413,6 +5413,29 @@ func (r *Runner) ifs() (value string, set bool) {
 	return v, true
 }
 
+// ifsSpace is the whitespace half of IFS for this dialect: the characters a
+// run of which counts as one separator and which come off either end of a
+// value. See Semantics.IFSWhitespaceIsEverySpaceCharacter for what splits the
+// panel and what was measured.
+//
+// The guard is the whole reason this is a function rather than a field. Space,
+// tab and newline are that half in every column, so a separator set holding
+// none of the other three space characters reaches no question at all — which
+// is the default IFS, and every `IFS=:` and `IFS=$'\n'` any script ever
+// wrote. Only a set that actually names the vertical tab, the form feed or
+// the carriage return puts the question, and only there can the two readings
+// give different fields.
+func (r *Runner) ifsSpace(ifs string) string {
+	if !strings.ContainsAny(ifs, "\v\f\r") {
+		return ifsSpacePosix
+	}
+	if r.ask(r.sem().IFSWhitespaceIsEverySpaceCharacter,
+		"whether the vertical tab, the form feed and the carriage return are IFS whitespace") {
+		return ifsSpaceEvery
+	}
+	return ifsSpacePosix
+}
+
 // splitFields implements docs/spec/grammar/word-splitting.md.
 //
 // The rule that makes this more than a strings.Split: a run of IFS whitespace
@@ -5420,8 +5443,8 @@ func (r *Runner) ifs() (value string, set bool) {
 // non-whitespace separator delimits — so two adjacent ones produce an empty
 // field. A trailing separator is absorbed and a leading one is not, which is
 // the asymmetry a symmetric implementation gets wrong.
-func splitFields(s string, ifs string, ifsSet bool) []string {
-	return splitFieldsLiteral(s, nil, ifs, ifsSet)
+func splitFields(s string, ifs, space string, ifsSet bool) []string {
+	return splitFieldsLiteral(s, nil, ifs, space, ifsSet)
 }
 
 // splitFieldsLiteral is splitFields with some bytes exempt from separating:
@@ -5430,8 +5453,8 @@ func splitFields(s string, ifs string, ifsSet bool) []string {
 // one field — by the time the escapes are removed, an escaped space and a
 // separating one are the same byte, so only a mask can still tell them
 // apart. A nil mask exempts nothing.
-func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []string {
-	return splitFieldsEdges(s, literal, ifs, ifsSet, false, false)
+func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool) []string {
+	return splitFieldsEdges(s, literal, ifs, space, ifsSet, false, false)
 }
 
 // splitFieldsEdges is splitFieldsLiteral with the discarding of the outermost
@@ -5449,8 +5472,8 @@ func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []str
 // it. `read` and `${#(w)v}` hand it plain text and pass false. The two cannot
 // be told apart by looking, since a backslash is a legal character of a value
 // as well as the form's own mark — so it is the caller that knows.
-func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
-	fields, _, _ := splitFieldsAt(s, literal, ifs, ifsSet, keepEdges, escaped)
+func splitFieldsEdges(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool) []string {
+	fields, _, _ := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped)
 	return fields
 }
 
@@ -5462,8 +5485,8 @@ func splitFieldsEdges(s string, literal []bool, ifs string, ifsSet, keepEdges, e
 // splitter, for the reason splitFieldsAt's offsets are reported from here:
 // which bytes are a delimiter is a rule with a mask, an escape form and a
 // run in it, and a copy of that rule is a second place for it to drift.
-func splitFieldsOpenEnd(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) ([]string, bool) {
-	fields, _, openEnd := splitFieldsAt(s, literal, ifs, ifsSet, keepEdges, escaped)
+func splitFieldsOpenEnd(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool) ([]string, bool) {
+	fields, _, openEnd := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped)
 	return fields, openEnd
 }
 
@@ -5479,7 +5502,7 @@ func splitFieldsOpenEnd(s string, literal []bool, ifs string, ifsSet, keepEdges,
 // only thing that makes the difference recoverable. It is reported from the
 // one splitter rather than recomputed beside it, because a second walk of the
 // same rule is a second place for it to drift.
-func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) ([]string, []int, bool) {
+func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool) ([]string, []int, bool) {
 	if ifsSet && ifs == "" {
 		// Set and empty disables the stage entirely, which is a different
 		// state from unset rather than a degree of it.
@@ -5506,7 +5529,7 @@ func splitFieldsAt(s string, literal []bool, ifs string, ifsSet, keepEdges, esca
 	isWS := func(i int) bool {
 		c := s[i]
 		return !isMark(i) && (literal == nil || !literal[i]) &&
-			strings.IndexByte(ifs, c) >= 0 && (c == ' ' || c == '\t' || c == '\n')
+			strings.IndexByte(ifs, c) >= 0 && isIFSWhitespace(c, space)
 	}
 	isSep := func(i int) bool {
 		return !isMark(i) && (literal == nil || !literal[i]) && strings.IndexByte(ifs, s[i]) >= 0

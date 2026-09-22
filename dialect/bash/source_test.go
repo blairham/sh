@@ -688,11 +688,14 @@ func TestShiftReadsNoOptionsAndStillTakesTheMarker(t *testing.T) {
 	}
 }
 
-// `read -i` takes its argument and does nothing with it. The seed is the text
-// a line editor opens with, so it has an effect only where there is a
-// terminal and an editor on it, and `-e` — the letter that would open one —
-// is refused here as unimplemented. bash answers the same way wherever its
-// own input is not a terminal.
+// `read -i` takes its argument and does nothing with it, and so do `-e` and
+// `-E`. All three are about a line editor — `-e` opens one, `-E` opens one
+// with the default completion on it, and `-i` is the text it opens with — so
+// they have an effect only where there is a terminal and an editor on it,
+// and this shell's `read` never opens one. bash answers the same way
+// wherever its own input is not a terminal, which is every `read` in every
+// script: the letters are read and dropped and the line reads as it would
+// without them (#4170).
 //
 // The seed is not a *default* for an empty line, which is the reading of the
 // manual that looks right and is not: an empty line leaves the variable
@@ -720,10 +723,22 @@ func TestReadInitialValueIsTakenAndIgnored(t *testing.T) {
 				"st=2\n", 0,
 		},
 		{
-			// The editor itself is still refused by name, which is what
-			// keeps the seed from ever having somewhere to go.
-			`printf "x\n" | { read -e -r l; echo "st=$?"; }`,
-			"bash: line 1: read: -e is not implemented yet\nst=2\n", 0,
+			// The editor's own letter reads the line and nothing else, so
+			// the seed still has nowhere to go and the value is the input.
+			`printf "x\n" | { l=keep; read -e -i pre -r l; echo "st=$? l=[$l]"; }`,
+			"st=0 l=[x]\n", 0,
+		},
+		{
+			// And at end of input it is the plain read's answer: 1, with
+			// the name cleared rather than left as it was.
+			`printf "" | { l=keep; read -e -r l; echo "st=$? l=[$l]"; }`,
+			"st=1 l=[]\n", 0,
+		},
+		{
+			// `-E` is the same letter with the default completion on it,
+			// and answers the same way off a terminal.
+			`printf "a b\n" | { read -E -r x y; echo "st=$? x=[$x] y=[$y]"; }`,
+			"st=0 x=[a] y=[b]\n", 0,
 		},
 	} {
 		if out, st := runBash(t, dir, tc.src+"\n"); out != tc.want || st != tc.st {

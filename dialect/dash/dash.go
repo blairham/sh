@@ -1355,6 +1355,14 @@ func Semantics() interp.Semantics {
 	// the ordinary field split, which is this shell's everywhere else.
 	s.ReadTrailingWhitespaceEndsAField = interp.No
 	s.ReadNoFieldsIsOneEmptyElement = interp.No
+	// The whitespace half of IFS is POSIX's three: with `IFS` the vertical
+	// tab alone, `a\v\vb` is three fields here and two in bash 5.3 and
+	// ksh93.
+	s.IFSWhitespaceIsEverySpaceCharacter = interp.No
+	// unanswered BareReadTakesTheLineWhole: `read` with no name at all is
+	// `read: arg count` at 2 in this shell — ReadRequiresAVariableName above
+	// — so no line ever reaches the default name and there is no value for
+	// the axis to decide about.
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.TypesetTakesASubscript = interp.No
 	// unanswered UnsetElementEmptiesAnUnwrittenArrayInASubshell: no

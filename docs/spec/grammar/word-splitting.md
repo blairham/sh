@@ -108,8 +108,11 @@ the standard idiom for reading a line whole.
 ## Whitespace and non-whitespace delimiters differ
 
 The rule that produces almost all confusion. A character in `IFS` is
-**IFS whitespace** if it is space, tab or newline; otherwise it is **IFS
-non-whitespace**, and the two are treated differently:
+**IFS whitespace** if it is a space character — always space, tab and
+newline, and in two of the seven columns the vertical tab, the form feed
+and the carriage return as well, which is the axis at the foot of this
+section — otherwise it is **IFS non-whitespace**, and the two are treated
+differently:
 
 - A run of IFS whitespace is **one** delimiter, and leading and trailing
   runs are discarded entirely.
@@ -128,6 +131,40 @@ not split parameter expansions at all — see below):
 | `IFS=:; x='a:b:c'; set -- $x` | `[a][b][c]` |
 | `IFS=:; x='a::b'; set -- $x` | `[a][][b]` |
 | `IFS=:; x=':a'; set -- $x` | `[][a]` |
+
+### Which characters are the whitespace half
+
+Space, tab and newline are the whitespace half in every column. POSIX
+defines the half as the characters of `IFS` that are also **white-space
+characters**, and in the POSIX locale that class holds the vertical tab,
+the form feed and the carriage return as well — so the standard's own
+reading is wider than the three it is usually quoted as.
+
+Two columns take the wider reading and four take the narrower one.
+Measured 2026-09-22 under `LC_ALL=C`, `IFS` set to the vertical tab
+alone (`setopt shwordsplit` for zsh, which otherwise splits nothing):
+
+| probe | bash 5.3, ksh93 | bash 3.2, dash, zsh, BusyBox ash |
+| --- | --- | --- |
+| `v=$'a\v\vb'; set -- $v` | `[a][b]` | `[a][][b]` |
+| `v=$'\va\v'; set -- $v` | `[a]` | `[][a]` |
+
+The carriage return and the form feed answer exactly as the vertical tab
+does in every column, so this is the character *class* and not one
+character. bash 3.2 sitting with the narrower group is what makes this a
+change within bash rather than a bash-versus-the-rest split.
+
+`interp.Semantics.IFSWhitespaceIsEverySpaceCharacter` is the axis, and it
+decides the half in one place for every stage that splits: word
+splitting, `read`'s fields, the remainder `read`'s last name takes, and
+`[[:IFSSPACE:]]`. A separator set holding none of the three characters at
+issue never puts the question, which is the default `IFS` and every
+`IFS=:` a script has ever written.
+
+BusyBox ash answers it **twice**, and the record says so rather than
+folding the two together: its splitter gives `[a][][b]` above while its
+own `read` merges the run. One shell, two notions; the axis holds the
+splitter's.
 | `IFS=:; x='a:'; set -- $x` | `[a]` — but see the axis below |
 | `IFS=:; x='::'; set -- $x` | 2 fields |
 | `IFS=' :'; x='a : b'; set -- $x` | `[a][b]` |

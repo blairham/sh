@@ -2329,6 +2329,10 @@ type patternClasses struct {
 	// word is `$WORDCHARS`: the characters that join letters and digits into
 	// one word. `[[:WORD:]]` is the union of the two.
 	word string
+	// space is the whitespace half of IFS, as the dialect draws it — see
+	// Semantics.IFSWhitespaceIsEverySpaceCharacter. Empty is the POSIX
+	// three, which is what every caller that never asked gets.
+	space string
 }
 
 // holds answers one of the extra names, and answers false for any name the
@@ -2365,7 +2369,7 @@ func (c patternClasses) holds(name, unit string) bool {
 	case "IFSSPACE":
 		// The separators that are also whitespace, which is the half of IFS
 		// a run of counts as one delimiter.
-		return len(unit) == 1 && isIFSWhitespace(unit[0]) && unitIn(c.ifs, unit)
+		return len(unit) == 1 && isIFSWhitespace(unit[0], c.space) && unitIn(c.ifs, unit)
 	case "INCOMPLETE", "INVALID":
 		// A byte that is not a character. A unit is one of these only when
 		// it stands alone and is above ASCII: a lead byte that could have
@@ -2421,9 +2425,30 @@ func unitIn(set, unit string) bool {
 	return false
 }
 
-// isIFSWhitespace is the whitespace half of IFS: the three characters a run of
-// which counts as one field separator.
-func isIFSWhitespace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' }
+// ifsSpacePosix is the whitespace half of IFS as POSIX draws it, and
+// ifsSpaceEvery is the same half as the C locale's `isspace` draws it. Which
+// of the two a dialect uses is Semantics.IFSWhitespaceIsEverySpaceCharacter;
+// see Runner.ifsSpace, which is the only place that chooses.
+const (
+	ifsSpacePosix = " \t\n"
+	ifsSpaceEvery = " \t\n\v\f\r"
+)
+
+// isIFSWhitespace is the whitespace half of IFS: the characters a run of
+// which counts as one field separator, and which are discarded at either end
+// of a value.
+//
+// space is the set the dialect draws that half from, and an empty one is the
+// POSIX three — so a caller with no dialect to ask behaves as it always did.
+// One predicate rather than the five open-coded `c == ' ' || c == '\t' ||
+// c == '\n'` tests this rule used to be spelled as: each of those was a
+// separate place for the answer to be wrong, and one of them was (#4170).
+func isIFSWhitespace(c byte, space string) bool {
+	if space == "" {
+		space = ifsSpacePosix
+	}
+	return strings.IndexByte(space, c) >= 0
+}
 
 // inPosixClass answers the POSIX character classes, over bytes, in the C
 // locale the corpus is measured under. All twelve are here and unanimous
@@ -2709,6 +2734,7 @@ func (r *Runner) patternClasses(pattern string) patternClasses {
 	c := patternClasses{names: names}
 	if classDeclared(names, "IFS") || classDeclared(names, "IFSSPACE") {
 		c.ifs, _ = r.ifs()
+		c.space = r.ifsSpace(c.ifs)
 	}
 	if classDeclared(names, "WORD") {
 		c.word, _ = r.getVar("WORDCHARS")

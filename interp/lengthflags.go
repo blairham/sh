@@ -141,6 +141,7 @@ func (r *Runner) countCharacters(e *syntax.ParamExpr, words []string) int {
 func (r *Runner) countWords(e *syntax.ParamExpr, words []string, keepEmpty bool) int {
 	sep, explicit := flagWordSep(e)
 	ifs, ifsSet := r.ifs()
+	space := r.ifsSpace(ifs)
 	n := 0
 	for _, w := range words {
 		switch {
@@ -149,7 +150,7 @@ func (r *Runner) countWords(e *syntax.ParamExpr, words []string, keepEmpty bool)
 		case keepEmpty:
 			n += separatedFieldCount(w, ifs, ifsSet)
 		default:
-			n += ifsWordCount(w, ifs, ifsSet)
+			n += ifsWordCount(w, ifs, space, ifsSet)
 		}
 	}
 	return n
@@ -240,9 +241,9 @@ func separatedFieldCount(w, ifs string, ifsSet bool) int {
 // there. It is the *run* that decides, not the last byte — `IFS=': '` counts
 // `'a: '` as 2 and `'a '` as 1, so a run containing one non-whitespace
 // separator opens a field however much whitespace follows it.
-func ifsWordCount(w, ifs string, ifsSet bool) int {
-	n := len(splitFields(w, ifs, ifsSet))
-	if trailingRunSeparates(w, nil, ifs, ifsSet) {
+func ifsWordCount(w, ifs, space string, ifsSet bool) int {
+	n := len(splitFields(w, ifs, space, ifsSet))
+	if trailingRunSeparates(w, nil, ifs, space, ifsSet) {
 		n++
 	}
 	return n
@@ -256,7 +257,7 @@ func ifsWordCount(w, ifs string, ifsSet bool) int {
 // the run rather than belonging to it, and `read -A` on `a\:` is one field in
 // the shell where `a:` is two. A nil mask exempts nothing, which is every
 // caller but that one.
-func trailingRunSeparates(w string, literal []bool, ifs string, ifsSet bool) bool {
+func trailingRunSeparates(w string, literal []bool, ifs, space string, ifsSet bool) bool {
 	if ifsSet && ifs == "" {
 		return false
 	}
@@ -269,7 +270,7 @@ func trailingRunSeparates(w string, literal []bool, ifs string, ifsSet bool) boo
 		if strings.IndexByte(ifs, c) < 0 {
 			break
 		}
-		if c != ' ' && c != '\t' && c != '\n' {
+		if !isIFSWhitespace(c, space) {
 			found = true
 		}
 	}

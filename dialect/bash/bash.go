@@ -1063,12 +1063,21 @@ func Semantics() interp.Semantics {
 	// the panel: ksh93 has only `\E` and zsh only `\e`.
 	s.EchoExpandsEscEscape = interp.Yes
 	s.EchoExpandsCapitalEscEscape = interp.Yes
-	// read takes -r and -s plus the argument letters: -a names the array in
-	// the option's argument, -d a delimiter, -i the text a line editor would
-	// be seeded with, -n and -N the two counts, -p a prompt for when the
-	// input is a terminal, -t a timeout and -u a descriptor. A short -n
-	// keeps its text and reports 1; a short -N keeps its text too.
-	s.ReadOptions = "rsa:d:i:n:N:p:t:u:"
+	// read takes -r, -s, -e and -E plus the argument letters: -a names the
+	// array in the option's argument, -d a delimiter, -i the text a line
+	// editor would be seeded with, -n and -N the two counts, -p a prompt for
+	// when the input is a terminal, -t a timeout and -u a descriptor. A
+	// short -n keeps its text and reports 1; a short -N keeps its text too.
+	//
+	// -e and -E are the line editor's two letters and they are read and
+	// dropped, which is the measured whole of them wherever the input is not
+	// a terminal — and the input `read` is given is not one in any script.
+	// Measured 2026-09-22 against a pipe: `read -e x`, `read -E x y`,
+	// `read -e -i seed x` and `read -e -n 2 x` each answer exactly as the
+	// same line without the letter does, seed and all, and a bare `read -e`
+	// at end of input reports 1 with the name cleared. Refusing them by name
+	// instead cost `read.tests` five lines and two statuses (#4170).
+	s.ReadOptions = "rseEa:d:i:n:N:p:t:u:"
 	// `-n` unsets through a name reference. bash 3.2 does not have it —
 	// `unset -n x` is an invalid option there and under `--posix` — so
 	// this is 5.3's set, which is the binary the panel measures.
@@ -2437,6 +2446,18 @@ func Semantics() interp.Semantics {
 	// ksh93 and zsh both leave one empty element.
 	s.ReadTrailingWhitespaceEndsAField = interp.No
 	s.ReadNoFieldsIsOneEmptyElement = interp.No
+	// The whitespace half of IFS is every space character of the C locale
+	// here, which is `isspace` rather than POSIX's three: with `IFS` the
+	// vertical tab alone, `a\v\vb` is two fields and `\va\v` is one, where
+	// dash, zsh and BusyBox ash give three and two. The carriage return and
+	// the form feed answer the same way. bash 3.2 is the three, so this is a
+	// change within bash and the dialect takes 5.3's.
+	s.IFSWhitespaceIsEverySpaceCharacter = interp.Yes
+	// A bare `read` hands REPLY the record as it came: a line with two
+	// spaces at each end reaches `[$REPLY]` with all four still on it, where
+	// ksh93 and zsh trim it the way a named operand's value is trimmed. Both
+	// bash columns answer alike.
+	s.BareReadTakesTheLineWhole = interp.Yes
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
 	// And the container letter, which this shell takes: `typeset -A m[k]=v`
@@ -3921,15 +3942,13 @@ func Diagnostics() interp.Diagnostics {
 			// command with the job specs in its arguments replaced by
 			// process ids.
 			"jobs": "nx",
-			// What is left of read's letters: readline editing, which is a
-			// line editor this runner does not hold. -i is off this list
-			// because there is nothing left for it to do — it seeds the
-			// editor -e opens, and with -e refused here there is never one
-			// to seed, which is also bash's own answer wherever the input
-			// is not a terminal. The -p prompt is implemented: parsed
-			// always, printed only to a terminal, which is the measured
-			// whole of it.
-			"read": "Ee",
+			// Nothing of read's is left. -e and -E joined ReadOptions above
+			// when it was measured that the pair changes nothing off a
+			// terminal, which is where every `read` in a script runs; -i
+			// was never here, because it seeds the editor -e opens and
+			// there is never one to seed. The -p prompt is implemented:
+			// parsed always, printed only to a terminal, which is the
+			// measured whole of it.
 			// `local`'s function letters, which this shell takes and ignores
 			// where no operand is a function. `-n` left this list when name
 			// references landed (#2553), `-I` when inheritance did (#3434)

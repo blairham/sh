@@ -219,6 +219,54 @@ type Semantics struct {
 	// the six columns give.
 	DiagnosticWordIsFields Answer
 
+	// IFSWhitespaceIsEverySpaceCharacter makes the whitespace half of IFS
+	// every space character of the C locale — the vertical tab, the form feed
+	// and the carriage return beside the space, the tab and the newline —
+	// rather than the three POSIX names the rule by.
+	//
+	// The whitespace half is the half a *run* of counts as one separator and
+	// the half that is discarded at either end of a value, so a character
+	// that is in IFS and is not in this set still separates: it separates
+	// once per occurrence and it is never absorbed. That is the whole of what
+	// this axis decides, and it decides it in one place — the splitter — for
+	// every stage that splits: word splitting, `read`'s fields, the remainder
+	// `read`'s last name takes, and `[[:IFSSPACE:]]`.
+	//
+	// Measured 2026-09-22 under `LC_ALL=C`, `IFS` set to the vertical tab
+	// alone, against `a\v\vb` — two separators with nothing between them,
+	// which is the shape a run and a repetition disagree about — and against
+	// `\va\v`, where the two disagree about the edges:
+	//
+	//	                a\v\vb        \va\v
+	//	bash 5.3        [a][b]        [a]
+	//	ksh93           [a][b]        [a]
+	//	dash            [a][][b]      [][a]
+	//	zsh             [a][][b]      [][a][]
+	//	BusyBox ash     [a][][b]      [][a]
+	//
+	// The carriage return and the form feed answer exactly as the vertical
+	// tab does in every column, which is what says the question is the
+	// *class* rather than one character: bash and ksh93 ask `isspace`, and
+	// dash, zsh and BusyBox ash ask for one of the three POSIX writes down.
+	//
+	// bash 3.2 is the three — `a\v\vb` is three fields there — so this is a
+	// change within bash and the panel's `bash32` column is the older answer.
+	// Nothing here rides on it: the dialect is 5.3's.
+	//
+	// Recorded and not implemented: BusyBox ash answers this **twice**. Its
+	// splitter gives three fields for `a\v\vb` and its `read` merges the run
+	// — `IFS=$(printf '\v'); read x y z` on that line fills x and y and
+	// leaves z empty, where its own `set -- $v` writes an empty field
+	// between. One shell, two notions, and folding them into this axis would
+	// give ash's splitter bash's answer to fix its `read`. ash holds the
+	// splitter's answer here, which is what it already did.
+	//
+	// Asked only where the two readings differ, which is what keeps it off
+	// every ordinary script: the question is put when IFS actually holds one
+	// of the three characters at issue, so the default separators — and every
+	// `IFS=:` in every script ever written — reach no question at all.
+	IFSWhitespaceIsEverySpaceCharacter Answer
+
 	// TrailingSeparatorEndsAField makes the non-whitespace IFS separator that
 	// closes a value open one last empty field, rather than being absorbed.
 	//
@@ -302,6 +350,41 @@ type Semantics struct {
 	// has one by then, and asking before it would give that shell two
 	// elements for a line of spaces where it gives one.
 	ReadNoFieldsIsOneEmptyElement Answer
+
+	// BareReadTakesTheLineWhole gives a `read` with no names the line as it
+	// came, rather than the value a named operand would have been given.
+	//
+	// A `read` with nothing to fill fills the shell's own name, and the
+	// panel splits over what with. One reading is that the default name is
+	// an operand like any other, so the line is split and the single name
+	// takes it back with its leading and trailing IFS whitespace gone. The
+	// other is that the default name is not an operand at all and holds the
+	// record as read.
+	//
+	// Measured 2026-09-22 under `LC_ALL=C`, default IFS, piping in a line
+	// carrying two spaces at each end and echoing `[$REPLY]` back:
+	//
+	//	bash 5.3, bash 3.2   [  A B  ]
+	//	BusyBox ash          [  A B  ]
+	//	ksh93, zsh           [A B]
+	//
+	// The escapes are still processed either way — a backslash-space reaches
+	// REPLY as a space in all four, and `read -r` keeps the backslash in all
+	// four — so this is the trimming alone and not the reading. A
+	// non-whitespace IFS hides it completely: `IFS=:` on the same line keeps
+	// the spaces in every column, because they are not separators there.
+	//
+	// dash is not asked. Its `read` refuses a line with no name at all —
+	// `read: arg count` at 2, which is
+	// [Semantics.ReadRequiresAVariableName] — so there is no value for this
+	// to decide about.
+	//
+	// Asked only where the two readings differ, which is the guard that
+	// keeps it off `while read; do`: the question is put when the line
+	// actually loses something to the trim, so a record with no leading or
+	// trailing IFS whitespace — which is nearly every record — reaches no
+	// question.
+	BareReadTakesTheLineWhole Answer
 
 	// ReadTrailingEscapedSeparator is what `read` does with an IFS
 	// *whitespace* character the line escaped at the very end of the value

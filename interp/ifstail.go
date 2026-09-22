@@ -18,7 +18,8 @@ import "strings"
 // splitFieldsEdges, and then the field a trailing non-whitespace separator
 // opens where the dialect says it opens one.
 func (r *Runner) splitFieldsAsking(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
-	out := splitFieldsEdges(s, literal, ifs, ifsSet, keepEdges, escaped)
+	space := r.ifsSpace(ifs)
+	out := splitFieldsEdges(s, literal, ifs, space, ifsSet, keepEdges, escaped)
 	return r.trailingSeparatorField(out, s, literal, ifs, ifsSet, keepEdges)
 }
 
@@ -44,7 +45,7 @@ func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
 // beside the split would both double the question and let the two answers
 // disagree.
 func (r *Runner) splitFieldsAskEdge(s, ifs string, ifsSet bool) (fields []string, openEnd bool) {
-	out, openEnd := splitFieldsOpenEnd(s, nil, ifs, ifsSet, false, true)
+	out, openEnd := splitFieldsOpenEnd(s, nil, ifs, r.ifsSpace(ifs), ifsSet, false, true)
 	fields = r.trailingSeparatorField(out, s, nil, ifs, ifsSet, false)
 	return fields, openEnd && len(fields) == len(out)
 }
@@ -80,7 +81,7 @@ func (r *Runner) splitFieldsAskPlain(s, ifs string, ifsSet bool) []string {
 // separator is there already, so there is nothing to decide and asking would
 // add a second one.
 func (r *Runner) trailingSeparatorField(fields []string, s string, literal []bool, ifs string, ifsSet, keepEdges bool) []string {
-	if keepEdges || !trailingRunSeparates(s, literal, ifs, ifsSet) {
+	if keepEdges || !trailingRunSeparates(s, literal, ifs, r.ifsSpace(ifs), ifsSet) {
 		return fields
 	}
 	if !r.ask(r.sem().TrailingSeparatorEndsAField,
@@ -109,7 +110,7 @@ func (r *Runner) readFieldsTail(fields []string, s string, literal []bool, ifs s
 	if out := r.trailingSeparatorField(fields, s, literal, ifs, ifsSet, false); len(out) != len(fields) {
 		return out
 	}
-	if r.unspecified || !trailingRunIsWhitespace(s, literal, ifs, ifsSet) {
+	if r.unspecified || !trailingRunIsWhitespace(s, literal, ifs, r.ifsSpace(ifs), ifsSet) {
 		return fields
 	}
 	if !r.ask(r.sem().ReadTrailingWhitespaceEndsAField,
@@ -132,13 +133,13 @@ func (r *Runner) readFieldsTail(fields []string, s string, literal []bool, ifs s
 // the end can never succeed, and Runner.ifs already hands an unset IFS back as
 // the default three characters. Either as a line of its own was a branch no
 // mutation could kill.
-func trailingRunIsWhitespace(w string, literal []bool, ifs string, ifsSet bool) bool {
+func trailingRunIsWhitespace(w string, literal []bool, ifs, space string, ifsSet bool) bool {
 	i := len(w) - 1
 	if i < 0 || (literal != nil && literal[i]) {
 		return false
 	}
 	c := w[i]
-	if c != ' ' && c != '\t' && c != '\n' {
+	if !isIFSWhitespace(c, space) {
 		return false
 	}
 	return strings.IndexByte(ifs, c) >= 0

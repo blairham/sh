@@ -1781,6 +1781,14 @@ func Semantics() interp.Semantics {
 	// A line that splits into nothing fills one empty element rather than
 	// none, which is ksh93's answer too and not bash's.
 	s.ReadNoFieldsIsOneEmptyElement = interp.Yes
+	// The whitespace half of IFS is POSIX's three and not `isspace`: with
+	// `IFS` the vertical tab alone and `setopt shwordsplit`, `a\v\vb` is
+	// three fields here where bash 5.3 and ksh93 give two.
+	s.IFSWhitespaceIsEverySpaceCharacter = interp.No
+	// A bare `read` trims the record the way a named operand's value is
+	// trimmed: a line with two spaces at each end reaches REPLY with none of
+	// them, which is ksh93's answer and not bash's.
+	s.BareReadTakesTheLineWhole = interp.No
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
 	// No parameter of GLOBIGNORE's kind, and `.` and `..` are not in what a

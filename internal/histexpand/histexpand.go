@@ -274,6 +274,11 @@ func Expand(line string, hist List, c Chars) (Result, error) {
 // expanded, text inside double quotes is, and a `'` inside double quotes opens
 // nothing — measured, `echo "it's !!"` expands where `echo '!!'` does not.
 //
+// A command substitution restarts that last part. Inside a `$(…)` or a pair of
+// backquotes a `'` is a quote again however the substitution is written, so
+// `echo "$( echo '!zz' )"` prints the text where `echo "'!zz'"` is an event
+// nobody has. Measured on bash 5.3.20, 2026-09-22.
+//
 // A `^old^new^` quick substitution is only one when the line begins outside a
 // quote. Inside one the character is ordinary text, and a line of a here
 // document or of a continued string that happened to start with it would
@@ -293,6 +298,23 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 	var out strings.Builder
 	res := Result{}
 	single, double := in == InSingleQuotes, in == InDoubleQuotes
+	// parens is one entry per open parenthesis, true where the parenthesis
+	// opened a command substitution. backquote is the other spelling of the
+	// same thing. Together they answer inSub, which is what makes a single
+	// quote special again inside a substitution written inside double quotes.
+	var parens []bool
+	backquote := false
+	inSub := func() bool {
+		if backquote {
+			return true
+		}
+		for _, sub := range parens {
+			if sub {
+				return true
+			}
+		}
+		return false
+	}
 	for i := 0; i < len(src); {
 		r := src[i]
 		switch {
@@ -309,13 +331,28 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 			}
 			i++
 			continue
-		case r == '\'' && !double:
+		case r == '\'' && (!double || inSub()):
 			single = !single
 			out.WriteRune(r)
 			i++
 			continue
 		case r == '"' && !single:
 			double = !double
+			out.WriteRune(r)
+			i++
+			continue
+		case r == '`' && !single:
+			backquote = !backquote
+			out.WriteRune(r)
+			i++
+			continue
+		case r == '(' && !single:
+			parens = append(parens, i > 0 && src[i-1] == '$')
+			out.WriteRune(r)
+			i++
+			continue
+		case r == ')' && !single && len(parens) > 0:
+			parens = parens[:len(parens)-1]
 			out.WriteRune(r)
 			i++
 			continue

@@ -537,6 +537,17 @@ double quotes opens nothing — `echo "it's !!"` expands where `echo '!!'` does
 not. Nothing that had already tokenized the line could tell those apart from a
 parameter expansion's rules.
 
+**A command substitution restarts that question**, and the scanner here read it
+as one flat string until #4137. Measured on bash 5.3.20 on 2026-09-22 from a
+script with `set -o history; set -H`: `echo "$( echo '!zz' )"` and its
+backquoted spelling print the text, while `echo "'!zz'"` — the same apostrophes
+with nothing open between them and the quote — is `!zz': event not found`. So
+the apostrophe is ordinary text inside double quotes only while no substitution
+is open; a `$(`, or a backquote, makes it a quote again, and it stays one
+through a nested `"`: `echo "$( echo "'!zz'" )"` prints the text too. The
+substitution's own parentheses are counted, so `$( ( echo '!zz' ) )` closes
+where it was opened rather than at the first `)`.
+
 **The quoting state does not change which characters start a reference**, which
 is the half #3421 asserted and re-measurement disproved. `echo "!\x"` and
 `echo T!\xE` are refused alike, so the rule is one rule and this shell was

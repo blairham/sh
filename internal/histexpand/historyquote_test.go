@@ -121,3 +121,41 @@ func TestRootAndExtensionModifiers(t *testing.T) {
 		})
 	}
 }
+
+// A command substitution restarts the quoting question, so a single quote
+// inside one protects even where the substitution is written inside double
+// quotes.
+//
+// Measured on bash 5.3.20 on 2026-09-22 from a script file with `set -o
+// history; set -H`: `echo "$( echo '!zz' )"` and its backquoted spelling print
+// the text, while `echo "'!zz'"` — the same apostrophes with no substitution
+// between them and the quote — is `!zz': event not found`. So the apostrophe
+// is not ordinary text everywhere inside double quotes, which is what the
+// scanner used to assume; it is ordinary text only while no substitution is
+// open.
+func TestASubstitutionMakesAQuoteSpecialAgain(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		line string
+		want string
+	}{
+		{"inside a double-quoted substitution", `echo "$( echo '!!' )"`, `echo "$( echo '!!' )"`},
+		{"inside a double-quoted backquote", "echo \"`echo '!!'`\"", "echo \"`echo '!!'`\""},
+		{"a nested double quote does not undo it", `echo "$( echo "'!!'" )"`, `echo "$( echo "'!!'" )"`},
+		{"and the substitution ends", `echo "$( echo x )" '!!'`, `echo "$( echo x )" '!!'`},
+		// The other half: with no substitution open the apostrophe is text,
+		// so the reference expands exactly as it did before.
+		{"no substitution, so the quote is text", `echo "it's !!"`, `echo "it's echo AAA"`},
+		{"a parenthesis that opens no substitution", `echo "( '!!' )"`, `echo "( 'echo AAA' )"`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			res, err := histexpand.Expand(c.line, list("echo AAA"), histexpand.Default)
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+			if res.Line != c.want {
+				t.Errorf("expanded %q to %q, want %q", c.line, res.Line, c.want)
+			}
+		})
+	}
+}

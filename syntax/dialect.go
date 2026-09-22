@@ -5050,6 +5050,28 @@ type Dialect struct {
 	// one is safe to be wrong about loudly.
 	ArrayLiteral bool
 
+	// ArrayLiteralRunningOutIsUnmatched reports an array literal whose `)`
+	// never came as a construct that ran out — `unexpected EOF while looking
+	// for matching `)'`, blamed at the parenthesis — rather than as a token
+	// the grammar did not want at the end of the input.
+	//
+	// The two readings are both defensible and the shells split. Measured
+	// 2026-09-22 over `a=(` through `-c`:
+	//
+	//	bash 5.3.20   line 1: unexpected EOF while looking for matching `)'
+	//	ksh93u+       syntax error at line 1: `end of file' unexpected
+	//	zsh 5.9.2     parse error near `a'
+	//	dash, ash     no array literal at all — the `(` is refused outright
+	//
+	// So bash is the column that treats it as an unfinished *bracket* and
+	// the rest treat it as a refused token, which is why this is a flag
+	// rather than the parser's own answer. ksh93's row was already right
+	// here and is what a change without this flag would have broken.
+	//
+	// Only at the end of the input: a literal stopped by some *other* token
+	// — `a=(1 ;` — is that token's refusal in every column, bash included.
+	ArrayLiteralRunningOutIsUnmatched bool
+
 	// CompoundAssignmentWordRunsPastItsParenthesis keeps a compound
 	// assignment's word going after its closing parenthesis, so `a=(1 2)x`
 	// is **one word** — and so not an array assignment at all, since no

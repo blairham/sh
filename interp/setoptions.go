@@ -593,7 +593,7 @@ var extraSetOptions = map[string]setOption{
 // this preset carries bash 5's reading for the reason
 // Semantics.UnsetReadonlyFatal gives.
 //
-// **Nine of the twelve axes it moves take the standard's own answer**, because
+// **Eleven of the fourteen axes it moves take the standard's own answer**, because
 // that is what the name asks for and every shell with a POSIX mode was measured
 // to take them. The other three it takes from the dialect, through a field of
 // their own apiece, because a value written in here reaches every dialect
@@ -649,6 +649,9 @@ func (r *Runner) SetPosixMode(on bool) {
 	aliasReserved := r.posixSavedAliasReserved
 	quoteProtects := r.posixSavedQuoteProtects
 	funcSpecial := r.posixSavedFuncSpecial
+	badDeclName, badUnsetName := r.posixSavedBadDeclarationName, r.posixSavedBadUnsetName
+	failedExpansion := r.posixSavedFailedExpansion
+	shiftVerbose := r.posixSavedShiftVerbose
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
@@ -705,6 +708,53 @@ func (r *Runner) SetPosixMode(on bool) {
 		// already answer Yes outside the mode, so this moves bash and zsh.
 		r.posixSavedDotMissingFatal = r.sem().DotMissingFileFatal
 		dotMissingFatal = Yes
+		// And a bad *name* to `export`, `readonly` or `unset -v`, which is
+		// the same rule reaching the same builtins one failure over: POSIX
+		// makes a special builtin's failure fatal and names no exception for
+		// an operand that is not an identifier. The standard's own answer,
+		// written in here rather than asked of the dialect, because every
+		// column but bash already holds `Yes` under every name it is called
+		// by — so there is no second reading for a knob to carry. Measured
+		// 2026-09-22 on bash 5.3.20: `readonly non-ident; echo after`,
+		// `export non-ident; echo after` and `unset -v a-b; echo after`
+		// each write the refusal and then `after` under bash's own name,
+		// and write the refusal and stop at 1 under the `sh` name, under
+		// `set -o posix` and under `bash -o posix` alike. `set +o posix`
+		// puts the carrying-on back, which is what the saved answers are
+		// for (#4166).
+		r.posixSavedBadDeclarationName = r.sem().BadNameToDeclarationFatal
+		r.posixSavedBadUnsetName = r.sem().BadNameToUnsetFatal
+		badDeclName, badUnsetName = Yes, Yes
+		// And the same rule one phase earlier: an expansion the shell cannot
+		// perform ends it here rather than costing the line. Measured
+		// 2026-09-22 on bash 5.3.20 over the 2x2 the axis itself is measured
+		// on — both routes, both separators — and over all four failures it
+		// names: `${#+}`, `$((1/0))`, `${a[1+]}` and `$((1 +))` each write
+		// the complaint and then `after` under bash's own name, and write
+		// the complaint and stop under the `sh` name and under `set -o
+		// posix`. dash, ksh93 and zsh already answer `No` under every name,
+		// so this moves bash and nothing else.
+		//
+		// Unanswered stays unanswered, the rule the listings above keep: the
+		// core declines this axis on purpose — one shell against three is a
+		// disagreement — so the mode must not hand it the standard's answer
+		// to a question its dialect never took a position on.
+		r.posixSavedFailedExpansion = r.sem().FailedExpansionAbandonsTheLine
+		if failedExpansion = r.posixSavedFailedExpansion; failedExpansion != Unspecified {
+			failedExpansion = No
+		}
+		// And the one thing the mode moves that is not on the semantics
+		// vector at all: a `shift` past the end saying so. The wording is
+		// bash's `shopt shift_verbose` and the *withholding* is the
+		// capability the runner holds, so this is written the way
+		// aliasReserved below is — through the pair of methods rather than
+		// through an axis. Measured 2026-09-22 on bash 5.3.20: `shopt
+		// shift_verbose` reports `off` under bash's own name, `on` after
+		// `set -o posix` and under the `sh` name, and `off` again after
+		// `set +o posix`; with it on, `set -- ; shift 12` writes `shift:
+		// 12: shift count out of range` and leaves 1 either way.
+		r.posixSavedShiftVerbose = r.ReportsShiftPastTheEnd()
+		shiftVerbose = true
 		r.posixSavedFuncSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionName
 		funcSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionNameInPosixMode
 		r.posixSavedBadSetName = r.sem().BadSetOptionNameFatal
@@ -813,6 +863,13 @@ func (r *Runner) SetPosixMode(on bool) {
 		// and the script ends.
 		s.DotFallsBackToCurrentDirectory = dotFallback
 		s.DotMissingFileFatal = dotMissingFatal
+		// The two name refusals, saved separately for the reason the `.`
+		// pair above is: ksh93 answers them differently — `export 1x` ends
+		// the script there and `unset 1x` does not — so one remembered
+		// answer could not put both back.
+		s.BadNameToDeclarationFatal = badDeclName
+		s.BadNameToUnsetFatal = badUnsetName
+		s.FailedExpansionAbandonsTheLine = failedExpansion
 		// The fifth, sixth and seventh, and the first the mode moves that
 		// are about what a builtin *writes* rather than about what ends a
 		// script. Measured 2026-09-12 on bash 5.3.15 and the 3.2.57 macOS
@@ -937,6 +994,7 @@ func (r *Runner) SetPosixMode(on bool) {
 		d.QuoteProtectsTheClosingBrace = quoteProtects
 		r.Dialect = &d
 	}
+	r.SetReportsShiftPastTheEnd(shiftVerbose)
 	r.posixMode = on
 	r.posixDotSearchOnly = dotSearchOnly
 	// The standard has aliases expand in a script, so the mode turns the

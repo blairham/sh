@@ -857,7 +857,8 @@ scan:
 	switch {
 	case strings.HasPrefix(s, "#") && len(s) > 1 &&
 		!hashIsTheParameter(s[1:], p.dialect.NamelessParamExpansion,
-			p.dialect.ParamLengthOverASpecialNameIsFinal):
+			p.dialect.ParamLengthOverASpecialNameIsFinal,
+			p.dialect.ParamLengthBareOperatorIsTheParameter):
 		e.Length = true
 		s = s[1:]
 	case strings.HasPrefix(s, "!") && len(s) > 1 && p.bangNameCarriesOn(s[1]):
@@ -1480,14 +1481,22 @@ func matchingFlagDelimiter(open byte) byte {
 // five shells without the nameless form and `1` in the one with it, while
 // `${#:+w}` is `w`, `${#:=w}` is `2` and `${#:?w}` is `2` in all six — so
 // the divergence is `:-` alone and not the colon.
-func hashIsTheParameter(s string, nameless, lengthFinal bool) bool {
+func hashIsTheParameter(s string, nameless, lengthFinal, bareOperator bool) bool {
 	switch {
 	case s == "":
 		return false
 	case s[0] == '=' || s[0] == '+':
 		// Neither can begin a name, so there is no length reading to
 		// compete: `${#=w}` and `${#+w}` are `$#` in all six shells.
-		return true
+		//
+		// With an operand, which is the shape every other row of this table
+		// asks for and the shape those two measurements have. Bare, five of
+		// the six refuse the whole expansion — the `+` or `=` is scanned as
+		// the name the length is over, no name comes out of it, and
+		// `${#+}` is a bad substitution. See
+		// [Dialect.ParamLengthBareOperatorIsTheParameter] for the panel and
+		// for the one shell that keeps the parameter reading here.
+		return len(s) > 1 || bareOperator
 	case s[0] == ':':
 		// Every `:` operator, and `:-` as well in a grammar with no nameless
 		// expansion to be a length over: there `${#:-w}` is `$#` with a

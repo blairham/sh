@@ -2307,6 +2307,25 @@ type Runner struct {
 	// the brace scan alone, so one remembered value could not put both back.
 	// See syntax.Dialect.QuoteProtectsTheClosingBraceInPosixMode.
 	posixSavedQuoteProtects syntax.BraceQuotePolicy
+	// A bad *name* to `export`, `readonly` and `unset -v`, which POSIX makes
+	// fatal for a special builtin and bash alone does not. Two fields rather
+	// than one for the reason the two axes are two: ksh93 answers them
+	// differently, so a single remembered answer could not put both back.
+	posixSavedBadDeclarationName Answer
+	posixSavedBadUnsetName       Answer
+	// And whether a failed expansion gives up the line or the shell, which
+	// is the same POSIX rule reaching the expansion phase. Saved rather than
+	// asserted on the way out for the reason the rest are, and with one
+	// difference worth naming: the core leaves this axis unanswered on
+	// purpose, so the mode has to leave an unanswered axis unanswered — see
+	// the listings above, which keep the same rule.
+	posixSavedFailedExpansion Answer
+	// And a `shift` past the end saying so, which is not on the semantics
+	// vector either: the withholding is a capability the runner holds and
+	// bash's `shopt shift_verbose` is the script's spelling of it. The mode
+	// turns it on — measured, `shopt shift_verbose` reports `on` under `set
+	// -o posix` and under the `sh` name, and `off` outside both.
+	posixSavedShiftVerbose bool
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or
@@ -2961,6 +2980,17 @@ type Runner struct {
 	// own, so a give-up inside it has to reach the caller's line to find out
 	// how much to give up. See Runner.giveUpLine for the rows.
 	inputLine int
+
+	// readersLine is where this dialect's *reader* stands, which is a
+	// different number from the line of the command being run and is read by
+	// exactly one diagnostic — see Diagnostics.SelectNameIsLocatedAtTheReader
+	// for the shapes it was measured on.
+	//
+	// Zero means nothing has moved it and the reader is at the end of the
+	// top-level statement, which is inputLine above. A function call and a
+	// `for` clause each move it for the duration of what they run, and both
+	// put it back.
+	readersLine int
 
 	// assignFailed marks an assignment that was refused rather than made,
 	// so the status it left is not zeroed by the assignment that follows

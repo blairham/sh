@@ -299,6 +299,14 @@ func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 }
 
 func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
+	// And a `for` moves the reader to its own first line for as long as it
+	// runs, which is what a `select` nested in one reports — see
+	// Runner.readersLine and Diagnostics.SelectNameIsLocatedAtTheReader. The
+	// clause's own refusal below is unaffected: that one is located at the
+	// clause, which is this same line.
+	outerReader := r.readersLine
+	r.readersLine = r.lineOf(c.Pos())
+	defer func() { r.readersLine = outerReader }()
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		if c.RefusedName != "" {
 			// The word standing where the variable belonged is not a name,
@@ -313,7 +321,7 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			// ksh93 alike — all four report the name, all four create the
 			// file — so the redirection belongs to the *clause* and is made
 			// before anything about the variable is asked.
-			r.refuseForName(c.RefusedName, len(c.Redirs) > 0)
+			r.refuseForName(c.RefusedName, len(c.Redirs) > 0, false)
 			return nil
 		}
 		// An absent word list iterates the positional parameters; an empty
@@ -955,6 +963,18 @@ func isPlainFuncName(s string) bool {
 }
 
 func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
+	if r.diag().FunctionDefinitionIsLocatedAtItsEnd && c.Body != nil {
+		// A definition's own complaints are located where the definition
+		// ends rather than where its name stands — the shell has read the
+		// whole of it before it runs any of it. Put back on the way out, the
+		// way every other line shift in this tree is: nothing here runs the
+		// body, so this reaches the definition's refusals and nothing else.
+		// See Diagnostics.FunctionDefinitionIsLocatedAtItsEnd for the five
+		// shapes measured.
+		was := r.line
+		r.line = r.lineOf(c.End())
+		defer func() { r.line = was }()
+	}
 	if c.RefusedName != "" {
 		// The grammar read a word where a name belonged and left the check
 		// to here, which is the stage two of the panel answer at — see
@@ -1646,7 +1666,15 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// written — measured, though the column that writes a head for a `{ }`
 	// standing on its own writes none here. See Runner.suppressedHead.
 	r.suppressedHead = true
+	// And where the reader stands for the duration of the body, which one
+	// dialect's `select` refusal reads instead of the clause's own line: a
+	// call moves it to the body's **first** line, wherever in the body the
+	// refusal happens. The same number the DEBUG trap above is located at,
+	// and measured the same way. See Runner.readersLine.
+	outerReader := r.readersLine
+	r.readersLine = r.lineOf(fn.Body.Pos())
 	err := r.command(ctx, fn.Body)
+	r.readersLine = outerReader
 	// Whatever arrived while the body's *last* command ran, handled before
 	// the call unwinds. stmt drains between commands, which leaves the last
 	// one of a body with nobody to drain after it: the arrival waited for

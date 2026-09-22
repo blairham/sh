@@ -5512,6 +5512,74 @@ type Diagnostics struct {
 	// builtin is where the third one parts.
 	BadNameRefusalOmitsTheLine map[string]bool
 
+	// FunctionDefinitionIsLocatedAtItsEnd puts a function definition's own
+	// complaints at the line the definition *ends* on, rather than at the
+	// line its name was written on.
+	//
+	// bash, and it is the run-time refusals a definition raises — a name
+	// the shell will not bind, and a redefinition of a frozen name.
+	// Measured 2026-09-22 on bash 5.3.20 and bash 3.2.57 alike, from a
+	// script file, with a definition of `$1` written five ways and the line
+	// each refusal named:
+	//
+	//	$1 () { echo x; }          on one line       that line
+	//	$1 () ⏎ { echo x; }         two lines         the second
+	//	$1 () { ⏎ echo x ⏎ }        three lines       the third
+	//	function $1 { ⏎ … ⏎ }       three lines       the third
+	//	$1 () ( ⏎ echo x ⏎ )        three lines       the third
+	//
+	// and the frozen-name refusal on a four-line redefinition names the
+	// fourth. So it is the body's end and not a fixed offset, which is what
+	// makes it a rule rather than an off-by-one.
+	//
+	// **Only bash reaches the question**, which is why this is a
+	// Diagnostics field rather than an axis with four answers: dash and
+	// ksh93 refuse a definition whose name is not a name while *reading*
+	// the file, so their complaint is a syntax error located where the read
+	// stopped, and zsh binds the name without complaint. A dialect that
+	// leaves this false keeps the definition's own start, which is where
+	// every other command's diagnostic is located.
+	//
+	// The name's *word* is on the first line in every one of those rows, so
+	// this is not "where the failure was seen" — bash has finished reading
+	// the whole definition before it runs any of it, and the line it
+	// reports is the one its reader had reached (#4166).
+	FunctionDefinitionIsLocatedAtItsEnd bool
+
+	// SelectNameIsLocatedAtTheReader puts a `select` clause's refused-name
+	// complaint where the shell's *reader* stands rather than at the clause
+	// that raised it.
+	//
+	// bash, and the `select` spelling alone: the `for` spelling is located
+	// at its own clause in the same shell, which is what makes this a fact
+	// about one construct rather than about the diagnostic. Measured
+	// 2026-09-22 on bash 5.3.20 from script files, `select $1 in a b c ; do
+	// echo $REPLY ; done` with `$1` unset and stdin closed:
+	//
+	//	where it stands                             reported at
+	//	alone on one top-level line                 that line
+	//	spread over two top-level lines             the second — the clause's last
+	//	inside a top-level `{ }`, `if` or `while`   that statement's last line
+	//	inside a function, anywhere in the body     the body's first line
+	//	inside a `for`, at any depth                the `for` clause's first line
+	//
+	// Two `{ }` nested inside a function body still report the body's first
+	// line, and a `for` inside a function reports the `for` — so the last
+	// two rows are a stack and not a pair of special cases.
+	//
+	// **Every row is the same rule**: bash reads a whole top-level command
+	// before running any of it, so its line counter sits at the end of what
+	// it read; entering a function moves the counter to the body's first
+	// line, and running a `for` moves it to that clause's; and `select`,
+	// unlike `for`, does not move it at all, so its refusal quotes whatever
+	// the last of those left. See [Runner.readersLine] for the three places
+	// this tree keeps the same number.
+	//
+	// Only bash reaches the question: the shells that check a loop
+	// variable's name while *parsing* never build a clause to run, and the
+	// one that binds the word without complaint says nothing (#4166).
+	SelectNameIsLocatedAtTheReader bool
+
 	// InconsistentType is what a declaration says when the plain word it was
 	// given is assigned over a name whose cell is really holding an array or
 	// a keyed table. One verb: the name.

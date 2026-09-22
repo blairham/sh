@@ -3966,6 +3966,20 @@ func Diagnostics() interp.Diagnostics {
 		ReadonlyNotAFunction:      "readonly: %[1]s: not a function",
 		ReadonlyFunctionRedefined: "%[1]s: readonly function",
 		UnsetReadonlyFunction:     "unset: %[1]s: cannot unset: readonly function",
+		// And the *line* that prefix carries is the definition's last, not
+		// its first: this shell reads the whole definition before it runs
+		// any of it and reports where its reader had got to. Measured
+		// 2026-09-22 on 5.3.20 and 3.2.57 alike over five spellings of a
+		// definition — see the field, which carries the table. It reaches
+		// the refusal above and the `not a valid identifier` a name the
+		// shell will not bind draws, both of which are the definition's own
+		// and neither of which any other column reaches at run time.
+		FunctionDefinitionIsLocatedAtItsEnd: true,
+		// And a `select` whose variable is not a name is located where this
+		// shell's reader stands rather than at the clause — the `for`
+		// spelling beside it is located at its own clause. Measured
+		// 2026-09-22 over five shapes; the field carries the table.
+		SelectNameIsLocatedAtTheReader: true,
 		// `declare -p nosuch` — the name it was invoked by is in front,
 		// which declarePrint writes, so the wording carries only the rest.
 		DeclareNoSuchVariable: "%[1]s: not found",

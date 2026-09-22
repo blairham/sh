@@ -112,6 +112,12 @@ func returnRun(t *testing.T, src string, refused Answer) (string, int) {
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.ReturnOutsideAFunctionIsRefused = refused
+	// The refusal and its fatality are two axes and this helper is about the
+	// first. Only one column refuses at all and it does not stop there, so
+	// the pairing every other row here means is refused-and-carries-on; the
+	// other pairing is the whole of
+	// TestARefusedReturnEndsTheScriptWhereAFailedSpecialBuiltinDoes below.
+	sem.BadOptionToSpecialBuiltinFatal = No
 	dg := Diagnostics{}
 	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 	f, err := syntax.Parse(src, syntax.Core())
@@ -146,5 +152,56 @@ func TestSourcingDoesNotLeaveTheScriptLookingSourced(t *testing.T) {
 	}
 	if st != 0 {
 		t.Errorf("status = %d, want 0", st)
+	}
+}
+
+// A `return` with nowhere to return from is a special builtin declining the
+// way it was called, so whether the *script* ends there is the axis that
+// already carries that question — see Runner.refusedReturnOperand, which is
+// the same builtin's other refusal one branch over.
+//
+// The two are genuinely separate: bash refuses the place and carries on,
+// bash in POSIX mode refuses it and stops, and `set -o posix` moves the same
+// binary between the two. So this is the axis' other value over the same
+// source, and the sentence is unchanged by it.
+func TestARefusedReturnEndsTheScriptWhereAFailedSpecialBuiltinDoes(t *testing.T) {
+	const src = "echo before\nreturn 7\necho \"after st=$?\"\n"
+	for _, c := range []struct {
+		name   string
+		fatal  Answer
+		gone   bool
+		status int
+	}{
+		{"carries on where a failed special builtin does", No, false, 0},
+		{"ends the script where one is fatal", Yes, true, 2},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var buf strings.Builder
+			sem := PosixSemantics()
+			sem.ReturnOutsideAFunctionIsRefused = Yes
+			sem.BadOptionToSpecialBuiltinFatal = c.fatal
+			dg := Diagnostics{}
+			r := newTestRunner(t, &Runner{
+				Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh",
+			})
+			f, err := syntax.Parse(src, syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			st, err := r.Run(context.Background(), f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := buf.String()
+			if !strings.Contains(out, "can only `return'") {
+				t.Errorf("said %q, want the refusal in it whichever way it ends", out)
+			}
+			if got := strings.Contains(out, "after st="); got == c.gone {
+				t.Errorf("said %q, want the line after the return to have run: %v", out, !c.gone)
+			}
+			if st != c.status {
+				t.Errorf("status = %d, want %d", st, c.status)
+			}
+		})
 	}
 }

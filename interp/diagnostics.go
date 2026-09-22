@@ -4414,6 +4414,29 @@ type Diagnostics struct {
 	// not a script is a different question, and not this one.
 	ScriptNotReadableStatus int
 
+	// ScriptBinaryContent is what a shell says about a script *operand* whose
+	// content is not shell text. One verb: the path, as the shell resolved
+	// it.
+	//
+	// A wording of its own rather than a reason passed to ScriptNotFound,
+	// because nothing failed to open: the file was read and then declined, so
+	// there is no errno for the reason verb to carry.
+	//
+	// Measured 2026-09-22 with `/bin/ls` copied onto PATH as `lsbin`:
+	//
+	//	bash   <path>: <path>: cannot execute binary file        126
+	//	ksh93  lsbin: lsbin: cannot execute [Exec format error]   126
+	//
+	// zsh and dash never reach it: neither searches PATH for a slash-less
+	// operand, so both report a file that is not there. ksh93's row is
+	// recorded and not answered — it names the operand as written where bash
+	// names what the search resolved, which is a second answer this field
+	// does not hold.
+	//
+	// Empty means the shell reads whatever it was handed, which is what it
+	// did before there was a field.
+	ScriptBinaryContent string
+
 	// InvocationNamesTheUnreadLine writes a line number into a diagnostic
 	// about the invocation itself — the script operand that would not open,
 	// reported before any line has been read.
@@ -4445,6 +4468,42 @@ type Diagnostics struct {
 	// The wording is unchanged by it: this says which name stands in front of
 	// ScriptNotFound or ScriptNotReadable, not what either of them says.
 	ScriptOperandNamedByItselfOnceOpened bool
+
+	// BadInterpreter is what a shell says about a command whose `#!` line
+	// names an interpreter that is not there — the kernel refuses the start
+	// and the file itself is perfectly present, so a wording that reported
+	// the errno alone would say "No such file or directory" about a file the
+	// shell just found. Three verbs: %[1]s the command as the diagnostic
+	// names it, %[2]s the interpreter the `#!` line named, and %[3]s the
+	// reason.
+	//
+	// Measured 2026-09-22 on a file whose first line is `#!nosuchfile`, run
+	// from a script:
+	//
+	//	bash   <$0>: ./x: nosuchfile: bad interpreter: No such file or directory
+	//	zsh    <$0>:<line>: ./x: bad interpreter: nosuchfile: no such file or directory
+	//	ksh93  <$0>: line <n>: ./x: not found
+	//	dash   <$0>: <n>: ./x: not found
+	//
+	// So two of the four look inside the file and two report the start
+	// failure as a name that was not found. Empty — which is what the second
+	// pair want — means the shell says what it already said about a start it
+	// could not make.
+	//
+	// zsh's row is recorded and not answered here: it keeps the location
+	// bash drops and numbers the failure 127 where bash numbers it 126, so
+	// filling this field in for it would be two more answers than the field
+	// holds.
+	BadInterpreter string
+
+	// BadInterpreterLocatedByNameAlone drops the line from that one message.
+	//
+	// bash alone, and it is the neighboring line that shows it is a rule
+	// about this message rather than about the route: `./s.sh: line 2:
+	// ./nosuch: No such file or directory` for a command that is not there,
+	// and `./s.sh: ./x: nosuchfile: bad interpreter: …` for this one, from
+	// the same script and the same line.
+	BadInterpreterLocatedByNameAlone bool
 
 	// InvocationMissingOptionArgument is what a shell says about an option
 	// word at an invocation that takes an argument and was given none. One
@@ -9024,6 +9083,12 @@ func (d Diagnostics) ForPrompt() Diagnostics {
 // shell is what the shell calls itself — its own name, never the script's,
 // which is measured: nothing has been read, so there is no `$0` yet.
 func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
+	if errors.Is(err, ErrBinaryScript) && d.ScriptBinaryContent != "" {
+		// Nothing failed to open here, so there is no reason verb to fill:
+		// the file was read and declined. See Diagnostics.ScriptBinaryContent.
+		return d.invocationPrefix(shell) +
+			Wording(d.ScriptBinaryContent, "%[1]s: %[2]s", path, ErrBinaryScript.Error()) + "\n"
+	}
 	format := d.ScriptNotFound
 	if !errors.Is(err, fs.ErrNotExist) && d.ScriptNotReadable != "" {
 		format = d.ScriptNotReadable

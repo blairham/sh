@@ -7461,9 +7461,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 				r.status = st
 				return nil
 			}
-			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-			r.diagf("%s: %v\n", argv[0], err)
-			r.status = 126
+			r.status = r.reportStartFailure(ctx, action, argv, path, err)
 			return nil
 		}
 		// The pid is final now, so anything waiting to read `$!` may proceed
@@ -7505,9 +7503,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 			r.status = st
 			return nil
 		}
-		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		r.diagf("%s: %v\n", argv[0], err)
-		r.status = 126
+		r.status = r.reportStartFailure(ctx, action, argv, path, err)
 		return nil
 	}
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
@@ -7582,9 +7578,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 			r.status = st
 			return nil
 		}
-		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		r.diagf("%s: %v\n", argv[0], err)
-		r.status = 126
+		r.status = r.reportStartFailure(ctx, action, argv, cmd.Path, err)
 		return nil
 	}
 	pid := cmd.Process.Pid

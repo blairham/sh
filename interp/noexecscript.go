@@ -92,6 +92,25 @@ func notAnExecutableImage(err error) bool {
 	return errors.Is(err, syscall.ENOEXEC)
 }
 
+// ErrBinaryScript is a file offered to a shell as a *script* whose content is
+// not shell text — the script-operand half of the question looksBinary asks of
+// a file the kernel refused.
+//
+// An error of its own rather than an errno, because no system call failed: the
+// file opened and was read, and the shell then declined to run what came out.
+// See Diagnostics.ScriptBinaryContent, which is what a dialect says about it.
+var ErrBinaryScript = errors.New("cannot execute binary file")
+
+// BinaryScriptContent reports whether a file's content is the kind a shell
+// refuses to read as a script, by the rule looksBinary draws: a NUL byte in
+// the first line, within the sample bound.
+//
+// Exported for the front end, which meets the same question at the other door
+// — a script *operand*, where nothing has been executed and there is no
+// ENOEXEC to key on. One rule for both, so a file that is not a script at one
+// door is not a script at the other.
+func BinaryScriptContent(image []byte) bool { return looksBinary(image) }
+
 // looksBinary reports whether an image the kernel refused holds a NUL byte in
 // its first line — see the table above for the measurement that drew the
 // bound here rather than over the whole file.
@@ -103,6 +122,68 @@ func looksBinary(image []byte) bool {
 		image = image[:binarySample]
 	}
 	return bytes.IndexByte(image, 0) >= 0
+}
+
+// interpreterNamed is the name on a file's `#!` line, for a start the kernel
+// refused because something was not there.
+//
+// The file this shell found is present — the lookup opened it and the execute
+// bit is on it — so an ENOENT out of the start is about the *interpreter* and
+// not about the command. Nothing else can produce one at that door, which is
+// why the errno is the whole of the test and the `#!` line is only read to
+// find the name to print.
+//
+// It reads the file for the reason classifyImage does, through the same gate
+// and for the same re-entry: a policy that hides a path hides what is written
+// inside it too. Empty where the dialect has nothing to say about it, so the
+// read is not made at all in three of the four.
+func (r *Runner) interpreterNamed(ctx context.Context, path string, err error) string {
+	if r.diag().BadInterpreter == "" || !errors.Is(err, syscall.ENOENT) {
+		return ""
+	}
+	open := r.act(Action{Kind: ActionOpen, Path: path})
+	if r.openQuietlyDenied(open) {
+		return ""
+	}
+	image, readErr := r.readFileGated(ctx, &open, path)
+	if readErr != nil {
+		return ""
+	}
+	r.emit(ctx, Event{Kind: EventAccess, Action: open})
+	line, _, _ := bytes.Cut(image, []byte("\n"))
+	rest, ok := bytes.CutPrefix(line, []byte("#!"))
+	if !ok {
+		return ""
+	}
+	// The first word of the line, which is the program the kernel was asked
+	// for; anything after it is that program's own argument.
+	name := strings.TrimSpace(string(rest))
+	name, _, _ = strings.Cut(name, " ")
+	name, _, _ = strings.Cut(name, "\t")
+	return name
+}
+
+// reportStartFailure is the tail every door a start can fail at shares: the
+// event, the diagnostic and the status.
+//
+// One place rather than three, because the three doors — a background job, a
+// watched foreground command and a plain one — differ in how they wait and
+// not at all in what they say when there was nothing to wait for. The bad
+// interpreter above was the second thing this shell had learned at one door
+// and not the others.
+func (r *Runner) reportStartFailure(ctx context.Context, action Action, argv []string, path string, err error) int {
+	r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
+	if named := r.interpreterNamed(ctx, path, err); named != "" {
+		// Through cannotRun, so this failure is named the way every other
+		// one at this door is — `exec` absolutises the path and a command
+		// word does not, in the dialect that tells them apart.
+		return r.cannotRun(&pathError{name: argv[0], resolved: path, interpreter: named, err: err}, naming{
+			bare:     r.diag().NotFound,
+			fallback: "%[1]s: not found",
+		})
+	}
+	r.diagf("%s: %v\n", argv[0], err)
+	return 126
 }
 
 // notAnImage is the failure a file with binary content in it is reported

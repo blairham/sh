@@ -457,6 +457,10 @@ func Semantics() interp.Semantics {
 	// does not; and neither does a shell that is not a login shell. See
 	// Semantics.LogoutFile for the rest of the row.
 	s.LogoutFile = ".bash_logout"
+	// And a script operand written without a slash is looked for along PATH,
+	// the way a command word is — `bash ls` runs into `/bin/ls` rather than
+	// reporting a file that is not there. See the field for the panel's row.
+	s.ScriptOperandSearchedOnPath = true
 	// `$0` can arrive in the environment here, which nothing else in the
 	// panel does. See Semantics.DollarZeroFromEnvironment.
 	s.DollarZeroFromEnvironment = "BASH_ARGV0"
@@ -3569,11 +3573,24 @@ func Diagnostics() interp.Diagnostics {
 		// where `bash ./nosuch` and a mode-000 file both open with the
 		// shell's own name. See ScriptOperandNamedByItselfOnceOpened.
 		ScriptOperandNamedByItselfOnceOpened: true,
+		// And what it says about one it read and would not run: `bash lsbin`
+		// where lsbin is a copy of `/bin/ls` is `<path>: <path>: cannot
+		// execute binary file` at 126, with no errno behind it — nothing
+		// failed to open. See ScriptBinaryContent.
+		ScriptBinaryContent: "%[1]s: cannot execute binary file",
 		// `bash -c` with nothing behind it. The rest of the panel words it
 		// differently enough that nothing here is shared; see the field.
 		InvocationMissingOptionArgument: "%[1]s: option requires an argument",
-		SelectPrompt:                    "#? ",
-		Location:                        interp.LocationLineWord,
+		// A `#!` line naming an interpreter that is not there, which this
+		// shell reads the file to find out about. `./x23` whose first line
+		// is `#!nosuchfile` is `<$0>: ./x23: nosuchfile: bad interpreter:
+		// No such file or directory`, and with no line in it — measured
+		// beside a plain missing command from the same script, which keeps
+		// one.
+		BadInterpreter:                   "%[1]s: %[2]s: bad interpreter: %[3]s",
+		BadInterpreterLocatedByNameAlone: true,
+		SelectPrompt:                     "#? ",
+		Location:                         interp.LocationLineWord,
 		// And no line at all at a prompt: measured 2026-09-11 under `-i`,
 		// `if; then` is `bash: syntax error near unexpected token `;'` where
 		// the same line in a script is `s.sh: line 1: …`. The line *inside* a

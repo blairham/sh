@@ -15830,6 +15830,31 @@ type Semantics struct {
 	// name stands.
 	DollarZeroFromEnvironment string
 
+	// ScriptOperandSearchedOnPath looks along `$PATH` for a script operand
+	// written without a slash, the way a command word is looked for.
+	//
+	// Measured 2026-09-22 with a script on a PATH directory and nowhere else:
+	//
+	//	bash   runs it, with or without the execute bit
+	//	ksh93  runs it, but only with the execute bit on
+	//	zsh    can't open input file: <name>
+	//	dash   cannot open <name>: No such file
+	//
+	// So it is two columns against two, and the operand that *has* a slash is
+	// never searched for in any of them — `bash ./name` reports the file that
+	// is not there without looking anywhere else.
+	//
+	// The candidate has to be readable: a mode-000 file on PATH is passed
+	// over and the search goes on, ending at "no such file" rather than at a
+	// permission refusal.
+	//
+	// Two names come out of a search that found something, and they are not
+	// the same name. `$0` is the word that was *typed* — `bash zeroprobe` is
+	// `$0` of `zeroprobe` — while a diagnostic from inside the script names
+	// what the search resolved. ksh93's execute-bit condition is recorded and
+	// not answered here; this is a switch and that is a second question.
+	ScriptOperandSearchedOnPath bool
+
 	// LogoutFile is the file in a person's home directory a *login* shell
 	// reads on its way out, as the counterpart of LoginStartupFiles.
 	//

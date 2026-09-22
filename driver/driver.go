@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -1037,6 +1038,14 @@ type source struct {
 	// script. Conflating the two dropped `-i` outright whenever an operand
 	// was given (#472).
 	interactive bool
+	// zero is what `$0` answers with where that is not the name a diagnostic
+	// uses, and empty where the two are the same thing.
+	//
+	// One route parts them: a script operand found along PATH is named by
+	// what the search resolved in every diagnostic and by the word that was
+	// typed in `$0`. Measured — `bash zeroprobe` reports `$0` of `zeroprobe`
+	// and writes `/…/pdir/zeroprobe: line 1: …` about a failure inside it.
+	zero string
 	// file is the path the input was read from, or empty where there was no
 	// file — `-c`, or standard input. It is the floor of the call stack: a
 	// script asking where it is means this, and only the front end knows.
@@ -2064,11 +2073,17 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		return source{onStdin: true, name: sh.Name, params: args, dg: sh.Diagnostics.ForStdin(), opts: inv.opts}, nil
 	}
 	path := args[0]
+	// A slash-less operand is looked for along PATH in the dialects that do
+	// that, exactly as a command word is: `bash ls` runs into `/bin/ls`. The
+	// word that was typed stays `$0` and the path the search resolved is what
+	// a diagnostic names — see Shell.scriptOnPath and the two names it
+	// returns.
+	read, zero := sh.scriptOnPath(path)
 	// Through the gate: the program a shell was pointed at is an access
 	// chosen by whoever invoked it, so a policy hiding a path hides it from
 	// `sh /that/path` too — and an audit trail that recorded every file a
 	// script opened and not the script itself was missing the first one.
-	b, err := sh.readFile(path)
+	b, err := sh.readFile(read)
 	if err != nil {
 		// Not a usage error. Every shell in the panel tells this apart from
 		// being invoked wrongly, and three of the four tell the two ways it
@@ -2099,7 +2114,20 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// invalid option name`, word for word what the same option draws
 		// with no operand at all.
 		return source{
-			scriptErr: &scriptError{path: path, err: err},
+			scriptErr: &scriptError{path: read, err: err},
+			name:      sh.Name, dg: sh.Diagnostics,
+			params: args[1:], opts: inv.opts,
+		}, nil
+	}
+	if sh.Diagnostics.ScriptBinaryContent != "" &&
+		sh.Semantics.BinaryContentIsNotRunAsAScript == interp.Yes &&
+		interp.BinaryScriptContent(b) {
+		// Read, and then declined: the file is not shell text. Carried as a
+		// script error like every other refusal of the operand, so it is
+		// numbered and named where they are — 126, and under the path the
+		// search resolved, which is what the shell had open.
+		return source{
+			scriptErr: &scriptError{path: read, err: interp.ErrBinaryScript},
 			name:      sh.Name, dg: sh.Diagnostics,
 			params: args[1:], opts: inv.opts,
 		}, nil
@@ -2108,9 +2136,46 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 	// diagnostic, not itself, and reports in the script form — ksh93 also
 	// changes how it names the line.
 	return source{
-		src: string(b), name: path, file: path,
+		src: string(b), name: read, file: read, zero: zero,
 		params: args[1:], dg: sh.Diagnostics.ForScript(), opts: inv.opts,
 	}, nil
+}
+
+// scriptOnPath resolves a script operand, answering with the path to read and
+// with the word `$0` should keep where the two differ.
+//
+// Only a slash-less operand is looked for, and only in a dialect that looks;
+// everything else comes back as it was written, with no second name. See
+// Semantics.ScriptOperandSearchedOnPath for the panel's row and for why the
+// candidate has to be readable — a mode-000 file on PATH is passed over and
+// the search goes on.
+func (sh Shell) scriptOnPath(operand string) (read, zero string) {
+	if !sh.Semantics.ScriptOperandSearchedOnPath || strings.ContainsRune(operand, '/') {
+		return operand, ""
+	}
+	list, _ := lookupEnv(sh.env(), "PATH")
+	for _, dir := range filepath.SplitList(list) {
+		if dir == "" {
+			// An empty entry is the current directory, which is what every
+			// PATH search in this tree already reads it as.
+			dir = "."
+		}
+		candidate := filepath.Join(dir, operand)
+		// Opened rather than stat'd, which is the measured rule: a directory
+		// and a file this shell may not read are both passed over, and the
+		// search ends at "no such file" rather than at either of them.
+		if info, err := os.Stat(candidate); err != nil || info.IsDir() {
+			continue
+		}
+		if _, err := sh.readFile(candidate); err != nil {
+			continue
+		}
+		return candidate, operand
+	}
+	// Nothing on the list. Reported as the operand was written, and as a file
+	// that is not there rather than as a search that failed — measured, `bash
+	// nosuchname` is the same sentence `bash ./nosuchname` gets.
+	return operand, ""
 }
 
 // commandWithStdinOption is `-c` and `-s` together, where the two routes have
@@ -2485,6 +2550,12 @@ func (sh Shell) runInput(in source) int {
 	}
 
 	r := sh.newRunner(name, in.params, dg, in.invocationRoute())
+	if in.zero != "" {
+		// `$0` where it is not the name diagnostics use — see source.zero.
+		// Through the rename seam rather than through Runner.Name, which is
+		// exactly the split that seam exists for.
+		r.SetDollarZeroName(in.zero)
+	}
 	// `-s` as written, which `$-` shows even where `-c` supplied the
 	// program instead.
 	r.StandardInputOption = in.stdinOption

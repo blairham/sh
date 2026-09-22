@@ -121,11 +121,15 @@ import (
 // `emulate` keep theirs, which is also what gives a subshell its own copy.
 const zmodloadStore = ".zsh.zmodload"
 
-// zmodloadAlwaysLoaded is the module a fresh shell already has.
+// zmodloadAlwaysLoaded is the module a fresh shell already has **whether or
+// not it has an editor**, which is the part of the answer that does not move.
 //
 // Measured: `zsh -f -c zmodload` writes exactly `zsh/main`, `zmodload -L`
 // writes `zmodload zsh/main`, and `zmodload -e zsh/main` is 0 while the same
-// question about `zsh/complete` or `zsh/zle` is 1. It names no features —
+// question about `zsh/complete` or `zsh/zle` is 1. That last clause is a
+// measurement of a `-c` shell and reads as one: at a real prompt both of
+// those are 0, because the editor starts and brings them — see
+// zmodloadEditorLoads, where the pty rows are. It names no features —
 // `zmodload -lF zsh/main` on a loaded one is `module 'zsh/main' does not
 // support features` — so the rule below loads it vacuously, which is the
 // same answer arrived at rather than a special case.
@@ -428,17 +432,118 @@ func zmodloadMissing(r *interp.Runner, features []string, named map[string]bool)
 	return missing
 }
 
+// zmodloadEditorLoads is what an interactive shell with a terminal has
+// loaded that a script has not, and **when** each one arrives.
+//
+// Measured 2026-09-22 through `zsh/zpty`, driving zsh 5.9.2 and asking
+// `zmodload -e NAME` from a `~/.zshrc` and again after it:
+//
+//	                          zsh/zle   zsh/complete
+//	prompt, or after the rc      0           0
+//	*during* the rc              0           1
+//	interactive, no terminal     1           1
+//	not interactive              1           1
+//
+// Two rules, not one, and the second row is the whole reason this is a table
+// rather than a list. A `~/.zshrc` runs **before** `zsh/complete` is there
+// and **after** `zsh/zle` is, so a rule that named one moment for both would
+// have been wrong for one of them wherever it was put — which is exactly the
+// shape the first version of this change had, and it was wrong in the case
+// that matters: an rc file is where a plugin binds its widgets.
+//
+// **A terminal decides it, not a prompt loop.** The issue this comes from
+// (#4233) has `-f -i -c` answering 1 in both shells, and that reading is off
+// a pipe: on a pty the same `-f -i -c` is 0 for both modules, because the
+// shell is interactive and has a terminal and it makes no difference that no
+// prompt is ever drawn. So the condition is the pair this shell already keeps
+// — see [interp.Runner.Interactive] and [interp.Runner.Terminal], which is
+// the same pair zleOption's own set refuses on — and not whether the editor
+// has been handed to the runner. [interp.Runner.EditLine] was the first
+// answer here and cannot be it: the front end sets that seam *after* the
+// startup files have run, so an rc file asking about `zsh/zle` would still
+// have been told 1 and F-Sy-H would still have unbound itself.
+//
+// The seven other modules in the same measurement — `zsh/zleparameter`,
+// `zsh/parameter`, `zsh/complist`, `zsh/terminfo` among them — are 1 in every
+// row, so they stay a script's to ask for.
+//
+// **Still through the gate.** Both pass zmodloadLoad's rule today —
+// `zmodload zsh/zle` and `zmodload zsh/complete` are each 0 here — so nothing
+// is being claimed for the editor that the feature table would refuse a
+// script. It is asked rather than asserted for the reason the rest of this
+// file is: if a feature is ever withdrawn, the module goes back to refusing,
+// by the same sentence, at a prompt as well as in a script.
+var zmodloadEditorLoads = map[string]func(r *interp.Runner) bool{
+	// There before the first startup file, which is what #4233 turns on:
+	// `add-zle-hook-widget` guards itself with `zmodload -e zsh/zle` and
+	// every plugin that binds a widget calls it from an rc file.
+	"zsh/zle": func(*interp.Runner) bool { return true },
+	// And this one is not there yet while a startup file is running. Asked
+	// of the call stack rather than of a flag, because "a file the shell is
+	// in" is already a frame here — see [interp.Frame.Startup], which marks
+	// the run-commands file, the login profile and `$ENV` alike.
+	"zsh/complete": func(r *interp.Runner) bool { return !zmodloadInStartupFile(r) },
+}
+
+// zmodloadInStartupFile reports whether the shell is running a startup file
+// right now — an rc, a profile, `$ENV` — at any depth, so a function an rc
+// calls is still inside it.
+func zmodloadInStartupFile(r *interp.Runner) bool {
+	for _, f := range r.CallStack() {
+		if f.Startup {
+			return true
+		}
+	}
+	return false
+}
+
+// zmodloadStartedWith is the modules this shell has without anything asking —
+// `zsh/main`, and what being an interactive shell on a terminal brought.
+//
+// See zmodloadEditorLoads for the measurement, for why a terminal rather than
+// a prompt decides it, and for why the editor is asked through the same
+// feature gate a script goes through.
+func zmodloadStartedWith(r *interp.Runner) []string {
+	started := []string{zmodloadAlwaysLoaded}
+	if !r.Interactive || !r.Terminal {
+		return started
+	}
+	for _, m := range zmodloadEditorNames {
+		if !zmodloadEditorLoads[m](r) {
+			continue
+		}
+		if len(zmodloadMissing(r, zmodloadFeatures[m], nil)) == 0 {
+			started = append(started, m)
+		}
+	}
+	// Sorted here as well as below, because this is a listing too the moment
+	// it is more than one name — measured at a prompt, zsh writes
+	// `zsh/compctl`, `zsh/complete`, `zsh/main`, `zsh/zle` in that order.
+	//
+	// `zsh/compctl` is the one of those four this shell does not claim. It
+	// has no entry in the table above, and the rule an entry lands under is
+	// that it arrives *with* the feature rather than in front of it: a name
+	// listed as loaded is a script told that `compctl` is there to call.
+	sort.Strings(started)
+	return started
+}
+
+// zmodloadEditorNames is zmodloadEditorLoads in a fixed order, because a map
+// has none and this set is walked to build a listing.
+var zmodloadEditorNames = []string{"zsh/complete", "zsh/zle"}
+
 // zmodloadLoaded is the modules loaded now, sorted — which is the order
 // zsh's listing is in.
 //
 // A store that was never written means the shell as it started, which is
-// `zsh/main` alone. An *empty* store is not the same thing and must not read
-// as the default: `zmodload -u zsh/main` succeeds and empties the listing in
-// zsh, so the emptied set has to survive being written.
+// `zsh/main` alone in a script and `zsh/zle` and `zsh/complete` besides at a
+// prompt — see zmodloadStartedWith. An *empty* store is not the same thing
+// and must not read as the default: `zmodload -u zsh/main` succeeds and
+// empties the listing in zsh, so the emptied set has to survive being written.
 func zmodloadLoaded(r *interp.Runner) []string {
 	stored, ok := r.GetArray(zmodloadStore)
 	if !ok {
-		return []string{zmodloadAlwaysLoaded}
+		return zmodloadStartedWith(r)
 	}
 	out := append([]string(nil), stored...)
 	// Sorted because that is the order zsh's listing is in. This was once

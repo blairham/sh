@@ -3747,9 +3747,39 @@ func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 // is `unset`'s row and not a rule about operands. The control is a key with
 // nothing to quote, `unset m[plain]`, which removes the element on every one
 // of the six spellings.
+// **A lexed operand's brackets are not scanned and its subscript is not
+// unquoted**, and both halves of that are the same fact: the `[` and the `]`
+// are characters the *source* wrote, so everything between them arrived from
+// an expansion and is the key exactly as it came. Scanning it again reads a
+// bracket the key is made of as the one that ends the subscript, and
+// unquoting it again takes off a quote the key is made of. Measured
+// 2026-09-22 on bash 5.3.20 from a script file, a table holding the keys
+// `x]y`, `]`, `[`, `x` and `'q'`:
+//
+//	k='x]y'; unset a[$k]    the element is gone
+//	k=']';   unset a[$k]    gone
+//	k='[';   unset a[$k]    gone
+//	k="'q'"; unset a[$k]    gone — the key with the quotes in it, and the
+//	                        plain `q` beside it is untouched
+//
+// Every one of them was silently left standing here, at status 0, because
+// the scan found the wrong `]` — or, for the last row, because the key was
+// unquoted into a different key that did exist. The quoted spellings are the
+// control and they remove nothing in bash either: `unset "a[$k]"` leaves all
+// five, which is what the rows above this comment already say.
 func (r *Runner) subscriptOperandRead(operand string, lexed bool) (string, string, bool) {
 	open := strings.IndexByte(operand, '[')
-	if open <= 0 || !r.operandBracketsBalance(operand[open:], lexed) {
+	if open <= 0 {
+		return "", "", false
+	}
+	if lexed {
+		if !strings.HasSuffix(operand, "]") {
+			return "", "", false
+		}
+		sub := subscriptOperandText(operand[open+1 : len(operand)-1])
+		return operand[:open], r.operandSubscriptTilde(operand[:open], sub), true
+	}
+	if !r.operandBracketsBalance(operand[open:], lexed) {
 		return "", "", false
 	}
 	base := operand[:open]

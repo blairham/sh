@@ -94,7 +94,13 @@ type literalElem struct {
 // goes or is an ordinary word with a bracket in front of it. True everywhere
 // but one dialect; see [Runner.literalReadsSubscripts], which is the whole of
 // what decides it and where it is measured.
-func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts bool) ([]literalElem, bool) {
+//
+// bareIsOneValue says the elements that carry no such head are each **one**
+// field rather than as many as their expansion comes to — the keyed literal's
+// reading, and the whole of Semantics.BareElementsInATableLiteralAreEachOneValue.
+// See [Runner.bareLiteralElementIsOneValue], which is where the question is
+// put and which is the only thing that ever passes this true.
+func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIsOneValue bool) ([]literalElem, bool) {
 	if parsed, ok := r.takeExpandedElements(elems); ok {
 		// Already expanded, by the caller that is about to trace what they
 		// came to. See Runner.assignAll.
@@ -162,9 +168,100 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts bool) (
 				continue
 			}
 		}
+		if bareIsOneValue {
+			// Expanded as an assignment's value: no splitting, no pathname
+			// expansion, and a null result kept as a field rather than
+			// removed. One word in, one field out, whatever the expansion
+			// came to.
+			out = append(out, literalElem{fields: []string{r.expandAssignValue(w)}})
+			continue
+		}
 		out = append(out, literalElem{fields: r.expandWord(w)})
 	}
 	return out, !r.failedHeading()
+}
+
+// bareLiteralElementIsOneValue reports whether this literal's bare elements
+// are each one field, which is a question only a **keyed** literal asks.
+//
+// The name is what decides whether the literal is keyed, and it is asked of
+// the same two things every other seam here asks: the table already declared,
+// and the table letter written on the command this literal is an operand of.
+// The second is what makes `typeset -A m=($k $v)` answer the same as
+// `typeset -A m; m=($k $v)`, which it must — the letter and the literal being
+// on one command is the ordinary spelling and the one a script writes.
+//
+// tableLetterAhead is that second reading at the one seam that cannot look it
+// up: an operand's elements are expanded **before** the utility runs, so
+// Runner.tableLetterHere has not been written yet and the letter has to come
+// from the command's own words. See Runner.expandArrayOperands.
+//
+// An indexed literal never reaches the axis at all, which is the control the
+// axis's own comment records: `a=($k)` is four fields in every column.
+func (r *Runner) bareLiteralElementIsOneValue(name string, elems []*syntax.ArrayElem, tableLetterAhead bool) bool {
+	if name == "" || (!tableLetterAhead && !r.assocDeclared(name) && !r.tableLetterHere[name]) {
+		return false
+	}
+	if r.sem().BareElementsInATableLiteralEndTheScript {
+		// The dialect that refuses a bare element in a table literal outright
+		// never reaches this question — see the axis's own doc comment, and
+		// indexArrayIntoATable, which is where that refusal is made. Asking
+		// here would refuse `typeset -A m=($e)` there with the wrong
+		// sentence and at the wrong status.
+		return false
+	}
+	if !aBareElementCanDiffer(elems) {
+		// Asked at the disagreement and not on the common path. A literal
+		// whose every element names its key does not put the question at
+		// all, and neither does one whose bare elements are plain words:
+		// `typeset -A m=(k v)` is the same table under both readings, so
+		// asking there would refuse the ordinary spelling in every dialect
+		// that has no answer.
+		return false
+	}
+	return r.ask(r.sem().BareElementsInATableLiteralAreEachOneValue,
+		"each bare element of a keyed literal being one field rather than a word list")
+}
+
+// aBareElementCanDiffer reports whether any element of the literal carries no
+// `[key]=` head **and** could come to other than exactly one field.
+//
+// The first half is read off the written word for the reason
+// indexArrayIntoATable reads it that way: the shape is decided before
+// anything expands.
+//
+// The second half is what keeps the axis off the common path. The two
+// readings of a bare element part company only where an ordinary word
+// expansion would split it, drop it or match it against the directory, and a
+// word made of literal text with no pattern character in it does none of
+// those — `typeset -A m=(k v)` is one table under both readings, and a
+// question put there would refuse the ordinary spelling in the four dialects
+// that have no answer to it.
+func aBareElementCanDiffer(elems []*syntax.ArrayElem) bool {
+	for _, el := range elems {
+		if el.Nested != nil || (el.Word != nil && syntax.SubscriptedElement(el.Word)) {
+			continue
+		}
+		if el.Word == nil || wordCanSplitOrMatch(el.Word) {
+			return true
+		}
+	}
+	return false
+}
+
+// wordCanSplitOrMatch reports whether a word holds anything an ordinary
+// expansion could split, remove or match with: a span that is not literal
+// text, or unquoted literal text carrying a pattern character.
+func wordCanSplitOrMatch(w *syntax.Word) bool {
+	for _, s := range w.Spans {
+		if s.Kind != syntax.Literal {
+			return true
+		}
+		if s.Quoting == syntax.Unquoted && strings.ContainsAny(s.Value, "*?[") {
+			return true
+		}
+	}
+	return false
 }
 
 // takeExpandedElements is an element list somebody has already expanded for
@@ -288,7 +385,8 @@ func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.ArrayElem) bool {
 // text — `${a[0]}` answered the six characters `[2]=c` — and nothing reported
 // it, so the array looked populated and was not.
 func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
-	parsed, ok := r.literalElems(elems, r.literalReadsSubscripts(name, elems, appendTo))
+	parsed, ok := r.literalElems(elems, r.literalReadsSubscripts(name, elems, appendTo),
+		r.bareLiteralElementIsOneValue(name, elems, false))
 	if !ok {
 		// The elements were not read, so there is nothing to store and the
 		// name keeps whatever it was holding. Before literalSubscriptIsAKey,

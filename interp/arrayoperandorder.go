@@ -3,6 +3,8 @@
 
 package interp
 
+import "strings"
+
 // When a declaration utility's **array literal** operand is expanded, against
 // when the command's own redirections are opened.
 //
@@ -60,7 +62,13 @@ package interp
 //
 // The elements are consumed by the store that runs after the utility, so this
 // decides *when* the value was computed and nothing about what is stored.
-func (r *Runner) expandArrayOperands() {
+// tableLetterAhead says the command these operands belong to carries the
+// table letter, read off its own words because nothing has recorded it yet:
+// the elements are expanded here, in front of the utility, and
+// Runner.tableLetterHere is written by the utility. See
+// Runner.bareLiteralElementIsOneValue, which is the one question that needs
+// it.
+func (r *Runner) expandArrayOperands(tableLetterAhead bool) {
 	for i := range r.arrayOperands {
 		op := &r.arrayOperands[i]
 		a := op.assign
@@ -71,7 +79,8 @@ func (r *Runner) expandArrayOperands() {
 			continue
 		}
 		parsed, ok := r.literalElems(a.Elems,
-			r.literalReadsSubscripts(a.Name, a.Elems, a.Append))
+			r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
+			r.bareLiteralElementIsOneValue(a.Name, a.Elems, tableLetterAhead))
 		if !ok {
 			// The element list failed — an unmatched pattern where the
 			// dialect calls that an error, a division by zero. The store
@@ -81,4 +90,33 @@ func (r *Runner) expandArrayOperands() {
 		}
 		op.expanded = &expandedAssign{assign: a, elems: parsed, elemsSet: true}
 	}
+}
+
+// tableLetterAmongTheOptions reports whether a declaration utility's option
+// words carry the table letter.
+//
+// Read off the words rather than parsed, and the narrowness is deliberate:
+// the only thing it decides is which of two expansions a keyed literal's bare
+// elements get, so a word it cannot make sense of is simply not a table
+// letter and the elements are expanded the way they were before this existed.
+// The utility's own option parse runs afterwards and is what reports anything
+// wrong with them.
+//
+// Only ever asked of a command that already has an array-literal *operand*,
+// which is a shape only a declaration utility has, so there is no question
+// here of whether argv[0] is one.
+func tableLetterAmongTheOptions(argv []string) bool {
+	for _, w := range argv[1:] {
+		if w == "--" {
+			return false
+		}
+		if len(w) < 2 || (w[0] != '-' && w[0] != '+') {
+			// The first operand: every option word is behind it.
+			return false
+		}
+		if strings.ContainsRune(w, 'A') {
+			return true
+		}
+	}
+	return false
 }

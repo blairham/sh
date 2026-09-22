@@ -669,7 +669,8 @@ func (r *Runner) badGetoptsName(name string) int {
 // isStoreOperandName is the shared rule: an operand a builtin writes through
 // is a name, or it names an element of one where the dialect has elements.
 func (r *Runner) isStoreOperandName(builtin, name string) bool {
-	if base, _, subscripted := r.subscriptOperand(name); subscripted && isPlainName(base) &&
+	if base, _, subscripted := r.subscriptOperandRead(name,
+		r.outputOperandBracketsAreLexed(name)); subscripted && isPlainName(base) &&
 		r.sem().StoreOperandTakesASubscript != No {
 		return true
 	}

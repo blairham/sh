@@ -9899,6 +9899,46 @@ type Semantics struct {
 	// holds. dash and ash have no tables and never ask (#2611).
 	BareElementsInATableLiteralEndTheScript bool
 
+	// BareElementsInATableLiteralAreEachOneValue says that each element of a
+	// keyed literal written **without** a `[key]=` head contributes exactly
+	// one field — the word expanded as an assignment's value, with no
+	// splitting, no pathname expansion and a null result kept — rather than
+	// as an ordinary word whose expansion may come to any number of fields.
+	//
+	// It decides what `m=($k $v)` means, and the two readings part company
+	// on every value with a space or a `*` in it. Measured 2026-09-22 with
+	// `k='1 2'; v='3 4 5'`, and with `a`, `*` where a directory of files was
+	// beside the shell:
+	//
+	//	shell        `typeset -A m=($k $v); typeset -p m`
+	//	bash 5.3.20  `declare -A m=(["1 2"]="3 4 5" )` — one field each
+	//	zsh 5.9.2    `typeset -A m=( ['1 2']='3 4 5' )` — the same answer,
+	//	             reached the other way: that shell does not split an
+	//	             unquoted expansion at all, so an ordinary word already
+	//	             comes to one field
+	//	bash 5.3.20  `typeset -A m=(a *)` is `declare -A m=([a]="*" )`, so the
+	//	             pathname expansion an ordinary word would do is off here
+	//	             too
+	//
+	// The **null** result is what separates the two readings where splitting
+	// cannot: with `e=` unset-empty, `typeset -A m=(p $e q)` is `declare -A
+	// m=([q]="" [p]="" )` in bash — three fields, the empty one kept as a
+	// value — and `typeset -A m=( [p]=q )` in zsh, where the empty word is
+	// removed as it is in any other word list. So a dialect that reaches one
+	// field by not splitting is still answering *no* here: the question is
+	// whether the element is an assignment's value, and only one column
+	// makes it one.
+	//
+	// An indexed literal is the control and it is not this question: `a=($k)`
+	// is four fields in bash exactly as it is in every column, so this is
+	// about the keyed literal's pairing and not about assignments in general.
+	//
+	// unanswered in ksh93, dash and ash. ksh93 refuses a bare element in a
+	// table literal outright — see
+	// BareElementsInATableLiteralEndTheScript — so it never reaches the
+	// question, and dash and ash have no tables to put one in.
+	BareElementsInATableLiteralAreEachOneValue Answer
+
 	// WholeArraySubscriptAssigningAnArray is what `a[@]=Z` and `a[*]=Z` mean
 	// where the name is **not** a table — see WholeArraySubscriptAssignPolicy
 	// for the five answers.

@@ -81,7 +81,7 @@ func (r *Runner) nestElemLiteral(a *syntax.Assign) {
 // come to disagree about what a literal *is*; see literalWords, which is the
 // same call for the dialect that splices.
 func (r *Runner) nestedLiteral(name string, elems []*syntax.ArrayElem) (Element, bool) {
-	parsed, ok := r.literalElems(elems, r.literalShapeReadsSubscripts(elems))
+	parsed, ok := r.literalElems(elems, r.literalShapeReadsSubscripts(elems), false)
 	if !ok {
 		return Element{}, false
 	}

@@ -6394,7 +6394,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			return nil
 		}
 	}
-	r.expandArrayOperands()
+	r.expandArrayOperands(tableLetterAmongTheOptions(argv))
 	holdsItsLine := r.holdsItsLineForACompoundOperand()
 	if holdsItsLine {
 		// A compound operand's members are performed in front of the command
@@ -10347,7 +10347,8 @@ func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAs
 		r.ask(r.sem().TraceArrayLiteralShowsTheExpandedElements,
 			"an array literal traced as what its elements expanded to") {
 		if parsed, ok := r.literalElems(a.Elems,
-			r.literalReadsSubscripts(a.Name, a.Elems, a.Append)); ok {
+			r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
+			r.bareLiteralElementIsOneValue(a.Name, a.Elems, false)); ok {
 			e.elems, e.elemsSet = parsed, true
 		}
 	}

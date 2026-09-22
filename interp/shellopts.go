@@ -98,6 +98,35 @@ func (r *Runner) producedOptionList(name string) (string, bool) {
 	return "", false
 }
 
+// exportedOptionLists is the environment entry a bound option record earns
+// when the *script* exported it rather than inheriting it, and `done` names the
+// ones the walk over the inherited environment has already written.
+//
+// A pass of its own for the reason exportedTables has one: the name is
+// produced and readonly, so it is in no map any other pass walks — the walk
+// over Vars cannot see it, and the walk over Env sees it only where it came in
+// that way. Without this, `set -o noglob; export SHELLOPTS` records the
+// attribute, reads back as `declare -rx`, and hands a child nothing at all —
+// which is the opposite of what the script asked, at status 0, and `export
+// SHELLOPTS` is the documented way to make it stick because assigning to the
+// variable is refused (#4188).
+//
+// Sorted, for the reason zeroValuedTypeExports is sorted: a child's
+// environment must not depend on the order a slice happened to be built in.
+// The slice is already in registration order, which is stable, and this says
+// so rather than relying on it.
+func (r *Runner) exportedOptionLists(done map[string]bool) []string {
+	var out []string
+	for _, l := range r.optionLists {
+		if done[l.name] || !r.isExported(l.name) {
+			continue
+		}
+		out = append(out, l.name+"="+l.value(r))
+	}
+	sort.Strings(out)
+	return out
+}
+
 // shellOptions is the value: every long option name this shell has on, sorted
 // and colon-separated.
 //

@@ -231,3 +231,44 @@ printenv `+optionRecord+`
 		t.Errorf("the child was handed %q, want this shell's record rather than nothing", out)
 	}
 }
+
+// TestAScriptCanExportTheRecordItself.
+//
+// The other way a child gets the record, and the one nothing reached: the
+// recomputation above lives in the walk over the *inherited* environment, so a
+// name the script exported itself was in no pass at all. The record is
+// produced and readonly, so the walk over the stored variables cannot see it
+// either, and a shell that recorded the attribute — `declare -rx` reads it
+// back — handed its children nothing.
+//
+// Exporting it is the documented way to make an option stick across a child,
+// since assigning to the record is refused (#4188).
+func TestAScriptCanExportTheRecordItself(t *testing.T) {
+	out, _ := run(t, `set -u
+export `+optionRecord+`
+printenv `+optionRecord+`
+`, withOptionRecord)
+	if !strings.Contains(out, "nounset") {
+		t.Errorf("the child was handed %q, want the record with the option the script turned on", out)
+	}
+	// And the attribute is what decides: without it the child sees nothing,
+	// which is what keeps this from handing every command a record it never
+	// asked for.
+	bare, _ := run(t, `set -u
+printenv `+optionRecord+`
+echo "st=$?"
+`, withOptionRecord)
+	if strings.Contains(bare, "nounset") {
+		t.Errorf("an unexported record reached the child: %q", bare)
+	}
+	// Taking the attribute off again takes it back out.
+	off, _ := run(t, `set -u
+export `+optionRecord+`
+export -n `+optionRecord+`
+printenv `+optionRecord+`
+echo "st=$?"
+`, withOptionRecord)
+	if strings.Contains(off, "nounset") {
+		t.Errorf("the record survived `export -n`: %q", off)
+	}
+}

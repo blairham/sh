@@ -1253,9 +1253,35 @@ type dotSearch struct {
 // of them only so as to say they have not got it — and zsh reads it as the
 // name of the file, so `. -p dir f` there is a complaint about a file called
 // `-p`. Which word the operand is depends on the answer, so it comes first.
+//
+// A leading `--` is the exception and is taken before that answer is asked,
+// because the panel does not disagree about it. Measured 2026-09-22 with an
+// absolute path, so PATH search is not a confound:
+//
+//	. -- /abs/f.sh   zsh 5.9.2, bash 5.3, bash as `sh`, bash 3.2,
+//	                 dash and ksh93 all source the file at 0
+//
+// `source -- /abs/f.sh` is the same in all of them but dash, which has no
+// such builtin at all. One `--` and one only: `source -- -- f` in zsh is a
+// complaint about a file named `--`, which is what says it is end-of-options
+// and not a word the builtin skips.
+//
+// This was zsh's alone to get wrong and it got it wrong at startup. F-Sy-H
+// opens with `builtin source -- "$plugin_dir/lib/lifecycle.zsh" || return`,
+// so reading the `--` as the filename made the plugin's first line fail and
+// the `|| return` abandoned the rest of it — a real `~/.zshrc` printed
+// `(anon):source:29: no such file or directory: --` and loaded no syntax
+// highlighting (#4210).
 func (r *Runner) dotOptions(args []string) (rest []string, search dotSearch, code int) {
 	if len(args) == 0 || !strings.HasPrefix(args[0], "-") || args[0] == "-" {
 		return args, search, 0
+	}
+	if args[0] == "--" {
+		// Nothing after it is an option, whatever the dialect answers, so
+		// this returns rather than falling into the loop below. The loop
+		// keeps a `--` case of its own for the other position it can stand
+		// in — after an option that took an argument, as in `. -p /tmp -- f`.
+		return args[1:], search, 0
 	}
 	if !r.ask(r.sem().DotReadsOptions, "`.` reading a leading dash-word as an option") {
 		// Not an error: the word is the filename, and resolving it will

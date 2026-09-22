@@ -120,6 +120,29 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			return nil
 		}))
 	}
+	// dropFdVarDescriptor takes back a descriptor the shell had picked for a
+	// `{name}` redirection whose name would not take the number.
+	//
+	// The open happened before the store was tried — it has to, since the
+	// number the name receives is the number the open produced — so a
+	// refused store leaves a descriptor nothing published and nothing can
+	// reach. Measured 2026-09-22 on bash 5.3.20: `readonly v=42` and then
+	// three refused `{v}>` redirections in a row, and the next `exec
+	// {q}</dev/null` still answers 10. Here it answered 13, because each
+	// refusal kept the number and the file behind it — which moves every
+	// descriptor a script picks afterwards.
+	//
+	// The file is closed only where this redirection owns the close. A
+	// descriptor that does *not* outlive its command already has its closer
+	// on the list above, and closing it twice is what a second close here
+	// would be.
+	dropFdVarDescriptor := func(fd int, own io.Closer, persists bool) {
+		delete(r.fds, fd)
+		delete(r.execFds, fd)
+		if persists && own != nil {
+			_ = own.Close()
+		}
+	}
 	// closeMovedSource is the second half of `N<&M-`: M is closed, and
 	// forKeeps says whether the command takes that back when it ends.
 	//
@@ -263,14 +286,15 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			persists := false
 			if fdVar != "" {
 				persists = r.ask(r.sem().FdVariableOutlivesTheCommand,
-					"a variable-named descriptor outliving its command")
+					"a variable-named descriptor outliving its command") &&
+					r.FdVariableDescriptorOutlivesTheCommand()
 				if r.unspecified {
 					r.redirErr = true
 					return closers, nil
 				}
 				hfd = r.nextFreeFd(-1)
 			}
-			if r.refuseFdOverLimit(hfd) || r.unspecified {
+			if r.refuseFdOverLimitFor(fdVar, hfd, "") || r.unspecified {
 				r.redirErr = true
 				return closers, nil
 			}
@@ -316,6 +340,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.redirWrote(hfd)
 				if fdVar != "" {
 					if !r.setFdVar(fdVar, itoa(hfd)) {
+						dropFdVarDescriptor(hfd, closer, persists)
 						r.redirErr = true
 						return closers, nil
 					}
@@ -488,7 +513,8 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				fd = r.nextFreeFd(moveFrom)
 			}
 			persists := fdVar != "" &&
-				r.ask(r.sem().FdVariableOutlivesTheCommand, "a variable-named descriptor outliving its command")
+				r.ask(r.sem().FdVariableOutlivesTheCommand, "a variable-named descriptor outliving its command") &&
+				r.FdVariableDescriptorOutlivesTheCommand()
 			if r.unspecified {
 				r.redirErr = true
 				return closers, nil
@@ -496,7 +522,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// The number, before the duplication that would use it. There is
 			// no file here for a refusal to have created, which is the whole
 			// of why this side is checked earlier than the other.
-			if r.refuseFdOverLimit(fd) || r.unspecified {
+			if r.refuseFdOverLimitFor(fdVar, fd, name) || r.unspecified {
 				r.redirErr = true
 				return closers, nil
 			}
@@ -536,6 +562,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			r.redirWrote(fd)
 			if fdVar != "" {
 				if !r.setFdVar(fdVar, itoa(fd)) {
+					// A duplication opens nothing of its own — the entry is
+					// a second name for a file something else holds — so
+					// only the name goes.
+					dropFdVarDescriptor(fd, nil, persists)
 					r.redirErr = true
 					return closers, nil
 				}
@@ -640,8 +670,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// rather than once per name: it is a question about the operator.
 		persists := false
 		if fdVar != "" {
+			// The session's own switch can only take the descriptor back
+			// sooner, never keep it longer — see
+			// Runner.FdVariableDescriptorOutlivesTheCommand.
 			persists = r.ask(r.sem().FdVariableOutlivesTheCommand,
-				"a variable-named descriptor outliving its command")
+				"a variable-named descriptor outliving its command") &&
+				r.FdVariableDescriptorOutlivesTheCommand()
 			if r.unspecified {
 				r.redirErr = true
 				return closers, nil
@@ -851,7 +885,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// limit of twenty, `exec 20>fresh` complains and the file is there
 			// afterwards. The open happens and the descriptor it produces is what
 			// cannot be moved to the number the script asked for.
-			if r.refuseFdOverLimit(fd) || r.unspecified {
+			if r.refuseFdOverLimitFor(fdVar, fd, name) || r.unspecified {
 				_ = f.Close()
 				r.redirErr = true
 				return closers, nil
@@ -919,6 +953,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.redirWrote(fd)
 				if fdVar != "" {
 					if !r.setFdVar(fdVar, itoa(fd)) {
+						dropFdVarDescriptor(fd, f, persists)
 						r.redirErr = true
 						return closers, nil
 					}
@@ -1433,6 +1468,60 @@ func (r *Runner) refuseFdOverLimit(fd int) bool {
 	r.diagf("%s\n", Wording(r.diag().FdNumberOverLimit, "%[1]d: %[2]s",
 		fd, r.diag().reasonText(reason(syscall.EBADF))))
 	r.status = r.diag().redirectFailureStatus()
+	return true
+}
+
+// refuseFdOverLimitFor routes the two refusals a number over the process's
+// limit can get: a number the **script** wrote is the dialect's axis above,
+// and a number this shell **picked** for a `{name}` redirection is the event
+// below, which every shell with the construct refuses.
+func (r *Runner) refuseFdOverLimitFor(fdVar string, fd int, target string) bool {
+	if fdVar != "" {
+		return r.refusePickedFdOverLimit(fd, target)
+	}
+	return r.refuseFdOverLimit(fd)
+}
+
+// refusePickedFdOverLimit reports a descriptor the *shell* picked for a
+// `{name}` redirection that this process could not hold.
+//
+// A different event from [Runner.refuseFdOverLimit], and the panel splits
+// differently on it. A number the script wrote is refused by two of the five;
+// a number the shell picked is refused by **all three that have the
+// construct** — measured 2026-09-22 under `ulimit -n 8` from a script file,
+// where bash 5.3.20, ksh93 and zsh 5.9.2 each refuse `exec {v}</dev/null` at
+// 1, and dash and BusyBox ash have no such redirection to refuse. So there is
+// no axis here: what the three disagree about is the wording, which
+// Diagnostics.FdPickedNumberUnusable carries beside CannotOpen.
+//
+// Only reachable under a limit below ten, since that is where the picking
+// starts — and the open has already happened where there is one, which is the
+// order the sentences describe: the file is opened and the descriptor it
+// produced is what cannot be moved to the number.
+func (r *Runner) refusePickedFdOverLimit(fd int, target string) bool {
+	if fd <= 2 || r.GetRlimit == nil {
+		return false
+	}
+	soft, _, err := r.GetRlimit(ResourceOpenFiles)
+	if err != nil || soft == RlimitInfinity || int64(fd) < soft {
+		return false
+	}
+	d := r.diag()
+	why := d.reasonText(reason(syscall.EINVAL))
+	if w := d.FdPickedNumberUnusable; w != "" {
+		// Located by name alone, which is the whole of what is special about
+		// this sentence: the shell that writes it leaves the line out of
+		// this one message and puts it back for the refusal underneath.
+		located := r.locatedByNameAlone
+		r.locatedByNameAlone = true
+		r.diagf("%s\n", Wording(w, "cannot duplicate fd: %[1]s", why))
+		r.locatedByNameAlone = located
+	}
+	if target == "" {
+		target = d.RedirectWithoutATargetName
+	}
+	r.diagf("%s\n", Wording(d.CannotOpen, "%[1]s: %[2]s", target, why))
+	r.status = d.redirectFailureStatus()
 	return true
 }
 
@@ -2149,6 +2238,16 @@ func (r *Runner) setFdVar(ref, value string) bool {
 	// the shell puts it: put aside and given back, the way every other site
 	// that lends a speaker does it.
 	outerSpeaker, outerFailed := r.fdVarSpeaker, r.assignFailed
+	// The transfer the store may raise is put aside with them. A name the
+	// shell will not write is refused the way an assignment to it is, and an
+	// assignment to a readonly name gives up the function it is in — but a
+	// *redirection* aimed at one does not: measured 2026-09-22 on bash
+	// 5.3.20, `readonly v=42; f() { exec {v}>>/dev/null; echo after; }; f`
+	// prints both sentences, then `after`, and leaves the function at 0,
+	// where the bare `v=1` in the same place ends the function at 1. So the
+	// refusal belongs to the redirection and the transfer is not the
+	// redirection's to carry.
+	outerCtl, outerDepth := r.ctl, r.ctlDepth
 	r.fdVarSpeaker, r.assignFailed = r.redirForCommandWord, false
 	_, refused := r.storeThroughOperand(ref, value)
 	failed := refused || r.assignFailed || r.ctl == controlExit
@@ -2156,6 +2255,7 @@ func (r *Runner) setFdVar(ref, value string) bool {
 	if !failed {
 		return true
 	}
+	r.ctl, r.ctlDepth = outerCtl, outerDepth
 	if w := r.diag().CannotAssignFdToVariable; w != "" {
 		r.diagf("%s\n", Wording(w, "%[1]s: cannot assign fd to variable", ref))
 	}

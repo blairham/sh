@@ -6130,6 +6130,39 @@ type Diagnostics struct {
 	// and quotes a different errno, so it says so.
 	FdNumberOverLimit string
 
+	// FdPickedNumberUnusable is the sentence one shell writes **before** the
+	// refusal when the number the *shell* picked for a `{name}` redirection
+	// is one this process cannot hold. One verb: the reason. It is located
+	// by name alone, with no line — which is how the shell that has it
+	// writes this one sentence and no other.
+	//
+	// Measured 2026-09-22 under `ulimit -n 8`, from a script file, over
+	// `exec {v}</dev/null`, `{v}>f`, `{v}>&1` and `cat {v}<<EOF`:
+	//
+	//	bash 5.3.20   `redirection error: cannot duplicate fd: Invalid
+	//	              argument`, then `<target>: Invalid argument`, at 1
+	//	ksh93         `<target>: cannot open [Invalid argument]`, alone, at 1
+	//	zsh 5.9.2     `cannot move fd 3: invalid argument`, alone, at 1
+	//
+	// The refusal beside it is CannotOpen with the target and EINVAL, which
+	// is what the first two write down to the byte — and `cannot open` for a
+	// `{v}>` create as well as for a `{v}<`, so the event is worded as a
+	// failed open in both and never as a failed create.
+	//
+	// zsh is the one column this does not reach: it names the descriptor the
+	// *open* produced rather than the target, and that number is the
+	// measuring process's — a shell in this runtime holds different ones, so
+	// writing it down would be recording a number rather than a rule. Its
+	// refusal and its status are what this gives it.
+	FdPickedNumberUnusable string
+
+	// RedirectWithoutATargetName is what that refusal names when the
+	// redirection has no target word at all — a here-document, whose word is
+	// a body rather than a filename. Measured in the same run: bash 5.3.20
+	// writes `file descriptor out of range` where a filename would go and
+	// ksh93 writes `(null)`.
+	RedirectWithoutATargetName string
+
 	// NoJobControl is `bg` or `fg` in a shell with none, for the dialects
 	// that say so before anything else — see
 	// Semantics.JobControlAbsenceIsReportedFirst, which is what decides

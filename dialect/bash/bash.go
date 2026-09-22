@@ -3427,6 +3427,12 @@ func Diagnostics() interp.Diagnostics {
 		// No verb at all: the name, then the OS string. Same either way —
 		// bash does not distinguish opening from creating.
 		CannotOpen: "%[1]s: %[2]s",
+		// The descriptor this shell picks for a `{name}` redirection is
+		// announced separately when the process cannot hold it: one sentence
+		// with no line in it, then the ordinary refusal above with the target
+		// and the same errno. Measured 2026-09-22 under `ulimit -n 8`.
+		FdPickedNumberUnusable:     "redirection error: cannot duplicate fd: %[1]s",
+		RedirectWithoutATargetName: "file descriptor out of range",
 		// And a duplication whose source is not open names the word the
 		// script *wrote*: `n=10; echo x >&$n` is `$n: Bad file descriptor`
 		// here where ksh93 and zsh both say `10`. The sentence is the

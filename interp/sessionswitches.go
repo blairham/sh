@@ -314,3 +314,28 @@ func (r *Runner) SetErrExitEntersACommandSubstitution(on bool) {
 		s.ErrExitEntersACommandSubstitution = a
 	})
 }
+
+// FdVariableDescriptorOutlivesTheCommand reports whether the descriptor a
+// `{name}>file` redirection picked is still open once the command carrying it
+// has ended — bash's `varredir_close` read the way round the shell behaves
+// rather than the way round the option is named.
+//
+// One shell in the panel names the question and it names the *closing*:
+// `shopt -s varredir_close` asks for the descriptor to be taken back. So the
+// table inverts and this does not, for the reason CompletesEmptyCommandWord
+// gives — there is exactly one place in the program where the sense of the
+// bit is decided.
+//
+// It is a permission and not a behavior: whether such a descriptor outlives
+// its command at all is Semantics.FdVariableOutlivesTheCommand, and this can
+// only turn that down. A dialect whose axis already closes the descriptor is
+// unaffected by the name being set.
+func (r *Runner) FdVariableDescriptorOutlivesTheCommand() bool {
+	return !r.fdVarClosedWithTheCommand
+}
+
+// SetFdVariableDescriptorOutlivesTheCommand moves it, in the positive
+// direction the getter reads.
+func (r *Runner) SetFdVariableDescriptorOutlivesTheCommand(on bool) {
+	r.fdVarClosedWithTheCommand = !on
+}

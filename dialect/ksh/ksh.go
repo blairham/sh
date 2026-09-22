@@ -3708,6 +3708,11 @@ func Diagnostics() interp.Diagnostics {
 		// it — the same shape ksh93 uses for `.`, which DotCannotOpen
 		// already says.
 		CannotOpen: "%[1]s: cannot open [%[2]s]",
+		// This shell writes no sentence of its own for a picked descriptor
+		// the process cannot hold — the refusal above is the whole of it —
+		// and where the redirection has no target word it names one anyway.
+		// Measured 2026-09-22 under `ulimit -n 8` on `cat {v}<<EOF`.
+		RedirectWithoutATargetName: "(null)",
 		// A duplication whose source is not open takes the same shape as an
 		// open that failed here — `cat <&10` is `10: cannot open [Bad file
 		// descriptor]`, measured 2026-09-12 — but it cannot share the field:

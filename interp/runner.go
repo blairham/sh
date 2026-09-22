@@ -2078,6 +2078,24 @@ type Runner struct {
 	// range is not governed by it — bash names a negative count with the
 	// option off as well as on, measured.
 	shiftPastEndQuiet bool
+	// fdVarClosedWithTheCommand takes back a `{name}` descriptor when the
+	// command carrying the redirection ends — bash's `varredir_close`, which
+	// is **off** by default there and is the only name any shell in the panel
+	// has for the question.
+	//
+	// Stored as the negative so the zero value leaves the descriptor open
+	// wherever the dialect's axis says it outlives its command, which is what
+	// a Runner that was never told about the option already did. It is a
+	// permission and not a behavior: it can only turn
+	// Semantics.FdVariableOutlivesTheCommand down.
+	//
+	// `exec` is outside it, measured 2026-09-22 on bash 5.3.20 with the
+	// option on: `exec {e}</dev/null` then `cat <&$e` still reads, while
+	// `echo hi {a}>/dev/null` then `cat <&$a` is `$a: Bad file descriptor`
+	// and the next allocation takes that number back. There is no command
+	// for the descriptor to outlive there, which is why nothing here has to
+	// say so — `exec` skips every closer this redirection list builds.
+	fdVarClosedWithTheCommand bool
 	// operandSubscriptExpandedOnce withholds the second round of expansion a
 	// subscript that reached a builtin as **text** gets — bash's
 	// `assoc_expand_once` and its synonym `array_expand_once`, the only

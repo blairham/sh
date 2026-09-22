@@ -466,6 +466,22 @@ var shoptSwitches = map[string]struct {
 		get: func(r *interp.Runner) bool { return !r.ExpandsAnOperandsSubscriptAgain() },
 		set: func(r *interp.Runner, on bool) { r.SetExpandsAnOperandsSubscriptAgain(!on) },
 	},
+	// The descriptor a `{name}>file` redirection picked is taken back when
+	// the command ends rather than left open. The sense inverts here, for
+	// the reason `no_empty_cmd_completion` above gives: the option names the
+	// *closing* and the core holds the capability the positive way round.
+	// See interp.Runner.FdVariableDescriptorOutlivesTheCommand, which also
+	// carries why `exec` is outside it.
+	//
+	// It sat in shoptStates refusing the write, and the refusal was the
+	// honest kind while nothing implemented it — a shell that granted the
+	// name and went on leaving descriptors open would be the silent wrong
+	// answer, since the whole observable is whether a later `<&$fd` finds
+	// anything.
+	"varredir_close": {
+		get: func(r *interp.Runner) bool { return !r.FdVariableDescriptorOutlivesTheCommand() },
+		set: func(r *interp.Runner, on bool) { r.SetFdVariableDescriptorOutlivesTheCommand(!on) },
+	},
 	"shift_verbose": {
 		get: (*interp.Runner).ReportsShiftPastTheEnd,
 		set: (*interp.Runner).SetReportsShiftPastTheEnd,
@@ -731,7 +747,6 @@ var shoptStates = map[string]bool{
 	"noexpand_translation": false,
 	"progcomp_alias":       false,
 	"promptvars":           true,
-	"varredir_close":       false,
 }
 
 const shoptUsage = "shopt: usage: shopt [-pqsu] [-o] [optname ...]"

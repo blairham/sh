@@ -1376,7 +1376,22 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			// script to read. Measured against zsh 5.9.2: `*(*)` over
 			// `abc93` leaves the group **empty**, because the star took the
 			// lot. Shortest first gives the group the whole subject. #2513.
-			for len(p) > 0 && p[0] == '*' {
+			//
+			// The run stops at a star that opens a *group*: `**(e|f)` is a
+			// wildcard followed by the closure `*(e|f)`, not two wildcards
+			// followed by a bare group — and the dialect with quantified
+			// groups has no bare ones, so collapsing both left `(e|f)` to be
+			// read as five ordinary characters. Measured 2026-09-22 on bash
+			// 5.3.20 with `extglob`, in a directory holding `ab`, `abef`,
+			// `abcdef` and `abcfef`: `ab**(e|f)` lists all four where
+			// `ab*+(e|f)` lists the three that end in one.
+			//
+			// The first star is this branch's own and is taken whatever
+			// stands behind it — the group reading was already tried and
+			// declined before the switch, and a `*(` nothing closes would
+			// otherwise leave the pattern where it was and recur forever.
+			p, pp = p[1:], pp+1
+			for len(p) > 0 && p[0] == '*' && !quantifierOpensAGroup(p, o) {
 				p, pp = p[1:], pp+1
 			}
 			// A star may stand in front of a leading period and still not

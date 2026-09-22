@@ -32,8 +32,8 @@ func TestAnUnclosedBracketSwallowsTheGroupsCloser(t *testing.T) {
 		// written as, no name is that, and it comes back unexpanded.
 		{`@(ab|[)`, `[@(ab|[)]`},
 		{`abcx*(x[)`, `[abcx*(x[)]`},
-		{`!([*)*`, `[!([*)*]`},
-		{`+(a|b[)*`, `[+(a|b[)*]`},
+		{`!([q)*`, `[!([q)*]`},
+		{`+(a|c[)*`, `[+(a|c[)*]`},
 		// The controls, which say this is the bracket reaching the end of
 		// the pattern rather than any `[` poisoning a group: an escaped one
 		// is not a bracket, a `]` alone is an ordinary character, and a

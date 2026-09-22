@@ -3716,6 +3716,42 @@ type Semantics struct {
 	// a second time where zsh carries on to `b`.
 	GetoptsAssignmentRestartsWord Answer
 
+	// GetoptsRefusedNameStillScans is whether the scan runs anyway when the
+	// name operand is not an identifier — which is to say, whether OPTIND
+	// moves over an option the builtin then refuses to store.
+	//
+	// The refusal itself is the core's and is not in question: every column
+	// refuses `getopts x 1bad -x`, and #3555 recorded the wordings. What
+	// that measurement could not see is this, because the probe it used —
+	// `echo A; getopts x 1bad -x; echo "B st=$?"` — prints the status and
+	// never prints OPTIND. The note left behind in the builtin said "OPTIND
+	// is not moved either way", and for three of the five columns that is
+	// wrong.
+	//
+	// Measured 2026-09-21, `set -- -a; getopts a opt-var; echo "rc=$?
+	// OPTIND=$OPTIND"`:
+	//
+	//	bash 5.3.20    rc=1  OPTIND=2    the scan ran
+	//	dash 0.5.12    rc=2  OPTIND=2    the scan ran
+	//	BusyBox 1.37.0 rc=2  OPTIND=2    the scan ran
+	//	ksh93u+        rc=1  OPTIND=1    it did not
+	//
+	// **It is the scan and not a fixed increment.** With nothing for the
+	// option to be — `getopts x 1bad foo`, an operand that is not an option
+	// — bash leaves OPTIND at 1. So the builtin does its ordinary work and
+	// the refusal lands on the *store*, which is also what makes the
+	// parameter's old value survive: `bad=PRE` is still `PRE` afterwards in
+	// every column.
+	//
+	// unpinned zsh: the refusal ends the shell there, so nothing downstream
+	// can read OPTIND back. Measured the same day, `set -- -a; getopts a
+	// opt-var; echo "rc=$? OPTIND=$OPTIND"` writes `zsh:1: not an
+	// identifier: opt-var` and stops — the echo never runs, under `emulate
+	// sh` as well. A row either way would be measuring the fatality, which
+	// is Semantics.BadNameToGetoptsFatal's question and already answered
+	// there.
+	GetoptsRefusedNameStillScans Answer
+
 	// KillJobSpecAimsAtTheGroup points a `%` job specification at the job's
 	// *process group* rather than at its process.
 	//

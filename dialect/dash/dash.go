@@ -983,6 +983,10 @@ func Semantics() interp.Semantics {
 	// dollar included — so the grammar refuses the form before any of them
 	// can be asked. An answer here would be an invention.
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// The refused name operand is judged after the scan here too: measured
+	// 2026-09-21, `set -- -a; getopts a opt-var` leaves OPTIND at 2, at
+	// this shell's own status of 2.
+	s.GetoptsRefusedNameStillScans = interp.Yes
 	// `kill %1` aims at the job's process group, which a script never has:
 	// the monitor is off, the job leads no group, and the send is ESRCH.
 	s.KillJobSpecAimsAtTheGroup = interp.Yes

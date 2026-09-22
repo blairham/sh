@@ -3114,6 +3114,29 @@ type Runner struct {
 	// its own copy from the shallow copy every clone starts as.
 	zeroName     string
 	zeroNameHeld bool
+
+	// getoptsRefusedName is the name operand `getopts` refused while its
+	// scan runs for the cursor alone — the dialects whose refused name
+	// still moves OPTIND. See Semantics.GetoptsRefusedNameStillScans.
+	//
+	// The *name* and not a bool, because getoptsWrite is the one door for
+	// all three of the parameters this builtin fills in: suppressing it
+	// wholesale suppressed OPTIND and OPTARG too, and the cursor then did
+	// not move at all — which is the failure this field was added to fix
+	// and is indistinguishable, from the outside, from not scanning.
+	getoptsRefusedName string
+
+	// zeroNameOverride is a name a *parameter* gave the shell, which `$0`
+	// reads ahead of Name and a diagnostic does not read at all. See
+	// Runner.shellNameForZero for the measurement that keeps the two apart,
+	// and Runner.SetDollarZeroName, which is how a dialect writes one.
+	//
+	// Not frame-scoped, which is measured rather than convenient: bash's
+	// `BASH_ARGV0` assigned inside a function is still in force after the
+	// call returns — `f(){ BASH_ARGV0=inner; }; f; echo $0` is `inner` —
+	// so this is the runner's and a clone's copy is the subshell's own,
+	// which is what confines it to a subshell the way bash confines it.
+	zeroNameOverride string
 	// inErrTrap, inDebugTrap and inReturnTrap guard each trap against
 	// running itself: a failing command inside the ERR action fires
 	// nothing, which is measured, and a DEBUG action that fired DEBUG

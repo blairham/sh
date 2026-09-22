@@ -786,7 +786,31 @@ func tokenText(tok Token) string {
 // ErrUnterminated — and all four are here.
 type opener struct {
 	word string
-	line int
+	// named is the word a *diagnostic* calls this construct, where that is
+	// not the word a prompt draws it as. The two part company in exactly one
+	// place and it is measured: a function body is drawn as `function`,
+	// because a caller redrawing an unfinished function wants to see what it
+	// is inside, and every shell in the panel that names a construct in an
+	// unterminated-input diagnostic names the **brace**. Measured 2026-09-21
+	// over `f() { echo a`, and over `function f { echo a` where the shell
+	// has the keyword:
+	//
+	//	bash 5.3.20   unexpected end of file from `{' command on line 1
+	//	ksh93u+       `{' unmatched
+	//	dash 0.5.12   end of file unexpected (expecting "}")
+	//	BusyBox ash   unexpected end of file (expecting "}")
+	//	zsh 5.9.2     parse error near `a' — names the token, not a construct
+	//	bash 3.2.57   unexpected end of file — names nothing
+	//
+	// Not one of them says `function`, which is what this shell said. The
+	// claim that they did was written down rather than measured, and the
+	// `namespace` block beside it is the case that is genuinely the
+	// enclosing construct's: ksh93u+ answers `` `namespace' unmatched ``
+	// there while answering `` `{' unmatched `` for both function spellings.
+	//
+	// Empty means the diagnostic uses word, which is every other construct.
+	named string
+	line  int
 	// construct marks a compound command rather than a clause of one. `if`
 	// is a construct and the `then` inside it is not, which is the
 	// distinction one shell's wording turns on.
@@ -798,7 +822,12 @@ type opener struct {
 // The close truncates rather than pops, so a clause opened inside it — `then`,
 // `else` — needs no unwinding of its own and an early return cannot leave the
 // stack out of step with the parse.
-func (p *Parser) opens(word string) func() {
+func (p *Parser) opens(word string) func() { return p.opensNamed(word, "") }
+
+// opensNamed is opens with the diagnostic's word for the construct given
+// apart from the prompt's. See opener.named, which is where the measurement
+// that splits them lives.
+func (p *Parser) opensNamed(word, named string) func() {
 	depth := len(p.open)
 	// A separator stood over inside this construct belongs to it and goes
 	// with it. `{ ; } ; if :; then` names the `then` in the shell that names
@@ -809,7 +838,7 @@ func (p *Parser) opens(word string) func() {
 	// the same reason: `case x in x) : ; ;; esac` then `{` names the `{`.
 	termStood, termText := p.terminatorStood, p.armTerminator
 	p.terminatorStood, p.armTerminator = Pos{}, ""
-	p.open = append(p.open, opener{word: word, line: int(p.tok.Pos.Line), construct: true})
+	p.open = append(p.open, opener{word: word, named: named, line: int(p.tok.Pos.Line), construct: true})
 	return func() {
 		p.open = p.open[:depth]
 		p.separatorStood = stood
@@ -938,6 +967,9 @@ func (p *Parser) unterminated(expected string) *Error {
 		for i := n - 1; i >= 0; i-- {
 			if p.open[i].construct {
 				e.Construct, e.ConstructLine = p.open[i].word, p.open[i].line
+				if p.open[i].named != "" {
+					e.Construct = p.open[i].named
+				}
 				break
 			}
 		}
@@ -5197,11 +5229,13 @@ func (p *Parser) parseSubshell() Command {
 }
 
 func (p *Parser) parseGroup(funcBody bool) Command {
-	word := "{"
 	if funcBody {
-		word = "function"
+		// Drawn as the function it is and *named* as the brace it opened —
+		// see opener.named for the panel that says so. It was named
+		// `function` in both roles until #TBD, which no shell does.
+		return p.parseGroupNamed("function", "{")
 	}
-	return p.parseGroupOpenedBy(word)
+	return p.parseGroupOpenedBy("{")
 }
 
 // parseGroupOpenedBy is parseGroup with the construct the braces belong to
@@ -5213,8 +5247,14 @@ func (p *Parser) parseGroup(funcBody bool) Command {
 // `namespace ns {` with nothing after it is “ syntax error at line 2:
 // `namespace' unmatched “ on ksh93u+ and not “ `{' unmatched “.
 func (p *Parser) parseGroupOpenedBy(word string) Command {
+	return p.parseGroupNamed(word, "")
+}
+
+// parseGroupNamed is parseGroupOpenedBy with the diagnostic's word for the
+// construct given apart from the prompt's. See opener.named.
+func (p *Parser) parseGroupNamed(word, named string) Command {
 	c := &Group{Start: p.tok.Pos}
-	defer p.opens(word)()
+	defer p.opensNamed(word, named)()
 	p.next()
 	c.List = p.parseBody()
 	if !p.atWord("}") {

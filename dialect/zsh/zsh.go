@@ -2743,6 +2743,13 @@ func Semantics() interp.Semantics {
 	s.DollarSingleQuestionEscape = interp.Yes
 	s.DollarSingleUnicodeEscapes = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.No
+	// unanswered GetoptsRefusedNameStillScans: a refused name operand ends
+	// the shell here, so nothing downstream can read OPTIND back and say
+	// whether the scan ran. Measured 2026-09-21, `set -- -a; getopts a
+	// opt-var; echo "rc=$? OPTIND=$OPTIND"` writes `zsh:1: not an
+	// identifier: opt-var` and stops — the echo never runs, under `emulate
+	// sh` as well. The fatality itself is BadNameToGetoptsFatal's and is
+	// answered there.
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// zsh 5.9.2 sends it: `kill -0 -- -1` is 0.

@@ -75,17 +75,61 @@ func biGetopts(r *Runner, _ context.Context, args []string) int {
 		return orDefault(r.diag().GetoptsUsageStatus, 2)
 	}
 	optstring, name := args[0], args[1]
-	if !r.isGetoptsName(name) {
-		// Judged before anything is scanned, which is where every column
-		// judges it: measured 2026-09-18, `echo A; getopts x 1bad -x; echo
-		// "B st=$?"` writes A, the refusal and then B in six of the seven,
-		// and the seventh ends the script at the refusal — so nothing is
-		// stored and OPTIND is not moved either way.
+	refusedName := !r.isGetoptsName(name)
+	if refusedName && r.sem().BadNameToGetoptsFatal == Yes {
+		// The refusal ends the shell here, so whether the scan would have
+		// run is not a question anything downstream can ask: nothing reads
+		// OPTIND back. Asked before the axis rather than answered by it —
+		// see Semantics.GetoptsRefusedNameStillScans, which records zsh as
+		// unpinned for exactly this reason.
 		return r.badGetoptsName(name)
 	}
+	if refusedName && !r.ask(r.sem().GetoptsRefusedNameStillScans,
+		"a refused `getopts` name operand still scanning") {
+		// Judged before anything is scanned, which is one of the two answers
+		// — ksh93's. The note here used to say it was every column's and
+		// that "OPTIND is not moved either way", which #3555's probe could
+		// not have seen: it printed the status and never printed OPTIND. See
+		// Semantics.GetoptsRefusedNameStillScans for the four columns that
+		// were re-measured.
+		return r.badGetoptsName(name)
+	}
+	if refusedName {
+		// The other answer: the builtin does its ordinary work and the
+		// refusal lands on the *store*. The diagnostic and the status are
+		// the refusal's, and the scan below runs for its effect on OPTIND
+		// alone — getoptsWrite is suppressed while it does, so the
+		// parameter keeps the value it had.
+		// The scan first and the refusal after, which is the order the
+		// measurement implies and not merely an implementation choice: the
+		// refusal is what a *store* earns, so everything that happens before
+		// the store has already happened when it is written. Writing it
+		// first also stops the scan, because a fatal refusal leaves the
+		// runner unwilling to do any more work — which is how this was
+		// first written, and it left OPTIND where it started.
+		func() {
+			defer func(was string) { r.getoptsRefusedName = was }(r.getoptsRefusedName)
+			r.getoptsRefusedName = name
+			r.getoptsScan(optstring, name, args[2:])
+		}()
+		return r.badGetoptsName(name)
+	}
+	return r.getoptsScan(optstring, name, args[2:])
+}
+
+// getoptsScan is the builtin's ordinary work: find the next option in the
+// words, move OPTIND over what it consumed, and store what it found.
+//
+// Split out so that the dialects whose refused *name* still scans can run it
+// for the cursor alone — see Semantics.GetoptsRefusedNameStillScans. The
+// store is what the refusal takes away, and getoptsWrite is where it is
+// taken; everything here happens either way, which is what makes `getopts x
+// 1bad foo` leave OPTIND at 1 in bash while `getopts x 1bad -x` moves it to
+// 2. A fixed increment would have got that pair wrong.
+func (r *Runner) getoptsScan(optstring, name string, given []string) int {
 	// The operands to scan are the ones given, or the shell's own parameters
 	// when none are — which is what every use of it in a script relies on.
-	words := args[2:]
+	words := given
 	if len(words) == 0 {
 		words = r.Params
 	}
@@ -521,6 +565,16 @@ func (r *Runner) getoptsWrite(name, value string) bool {
 		// compound the scalar replaces — still happens.
 		delete(r.readonly, name)
 		defer func() { r.readonly[name] = true }()
+	}
+	if r.getoptsRefusedName != "" && name == r.getoptsRefusedName {
+		// This is the operand the refusal is about, and this dialect ran the
+		// scan anyway: the cursor moves and nothing is stored. Reported as a
+		// write that happened, because the caller's question is whether the
+		// scan may carry on, and the answer is yes.
+		//
+		// Matched by name rather than by a flag, because OPTIND and OPTARG
+		// come through here too — see Runner.getoptsRefusedName.
+		return true
 	}
 	// setOperandValue rather than setVar, because this builtin's name
 	// operand is one of the three a dialect may spell as a *position* —

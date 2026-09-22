@@ -65,14 +65,50 @@ func TestAGetoptsNameOperandThatIsNotANameIsRefused(t *testing.T) {
 
 // And nothing is stored under the word that was refused, which is the half a
 // caller can see: the parameter the loop goes on to read stays as it was.
+//
+// **OPTIND is the other half and it is a dialect's**, which this case claimed
+// it was not until 2026-09-21. It asserted `OPTIND=1` under "the scan never
+// ran", and the scan does run in three of the five columns — see
+// Semantics.GetoptsRefusedNameStillScans, which holds the re-measurement. The
+// probe that had been taken as settling it printed the status and never
+// printed OPTIND, so it could not have.
 func TestARefusedGetoptsNameStoresNothing(t *testing.T) {
-	src := `bad=PRE; getopts x "1bad" -x; echo "st=$? bad=$bad OPTIND=$OPTIND"`
-	out, _ := getoptsNameRun(t, nil, Diagnostics{}, src)
-	if !strings.Contains(out, "bad=PRE") {
-		t.Errorf("out %q, want the parameter left standing", out)
+	for _, tc := range []struct {
+		name  string
+		scans Answer
+		want  string
+	}{
+		{"the scan runs anyway", Yes, "OPTIND=2"},
+		{"the name is judged first", No, "OPTIND=1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := `bad=PRE; getopts x "1bad" -x; echo "st=$? bad=$bad OPTIND=$OPTIND"`
+			out, _ := getoptsNameRun(t, func(s *Semantics) {
+				s.GetoptsRefusedNameStillScans = tc.scans
+			}, Diagnostics{}, src)
+			if !strings.Contains(out, "bad=PRE") {
+				t.Errorf("out %q, want the parameter left standing", out)
+			}
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("out %q, want %s", out, tc.want)
+			}
+		})
 	}
+}
+
+// The cursor moves because the *scan* ran, not because a refusal adds one.
+//
+// The discriminating case, and the reason this is not a fixed increment:
+// with nothing for the option to be, bash leaves OPTIND where it was.
+// Measured 2026-09-21, `getopts x 1bad foo` is `OPTIND=1` there while
+// `getopts x 1bad -x` is `OPTIND=2`.
+func TestARefusedGetoptsNameMovesNothingWithNoOptionToRead(t *testing.T) {
+	src := `getopts x "1bad" foo; echo "st=$? OPTIND=$OPTIND"`
+	out, _ := getoptsNameRun(t, func(s *Semantics) {
+		s.GetoptsRefusedNameStillScans = Yes
+	}, Diagnostics{}, src)
 	if !strings.Contains(out, "OPTIND=1") {
-		t.Errorf("out %q, want OPTIND unmoved — the scan never ran", out)
+		t.Errorf("out %q, want OPTIND unmoved — there was no option to consume", out)
 	}
 }
 

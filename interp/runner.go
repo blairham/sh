@@ -7565,6 +7565,9 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 func (r *Runner) environ() []string {
 	base := r.Env
 	out := make([]string, 0, len(base)+len(r.Vars))
+	// The bound option records this loop wrote, so the pass at the end does
+	// not write one of them a second time — see exportedOptionLists.
+	var writtenLists map[string]bool
 	for _, kv := range base {
 		k, _, ok := strings.Cut(kv, "=")
 		if !ok {
@@ -7605,6 +7608,10 @@ func (r *Runner) environ() []string {
 			// which is what stops a dialect's second one (`$BASHOPTS`) being
 			// the copy that keeps its startup string.
 			out = append(out, k+"="+live)
+			if writtenLists == nil {
+				writtenLists = map[string]bool{}
+			}
+			writtenLists[k] = true
 			continue
 		}
 		// A name **inherited** and never assigned since reaches a child as
@@ -7685,6 +7692,10 @@ func (r *Runner) environ() []string {
 		out = append(out, k+"="+v)
 	}
 	out = append(out, r.zeroValuedTypeExports()...)
+	// And a bound option record the *script* exported, which no walk above
+	// can reach: it is produced and readonly, so it is in neither Vars nor —
+	// unless it was inherited — Env. See exportedOptionLists.
+	out = append(out, r.exportedOptionLists(writtenLists)...)
 	return out
 }
 

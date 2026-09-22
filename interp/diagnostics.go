@@ -5293,6 +5293,38 @@ type Diagnostics struct {
 	// this dialect for that reason.
 	SubstitutionBodyExpecting string
 
+	// UnterminatedSubstitutionIsItsBodysRefusal answers an unclosed `$( … )`
+	// whose body holds a token the grammar refused with **that refusal
+	// instead of** the unmatched-parenthesis sentence — one message, at the
+	// token's own line, with SubstitutionBodyExpecting appended to it.
+	//
+	// bash alone, and it is the same dialect and the same clause as the
+	// closed case: what differs is only whether the closer ever arrived.
+	// Measured 2026-09-21 on bash 5.3.20 through `-c`, each body written
+	// twice, once closed and once not:
+	//
+	//	v=$(esac)          line 1: … near `esac' while looking for matching `)'
+	//	v=$(esac           line 1: … near `esac' while looking for matching `)'
+	//	v=$(echo hi; ;)    line 1: … near `;' while looking for matching `)'
+	//	v=$(echo hi; ;     line 1: … near `;' while looking for matching `)'
+	//	v=$(done)          line 1: … near `done' while looking for matching `)'
+	//	v=$(done           line 1: … near `done' while looking for matching `)'
+	//
+	// The two columns are identical, which is the finding: this shell
+	// answered the left column correctly and the right one with `line 2:
+	// unexpected EOF while looking for matching `)'`, because an unclosed
+	// span never reaches the expansion route where the closed one is refused.
+	//
+	// **The discriminator is a body that parses.** `v=$(echo hi` with no
+	// closer is the EOF sentence in bash too, so this is the body's refusal
+	// where the body has one rather than a new sentence on every unclosed
+	// substitution.
+	//
+	// Distinct from UnterminatedSubstitutionWritesItsBodysRefusal, which is
+	// zsh's and writes the body's refusal as a *first* message with the
+	// quote's own still behind it. Here there is no second message at all.
+	UnterminatedSubstitutionIsItsBodysRefusal bool
+
 	// ForName is a `for` whose variable is not one. Two verbs: %[1]s the word
 	// as written and %[2]d the line, for the dialect that carries its own.
 	ForName string
@@ -7960,6 +7992,11 @@ func (d Diagnostics) parseFailureLineInTheInput(err error) int {
 		return 0
 	}
 	if se.Kind == syntax.ErrUnmatched {
+		if body, _, ok := d.substitutionBodyReplacesTheQuote(se); ok {
+			// The line moves with the message: the token's own, not the end
+			// of the input.
+			return d.parseFailureLineInTheInput(body)
+		}
 		// The openers that hold a program, together: the dialect that puts
 		// an unmatched `$(` at the line after the input's last puts `<(`,
 		// `>(` and `=(` there too, which is measured rather than assumed.
@@ -8433,6 +8470,11 @@ func (d Diagnostics) ParseFailure(err error) string {
 	case syntax.ErrUnexpected:
 		return d.unexpectedToken(se)
 	case syntax.ErrUnmatched:
+		if body, closer, ok := d.substitutionBodyReplacesTheQuote(se); ok {
+			// One message and it is the body's — see
+			// UnterminatedSubstitutionIsItsBodysRefusal.
+			return d.ParseFailure(body) + Wording(d.SubstitutionBodyExpecting, "", closer)
+		}
 		form := d.UnmatchedQuote
 		switch se.Token {
 		case "`":
@@ -8957,6 +8999,38 @@ func (d Diagnostics) bodyRefusalWrittenFirst(name, input string, err error) (str
 		quoteAt = at
 	}
 	return d.ReportFrom(name, input, at, d.ParseFailure(body)+"\n"), quoteAt, true
+}
+
+// substitutionBodyReplacesTheQuote is the body refusal that stands in for an
+// unmatched-substitution sentence, and the closer to name after it.
+//
+// See UnterminatedSubstitutionIsItsBodysRefusal, which holds the measurement.
+// Two readers — the message and the line — because the dialect moves both.
+func (d Diagnostics) substitutionBodyReplacesTheQuote(err error) (*syntax.Error, string, bool) {
+	var se *syntax.Error
+	if !d.UnterminatedSubstitutionIsItsBodysRefusal || !errors.As(err, &se) {
+		return nil, "", false
+	}
+	if se.Kind != syntax.ErrUnmatched || se.BodyRefusal == nil {
+		return nil, "", false
+	}
+	closer := ""
+	switch {
+	case se.Token == "${" || se.HoldsProgram && se.Token == "{":
+		closer = "}"
+	case se.Token == "$(" || se.Token == "<(" || se.Token == ">(" || se.Token == "=(":
+		closer = ")"
+	default:
+		return nil, "", false
+	}
+	body := se.BodyRefusal
+	if body.Kind != syntax.ErrUnexpected || body.Token == closer {
+		// The two shapes the clause is never written for, and they are the
+		// closed case's own: the closer itself is what the shell was looking
+		// for, and anything that is not a refused token is not this sentence.
+		return nil, "", false
+	}
+	return body, closer, true
 }
 
 // locatesByNameAlone reports whether this dialect writes err with the shell's

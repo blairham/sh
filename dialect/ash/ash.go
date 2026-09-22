@@ -1185,6 +1185,9 @@ func Semantics() interp.Semantics {
 	s.FatalErrorEndsAtTheCommandWord = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// And the same after the scan, measured 2026-09-21 in the pinned image:
+	// `set -- -a; getopts a opt-var` is OPTIND 2 at status 2, as in dash.
+	s.GetoptsRefusedNameStillScans = interp.Yes
 	// `kill %1` reaches the job's process here, as it does in bash.
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// BusyBox 1.37.0 ash sends it: `kill -0 -1` is 0.

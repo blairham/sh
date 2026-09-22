@@ -5715,7 +5715,7 @@ func (r *Runner) dollarZero() (string, bool) {
 		// a core that refuses every unanswered axis must not refuse `echo
 		// $0` in a script that has called nothing, and a startup file is
 		// outside all three readings alike.
-		return r.Name, true
+		return r.shellNameForZero(), true
 	}
 	switch r.dollarZeroScope() {
 	case DollarZeroIsTheInnermostCall:
@@ -5727,7 +5727,36 @@ func (r *Runner) dollarZero() (string, bool) {
 			return keyword, true
 		}
 	}
-	return r.Name, true
+	return r.shellNameForZero(), true
+}
+
+// shellNameForZero is Runner.Name as `$0` reads it, which is not always
+// Runner.Name: a dialect can give the shell a *parameter* that renames it.
+//
+// Kept apart from Runner.Name rather than written into it, because the two
+// are measurably different things. Measured 2026-09-21 on bash 5.3.20, whose
+// `BASH_ARGV0` is the parameter in question, in a script that assigns it and
+// then runs a command that is not there:
+//
+//	echo "$0"              ./t.sh
+//	BASH_ARGV0=renamed
+//	echo "$0"              renamed      -- `$0` moved
+//	nosuchcmd              ./t.sh: line 3: nosuchcmd: command not found
+//
+// The diagnostic still names the file. Writing Runner.Name would have moved
+// both, and Runner.name -- which is what a diagnostic prints -- reads
+// Runner.Name on the script route deliberately.
+//
+// Through `-c` the two coincide, because there is no file for the diagnostic
+// to name and bash prints `$0` there: the same assignment makes the
+// diagnostic say `zzz:`. That column of the measurement is #TBD's, not this
+// function's, and it is the reason this is an override rather than a second
+// name the whole shell answers to.
+func (r *Runner) shellNameForZero() string {
+	if r.zeroNameOverride != "" {
+		return r.zeroNameOverride
+	}
+	return r.Name
 }
 
 // specialLength answers `${#@}` and `${#*}`.
@@ -7499,3 +7528,18 @@ func wholeArrayFieldsSurvive(e *syntax.ParamExpr, r *Runner) bool {
 	return e.Index != nil && e.IndexFlags == nil &&
 		r.subscriptAsWritten(e.Subscript()) == "@"
 }
+
+// DollarZeroName is the name `$0` answers with where nothing on the call
+// stack answers ahead of it — see Runner.shellNameForZero.
+//
+// Exported for the dialect that publishes it as a parameter. bash's is
+// `BASH_ARGV0`; see dialect/bash/shellparameters.go, which is the only
+// caller of either of these.
+func (r *Runner) DollarZeroName() string { return r.shellNameForZero() }
+
+// SetDollarZeroName renames the shell as `$0` reads it, leaving Runner.Name
+// and therefore every diagnostic's prefix alone.
+//
+// An empty name puts the shell back to answering with Runner.Name, which is
+// what `unset` of the parameter leaves behind.
+func (r *Runner) SetDollarZeroName(name string) { r.zeroNameOverride = name }

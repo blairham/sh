@@ -585,6 +585,7 @@ zsh   ExpansionResultSuppliesGroupSyntax
 zsh   ExportOrReadonlyTakesAReferenceToAnElement
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns
+zsh   GetoptsRefusedNameStillScans
 zsh   IgnoredNamesFollowTheParameter
 zsh   IgnoredNamesMatchTheLastComponent
 zsh   IgnoredNamesValueIsOnePattern

@@ -91,6 +91,29 @@ func registerShellParameters(r *interp.Runner) {
 	})
 	r.SetDynamicArrayWriter("GROUPS", func(*interp.Runner, []string) {})
 	r.SetDynamicDeclaration("GROUPS", interp.ProducedDeclaration{Array: true})
+	// The shell's own `$0`, and the one parameter here whose assignment is
+	// **kept** rather than discarded: writing it renames the shell.
+	//
+	// Measured 2026-09-21 against bash 5.3.20 (#TBD):
+	//
+	//	declare -p BASH_ARGV0            declare -- BASH_ARGV0="/…/bash"
+	//	BASH_ARGV0=one; echo "$0"        one      -- `$0` moved with it
+	//	f(){ BASH_ARGV0=in; }; f; $0     in       -- and it outlasts the call
+	//	( BASH_ARGV0=sub ); echo "$0"    unchanged -- a subshell keeps its own
+	//	unset BASH_ARGV0; echo "[$0]"    the name it had; the link is gone
+	//
+	// No letters in the listing, which is why this one takes the zero value
+	// of ProducedDeclaration where its three neighbors take `-i` or `-a`.
+	//
+	// **It renames `$0` and not the shell.** In a script the diagnostic goes
+	// on naming the file after the assignment — measured, `nosuchcmd` on the
+	// line after is still `./t.sh: line 3: …` — so this writes the override
+	// rather than Runner.Name. See Runner.shellNameForZero.
+	r.SetDynamic("BASH_ARGV0", func(rr *interp.Runner) string { return rr.DollarZeroName() })
+	r.SetDynamicWriter("BASH_ARGV0", func(rr *interp.Runner, value string) {
+		rr.SetDollarZeroName(value)
+	})
+	r.SetDynamicDeclaration("BASH_ARGV0", interp.ProducedDeclaration{})
 }
 
 // shellPid is what `$BASHPID` answers — see the note above registerShell-

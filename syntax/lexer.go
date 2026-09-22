@@ -4252,13 +4252,48 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 			l.lastInner = sub.lex.OpenInnermost()
 			l.lastInnerHeredocExpands = sub.lex.OpenHeredocExpands()
 		}
+		// The stop offset is recorded only where the read *refused*, which
+		// is what it has always meant: it tells the counting loop below how
+		// much input that read already spent. A read that stopped cleanly
+		// spent nothing it should be charged for, and setting it here made
+		// the counting start past a `)` it still needed — measured, it
+		// turned `v=$(cat <<E⏎w⏎E )` into an unterminated substitution.
+		if sub.err != nil {
+			l.lastBodyStop = from + int(sub.tok.Pos.Offset)
+		}
+		if sub.err == nil && !sub.at(TokEOF) {
+			// The read *stopped* rather than refusing, which is what a
+			// reserved word that cannot begin a command does to parseList:
+			// it is how `esac`, `done`, `fi`, `then` and `;;` end the
+			// construct they belong to, and parseList has no way of knowing
+			// there is no such construct here. Inside a substitution there
+			// is not, and both dialects that say anything about a body say
+			// so.
+			//
+			// **Only where it stopped on a token.** A body that simply ran
+			// out — `v=$(echo hi` — parsed fine and has nothing to say, and
+			// both dialects leave the substitution to speak alone there:
+			// that is the discriminator Error.BodyRefusal already records,
+			// and synthesizing a refusal without this guard wrote a
+			// `parse error near `\n'` in front of it.
+			//
+			// Measured 2026-09-21, `v=$(esac` with no closer:
+			//
+			//	bash 5.3.20  syntax error near unexpected token `esac'
+			//	             while looking for matching `)'
+			//	zsh 5.9.2    parse error near `esac', and then its own
+			//	             parse error for the whole word
+			//
+			// Both were a message short here. `v=$(echo hi; ;` already
+			// refused on its own and is untouched — which is the check that
+			// this adds a refusal only where there was none, rather than
+			// replacing one.
+			sub.failUnexpected("")
+		}
 		// And what this read had to say, and how far it got, for the same
 		// caller and the same moment. See Lexer.lastBodyRefusal and
 		// Lexer.lastBodyStop.
 		l.lastBodyRefusal, _ = sub.err.(*Error)
-		if sub.err != nil {
-			l.lastBodyStop = from + int(sub.tok.Pos.Offset)
-		}
 		return 0, nil, false
 	}
 	return from + int(sub.tok.Pos.Offset), sub.lex.remarks, true

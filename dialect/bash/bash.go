@@ -2080,6 +2080,12 @@ func Semantics() interp.Semantics {
 	s.DollarSingleQuestionEscape = interp.Yes
 	s.DollarSingleUnicodeEscapes = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// A name operand that is not an identifier is refused on the *store*,
+	// after the scan has already moved the cursor. Measured 2026-09-21:
+	// `set -- -a; getopts a opt-var` leaves OPTIND at 2 at status 1, while
+	// `getopts x 1bad foo` — nothing for the option to be — leaves it at 1,
+	// so it is the scan and not an increment.
+	s.GetoptsRefusedNameStillScans = interp.Yes
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// bash 5.3.20 sends it: `kill -0 -- -1` is 0.
@@ -3626,6 +3632,13 @@ func Diagnostics() interp.Diagnostics {
 		// for. See Diagnostics.SubstitutionBodyExpecting for the six rows
 		// and for the two shapes that get nothing (#3467).
 		SubstitutionBodyExpecting: " while looking for matching `%[1]s'",
+		// And an *unclosed* one answers with that same refusal instead of
+		// the unmatched-parenthesis sentence. Measured 2026-09-21: `v=$(esac`
+		// with no closer is `line 1: syntax error near unexpected token
+		// `esac' while looking for matching `)'` — the same line this shell
+		// already wrote for `v=$(esac)`, where it had been writing `line 2:
+		// unexpected EOF while looking for matching `)'`.
+		UnterminatedSubstitutionIsItsBodysRefusal: true,
 		// A refused word is echoed as it was written: `"zzz"` keeps its
 		// quotes and `$x` is not the name `x`. See UnexpectedWordNaming.
 		UnexpectedWordNaming: interp.UnexpectedWordIsSourceText,

@@ -2335,6 +2335,10 @@ func Semantics() interp.Semantics {
 	// 01. Measured 2026-09-18 by `od` (#3415).
 	s.DollarSingleOctalPastAByteDropsTheLastDigit = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
+	// The one column that judges the name *before* scanning: measured
+	// 2026-09-21, `set -- -a; getopts a opt-var` leaves OPTIND at 1 at
+	// status 1, where bash, dash and BusyBox ash all leave it at 2.
+	s.GetoptsRefusedNameStillScans = interp.No
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
 	// ksh93u+ alone refuses it, and by name: `kill -0 -- -1` is

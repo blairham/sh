@@ -132,6 +132,10 @@ type Parser struct {
 	// file, held here from the moment it is raised until NextLine hands it
 	// back on the File. See File.Refused.
 	refused error
+	// refusedAtEOF says a refused line was given up with no input left to
+	// recover, which is what makes it final rather than merely set aside:
+	// see Parser.giveUpOnTheArray and Parser.NextLine.
+	refusedAtEOF bool
 	// lineSubsts are the command substitutions read since the last line was
 	// handed back, for the dialects that parse a body with its line. Nil
 	// under every other dialect, where nothing is gathered at all. Drained by
@@ -1286,6 +1290,25 @@ func (p *Parser) NextLine() (*File, bool) {
 	}
 	f.Last = p.lineEnd()
 	f.Refused, p.refused = p.refused, nil
+	// A refusal given up with the input already spent is the answer, and
+	// nothing an *enclosing* construct went on to say about that same end of
+	// input stands in front of it. `( a=(` was the subshell's `unexpected
+	// end of file from `(' command on line 1` at status 2, where bash names
+	// the inner parenthesis at status 1.
+	//
+	// **It stays a refusal rather than becoming the line's error**, and the
+	// status is what says so: bash exits 1 for `a=(` and 2 for `echo $(` —
+	// the same message and the same end of input outside an array literal —
+	// which is File.Refused's whole purpose. Reporting it as the error
+	// instead makes the status 2.
+	//
+	// Here rather than in Parse, because both routes into the parser pass
+	// through this one: a front end reading line by line checks the error
+	// before the refusal, so the same rule written on the whole-file route
+	// alone leaves `-c` saying the old thing.
+	if p.refusedAtEOF && f.Refused != nil {
+		p.err, p.refusedAtEOF = nil, false
+	}
 	f.Substitutions, p.lineSubsts = p.lineSubsts, nil
 	f.CarriedHeredocs, p.lex.carried = p.lex.carried, nil
 	if p.err != nil {
@@ -4107,6 +4130,11 @@ func (p *Parser) giveUpOnTheArray(savedInArgument bool, opening Pos) bool {
 			}
 		}
 		p.refused, p.err = p.err, nil
+		// And it is **final**, because the input is already spent — see
+		// Parser.refusedAtEOF. Giving up the line is a recovery and there is
+		// no line left to recover: what it buys anywhere else is that the
+		// text after the literal is still read.
+		p.refusedAtEOF = p.refused != nil
 		// The lexer's copy as well, where the failure was its: a parser that
 		// re-reads at EOF adopts it again on the next token and the refusal
 		// would become the file's after all. There is nothing left to read
@@ -4132,6 +4160,15 @@ func (p *Parser) giveUpOnTheArray(savedInArgument bool, opening Pos) bool {
 			depth--
 		}
 		p.next()
+	}
+	// The recovery ran to the end of the input without finding the `)`,
+	// which leaves this branch where the one above already is: nothing is
+	// left to read, so the refusal is final and an enclosing construct's
+	// complaint about the same end of input is not what the script got
+	// wrong. `( a=( ;` is the shape — the `;` is refused, correctly, and the
+	// subshell then reported over it.
+	if depth > 0 && p.at(TokEOF) {
+		p.refusedAtEOF = p.refused != nil
 	}
 	p.lex.inArgument = savedInArgument
 	return true

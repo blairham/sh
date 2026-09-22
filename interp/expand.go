@@ -1180,10 +1180,13 @@ func (r *Runner) expandAssignValue(w *syntax.Word) string {
 // three of the four shells, and the fourth's answer needs the expansion's
 // value, which does not exist yet.
 func (r *Runner) expandColonTildes(w *syntax.Word) {
-	home, ok := r.getVar("HOME")
-	if !ok {
-		return
-	}
+	// The home is read on the first colon-tilde in the word and not before
+	// it. This is the second of the two roads a written `~` takes to a home —
+	// Runner.tildeSplit is the other — and it asks the same question, so
+	// asking it for every `x=1` would report an unanswered axis against a
+	// value with no tilde in it. See interp/cachedhome.go.
+	var home string
+	var read, ok bool
 	for i := range w.Spans {
 		s := &w.Spans[i]
 		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
@@ -1192,6 +1195,13 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 		v := s.Value
 		if !strings.Contains(v, ":~") {
 			continue
+		}
+		if !read {
+			home, ok = r.tildeHome()
+			read = true
+		}
+		if !ok {
+			return
 		}
 		var b strings.Builder
 		for j := 0; j < len(v); j++ {

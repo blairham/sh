@@ -2530,6 +2530,16 @@ type Runner struct {
 	// wrong.
 	toldOfJobsAtExit    bool
 	tellingOfJobsAtExit bool
+	// cachedHome is the copy of HOME one column answers a bare `~` from, and
+	// cachedHomeSet says the environment it was taken from carried the name
+	// at all — absent and empty are two different homes. cachedHomeSeeded
+	// keeps the startup value from being taken a second time, which is what
+	// separates the copy from the variable. See interp/cachedhome.go and
+	// Semantics.TildeReadsACachedHome; a dialect on the standard's reading
+	// never reads any of the three.
+	cachedHome       string
+	cachedHomeSet    bool
+	cachedHomeSeeded bool
 	// oldpwdSettled says the inherited OLDPWD has already been read and
 	// judged, which happens once however many chunks a session runs.
 	//
@@ -4794,6 +4804,11 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ensureLineOrigin()
 	r.ensurePWD()
 	r.ensureSpecials()
+	// And the copy of HOME that one column answers `~` from, seeded before
+	// any line of this chunk can assign to the variable — the whole of what
+	// separates that reading from the variable is that a script's own
+	// assignment does not reach it. See interp/cachedhome.go.
+	r.ensureCachedHome()
 	r.ensureImportedFunctions()
 	// Before anything the script runs can create a file, because this is
 	// what takes the mask off the process and puts it in this shell's own
@@ -7819,6 +7834,12 @@ func (r *Runner) environ() []string {
 	// a child's environment with the value the shell reads for it, and this
 	// shell put none of the three there.
 	out = append(out, r.exportedProducedParameters(writtenLists)...)
+	// Building this is what moves the cached home in the one column that keeps
+	// one — measured, and it is why the refresh hangs here rather than on a
+	// process being started: a subshell starts one and does not move it, while
+	// a command substitution, whose body may be nothing but a builtin, does.
+	// See interp/cachedhome.go.
+	r.noteChildEnvironment(out)
 	return out
 }
 

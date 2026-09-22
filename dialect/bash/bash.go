@@ -847,6 +847,16 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-17 on 5.3.20; ksh93 agrees and zsh takes the
 	// characters (#2298).
 	s.SubscriptKeyExpandsALeadingTilde = interp.Yes
+	// And a bare `~` is answered from a *copy* of HOME rather than from the
+	// variable — the one answer in the panel that is this shell's alone, its
+	// own 3.2 included. The copy is not the home the shell started with: it
+	// is refreshed whenever an environment is built for a child, so
+	// `HOME=/h; echo ~` is the old home and `HOME=/h; /usr/bin/true; echo ~`
+	// is the new one. Measured 2026-09-22 on 5.3.20 and unchanged by POSIX
+	// mode; see Semantics.TildeReadsACachedHome for the twelve rows that
+	// separate the three readings, and #3484 and #4039, which were each
+	// filed on the reading this is not (#4156).
+	s.TildeReadsACachedHome = interp.Yes
 	// The three bytes the panel does not agree about in a listed word.
 	// Measured 2026-09-14 over `set` and over a keyed `typeset -p`, which
 	// agree: `=` is ordinary here — `v=a=b` and the keys `[a=b]`, `[=x]`,

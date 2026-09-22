@@ -14545,6 +14545,61 @@ type Semantics struct {
 	// take the standard's value, which expands nothing (#2298).
 	SubscriptKeyExpandsALeadingTilde Answer
 
+	// TildeReadsACachedHome answers a bare `~` from a copy of `HOME` that the
+	// shell's own assignments do not reach, rather than from the variable as
+	// it stands. bash 5.3 alone in the panel — its own 3.2 reads the
+	// variable, and so do zsh, ksh93, dash and BusyBox ash.
+	//
+	// **The copy is not the home the shell started with**, and that is the
+	// whole reason this axis is named for a cache. It is refreshed as a side
+	// effect of building an environment for a child, so the same `~` is one
+	// answer before an external command on the line and another after it.
+	// Measured 2026-09-22 on bash 5.3.20, `env -i PATH=/usr/bin:/bin LC_ALL=C
+	// HOME=/orig`, `--norc --noprofile`, every line from `-c` and every one
+	// of them ending `HOME=/h; … ; echo ~`:
+	//
+	//	nothing between                 /orig
+	//	a builtin (`true`)              /orig
+	//	`export HOME` / `export FOO=1`  /orig
+	//	`eval "x=1"` / `. /dev/null`    /orig
+	//	a subshell `( true )`           /orig
+	//	`unset HOME`                    /orig
+	//	a function call                 /orig
+	//
+	//	an external command             /h
+	//	a pipeline                      /h
+	//	a background job and a `wait`   /h
+	//	a command substitution          /h
+	//
+	// Three readings are separated by those rows and only the last survives:
+	// the variable would answer `/h` throughout, a home frozen at startup
+	// would answer `/orig` throughout, and a cache a child's environment
+	// refreshes answers the split above. #3484 was filed on the first reading
+	// of it — "the HOME the shell started with" — and #4039 on the same, and
+	// both were wrong about a `HOME=/h; date >/dev/null; cd ~`, which goes to
+	// the **new** home there.
+	//
+	// It is the exported environment that is read and not the variable:
+	// `HOME=/h; export -n HOME; /usr/bin/true; echo ~` is the password
+	// database's answer in bash, the name having left the environment, and
+	// `HOME=/h; HOME=/z /usr/bin/true; echo ~` is `/h` rather than `/z`, so a
+	// command's own assignment prefix is not what the copy is taken from.
+	// This package carries no password database — see Runner.UserHomeDir —
+	// so a `~` whose cached home is absent is left as written, which is what
+	// a run with no `HOME` at all already does.
+	//
+	// `~+`, `~-`, `~user` and a bare `cd` are outside it: measured the same
+	// day, `~+` and `~-` still read `PWD` and `OLDPWD`, `~root` still reads
+	// the password database, and `cd` with no operand uses the current
+	// `$HOME` while `cd ~` on the same line uses the cached one. So it is
+	// `$HOME` behind a written `~` alone.
+	//
+	// Every other column answers No, which is their current behavior and what
+	// interp/tildecurrenthome_test.go pins: a shell that took this by
+	// accident would have `HOME=/x; cd ~` going to the old home for as long
+	// as a script runs nothing but builtins.
+	TildeReadsACachedHome Answer
+
 	// SubscriptIsAQuotingContext runs an associative array's subscript
 	// through quote removal, so the key is the text *inside* its quotes and
 	// escapes. True in bash and ksh93; false in zsh, where the subscript is
@@ -24767,6 +24822,11 @@ func PosixSemantics() Semantics {
 		// tilde to stand at the front of; the standard's shell expands
 		// nothing there and the two columns that have the container override.
 		SubscriptKeyExpandsALeadingTilde: No,
+		// And a `~` is the home the shell holds now. The standard describes
+		// the tilde prefix as being replaced by the value of `HOME`, with no
+		// copy of it anywhere in the description, and six of the seven
+		// columns read the variable. bash 5.3 is the one that overrides it.
+		TildeReadsACachedHome: No,
 		// And a descriptor the shell has nothing open at is not a terminal,
 		// however the number was spelled: no narrowing, and no value that
 		// answers true on its own.
@@ -25048,6 +25108,13 @@ func CoreSemantics() Semantics {
 		// refusing a shape five columns agree about. ksh93 and zsh are the
 		// departures and say so themselves. See interp/prefixoperandorder.go.
 		PrefixExpandedBeforeADeclarationsOperand: No,
+		// A bare `~` is the home the shell holds *now*. Answered here rather
+		// than left to refuse because the question is asked of every written
+		// tilde, so a refusal would be the substrate refusing `~/bin` — and
+		// because six of the seven columns read the variable, bash's own 3.2
+		// among them. The seventh says so itself; see
+		// Semantics.TildeReadsACachedHome and interp/cachedhome.go.
+		TildeReadsACachedHome: No,
 		// A clustered `-abc` leaves OPTIND naming the word until its last
 		// letter has been read, which is what four of the six columns do and
 		// what a script shifting by `OPTIND-1` between calls needs. dash and

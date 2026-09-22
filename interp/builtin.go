@@ -5294,18 +5294,27 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// nothing in every shell that has the letter, terminal or none, and
 	// skipping the word instead once let a password echo (#321).
 
-	// -i is parsed and does nothing, which is not the same as ignoring it.
-	// It is the text a *line editor* opens with, so it has an effect only
-	// where there is a terminal and an editor on it — and this runner's
-	// `read` never opens one, because the letter that would (`-e`) is
-	// refused by name as unimplemented. bash answers the same way wherever
-	// its own input is not a terminal: `printf x | read -i pre -r l` sets l
-	// to `x`, seed and all. The reading that would be wrong is treating the
-	// seed as a *default* for an empty line — `printf '\n' | read -i pre l`
-	// leaves l empty in bash, not `pre`, and in no shell in the panel does
-	// it do otherwise (#761). The letter still consumes its argument, which
-	// is the half that has to be right either way: without it `read -i pre
-	// -r l` would read `pre` as the variable name.
+	// -e, -E and -i are parsed and do nothing, which is not the same as
+	// ignoring them. All three are about a *line editor*: -e opens one, -E
+	// opens one with the shell's default completion on it, and -i is the
+	// text it opens with. So they have an effect only where there is a
+	// terminal and an editor on it, and this runner's `read` never opens
+	// one. bash answers the same way wherever its own input is not a
+	// terminal, which is every `read` in every script: measured 2026-09-22,
+	// `printf x | read -e -i pre -r l` sets l to `x`, seed and all, and
+	// `read -e x </dev/null` reports 1 with x cleared exactly as `read x`
+	// does. The reading that would be wrong is treating the seed as a
+	// *default* for an empty line — `printf '\n' | read -i pre l` leaves l
+	// empty in bash, not `pre`, and in no shell in the panel does it do
+	// otherwise (#761). -i still consumes its argument, which is the half
+	// that has to be right either way: without it `read -i pre -r l` would
+	// read `pre` as the variable name.
+	//
+	// Read and dropped rather than refused by name. A letter in
+	// Diagnostics.UnimplementedOptionLetters says "this shell has not got to
+	// it yet", and for these two that sentence is wrong in the place it is
+	// read: off a terminal there is nothing to get to, and saying it cost
+	// `read.tests` five lines and two statuses (#4170).
 
 	// -p rides the optstring's shape the way -n does: `p:` takes a prompt,
 	// handled once the stream is known, and a bare `p` names the coprocess
@@ -5775,7 +5784,8 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// split, which is why the mask rides along rather than the processing
 	// being a pre-pass over the string.
 	ifs, set := r.ifs()
-	fields, at, _ := splitFieldsAt(text, lits, ifs, set, false, false)
+	space := r.ifsSpace(ifs)
+	fields, at, _ := splitFieldsAt(text, lits, ifs, space, set, false, false)
 	if array != "" {
 		// An array target takes the fields *as* fields, so the tail of the
 		// splitting rule is live here: `IFS=:; read -A a` on `a:b:` fills
@@ -5862,11 +5872,29 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		case i >= len(fields):
 			v = ""
 		case i == len(args)-1 && len(fields) > len(args):
-			v = r.readRemainderValue(text, at, fields, i, ifs)
+			v = r.readRemainderValue(text, at, fields, i, ifs, space)
 		case i == len(args)-1:
-			v = r.readLastFieldValue(fields[i], ifs)
+			v = r.readLastFieldValue(fields[i], ifs, space)
 		default:
 			v = fields[i]
+		}
+		// The shell's own name is not an operand in every column: two of the
+		// four that have one hand it the record as it came and two trim it
+		// the way the value above was trimmed. See
+		// Semantics.BareReadTakesTheLineWhole.
+		//
+		// Asked here, with both readings in hand, because the guard is the
+		// comparison itself: where the split gave back the line unchanged
+		// there is nothing to decide, and that is every record with no
+		// leading or trailing IFS whitespace on it — which is what keeps the
+		// question off `while read; do`.
+		if defaulted && v != text {
+			if r.ask(r.sem().BareReadTakesTheLineWhole,
+				"a bare `read` handing its default name the record whole") {
+				v = text
+			} else if r.unspecified {
+				return 2
+			}
 		}
 		if st, stop := r.readFill(name, v, fill-i-1, defaulted, &refused); stop {
 			return st
@@ -5932,7 +5960,7 @@ func (r *Runner) readFill(name, value string, left int, defaulted bool, refused 
 // is not in IFS stays too, which is why the mask and IFS both have to be
 // consulted rather than unicode.IsSpace. The escape mask is honored on the
 // same reasoning the splitter honors it: a backslashed space is data.
-func readRemainder(text string, start int, literal []bool, ifs string) string {
+func readRemainder(text string, start int, literal []bool, ifs, space string) string {
 	end := len(text)
 	for end > start {
 		i := end - 1
@@ -5940,7 +5968,7 @@ func readRemainder(text string, start int, literal []bool, ifs string) string {
 			break
 		}
 		c := text[i]
-		if c != ' ' && c != '\t' && c != '\n' {
+		if !isIFSWhitespace(c, space) {
 			break
 		}
 		if strings.IndexByte(ifs, c) < 0 {
@@ -5973,16 +6001,16 @@ func readRemainder(text string, start int, literal []bool, ifs string) string {
 // This implementation had neither: it honored the mask character by
 // character, which is dash's answer on the first row and nobody's on the
 // second (#1360).
-func (r *Runner) readRemainderValue(text string, at []int, fields []string, i int, ifs string) string {
+func (r *Runner) readRemainderValue(text string, at []int, fields []string, i int, ifs, space string) string {
 	start := at[i]
-	bare := readRemainder(text, start, nil, ifs)
+	bare := readRemainder(text, start, nil, ifs, space)
 	// The end can only ever move *forward* from the plain trim, because the
 	// only thing either reading declines to take off is whitespace the other
 	// one took: a non-whitespace separator is not trimmed by anybody, and a
 	// field's own content is past the plain trim's stop by definition.
 	end := start + len(bare)
 	for j := i; j < len(fields) && j < len(at); j++ {
-		if allSeparatorWhitespace(fields[j], ifs) {
+		if allSeparatorWhitespace(fields[j], ifs, space) {
 			continue
 		}
 		if e := at[j] + len(fields[j]); e > end {
@@ -6012,10 +6040,10 @@ func (r *Runner) readRemainderValue(text string, at []int, fields []string, i in
 // and must not hold the end open. `IFS=: read x y` on `a:b:c::` is `b:c::` in
 // all six shells, and it stays that way because the plain trim never takes a
 // colon — not because an empty field extended it.
-func allSeparatorWhitespace(field, ifs string) bool {
+func allSeparatorWhitespace(field, ifs, space string) bool {
 	for i := range len(field) {
 		c := field[i]
-		if c != ' ' && c != '\t' && c != '\n' {
+		if !isIFSWhitespace(c, space) {
 			return false
 		}
 		if strings.IndexByte(ifs, c) < 0 {
@@ -6033,8 +6061,8 @@ func allSeparatorWhitespace(field, ifs string) bool {
 // differing from the field at all *is* the disagreement, and is where the
 // axis is read. One column trims here and the other two leave the field
 // alone, which is the row that made the axis three-valued.
-func (r *Runner) readLastFieldValue(field, ifs string) string {
-	trimmed := readRemainder(field, 0, nil, ifs)
+func (r *Runner) readLastFieldValue(field, ifs, space string) string {
+	trimmed := readRemainder(field, 0, nil, ifs, space)
 	if trimmed == field {
 		return field
 	}

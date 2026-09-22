@@ -1696,6 +1696,17 @@ func Semantics() interp.Semantics {
 	s.ReadTrailingEscapedSeparator = interp.ReadTrailingEscapedSeparatorTrimmed
 	s.ReadTrailingWhitespaceEndsAField = interp.No
 	s.ReadNoFieldsIsOneEmptyElement = interp.No
+	// The whitespace half of IFS is POSIX's three, measured on the splitter:
+	// with `IFS` the vertical tab alone, `set -- $v` over `a\v\vb` is three
+	// fields here where bash 5.3 and ksh93 give two. This shell answers the
+	// question **twice** — its own `read` merges that run, filling two names
+	// and leaving the third empty — and the splitter's answer is the one
+	// held, because one axis cannot hold both and giving the splitter bash's
+	// answer to fix `read` would be the wrong half.
+	s.IFSWhitespaceIsEverySpaceCharacter = interp.No
+	// A bare `read` hands REPLY the record as it came, spaces at both ends
+	// and all, which is bash's answer rather than ksh93's and zsh's.
+	s.BareReadTakesTheLineWhole = interp.Yes
 	s.ReadRefusesABadNameBeforeReading = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.No
 	s.InteractiveSelectsEmacs = interp.No

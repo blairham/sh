@@ -321,6 +321,7 @@ dash  BadSubscriptToADeclaration
 dash  BadSubscriptToAnOutputOperand
 dash  BadSubscriptToUnset
 dash  BareFloatLetterResetsThePrecision
+dash  BareReadTakesTheLineWhole
 dash  BareSubscriptIsASubscript
 dash  BareTypesetListing
 dash  BlankArithSubscriptIsTheEmptyExpression

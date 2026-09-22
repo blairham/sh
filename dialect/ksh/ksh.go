@@ -2634,6 +2634,14 @@ func Semantics() interp.Semantics {
 	// zsh.
 	s.ReadNoFieldsIsOneEmptyElement = interp.Yes
 	s.ReadTrailingWhitespaceEndsAField = interp.No
+	// bash's answer about the whitespace half of IFS, and the only other
+	// column that gives it: with `IFS` the vertical tab alone, `a\v\vb` is
+	// two fields here and three in dash, zsh and BusyBox ash.
+	s.IFSWhitespaceIsEverySpaceCharacter = interp.Yes
+	// A bare `read` trims the record the way a named operand's value is
+	// trimmed, so a line with two spaces at each end reaches REPLY with
+	// none of them. zsh's answer; bash and BusyBox ash keep them.
+	s.BareReadTakesTheLineWhole = interp.No
 	s.BadNameDeclaresTheOperandsAfterIt = interp.Yes
 	s.SubscriptedOperandTakesTheIntegerAttribute = interp.Yes
 	// And the container letter, taken here too — what this shell then does

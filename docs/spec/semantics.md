@@ -20568,6 +20568,26 @@ the control expression then compares nothing.
 Refuses a bare `read`: dash's "arg count" at 2, where the other three
 read into REPLY.
 
+**`BareReadTakesTheLineWhole`** — bash yes · dash unanswered · ksh93 no · zsh no · BusyBox ash yes
+
+Hands the name a bare `read` fills — the shell's own `REPLY` — the record
+as it came, rather than the value a named operand would have been given.
+
+`printf '  A B  \n' | { read; }` leaves `REPLY` holding both runs of
+spaces in bash 5.3, bash 3.2 and BusyBox ash, and holding `A B` in ksh93
+and zsh, where the default name is an operand like any other and the line
+is split and trimmed. The escapes are processed either way — a
+backslash-space reaches `REPLY` as a space in all of them and `read -r`
+keeps the backslash in all of them — so it is the trim alone. A
+non-whitespace `IFS` hides it completely, the spaces not being separators
+there.
+
+Unanswered in dash, which refuses a bare `read` outright: see
+`ReadRequiresAVariableName` above, so no line ever reaches a default name.
+
+The question is put only where the trim would take something off, which
+is what keeps `while read; do` from consulting it.
+
 **`ReadRefusesABadNameBeforeReading`** — bash yes · dash no · ksh93 yes · zsh no
 
 Judges `read`'s first operand as a name before it goes to the stream,

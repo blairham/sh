@@ -182,3 +182,27 @@ func TestTheQuotedSpellingsAreUnaffected(t *testing.T) {
 		}
 	}
 }
+
+// A backslash is the one IFS character the join cannot hand over raw.
+//
+// The parts it joins are in the escaped form, where a backslash in front of a
+// character says that character was quoted — so a separator dropped between
+// two of them straight off IFS is read as a mark and taken away with the
+// marks. Measured 2026-09-22 against bash 5.3.20: `IFS='\'; set -- x y; v=$*`
+// assigns `x\y`, where this shell assigned `xy` at status 0.
+//
+// The unquoted spelling is the one that moved, and `"$*"` — which reaches the
+// join by a different route — is here beside it, because the two printing
+// different things is what the whole join rule exists to prevent.
+func TestABackslashSeparatorSurvivesTheUnsplitJoin(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`IFS='\'; set -- x y; v=$*; printf "[%s]" "$v"`, `[x\y]`},
+		{`IFS='\'; set -- x y; printf "[%s]" "$*"`, `[x\y]`},
+		{`IFS='\'; a=(x y); v=${a[*]}; printf "[%s]" "$v"`, `[x\y]`},
+		{"IFS='\\'; set -- x y; cat <<E\n$*\nE", "x\\y\n"},
+	} {
+		if out, st := joinSepRun(t, c.src, Yes); out != c.want || st != 0 {
+			t.Errorf("%s: got %q status %d, want %q at 0", c.src, out, st, c.want)
+		}
+	}
+}

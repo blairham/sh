@@ -152,6 +152,42 @@ func bashControlEscape(c byte) string {
 	return controlEscape(c)
 }
 
+// zshControlEscape is the fourth spelling of one byte, and the only one that
+// is not a number: zsh writes a **control notation** inside the `$'…'` of a
+// trace — `\C-A` for 0x01, `\C-[` for escape and `\C-?` for DEL — and marks a
+// byte above ASCII with `\M-` in front of the notation for its low seven
+// bits.
+//
+// Measured 2026-09-22 on zsh 5.9.2 under `LC_ALL=en_US.UTF-8`, one `set -x`
+// line per byte, with the word `a<byte> b`:
+//
+//	byte   written     byte   written       byte   written
+//	0x01   \C-A        0x0d   \C-M          0x89   \M-\t
+//	0x07   \C-G        0x1b   \C-[          0x8a   \M-\n
+//	0x09   \t          0x7f   \C-?          0x8d   \M-\C-M
+//	0x0a   \n          0x80   \M-\C-@       0xa7   \M-'
+//	0x0b   \C-K        0xa0   \M-<space>    0xc6   \M-F
+//
+// So exactly two bytes have names — tab and newline — where bash names seven
+// and ksh93 six, and the `\M-` prefix composes with the same notation rather
+// than having a table of its own: 0x89 is `\M-\t` and not `\M-\C-I`, which
+// is the row that says the low seven bits go through this function again.
+func zshControlEscape(c byte) string {
+	if c >= 0x80 {
+		return `\M-` + zshControlEscape(c&0x7f)
+	}
+	switch c {
+	case '\t':
+		return `\t`
+	case '\n':
+		return `\n`
+	}
+	if c < 0x20 || c == 0x7f {
+		return `\C-` + string(rune(c^0x40))
+	}
+	return string(rune(c))
+}
+
 // kshSingleQuote is ksh93's `%q`, which has three shapes rather than two.
 //
 // A value it can write bare it writes bare — `abc` is `abc`, where the other

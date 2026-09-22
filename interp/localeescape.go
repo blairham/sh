@@ -129,6 +129,14 @@ func unicodeEscapeSpelling(n int) string {
 // Exported because a dialect's own escape reader needs the same answer and
 // must not grow a second one — `print` is zsh's and lives in dialect/zsh.
 func (r *Runner) CodePointEscapeText(n int) (string, bool) {
+	if n > codePointSixByteMax &&
+		!r.ask(r.sem().CodePointPastSixBytesIsEncoded, "a code point past what six bytes hold") {
+		// Nothing for the escape, and **not** a refusal: the rest of the word
+		// still reaches the stream, which is what the second result would stop.
+		// Ahead of the locale because the two shells that answer No here write
+		// nothing under `LC_ALL=C` as well — see the axis.
+		return "", false
+	}
 	if !r.localeRefusesCodePoint(n) {
 		return EncodeCodePoint(n), false
 	}
@@ -220,6 +228,13 @@ func (r *Runner) localeCharsetBytes(n int) ([]byte, bool) {
 // unicodeMax is the last code point Unicode has, past which no charset table
 // can hold a value whatever it says.
 const unicodeMax = 0x10ffff
+
+// codePointSixByteMax is the largest value the six-byte form of the original
+// UTF-8 has room for: six bytes carry thirty-one bits, five in the lead and
+// six in each of the five that follow. A value above it has nowhere to go but
+// into the lead byte, which is where the panel parts company — see
+// Semantics.CodePointPastSixBytesIsEncoded.
+const codePointSixByteMax = 0x7fffffff
 
 // RefuseCodePoint reports the refusal and abandons the script.
 //

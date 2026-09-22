@@ -418,6 +418,8 @@ func Semantics() interp.Semantics {
 	// counts, -d, -t, -u) is refused as unknown here.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
+	// unanswered CodePointPastSixBytesIsEncoded: the question comes after a
+	// `\u` has been read and there is no construct here that reads one.
 	// unanswered DollarSingleEscEscape, DollarSingleQuestionEscape,
 	// DollarSingleUnicodeEscapes and
 	// DollarSingleOctalPastAByteDropsTheLastDigit: dash has no `$'…'` at all,

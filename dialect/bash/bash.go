@@ -1074,6 +1074,13 @@ func Semantics() interp.Semantics {
 	// normalized to four or eight upper-case digits, and the command carries
 	// on. Measured 2026-09-11 under `LC_ALL=C` (#1851).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeWritten
+	// And a value the six-byte form cannot hold writes **nothing at all** for
+	// the escape, with the rest of the word carried on to the stream.
+	// Measured 2026-09-22 under both `LC_ALL=C` and `LC_ALL=en_US.UTF-8`,
+	// `printf '%s' $'a\UFFFFFFFFb'` is `a b` in 5.3.20 where `$'a\U7FFFFFFFb'`
+	// — the last value the form has room for — writes all six bytes between
+	// them. zsh carries the arithmetic past the ceiling instead.
+	s.CodePointPastSixBytesIsEncoded = interp.No
 	// An *unset* locale is UTF-8-capable here, which is this shell alone in
 	// the panel and is measured on three operators at once: under `env -i`,
 	// 5.3.15 answers 5 for `s=héllo; echo ${#s}`, uppercases `café` to
@@ -1081,6 +1088,15 @@ func Semantics() interp.Semantics {
 	// zsh 5.9.2 answer 6 and `CAFé` there, and 3.2.57 answers 6 — so this is
 	// the modern build's reading rather than the family's (#2020).
 	s.UnsetLocaleIsUnicodeAware = interp.Yes
+	// A pattern the encoding cannot decode drops the whole match to bytes
+	// here, so a byte that begins no character finds itself inside one.
+	// Measured 2026-09-22 under `LC_ALL=en_US.UTF-8` on 5.3.20: with the euro
+	// sign in `e` and its middle byte alone in `b`, `[[ $e == *$b* ]]` matches
+	// and `${e#*$b}` is the single trailing byte, where zsh and ksh93 leave
+	// both alone. A pattern of ASCII still counts characters — `[[ $e == ?? ]]`
+	// finds nothing in all three — which is what makes this the pattern's
+	// reading rather than a standing preference for bytes.
+	s.UndecodablePatternComparesBytes = interp.Yes
 	s.EchoEmptyHexDigitRunIsNul = interp.No
 	// Both spellings of the escape character, which is this shell alone in
 	// the panel: ksh93 has only `\E` and zsh only `\e`.
@@ -3648,10 +3664,11 @@ func Diagnostics() interp.Diagnostics {
 		// set -o pads to fifteen and tabs; kill -l numbers five to a row.
 		// The width is named rather than written, because `shopt -o -s`
 		// writes this listing narrowed and has to pad it the same way.
-		OptionListingWidth:  setOptionListingWidth,
-		OptionListingTabbed: true,
-		KillListing:         interp.KillListingNumbered,
-		TraceQuoting:        interp.QuoteShell,
+		OptionListingWidth:          setOptionListingWidth,
+		OptionListingTabbed:         true,
+		KillListing:                 interp.KillListingNumbered,
+		TraceQuoting:                interp.QuoteShell,
+		DiagnosticNamesAWordEscaped: true,
 		// And the widest character set of the three, with a position rule
 		// the other two do not have: `~a` and `#a` are quoted and `a~b` and
 		// `a#b` are not, so the tilde and the hash count only where they

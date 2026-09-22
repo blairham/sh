@@ -2155,7 +2155,7 @@ func (r *Runner) bareArrayReading(elems []string, base string, assigned bool) (s
 	if r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array") {
 		// Joined with the first character of IFS, exactly as `$*` is: an
 		// empty array joins to the empty string, and the name is set.
-		return strings.Join(elems, ifsFirst(r.ifs())), true
+		return strings.Join(elems, r.ifsFirst(r.ifs())), true
 	}
 	return base, assigned
 }
@@ -2177,7 +2177,7 @@ func (r *Runner) arrayScalar(elems []string) string {
 		// `${a[*]}` already was. A hard space was wrong for the same reason
 		// it would be wrong there: measured, `IFS=-; a=(x y z); echo "$a"`
 		// is `x-y-z` and `IFS=; echo "$a"` is `xyz`.
-		return strings.Join(elems, ifsFirst(r.ifs()))
+		return strings.Join(elems, r.ifsFirst(r.ifs()))
 	default:
 		return elems[0]
 	}

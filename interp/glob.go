@@ -1525,7 +1525,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	// `?` is ASCII and still has to consume a whole character of a filename.
 	// Asked once for the listing rather than once per name, so a directory
 	// full of them earns one diagnostic from the core rather than one each.
-	o.chars = r.patternCountsCharacters(append(entryNames(entries), pattern)...)
+	o.chars = r.patternMatchCountsCharacters(pattern, entryNames(entries)...)
 
 	var out []string
 	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group, o.quantified)) {

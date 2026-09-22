@@ -19,7 +19,7 @@ import "strings"
 // opens where the dialect says it opens one.
 func (r *Runner) splitFieldsAsking(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
 	space := r.ifsSpace(ifs)
-	out := splitFieldsEdges(s, literal, ifs, space, ifsSet, keepEdges, escaped)
+	out := splitFieldsEdges(s, literal, ifs, space, ifsSet, keepEdges, escaped, r.countsTheLocalesCharacters)
 	return r.trailingSeparatorField(out, s, literal, ifs, ifsSet, keepEdges)
 }
 
@@ -45,7 +45,7 @@ func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
 // beside the split would both double the question and let the two answers
 // disagree.
 func (r *Runner) splitFieldsAskEdge(s, ifs string, ifsSet bool) (fields []string, openEnd bool) {
-	out, openEnd := splitFieldsOpenEnd(s, nil, ifs, r.ifsSpace(ifs), ifsSet, false, true)
+	out, openEnd := splitFieldsOpenEnd(s, nil, ifs, r.ifsSpace(ifs), ifsSet, false, true, r.countsTheLocalesCharacters)
 	fields = r.trailingSeparatorField(out, s, nil, ifs, ifsSet, false)
 	return fields, openEnd && len(fields) == len(out)
 }

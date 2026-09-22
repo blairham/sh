@@ -1384,6 +1384,45 @@ type Semantics struct {
 	// refuses, so an ASCII one needs no answer from anybody and neither does
 	// any escape at all in a UTF-8 locale.
 	UnicodeEscapeOutsideTheLocale OutsideLocaleEscapePolicy
+	// CodePointPastSixBytesIsEncoded writes a `\u` or `\U` escape whose value
+	// is larger than the six-byte form can hold by letting it overflow into the
+	// lead byte, rather than writing nothing at all for the escape.
+	//
+	// Six bytes hold thirty-one bits, so the last value the encoding has room
+	// for is `\U7FFFFFFF` and the question begins one past it. `\U` reads
+	// eight hexadecimal digits, so every value that reaches it is inside
+	// thirty-two bits and this is the whole of the range above the form.
+	//
+	// Measured 2026-09-22 under `LC_ALL=en_US.UTF-8`, `printf '%s' $'a\UXb'`
+	// with the bytes read by `od -b`:
+	//
+	//	value       bash 5.3.20        zsh 5.9.2               ksh93u+
+	//	7FFFFFFF    a fd bf bf bf bf bf b   the same            the same
+	//	80000000    a b                 a fe 80 80 80 80 80 b   a b
+	//	FFFFFFFE    a b                 a ff bf bf bf bf be b   a b
+	//	FFFFFFFF    a b                 a ff bf bf bf bf bf b   a b
+	//
+	// So two shells stop at the form's own ceiling and one carries the
+	// arithmetic past it, writing a lead byte no UTF-8 decoder will take back.
+	// The row at the ceiling is what makes this the *value* rather than the
+	// encoder: all three agree while the six bytes are enough.
+	//
+	// **The escape contributes nothing and the word carries on**, which is the
+	// half a measurement of the escape alone would have missed: `a` and `b`
+	// both reach the stream in the two shells that write no character, and the
+	// status stays 0. It is not the refusal UnicodeEscapeOutsideTheLocale
+	// above records, where what came before the escape is written and nothing
+	// after it is.
+	//
+	// Asked **before** the locale is consulted, and measured that way: bash
+	// writes nothing for `\UFFFFFFFF` under `LC_ALL=C` exactly as it does
+	// under a UTF-8 locale, where a code point the locale merely cannot hold
+	// has the escape written back there. So this is a property of the value
+	// and the encoder, and the locale never gets a say in it.
+	//
+	// Asked only where an escape actually names a value above the form, so no
+	// ordinary code point puts the question to anybody.
+	CodePointPastSixBytesIsEncoded Answer
 	// EchoEmptyHexDigitRunIsNul reads a hexadecimal escape with no digit
 	// after it as a zero rather than leaving it as written: `echo '\xZ'`,
 	// `echo '\uZ'` and `echo '\x'` are a NUL byte followed by what was
@@ -15187,6 +15226,78 @@ type Semantics struct {
 	// shell that never sees a non-ASCII byte never needs an answer.
 	MultibyteEncodingIsHonored Answer
 
+	// UndecodablePatternComparesBytes matches a pattern the locale's encoding
+	// cannot decode against the subject **byte by byte**, rather than
+	// character by character with the undecodable bytes standing as characters
+	// of their own.
+	//
+	// The pattern decides, and it decides for the whole match. Measured
+	// 2026-09-22 under `LC_ALL=en_US.UTF-8` with `e` the euro sign
+	// (`e2 82 ac`, one character) and `b` its middle byte alone (`\x82`,
+	// which begins no character):
+	//
+	//	pattern      bash 5.3.20   zsh 5.9.2   ksh93u+
+	//	`*$b*`       match         no          no
+	//	`*[$b]*`     match         no          no
+	//	`?*$b*`      match         no          no
+	//	`??*`        no            no          no
+	//
+	// The last row is what says it is the *pattern* and not a standing
+	// preference for bytes: a pattern of ASCII alone still consumes whole
+	// characters in all three, so the euro is one unit there and `??` finds
+	// nothing. The third row is what says the reading is the whole pattern's
+	// rather than one element's — `?` consumes a single byte there, which it
+	// does nowhere else.
+	//
+	// The trim and replacement operators take the same answer, measured
+	// beside it: `${e#*$b}` is the single byte `ac` in bash and the whole
+	// euro in the other two, and `${e/$b/Z}` is `e2 5a ac` in bash, a
+	// character cut in half.
+	//
+	// **The subject's own bytes are not a second question**, and that is a
+	// limit of what can be measured rather than a decision: a byte that
+	// begins no character is one character of one byte under the character
+	// reading too — see characters() in interp/multibyte.go — so a subject
+	// that does not decode gives the two readings the same units, and no
+	// probe separates them. The pattern is where the split shows.
+	//
+	// Asked only once the locale and the dialect have already said characters
+	// are counted at all, and only for a pattern that actually holds a
+	// sequence the encoding refuses — so a UTF-8 pattern, an ASCII one, and
+	// every pattern under `LC_ALL=C` put the question to nobody.
+	UndecodablePatternComparesBytes Answer
+
+	// JoinTakesTheFirstCharacterOfIFS joins a list with the first
+	// **character** of `IFS` rather than with its first byte.
+	//
+	// `$*`, `${a[*]}` and every other site that joins on `IFS` take the same
+	// answer — it is one separator, chosen once.
+	//
+	// Measured 2026-09-22, `set -- a b c; printf '%s' "$*"` with `IFS`
+	// assigned to a two-byte character *after* the locale was set, bytes read
+	// with `od -b`:
+	//
+	//	locale             bash 5.3.20     zsh 5.9.2       ksh93u+
+	//	en_US.UTF-8        a c3 a9 b …     the same        a c3 b c3 c
+	//	C                  a c3 b c3 c     the same        the same
+	//
+	// The order of the two lines matters and is why the probe assigns `IFS`
+	// after the locale: bash settles the separator when `IFS` is assigned, so
+	// setting the locale afterwards leaves the character it already chose and
+	// a probe written the other way round reads as locale-blind.
+	//
+	// A byte is not a smaller version of the right answer. Half of a
+	// character between every pair of words is a sequence the encoding
+	// refuses, so the joined value cannot be measured, matched or written
+	// back — which is what the shell that does it is measurably wrong about
+	// rather than merely different.
+	//
+	// Asked only where `IFS` begins with a byte above ASCII and the locale
+	// has characters at all: a separator of ASCII is one byte under either
+	// reading, so the ordinary space, tab, newline and colon put the question
+	// to nobody.
+	JoinTakesTheFirstCharacterOfIFS Answer
+
 	// UnsetLocaleIsUnicodeAware is what a locale *nothing names* is: the
 	// encoding the environment would have chosen, or the C locale.
 	//
@@ -23804,6 +23915,27 @@ func PosixSemantics() Semantics {
 		// LC_CTYPE category says one is. So the standard's answer is yes,
 		// and it is also what every panel member but dash does.
 		MultibyteEncodingIsHonored: Yes,
+		// A pattern the encoding cannot decode is still matched by
+		// character. XBD matches a pattern against *characters*, and a byte
+		// sequence that begins no character is not one — so reading the
+		// whole match as bytes because one element of the pattern will not
+		// decode is a departure from the text rather than what it asks for,
+		// and the preset follows the text. It is also the majority:
+		// measured 2026-09-22 under `LC_ALL=en_US.UTF-8`, zsh 5.9.2 and
+		// ksh93u+ both find nothing for `[[ $e == *$b* ]]` on the euro sign
+		// and its middle byte, where bash 5.3.20 matches.
+		UndecodablePatternComparesBytes: No,
+		// `$*` joins on the first *character* of IFS, which is XCU's own word
+		// for it — "the first character of the IFS variable". A separator
+		// taken as the first byte cuts a multi-byte one in half and puts a
+		// sequence in the value that nothing can decode, so the preset follows
+		// the text. Measured 2026-09-22 with `IFS` assigned after the locale,
+		// `set -- a b c; printf '%s' "$*"`: under `LC_ALL=en_US.UTF-8` bash
+		// 5.3.20 and zsh 5.9.2 both write the whole two-byte separator between
+		// the words and ksh93u+ writes its lead byte alone; under `LC_ALL=C`
+		// all three write the lead byte, which is the right answer there and
+		// the reason the question is asked only where a locale has characters.
+		JoinTakesTheFirstCharacterOfIFS: Yes,
 		// XBD ranks the locale variables and then leaves the case where none
 		// of them is set to the implementation: what applies is the
 		// implementation-defined default locale. The default a C program
@@ -28124,7 +28256,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// which bash's `nocasematch` turns on beside this one and zsh's turns
 		// on instead of it.
 		fold:              r.MatchOption(MatchFoldsCase),
-		chars:             r.patternCountsCharacters(pattern, s),
+		chars:             r.patternMatchCountsCharacters(pattern, s),
 		escapes:           r.sem().PatternEscapeReaches,
 		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),

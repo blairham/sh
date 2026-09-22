@@ -75,6 +75,7 @@ ash   BuiltinReadsOptions
 ash   CaseAttributeFoldsWhenRead
 ash   CaseAttributeReplacesTheNumericAttribute
 ash   ChainedSubscriptReadsANestedValue
+ash   CodePointPastSixBytesIsEncoded
 ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
@@ -339,6 +340,7 @@ dash  BuiltinReadsOptions
 dash  CaseAttributeFoldsWhenRead
 dash  CaseAttributeReplacesTheNumericAttribute
 dash  ChainedSubscriptReadsANestedValue
+dash  CodePointPastSixBytesIsEncoded
 dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute
 dash  CompoundPipelineStatusRecord

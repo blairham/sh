@@ -652,6 +652,7 @@ func (r *Runner) SetPosixMode(on bool) {
 	badDeclName, badUnsetName := r.posixSavedBadDeclarationName, r.posixSavedBadUnsetName
 	failedExpansion := r.posixSavedFailedExpansion
 	shiftVerbose := r.posixSavedShiftVerbose
+	typeSpecial := r.posixSavedTypeSpecial
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
 		r.posixSavedUnsetReadonly = r.sem().UnsetReadonlyFatal
@@ -757,6 +758,8 @@ func (r *Runner) SetPosixMode(on bool) {
 		shiftVerbose = true
 		r.posixSavedFuncSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionName
 		funcSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionNameInPosixMode
+		r.posixSavedTypeSpecial = r.sem().TypeDistinguishesSpecialBuiltins
+		typeSpecial = r.sem().TypeDistinguishesSpecialBuiltinsInPosixMode
 		r.posixSavedBadSetName = r.sem().BadSetOptionNameFatal
 		r.posixSavedBadSetLetter = r.sem().BadSetOptionLetterFatal
 		badSetName = r.sem().BadSetOptionNameFatalInPosixMode
@@ -966,6 +969,12 @@ func (r *Runner) SetPosixMode(on bool) {
 		// panel and for why the two spellings are two fields (#2641).
 		s.BadSetOptionNameFatal = badSetName
 		s.BadSetOptionLetterFatal = badSetLetter
+		// The fourteenth, and it takes the dialect's answer for the reason
+		// the bad-option pair does: `type .` is `. is a shell builtin` in
+		// bash under its own name and `a special shell builtin` the moment
+		// the mode is entered, while zsh has no `posix` option to enter it
+		// with. See Semantics.TypeDistinguishesSpecialBuiltinsInPosixMode.
+		s.TypeDistinguishesSpecialBuiltins = typeSpecial
 	})
 	// The twelfth, and the only one that is not on the vector at all: whether
 	// an alias may stand in for a word the grammar reserves is decided while

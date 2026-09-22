@@ -22,6 +22,10 @@ func FunctionLayout() syntax.Layout {
 		// `fi` as much as mid-block.
 		Separator:         "",
 		KeywordTerminator: "",
+		// A command that is nothing but redirections keeps the blank that
+		// would have separated it from a word: `f() { > out; }` comes back
+		// `\t > out` here, where the other engine writes `> out`.
+		BlankBeforeAWordlessRedirection: true,
 		// `then` and `do` — after words and after a command alike — each
 		// start a line of their own.
 		ThenOnItsOwnLine:           true,

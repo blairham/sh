@@ -446,7 +446,11 @@ func TestPrintingAnOmittedBodyThatRedirects(t *testing.T) {
 			back.Names, len(back.Items), len(back.Body))
 	}
 	if len(back.Body) == 1 {
-		if got := syntax.PrintCommand(back.Body[0].Expr.(*syntax.Pipeline).Cmds[0]); got != " > /dev/null" {
+		// Bare, with no blank in front of it: the body is a command that is
+		// nothing but a redirection, so there is no word for a blank to
+		// separate it from. See Layout.BlankBeforeAWordlessRedirection,
+		// which is the arrangement that asks for the other spelling.
+		if got := syntax.PrintCommand(back.Body[0].Expr.(*syntax.Pipeline).Cmds[0]); got != "> /dev/null" {
 			t.Errorf("the redirection came back as %q", got)
 		}
 	}

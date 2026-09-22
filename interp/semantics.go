@@ -6957,6 +6957,31 @@ type Semantics struct {
 	// its own list moves this sentence with it rather than beside it.
 	TypeDistinguishesSpecialBuiltins Answer
 
+	// TypeDistinguishesSpecialBuiltinsInPosixMode is the same question asked
+	// of a shell that is in POSIX mode, which is a state rather than a preset
+	// — [Runner.SetPosixMode] swaps this value in on the way in and puts the
+	// answer above back on the way out.
+	//
+	// A field of its own for the reason
+	// BadOptionToSpecialBuiltinFatalInPosixMode is one: what a shell's own
+	// POSIX mode makes of an axis is the shell's answer and not the mode's.
+	// Measured 2026-09-22, `type .` and `type export` with `type echo` as the
+	// control:
+	//
+	//	                        default          POSIX mode
+	//	bash 5.3.20             shell builtin    SPECIAL
+	//	bash 5.3.20 as `sh`     SPECIAL          SPECIAL
+	//	dash, ksh93, ash        SPECIAL          SPECIAL (it is the mode)
+	//	zsh 5.9.2               shell builtin    `set: no such option: posix`
+	//
+	// zsh's row is why the twin is not simply the standard's answer written
+	// into the swap: that shell has no `posix` option at all, so the only
+	// door into the mode there is the name — and a dialect that cannot enter
+	// the mode must not be handed a reading through it either way. `echo` is
+	// the control on every row and stays `shell builtin` throughout, which is
+	// what makes this a distinction rather than a longer phrase.
+	TypeDistinguishesSpecialBuiltinsInPosixMode Answer
+
 	// TypePrintsFunctionBody makes `type name` follow "name is a function"
 	// with the function itself, reformatted. True in bash alone — all three
 	// builds — where the other four stop at the sentence. What that sentence
@@ -24092,6 +24117,13 @@ func PosixSemantics() Semantics {
 		// say `echo is a shell builtin`. bash under its own name and zsh
 		// are the departures.
 		TypeDistinguishesSpecialBuiltins: Yes,
+		// And the standard's own mode cannot make it anything else, so the
+		// preset answers the POSIX-mode twin the same way. bash is the one
+		// dialect this moves: it says `shell builtin` under its own name and
+		// `a special shell builtin` the moment the mode is entered, by either
+		// door. The three shells that are always in the mode already hold
+		// Yes, and zsh has no `set -o posix` to reach it through.
+		TypeDistinguishesSpecialBuiltinsInPosixMode: Yes,
 		// `local` reads the declaration question rather than the export one,
 		// and the standard gives it to nobody, so the core answers it the
 		// same way it answers the neighboring one: a declaration names a

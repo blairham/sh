@@ -7709,21 +7709,6 @@ func (r *Runner) environ() []string {
 			// the *first* of the two, and execve leaves it that way.
 			continue
 		}
-		if live, produced := r.producedScalar(k); produced {
-			// The same rule the option records below have, asked of every
-			// produced parameter: what a child is handed is what the name
-			// answers *now*, not the text this shell was launched with. An
-			// inherited `BASH_ARGV0` is the sharpest case — the name this
-			// shell was given is not the name it is running under once the
-			// route has settled `$0`, and handing the stale one down renamed
-			// every shell underneath it too.
-			out = append(out, k+"="+live)
-			if writtenLists == nil {
-				writtenLists = map[string]bool{}
-			}
-			writtenLists[k] = true
-			continue
-		}
 		if live, bound := r.producedOptionList(k); bound {
 			// An option record is produced, so what a child must be handed
 			// is this shell's options *now* and not the string this shell was
@@ -7860,12 +7845,33 @@ func (r *Runner) producedScalar(name string) (string, bool) {
 	return produce(r), true
 }
 
+// inheritedEntry reports whether a name came in on this shell's environment,
+// which is where environ's first walk would have written it.
+func (r *Runner) inheritedEntry(name string) bool {
+	for _, kv := range r.Env {
+		if k, _, ok := strings.Cut(kv, "="); ok && k == name {
+			return true
+		}
+	}
+	return false
+}
+
 // exportedProducedParameters is the environment entries the exported produced
 // scalars earn, for the names that reached neither of environ's two walks.
 func (r *Runner) exportedProducedParameters(done map[string]bool) []string {
 	var out []string
 	for name := range r.Dynamic {
 		if done[name] || r.removed[name] || !r.isExported(name) {
+			continue
+		}
+		if r.inheritedEntry(name) {
+			// The walk over the inherited environment already wrote it, as
+			// the text that came in. Producing a second entry here would hand
+			// a child the same name twice — and would *ask the producer*,
+			// which is not a read this shell was asked to make: `$_` arrives
+			// in the environment of nearly every process, and answering it
+			// where a dialect has left the question open turned every command
+			// a core shell ran into a pair of refusals.
 			continue
 		}
 		if live, produced := r.producedScalar(name); produced {

@@ -2078,12 +2078,17 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 	// word that was typed stays `$0` and the path the search resolved is what
 	// a diagnostic names — see Shell.scriptOnPath and the two names it
 	// returns.
-	read, zero := sh.scriptOnPath(path)
-	// Through the gate: the program a shell was pointed at is an access
-	// chosen by whoever invoked it, so a policy hiding a path hides it from
-	// `sh /that/path` too — and an audit trail that recorded every file a
-	// script opened and not the script itself was missing the first one.
-	b, err := sh.readFile(read)
+	read, zero, b, found := sh.scriptOnPath(path)
+	var err error
+	if !found {
+		// Through the gate: the program a shell was pointed at is an access
+		// chosen by whoever invoked it, so a policy hiding a path hides it
+		// from `sh /that/path` too — and an audit trail that recorded every
+		// file a script opened and not the script itself was missing the
+		// first one. The search above reads through the same gate, so a
+		// candidate it took is already in hand.
+		b, err = sh.readFile(read)
+	}
 	if err != nil {
 		// Not a usage error. Every shell in the panel tells this apart from
 		// being invoked wrongly, and three of the four tell the two ways it
@@ -2149,9 +2154,9 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 // Semantics.ScriptOperandSearchedOnPath for the panel's row and for why the
 // candidate has to be readable — a mode-000 file on PATH is passed over and
 // the search goes on.
-func (sh Shell) scriptOnPath(operand string) (read, zero string) {
+func (sh Shell) scriptOnPath(operand string) (read, zero string, body []byte, found bool) {
 	if !sh.Semantics.ScriptOperandSearchedOnPath || strings.ContainsRune(operand, '/') {
-		return operand, ""
+		return operand, "", nil, false
 	}
 	list, _ := lookupEnv(sh.env(), "PATH")
 	for _, dir := range filepath.SplitList(list) {
@@ -2161,21 +2166,22 @@ func (sh Shell) scriptOnPath(operand string) (read, zero string) {
 			dir = "."
 		}
 		candidate := filepath.Join(dir, operand)
-		// Opened rather than stat'd, which is the measured rule: a directory
-		// and a file this shell may not read are both passed over, and the
-		// search ends at "no such file" rather than at either of them.
-		if info, err := os.Stat(candidate); err != nil || info.IsDir() {
+		// Read rather than asked about, which is both the measured rule and
+		// the one that keeps this inside the gate: a directory and a file
+		// this shell may not read both fail the read and are passed over, and
+		// the search ends at "no such file" rather than at either of them. A
+		// policy that hides a candidate hides it here too, exactly as it does
+		// for an operand spelled as a path.
+		b, err := sh.readFile(candidate)
+		if err != nil {
 			continue
 		}
-		if _, err := sh.readFile(candidate); err != nil {
-			continue
-		}
-		return candidate, operand
+		return candidate, operand, b, true
 	}
 	// Nothing on the list. Reported as the operand was written, and as a file
 	// that is not there rather than as a search that failed — measured, `bash
 	// nosuchname` is the same sentence `bash ./nosuchname` gets.
-	return operand, ""
+	return operand, "", nil, false
 }
 
 // commandWithStdinOption is `-c` and `-s` together, where the two routes have

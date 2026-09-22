@@ -12859,6 +12859,33 @@ is not built: `Runner.SetTracedFunctions` is the seam, bash fills in none,
 and the DEBUG and RETURN trap inheritance the mark asks for is #3051's
 larger half.
 
+**Which listings carry that line is the `-p` word's question and not the
+`-f` letter's.** Measured 2026-09-22 on bash 5.3.20 under `LC_ALL=C` from a
+script file, with `a` holding nothing, `b` frozen, `c` traced and `d`
+exported:
+
+| line | written |
+| --- | --- |
+| `declare -f` | every body, each attributed one followed by its own line |
+| `declare -f b` | the body alone |
+| `declare -fp b` | the body, then `declare -fr b` |
+| `declare -fp a` | the body alone — `a` holds nothing to write |
+| `declare -Fp a` | `declare -f a`, with no body |
+| `declare -fp b c` | each body followed by its own line, interleaved |
+| `declare -fp b nosuch` | `b`'s two rows, then `declare: nosuch: not found`, 1 |
+
+So the whole-table listing and the `-p` form write both halves and the bare
+`declare -f NAME` writes the body alone. `declare -pf` and `typeset -fp` are
+the same request, the letters come off in the field's order whatever the
+command line said (`readonly -f c` on a traced `c` lists as `declare -frt
+c`), and the `-p` form's line is the function's attributes rather than the
+form's decoration — a function holding none gets no line, where the `-F -p`
+form writes `declare -f NAME` for it regardless.
+
+That last distinction is what makes the gap silent: `declare -fp f` is the
+shape a state capture reads back, and a body with no line under it is a
+listing saying a frozen function is an ordinary one, at status 0 (#4190).
+
 zsh writes its mark **inside the body** — `f () {` then a `# traced` comment
 line — rather than as a row after it, so the two renderings are not one
 rendering and that column's function half is named as missing on a `-f` line

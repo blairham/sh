@@ -3791,13 +3791,16 @@ func Diagnostics() interp.Diagnostics {
 		// the 126 an unrunnable command carries. It is the only shell in the
 		// panel that words the two differently without also numbering them
 		// differently from bash.
-		ScriptNotFound:          "%[1]s: not found",
-		ScriptNotFoundStatus:    127,
-		ScriptNotReadable:       "%[1]s: cannot open [%[2]s]",
-		ScriptNotReadableStatus: 126,
-		Location:                interp.LocationLineWordAfterFirst,
-		TraceQuoting:            interp.QuoteDollar,
-		TraceEscape:             interp.TraceEscapeHex,
+		ScriptNotFound: "%[1]s: not found",
+		// `ksh -c` with nothing behind it, which is the panel's one
+		// spelling without the article. Measured 2026-09-22 on ksh93u+.
+		InvocationMissingOptionArgument: "%[1]s requires argument",
+		ScriptNotFoundStatus:            127,
+		ScriptNotReadable:               "%[1]s: cannot open [%[2]s]",
+		ScriptNotReadableStatus:         126,
+		Location:                        interp.LocationLineWordAfterFirst,
+		TraceQuoting:                    interp.QuoteDollar,
+		TraceEscape:                     interp.TraceEscapeHex,
 		// The tilde and the hash count anywhere here rather than only at the
 		// front, `=` counts only at the front, and `^` and `!` do not count
 		// at all — three splits from bash in one set. Measured 2026-09-12.

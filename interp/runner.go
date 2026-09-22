@@ -1367,6 +1367,13 @@ type Runner struct {
 	// because by the time anyone asks, every file the shell was reading has
 	// been unwound and the answer would always be "not in a file".
 	exitRanOutsideAFile bool
+	// exitRan says the controlExit being carried came from the `exit` builtin
+	// at all, wherever it ran. The neighboring question to the one above and
+	// a different one: a login shell reads its logout file for an `exit` in a
+	// sourced file too, and reads nothing when the input simply ran out or
+	// `set -e` fired — both of which raise the same controlExit. See
+	// Runner.ExitRan.
+	exitRan bool
 	// loopDepth is how many loops execution is inside right now, which is
 	// what a ^Z has to break out of — see breakLoopsForAStop. Dynamic rather
 	// than lexical: a loop that calls a function that loops is two, because
@@ -7708,6 +7715,21 @@ func (r *Runner) environ() []string {
 			// the *first* of the two, and execve leaves it that way.
 			continue
 		}
+		if live, produced := r.producedScalar(k); produced {
+			// The same rule the option records below have, asked of every
+			// produced parameter: what a child is handed is what the name
+			// answers *now*, not the text this shell was launched with. An
+			// inherited `BASH_ARGV0` is the sharpest case — the name this
+			// shell was given is not the name it is running under once the
+			// route has settled `$0`, and handing the stale one down renamed
+			// every shell underneath it too.
+			out = append(out, k+"="+live)
+			if writtenLists == nil {
+				writtenLists = map[string]bool{}
+			}
+			writtenLists[k] = true
+			continue
+		}
 		if live, bound := r.producedOptionList(k); bound {
 			// An option record is produced, so what a child must be handed
 			// is this shell's options *now* and not the string this shell was
@@ -7810,6 +7832,55 @@ func (r *Runner) environ() []string {
 	// can reach: it is produced and readonly, so it is in neither Vars nor —
 	// unless it was inherited — Env. See exportedOptionLists.
 	out = append(out, r.exportedOptionLists(writtenLists)...)
+	// And a produced parameter the script exported, which no walk above can
+	// reach either: it is answered by a function rather than stored, so it is
+	// in Vars only if something assigned to it and in Env only if it was
+	// inherited. Measured 2026-09-22 against bash 5.3.20 — `export SECONDS`,
+	// `export RANDOM` and `export BASH_ARGV0=this-bash` each put the name in
+	// a child's environment with the value the shell reads for it, and this
+	// shell put none of the three there.
+	out = append(out, r.exportedProducedParameters(writtenLists)...)
+	return out
+}
+
+// producedScalar answers with the live value of a produced scalar parameter,
+// and whether the name is one. Read where a child's environment is built, the
+// way producedOptionList is and for the same reason.
+//
+// A name the shell's own table has taken over is not one: an assignment moves
+// a produced name into Vars in the dialects where assigning to one is kept,
+// and the walk over that map is where such a name belongs.
+func (r *Runner) producedScalar(name string) (string, bool) {
+	produce, ok := r.Dynamic[name]
+	if !ok {
+		return "", false
+	}
+	if _, own := r.Vars[name]; own {
+		return "", false
+	}
+	if !r.dynamicParameterIsThere(name) {
+		// Not there at all, so there is nothing to hand down — the same
+		// answer an unset name gets everywhere else.
+		return "", false
+	}
+	return produce(r), true
+}
+
+// exportedProducedParameters is the environment entries the exported produced
+// scalars earn, for the names that reached neither of environ's two walks.
+func (r *Runner) exportedProducedParameters(done map[string]bool) []string {
+	var out []string
+	for name := range r.Dynamic {
+		if done[name] || r.removed[name] || !r.isExported(name) {
+			continue
+		}
+		if live, produced := r.producedScalar(name); produced {
+			out = append(out, name+"="+live)
+		}
+	}
+	// Sorted, for the reason exportedTables is: a child's environment must
+	// not depend on a map walk.
+	sort.Strings(out)
 	return out
 }
 

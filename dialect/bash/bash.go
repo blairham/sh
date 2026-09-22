@@ -450,6 +450,16 @@ func Semantics() interp.Semantics {
 	// present bash reads `~/.bash_profile`, with that one absent it reads
 	// `~/.bash_login`, and with both absent `~/.profile`. bash 3.2 agrees.
 	s.LoginStartupFiles = ".bash_profile .bash_login .profile"
+	// And the file a login shell reads on the way *out*, which this shell
+	// alone has. Measured 2026-09-22 with a marker in `~/.bash_logout`:
+	// `bash -lc 'exit 3'` and `bash -l ./s.sh` whose own line exits both read
+	// it; `bash -lc 'echo x'`, which runs out of input rather than exiting,
+	// does not; and neither does a shell that is not a login shell. See
+	// Semantics.LogoutFile for the rest of the row.
+	s.LogoutFile = ".bash_logout"
+	// `$0` can arrive in the environment here, which nothing else in the
+	// panel does. See Semantics.DollarZeroFromEnvironment.
+	s.DollarZeroFromEnvironment = "BASH_ARGV0"
 	// `bash -i` reads `~/.bashrc` and nothing else, and does not read `$ENV`
 	// — that is the same file under POSIX mode, where `~/.bashrc` goes
 	// unread; the front end asks the mode rather than the dialect.
@@ -3554,8 +3564,16 @@ func Diagnostics() interp.Diagnostics {
 		ScriptNotFound:          "%[1]s: %[2]s",
 		ScriptNotFoundStatus:    127,
 		ScriptNotReadableStatus: 126,
-		SelectPrompt:            "#? ",
-		Location:                interp.LocationLineWord,
+		// And this shell alone names the operand *twice* once it has the
+		// file open: `bash ./adir` is `./adir: ./adir: Is a directory`
+		// where `bash ./nosuch` and a mode-000 file both open with the
+		// shell's own name. See ScriptOperandNamedByItselfOnceOpened.
+		ScriptOperandNamedByItselfOnceOpened: true,
+		// `bash -c` with nothing behind it. The rest of the panel words it
+		// differently enough that nothing here is shared; see the field.
+		InvocationMissingOptionArgument: "%[1]s: option requires an argument",
+		SelectPrompt:                    "#? ",
+		Location:                        interp.LocationLineWord,
 		// And no line at all at a prompt: measured 2026-09-11 under `-i`,
 		// `if; then` is `bash: syntax error near unexpected token `;'` where
 		// the same line in a script is `s.sh: line 1: …`. The line *inside* a

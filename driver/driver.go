@@ -540,10 +540,11 @@ func MainArgs(sh Shell, argv []string) int {
 			// reach a program rather than failing to understand its own
 			// argument vector, and the panel numbers it that way: 127 for a
 			// path that is not there and 126 for one that will not open, in
-			// the shells that tell them apart. Reported before `$0` exists,
-			// so the shell names itself.
-			sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, se.path, se.err))
-			return sh.Diagnostics.ScriptStatus(se.err)
+			// the shells that tell them apart. Named the way
+			// Shell.reportScriptError says: the shell itself, since nothing
+			// has been read and there is no `$0` yet — unless this dialect
+			// had the file open before it failed.
+			return sh.reportScriptError(se)
 		}
 		var er *emulationRefusal
 		if errors.As(err, &er) {
@@ -705,6 +706,62 @@ func (sh Shell) env() []string {
 		return sh.Env
 	}
 	return os.Environ()
+}
+
+// inheritedZeroName is the name an inherited parameter puts in `$0`, applied
+// to a route that named none of its own.
+//
+// Given the name the route settled on, and it answers with that name unless
+// two things hold: the dialect names such a parameter, and the route left the
+// shell's own name standing. That second test is the whole of "the invocation
+// named no `$0`" — a script operand and a `-c` name operand both write one
+// here, and both are measured to win. See Semantics.DollarZeroFromEnvironment.
+func (sh Shell) inheritedZeroName(name string) string {
+	if name != sh.Name || sh.Semantics.DollarZeroFromEnvironment == "" {
+		return name
+	}
+	if value, ok := lookupEnv(sh.env(), sh.Semantics.DollarZeroFromEnvironment); ok {
+		return value
+	}
+	return name
+}
+
+// runnerEnv is the environment the interpreter is built with: the process's,
+// less the one variable this front end *consumed* on the way in.
+//
+// A name a dialect takes for `$0` is read once and not passed on — measured,
+// `env` inside `BASH_ARGV0=x bash -c …` does not list it — so a rename
+// reaches the one shell it was aimed at rather than every shell started under
+// it. Dropped whether or not the route used it, which is the same
+// measurement: a script operand overrides it and it is gone from the child's
+// environment all the same.
+func (sh Shell) runnerEnv() []string {
+	name := sh.Semantics.DollarZeroFromEnvironment
+	if name == "" {
+		return sh.env()
+	}
+	env := sh.env()
+	kept := make([]string, 0, len(env))
+	for _, entry := range env {
+		if _, ok := strings.CutPrefix(entry, name+"="); ok {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
+}
+
+// lookupEnv reads one variable out of an environment, last assignment
+// winning, the way the environment a process is handed is read everywhere
+// else.
+func lookupEnv(env []string, name string) (string, bool) {
+	value, found := "", false
+	for _, entry := range env {
+		if rest, ok := strings.CutPrefix(entry, name+"="); ok {
+			value, found = rest, true
+		}
+	}
+	return value, found
 }
 
 // context is what bounds the run, and nil means nothing does.
@@ -1333,7 +1390,7 @@ func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (
 		// which is not one a shell can guess at, and every other option here
 		// that takes an argument is refused the same way.
 		if len(args) < 1 {
-			return nil, true, fmt.Errorf("%s requires an argument", spelling)
+			return nil, true, errors.New(sh.Diagnostics.MissingOptionArgument(spelling))
 		}
 		inv.startup.file = args[0]
 		return args[1:], true, nil
@@ -1778,7 +1835,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 				// with "string expected after -o". A listing at invocation
 				// is not worth the machinery until something needs it, and
 				// refusing is the honest half of a split panel.
-				return nil, fmt.Errorf("%s requires an argument", a)
+				return nil, errors.New(sh.Diagnostics.MissingOptionArgument(a))
 			}
 			inv.opts = append(inv.opts, optionSpec{spec: args[0], isName: true, on: on})
 			// Read here as well as carried, because *where* it was written
@@ -1801,6 +1858,27 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 	}
 	flush()
 	return args, nil
+}
+
+// reportScriptError writes the diagnostic a script operand that would not run
+// draws, and returns the status to exit with.
+//
+// One helper for both routes it is reached by — the front end's own refusal
+// and the one carried past the option words — because the two are the same
+// report, and a name rule written at one of them would have been missing from
+// the other.
+//
+// Which name stands in front of it is the dialect's: three of the four name
+// themselves whatever happened, since nothing has been read and there is no
+// `$0` yet, and bash names the operand once it has the file *open* — see
+// Diagnostics.ScriptOperandNamedByItselfOnceOpened.
+func (sh Shell) reportScriptError(se *scriptError) int {
+	name := sh.Name
+	if sh.Diagnostics.ScriptOperandNamesItself(se.err) {
+		name = se.path
+	}
+	sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(name, se.path, se.err))
+	return sh.Diagnostics.ScriptStatus(se.err)
 }
 
 // scriptError is a script operand the shell could not read, carried as its own
@@ -1847,6 +1925,11 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	if err != nil {
 		return source{}, err
 	}
+	// The one name a route can be *given* rather than decide. Applied here,
+	// once, above every route, because the question it asks is the same on
+	// all of them — did this invocation name a `$0`? — and the answer is
+	// read off the name the route settled on. See Shell.inheritedZeroName.
+	in.name = sh.inheritedZeroName(in.name)
 	// Either half makes the shell interactive: the invocation says so
 	// outright on every route — by the `-i` letter or by the dialect's own
 	// `-o` name — and a prompt is interactive whether or not anything was
@@ -1930,7 +2013,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// for `sh -cs cmd` and for `sh -ci cmd` — neither reading standard
 		// input nor prompting — and take the string from the first operand.
 		if len(args) == 0 {
-			return source{}, errors.New("-c requires an argument")
+			return source{}, errors.New(sh.Diagnostics.MissingOptionArgument("-c"))
 		}
 		if inv.fromStdin && len(args) > 1 {
 			// The operand question, and the standard-input half below is
@@ -2145,7 +2228,7 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// environment it is handed rather than reach for shared state. This
 		// binary *is* the process, so the read is made once, where it is
 		// visible — the same split as ReplaceProcess below.
-		Env: sh.env(),
+		Env: sh.runnerEnv(),
 		// Whether this shell has a terminal, which is the fact `set -m`
 		// turns on and which no route is exempt from: measured on a
 		// pseudo-terminal, every shell in the panel grants `set -m` inside a
@@ -2537,10 +2620,9 @@ func (sh Shell) runInput(in source) int {
 		// environment's list as well as the argument vector's, which is
 		// measured: `SHELLOPTS=nosuchoption bash /nope/x.sh` writes the
 		// option's complaint *and* the file's, in that order, and exits 127.
-		// Reported with the shell's own name and not `$0`, exactly as it was
-		// when this was answered in the front end.
-		sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, in.scriptErr.path, in.scriptErr.err))
-		return sh.Diagnostics.ScriptStatus(in.scriptErr.err)
+		// Named exactly as it is when this is answered in the front end,
+		// through the one helper both routes report from.
+		return sh.reportScriptError(in.scriptErr)
 	}
 	if in.scriptListing || in.stringCatalog || in.stringCatalogPortable {
 		// The invocation asked for the program rather than a run of it, so
@@ -2773,6 +2855,9 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 	// 3'` writes the word and then the trap's output, so the word belongs to
 	// the `exit` that was run and not to the end of the process.
 	sh.sayLeaving(r, in)
+	// And the file a login shell reads on its way out, after that word and
+	// before the EXIT trap Finish runs — both measured. See Shell.logoutFile.
+	sh.logoutFile(r, in)
 	switch how {
 	case endingParseFailure, endingRefused:
 		// The EXIT trap fires even when the last thing read would not parse,

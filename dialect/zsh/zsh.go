@@ -4253,10 +4253,14 @@ func Diagnostics() interp.Diagnostics {
 		// same 127. So zsh knows the file would not open and declines to say
 		// which way — the one shell in the panel that splits neither the
 		// wording nor the status.
-		ScriptNotFound:          "can't open input file: %[1]s",
-		ScriptNotFoundStatus:    127,
-		ScriptNotReadableStatus: 127,
-		Location:                interp.LocationTightLine,
+		ScriptNotFound: "can't open input file: %[1]s",
+		// `zsh -c` with nothing behind it names the option last, which is
+		// why this is a verb rather than a fixed sentence. Measured
+		// 2026-09-22 on zsh 5.9.2.
+		InvocationMissingOptionArgument: "string expected after %[1]s",
+		ScriptNotFoundStatus:            127,
+		ScriptNotReadableStatus:         127,
+		Location:                        interp.LocationTightLine,
 		// And no line at a prompt, which is the same answer this shell gives
 		// a program on standard input: measured 2026-09-11 under `-i`,
 		// `if; then` then end of input is `zsh: parse error near `\n'` where

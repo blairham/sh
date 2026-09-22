@@ -4424,6 +4424,42 @@ type Diagnostics struct {
 	// switch rather than a verb.
 	InvocationNamesTheUnreadLine bool
 
+	// ScriptOperandNamedByItselfOnceOpened reports the script operand under its
+	// own name rather than the shell's, once the shell has the file *open* and
+	// the failure is in what came out of it.
+	//
+	// bash alone, and the line it draws is where `$0` is settled rather than
+	// where the wording changes. Measured 2026-09-22 against bash 5.3.20 with
+	// the operand spelled `./x` each time:
+	//
+	//	an operand that is not there     <shell>: ./x: No such file or directory
+	//	a file with no read permission   <shell>: ./x: Permission denied
+	//	a directory                      ./x: ./x: Is a directory
+	//
+	// The first two fail at the open and the third does not — a directory
+	// opens and refuses to be *read* — so the shell that has got the file
+	// open has already taken the operand as `$0` and names it. zsh and ksh93
+	// name themselves for all three, and dash runs a directory to a silent
+	// exit 0, so nothing else in the panel has the distinction to make.
+	//
+	// The wording is unchanged by it: this says which name stands in front of
+	// ScriptNotFound or ScriptNotReadable, not what either of them says.
+	ScriptOperandNamedByItselfOnceOpened bool
+
+	// InvocationMissingOptionArgument is what a shell says about an option
+	// word at an invocation that takes an argument and was given none. One
+	// verb: the option as it was spelled.
+	//
+	//	bash   <shell>: -c: option requires an argument
+	//	zsh    <shell>: string expected after -c
+	//	ksh93  <shell>: -c requires argument
+	//	dash   <shell>: 0: -c requires an argument
+	//
+	// Measured 2026-09-22 on `-c` with nothing behind it. Empty means the
+	// substrate's own, `%[1]s requires an argument`, which is dash's sentence
+	// and a serviceable default for a shell that has named none.
+	InvocationMissingOptionArgument string
+
 	// InvocationUsage is the shell's own usage block, written under a `set`
 	// option the invocation was refused. Two verbs: the name the shell was
 	// invoked by, and that name's last path element.
@@ -8994,6 +9030,34 @@ func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
 	}
 	msg := Wording(format, "%[1]s: %[2]s", path, d.openReason(err, false))
 	return d.invocationPrefix(shell) + msg + "\n"
+}
+
+// MissingOptionArgument is the sentence a shell writes about an option word
+// at an invocation that takes an argument and was given none — the sentence
+// alone, with no name in front of it and no newline on it, because the caller
+// puts the shell's name there the way it does for every other usage refusal.
+//
+// Rendered here for the reason ScriptDiagnostic is: the words are the
+// dialect's and the front end owns only the fact that the word ran out of
+// vector. See Diagnostics.InvocationMissingOptionArgument.
+func (d Diagnostics) MissingOptionArgument(spelling string) string {
+	return Wording(d.InvocationMissingOptionArgument, "%[1]s requires an argument", spelling)
+}
+
+// ScriptOperandNamesItself answers whether a script operand that would not run
+// is reported under its own name rather than the shell's — see
+// Diagnostics.ScriptOperandNamedByItselfOnceOpened, which is the whole of the
+// measurement.
+//
+// err is why the operand failed, and the question it is asked is whether the
+// shell ever got the file open: a path that is not there and one it may not
+// read both fail at the open, and everything else — a directory, most
+// sharply — fails at what came out of one.
+func (d Diagnostics) ScriptOperandNamesItself(err error) bool {
+	if !d.ScriptOperandNamedByItselfOnceOpened {
+		return false
+	}
+	return !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, fs.ErrPermission)
 }
 
 // InvocationOptionDiagnostic is the whole of what a shell writes about an

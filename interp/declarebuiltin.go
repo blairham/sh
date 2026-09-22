@@ -1496,8 +1496,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		defer r.globalDeclarationRunsOnTheShellsOwnCell(held)()
 	}
 
+	// See biReadonly: a refusal made anywhere in an operand whose parentheses
+	// the quoting hid names the builtin, and the claim belongs to the operand
+	// being read rather than to the call.
+	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		r.rereadingAQuotedLiteral = hasValue && r.operandHidesALiteral(name, value, f, false)
 		// A **member path** whose base is a reference is a member of the name
 		// the reference points at, and the whole operand is about that cell.
 		// Here rather than beside attributeFollowsTheReference below, which

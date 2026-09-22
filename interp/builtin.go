@@ -6734,6 +6734,10 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	if r.unspecified {
 		return status
 	}
+	// Restored once, here, because the loop below leaves by a dozen returns
+	// and the flag is a *claim about the operand being read* — a call that
+	// walked out of one must not leave the next command inside it.
+	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
 		// A **member path** whose base is a reference is a member of the name
@@ -6808,7 +6812,37 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		if target, follows := r.attributeFollowsTheReference(name, f); follows {
 			name = target
 		}
-		if (f.array || f.assoc) && r.readonlyRecordsTheCompound() {
+		// A value whose parentheses the quoting hid is the builtin's own to
+		// read, and a refusal anywhere in this operand names it — the mark
+		// below included, which is what reports a frozen name. Per operand
+		// rather than deferred, because this loop leaves an operand by half
+		// a dozen `continue`s and the next one is a question of its own. See
+		// Runner.operandHidesALiteral.
+		r.rereadingAQuotedLiteral = hasValue && r.operandHidesALiteral(name, value, f, true)
+		// And the refusal in front of the whole operand, because everything
+		// below it writes: the kind mark converts a standing scalar and the
+		// store lays the elements down, and each of them reports on its own
+		// once it has already written. Measured, bash answers this operand
+		// with **one** sentence and leaves the array exactly as it was —
+		// `a=(1); readonly a; readonly -a a="(4)"` is still `([0]="1")`.
+		if r.rereadingAQuotedLiteral && r.refuseReadonly(name, assignedByDeclaration) {
+			r.assignFailed = true
+			if r.ctl == controlExit {
+				return r.status
+			}
+			continue
+		}
+		// With a value the letter names the kind the value is stored as, and
+		// the axis is not asked: measured 2026-09-22, `readonly -a d=4` is
+		// `declare -ar d=([0]="4")` in bash 5.3.20 — the shell whose
+		// *valueless* `readonly -a` records nothing — and zsh refuses the
+		// same line as an inconsistent type before the question is reached.
+		// The axis was written from the valueless measurement and was
+		// standing in front of both, so a valued `readonly -a` stored a
+		// scalar here and `readonly -a q="(1 2)"` below could not see an
+		// array to read its text again for.
+
+		if (f.array || f.assoc) && (hasValue || r.readonlyRecordsTheCompound()) {
 			// Ahead of the assignment, the order every other declaration
 			// loop keeps: the letters say what the name is and the value
 			// then lands in it.
@@ -6831,6 +6865,38 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			}
 			if r.unspecified {
 				return r.status
+			}
+			// `readonly -a q="(1 2)"` is the same operand `typeset -a
+			// q="(1 2)"` carries, and the word does not change what the text
+			// means: the quoting hid the parentheses from the parser and the
+			// letter on this line says the name is an array, so the text is
+			// read again as the literal it was written as. Ahead of the
+			// append and the plain store for the reason it is ahead of
+			// biDeclare's and biLocal's — they would put the characters in
+			// element 0, which is what this word did (`declare -p` came back
+			// `([0]="(1 2)")` where the other two spellings leave two
+			// elements). This builtin has a loop of its own, so the rule has
+			// to be asked here as well or the shell answers one spelling and
+			// not the other.
+			//
+			// And the give-up with it: a text the re-read cannot take is
+			// refused inside it and costs the rest of the line, exactly as
+			// the other words' operands do.
+			if r.rereadingAQuotedLiteral && r.arrayLiteralHiddenByQuoting(name, value, appends) {
+				if r.unspecified || r.operandGaveUpTheBuiltin() {
+					return r.status
+				}
+				if !letters {
+					continue
+				}
+				r.declarationAssignmentExport(name, false)
+				if r.unspecified {
+					return r.status
+				}
+				if freezes {
+					r.markReadonly(name)
+				}
+				continue
 			}
 			// `readonly a+=2` joins what the name holds and then freezes it
 			// — over the standing value where this builtin took no scope,

@@ -2210,6 +2210,12 @@ type Runner struct {
 	// of a readonly name; ksh93 is the reverse. The listings below make the
 	// same point in the other direction — zsh writes `export V='a b'` for
 	// one and `typeset -r R=2` for the next.
+	// rereadingAQuotedLiteral is on while a declaration builtin is storing
+	// the elements of a value whose parentheses quoting had hidden — see
+	// arrayLiteralHiddenByQuoting. It is read by one thing: a refusal made
+	// inside that store names the builtin, where the same word's ordinary
+	// store may not.
+	rereadingAQuotedLiteral bool
 	posixMode               bool
 	posixSaved              Answer
 	posixSavedUnsetReadonly Answer
@@ -9161,6 +9167,16 @@ func (r *Runner) appendedValue(name, old, add string) (string, bool) {
 // differently through the identical word — see
 // Diagnostics.ReadonlyAttributeRefusalNamesBuiltin.
 func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm) bool {
+	if r.rereadingAQuotedLiteral {
+		// A store the builtin made while reading a value's text again as a
+		// literal, which the dialect that re-reads names itself for every
+		// declaration word — see Runner.arrayLiteralHiddenByQuoting. It is
+		// not the table's question: the table is about the word, and the two
+		// spellings of one word answer it differently, so a row per word
+		// could not hold both. A dialect that does not re-read never
+		// arrives here.
+		return true
+	}
 	if form == attributeRatherThanAValue && r.diag().ReadonlyAttributeRefusalNamesBuiltin != nil {
 		return r.diag().ReadonlyAttributeRefusalNamesBuiltin[r.inBuiltin]
 	}
@@ -9185,7 +9201,13 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
 	// what Wording's own note is about.
 	msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
-	if form.namesTheBuiltin() && r.diag().ReadonlyVariableInDeclaration != "" &&
+	// A refusal made while the builtin was reading a value's hidden literal
+	// names the builtin whatever form the store used, which is the one place
+	// the form is not the question: the write is the builtin's own reading
+	// of its own operand, and it reaches the store through the ordinary
+	// array path. See Runner.operandHidesALiteral for the measurement.
+	if (form.namesTheBuiltin() || r.rereadingAQuotedLiteral) &&
+		r.diag().ReadonlyVariableInDeclaration != "" &&
 		r.readonlyRefusalNamesBuiltin(form) {
 		wording := r.diag().ReadonlyVariableInDeclaration
 		if r.inBuiltin == "read" && r.diag().ReadonlyVariableInRead != "" {

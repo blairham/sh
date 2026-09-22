@@ -6556,6 +6556,23 @@ type Diagnostics struct {
 	// dash answer **1**, reading the two signs rather than an operator, and
 	// ksh93 and zsh write the sentence above (#2420).
 	ArithIncrementNeedsAPlace string
+	// ArithAssignToNonPlace is the reason when an arithmetic *assignment*
+	// stands against something that is not a place: `$(( 7=4 ))`,
+	// `$(( 1+2=3 ))`, `$(( (1)=2 ))`. No verb — the panel names the text in
+	// the shape ArithError already gives it, and none of the three sentences
+	// quotes the operator.
+	//
+	// Measured 2026-09-22, `-c` under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	bash    7=4 : attempted assignment to non-variable
+	//	                                 (error token is "=4 ")
+	//	ksh93    7=4 : assignment requires lvalue
+	//	zsh     bad math expression: lvalue required
+	//
+	// Empty falls back to ArithIncrementNeedsAPlace, which is what the two
+	// shells that reach the same complaint through `++` already hold, and
+	// then to ArithOperatorExpected for a dialect with neither.
+	ArithAssignToNonPlace string
 	// ArithIllegalByte is the reason when the arithmetic reader met a byte
 	// that is part of no token at all, at a position where the expression
 	// could legally have stopped: `$((@))` and `$((1 @))` are
@@ -8097,6 +8114,19 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 			// which is what it would have said had the group closed.
 			reason = d.ArithOperatorExpected
 		}
+	case syntax.ErrArithAssignToNonPlace:
+		reason, fallback = d.ArithAssignToNonPlace, "attempted assignment to non-variable"
+		if reason == "" {
+			// The two dialects that reach an lvalue complaint through the
+			// *operator* say the same sentence here, so they write it once.
+			reason = d.ArithIncrementNeedsAPlace
+		}
+		if reason == "" {
+			// And a dialect with no lvalue sentence at all says what it said
+			// before this kind existed, which is what it says about any text
+			// an expression could use for nothing.
+			reason, fallback = d.ArithOperatorExpected, "operator expected"
+		}
 	case syntax.ErrArithOperator:
 		reason, fallback = d.ArithOperatorExpected, "operator expected"
 	case syntax.ErrArithBadOperator:
@@ -8443,7 +8473,7 @@ func (d Diagnostics) ParseFailure(err error) string {
 		syntax.ErrArithBadBaseSyntax, syntax.ErrArithMissingCloseParen,
 		syntax.ErrArithConditionalThen,
 		syntax.ErrArithConditionalColon, syntax.ErrArithConditionalElse,
-		syntax.ErrArithColonWithoutQuestion:
+		syntax.ErrArithColonWithoutQuestion, syntax.ErrArithAssignToNonPlace:
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)

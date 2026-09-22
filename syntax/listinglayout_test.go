@@ -189,6 +189,16 @@ func TestTheFieldsOfAListingArrangement(t *testing.T) {
 				"so writing it out is a normalization the caller asks for",
 		},
 		{
+			name:   "the blanks an arithmetic for's expressions were written with",
+			src:    "f() { for (( i=0 ; i < 2 ; i++ )); do break; done; }",
+			layout: with(func(l *syntax.Layout) { l.ArithmeticForExpressionsAsWritten = true }),
+			on:     "{ \n    for ((i=0 ; i < 2 ; i++ )); do\n        break;\n    done\n}",
+			off:    "{ \n    for ((i=0; i < 2; i++)); do\n        break;\n    done\n}",
+			why: "both engines that list a body keep the blanks written after an " +
+				"expression and drop the ones written before it, so `i++ ))` is the " +
+				"source's own spacing and the `; ` supplies what the leading blanks did",
+		},
+		{
 			name:   "an arithmetic for with every expression written",
 			src:    `f() { for ((i=0;i<2;i++)); do break; done; }`,
 			layout: with(func(l *syntax.Layout) { l.EmptyArithmeticForExpressionIsOne = true }),

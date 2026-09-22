@@ -49,6 +49,13 @@ func FunctionLayout() syntax.Layout {
 		PipeBothWrittenOut:       true,
 		BodyIsAlwaysBraced:       true,
 
+		// And a fourth: the three expressions of an arithmetic `for` keep
+		// the blanks written after them and lose the ones written before,
+		// exactly as the other engine does — `for (( i=0 ; i < 3 ; i++ ))`
+		// comes back `for ((i=0 ; i < 3 ; i++ ))`. Measured 2026-09-22 on
+		// zsh 5.9.2 through `functions`.
+		ArithmeticForExpressionsAsWritten: true,
+
 		// And a subshell gets the shape a brace group gets, which the other
 		// engine does not give it: `( exit 1 )` there, three lines here.
 		SubshellBodyOnItsOwnLines: true,

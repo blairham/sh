@@ -308,6 +308,24 @@ type Layout struct {
 	// program: an omitted condition is true, and `1` is how that is spelled.
 	EmptyArithmeticForExpressionIsOne bool
 
+	// ArithmeticForExpressionsAsWritten writes each of the three expressions
+	// of an arithmetic `for` with the blanks the script put *after* it,
+	// instead of the trimmed text the fields hold.
+	//
+	// Both engines that list a body keep that half and drop the other:
+	// measured 2026-09-16 on bash 5.3.20 through `declare -f` and on zsh
+	// 5.9.2 through `functions`, `for (( i=0 ; i < 3 ; i++ ))` comes back
+	// `for ((i=0 ; i < 3 ; i++ ))` and `for ((   i=0;i<3;i++   ))` comes back
+	// `for ((i=0; i<3; i++   ))`. So the leading blanks go — the `; ` this
+	// writes supplies one — and the trailing blanks stay, which is what makes
+	// `i++ ))` rather than `i++))`.
+	//
+	// The parts come from [ForArithClause.PartsAsWritten], which re-splits
+	// the header; a tree built by hand has no header and prints as it always
+	// did. Off by default, since a formatter wants the blanks normalized and
+	// a round trip wants them not doubled.
+	ArithmeticForExpressionsAsWritten bool
+
 	// HereDocumentWordSingleQuoted writes a delimiter that carries any
 	// quoting as its literal text inside one pair of single quotes,
 	// whichever quoting the source used.
@@ -1051,6 +1069,12 @@ func (p *printer) command(c Command) {
 		p.caseClause(x)
 	case *ForArithClause:
 		init, cond, post := x.InitText, x.CondText, x.PostText
+		if p.layout.ArithmeticForExpressionsAsWritten {
+			init, cond, post = x.PartsAsWritten()
+			init = strings.TrimLeft(init, " \t\n")
+			cond = strings.TrimLeft(cond, " \t\n")
+			post = strings.TrimLeft(post, " \t\n")
+		}
 		if p.layout.EmptyArithmeticForExpressionIsOne {
 			init, cond, post = arithForOne(init), arithForOne(cond), arithForOne(post)
 		}

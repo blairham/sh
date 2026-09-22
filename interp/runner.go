@@ -2002,6 +2002,7 @@ type Runner struct {
 	// and histStarted says the first of them has happened. See
 	// SetHistoryFile.
 	histFirst   func(*Runner) int
+	histSeed    func(*Runner, []string)
 	histStart   func(*Runner)
 	histFinish  func(*Runner)
 	histStarted bool

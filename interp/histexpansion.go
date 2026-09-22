@@ -342,6 +342,31 @@ func (r *Runner) HistoryExpansionRefusal(err error) string {
 	return err.Error()
 }
 
+// SetHistorySeed hands the Runner the dialect's way of putting entries a
+// *previous* session left into the list — what a script's `history -r` does,
+// without the numbering an `-r` moves.
+//
+// It exists for the one shell state [SetHistoryFile] deliberately leaves
+// alone: an **interactive** session, whose file is the front end's and whose
+// start and finish hooks never run. The list, though, is the dialect's, and
+// `history`, `fc` and every `!` reference read it — so a session that kept
+// its lines only in the front end had a `history` builtin that could see
+// nothing and an `!!` that matched nothing, while the same shell drew those
+// lines back with the up arrow.
+//
+// Seeding rather than recording: these entries were read from a file, so
+// nothing is waiting to be written back and the numbering does not move for
+// what the size drops. Nil is a dialect that keeps no list.
+func (r *Runner) SetHistorySeed(seed func(*Runner, []string)) { r.histSeed = seed }
+
+// SeedHistoryEntries puts a previous session's lines into the list.
+func (r *Runner) SeedHistoryEntries(lines []string) {
+	if r.histSeed == nil || len(lines) == 0 {
+		return
+	}
+	r.histSeed(r, lines)
+}
+
 // SetHistoryFile hands the Runner the two moments a **script's** history
 // list meets a file: start runs the first time the list is turned on, and
 // finish runs as the shell ends with the list still on.

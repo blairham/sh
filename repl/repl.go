@@ -506,6 +506,20 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// `!4 #1` at its first prompt, editor or no editor.
 	hist := s.historyFile()
 	earlier := s.recalled(ctx, hist)
+	// And into the dialect's list, once, before either loop: `history`, `fc`
+	// and every `!` reference read that one, and a session whose earlier
+	// lines were only in the front end's answered a `history` with nothing
+	// while the up arrow walked them (#4177). Seeded rather than recorded —
+	// they are already in the file. See interp.Runner.SetHistorySeed.
+	if s.Runner != nil {
+		s.Runner.SeedHistoryEntries(earlier)
+		// And that this reader is the one filling that list, which is what
+		// lets a builtin drop the line it is written on. Said here rather
+		// than derived, exactly as the script's front end says it: the
+		// answer is about who is recording, and until this session did, a
+		// prompt was the state the flag was *false* for.
+		s.Runner.SetHistoryListFilledByTheReader(true)
+	}
 	s.counts = &counts{history: len(earlier)}
 	s.hooks = &hookState{reported: map[string]bool{}, themeReported: map[string]bool{}}
 	// Where this session records a command and what came of it. Opened here
@@ -1313,6 +1327,7 @@ func (s Shell) runPlain(
 	record := s.recording(recall, &added, &addedAt)
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
+	var seeded string
 	for {
 		drawn := s.beforeReading(ctx, nil, &pending)
 		if s.Runner.Exited() {
@@ -1361,6 +1376,31 @@ func (s Shell) runPlain(
 			return s.status(), nil
 		}
 		line = strings.TrimSuffix(line, "\n")
+		// What a `histverify` expansion left for this read to be added to.
+		// There is no editing line here to draw it on, so it is carried and
+		// joined to what comes next — which is what the real shell does on
+		// this route too: measured 2026-09-22, `shopt -s histverify`, `echo
+		// hello`, `!!`, `echo done` on a pipe runs `echo helloecho done`,
+		// because the line buffer the expansion was put back into was still
+		// holding it when the next line arrived.
+		line, seeded = seeded+line, ""
+
+		// History expansion, before anything has looked at the line, exactly
+		// as the editor's loop does it and for the reason written there. It
+		// was missing here entirely: this loop kept a list from #4007 and
+		// never consulted it, so `!!` on a pipe reached the parser as two
+		// characters nobody could run (#4177).
+		expanded, outcome := s.expanded(line, recall.lines, recall.remember)
+		switch outcome {
+		case dropLine:
+			pending.Reset()
+			continue
+		case verifyLine:
+			seeded = expanded
+			continue
+		case runLine:
+			line = expanded
+		}
 
 		stmts, text, perr, ready := s.take(&pending, record, line)
 		if !ready {
@@ -1951,6 +1991,15 @@ func (s Shell) recording(recall recalls, added, at *[]string) func(string) {
 		// protected by the credential check above rather than obliged to
 		// repeat it.
 		s.recorded(sessionRecorder{added: added, at: at}, line)
+		// And into the *dialect's* list, which is the one `history`, `fc`
+		// and every `!` reference read. The two lists are not one — see
+		// interp.Runner.SetHistoryStore for why the dialect keeps its own —
+		// and until this the session's went only into the front end's, so a
+		// shell at a prompt drew a line back with the up arrow that its own
+		// `history` could not see (#4177).
+		if s.Runner != nil {
+			s.Runner.RecordHistoryEntry(line)
+		}
 	}
 }
 

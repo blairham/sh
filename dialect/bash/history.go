@@ -141,6 +141,11 @@ func registerHistory(r *interp.Runner) {
 	// interp.Runner.SetHistoryOwnLine.
 	r.SetHistoryOwnLine(historyHasOwnLine, historyDropOwnLine)
 	r.SetHistoryFile(historyStartFile, historyFinishFile)
+	// And the seam for the one shell that route leaves out: an interactive
+	// session, whose file the front end keeps. Its lines still belong in this
+	// list, because `history`, `fc` and every `!` reference read this one.
+	// See interp.Runner.SetHistorySeed.
+	r.SetHistorySeed(historySeed)
 	r.SetHistoryNumbering(historyFirst)
 	// And the parameter whose assignment truncates the file where it
 	// stands, which is the moment nothing else could reach: see
@@ -940,6 +945,21 @@ func historyLoadLines(r *interp.Runner, lines []string, numbered bool) {
 	entries, times := repl.HistoryEntriesTimed(historyStyle(r), lines)
 	for i, entry := range entries {
 		historyLoad(r, entry, times[i], numbered)
+	}
+}
+
+// historySeed is a previous session's lines joining the list, which is what
+// an interactive front end hands over once, at the start.
+//
+// The same call `-r` makes and with the same `numbered` answer the startup
+// read uses: these lines were read from a file, so nothing counts them as
+// waiting to be written and the numbering does not move for the ones a size
+// drops. No times come with them — the front end's decoder hands back the
+// commands — so a listing under a format draws `??` for a line an earlier
+// session wrote, which is what this shell knows about it.
+func historySeed(r *interp.Runner, lines []string) {
+	for _, line := range lines {
+		historyLoad(r, line, "", false)
 	}
 }
 

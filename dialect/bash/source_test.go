@@ -68,6 +68,47 @@ func wantWholeLines(t *testing.T, out string, want ...string) {
 	}
 }
 
+// countLines is how many whole lines of out are exactly want, for the suites
+// that assert a diagnostic appears **once** rather than merely appears.
+//
+// Here beside wantWholeLines rather than in whichever suite wanted it first,
+// because it was written twice: #4199 put one in typeposix_test.go and #4214
+// put another in readonlyhiddenliteral_test.go, neither knowing about the
+// other. Both PRs were green — each branch held only one of the two files —
+// and the redeclaration existed only in the merge, so `main` stopped
+// compiling and took every open PR's Lint and Pre-commit job with it
+// (#4221). One name, in the file this package already keeps its shared
+// assertions in, so the third person to want one finds it.
+func countLines(out, want string) int {
+	n := 0
+	for line := range splitLines(out) {
+		if line == want {
+			n++
+		}
+	}
+	return n
+}
+
+// splitLines yields each line of out, splitting on the newline exactly as
+// `strings.Split(out, "\n")` does — a trailing newline therefore yields a
+// final empty line, measured: "a\nb\n" gives "a", "b", "". That agreement
+// matters, because wantWholeLines above compares against that same split, so
+// a suite asserting a line appears and a suite counting how often it appears
+// cannot disagree about what a line is.
+func splitLines(out string) func(func(string) bool) {
+	return func(yield func(string) bool) {
+		start := 0
+		for i := 0; i <= len(out); i++ {
+			if i == len(out) || out[i] == '\n' {
+				if !yield(out[start:i]) {
+					return
+				}
+				start = i + 1
+			}
+		}
+	}
+}
+
 func TestSourceIsASynonymForDot(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "s.sh")

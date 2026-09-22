@@ -175,25 +175,35 @@ func (r *Runner) outputOperandBracketsAreLexed(operand string) bool {
 // Read off the spans, because that is the only place the fact survives:
 // `unset m[$k]` and `unset "m[$k]"` come to the same string and name
 // different elements. See Runner.subscriptOperandRead for the rows.
+// **One** pair, and the closing bracket is the word's last byte. A chain —
+// `unset a[1][2]` — wrote two pairs of its own, so the text between the
+// first `[` and the last `]` is not one subscript and the operand is left to
+// the reading that refuses it. The pair a lexed operand *does* have may hold
+// anything at all between the brackets, since whatever is there arrived from
+// an expansion: `unset a[$k]` with `k=']'` is one written pair and a key made
+// of the other bracket.
 func wordBracketsAreLexed(w *syntax.Word) bool {
 	if w == nil {
 		return false
 	}
-	open := false
+	opens, closes, endsThere := 0, 0, false
 	for _, span := range w.Spans {
 		if span.Kind != syntax.Literal || span.Quoting != syntax.Unquoted {
+			endsThere = false
 			continue
 		}
 		for i := 0; i < len(span.Value); i++ {
 			switch span.Value[i] {
 			case '[':
-				open = true
+				opens++
+				endsThere = false
 			case ']':
-				if open {
-					return true
-				}
+				closes++
+				endsThere = i == len(span.Value)-1
+			default:
+				endsThere = false
 			}
 		}
 	}
-	return false
+	return opens == 1 && closes == 1 && endsThere
 }

@@ -3,7 +3,10 @@
 
 package bash_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // `unset a[$k]` writes its own brackets, so whatever the expansion between
 // them came to is the key — a bracket in it, a backslash in it, a quote
@@ -66,4 +69,20 @@ func quoteForSingle(s string) string {
 		out += string(c)
 	}
 	return out
+}
+
+// One written pair, and the rule is about the pairs the **source** wrote
+// rather than about the brackets in the text: `unset a[1][2]` wrote two, so
+// the operand is not one subscript and is read as the name it is not.
+// Measured 2026-09-22 on bash 5.3.20, `a=(x y z); unset a[1][2]` is silent
+// at status 0 with all three elements still there.
+//
+// A lexed pair may hold the other bracket and still be one pair, which is
+// the row above this one — so the two cannot be told apart by counting the
+// brackets in the expanded text, only by what the source wrote.
+func TestUnsetDoesNotReadAChainedSubscriptAsOne(t *testing.T) {
+	out, st := answersRun(t, `a=(x y z); unset a[1][2]; printf "[%s][%s]" "${#a[@]}" "${a[1]}"`)
+	if want := "[3][y]"; !strings.Contains(out, want) {
+		t.Errorf("= %q status %d, want it to contain %q with the array untouched", out, st, want)
+	}
 }

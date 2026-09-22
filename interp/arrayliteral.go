@@ -202,6 +202,14 @@ func (r *Runner) bareLiteralElementIsOneValue(name string, elems []*syntax.Array
 	if name == "" || (!tableLetterAhead && !r.assocDeclared(name) && !r.tableLetterHere[name]) {
 		return false
 	}
+	if r.sem().BareElementsInATableLiteralEndTheScript {
+		// The dialect that refuses a bare element in a table literal outright
+		// never reaches this question — see the axis's own doc comment, and
+		// indexArrayIntoATable, which is where that refusal is made. Asking
+		// here would refuse `typeset -A m=($e)` there with the wrong
+		// sentence and at the wrong status.
+		return false
+	}
 	if !aBareElementCanDiffer(elems) {
 		// Asked at the disagreement and not on the common path. A literal
 		// whose every element names its key does not put the question at

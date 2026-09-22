@@ -105,17 +105,35 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 
 // braceProduct substitutes each alternative of the group between open and
 // close back into the word, and expands what comes out.
+//
+// The alternative and the text behind the group are each expanded **on their
+// own**, and the three pieces are joined afterwards. Joining first and
+// re-reading the result would expand text that no brace in the script wrote:
+// `{{1,2,3}..4}` is `{1..4} {2..4} {3..4}` in bash and zsh alike, where the
+// group that produced `1` and the `..4}` behind it are both from the file but
+// the `{1..4}` they spell between them is not. Measured 2026-09-22, and the
+// same for `{6..{7,8,9}}` and `{{1,2,3}..{7,8,9}}` — this is not an axis, it
+// is one pass over the word in every shell that expands braces at all.
 func (r *Runner) braceProduct(w *syntax.Word, open, close cursor, alts [][]syntax.Span, endpoints bool) []*syntax.Word {
 	before := sliceSpans(w.Spans, cursor{0, 0}, open)
 	after := sliceSpans(w.Spans, next(close), cursor{len(w.Spans), 0})
 
+	// The tail is read once rather than once per alternative: it is the same
+	// text every time, and `{a,b}{c,d}` is four words either way.
+	tails := r.braceWords(&syntax.Word{Spans: after, Start: w.Start, Stop: w.Stop}, endpoints)
+
 	var out []*syntax.Word
 	for _, alt := range alts {
-		spans := append([]syntax.Span(nil), before...)
-		spans = append(spans, alt...)
-		spans = append(spans, after...)
-		// Recur, so `{a,b}{c,d}` and nested braces both work.
-		out = append(out, r.braceWords(&syntax.Word{Spans: spans, Start: w.Start, Stop: w.Stop}, endpoints)...)
+		// The alternative is still read, so a group nested inside one — the
+		// `{b,c}` of `{a,{b,c}}` — is a list and not text.
+		for _, head := range r.braceWords(&syntax.Word{Spans: alt, Start: w.Start, Stop: w.Stop}, endpoints) {
+			for _, tail := range tails {
+				spans := append([]syntax.Span(nil), before...)
+				spans = append(spans, head.Spans...)
+				spans = append(spans, tail.Spans...)
+				out = append(out, &syntax.Word{Spans: spans, Start: w.Start, Stop: w.Stop})
+			}
+		}
 	}
 	return out
 }

@@ -46,6 +46,25 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 		return err
 	}
 	if r.ask(r.sem().CoprocEndsInAnArray, "a coprocess putting its ends in an array") {
+		// The ends are an array, so the name answers the array literal's
+		// question rather than the scalar store's: a reference with nothing
+		// to point at gives the attribute up, and one aimed at an element
+		// has nowhere to put two descriptors. Measured on bash 5.3.20 —
+		// `typeset -n x; coproc x { :; }` warns once and fills `x`, and
+		// `typeset -n x=A[0]; coproc x { :; }` writes `` `A[0]': not a valid
+		// identifier `` and fills nothing. This aimed the reference at the
+		// first descriptor and then at the second, so a valueless reference
+		// drew the refusal twice and an element target made a parameter
+		// whose name had a subscript in it. The coprocess itself still ran
+		// and still reports 0, which is bash's answer too.
+		target, write := r.namerefArrayLiteralTarget(name)
+		if !write {
+			// Reported there, and the coprocess itself still ran and still
+			// reports 0 — the ends simply reach no name.
+			r.status = 0
+			return nil
+		}
+		name = target
 		r.setArrayElem(name, 0, "0", itoa(r.coproc.read))
 		r.setArrayElem(name, 1, "1", itoa(r.coproc.write))
 		r.setVar(name+"_PID", itoa(job.Ident()))

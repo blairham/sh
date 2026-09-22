@@ -1870,6 +1870,37 @@ type Semantics struct {
 	// refuse it on the attribute alone.
 	NamerefArrayRefusal NamerefArrayRefusal
 
+	// ArrayLetterOverAnUnaimedReferenceDropsIt decides what an array letter
+	// does to a name that is a reference **with nothing to point at**.
+	//
+	// The aimed case is not this question and is unanimous: the letter
+	// travels to the target, which attributeFollowsTheReference already
+	// does. A reference that has never been aimed has no target to send it
+	// to, and the two shells part company over what is left standing.
+	// Measured 2026-09-22, `env -i` with a scratch HOME:
+	//
+	//	typeset -n foo; typeset -a foo; typeset -p foo
+	//	  bash 5.3.20     declare -a foo        — the reference is gone
+	//	  ksh93u+ 2012    typeset -n -a foo     — both letters stand
+	//	typeset -n foo; typeset -A foo; typeset -p foo
+	//	  bash 5.3.20     declare -A foo
+	//	  ksh93u+ 2012    typeset -n -a foo
+	//	the first, then `foo[0]=7; typeset -p foo`
+	//	  bash 5.3.20     declare -a foo=([0]="7")
+	//	  ksh93u+ 2012    foo: no reference name
+	//
+	// The third row is why this is a behavior and not a listing: under Yes
+	// the name is an ordinary array afterwards and elements land in it,
+	// under No it is still a reference and an element write has nowhere to
+	// go. Neither is a subset of the other and a shell that guessed would
+	// either lose a reference the script still means or refuse a write the
+	// script expects to work.
+	//
+	// Yes is bash's. Asked only where an array letter really landed on an
+	// unaimed reference, so a dialect that spells no `n` letter is never
+	// asked for an answer.
+	ArrayLetterOverAnUnaimedReferenceDropsIt Answer
+
 	// NamerefLetterStandsAlone refuses a declaration that writes the `n`
 	// letter beside any other one, rather than deciding which of the two
 	// wins.

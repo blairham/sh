@@ -1179,6 +1179,13 @@ func Semantics() interp.Semantics {
 	// sentence instead. ksh93 answers both halves the other way round
 	// (#3103).
 	s.NamerefArrayRefusal = interp.NamerefArrayCheckedLastOnTheAttribute
+	// And an array letter written over a reference that has never been
+	// aimed takes the reference away rather than standing beside it:
+	// measured 2026-09-22 on 5.3.20, `typeset -n foo; typeset -a foo` lists
+	// `declare -a foo` and `foo[0]=7` then lands in it, where ksh93u+ lists
+	// `typeset -n -a foo` and answers the same write `foo: no reference
+	// name`. See Semantics.ArrayLetterOverAnUnaimedReferenceDropsIt.
+	s.ArrayLetterOverAnUnaimedReferenceDropsIt = interp.Yes
 	// The `n` letter is read beside every other one here and each pair is
 	// decided on its own. Measured 2026-09-18 on 5.3.20, `env -i` with a
 	// scratch HOME, from a file, with `v=1`: `declare -nx r=v` and
@@ -4175,8 +4182,14 @@ func Diagnostics() interp.Diagnostics {
 		// The target is quoted back with bash's own `'` pair, the way every
 		// bad-name refusal on this builtin quotes one — see BuiltinBadName,
 		// which is the sentence this replaces for the `n` letter alone.
-		NamerefBadTarget:     "`%[1]s': invalid variable name for name reference",
-		NamerefSelfReference: "%[1]s: nameref variable self references not allowed",
+		NamerefBadTarget: "`%[1]s': invalid variable name for name reference",
+		// Except for the empty word, which never reaches the sentence above:
+		// measured 2026-09-22 on 5.3.20, `declare -n r=` is ``declare: `':
+		// not a valid identifier`` — the ordinary bad-name refusal this
+		// builtin gives any word it will not bind — where `declare -n r=1x`
+		// is the line above it. An aimed reference is left aimed either way.
+		NamerefEmptyTargetIsAnOrdinaryBadName: "`%[1]s': not a valid identifier",
+		NamerefSelfReference:                  "%[1]s: nameref variable self references not allowed",
 		// The same sentence ksh93 writes, and the only one the two shells
 		// share on this letter — carried here so the dialect says which
 		// wording it means rather than leaning on a fallback.

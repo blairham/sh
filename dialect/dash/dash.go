@@ -633,6 +633,9 @@ func Semantics() interp.Semantics {
 	// operand can be written here (#3881).
 	// unanswered NamerefTargetResolvedWhenAimed: no `typeset` and no arrays,
 	// so neither half of the question can be written (#3124).
+	// unanswered ArrayLetterOverAnUnaimedReferenceDropsIt: the same wall —
+	// no `typeset -n` to make a reference and no `typeset -a` to write over
+	// it, so neither half of the question can be put (#4178).
 	// unanswered NamerefArrayRefusal: the same wall, and no arrays either —
 	// `r=(a b)` is `Syntax error: "(" unexpected` — so neither half of the
 	// question can be put (#3103).

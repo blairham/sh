@@ -1758,6 +1758,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// After the shadow, which is what lets the scope put back the outer
 		// name's attribute rather than the one this line just gave it.
 		r.setHideInScope(name, df)
+		// An array letter over a reference with nothing to point at, which
+		// one column reads as the reference giving way. Ahead of the store
+		// below, because what it decides is whether there is a reference
+		// there at all for an element to have nowhere to go through. See
+		// Semantics.ArrayLetterOverAnUnaimedReferenceDropsIt.
+		r.arrayLetterTakesAnUnaimedReference(name, df)
+		if r.unspecified {
+			return r.status
+		}
 		if !r.markDeclaredCompound(name, fresh, df, hasValue) {
 			// One kind of array declared over the other, and the dialect
 			// will not have it: the operand is refused and the next one is
@@ -1782,6 +1791,20 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		}
 		if r.unspecified {
 			return r.status
+		}
+		if df.nameref && r.namerefRefusesACompoundLiteral(complaintName, name) {
+			// The `n` letter beside a **parenthesized** value, which is a
+			// container and not a name to point at. The refusal is reported
+			// and the letter goes; the literal still lands, because the
+			// column that reports this one is not the column that ends the
+			// script over it. See interp/nameref.go — and note that the
+			// status is carried on r.assignFailed rather than returned,
+			// since a builtin answering anything but 0 is exactly what keeps
+			// Runner.assignOperands from landing the literal at all.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			df.nameref = false
 		}
 		if df.nameref && !r.namerefLetterIsDropped(df) {
 			// The `n` letter makes the name a **reference**, and what the

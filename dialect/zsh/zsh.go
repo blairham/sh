@@ -2186,6 +2186,11 @@ func Semantics() interp.Semantics {
 	// there is no reference for a target to be settled on. Measured
 	// 2026-09-18, `typeset -n r=a[1]` is `typeset: bad option: -n` at 1
 	// (#3124).
+	// unanswered ArrayLetterOverAnUnaimedReferenceDropsIt: the `n` letter is
+	// the missing one again, so there is no unaimed reference for an array
+	// letter to land on. Measured 2026-09-22, `typeset -n foo` is `typeset:
+	// bad option: -n` at 1 and `typeset -a foo` after it is an ordinary
+	// array (#4178).
 	// unanswered NamerefArrayRefusal: the letter is the same missing one, so
 	// there is no declaration for an array to be refused under. Measured
 	// 2026-09-16, `r=(a b); typeset -n r=v` is `typeset: bad option: -n` at 1

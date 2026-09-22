@@ -3063,6 +3063,16 @@ type Runner struct {
 	// carrying on with a status of 0 said the refusal had not happened.
 	assignFailed bool
 
+	// lettersRefusedTheOperand marks a declaration whose **letters** refused
+	// the operand while its value still lands — today one shape: the `n`
+	// letter beside a parenthesized value, which bash reports at 1 and then
+	// assigns anyway. It cannot be carried on assignFailed, which is read
+	// before the value is expanded and would stop the assignment this is
+	// about, and it cannot be the builtin's own status either, since a
+	// builtin answering anything but 0 is what keeps assignOperands from
+	// running at all. See Runner.namerefRefusesACompoundLiteral.
+	lettersRefusedTheOperand bool
+
 	// linePin overrides the line a node reports, for the dialect that names
 	// where a trap fired rather than where in its body a failure was.
 	linePin int
@@ -5929,6 +5939,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 	}
 	r.unspecified, r.expandErr, r.badSubscript, r.assignFailed = false, false, false, false
+	r.lettersRefusedTheOperand = false
 	r.arithNounsetNamedTheParameter = false
 	// Whatever this command's process substitutions opened is closed when the
 	// command is done, whether it turned out to be a builtin, a function or
@@ -7049,7 +7060,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// fatal in one dialect too, and the status they report is the
 				// one the corpus pins.
 				fatal = true
-			case r.assignFailed:
+			case r.assignFailed, r.lettersRefusedTheOperand:
 				// A refused operand is the declaration's own failure, and
 				// biDeclare cannot see it: the operand assignments land after
 				// the builtin has returned, so the 0 it reported for the
@@ -7803,6 +7814,10 @@ func (r *Runner) environ() []string {
 	// Sorted, for the reason zeroValuedTypeExports is: a child's environment
 	// must not depend on a map walk.
 	out = append(out, r.exportedTables()...)
+	// And a **reference** carrying the export letter, which no walk above can
+	// reach either: a reference keeps no scalar view, so it is in neither
+	// Vars nor AssocArrays. See exportedNamerefs.
+	out = append(out, r.exportedNamerefs()...)
 	for k, v := range r.hiddenExports {
 		out = append(out, k+"="+v)
 	}
@@ -9276,6 +9291,10 @@ func (r *Runner) readCaseFolded(name, value string) string {
 // the same reason: the failure ends the script and a half-written name would
 // outlive it.
 func (r *Runner) appendedValue(name, old, add string) (string, bool) {
+	// Which name's letters these are is the *target's* question where the
+	// name is a reference — see attributedName, and the wrong number this
+	// stored at status 0 before it asked.
+	name = r.attributedName(name)
 	_, isFloat := r.floatPrecision[name]
 	switch {
 	case isFloat:

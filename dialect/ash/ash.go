@@ -663,6 +663,9 @@ func Semantics() interp.Semantics {
 	// unanswered NamerefTargetResolvedWhenAimed: the same wall — no
 	// `typeset`, so there is no declaration for a target to be settled at
 	// (#3124).
+	// unanswered ArrayLetterOverAnUnaimedReferenceDropsIt: the same wall, and
+	// no array letter either — neither half of the question can be written
+	// here (#4178).
 	// unanswered NamerefArrayRefusal: the same wall, and there are no arrays
 	// here either for a reference to be refused over (#3103).
 	// unanswered UnsetReferenceLetterRemovesANonReference: no `-n` on `unset`

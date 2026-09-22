@@ -5856,6 +5856,24 @@ type Diagnostics struct {
 	// where bash has a sentence of its own for this letter.
 	NamerefBadTarget string
 
+	// NamerefEmptyTargetIsAnOrdinaryBadName is the same refusal for the one
+	// target that is not a word at all: the empty string. No verb, or one
+	// that renders as nothing — the word being quoted back is empty.
+	//
+	// **Empty means "the sentence above covers it too"**, which is ksh93's
+	// answer: measured 2026-09-22 on ksh93u+ 2012-08-01, `typeset -n r=1x`
+	// and `typeset -n r=` are `typeset: 1x: invalid variable name` and
+	// `typeset: : invalid variable name`, one sentence with the word
+	// dropped in. bash has two — `` declare: `1x': invalid variable name
+	// for name reference `` against `` declare: `': not a valid identifier
+	// `` — because an empty operand never reaches the sentence the letter
+	// owns and falls out through the ordinary bad-name door instead.
+	//
+	// A field rather than a rule, because "an empty word is an ordinary bad
+	// name" is a statement about where one shell's check sits and not
+	// something the other shell can be read as agreeing with quietly.
+	NamerefEmptyTargetIsAnOrdinaryBadName string
+
 	// NamerefTargetHasNoParent is a declaration aiming a name reference at a
 	// **compound member path** whose base name is not there. One verb: the
 	// path as the script wrote it.

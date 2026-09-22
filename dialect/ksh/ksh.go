@@ -1656,6 +1656,13 @@ func Semantics() interp.Semantics {
 	// The associative attribute does make an object, `typeset -A m=()`, and
 	// is refused (#3103).
 	s.NamerefArrayRefusal = interp.NamerefArrayCheckedFirstOnTheContents
+	// And an array letter over an unaimed reference leaves both letters
+	// standing here: measured 2026-09-22 on ksh93u+, `typeset -n foo;
+	// typeset -a foo` lists `typeset -n -a foo` and `foo[0]=7` is then
+	// `foo: no reference name` — the name is still a reference and the
+	// write has nowhere to go. bash drops the reference instead. See
+	// Semantics.ArrayLetterOverAnUnaimedReferenceDropsIt.
+	s.ArrayLetterOverAnUnaimedReferenceDropsIt = interp.No
 	// And the `n` letter is read **alone** or not at all. Measured
 	// 2026-09-18 on ksh93u+ 2012-08-01, `env -i` with a scratch HOME, from
 	// a file: `typeset -n r=v` is the reference at 0, while `-rn`, `-ni`,

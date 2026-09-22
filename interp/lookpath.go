@@ -44,6 +44,11 @@ type pathError struct {
 	resolved string
 	// missing distinguishes "no such command" from "found it, cannot run it".
 	missing bool
+	// interpreter is the name a `#!` line held, for the one failure where
+	// the file the shell found is there and the *interpreter* is not. Empty
+	// for every other failure, which is what makes it the test as well as
+	// the verb. See Runner.interpreterNamed.
+	interpreter string
 	// onPathDirectory marks a search whose only match was a directory, which
 	// one dialect numbers 127 while still naming the candidate.
 	onPathDirectory bool
@@ -453,6 +458,19 @@ func (r *Runner) cannotRun(err error, how naming) int {
 		}
 	}
 
+	if pe.interpreter != "" && r.diag().BadInterpreter != "" {
+		// The file is there and the program named on its first line is not,
+		// so the errno alone would say "No such file or directory" about a
+		// file this shell had just opened. One dialect reads the line and
+		// says which name it could not find; see Diagnostics.BadInterpreter.
+		if r.diag().BadInterpreterLocatedByNameAlone {
+			r.locatedByNameAlone = true
+			defer func() { r.locatedByNameAlone = false }()
+		}
+		r.diagf("%s\n", Wording(r.diag().BadInterpreter, "%[1]s: %[2]s: %[3]s",
+			name, pe.interpreter, r.diag().reasonText(reason(pe.err))))
+		return 126
+	}
 	if !pe.missing {
 		why := reason(pe.err)
 		if errors.Is(pe.err, syscall.ENOEXEC) && r.diag().BinaryFileReason != "" {

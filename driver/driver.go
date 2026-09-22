@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -540,10 +541,11 @@ func MainArgs(sh Shell, argv []string) int {
 			// reach a program rather than failing to understand its own
 			// argument vector, and the panel numbers it that way: 127 for a
 			// path that is not there and 126 for one that will not open, in
-			// the shells that tell them apart. Reported before `$0` exists,
-			// so the shell names itself.
-			sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, se.path, se.err))
-			return sh.Diagnostics.ScriptStatus(se.err)
+			// the shells that tell them apart. Named the way
+			// Shell.reportScriptError says: the shell itself, since nothing
+			// has been read and there is no `$0` yet — unless this dialect
+			// had the file open before it failed.
+			return sh.reportScriptError(se)
 		}
 		var er *emulationRefusal
 		if errors.As(err, &er) {
@@ -705,6 +707,62 @@ func (sh Shell) env() []string {
 		return sh.Env
 	}
 	return os.Environ()
+}
+
+// inheritedZeroName is the name an inherited parameter puts in `$0`, applied
+// to a route that named none of its own.
+//
+// Given the name the route settled on, and it answers with that name unless
+// two things hold: the dialect names such a parameter, and the route left the
+// shell's own name standing. That second test is the whole of "the invocation
+// named no `$0`" — a script operand and a `-c` name operand both write one
+// here, and both are measured to win. See Semantics.DollarZeroFromEnvironment.
+func (sh Shell) inheritedZeroName(name string) string {
+	if name != sh.Name || sh.Semantics.DollarZeroFromEnvironment == "" {
+		return name
+	}
+	if value, ok := lookupEnv(sh.env(), sh.Semantics.DollarZeroFromEnvironment); ok {
+		return value
+	}
+	return name
+}
+
+// runnerEnv is the environment the interpreter is built with: the process's,
+// less the one variable this front end *consumed* on the way in.
+//
+// A name a dialect takes for `$0` is read once and not passed on — measured,
+// `env` inside `BASH_ARGV0=x bash -c …` does not list it — so a rename
+// reaches the one shell it was aimed at rather than every shell started under
+// it. Dropped whether or not the route used it, which is the same
+// measurement: a script operand overrides it and it is gone from the child's
+// environment all the same.
+func (sh Shell) runnerEnv() []string {
+	name := sh.Semantics.DollarZeroFromEnvironment
+	if name == "" {
+		return sh.env()
+	}
+	env := sh.env()
+	kept := make([]string, 0, len(env))
+	for _, entry := range env {
+		if _, ok := strings.CutPrefix(entry, name+"="); ok {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
+}
+
+// lookupEnv reads one variable out of an environment, last assignment
+// winning, the way the environment a process is handed is read everywhere
+// else.
+func lookupEnv(env []string, name string) (string, bool) {
+	value, found := "", false
+	for _, entry := range env {
+		if rest, ok := strings.CutPrefix(entry, name+"="); ok {
+			value, found = rest, true
+		}
+	}
+	return value, found
 }
 
 // context is what bounds the run, and nil means nothing does.
@@ -980,6 +1038,14 @@ type source struct {
 	// script. Conflating the two dropped `-i` outright whenever an operand
 	// was given (#472).
 	interactive bool
+	// zero is what `$0` answers with where that is not the name a diagnostic
+	// uses, and empty where the two are the same thing.
+	//
+	// One route parts them: a script operand found along PATH is named by
+	// what the search resolved in every diagnostic and by the word that was
+	// typed in `$0`. Measured — `bash zeroprobe` reports `$0` of `zeroprobe`
+	// and writes `/…/pdir/zeroprobe: line 1: …` about a failure inside it.
+	zero string
 	// file is the path the input was read from, or empty where there was no
 	// file — `-c`, or standard input. It is the floor of the call stack: a
 	// script asking where it is means this, and only the front end knows.
@@ -1333,7 +1399,7 @@ func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (
 		// which is not one a shell can guess at, and every other option here
 		// that takes an argument is refused the same way.
 		if len(args) < 1 {
-			return nil, true, fmt.Errorf("%s requires an argument", spelling)
+			return nil, true, errors.New(sh.Diagnostics.MissingOptionArgument(spelling))
 		}
 		inv.startup.file = args[0]
 		return args[1:], true, nil
@@ -1778,7 +1844,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 				// with "string expected after -o". A listing at invocation
 				// is not worth the machinery until something needs it, and
 				// refusing is the honest half of a split panel.
-				return nil, fmt.Errorf("%s requires an argument", a)
+				return nil, errors.New(sh.Diagnostics.MissingOptionArgument(a))
 			}
 			inv.opts = append(inv.opts, optionSpec{spec: args[0], isName: true, on: on})
 			// Read here as well as carried, because *where* it was written
@@ -1801,6 +1867,27 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 	}
 	flush()
 	return args, nil
+}
+
+// reportScriptError writes the diagnostic a script operand that would not run
+// draws, and returns the status to exit with.
+//
+// One helper for both routes it is reached by — the front end's own refusal
+// and the one carried past the option words — because the two are the same
+// report, and a name rule written at one of them would have been missing from
+// the other.
+//
+// Which name stands in front of it is the dialect's: three of the four name
+// themselves whatever happened, since nothing has been read and there is no
+// `$0` yet, and bash names the operand once it has the file *open* — see
+// Diagnostics.ScriptOperandNamedByItselfOnceOpened.
+func (sh Shell) reportScriptError(se *scriptError) int {
+	name := sh.Name
+	if sh.Diagnostics.ScriptOperandNamesItself(se.err) {
+		name = se.path
+	}
+	sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(name, se.path, se.err))
+	return sh.Diagnostics.ScriptStatus(se.err)
 }
 
 // scriptError is a script operand the shell could not read, carried as its own
@@ -1847,6 +1934,11 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	if err != nil {
 		return source{}, err
 	}
+	// The one name a route can be *given* rather than decide. Applied here,
+	// once, above every route, because the question it asks is the same on
+	// all of them — did this invocation name a `$0`? — and the answer is
+	// read off the name the route settled on. See Shell.inheritedZeroName.
+	in.name = sh.inheritedZeroName(in.name)
 	// Either half makes the shell interactive: the invocation says so
 	// outright on every route — by the `-i` letter or by the dialect's own
 	// `-o` name — and a prompt is interactive whether or not anything was
@@ -1930,7 +2022,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// for `sh -cs cmd` and for `sh -ci cmd` — neither reading standard
 		// input nor prompting — and take the string from the first operand.
 		if len(args) == 0 {
-			return source{}, errors.New("-c requires an argument")
+			return source{}, errors.New(sh.Diagnostics.MissingOptionArgument("-c"))
 		}
 		if inv.fromStdin && len(args) > 1 {
 			// The operand question, and the standard-input half below is
@@ -1981,11 +2073,22 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		return source{onStdin: true, name: sh.Name, params: args, dg: sh.Diagnostics.ForStdin(), opts: inv.opts}, nil
 	}
 	path := args[0]
-	// Through the gate: the program a shell was pointed at is an access
-	// chosen by whoever invoked it, so a policy hiding a path hides it from
-	// `sh /that/path` too — and an audit trail that recorded every file a
-	// script opened and not the script itself was missing the first one.
-	b, err := sh.readFile(path)
+	// A slash-less operand is looked for along PATH in the dialects that do
+	// that, exactly as a command word is: `bash ls` runs into `/bin/ls`. The
+	// word that was typed stays `$0` and the path the search resolved is what
+	// a diagnostic names — see Shell.scriptOnPath and the two names it
+	// returns.
+	read, zero, b, found := sh.scriptOnPath(path)
+	var err error
+	if !found {
+		// Through the gate: the program a shell was pointed at is an access
+		// chosen by whoever invoked it, so a policy hiding a path hides it
+		// from `sh /that/path` too — and an audit trail that recorded every
+		// file a script opened and not the script itself was missing the
+		// first one. The search above reads through the same gate, so a
+		// candidate it took is already in hand.
+		b, err = sh.readFile(read)
+	}
 	if err != nil {
 		// Not a usage error. Every shell in the panel tells this apart from
 		// being invoked wrongly, and three of the four tell the two ways it
@@ -2016,7 +2119,20 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		// invalid option name`, word for word what the same option draws
 		// with no operand at all.
 		return source{
-			scriptErr: &scriptError{path: path, err: err},
+			scriptErr: &scriptError{path: read, err: err},
+			name:      sh.Name, dg: sh.Diagnostics,
+			params: args[1:], opts: inv.opts,
+		}, nil
+	}
+	if sh.Diagnostics.ScriptBinaryContent != "" &&
+		sh.Semantics.BinaryContentIsNotRunAsAScript == interp.Yes &&
+		interp.BinaryScriptContent(b) {
+		// Read, and then declined: the file is not shell text. Carried as a
+		// script error like every other refusal of the operand, so it is
+		// numbered and named where they are — 126, and under the path the
+		// search resolved, which is what the shell had open.
+		return source{
+			scriptErr: &scriptError{path: read, err: interp.ErrBinaryScript},
 			name:      sh.Name, dg: sh.Diagnostics,
 			params: args[1:], opts: inv.opts,
 		}, nil
@@ -2025,9 +2141,47 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 	// diagnostic, not itself, and reports in the script form — ksh93 also
 	// changes how it names the line.
 	return source{
-		src: string(b), name: path, file: path,
+		src: string(b), name: read, file: read, zero: zero,
 		params: args[1:], dg: sh.Diagnostics.ForScript(), opts: inv.opts,
 	}, nil
+}
+
+// scriptOnPath resolves a script operand, answering with the path to read and
+// with the word `$0` should keep where the two differ.
+//
+// Only a slash-less operand is looked for, and only in a dialect that looks;
+// everything else comes back as it was written, with no second name. See
+// Semantics.ScriptOperandSearchedOnPath for the panel's row and for why the
+// candidate has to be readable — a mode-000 file on PATH is passed over and
+// the search goes on.
+func (sh Shell) scriptOnPath(operand string) (read, zero string, body []byte, found bool) {
+	if !sh.Semantics.ScriptOperandSearchedOnPath || strings.ContainsRune(operand, '/') {
+		return operand, "", nil, false
+	}
+	list, _ := lookupEnv(sh.env(), "PATH")
+	for _, dir := range filepath.SplitList(list) {
+		if dir == "" {
+			// An empty entry is the current directory, which is what every
+			// PATH search in this tree already reads it as.
+			dir = "."
+		}
+		candidate := filepath.Join(dir, operand)
+		// Read rather than asked about, which is both the measured rule and
+		// the one that keeps this inside the gate: a directory and a file
+		// this shell may not read both fail the read and are passed over, and
+		// the search ends at "no such file" rather than at either of them. A
+		// policy that hides a candidate hides it here too, exactly as it does
+		// for an operand spelled as a path.
+		b, err := sh.readFile(candidate)
+		if err != nil {
+			continue
+		}
+		return candidate, operand, b, true
+	}
+	// Nothing on the list. Reported as the operand was written, and as a file
+	// that is not there rather than as a search that failed — measured, `bash
+	// nosuchname` is the same sentence `bash ./nosuchname` gets.
+	return operand, "", nil, false
 }
 
 // commandWithStdinOption is `-c` and `-s` together, where the two routes have
@@ -2145,7 +2299,7 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// environment it is handed rather than reach for shared state. This
 		// binary *is* the process, so the read is made once, where it is
 		// visible — the same split as ReplaceProcess below.
-		Env: sh.env(),
+		Env: sh.runnerEnv(),
 		// Whether this shell has a terminal, which is the fact `set -m`
 		// turns on and which no route is exempt from: measured on a
 		// pseudo-terminal, every shell in the panel grants `set -m` inside a
@@ -2402,6 +2556,12 @@ func (sh Shell) runInput(in source) int {
 	}
 
 	r := sh.newRunner(name, in.params, dg, in.invocationRoute())
+	if in.zero != "" {
+		// `$0` where it is not the name diagnostics use — see source.zero.
+		// Through the rename seam rather than through Runner.Name, which is
+		// exactly the split that seam exists for.
+		r.SetDollarZeroName(in.zero)
+	}
 	// `-s` as written, which `$-` shows even where `-c` supplied the
 	// program instead.
 	r.StandardInputOption = in.stdinOption
@@ -2537,10 +2697,9 @@ func (sh Shell) runInput(in source) int {
 		// environment's list as well as the argument vector's, which is
 		// measured: `SHELLOPTS=nosuchoption bash /nope/x.sh` writes the
 		// option's complaint *and* the file's, in that order, and exits 127.
-		// Reported with the shell's own name and not `$0`, exactly as it was
-		// when this was answered in the front end.
-		sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, in.scriptErr.path, in.scriptErr.err))
-		return sh.Diagnostics.ScriptStatus(in.scriptErr.err)
+		// Named exactly as it is when this is answered in the front end,
+		// through the one helper both routes report from.
+		return sh.reportScriptError(in.scriptErr)
 	}
 	if in.scriptListing || in.stringCatalog || in.stringCatalogPortable {
 		// The invocation asked for the program rather than a run of it, so
@@ -2773,6 +2932,9 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 	// 3'` writes the word and then the trap's output, so the word belongs to
 	// the `exit` that was run and not to the end of the process.
 	sh.sayLeaving(r, in)
+	// And the file a login shell reads on its way out, after that word and
+	// before the EXIT trap Finish runs — both measured. See Shell.logoutFile.
+	sh.logoutFile(r, in)
 	switch how {
 	case endingParseFailure, endingRefused:
 		// The EXIT trap fires even when the last thing read would not parse,

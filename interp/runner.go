@@ -1367,6 +1367,13 @@ type Runner struct {
 	// because by the time anyone asks, every file the shell was reading has
 	// been unwound and the answer would always be "not in a file".
 	exitRanOutsideAFile bool
+	// exitRan says the controlExit being carried came from the `exit` builtin
+	// at all, wherever it ran. The neighboring question to the one above and
+	// a different one: a login shell reads its logout file for an `exit` in a
+	// sourced file too, and reads nothing when the input simply ran out or
+	// `set -e` fired — both of which raise the same controlExit. See
+	// Runner.ExitRan.
+	exitRan bool
 	// loopDepth is how many loops execution is inside right now, which is
 	// what a ^Z has to break out of — see breakLoopsForAStop. Dynamic rather
 	// than lexical: a loop that calls a function that loops is two, because
@@ -7454,9 +7461,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 				r.status = st
 				return nil
 			}
-			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-			r.diagf("%s: %v\n", argv[0], err)
-			r.status = 126
+			r.status = r.reportStartFailure(ctx, action, argv, path, err)
 			return nil
 		}
 		// The pid is final now, so anything waiting to read `$!` may proceed
@@ -7498,9 +7503,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 			r.status = st
 			return nil
 		}
-		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		r.diagf("%s: %v\n", argv[0], err)
-		r.status = 126
+		r.status = r.reportStartFailure(ctx, action, argv, path, err)
 		return nil
 	}
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
@@ -7575,9 +7578,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 			r.status = st
 			return nil
 		}
-		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		r.diagf("%s: %v\n", argv[0], err)
-		r.status = 126
+		r.status = r.reportStartFailure(ctx, action, argv, cmd.Path, err)
 		return nil
 	}
 	pid := cmd.Process.Pid
@@ -7810,6 +7811,76 @@ func (r *Runner) environ() []string {
 	// can reach: it is produced and readonly, so it is in neither Vars nor —
 	// unless it was inherited — Env. See exportedOptionLists.
 	out = append(out, r.exportedOptionLists(writtenLists)...)
+	// And a produced parameter the script exported, which no walk above can
+	// reach either: it is answered by a function rather than stored, so it is
+	// in Vars only if something assigned to it and in Env only if it was
+	// inherited. Measured 2026-09-22 against bash 5.3.20 — `export SECONDS`,
+	// `export RANDOM` and `export BASH_ARGV0=this-bash` each put the name in
+	// a child's environment with the value the shell reads for it, and this
+	// shell put none of the three there.
+	out = append(out, r.exportedProducedParameters(writtenLists)...)
+	return out
+}
+
+// producedScalar answers with the live value of a produced scalar parameter,
+// and whether the name is one. Read where a child's environment is built, the
+// way producedOptionList is and for the same reason.
+//
+// A name the shell's own table has taken over is not one: an assignment moves
+// a produced name into Vars in the dialects where assigning to one is kept,
+// and the walk over that map is where such a name belongs.
+func (r *Runner) producedScalar(name string) (string, bool) {
+	produce, ok := r.Dynamic[name]
+	if !ok {
+		return "", false
+	}
+	if _, own := r.Vars[name]; own {
+		return "", false
+	}
+	if !r.dynamicParameterIsThere(name) {
+		// Not there at all, so there is nothing to hand down — the same
+		// answer an unset name gets everywhere else.
+		return "", false
+	}
+	return produce(r), true
+}
+
+// inheritedEntry reports whether a name came in on this shell's environment,
+// which is where environ's first walk would have written it.
+func (r *Runner) inheritedEntry(name string) bool {
+	for _, kv := range r.Env {
+		if k, _, ok := strings.Cut(kv, "="); ok && k == name {
+			return true
+		}
+	}
+	return false
+}
+
+// exportedProducedParameters is the environment entries the exported produced
+// scalars earn, for the names that reached neither of environ's two walks.
+func (r *Runner) exportedProducedParameters(done map[string]bool) []string {
+	var out []string
+	for name := range r.Dynamic {
+		if done[name] || r.removed[name] || !r.isExported(name) {
+			continue
+		}
+		if r.inheritedEntry(name) {
+			// The walk over the inherited environment already wrote it, as
+			// the text that came in. Producing a second entry here would hand
+			// a child the same name twice — and would *ask the producer*,
+			// which is not a read this shell was asked to make: `$_` arrives
+			// in the environment of nearly every process, and answering it
+			// where a dialect has left the question open turned every command
+			// a core shell ran into a pair of refusals.
+			continue
+		}
+		if live, produced := r.producedScalar(name); produced {
+			out = append(out, name+"="+live)
+		}
+	}
+	// Sorted, for the reason exportedTables is: a child's environment must
+	// not depend on a map walk.
+	sort.Strings(out)
 	return out
 }
 

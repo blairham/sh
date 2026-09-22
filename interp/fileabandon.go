@@ -109,6 +109,7 @@ func (r *Runner) stopTheShell() {
 // stopTheShell plus the one note only this producer can take: whether a file
 // was being read when the word ran. See Runner.ExitRanOutsideAFile.
 func (r *Runner) stopTheShellForExit() {
+	r.exitRan = true
 	r.exitRanOutsideAFile = r.sourceDepth == 0
 	r.stopTheShell()
 }
@@ -145,6 +146,48 @@ func (r *Runner) stopTheShellForExit() {
 // subshell's own exit.
 func (r *Runner) ExitRanOutsideAFile() bool {
 	return r.ctl == controlExit && r.exitRanOutsideAFile
+}
+
+// ExitRan reports whether the shell is stopping because the `exit` builtin
+// ran, wherever it ran — in a file this shell was reading as much as outside
+// one.
+//
+// For a front end, and for one question: a login shell reads a logout file on
+// its way out, and *this* is what reaches it. Measured 2026-09-22 against bash
+// 5.3.20 with a marker in `~/.bash_logout`, each probe behind `-lc`:
+//
+//	exit 3                              read
+//	. f.sh, whose own line exits        read
+//	echo x                              nothing -- the input ran out
+//	set -e; false                       nothing
+//	set -u; echo $nope                  nothing
+//	a line that will not parse          nothing
+//
+// So it is neither "the shell stopped" — the four quiet rows all stop — nor
+// ExitRanOutsideAFile, which the second row is not. It is the builtin having
+// run, and nothing else.
+func (r *Runner) ExitRan() bool { return r.ctl == controlExit && r.exitRan }
+
+// ResumeAfterExit takes back the stop `exit` raised, so a front end can run
+// one more file before the shell is finished, and reports whether there was
+// such a stop to take back.
+//
+// For the logout file above and for nothing else. A shell that has run `exit`
+// will not execute another command — that is what the stop is for — so the
+// file could not otherwise be read at all; and it is the front end that owns
+// startup and shutdown files, which is why this is a seam rather than a read
+// interp makes for itself.
+//
+// The status is left exactly as it stood. A logout file that says nothing
+// about it leaves the shell exiting with the number `exit` named, which is
+// measured; one that runs `exit` of its own raises the stop again and names a
+// new number, which is measured too.
+func (r *Runner) ResumeAfterExit() bool {
+	if r.ctl != controlExit {
+		return false
+	}
+	r.ctl, r.exitRan, r.exitRanOutsideAFile = controlNone, false, false
+	return true
 }
 
 // takeFileError consumes a caught error, putting the runner back into ordinary

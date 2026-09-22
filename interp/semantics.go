@@ -15806,6 +15806,80 @@ type Semantics struct {
 	// spelling (#2345).
 	DollarZeroNames DollarZeroScope
 
+	// DollarZeroFromEnvironment names an environment variable whose inherited
+	// value becomes `$0` where the invocation named no `$0` of its own.
+	//
+	// bash alone, through `BASH_ARGV0` — the same parameter a running shell
+	// assigns to rename itself, read once on the way in. Measured 2026-09-22
+	// against bash 5.3.20, with the value `renamed` in the environment:
+	//
+	//	bash -c 'echo $0'              renamed
+	//	echo … | bash -s               renamed
+	//	bash -c 'echo $0' operand      operand   -- the operand names it
+	//	bash ./s.sh                    ./s.sh    -- so does the script
+	//	bash -c nosuchcmd              renamed: line 1: nosuchcmd: …
+	//	BASH_ARGV0= bash -c 'echo "[$0]"'   []   -- an empty value is a name
+	//
+	// So it stands exactly where the shell's own name would, diagnostics
+	// included, and loses to either route that names one. It is also consumed:
+	// the variable is *not* in the environment the shell hands its children,
+	// measured with `env` from inside, so a rename reaches one shell rather
+	// than every shell under it.
+	//
+	// Empty — every other dialect — means nothing is read and the shell's own
+	// name stands.
+	DollarZeroFromEnvironment string
+
+	// ScriptOperandSearchedOnPath looks along `$PATH` for a script operand
+	// written without a slash, the way a command word is looked for.
+	//
+	// Measured 2026-09-22 with a script on a PATH directory and nowhere else:
+	//
+	//	bash   runs it, with or without the execute bit
+	//	ksh93  runs it, but only with the execute bit on
+	//	zsh    can't open input file: <name>
+	//	dash   cannot open <name>: No such file
+	//
+	// So it is two columns against two, and the operand that *has* a slash is
+	// never searched for in any of them — `bash ./name` reports the file that
+	// is not there without looking anywhere else.
+	//
+	// The candidate has to be readable: a mode-000 file on PATH is passed
+	// over and the search goes on, ending at "no such file" rather than at a
+	// permission refusal.
+	//
+	// Two names come out of a search that found something, and they are not
+	// the same name. `$0` is the word that was *typed* — `bash zeroprobe` is
+	// `$0` of `zeroprobe` — while a diagnostic from inside the script names
+	// what the search resolved. ksh93's execute-bit condition is recorded and
+	// not answered here; this is a switch and that is a second question.
+	ScriptOperandSearchedOnPath bool
+
+	// LogoutFile is the file in a person's home directory a *login* shell
+	// reads on its way out, as the counterpart of LoginStartupFiles.
+	//
+	// bash alone among the shells that can be measured without a terminal,
+	// through `~/.bash_logout`. Measured 2026-09-22 against bash 5.3.20 with
+	// a marker in the file and a scratch home:
+	//
+	//	bash -lc 'exit 3'                 read, and the status stays 3
+	//	bash -l s.sh whose line exits      read
+	//	bash -lc '. f.sh' where f.sh exits read
+	//	bash -lc 'echo x'                 not read -- the input ran out
+	//	bash -lc 'set -e; false'          not read
+	//	bash -c 'exit 3'                  not read -- not a login shell
+	//	bash --noprofile -lc 'exit 3'      read -- the profile's switch is not
+	//	                                  this file's
+	//
+	// So it is the `exit` builtin that reaches it and not the shell stopping:
+	// a login shell that simply runs out of program reads nothing. It runs
+	// *before* the EXIT trap, and a status it sets of its own — `exit 9` in
+	// the file — is the one the shell leaves with; otherwise the status the
+	// shell already had stands.
+	//
+	// Empty — every other dialect — means there is no such file.
+	LogoutFile string
+
 	// BuiltinSyntaxErrorFatal ends a non-interactive shell when text handed
 	// to a special builtin does not parse — `eval "if"`, or a sourced file
 	// with an unterminated `if` in it.

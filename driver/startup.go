@@ -341,6 +341,36 @@ func (sh Shell) nonInteractiveStartupFile(r *interp.Runner, in source) int {
 	return sh.sourceFile(r, r.Expand(value))
 }
 
+// logoutFile sources the file a *login* shell reads on its way out.
+//
+// The counterpart of loginProfile, and reached from the other end of the run:
+// what starts it is the `exit` builtin having run, not the shell stopping —
+// a login shell whose program simply ran out reads nothing. See
+// Semantics.LogoutFile, which carries the measured row, and Runner.ExitRan.
+//
+// Before the EXIT trap, which is measured: a login shell with both writes the
+// file's output and then the trap's. The status the shell is leaving with
+// stands unless the file names one of its own by running `exit`, which is the
+// other half of the same measurement.
+func (sh Shell) logoutFile(r *interp.Runner, in source) {
+	if sh.Semantics.LogoutFile == "" || !in.loginShell() || !r.ExitRan() {
+		return
+	}
+	// The stop `exit` raised is taken back for the length of this one file,
+	// or nothing in it would run at all.
+	if !r.ResumeAfterExit() {
+		return
+	}
+	leaving := r.ExitStatus()
+	sh.sourceFile(r, sh.startupPath(r, sh.Semantics.LogoutFile))
+	if !r.Exited() {
+		// The file said nothing about the status, so the number `exit` named
+		// is still the one the shell leaves with — and not whatever the
+		// file's last command happened to return.
+		r.SetExitStatus(leaving)
+	}
+}
+
 // sourceFile runs a file on the runner, as `.` would.
 func (sh Shell) sourceFile(r *interp.Runner, path string) int {
 	status, _ := sh.sourceFoundFile(r, path)

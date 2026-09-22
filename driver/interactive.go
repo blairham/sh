@@ -174,6 +174,10 @@ func (sh Shell) session(argv []string, in source) int {
 		sh.errf("%s", dg.Report(name, 1, err.Error()+"\n"))
 		return usageStatus
 	}
+	// And the file a login shell reads on its way out, before that trap and
+	// for the same reason the script routes read it there: a session ended
+	// by `exit` — which is what ^D is at a prompt — is a login shell leaving.
+	sh.logoutFile(r, in)
 	// The EXIT trap fires when the session ends, the same as at the end of a
 	// script — `trap 'echo bye' EXIT` typed at the prompt has to mean
 	// something.

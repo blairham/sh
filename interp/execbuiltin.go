@@ -183,7 +183,14 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// shared reporter has a name and a resolved path to work from. The
 		// resolved path is also what puts this on the pathname side of the
 		// exit-trap question, which is right — the file was found.
-		return r.execFailed(&pathError{name: argv[0], resolved: path, err: err})
+		// The interpreter a `#!` line named, for the dialect that reads the
+		// file to tell "this command is not there" from "the program its
+		// first line names is not there" — see Runner.interpreterNamed. Both
+		// doors ask, because `exec ./x` and `./x` word it identically.
+		return r.execFailed(&pathError{
+			name: argv[0], resolved: path,
+			interpreter: r.interpreterNamed(ctx, path, err), err: err,
+		})
 	}
 
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
@@ -211,7 +218,14 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// shared reporter has a name and a resolved path to work from. The
 		// resolved path is also what puts this on the pathname side of the
 		// exit-trap question, which is right — the file was found.
-		return r.execFailed(&pathError{name: argv[0], resolved: path, err: err})
+		// The interpreter a `#!` line named, for the dialect that reads the
+		// file to tell "this command is not there" from "the program its
+		// first line names is not there" — see Runner.interpreterNamed. Both
+		// doors ask, because `exec ./x` and `./x` word it identically.
+		return r.execFailed(&pathError{
+			name: argv[0], resolved: path,
+			interpreter: r.interpreterNamed(ctx, path, err), err: err,
+		})
 	}
 	status := r.exitStatus(cmd.Wait())
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: status})

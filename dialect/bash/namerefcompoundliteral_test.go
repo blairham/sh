@@ -195,3 +195,41 @@ func TestTheEmptyReferenceTarget(t *testing.T) {
 		})
 	}
 }
+
+// The silent refusal `typeset -in` gives takes back a name it brought into
+// being, and an `unset` name is not one it found standing. Measured on bash
+// 5.3.20, 2026-09-22.
+func TestTheSilentReferenceRefusalTakesBackAnUnsetName(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"a name nothing ever set",
+			`typeset -in b=v 2>/dev/null; typeset -p b 2>/dev/null; echo "st=$?"`,
+			"st=1\n",
+		},
+		{
+			"a name an unset took away",
+			`b=1; unset b; typeset -in b=v 2>/dev/null; typeset -p b 2>/dev/null; echo "st=$?"`,
+			"st=1\n",
+		},
+		{
+			"and one `unset -n` took away",
+			`typeset -ai a=(1); typeset -n b='a[0]'; unset -n b
+typeset -in b='a[0]' 2>/dev/null; typeset -p b 2>/dev/null; echo "st=$?"`,
+			"st=1\n",
+		},
+		{
+			"where a name that really is there keeps its letters",
+			`b=kept; typeset -in b=v 2>/dev/null; typeset -p b`,
+			"declare -i b=\"kept\"\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			out, _ := answersRun(t, c.src)
+			if out != c.want {
+				t.Errorf("wrote %q, want %q", out, c.want)
+			}
+		})
+	}
+}

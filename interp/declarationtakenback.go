@@ -82,7 +82,17 @@ func (r *Runner) holdTheDeclaration(name string) declarationHeld {
 	h.exported, h.exportSpoken = r.exported[name]
 	_, array := r.Arrays[name]
 	_, assoc := r.AssocArrays[name]
-	h.existed = h.valueSet || array || assoc || h.exportSpoken ||
+	// The export record counts as a name being here only when it records an
+	// export. It is a **tri-state**, and its third state is written by
+	// `unset` — the entry is set to false rather than deleted, so that a
+	// later assignment does not put an inherited name back in a child's
+	// environment (see unsetOneName). Reading the bare presence of the entry
+	// as "there was a name here" made an `unset` name look like a standing
+	// one for as long as the shell ran: measured 2026-09-22, `b=1; unset b;
+	// typeset -in b=v` leaves nothing at all in bash 5.3.20 and left
+	// `declare -i b` here, because the silent refusal declines to take back
+	// a name it thinks it did not make.
+	h.existed = h.valueSet || array || assoc || (h.exportSpoken && h.exported) ||
 		h.attrs != (nameAttributes{})
 	return h
 }

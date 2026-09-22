@@ -252,6 +252,29 @@ var zleLineParameters = []string{"BUFFER", "CURSOR", "LBUFFER", "RBUFFER"}
 // the file comment.
 var zleParameters = append(slices.Clone(zleLineParameters), "WIDGET")
 
+// zleQueueParameters are what a widget reads to ask how much input is
+// waiting behind the keystroke it was called for, and this editor's answer
+// to both is the constant 0.
+//
+// Not in zleParameters, for the reason region_highlight is not: that list is
+// the line and the widget's name, which is what the completion branch marks
+// read-only as a set and what the suites walk as "the line parameters".
+// These two are neither, and they are read-only under every kind of widget
+// rather than only a completion one.
+//
+// `PENDING` is the count of bytes already typed and immediately readable;
+// `KEYS_QUEUED_COUNT` is what `zle -U` has pushed back. This shell reads one
+// keystroke at a time and pushes nothing back, so 0 is the honest answer to
+// both rather than a placeholder — the same answer real zsh gives on a
+// system that cannot ask its terminal how much is buffered.
+//
+// They were absent, which is not the same as 0 and is what #4211 was:
+// zsh-autosuggestions opens `_zsh_autosuggest_modify` with
+// `(( $PENDING > 0 || $KEYS_QUEUED_COUNT > 0 ))`, and an *unset* name leaves
+// the arithmetic with no left operand at all, so every keystroke at a real
+// prompt printed `bad math expression: operand expected at `> 0 || 0 > 0 ”.
+var zleQueueParameters = []string{"PENDING", "KEYS_QUEUED_COUNT"}
+
 // zleCompleters is what may be named as the second word of `zle -C`: the
 // builtin completion widgets, each under its own name and under the `.`
 // spelling that reaches the builtin even when something has redefined the
@@ -1041,6 +1064,20 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 	// change. Lifted again by UnsetDynamic when the call ends, so a script
 	// outside one finds an ordinary variable.
 	r.MarkReadonly("WIDGET")
+	for _, name := range zleQueueParameters {
+		r.SetDynamic(name, func(*interp.Runner) string { return "0" })
+		// `integer-local-readonly-special` in real zsh, measured 2026-09-22
+		// through a pseudo-terminal on zsh 5.9.2 by pressing a key bound to
+		// a widget — the only way to ask, and the same run reported
+		// `scalar-local-special` for BUFFER and `scalar-local-readonly-special`
+		// for WIDGET, which is what says the harness was reading the right
+		// shell. The integer attribute is not decoration: `${(t)…}` is how a
+		// plugin asks, and `typeset -p` inside a widget is how the careful
+		// ones check before trusting a parameter.
+		r.MarkInteger(name)
+		r.MarkReadonly(name)
+		r.MarkLocal(name)
+	}
 	if completion {
 		for _, name := range zleLineParameters {
 			r.MarkReadonly(name)
@@ -1082,6 +1119,9 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 // a widget finds them unset.
 func closeWidgetParameters(r *interp.Runner) {
 	for _, name := range zleParameters {
+		r.UnsetDynamic(name)
+	}
+	for _, name := range zleQueueParameters {
 		r.UnsetDynamic(name)
 	}
 	// Not added to zleParameters, because that list is also what the

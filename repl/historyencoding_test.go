@@ -21,7 +21,8 @@ var (
 	continued   = historyEncoding{continuesOnABackslash: true}
 	stampedOnly = historyEncoding{mayCarryATimestamp: true}
 	zshLikeFile = historyEncoding{continuesOnABackslash: true, mayCarryATimestamp: true}
-	hashLines   = historyEncoding{mayCarryAHashLine: true}
+	hashLines   = historyEncoding{hashLines: HashTimestampLinesWhenTheFileOpensWithOne}
+	spanning    = historyEncoding{hashLines: HashTimestampLinesAndEntriesSpanThem}
 	keepEmpties = historyEncoding{emptyIsAnEntry: true}
 )
 
@@ -202,6 +203,42 @@ func TestDecodingAHistoryFile(t *testing.T) {
 			nil,
 		},
 		{
+			// The third policy, and the row that pays for it: the lines
+			// after a command belong to it, so a command somebody typed over
+			// several lines comes back as the one entry it was.
+			"entries span the lines between two hash time lines",
+			spanning,
+			[]string{"#1", "cat <<EOF", "x", "y", "EOF", "#2", "echo b"},
+			[]string{"cat <<EOF\nx\ny\nEOF", "echo b"},
+		},
+		{
+			// The spanning is still the file's own first line. A file that
+			// does not open with a header is read a line at a time — and the
+			// headers come out of it anyway, which is the half this policy
+			// has that the one before it does not.
+			"a file that does not open with a hash time line is still read a line at a time",
+			spanning,
+			[]string{"lead", "#1", "echo a", "extra", "#2", "echo c"},
+			[]string{"lead", "echo a", "extra", "echo c"},
+		},
+		{
+			// The empty lines of an entry are the entry's, except at the
+			// front. Measured on the shell that writes these files.
+			"an entry keeps its own empty lines but not its leading ones",
+			spanning,
+			[]string{"#1", "", "", "echo a", "", "", "#2", "echo c"},
+			[]string{"echo a\n\n", "echo c"},
+		},
+		{
+			// And a stretch of nothing but empty lines is no entry at all,
+			// which is [EmptyLinesAreEntries] reaching the joined entry
+			// rather than the physical line.
+			"a stretch of only empty lines is no entry",
+			spanning,
+			[]string{"#1", "", "", "#2", "echo c"},
+			[]string{"echo c"},
+		},
+		{
 			// The fourth answer: an empty line is a gap in the file and not
 			// a command. bash's, wherever the blank falls — this is the
 			// issue's own case with the rest of the positions beside it.
@@ -293,15 +330,15 @@ func TestTheEncodingComesOffTheStatedStyle(t *testing.T) {
 		t.Errorf("a style that said nothing gave %+v, want the zero encoding", got)
 	}
 	all := HistoryStyle{
-		EntriesContinueOnABackslash:       true,
-		EntriesMayCarryATimestampHeader:   true,
-		EntriesMayCarryAHashTimestampLine: true,
-		EmptyLinesAreEntries:              true,
+		EntriesContinueOnABackslash:     true,
+		EntriesMayCarryATimestampHeader: true,
+		HashTimestampLines:              HashTimestampLinesAndEntriesSpanThem,
+		EmptyLinesAreEntries:            true,
 	}
 	want := historyEncoding{
 		continuesOnABackslash: true,
 		mayCarryATimestamp:    true,
-		mayCarryAHashLine:     true,
+		hashLines:             HashTimestampLinesAndEntriesSpanThem,
 		emptyIsAnEntry:        true,
 	}
 	if got := historyEncodingFrom(all); got != want {
@@ -310,7 +347,7 @@ func TestTheEncodingComesOffTheStatedStyle(t *testing.T) {
 	// And the exported decoder is that construction and the same decode, so a
 	// dialect reading a file of its own gets the session's answer.
 	lines := []string{"#100", "echo one"}
-	got := HistoryEntries(HistoryStyle{EntriesMayCarryAHashTimestampLine: true}, lines)
+	got := HistoryEntries(HistoryStyle{HashTimestampLines: HashTimestampLinesWhenTheFileOpensWithOne}, lines)
 	if !slices.Equal(got, []string{"echo one"}) {
 		t.Errorf("HistoryEntries = %q, want [echo one]", got)
 	}
@@ -340,9 +377,15 @@ func TestABlankLineInsideAnEntrySurvives(t *testing.T) {
 		t.Errorf("decoded %q, want %q", got, want)
 	}
 	// An entry of nothing at all goes; one of whitespace is a command.
-	if got, want := withoutEmpty([]string{"echo one", "", "   ", "echo two"}),
-		[]string{"echo one", "   ", "echo two"}; !slices.Equal(got, want) {
-		t.Errorf("withoutEmpty = %q, want %q", got, want)
+	kept, kepttimes := withoutEmpty([]string{"echo one", "", "   ", "echo two"},
+		[]string{"1", "2", "3", "4"})
+	if want := []string{"echo one", "   ", "echo two"}; !slices.Equal(kept, want) {
+		t.Errorf("withoutEmpty = %q, want %q", kept, want)
+	}
+	// And the times go with the entries they belong to rather than sliding
+	// onto the ones that followed the dropped line.
+	if want := []string{"1", "3", "4"}; !slices.Equal(kepttimes, want) {
+		t.Errorf("withoutEmpty times = %q, want %q", kepttimes, want)
 	}
 }
 
@@ -370,7 +413,7 @@ func TestLoadDropsBlanksAfterDecodingAndNotBefore(t *testing.T) {
 		// Both answers on, because the ordering is only a question for a
 		// file whose encoding joins lines *and* whose shell drops empties.
 		// With the empty answer off there is nothing to order.
-		encoding: continued,
+		style: HistoryStyle{EntriesContinueOnABackslash: true},
 	}
 	got := h.load(t.Context())
 	// Three entries. Dropping the blank first gives two, the second of which
@@ -425,47 +468,80 @@ func TestEncodingAHistoryFile(t *testing.T) {
 		name    string
 		enc     historyEncoding
 		entries []string
+		times   []string
 		want    string
 	}{
 		{
 			"a file that states no continuation writes lines",
 			plainFile,
 			[]string{"echo one", "a\nb"},
+			nil,
 			"echo one\na\nb\n",
 		},
 		{
 			"an entry's newline becomes a backslash and a newline",
 			continued,
 			[]string{"a\nb", "echo tail"},
+			nil,
 			"a\\\nb\necho tail\n",
 		},
 		{
 			"an entry ending in a backslash is guarded with a space",
 			continued,
 			[]string{`echo x\`, "echo tail"},
+			nil,
 			"echo x\\ \necho tail\n",
 		},
 		{
 			"an entry of nothing is a line of nothing",
 			continued,
 			[]string{""},
+			nil,
 			"\n",
 		},
 		{
 			"a tab is written as itself",
 			continued,
 			[]string{"a\tb"},
+			nil,
 			"a\tb\n",
 		},
 		{
 			"no entries is no text",
 			continued,
 			nil,
+			nil,
 			"",
+		},
+		{
+			// The header the spanning policy reads is the header it writes.
+			"a timed entry is written under its own hash line",
+			spanning,
+			[]string{"echo one", "echo two"},
+			[]string{"1700000000", "1700000060"},
+			"#1700000000\necho one\n#1700000060\necho two\n",
+		},
+		{
+			// An entry with no time of its own goes down bare, among ones
+			// that have one. Measured on the shell that writes these.
+			"an entry with no time is written with no header",
+			spanning,
+			[]string{"echo one", "echo two"},
+			[]string{"", "1700000060"},
+			"echo one\n#1700000060\necho two\n",
+		},
+		{
+			// And the policy is the gate: the same entries written by a
+			// shell that was not recording times carry no headers.
+			"times are not written where the policy does not read them",
+			hashLines,
+			[]string{"echo one"},
+			[]string{"1700000000"},
+			"echo one\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := encodeEntries(tc.entries, tc.enc); got != tc.want {
+			if got := encodeEntries(tc.entries, tc.times, tc.enc); got != tc.want {
 				t.Errorf("encoded %q as %q, want %q", tc.entries, got, tc.want)
 			}
 		})

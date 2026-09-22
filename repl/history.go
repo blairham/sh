@@ -59,11 +59,23 @@ type historyFile struct {
 	// was never given a policy.
 	bound boundary.Boundary
 
-	// encoding is how the file spells an entry — see decodeEntries, and
-	// HistoryStyle, where the two facts it holds were measured. The zero value
-	// is one entry per line, which is what every reader of this file did
-	// before the encoding was a question.
-	encoding historyEncoding
+	// style is how the file spells an entry — see decodeEntries, and
+	// HistoryStyle, where the facts it holds were measured. The zero value is
+	// one entry per line, which is what every reader of this file did before
+	// the encoding was a question.
+	style HistoryStyle
+	// vars reads the shell's variables, because one of the style's answers is
+	// a variable's and it is asked **at the read or the write** rather than
+	// when the session was built. Measured 2026-09-22: a `HISTTIMEFORMAT`
+	// assigned at the prompt changes the file the session writes when it
+	// ends, so a style frozen at startup writes the wrong file for every
+	// session that turns the times on from inside.
+	vars func(string) (string, bool)
+}
+
+// encoding is the style as it stands for the shell's variables now.
+func (h historyFile) encoding() historyEncoding {
+	return historyEncodingFrom(h.style.InForce(h.vars))
 }
 
 // historyEncoding is the pair of answers HistoryStyle gives about the file.
@@ -74,7 +86,7 @@ type historyFile struct {
 type historyEncoding struct {
 	continuesOnABackslash bool
 	mayCarryATimestamp    bool
-	mayCarryAHashLine     bool
+	hashLines             HashTimestampLines
 	emptyIsAnEntry        bool
 }
 
@@ -89,7 +101,7 @@ func historyEncodingFrom(style HistoryStyle) historyEncoding {
 	return historyEncoding{
 		continuesOnABackslash: style.EntriesContinueOnABackslash,
 		mayCarryATimestamp:    style.EntriesMayCarryATimestampHeader,
-		mayCarryAHashLine:     style.EntriesMayCarryAHashTimestampLine,
+		hashLines:             style.HashTimestampLines,
 		emptyIsAnEntry:        style.EmptyLinesAreEntries,
 	}
 }
@@ -110,7 +122,25 @@ func historyEncodingFrom(style HistoryStyle) historyEncoding {
 // session's reader dropped a blank and a script's `history -r` kept one, out
 // of the same file (#4024).
 func HistoryEntries(style HistoryStyle, lines []string) []string {
-	return decodeEntries(lines, historyEncodingFrom(style), true)
+	entries, _ := HistoryEntriesTimed(style, lines)
+	return entries
+}
+
+// HistoryEntriesTimed is [HistoryEntries] and, beside each entry, the time
+// the file recorded for it — epoch seconds as the file spells them, and empty
+// for an entry the file gave none.
+//
+// A second return rather than a pair type, because exactly one dialect's file
+// carries a time and the entries are what every caller wants. It is the same
+// decode and the same pass: a reader that asked for the times separately
+// would be a second decoder, which is the thing this file exists to prevent.
+//
+// The times survive a read that was not asked to record any. Measured
+// 2026-09-22 on bash 5.3.20: a file of `#<epoch>` lines read with
+// HISTTIMEFORMAT unset and listed with it set shows the file's own times, so
+// the header is read for its value whenever it is read at all.
+func HistoryEntriesTimed(style HistoryStyle, lines []string) (entries, times []string) {
+	return decodeTimed(lines, historyEncodingFrom(style), true)
 }
 
 // HistoryEntriesIn turns a history file's **text** into the entries it holds.
@@ -185,13 +215,73 @@ func decodeText(text string, enc historyEncoding) []string {
 // does, the header belongs here beside the continuation and not in a second
 // writer — which is the shape this change exists to stop happening again.
 func HistoryText(style HistoryStyle, entries []string) string {
-	return encodeEntries(entries, historyEncodingFrom(style))
+	return HistoryTextTimed(style, entries, nil)
+}
+
+// HistoryFileTail is the physical lines a history file keeps when it is cut
+// down to its newest keep, which is a count of **entries** in the one
+// encoding where an entry is not a line.
+//
+// The size variables are counts of lines everywhere else and the difference
+// is visible, so it was measured rather than reasoned: a five-entry file of
+// `#<epoch>` lines cut to three keeps six lines under a shell that was told
+// to record times, and keeps three under one that was not — cutting the
+// second file inside an entry and leaving a command with no header above it.
+// Measured 2026-09-22, bash 5.3.20, the same file and the same HISTFILESIZE
+// with the variable set and unset.
+//
+// So the line reading is the rule and the entry reading is the exception,
+// which is the way round the code runs: a style that does not span returns
+// the same slice it always did.
+func HistoryFileTail(style HistoryStyle, lines []string, keep int) []string {
+	if len(lines) <= keep {
+		return lines
+	}
+	enc := historyEncodingFrom(style)
+	if enc.hashLines != HashTimestampLinesAndEntriesSpanThem ||
+		len(lines) == 0 || !isHashTimestampLine(lines[0]) {
+		return lines[len(lines)-keep:]
+	}
+	var starts []int
+	for i, line := range lines {
+		if isHashTimestampLine(line) {
+			starts = append(starts, i)
+		}
+	}
+	if len(starts) <= keep {
+		return lines
+	}
+	return lines[starts[len(starts)-keep]:]
+}
+
+// HistoryTextTimed is [HistoryText] with the time each entry carries, which
+// the one encoding that has a place for one writes on a line of its own in
+// front of it.
+//
+// times is read positionally and may be shorter than entries or nil, which is
+// an entry with no time: it is written bare, with no header, exactly as the
+// shell writes one. Measured 2026-09-22 on bash 5.3.20 — entries made before
+// HISTTIMEFORMAT was ever set go down with no `#` line among entries that
+// have one.
+//
+// Whether a header is written at all is the style's, not a flag here: the
+// policy that reads an entry as spanning the lines after it is the same
+// policy that writes the line that opens it. Measured, the two are one knob —
+// a shell whose HISTTIMEFORMAT is unset at the moment it writes puts down no
+// headers however the entries were made.
+func HistoryTextTimed(style HistoryStyle, entries, times []string) string {
+	return encodeEntries(entries, times, historyEncodingFrom(style))
 }
 
 // encodeEntries is HistoryText against an encoding already read off a style.
-func encodeEntries(entries []string, enc historyEncoding) string {
+func encodeEntries(entries, times []string, enc historyEncoding) string {
 	var b strings.Builder
-	for _, entry := range entries {
+	for i, entry := range entries {
+		if enc.hashLines == HashTimestampLinesAndEntriesSpanThem && i < len(times) && times[i] != "" {
+			b.WriteByte('#')
+			b.WriteString(times[i])
+			b.WriteByte('\n')
+		}
 		if enc.continuesOnABackslash {
 			entry = strings.ReplaceAll(entry, "\n", "\\\n")
 			if strings.HasSuffix(entry, `\`) {
@@ -286,7 +376,7 @@ func (h historyFile) load(ctx context.Context) []string {
 	// empty line is an entry included. This used to drop the blanks itself,
 	// which made the session's reading of a file differ from a script's
 	// reading of the very same file (#4024).
-	entries := decodeText(string(data), h.encoding)
+	entries := decodeText(string(data), h.encoding())
 	if len(entries) > h.size {
 		entries = entries[len(entries)-h.size:]
 	}
@@ -306,18 +396,44 @@ func (h historyFile) load(ctx context.Context) []string {
 // the four rows are, and where the reason it is the *text* and not the lines
 // that is decoded is written down.
 func decodeEntries(lines []string, enc historyEncoding, terminated bool) []string {
+	entries, _ := decodeTimed(lines, enc, terminated)
+	return entries
+}
+
+// decodeTimed is decodeEntries and the time each entry's header carried, and
+// is where the work is. See [HistoryEntriesTimed].
+func decodeTimed(lines []string, enc historyEncoding, terminated bool) (entries, times []string) {
 	var out []string
 	var held strings.Builder
 	continuing := false
 	// Whether this read is one of the files that puts its times on lines of
-	// their own, which is decided once by the first line and not per line.
-	// See EntriesMayCarryAHashTimestampLine, where the measurement is.
-	hashed := enc.mayCarryAHashLine && len(lines) > 0 && isHashTimestampLine(lines[0])
+	// their own. Two questions and not one: whether a header is a header at
+	// all, and whether the lines after one belong to the entry it opened.
+	// The first is the policy's, and the second is additionally the file's
+	// own — its first line, read once and not per line. See
+	// [HashTimestampLines], where both were measured.
+	opensWithAHeader := len(lines) > 0 && isHashTimestampLine(lines[0])
+	hashed := enc.hashLines == HashTimestampLinesAndEntriesSpanThem ||
+		(enc.hashLines == HashTimestampLinesWhenTheFileOpensWithOne && opensWithAHeader)
+	if hashed && opensWithAHeader && enc.hashLines == HashTimestampLinesAndEntriesSpanThem {
+		return spanningEntries(lines, enc)
+	}
+	// The time the last header carried, waiting for the entry it opens. A
+	// dangling one at the end of the file is never claimed and goes with it.
+	stamp := ""
+	var stamps []string
+	add := func(entry string) {
+		out = append(out, entry)
+		stamps = append(stamps, stamp)
+		stamp = ""
+	}
 	for i, line := range lines {
 		if hashed && isHashTimestampLine(line) {
-			// The header is not part of any entry and there is nothing here
-			// that keeps a time, so it goes. A dangling one at the end of the
-			// file goes with the rest.
+			// The header is not part of any entry, and it is read for its
+			// value whether or not this shell was told to record one — see
+			// [HistoryEntriesTimed]. A dangling one at the end of the file
+			// goes with the rest.
+			stamp = line[1:]
 			continue
 		}
 		if enc.continuesOnABackslash && strings.HasSuffix(line, `\`) && (terminated || i < len(lines)-1) {
@@ -350,12 +466,12 @@ func decodeEntries(lines []string, enc historyEncoding, terminated bool) []strin
 		}
 		if continuing {
 			held.WriteString(line)
-			out = append(out, withoutTimestamp(held.String(), enc))
+			add(withoutTimestamp(held.String(), enc))
 			held.Reset()
 			continuing = false
 			continue
 		}
-		out = append(out, withoutTimestamp(line, enc))
+		add(withoutTimestamp(line, enc))
 	}
 	if continuing {
 		// A file whose last line promised another line and did not have one
@@ -376,9 +492,57 @@ func decodeEntries(lines []string, enc historyEncoding, terminated bool) []strin
 		// multi-line command is part of that command, so a file whose
 		// encoding joins on a backslash would lose the join if the empties
 		// went first. See EmptyLinesAreEntries.
-		out = withoutEmpty(out)
+		out, stamps = withoutEmpty(out, stamps)
 	}
-	return out
+	return out, stamps
+}
+
+// spanningEntries is [decodeEntries] for the one mode where a physical line
+// is not an entry: a file of `#<epoch>` headers read by a shell that was told
+// to record when each line ran.
+//
+// An entry runs from the header that opened it to the header that opens the
+// next one, so a command somebody typed over several lines comes back whole.
+// See [HashTimestampLinesAndEntriesSpanThem], where the rows are.
+//
+// The continuation and header encodings are not asked about here, and that is
+// not an omission: the one dialect that writes these lines has no backslash
+// continuation and no `: start:elapsed;` header, and a file cannot be two
+// encodings at once. What it does keep is [EmptyLinesAreEntries]' rule, and
+// it keeps it the same way [decodeEntries] does — last, over the joined
+// entries, so that an empty line *inside* an entry survives and a run of
+// nothing but empty lines is no entry at all.
+func spanningEntries(lines []string, enc historyEncoding) (entries, times []string) {
+	var out, stamps []string
+	var held []string
+	stamp := ""
+	// Dropped rather than kept, and at the front of an entry only: measured,
+	// the empty lines between a header and the command it opens are gone and
+	// the ones after that command are the command's.
+	flush := func(next string) {
+		for len(held) > 0 && held[0] == "" {
+			held = held[1:]
+		}
+		out = append(out, strings.Join(held, "\n"))
+		stamps = append(stamps, stamp)
+		held, stamp = nil, next
+	}
+	for i, line := range lines {
+		if isHashTimestampLine(line) {
+			if i > 0 {
+				flush(line[1:])
+			} else {
+				stamp = line[1:]
+			}
+			continue
+		}
+		held = append(held, line)
+	}
+	flush("")
+	if !enc.emptyIsAnEntry {
+		out, stamps = withoutEmpty(out, stamps)
+	}
+	return out, stamps
 }
 
 // withoutTimestamp takes the `: <start>:<elapsed>;` off the front of an entry,
@@ -439,22 +603,28 @@ func allDigits(s string) bool {
 // command as far as every shell measured is concerned, and this used to trim
 // before testing, which dropped an entry bash keeps. See
 // EmptyLinesAreEntries.
-func withoutEmpty(entries []string) []string {
-	out := entries[:0]
-	for _, e := range entries {
-		if e != "" {
-			out = append(out, e)
+// times is carried alongside so the two stay index-aligned — an entry and
+// the time its header gave it go or stay together.
+func withoutEmpty(entries, times []string) (keptEntries, keptTimes []string) {
+	out, stamps := entries[:0], times[:0]
+	for i, e := range entries {
+		if e == "" {
+			continue
+		}
+		out = append(out, e)
+		if i < len(times) {
+			stamps = append(stamps, times[i])
 		}
 	}
-	return out
+	return out, stamps
 }
 
 // save appends what this session added.
 //
 // Only what it added: the lines it read at the start are already in the file,
 // and writing them again would double it every time a shell is opened.
-func (h historyFile) save(ctx context.Context, added []string) error {
-	added = withoutCredentials(added)
+func (h historyFile) save(ctx context.Context, added, times []string) error {
+	added, times = withoutCredentials(added, times)
 	if h.path == "" || h.size == 0 || h.file == 0 || len(added) == 0 {
 		return nil
 	}
@@ -486,7 +656,7 @@ func (h historyFile) save(ctx context.Context, added []string) error {
 	// `fc -W` reach: an entry holding a newline is the file's business and
 	// not each writer's. See HistoryText.
 	w := bufio.NewWriter(f)
-	_, _ = w.WriteString(encodeEntries(added, h.encoding))
+	_, _ = w.WriteString(encodeEntries(added, times, h.encoding()))
 	if err := w.Flush(); err != nil {
 		_ = f.Close()
 		return err
@@ -536,10 +706,14 @@ func (h historyFile) trim(ctx context.Context) error {
 		lines = append(lines, sc.Text())
 	}
 	_ = f.Close()
-	if len(lines) <= h.file {
+	// By entries rather than by lines where this file's encoding puts an
+	// entry across several of them — see [HistoryFileTail], where the two
+	// readings were measured.
+	kept := HistoryFileTail(h.style.InForce(h.vars), lines, h.file)
+	if len(kept) == len(lines) {
 		return nil
 	}
-	lines = lines[len(lines)-h.file:]
+	lines = kept
 
 	dir := filepath.Dir(h.path)
 	// dir is the history file's own directory and is never empty, which is
@@ -607,15 +781,18 @@ func (h historyFile) trim(ctx context.Context) error {
 // confusion, so the person is told at the moment they type the line — see
 // Shell.recording — where the notice lands next to the thing it is about
 // instead of arriving in a rush as the shell exits.
-func withoutCredentials(added []string) []string {
-	kept := added[:0:0]
-	for _, line := range added {
+func withoutCredentials(added, times []string) (kept, keptTimes []string) {
+	kept, keptTimes = added[:0:0], times[:0:0]
+	for i, line := range added {
 		if _, found := secret.Default().Match(line); found {
 			continue
 		}
 		kept = append(kept, line)
+		if i < len(times) {
+			keptTimes = append(keptTimes, times[i])
+		}
 	}
-	return kept
+	return kept, keptTimes
 }
 
 // matchingWalk is what a run of these keys remembers.

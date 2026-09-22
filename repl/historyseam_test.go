@@ -27,7 +27,7 @@ func recorded(t *testing.T, s Shell, rec *recordingHistory, lines ...string) ([]
 	s.HistoryRecorders = []HistoryRecorder{rec}
 	ed := &editor{}
 	var added []string
-	remember := s.recording(ed, &added)
+	remember := s.recording(ed, &added, new([]string))
 	for _, line := range lines {
 		remember(line)
 	}
@@ -128,7 +128,7 @@ func TestEveryRecorderIsTold(t *testing.T) {
 	s := Shell{Runner: newTestRunner(nil), HistoryRecorders: []HistoryRecorder{first, nil, second}}
 	ed := &editor{}
 	var added []string
-	s.recording(ed, &added)("echo hi")
+	s.recording(ed, &added, new([]string))("echo hi")
 
 	for name, r := range map[string]*recordingHistory{"first": first, "second": second} {
 		if len(r.got) != 1 || r.got[0].Command != "echo hi" {
@@ -151,7 +151,7 @@ func TestARecorderThatPanicsCostsOnlyItsOwnRecord(t *testing.T) {
 	}
 	ed := &editor{}
 	var added []string
-	s.recording(ed, &added)("echo hi")
+	s.recording(ed, &added, new([]string))("echo hi")
 
 	if !reflect.DeepEqual(added, []string{"echo hi"}) {
 		t.Errorf("the file collected %q, want %q", added, []string{"echo hi"})

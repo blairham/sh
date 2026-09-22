@@ -617,13 +617,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// and they cannot be, because a dialect exists in which an ignored line is
 	// still recallable and still not written. Kept here, so that the only
 	// thing the file's contents depend on is what went into this slice.
-	var added []string
+	var added, addedAt []string
 	defer func() {
-		if err := hist.save(ctx, added); err != nil {
+		if err := hist.save(ctx, added, addedAt); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
-	record := s.recording(ed, &added)
+	record := s.recording(ed, &added, &addedAt)
 	var pending strings.Builder
 	// And what the editor draws again when the wake fires. After `pending`
 	// exists, because a re-render has to know whether it is drawing the
@@ -1304,13 +1304,13 @@ func (s Shell) runPlain(
 	// There is no editor here to hold the list, so the list is its own type
 	// and the recorder, the rules and the file are the same ones (#2298).
 	recall := &lineList{lines: earlier}
-	var added []string
+	var added, addedAt []string
 	defer func() {
-		if err := hist.save(ctx, added); err != nil {
+		if err := hist.save(ctx, added, addedAt); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
-	record := s.recording(recall, &added)
+	record := s.recording(recall, &added, &addedAt)
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
@@ -1651,7 +1651,10 @@ func (s Shell) historyFile() historyFile {
 	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}
 	// How this shell's file spells an entry, which is the dialect's answer —
 	// see HistoryStyle, and decodeEntries for what is done with it.
-	h.encoding = historyEncodingFrom(s.History)
+	// The style and the way to read this shell's variables, rather than an
+	// encoding settled now: one of the style's answers is a variable's, and a
+	// session sets that variable at the prompt.
+	h.style, h.vars = s.History, s.Runner.GetVar
 	return h
 }
 
@@ -1914,7 +1917,7 @@ func (s Shell) take(pending *strings.Builder, remember func(string), line string
 // its own reasons — so the two paths look alike here and are decided
 // separately, which is why they are written separately rather than folded
 // together.
-func (s Shell) recording(recall recalls, added *[]string) func(string) {
+func (s Shell) recording(recall recalls, added, at *[]string) func(string) {
 	if recall == nil {
 		return nil
 	}
@@ -1947,7 +1950,7 @@ func (s Shell) recording(recall recalls, added *[]string) func(string) {
 		// what the session will write — which is what makes a recorder
 		// protected by the credential check above rather than obliged to
 		// repeat it.
-		s.recorded(sessionRecorder{added: added}, line)
+		s.recorded(sessionRecorder{added: added, at: at}, line)
 	}
 }
 
@@ -1997,10 +2000,24 @@ func (l *lineList) newest() string {
 // rather than a test's, which is the point of it being written this way. The
 // file's contents are what this collects and nothing else, so a recorder added
 // beside it cannot change them and cannot be forgotten by them.
-type sessionRecorder struct{ added *[]string }
+type sessionRecorder struct {
+	added *[]string
+	at    *[]string
+}
 
-// Record adds the line to what the session will write.
-func (r sessionRecorder) Record(e HistoryEntry) { *r.added = append(*r.added, e.Command) }
+// Record adds the line, and when it was accepted, to what the session will
+// write. The time is kept beside the line rather than derived at the write,
+// because the file is written as the shell exits and a session is long.
+// Every line, with no question asked about whether this session was told to
+// record times: measured 2026-09-22, a shell at a prompt stamps what it reads
+// whether HISTTIMEFORMAT was ever set or not, and the variable decides only
+// whether the stamps are *written*. The other reader — a script's, in the one
+// dialect that has one — gates the stamp on the variable instead, and the two
+// disagreeing is the measurement rather than a gap here.
+func (r sessionRecorder) Record(e HistoryEntry) {
+	*r.added = append(*r.added, e.Command)
+	*r.at = append(*r.at, strconv.FormatInt(e.At.Unix(), 10))
+}
 
 // recorded tells the file and then every recorder the front end contributed.
 //

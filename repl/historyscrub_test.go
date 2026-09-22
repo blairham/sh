@@ -42,7 +42,7 @@ func TestACredentialIsNotWrittenToTheHistoryFile(t *testing.T) {
 		"curl -H \"Authorization: Bearer " + strings.Repeat("z", 40) + "\" https://api.example.com",
 		"echo two",
 	}
-	if err := h.save(t.Context(), added); err != nil {
+	if err := h.save(t.Context(), added, nil); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(path)
@@ -76,7 +76,7 @@ func TestACredentialIsNotWrittenToTheHistoryFile(t *testing.T) {
 // than an empty one that says a shell was here and reveals when.
 func TestNothingButCredentialsWritesNoFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), []string{"export GH_TOKEN=" + fakeToken}); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), []string{"export GH_TOKEN=" + fakeToken}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -93,7 +93,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 	sh := Shell{Runner: newTestRunner(nil), Dialect: syntax.Core(), Err: &out, Name: "sh"}
 	var pending strings.Builder
 	var added []string
-	record := sh.recording(e, &added)
+	record := sh.recording(e, &added, new([]string))
 
 	line := "export AWS_ACCESS_KEY_ID=" + fakeKeyID
 	if _, _, _, ready := sh.take(&pending, record, line); !ready {
@@ -125,7 +125,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 	// And it still does not reach the file, which is the part that outlives
 	// the session.
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), e.history); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), e.history, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -149,7 +149,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 // A session without an editor has nothing to record into, and the wrapper
 // says so rather than manufacturing one.
 func TestNoHistoryMeansNoRecorder(t *testing.T) {
-	if got := (Shell{}).recording(nil, nil); got != nil {
+	if got := (Shell{}).recording(nil, nil, nil); got != nil {
 		t.Error("a shell with nowhere to remember produced a recorder")
 	}
 }

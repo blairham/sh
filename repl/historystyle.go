@@ -95,10 +95,10 @@ type HistoryStyle struct {
 	// substrate could hold. It is here for the reason SearchPrompt is.
 	EntriesMayCarryATimestampHeader bool
 
-	// EntriesMayCarryAHashTimestampLine is that other spelling: a whole
-	// physical line of `#` and digits *before* the command, which is what
-	// bash writes when it was told to record when each line ran, and what it
-	// leaves out of the list when it reads one back.
+	// HashTimestampLines is that other spelling: a whole physical line of
+	// `#` and digits *before* the command, which is what bash writes when it
+	// was told to record when each line ran, and what it leaves out of the
+	// list when it reads one back.
 	//
 	// Measured 2026-09-21, bash 5.3.20, `env -i` with a scratch HOME, one
 	// file shape at a time read by `history -r` and listed with `history`.
@@ -124,15 +124,28 @@ type HistoryStyle struct {
 	// A dangling one at the end of a header file, with no command after it,
 	// is dropped with the rest: `#1 / echo a / #2` is one entry.
 	//
-	// bash reads a header file this way whether or not HISTTIMEFORMAT is
-	// set — measured with it unset, and with `unset HISTTIMEFORMAT` — and
-	// setting HISTTIMEFORMAT to anything, the empty string included, *also*
-	// puts a read that would not otherwise be in this mode into it. That
-	// second half is not implemented, because this shell has no
-	// HISTTIMEFORMAT at all and giving the name one effect out of three is
-	// the half-implemented knob the ksh dialect's HistoryStyle argues
-	// against. The file's own shape is the whole of what is read here.
-	EntriesMayCarryAHashTimestampLine bool
+	// A policy rather than a flag, because the shell that has these lines
+	// reads them **three** ways and which one is in force is not a property
+	// of the dialect — it is whether that shell was told to record when each
+	// line ran. See [HashTimestampLines] for the three and for where the
+	// third was measured.
+	HashTimestampLines HashTimestampLines
+
+	// HashTimestampsVariable names the shell variable whose being set moves
+	// [HashTimestampLines] up to [HashTimestampLinesAndEntriesSpanThem] for
+	// as long as it is set.
+	//
+	// A variable name rather than a rule, because which reading is in force
+	// is not a property of the dialect: the shell that has these lines reads
+	// a file one way when it was told to record when each line ran and
+	// another way when it was not, and a script turns that on and off at
+	// will. The substrate cannot know the name — that is the dialect's — and
+	// the dialect cannot reach the session's reader, so the name is what
+	// crosses.
+	//
+	// Empty is a style whose answer does not move, which is every dialect
+	// but one.
+	HashTimestampsVariable string
 
 	// EmptyLinesAreEntries says a physical line with nothing on it is a
 	// command of its own rather than a gap in the file, so reading the file
@@ -242,6 +255,22 @@ type HistoryStyle struct {
 	PatternIgnoredStaysInSession bool
 }
 
+// InForce is this style as it stands for a shell whose variables are these.
+//
+// Only [HashTimestampsVariable] moves anything today, and the method exists
+// rather than a naked lookup at each reader so that a second variable-borne
+// answer has one place to go. A style naming no variable is returned as it
+// stands.
+func (h HistoryStyle) InForce(get func(string) (string, bool)) HistoryStyle {
+	if h.HashTimestampsVariable == "" || get == nil {
+		return h
+	}
+	if _, ok := get(h.HashTimestampsVariable); ok {
+		h.HashTimestampLines = HashTimestampLinesAndEntriesSpanThem
+	}
+	return h
+}
+
 // The substrate's own search wording, for a front end that has not said. It
 // names no shell on purpose: the core does not know its successors, and a
 // default borrowed from one of them would make the others look like
@@ -249,4 +278,55 @@ type HistoryStyle struct {
 const (
 	defaultSearchPrompt = "(reverse-search)`%s': "
 	defaultSearchFailed = "(failed reverse-search)`%s': "
+)
+
+// HashTimestampLines is how a history file's `#<digits>` lines are read, and
+// there are three answers rather than two.
+//
+// The third is why this is a policy and not a flag. bash's reading of such a
+// file depends on whether that shell was told to record when each line ran —
+// HISTTIMEFORMAT — and that is a variable a script sets and unsets, not a
+// property of the dialect. So the dialect's reader asks the question of the
+// runner each time it opens a file and states the answer here.
+//
+// Measured 2026-09-22, bash 5.3.20, `env -i` with a scratch HOME, one file
+// shape at a time read by `history -r` and listed with `history` after
+// HISTTIMEFORMAT was put back:
+//
+//	file                      HISTTIMEFORMAT unset   HISTTIMEFORMAT set
+//	#1 a #2 b                 a · b                  a · b
+//	a #1 b                    a · #1 · b             a · b
+//	#1 a extra #2 c           a · extra · c          "a\nextra" · c
+//	lead #1 a extra #2 c      lead · #1 · a ·        lead · a · extra · c
+//	                          extra · c
+//
+// Row three is the one that pays for the third answer: the lines after a
+// command belong to it, so a command that spans lines comes back as the one
+// entry somebody typed rather than as one entry per line. Row four says the
+// spanning still turns on the file's own first line — a file that does not
+// open with a header is read a line at a time even with the variable set —
+// while the headers themselves come out of it either way.
+type HashTimestampLines int
+
+const (
+	// NoHashTimestampLines is the substrate's own answer and every dialect's
+	// but one: a `#` is the first character of a command somebody typed.
+	NoHashTimestampLines HashTimestampLines = iota
+
+	// HashTimestampLinesWhenTheFileOpensWithOne drops the header lines of a
+	// file that begins with one, and leaves a file that does not alone. Each
+	// remaining physical line is an entry.
+	HashTimestampLinesWhenTheFileOpensWithOne
+
+	// HashTimestampLinesAndEntriesSpanThem drops a header wherever it falls,
+	// and — where the file opens with one — runs every line up to the next
+	// header into the entry that header opened.
+	//
+	// The empty lines of such an entry are the entry's, except at the front:
+	// measured, `#1`, two empty lines, `echo a`, two empty lines, `#2`,
+	// `echo c` reads as `echo a` with two empty lines after it and then
+	// `echo c`, and a stretch that is nothing but empty lines is no entry at
+	// all. *Empty* rather than blank, as everywhere else here: a line of
+	// spaces is text the entry keeps.
+	HashTimestampLinesAndEntriesSpanThem
 )

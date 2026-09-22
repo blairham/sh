@@ -75,7 +75,7 @@ func TestHistorySurvivesTheSession(t *testing.T) {
 	if got := h.load(t.Context()); got != nil {
 		t.Errorf("a missing file gave %q, want nothing and no complaint", got)
 	}
-	if err := h.save(t.Context(), []string{"one", "two"}); err != nil {
+	if err := h.save(t.Context(), []string{"one", "two"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got := h.load(t.Context())
@@ -84,7 +84,7 @@ func TestHistorySurvivesTheSession(t *testing.T) {
 	}
 	// The second session appends its own and does not rewrite the file, so
 	// two shells open at once both keep what they typed.
-	if err := h.save(t.Context(), []string{"three"}); err != nil {
+	if err := h.save(t.Context(), []string{"three"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := h.load(t.Context()); len(got) != 3 || got[2] != "three" {
@@ -105,7 +105,7 @@ func TestHistorySurvivesTheSession(t *testing.T) {
 // list a person can walk is trimmed on the way in rather than read whole.
 func TestHistoryIsTrimmedToItsSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), []string{"a", "b", "c", "d"}); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), []string{"a", "b", "c", "d"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got := historyFile{path: path, size: 2, file: 2}.load(t.Context())
@@ -118,7 +118,7 @@ func TestHistoryIsTrimmedToItsSize(t *testing.T) {
 func TestHistoryTurnedOff(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
 	h := historyFile{path: path, size: 0, file: 0}
-	if err := h.save(t.Context(), []string{"one"}); err != nil {
+	if err := h.save(t.Context(), []string{"one"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -130,7 +130,7 @@ func TestHistoryTurnedOff(t *testing.T) {
 	// And a history with nowhere to go saves nothing, quietly. An empty
 	// HISTFILE means "keep none", not "fail on the way out" — the error
 	// would arrive as the shell exits, which is the worst moment for one.
-	if err := (historyFile{size: defaultHistorySize, file: defaultHistorySize}).save(t.Context(), []string{"one"}); err != nil {
+	if err := (historyFile{size: defaultHistorySize, file: defaultHistorySize}).save(t.Context(), []string{"one"}, nil); err != nil {
 		t.Errorf("saving with no path gave %v, want it quietly skipped", err)
 	}
 }
@@ -153,7 +153,7 @@ func TestHistorySkipsBlankLines(t *testing.T) {
 		t.Errorf("loaded %q, want %q", got, want)
 	}
 	// And the shell that says an empty line is an entry gets all four.
-	h := historyFile{path: path, size: 100, file: 100, encoding: historyEncoding{emptyIsAnEntry: true}}
+	h := historyFile{path: path, size: 100, file: 100, style: HistoryStyle{EmptyLinesAreEntries: true}}
 	if want := []string{"one", "", "   ", "two"}; !slices.Equal(h.load(t.Context()), want) {
 		t.Errorf("loaded %q, want %q", h.load(t.Context()), want)
 	}
@@ -164,7 +164,7 @@ func TestHistorySkipsBlankLines(t *testing.T) {
 func TestHistoryKeepsALongLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
 	long := "echo " + strings.Repeat("x", 200000)
-	if err := (historyFile{path: path, size: 10, file: 10}).save(t.Context(), []string{long, "after"}); err != nil {
+	if err := (historyFile{path: path, size: 10, file: 10}).save(t.Context(), []string{long, "after"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got := historyFile{path: path, size: 10, file: 10}.load(t.Context())
@@ -211,7 +211,7 @@ func TestAMultiLineCommandIsOneEntry(t *testing.T) {
 	// is a real limit of the format and not a thing this test wants.
 	path := filepath.Join(t.TempDir(), "hist")
 	h := historyFile{path: path, size: 100, file: 100}
-	if err := h.save(t.Context(), e.history); err != nil {
+	if err := h.save(t.Context(), e.history, nil); err != nil {
 		t.Fatal(err)
 	}
 	// Three lines from the loop and one from the command after it.
@@ -228,7 +228,7 @@ func TestAMultiLineCommandIsOneEntry(t *testing.T) {
 func TestTheFileIsBroughtBackUnderItsBound(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
 	h := historyFile{path: path, size: 100, file: 3}
-	if err := h.save(t.Context(), []string{"a", "b", "c", "d"}); err != nil {
+	if err := h.save(t.Context(), []string{"a", "b", "c", "d"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := h.load(t.Context()); strings.Join(got, "|") != "b|c|d" {
@@ -236,7 +236,7 @@ func TestTheFileIsBroughtBackUnderItsBound(t *testing.T) {
 	}
 	// A second session appends and is trimmed again, so the bound holds
 	// across sessions rather than only within one.
-	if err := h.save(t.Context(), []string{"e"}); err != nil {
+	if err := h.save(t.Context(), []string{"e"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := h.load(t.Context()); strings.Join(got, "|") != "c|d|e" {
@@ -271,14 +271,14 @@ func TestAFileUnderItsBoundIsNotRewritten(t *testing.T) {
 	// allowed three.
 	path := filepath.Join(t.TempDir(), "hist")
 	h := historyFile{path: path, size: 100, file: 3}
-	if err := h.save(t.Context(), []string{"a", "b"}); err != nil {
+	if err := h.save(t.Context(), []string{"a", "b"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	before, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.save(t.Context(), []string{"c"}); err != nil {
+	if err := h.save(t.Context(), []string{"c"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.Stat(path)
@@ -308,7 +308,7 @@ func TestZeroTurnsTheWritingOff(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.h.path = filepath.Join(t.TempDir(), "hist")
-			if err := tc.h.save(t.Context(), []string{"one"}); err != nil {
+			if err := tc.h.save(t.Context(), []string{"one"}, nil); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := os.Stat(tc.h.path); err == nil {

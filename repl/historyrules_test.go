@@ -246,7 +246,7 @@ func TestAnIgnoredLineIsDroppedOrMerelyUnwritten(t *testing.T) {
 			e := &editor{}
 			var added []string
 			sh := Shell{Runner: newTestRunner(tc.vars), Dialect: syntax.Core(), History: tc.style}
-			record := sh.recording(e, &added)
+			record := sh.recording(e, &added, new([]string))
 			record("echo kept")
 			record(" echo hidden")
 
@@ -286,7 +286,7 @@ func TestTheKnobsKeepTheListWorthWalking(t *testing.T) {
 		Dialect: syntax.Core(),
 		History: bashishHistory,
 	}
-	record := sh.recording(e, &added)
+	record := sh.recording(e, &added, new([]string))
 	for _, line := range []string{"ls", "ls -la", "make check", "make check", " secret thing", "git push"} {
 		record(line)
 	}
@@ -306,7 +306,7 @@ func TestACredentialIsStillRecallableAndStillNotWritten(t *testing.T) {
 	var added []string
 	sh := Shell{Runner: newTestRunner(nil), Dialect: syntax.Core(), History: bashishHistory}
 	line := "export AWS_ACCESS_KEY_ID=" + fakeKeyID
-	sh.recording(e, &added)(line)
+	sh.recording(e, &added, new([]string))(line)
 	if len(e.history) != 1 || e.history[0] != line {
 		t.Errorf("the list is %q, want the line still recallable", e.history)
 	}
@@ -326,7 +326,7 @@ func TestABareNewlineIsNotRecorded(t *testing.T) {
 	e := &editor{}
 	var added []string
 	sh := Shell{Runner: newTestRunner(nil), Dialect: syntax.Core(), History: bashishHistory}
-	record := sh.recording(e, &added)
+	record := sh.recording(e, &added, new([]string))
 	for _, line := range []string{"", "   ", "\t", "echo real"} {
 		record(line)
 	}

@@ -111,7 +111,6 @@ func TestTheNameListIsGreedyAndStopsAtTheBody(t *testing.T) {
 	}{
 		{`function a while { :; }`, []string{"a", "while"}},
 		{`function a if for { :; }`, []string{"a", "if", "for"}},
-		{`function a in { :; }`, []string{"a", "in"}},
 	} {
 		fn := decl(t, tc.src, d)
 		if len(fn.AlsoNamed) != len(tc.names)-1 {
@@ -124,6 +123,13 @@ func TestTheNameListIsGreedyAndStopsAtTheBody(t *testing.T) {
 		`function a } { :; }`,
 		`function a b done { :; }`,
 		`function a b then { :; }`,
+		// `in` is one of them wherever a command may begin — see
+		// Dialect.InStandsAsACommandName — so it is refused here with the
+		// rest rather than taken as a name. It was in the list above until
+		// #4134, and the shell that has the name list agrees with the move:
+		// `function a in { echo hi; }` is `` `in' unexpected `` on ksh93u+,
+		// measured 2026-09-22.
+		`function a in { :; }`,
 	} {
 		mustFail(t, src, d, "a stop word in the name list")
 	}

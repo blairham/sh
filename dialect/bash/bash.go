@@ -42,6 +42,11 @@ func Dialect() syntax.Dialect {
 	// so this is a version line inside one lineage exactly as
 	// ArithDoubleQuote is. See syntax.Dialect.SubstitutionBodyRead (#2857).
 	d.SubstitutionBodyRead = syntax.NewerSubstitutionBodyReadWithItsLine
+	// And a body it refuses settles the read: nothing after the substitution
+	// is reached, so no closing parenthesis is looked for. See
+	// syntax.Dialect.SubstitutionBodyRefusalEndsTheRead for the panel
+	// (#4134).
+	d.SubstitutionBodyRefusalEndsTheRead = true
 	// A here-document a one-line `$( )` or `<( )` opened is fed from the
 	// lines after the enclosing command, and the substitution yields the
 	// body. 5.3's and not 3.2's, and not the backquoted spelling's; see

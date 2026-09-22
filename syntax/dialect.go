@@ -2364,6 +2364,68 @@ type Dialect struct {
 	// pipeline exactly as zsh leaves it.
 	TimePosixFlag bool
 
+	// InStandsAsACommandName takes the reservation off `in` everywhere but
+	// the headers that read it, so a bare `in` is a command name rather than
+	// a word the grammar refuses.
+	//
+	// `in` is one of POSIX's reserved words, and bash, dash and ksh93 all
+	// refuse it wherever a command may begin. zsh is the one that does not,
+	// which is a difference a script can see: the same text is a parse error
+	// there only if something else in the line is. Measured 2026-09-22, each
+	// line its own `-c`, with BusyBox ash left out for want of a container on
+	// this machine — it holds the POSIX reading below until somebody runs
+	// these three lines in one:
+	//
+	//	              in                 echo | in           in() { :; }
+	//	bash 5.3.20   `in' unexpected    `in' unexpected     `in' unexpected
+	//	dash 0.5.12   "in" unexpected    "in" unexpected     "in" unexpected
+	//	ksh93u+       `in' unexpected    `in' unexpected     `in' unexpected
+	//	zsh 5.9.2     command not found  command not found   defines a function
+	//
+	// The word is still read by the `for`, `select` and `case` headers in
+	// every dialect, which ask for it by name rather than through the
+	// command position, and it is an ordinary argument everywhere in all
+	// five — `echo in` prints `in`, and `in=5` assigns.
+	//
+	// Off is the POSIX reading, so a preset opts *in* to zsh's answer. It
+	// was off for nobody before #4134: `in` stood as a command name in every
+	// dialect, so `case x in esac|in) foo;; esac` — where the `esac` after
+	// the header closes the `case` and leaves `| in)` behind — named the
+	// `)` where bash names the `in`.
+	InStandsAsACommandName bool
+
+	// SubstitutionBodyRefusalEndsTheRead says that a `$( … )` body the
+	// grammar refuses at a token settles the whole read: no closing
+	// parenthesis is looked for, and what follows the substitution is never
+	// reached.
+	//
+	// It goes with [SubstitutionBodyRead], and only a dialect that reads the
+	// body *with its line* can answer it yes — a shell that reads the body
+	// when it runs has already parsed the rest of the line by then, and
+	// measurably reports what it found there instead.
+	//
+	// Measured 2026-09-22, `echo before; : $(case x in esac|in) foo;; esac)`
+	// as one `-c` string. The `esac` after the header closes the `case`, so
+	// the `in` behind the `|` stands where no command may begin, and the
+	// parenthesis after it is the first one a count would find:
+	//
+	//	bash 5.3.20   `in' unexpected — and no `before'
+	//	dash 0.5.12   "in" unexpected — and no `before'
+	//	zsh 5.9.2     `;;' — the count's reading, from the leftovers
+	//	ksh93u+       `before', and nothing else at all
+	//
+	// The two that answer the body's own token are the two that read the
+	// body with the line; the other two are the counting reading, which is
+	// theirs to keep.
+	//
+	// **BusyBox ash is deliberately not set here.** It reads both spellings
+	// with the line, so it is the column this would most likely also be true
+	// of — and there is no BusyBox on a macOS machine, so it was not
+	// measured, and a value inherited for looking like dash is the shape
+	// docs/spec/ash.md exists to refuse. It keeps the counting reading until
+	// somebody runs the two lines above in the container.
+	SubstitutionBodyRefusalEndsTheRead bool
+
 	// TimesIsReserved makes `times` a reserved word rather than a builtin,
 	// so a word after it is a syntax error rather than an argument it
 	// ignores. ksh93 alone, and the only place in the panel where *which*

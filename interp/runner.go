@@ -3903,6 +3903,12 @@ func (r *Runner) clone() *Runner {
 // compound node carries its own list because a redirection on one applies to
 // everything inside it.
 func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body func() error) error {
+	// A redirection is a word, and a word can be `<(cmd)`. So this is the
+	// second road into an expansion that opens a pipe, and it has the same
+	// rule and the same removal as the first — see scopeProcSubs, which is
+	// both. Before the redirections are applied, because applying them is
+	// what expands the word.
+	defer r.scopeProcSubs()()
 	// A compound command's body runs in this shell, so its here-documents
 	// expand here — measured, `while read x; do :; done <<END` with a body
 	// of `$(( n++ ))` leaves the increment behind in all four shells.
@@ -5808,21 +5814,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// pipe stayed open, `tr` waited for an end-of-file that was never coming,
 	// and the substitution simply produced nothing.
 	//
-	// Only this command's own. Whatever was pending when it started is the
-	// enclosing command's — the call a function body is running inside — and
-	// is set aside for the length of this one and put back after it, so that
-	// the call still holds its pipes for the next command in the body.
-	enclosing, enclosingBefore := r.procSubs, r.enclosingProcSubs
-	if len(enclosing) > 0 {
-		r.enclosingProcSubs = append(slices.Clone(enclosingBefore), enclosing...)
-		r.procSubs = nil
-	}
-	defer func() {
-		r.removeProcSubs(r.takeProcSubs())
-		if len(enclosing) > 0 {
-			r.procSubs, r.enclosingProcSubs = enclosing, enclosingBefore
-		}
-	}()
+	// Only this command's own — see scopeProcSubs, which is that rule and is
+	// shared with the other road into an expansion, a compound command's
+	// redirections.
+	defer r.scopeProcSubs()()
 	// `=cmd` is resolved across the whole command before any of it is
 	// expanded, which is measured rather than assumed: `echo [[a == a]]`
 	// reports the `==` and never reaches the `[[a`, so zsh has finished this

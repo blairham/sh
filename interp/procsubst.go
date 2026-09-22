@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -730,6 +731,42 @@ type procSubPipe struct {
 	// body's goroutine, after the entry was made — so the count, which has
 	// the lock, is what travels. Nil for `=(cmd)`, which has no pipe.
 	keep *substEnd
+}
+
+// scopeProcSubs sets apart the substitutions a command is about to make, and
+// returns what takes them away when it is done.
+//
+// Two things in one, because they are two halves of one rule. **A command
+// removes its own and no others**: whatever was pending when it started
+// belongs to the command it is running inside — the call a function body is
+// in, the loop a redirection was written on — and is set aside for the length
+// of this one and put back after it, so that the enclosing command still
+// holds its pipes for whatever it runs next. And what is set aside is handed
+// on as *enclosing*, which is what keeps `f() { cat "$1"; }; f <(echo x)`
+// working: the pipe reaches the commands run inside the command that named
+// it, by number, through childFiles.
+//
+// One helper and two callers, rather than the block written out at each. It
+// began at the simple command alone, and a compound command's redirections —
+// `while read x; do :; done < <(cmd)` — reached the same expansion by a road
+// that had no removal on it at all. That leaked one descriptor per execution
+// of the loop, which is a leak per *iteration* wherever the loop is itself
+// inside one: measured 2026-09-21, `ulimit -n 64` and 300 turns of the idiom
+// ran 300 times in bash 5.3.20 and stopped at 59 here with `too many open
+// files`. The second road is exactly why this is a helper now — see
+// withRedirs, which is the other caller.
+func (r *Runner) scopeProcSubs() func() {
+	enclosing, enclosingBefore := r.procSubs, r.enclosingProcSubs
+	if len(enclosing) > 0 {
+		r.enclosingProcSubs = append(slices.Clone(enclosingBefore), enclosing...)
+		r.procSubs = nil
+	}
+	return func() {
+		r.removeProcSubs(r.takeProcSubs())
+		if len(enclosing) > 0 {
+			r.procSubs, r.enclosingProcSubs = enclosing, enclosingBefore
+		}
+	}
 }
 
 // takeProcSubs hands over the paths a command's substitutions made, and

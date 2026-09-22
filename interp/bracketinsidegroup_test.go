@@ -122,15 +122,22 @@ func TestABracketExpressionInsideAGroupIsOneMember(t *testing.T) {
 			"a bracket in a later arm", "a", "(x|[a|b])", true,
 		},
 		{
-			// An *unterminated* `[` is not a bracket expression, so the bar
-			// behind it splits as it always did — under the answer these
-			// rows run with, the arms are `[a` and `b`. The shell this is
-			// measured from answers the same question `bad pattern`
-			// instead, which is a different axis and not this one; what
-			// both readings share is that the `[` did not swallow the bar.
-			"an unterminated bracket still splits", "b", "([a|b)", true,
+			// An *unterminated* `[` reaches the end of the pattern, so the
+			// `)` behind it is inside the bracket's reach and closes
+			// nothing: this is not a group at all, and the text is the six
+			// ordinary characters it is written as. Measured 2026-09-22 on
+			// bash 5.3.20 with `extglob`, where `@([a|b)` matches the
+			// string `@([a|b)` and matches neither `b` nor `[a`.
+			//
+			// The shell these rows are worded for answers `bad pattern`
+			// instead — it agrees the group never closed and reports that
+			// rather than falling back to text, which is a different axis
+			// and not this one. What all three readings share is that the
+			// `[` did not leave `b` standing as an arm.
+			"an unterminated bracket closes no group", "b", "([a|b)", false,
 		},
-		{"and its other arm is the text in front of the bar", "[a", "([a|b)", true},
+		{"nor is the text in front of the bar an arm", "[a", "([a|b)", false},
+		{"and the whole of it is ordinary text", "([a|b)", "([a|b)", true},
 		{
 			// The two controls that were already right and must stay so: a
 			// group with no bracket, and a bracket with no group.

@@ -1768,6 +1768,25 @@ func splitGroup(p string, pp int, o *patternOpts) (body string, quant byte, rest
 // had no closing parenthesis at all here, so the group was not a group and
 // the text was read as ordinary characters (#3075). The prepared table in
 // matchWhere.prepare is built from this, so the two cannot disagree.
+//
+// A `[` that nothing closes takes the rest of the pattern with it, and the
+// group is then never closed at all. This scan is looking for a `)` and a
+// bracket is where a `)` is not one — so the question is how far the bracket
+// reaches, and a bracket with no `]` reaches the end. Standing still there
+// instead let the `)` behind it close a group, which is what made
+// `@(ab|[)` match `ab`. Measured 2026-09-22, and unanimous where it can be
+// asked:
+//
+//	                      bash 5.3.20  ksh93u+
+//	[[ ab   == @(ab|[)  ]]     no          no
+//	[[ a)b  == @(a[)]b) ]]     yes         yes    the bracket took the `)`
+//	[[ ab   == @(a[)b]|x) ]]   yes         yes    and `a` then `b`, a member
+//	[[ a[   == @(a\[)   ]]     yes         yes    an escaped one is not a
+//	                                             bracket and closes nothing
+//
+// The second and third rows are what say this is the bracket *reaching* past
+// the parenthesis rather than the group being poisoned by it: a group whose
+// bracket does close is a group, and it holds the `)` the bracket swallowed.
 func closingParen(p string) (int, bool) {
 	depth := 0
 	for i := 0; i < len(p); i++ {
@@ -1775,7 +1794,11 @@ func closingParen(p string) (int, bool) {
 		case '\\':
 			i++
 		case '[':
-			i = skipBracket(p, i)
+			end, ok := bracketEnd(p, i)
+			if !ok {
+				return 0, false
+			}
+			i = end
 		case '(':
 			depth++
 		case ')':

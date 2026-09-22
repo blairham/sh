@@ -3808,10 +3808,23 @@ func subscriptOperandText(sub string) string {
 	if trimmed := strings.TrimSpace(sub); trimmed != "" || sub == "" {
 		return trimmed
 	}
-	// All whitespace and not nothing: left as one space, which is what the
-	// blank axis is about and is the shortest text that cannot be mistaken
-	// for the empty one.
-	return " "
+	// All whitespace and not nothing: **left as it was written**, which is
+	// what the blank axis is about and cannot be mistaken for the empty one
+	// either. One space stood here instead, and a keyed array is where that
+	// shows: the text is the *key*, so collapsing it stored the element
+	// under a character the script never wrote. Measured 2026-09-22 on bash
+	// 5.3.20 from a script file, a table declared and then written through
+	// each operand route,
+	//
+	//	read "A[$k]" <<< X      k=$'\t'    the key is a tab
+	//	printf -v "A[$k]" %s X  k=$'\n'    the key is a newline
+	//	read "A[  ]" <<< X                 the key is two spaces
+	//
+	// — where all three came out as one space here, and the element an
+	// ordinary `A[$k]=v` had already put under the tab was left beside the
+	// one this route added. `a[ ]` is unchanged, since a single space is
+	// what it was written with (#4175).
+	return sub
 }
 
 // operandSubscriptTilde is Semantics.SubscriptKeyExpandsALeadingTilde reached

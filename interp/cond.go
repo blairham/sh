@@ -431,43 +431,22 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 	// unquoted — and that is the only stage at which anything can know it.
 	// The two readings are one expansion, which is what the operand must
 	// have however many readers it has.
-	var scan syntax.ArithBracketScan
-	return r.wordTextNoSplit(w, func(sp syntax.Span, text string) string {
-		if sp.Kind == syntax.Literal && sp.Quoting == syntax.Unquoted {
-			for i := 0; i < len(text); i++ {
-				switch b := text[i]; {
-				case scan.Content(b):
-				case b == '[':
-					scan.Depth++
-				case b == ']':
-					scan.Depth--
-				}
-			}
-			return text
-		}
-		if scan.Depth <= 0 {
-			// Not inside brackets the script wrote, so there are no brackets
-			// of the script's for a value's to be told apart from — and the
-			// value's are then the only ones there are. Measured 2026-09-16:
-			// `m[k]=5; key=k; e='m[$key]'; [[ $e -eq 5 ]]` holds in bash
-			// 5.3.20, the whole subscript having come out of the value, where
-			// `[[ a[$k] -eq 9 ]]` with `k='x]'` reads the value's bracket as
-			// part of the key. The same rule expandArithText draws with the
-			// same type, and drawn here for the same reason (#3303).
-			return text
-		}
-		// A bracket behind a quote, and one out of an expansion, are
-		// content: measured 2026-09-16 from a script file with `declare -A
-		// a; a[']']=5`, `[[ a[']'] -eq 5 ]]` holds in bash 5.3.20 and under
-		// that build as `sh`. It is bash's alone — ksh93u+ 2012-08-01 says
-		// `a[]]: arithmetic syntax error` to the same line, and reads the
-		// same subscript inside `(( ))` perfectly well — so which of the two
-		// readings is taken is the dialect's, and the marking is only what
-		// makes both available. See
-		// Semantics.ConditionArithmeticReadsTheWrittenSubscript and
-		// conditionSubscriptText, which asks it (#3302).
-		return markArithValue(text)
-	})
+	// A condition's operand protects every span that is not plain unquoted
+	// text: a bracket behind a quote, and one out of an expansion, are both
+	// content. Measured 2026-09-16 from a script file with `declare -A a;
+	// a[']']=5`, and again 2026-09-22 over the other two spellings:
+	// `[[ a[']'] -eq 5 ]]`, `[[ a["]"] -eq 5 ]]` and `[[ a[\]] -eq 5 ]]` all
+	// hold in bash 5.3.20 and under that build as `sh`. It is bash's alone —
+	// ksh93u+ 2012-08-01 says `a[]]: arithmetic syntax error` to the first of
+	// them, and reads the same subscript inside `(( ))` perfectly well — so
+	// which of the two readings is taken is the dialect's, and the marking is
+	// only what makes both available. See
+	// Semantics.ConditionArithmeticReadsTheWrittenSubscript and
+	// conditionSubscriptText, which asks it (#3302).
+	//
+	// A substring's range is the other caller of the same marking and does
+	// **not** protect the same set — see rangeProtectsSpan.
+	return r.markedSubscriptWord(w, func(syntax.Span) bool { return true })
 }
 
 // condOperandText is condOperand with the marks off: the text every reader

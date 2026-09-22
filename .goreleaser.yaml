@@ -342,7 +342,7 @@ release:
 
     ### Where it stands
 
-    Each dialect graded against the real shell it models, over 4379 cases —
+    Each dialect graded against the real shell it models, over 4423 cases —
     `make conformance-dialects`:
 
     | binary | against | exact | behavioral |
@@ -351,7 +351,7 @@ release:
     | `zsh` | zsh 5.9.2 | 98% | 99% |
     | `dash` | dash | 98% | **100%** |
     | `ksh` | ksh93 AJM 93u+ | 96% | 99% |
-    | `ash` | BusyBox 1.37 ash | 92% | 99% |
+    | `ash` | BusyBox 1.37 ash | 93% | 99% |
 
     *Exact* is byte-identical stdout, stderr and status; *behavioral* allows a
     diagnostic to be worded differently when the status and output agree. The
@@ -365,9 +365,9 @@ release:
     headline gap: a bounded sample of twenty everyday error situations — a
     missing command, `cd` onto a file, a redirect that cannot open, an unknown
     option to six builtins — comes back byte-identical on standard error *and*
-    exit status for `bash`, `zsh`, `ksh` and `dash`, 80 of 80 on 2026-09-19.
-    The probe is `internal/cmd/diagsample` and takes a few seconds a column,
-    so this line can be re-measured rather than inherited.
+    exit status for every one of the five, 100 of 100 on 2026-09-22. The probe
+    is `internal/cmd/diagsample` and takes a few seconds a column, so this line
+    can be re-measured rather than inherited.
   # `.PreviousTag` is empty for a first tag, which would render this as a
   # `compare/...v0.0.0` link that goes nowhere.
   footer: |

@@ -10,7 +10,7 @@ A shell parser and interpreter in Go.
 **Status: early — these are `0.x` tags and they mean it.** The core parser
 and interpreter are in place, and all five dialect binaries grade against a
 panel of the real shells they model. Measured on macOS with
-`make conformance-dialects`, 2026-09-18, 4379 cases each:
+`make conformance-dialects`, 2026-09-22, 4423 cases each:
 
 | our binary | graded against | exact | behavioral |
 | --- | --- | --- | --- |
@@ -18,13 +18,13 @@ panel of the real shells they model. Measured on macOS with
 | `zsh` | zsh 5.9.2 | 98% | 99% |
 | `dash` | dash | 98% | **100%** |
 | `ksh` | ksh93 AJM 93u+ | 96% | 99% |
-| `ash` | BusyBox 1.37 ash | 92% | 99% |
+| `ash` | BusyBox 1.37 ash | 93% | 99% |
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
 lets a diagnostic be worded differently so long as the status and the output
 agree. The distance between the two columns is now mostly wording, which it
 was not when this paragraph last said otherwise: in `ksh`, the column that has
-been counted, the 180 non-exact cases split **144 wording to 36 behavioral**,
+been counted, the 172 non-exact cases split **142 wording to 30 behavioral**,
 against 93 to 126 on 2026-09-15. Behavior lands spec-first, per `CLEANROOM.md`.
 
 ## What makes this different
@@ -100,26 +100,21 @@ short.
 - **Diagnostic wording is a long tail, not the headline gap.** This list
   used to open by saying wording was most of the distance above, and two
   measurements disagree. One is the `ksh` re-count beside the table. The
-  other is a bounded sample, run 2026-09-16: twenty error situations a
-  person actually hits — a missing command, `cd` onto a file, `set -u` on
+  other is a bounded sample, first run 2026-09-16: twenty error situations
+  a person actually hits — a missing command, `cd` onto a file, `set -u` on
   an unset name, a redirect that cannot open, division by zero, an unknown
   option to six different builtins, running a directory, `exit foo` — each
   run once through the real shell and through ours under a matching
   `argv[0]`, compared on stderr and exit status together. Re-measured
-  2026-09-19: byte-identical **20/20 for `bash`, `zsh`, `ksh` and `dash`**,
-  80 of 80 across the four columns whose reference is installed here — the
-  `ksh` and `zsh` misses of 2026-09-16 are gone. `ash`, whose reference is
-  a container, last read 16/20 on 2026-09-16, and of its four misses
-  exactly one is a wording: it says `%` where we say `%z` for a bad
-  `printf` directive. The other three carry a different exit status, a
-  different line number, or a different answer, which is behavior rather
-  than phrasing. Twenty common situations is a sample and not a census,
-  and the corpus behind the
-  percentages above is two hundred times larger and much stranger. The
-  probe is `internal/cmd/diagsample`, a few seconds a column, so this
-  bullet can be re-checked rather than inherited — which is how it came
-  to be wrong: its only previous instrument was an hour-long conformance
-  run, so nobody ever ran it to find out.
+  2026-09-22: byte-identical **20/20 on every one of the five**, 100 of 100,
+  `ash` included — its reference is a container, and the 16/20 it read on
+  2026-09-16 is gone along with the `ksh` and `zsh` misses of that day.
+  Twenty common situations is a sample and not a census, and the corpus
+  behind the percentages above is two hundred times larger and much
+  stranger. The probe is `internal/cmd/diagsample`, a few seconds a column,
+  so this bullet can be re-checked rather than inherited — which is how it
+  came to be wrong: its only previous instrument was an hour-long
+  conformance run, so nobody ever ran it to find out.
 - **The sandbox contains the shell, not the process tree.** A policy
   decides what the *shell* opens, runs and signals; a command it was
   allowed to start makes its own accesses and nothing here sees them.

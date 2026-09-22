@@ -1223,6 +1223,12 @@ func Semantics() interp.Semantics {
 	// in silence.
 	s.AutoCdAnnouncesTheSubstitution = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
+	// And a *numbered* tilde reads the directory stack: `~1` is the entry
+	// below the current directory and `~-1` the one above the bottom. The
+	// parameter is this dialect's own view over the prelude's storage — see
+	// dialect/bash/shellparameters.go — so naming it here is what lets a
+	// tilde reach state the interpreter does not keep.
+	s.DirectoryStackParameter = "DIRSTACK"
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// And there is a parameter to move: `${_+x}` is non-empty before a
 	// command has run, which the preset denies because POSIX names no such

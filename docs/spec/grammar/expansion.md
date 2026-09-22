@@ -338,6 +338,40 @@ recorded rather than modeled; the shape shared by all three is
 `TildePlusMinusExpands` axis provides (no for `posix`; the bash, ksh
 and zsh dialects say yes).
 
+### `~N`: an entry of the directory stack
+
+A tilde over a **number** names an entry of the directory stack rather
+than a home. `~N` and `~+N` count from the top, where slot zero is the
+current directory and the pushed entries follow it; `~-N` counts from
+the bottom. Measured 2026-09-22 on bash 5.3.20 from a script file, after
+`pushd /tmp; pushd /usr` in a scratch directory, so that the stack reads
+`/usr /tmp /scratch`:
+
+| word | expands to | |
+| --- | --- | --- |
+| `~0`, `~+0` | `/usr` | slot zero is `$PWD`, not the first push |
+| `~1`, `~+1` | `/tmp` | |
+| `~2`, `~+2` | `/scratch` | |
+| `~3`, `~+3` | `~3`, `~+3` | past the end, so the word stands as written |
+| `~-0` | `/scratch` | the bottom entry |
+| `~-1` | `/tmp` | |
+| `~01`, `~+01` | `/tmp` | leading zeros are a number like any other |
+| `~1a` | `~1a` | a name with a digit in it is not an index |
+| `~0/x` | `/usr/x` | the tail after the first slash is the tail |
+
+A number that is past the end is **not** then looked for as a name. That
+is the row worth stating on its own: a shell that fell through to the
+user database there could be handed a home directory by a system that
+happens to have a login called `3`.
+
+The stack is not this package's to keep — `pushd`, `popd` and `dirs` are
+a dialect's prelude, and bash's `$DIRSTACK` is a view over the storage
+that text owns — so the axis is the *name* of the array to read,
+`Semantics.DirectoryStackParameter`, and not a yes/no. Empty is the
+whole of "this shell has no numbered tilde": bash says `DIRSTACK`, and
+the rest of the panel says nothing, zsh included until its own stack is
+measured.
+
 ### `~name`: a user, or a directory the shell was told about
 
 Two things wear a `~` and a name, and only one of them is the shell's.

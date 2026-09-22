@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -158,6 +159,17 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 		}
 		return home, tail, true
 	}
+	// A **number** names an entry of the directory stack rather than a home,
+	// and is asked before the name tables below it for the reason the digits
+	// make plain: no user is called `1`, and a shell with the tilde answers
+	// it out of state no lookup of a name can reach. See
+	// Runner.directoryStackTilde and Semantics.DirectoryStackParameter.
+	if dir, ok, isIndex := r.directoryStackTilde(name); isIndex {
+		if !ok {
+			return "", "", false
+		}
+		return dir, tail, true
+	}
 	// What is left is a name, and two different things wear one. A **named
 	// directory** is this shell's own table — `hash -d name=dir` writes it —
 	// and is asked first, measured: on zsh 5.9.2, 2026-09-14,
@@ -175,6 +187,58 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 		}
 	}
 	return "", "", false
+}
+
+// directoryStackTilde resolves the numbered tilde — `~N`, `~+N` and `~-N` —
+// against the dialect's directory stack.
+//
+// isIndex is the answer that keeps the two kinds of tilde apart, and it is
+// what a bool alone could not say: a number that is past the end of the stack
+// is **not** a name to go looking for afterwards. Measured on bash 5.3.20,
+// `~3` over a stack of three entries comes back as the three characters it
+// was written as, and no user database is asked — so a caller that read only
+// "did not resolve" would go on to ask for a user called `3` and could be
+// handed a home directory by a system that has one.
+//
+// The counting is [Semantics.DirectoryStackParameter]'s: `+N` from the top,
+// where slot zero is the current directory, and `-N` from the bottom. A bare
+// number is `+N`, which is the spelling scripts use.
+func (r *Runner) directoryStackTilde(name string) (dir string, ok, isIndex bool) {
+	param := r.sem().DirectoryStackParameter
+	if param == "" {
+		return "", false, false
+	}
+	digits, fromBottom := name, false
+	switch name[0] {
+	case '+':
+		digits = name[1:]
+	case '-':
+		digits, fromBottom = name[1:], true
+	}
+	if digits == "" {
+		return "", false, false
+	}
+	for i := 0; i < len(digits); i++ {
+		if digits[i] < '0' || digits[i] > '9' {
+			return "", false, false
+		}
+	}
+	// The shape is an index from here on, whatever the stack holds, so every
+	// return below says so.
+	n, err := strconv.Atoi(digits)
+	if err != nil {
+		// A numeral too long to be an index is past the end of every stack
+		// there will ever be, which is the same answer as `~99`.
+		return "", false, true
+	}
+	entries, _ := r.arrayElems(param)
+	if fromBottom {
+		n = len(entries) - 1 - n
+	}
+	if n < 0 || n >= len(entries) {
+		return "", false, true
+	}
+	return entries[n], true, true
 }
 
 // tildeFlagFields applies the `${~spec}` flag to the fields a substituted

@@ -61,6 +61,13 @@ func Prelude() string { return identity() + functions }
 // the stack, `-l` writes paths unabbreviated, `-p` one to a line, `-v` the
 // same numbered, and `+N` / `-N` print one entry.
 //
+// `-v` numbers the single entry an index picks as well as the whole listing,
+// and the number is the entry's **own** index rather than a counter that
+// starts again for this line: measured 2026-09-22 on bash 5.3.20 over a stack
+// of three, `dirs -v +1` and `dirs -v -1` both write ` 1  /tmp`. The letter
+// was read and then dropped on that branch, so any index made the listing
+// plain whatever else had been asked for.
+//
 // Rotation goes through the positional parameters rather than through array
 // subscripts, and that is not a flourish: this text is one line different
 // from the zsh dialect's, whose arrays start at 1, and `set -- "$@" "$1";
@@ -77,7 +84,7 @@ func Prelude() string { return identity() + functions }
 // the word to `cd`. docs/spec/semantics.md records the rest.
 const functions = `
 dirs() {
-	local __d __n= __clear= __long= __lines= __numbers= __i= __out=
+	local __d __n= __clear= __long= __lines= __numbers= __i= __at= __out=
 	while [ $# -gt 0 ]; do
 		case $1 in
 		-c) __clear=1 ;;
@@ -116,11 +123,18 @@ dirs() {
 			diagnose "${__n#[-+]}: directory stack index out of range"
 			return 1
 		fi
+		__at=$__i
 		while [ "$__i" -gt 0 ]; do
 			shift
 			__i=$(( __i - 1 ))
 		done
-		if [ -n "$__long" ]; then echo "$1"; else echo "${1/#$HOME/\~}"; fi
+		if [ -n "$__long" ]; then __d=$1; else __d=${1/#$HOME/\~}; fi
+		# The -v letter numbers one entry too — see the note above this text.
+		if [ -n "$__numbers" ]; then
+			printf '%2d  %s\n' "$__at" "$__d"
+		else
+			echo "$__d"
+		fi
 		return 0
 	fi
 	__i=0

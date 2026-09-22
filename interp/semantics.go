@@ -19041,6 +19041,34 @@ type Semantics struct {
 	// of its own this runner does not keep — recorded, not reproduced.
 	TildePlusMinusExpands Answer
 
+	// DirectoryStackParameter names the array a numbered tilde indexes, and
+	// is empty in a dialect whose tilde reads no such thing.
+	//
+	// `~N`, `~+N` and `~-N` name an entry of the directory stack rather than
+	// a home: `+N` counts from the top, where slot zero is the current
+	// directory, and `-N` counts from the bottom. Measured 2026-09-22 on
+	// bash 5.3.20 from a script file, after `pushd /tmp; pushd /usr` in a
+	// scratch directory, with the stack reading `/usr /tmp /scratch`:
+	//
+	//	~0 ~+0     /usr        slot zero is $PWD, not the first push
+	//	~1 ~+1     /tmp
+	//	~2 ~+2     /scratch
+	//	~3 ~+3     ~3 ~+3      past the end, so the word stands as written
+	//	~-0        /scratch    the bottom entry
+	//	~-1        /tmp
+	//	~01 ~+01   /tmp        leading zeros are a number like any other
+	//	~1a        ~1a         a name with a digit in it is not an index
+	//	~0/x       /usr/x      the tail after the first slash is the tail
+	//
+	// A name rather than an axis because there is nothing here to choose
+	// between: the stack is a parameter this package does not own — see
+	// dialect/bash/shellparameters.go, where `DIRSTACK` is a view over the
+	// prelude's own storage — so the dialect that has the tilde is the
+	// dialect that can say where to read it. Empty is the whole of "this
+	// shell has no numbered tilde", which is dash's and ksh93's answer, and
+	// zsh's until its own stack is measured.
+	DirectoryStackParameter string
+
 	// SetHasTheErrtraceLetter gives `set` the -E letter, which carries the
 	// ERR trap into functions and subshells the dialect otherwise bounds it
 	// out of. bash and BusyBox ash: dash and ksh93 refuse the letter, and zsh

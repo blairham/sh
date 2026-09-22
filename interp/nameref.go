@@ -5,6 +5,7 @@ package interp
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -157,6 +158,34 @@ func (r *Runner) throughNamerefName(name string) string {
 	}
 	if _, _, element := r.indirectElement(target); element {
 		return name
+	}
+	return target
+}
+
+// attributedName is the name whose **attributes** decide what a value stored
+// through this one becomes.
+//
+// A reference redirects the store, and the attributes travel with the store
+// rather than staying on the reference: `typeset -i v=1; typeset -n r=v;
+// r+=2` is `3` in bash 5.3.20, because the integer letter is `v`'s and the
+// append is a write to `v`. Measured with the table too — `typeset -A m;
+// typeset -i m; typeset -n r=m[k]; r=1; r+=2` is `3` there — which is why an
+// element target comes back as its **base**: a subscript names a cell and the
+// letters are the whole name's.
+//
+// The plain assignment already had this right, because it folds at the store
+// and the store is reached with the target's name. The append did not, and
+// could not: `+=` joins the two sides *before* it reaches a store, so it has
+// to ask about the attributes itself, and it was asking about the reference —
+// which carries none — so `typeset -i v=1; typeset -n r=v; r+=2` built the
+// text `12` and stored a wrong number at status 0 with nothing said.
+func (r *Runner) attributedName(name string) string {
+	target, is := r.namerefTarget(name)
+	if !is {
+		return name
+	}
+	if base, _, element := r.indirectElement(target); element {
+		return base
 	}
 	return target
 }
@@ -1393,4 +1422,46 @@ func (r *Runner) declarationThroughAReferenceShadowsTheTarget(target string, fre
 		return fresh
 	}
 	return shadow(target)
+}
+
+// exportedNamerefs is the environment entries a reference carrying the export
+// letter earns.
+//
+// No other pass can produce them. A reference keeps no scalar view — its
+// target is in r.nameref and nowhere else — so the walk over Vars never sees
+// the name, and a `typeset -nx r=v` reached a child as nothing at all.
+//
+// What a child is handed is the **target's name**, not the value read through
+// it. Measured on bash 5.3.20, 2026-09-22, with `var=foo`:
+//
+//	typeset -nx ref=var; env          ref=var
+//	typeset -a a=(x y)
+//	typeset -nx ref=a[1]; env         ref=a[1]
+//	typeset -nx ref; env              nothing
+//
+// So the entry is the text the reference is aimed at, subscript and all, and
+// a reference aimed at nothing earns none — which is the same rule
+// declaredEmpty states for a plain name one loop up.
+//
+// Only the letter given at the declaration puts a reference in a child's
+// environment. `typeset -n ref=var; export ref` does not: that one exports
+// the *target*, because `export` takes a name operand and a name operand is
+// resolved through the reference. Both halves are already right at their own
+// ends; this is the half that had nowhere to be written.
+//
+// Sorted, for the reason exportedTables is: a child's environment must not
+// depend on a map walk.
+func (r *Runner) exportedNamerefs() []string {
+	var out []string
+	for k, target := range r.nameref {
+		if target == "" || !r.isExported(k) {
+			continue
+		}
+		if _, own := r.Vars[k]; own {
+			continue
+		}
+		out = append(out, k+"="+target)
+	}
+	sort.Strings(out)
+	return out
 }

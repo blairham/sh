@@ -7770,6 +7770,10 @@ func (r *Runner) environ() []string {
 	// Sorted, for the reason zeroValuedTypeExports is: a child's environment
 	// must not depend on a map walk.
 	out = append(out, r.exportedTables()...)
+	// And a **reference** carrying the export letter, which no walk above can
+	// reach either: a reference keeps no scalar view, so it is in neither
+	// Vars nor AssocArrays. See exportedNamerefs.
+	out = append(out, r.exportedNamerefs()...)
 	for k, v := range r.hiddenExports {
 		out = append(out, k+"="+v)
 	}
@@ -9173,6 +9177,10 @@ func (r *Runner) readCaseFolded(name, value string) string {
 // the same reason: the failure ends the script and a half-written name would
 // outlive it.
 func (r *Runner) appendedValue(name, old, add string) (string, bool) {
+	// Which name's letters these are is the *target's* question where the
+	// name is a reference — see attributedName, and the wrong number this
+	// stored at status 0 before it asked.
+	name = r.attributedName(name)
 	_, isFloat := r.floatPrecision[name]
 	switch {
 	case isFloat:

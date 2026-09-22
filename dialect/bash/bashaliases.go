@@ -72,6 +72,18 @@ func registerBashAliases(r *interp.Runner) {
 			if !set {
 				return
 			}
+			if rr.AliasNameRefused(key) {
+				// The table is the alias table, so a name an alias may not
+				// carry is refused by this road as squarely as by the
+				// builtin — with the builtin's name left off, since no
+				// builtin was called. Measured 2026-09-22 on bash 5.3.20
+				// from a script file: `BASH_ALIASES['\$']=xx` writes
+				// ``s.sh: line 1: \`\$': invalid alias name``, leaves the
+				// status at 0, and defines nothing, and `BASH_ALIASES['a
+				// b']=x` answers the same for the blank.
+				rr.Diagnosef("`%s': invalid alias name\n", key)
+				return
+			}
 			rr.DefineAlias(key, value, interp.AliasRegularKind)
 		})
 }

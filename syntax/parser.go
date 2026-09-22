@@ -1342,7 +1342,15 @@ func (p *Parser) NextLine() (*File, bool) {
 			break
 		}
 		if st == nil {
-			if p.err == nil && !p.at(TokEOF) {
+			// A newline is the line ending rather than something that cannot
+			// begin a command, and only one thing reaches here standing on
+			// one: an alias whose value is empty — or all of it a comment —
+			// written as the whole command. `alias c=''` and then `c` is an
+			// empty line in bash 5.3.20, dash 0.5.12, ksh93u+ and zsh 5.9.2
+			// alike, measured 2026-09-22, where this named the newline
+			// (#4147). The same alias with `echo pre; c; echo post` around
+			// it is still the refusal every column makes, at the `;`.
+			if p.err == nil && !p.at(TokEOF) && !p.at(TokNewline) {
 				// Nothing here can begin a command: a stop word with no
 				// construct open, most often. Every shell in the panel calls
 				// that a syntax error — `}` alone is one in all four — where
@@ -2791,6 +2799,20 @@ func (p *Parser) parseRedirect() *Redirect {
 	p.next()
 	p.lex.noAssignment, p.lex.inRedirectTarget = savedNoAssign, savedInRedirect
 	p.lex.inHeredocDelimiter = savedDelimiter
+	if p.aliasNextWord && p.aliasSpliced == 0 && p.Aliases != nil {
+		// A value that ended in a blank makes the word after it eligible
+		// too, and a redirection's target is such a word: the rule is about
+		// where the blank left off and not about what the grammar does with
+		// what follows. Measured 2026-09-22 with `shopt -s expand_aliases`,
+		// `alias c='cat < '` and `alias f=data`: bash 5.3.20 reads `c f` as
+		// `cat < data`, where this read the target as the literal `f`. The
+		// here-document operators go the same way — `alias c='cat << '` with
+		// `alias E=EOF` ends the body at a line reading `EOF` there — which
+		// is why the delimiter is not carved out, although nothing else
+		// expands in one (#4147).
+		p.aliasNextWord = false
+		p.expandAlias(map[string]bool{}, p.Aliases)
+	}
 	if r.Op.IsSeek() {
 		// The file-position operators take an arithmetic command where every
 		// other redirection takes a target: `exec 3<#((0))` seeks, and the

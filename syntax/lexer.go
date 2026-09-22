@@ -156,6 +156,10 @@ type Lexer struct {
 	// nobody has wrapped, which is every raw scan.
 	parser *Parser
 
+	// commentRanToTheEnd says the last comment skipped was ended by the text
+	// running out rather than by a newline. See Lexer.CommentRanToTheEnd.
+	commentRanToTheEnd bool
+
 	// wordStart is where the word being read began, kept for the diagnostic
 	// that quotes it back.
 	//
@@ -1308,7 +1312,29 @@ func (l *Lexer) skipComment() {
 	for !l.eof() && l.peek() != '\n' {
 		l.advance()
 	}
+	// Whether the comment ended with the text or with a newline of its own.
+	// Only one caller asks — an alias body is substituted into a line, so a
+	// comment it opens and does not end runs on into what follows the alias
+	// word. See Parser.spliceAlias and Lexer.CommentRanToTheEnd.
+	l.commentRanToTheEnd = l.eof()
 }
+
+// CommentRanToTheEnd reports whether the last comment this lexer skipped was
+// ended by the text running out rather than by a newline.
+//
+// It answers the comment's half of the seam [Parser.carryOpenWord] answers
+// for a quote: an alias value is substituted into a line, so a `#` in it that
+// nothing closes comments out the rest of *that line* and not only the rest
+// of the value. Measured 2026-09-22, with `shopt -s expand_aliases` and
+// `alias c=#` on the line before:
+//
+//	echo pre; c; echo post     bash 5.3.20 writes `pre` and nothing else
+//	c foo                      nothing at all
+//	`alias c='echo #'`, c foo  an empty line — the argument is commented out
+//
+// This shell read the value as no tokens at all and then went on reading the
+// input, so the first of those was a syntax error at the `;` (#4147).
+func (l *Lexer) CommentRanToTheEnd() bool { return l.commentRanToTheEnd }
 
 // CommentMode says what an unquoted `#` standing where a word could begin
 // means to this lexer.

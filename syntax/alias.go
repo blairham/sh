@@ -349,6 +349,14 @@ func (p *Parser) spliceAlias(name, value string) {
 	chain[name] = true
 	at := p.tok.Pos
 	end := p.tok.End
+	// A comment the value opens and does not end reaches past the alias
+	// word, because substitution is textual: the rest of the line the alias
+	// word was written on is inside that comment. Spent before the body is
+	// read, so the text each of the body's tokens is followed by is what is
+	// really left. See Parser.spendCommentedTail.
+	if strings.IndexByte(value, '#') >= 0 && valueOpensAComment(value, p.dialect) {
+		p.spendCommentedTail()
+	}
 	sub := NewLexer(value, p.dialect)
 	// The body's own newlines, where the dialect counts them: a token on the
 	// body's second line is reported one line below the alias word, and
@@ -783,6 +791,53 @@ func (p *Parser) carryOpenWord(last *Token, tail string) {
 	}
 	t.Pos, t.End = last.Pos, p.lex.pos()
 	*last = t
+}
+
+// valueOpensAComment reports whether reading an alias value leaves a comment
+// open at the end of it.
+//
+// A read of its own rather than a question asked of the body's own lexer
+// afterwards, because the answer is needed *before* the body is read: what
+// follows each of the body's tokens is the text after the alias word, and a
+// comment that swallowed some of that text has to have swallowed it already.
+//
+// Only ever reached for a value holding a `#`, which almost none do.
+func valueOpensAComment(value string, d Dialect) bool {
+	l := NewLexer(value, d)
+	for {
+		if t := l.Next(); t.Kind == TokEOF {
+			return l.CommentRanToTheEnd()
+		}
+	}
+}
+
+// spendCommentedTail takes the rest of the line out of the text that follows
+// the alias word, across every body the word was inside and then the input.
+//
+// The same spending carryOpenWord does for a construct that crosses the seam,
+// and for the same reason: a comment the value opened is still open when what
+// follows the alias word is read. See Lexer.CommentRanToTheEnd for the panel.
+func (p *Parser) spendCommentedTail() {
+	outer := p.tokTail
+	rest := outer + p.lex.src[p.lex.off:]
+	took := len(rest)
+	if i := strings.IndexByte(rest, '\n'); i >= 0 {
+		took = i
+	}
+	for len(p.pending) > 0 && took >= len(outer)-len(p.pendingTails[0]) {
+		p.pending = p.pending[1:]
+		p.pendingTouches = p.pendingTouches[1:]
+		p.pendingChains = p.pendingChains[1:]
+		p.pendingTails = p.pendingTails[1:]
+		p.pendingCarries = p.pendingCarries[1:]
+		if p.aliasSpliced > 0 {
+			p.aliasSpliced--
+		}
+	}
+	if took > len(outer) {
+		p.lex.skipOver(took - len(outer))
+	}
+	p.tokTail = outer[min(took, len(outer)):]
 }
 
 // endsInLoneBackslash reports whether s ends with a backslash that escapes

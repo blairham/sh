@@ -1158,6 +1158,17 @@ func (r *Runner) SetAliasExpansionBase(on bool) {
 // five. Not an axis with a set beside it: the two shells that check do not
 // agree on what is in the set, so the set *is* the answer and an empty one
 // is the whole of "this shell does not check".
+// AliasNameRefused is that question asked from outside the package.
+//
+// Exported for a dialect that writes to the alias table by another road than
+// the builtin: bash's `BASH_ALIASES` is an assignment, and an assignment
+// naming something an alias may not carry is refused there as squarely as
+// `alias` refuses it — measured 2026-09-22 on bash 5.3.20,
+// `BASH_ALIASES['\$']=xx` answers that the name is an invalid alias name and
+// defines nothing. The predicate is here rather than repeated there because the set
+// is the dialect's and the reading of it must not be written twice.
+func (r *Runner) AliasNameRefused(name string) bool { return r.aliasNameIsRefused(name) }
+
 func (r *Runner) aliasNameIsRefused(name string) bool {
 	set := r.sem().AliasNameRefusedCharacters
 	return set != "" && strings.ContainsAny(name, set)

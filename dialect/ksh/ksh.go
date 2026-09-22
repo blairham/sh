@@ -2244,6 +2244,13 @@ func Semantics() interp.Semantics {
 	// reachable at those two sites only, since this shell reads no `\u` in
 	// `echo`, in `print` or in a `%b` (#2021).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeEncoded
+	// Writing the character regardless of the locale stops at the encoding's
+	// own ceiling: a value above what six bytes hold writes nothing for the
+	// escape and leaves the rest of the word alone. Measured 2026-09-22,
+	// `printf '%s' $'a\UFFFFFFFFb'` is `a b` in 93u+ 2012-08-01 where
+	// `$'a\U7FFFFFFFb'` writes the six bytes, which is bash's answer and not
+	// zsh's.
+	s.CodePointPastSixBytesIsEncoded = interp.No
 	// In a *format* this shell takes both letters: `printf 'a\eZ'` and
 	// `printf 'a\EZ'` are each `61 1b 5a` in 93u+ 2012-08-01 (#3225). Its
 	// two sites disagree, which is what says the format's pair is not the

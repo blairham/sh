@@ -261,6 +261,28 @@ func (r *Runner) patternCountsCharacters(texts ...string) bool {
 	return false
 }
 
+// patternMatchCountsCharacters is patternCountsCharacters for a match whose
+// pattern is known, which is every glob: the units are the locale's
+// characters unless the pattern holds a sequence the encoding cannot decode
+// and the dialect drops the whole match to bytes for it.
+//
+// The order is the point, and it is the order countsTheLocalesCharacters
+// already keeps. A single-byte locale and a dialect with no decoder both end
+// the question before the new axis is reached, so dash never has a pattern
+// put to it and neither does a corpus case under the harness's `LC_ALL=C`.
+// Only a shell that decodes, in a locale that has an encoding, with a pattern
+// that poses the question, reaches Semantics.UndecodablePatternComparesBytes.
+func (r *Runner) patternMatchCountsCharacters(pattern string, subjects ...string) bool {
+	if !r.patternCountsCharacters(append([]string{pattern}, subjects...)...) {
+		return false
+	}
+	if utf8.ValidString(pattern) {
+		return true
+	}
+	return !r.ask(r.sem().UndecodablePatternComparesBytes,
+		"a pattern the encoding cannot decode being compared byte by byte")
+}
+
 // isASCII reports whether every byte of s is a single-byte character in every
 // encoding, so that counting bytes and counting characters agree.
 func isASCII(s string) bool {

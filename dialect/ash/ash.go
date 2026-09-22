@@ -1851,6 +1851,10 @@ func Semantics() interp.Semantics {
 	s.DollarSingleEscEscape = interp.No
 	s.DollarSingleQuestionEscape = interp.No
 	s.DollarSingleUnicodeEscapes = interp.No
+	// unanswered CodePointPastSixBytesIsEncoded: what an escape's value does
+	// past the six-byte form is a question after the escape has been read, and
+	// this shell reads none — `$'\U00000041'` keeps its backslash and every
+	// digit, measured in the row above.
 
 	// `$((2**-1))` is `exponent less than 0` — no float answer, which is
 	// bash's side of the split (#2272).

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 // builtins are commands the shell runs itself.
@@ -5583,7 +5584,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if readsKeys {
 		return r.readKeysInto(next, keys, args)
 	}
-	text, lits, end := readSegment(next, raw, delim, count, exact)
+	text, lits, end := readSegment(next, raw, delim, count, exact, r.countsTheLocalesCharacters)
 
 	// A `read` that fails still assigns. All four shells clear the variables
 	// at end of input rather than leaving what was there, and the reason is
@@ -5785,7 +5786,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// being a pre-pass over the string.
 	ifs, set := r.ifs()
 	space := r.ifsSpace(ifs)
-	fields, at, _ := splitFieldsAt(text, lits, ifs, space, set, false, false)
+	fields, at, _ := splitFieldsAt(text, lits, ifs, space, set, false, false, r.countsTheLocalesCharacters)
 	if array != "" {
 		// An array target takes the fields *as* fields, so the tail of the
 		// splitting rule is live here: `IFS=:; read -A a` on `a:b:` fills
@@ -6252,6 +6253,47 @@ func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time
 	return next, stop
 }
 
+// readUnits counts what `read -n` and `read -N` limit: the locale's
+// characters where it has them, bytes otherwise.
+//
+// A counter rather than a length, because the bytes of one character arrive
+// one at a time and the stop has to land between characters. A byte in
+// 0x80..0xBF continues the character already in progress; anything else ends
+// it and begins another, which is the reading characters() gives a string
+// that holds a sequence nothing can decode — a byte that begins no valid
+// character is one character of one byte, handed back as itself.
+type readUnits struct {
+	// chars is asked at most once per character and only for a byte above
+	// ASCII, so a count over ordinary text asks nothing.
+	chars func() bool
+	part  []byte // the bytes of a character that has begun to arrive
+	n     int
+}
+
+func (u *readUnits) add(c byte) {
+	if len(u.part) > 0 {
+		if c >= 0x80 && c < 0xC0 {
+			u.part = append(u.part, c)
+			if utf8.FullRune(u.part) || len(u.part) == utf8.UTFMax {
+				u.part, u.n = u.part[:0], u.n+1
+			}
+			return
+		}
+		// The character in progress ended short of what its lead byte
+		// promised. It is a character all the same, and this byte starts
+		// another.
+		u.part, u.n = u.part[:0], u.n+1
+	}
+	if c < utf8.RuneSelf || !u.chars() {
+		u.n++
+		return
+	}
+	u.part = append(u.part, c)
+	if utf8.FullRune(u.part) {
+		u.part, u.n = u.part[:0], u.n+1
+	}
+}
+
 // readSegment reads until the delimiter, the count, or the end of the input,
 // honoring the backslash unless raw: it removes the special meaning of the
 // character after it and is itself removed — so `a\tb` (a literal backslash,
@@ -6271,12 +6313,37 @@ func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time
 //
 // count limits the characters as delivered, after an escape or a
 // continuation has folded its backslash away; negative means unlimited.
-func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact bool) (text string, literal []bool, end int) {
+//
+// **Characters and not bytes**, which is what the sentence above always said
+// and what the loop did not do. Measured 2026-09-22 under
+// `LC_ALL=en_US.UTF-8` on a run of Cyrillic letters, `printf '%s' "$v" | {
+// read -n 5 y; }`: bash 5.3.20 leaves five letters in `y`, ten bytes, and so
+// does `read -N 5`. Counting the bytes handed five *bytes* over and cut the
+// third letter in half — the same wrong answer `${#s}` and `${s:off:len}`
+// were given before countsTheLocalesCharacters existed, at the one operator
+// that reads its input a byte at a time.
+//
+// chars is that reader, handed in rather than called here so that it is asked
+// **only when a byte above ASCII actually arrives**: an ASCII byte is one
+// unit under either reading, so a count over ordinary text never puts a
+// locale question to a core whose answer is "unanswered". That is the
+// discipline countsCharacters keeps for a length and readKeysFrom keeps for
+// `read -k`.
+func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact bool,
+	chars func() bool,
+) (text string, literal []bool, end int) {
 	var b strings.Builder
 	var escapedAt []int // offsets in b whose byte arrived behind a backslash
 	pending := false    // a backslash read, its character not yet
+	units := readUnits{chars: chars}
+	write := func(c byte) {
+		b.WriteByte(c)
+		if count >= 0 {
+			units.add(c)
+		}
+	}
 	for {
-		if count >= 0 && b.Len() >= count {
+		if count >= 0 && units.n >= count {
 			return b.String(), literalMask(escapedAt, b.Len()), endCount
 		}
 		c, ev := next()
@@ -6288,7 +6355,7 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 			return b.String(), literalMask(escapedAt, b.Len()), endTimeout
 		}
 		if exact {
-			b.WriteByte(c)
+			write(c)
 			continue
 		}
 		if pending {
@@ -6303,7 +6370,7 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 			// Escaped, so literal: the delimiter does not end the read
 			// here, and a separator marked this way must not split.
 			escapedAt = append(escapedAt, b.Len())
-			b.WriteByte(c)
+			write(c)
 			continue
 		}
 		if !raw && c == '\\' {
@@ -6313,7 +6380,7 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 		if c == delim {
 			return b.String(), literalMask(escapedAt, b.Len()), endDelim
 		}
-		b.WriteByte(c)
+		write(c)
 	}
 }
 
@@ -6344,7 +6411,9 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 	// waits on its stream exactly as `read` does — see
 	// settleBackgroundJobBeforeABlockingRead.
 	r.settleBackgroundJobBeforeABlockingRead(in)
-	text, _, end := readSegment(directByteSource(in), raw, '\n', -1, false)
+	// No count, so nothing asks what a character is: readSegment puts the
+	// locale question only where a count has to land between characters.
+	text, _, end := readSegment(directByteSource(in), raw, '\n', -1, false, r.countsTheLocalesCharacters)
 	return text, end == endEOF
 }
 

@@ -5468,8 +5468,8 @@ func (r *Runner) ifsSpace(ifs string) string {
 // non-whitespace separator delimits — so two adjacent ones produce an empty
 // field. A trailing separator is absorbed and a leading one is not, which is
 // the asymmetry a symmetric implementation gets wrong.
-func splitFields(s string, ifs, space string, ifsSet bool) []string {
-	return splitFieldsLiteral(s, nil, ifs, space, ifsSet)
+func splitFields(s string, ifs, space string, ifsSet bool, chars func() bool) []string {
+	return splitFieldsLiteral(s, nil, ifs, space, ifsSet, chars)
 }
 
 // splitFieldsLiteral is splitFields with some bytes exempt from separating:
@@ -5478,8 +5478,8 @@ func splitFields(s string, ifs, space string, ifsSet bool) []string {
 // one field — by the time the escapes are removed, an escaped space and a
 // separating one are the same byte, so only a mask can still tell them
 // apart. A nil mask exempts nothing.
-func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool) []string {
-	return splitFieldsEdges(s, literal, ifs, space, ifsSet, false, false)
+func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool, chars func() bool) []string {
+	return splitFieldsEdges(s, literal, ifs, space, ifsSet, false, false, chars)
 }
 
 // splitFieldsEdges is splitFieldsLiteral with the discarding of the outermost
@@ -5497,8 +5497,10 @@ func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool
 // it. `read` and `${#(w)v}` hand it plain text and pass false. The two cannot
 // be told apart by looking, since a backslash is a legal character of a value
 // as well as the form's own mark — so it is the caller that knows.
-func splitFieldsEdges(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool) []string {
-	fields, _, _ := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped)
+func splitFieldsEdges(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
+	chars func() bool,
+) []string {
+	fields, _, _ := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped, chars)
 	return fields
 }
 
@@ -5510,9 +5512,45 @@ func splitFieldsEdges(s string, literal []bool, ifs, space string, ifsSet, keepE
 // splitter, for the reason splitFieldsAt's offsets are reported from here:
 // which bytes are a delimiter is a rule with a mask, an escape form and a
 // run in it, and a copy of that rule is a second place for it to drift.
-func splitFieldsOpenEnd(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool) ([]string, bool) {
-	fields, _, openEnd := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped)
+func splitFieldsOpenEnd(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
+	chars func() bool,
+) ([]string, bool) {
+	fields, _, openEnd := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped, chars)
 	return fields, openEnd
+}
+
+// separatorStarts marks the bytes of s where a separator of ifs begins, and
+// is nil where reading the bytes on their own gives the same answer.
+//
+// **A separator is a character, not a byte**, and the two part company only
+// where `IFS` holds a byte above ASCII: an ASCII byte never occurs inside a
+// valid multi-byte character, so an ordinary `IFS` of spaces, tabs, newlines
+// or a colon cannot land inside one however the value is encoded. That is why
+// this answers nil for nearly every split a script makes, and why the locale
+// is asked only for the pair that could disagree.
+//
+// Measured 2026-09-22 under `LC_ALL=en_US.UTF-8`, `x=$'\xe2\x82\xac'` — the
+// euro sign, whose middle byte is 0x82 — with `IFS=$'\x82'; set -- $x`:
+// bash 5.3.20 and ksh93u+ both give one field, and zsh 5.9.2 gives one after
+// refusing the invalid character and putting `IFS` back. So the panel is
+// unanimous that a byte of `IFS` which is not a character of its own does not
+// cut a character in half, and splitting on the byte is simply wrong rather
+// than a dialect's reading of it.
+func separatorStarts(s, ifs string, chars func() bool) []bool {
+	if isASCII(ifs) || isASCII(s) || chars == nil || !chars() {
+		return nil
+	}
+	seps := make(map[string]bool, len(ifs))
+	for _, c := range characters(ifs) {
+		seps[c] = true
+	}
+	starts := make([]bool, len(s))
+	for i := 0; i < len(s); {
+		w := characterWidth(s[i:])
+		starts[i] = seps[s[i:i+w]]
+		i += w
+	}
+	return starts
 }
 
 // splitFieldsAt is splitFieldsEdges with each field's offset in s reported
@@ -5527,7 +5565,9 @@ func splitFieldsOpenEnd(s string, literal []bool, ifs, space string, ifsSet, kee
 // only thing that makes the difference recoverable. It is reported from the
 // one splitter rather than recomputed beside it, because a second walk of the
 // same rule is a second place for it to drift.
-func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool) ([]string, []int, bool) {
+func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
+	chars func() bool,
+) ([]string, []int, bool) {
 	if ifsSet && ifs == "" {
 		// Set and empty disables the stage entirely, which is a different
 		// state from unset rather than a degree of it.
@@ -5556,8 +5596,18 @@ func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdge
 		return !isMark(i) && (literal == nil || !literal[i]) &&
 			strings.IndexByte(ifs, c) >= 0 && isIFSWhitespace(c, space)
 	}
+	// Which bytes of s a separator may be found at. Nil is every byte, which
+	// is the reading for a single-byte locale and for an IFS of ASCII — see
+	// separatorStarts.
+	starts := separatorStarts(s, ifs, chars)
 	isSep := func(i int) bool {
-		return !isMark(i) && (literal == nil || !literal[i]) && strings.IndexByte(ifs, s[i]) >= 0
+		if isMark(i) || (literal != nil && literal[i]) {
+			return false
+		}
+		if starts != nil {
+			return starts[i]
+		}
+		return strings.IndexByte(ifs, s[i]) >= 0
 	}
 	// cutAt is where the field in front of the separator at i ends. A marked
 	// separator still separates — a value's backslash quotes for the *match*

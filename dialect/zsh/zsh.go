@@ -2133,6 +2133,13 @@ func Semantics() interp.Semantics {
 	// before the escape, and abandons the script with the status it already
 	// had. Measured 2026-09-11 under `LC_ALL=C` (#1851).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeRefused
+	// A value above what six bytes hold is still encoded here, the arithmetic
+	// overflowing into the lead byte: measured 2026-09-22 under
+	// `LC_ALL=en_US.UTF-8`, `printf '%s' $'a\UFFFFFFFFb'` is
+	// `61 ff bf bf bf bf bf 62` in 5.9.2, where bash and ksh93 write `a b`.
+	// The lead byte is one no decoder will take back, which is the shape of
+	// the disagreement rather than an accident of it.
+	s.CodePointPastSixBytesIsEncoded = interp.Yes
 	// And an *unset* locale is the C locale here, on every operator that
 	// reads one: under `env -i`, 5.9.2 answers 6 for `s=héllo; echo ${#s}`,
 	// leaves `${(U)s}` on `café` as `CAFé`, and refuses the escape above the

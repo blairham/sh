@@ -2802,6 +2802,24 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				continue
 			}
 			r.unsetNameref(name)
+			// And the **variable** goes with the reference, letters and
+			// all. `unset -n` is not "take the `n` letter off" — that is
+			// `typeset +n`, which leaves the target's name behind as an
+			// ordinary value. Measured 2026-09-22 on bash 5.3.20:
+			//
+			//	typeset -nx r=v; unset -n r; typeset -p r   r: not found
+			//	the same, then `r=plain; typeset -p r`      declare -- r="plain"
+			//	the same, then `env`                        no `r` at all
+			//
+			// So the export attribute does not survive it, and neither does
+			// anything else the cell carried. Deleting the reference alone
+			// left `declare -x r` standing over nothing, and a later plain
+			// assignment was then still handed to every child.
+			//
+			// unsetOneName rather than unsetName: the reference is already
+			// gone from the table, so there is nothing left to walk through,
+			// and walking would remove what the reference used to point at.
+			r.unsetOneName(name)
 		}
 		if len(rest) == 0 {
 			return status

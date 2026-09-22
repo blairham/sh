@@ -705,8 +705,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 			// else.
 			if held, set := r.getVar(name); set && adopts {
 				if !r.namerefTargetIsAName(held) {
-					return refuse(Wording(r.diag().NamerefBadTarget,
-						"%[1]s: invalid variable name for name reference", held))
+					return refuse(r.namerefBadTargetWording(held))
 				}
 				r.namerefEmptiesTheCell(name, df)
 				r.setNameref(name, held)
@@ -759,8 +758,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 			"%[1]s: no parent", target))
 	}
 	if !r.namerefTargetIsAName(target) {
-		return refuse(Wording(d.NamerefBadTarget,
-			"%[1]s: invalid variable name for name reference", target))
+		return refuse(r.namerefBadTargetWording(target))
 	}
 	aim, aimIsAName := r.namerefAim(target, df)
 	if !aimIsAName {
@@ -1464,4 +1462,94 @@ func (r *Runner) exportedNamerefs() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// namerefBadTargetWording is the refusal a declaration gives a word it will
+// not aim a reference at, and there are two of them in one column.
+//
+// The empty word is the one that parts them. bash has a sentence the `n`
+// letter owns, `invalid variable name for name reference`, and an empty
+// operand never reaches it: `declare -n r=` draws `not a valid identifier`
+// instead, which is what that builtin says about any word it will not bind.
+// ksh93 writes one sentence for both, with the word dropped in.
+//
+// Which shell is which is Diagnostics.NamerefEmptyTargetIsAnOrdinaryBadName,
+// and an empty wording there means the dialect has only the one sentence.
+func (r *Runner) namerefBadTargetWording(target string) string {
+	if target == "" {
+		if w := r.diag().NamerefEmptyTargetIsAnOrdinaryBadName; w != "" {
+			return Wording(w, "`%[1]s': not a valid identifier", target)
+		}
+	}
+	return Wording(r.diag().NamerefBadTarget,
+		"%[1]s: invalid variable name for name reference", target)
+}
+
+// arrayLetterTakesAnUnaimedReference is the declaration loop's one line for
+// Semantics.ArrayLetterOverAnUnaimedReferenceDropsIt: an `a` or `A` letter
+// written over a reference that has never been aimed, in the column where
+// the reference gives way to it.
+//
+// Only the unaimed shape reaches here. An aimed reference sends its letters
+// to the target and keeps being a reference, which attributeFollowsTheReference
+// resolved one step earlier, and `-n` written on this very line is the
+// declaration making a reference rather than one landing on it.
+func (r *Runner) arrayLetterTakesAnUnaimedReference(name string, df declareFlags) {
+	if df.nameref || (!df.array && !df.assoc) {
+		return
+	}
+	if target, is := r.nameref[name]; !is || target != "" {
+		return
+	}
+	if r.ask(r.sem().ArrayLetterOverAnUnaimedReferenceDropsIt,
+		"an array letter over a name reference with nothing to point at") {
+		r.unsetNameref(name)
+	}
+}
+
+// namerefRefusesACompoundLiteral reports — and refuses — an `n` letter
+// written beside a **parenthesized** value.
+//
+// A reference points at a name and a literal is a container, so there is
+// nothing for the letter to mean. Both shells with the letter say so, in the
+// sentence they already share for a reference over an array. Measured
+// 2026-09-22, `env -i` with a scratch HOME, from a file:
+//
+//	typeset -n x=(a b)              x: reference variable cannot be an array
+//	  bash 5.3.20                   status 1, and `x` is then
+//	                                `declare -a x=([0]="a" [1]="b")`
+//	  ksh93u+ 2012                  the same sentence, and the script ends
+//	typeset -na y=(a b)             the same in both
+//	typeset -n z=()                 the same in both
+//
+// So the value lands in bash and does not in ksh93 — which is not a second
+// question: refuseNameref already asks BadNameToDeclarationFatal, and the
+// column that ends the script never reaches the assignment at all.
+//
+// A reference that is **already aimed** is not this shape and is left alone:
+// `typeset -n q=v; typeset -n q=(a b)` writes the array through to `v` at 0
+// in bash, because the letter is saying again what the name already is
+// rather than declaring it over a literal.
+//
+// This shell used to write the warning an *assignment statement* gives —
+// `warning: x: removing nameref attribute` — at status 0, because the letter
+// made an unaimed reference and the literal then took it away at the store.
+// That is the right sentence for `x=(a b)` over a reference and the wrong
+// one here, and the status was wrong with it.
+func (r *Runner) namerefRefusesACompoundLiteral(builtin, name string) bool {
+	if !r.literalOperands[name] {
+		return false
+	}
+	if target, is := r.nameref[name]; is && target != "" {
+		return false
+	}
+	r.refuseNameref(builtin, Wording(r.diag().NamerefCannotBeAnArray,
+		"%[1]s: reference variable cannot be an array", name))
+	// The 1 rides on a mark rather than on the builtin's own return, because
+	// a builtin answering anything but 0 never reaches assignOperands and the
+	// literal would then not land at all — which is the half bash keeps. Not
+	// r.assignFailed either: that one is read *before* the value is expanded
+	// and would stop the very assignment this is meant to leave alone.
+	r.lettersRefusedTheOperand = true
+	return true
 }

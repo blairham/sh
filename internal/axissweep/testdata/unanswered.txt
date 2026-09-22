@@ -38,6 +38,7 @@ ash   ArithSubscriptNameMustBeSet
 ash   ArithSubscriptSkippedWhenNameUnset
 ash   ArithWholeArraySubscriptIsReportedAsBad
 ash   ArithWholeArraySubscriptIsTheSlice
+ash   ArrayLetterOverAnUnaimedReferenceDropsIt
 ash   ArrayLiteralAssignmentStartsTheNameOver
 ash   ArrayLiteralOperandRetypesAFrozenScalar
 ash   ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
@@ -301,6 +302,7 @@ dash  ArithSubscriptNameMustBeSet
 dash  ArithSubscriptSkippedWhenNameUnset
 dash  ArithWholeArraySubscriptIsReportedAsBad
 dash  ArithWholeArraySubscriptIsTheSlice
+dash  ArrayLetterOverAnUnaimedReferenceDropsIt
 dash  ArrayLiteralAssignmentStartsTheNameOver
 dash  ArrayLiteralOperandRetypesAFrozenScalar
 dash  ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
@@ -579,6 +581,7 @@ ksh   UnsetEndsTheProducedPipelineStatus
 
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
+zsh   ArrayLetterOverAnUnaimedReferenceDropsIt
 zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand

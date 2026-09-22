@@ -150,6 +150,10 @@ func newProcSubPipe(childWrites bool, dir string, want []int) (procSubEnds, erro
 	if childWrites {
 		shell, child = rd, wr
 	}
+	// The shell's own end is moved out of the way first — see raiseShellEnd.
+	// Before the park, because the number it gives up is one of the numbers
+	// the park is about to ask for.
+	shell = raiseShellEnd(shell, want)
 	parked, err := parkDescriptor(child, dir, want)
 	// The original is closed either way: on success the parked duplicate is
 	// the one the path names, and on failure there is nothing to hand over.
@@ -158,7 +162,120 @@ func newProcSubPipe(childWrites bool, dir string, want []int) (procSubEnds, erro
 		_ = shell.Close()
 		return procSubEnds{}, err
 	}
+	// And now that both of this pipe's own originals are gone, the number the
+	// dialect actually wanted may have come free — see reparkPreferred.
+	parked = reparkPreferred(parked, dir, want)
 	return procSubEnds{shell: shell, child: parked, path: parked.Name()}, nil
+}
+
+// raiseShellEnd moves this shell's end of the pipe above every number the
+// dialect could publish, and closes the original.
+//
+// **The shell's half of the plumbing is not supposed to be in the answer.**
+// `os.Pipe` takes the two lowest free numbers, so before this the shell's own
+// end sat *inside* the region the published number comes from and the next
+// substitution's number had to step over it. That is the whole of ksh93's
+// `6 9 12` where the shell answers `3 4 5`: the rule was right and the floor
+// was this shell's own pipes. Measured 2026-09-21 by dumping the table at each
+// park — `3:P 4:P` on the first, `3:s 4:P 5:P 6:P 7:P` on the second — so each
+// turn cost two or three numbers, which is exactly the gap.
+//
+// It is what ksh93 does too, and the reason it can answer `3 4 5` at all:
+// a shell that keeps its own descriptors high leaves the low ones for the
+// numbers it publishes.
+//
+// A best effort, and the failure is not one. Under a low `ulimit -n` the floor
+// is past the limit and the duplicate is refused, which leaves the end where
+// `os.Pipe` put it — the arrangement every release before this one shipped.
+// A substitution that refused to run because its *private* descriptor could
+// not be tidied would be a construct lost to a cosmetic.
+func raiseShellEnd(f *os.File, want []int) *os.File {
+	floor := shellEndFloor(want)
+	if floor == 0 {
+		return f
+	}
+	conn, err := f.SyscallConn()
+	if err != nil {
+		return f
+	}
+	moved := -1
+	if cerr := conn.Control(func(fd uintptr) {
+		// **Any answer at or above the floor will do**, which is the
+		// difference from parkDescriptor and the reason these are two walks
+		// rather than one. A published number has to be the number the
+		// dialect asked for; a number nothing can name only has to be out of
+		// the way, and F_DUPFD answers at or above what it was given. Taking
+		// the exact number instead cost the third substitution its place —
+		// the first two shell ends were already on the floor and its
+		// neighbor, so the wish was refused and the end stayed low, and
+		// ksh93's `3 4 5` read `3 4 6`.
+		if got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, floor); err == nil {
+			moved = got
+		}
+	}); cerr != nil || moved < 0 {
+		return f
+	}
+	// And the blocking mode is put back, for parkDescriptor's reason applied
+	// to the other end of the same pipe. Go opens a pipe non-blocking and
+	// runs it behind its own poller, and that mode belongs to the *os.File
+	// Go made — a duplicate wrapped by os.NewFile is a file Go did not make,
+	// so the mode stops being the poller's business and starts being the
+	// description's. What reads this end is the substitution's body, which is
+	// usually an external command handed the descriptor, and a command on a
+	// non-blocking pipe meets EAGAIN on an empty one: measured, `cat` in
+	// `>(cat)` answered `stdin: Resource temporarily unavailable`.
+	if err := syscall.SetNonblock(moved, false); err != nil {
+		_ = syscall.Close(moved)
+		return f
+	}
+	raised := os.NewFile(uintptr(moved), f.Name())
+	_ = f.Close()
+	return raised
+}
+
+// reparkPreferred asks the wish list again, once, now that this pipe's own
+// originals are closed.
+//
+// The park has to run while the original is still open — it is what is being
+// duplicated — so the original is itself occupying one of the numbers being
+// asked for, and on the dialects that allocate *upward* it is occupying the
+// best one. `os.Pipe` hands out 3 and 4, ksh93's list starts at 3, and the
+// first answer is therefore 5 however free 3 was a moment later. One more
+// pass, after the close, is what turns that into 3.
+//
+// The list is walked in its own order and the walk stops at the number
+// already held: the list is best-first, so reaching the current number
+// without a wish landing means nothing better was free. And it is the *list*
+// rather than a bare descent from a floor, which is what keeps this from
+// reopening the collision firstProcSubFd was set to avoid —
+// Runner.substEndCandidates has already taken out every number the script's
+// own table holds.
+//
+// Failure is not one here either: the number in hand is already a working
+// descriptor, and every refusal simply leaves it.
+func reparkPreferred(parked *os.File, dir string, want []int) *os.File {
+	cur := int(parked.Fd())
+	for _, n := range want {
+		if n == cur {
+			return parked
+		}
+		got, err := fcntlInt(cur, syscall.F_DUPFD_CLOEXEC, n)
+		if err != nil {
+			continue
+		}
+		if got != n {
+			// Taken. A working duplicate at the wrong number is no use here —
+			// the one in hand is already that — so it is closed rather than
+			// kept.
+			_ = syscall.Close(got)
+			continue
+		}
+		// No SetNonblock: the duplicate shares the open file description with
+		// the one parkDescriptor already cleared the mode on.
+		_ = parked.Close()
+		return os.NewFile(uintptr(got), dir+"/"+strconv.Itoa(got))
+	}
+	return parked
 }
 
 // parkDescriptor duplicates a file onto one of the numbers want asks for, and

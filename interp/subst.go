@@ -255,6 +255,21 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 	// spelling. See Runner.hasSomethingToReturnFrom.
 	r.currentShellSubstDepth++
 	defer func() { r.currentShellSubstDepth-- }()
+	// **Whether the body's shell holds `set -e`**, which is the same
+	// question the subshell spelling asks and the same answer per column —
+	// see Semantics.ErrExitEntersACommandSubstitution, whose doc carries the
+	// rows for this spelling too. The body runs in *this* shell, so the
+	// option is put back rather than thrown away with a clone.
+	//
+	// Without it a `false` in the body ended the script in silence where
+	// bash 5.3.20 answers the body's output and carries on: measured
+	// 2026-09-22, `set -e; echo "${ false; echo in; }" x; echo after` writes
+	// `in x` and `after` there and wrote nothing at all here.
+	if r.errexit && !r.ask(r.sem().ErrExitEntersACommandSubstitution,
+		"`set -e` reaching into a `${ … ;}` body, which runs in this shell") {
+		r.errexit = false
+		defer func() { r.errexit = true }()
+	}
 	// And an execution unit of its own, which is the shape #3184 filed: a
 	// bare `exit` in the body reports what the body has run and 0 where it
 	// has run nothing, while `$?` in the same body still reads the value the

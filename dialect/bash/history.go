@@ -191,8 +191,11 @@ type historyFlags struct {
 	store  bool
 }
 
-// fileLetter reports whether one of the four letters that name a file was
-// given, and refuses the combination bash refuses by taking the last.
+// fileLetter reports which of the four letters that name a file was given.
+//
+// At most one can have been, because [historyFlags.tooManyFileLetters] has
+// already refused the call where two were — so the order of the cases below
+// decides nothing and is not a precedence.
 func (f historyFlags) fileLetter() (byte, bool) {
 	switch {
 	case f.append:
@@ -207,10 +210,36 @@ func (f historyFlags) fileLetter() (byte, bool) {
 	return 0, false
 }
 
+// tooManyFileLetters reports the combination bash refuses: two *different*
+// letters out of `-anrw` on one call.
+//
+// Different, not repeated — measured 2026-09-22 on bash 5.3.20, `history -a
+// -a` is accepted and does the append once, while `-an`, `-na`, `-anrw` and
+// `-c -a -r` are each `history: cannot use more than one of -anrw` at status
+// 1. The refusal stands in front of the whole builtin and not only in front
+// of the file work: the `-c` of that last one does not clear the list.
+//
+// No usage block under it, which is the difference between a complaint about
+// a *combination* and one about a letter the builtin does not have: `-Z` is
+// status 2 with the usage line, this is status 1 without it.
+func (f historyFlags) tooManyFileLetters() bool {
+	n := 0
+	for _, given := range []bool{f.append, f.unread, f.read, f.write} {
+		if given {
+			n++
+		}
+	}
+	return n > 1
+}
+
 func historyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	flags, rest, code := historyOptions(r, args)
 	if code != 0 {
 		return code
+	}
+	if flags.tooManyFileLetters() {
+		r.Diagnosef("history: cannot use more than one of -anrw\n")
+		return 1
 	}
 
 	// `-p` and `-s` take every remaining operand and answer on their own,

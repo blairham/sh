@@ -296,24 +296,50 @@ func TestAFileUnderItsBoundIsNotRewritten(t *testing.T) {
 	}
 }
 
-// HISTFILESIZE=0 writes nothing, and HISTSIZE=0 leaves the session with
-// nothing to write.
+// The two zeros are different answers, which they did not used to be.
+//
+// HISTSIZE=0 is the history turned off and leaves no file at all.
+// HISTFILESIZE=0 is a file that keeps nothing, and a file that keeps nothing
+// is **emptied** — made where it was not there, and truncated where it was,
+// so a session told to keep nothing does not leave the last one's lines
+// behind. Measured 2026-09-22 on bash 5.3.20, one variable at a time, with
+// lines to write and with none.
 func TestZeroTurnsTheWritingOff(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		h    historyFile
+		name  string
+		h     historyFile
+		wrote bool
 	}{
 		{name: "HISTSIZE=0", h: historyFile{size: 0, file: 100}},
-		{name: "HISTFILESIZE=0", h: historyFile{size: 100, file: 0}},
+		{name: "HISTFILESIZE=0", h: historyFile{size: 100, file: 0}, wrote: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.h.path = filepath.Join(t.TempDir(), "hist")
+			if err := os.WriteFile(tc.h.path, []byte("earlier\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
 			if err := tc.h.save(t.Context(), []string{"one"}, nil); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := os.Stat(tc.h.path); err == nil {
-				t.Error("a file was written for a session told to keep nothing")
+			data, err := os.ReadFile(tc.h.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wrote && len(data) != 0 {
+				t.Errorf("the file holds %q, want nothing at all", data)
+			}
+			if !tc.wrote && string(data) != "earlier\n" {
+				t.Errorf("the file holds %q, want the earlier session's line untouched", data)
 			}
 		})
+	}
+	// And the one a session told to keep nothing did not find: it is made
+	// rather than left absent, which is the half a truncation alone misses.
+	h := historyFile{size: 100, file: 0, path: filepath.Join(t.TempDir(), "hist")}
+	if err := h.save(t.Context(), nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(h.path); err != nil {
+		t.Errorf("no file was left behind: %v", err)
 	}
 }

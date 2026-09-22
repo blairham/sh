@@ -625,7 +625,22 @@ func withoutEmpty(entries, times []string) (keptEntries, keptTimes []string) {
 // and writing them again would double it every time a shell is opened.
 func (h historyFile) save(ctx context.Context, added, times []string) error {
 	added, times = withoutCredentials(added, times)
-	if h.path == "" || h.size == 0 || h.file == 0 || len(added) == 0 {
+	if h.path == "" || h.size == 0 {
+		// No file to write, or a history turned off, which is not the same
+		// as a file that keeps nothing: see below.
+		return nil
+	}
+	if h.file == 0 {
+		// A file that keeps nothing is **emptied**, not left alone, and it
+		// is created if it was not there. Measured 2026-09-22 on bash 5.3.20,
+		// `HISTFILESIZE=0` on a session with lines to write and on one with
+		// none: the file exists afterwards and holds nothing, where
+		// `HISTSIZE=0` — the history turned off — leaves no file at all.
+		// This used to return here with the other two, so a session told to
+		// keep nothing left whatever the last one wrote.
+		return h.empty(ctx)
+	}
+	if len(added) == 0 {
 		return nil
 	}
 	// 0600: a shell history is a record of what someone typed, which is not
@@ -665,6 +680,27 @@ func (h historyFile) save(ctx context.Context, added, times []string) error {
 		return err
 	}
 	return h.trim(ctx)
+}
+
+// empty puts the file down holding nothing, making it where it was not there.
+//
+// Through the boundary like every other open this package makes, and silent
+// on a refusal for the reason save is: the session is ending, there is nobody
+// left to tell, and the sink has the record.
+func (h historyFile) empty(ctx context.Context) error {
+	f, err := h.bound.OpenFile(ctx, boundary.File{
+		Path:    h.path,
+		Flags:   os.O_CREATE | os.O_TRUNC | os.O_WRONLY,
+		Perm:    0o600,
+		Parents: true,
+	})
+	if err != nil {
+		if errors.Is(err, boundary.ErrRefused) {
+			return nil
+		}
+		return err
+	}
+	return f.Close()
 }
 
 // trim brings the file back under HISTFILESIZE.

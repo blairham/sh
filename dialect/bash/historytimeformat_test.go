@@ -163,3 +163,35 @@ func TestHistfilesizeCountsEntriesInATimedFile(t *testing.T) {
 		})
 	}
 }
+
+// Two different letters out of `-anrw` on one call is a refusal, and it
+// stands in front of the whole builtin rather than in front of the file work.
+//
+// Measured 2026-09-22 on bash 5.3.20. Repeating one letter is not the
+// combination — `history -a -a` appends once and says nothing — and the
+// status is 1 with no usage block under it, where a letter the builtin does
+// not have is 2 with one.
+func TestTwoOfTheFourFileLettersIsRefused(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{name: "two letters in one word", src: "history -an\n", want: "S: line 2: history: cannot use more than one of -anrw\n", status: 1},
+		{name: "two letters in two words", src: "history -a -r\n", want: "S: line 2: history: cannot use more than one of -anrw\n", status: 1},
+		{name: "all four", src: "history -anrw\n", want: "S: line 2: history: cannot use more than one of -anrw\n", status: 1},
+		{name: "one letter twice is not the combination", src: "history -a -a\n", want: "", status: 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, errs, status := historyRun(t, "HISTFILE=/dev/null\n"+c.src)
+			if errs != c.want || status != c.status {
+				t.Errorf("stderr %q status %d, want %q and %d", errs, status, c.want, c.status)
+			}
+		})
+	}
+	// And the refusal is before any of the builtin's other work: the `-c` of
+	// a call that also carries two file letters does not clear the list.
+	out, _, _ := historyRun(t, "set +o history\nhistory -s one\nhistory -c -a -r\nhistory\n")
+	if want := "    1  one\n"; out != want {
+		t.Errorf("listing %q, want %q", out, want)
+	}
+}

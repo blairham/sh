@@ -46,7 +46,7 @@ func TestACompoundRedirectionsSubstitutionIsRemovedWithIt(t *testing.T) {
 				{ true; } < <(true)
 				n=$((n+1))
 			done
-			echo <(true)`)
+			echo <(true)`, nil)
 	got := substNumbers(t, out)
 	if len(got) != 1 {
 		t.Fatalf("got %v, want one number", got)
@@ -68,7 +68,7 @@ func TestACompoundRedirectionsSubstitutionIsRemovedWithIt(t *testing.T) {
 func TestACompoundsSubstitutionReachesItsBody(t *testing.T) {
 	out := runSubstPlacement(t, SubstitutionEndsAtTheTopOfTheTable,
 		AllocateDescriptorsFromTen, nil,
-		`while read x; do echo got:$x; done < <(echo hello)`)
+		`while read x; do echo got:$x; done < <(echo hello)`, nil)
 	if got := strings.TrimSpace(out); got != "got:hello" {
 		t.Errorf("got %q, want %q", got, "got:hello")
 	}
@@ -92,7 +92,7 @@ func TestACompoundsSubstitutionReachesItsBody(t *testing.T) {
 func TestAWritingSubstitutionOnACompoundProduces(t *testing.T) {
 	out := runSubstPlacement(t, SubstitutionEndsAtTheTopOfTheTable,
 		AllocateDescriptorsFromTen, nil,
-		`{ echo hi; } > >(read x; echo body:$x); echo after`)
+		`{ echo hi; } > >(read x; echo body:$x); echo after`, nil)
 	got := strings.Fields(out)
 	if len(got) != 2 || got[0] != "after" || got[1] != "body:hi" {
 		t.Errorf("got %q, want the command's line and then the body's", out)

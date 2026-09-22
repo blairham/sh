@@ -80,6 +80,11 @@ import "os"
 // ending when the outer one returns.
 func (c *Runner) ownDescriptors() func() {
 	var dups []*os.File
+	// Above the region this dialect publishes — see Runner.privateFdFloor.
+	// These copies are the shell's own and no script can name them, so the
+	// only thing their numbers can do is crowd out a number that *is*
+	// published.
+	floor := c.privateFdFloor()
 	// take is the copy itself, written once because the input and the table
 	// entries are the same question about two places a descriptor is kept.
 	//
@@ -92,7 +97,7 @@ func (c *Runner) ownDescriptors() func() {
 		if !ok {
 			return nil, false
 		}
-		d, err := dupFile(f)
+		d, err := dupFile(f, floor)
 		if err != nil {
 			return nil, false
 		}

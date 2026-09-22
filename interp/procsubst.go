@@ -84,7 +84,8 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// expands, is compared against, and never starts its command. See
 	// Runner.PipesMadeForTest.
 	r.procSubHomeBox().seq.Add(1)
-	ends, err := newProcSubPipe(kind == syntax.ProcSubstOut, r.procSubFdDir(), r.substEndCandidates())
+	ends, err := newProcSubPipe(kind == syntax.ProcSubstOut, r.procSubFdDir(),
+		r.substEndCandidates())
 	if err != nil {
 		r.diagf("%v\n", err)
 		r.expandErr = true
@@ -1488,6 +1489,37 @@ func (r *Runner) substEndCandidates() []int {
 		return lowest(up(topOfTheDescriptorTable+1, nil))
 	}
 	return up(r.sem().FirstAllocatedDescriptor.number(), nil)
+}
+
+// shellEndFloor is the lowest number the shell's own end of a substitution
+// pipe may sit on: one above the highest number this dialect could publish.
+//
+// Derived from the wish list rather than named as a constant, because "out of
+// the way" is a different number in each dialect and a constant would be in
+// the way of one of them. bash publishes at or below 63 and its floor is 64;
+// BusyBox publishes from 64 up and its floor is above the whole of that
+// search; ksh93 and zsh allocate upward from 3 and 11.
+func shellEndFloor(want []int) int {
+	floor := 0
+	for _, n := range want {
+		if n >= floor {
+			floor = n + 1
+		}
+	}
+	return floor
+}
+
+// privateFdFloor is that floor for the descriptors this shell duplicates for
+// its own plumbing — a concurrent body's private copies of the table, which
+// ownDescriptors takes and dupFile places.
+//
+// The same number and the same reason as the shell's end of a substitution
+// pipe: these are copies no script can name, so the only thing their numbers
+// can do is crowd out one that *is* named. Asked through the wish list rather
+// than from a constant of its own, so that there is one answer to "what could
+// this dialect publish" and not two that can drift apart.
+func (r *Runner) privateFdFloor() int {
+	return shellEndFloor(r.substEndCandidates())
 }
 
 // substEndSearch bounds how far up a wish list looks.

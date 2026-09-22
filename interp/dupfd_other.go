@@ -13,4 +13,4 @@ import (
 // dupFile has nothing to duplicate with where descriptors are not what the
 // platform hands a child — the same absence childFiles answers, so a shell
 // there shares the table entry as it did before ownDescriptors existed.
-func dupFile(*os.File) (*os.File, error) { return nil, errors.ErrUnsupported }
+func dupFile(*os.File, int) (*os.File, error) { return nil, errors.ErrUnsupported }

@@ -6909,25 +6909,51 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		array:    strings.ContainsRune(opts, 'a'),
 		assoc:    strings.ContainsRune(opts, 'A'),
 	}
-	if strings.ContainsRune(opts, 'f') && r.sem().FunctionAttributeLetters != "" {
-		// The `f` letter names the *function* table, which is a different
-		// freeze under the same word — `readonly f` makes a variable
-		// immutable and `readonly -f f` makes a function undefinable. The
-		// letter was in ReadonlyOptions and reached nothing, so the option
-		// was accepted, no record was kept, and the function could be
-		// redefined and unset afterwards at status 0 (#3192).
+	if strings.ContainsRune(opts, 'f') {
+		if r.sem().FunctionAttributeLetters != "" {
+			// The `f` letter names the *function* table, which is a
+			// different freeze under the same word — `readonly f` makes a
+			// variable immutable and `readonly -f f` makes a function
+			// undefinable. The letter was in ReadonlyOptions and reached
+			// nothing, so the option was accepted, no record was kept, and
+			// the function could be redefined and unset afterwards at
+			// status 0 (#3192).
+			//
+			// With no name it is the listing `declare -fr` writes, `-p` or
+			// not: measured on bash 5.3.20, `readonly -f` and `readonly -pf`
+			// are the same bytes.
+			if len(args) == 0 {
+				return r.attributedFunctionListing(functionAttributeReadonly)
+			}
+			names, status, ended := r.builtinNames("readonly", args, false)
+			if r.unspecified || ended {
+				return status
+			}
+			return r.freezeFunctions(names)
+		}
+		// Empty FunctionAttributeLetters means this dialect has no readonly
+		// *function* attribute at all — zsh, where `readonly -f` is
+		// `typeset -fr` and the `r` is inert on the `f` line, leaving an
+		// ordinary function listing. `-p` writes the same bytes, measured
+		// 2026-09-22 on zsh 5.9.2 under LC_ALL=C from a script file:
+		// `readonly -f b`, `readonly -pf b`, `readonly -f` and `readonly -pf`
+		// (bare) are each byte-identical to their non-`p` twin. A missing
+		// name is silent and leaves 1 behind without stopping the rest of
+		// the listing — `readonly -f b nosuch` writes `b`'s body and still
+		// answers 1 — which is declareFunctions' own rule for a name that is
+		// not there (#4215).
 		//
-		// With no name it is the listing `declare -fr` writes, `-p` or not:
-		// measured on bash 5.3.20, `readonly -f` and `readonly -pf` are the
-		// same bytes.
+		// Before this, the guard above skipped the whole `f` branch here:
+		// the option was accepted and reached nothing, so `readonly -f`
+		// wrote nothing at 0 and a missing name did too, where zsh leaves 1.
 		if len(args) == 0 {
-			return r.attributedFunctionListing(functionAttributeReadonly)
+			return r.declareFunctions(nil, false, false, false, false, false)
 		}
 		names, status, ended := r.builtinNames("readonly", args, false)
 		if r.unspecified || ended {
 			return status
 		}
-		return r.freezeFunctions(names)
+		return r.declareFunctions(names, false, false, false, false, false)
 	}
 	if strings.ContainsRune(opts, 'p') || ((opts == "" || opts == "n") && len(args) == 0) {
 		// The listing: readonly names alone, in the dialect's shape. `-p` and

@@ -12894,6 +12894,32 @@ bare `typeset -ft` are `-t is not implemented yet`. ksh93's is built
 already, through `Semantics.FunctionLettersThatMarkUndefined` and
 `dialect/ksh`'s own marks.
 
+**A dialect with no `FunctionAttributeLetters` at all still has to answer
+`-f`, where its `ReadonlyOptions` spells the letter** — the two questions
+look like one gate and are not. zsh is the only other column with `f` in
+`ReadonlyOptions`, and it has no readonly function attribute: `readonly -f`
+there is `typeset -fr` under another name, `r` is inert on an `f` line, and
+what is left is an ordinary function *listing*. Measured 2026-09-22 on zsh
+5.9.2 under `LC_ALL=C` from a script file, with `b` and `c` defined:
+
+| line | written |
+| --- | --- |
+| `readonly -f b` | `b`'s body, 0 |
+| `readonly -pf b` | the same bytes — `-p` changes nothing here |
+| `readonly -f` | every function's body, 0 |
+| `readonly -f nosuch` | nothing, **1** |
+| `readonly -f b nosuch` | `b`'s body, then 1 — the miss does not stop the rest |
+| `readonly -f b c` | both bodies, 0 |
+
+So the whole-table and named-listing rules are declareFunctions' own, with
+no attribute line ever added (the field the caller reads is empty here) and
+`-p` asking for nothing this dialect's `-f` line does not already write.
+Before this, the guard reading `FunctionAttributeLetters != ""` skipped the
+whole `-f` branch on this column, so the letter reached the ordinary
+*variable* path instead — `readonly -f b` silently froze a variable named
+`b` and `readonly -f nosuch` froze one named `nosuch`, both at status 0
+where zsh leaves 1 on the missing name (#4215).
+
 ## The bare declaration listing, and the sign that reaches it
 
 Measured 2026-09-12, bash 5.3.15 `--norc --noprofile` with a scrubbed

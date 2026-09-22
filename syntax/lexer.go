@@ -3386,6 +3386,44 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []
 			flush()
 			out = append(out, l.scanBraces(DoubleQuoted))
 			litPos = l.pos()
+		case c == '$' && !closing && !l.inRawBody && l.peekAt(1+skip) == '\'' &&
+			l.dialect.DollarSingleQuote &&
+			l.dialect.QuoteProtectsTheClosingBrace == BraceQuoteProtectsEveryOperand:
+			// A `$'…'` written in the **word** operand of a `${ … }` that
+			// stands inside double quotes, where one column reads the
+			// operand as a fragment of shell rather than as text of the
+			// quote around it. `closing` is false only for an operand, and
+			// that is what keeps a plain `"$'a\tb'"` the eight characters
+			// the whole panel writes — `recho "$'a\tb\tc'"` is a line of
+			// the suite file this came from and it does not move.
+			//
+			// The same axis the scan for the closing brace asks, and
+			// deliberately not a second flag beside it: **where a quote
+			// quotes, the `$'…'` run is the quoting**, and every column
+			// measured answers the two together. Measured 2026-09-22 under
+			// `LC_ALL=C`, `unset u; echo "${u:-$'\t'}"` —
+			//
+			//	bash 5.3.20, bash 3.2.57        a tab
+			//	bash 5.3.20 --posix, as `sh`    the four characters
+			//	zsh 5.9.2, ksh93u+, ash 1.37.0  the four characters
+			//
+			// — which is BraceQuoteProtectsEveryOperand's column and no
+			// other, POSIX mode included, where the axis has already moved
+			// to BraceQuoteMovesToAPatternOnly. dash has no `$'…'` to ask it
+			// of (#4169).
+			//
+			// inRawBody is the other half of `closing`, and it is measured
+			// too: a here-document's body is marked double-quoted so that
+			// nothing in it is split, and the mark is not a pair of quotes.
+			// `cat <<EOF` over `${none-a$'\01'b}` writes the eight
+			// characters as they stand on bash 5.3.20, where the same
+			// expansion inside real quotes writes the control character —
+			// which is one of the lines of the suite file this came from.
+			flush()
+			if s, ok := l.scanDollarSingle(); ok {
+				out = append(out, s)
+			}
+			litPos = l.pos()
 		case c == '$' && stopped == DollarBraces && l.dialect.DollarGoesWhenAContinuationStopsItAtABrace:
 			// Stopped at a `${`, and this dialect drops the `$` rather than
 			// leaving it as text. Nothing is flushed and no span is made: the
@@ -5017,7 +5055,9 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			if l.skipSubstitution() {
 				continue
 			}
-			if l.dialect.DollarSingleQuote && l.peekAt(1) == '\'' && (brace || q != DoubleQuoted) {
+			if l.dialect.DollarSingleQuote && l.peekAt(1) == '\'' &&
+				(brace || q != DoubleQuoted ||
+					l.quoteProtectsTheBrace(l.src[bodies[len(bodies)-1]:l.off])) {
 				// `$'…'` is one construct and not a `$` beside a quote, so a
 				// backslash inside it quotes the byte behind it and the `'`
 				// that ends the run is the first *unescaped* one. Left to the
@@ -5033,14 +5073,29 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				// `echo ${x:-$'a}b'}` prints `a}b` in all four — so the run
 				// hides its `}` as well as its `\'`.
 				//
-				// Double-quoted is the case that is *not* this one, and it is
-				// measured rather than assumed: inside `"${…}"` the panel
-				// stops reading `$'` as a construct at all, and
+				// Inside double quotes the question is the `'` branch's
+				// question, asked one construct earlier: **where a quote
+				// quotes, the `$'…'` run is the quoting**. So the same
+				// Dialect.QuoteProtectsTheClosingBrace decides both, and a
+				// column that reads a quote as an ordinary character there
+				// reads this `$'` as an ordinary `$` for the same reason.
+				//
+				// It is the operand kind that parts them and not the shell.
+				// Measured 2026-09-22 under `LC_ALL=C` with `v="'"`:
+				// `printf '[%s]' "${v/$'\''/x}"` is `[x]` in bash 5.3.20,
+				// zsh 5.9.2 and ksh93u+ — the pattern is the one quote and
+				// it matches — where this shell took the `\'` as the run's
+				// end, opened a second run on the quote behind it, and ran
+				// off the end of the file: 17 lines of one suite file went
+				// unprinted behind `unexpected EOF while looking for matching
+				// '` (#4169). In a *word* operand the panel keeps the text:
 				// `echo "${x:-$'\''}"` is the literal `$'\''` in zsh 5.9.2
-				// and ksh93u+ — which is what the `'` branch below already
-				// produces through Dialect.QuoteProtectsTheClosingBrace. The
-				// command form keeps the construct, because its body is a
-				// program rather than an operand of the enclosing quote.
+				// and ksh93u+, which is that flag's pattern-only answer
+				// arriving here unchanged.
+				//
+				// The command form keeps the construct whatever the flag
+				// says, because its body is a program rather than an operand
+				// of the enclosing quote.
 				l.advance() // $
 				l.skipQuoted('\'', true)
 				continue

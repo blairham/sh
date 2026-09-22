@@ -464,6 +464,60 @@ part of the **pattern**, not a quote that ran out of input.
 matching nothing — and dropping the stray quote makes the pattern `a`,
 strips it and answers `}b'}` with no diagnostic anywhere.
 
+### And a `$'…'` in an operand is the same question, one construct earlier
+
+A `$'…'` is one construct and not a `$` beside a quote, so its backslash
+quotes the byte behind it and the run ends at the first **unescaped**
+quote. Read as a plain `'…'` run instead, the run of `$'\''` ends at the
+backslashed quote, the one behind it opens a second run, and everything
+left goes into it — a `/` separator and a closing brace included.
+
+Three scans need the rule and only the first had it. The scan for the
+closing brace is `$'…'`-aware since the escaped quote was found fatal
+there; the scan that cuts a pattern from its replacement at the first
+unquoted `/`, and the scan that decides whether a quote in a pattern ever
+closed, both read it as a plain run. So with `v` holding one quote:
+
+    printf '[%s]' ${v/$'\''/x}    [x] in bash 5.3, zsh 5.9.2, ksh93u+
+                                  ['] here, before the rule reached them
+
+The pattern came out as the whole operand plus a stray quote, matched
+nothing, and handed the subject back — a silent wrong answer at status 0.
+Measured 2026-09-22 under `LC_ALL=C` from a script file. The same byte
+spelled `$'\x27'` was cut correctly all along, which is what says the
+defect was in finding the run's end and not in decoding it.
+
+**Inside double quotes the panel splits, and it splits on the axis
+above.** Where a quote quotes, the `$'…'` run is the quoting — so
+`QuoteProtectsTheClosingBrace` answers this too and no second flag
+records the same mechanism twice. In a *word* operand that makes the
+construct bash's alone:
+
+    unset u; printf '[%s]' "${u:-$'\t'}"
+      bash 5.3.20, bash 3.2.57                     a tab
+      bash 5.3.20 --posix and as `sh`              the four characters
+      zsh 5.9.2, ksh93u+, BusyBox ash 1.37.0       the four characters
+
+POSIX mode agreeing with the other three is the control: the axis has
+already moved to a pattern-only reading there, and this moves with it. A
+*pattern* operand is read on its own terms in every column, so
+`"${v/$'\''/x}"` is `[x]` across the panel — which is the run's **end**
+being found and not the enclosing quoting.
+
+**A here-document body is not a pair of quotes.** Its spans are marked
+double-quoted so that nothing in them is field-split, and that mark is
+the only reason a body's operand reads as a quoted one at all. bash keeps
+the text there:
+
+    unset u; IFS= read -r l <<EOF
+    [${u:-$'\t'}]
+    EOF
+
+is `[$'\t']` on bash 5.3.20, where the same expansion between real quotes
+is a tab. `Parser.inRawBody` is what tells the two apart, and it is the
+same bool the lexer already carries for the diagnostics that would
+otherwise blame a quote character nobody wrote (#4169).
+
 ### When the second read happens
 
 The operand of a `${ … }` written inside double quotes is read a second

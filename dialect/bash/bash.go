@@ -2057,6 +2057,16 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-18 under `LC_ALL=C` from a script file; ksh93 is the
 	// one column on the other side of both.
 	s.PrintfUnknownEscapeDropsTheBackslash = interp.No
+	// Except C's own three, which this column alone reads as C does: `printf
+	// "[\'][\"][\?]"` is `['"?]` here and the six characters as written in
+	// zsh, dash and BusyBox ash. Measured 2026-09-22 under `LC_ALL=C` from a
+	// script file, on 5.3.20 and 3.2.57 alike, and at the format's site only
+	// — `printf '%b' "\'"` is `\'` here as it is everywhere. ksh93 prints the
+	// characters too and is not evidence for this axis: it drops the
+	// backslash from every undefined escape, so its column cannot tell the
+	// two readings apart. See interp.Semantics.PrintfQuoteAndQuestionEscapes
+	// (#4169).
+	s.PrintfQuoteAndQuestionEscapes = interp.Yes
 	s.PrintfFloatHalf = interp.PrintfFloatHalfToEven
 	s.PrintfBEscEscape = interp.Yes
 	s.PrintfBCapitalEscEscape = interp.Yes

@@ -19190,6 +19190,39 @@ A format ending in a backslash is not this question and is unanimous:
 `printf 'a\'` writes `a\` in every column, because there is no
 character for the backslash to have been in front of.
 
+**`PrintfQuoteAndQuestionEscapes`** — bash **yes** · dash no · ksh93 no, and unmeasurable · zsh no · ash no
+
+Gives a printf *format* C's own three punctuation escapes — `\'`, `\"`
+and `\?` — each standing for the character alone, where the rest of the
+panel leaves the backslash in front of it.
+
+    printf '[\?]'        bash [?]        zsh, dash, ash [\?]
+    printf '[\"]'        bash ["]        zsh, dash, ash [\"]
+    printf "[\']"        bash [']        zsh, dash, ash [\']
+
+Measured 2026-09-22 under `LC_ALL=C` from a script file, on bash 5.3.20
+and bash 3.2.57 alike. The three move together in every column, which is
+what keeps them one axis.
+
+**ksh93's column cannot tell the two readings apart.** It drops the
+backslash from *every* undefined escape —
+`PrintfUnknownEscapeDropsTheBackslash`, which it alone answers yes — so
+`\'` is `'` there whatever this says, exactly as `\q` is `q`. The `\q`
+row is what separates the two columns that print the character, and it is
+why this axis takes the standing answer for ksh93 rather than a measured
+one. The order in `expandPrintfEscape` is what makes that true rather
+than assumed: this axis is asked first and a `no` falls through to the
+other.
+
+The format's site alone. `printf '%b' '[\?]'` is `[\?]` in all six,
+bash included, which is the same two-site split `PrintfEscEscape` and
+`PrintfBEscEscape` record one escape over.
+
+Answered wrongly it is silent and wrong at status 0: a format written for
+C's reading carries a backslash into the output and nothing reports it.
+That is one line of bash's own `nquote` suite file, and it is how this
+was found (#4169).
+
 **`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
 
 Is how `%q` quotes, which is three answers and an absence rather than a

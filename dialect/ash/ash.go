@@ -211,6 +211,16 @@ func Semantics() interp.Semantics {
 	// (#3986).
 	s.SubstitutionPathPrefersProcSelfFd = interp.No
 
+	// And the number in that path is this shell's own answer, shared with
+	// nobody. Measured 2026-09-21 in the same image: `echo <(true) <(true)
+	// <(true)` is `/dev/fd/64 /dev/fd/65 /dev/fd/66`, `65 66` with 64
+	// parked — so it counts *up* from 64, past the region bash descends
+	// through from 63 rather than into it. The limit gates it the way
+	// bash's gates bash: `64 65` at `ulimit -n` 66 and above, `3 4` at 64
+	// and below, and at 65 exactly it is `64 3`, the first substitution
+	// taking 64 and the second falling back on its own.
+	s.SubstitutionEndPlacement = interp.SubstitutionEndsAboveTheTopOfTheTable
+
 	// ---- expansion and words ----
 
 	// `export a+=2` is `a+: bad variable name`, so the append operator is not

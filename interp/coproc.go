@@ -266,6 +266,16 @@ const topOfTheDescriptorTable = 63
 // asked about, and a library that was given none is not the place to invent
 // one.
 func (r *Runner) topOfTableIsReachable() bool {
+	return r.fdWithinOpenFileLimit(topOfTheDescriptorTable)
+}
+
+// fdWithinOpenFileLimit says whether this process could hold the number fd.
+//
+// The condition topOfTableIsReachable asks about the constant, asked about any
+// number — which is what Semantics.SubstitutionEndPlacement's fourth value
+// needs, BusyBox counting up from 64 where bash counts down from 63 and both
+// giving up on the same test one number apart.
+func (r *Runner) fdWithinOpenFileLimit(fd int) bool {
 	if r.GetRlimit == nil {
 		return true
 	}
@@ -273,7 +283,7 @@ func (r *Runner) topOfTableIsReachable() bool {
 	if err != nil || soft == RlimitInfinity {
 		return true
 	}
-	return int64(topOfTheDescriptorTable) < soft
+	return int64(fd) < soft
 }
 
 // highestFreeFds is the n highest free entries at or below from, in descending

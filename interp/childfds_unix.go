@@ -158,20 +158,34 @@ func (r *Runner) fileTable(asACommand bool) []*os.File {
 		return nil
 	}
 	files := make([]*os.File, highest-firstExtraFd+1)
-	for fd, v := range r.fds {
-		if fd < firstExtraFd || fd > highest {
-			continue
-		}
-		if f := tableFile(v); f != nil {
-			files[fd-firstExtraFd] = f
-		}
-	}
+	// The substitutions go in first and the script's own table over the top,
+	// which is the order rather than the other one because **the script wins
+	// a collision**. Measured 2026-09-21 on bash 5.3.20 with the number its
+	// own rule picks: `cat <(echo a) 63>&1` is `cat: /dev/fd/63: Permission
+	// denied` at 1 there — the redirection has taken 63 for standard output
+	// and the path the word expanded to now names it, write-only, so the
+	// command cannot read what it was handed.
+	//
+	// There is only one shape where the two meet. A number a script parked
+	// *before* the word expanded is already in r.fds, and substEndCandidates
+	// skips it — measured, `exec 63</dev/null; echo <(true)` is `/dev/fd/62`
+	// in bash too. What is left is a redirection on the same command as the
+	// substitution, applied after the word expanded, and that is the case
+	// above. Putting the substitution second made this shell answer `a` at 0.
 	for _, p := range r.handedProcSubs() {
 		if p.hold == nil {
 			continue
 		}
 		if fd := int(p.hold.Fd()); fd >= firstExtraFd && fd <= highest {
 			files[fd-firstExtraFd] = p.hold
+		}
+	}
+	for fd, v := range r.fds {
+		if fd < firstExtraFd || fd > highest {
+			continue
+		}
+		if f := tableFile(v); f != nil {
+			files[fd-firstExtraFd] = f
 		}
 	}
 	if asACommand {

@@ -3082,6 +3082,12 @@ func Semantics() interp.Semantics {
 	// `63 60`, `62 58`, `61 56` and `59 54`, while `exec {v}>/dev/null` with
 	// one running still answers 10 (#2596).
 	s.CoprocessEndPlacement = interp.CoprocEndsAtTheTopOfTheTable
+	// A process substitution's far end goes to the same region by the same
+	// rule, counting down and skipping what is held. Measured 2026-09-21:
+	// `echo <(true) <(true) <(true)` is `/dev/fd/63 /dev/fd/62 /dev/fd/61`
+	// in 5.3.20 and in 3.2.57, `62 61` with 63 parked, and `3 4` at any
+	// `ulimit -n` of 63 or below.
+	s.SubstitutionEndPlacement = interp.SubstitutionEndsAtTheTopOfTheTable
 	// A duplication's descriptor number has no ceiling of this shell's own
 	// — `echo x >&99` is the ordinary bad-descriptor sentence (#3210) — the
 	// `-v` echo ends a line the input did not end (#3130), and `read -t`

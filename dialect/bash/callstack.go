@@ -4,6 +4,7 @@
 package bash
 
 import (
+	"slices"
 	"strconv"
 
 	"github.com/blairham/sh/interp"
@@ -33,13 +34,30 @@ func registerCallStack(r *interp.Runner) {
 	})
 
 	r.SetDynamicArray("FUNCNAME", func(r *interp.Runner) []string {
-		if !r.InCall() {
-			// Absent at the top level rather than empty, which is a
-			// different thing to a script testing it: bash documents this as
-			// existing only inside a function.
+		frames := r.CallStack()
+		// Absent where no **function** has been entered, rather than empty,
+		// which is a different thing to a script testing it: bash documents
+		// this as existing only inside a function, and a sourced file is not
+		// one however many frames it has put on the stack.
+		//
+		// Measured 2026-09-22 on bash 5.3.20 from a script file, with a
+		// script sourcing `a.inc`, `a.inc` sourcing `b.inc`, and `b.inc`
+		// calling a function `q`:
+		//
+		//	in a.inc     ${FUNCNAME[@]} empty, ${#BASH_SOURCE[@]} 2
+		//	in b.inc     empty, 3
+		//	in q         `q source source main`, 4
+		//	in a `g` sourcing from inside `h`   `source g h main`
+		//
+		// So the `source` frames are in the array the moment a function is
+		// anywhere on the stack, and so is the script's own `main` — and
+		// neither is there while the stack holds nothing but sourced files.
+		// The companion arrays do not follow it: BASH_SOURCE and BASH_LINENO
+		// count every frame in all four of those rows, which is why this is
+		// the only one of the three that asks.
+		if !slices.ContainsFunc(frames, interp.Frame.IsFunction) {
 			return nil
 		}
-		frames := r.CallStack()
 		out := make([]string, 0, len(frames))
 		for _, f := range frames {
 			if f.Name == "" {

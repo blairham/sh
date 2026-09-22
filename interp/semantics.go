@@ -19071,6 +19071,30 @@ type Semantics struct {
 	// `opt/set-t-stops-after-one-command`.
 	SetHasTheTLetter Answer
 
+	// SetHasTheRestrictedLetter gives `set` the -r letter: the shell enters
+	// restricted mode, and never leaves it. See interp/restricted.go for the
+	// nine refusals that mode is made of.
+	//
+	// The axis is about **this shell having built the mode**, not only about
+	// the letter existing, and the two are deliberately one question. A
+	// dialect that answered Yes without the refusals behind it would take
+	// `set -r` at 0 and then run every command the mode forbids, which is a
+	// worse answer than the refusal it replaces: a script that asks for a
+	// restricted shell and is told it has one has been lied to, where a
+	// script told `-r is not implemented yet` can still stop.
+	//
+	// bash alone today. ksh93 has the letter and a restricted mode of its
+	// own — different refusals, different wording — and this shell has not
+	// built it, so `r` stays in that dialect's
+	// Diagnostics.UnimplementedOptionLetters and the letter keeps saying so.
+	// Measured on bash 5.3.20, 2026-09-22: `set -r` is silent at 0, `$-`
+	// grows an `r`, and `set +r` afterwards is `set: +r: invalid option`
+	// with the builtin's usage block at 1 — while the same `set +r` in a
+	// shell that never entered the mode is silent at 0. zsh, dash and
+	// BusyBox ash have no such letter and refuse it outright, which the
+	// preset's No already gives them.
+	SetHasTheRestrictedLetter Answer
+
 	// KeywordAssignments is `set -k`: with it on, **every** `name=value` word
 	// of a simple command is a prefix assignment and not only the ones
 	// written in front of the command name.
@@ -24082,6 +24106,10 @@ func PosixSemantics() Semantics {
 		// override. dash — the closest reading of the standard here — is the
 		// one that refuses it outright, which is the same answer.
 		SetHasTheTLetter: No,
+		// The standard has no restricted shell at all — it is one shell's
+		// own, grown from an older one — so the preset claims neither the
+		// letter nor the mode and the one dialect that has both overrides.
+		SetHasTheRestrictedLetter: No,
 		// The standard's `set` takes `-o name` and nothing spelled `--name`
 		// at all, so the two words below it are one shell's own and the
 		// preset claims neither.

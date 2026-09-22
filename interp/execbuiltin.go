@@ -78,6 +78,22 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		r.keepRedirs = true
 		return 0
 	}
+	if r.restricted {
+		// A restricted shell will not be replaced, and it says so before it
+		// looks: measured, `exec /bin/sh`, `exec sh` and `exec nosuchcmd`
+		// are one sentence at 1, so neither the slash nor whether the
+		// command exists is reached. The builtin is named and the operand is
+		// not — there is nothing to say about a word that was never looked
+		// up.
+		//
+		// The redirection form above is untouched, which is the measurement
+		// and is also the only reading that makes sense: `exec 3< f` in a
+		// restricted shell is silent at 0, because the mode is about the
+		// shell being replaced and not about `exec`. What the mode does stop
+		// is `exec > f`, and it stops it in applyRedirs as an output
+		// redirection like any other rather than here.
+		return r.restrictedRefusal("exec")
+	}
 
 	path, lookErr := r.lookPath(argv[0])
 	if lookErr != nil {

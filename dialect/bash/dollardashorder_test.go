@@ -33,7 +33,7 @@ import (
 // where `s` does not. Which of `c` and `s` leads is not measurable here,
 // because this shell never shows both — see CommandStringShowsSInDollarDash.
 func TestDollarDashLetterOrder(t *testing.T) {
-	if got, want := bash.Semantics().DollarDashLetterOrder, "aefhkilmntuvxBCEHTcs"; got != want {
+	if got, want := bash.Semantics().DollarDashLetterOrder, "aefhkilmnrtuvxBCEHTcs"; got != want {
 		t.Errorf("DollarDashLetterOrder = %q, want %q", got, want)
 	}
 }

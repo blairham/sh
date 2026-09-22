@@ -47,6 +47,18 @@ func biEnable(r *Runner, _ context.Context, args []string) int {
 		return 0
 	}
 	if containsByte(opts, 'd') {
+		if r.restricted {
+			// Taking a builtin away is how a restricted shell would be
+			// handed the disk back: with `cd` unloaded the name falls to a
+			// PATH search, and the mode's refusal of it goes with it.
+			// Measured, and it is the builtin that is named rather than the
+			// letter or the operand — `enable: restricted` at 1.
+			//
+			// The other spellings are not refused, which is measured too:
+			// `enable name` and `enable -n name` are silent at 0 in a
+			// restricted shell, because neither adds or removes anything.
+			return r.restrictedRefusal("enable")
+		}
 		return r.unloadBuiltins(rest)
 	}
 	status := 0

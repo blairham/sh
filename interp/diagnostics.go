@@ -5472,6 +5472,41 @@ type Diagnostics struct {
 	// NotFound is a command name that resolved to nothing. One verb: the
 	// name.
 	NotFound string
+
+	// The four sentences a restricted shell refuses with. Only a dialect
+	// whose Semantics.SetHasTheRestrictedLetter is Yes can reach any of
+	// them, so the fallbacks are the one measured shell's; see
+	// interp/restricted.go for the nine sites and for what each was
+	// measured doing.
+	//
+	// Four and not one, because the four name different things and a script
+	// reads which: the builtin alone, the builtin and the operand it
+	// objected to, the command word, and the redirection's target.
+
+	// Restricted refuses a whole builtin — `cd`, `exec`, `enable`. One verb:
+	// the builtin's name.
+	Restricted string
+	// RestrictedOperand refuses one word of an otherwise ordinary command —
+	// `command -p`, `. /etc/profile`, `hash -p /bin/ls`. Two verbs: the
+	// builtin's name and the word it refused.
+	RestrictedOperand string
+	// RestrictedCommandName refuses a command word with a path separator in
+	// it, before any search for it happens. One verb: the word as written.
+	RestrictedCommandName string
+	// RestrictedRedirect refuses a redirection that would open a file to
+	// write. One verb: the target word as written, not the path it resolves
+	// to.
+	RestrictedRedirect string
+	// RestrictedHashNotFound is a command-hash entry whose path is a bare
+	// name that nothing on PATH answers to, written by the *parameter*
+	// spelling of the hash and therefore naming no builtin. One verb: the
+	// path as written.
+	//
+	// The builtin spelling of the same refusal is [HashNotFound], which is
+	// the same sentence with `hash` in front of it. Two fields because the
+	// two routes really differ — see Runner.restrictedHashEntry, where the
+	// statuses differ too.
+	RestrictedHashNotFound string
 	// SetArrayNeedsAName is what `set -A` with nothing after it says, where
 	// the dialect refuses it. One verb: the letter as written, `-A` or `+A`.
 	//

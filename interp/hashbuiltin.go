@@ -58,6 +58,20 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 			r.builtinUsageLine("hash")
 			return orDefault(r.diag().BuiltinBadOptionStatus, 2)
 		}
+		if r.restrictedHashEntry("hash", optArg['p']) {
+			// A path rather than a bare word, which is the same rule `.`
+			// keeps: the entry this letter writes is a command the shell
+			// would then run without searching for it, so a path here is a
+			// way around the frozen PATH and a bare name is not. Measured —
+			// `hash -p d/g gg` and `hash -p /bin/ls ls` are this sentence at
+			// 1, while `hash -p foo bar` reaches the ordinary reader behind
+			// it.
+			//
+			// Once for the command rather than once per name, which is where
+			// it differs from the directory complaint below: the path is one
+			// word and the mode objects to the word.
+			return restrictedStatus
+		}
 		status := 0
 		for _, name := range args {
 			// The path is taken as written, and a *directory* is the one

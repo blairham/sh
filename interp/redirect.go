@@ -674,6 +674,31 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// rule lives now — it was written here first, and the file tests had
 			// the identical bug because the rule had not reached the resolution
 			// they shared (#1189).
+			if r.restricted && flags != os.O_RDONLY {
+				// A restricted shell writes nowhere it was not already
+				// writing. Every operator that *opens* a file to write is
+				// refused — `>`, `>>`, `>|`, `<>`, `&>` and `&>>` — and a
+				// descriptor duplication is not one of them: measured,
+				// `echo x >&2` and `echo x 2>&1` are silent at 0 in a
+				// restricted shell while `echo x > f` and `echo x &> f` are
+				// this sentence at 1. So the test is the open and its
+				// direction, which is what `flags` already holds, rather
+				// than a list of tokens that would have had to be kept in
+				// step with the parser.
+				//
+				// Input is untouched for the same reading: `cat < f`, a
+				// here-document and a here-string are all silent at 0, and
+				// none of the three opens anything to write.
+				//
+				// The word as the script wrote it, before atDir joins it to
+				// the working directory — measured, `echo x > f` names `f`.
+				// And the command does not run: r.redirErr is what stops it,
+				// exactly as an unopenable target does.
+				r.restrictedRedirect(name)
+				r.status = restrictedStatus
+				r.redirErr = true
+				return closers, nil
+			}
 			path := r.atDir(name)
 			// `< /dev/stdin` and `< /dev/fd/0` are the command's own standard
 			// input, which is not the process's here: a here-string or a pipe

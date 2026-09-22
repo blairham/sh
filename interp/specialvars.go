@@ -202,6 +202,14 @@ func (r *Runner) optionLetters() string {
 		// Unanimous in the two shells that have the option, so no axis.
 		b.WriteByte('t')
 	}
+	if r.restricted {
+		// `r` for a restricted shell, in the one column that has the mode
+		// built here. Measured: `set -r; echo $-` grows the letter and no
+		// `set +r` ever takes it away, which is the same one-way shape
+		// `noexec` has and for the same reason — the option cannot be
+		// turned off, so the letter cannot be withdrawn.
+		b.WriteByte('r')
+	}
 	if r.keywordAssignments {
 		// `k` while `set -k` is on, in both shells that have the option and
 		// in neither of the two that refuse the letter. zsh writes the same

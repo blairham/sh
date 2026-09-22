@@ -1617,6 +1617,31 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				continue
 			}
 			r.onecmd = on
+		case 'r':
+			// `set -r`: restricted mode, entered here and never left. One
+			// of the panel has the letter and a mode behind it that this
+			// shell has built; one more has the letter and a different mode
+			// that it has not, and reaches its own `not implemented yet`
+			// through the refusal below. See
+			// Semantics.SetHasTheRestrictedLetter, which is one question
+			// about the letter and the mode together for the reason written
+			// there.
+			if !r.ask(r.sem().SetHasTheRestrictedLetter, "`set -r` entering restricted mode") {
+				if r.unspecified {
+					return false
+				}
+				if !r.badSetOptionLetter(opt, on) {
+					return false
+				}
+				continue
+			}
+			if on {
+				r.enterRestricted()
+				continue
+			}
+			if !r.restrictedLetterTurnedOff() {
+				return false
+			}
 		case 'p':
 			// The short spelling of `privileged`. bash, ksh93 and zsh have
 			// the letter and all three mean privileged mode by it; dash and
@@ -1776,6 +1801,37 @@ func (r *Runner) badSetOptionLetter(opt rune, on bool) bool {
 	}
 	r.saySetRefusal(msg, usage, false)
 	return r.setRefusalStatus(refusedOptionLetter, "a refused `set` option letter ending the script")
+}
+
+// restrictedLetterTurnedOff answers `set +r`, and the answer depends on
+// whether the shell is in the mode: a shell that never entered it grants the
+// request silently, and one that did is told the letter is not an option at
+// all.
+//
+// Measured 2026-09-22 on bash 5.3.20, which is the only column with the
+// letter built here. `set +r` in an ordinary shell writes nothing and reports
+// 0 — the request is for the state it is already in, which is the bargain
+// every unimplemented `set -o` name keeps. In a restricted shell the same
+// word is `set: +r: invalid option` with `set`'s usage block under it at
+// **1**, where that shell's other refused letters — `set -q`, say — report 2.
+//
+// So this is not badSetOptionLetter with a different status bolted on: it is
+// a shell declining to have the option at all rather than declining to move
+// it, which is why the sentence says `invalid option` and not `not
+// implemented`. The status is written here rather than taken from
+// Diagnostics.SetInvalidOptionLetterStatus for exactly that reason — the two
+// numbers were measured apart in one shell, on one line.
+//
+// It reports whether the option loop should carry on, which is false: the
+// refusal ends the word the way every other `set` refusal does.
+func (r *Runner) restrictedLetterTurnedOff() bool {
+	if !r.restricted {
+		return true
+	}
+	d := r.diag()
+	r.saySetRefusal(Wording(d.SetInvalidOptionLetter, "set: %[1]s: invalid option", "+r", "r"), true, false)
+	r.setOptionStatus = restrictedStatus
+	return false
 }
 
 func (r *Runner) badSetOptionName(name string) bool {
@@ -4680,6 +4736,14 @@ func (r *Runner) cdOptions(args []string) (rest []string, opts cdFlags, code int
 }
 
 func biCd(r *Runner, ctx context.Context, args []string) int {
+	if r.restricted {
+		// Before the options and before the operand, which is measured: a
+		// bare `cd`, `cd /`, `cd -` and `cd -P /tmp` are one sentence in a
+		// restricted shell and none of them says anything about the
+		// directory. The whole builtin is what the mode withholds, so there
+		// is nothing for the reader below to find fault with first.
+		return r.restrictedRefusal("cd")
+	}
 	args, opts, code := r.cdOptions(args)
 	if code != 0 {
 		return code

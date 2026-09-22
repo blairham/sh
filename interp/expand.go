@@ -4264,7 +4264,7 @@ func (r *Runner) rangeExpansion(w *syntax.Word) string {
 	if !wordOpensASubscript(w) {
 		return r.joinWord(w)
 	}
-	return r.markedSubscriptWord(w, rangeProtectsSpan)
+	return r.markedSubscriptWord(w, r.rangeProtectsSpan)
 }
 
 // rangeProtectsSpan is which of a range's spans are content rather than
@@ -4277,13 +4277,21 @@ func (r *Runner) rangeExpansion(w *syntax.Word) string {
 // backslash do not, where a condition's operand takes all three — which is
 // why the two callers of the marking part over this function rather than
 // sharing one rule.
-func rangeProtectsSpan(sp syntax.Span) bool {
+func (r *Runner) rangeProtectsSpan(sp syntax.Span) bool {
 	if sp.Kind != syntax.Literal {
-		// An expansion's result, which no column reads back as syntax where
-		// the brackets around it were the script's.
-		return true
+		// An expansion's result, and whether it is read back as syntax is
+		// the axis every other arithmetic site asks. Asked here rather than
+		// once for the whole word so that a range whose only quoting is the
+		// script's own never reaches it.
+		return !r.ask(r.sem().ArithSubscriptRereadsItsExpandedText,
+			"a subscript's expanded text being read again as subscript syntax")
 	}
-	return sp.Quoting == syntax.SingleQuoted
+	// A quotation the script wrote, and the marking stands in for the
+	// apostrophes themselves: they are what the reader would have honored,
+	// and the word arrives with them already removed. So it follows the
+	// dialect flag that says the reader honors them at all, which is what
+	// makes `$(( a[']'] ))` and `${s:0:a[']']}` one answer rather than two.
+	return sp.Quoting == syntax.SingleQuoted && r.dialect().ArithSubscriptQuoting
 }
 
 // wordOpensASubscript reports whether a word wrote an unquoted `[` and then

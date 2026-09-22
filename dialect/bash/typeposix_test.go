@@ -72,27 +72,3 @@ type zzprog`)
 		"zzprog is sub/zzprog",
 	)
 }
-
-func countLines(out, want string) int {
-	n := 0
-	for line := range splitLines(out) {
-		if line == want {
-			n++
-		}
-	}
-	return n
-}
-
-func splitLines(out string) func(func(string) bool) {
-	return func(yield func(string) bool) {
-		start := 0
-		for i := 0; i <= len(out); i++ {
-			if i == len(out) || out[i] == '\n' {
-				if !yield(out[start:i]) {
-					return
-				}
-				start = i + 1
-			}
-		}
-	}
-}

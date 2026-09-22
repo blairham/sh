@@ -68,6 +68,28 @@ func wantWholeLines(t *testing.T, out string, want ...string) {
 	}
 }
 
+// countLines is wantWholeLines' counting half: how many whole lines of out are
+// exactly want, for the cases where a diagnostic appearing *twice* is the
+// defect and appearing once is the fix.
+//
+// It lives here beside wantWholeLines because this is where the package keeps
+// the assertions its suites share. Two suites each wrote their own on the way
+// in — #4199 in typeposix_test.go and #4214 in readonlyhiddenliteral_test.go —
+// and neither branch could see the other, so each was green alone and the
+// redeclaration existed only in the merge, where it stopped this package's
+// test binary compiling and failed every open PR (#4221). One helper the third
+// caller finds is the answer; a third name would only have widened the same
+// hole. Split the way wantWholeLines splits, so the two cannot drift.
+func countLines(out, want string) int {
+	n := 0
+	for _, line := range strings.Split(out, "\n") {
+		if line == want {
+			n++
+		}
+	}
+	return n
+}
+
 func TestSourceIsASynonymForDot(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "s.sh")

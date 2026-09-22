@@ -4098,12 +4098,16 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 	// parentheses are the expression's grouping rather than a pattern group
 	// that the dialect with glob qualifiers would read as a list.
 	restore := r.withoutGlobbing()
-	text := r.rangeSegmentText(w)
+	marked := r.rangeSegmentText(w)
 	restore()
+	// The marks are the evaluator's alone. Everything below shows the text
+	// instead, and one printed into a log is a stray NUL — the same carve-out
+	// arithTreeOver makes. See stripArithValueMarks.
+	text := stripArithValueMarks(marked)
 	// The range's own reader, not the subscript's: an offset that expanded
 	// to nothing is zero in every column, where the same emptiness in a
 	// subscript is refused in one of them.
-	n, err := r.expressionValue(text)
+	n, err := r.expressionValue(marked)
 	if err != nil {
 		// What is *blamed* is not always what was evaluated: one dialect
 		// names the offset together with everything after it in the range.
@@ -4117,7 +4121,8 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 			// `${s:1+:(2)}` blames `1+:\(2\)` rather than leaving the half
 			// that was not evaluated as it was written.
 			restore := r.withoutGlobbing()
-			blame += ":" + r.rangeSegmentBlame(tail, rangeWritten(e, tail), r.rangeSegmentText(tail))
+			blame += ":" + r.rangeSegmentBlame(tail, rangeWritten(e, tail),
+				stripArithValueMarks(r.rangeSegmentText(tail)))
 			restore()
 		}
 		r.diagf("%s\n", Wording(r.diag().SubstringRangeError, "%[2]s",
@@ -4200,8 +4205,8 @@ func wordIsPlainText(w *syntax.Word) bool {
 }
 
 // rangeSegmentText is one half of a substring range as the evaluator receives
-// it: the word expanded, trimmed, and — where the dialect protects them — its
-// pattern characters escaped.
+// it: the source read the way an arithmetic expression is read, trimmed, and —
+// where the dialect protects them — its pattern characters escaped.
 //
 // The escaping is not a diagnostic's doing even though a diagnostic is where
 // it shows. It happens to the text before anything reads it, so the shell that
@@ -4210,19 +4215,109 @@ func wordIsPlainText(w *syntax.Word) bool {
 // being blamed rather than a sentence formatted with escapes. See
 // Semantics.SubstringRangeQuotesPatternCharacters.
 func (r *Runner) rangeSegmentText(w *syntax.Word) string {
-	text := strings.TrimSpace(r.joinWord(w))
+	marked := strings.TrimSpace(r.rangeExpansion(w))
+	text := stripArithValueMarks(marked)
 	if !strings.ContainsAny(text, rangePatternCharacters) {
 		// Asked only where there is something to protect, which is the rule
 		// the modifier reading beside it follows: under either answer
 		// `${x:1:2}` is the same range, so a dialect that has not chosen has
 		// nothing to be refused over.
-		return text
+		return marked
 	}
 	if !r.ask(r.sem().SubstringRangeQuotesPatternCharacters,
 		"a substring range having its pattern characters protected before it is read") {
-		return text
+		return marked
 	}
+	// The one dialect that protects refuses every range holding a bracket,
+	// so nothing it reads afterwards can tell a value's bracket from the
+	// script's and the marks have no consumer left.
 	return escapeRangePatternCharacters(text)
+}
+
+// rangeExpansion is a substring range's half with its substitutions performed.
+//
+// A range is arithmetic, and wherever a value or a quotation can have put a
+// bracket inside one the script wrote the word is expanded **marked**, so the
+// bracket scanner behind the reader still knows which brackets were the
+// script's. Measured on bash 5.3.20, 2026-09-22, from a script file, with
+// `s=abcdefghij` and an associative `A` holding `]` at 5 and `%` at 2:
+//
+//	                        ${s:0:…}          $(( … ))
+//	A[']']                  5                 5
+//	A["]"]                  A[]]: refused     A[]]: refused
+//	A[\]]                   A[]]: refused     A[]]: refused
+//	k=']';    A[$k]         5                 5
+//	kk='$(echo %)'; A[$kk]  2, nothing run    2, nothing run
+//
+// The joined word answers none of them: quote removal has taken row one's
+// apostrophes off before a reader sees them, and rows four and five arrive as
+// a bare `]` and a bare `$(` that the next reader takes for syntax of its own.
+// Semantics.ArithSubscriptRereadsItsExpandedText is what decides whether the
+// marks are honored, and it is already answered for every arithmetic site, so
+// the range asks no axis of its own (#3047, #3303).
+//
+// Only where the word can carry one, which is settled from its spans before
+// anything is expanded rather than by expanding it twice: `${s:1+1:2}` and
+// `${s:$i:2}` have no bracket of the script's for a value's to be told apart
+// from, and they take the reading they have always taken.
+func (r *Runner) rangeExpansion(w *syntax.Word) string {
+	if !wordOpensASubscript(w) {
+		return r.joinWord(w)
+	}
+	return r.markedSubscriptWord(w, rangeProtectsSpan)
+}
+
+// rangeProtectsSpan is which of a range's spans are content rather than
+// syntax, and it is a **narrower** set than a condition's operand protects.
+//
+// Rows two and three of the table above are the measurement, and the same
+// two spellings hold inside `[[ … ]]` in the same shell: `[[ a["]"] -eq 5 ]]`
+// and `[[ a[\]] -eq 5 ]]` are both true there and both refused here. So an
+// apostrophe protects a bracket in a range and a double quote and a
+// backslash do not, where a condition's operand takes all three — which is
+// why the two callers of the marking part over this function rather than
+// sharing one rule.
+func rangeProtectsSpan(sp syntax.Span) bool {
+	if sp.Kind != syntax.Literal {
+		// An expansion's result, which no column reads back as syntax where
+		// the brackets around it were the script's.
+		return true
+	}
+	return sp.Quoting == syntax.SingleQuoted
+}
+
+// wordOpensASubscript reports whether a word wrote an unquoted `[` and then
+// went on to a span that is not plain unquoted text — a quotation, an
+// expansion, a substitution — so that what the span produces lands inside
+// brackets the script wrote.
+//
+// Read off the spans rather than off the finished text, because the finished
+// text cannot say which of its brackets were written: an arrived bracket is
+// the same byte. The same distinction markedSubscriptWord draws while it
+// expands, asked before the expansion so that a range with nothing to decide
+// is not expanded twice to find out.
+func wordOpensASubscript(w *syntax.Word) bool {
+	if w == nil {
+		return false
+	}
+	open := false
+	for _, sp := range w.Spans {
+		if sp.Kind == syntax.Literal && sp.Quoting == syntax.Unquoted {
+			for i := 0; i < len(sp.Value); i++ {
+				switch sp.Value[i] {
+				case '[':
+					open = true
+				case ']':
+					open = false
+				}
+			}
+			continue
+		}
+		if open {
+			return true
+		}
+	}
+	return false
 }
 
 // rangePatternCharacters is the alphabet the protection covers, measured a

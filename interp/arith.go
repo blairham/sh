@@ -3354,6 +3354,60 @@ func (r *Runner) expandArithText(text string) string {
 	return out
 }
 
+// markedSubscriptWord expands a word once and marks what landed inside a
+// bracket the *script* wrote, so the bracket scanner behind an arithmetic
+// reader can still tell the script's brackets from a value's.
+//
+// The one place that distinction can be drawn: once a word is joined, an
+// arrived bracket is the same byte as a written one. [Runner.expandArithText]
+// draws it over raw text and this draws it over a word's spans, and the two
+// are the same rule — see syntax.ArithValueMark.
+//
+// protects says which spans count as content rather than as syntax, and it
+// is the whole of what the two callers disagree about: a condition's operand
+// protects every span that is not plain unquoted text, and a substring's
+// range protects a narrower set. A span that is not protected is scanned for
+// brackets like any other text, so its `]` still closes a subscript.
+func (r *Runner) markedSubscriptWord(w *syntax.Word, protects func(syntax.Span) bool) string {
+	var scan syntax.ArithBracketScan
+	advance := func(text string) {
+		for i := 0; i < len(text); i++ {
+			switch b := text[i]; {
+			case scan.Content(b):
+			case b == '[':
+				scan.Depth++
+			case b == ']':
+				scan.Depth--
+			}
+		}
+	}
+	return r.wordTextNoSplit(w, func(sp syntax.Span, text string) string {
+		if sp.Kind == syntax.Literal && sp.Quoting == syntax.Unquoted {
+			advance(text)
+			return text
+		}
+		if scan.Depth <= 0 {
+			// Not inside brackets the script wrote, so there are no brackets
+			// of the script's for a value's to be told apart from — and the
+			// value's are then the only ones there are. Measured 2026-09-16:
+			// `m[k]=5; key=k; e='m[$key]'; [[ $e -eq 5 ]]` holds in bash
+			// 5.3.20, the whole subscript having come out of the value, where
+			// `[[ a[$k] -eq 9 ]]` with `k='x]'` reads the value's bracket as
+			// part of the key (#3303).
+			return text
+		}
+		if !protects(sp) {
+			// Text the caller reads as syntax rather than as content, so its
+			// own brackets delimit exactly as an unquoted one's do.
+			if sp.Kind == syntax.Literal {
+				advance(text)
+			}
+			return text
+		}
+		return markArithValue(text)
+	})
+}
+
 // markArithValue puts a mark in front of each byte of an expansion's result
 // that the bracket scanner would otherwise read as syntax.
 //

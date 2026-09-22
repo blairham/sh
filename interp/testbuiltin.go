@@ -212,6 +212,10 @@ const (
 	// first word as a unary operator. See
 	// Diagnostics.TestTrailingBinaryOperandExpected.
 	errTrailingOperandExpected
+	// errLeftoverOperator is a well-formed expression with a word left over
+	// that is spelled like an operator — see
+	// Diagnostics.TestLeftoverOperator, where the split is.
+	errLeftoverOperator
 	// errTooManyArguments is a well-formed expression with words left over.
 	errTooManyArguments
 	// errIncorrectSyntax is a list the grammar could not finish: a word it
@@ -243,6 +247,8 @@ func (e *testError) fallback() string {
 		return "%[2]s: argument expected"
 	case errTrailingOperandExpected:
 		return "%[2]s: %[1]s: argument expected"
+	case errLeftoverOperator:
+		return "%[2]s: too many arguments"
 	case errTooManyArguments:
 		return "%[2]s: too many arguments"
 	case errIncorrectSyntax:
@@ -267,6 +273,11 @@ func (e *testError) format(d Diagnostics) string {
 		return d.TestOperandExpected
 	case errTrailingOperandExpected:
 		return d.TestTrailingBinaryOperandExpected
+	case errLeftoverOperator:
+		if d.TestLeftoverOperator != "" {
+			return d.TestLeftoverOperator
+		}
+		return d.TestTooManyArguments
 	case errTooManyArguments:
 		return d.TestTooManyArguments
 	case errIncorrectSyntax:
@@ -280,6 +291,11 @@ func (e *testError) format(d Diagnostics) string {
 	case errBinaryExpected:
 		return d.TestBinaryExpected
 	case errClosingParenExpected:
+		if e.operand != "" && d.TestClosingParenExpectedFound != "" {
+			// A word was there and was not the parenthesis, in the column
+			// that names it — see Diagnostics.TestClosingParenExpectedFound.
+			return d.TestClosingParenExpectedFound
+		}
 		return d.TestClosingParenExpected
 	}
 	return d.TestUnaryExpected
@@ -574,6 +590,14 @@ func (r *Runner) testExprRead(form testForm, args []string) (bool, error) {
 			// parse did *not* take, rather than the last one it did.
 			leftover = p.args[p.pos]
 		}
+		if stopped := p.args[p.pos]; strings.HasPrefix(stopped, "-") &&
+			r.diag().TestLeftoverOperator != "" {
+			// A leftover that is spelled like an **operator** is a different
+			// sentence in one column, and it names that word rather than the
+			// one the parse stopped after. See
+			// Diagnostics.TestLeftoverOperator.
+			return false, &testError{kind: errLeftoverOperator, operand: stopped}
+		}
 		return false, &testError{kind: errTooManyArguments, operand: leftover}
 	}
 	return v, nil
@@ -629,6 +653,22 @@ func (r *Runner) testOneOperand(word string) (bool, error) {
 		return r.unaryTest("-t", "1")
 	}
 	return word != "", nil
+}
+
+// shortGroup is how many words stand between the parenthesis just consumed
+// and a closing one, where that is **one, two or three** — and 0 for every
+// other shape, the empty group and the unclosed one included.
+//
+// Three and no further, which is measured rather than tidy: four words inside
+// is the grammar again, and the operator there does take the parenthesis. See
+// Semantics.TestShortGroupIsReadByTheCounts for the rows.
+func (p *testParser) shortGroup() int {
+	for n := 1; n <= 3; n++ {
+		if p.pos+n < len(p.args) && p.args[p.pos+n] == ")" {
+			return n
+		}
+	}
+	return 0
 }
 
 // lastTaken is the final word the parse consumed, for the complaint about
@@ -727,11 +767,44 @@ func (p *testParser) primary() (bool, error) {
 			p.pos++
 			return false, nil
 		}
+		// A group holding one, two or three words is read by the **counts**
+		// rather
+		// than by the grammar, in the one column measured to do it: the
+		// words inside stand exactly as they would with no parentheses
+		// round them, so a lone operator is the word it is spelled with
+		// and a `!` in front of one negates that word. See
+		// Semantics.TestShortGroupIsReadByTheCounts.
+		if n := p.shortGroup(); n > 0 && p.r.ask(p.r.sem().TestShortGroupIsReadByTheCounts,
+			"a `test` group holding one or two words read by the argument counts") {
+			content := p.args[p.pos : p.pos+n]
+			p.pos += n + 1
+			return p.r.testExpr(p.form, content)
+		}
+		if p.r.unspecified {
+			return false, &testError{kind: errOperandExpected}
+		}
 		v, err := p.orExpr()
 		if err != nil {
 			return false, p.r.unclosedGroup(err)
 		}
 		if !p.more() || p.peek() != ")" {
+			// The group's **own** missing parenthesis, which is a different
+			// complaint from a failure inside one — see unclosedGroup, whose
+			// axis is about replacing that. Four columns word this and they
+			// do not agree: two name the parenthesis, two say `argument
+			// expected` and reach it through the reading below. The word
+			// that was found where the parenthesis belonged is carried for
+			// the column that names it, and for `[` that word is the `]`
+			// the builtin took off the end.
+			if w := p.r.diag().TestClosingParenExpected; w != "" {
+				found := ""
+				if p.more() {
+					found = p.peek()
+				} else if p.r.inBuiltin == "[" {
+					found = "]"
+				}
+				return false, &testError{kind: errClosingParenExpected, operand: found}
+			}
 			return false, p.r.unclosedGroup(&testError{kind: errOperandExpected})
 		}
 		p.pos++
@@ -752,6 +825,20 @@ func (p *testParser) primary() (bool, error) {
 	}
 	if p.r.isTestUnary(p.args[p.pos]) {
 		if p.pos+1 >= len(p.args) {
+			// Nothing left for it to be an operator over. Three columns read
+			// the word the way the one-argument rule does and two refuse it
+			// — see Semantics.TestTrailingUnaryOperatorIsAWord, and
+			// testOneOperand, which is that rule and carries `-t`'s own
+			// question inside it.
+			if p.r.ask(p.r.sem().TestTrailingUnaryOperatorIsAWord,
+				"an operator with nothing behind it at the end of a `test` expression read as a word") {
+				word := p.args[p.pos]
+				p.pos++
+				return p.r.testOneOperand(word)
+			}
+			// An unanswered axis has already said so and runTestForm turns
+			// that into the refusal status; the complaint below is the
+			// answer for a dialect that said no.
 			return false, &testError{kind: errOperandExpected}
 		}
 		v, err := p.r.unaryTest(p.args[p.pos], p.args[p.pos+1])
@@ -843,6 +930,8 @@ func (r *Runner) isTestUnary(s string) bool {
 	switch s {
 	case "-v":
 		return r.dialect().ParameterIsSetTest
+	case "-R":
+		return r.sem().TestHasTheNameReferenceOperator == Yes
 	case "-a":
 		// The connective under the same spelling, and the argument count is
 		// what tells them apart — so this is asked only where a *primary*
@@ -908,6 +997,17 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		// assoc_expand_once` stops the round at this operator alone. See
 		// Semantics.TestIsSetExpandsAFlatSubscript (#3298).
 		return r.testParameterIsSet(operand)
+	case "-R":
+		// Whether the name is a **reference**, which is a question about the
+		// binding rather than about what it points at: the reference answers
+		// true and its target answers false. Gated here and at isTestUnary
+		// for the reason `-v` is — the two-word route never consults the
+		// operator table.
+		if !r.ask(r.sem().TestHasTheNameReferenceOperator,
+			"`test -R r` asking whether r is a name reference") {
+			break
+		}
+		return r.isNameref(operand), nil
 	case "-a":
 		// The file test, not the connective: two words have already settled
 		// which this is. Asked of the dialect at both gates for the reason
@@ -992,6 +1092,52 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 // questions are shared — the constructs disagree about everything *else*,
 // `=` above all, and a shared entry point would invite sharing the parts
 // that must not be.
+// ownDescriptorPath is the path of the file **this shell** has open at the
+// descriptor a `/dev/fd/N` operand names, where it has one.
+//
+// A Runner keeps its own descriptor table, so the number a script writes is
+// not the number the process holds: `exec 6>&1` opens the shell's 6 at
+// whatever the Go runtime handed out. Statting the literal path asks the
+// process about *its* 6, which is a descriptor no line of the script ever
+// mentioned — so `test -p /dev/fd/6` over a pipe the script opened answered
+// about something else entirely, and did it silently.
+//
+// Measured 2026-09-22 on bash 5.3.20 with standard output on a pipe:
+// `test -p /dev/fd/6` is false with nothing open there and true after
+// `exec 6>&1`, and true after `exec 6<>fifo` for a real named pipe. The
+// mapping is what makes both rows the shell's answer rather than the
+// runtime's.
+//
+// Only where the shell **has** a descriptor there. A number it has nothing
+// open at is left as the path it was written as, which is the reading this
+// already had, and it is deliberately not answered as "no such file" even
+// though that is what the reference would say: a process substitution's
+// `/dev/fd/N` is a **process** descriptor this table does not hold — see
+// childFiles, where that is spelled out — so a rule that refused every number
+// the table is missing would make `test -e <(echo hi)` false.
+//
+// What that leaves is a number nobody in the script opened answering about
+// whatever the process has there, which is measurable and is not hypothetical:
+// on a Linux runner the test binary really does hold a pipe at 6. It is the
+// reading this had before and the narrower claim to make today.
+func (r *Runner) ownDescriptorPath(operand string) (string, bool) {
+	rest, ok := strings.CutPrefix(operand, devFdDir+"/")
+	if !ok {
+		return "", false
+	}
+	n, err := strconv.Atoi(rest)
+	if err != nil || n < 0 {
+		return "", false
+	}
+	sys, open := r.SystemDescriptor(n)
+	if !open || sys == n {
+		// Already the same number, so there is nothing to translate and the
+		// path stands — which is every ordinary `/dev/fd/0`.
+		return "", false
+	}
+	return inheritedPath(sys), true
+}
+
 func (r *Runner) fileTest(op, operand string) bool {
 	if operand == "" {
 		// An empty operand is not a path, so the answer is false for every
@@ -1016,6 +1162,12 @@ func (r *Runner) fileTest(op, operand string) bool {
 		return false
 	}
 	path := r.atDir(operand)
+	if own, ok := r.ownDescriptorPath(operand); ok {
+		// A path naming one of **this shell's** descriptors is the file the
+		// shell has open there, not the process's Nth. See
+		// ownDescriptorPath.
+		path = own
+	}
 	// Through the gate, like every stat; a denied one is err != nil here,
 	// so every test below reads it as the file not existing.
 	info, err := r.stat(path)

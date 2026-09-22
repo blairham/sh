@@ -457,7 +457,7 @@ func (r *Runner) arithFlaggedElement(x *syntax.ArithIndex) (arithNum, bool) {
 		return intNum(0), false
 	}
 	v, _ := r.flaggedSubscript(e)
-	n, err := r.arithElemValue(arithIndexWritten(x), strings.Join(v, ifsFirst(r.ifs())))
+	n, err := r.arithElemValue(arithIndexWritten(x), strings.Join(v, r.ifsFirst(r.ifs())))
 	if err != nil {
 		// Worded where every other subscript failure is worded, so the join
 		// of several matches complains as the text it is.
@@ -512,7 +512,7 @@ func (r *Runner) arithWholeArraySlice(x *syntax.ArithIndex) (string, bool) {
 		"`$(( a[*] ))`, a whole-array subscript inside an expression") {
 		return "", false
 	}
-	return strings.Join(r.wholeArrayElems(x.Name), ifsFirst(r.ifs())), true
+	return strings.Join(r.wholeArrayElems(x.Name), r.ifsFirst(r.ifs())), true
 }
 
 // arithWholeArraySubscript reports whether the brackets hold the whole-array

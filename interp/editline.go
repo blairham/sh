@@ -93,5 +93,5 @@ func (r *Runner) SplitOnIFS(s string) []string {
 // a builtin that shows a list as one line of text and reads it back has to use
 // the same separator in both directions or the round trip is lossy.
 func (r *Runner) JoinOnIFS(fields []string) string {
-	return strings.Join(fields, ifsFirst(r.ifs()))
+	return strings.Join(fields, r.ifsFirst(r.ifs()))
 }

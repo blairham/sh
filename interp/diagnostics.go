@@ -560,6 +560,50 @@ type Diagnostics struct {
 	// shell and the line the way that column's other `test` refusals do and
 	// naming neither the builtin nor a word.
 	TestClosingParenExpected string
+	// TestClosingParenExpectedFound is the same complaint where a word
+	// **was** there and was not the parenthesis. One verb: that word.
+	//
+	// Two fields because two columns say it two ways and the split is
+	// measured: bash writes `` `)' expected `` when the arguments ran out and
+	// `` `)' expected, found junk `` when they did not, and its `[` always
+	// reaches the second because the `]` is the word it found. BusyBox and
+	// dash write one sentence for both. Measured 2026-09-22 on bash 5.3.20
+	// and on 3.2.57 under the `sh` name, which answer alike:
+	//
+	//	test "(" 1 = 2               `)' expected
+	//	test "(" 1 = 2 -a 3 = 3      `)' expected
+	//	test "(" 1 = 2 junk          `)' expected, found junk
+	//	[ "(" 1 = 2 ]                `)' expected, found ]
+	//	[ "(" 1 = 2 junk ]           `)' expected, found junk
+	//
+	// Empty leaves every shape to TestClosingParenExpected, which is what a
+	// dialect with one sentence wants.
+	TestClosingParenExpectedFound string
+	// TestLeftoverOperator is a well-formed expression with a word left over
+	// that is **spelled like an operator** — anything beginning with `-`.
+	// One verb: that word.
+	//
+	// The ordinary leftover is TestTooManyArguments and says no word at all;
+	// this one is a second sentence the same column writes when the leftover
+	// looks like an operator, and it is the only shape where a reader is
+	// told which word ended the expression. Measured 2026-09-22 on bash
+	// 5.3.20:
+	//
+	//	test 1 -ne 2 -ne 3     syntax error: `-ne' unexpected
+	//	test 1 -ne 2 -t 3      syntax error: `-t' unexpected
+	//	test 1 -ne 2 -Q 3      syntax error: `-Q' unexpected — unknown too
+	//	test 1 -ne 2 -- 3      syntax error: `--' unexpected
+	//	test a = b = c         too many arguments — `=` is not one
+	//	test 1 -ne 2 ! 3       too many arguments
+	//	test x y z w           too many arguments
+	//
+	// So the test is the spelling and not membership of an operator table:
+	// `-Q` is no operator in any column and still takes the sentence. Every
+	// other shell in the panel writes one sentence for both shapes — bash
+	// 3.2 and zsh say `too many arguments`, dash names a word through
+	// TestNamesTheWordTheParseStoppedAt, and ksh93 answers 0 — so empty
+	// leaves the leftover to TestTooManyArguments, which is what they want.
+	TestLeftoverOperator string
 	// ProcessSubstitutionNotInCondition is a `<(cmd)` standing as a
 	// condition's operand in a dialect that does not allow one there. One
 	// verb: the substitution as it was written, `<(cmd)` and not its inside.
@@ -7533,6 +7577,44 @@ type Diagnostics struct {
 	// about `!`, about `=` and about whether a `~` counts anywhere or only
 	// at the front (#2141).
 	TraceMetacharacters TraceMetacharacters
+	// TraceEscape is how the bytes *inside* that `$'…'` are spelled, and
+	// which words reach it at all. A third field because the panel splits
+	// three ways on the spelling where TraceQuoting splits it two — see the
+	// type, and TraceEscape.consultsTheLocale for the half about which words.
+	//
+	// Zero is TraceEscapeOctal, which is bash's answer and the substrate's own.
+	TraceEscape TraceEscape
+	// DiagnosticNamesAWordEscaped writes a word a *runtime diagnostic* names
+	// — a command that was not found, a directory `cd` could not reach — in
+	// the `$'…'` form when it holds a byte the locale cannot write, rather
+	// than putting the bytes on the stream as they are.
+	//
+	// The same device the trace reaches for and the same TraceEscape spelling,
+	// but a **narrower trigger**: a word that merely needs quoting is named
+	// bare. Measured 2026-09-22 on bash 5.3.20 under `LC_ALL=en_US.UTF-8`,
+	// each word run as a command:
+	//
+	//	`a b`            `a b: command not found`
+	//	`a'b`            `a'b: command not found`
+	//	`a<0x01>b`       `$'a\001b': command not found`
+	//	`a<0xff>b`       `$'a\377b': command not found`
+	//	`café` in UTF-8  `café: command not found`
+	//	`café` under C   `$'caf\303\251': command not found`
+	//
+	// so the space and the quote rows are what separate this from
+	// TraceQuoting, and the last two are the locale reading TraceEscape
+	// already carries. `cd` names its operand the same way, and the *word* of
+	// a `${x:?word}` does not — that is message text rather than a name.
+	//
+	// False — the zero value and the substrate's own — writes the bytes as
+	// they are, which is ksh93u+, dash and BusyBox ash. **zsh is a third
+	// answer and is not modeled here**: it escapes the bytes with a caret
+	// notation of its own and no quotes around them —
+	// `command not found: 5\M-^Y…` — which is a spelling nothing else in this
+	// tree writes and which its own trace does not use. It stays on False, so
+	// that column names the word as written; a measured gap rather than a
+	// hidden one.
+	DiagnosticNamesAWordEscaped bool
 	// TraceBareBracket is the one exemption from all of that: how much of a
 	// `[ … ]` test is printed without quotes even though the same character
 	// is quoted everywhere else.

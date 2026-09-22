@@ -1985,6 +1985,16 @@ type Runner struct {
 	// expansion itself: the same call gives the same answer and only what is
 	// done with it moves. See HistoryExpansionVerifies.
 	histVerify bool
+	// histJoinLines is whether a command typed over several physical lines
+	// becomes one joined entry rather than an entry holding the newlines it
+	// was typed with — bash's `shopt lithist` read the other way round. See
+	// HistoryJoinsATypedCommand, where the measurement is.
+	histJoinLines bool
+	// histRewrite is whether the history file is written from the session's
+	// list rather than appended to, where the two differ — bash's
+	// `shopt histappend` read the other way round. See
+	// RewritesTheHistoryFile, where the measurement is.
+	histRewrite bool
 	// histMemory is the last substitution and search history expansion made,
 	// which the next line's `:&` and `%` read. See histexpand.Memory.
 	histMemory *histexpand.Memory
@@ -7116,6 +7126,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// the child's — see Runner.prefixChildForTheDisciplines.
 	child := r.prefixChildForTheDisciplines(c.Assigns)
 	var prefixEnv []string
+	// What the prefix has assigned so far, visible to the entries behind it.
+	// An external command is run by a child, so this route makes no store of
+	// its own and there was nothing for the next entry to read — see
+	// interp/prefixsees.go, where the panel is. Released before the
+	// environment is read, so the child is handed the prefix and not this
+	// shell's cells rewritten.
+	var held heldPrefix
 	// The PATH the prefix supplies, if it supplies one, held so that the
 	// search below is made with it — see reachPrefixedPath.
 	prefixPath, pathFromPrefix := "", false
@@ -7214,7 +7231,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			prefixPath, pathFromPrefix = value, true
 		}
 		prefixEnv = append(prefixEnv, landsOn+"="+value)
+		if name, ok := r.prefixHoldableName(a); ok {
+			held.hold(r, name, value)
+		}
 	}
+	held.release(r)
 	// Read after the stores above rather than before them, so a hook that
 	// wrote some *other* exported name is answered by the environment the
 	// child is given. See Runner.prefixChildForTheDisciplines.

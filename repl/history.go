@@ -619,11 +619,21 @@ func withoutEmpty(entries, times []string) (keptEntries, keptTimes []string) {
 	return out, stamps
 }
 
-// save appends what this session added.
+// save writes what this session added.
 //
-// Only what it added: the lines it read at the start are already in the file,
-// and writing them again would double it every time a shell is opened.
-func (h historyFile) save(ctx context.Context, added, times []string) error {
+// Appending it, almost always: the lines it read at the start are already in
+// the file, and writing them again would double it every time a shell is
+// opened.
+//
+// rewrite is interp.Runner.RewritesTheHistoryFile — bash's `shopt histappend`
+// read the other way round — and it asks for the other answer in the one case
+// the two differ. Measured against bash 5.3.20; the table is on that method,
+// and the condition below is the whole of what it says: the file is written
+// from the session's list where the list no longer holds every line the
+// session added, which is what HISTSIZE trimming it below that count does.
+// Everywhere else bash appends with the option off exactly as it does with it
+// on, so this shell's ordinary exit is the append it has always been.
+func (h historyFile) save(ctx context.Context, earlier, added, times []string, rewrite bool) error {
 	added, times = withoutCredentials(added, times)
 	if h.path == "" || h.size == 0 {
 		// No file to write, or a history turned off, which is not the same
@@ -642,6 +652,30 @@ func (h historyFile) save(ctx context.Context, added, times []string) error {
 	}
 	if len(added) == 0 {
 		return nil
+	}
+	if rewrite && len(added) > h.size {
+		// The list rather than what was added, because that is what the
+		// rewrite is: the file becomes the session's list, and the lines the
+		// list no longer holds are the ones that go. A line another process
+		// appended to the file while this session ran goes with them, which
+		// is the cost the option names and the reason bash's own default
+		// only pays it here.
+		if err := h.writeOver(ctx, h.list(earlier, added), nil); err != nil {
+			return err
+		}
+		return h.trim(ctx)
+	}
+	// The same bound on the append, which is HISTSIZE's and not this
+	// branch's: what bash writes is the tail of its list, so a session that
+	// typed more lines than the list holds appends only the lines still in
+	// it. Measured 2026-09-22 on bash 5.3.20 — `HISTSIZE=2`,
+	// `HISTFILESIZE=100`, `shopt -s histappend` and four lines typed leaves
+	// the eight already in the file and the last **two** after them.
+	if len(added) > h.size {
+		added = added[len(added)-h.size:]
+		if len(times) > h.size {
+			times = times[len(times)-h.size:]
+		}
 	}
 	// 0600: a shell history is a record of what someone typed, which is not
 	// something to leave readable by everyone on the machine. Parents,
@@ -705,23 +739,19 @@ func (h historyFile) empty(ctx context.Context) error {
 
 // trim brings the file back under HISTFILESIZE.
 //
-// This is the one time the file is rewritten rather than appended to, and the
-// exception is what makes the bound a bound: a limit that is never enforced is
-// a number in a variable. It happens only when the file is over it, so the
-// ordinary exit is still an append and two shells closing at once still both
-// keep their lines.
+// The bound is what makes a bound: a limit that is never enforced is a number
+// in a variable. It happens only when the file is over it, so the ordinary
+// exit is still an append and two shells closing at once still both keep
+// their lines.
 //
-// A temporary file and a rename, so that a shell killed in the middle of this
-// leaves the old history rather than half of it. The temporary is made in the
-// same directory because a rename across filesystems is not one, and it is
-// created 0600 for the reason the history itself is.
+// Measured 2026-09-22 against bash 5.3.20, which truncates here with
+// `histappend` on as well as off: a session under `HISTFILESIZE=3` leaves
+// three lines behind either way. So this runs after both of save's two
+// writes, not only after the append.
 //
 // The bound is enforced when this shell writes, which is the only moment it
-// touches the file. bash instead rewrites the whole file from its in-memory
-// list at exit, so a bash that ran with a small HISTSIZE throws away what
-// earlier sessions wrote; that is a divergence and it is on purpose, because
-// silently deleting somebody's history is the worse of the two failures.
-// The temporary beside it is this shell's own name, but the two verbs that
+// touches the file. The temporary beside it is this shell's own name, but the
+// two verbs that
 // finish the rewrite — the rename over HISTFILE and the removal of the
 // temporary — are changes to a path a *script* chose, since HISTFILE is a
 // variable a line at the prompt can set. So they go through
@@ -749,8 +779,48 @@ func (h historyFile) trim(ctx context.Context) error {
 	if len(kept) == len(lines) {
 		return nil
 	}
-	lines = kept
+	return h.writeOver(ctx, kept, nil)
+}
 
+// list is the entries the session can still recall: what it read at the start
+// and what it added, bounded by HISTSIZE the way the file's own read is.
+//
+// The same list a rewrite writes and the same length the condition in save is
+// read against, named once so the two cannot disagree about what "the list"
+// is.
+func (h historyFile) list(earlier, added []string) []string {
+	all := make([]string, 0, len(earlier)+len(added))
+	all = append(all, earlier...)
+	all = append(all, added...)
+	if len(all) > h.size {
+		all = all[len(all)-h.size:]
+	}
+	return all
+}
+
+// writeOver writes these entries over the history file.
+//
+// Two callers and one rewrite: the bound below, which drops the oldest lines
+// when the file is over HISTFILESIZE, and save above, which writes the
+// session's list when the option asks it to. They were one function once, and
+// the bound's own temporary-and-rename is the part neither can be written
+// without.
+//
+// A temporary file and a rename, so that a shell killed in the middle of this
+// leaves the old history rather than half of it. The temporary is made in the
+// same directory because a rename across filesystems is not one, and it is
+// created 0600 for the reason the history itself is.
+//
+// The entry encoder rather than a line per entry, for the reason save's
+// append uses it: an entry holding a newline is the file's business and not
+// each writer's, and a rewrite that wrote raw newlines would turn one entry
+// into several the next session reads back. See HistoryText.
+// times is read positionally beside entries and may be nil, which is an entry
+// with no time — see HistoryTextTimed. Both callers hand nil: a truncation is
+// putting the file's own physical lines back, headers and all, and a rewrite
+// is putting down a list whose older half was read back from the file as
+// commands, so there is no time this side of it to write.
+func (h historyFile) writeOver(ctx context.Context, entries, times []string) error {
 	dir := filepath.Dir(h.path)
 	// dir is the history file's own directory and is never empty, which is
 	// the whole of what this pattern guards against: os.TempDir is
@@ -762,10 +832,7 @@ func (h historyFile) trim(ctx context.Context) error {
 		return err
 	}
 	w := bufio.NewWriter(tmp)
-	for _, line := range lines {
-		_, _ = w.WriteString(line)
-		_ = w.WriteByte('\n')
-	}
+	_, _ = w.WriteString(encodeEntries(entries, times, h.encoding()))
 	if err := w.Flush(); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmp.Name())

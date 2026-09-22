@@ -2868,11 +2868,12 @@ differences from `$SHELLOPTS` are measured, all on bash 5.3.15, 2026-09-13:
 - **The two bash columns disagree.** bash 3.2 writes nothing for `$BASHOPTS`
   and reads nothing out of an inherited one, so this is bash 5's answer and
   every corpus row says so.
-- **Our list is longer than bash's**, for the reason `hashall` is missing from
-  the other one: `histappend` and `lithist` are on here because this shell
-  really appends its history and really keeps a recalled entry's newlines. The
-  value is this shell's own state, so the rows ask about membership of a name
-  they set themselves.
+- **The value is this shell's own state**, so the rows ask about membership of
+  a name they set themselves rather than pinning a list. It used to be longer
+  than bash's, for the reason `hashall` is missing from the other one:
+  `histappend` and `lithist` were held on because this shell appended its
+  history and kept a recalled entry's newlines. Both are switches at bash's
+  own default since #4149, so the two lists agree on them now.
 
 It was empty in both directions until #2475, which meant a capture harness
 reading it back saw a shell with no options set at all.

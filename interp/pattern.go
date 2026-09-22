@@ -2735,7 +2735,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		bracket:           BracketLiteral,
 		unknownClass:      r.unknownClassPolicy(pattern),
 		unterminatedClass: r.unterminatedClassPolicy(pattern),
-		chars:             r.patternCountsCharacters(append([]string{pattern}, subjects...)...),
+		chars:             r.patternMatchCountsCharacters(pattern, subjects...),
 		group:             r.dialect().PatternAlternation,
 		topGroup:          r.dialect().PatternTopLevelAlternation.ReadsATopLevelBar(false),
 		quantified:        r.readsQuantifiedGroups(false),

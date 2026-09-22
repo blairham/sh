@@ -467,7 +467,7 @@ func (r *Runner) cannotRun(err error, how naming) int {
 			why = r.diag().DirectoryReason
 		}
 		r.diagf("%s\n", Wording(orElse(how.cannotExecute, r.diag().CannotExecute),
-			"%[1]s: %[2]s", name, r.diag().reasonText(why)))
+			"%[1]s: %[2]s", r.NamedWord(name), r.diag().reasonText(why)))
 		if pe.onPathDirectory && r.diag().DirectoryOnPathStatus != 0 {
 			// One dialect names the directory it found and then numbers the
 			// failure as if it had found nothing.
@@ -488,7 +488,7 @@ func (r *Runner) cannotRun(err error, how naming) int {
 	// `%!(EXTRA string=Not found)` against bash's plain `%s`. An indexed
 	// format tolerates an unused argument and a plain one does not, which is
 	// the same trap interp/wording_test.go already pins.
-	r.diagf("%s\n", Wording(format, how.fallback, name))
+	r.diagf("%s\n", Wording(format, how.fallback, r.NamedWord(name)))
 	if r.NotFoundHint != nil {
 		// A second line, from a caller that knows something this package may
 		// not — see Runner.NotFoundHint. The operand as written rather than

@@ -228,6 +228,55 @@ const (
 	TraceAssignmentOperandValue
 )
 
+// TraceEscape is how a shell spells, inside the `$'…'` a trace reaches for,
+// a byte it will not write as itself.
+//
+// A separate question from TraceQuoting: that one is which device the word
+// goes into, this one is what the bytes inside it look like, and the panel
+// splits differently on the two. Measured 2026-09-22, one `set -x` line per
+// byte for the word `a<byte> b` under `LC_ALL=en_US.UTF-8`; the escape
+// functions themselves carry the byte-by-byte tables.
+//
+// Which words reach the device at all is a third question and rides on this
+// enum — see TraceEscape.consultsTheLocale.
+type TraceEscape int
+
+const (
+	// TraceEscapeOctal is bash: seven named escapes, `\E` for escape, and
+	// three-digit octal for everything else. The substrate's own, and the
+	// spelling that shell's `%q` already uses — measured against each other
+	// byte for byte, they agree.
+	TraceEscapeOctal TraceEscape = iota
+	// TraceEscapeHex is ksh93: the same names minus `\v`, `\E` for escape,
+	// and two-digit lower-case hexadecimal for the rest.
+	TraceEscapeHex
+	// TraceEscapeControlNotation is zsh: `\C-A`, `\C-[`, `\C-?`, with `\M-`
+	// in front for a byte above ASCII, and only tab and newline named.
+	TraceEscapeControlNotation
+)
+
+// consultsTheLocale says whether the *decision* to reach for `$'…'` is the
+// locale's as well as the byte's.
+//
+// It rides on the spelling because the panel does: measured 2026-09-22 on the
+// word `café` in UTF-8 bytes, `set -x; : "$v"`, bash 5.3.20 writes it bare
+// under `LC_ALL=en_US.UTF-8` and `$'caf\303\251'` under `LC_ALL=C`, ksh93u+
+// writes it bare and `$'caf\xc3\xa9'`, and zsh 5.9.2 writes it bare under
+// both. So the two shells that number their bytes ask what the locale can
+// print, and the one that names them does not.
+func (e TraceEscape) consultsTheLocale() bool { return e != TraceEscapeControlNotation }
+
+// traceEscapeByte is one unwritable byte under one of the three spellings.
+func traceEscapeByte(c byte, e TraceEscape) string {
+	switch e {
+	case TraceEscapeHex:
+		return kshControlEscape(c)
+	case TraceEscapeControlNotation:
+		return zshControlEscape(c)
+	}
+	return bashControlEscape(c)
+}
+
 // TraceQuoting is how a shell renders a word that needs quoting. *Which*
 // words need it is a separate question with a separate answer — see
 // TraceMetacharacters, and the two are separate because the panel does not
@@ -409,12 +458,12 @@ func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
 		}
 		if i > 0 && from >= 0 && i >= from &&
 			d.TraceAssignmentOperand == TraceAssignmentOperandValue {
-			if operand, ok := traceAssignmentOperand(w, d); ok {
+			if operand, ok := r.traceAssignmentOperand(w, d); ok {
 				quoted[i] = operand
 				continue
 			}
 		}
-		quoted[i] = traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
+		quoted[i] = r.traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
 	}
 	return quoted
 }
@@ -448,18 +497,18 @@ func (r *Runner) traceCommandWords(words []string, d Diagnostics) []string {
 // quotes inside the brackets, `+ m['a b']=v` — so the quoting is gated on the
 // field that says the halves are written apart rather than applied here for
 // everyone.
-func traceAssignmentOperand(w string, d Diagnostics) (string, bool) {
+func (r *Runner) traceAssignmentOperand(w string, d Diagnostics) (string, bool) {
 	target, value, ok := strings.Cut(w, "=")
 	if !ok || target == "" {
 		return "", false
 	}
 	if d.TraceAssignmentOperand == TraceAssignmentOperandValue {
-		target = traceQuote(target, d.TraceQuoting, d.TraceMetacharacters)
+		target = r.traceQuote(target, d.TraceQuoting, d.TraceMetacharacters)
 	}
 	if value == "" && d.TraceEmptyAssignmentValueIsBare {
 		return target + "=", true
 	}
-	return target + "=" + traceQuote(value, d.TraceQuoting, d.TraceMetacharacters), true
+	return target + "=" + r.traceQuote(value, d.TraceQuoting, d.TraceMetacharacters), true
 }
 
 // traceAssignments writes one trace line for a run of assignments.
@@ -562,7 +611,7 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 	}
 	b.WriteString("=")
 	if a.IsArray {
-		b.WriteString(traceArrayLiteral(a.Elems, expandedElemsOf(e),
+		b.WriteString(r.traceArrayLiteral(a.Elems, expandedElemsOf(e),
 			d.TraceArrayLiteral, d, r.traceWordLayout(d)))
 		return b.String()
 	}
@@ -572,7 +621,7 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 		// argument. See the field.
 		return b.String()
 	}
-	b.WriteString(traceQuote(value, d.TraceQuoting, d.TraceMetacharacters))
+	b.WriteString(r.traceQuote(value, d.TraceQuoting, d.TraceMetacharacters))
 	return b.String()
 }
 
@@ -614,7 +663,7 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 			op = "+="
 		}
 		lines = append(lines, a.Name+"["+el.sub+"]"+op+
-			traceQuote(el.value, d.TraceQuoting, d.TraceMetacharacters))
+			r.traceQuote(el.value, d.TraceQuoting, d.TraceMetacharacters))
 	}
 	return lines, true
 }
@@ -631,7 +680,7 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 // modeled here, for the reason traceAssign gives about the subscript:
 // expanding the elements to print them would expand them twice. Tracked as
 // #1959.
-func traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style TraceArrayLiteral,
+func (r *Runner) traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style TraceArrayLiteral,
 	d Diagnostics, l syntax.Layout,
 ) string {
 	var words []string
@@ -657,7 +706,7 @@ func traceArrayLiteral(elems []*syntax.ArrayElem, parsed []literalElem, style Tr
 		// the column that splits and one in the column that does not, and
 		// each of them traces its own count.
 		for _, f := range parsed[i].fields {
-			words = append(words, traceQuote(f, d.TraceQuoting, d.TraceMetacharacters))
+			words = append(words, r.traceQuote(f, d.TraceQuoting, d.TraceMetacharacters))
 		}
 	}
 	return wrapArrayLiteral(strings.Join(words, " "), style)
@@ -738,7 +787,7 @@ func (r *Runner) traceForIteration(header, name, value string) {
 			// nameless parameter.
 			return
 		}
-		line = name + "=" + traceQuote(value, d.TraceQuoting, d.TraceMetacharacters)
+		line = name + "=" + r.traceQuote(value, d.TraceQuoting, d.TraceMetacharacters)
 	default:
 		return
 	}
@@ -852,7 +901,7 @@ func (r *Runner) traceCondOperand(s string) string {
 		// leave `[[ -z ]]`, which is a condition no shell would accept.
 		return "''"
 	}
-	return traceQuote(s, r.diag().TraceConditionQuoting, r.diag().TraceMetacharacters)
+	return r.traceQuote(s, r.diag().TraceConditionQuoting, r.diag().TraceMetacharacters)
 }
 
 // traceArithCommand writes the line for a traced arithmetic expression.
@@ -1099,8 +1148,70 @@ func traceBracketIsBare(p TraceBareBracket, words []string, i int) bool {
 	return p == TraceBracketPairBare && i == len(words)-1 && words[i] == "]"
 }
 
+// NamedWord is a word a runtime diagnostic names, written the way the dialect
+// writes it: see Diagnostics.DiagnosticNamesAWordEscaped for the trigger and
+// the panel.
+//
+// Exported for the reason Runner.NameReportWord is: a dialect's own builtin
+// naming a word has to reach the same rendering rather than grow a second
+// one.
+func (r *Runner) NamedWord(s string) string {
+	if !r.diag().DiagnosticNamesAWordEscaped || !traceHoldsAnUnwritableByte(s, r.eachTraceUnit) {
+		return s
+	}
+	return dollarQuote(s, r.diag().TraceEscape, r.eachTraceUnit)
+}
+
+// eachTraceUnit walks a value the way a trace reads it: bytes that stand
+// alone, and whole characters the shell will write as themselves.
+//
+// The locale decides which is which, and it decides only for the two dialects
+// whose spelling numbers its bytes — see TraceEscape.consultsTheLocale for
+// the measurement. Where the locale is consulted and has no multi-byte
+// characters, every byte above ASCII stands alone and is therefore
+// unwritable, which is what makes `café` trace as `$'caf\303\251'` under
+// `LC_ALL=C`.
+//
+// The locale question is put only for a value that actually holds a byte
+// above ASCII, which is the discipline countsCharacters keeps for a length:
+// an ASCII word reads the same under every locale, so an ordinary trace line
+// asks nothing.
+func (r *Runner) eachTraceUnit(v string, one func(int, byte), run func(int, string)) {
+	if isASCII(v) || !r.diag().TraceEscape.consultsTheLocale() || r.countsTheLocalesCharacters() {
+		eachQuotableByte(v, one, run)
+		return
+	}
+	for i := 0; i < len(v); i++ {
+		one(i, v[i])
+	}
+}
+
+// traceHoldsAnUnwritableByte is the question that sends a word into `$'…'`:
+// does it hold a byte this shell will not write as itself.
+//
+// **Not only the C0 controls**, which is what it used to ask. DEL and every
+// byte above it count too, unless the walk hands them over as a character —
+// measured 2026-09-22, the word `a<0xff> b` traces as `$'a\377 b'` in bash
+// 5.3.20, `$'a\xff b'` in ksh93u+ and `$'a\M-\C-? b'` in zsh 5.9.2, where
+// this shell wrote the raw byte and no quotes at all.
+func traceHoldsAnUnwritableByte(s string, units func(string, func(int, byte), func(int, string))) bool {
+	found := false
+	units(s, func(_ int, c byte) {
+		if unwritableByte(c) {
+			found = true
+		}
+	}, func(int, string) {})
+	return found
+}
+
 // traceQuote renders one expanded word the way the dialect would.
-func traceQuote(s string, q TraceQuoting, meta TraceMetacharacters) string {
+//
+// units is the locale's reading of the value — see Runner.eachTraceUnit — and
+// is handed in rather than read here so that the decision and the spelling
+// stay one walk.
+func (r *Runner) traceQuote(s string, q TraceQuoting, meta TraceMetacharacters) string {
+	e := r.diag().TraceEscape
+	units := r.eachTraceUnit
 	if q == QuoteNever {
 		return s
 	}
@@ -1115,18 +1226,18 @@ func traceQuote(s string, q TraceQuoting, meta TraceMetacharacters) string {
 		}
 		return "''"
 	}
-	if ctl := strings.IndexFunc(s, func(c rune) bool { return c < 0x20 }); ctl >= 0 {
+	if traceHoldsAnUnwritableByte(s, units) {
 		// The one place a shell without `$'…'` has to write the byte itself.
 		if q == QuoteSingleOnly {
 			return traceSingleQuote(s)
 		}
-		return dollarQuote(s)
+		return dollarQuote(s, e, units)
 	}
 	if !traceNeedsQuoting(s, meta) {
 		return s
 	}
 	if strings.Contains(s, "'") && q == QuoteDollar {
-		return dollarQuote(s)
+		return dollarQuote(s, e, units)
 	}
 	if q == QuoteSingleOnly {
 		return traceSingleQuote(s)
@@ -1245,27 +1356,35 @@ func traceSingleQuote(s string) string {
 	return b.String()
 }
 
-// dollarQuote renders a word with `$'…'`, where a control character has a
-// readable spelling.
-func dollarQuote(s string) string {
+// dollarQuote renders a word with `$'…'`, where a byte the shell will not
+// write as itself has a readable spelling.
+//
+// **Every** such byte and not only the three that used to be named here: a
+// word reaching this function because it holds one control character was
+// written with the other bytes raw, so `$'a\001b'` came out as `$'a` — the
+// byte itself — `b'`, which is not what any shell writes and does not read
+// back. Measured 2026-09-22, the word `a<0x01> b`: bash 5.3.20 writes
+// `$'a\001 b'`, ksh93u+ `$'a\x01 b'` and zsh 5.9.2 `$'a\C-A b'`.
+//
+// units is the walk over the value — which bytes stand alone and which are a
+// character written as itself — and it is the caller's because it is the
+// locale's; see Runner.eachTraceUnit.
+func dollarQuote(s string, e TraceEscape,
+	units func(string, func(int, byte), func(int, string)),
+) string {
 	var b strings.Builder
 	b.WriteString("$'")
-	for _, c := range s {
-		switch c {
-		case '\t':
-			b.WriteString(`\t`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\'':
-			b.WriteString(`\'`)
-		case '\\':
-			b.WriteString(`\\`)
+	units(s, func(_ int, c byte) {
+		switch {
+		case c == '\'' || c == '\\':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		case unwritableByte(c):
+			b.WriteString(traceEscapeByte(c, e))
 		default:
-			b.WriteRune(c)
+			b.WriteByte(c)
 		}
-	}
+	}, func(_ int, raw string) { b.WriteString(raw) })
 	b.WriteString("'")
 	return b.String()
 }

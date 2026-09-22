@@ -25,6 +25,7 @@ import (
 
 	"github.com/blairham/sh/internal/blocks"
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/internal/histjoin"
 	"github.com/blairham/sh/internal/panicguard"
 	"github.com/blairham/sh/internal/secret"
 	"github.com/blairham/sh/interp"
@@ -633,7 +634,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// thing the file's contents depend on is what went into this slice.
 	var added, addedAt []string
 	defer func() {
-		if err := hist.save(ctx, added, addedAt); err != nil {
+		if err := hist.save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
@@ -684,7 +685,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// ^C abandons whatever was half-typed, including the earlier
 			// lines of an unfinished construct — which is the whole point of
 			// it at a continuation prompt.
-			pending.Reset()
+			s.abandon(&pending)
 			continue
 		case errors.Is(err, io.EOF):
 			if s.heldForJobsAtExit(state) {
@@ -722,7 +723,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// expansion and run nothing. Either way the construct in hand is
 			// abandoned the way ^C abandons it: measured, bash draws a fresh
 			// prompt rather than a continuation one.
-			pending.Reset()
+			s.abandon(&pending)
 			continue
 		case verifyLine:
 			// `shopt histverify`: the expansion is drawn back on the editing
@@ -1320,7 +1321,7 @@ func (s Shell) runPlain(
 	recall := &lineList{lines: earlier}
 	var added, addedAt []string
 	defer func() {
-		if err := hist.save(ctx, added, addedAt); err != nil {
+		if err := hist.save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
@@ -1445,6 +1446,11 @@ func (s Shell) runPlain(
 // `echo $HOME`.
 func (s Shell) accept(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, string, error, bool) {
 	first := s.countLine(pending.Len() == 0)
+	c := s.counted()
+	// The same physical line, into the collector that will make one history
+	// entry of it — with what the parser was inside when the *previous* line
+	// was taken, which is what the parse below leaves behind for the next one.
+	c.entry.Add(line, c.entryAt)
 	pending.WriteString(line)
 	pending.WriteString("\n")
 	text := pending.String()
@@ -1475,19 +1481,73 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 		// Kept for the continuation prompt: what the next line goes on with
 		// is what the parser is still inside, and this is the only place it
 		// is known.
-		s.counted().open = p.Open()
+		c.open = p.Open()
+		// And the narrower half of the same answer, for the collector: the
+		// quote or here-document the next physical line begins inside, which
+		// decides whether the newline before it is a separator or text.
+		c.entryAt = histjoin.At{
+			Open:           p.OpenQuote(),
+			HeredocExpands: p.OpenHeredocExpands(),
+			Dialect:        s.parseDialect(),
+		}
 		return nil, "", nil, false
 	}
 	pending.Reset()
 	// The construct is whole, so nothing is waiting on the next line.
-	s.counted().open = nil
+	c.open = nil
+	c.entryAt = histjoin.At{}
+	joined := c.entry.Take()
 	text = strings.TrimSuffix(text, "\n")
 	if remember != nil {
 		// Nil where there is nothing to recall with: a session without an
 		// editor has no way to reach a history and no reason to keep one.
-		remember(text)
+		//
+		// The *entry* rather than the text, where this dialect joins a
+		// command typed over several lines into one — the two are the same
+		// string for the single-line command almost every command is. The
+		// block store and the runner are still given the text as typed,
+		// which is what they are for; only the history holds the joined
+		// form. See interp.Runner.HistoryJoinsATypedCommand.
+		remember(s.historyEntry(joined, text))
 	}
 	return stmts, text, err, true
+}
+
+// rewritesHistory is the dialect's answer about the file at exit, read at the
+// moment it is written rather than when the session began — `shopt -u
+// histappend` in an rc file and one typed at the prompt have to mean the same
+// thing. See interp.Runner.RewritesTheHistoryFile.
+func (s Shell) rewritesHistory() bool {
+	return s.Runner != nil && s.Runner.RewritesTheHistoryFile()
+}
+
+// historyEntry is what the history keeps for a command whose text is text and
+// whose collected lines joined to joined.
+//
+// The two differ only for a command typed over more than one physical line,
+// and which of them is kept is the dialect's answer rather than this
+// package's: bash joins with nothing said and keeps the lines under
+// `shopt -s lithist`, and a shell with no such option keeps them.
+func (s Shell) historyEntry(joined, text string) string {
+	if s.Runner == nil || !s.Runner.HistoryJoinsATypedCommand() {
+		return text
+	}
+	return joined
+}
+
+// abandon throws away a half-typed construct: the text, and the history entry
+// its lines were being collected into.
+//
+// One function rather than a pair of statements at each of the three places
+// that give up on a line, because the pair is exactly the shape that goes out
+// of step — the collector was added after the resets were written, and a site
+// that reset only the text would carry the abandoned lines into the next
+// command's entry.
+func (s Shell) abandon(pending *strings.Builder) {
+	pending.Reset()
+	c := s.counted()
+	c.entry = histjoin.Entry{}
+	c.entryAt = histjoin.At{}
 }
 
 // countLine records that one more line has been read and answers the line
@@ -1540,7 +1600,10 @@ func (s Shell) pendingLine() int {
 // this loop was already leaving at end of input, so it keeps doing so.
 func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, error) {
 	text := pending.String()
-	pending.Reset()
+	// The collector goes with it. What is read here is read whole rather than
+	// a line at a time, so the entry it would have made is not this one's —
+	// and a session ends here, so nothing is left that could reach it anyway.
+	s.abandon(pending)
 	if strings.TrimSpace(text) == "" {
 		return nil, "", nil
 	}

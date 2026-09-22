@@ -2133,6 +2133,13 @@ func Semantics() interp.Semantics {
 	// before the escape, and abandons the script with the status it already
 	// had. Measured 2026-09-11 under `LC_ALL=C` (#1851).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeRefused
+	// A value above what six bytes hold is still encoded here, the arithmetic
+	// overflowing into the lead byte: measured 2026-09-22 under
+	// `LC_ALL=en_US.UTF-8`, `printf '%s' $'a\UFFFFFFFFb'` is
+	// `61 ff bf bf bf bf bf 62` in 5.9.2, where bash and ksh93 write `a b`.
+	// The lead byte is one no decoder will take back, which is the shape of
+	// the disagreement rather than an accident of it.
+	s.CodePointPastSixBytesIsEncoded = interp.Yes
 	// And an *unset* locale is the C locale here, on every operator that
 	// reads one: under `env -i`, 5.9.2 answers 6 for `s=héllo; echo ${#s}`,
 	// leaves `${(U)s}` on `café` as `CAFé`, and refuses the escape above the
@@ -2453,6 +2460,10 @@ func Semantics() interp.Semantics {
 	// reading this shell shares with ksh93: `[ -t ] >/dev/null` is 1 here
 	// and 0 in dash and bash.
 	s.BareTerminalTestIsDescriptorOne = interp.Yes
+	// And a trailing operator with nothing behind it is read as a word,
+	// which is what that answer is then applied to: `test -n xx -a -f` is 0
+	// and `test -n xx -a -t` is 1 — the word, and then `-t 1` about it.
+	s.TestTrailingUnaryOperatorIsAWord = interp.Yes
 	// And a connective with nothing behind it is the connective still, over
 	// a right operand that is missing and therefore false — the reading this
 	// shell shares with dash and with no other column. Measured 2026-09-18:
@@ -4530,6 +4541,7 @@ func Diagnostics() interp.Diagnostics {
 		// bash 5.3.15; the two shared a value until #2695 because the corpus
 		// row used `it's`, the one shape they agree on.
 		TraceQuoting: interp.QuoteShellLazy,
+		TraceEscape:  interp.TraceEscapeControlNotation,
 		// The path inside a `type`, `command -V` or `whence -v` sentence is
 		// written back the way this shell writes a word — the same spelling,
 		// against the same alphabet below — while `command -v`, `whence`,

@@ -313,11 +313,19 @@ var Panel = []Suite{
 		// time.
 		Against:       "GNU bash 5.3",
 		AgainstReport: "version 5.3",
-		// Every builtin's help, three ways, plus the topic list. The suite
+		// Every builtin's help, four ways, plus the topic list. The suite
 		// calls the help builtin throughout one of its files and the answer
 		// is pages of manual text, which is the largest single thing in
 		// this column that is not available to be written.
-		SelfDoc: "help; help -s; for b in $(compgen -b); do help \"$b\"; help -d \"$b\"; help -s \"$b\"; done",
+		//
+		// `-m` is here because the suite asks for it and the dictionary did
+		// not: the man-page layout is a form of the same documentation with
+		// headings of its own, and a dictionary built from the other three
+		// had no `NAME`, no `SYNOPSIS` and no `SEE ALSO` in it. Those pages
+		// then read as work in the report — see [Doc.Attribute], which is
+		// the other half of the same undercount.
+		SelfDoc: "help; help -s; for b in $(compgen -b); do help \"$b\"; help -d \"$b\"; " +
+			"help -s \"$b\"; help -m \"$b\"; done",
 	},
 	{
 		Name:    "zsh",

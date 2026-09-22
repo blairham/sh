@@ -191,7 +191,7 @@ func (r *Runner) markedSeparatorPattern(s syntax.Span) (text string, live, ok bo
 	if !wok {
 		return "", false, true
 	}
-	return strings.Join(words, ifsFirst(r.ifs())), true, true
+	return strings.Join(words, r.ifsFirst(r.ifs())), true, true
 }
 
 // tildeMarkRefusal names the composition this interpreter cannot hold a

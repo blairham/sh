@@ -367,7 +367,9 @@ func printDiffering(o out, rep suite.Report) {
 		o.printf("                            documentation: help text, a usage block, a version\n")
 		o.printf("                            and a license. Not work — matching it means copying\n")
 		o.printf("                            it. A floor, counted by asking the shell for its own\n")
-		o.printf("                            help and testing membership, never by reading\n")
+		o.printf("                            help and testing membership, never by reading — by\n")
+		o.printf("                            the page rather than the sentence, since a heading\n")
+		o.printf("                            and a blank line are the page's too\n")
 	}
 	printReordered(o, rep)
 	printProcessGroups(o, rep)

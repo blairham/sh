@@ -148,7 +148,7 @@ func (r *Runner) traceArrayOperandAssignment(a *syntax.Assign, e *expandedAssign
 		b.WriteString("+")
 	}
 	b.WriteString("=")
-	b.WriteString(traceArrayOperandLiteral(a.Elems, expandedElemsOf(e), d))
+	b.WriteString(r.traceArrayOperandLiteral(a.Elems, expandedElemsOf(e), d))
 	return b.String()
 }
 
@@ -161,7 +161,7 @@ func (r *Runner) traceArrayOperandAssignment(a *syntax.Assign, e *expandedAssign
 // ksh93, so the subscript is the text it expanded to and never the number it
 // would evaluate to; `k=kk; typeset -A m=([$k]=v)` is `['kk']` and `m[kk]` in
 // the same two, which is what says it expanded at all.
-func traceArrayOperandLiteral(elems []*syntax.ArrayElem, parsed []literalElem, d Diagnostics) string {
+func (r *Runner) traceArrayOperandLiteral(elems []*syntax.ArrayElem, parsed []literalElem, d Diagnostics) string {
 	var words []string
 	for i, e := range elems {
 		if e.Word == nil {
@@ -180,14 +180,14 @@ func traceArrayOperandLiteral(elems []*syntax.ArrayElem, parsed []literalElem, d
 			if el.appendValue {
 				op = "+="
 			}
-			words = append(words, "["+traceArrayOperandElement(el.sub, d)+"]"+
-				op+traceArrayOperandElement(el.value, d))
+			words = append(words, "["+r.traceArrayOperandElement(el.sub, d)+"]"+
+				op+r.traceArrayOperandElement(el.value, d))
 			continue
 		}
 		// However many fields a bare element expanded to, for the reason
 		// traceArrayLiteral gives: the count is part of what the line says.
 		for _, f := range el.fields {
-			words = append(words, traceArrayOperandElement(f, d))
+			words = append(words, r.traceArrayOperandElement(f, d))
 		}
 	}
 	return wrapArrayLiteral(strings.Join(words, " "), d.TraceArrayLiteral)
@@ -201,9 +201,9 @@ func traceArrayOperandLiteral(elems []*syntax.ArrayElem, parsed []literalElem, d
 // for the `$'…'` its TraceQuoting uses for the same byte in an argument. An
 // embedded quote is still `'it'\”s'` and a lone one still `\'`, so what the
 // field moves is whether the rule fires and not which rule it is.
-func traceArrayOperandElement(s string, d Diagnostics) string {
+func (r *Runner) traceArrayOperandElement(s string, d Diagnostics) string {
 	if !d.TraceArrayOperandQuotesEveryElement {
-		return traceQuote(s, d.TraceQuoting, d.TraceMetacharacters)
+		return r.traceQuote(s, d.TraceQuoting, d.TraceMetacharacters)
 	}
 	if s == "" {
 		return "''"

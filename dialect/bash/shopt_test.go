@@ -88,9 +88,10 @@ func TestShoptRefusals(t *testing.T) {
 		{`shopt -z`, "shopt: usage: shopt [-pqsu] [-o] [optname ...]", 2},
 		// A name this shell recognizes and cannot move: refused out loud,
 		// never accepted quietly. `sourcepath` was the example here until
-		// #3058 gave it the switch it names, so the example is now one that
+		// #3058 gave it the switch it names and `histappend` was the example
+		// after it until #4149 did the same, so the example is now one that
 		// is still only a name.
-		{`shopt -u histappend`, "shopt: histappend: not implemented", 1},
+		{`shopt -s cdable_vars`, "shopt: cdable_vars: not implemented", 1},
 	} {
 		out, st := runBash(t, t.TempDir(), tc.src)
 		if st != tc.status || !strings.Contains(out, tc.said) {
@@ -99,7 +100,7 @@ func TestShoptRefusals(t *testing.T) {
 		}
 	}
 	// The states already held are granted: off may be turned off, on on.
-	for _, src := range []string{`shopt -u execfail`, `shopt -s histappend`} {
+	for _, src := range []string{`shopt -u execfail`, `shopt -s cmdhist`} {
 		if out, st := runBash(t, t.TempDir(), src); st != 0 || out != "" {
 			t.Errorf("%s = %q status %d, want a quiet success", src, out, st)
 		}
@@ -265,18 +266,23 @@ func TestShoptDashOListsNarrowed(t *testing.T) {
 	}
 }
 
-// The three history names #1429 asked about, and the six it left refused.
+// The history name #1429 asked about that is still a held state, and the six
+// it left refused.
 //
 // This is the whole point of the issue: a `shopt` that accepted everything
 // would put a startup file in the position of believing a setting took
 // effect. So the granted names and the refused ones are asserted together —
 // the split is the fix, not the count.
+//
+// It was three names until #4149. `histappend` and `lithist` are switches
+// now, at bash's own default, and are asserted next door — a held state and a
+// switch are different claims and a name that moved between them must not
+// keep the old assertion by accident.
 func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
-	// Granted, because this shell already does what each name asks for: the
-	// history writer appends rather than rewriting, a construct typed over
-	// several lines is one entry, and that entry keeps its newlines rather
-	// than being joined with semicolons.
-	for _, name := range []string{"histappend", "cmdhist", "lithist"} {
+	// Granted, because this shell already does what the name asks for: a
+	// construct typed over several lines is one entry rather than one entry
+	// per line.
+	for _, name := range []string{"cmdhist"} {
 		if out, st := runBash(t, t.TempDir(), "shopt -s "+name); st != 0 || out != "" {
 			t.Errorf("shopt -s %s = %q status %d, want a quiet success", name, out, st)
 		}

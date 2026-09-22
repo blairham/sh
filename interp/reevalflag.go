@@ -127,7 +127,7 @@ func (r *Runner) reevalFlagged(e *syntax.ParamExpr, words []string, quoted bool)
 			return nil, false, false
 		}
 		if join {
-			out = append(out, strings.Join(fields, ifsFirst(r.ifs())))
+			out = append(out, strings.Join(fields, r.ifsFirst(r.ifs())))
 			continue
 		}
 		out = append(out, fields...)

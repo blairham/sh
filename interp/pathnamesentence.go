@@ -79,5 +79,5 @@ func (r *Runner) typeExternalSentence(name, path string, hashed bool) string {
 // assumed. See Diagnostics.TypeSentencePathQuoting.
 func (r *Runner) typeSentencePathWord(path string) string {
 	d := r.diag()
-	return traceQuote(path, d.TypeSentencePathQuoting, d.TraceMetacharacters)
+	return r.traceQuote(path, d.TypeSentencePathQuoting, d.TraceMetacharacters)
 }

@@ -41,13 +41,22 @@ import (
 // anything. It is per-run and in memory, and no part of it reaches the
 // report.
 
-// Doc is one reference shell's own documentation, as a set of lines.
+// Doc is one reference shell's own documentation, as two sets of lines.
 //
 // The zero value attributes nothing, which is what a column with no
 // [Suite.SelfDoc] gets: an unasked question, counted as zero rather than
 // guessed at.
+//
+// Two sets rather than one because a block of documentation is not only its
+// sentences. `lines` holds the prose — what a sentence looks like is the
+// length-and-a-space rule below — and is what *anchors* an attribution.
+// `block` holds every line the shell wrote, the blank lines and the one-word
+// headings of the same pages included, and is only ever crossed from an
+// anchor. See [Doc.Attribute] for why that pair is what makes the number
+// honest without letting it run away.
 type Doc struct {
 	lines map[string]bool
+	block map[string]bool
 }
 
 // docTimeout bounds the collection. Asking a shell to print its own help is
@@ -80,13 +89,25 @@ func SelfDocumentation(ctx context.Context, s Suite, shell string) Doc {
 	return doc
 }
 
-func (d Doc) add(out string) {
+func (d *Doc) add(out string) {
+	if d.lines == nil {
+		d.lines = map[string]bool{}
+	}
+	if d.block == nil {
+		d.block = map[string]bool{}
+	}
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
-		// Blank and one-word lines are dropped. A dictionary that matched
-		// `done` or `fi` would attribute a file's own echoes to
-		// documentation, and the number this exists to make honest would
-		// start overstating in the other direction.
+		// Everything the shell wrote goes in the block set, blanks and
+		// headings included: those are what a page of documentation is made
+		// of between its sentences, and leaving them out is what made the
+		// figure understate. Membership in this set is never enough on its
+		// own — see [Doc.Attribute].
+		d.block[line] = true
+		// Blank and one-word lines are dropped from the anchors. A
+		// dictionary that matched `done` or `fi` would attribute a file's own
+		// echoes to documentation, and the number this exists to make honest
+		// would start overstating in the other direction.
 		if len(line) < docMinLen || !strings.Contains(line, " ") {
 			continue
 		}
@@ -112,6 +133,25 @@ func (d Doc) Empty() bool { return len(d.lines) == 0 }
 // bound on what the subsequence left unmatched, which is the direction an
 // honest discount has to err in — every line counted here is one the
 // reference printed and we printed nowhere.
+//
+// # Why a page is attributed and not only its sentences
+//
+// A line-at-a-time membership test undercounts, and by a lot. A page of
+// documentation is sentences with blank lines between them, indented
+// continuations, and one-word headings — `NAME`, `SYNOPSIS`, `SEE ALSO` —
+// and every one of those fails the length-and-a-space rule that keeps a
+// file's own `done` out of the dictionary. Measured on the builtins file of
+// the bash column, 2026-09-22: 52 differing lines, of which 50 are the help
+// builtin's output, and the per-line test attributed 28. The 22 it missed
+// were the blanks and the headings *of the pages it had already attributed*,
+// so the report said there were 24 lines of work in a file that has two.
+//
+// So the walk is over runs rather than lines. A line in the prose set is an
+// **anchor**; from an anchor the run extends outward through neighboring
+// unmatched lines for as long as each one is something the shell itself
+// wrote, and stops at the first line that is not. Crossing is what the
+// second set is for, and it is never a starting point: a blank line or a
+// bare `fi` is attributed only when the page it sits in already was.
 func (d Doc) Attribute(mine, theirs []string) int {
 	if d.Empty() {
 		return 0
@@ -120,14 +160,39 @@ func (d Doc) Attribute(mine, theirs []string) int {
 	for _, line := range mine {
 		have[strings.TrimSpace(line)]++
 	}
-	n := 0
-	for _, line := range theirs {
+	// unmatched is the multiset difference, kept positionally so the runs
+	// below are the reference's own order.
+	unmatched := make([]bool, len(theirs))
+	trimmed := make([]string, len(theirs))
+	attributed := make([]bool, len(theirs))
+	for i, line := range theirs {
 		line = strings.TrimSpace(line)
+		trimmed[i] = line
 		if have[line] > 0 {
 			have[line]--
 			continue
 		}
-		if d.lines[line] {
+		unmatched[i] = true
+		attributed[i] = d.lines[line]
+	}
+	// Two passes and no more. A run only ever grows outward from an anchor,
+	// so one sweep each way reaches every line either sweep could: a line the
+	// forward pass marks can extend the run rightwards alone, and the
+	// backward pass is the mirror of that.
+	crosses := func(i int) bool { return unmatched[i] && d.block[trimmed[i]] }
+	for i := 1; i < len(theirs); i++ {
+		if attributed[i-1] && !attributed[i] && crosses(i) {
+			attributed[i] = true
+		}
+	}
+	for i := len(theirs) - 2; i >= 0; i-- {
+		if attributed[i+1] && !attributed[i] && crosses(i) {
+			attributed[i] = true
+		}
+	}
+	n := 0
+	for _, ok := range attributed {
+		if ok {
 			n++
 		}
 	}

@@ -295,6 +295,13 @@ func Dialect() syntax.Dialect {
 	// `coproc cat` with the near ends in COPROC. zsh's coprocess speaks
 	// `print -p` rather than an array and is a different feature.
 	d.Coproc = true
+	// An array literal that never closes is an unfinished bracket here
+	// rather than a refused token: `a=(` is `unexpected EOF while looking
+	// for matching `)'` at the parenthesis's own line, where this shell used
+	// to answer `line 2: syntax error: unexpected end of file`. See
+	// syntax.Dialect.ArrayLiteralRunningOutIsUnmatched for the panel —
+	// ksh93 answers the other way and was already right.
+	d.ArrayLiteralRunningOutIsUnmatched = true
 	d.CoprocName = true
 	// And the way that array is closed: `exec {COPROC[1]}>&-` names the
 	// element holding the feed. Not core because zsh has the `{name}` token

@@ -3898,7 +3898,7 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 				break
 			}
 		}
-		if !p.at(TokRightParen) && p.giveUpOnTheArray(saved) {
+		if !p.at(TokRightParen) && p.giveUpOnTheArray(saved, opening) {
 			p.lex.inArrayLiteral = savedArray
 			p.lex.inDeclarationOperand = savedDecl
 			return a
@@ -4077,7 +4077,7 @@ func (p *Parser) nestedArrayLiteral(offersACompound bool) *Assign {
 // inArgument is put back before anything else, because the skip reads the
 // remaining elements the way the loop above read them, and what follows the
 // array is not an argument either way.
-func (p *Parser) giveUpOnTheArray(savedInArgument bool) bool {
+func (p *Parser) giveUpOnTheArray(savedInArgument bool, opening Pos) bool {
 	if !p.dialect.CompoundAssignmentErrorGivesUpTheLine {
 		return false
 	}
@@ -4088,10 +4088,23 @@ func (p *Parser) giveUpOnTheArray(savedInArgument bool) bool {
 			return false
 		}
 		if p.err == nil {
-			// Nothing has recorded it yet, so the caller's own report is
-			// made here instead — same token, same wording, same `)` asked
-			// for — and only where it goes differs.
-			p.failUnexpected(")")
+			if p.dialect.ArrayLiteralRunningOutIsUnmatched {
+				// This dialect calls a literal the input ran out inside an
+				// unfinished *bracket* rather than a refused token, and
+				// blames the parenthesis rather than the end of the input.
+				// See [Dialect.ArrayLiteralRunningOutIsUnmatched] for the
+				// panel that splits on it.
+				p.err = &Error{
+					Pos: opening, Kind: ErrUnmatched,
+					Token: "(", Expected: ")", LastToken: p.lastText,
+					Msg: "unmatched (", EofLine: int(p.tok.Pos.Line),
+				}
+			} else {
+				// Nothing has recorded it yet, so the caller's own report is
+				// made here instead — same token, same wording, same `)`
+				// asked for — and only where it goes differs.
+				p.failUnexpected(")")
+			}
 		}
 		p.refused, p.err = p.err, nil
 		// The lexer's copy as well, where the failure was its: a parser that

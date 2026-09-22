@@ -5503,7 +5503,21 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 	for exprEnd < 0 {
 		if l.eof() {
 			l.ranOut("$((")
-			l.fail(start, "unterminated arithmetic command")
+			// Unmatched rather than a bare syntax error, so that each
+			// dialect words it the way it words any construct whose closer
+			// never came. It was a substrate sentence no dialect overrode —
+			// "unterminated arithmetic command" — and three of the five
+			// print something else. Measured 2026-09-22 over `((`:
+			//
+			//	bash 5.3.20   unexpected EOF while looking for matching `)'
+			//	zsh 5.9.2     parse error
+			//	ksh93u+       `(: not found` — it never reads a command here
+			//	dash, ash     end of file unexpected (expecting ")")
+			//
+			// dash and BusyBox ash have no arithmetic command at all, so
+			// their `((` is two subshells and never reaches this scan; they
+			// were already right and are unaffected.
+			l.failUnmatched(start, "((", ")", "unterminated arithmetic command")
 			exprEnd = l.off
 			break
 		}
@@ -5699,13 +5713,51 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 	strip := r.Op == TokDLessDash
 	delim := r.Word.Literal()
 	start := l.pos()
+	// The line the *warning* names as where this document began, which is
+	// not the operator's line once a second document is queued behind the
+	// first. It is **the last line the input has already given up** when
+	// this document's body starts reading: the operator's own line for the
+	// first, and wherever the previous body stopped for each one after.
+	//
+	// Measured 2026-09-22 against bash 5.3.20, one file per row, the second
+	// document's name in the last column:
+	//
+	//	cat <<E1 <<E2 / a                    E2 at 2   the body's one line
+	//	cat <<E1 <<E2 / a / b / c            E2 at 4   E1 ran to the end
+	//	cat <<E1 <<E2 / x / E1 / y           E2 at 3   E1's delimiter line
+	//	echo one / <blank> / cat <<E1 <<E2 / a   E2 at 4
+	//	cat <<E1 <<E2 <<E3 / a               E2 and E3 both at 2
+	//
+	// Rows two and three are what makes this the *consumed* line rather
+	// than "one before the body starts": E1 stopping at a delimiter leaves
+	// the cursor on the line after it, and E1 running to the end of a file
+	// with no closing newline leaves it on the last line itself. So the
+	// line before is taken only where the cursor has just crossed a
+	// newline, which is what Col records.
+	//
+	// Floored at the operator's line for a document opened on the last line
+	// of a file with no newline after it: nothing has been consumed past
+	// the operator, and bash names the operator's line.
+	namedLine := start.Line
+	if start.Col == 1 {
+		namedLine--
+	}
+	namedAt := r.OpPos
+	if namedLine > namedAt.Line {
+		namedAt = Pos{Offset: start.Offset, Line: namedLine, Col: 1}
+	}
 	// Where the last line of the body began, which is where the input ran
 	// out as far as the one shell that remarks on this is concerned. Not
 	// l.pos() at the end: a body whose last line ends in a newline leaves
 	// the lexer at the start of the line *after* it, and the warning names
-	// the last line that had something on it. A body with no lines at all
-	// names the here-document's own line, which is measured.
-	lastLine := r.OpPos
+	// the last line that had something on it.
+	//
+	// It starts at namedAt rather than at the operator for the same reason
+	// namedAt is not the operator: a document with **no body at all** — the
+	// second of `cat <<E1 <<E2` once E1 has taken everything — is remarked
+	// on where the input stopped, not back where its operator was written.
+	// Measured, both numbers of that sentence are the same line there.
+	lastLine := namedAt
 	var body strings.Builder
 	// Where the last line the body took began, and how long the body was
 	// before it — so that the line can be given back at the end of the text
@@ -5745,7 +5797,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 				l.remarks = append(l.remarks, Remark{
 					Kind:  RemarkHeredocAtEOF,
 					Pos:   lastBody,
-					At:    r.OpPos,
+					At:    namedAt,
 					Token: delim,
 				})
 				l.markHeredocEnd(lastBody)
@@ -5772,7 +5824,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			l.remarks = append(l.remarks, Remark{
 				Kind:  RemarkHeredocAtEOF,
 				Pos:   lastLine,
-				At:    r.OpPos,
+				At:    namedAt,
 				Token: delim,
 			})
 			// The body ran to the end of the input, so the last line there
@@ -5806,7 +5858,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			l.remarks = append(l.remarks, Remark{
 				Kind:  RemarkHeredocAtEOF,
 				Pos:   linePos,
-				At:    r.OpPos,
+				At:    namedAt,
 				Token: delim,
 			})
 			l.markHeredocEnd(linePos)

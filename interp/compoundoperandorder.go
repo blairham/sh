@@ -148,7 +148,7 @@ func (r *Runner) flushHeldCommandTrace() {
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	for _, line := range held.lines {
-		r.errf("%s", line)
+		r.tracef("%s", line)
 	}
 }
 

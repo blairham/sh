@@ -3612,6 +3612,10 @@ func Diagnostics() interp.Diagnostics {
 		// is what the second field says. See interp/xtracearrayoperand.go.
 		TraceDeclarationArrayOperand:        interp.TraceOperandSplitBefore,
 		TraceArrayOperandQuotesEveryElement: true,
+		// And a `$'…'` in a **bare** literal is written as the characters it
+		// stands for: `a=( $'\t' )` traces a literal tab inside single
+		// quotes. Measured 2026-09-22 on 5.3.20; see the field.
+		TraceArrayLiteralDecodesAnsiCQuoting: true,
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
 		EvalNaming:       interp.SourceBeforeLocation,
@@ -4349,6 +4353,9 @@ func Apply(r *interp.Runner) {
 	// not found", so it is registered here rather than taken away there.
 	r.Register("shopt", biShopt)
 	registerLogout(r)
+	// Where `set -x` writes, which this shell alone lets a script move. See
+	// xtracefd.go for the three measurements that shape it.
+	registerTraceDescriptor(r)
 	// And the same table reached from the command line that started the
 	// shell, where there is no builtin to run: `bash -O checkhash` moves one
 	// of these names before the first line of the script. See shopt.go, and

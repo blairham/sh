@@ -105,13 +105,33 @@ func PrintWord(w *Word) string {
 	return p.b.String()
 }
 
+// PrintWordWith is PrintWord with an arrangement, for the one caller that
+// needs a word written some way other than as it stands.
+//
+// Only the fields a *word* can reach mean anything here, which today is
+// [Layout.AnsiCQuotedWordIsItsValue]: a shell's own `set -x` writes a `$'…'`
+// element of an array literal as the text it stands for, and the decoder for
+// that is the dialect's — see the field.
+func PrintWordWith(w *Word, l Layout) string {
+	if w == nil {
+		return ""
+	}
+	p := printer{layout: l}
+	p.word(w)
+	return p.b.String()
+}
+
 // PrintArrayElem renders one element of an array literal as it was written —
 // an ordinary word, or a nested literal with its parentheses.
-func PrintArrayElem(e *ArrayElem) string {
+func PrintArrayElem(e *ArrayElem) string { return PrintArrayElemWith(e, Layout{}) }
+
+// PrintArrayElemWith is PrintArrayElem with an arrangement, for the reason
+// PrintWordWith has one.
+func PrintArrayElemWith(e *ArrayElem, l Layout) string {
 	if e == nil {
 		return ""
 	}
-	var p printer
+	p := printer{layout: l}
 	p.arrayElem(e)
 	return p.b.String()
 }

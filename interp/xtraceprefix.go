@@ -322,7 +322,7 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 	line += strings.Join(r.traceCommandWords(argv, d), " ")
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.errf("%s%s\n", r.tracePrefix(), line)
+	r.tracef("%s%s\n", r.tracePrefix(), line)
 }
 
 // tracePrefixAfterTheCommand writes the assignment lines ksh93 puts behind

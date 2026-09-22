@@ -2308,6 +2308,11 @@ type Runner struct {
 	// may enter the mode, define nothing, and leave it, and the dialect's
 	// own answer has to be the one that comes back.
 	posixSavedFuncSpecial Answer
+	// posixSavedTypeSpecial is TypeDistinguishesSpecialBuiltins', for the
+	// reason every field here is one: the mode moves it in bash and the
+	// shells that are always in it answer it already, so leaving the mode has
+	// to reach the dialect's own answer rather than the standard's.
+	posixSavedTypeSpecial Answer
 	// The two `set` refusals, saved separately from each other and from the
 	// bad-option axis above because the panel does not answer them alike:
 	// BusyBox ash is fatal on the letter and not on the name, so one

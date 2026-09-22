@@ -358,6 +358,41 @@ type Layout struct {
 	// bash 5.3.20 through `declare -f`.
 	HereDocumentWordSingleQuoted bool
 
+	// CoprocessDefaultName is written where a coprocess over a **compound**
+	// command was given no name of its own, and is empty where the name is
+	// left out.
+	//
+	// A name may only be written before a compound command — with a simple
+	// one the first word is the command — so the two shapes are two
+	// constructs and the engine that lists a body writes them apart.
+	// Measured 2026-09-22 on bash 5.3.20 through `type`:
+	//
+	//	coproc ( : )              coproc COPROC ( : )
+	//	coproc { :; }             coproc COPROC { … }
+	//	coproc while …; done      coproc COPROC while …; done
+	//	coproc cat                coproc cat
+	//	coproc NM ( : )           coproc NM ( : )
+	//
+	// The name is not in the tree for the first three: nothing was written
+	// there, and what the coprocess ends up called is the runner's answer.
+	// So this is a normalization the caller asks for, in the caller's own
+	// spelling — a shell whose default is called something else says so
+	// here rather than being hard-coded into the printer.
+	CoprocessDefaultName string
+
+	// BlankBeforeAWordlessRedirection writes the blank that separates a
+	// command from its redirections even where there is no command in front
+	// of it — `> out` written back as ` > out`.
+	//
+	// A command may be nothing but redirections, and then the blank has
+	// nothing to separate. The two engines answer it differently and both
+	// answers are visible in a listed body, measured 2026-09-22 over
+	// `f() { > out; }`: bash writes `> out` and zsh writes ` > out`. It
+	// reaches the inside of a substitution too, which is where it costs
+	// something a reader notices — `echo $(< x1)` comes back `echo $( < x1)`
+	// with the blank and `echo $(< x1)` without it.
+	BlankBeforeAWordlessRedirection bool
+
 	// AnsiCQuotedWordIsItsValue writes a `$'…'` as an ordinary single-quoted
 	// string holding the characters it stands for, decoded by this function.
 	//
@@ -624,6 +659,36 @@ type printer struct {
 	// which is the one thing a statement's own End cannot say — see units,
 	// its only reader.
 	consumed int32
+	// oweASkippedSeparator is set when a here-document body has been written
+	// and the *next* statement separator has still to be dropped.
+	//
+	// The body ends the line it was on, so the separator of the statement
+	// that carried it is already gone — atLineStart is what says so. The
+	// separator after **that** goes too, and it is a separate piece of state
+	// because by then something has been written and the line has started
+	// again. Measured 2026-09-22 on bash 5.3.20 through `type`, over four
+	// shapes that pin exactly which one is dropped:
+	//
+	//	{ cat <<E …; echo a; echo b; echo c; }
+	//	                  cat and `echo a` lose theirs, `echo b` keeps its
+	//	{ echo z; cat <<E …; echo a; echo b; }
+	//	                  `echo z` keeps its, cat and `echo a` lose theirs
+	//	for i in 1; do cat <<E … done; echo a; echo b
+	//	                  cat and `done` lose theirs, `echo a` keeps its
+	//	for i in 1; do cat <<E …; echo q; done; echo a; echo b
+	//	                  cat and `done` lose theirs, `echo q` keeps its
+	//
+	// The last row is what makes this one flag rather than a count of two:
+	// the `;` that closes a keyword body is a **terminator** and neither
+	// takes the skip nor consumes it, so the skipped pair can have a
+	// statement between them.
+	//
+	// And a body closed by a **bracket** cancels it, where a body closed by
+	// a keyword carries it out: measured the same day, `coproc ( cat <<E … )`
+	// and `coproc { cat <<E …; }` are both followed by their `;`, where the
+	// `done` of the loop above is not. That is the same line Layout draws
+	// between a keyword terminator and a bracket, read from the other end.
+	oweASkippedSeparator bool
 	// translated collects the `$"…"` runs as they are written, for the one
 	// caller that wants them rather than the text — see TranslatedStrings.
 	// Nil for every ordinary print.
@@ -798,7 +863,15 @@ func (p *printer) separate(prev, next *Stmt) {
 		// of this, and writing the separator there instead is a `;` with
 		// nothing before it.
 		if !prev.Background && !p.atLineStart() {
-			p.str(p.layout.Separator)
+			if p.oweASkippedSeparator {
+				// The separator a here-document body still owes — see
+				// printer.oweASkippedSeparator. Consumed here whether or
+				// not the arrangement writes anything, because what is
+				// being counted is the separator and not the text.
+				p.oweASkippedSeparator = false
+			} else {
+				p.str(p.layout.Separator)
+			}
 		}
 		p.newLine()
 		return
@@ -938,6 +1011,7 @@ func (p *printer) braceGroup(list []*Stmt) {
 		p.bodyAt(list, false, p.layout.OutermostBraceOpensALine || p.depth > 0)
 		p.newLine()
 		p.str("}")
+		p.oweASkippedSeparator = false
 		return
 	}
 	if len(list) == 0 {
@@ -968,6 +1042,7 @@ func (p *printer) command(c Command) {
 			p.bodyAt(x.List, false, true)
 			p.newLine()
 			p.str(")")
+			p.oweASkippedSeparator = false
 			p.redirs(x.Redirs)
 			return
 		}
@@ -976,6 +1051,7 @@ func (p *printer) command(c Command) {
 		p.str("( ")
 		p.stmts(x.List)
 		p.str(" )")
+		p.oweASkippedSeparator = false
 		p.redirs(x.Redirs)
 	case *Group:
 		p.braceGroup(x.List)
@@ -1244,6 +1320,16 @@ func (p *printer) command(c Command) {
 			p.str(" ")
 		case x.Name != "":
 			p.str(x.Name + " ")
+		case p.layout.CoprocessDefaultName != "":
+			// Nothing was written, and the arrangement asks for the name
+			// the shell gives one anyway. Only over a compound command:
+			// before a simple one there is no place a name could have
+			// stood, so writing one there would turn the command's first
+			// word into a name and the rest into the command. See
+			// Layout.CoprocessDefaultName.
+			if _, simple := x.Cmd.(*SimpleCmd); !simple {
+				p.str(p.layout.CoprocessDefaultName + " ")
+			}
 		}
 		p.command(x.Cmd)
 	}
@@ -1707,7 +1793,10 @@ func (p *printer) simple(c *SimpleCmd) {
 		sep()
 		p.assign(a)
 	}
-	p.redirs(c.Redirs)
+	// A command that is nothing but redirections has no word for the blank
+	// to separate them from — see Layout.BlankBeforeAWordlessRedirection,
+	// which is where the two engines part.
+	p.redirsAfter(c.Redirs, !first || p.layout.BlankBeforeAWordlessRedirection)
 }
 
 func (p *printer) assign(a *Assign) {
@@ -1820,7 +1909,15 @@ func (p *printer) compoundVariableItem(c *SimpleCmd) {
 	}
 }
 
-func (p *printer) redirs(rs []*Redirect) {
+func (p *printer) redirs(rs []*Redirect) { p.redirsAfter(rs, true) }
+
+// redirsAfter is redirs with the leading blank made a decision.
+//
+// blank is whether anything the redirections have to be kept apart from was
+// written before them. It is false only for a simple command with no words
+// at all, and only where the arrangement says the blank goes with the
+// command rather than with the redirection.
+func (p *printer) redirsAfter(rs []*Redirect, blank bool) {
 	for _, rd := range rs {
 		if rd.PipeBoth && !p.layout.PipeBothWrittenOut {
 			// Nobody wrote this one: it is what the `|&` after the command
@@ -1829,7 +1926,10 @@ func (p *printer) redirs(rs []*Redirect) {
 			// operator, which is what PipeBothWrittenOut says.
 			continue
 		}
-		p.str(" ")
+		if blank {
+			p.str(" ")
+		}
+		blank = true
 		if rd.Op == TokLessAmp || rd.Op == TokGreatAmp {
 			p.dup(rd)
 			continue
@@ -2078,6 +2178,7 @@ func (p *printer) flushHeredocs() {
 		// says whether the *body* expands, and the closing line is never
 		// quoted in any shell.
 		p.str(rd.Word.Literal() + "\n")
+		p.oweASkippedSeparator = true
 	}
 }
 

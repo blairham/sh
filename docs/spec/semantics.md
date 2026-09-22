@@ -24191,6 +24191,26 @@ is a reserved word` — and belongs to that shell's grammar rather than here.
 the panel does not agree about that either. That membership is
 `SpecialBuiltinsBeyondPosix`, below.
 
+**`TypeDistinguishesSpecialBuiltinsInPosixMode`** — the same question asked of
+a shell that is *in* POSIX mode, which is a state rather than a preset:
+`Runner.SetPosixMode` swaps this value in on the way in and puts the answer
+above back on the way out.
+
+A field of its own for the reason `BadOptionToSpecialBuiltinFatalInPosixMode`
+is one — what a shell's own POSIX mode makes of an axis is that shell's answer
+and not the mode's. Measured 2026-09-22, `type break` with `type echo` as the
+control:
+
+    bash 5.3.20                        break is a shell builtin
+    bash 5.3.20, set -o posix          break is a special shell builtin
+    bash 5.3.20 as sh                  break is a special shell builtin
+    zsh 5.9.2, set -o posix            set: no such option: posix
+
+zsh's row is why the twin is not simply the standard's answer written into the
+swap: that shell has no `posix` option at all, so the only door there is the
+name. dash, ksh93 and BusyBox ash are in the mode under every name and already
+answer yes.
+
 **`SpecialBuiltinsBeyondPosix`** — bash — · dash `local` · ksh93 `alias
 unalias typeset` · zsh — · ash `local` · POSIX preset —
 

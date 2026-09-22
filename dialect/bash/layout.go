@@ -113,6 +113,11 @@ func common() syntax.Layout {
 		EmptyArithmeticForExpressionIsOne: true,
 		ArithmeticForExpressionsAsWritten: true,
 		HereDocumentWordSingleQuoted:      true,
+		// And a coprocess over a compound command is listed with the name
+		// this shell gives it when the script wrote none — `coproc ( : )`
+		// comes back `coproc COPROC ( : )`, where `coproc cat` comes back
+		// as it was written.
+		CoprocessDefaultName: "COPROC",
 
 		// A subshell stays on one line, and the line a here-document body
 		// ended is not written on again — so a body followed by anything at

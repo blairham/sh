@@ -305,12 +305,21 @@ func (r *Runner) lookPathReporting(name string) (string, error) {
 			return hashed, nil
 		}
 	}
-	path, err := r.lookPath(name)
+	path, spelled, err := r.lookPathSpelled(name)
 	if err != nil {
 		return path, err
 	}
 	if r.rememberingLookups() && r.sem().ALookupRemembersThePath == Yes {
+		// The table remembers what would **run**, which is the absolute
+		// path: a relative entry remembered as written would send a later
+		// run through os/exec's own resolution against the process's
+		// directory. Only what is printed takes the spelling.
 		r.hashCommandRun(name, path)
 	}
-	return path, err
+	// And the spelling is the answer, which is the whole of why the search
+	// hands back two: a PATH entry that is relative is written back as the
+	// script wrote it — `PATH=.` makes `type -p e` answer `./e`, where the
+	// absolute path names a directory nothing in the script mentions. See
+	// Runner.lookPathSpelled.
+	return spelled, nil
 }

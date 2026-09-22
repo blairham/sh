@@ -93,6 +93,12 @@ type Lexer struct {
 	// about the substitution — see Error.BodyRefusal — and the read that
 	// found it has already happened.
 	lastBodyRefusal *Error
+	// heredocPrefixRecovered says the last line of the text inside
+	// parentheses was read as a delimiter *prefix* — see
+	// heredocPrefixEndsTheParens. It is what tells a document that ended on
+	// the closing line from one that ran past the parenthesis entirely, and
+	// only a read made for that question asks it.
+	heredocPrefixRecovered bool
 	// lastBodyGaveUp is what that read gave up its **line** over, with the
 	// input already spent — an array literal that ran out, and nothing
 	// else. It is not lastBodyRefusal: that is what the read *failed* with,
@@ -3903,8 +3909,32 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// input has no wording for a here-document at end of file, so there
 		// is nothing to print beside the complaint — and suppressing it here
 		// silently made that nested shape parse again.
+		// Where the closing line counts as the body's last line, the
+		// question is a narrower one: did the document end *inside* the
+		// parentheses? `v=$(cat <<EOF` / `a` / `EOF)` is the shape the flag
+		// was written for and the delimiter is there, on the line the `)`
+		// shares — so the construct closes, and the warning above still
+		// stands because the read that raised it had the `)` on the end of
+		// that line. Where the delimiter is nowhere at all the body runs
+		// past the parenthesis in every column: measured 2026-09-22 over
+		// `v=$(cat <<EOF` / `hi` / `)`, bash 5.3.20 answers a warning and
+		// `unexpected EOF while looking for matching `)'` and ksh93u+
+		// answers `` `(' unmatched ``, which is what dash and zsh say too
+		// (#4135).
+		refuse := bodyRanOut && depth == 0
+		if refuse && l.dialect.HeredocEndsAtClosingParen {
+			_, recovered := l.readInsideParens(l.src[start:stop], int(open.Line))
+			refuse = !recovered
+		}
+		if refuse {
+			// The body reached the end of the *input* rather than the end of
+			// the substitution's own text, so that is the read the remark
+			// belongs to: bash locates the warning on the last line of the
+			// file and not on the line the parenthesis is on.
+			remarks, _ = l.takeRemarks(l.src[start:], int(open.Line))
+		}
 		l.remarks = append(l.remarks, remarks...)
-		if bodyRanOut && depth == 0 && !l.dialect.HeredocEndsAtClosingParen {
+		if refuse {
 			// The body took the `)` and everything after it, so that is
 			// where the cursor belongs: the input ran out inside this
 			// construct and there is nothing left for anyone to read.
@@ -4281,6 +4311,30 @@ func (l *Lexer) takeRemarks(text string, from int) ([]Remark, bool) {
 		}
 	}
 	return sub.lex.remarks, false
+}
+
+// readInsideParens is takeRemarks over text the reader is told is the inside
+// of a construct's parentheses, and it answers one further question: whether
+// the last line of that text was taken as a delimiter *prefix*.
+//
+// That is the discriminator between a here-document that ended on the closing
+// line and one that ran past the parenthesis and took it with it, which
+// nothing else can tell apart — both raise the same remark, in the same
+// words, at the same place. See Dialect.HeredocLastLineIsADelimiterPrefix.
+func (l *Lexer) readInsideParens(text string, from int) (ranOut, recovered bool) {
+	lex := NewLexer(text, l.dialect)
+	lex.line = from
+	lex.inProgramParens = true
+	sub := newParserOn(lex, l.dialect)
+	sub.InsideASubstitution()
+	sub.parseList()
+	for _, r := range sub.lex.remarks {
+		if r.Kind == RemarkHeredocAtEOF {
+			ranOut = true
+			break
+		}
+	}
+	return ranOut, sub.lex.heredocPrefixRecovered
 }
 
 // It also returns what the read had to say about input it accepted, for the
@@ -5871,6 +5925,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 				// line: this document was not closed by a delimiter of its
 				// own, and the one shell that says so says it here. Measured
 				// byte for byte against it.
+				l.heredocPrefixRecovered = true
 				l.remarks = append(l.remarks, Remark{
 					Kind:  RemarkHeredocAtEOF,
 					Pos:   lastBody,

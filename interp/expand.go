@@ -5898,11 +5898,45 @@ func (r *Runner) expandSpansWith(spans []syntax.Span, hook func(literal bool, pa
 func (r *Runner) rawSpans(text string) ([]syntax.Span, bool) {
 	spans, err := syntax.HeredocSpans(text, r.dialect())
 	if err != nil {
-		r.diagf("%s\n", r.diag().ParseFailure(err))
+		r.reportRawTextRefusal(err)
 		r.expandErr = true
 		return nil, false
 	}
 	return r.parseSpans(spans), true
+}
+
+// reportRawTextRefusal writes that refusal, located the way the dialect
+// locates anything else it found in a body it read at expansion time.
+//
+// A here-document body is such a body, and the text in it is numbered from
+// the body's own first line — so a `$( … )` written there that never closes
+// was reported at the line of the *command* the redirection belongs to, with
+// nothing saying it came out of a body at all. Measured 2026-09-22 on bash
+// 5.3.20, an `echo … <<EOF` on line 2 of a script whose body line 3 holds
+// `$(cat 10`:
+//
+//	bash 5.3.20  s.sh: command substitution: line 4: unexpected EOF while
+//	             looking for matching `)'
+//	before       s.sh: line 2: unexpected EOF while looking for matching `)'
+//
+// Line 4 rather than 3 by the convention every unterminated construct
+// follows: the input ran out on the line after the body's last. See
+// Runner.substFailureRoute, which is where a body that *parses into a tree*
+// and then refuses already gets the same two answers.
+func (r *Runner) reportRawTextRefusal(err error) {
+	d := r.diag()
+	if !r.inBodyReadAtExpansion {
+		r.diagf("%s\n", d.ParseFailure(err))
+		return
+	}
+	was := r.line
+	if r.expansionBodyLine > 0 {
+		if at := d.ParseFailureLine(err); at > 0 {
+			r.line = r.expansionBodyLine + at - 1
+		}
+	}
+	r.errf("%s", r.diagLineNamed(r.substFailureRoute(syntax.Span{}), "%s\n", d.ParseFailure(err)))
+	r.line = was
 }
 
 // parseSpans fills in the parsed form of any expansion the lexer left raw,

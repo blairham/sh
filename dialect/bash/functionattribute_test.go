@@ -73,6 +73,69 @@ func TestABodyListingCarriesTheAttributeLine(t *testing.T) {
 	}
 }
 
+// The `-p` word puts the attribute line back on a listing a name asked for,
+// which is the one form that writes a body and an attribute line together —
+// #4190.
+//
+// `declare -fp f` is the shape a state capture reads back, so a body alone
+// there is a listing saying a frozen function is an ordinary one, silently and
+// at status 0. Every want below is bytes from bash 5.3.20 under LC_ALL=C,
+// measured 2026-09-22 from a script file.
+func TestThePrintWordCarriesTheAttributeLineOnANamedListing(t *testing.T) {
+	// One of each letter and one holding none, so a row that wrote the line
+	// for every name would fail on `a` and a row that wrote none would fail
+	// on the other three.
+	setup := "a(){ :; }\nb(){ :; }\nc(){ :; }\nd(){ :; }\n" +
+		"readonly -f b\ndeclare -ft c\nexport -f d\n"
+	body := func(n string) string { return n + " () \n{ \n    :\n}\n" }
+	for _, tc := range []struct{ line, want string }{
+		// The body and then the line, in that order.
+		{"declare -fp b", body("b") + "declare -fr b\n"},
+		{"declare -fp c", body("c") + "declare -ft c\n"},
+		{"declare -fp d", body("d") + "declare -fx d\n"},
+		// A function holding none gets no line at all, where `-Fp` writes
+		// `declare -f a` for the same name — so the line is the function's
+		// attributes rather than the form's decoration.
+		{"declare -fp a", body("a")},
+		{"declare -Fp a", "declare -f a\n"},
+		// The letters come off in the field's order whatever the command
+		// line said, and a name may hold more than one.
+		{"readonly -f c\ndeclare -fp c", body("c") + "declare -frt c\n"},
+		// Two names, each followed by its own line rather than both lines
+		// collected at the end.
+		{"declare -fp b c", body("b") + "declare -fr b\n" + body("c") + "declare -ft c\n"},
+		// The word may be spelled first, and `typeset` is the same builtin.
+		{"declare -pf b", body("b") + "declare -fr b\n"},
+		{"typeset -fp b", body("b") + "declare -fr b\n"},
+		// Without it the body stands alone, which is the contrast the fix
+		// had to keep: only the `-p` form changed.
+		{"declare -f b", body("b")},
+	} {
+		t.Run(tc.line, func(t *testing.T) {
+			out, st := runBash(t, t.TempDir(), setup+tc.line+"\n")
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.line, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A name that is not there is still reported, and still leaves 1 behind, with
+// the attribute line of the name that was there written before it.
+func TestThePrintWordOnAMissingNameBesideAnAttributedOne(t *testing.T) {
+	out, st := runBash(t, t.TempDir(), "b(){ :; }\nreadonly -f b\ndeclare -fp b nosuch\n")
+	want := "b () \n{ \n    :\n}\ndeclare -fr b\n"
+	if !strings.HasPrefix(out, want) {
+		t.Errorf("declare -fp b nosuch = %q, want it to start with %q", out, want)
+	}
+	if !strings.Contains(out, "nosuch: not found") {
+		t.Errorf("declare -fp b nosuch = %q, want the missing name reported", out)
+	}
+	if st != 1 {
+		t.Errorf("declare -fp b nosuch left %d behind, want 1", st)
+	}
+}
+
 // With an operand the same letters set rather than filter, in either order
 // and under either word.
 func TestTheAttributeLettersSetWithAnOperand(t *testing.T) {

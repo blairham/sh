@@ -289,8 +289,9 @@ func (r *Runner) attributedFunctionListing(letter rune) int {
 // that holds attributes — the same `declare -f<letters> NAME` a names-only
 // listing writes, and empty for a function with none.
 //
-// Whole-table listings only. `declare -f NAME` is the body alone in bash
-// 5.3.20, so the caller decides; see Runner.declareFunctions.
+// Not for every listing: `declare -f NAME` is the body alone in bash 5.3.20
+// where `declare -fp NAME` is the body and then this line, so the caller
+// decides; see Runner.declareFunctions.
 func (r *Runner) functionAttributeLine(name string) string {
 	attrs := r.functionAttributes(name)
 	if attrs == "" {

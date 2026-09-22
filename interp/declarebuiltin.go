@@ -3431,6 +3431,10 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 	// listing is the *table* filtered rather than a name asked for, and bash
 	// 5.3.20 writes both of those for it — `declare -Fr` is `declare -fr b`
 	// and `declare -fr` is the body and then that same line (#3192).
+	//
+	// The `-p` word takes the first half of that back: `declare -fp f` is
+	// the body *and* the attribute line, so it is `print` and not this flag
+	// alone that decides the second one below (#4190).
 	byOperand := len(names) > 0 && !narrowed
 	if !named {
 		// The script's own and not the prelude's: this listing is what a
@@ -3470,9 +3474,19 @@ func (r *Runner) declareFunctions(names []string, narrowed, namesOnly, asDeclara
 		switch {
 		case !namesOnly:
 			r.printf("%s", r.listedFunctionLine(name, fn))
-			if !byOperand {
+			if !byOperand || print {
 				// And the attributes under the body, where this dialect has
 				// them and this function holds some.
+				//
+				// The `-p` word puts the line back on a listing a name asked
+				// for, which is the one form that writes both halves and the
+				// whole of what it adds. Measured 2026-09-22 on bash 5.3.20
+				// with `b` frozen: `declare -f b` is the body alone,
+				// `declare -fp b` is the body and then `declare -fr b`, and
+				// `declare -Fp b` is that line without a body. A listing
+				// asked for by `-p` is what a state capture reads back, so
+				// the body alone was a listing that said the function was
+				// ordinary (#4190).
 				r.printf("%s", r.functionAttributeLine(name))
 			}
 		case byOperand && asDeclarations && locates:

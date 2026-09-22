@@ -408,6 +408,13 @@ func (c *Runner) ownTables(r *Runner) {
 	// arithmetic must not write into the parent's array — the cycle bound
 	// reads it back to decide whether a name has come round on itself.
 	c.arithValueNames = slices.Clone(r.arithValueNames)
+	// And the numbers a substitution's body is entitled to re-use, which
+	// substRunner replaces wholesale a moment later for the body itself —
+	// cloned here anyway, for the reason reaped is below: "the next thing
+	// that runs replaces it" is a fact about the caller and not about the
+	// field, and every append to this one lands on the substitution path
+	// where the clone runs on a goroutine of its own.
+	c.releasedSubstFds = slices.Clone(r.releasedSubstFds)
 	c.jobs = slices.Clone(r.jobs)
 	c.jobOrder = slices.Clone(r.jobOrder)
 	// And the memory of the ones already reported, which a body a real shell

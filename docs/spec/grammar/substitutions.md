@@ -712,7 +712,7 @@ unlinked.
 ### The number a nested substitution takes
 
 A substitution inside another one's **body** takes the number the enclosing
-one published. Measured 2026-09-21, bash 5.3.20:
+one published. Measured 2026-09-22, bash 5.3.20:
 
 | written | bash 5.3.20 |
 | --- | --- |

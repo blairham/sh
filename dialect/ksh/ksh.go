@@ -1248,6 +1248,10 @@ func Semantics() interp.Semantics {
 	// >/dev/null` is 1 here and 0 in dash and bash, while the same line on a
 	// pseudo-terminal is 0 in all six.
 	s.BareTerminalTestIsDescriptorOne = interp.Yes
+	// And `test -R r` asks whether the name is a reference: measured
+	// 2026-09-22 on ksh93u+ 2012-08-01, `typeset -n r=v; test -R r` is 0 and
+	// `test -R v` is 1.
+	s.TestHasTheNameReferenceOperator = interp.Yes
 	// A name-shaped value is looked up in turn here as it is in bash and
 	// zsh — `y=5; x=y; $((x+1))` is 6, and `y=z; z=7; x=y` is 8 — measured
 	// 2026-09-11 against 93u+ 2012-08-01. The axis comment in interp said

@@ -48,9 +48,6 @@ func TestAFailureInsideAnUnclosedGroupCanBeTheParen(t *testing.T) {
 		{`[ \( x y \) ]`, "WORD y"},
 		{`[ \( -Q x \) ]`, "WORD x"},
 		{`[ \( \) ]`, "WORD )"},
-		{`[ \( -n x y \) ]`, "OPERAND"},
-		{`[ \( x y z \) ]`, "OPERAND"},
-		{`[ x -a \( y z \) ]`, "OPERAND"},
 		{`[ \( \( x \) ]`, "WORD x"},
 	} {
 		if got := run(c.src, No); !strings.Contains(got, c.off) {
@@ -58,6 +55,25 @@ func TestAFailureInsideAnUnclosedGroupCanBeTheParen(t *testing.T) {
 		}
 		if got := run(c.src, Yes); !strings.Contains(got, "PAREN") {
 			t.Errorf("%s at Yes: said %q, want PAREN", c.src, got)
+		}
+	}
+	// A group whose **own** closing parenthesis is what the reading ran out
+	// of is not this axis at all: the sentence is the same one, and it is
+	// written under either answer wherever the dialect has it. Three rows
+	// that used to sit in the table above and did not belong there — the
+	// reading gave up wanting a `)` rather than inside the group, so a
+	// dialect with a sentence for the missing parenthesis writes it either
+	// way. Measured 2026-09-22: dash, which answers this axis No and has the
+	// sentence, writes `closing paren expected` for all three.
+	for _, src := range []string{
+		`[ \( -n x y \) ]`,
+		`[ \( x y z \) ]`,
+		`[ x -a \( y z \) ]`,
+	} {
+		for _, on := range []Answer{No, Yes} {
+			if got := run(src, on); !strings.Contains(got, "PAREN") {
+				t.Errorf("%s at %v: said %q, want PAREN", src, on, got)
+			}
 		}
 	}
 	// And the controls: a group that closed leaves the leftover word named

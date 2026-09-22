@@ -560,6 +560,50 @@ type Diagnostics struct {
 	// shell and the line the way that column's other `test` refusals do and
 	// naming neither the builtin nor a word.
 	TestClosingParenExpected string
+	// TestClosingParenExpectedFound is the same complaint where a word
+	// **was** there and was not the parenthesis. One verb: that word.
+	//
+	// Two fields because two columns say it two ways and the split is
+	// measured: bash writes `` `)' expected `` when the arguments ran out and
+	// `` `)' expected, found junk `` when they did not, and its `[` always
+	// reaches the second because the `]` is the word it found. BusyBox and
+	// dash write one sentence for both. Measured 2026-09-22 on bash 5.3.20
+	// and on 3.2.57 under the `sh` name, which answer alike:
+	//
+	//	test "(" 1 = 2               `)' expected
+	//	test "(" 1 = 2 -a 3 = 3      `)' expected
+	//	test "(" 1 = 2 junk          `)' expected, found junk
+	//	[ "(" 1 = 2 ]                `)' expected, found ]
+	//	[ "(" 1 = 2 junk ]           `)' expected, found junk
+	//
+	// Empty leaves every shape to TestClosingParenExpected, which is what a
+	// dialect with one sentence wants.
+	TestClosingParenExpectedFound string
+	// TestLeftoverOperator is a well-formed expression with a word left over
+	// that is **spelled like an operator** — anything beginning with `-`.
+	// One verb: that word.
+	//
+	// The ordinary leftover is TestTooManyArguments and says no word at all;
+	// this one is a second sentence the same column writes when the leftover
+	// looks like an operator, and it is the only shape where a reader is
+	// told which word ended the expression. Measured 2026-09-22 on bash
+	// 5.3.20:
+	//
+	//	test 1 -ne 2 -ne 3     syntax error: `-ne' unexpected
+	//	test 1 -ne 2 -t 3      syntax error: `-t' unexpected
+	//	test 1 -ne 2 -Q 3      syntax error: `-Q' unexpected — unknown too
+	//	test 1 -ne 2 -- 3      syntax error: `--' unexpected
+	//	test a = b = c         too many arguments — `=` is not one
+	//	test 1 -ne 2 ! 3       too many arguments
+	//	test x y z w           too many arguments
+	//
+	// So the test is the spelling and not membership of an operator table:
+	// `-Q` is no operator in any column and still takes the sentence. Every
+	// other shell in the panel writes one sentence for both shapes — bash
+	// 3.2 and zsh say `too many arguments`, dash names a word through
+	// TestNamesTheWordTheParseStoppedAt, and ksh93 answers 0 — so empty
+	// leaves the leftover to TestTooManyArguments, which is what they want.
+	TestLeftoverOperator string
 	// ProcessSubstitutionNotInCondition is a `<(cmd)` standing as a
 	// condition's operand in a dialect that does not allow one there. One
 	// verb: the substitution as it was written, `<(cmd)` and not its inside.

@@ -2460,6 +2460,10 @@ func Semantics() interp.Semantics {
 	// reading this shell shares with ksh93: `[ -t ] >/dev/null` is 1 here
 	// and 0 in dash and bash.
 	s.BareTerminalTestIsDescriptorOne = interp.Yes
+	// And a trailing operator with nothing behind it is read as a word,
+	// which is what that answer is then applied to: `test -n xx -a -f` is 0
+	// and `test -n xx -a -t` is 1 — the word, and then `-t 1` about it.
+	s.TestTrailingUnaryOperatorIsAWord = interp.Yes
 	// And a connective with nothing behind it is the connective still, over
 	// a right operand that is missing and therefore false — the reading this
 	// shell shares with dash and with no other column. Measured 2026-09-18:

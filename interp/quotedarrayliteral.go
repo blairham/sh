@@ -191,6 +191,45 @@ func (r *Runner) literalTextHasMoreThanTheAssignment(file *syntax.File, src stri
 	}
 }
 
+// operandHidesALiteral reports whether this operand is the shape the re-read
+// is for, without performing it — the value has the parentheses at its ends,
+// this line's letters or the name's standing kind make it a compound, and the
+// dialect reads such a text again.
+//
+// It exists because the *refusal* has to know before the store does. A frozen
+// name is refused by the attribute mark, which runs ahead of the value, and a
+// refusal made anywhere in this operand names the builtin: measured
+// 2026-09-22 on bash 5.3.20, `readonly -a a="(4)"` and `export -a a="(4)"`
+// over a frozen `a` are `readonly: a: readonly variable` and `export: a:
+// readonly variable` — over a scalar, over an array, and over a name declared
+// with no value at all. The written literal is the control and stays bare.
+// See Runner.readonlyRefusalNamesBuiltin.
+// letterOnly is whether the container letter has to be **on this line**.
+// Measured 2026-09-22 on bash 5.3.20 over `declare -a c` and a `"(3)"` value:
+//
+//	declare c="(3)"      ([0]="3")      the standing attribute is enough
+//	typeset c="(3)"      ([0]="3")
+//	readonly -a c="(3)"  ([0]="3")      and so is the letter
+//	readonly c="(3)"     ([0]="(3)")    but the standing attribute is not
+//	export c="(3)"       ([0]="(3)")
+//	c="(3)"              ([0]="(3)")    the control: a bare assignment never
+//
+// So two of the five words re-read on the strength of what the name already
+// is and two want the letter written, which is what this argument carries.
+func (r *Runner) operandHidesALiteral(name, value string, f declareFlags, letterOnly bool) bool {
+	if len(value) < 2 || value[0] != '(' || value[len(value)-1] != ')' {
+		return false
+	}
+	if letterOnly {
+		if !f.array && !f.assoc {
+			return false
+		}
+	} else if !f.array && !f.assoc && !r.arrayDeclared(name) && !r.assocDeclared(name) {
+		return false
+	}
+	return r.sem().DeclarationRereadsAParenthesizedValue == Yes
+}
+
 // arrayLiteralHiddenByQuoting is the whole of what a declaration's value
 // branch has to ask: it reports whether this operand was a literal, and stores
 // it where the written form would have gone.

@@ -93,6 +93,16 @@ type Lexer struct {
 	// about the substitution — see Error.BodyRefusal — and the read that
 	// found it has already happened.
 	lastBodyRefusal *Error
+	// lastBodyGaveUp is what that read gave up its **line** over, with the
+	// input already spent — an array literal that ran out, and nothing
+	// else. It is not lastBodyRefusal: that is what the read *failed* with,
+	// and a read that gave up a line did not fail at all. See
+	// Parser.giveUpOnTheArray, Parser.refusedAtEOF and Lexer.refused.
+	lastBodyGaveUp *Error
+	// refused is a refusal a substitution's body gave up with no input left
+	// to recover, handed out to the parser reading this lexer rather than
+	// recorded as an error. See Lexer.takeRefused.
+	refused *Error
 
 	// wordStart is where the word being read began, kept for the diagnostic
 	// that quotes it back.
@@ -584,6 +594,27 @@ func (l *Lexer) Err() error { return l.err }
 // is no more text for a lexer in a state it cannot continue from to be asked
 // about.
 func (l *Lexer) forgetErr() { l.err = nil }
+
+// takeRefused hands back a refusal the body of a substitution gave up with the
+// input already spent, and forgets it. Nil where there is none.
+//
+// A refusal is the *parser's* to hold — see [File.Refused] — but the read that
+// produced this one is the lexer's, run from inside a word: the sub-parse of a
+// `$( … )` body in Lexer.parseToClose. There is no parser between the two, so
+// the lexer carries it as far as the token it was reading and the parser takes
+// it from here.
+//
+// It is handed over rather than recorded as an error because that is the
+// distinction it exists to keep: `a=(` exits 1 and `echo $(` exits 2 over the
+// same end of input, and making this the lexer's error is what would say 2.
+func (l *Lexer) takeRefused() error {
+	if l.refused == nil {
+		return nil
+	}
+	refused := l.refused
+	l.refused = nil
+	return refused
+}
 
 // Incomplete reports whether the input ended in the middle of something that
 // could still be finished — an unclosed quote, a trailing line continuation.
@@ -3656,6 +3687,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		// them here is the fold: one scanner, one comment rule, one answer
 		// to where a body ends, for all three kinds that hold a program.
 		l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
+		l.lastBodyGaveUp = nil
 		l.lastInnerHeredocExpands = false
 		if end, remarks, ok := l.parseToClose(start); ok {
 			// What that read had to say comes back with it. A parse inside a
@@ -3704,7 +3736,12 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	// spend a parenthesis that read has already spent. See
 	// Lexer.lastBodyStop.
 	spent := l.lastBodyStop
+	// And what that read gave up a *line* over with the input already spent,
+	// which is the answer ahead of this construct's own rather than beside
+	// it. See the eof branch below and Lexer.refused.
+	gaveUp := l.lastBodyGaveUp
 	l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
+	l.lastBodyGaveUp = nil
 	l.lastInnerHeredocExpands = false
 	joined := l.collectContinuations()
 	for depth > 0 {
@@ -3713,6 +3750,38 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				l.innerOpen, l.innerHeredocExpands = inner, innerExpands
 			}
 			l.ranOut(openingOf(kind))
+			if gaveUp != nil {
+				// The body gave up its line with nothing left to read, and
+				// that refusal is **final** — the same rule the enclosing
+				// constructs follow in Parser.giveUpOnTheArray, arrived at
+				// from the other side. `$(a=(` is the shape: two complaints
+				// about the same end of input, one naming the literal's
+				// parenthesis and one naming the substitution's, and bash
+				// names the literal's at status 1 where this said the
+				// substitution's at line 2 and status 2.
+				//
+				// So this construct raises nothing at all. It is handed to
+				// the parser as a refusal rather than recorded as this
+				// lexer's error, because a refused line exits 1 and a file
+				// that would not parse exits 2 — see Lexer.takeRefused.
+				l.refused = gaveUp
+				// A refused **token** is written with the substitution's
+				// complaint around it and a body that merely ran out is
+				// not, which is one construct's measurement rather than a
+				// guess: 2026-09-22, bash 5.3.20, `${ a=(` names `)' — the
+				// literal's — and `${ a=( ;` names `}', the funsub's. So the
+				// clause is the substitution's and it is written only for
+				// the token, which is exactly the split
+				// Diagnostics.substitutionBodyReplacesTheQuote already draws
+				// from the other end. Error.BodyRefusal is how it is carried.
+				if gaveUp.Kind == ErrUnexpected && l.err == nil {
+					l.failedToClose(open, kind, gaveUp)
+					if se, ok := l.err.(*Error); ok {
+						l.refused, l.err = se, nil
+					}
+				}
+				break
+			}
 			l.failedToClose(open, kind, refusal)
 			break
 		}
@@ -4294,6 +4363,14 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 		// caller and the same moment. See Lexer.lastBodyRefusal and
 		// Lexer.lastBodyStop.
 		l.lastBodyRefusal, _ = sub.err.(*Error)
+		// And what it gave up a *line* over with nothing left to read, which
+		// is a different thing from what it failed with and is kept
+		// separately: an array literal that ran out is not a failed read at
+		// all — sub.err is nil there — so this is invisible to the line
+		// above. See Lexer.lastBodyGaveUp.
+		if sub.refusedAtEOF {
+			l.lastBodyGaveUp, _ = sub.refused.(*Error)
+		}
 		return 0, nil, false
 	}
 	return from + int(sub.tok.Pos.Offset), sub.lex.remarks, true

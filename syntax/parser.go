@@ -576,6 +576,17 @@ func (p *Parser) next() {
 	if p.err == nil && p.lex.Err() != nil {
 		p.err = p.lex.Err()
 	}
+	// And a refusal the lexer is holding for this parser: the body of a
+	// substitution gave up its line with the input already spent, which is
+	// final exactly as an array literal's own is — see Lexer.takeRefused and
+	// Parser.refusedAtEOF. Taken here rather than raised there because a
+	// refusal is a parser's to hold, and `$(a=(` has no parser between the
+	// two: the read that produced it ran from inside a word.
+	if p.refused == nil {
+		if refused := p.lex.takeRefused(); refused != nil {
+			p.refused, p.refusedAtEOF = refused, true
+		}
+	}
 	// A global alias is expanded wherever a word stands, so the question is
 	// asked of every token rather than at the handful of places a command
 	// word is read. A token read here begins a chain of its own. See

@@ -427,6 +427,7 @@ func NewParserAt(src string, d Dialect, first int) *Parser {
 // settings and never recorded.
 func newParserOn(lex *Lexer, d Dialect) *Parser {
 	p := &Parser{lex: lex, dialect: d}
+	lex.parser = p
 	p.next()
 	return p
 }
@@ -763,6 +764,35 @@ func (p *Parser) atListEnd() bool {
 // is a different question.
 func (p *Parser) atASubstitutionCloser() bool {
 	return p.substitutionBody && p.at(TokEOF)
+}
+
+// atAliasSuppliedSubstitutionCloser reports whether the `)` standing here is
+// one an **alias value** put there, in a body that is the inside of a
+// substitution.
+//
+// The lexer cuts a `$( … )` body out of the script at the closing
+// parenthesis, so the text handed over never holds one at the top level —
+// with one exception, and it is textual substitution's: `alias p='echo hi )'`
+// used as `v=$( p` closes the construct with a parenthesis that is in the
+// value. The extent of the construct in the *script* is the alias word, so
+// that is what the body's text is, and the parenthesis comes back when the
+// body is read again and the value is expanded again. Measured 2026-09-22 on
+// bash 5.3.20, which answers `hi`; this refused the body at the `)` (#4150).
+//
+// Narrow on purpose: only a token a splice is still handing out counts, so a
+// stray parenthesis the script really wrote is still the refusal it was.
+func (p *Parser) atAliasSuppliedSubstitutionCloser() bool {
+	return p.substitutionBody && p.aliasSpliced > 0 && p.at(TokRightParen)
+}
+
+// endSubstitutionBody stops the read at the closer an alias supplied: nothing
+// after it is the body's, neither the rest of the value nor the rest of the
+// text the value was spliced into.
+func (p *Parser) endSubstitutionBody() {
+	p.pending, p.pendingTouches, p.pendingChains = nil, nil, nil
+	p.pendingTails, p.pendingCarries = nil, nil
+	p.aliasSpliced, p.tokTail, p.aliasSource = 0, "", ""
+	p.tok = Token{Kind: TokEOF, Pos: p.tok.Pos, End: p.tok.End}
 }
 
 // bareNegationStandsHere reports whether a `!` that has just been read may be
@@ -1301,6 +1331,16 @@ func (p *Parser) NextLine() (*File, bool) {
 			p.skipNewlines()
 		}
 		st := p.parseStmt()
+		if p.atAliasSuppliedSubstitutionCloser() {
+			// See Parser.atAliasSuppliedSubstitutionCloser: the body ends
+			// here and what the value holds past the parenthesis is the
+			// enclosing command's, not this program's.
+			if st != nil {
+				f.Stmts = append(f.Stmts, st)
+			}
+			p.endSubstitutionBody()
+			break
+		}
 		if st == nil {
 			if p.err == nil && !p.at(TokEOF) {
 				// Nothing here can begin a command: a stop word with no

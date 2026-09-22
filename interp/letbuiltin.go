@@ -28,6 +28,20 @@ func init() {
 }
 
 func biLet(r *Runner, _ context.Context, args []string) int {
+	if len(args) > 0 && args[0] == "--" {
+		// End of options, and the first one only. Unanimous among the three
+		// shells that have the builtin and measured 2026-09-22: `let --
+		// '1 == 1'` is 0 and `let -- 0` is 1 in bash 5.3.20, zsh 5.9.2 and
+		// ksh93u+, while `let -- -- 1` is each shell's complaint about an
+		// expression beginning `-`. `let --` with nothing behind it is the
+		// no-expression refusal below, which is where the three part company
+		// in wording and status rather than in reading.
+		//
+		// It is what `alias let='let --'` is for, which is a real idiom: the
+		// alias makes every `let` in a script safe against an expression
+		// that begins with a minus.
+		args = args[1:]
+	}
 	if len(args) == 0 {
 		d := r.diag()
 		msg := Wording(d.LetNoExpression, "let: expression expected")

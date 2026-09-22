@@ -146,6 +146,16 @@ type Lexer struct {
 	// recorded as an error. See Lexer.takeRefused.
 	refused *Error
 
+	// parser is the parser this lexer feeds, and it is here for one question
+	// the lexer cannot answer on its own: which alias tables a *program*
+	// between parentheses is read with.
+	//
+	// The tables are fields a caller fills in after the parser is built —
+	// see interp.Runner.ExpandAliasesIn — so a lexer that wanted them at
+	// construction time would always find them empty. Nil for a lexer
+	// nobody has wrapped, which is every raw scan.
+	parser *Parser
+
 	// wordStart is where the word being read began, kept for the diagnostic
 	// that quotes it back.
 	//
@@ -3849,7 +3859,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		l.lastBodyGaveUp = nil
 		l.lastBodyOpenParens, l.lastBodyRanOut = 0, false
 		l.lastInnerHeredocExpands = false
-		if end, remarks, ok := l.parseToClose(start); ok {
+		if end, remarks, inSource, ok := l.parseToClose(start); ok {
 			// What that read had to say comes back with it. A parse inside a
 			// parse otherwise says nothing — the reason takeRemarks exists
 			// below — and this is the *other* route into a substitution's
@@ -3868,7 +3878,9 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 				l.advance()
 			}
 			value := l.src[start:l.off]
-			l.advance() // the )
+			if inSource {
+				l.advance() // the )
+			}
 			if kind == CommandSubst || kind == ArithSubst {
 				// And a here-document this text opened and could not feed,
 				// where the dialect refuses one. `$( )` and not the two
@@ -4508,11 +4520,28 @@ func (l *Lexer) readInsideParens(text string, from int) (ranOut, recovered bool)
 // of the program rather than of the substitution. `$(` holds no newline, so
 // the lexer's current line is the opener's, and the offsets the caller uses
 // are untouched by it.
-func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
+// The third result says whether the closing parenthesis is a character of the
+// source. It is not where an **alias** supplied it: substitution is textual,
+// so `alias p='echo hi )'` used as `v=$( p` closes the construct with a
+// parenthesis that is in the value and nowhere in the script — and the token
+// carries the alias word's position, so the offset points at the word rather
+// than at any `)`. Measured 2026-09-22 on bash 5.3.20, which answers `hi`
+// there; stepping over a parenthesis that is not there ate the word's first
+// character and left the rest of it as text (#4150).
+func (l *Lexer) parseToClose(from int) (int, []Remark, bool, bool) {
 	lex := NewLexer(l.src[from:], l.dialect)
 	lex.line = l.line
 	lex.inProgramParens = true
 	sub := newParserOn(lex, l.dialect)
+	// Read with the same alias tables the body's own parse will use, because
+	// an alias may hold the very punctuation this read is looking for. `alias
+	// switch=case` makes `echo $( switch x in x) echo ok;; esac )` a case
+	// statement in bash 5.3.20, measured 2026-09-22 — where a read with no
+	// tables sees a word, a `)` that looks like the closer, and a `;;` left
+	// over for the enclosing line to complain about. `alias p='echo hi )'`
+	// is the same thing from the other side: the parenthesis that closes the
+	// construct is in the value (#4150).
+	l.lendAliases(sub)
 	// The text begins a substitution's contents, so the end of it is that
 	// construct's closing delimiter rather than the end of a program — the
 	// same thing Runner.readSubstBody tells the read that *runs* the body,
@@ -4590,9 +4619,31 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool) {
 		if sub.refusedAtEOF {
 			l.lastBodyGaveUp, _ = sub.refused.(*Error)
 		}
-		return 0, nil, false
+		return 0, nil, false, false
 	}
-	return from + int(sub.tok.Pos.Offset), sub.lex.remarks, true
+	if sub.aliasSpliced > 0 {
+		// The closer came out of an alias value. What the construct spends
+		// in the source is the alias *word*, whole, and there is no
+		// parenthesis after it to step over.
+		return from + int(sub.tok.End.Offset), sub.lex.remarks, false, true
+	}
+	return from + int(sub.tok.Pos.Offset), sub.lex.remarks, true, true
+}
+
+// lendAliases hands a read of a program between parentheses the tables the
+// enclosing read has.
+//
+// Priming is part of it: a *global* alias is offered to a token as it is
+// lexed, and the first one was read by newParserOn before there was a table
+// to offer it to.
+func (l *Lexer) lendAliases(sub *Parser) {
+	if l.parser == nil {
+		return
+	}
+	sub.Aliases = l.parser.Aliases
+	sub.GlobalAliases = l.parser.GlobalAliases
+	sub.SuffixAliases = l.parser.SuffixAliases
+	sub.primeAliases()
 }
 
 // parseToCloseBrace reads the body of `${ cmd;}` and returns the offset of
@@ -4924,8 +4975,8 @@ func (l *Lexer) scanSubshellSubstitution(open Pos, start int, q Quoting) (Span, 
 		// does not (#2725).
 		return Span{}, false
 	}
-	end, remarks, ok := l.parseToClose(start + 1)
-	if !ok || end+1 >= len(l.src) || l.src[end+1] != '}' {
+	end, remarks, inSource, ok := l.parseToClose(start + 1)
+	if !ok || !inSource || end+1 >= len(l.src) || l.src[end+1] != '}' {
 		return Span{}, false
 	}
 	l.remarks = append(l.remarks, remarks...)
@@ -5869,9 +5920,19 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 			// expression rather than a program, and its two parentheses
 			// balance against its two closers on their own.
 			if l.peekAt(1) == '(' && l.peekAt(2) != '(' {
-				if end, remarks, ok := l.parseToClose(l.off + 2); ok {
+				// end is the closer's own offset where the source holds one
+				// and the offset just past the alias word where it does not,
+				// so the last character to step over is one short in the
+				// second case. See parseToClose.
+				last := func(end int, inSource bool) int {
+					if inSource {
+						return end
+					}
+					return end - 1
+				}
+				if end, remarks, inSource, ok := l.parseToClose(l.off + 2); ok {
 					l.remarks = append(l.remarks, remarks...)
-					for l.off <= end {
+					for stop := last(end, inSource); l.off <= stop; {
 						l.advance()
 					}
 					continue

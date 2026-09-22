@@ -624,7 +624,7 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) 
 		// reason expandOneWordFields gives. See subscriptSubstHold (#3240).
 		release := r.armSubscriptSubsts(s)
 		if parts, ok := r.expandAt(s, splitNever, head); ok {
-			text = r.joinUnsplit(s.Param, parts)
+			text = r.joinUnsplitEscaped(s.Param, parts)
 		} else {
 			text, _ = r.expandSpan(s, splitNever, head)
 		}
@@ -705,7 +705,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// one the separator rule applies to. The fields view below is
 			// untouched: whether the target is read as fields at all is the
 			// redirection's own axis, and it is asked by the caller.
-			b.WriteString(r.joinUnsplit(s.Param, parts))
+			b.WriteString(r.joinUnsplitEscaped(s.Param, parts))
 			// add and not lay, though nothing can tell them apart here
 			// today: a target holding a distributive expansion is not one
 			// field under either rule, so redirectTarget's two readings
@@ -1891,6 +1891,32 @@ func (r *Runner) starSpelled(e *syntax.ParamExpr) bool {
 // the node and the fields.
 func (r *Runner) joinUnsplit(e *syntax.ParamExpr, parts []string) string {
 	return strings.Join(parts, r.unsplitJoinSeparator(r.starSpelled(e), len(parts)))
+}
+
+// joinUnsplitEscaped is joinUnsplit for the callers whose parts are in the
+// **escaped form** rather than raw values.
+//
+// It differs in one character and that character is a backslash. The escaped
+// form spells "this was quoted" as a backslash in front of a character, so a
+// separator dropped between two parts straight off IFS is read as a mark and
+// removed with the marks: measured 2026-09-22 against bash 5.3.20, zsh 5.9.2,
+// ksh93u+ and dash, `IFS='\'; set -- x y; v=$*` assigns `x\y` everywhere,
+// where this shell assigned `xy` at status 0 — the separator vanished, and
+// nothing said so. A separator is a character of IFS's own *value*, so the
+// escaping a value gets is the escaping it needs.
+//
+// Not globEscape, which would mark the metacharacters too: an IFS
+// metacharacter that reaches a pattern operand stays live, measured on the
+// same build — with `IFS='*'` and parameters `x` and `y`, `${v%$*}` trims
+// `Zxay` to `Z`, so the star the join supplied matched a character the
+// subject had rather than one it spelled.
+//
+// The raw spelling above is still what [Runner.readParamSource] and
+// [Runner.bracedWholeArrayReference] want: those join *values*, and a value's
+// backslash is already a backslash there.
+func (r *Runner) joinUnsplitEscaped(e *syntax.ParamExpr, parts []string) string {
+	sep := r.unsplitJoinSeparator(r.starSpelled(e), len(parts))
+	return strings.Join(parts, escapeValueBackslashes(sep))
 }
 
 // bracedWholeArrayReference is the scalar reading of `${r}` where `r` is a

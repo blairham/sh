@@ -4644,6 +4644,30 @@ type Dialect struct {
 	// about two classes of name; see interp.Semantics.
 	ParameterIsSetTest bool
 
+	// NameReferenceTest enables `[[ -R name ]]`, which asks whether a name is
+	// a **reference** — a question about the binding rather than about what it
+	// points at, so a reference answers true and its target answers false.
+	//
+	// A grammar flag for the same reason [ParameterIsSetTest] is one, and the
+	// same column decides it. Measured 2026-09-22 with `v=1` and a reference
+	// `r` aimed at it:
+	//
+	//	bash 5.3.20      `[[ -R r ]]` 0, `[[ -R v ]]` 1
+	//	ksh93u+ 2012-08  `[[ -R r ]]` 0, `[[ -R v ]]` 1
+	//	bash 3.2.57      `conditional binary operator expected`, then a
+	//	                 syntax error naming the operand — it cannot read the
+	//	                 line at all, which is what makes this grammar
+	//	zsh 5.9.2        `unknown condition: -R`
+	//	dash 0.5.12      no `[[ ]]` to put it in
+	//
+	// The builtin spelling is a separate question and a separate axis, because
+	// it is an operand rather than grammar: see
+	// interp.Semantics.TestHasTheNameReferenceOperator. The two must answer
+	// together in any dialect that has both — the corpus case
+	// `cond/a-name-reference-test-asks-about-the-binding` puts `[ -R r ]`
+	// beside `[[ -R r ]]` so that they cannot come apart.
+	NameReferenceTest bool
+
 	// FunctionNameExpands reads a function definition's name as a *word*
 	// rather than as literal text, so an expansion in one names the function
 	// the expansion produces: `w=foo; _p_${w}() { … }` defines `_p_foo`.

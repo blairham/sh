@@ -596,6 +596,7 @@ func Dialect() syntax.Dialect {
 	// fewer kinds of name through it than the other two; see
 	// interp.Semantics.ParameterIsSetSeesPositionals.
 	d.ParameterIsSetTest = true
+	d.NameReferenceTest = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.
 	d.RegexTakesAlternation = true
 	// `cmd |&` is this shell's coprocess: an operator that terminates a

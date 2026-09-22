@@ -267,6 +267,22 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// the builtin's does not is which brackets were written: see
 		// condParameterIsSet.
 		return r.condParameterIsSet(x.X, s)
+	case "-R":
+		// Whether the name is a **reference**, which is a question about the
+		// binding rather than about what it points at: the reference answers
+		// true and its target answers false. The same question `test -R`
+		// asks and the same answer, through the same helper — the corpus case
+		// puts the two spellings side by side so they cannot come apart.
+		//
+		// The grammar has already decided this word is an operator at all
+		// (Dialect.NameReferenceTest); this asks the separate question of
+		// whether the dialect answers it, which is what the builtin's gate
+		// asks too.
+		if !r.ask(r.sem().TestHasTheNameReferenceOperator,
+			"`[[ -R r ]]` asking whether r is a name reference") {
+			return false, nil
+		}
+		return r.isNameref(s), nil
 	case "-o":
 		// The shell's own option state, read through the dialect's namespace
 		// — which for one of the panel is far wider than its `set -o` names.

@@ -164,13 +164,15 @@ func (c *TestClause) commandNode() {}
 // of the variable — and a missing one is a syntax error in all three.
 // condUnaryOp reports whether a word is a one-operand test in this dialect.
 //
-// Most are core. Three are not, and each says why in dialect.go: `-v` behind
-// [Dialect.ParameterIsSetTest], and `-prefix` and `-suffix` behind
-// [Dialect.CompletionConditions].
+// Most are core. Four are not, and each says why in dialect.go: `-v` behind
+// [Dialect.ParameterIsSetTest], `-R` behind [Dialect.NameReferenceTest], and
+// `-prefix` and `-suffix` behind [Dialect.CompletionConditions].
 func (p *Parser) condUnaryOp(s string) bool {
 	switch s {
 	case "-v":
 		return p.dialect.ParameterIsSetTest
+	case "-R":
+		return p.dialect.NameReferenceTest
 	}
 	return condUnaryOps[s]
 }

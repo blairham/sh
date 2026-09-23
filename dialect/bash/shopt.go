@@ -380,6 +380,26 @@ var shoptSwitches = map[string]shoptSwitch{
 		get: (*interp.Runner).BareCdOperandCanNameAVariable,
 		set: (*interp.Runner).SetBareCdOperandCanNameAVariable,
 	},
+	// Whether a prompt's value is expanded each time it is drawn. On with
+	// nothing said, and it gates the *expansion* pass only — the backslash
+	// language runs either way, measured 2026-09-23 through a pty on bash
+	// 5.3.15:
+	//
+	//	PS1='[$x]> ' with x=XVAL   on `[XVAL]> `   off `[$x]> `
+	//	PS1='[\u]> '               on `[root]> `   off `[root]> `
+	//
+	// It reaches the drawing through interp.PromptStyle.Expand, which is
+	// asked at every draw — see promptVarsIsOn, and zsh's promptsubst one
+	// dialect over for the same shape.
+	//
+	// It sat in shoptStates reading **on**, which made `shopt -s` a silent
+	// grant and `shopt -u` the refusal — so the one state a script sets the
+	// name for was the one it could not have, over a prompt this shell was
+	// expanding unconditionally (#4149).
+	promptVarsName: {
+		get: promptVarsIsOn,
+		set: func(r *interp.Runner, on bool) { shoptSetStored(r, promptVarsName, on, promptVarsDefault) },
+	},
 	// The fourth name here that moves a semantics axis, and the one whose
 	// axis holds a *name* rather than an answer:
 	// interp.Semantics.PromptCommentsNeedTheOption is this option's own
@@ -901,7 +921,6 @@ var shoptStates = map[string]bool{
 	"huponexit":            false,
 	"mailwarn":             false,
 	"progcomp_alias":       false,
-	"promptvars":           true,
 }
 
 const shoptUsage = "shopt: usage: shopt [-pqsu] [-o] [optname ...]"

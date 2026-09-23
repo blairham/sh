@@ -6135,6 +6135,30 @@ type Diagnostics struct {
 	// itself through ArithErrorNamesTheBuiltin. ksh93 and zsh name no
 	// construct on any route.
 	ArithErrorNamesTheConstruct bool
+	// ArithValueShownEscaped writes the bytes an expansion put inside
+	// brackets the script wrote with a backslash in front of them, where the
+	// rest quote the expression back as the expansion left it.
+	//
+	// The escaping is not decoration: it is how the shell that does it tells
+	// its own reader that a `]` a value carried closes no subscript, and a
+	// refusal naming the unescaped text says the subscript ended where it did
+	// not. Measured 2026-09-22 from a script file under `LC_ALL=C`, with
+	// `declare -A assoc; key='x],b[$(echo 9)'; assoc[$key]=1`:
+	//
+	//	(( 'assoc[$key]++' ))   bash 5.3.20  'assoc[x\],b\[\$(echo 9)]++'
+	//	                        here         'assoc[x],b[$(echo 9)]++'
+	//
+	// zsh has no row: it stops at the apostrophe — `bad math expression:
+	// illegal character: '` — and names no text at all, and ksh93 and the two
+	// POSIX shells never quote a value's bytes back either. So it is bash's
+	// alone, and a dialect that says nothing keeps printing what it was
+	// handed — which matters, since a shell with no subscripts marks nothing
+	// and a backslash it never wrote would be this implementation's
+	// bookkeeping showing through (#4255).
+	//
+	// [syntax.ArithValueMark] is what the marks are; the escaped set is
+	// exactly the marked one.
+	ArithValueShownEscaped bool
 
 	// FdVariableWithoutADescriptor is `exec {name}>&-` when the name holds
 	// no descriptor number. One verb: the variable's name as written,

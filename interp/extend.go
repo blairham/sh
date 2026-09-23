@@ -1909,7 +1909,7 @@ func (r *Runner) ArithValue(text string) (int, bool) {
 	outer := r.inBuiltin
 	r.inBuiltin = ""
 	defer func() { r.inBuiltin = outer }()
-	tree, text, err := r.arithTreeOver(nil, text)
+	tree, text, err := r.arithTreeOver(nil, text, arithTextArrived)
 	if err != nil {
 		r.diagf("%s\n", r.diag().ParseFailure(err))
 		r.fatalQuiet()

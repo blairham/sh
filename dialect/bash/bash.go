@@ -3741,8 +3741,13 @@ func Diagnostics() interp.Diagnostics {
 		ArithConditionalColon:       "`:' expected for conditional expression",
 		ArithErrorSkipsLeadingSpace: true,
 		ArithErrorNamesTheConstruct: true,
-		DivisionByZero:              "division by 0",
-		ArithNegativeExponent:       "exponent less than 0",
+		// The bytes an expansion put inside brackets the script wrote come
+		// back escaped, and the expression bash quotes back shows them that
+		// way: with `declare -A assoc; key='x],b[$(echo 9)'`, the refusal
+		// `(( 'assoc[$key]++' ))` earns names `'assoc[x\],b\[\$(echo 9)]++'`.
+		ArithValueShownEscaped: true,
+		DivisionByZero:         "division by 0",
+		ArithNegativeExponent:  "exponent less than 0",
 
 		// bash reserves its generic arithmetic wording for operands that are
 		// not literals, so a bad digit gets a reason of its own.

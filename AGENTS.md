@@ -1432,6 +1432,20 @@ that they are **added and not removed**, and identical on both sides; a line the
 reconstruction is *missing* is a real perturbation and means something behaved
 differently.
 
+**A skeleton must flatten bytes, not decoded characters.** The rule for
+reporting the other side's output — letters to `a`/`A`, everything else kept —
+is only safe over bytes. Decode first and an invalid byte becomes one
+replacement character, so a four-byte value and a three-byte value render
+identically and a real difference disappears. That is not hypothetical: a line
+of `glob.tests` read as agreeing for three batches because both sides rendered
+as `<A\xfffd\A>`, and reporting `${#v}` instead showed one side holding four
+bytes and the other three.
+
+So where the question is about bytes — a multibyte charset, a value carrying a
+control character, anything the C locale will not decode — report **lengths**
+rather than a rendering. `${#name}` is structure, costs nothing, and cannot
+hide a byte.
+
 Then ask **our parser** what is at that position, printing node kinds,
 positions and field *lengths* only — never a value. `L54 SimpleCmd` with an
 `Assign len(Name)=3`, four literal words and a `Redirect Op=<<<` says

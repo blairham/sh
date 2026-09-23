@@ -1331,6 +1331,51 @@ is that the rule applies with no less force to an instrument written ten
 minutes ago as a shell function than to one with a `make` target and a test
 package, and the improvised ones are where all six of these happened.
 
+**And the silence can come from the shell, before your instrument runs at
+all.** The six above are instruments that ran and could not fail. The seventh
+shape is the one where nothing ran, and it is harder because there is no
+result to distrust — an empty output file reads as *still working*.
+
+The worked example cost thirty-six minutes and never reached a measurement.
+A background job was to edit a test, run it, and print the result. Reduced to
+its shape:
+
+```sh
+cd <worktree> && cat > scratch.go 2>/dev/null; python3 - <<'PY'
+… write the file …
+PY
+go test -run Scratch -v ./driver | grep -E 'DEBUG|FAIL|ok'
+```
+
+`cat > scratch.go` has **nothing feeding it** — no heredoc, no pipe, no file
+operand. It reads standard input, which in a spawned job is open and never
+closed, so it waits forever; and because it is first in the list, the
+`python3` that was to write the file and the `go test` that was to run it
+never started. The job's output file stayed empty through poll after poll,
+which is exactly what a slow build looks like.
+
+What made it harder to spot is that `cat` is aliased in the interactive shell
+these jobs run under and resolves to `bat -P`, so the blocked process does not
+answer to the name in the script.
+
+Three things follow, and the third is the general one:
+
+- **A redirect is not an input.** `cat > f` with nothing on its left and
+  nothing on its right is a wait, not a write, and every command after it in
+  the list is dead. If a job that should take seconds has produced nothing,
+  suspect this before suspecting the compiler.
+- **Write files with `tee f >/dev/null <<'EOF'`, a `python3` heredoc, or the
+  editor tool.** Those fail loudly where `cat` waits quietly. And beware any
+  command the interactive environment may have rebound — `cat`, `ls`, `grep`
+  and `find` are all commonly aliased, and an alias that is a convenience at a
+  prompt is a different program inside a script.
+- **"Still running" is a claim, and it is checkable in one command.** Look at
+  what the job is blocked on rather than at how long it has been quiet:
+  `pgrep -P <pid>` for its children, then `ps -o %cpu,etime,command` on what
+  comes back. A build at 0% CPU is not a build. One such look would have ended
+  this in the first minute, and a wait is the failure mode that gets more
+  expensive the longer you go on trusting it.
+
 `make bash-suite` fetches **bash's own `tests/`** and runs every file of it
 through real bash and through `cmd/bash`, comparing output and status.
 `internal/suite` holds it, `internal/cmd/suitecheck` prints the report, and

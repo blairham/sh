@@ -7166,7 +7166,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// the second order and the deferred freeze with it, which is the
 		// same answer `declare -ar A=(x y)` has always needed — see
 		// Semantics.ReadonlyDeclaresALocal.
-		locks := argv[0] == "readonly" && !r.readonlyScopesItsOperands()
+		//
+		// And a **container letter over an array literal** takes the second
+		// order too, for the mirror of the first reason: the letter has to
+		// be recorded before the literal is stored, or the value lands as
+		// whatever kind it looks like and the letter then meets a name of
+		// the other kind. See Runner.containerLetterOverALiteral.
+		locks := argv[0] == "readonly" && !r.readonlyScopesItsOperands() &&
+			!r.containerLetterOverALiteral(argv, c)
 		outerFreezing := r.freezing
 		// Recorded whichever order the two halves run in, because the
 		// refusal it feeds belongs to the *declaration* and `readonly -i

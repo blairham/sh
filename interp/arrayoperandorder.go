@@ -3,7 +3,11 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // When a declaration utility's **array literal** operand is expanded, against
 // when the command's own redirections are opened.
@@ -117,6 +121,57 @@ func tableLetterAmongTheOptions(argv []string) bool {
 			return false
 		}
 		if strings.ContainsRune(w, 'A') {
+			return true
+		}
+	}
+	return false
+}
+
+// containerLetterOverALiteral reports a `readonly` whose own words carry a
+// container letter *and* an array-literal operand, which is the one shape
+// that has to be declared before its value is stored.
+//
+// It decides the order of the two halves of such a command — see the branch
+// in Runner.commandBuiltin that reads it. `readonly a=(x)` stores first,
+// because freezing the name first would refuse the very assignment the
+// command was given; but a container letter has to be *recorded* first, or
+// the literal lands as whatever kind it looks like and the letter then meets
+// a name of the other kind. `declare -Ar m=([k]=v)` has the same pair of
+// needs and resolves them the other way round — the freeze waits — which is
+// the order this borrows.
+//
+// Read off the words rather than parsed, the way tableLetterAmongTheOptions
+// is, and with one extra condition: **every** option word has to be one this
+// utility takes. An option it will refuse leaves the order alone, because the
+// refusal comes before anything is stored in the borrowed order and after it
+// in this one — measured 2026-09-23 on bash 5.3.20, `readonly -rA z=(k 1)` is
+// `readonly: -r: invalid option` and then `declare -A z=([k]="1" )`, so the
+// assignment survives the refusal there.
+func (r *Runner) containerLetterOverALiteral(argv []string, c *syntax.SimpleCmd) bool {
+	letters := r.sem().ReadonlyOptions
+	container := false
+	for _, w := range argv[1:] {
+		if w == "--" {
+			break
+		}
+		if len(w) < 2 || (w[0] != '-' && w[0] != '+') {
+			// The first operand: every option word is behind it.
+			break
+		}
+		for _, letter := range w[1:] {
+			if !strings.ContainsRune(letters, letter) {
+				return false
+			}
+			if letter == 'a' || letter == 'A' {
+				container = true
+			}
+		}
+	}
+	if !container {
+		return false
+	}
+	for _, a := range c.Assigns {
+		if a.Name != "" && len(a.Elems) > 0 {
 			return true
 		}
 	}

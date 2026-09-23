@@ -1435,6 +1435,10 @@ func Semantics() interp.Semantics {
 	// reads once the call returns is `two` in both, and in ksh93, and is not
 	// an axis.
 	s.UnderscoreMovesBeforeAFunctionBody = interp.No
+	// And it holds that argument across an `eval` or a `.`, where the
+	// text's own last command would otherwise write through. Measured
+	// 2026-09-23: `: SEED; eval ': inner'` leaves `: inner` here.
+	s.UnderscoreHoldsTheCallAcrossEvalAndSource = interp.Yes
 	// Alone in the panel, bash writes `$_` before the first command runs,
 	// and what it writes is argv[0]: the same binary reached through a
 	// symlink named `sh` writes `sh`. An `_` the environment carried wins

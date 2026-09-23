@@ -1516,3 +1516,44 @@ func (r *Runner) dotReadsItsOwnInput(path string) ([]byte, bool) {
 	r.NoteErrno(err)
 	return b, true
 }
+
+// builtinRunsTheScriptsOwnCommands reports the builtins whose whole job is to
+// run text the script handed them, which is what gives them a function call's
+// question about `$_` — see Runner.underscoreAcrossABuiltinsOwnCommands.
+//
+// By name, because that is what a dialect adds: `source` is not in the
+// builtins table and is registered under biDot by the dialects that have it,
+// so a check on the function would miss it and a check on the table would
+// name dash's `.` and nothing else. `fc -s` re-runs a command too and is
+// deliberately not here: it is answered by the history list rather than by an
+// argument of its own, and no reading of it was measured.
+//
+// **The whole word list rather than the name**, because a precommand word in
+// front reaches the same builtin and was measured to want the same answer:
+// `command eval`, `builtin eval`, `command . f`, `command -p eval` and
+// `command command eval` each leave the call's own last argument in `$_` in
+// bash 5.3.20, and each left the text's last command here. The value is the
+// same either way round — a precommand word's arguments are the inner call
+// written out — so one bracket at the outermost call covers all of them.
+//
+// A `command -v eval`, which runs nothing, is reached by this and is
+// unharmed: the bracket restores the call's own last argument, which is what
+// `$_` already held when nothing inside it moved.
+func builtinRunsTheScriptsOwnCommands(argv []string) bool {
+	for _, word := range argv {
+		switch word {
+		case "eval", ".", "source":
+			return true
+		case "command", "builtin":
+			// A precommand word; read on to what it fronts.
+			continue
+		}
+		if len(word) > 1 && word[0] == '-' {
+			// An option of the precommand word in front of it, `--`
+			// included.
+			continue
+		}
+		return false
+	}
+	return false
+}

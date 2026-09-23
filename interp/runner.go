@@ -7090,6 +7090,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// A builtin runs in this shell, which is the whole reason it is one:
 	// `set` and `shift` change state a child process could not.
 	if fn, ok := r.lookupBuiltin(argv[0]); ok {
+		// `$_` belongs to this call where the builtin's job is to run the
+		// script's own commands — `eval` and `.` — exactly as it belongs to
+		// a function call. See Runner.underscoreAcrossABuiltinsOwnCommands,
+		// which reuses that bracket and is inert for every other builtin.
+		defer r.underscoreAcrossABuiltinsOwnCommands(argv, beforeLastArg, beforeLastArgSet)()
 		// An assignment prefixed to a builtin is visible to the builtin
 		// while it runs — `IFS=: read x y` splits on the colon — and is
 		// taken back afterward. The exception is a *special* builtin,

@@ -1172,7 +1172,10 @@ func (r *Runner) fileTest(op, operand string) bool {
 	// so every test below reads it as the file not existing.
 	info, err := r.stat(path)
 	switch op {
-	case "-e":
+	case "-e", "-a":
+		// `-a` is the older spelling of `-e` and asks the same question,
+		// inside `[[ ]]` only: the `[` builtin reads the word as `and`
+		// instead, which is why nothing routes it here from there.
 		return err == nil
 	case "-f":
 		return err == nil && info.Mode().IsRegular()

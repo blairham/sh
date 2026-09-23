@@ -32,20 +32,23 @@ func (c *CondUnary) Pos() Pos  { return c.Start }
 func (c *CondUnary) End() Pos  { return c.X.End() }
 func (c *CondUnary) condNode() {}
 
-// CondArity is a known conditional operator standing with the wrong number of
-// operands, accepted by the grammar and left for the interpreter to refuse.
+// CondUnknown is a condition the grammar accepted and the interpreter refuses
+// by name — `unknown condition: -n` — which is two shapes and one sentence:
+// an operator this dialect has, standing with the wrong number of operands,
+// and a `-word` it has no condition for at all.
 //
-// One dialect does that and the rest refuse while reading — see
-// [Dialect.ConditionArityIsCheckedWhenItRuns] for the measurement. The
-// operator and every word that stood with it are kept, because what a shell
-// says about this names the operator and a printer has to write the line back
-// as it was.
-type CondArity struct {
-	// Op is the operator that had the wrong number of operands.
+// One dialect resolves a condition's name when it runs and the rest refuse
+// while reading — see [Dialect.ConditionIsResolvedWhenItRuns] for both
+// measurements. The operator and every word that stood with it are kept,
+// because what a shell says about this names the operator and a printer has
+// to write the line back as it was.
+type CondUnknown struct {
+	// Op is the operator: a known one with the wrong arity, or a word that is
+	// no condition here.
 	Op string
-	// Words is what stood after it, which is none of them for `[[ -n ]]` and
-	// two or more for `[[ -n x y ]]`. Exactly one is an ordinary CondUnary
-	// and never reaches here.
+	// Words is what stood after it, which is none of them for `[[ -n ]]`, one
+	// for `[[ -Q x ]]` and two or more for `[[ -n x y ]]`. A known operator
+	// with exactly one is an ordinary CondUnary and never reaches here.
 	Words []*Word
 	Start Pos
 	// Stop is the end of the operator itself, so a node with no words at all
@@ -53,14 +56,14 @@ type CondArity struct {
 	Stop Pos
 }
 
-func (c *CondArity) Pos() Pos { return c.Start }
-func (c *CondArity) End() Pos {
+func (c *CondUnknown) Pos() Pos { return c.Start }
+func (c *CondUnknown) End() Pos {
 	if len(c.Words) == 0 {
 		return c.Stop
 	}
 	return c.Words[len(c.Words)-1].End()
 }
-func (c *CondArity) condNode() {}
+func (c *CondUnknown) condNode() {}
 
 // CondCompletion is one of the four completion-context tests — `-prefix`,
 // `-suffix`, `-after` and `-between` — standing with the operands its arity
@@ -177,6 +180,30 @@ func (p *Parser) condUnaryOp(s string) bool {
 	return condUnaryOps[s]
 }
 
+// condUnknownOp reports whether a word standing where an operator does is a
+// *named* condition this dialect has not got, in the dialect that looks a
+// condition's name up when it runs rather than while it reads.
+//
+// Every `-word` is a name there: measured on zsh 5.9.2, 2026-09-22,
+// `[[ -Q x ]]`, `[[ -R x ]]`, `[[ -1 x ]]`, `[[ -- x ]]`, `[[ -eq x ]]` and
+// `[[ -bogus x ]]` are each `unknown condition: <word>` at status 2 with the
+// commands before them already run — where this parser refused all six while
+// reading. `add-zle-hook-widget` is not why this matters and `-R` is not
+// either: the rule is that an operator this dialect does not have is looked
+// up and missed rather than never read (#4261).
+//
+// A lone `-` is not a name — `[[ - x ]]` is `parse error: condition expected:
+// -` in the same shell — so two characters is the shortest one.
+func (p *Parser) condUnknownOp(s string) bool {
+	if !p.dialect.ConditionIsResolvedWhenItRuns || p.condUnaryOp(s) {
+		return false
+	}
+	if _, _, completion := p.condCompletionOp(s); completion {
+		return false
+	}
+	return strings.HasPrefix(s, "-") && len(s) >= 2
+}
+
 // condCompletionOp is the operand count one of the four completion-context
 // tests takes, and false for anything else or where the dialect has not got
 // them. See [Dialect.CompletionConditions] for the measurement.
@@ -212,6 +239,16 @@ var condUnaryOps = map[string]bool{
 	// expression at all — a syntax error that abandoned the whole clause,
 	// where the question it asks has an answer every shell agrees on.
 	"-O": true, "-G": true,
+	// Existence under its older spelling, and the same head count again:
+	// `[[ -a /etc ]]` is 0 and `[[ -a /nosuch ]]` is 1 on bash 5.3, bash
+	// 3.2, ksh93 and zsh 5.9.2, measured 2026-09-22, and none of the four
+	// reads it as a connective inside `[[ ]]` — `[[ -n x -a -n y ]]` is a
+	// syntax error in bash and ksh93 and the arity refusal in zsh. It is
+	// only the `[` builtin where the word is `and`, which is why this sits
+	// here and not in isTestUnary. Missing, it was the one row of #4261's
+	// measurement where this shell said `unknown condition: -a` about an
+	// operator every column has.
+	"-a": true,
 }
 
 // condBinaryWordOps are the two-operand tests spelled as words. These compare
@@ -348,7 +385,7 @@ func (p *Parser) completionConditionAhead() bool {
 // So each operator has a lowest and a highest count, a count inside the range
 // is the condition, and a count outside it is the run-time refusal every
 // other known operator with a bad arity gets — see
-// [Dialect.ConditionArityIsCheckedWhenItRuns], whose node this reuses because
+// [Dialect.ConditionIsResolvedWhenItRuns], whose node this reuses because
 // the sentence and the status are the same one.
 //
 // **An operand that is itself an operator ends the reading**, which is the
@@ -389,11 +426,11 @@ func (p *Parser) condCompletion() CondExpr {
 	if p.err != nil {
 		return nil
 	}
-	if !p.dialect.ConditionArityIsCheckedWhenItRuns {
+	if !p.dialect.ConditionIsResolvedWhenItRuns {
 		// A dialect that refuses a bad arity while *reading* refuses these
 		// the same way: too few operands is the missing-operand failure and
 		// a surplus word is simply left where it stands, so the `]]` test
-		// names it. See [Dialect.ConditionArityIsCheckedWhenItRuns], which
+		// names it. See [Dialect.ConditionIsResolvedWhenItRuns], which
 		// is the only flag that lets a condition parse and then be refused.
 		if len(words) < low {
 			p.failCondOperand(op, "unary")
@@ -414,7 +451,7 @@ func (p *Parser) condCompletion() CondExpr {
 		}
 	}
 	if len(words) < low || len(words) > high {
-		return &CondArity{Op: op, Words: words, Start: start, Stop: stop}
+		return &CondUnknown{Op: op, Words: words, Start: start, Stop: stop}
 	}
 	return &CondCompletion{Op: op, Words: words, Start: start, Stop: stop}
 }
@@ -441,24 +478,98 @@ func (p *Parser) condCompletion() CondExpr {
 // dash has no `[[ ]]` at all, and bash 3.2 alone reads `-prefix` as *a*
 // conditional unary operator and calls the `]]` an unexpected argument to it.
 //
+// A second family asks the same question, and its answer is measured the same
+// way: a *named* condition this dialect has not got is an operator only where
+// something stands behind it. Measured on zsh 5.9.2, 2026-09-22, `[[ -bogus
+// ]]`, `[[ -zz ]]`, `[[ -eq ]]` and `[[ -bogus && -n x ]]` are all 0 with
+// nothing said — the bare-word reading again — where `[[ -bogus x ]]` is
+// `unknown condition: -bogus` at 2.
+//
+// **Two characters is the exception**, and it is the row that says the length
+// is doing the work: `[[ -Q ]]`, `[[ -1 ]]` and `[[ -- ]]` are each `unknown
+// condition` with no operand at all, where the longer words on the same line
+// are words. So a `-X` is an operator wherever it stands and a longer name
+// has to be followed by something.
+func (p *Parser) condOperatorHasItsOperand(op string) bool {
+	_, _, completion := p.condCompletionOp(op)
+	// The two families that fall back to being an ordinary word. Every other
+	// operator demands its operand, so there is nothing to look for.
+	mayBeAWord := completion || (p.condUnknownOp(op) && len(op) > 2)
+	return !mayBeAWord || p.condOperandAhead()
+}
+
+// condOperandAhead reports whether a word stands behind the operator current,
+// rather than the closer, a connective, a group's end or nothing at all.
+//
 // The look is at the source rather than at a token, the way peekIsAnonBody's
 // is: reading the next token would consume it, and there is nothing to put it
 // back into.
-func (p *Parser) condOperatorHasItsOperand(op string) bool {
-	if _, _, ok := p.condCompletionOp(op); !ok {
-		return true
-	}
-	i := p.lex.off
-	for i < len(p.lex.src) && isBlank(p.lex.src[i]) {
-		i++
-	}
-	rest := p.lex.src[i:]
+func (p *Parser) condOperandAhead() bool {
+	rest := p.condSourceAhead()
 	for _, end := range []string{"]]", "&&", "||", ")"} {
 		if strings.HasPrefix(rest, end) {
 			return false
 		}
 	}
 	return rest != ""
+}
+
+// condBinaryOperatorAhead reports whether the word behind the operator
+// current is a two-operand operator, which makes the word in hand that
+// operator's *left operand* rather than an operator of its own.
+//
+// The row this is for: `[[ -Q == bar ]]` is a string comparison answering 1
+// in zsh 5.9.2 where `[[ -Q x ]]` is `unknown condition: -Q`, and
+// `[[ -1 -lt 2 ]]` is arithmetic answering 0 — measured 2026-09-22. A rule
+// that made every `-word` an operator would refuse both, and a negative
+// number on the left of a comparison is not a rare thing to write.
+//
+// The same source look as condOperandAhead, and with the same limit: an
+// operator that arrives through an expansion is not seen here, because there
+// is nothing to look at yet.
+func (p *Parser) condBinaryOperatorAhead() bool {
+	rest := p.condSourceAhead()
+	if strings.HasPrefix(rest, "<") || strings.HasPrefix(rest, ">") {
+		return true
+	}
+	end := 0
+	for end < len(rest) && !isBlank(rest[end]) && rest[end] != '\n' {
+		end++
+	}
+	return condBinaryWordOps[rest[:end]]
+}
+
+// condSourceAhead is the source standing after the token current, with the
+// blanks between them passed over.
+func (p *Parser) condSourceAhead() string {
+	i := p.lex.off
+	for i < len(p.lex.src) && isBlank(p.lex.src[i]) {
+		i++
+	}
+	return p.lex.src[i:]
+}
+
+// condUnaryOperatorAhead reports whether the word current stands as the
+// operator of a one-operand condition: one this dialect has, or — where it
+// looks a condition's name up when it runs — one it has not.
+//
+// The second half is what makes `[[ -Q x ]]` a condition that parses and is
+// refused by name rather than a parse failure, and the two exceptions to it
+// are the two lines below: a name with nothing behind it may be an ordinary
+// word, and a name with a two-operand operator behind it is that operator's
+// left-hand side.
+func (p *Parser) condUnaryOperatorAhead() bool {
+	if p.tok.Kind != TokWord || p.tok.IsQuoted() {
+		return false
+	}
+	lit := p.tok.Literal()
+	switch {
+	case p.condUnaryOp(lit):
+		return p.condOperatorHasItsOperand(lit)
+	case p.condUnknownOp(lit):
+		return p.condOperatorHasItsOperand(lit) && !p.condBinaryOperatorAhead()
+	}
+	return false
 }
 
 // failCondTerm is a condition the grammar wanted and did not find: after the
@@ -705,9 +816,13 @@ func (p *Parser) condPrimary() CondExpr {
 		p.condOperatorHasItsOperand(p.tok.Literal()):
 		return p.condCompletion()
 
-	case p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.condUnaryOp(p.tok.Literal()) &&
-		p.condOperatorHasItsOperand(p.tok.Literal()):
+	case p.condUnaryOperatorAhead():
 		op, start, stop := p.tok.Literal(), p.tok.Pos, p.tok.End
+		// A name this dialect has no condition for is refused when it runs,
+		// whatever its arity — so the one-operand reading below, which is an
+		// ordinary condition for a known operator, is the refusal for this
+		// one. See Parser.condUnknownOp.
+		unknown := p.condUnknownOp(op)
 		p.next()
 		// The word after the operand is the condition's *third*, which is
 		// the one position a `(` belongs to the word in. `p.condWord()`
@@ -718,19 +833,22 @@ func (p *Parser) condPrimary() CondExpr {
 		x := p.condWord()
 		p.lex.inCondOperandGroup = false
 		if x == nil {
-			if p.dialect.ConditionArityIsCheckedWhenItRuns && p.err == nil {
+			if p.dialect.ConditionIsResolvedWhenItRuns && p.err == nil {
 				// No operand at all, which this dialect accepts and refuses
 				// when it runs. p.err is checked because condWord answers
 				// nil for a refusal of its own as well — a process
 				// substitution out of place — and that one is a real parse
 				// failure rather than an arity.
-				return &CondArity{Op: op, Start: start, Stop: stop}
+				return &CondUnknown{Op: op, Start: start, Stop: stop}
 			}
 			p.failCondOperand(op, "unary")
 			return nil
 		}
 		if surplus := p.condSurplusOperands(x); surplus != nil {
-			return &CondArity{Op: op, Words: surplus, Start: start, Stop: stop}
+			return &CondUnknown{Op: op, Words: surplus, Start: start, Stop: stop}
+		}
+		if unknown {
+			return &CondUnknown{Op: op, Words: []*Word{x}, Start: start, Stop: stop}
 		}
 		return &CondUnary{Op: op, X: x, Start: start}
 	}
@@ -885,7 +1003,7 @@ func namedConditionWord(s string) bool {
 // The words are returned with the operand in front of them, because what the
 // refusal names is the operator and what a printer writes back is the line.
 func (p *Parser) condSurplusOperands(operand *Word) []*Word {
-	if !p.dialect.ConditionArityIsCheckedWhenItRuns || p.err != nil {
+	if !p.dialect.ConditionIsResolvedWhenItRuns || p.err != nil {
 		return nil
 	}
 	if lit, ok := unquotedLiteralWord(operand); ok && p.condUnaryOp(lit) {

@@ -3552,7 +3552,7 @@ type Diagnostics struct {
 	// UnknownCondition is `[[ … ]]` given a known conditional operator with
 	// the wrong number of operands, in the dialect whose grammar accepts
 	// that and refuses it when it runs — see
-	// syntax.Dialect.ConditionArityIsCheckedWhenItRuns. One verb: the
+	// syntax.Dialect.ConditionIsResolvedWhenItRuns. One verb: the
 	// operator, which is what the refusal names and is not the surplus word.
 	//
 	// zsh 5.9.2 alone, measured 2026-09-14: `unknown condition: -n` for

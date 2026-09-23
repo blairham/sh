@@ -18816,6 +18816,32 @@ fc -l 2>&1`,
 		Why:         "the same refusal from the other end of the arity, and the row that says it is the *operator's* name being reported rather than whatever word was surplus — there is no surplus word here and zsh still writes `unknown condition: -n`. It also parts the three refusing columns from each other: bash names the `]]` as an unexpected argument to a unary operator and ksh93 calls the `]]` unexpected, where the row above has them naming `y`. BusyBox ash is the column that changes between the two rows — it complains about the surplus word above and takes this one silently, `-n` with nothing after it being a bare-word test there",
 	},
 	{
+		ID: "cond/an-unknown-condition-is-refused-when-it-runs", Category: "conditions",
+		// A syntax error under the bash dialect the parser conformance test
+		// uses, for the same reason the arity rows above are: exactly one
+		// column reads the word as a condition's name at all.
+		SyntaxError: true,
+		Snippet:     `echo pre; [[ -Q x ]]; echo post`,
+		Why:         "the arity rows above asked *where* a refusal happens for an operator the shell has; this asks it for one it has not, and the answer is the same place. zsh writes `pre` and then `unknown condition: -Q` at status 2, so every `-word` standing where an operator stands is a name looked up when the condition runs — where bash under both names, bash 3.2 and ksh93 refuse the line while reading and never run the `echo`. `-Q` is the control rather than an operator anybody wants: nothing in the panel implements it, so the row is about the spelling and not about one missing letter. dash has no `[[ ]]` and BusyBox ash reads the words as `test` words; both run both echoes. We refused it at parse time in every dialect, which was right for three columns and wrong for the one whose rule this is (#4261)",
+	},
+	{
+		ID: "cond/an-unknown-condition-nobody-reached", Category: "conditions",
+		// The same, and a syntax error under bash for the same reason.
+		SyntaxError: true,
+		Snippet:     `echo pre; [[ 1 == 1 || -Q x ]]; echo "st=$?"`,
+		Why:         "the row that says the line above is a **lookup** and not a wording: the left-hand side is true, so zsh reaches the `]]` with the operator never resolved and there is nothing to complain about — `st=0` and silence. A parse-time refusal cannot produce that however it is worded, which is what made this the discriminating case rather than the sentence itself. The columns that refuse the construct refuse it here too, before either side is evaluated, and the two with no `[[ ]]` answer in their own way",
+	},
+	{
+		ID: "cond/a-dashed-word-that-is-not-a-condition", Category: "conditions",
+		Snippet: `[[ -Q == bar ]]; echo "cmp=$?"; [[ -1 -lt 2 ]]; echo "num=$?"`,
+		Why:     "the boundary of the two rows above, and the reason a rule firing on every `-word` would be wrong: a two-operand operator behind the word makes the word that operator's **left operand**, so `cmp=1` is a string comparison and `num=0` is arithmetic on a negative number rather than either being refused. It is unanimous in all six columns that have `[[ ]]`, which is what makes it a boundary rather than a divergence: the column that reads a `-word` as a condition's name reads *this* one as an operand too, and `[[ -1 -lt 2 ]]` is not a rare thing to write. The same shells refuse the same line when the word is an operator they **do** have — `[[ -n == bar ]]` is a syntax error in bash and the arity refusal here — so what the word is comes first and the operator behind it second. dash has no `[[ ]]` and answers 127 twice",
+	},
+	{
+		ID: "cond/the-older-spelling-of-the-existence-test", Category: "conditions",
+		Snippet: `: > f; [[ -a f ]]; echo "yes=$?"; [[ -a nosuch ]]; echo "no=$?"`,
+		Why:     "`-a` is `-e` under an older spelling and it is unanimous in every column that has `[[ ]]`: the file that exists answers 0 and the one that does not answers 1. Recorded because it is the one row of the unknown-condition measurement where this shell said `unknown condition: -a` about a test every one of them has — the word is `and` in the `[` builtin and a file test inside `[[ ]]`, and having only the first is how the operator went missing. dash has no `[[ ]]` and BusyBox ash reads the words as `test` words, where `-a` is the connective again",
+	},
+	{
 		ID: "cond/an-operator-shaped-operand-is-an-operand", Category: "conditions",
 		Snippet: `echo pre; [[ -n -n ]]; echo post`,
 		Why:     "the control for both rows above, and it is unanimous: every column that has `[[ ]]` answers 0 with both echoes run, because `-n` in the *operand* position is an ordinary word and a non-empty one. Without it the rule reads as \"a `-` word after an operator is surplus\", which is the reading that would make this line a refusal — and zsh parts company with it a step further out, calling `[[ -n -z x ]]` a parse error near `x` where `[[ -n x y ]]` is the run-time refusal",

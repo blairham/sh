@@ -1726,7 +1726,7 @@ func (r *Runner) storeOperandWholeArraySubscript(base, sub, value string) (statu
 // stopped a script that two of the three columns finish. See
 // Semantics.BadSubscriptToAnOutputOperand for the rows.
 func (r *Runner) storeThroughOperand(name, value string) (status int, refused bool) {
-	base, sub, ok := r.subscriptOperandRead(name, r.outputOperandBracketsAreLexed(name))
+	base, raw, sub, ok := r.subscriptOperandParts(name, r.outputOperandBracketsAreLexed(name))
 	if !ok || !isPlainName(base) {
 		r.setOperandValue(name, value)
 		return 0, false
@@ -1742,7 +1742,7 @@ func (r *Runner) storeThroughOperand(name, value string) (status int, refused bo
 	// still permits it — this is one of the surfaces `shopt -s
 	// assoc_expand_once` names, where the declaration's round beside it is
 	// not (#3298).
-	sub = r.operandSubscriptText(base, sub, r.sem().OutputOperandExpandsAFlatSubscript,
+	sub = r.operandSubscriptText(base, raw, sub, r.sem().OutputOperandExpandsAFlatSubscript,
 		"a store through a builtin's operand expanding a subscript that reached it as text")
 	if r.unspecified {
 		return r.status, true

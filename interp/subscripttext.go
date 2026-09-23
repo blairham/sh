@@ -100,7 +100,18 @@ func subscriptTextCouldExpand(sub string) bool {
 // dialect that does not round is never asked about an option it has no name
 // for, and a session that turned the round off does not record an answer to
 // an axis it then ignores.
-func (r *Runner) operandSubscriptText(base, sub string, axis Answer, what string) string {
+// raw is the subscript as the operand carried it and sub the key its quoting
+// comes off to. The round is made over the **raw** text, because the quoting
+// is what says which expansions in it are performed and comes off with them:
+// an apostrophe the operand carried protects a `$` from this round and is gone
+// from the key either way, and removing it first left the `$` to expand
+// (#4254). See Runner.subscriptOperandParts for the rows.
+//
+// The cheap test is still asked of the key, so the question is put exactly
+// where it was: a subscript whose quoting is all the round would take off
+// reaches the same key both ways, and an axis asked there could not change an
+// answer.
+func (r *Runner) operandSubscriptText(base, raw, sub string, axis Answer, what string) string {
 	if !subscriptTextCouldExpand(sub) {
 		return sub
 	}
@@ -114,7 +125,7 @@ func (r *Runner) operandSubscriptText(base, sub string, axis Answer, what string
 	// reason: Runner.reference is the one route from a resolved text to the
 	// parameter expansion it spells, and going through it is what makes
 	// every site's second round the same round.
-	if key, again := r.expandedSubscriptText(base + "[" + sub + "]"); again {
+	if key, again := r.expandedSubscriptText(base + "[" + raw + "]"); again {
 		return key
 	}
 	return sub

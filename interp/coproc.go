@@ -65,6 +65,13 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 			return nil
 		}
 		name = target
+		if r.coprocNamesAreFrozen(name) {
+			// A name the script has frozen is not written, and neither is
+			// the other one: the coprocess runs, its status is 0, and the
+			// ends reach nothing. See coprocNamesAreFrozen.
+			r.status = 0
+			return nil
+		}
 		r.setArrayElem(name, 0, "0", itoa(r.coproc.read))
 		r.setArrayElem(name, 1, "1", itoa(r.coproc.write))
 		r.setVar(name+"_PID", itoa(job.Ident()))
@@ -76,6 +83,41 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	}
 	r.status = 0
 	return nil
+}
+
+// coprocNamesAreFrozen reports whether either name a coprocess would publish
+// under is readonly, complaining once for the one that is.
+//
+// **A readonly name is not written, and neither is its companion.** Measured
+// 2026-09-23 against bash 5.3.15 in the pinned image and bash 5.3.20 on macOS,
+// which agree, with `echo hi` as the body:
+//
+//	declare -r RO=x; coproc RO { … }        RO: readonly variable, status 0,
+//	                                        and `RO` still lists as `-r RO="x"`
+//	declare -r R2_PID=7; coproc R2 { … }    R2_PID: readonly variable, status 0,
+//	                                        and `R2` is `declare: R2: not found`
+//
+// The second row is the one that says the companion goes with it: the frozen
+// name is the `_PID` and it is the *array* that is never brought into being.
+//
+// This shell reported the refusal **twice** and then wrote the descriptors
+// over the readonly anyway — `declare -ar RO=([0]="63" [1]="60")` where the
+// script had said `declare -r RO="x"`. A readonly variable that a construct
+// modifies is the shape this tree cares about most, and the two extra lines
+// were `nameref11.sub`'s (#4178).
+//
+// The status stays 0 either way, which is the reference's answer and this
+// shell's: what the clause failed at is publishing the ends, not starting the
+// coprocess.
+func (r *Runner) coprocNamesAreFrozen(name string) bool {
+	frozen := false
+	for _, n := range []string{name, name + "_PID"} {
+		if r.readonly[n] {
+			r.refuseReadonly(n, assignedByDeclaration)
+			frozen = true
+		}
+	}
+	return frozen
 }
 
 // coprocName is what this clause's near ends are published under, and reports

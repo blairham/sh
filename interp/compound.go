@@ -1509,6 +1509,14 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// Where the call was made, for the line the shell is back at once it
 	// returns. Read before anything moves into the body.
 	calledAt := r.line
+	// A `return` in this body is the *function's* and is read the ordinary
+	// way, even where a trap action is what called it — measured, the same
+	// bare `return` answers the function's last command there and the
+	// handler's entry status when it is written in the action itself. See
+	// Semantics.TrapReturnStatus.
+	savedOwnBody := r.trapActionOwnBody
+	r.trapActionOwnBody = false
+	defer func() { r.trapActionOwnBody = savedOwnBody }()
 	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
 	// The list the body is given is a list of its own, so what a `set` in
 	// the body replaces is that one — which is why the mark travels with the

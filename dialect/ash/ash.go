@@ -1666,6 +1666,10 @@ func Semantics() interp.Semantics {
 	// `eval` reads none, unlike `.` above — measured against BusyBox
 	// 1.37.0, where `eval -- echo hi` is `eval: --: not found` at 127.
 	s.EvalOptions = interp.EvalReadsNoOptions
+	// BusyBox ash agrees with dash and bash, measured 2026-09-23 in a
+	// busybox:latest container rather than derived from dash: the same probe
+	// that answers 4 there answers 4 here.
+	s.TrapReturnStatus = interp.TrapReturnTakesTheStatusBeforeIt
 	s.DotTakesTheSearchPathOption = interp.No
 	s.DotDirectoryOperandIsAnError = interp.No
 	// An operand with no slash that PATH does not have is looked for in the

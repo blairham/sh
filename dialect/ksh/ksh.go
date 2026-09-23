@@ -1245,6 +1245,9 @@ func Semantics() interp.Semantics {
 	// See UnderscoreMovesOnlyBetweenInputCommands, and the guard in
 	// Runner.underscoreAcrossABuiltinsOwnCommands that skips the question.
 	s.UnderscoreHoldsTheCallAcrossEvalAndSource = interp.Yes
+	// ksh93 answers zero, which is neither of the numbers it was holding.
+	// Same probe, entered at 4 with the action's last command at 123.
+	s.TrapReturnStatus = interp.TrapReturnIsZero
 	// A defined f-g stops the script; a.b is an invalid discipline function.
 	s.PunctuatedFunctionNameIsRefused = interp.Yes
 	// And `a.get` is not: a dotted name whose suffix is one of this shell's

@@ -997,6 +997,31 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 	return r.declareNames(name, args, f)
 }
 
+// exportContainerLetterForThisOperand takes the container letter back off where
+// the word was `export` and this operand carries no value.
+//
+// Per operand, because that is what was measured: `export -A a b=1` records a
+// table for `b` and nothing for `a`. See
+// Semantics.ExportContainerLetterNeedsAValue for the rows, and note that it is
+// asked only where one of the two letters was really written — a plain
+// `export A=1` raises no question, and no dialect without the letters can reach
+// one.
+func (r *Runner) exportContainerLetterForThisOperand(name string, f declareFlags, hasValue bool) declareFlags {
+	// literalOperands beside hasValue, for the reason compoundKindChanged reads
+	// it that way: an *array literal* operand reaches this loop as the bare name
+	// with the parentheses held aside, so the string alone would say the operand
+	// carried nothing — and `export -A m=([k]=v)` is a table in the reference.
+	if hasValue || r.literalOperands[name] || !f.exportForced || (!f.array && !f.assoc) {
+		return f
+	}
+	if !r.ask(r.sem().ExportContainerLetterNeedsAValue,
+		"the container letter on a valueless `export` operand recording nothing") {
+		return f
+	}
+	f.array, f.assoc = false, false
+	return f
+}
+
 // declareNames is the declaration itself, once the letters have been read.
 //
 // Its own function because `integer` is the same declaration under a second
@@ -1519,6 +1544,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// this line's letter recorded on it and given back at the return. See
 		// Runner.compoundMemberThroughAReference.
 		name = r.compoundMemberThroughAReference(name)
+		f := r.exportContainerLetterForThisOperand(name, f, hasValue)
 		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
 			// Ahead of everything else this operand would do, because the
 			// shell that refuses declares nothing: the name is not brought

@@ -1639,15 +1639,21 @@ func Semantics() interp.Semantics {
 	// listing writes back for such a name — `declare -ax`. See
 	// Semantics.ExportOptions (#4089).
 	//
-	// Two neighboring rows measured in the same run and left where they
-	// are, both narrower than the form the issue is about. A **valueless**
-	// `export -a b` or `export -A n` records no container letter there —
-	// `declare -x b`, `declare -x n` — where this shell keeps the letter
-	// the word carried. And `export -a` with **no operands at all** is a
-	// listing filtered to the arrays, where this shell still refuses the
-	// letter: the filtered form is DeclarationListingFilter's question and
-	// `export` does not reach it.
+	// One neighboring row measured in the same run is left where it is,
+	// narrower than the form the issue is about: `export -a` with **no
+	// operands at all** is a listing filtered to the arrays, where this
+	// shell still refuses the letter. The filtered form is
+	// DeclarationListingFilter's question and `export` does not reach it.
+	//
+	// The valueless row that stood beside it — `export -a b` recording no
+	// container letter there — is answered below.
 	s.ExportOptions = "aA"
+	// And the letter takes effect only where the operand carries a value: a
+	// valueless `export -A n` records no container, converts none and refuses
+	// none. That closes the two rows the paragraph above left standing and the
+	// conversion refusal beside them. See
+	// interp.Semantics.ExportContainerLetterNeedsAValue (#4089, #4179).
+	s.ExportContainerLetterNeedsAValue = interp.Yes
 	// And a valueless declaration of a standing name is silent.
 	s.ValuelessDeclarationOfAHeldNameListsIt = interp.No
 	// A plain word declared over a name holding an array replaces it and

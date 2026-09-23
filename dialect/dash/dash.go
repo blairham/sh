@@ -88,6 +88,10 @@ func Semantics() interp.Semantics {
 	// 0 — the parentheses nest and the word inside them is a command name
 	// (#3364).
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// unanswered ExportContainerLetterNeedsAValue: `export` takes no container
+	// letter here, which Semantics.ExportOptions is the statement of — it is
+	// empty in this dialect, so `export -A` is a bad option and the question has
+	// no line to be about. Measured 2026-09-23.
 	// unanswered RestrictedModeIsLeftByTheLetter: there is no `set -r` here to
 	// leave a mode with — the letter is `set: Illegal option -r` at 2, measured,
 	// and TestSetRefusesTheRestrictedLetter pins it.

@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/internal/histexpand"
 	"github.com/blairham/sh/syntax"
@@ -3801,6 +3802,11 @@ type Runner struct {
 	// a property of the name that changes what a later assignment means.
 	lowered map[string]bool
 	uppered map[string]bool
+	// capitalized is the third of them — `declare -c`, which one dialect has
+	// and does not advertise: its own usage line omits the letter. It is the
+	// same shape as the other two and belongs to the same family rather than
+	// beside it, which is what caseLettersCancel says out loud.
+	capitalized map[string]bool
 	// hidden names keep their value out of every listing that would write
 	// one — `typeset -H`. It is a property of the name like the others, but
 	// the only one that changes nothing about a read: `$h` and `${h[k]}`
@@ -9414,8 +9420,43 @@ func (r *Runner) caseFolded(name, value string) string {
 		return r.caseChanged(value, unicode.ToLower)
 	case r.uppered[name]:
 		return r.caseChanged(value, unicode.ToUpper)
+	case r.capitalized[name]:
+		return r.capitalCase(value)
 	}
 	return value
+}
+
+// capitalCase is what `declare -c` makes of one value: the first character
+// upper and **every other character lower**, which is the half that has to be
+// measured rather than guessed — the letter's name suggests it only touches
+// the front.
+//
+// Measured 2026-09-23 on GNU bash 5.3.15, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+// from a script file:
+//
+//	declare -c a="MIXED CASE"        a is `Mixed case`
+//	declare -c b="mIxEd cAsE"        b is `Mixed case`
+//	declare -c c="  leading spaces"  c is unchanged
+//	declare -c d="9digit start"      d is unchanged
+//	declare -c g="x"; g+=" MORE"     g is `X more`
+//
+// Rows three and four are the controls: the first *character* is what is
+// uppercased, not the first letter, so a value opening with a space or a digit
+// keeps its opening and has the rest folded down anyway. Row five is the one
+// that says the fold is applied to the whole value on every assignment rather
+// than once to what was added.
+func (r *Runner) capitalCase(value string) string {
+	if value == "" {
+		return value
+	}
+	lowered := r.caseChanged(value, unicode.ToLower)
+	first, width := utf8.DecodeRuneInString(lowered)
+	if first == utf8.RuneError && width <= 1 {
+		// A byte that is not a character of its own: nothing to change case
+		// on, and folding the rest is what the other two letters would do.
+		return lowered
+	}
+	return r.caseChanged(lowered[:width], unicode.ToUpper) + lowered[width:]
 }
 
 // caseFoldsOnRead reports whether this shell keeps what was assigned and
@@ -9462,7 +9503,7 @@ func (r *Runner) readAttributeFolded(name, value string) string {
 // one read that takes it without the other: what a child is told. See the
 // environment loop, where the measurement is.
 func (r *Runner) readCaseFolded(name, value string) string {
-	if !r.lowered[name] && !r.uppered[name] {
+	if !r.lowered[name] && !r.uppered[name] && !r.capitalized[name] {
 		return value
 	}
 	if !r.caseFoldsOnRead() {
@@ -10528,7 +10569,7 @@ func (r *Runner) nameIsAnArray(name string) bool {
 // attribute the question is never asked about, which is how the float
 // precision and the width both survived a `c=(a bb)` that zsh drops them on.
 func (r *Runner) nameCarriesATypeAttribute(name string) bool {
-	if r.integer[name] || r.lowered[name] || r.uppered[name] {
+	if r.integer[name] || r.lowered[name] || r.uppered[name] || r.capitalized[name] {
 		return true
 	}
 	if _, ok := r.floatPrecision[name]; ok {
@@ -10542,6 +10583,7 @@ func (r *Runner) clearTypeAttributes(name string) {
 	delete(r.integer, name)
 	delete(r.lowered, name)
 	delete(r.uppered, name)
+	delete(r.capitalized, name)
 	delete(r.floatPrecision, name)
 	delete(r.fieldWidth, name)
 }

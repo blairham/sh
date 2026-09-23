@@ -19738,6 +19738,11 @@ echo after`,
 		Why:     "two different rules about a period, and this says they stay apart. A `.` *component* names a directory; a leading period in a *name* is hidden from a pattern that does not write one — so `./*` leaves `.hid` out in all seven even though the pattern begins with a period, and `./.h*` finds it",
 	},
 	{
+		ID: "core/the-capitalize-attribute", Category: "variables",
+		Snippet: `declare -c a="MIXED CASE"; declare -c g="x"; g+=" MORE"; declare -cu h="mixed case"; printf '[%s]' "$a" "$g" "$h"; declare -p a g h; echo "st=$?"`,
+		Why:     "the third case attribute, which bash has and does not advertise — its own `declare` usage line is `[-aAfFgiIlnrtux]`, with no `c` in it. bash 5.3 answers `[Mixed case][X more][mixed case]` and then `declare -c a=\"Mixed case\"`, `declare -c g=\"X more\"` and `declare -- h=\"mixed case\"`, which is three measurements in one line: the fold is the first *character* upper and every other character lower rather than the front alone; an append folds the whole value rather than what was added; and the letter written with `-u` cancels both, leaving no attribute and the value untouched, exactly as `-l` with `-u` does. bash 3.2 refuses the letter with a usage line of its own — `declare [-afFirtx] [-p]`, which has none of the three case letters in it — and zsh calls it `bad option: -c` while having `-l` and `-u`, which is what a script written against it meets there. dash, ksh93 and BusyBox ash answer `declare: not found`: the builtin is bash's spelling, and ksh93's own `typeset` is where its case letters live, so this row records that they never reach the question rather than that they disagree about it. So the row measures a letter one column has and records what the other six say instead (#4160)",
+	},
+	{
 		ID: "glob/a-bracket-holding-a-separator", Category: "expansion",
 		Script:  true,
 		Snippet: "{ shopt -s nullglob; } 2>/dev/null\n{ setopt nullglob; } 2>/dev/null\nset -- [a/b] [zQ]\nprintf '[%s]' \"$#\" \"$@\"\necho\n",

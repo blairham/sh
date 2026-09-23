@@ -13151,6 +13151,73 @@ Four letters say what a name's values *are* rather than where a
 declaration lands or who may see it: `-i`, `-F`, `-l` and `-u`. Two
 questions follow, and the panel answers them differently.
 
+### Asking an axis is itself on a path
+
+An axis must be consulted where the shells disagree and nowhere else — the rule
+this document already gives — and there is a second half to it that is easy to
+lose: **the asking is code, and it runs where it is written.**
+
+An axis read into a *variable*, or passed as an argument, is asked wherever that
+line is reached, not where the answer is used. `BracketHoldingASlashIsStillABracket`
+was first threaded into the gate that decides whether a field is a pattern as a
+`bool` argument — so the question was asked for every field any word produced,
+and a core with no dialect chosen refused ordinary word splitting instead of the
+one word carrying the bracket the question was about. Passing a function instead,
+and calling it inside the branch that has found such a bracket, moved the asking
+onto the path the disagreement is on.
+
+So: a question this shell cannot answer must refuse **only the word it is
+about**. When an axis is consulted from a helper, check what reaches the helper
+rather than what reaches the branch — an argument is evaluated before the branch
+that would have justified it.
+
+### A third case letter, which one shell has and does not advertise
+
+bash has `-c` beside `-l` and `-u`, and its own usage line leaves the letter
+out — `declare [-aAfFgiIlnrtux]`, which this shell prints back byte for byte.
+So a script using it is not reading the message it would get for a typo.
+
+Measured 2026-09-23, GNU bash 5.3.15, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+from script files:
+
+| written | the value afterwards | `declare -p` |
+| --- | --- | --- |
+| `declare -c a="MIXED CASE"` | `Mixed case` | `declare -c a="Mixed case"` |
+| `declare -c b="mIxEd cAsE"` | `Mixed case` | `declare -c b="Mixed case"` |
+| `declare -c c="  leading spaces"` | unchanged | `declare -c c="  leading spaces"` |
+| `declare -c d="9digit start"` | unchanged | `declare -c d="9digit start"` |
+| `declare -c f; f="later ASSIGN"` | `Later assign` | `declare -c f="Later assign"` |
+| `declare -c g="x"; g+=" MORE"` | `X more` | `declare -c g="X more"` |
+| `declare -c k=one; declare +c k; k="two THREE"` | `two THREE` | `declare -- k="two THREE"` |
+| `declare -c -a arr=(one TWO)` | `One`, `Two` | `declare -ac arr=([0]="One" [1]="Two")` |
+
+So the fold is **the first character upper and every other character lower**,
+and the name is the misleading part: it is not "capitalize the front and leave
+the rest". Rows three and four are the controls — the first *character* is what
+is uppercased rather than the first letter, so a value opening with a space or a
+digit keeps its opening and has the rest folded down anyway — and row six says
+the fold applies to the whole value on every store rather than once to what was
+appended.
+
+**It is a third member of the family above rather than a new one**, which is the
+part that decides the implementation. `-c` written with `-l` or `-u` on one
+declaration **cancels both**: `declare -cu h="mixed case"` lists as
+`declare -- h="mixed case"`, no attribute and no fold, exactly as `-l` with `-u`
+does. So `Semantics.TwoCaseLettersOnOneDeclarationCancel` answers it, any two of
+the three cancel, and the attribute maps learn a third value rather than a
+fourth question.
+
+In a listing the letter sits **last**, behind every other one including the two
+it cannot stand with: `declare -irtxc v="9"`, `declare -axc v=([0]="A")`,
+`declare -Ac v`, `declare -nc v`.
+
+bash 3.2 has none of the three. zsh and ksh93 have `-l` and `-u` and no `-c`, so
+the letter is in `Semantics.DeclareOptions` for the one dialect and is an unknown
+option in the others — which is what a script written against it will meet
+there.
+
+Pinned by `core/the-capitalize-attribute` (#4160).
+
 ### One family, or two
 
     typeset z=1; typeset -l z; typeset -i z; typeset -p z

@@ -64243,6 +64243,57 @@
         "TimedOut": false
       }
     },
+    "core/the-capitalize-attribute": {
+      "ash": {
+        "Stdout": "[][][]st=127",
+        "Stderr": "\u003cshell\u003e: declare: not found~\u003cshell\u003e: declare: not found~\u003cshell\u003e: g+= MORE: not found~\u003cshell\u003e: declare: not found~\u003cshell\u003e: declare: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[Mixed case][X more][mixed case]declare -c a=\"Mixed case\"~declare -c g=\"X more\"~declare -- h=\"mixed case\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[Mixed case][X more][mixed case]declare -c a=\"Mixed case\"~declare -c g=\"X more\"~declare -- h=\"mixed case\"~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[][ MORE][]declare -- g=\" MORE\"~st=1",
+        "Stderr": "\u003cshell\u003e: line 0: declare: -c: invalid option~declare: usage: declare [-afFirtx] [-p] [name[=value] ...]~\u003cshell\u003e: line 0: declare: -c: invalid option~declare: usage: declare [-afFirtx] [-p] [name[=value] ...]~\u003cshell\u003e: line 0: declare: -c: invalid option~declare: usage: declare [-afFirtx] [-p] [name[=value] ...]~\u003cshell\u003e: line 0: declare: a: not found~\u003cshell\u003e: line 0: declare: h: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[][][]st=127",
+        "Stderr": "\u003cshell\u003e: 1: declare: not found~\u003cshell\u003e: 1: declare: not found~\u003cshell\u003e: 1: g+= MORE: not found~\u003cshell\u003e: 1: declare: not found~\u003cshell\u003e: 1: declare: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[][ MORE][]st=127",
+        "Stderr": "\u003cshell\u003e: declare: not found~\u003cshell\u003e: declare: not found~\u003cshell\u003e: declare: not found~\u003cshell\u003e: declare: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[][ MORE][]typeset g=' MORE'~st=1",
+        "Stderr": "\u003cshell\u003e:declare:1: bad option: -c~\u003cshell\u003e:declare:1: bad option: -c~\u003cshell\u003e:declare:1: bad option: -c~\u003cshell\u003e:declare:1: no such variable: a~\u003cshell\u003e:declare:1: no such variable: h",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/the-characters-a-replacement-operand-parts-on": {
       "ash": {
         "Stdout": "[xqy][xqy][x\u003ctmp\u003ey][xqy][xp~qy]",

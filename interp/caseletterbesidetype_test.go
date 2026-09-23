@@ -167,7 +167,7 @@ func TestTheCaseLetterAxesAreAskedOnlyWhereTheyDiffer(t *testing.T) {
 	_, errs, st = caseLetterRun(t, `typeset -lu z=Ab`, func(s *Semantics) {
 		s.TwoCaseLettersOnOneDeclarationCancel = Unspecified
 	})
-	if st == 0 || !strings.Contains(errs, "both case letters") {
+	if st == 0 || !strings.Contains(errs, "two case letters") {
 		t.Errorf("cancel: got %d stderr %q, want the unanswered refusal", st, errs)
 	}
 	_, errs, st = caseLetterRun(t, `typeset -ui v=4`, func(s *Semantics) {

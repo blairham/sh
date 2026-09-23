@@ -1492,6 +1492,25 @@ that they are **added and not removed**, and identical on both sides; a line the
 reconstruction is *missing* is a real perturbation and means something behaved
 differently.
 
+**A marker that reads a parameter can become the diagnostic.** `${BASH_SOURCE[0]}`
+is a read, and a file running under `set -u` reports the *first* unbound one it
+meets — so in a region with the option on, the trap's own read is reported and
+the script's is not: a line reading `a[k]: unbound variable` came out as
+`BASH_SOURCE[0]: unbound variable`, from a trace that otherwise looked sound.
+Write every parameter in a marker with a default — `${BASH_SOURCE[0]-}`,
+`${LINENO-}` — and nothing in the body can be the first unbound read.
+
+This one is worse than the `set -x` case above and the difference is worth
+naming: xtrace **adds** a line, so a count survives it and the reconstruction
+flags it; this **replaces** one, so the line count is unchanged on both sides
+and only the byte-for-byte comparison catches it. A trace that fabricates a
+diagnostic and keeps the arithmetic straight is the failure mode to fear.
+
+That is six caveats on this instrument, and the count is itself the argument for
+reaching for the Go-side hook above first: every one of them is a way for a
+shell-level trap to be part of the program it is measuring, and the hook is not
+in the program at all.
+
 **A skeleton must flatten bytes, not decoded characters.** The rule for
 reporting the other side's output — letters to `a`/`A`, everything else kept —
 is only safe over bytes. Decode first and an invalid byte becomes one

@@ -1194,9 +1194,9 @@ func (r *Runner) namerefKeepsOnlyThisLinesFolding(name string, df declareFlags) 
 // an ordinary valueless declaration: `typeset -n g; typeset +n g` lists as
 // `declare -- g` there and as a bare `g` in ksh93, which is what
 // declareEmpty already writes.
-func (r *Runner) namerefAttributeRemoved(name string) bool {
+func (r *Runner) namerefAttributeRemoved(name string) (finished, consumed bool) {
 	if !r.isNameref(name) {
-		return false
+		return false, false
 	}
 	if r.refuseReadonly(name, attributeRatherThanAValue) {
 		// A **frozen reference** may not be taken apart: measured the same
@@ -1209,27 +1209,37 @@ func (r *Runner) namerefAttributeRemoved(name string) bool {
 		// attributeRatherThanAValue is the form this is: a declaration asking a name
 		// to give an attribute up, whose sentence is the declaration's and
 		// which gives up nothing of the enclosing line.
-		return true
+		return true, false
 	}
 	target, aimed := r.namerefTarget(name)
 	r.unsetNameref(name)
 	if !aimed {
 		// Nothing to leave behind, so the operand falls through to the
-		// ordinary declaration it now is. The attribute is the claim here;
-		// **what a listing then says about a name holding nothing is not**,
-		// and is not yet right: `typeset -n g; typeset +n g; typeset -p g`
-		// is `declare -- g` in bash 5.3.20 and a bare `g` in ksh93u+ and is
-		// `g: not found` here, because the cell the reference took over is
-		// still hidden and neither this fall-through nor declareEmpty brings
-		// it back. The name reads unset in all three — `${g-UNSET}` is
-		// UNSET everywhere — so what differs is the listing alone.
-		return false
+		// ordinary declaration it now is — and **the letter is spent**,
+		// which is what the second result says. `typeset -n g; typeset +n g;
+		// typeset -p g` was `g: not found` here against `declare -- g` in
+		// bash 5.3.20 and a bare `g` in ksh93u+: the fall-through reached
+		// declareEmpty with the `n` letter still set, declareEmpty read that
+		// as a line *adding* an attribute to a name rather than bringing one
+		// into being, and so created no cell for a listing to print. The
+		// hide namerefEmptiesTheCell put on the name comes off with the
+		// declaration; it needed no undoing of its own, which a mutation
+		// proved by leaving one in and killing nothing.
+		//
+		// The **value** agreed all along: the name reads unset in all three
+		// shells, `${g-UNSET}` is UNSET everywhere, so what was wrong was
+		// the listing alone. Measured 2026-09-23 against bash 5.3.20, with
+		// the controls that already agreed and still do — a reference that
+		// *was* aimed leaves the target's name behind (the branch below), a
+		// name that was never a reference is untouched, and `unset -n` still
+		// takes the name away outright in both (#4178).
+		return false, true
 	}
 	// The target's *name*, which is what the reference was holding — not
 	// what the target holds, which is the row that says the reference was
 	// not followed: `$foo` reads `v` afterwards and not `bar`.
 	r.setVar(name, target)
-	return true
+	return true, false
 }
 
 // unsetNameref takes the reference attribute off a name, which is what
@@ -1358,6 +1368,9 @@ func (r *Runner) selfNamerefStore(name, value string) bool {
 	for _, sc := range r.scopes {
 		if _, saved := sc.saved[name]; !saved {
 			continue
+		}
+		if r.selfNamerefStoreOverACompound(sc, name, value) {
+			return true
 		}
 		sc.saved[name] = value
 		sc.existed[name] = true
@@ -1734,4 +1747,102 @@ func (r *Runner) namerefGivesUpForAContainer(name string) {
 		r.DiagnoseAsTheShellf("%s\n", Wording(w, "warning: %[1]s: removing nameref attribute", name))
 	}
 	r.unsetNameref(name)
+}
+
+// selfNamerefStoreOverACompound is the shape above where the cell the write
+// lands on holds an **array or a table**, and reports whether it took the
+// write.
+//
+// A plain value assigned over a compound does not replace it in every column:
+// `a=(p q); a=z` leaves `declare -a a=([0]="z" [1]="q")` in bash, which is
+// Semantics.ScalarAssignedOverACompoundReplacesTheName and is implemented in
+// Runner.scalarOverCompound. A write through a self-aimed reference never
+// reached that rule, because the cell it lands on is **shadowed** — the
+// ordinary store looks at the live tables and the value is in the scope's
+// saved slot — so the scalar went straight in and the caller's array came
+// back with its first element unchanged.
+//
+// Measured 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C bash f.sh`
+// over a script file, against bash 5.3.20:
+//
+//	declare -a b=(0); g() { local -n b=$1; b=X; }; g b; declare -p b
+//	                                        declare -a b=([0]="X")
+//
+// against `([0]="0")` here, the three circular-reference warnings identical
+// on both sides. The controls already agreed and still do: the same function
+// with different names — `f() { local -n r=$1; r=X; }; f a` — writes element
+// zero through the ordinary path, and a caller whose name holds a *scalar*
+// takes the saved slot exactly as before.
+//
+// **The rule is borrowed rather than restated.** The saved compound is put
+// back in the live table for the length of the store, scalarOverCompound
+// runs over it — the axis asked, the table branch and the array branch and
+// the base index all its own — and whatever it leaves is moved back to the
+// scope. A second implementation of "a scalar over a compound" here is
+// exactly the shape that goes stale: this file would have had to learn about
+// the axis, about tables, and about the base index, and would have learned
+// about none of them the next time one moved.
+func (r *Runner) selfNamerefStoreOverACompound(sc *scope, name, value string) bool {
+	// **Held, not merely saved.** A scope records an entry for every name it
+	// shadows, so the presence of a key here says the name was displaced and
+	// nothing about what it held; the two `existed` maps are the half that
+	// says the caller's cell really carried a compound. Gating on the key
+	// alone sent a caller holding an ordinary scalar down this path and into
+	// an empty array's nil map.
+	heldArray := false
+	if sc.arrayExisted[name] {
+		_, heldArray = sc.savedArrays[name]
+	}
+	heldTable := false
+	if sc.assocExisted[name] {
+		_, heldTable = sc.savedAssoc[name]
+	}
+	if !heldArray && !heldTable {
+		return false
+	}
+	// Whatever the *live* tables hold under this name belongs to the binding
+	// that shadowed it, and has to be exactly as it was afterwards. Both
+	// tables, because scalarOverCompound reads both to decide which branch
+	// this is.
+	liveArray, hadLiveArray := r.Arrays[name]
+	liveAssoc, hadLiveAssoc := r.AssocArrays[name]
+	if r.Arrays == nil {
+		r.Arrays = map[string]Array{}
+	}
+	if r.AssocArrays == nil {
+		r.AssocArrays = map[string]AssocArray{}
+	}
+	delete(r.Arrays, name)
+	delete(r.AssocArrays, name)
+	if heldArray {
+		r.Arrays[name] = sc.savedArrays[name]
+	}
+	if heldTable {
+		r.AssocArrays[name] = sc.savedAssoc[name]
+	}
+	// The borrowed rule writes through storeArray, which keeps the scalar
+	// copy in step by calling setVarAs — and setVarAs would divert straight
+	// back here, because the name is still the self-aimed reference whose
+	// write this is. The guard says "this one is already landing".
+	was := r.storingSelfNameref
+	r.storingSelfNameref = name
+	took := r.scalarOverCompound(name, value, assignedAnyhow)
+	r.storingSelfNameref = was
+	if stored, ok := r.Arrays[name]; ok && heldArray {
+		sc.savedArrays[name] = stored
+		sc.arrayExisted[name] = true
+	}
+	if stored, ok := r.AssocArrays[name]; ok && heldTable {
+		sc.savedAssoc[name] = stored
+		sc.assocExisted[name] = true
+	}
+	delete(r.Arrays, name)
+	delete(r.AssocArrays, name)
+	if hadLiveArray {
+		r.Arrays[name] = liveArray
+	}
+	if hadLiveAssoc {
+		r.AssocArrays[name] = liveAssoc
+	}
+	return took
 }

@@ -470,6 +470,25 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 	if aimed {
 		return target, true
 	}
+	// **Aiming is a write to the reference itself**, so a frozen one refuses
+	// it — where a frozen reference that is already aimed passes the value
+	// through to its target above, and the target's own freeze is what
+	// decides there. Measured 2026-09-23 against bash 5.3.15 in the pinned
+	// image and bash 5.3.20 on macOS, which agree:
+	//
+	//	typeset -n f; typeset -r f; typeset f=v   typeset: f: readonly variable, 1
+	//	typeset -nr f; typeset f=v                the same
+	//	typeset -n g; typeset g=v                 0 — not frozen
+	//	b=1; typeset -nr f=b; typeset f=v         0 — aimed, so b takes it
+	//
+	// The plainly written `f=v` already refused it one caller up, which is
+	// what left the declaration spelling of the same write going through: the
+	// listing then read `declare -nr f="v"` where the reference had refused
+	// to be aimed (#4178).
+	if r.readonly[name] {
+		r.refuseReadonly(name, form)
+		return "", false
+	}
 	if !r.namerefTargetIsAName(value) {
 		r.refuseNamerefAim(value, form)
 		return "", false

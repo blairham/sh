@@ -111,6 +111,7 @@ ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
 ash   EmptyAssociativeKeyIsReportedWhenRead
 ash   EmptyAssociativeKeyRefusesTheLength
+ash   EmptyKeyInATableLiteral
 ash   EmptyParamSubscriptIsAnError
 ash   EmptySubscriptTextIsAMathError
 ash   EmptySubscriptToAnAssignment
@@ -157,6 +158,7 @@ ash   LocalListingIsTheRunningCallsOwn
 ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
+ash   MixedTableLiteral
 ash   NamerefArrayRefusal
 ash   NamerefCycleIsRefused
 ash   NamerefLetterStandsAlone
@@ -397,6 +399,7 @@ dash  EmptyArithSubscript
 dash  EmptyAssociativeKeyIsAnError
 dash  EmptyAssociativeKeyIsReportedWhenRead
 dash  EmptyAssociativeKeyRefusesTheLength
+dash  EmptyKeyInATableLiteral
 dash  EmptyParamSubscriptIsAnError
 dash  EmptyReplacementPattern
 dash  EmptySubscriptTextIsAMathError
@@ -447,6 +450,7 @@ dash  LocalListingIsTheRunningCallsOwn
 dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
+dash  MixedTableLiteral
 dash  NamerefArrayRefusal
 dash  NamerefCycleIsRefused
 dash  NamerefLetterStandsAlone
@@ -572,6 +576,7 @@ ksh   CoprocEndsInAnArray
 ksh   DeclarationMayShadowAnEnclosingScopesReadonly
 ksh   DeclareGlobalReachesPastALocal
 ksh   EchoLastEscapeFlagWins
+ksh   EmptyKeyInATableLiteral
 ksh   EmptySubscriptToAnAssignment
 ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin
@@ -581,6 +586,7 @@ ksh   LocalListingIsTheRunningCallsOwn
 ksh   LocalOutsideAFunctionIsFatal
 ksh   LocalThroughCommandDeclaresNothing
 ksh   LongOptionNameIgnoresHyphens
+ksh   MixedTableLiteral
 ksh   NegatedTestRecordsThePostNegationStatus
 ksh   PrintfReportsAMissingHexDigit
 ksh   QuitResetRestoresTheDefault

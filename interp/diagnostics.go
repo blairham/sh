@@ -6317,6 +6317,44 @@ type Diagnostics struct {
 	// machinery every declaration refusal already uses.
 	ArrayAttributeNotRemovable string
 
+	// BareElementInASubscriptedTableLiteral is a table literal whose first
+	// element carried a `[key]=` head meeting one that does not, in the dialect
+	// whose first element chooses the reading.
+	//
+	// Two verbs: %[1]s the name, %[2]s the element as the **source** wrote it.
+	// See Semantics.MixedTableLiteral for the rows.
+	BareElementInASubscriptedTableLiteral string
+	// BareElementInASubscriptedTableLiteralOperand is the same refusal where the
+	// literal was a **declaration's operand** rather than an assignment of its
+	// own, and it takes a different verb: %[1]s the name and %[2]s the value the
+	// element came to, not the text it was written as.
+	//
+	// The two are separate wordings because the column that refuses names two
+	// different things. Measured 2026-09-23 with `k=zz` and a table declared in
+	// front of each:
+	//
+	//	h=([p]=1 $k)           `h: $k: must use subscript …`
+	//	declare h=([p]=1 $k)   `h: 'zz': must use subscript …`
+	//	declare h=([p]=1 "x y")  `h: 'x y': must use subscript …`
+	//
+	// So an assignment names the source and a declaration names the value, in
+	// single quotes — which is the shape of an operand the shell expanded before
+	// the builtin saw it. Empty falls back to the wording above.
+	BareElementInASubscriptedTableLiteralOperand string
+	// MixedTableLiteralRefusal is the same mixture in the dialect that refuses
+	// it whichever way round it was written. No verbs: the sentence names
+	// neither the name nor the element there.
+	MixedTableLiteralRefusal string
+
+	// EmptyKeyInATableLiteralPair is an empty key among a table literal's bare
+	// words — `m=(p 1 "" x)`. One verb, the word as **written**, quotes and all.
+	// See Semantics.EmptyKeyInATableLiteral.
+	EmptyKeyInATableLiteralPair string
+	// EmptyKeyInATableLiteralElement is the same key written with a head —
+	// `m=([""]=x)`. One verb, and it is the whole **element** as written rather
+	// than the key alone, which is what the refusing column quotes back.
+	EmptyKeyInATableLiteralElement string
+
 	// FdVariableWithoutADescriptor is `exec {name}>&-` when the name holds
 	// no descriptor number. One verb: the variable's name as written,
 	// braces stripped.

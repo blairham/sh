@@ -95,6 +95,10 @@ func Semantics() interp.Semantics {
 	// ever mode-frozen. The same refusal keeps it out.
 	// unanswered RestrictedBuiltinRefusalIsFatal: no restricted mode, so none of
 	// the three refusals exists here (#4205).
+	// unanswered MixedTableLiteral, EmptyKeyInATableLiteral: this shell has no
+	// tables, so there is no keyed literal of its to mix shapes in or to write
+	// an empty key into. Measured 2026-09-23, `typeset -A m` is `typeset: not
+	// found` here — the declaration builtin is absent too.
 	// unanswered BuiltinReadsOptions: there is no `builtin` here to read one —
 	// `builtin -q` is `builtin: not found` at 127 (#3217).
 	//

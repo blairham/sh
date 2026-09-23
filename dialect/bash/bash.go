@@ -1424,6 +1424,12 @@ func Semantics() interp.Semantics {
 	// exist it is silent at 0. See interp.Semantics.ArrayAttributeRemoval
 	// (#4241).
 	s.ArrayAttributeRemoval = interp.ArrayAttributeRemovalRefusedForAnArray
+	// A table literal mixing `[key]=` heads with bare words lets the **first**
+	// element choose the reading, and a bare one after a head is refused by
+	// name. An empty key is refused in both shapes, at different cost. See
+	// interp.Semantics.MixedTableLiteral and .EmptyKeyInATableLiteral (#4241).
+	s.MixedTableLiteral = interp.MixedTableLiteralFollowsTheFirstElement
+	s.EmptyKeyInATableLiteral = interp.EmptyKeyInATableLiteralRefused
 	// And an unset name found that way is a zero like any other unset name:
 	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
@@ -3769,6 +3775,12 @@ func Diagnostics() interp.Diagnostics {
 		ArithEmptySubscript:                      "%[1]s[]: bad array subscript",
 		ArithEmptySubscriptTarget:                "`%[1]s[]': not a valid identifier",
 		ArrayAttributeNotRemovable:               "%[2]s: %[1]s: cannot destroy array variables in this way",
+		BareElementInASubscriptedTableLiteral:    "%[1]s: %[2]s: must use subscript when assigning associative array",
+		// A declaration's operand names the value it came to, single-quoted,
+		// where the assignment above names the text as written.
+		BareElementInASubscriptedTableLiteralOperand: "%[1]s: '%[2]s': must use subscript when assigning associative array",
+		EmptyKeyInATableLiteralPair:                  "%[1]s: bad array subscript",
+		EmptyKeyInATableLiteralElement:               "%[1]s: bad array subscript",
 		// A declaration's operand with a value complains about the
 		// *subscript*, in the words the read of one gets; with no value the
 		// whole operand is refused as a name, builtin and all. Measured

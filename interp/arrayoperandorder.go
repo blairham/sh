@@ -88,7 +88,9 @@ func (r *Runner) expandArrayOperands(tableLetterAhead bool) {
 			// nothing left for it to take.
 			continue
 		}
-		op.expanded = &expandedAssign{assign: a, elems: parsed, elemsSet: true}
+		op.expanded = &expandedAssign{
+			assign: a, elems: parsed, elemsSet: true, elemsAreOperands: true,
+		}
 	}
 }
 

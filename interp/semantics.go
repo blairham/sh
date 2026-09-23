@@ -10148,6 +10148,79 @@ type Semantics struct {
 	// question, and dash and ash have no tables to put one in.
 	BareElementsInATableLiteralAreEachOneValue Answer
 
+	// MixedTableLiteral is what a table literal mixing `[key]=` heads with bare
+	// words means, and the panel gives it three readings — two here and one that
+	// never reaches this file, because it is refused while the program is read.
+	//
+	// Measured 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C <shell>
+	// f.sh` over a script file with standard input on the null device, against
+	// bash 5.3.20, zsh 5.9.2 and ksh93u+ 2012-08-01, with the table declared in
+	// front of each row and the commands newline-separated so that an abandoned
+	// list does not hide what survived:
+	//
+	//	row                     bash 5.3.20            zsh 5.9.2          ksh93u+
+	//	a=([zero]=5 four)       `a: four: must use     `bad [key]=value   `syntax error
+	//	                        subscript when         syntax for         at line 3:
+	//	                        assigning associative  associative        `four'
+	//	                        array`, 1, and `a`     array`, script     unexpected`
+	//	                        keeps `zero`           given up
+	//	b=(one 1 [two]=2)       0, and the key is      the same refusal   reaches the
+	//	                        the literal `[two]=2`                     all-bare
+	//	                                                                  refusal
+	//
+	// So bash lets the **first** element choose the reading and zsh refuses the
+	// mixture whichever way round it was written. ksh93 is not an answer here:
+	// syntax.Dialect.ArrayLiteralShapeFollowsTheFirstElement already refuses the
+	// shape at the read, so no mixed literal of its reaches a run.
+	//
+	// **It is the table literal's question and not the array's**, which is
+	// measured rather than assumed: bash mixes freely on an indexed name —
+	// `a=([2]=c p q)` is 2, 3, 4 and `b=(p [2]=c q)` is 0, 2, 3 — so this cannot
+	// be the grammar flag above read twice.
+	//
+	// The word a refusal names is the one the **source** wrote: with `k=zz`,
+	// `m=([a]=1 $k)` names `$k` and not `zz`. See literalElem.written and
+	// Diagnostics.BareElementInASubscriptedTableLiteral.
+	//
+	// Wrong in the quiet direction when it is not asked: this shell paired every
+	// shape off, so `a=([zero]=5 four)` left a key `four` holding the empty
+	// string at status 0 where one column refuses the line and another gives up
+	// the script (#4241).
+	//
+	// unpinned ksh: refused while the program is read, so no run reaches it —
+	// see the row above.
+	// unpinned dash, ash: neither has tables to put a literal on.
+	MixedTableLiteral MixedTableLiteralPolicy
+
+	// EmptyKeyInATableLiteral is what an empty key written in a table literal
+	// means, and the two columns that can be asked disagree.
+	//
+	// Measured 2026-09-23, same conditions:
+	//
+	//	row                      bash 5.3.20                        zsh 5.9.2
+	//	g=(p 1 "" x q 2)         `"": bad array subscript`, **0**,  0, and
+	//	                         that pair dropped, `p` and `q`     `['']=x`
+	//	                         kept                               stored
+	//	h=([p]=1 [""]=x [r]=2)   `[""]=x: bad array subscript`,     0, all three
+	//	                         **1**, the rest of the literal     stored
+	//	                         abandoned, `h` keeps `p`
+	//
+	// The two shapes cost different amounts in the refusing column and that is
+	// the part a boolean would have lost: a bare pair is dropped and the literal
+	// carries on, a `[""]=` head gives up the rest of it. The element route
+	// already agrees in both columns — `s[""]=v` is `s[""]: bad array subscript`
+	// — so it is the literal that parted.
+	//
+	// The text a refusal names is the element as **written**, quotes and all:
+	// `""` for the bare shape and `[""]=x` for the subscripted one. See
+	// Diagnostics.EmptyKeyInATableLiteralPair and
+	// Diagnostics.EmptyKeyInATableLiteralElement.
+	//
+	// unpinned ksh: a mixed literal is refused at the read and an all-subscripted
+	// one carrying `[""]=` is the same refusal, so no run of its reaches this.
+	// unpinned dash, ash: neither has tables to put a literal on.
+	EmptyKeyInATableLiteral EmptyKeyInATableLiteralPolicy
+
 	// WholeArraySubscriptAssigningAnArray is what `a[@]=Z` and `a[*]=Z` mean
 	// where the name is **not** a table — see WholeArraySubscriptAssignPolicy
 	// for the five answers.
@@ -30433,6 +30506,86 @@ func (r *Runner) arrayAttributeRemoval() ArrayAttributeRemovalPolicy {
 	if p == ArrayAttributeRemovalUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered("`typeset +a` or `+A` over a name that is an array")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// MixedTableLiteralPolicy is what a **table** literal mixing `[key]=` heads with
+// bare words means — see Semantics.MixedTableLiteral for the measured columns.
+type MixedTableLiteralPolicy int
+
+const (
+	// MixedTableLiteralUnspecified is no answer, and is refused like any other.
+	MixedTableLiteralUnspecified MixedTableLiteralPolicy = iota
+	// MixedTableLiteralFollowsTheFirstElement lets the first element choose:
+	// with a `[key]=` head every later element needs one and a bare word is
+	// refused by name, and without one a `[key]=value` word is ordinary text
+	// paired off like any other. bash.
+	MixedTableLiteralFollowsTheFirstElement
+	// MixedTableLiteralRefused refuses a literal that mixes the two shapes
+	// whichever came first, and gives up the script over it. zsh.
+	MixedTableLiteralRefused
+)
+
+func (p MixedTableLiteralPolicy) String() string {
+	switch p {
+	case MixedTableLiteralFollowsTheFirstElement:
+		return "follows the first element"
+	case MixedTableLiteralRefused:
+		return "refused"
+	}
+	return "unspecified"
+}
+
+// mixedTableLiteral resolves the axis, and only where a table literal really
+// mixes the two shapes.
+func (r *Runner) mixedTableLiteral() MixedTableLiteralPolicy {
+	p := r.sem().MixedTableLiteral
+	if p == MixedTableLiteralUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("a table literal mixing `[key]=` heads with bare words")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// EmptyKeyInATableLiteralPolicy is what an **empty key** in a table literal
+// means — see Semantics.EmptyKeyInATableLiteral for the measured columns.
+type EmptyKeyInATableLiteralPolicy int
+
+const (
+	// EmptyKeyInATableLiteralUnspecified is no answer, and is refused like any
+	// other.
+	EmptyKeyInATableLiteralUnspecified EmptyKeyInATableLiteralPolicy = iota
+	// EmptyKeyInATableLiteralAccepted stores it: the empty string is a key like
+	// any other. zsh.
+	EmptyKeyInATableLiteralAccepted
+	// EmptyKeyInATableLiteralRefused refuses it, and the two shapes of the
+	// literal cost different amounts — a bare pair is dropped at status 0 and a
+	// `[""]=` head gives up the rest of the literal at 1. bash.
+	EmptyKeyInATableLiteralRefused
+)
+
+func (p EmptyKeyInATableLiteralPolicy) String() string {
+	switch p {
+	case EmptyKeyInATableLiteralAccepted:
+		return "accepted"
+	case EmptyKeyInATableLiteralRefused:
+		return "refused"
+	}
+	return "unspecified"
+}
+
+// emptyKeyInATableLiteral resolves the axis, and only where a table literal
+// really names an empty key.
+func (r *Runner) emptyKeyInATableLiteral() EmptyKeyInATableLiteralPolicy {
+	p := r.sem().EmptyKeyInATableLiteral
+	if p == EmptyKeyInATableLiteralUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("an empty key in a table literal")))
 		r.status = 2
 		r.unspecified = true
 	}

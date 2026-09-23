@@ -10556,6 +10556,12 @@ type expandedAssign struct {
 	elems      []literalElem
 	elemsSet   bool
 	elemsTaken bool
+	// elemsAreOperands says the list was expanded as a **declaration
+	// utility's operand** and not as an assignment of its own. The two setters
+	// of the field above are not the same route — one is the trace of a plain
+	// assignment — so the route is recorded rather than inferred from the list
+	// being there. See literalElem.operand.
+	elemsAreOperands bool
 
 	// subscript is what the store resolved this assignment's subscript to,
 	// for the dialect whose trace prints that rather than the text: the

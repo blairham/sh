@@ -614,7 +614,14 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 // assignAssocLiteral is `m=([k]=v …)` on a declared name — and `m+=(…)`,
 // which keeps the elements already there where `=` starts over.
 func (r *Runner) assignAssocLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
-	parsed, ok := r.literalElems(elems, r.literalShapeReadsSubscripts(elems),
+	// Before the elements are expanded, because one reading refuses the shape
+	// and a refusal must not run what the literal holds: measured, zsh writes
+	// its sentence without the `$(…)` in a later element having run.
+	reads, refuseBare, ok := r.tableLiteralShape(elems)
+	if !ok {
+		return
+	}
+	parsed, ok := r.literalElems(elems, reads,
 		r.bareLiteralElementIsOneValue(name, elems, false))
 	if !ok {
 		// A failed element list costs the whole table, exactly as it costs
@@ -624,7 +631,55 @@ func (r *Runner) assignAssocLiteral(name string, elems []*syntax.ArrayElem, appe
 	if r.indexArrayIntoATable(name, parsed, appendTo) {
 		return
 	}
-	r.assignAssocElems(name, parsed, appendTo)
+	r.assignAssocElems(name, parsed, appendTo, refuseBare)
+}
+
+// tableLiteralShape answers the two questions a table literal's element shapes
+// raise, and reports whether the literal survives them.
+//
+// **reads** is whether an element is read for a `[key]=` head at all, which is
+// the parse question every literal asks. **refuseBare** is the store question and
+// only a mixed literal asks it: whether a bare element among heads is refused
+// rather than paired off. They are separate because the common answers differ —
+// an all-bare literal in the dialect that refuses a mixture still *reads* for
+// heads, and it has no head for a bare element to be measured against.
+//
+// Semantics.MixedTableLiteral has the readings and the rows. It is asked only
+// where the literal really mixes the two shapes, which is the narrowest point the
+// columns part: a literal whose elements all carry a head, and one where none
+// does, reaches the same table under every reading.
+func (r *Runner) tableLiteralShape(elems []*syntax.ArrayElem) (reads, refuseBare, ok bool) {
+	heads, bare := 0, 0
+	for _, el := range elems {
+		if el.Word == nil {
+			continue
+		}
+		if syntax.SubscriptedElement(el.Word) {
+			heads++
+			continue
+		}
+		bare++
+	}
+	if heads == 0 || bare == 0 {
+		// Not mixed. The shape rule the *grammar* carries still applies — see
+		// literalShapeReadsSubscripts, which is the reading one dialect refuses
+		// this mixture at the read for.
+		return r.literalShapeReadsSubscripts(elems), false, true
+	}
+	switch r.mixedTableLiteral() {
+	case MixedTableLiteralFollowsTheFirstElement:
+		// The first element chooses. Where it carried a head every later bare
+		// element is refused; where it did not, a `[key]=value` word is ordinary
+		// text and nothing is refused at all.
+		first := elems[0].Word != nil && syntax.SubscriptedElement(elems[0].Word)
+		return first, first, true
+	case MixedTableLiteralRefused:
+		r.fatal("%s\n", Wording(r.diag().MixedTableLiteralRefusal,
+			"bad [key]=value syntax for associative array"))
+		return false, false, false
+	}
+	// Unanswered: mixedTableLiteral has said so and stopped the command.
+	return false, false, false
 }
 
 // indexArrayIntoATable is the refusing answer to a literal of **bare words**
@@ -703,7 +758,7 @@ func (r *Runner) tableBecomesAnIndexArray(name string, appendTo bool) bool {
 // Taken apart from the expansion because the indexed path reaches it too: a
 // dialect that reads a subscript as a key stores `a=([k]=v)` here, and it must
 // not expand the elements a second time to do so.
-func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bool) {
+func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, refuseBare bool) {
 	_, produced := r.DynamicAssocs[name]
 	if produced && !appendTo {
 		if _, writable := r.dynamicAssocWriters[name]; !writable {
@@ -753,9 +808,15 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 	// two elements in the two shells that take the form at all — the third
 	// refuses it, and refusing the shape both others accept would be the
 	// lone answer.
-	var pairs []string
+	var pairs, pairWords []string
 	for _, e := range parsed {
 		if e.subscripted {
+			if e.sub == "" && !r.tableLiteralKeyIsThere(name, e.written, true) {
+				// An empty key written with a head, in the reading that refuses
+				// one. It costs the rest of the literal and leaves what is
+				// already stored standing. See Semantics.EmptyKeyInATableLiteral.
+				return
+			}
 			if e.members != nil {
 				// The value under the key is a **compound variable's body** —
 				// `a=([1]=(p=1 q=2))` — which hangs its members under the
@@ -787,15 +848,100 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bo
 			r.setAssocElem(name, e.sub, value)
 			continue
 		}
+		if refuseBare {
+			// A bare element where the first one carried a head, in the reading
+			// that lets the first element choose. The refusal costs the rest of
+			// the literal and leaves what is already stored standing, which is
+			// what the column that makes it was measured doing: `a=([zero]=5
+			// [one]=10 four [two]=2)` keeps `zero` and `one`. See
+			// Semantics.MixedTableLiteral.
+			r.refuseBareTableLiteralElement(name, e)
+			return
+		}
 		pairs = append(pairs, e.fields...)
+		for range e.fields {
+			// The element's own text beside each field it made, so a refusal
+			// about the *key* can name the word the source wrote. One field per
+			// element is the shape the refusing column has — see
+			// BareElementsInATableLiteralAreEachOneValue — and where an element
+			// made several the field is the nearest thing to a word there is.
+			pairWords = append(pairWords, e.written)
+		}
 	}
 	for i := 0; i < len(pairs); i += 2 {
+		if pairs[i] == "" {
+			written := pairs[i]
+			if i < len(pairWords) && pairWords[i] != "" {
+				written = pairWords[i]
+			}
+			if !r.tableLiteralKeyIsThere(name, written, false) {
+				// The pair is dropped and the literal carries on, which is what
+				// the refusing column was measured doing — and is the half that
+				// parts the two shapes. See Semantics.EmptyKeyInATableLiteral.
+				continue
+			}
+		}
 		value := ""
 		if i+1 < len(pairs) {
 			value = pairs[i+1]
 		}
 		r.setAssocElem(name, pairs[i], value)
 	}
+}
+
+// tableLiteralKeyIsThere reports whether an **empty** key a table literal named
+// may be stored, and writes the refusal where it may not.
+//
+// One function for the literal's two shapes because they share the reading and
+// part only in what a refusal costs: a bare pair is dropped and the literal goes
+// on, a `[""]=` head gives up the rest of it. head says which this is. See
+// Semantics.EmptyKeyInATableLiteral for the rows.
+func (r *Runner) tableLiteralKeyIsThere(name, written string, head bool) bool {
+	if r.emptyKeyInATableLiteral() != EmptyKeyInATableLiteralRefused {
+		// Accepted, or unanswered — in which case the axis has already said so
+		// and stopped the command, and there is nothing to store into anyway.
+		return !r.unspecified
+	}
+	if !head {
+		wording := Wording(r.diag().EmptyKeyInATableLiteralPair,
+			"%[1]s: bad array subscript", written)
+		r.diagf("%s\n", wording)
+		return false
+	}
+	r.failedSubscript("%s\n", Wording(r.diag().EmptyKeyInATableLiteralElement,
+		"%[1]s: bad array subscript", written))
+	return false
+}
+
+// refuseBareTableLiteralElement is the sentence a bare element earns inside a
+// literal whose first element carried a head.
+//
+// The status and the reach are the ones measured: status 1, and the rest of the
+// command list is given up while the input is not — the same shape a bad
+// subscript in a literal already has, which is why it goes through the same door.
+func (r *Runner) refuseBareTableLiteralElement(name string, e literalElem) {
+	wording, fallback := r.diag().BareElementInASubscriptedTableLiteral,
+		"%[1]s: %[2]s: must use subscript when assigning associative array"
+	verb := e.written
+	if e.operand {
+		// A declaration's operand, which the shell expanded before the builtin
+		// saw it — and the column that refuses names the value rather than the
+		// text, in single quotes. See
+		// Diagnostics.BareElementInASubscriptedTableLiteralOperand for the rows.
+		if operand := r.diag().BareElementInASubscriptedTableLiteralOperand; operand != "" {
+			wording = operand
+		}
+		verb = ""
+		if len(e.fields) > 0 {
+			verb = e.fields[0]
+		}
+	}
+	// The status is the builtin's as well as the line's: a declaration whose
+	// operand was refused reports 1 rather than the 0 its own return would
+	// otherwise put there, which is the same door every other refused operand
+	// goes through.
+	r.assignFailed = true
+	r.failedSubscript("%s\n", Wording(wording, fallback, name, verb))
 }
 
 // literalNamesAKey reports whether a keyed literal has anything to store —

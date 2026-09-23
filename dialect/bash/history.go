@@ -961,6 +961,40 @@ func historySeed(r *interp.Runner, lines []string) {
 	for _, line := range lines {
 		historyLoad(r, line, "", false)
 	}
+	historySeedReadMark(r)
+}
+
+// historySeedReadMark says the session's history file has been read to its
+// end, which is what keeps a later `history -n` from reading it a second
+// time. Without it an interactive `history -n` listed every line the session
+// started with all over again (#4363), because the mark historyStartFile
+// lays down for a script had no counterpart on the route a prompt takes.
+//
+// The count is asked of the file here rather than taken from the entries
+// seeded above, and the two are not the same number twice over: the front
+// end's list is its own sources followed by the file's lines, so some of
+// what arrived was never in the file at all, and a `#<epoch>` line is a
+// physical line that is no entry. historyReadAt counts physical lines —
+// see historyReadMark, and the `read := len(lines)` historyStartFile takes
+// before a size trims what it keeps.
+//
+// One small read at the start of a session, which is the price of the
+// letter meaning what it says. Silent, and silent about a refusal too: this
+// is not a call the person at the prompt made, so it has nothing to report
+// and a file it cannot read simply leaves the mark where it was.
+//
+// Measured 2026-09-23 on bash 5.3.20, interactive with a three-line
+// HISTFILE: `history -n` then `history` lists those three lines once.
+func historySeedReadMark(r *interp.Runner) {
+	name, ok := r.GetVar("HISTFILE")
+	if !ok || name == "" {
+		return
+	}
+	lines, ok := historyReadFile(r, name, true)
+	if !ok {
+		return
+	}
+	r.SetAssocElement(historyReadAt, shellPath(r, name), strconv.Itoa(len(lines)))
 }
 
 // historyAppend puts one entry at the end of the list, keeping no more than

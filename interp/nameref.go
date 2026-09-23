@@ -466,9 +466,28 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 	if !r.isNameref(name) {
 		return name, true
 	}
-	target, aimed := r.namerefTarget(name)
+	target, cycle, aimed := r.namerefWalk(name)
 	if aimed {
 		return target, true
+	}
+	if cycle {
+		// **A reference in a cycle is aimed, not unaimed.** The walk cannot
+		// hand back a name, but the reference has one written in it, so an
+		// assignment is a write through it rather than an invitation to
+		// re-point it. The write lands nowhere and the shell says why.
+		//
+		// Measured 2026-09-23 against bash 5.3.15 in the pinned image and
+		// bash 5.3.20 on macOS, which agree: `typeset -n ref=re re=ref`, then
+		// `re=4`, is `warning: re: circular name reference` with both
+		// references still standing and `${ref}` unset. This shell read the
+		// walk's "not aimed" as the shape `typeset -n r; r=v` has and tried
+		// to aim `re` at `4`, which it then refused as a bad name — a
+		// sentence about the value where the reference's is about the cycle.
+		//
+		// The same reading Runner.selfNameref already applies one shape over,
+		// for a reference aimed straight at its own name (#4178).
+		r.warnAboutACycle(name)
+		return "", false
 	}
 	// **Aiming is a write to the reference itself**, so a frozen one refuses
 	// it — where a frozen reference that is already aimed passes the value

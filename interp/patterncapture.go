@@ -676,7 +676,7 @@ func charIndex(s string, n int) int {
 	}
 	count := 0
 	for i := 0; i < n; count++ {
-		i += characterWidth(s[i:])
+		i += characterWidth(s[i:], "")
 	}
 	return count
 }

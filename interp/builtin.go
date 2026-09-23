@@ -5986,7 +5986,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// being a pre-pass over the string.
 	ifs, set := r.ifs()
 	space := r.ifsSpace(ifs)
-	fields, at, _ := splitFieldsAt(text, lits, ifs, space, set, false, false, r.countsTheLocalesCharacters)
+	fields, at, _ := splitFieldsAt(text, lits, ifs, space, set, false, false, r.countsTheLocalesWideUnits)
 	if array != "" {
 		// An array target takes the fields *as* fields, so the tail of the
 		// splitting rule is live here: `IFS=:; read -A a` on `a:b:` fills

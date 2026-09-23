@@ -251,7 +251,7 @@ func standInFor(s string, stand *standIns) (string, []int) {
 	back := make([]int, 0, len(s)+1)
 	rewrote := false
 	for i := 0; i < len(s); {
-		w := characterWidth(s[i:])
+		w := characterWidth(s[i:], "")
 		unit := s[i : i+w]
 		out := unit
 		// A character with no case of its own is written through, and that

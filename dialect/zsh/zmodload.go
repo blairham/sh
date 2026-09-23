@@ -342,10 +342,11 @@ func zmodloadHolds(r *interp.Runner, feature string) bool {
 		return !r.AbsentParameter(name)
 	case "c":
 		// A condition has no word that runs it and no registry a script can
-		// ask, so a missing one is never reported anywhere: `[[ -nosuch x ]]`
-		// is a reading of the grammar and not a lookup. It holds the module
-		// shut for the same reason an unregistered parameter does — nothing
-		// downstream would say a word.
+		// ask, so a module holding one shut would change nothing a script
+		// sees: `[[ -nosuch x ]]` is looked up by *name* when the condition
+		// runs and refused there (#4261), which is the grammar's answer and
+		// not this table's. It holds the module shut for the same reason an
+		// unregistered parameter does — nothing downstream would say a word.
 		return true
 	}
 	return true

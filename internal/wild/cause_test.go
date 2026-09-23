@@ -18,20 +18,26 @@ func TestCausesGroupsAndRanks(t *testing.T) {
 	dir := t.TempDir()
 	// Three scripts sharing one gap, and one with a different gap.
 	for _, name := range []string{"a", "b", "c"} {
-		// A construct this parser does not have: that shell parses **any**
-		// `-word` with an operand as a unary condition and refuses an
-		// unknown one when it runs, which is the rule
-		// docs/spec/grammar/conditions.md declines to adopt — it is #965,
-		// and it is open.
+		// A condition whose words are no condition at all, refused at an
+		// **ordinary word** — which is the one thing this fixture has to be,
+		// so that its reason does not collapse onto the reserved word the
+		// second fixture is refused at.
 		//
-		// It was `[[ $k == (x|y) ]]` until #826 implemented that, and
-		// `[[ -prefix - ]]` until #1879 added that operator by name — the
-		// same hazard the second fixture's comment is about, reached from
-		// the other side. Whatever replaces this one has to be something
-		// real zsh reads and this parser still refuses **at an ordinary
-		// word**, so that its reason does not collapse onto the reserved
-		// word the second fixture is refused at.
-		write(t, dir, name, "#!/bin/zsh\n[[ -nosuch - ]]\n")
+		// It was `[[ $k == (x|y) ]]` until #826 implemented that,
+		// `[[ -prefix - ]]` until #1879 added that operator by name, and
+		// `[[ -nosuch - ]]` until #4261 made **any** unknown `-word` a
+		// condition this parser reads and the interpreter refuses by name.
+		// Three live gaps, three replacements, which is the lesson the
+		// second fixture's comment draws: a gap somebody is going to close
+		// guarantees the churn.
+		//
+		// So this one is chosen the way that one was — a **syntax error in
+		// every shell in the panel**, measured on zsh 5.9.2 2026-09-22,
+		// where `[[ p q r s ]]` is `condition expected: p` and this parser
+		// says the same sentence for the same reason. Four words are no
+		// condition in bash or ksh93 either, and nothing will implement
+		// them.
+		write(t, dir, name, "#!/bin/zsh\n[[ p q r s ]]\n")
 	}
 	// A different cause, and the seventh fixture to stand here. The six
 	// before it — `repeat 3 { echo x; }` until #827 implemented that,

@@ -2301,8 +2301,31 @@ func (p *Parser) parsePipeline() Expr {
 func (p *Parser) parseTime(negated bool, bang Pos) Expr {
 	tc := &TimeClause{Negated: negated, Bang: bang, Time: p.tok.Pos, Stop: p.tok.End}
 	p.next()
-	if p.dialect.TimePosixFlag && p.atWord("-p") {
-		tc.Posix, tc.PosixPos = true, p.tok.Pos
+	for {
+		if p.dialect.TimePosixFlag && p.atWord("-p") {
+			tc.Posix, tc.PosixPos = true, p.tok.Pos
+			tc.Stop = p.tok.End
+			p.next()
+		}
+		if p.dialect.TimeIgnoresADoubleDash && p.atWord("--") {
+			// Consumed, and it selects the POSIX report on its own — see
+			// Dialect.TimeIgnoresADoubleDash, where `time -- echo a` is
+			// measured in that layout with no `-p` written. One only: a
+			// second `--` is the command.
+			if !tc.Posix {
+				tc.Posix, tc.PosixPos = true, p.tok.Pos
+			}
+			tc.Stop = p.tok.End
+			p.next()
+		}
+		if !p.dialect.TimeFoldsARepeatedKeyword || !p.atWord("time") {
+			break
+		}
+		// A second keyword is the same request, not a timing of a timing:
+		// measured, `time time echo a` reports once and `time time -p echo a`
+		// reports once in the POSIX layout, so the flags accumulate onto one
+		// clause. Looping rather than recursing is what makes that true of a
+		// third `time` as well.
 		tc.Stop = p.tok.End
 		p.next()
 	}

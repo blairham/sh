@@ -509,10 +509,43 @@ the first word of the timed pipeline, and `time -p true` there is
 `command not found: -p` with the pipeline still timed. So the flag is a
 separate grammar question from the keyword and is not core.
 
+bash reads a `--` after the keyword as well, and reads it as a *second*
+way of asking for the POSIX report. Measured 2026-09-23 with `TIMEFORMAT`
+set to a string the POSIX layout cannot produce, so the two reports are
+told apart rather than assumed:
+
+    bash -c 'TIMEFORMAT=MARK; time -- echo a'    a, then real/user/sys
+    bash -c 'TIMEFORMAT=MARK; time -p -- echo a' a, then real/user/sys
+    bash -c 'time -p -- -- echo a'               `--: command not found`
+    bash -c 'time -- -p echo a'                  `-p: command not found`
+
+So: at most one `-p`, then at most one `--`, in that order, and either one
+selects the POSIX layout. ksh93 consumes the `--` too but answers it in a
+*third* layout — `0.00 real 0.00 user 0.00 sys`, neither its plain report
+nor its `-p` one — so it is not evidence for the rule as bash states it.
+zsh does not read the `--` at all: it is the command, `command not found:
+--`, with the pipeline still timed.
+
+A second `time` in front of a pipeline is the **same request** in bash
+rather than a timing of a timing:
+
+    bash -c 'TIMEFORMAT=MARK; time time echo a'       a, then one MARK
+    bash -c 'TIMEFORMAT=MARK; time time time echo a'  a, then one MARK
+    bash -c 'TIMEFORMAT=MARK; time time -p echo a'    a, then real/user/sys
+
+The last row is what says the flags accumulate onto one clause rather than
+the inner keyword being discarded: the `-p` of the *inner* `time` reaches
+the one report. ksh93 and zsh both nest instead — two reports each.
+
 A bare `time`, with no pipeline, parses and reports in all three shells
 that have the keyword (what it reports diverges — see semantics.md), and
 resets the status to 0: `false; time; echo $?` prints 0 in all three.
 A bare `time` directly followed by `|` is a syntax error in bash.
+
+A bare `time` prints back from bash with the separator its pipeline would
+have followed: a function whose whole body is `time` lists through `type`
+as `····time·` — the trailing space is bash's, and a suite file compares
+it.
 
 The status of a timed pipeline is the pipeline's own: `time false`
 reports 1 in all three.

@@ -3215,7 +3215,25 @@ func (r *Runner) attributeOverFrozenRefused(name string, f declareFlags, assigns
 	if !r.readonly[name] {
 		return false
 	}
-	if f.namesAValueShapingAttribute() {
+	if f.namesAValueShapingAttribute() || f.nameref {
+		// **The reference letter is here too**, and it is not a value shape:
+		// what it changes is where the name's reads and writes land, which a
+		// frozen name has even more reason to refuse than a letter about the
+		// value's type. Measured 2026-09-23 against bash 5.3.15 in the pinned
+		// image and bash 5.3.20 on macOS: with `declare -r A=x` already
+		// standing, `declare -n A`, `declare -n A=y` and `declare -nr A=x`
+		// are all `declare: A: readonly variable` at 1, where this shell took
+		// all three at 0 and redirected a name the script had frozen.
+		// ksh93u+ refuses the same shape in its own words.
+		//
+		// The controls, which are what say it is the letter and not the
+		// declaration: `declare -r A` over the same name is 0 in both, `+n`
+		// over it is 0 in both, and `-n` over a name nothing has frozen is 0.
+		// The `local -n` form already refused it — that path asks this same
+		// gate one operand loop over, which is what made the gap visible.
+		//
+		// Under the on sign alone: f.nameref is false for `+n`, which the
+		// third control covers.
 		wide := r.sem().AttributeOverAFrozenNameIsRefused
 		if r.ask(wide, "an attribute letter over a frozen name being refused") {
 			if r.unspecified {

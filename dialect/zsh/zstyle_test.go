@@ -292,3 +292,70 @@ func TestResettingAStyleKeepsItsPlace(t *testing.T) {
 		t.Errorf("output = %q, want %q", out, want)
 	}
 }
+
+// TestDashDashIsNotAnEndOfOptionsMarker is #4247. `add-zle-hook-widget`
+// records a hook's widget list with `zstyle -- "$hook" widgets ...`, so a
+// shell that refuses the word registers every zle hook a plugin installs with
+// an empty list and the plugin's redraw widget is never called.
+//
+// Measured 2026-09-22 against zsh 5.9.2: the word has three readings rather
+// than one, and treating it as an ordinary end-of-options marker gets two of
+// them wrong.
+func TestDashDashIsNotAnEndOfOptionsMarker(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			name: "a leading one is dropped and the style is set",
+			src:  "zstyle -- p1 s1 v1; print \"set=$?\"\nzstyle -g o1 p1 s1; print \"get=$? [$o1]\"\n",
+			want: "set=0\nget=0 [v1]\n",
+		},
+		{
+			name: "and the option letter behind it is still an option",
+			src:  "zstyle p1 s1 v1; zstyle -- -d p1; zstyle -L; print \"rc=$?\"\n",
+			want: "rc=0\n",
+		},
+		{
+			name: "a second one ends the options, so the operand is read as written",
+			src:  "zstyle -- -- -weird s v; zstyle -L\n",
+			want: "zstyle -weird s v\n",
+		},
+		{
+			name: "after an option letter it is an ordinary word",
+			src:  "zstyle -e -- p s v; zstyle -L\n",
+			want: "zstyle -e -- p s v\n",
+		},
+		{
+			name: "a lone dash ends the options where it stands",
+			src:  "zstyle - -weird s v; zstyle -L\n",
+			want: "zstyle -weird s v\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), c.src)
+			if out != c.want {
+				t.Errorf("output = %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// TestAnOperandTooManyIsItsOwnComplaint is the other half of #4247, and it is
+// what makes the word visible to a script at all: a form that does not skip
+// `--` counts it, so the operands run one past the end. Measured, that is
+// `too many arguments` rather than a retrieval of the wrong pattern — and a
+// dashed word too long to have been an option is refused as an *argument*,
+// which is not the wording an unknown letter gets.
+func TestAnOperandTooManyIsItsOwnComplaint(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"zstyle -g -- o p s\n", "too many arguments"},
+		{"zstyle -a -- p s arr\n", "too many arguments"},
+		{"zstyle -L p s extra\n", "too many arguments"},
+		{"zstyle -- -weird s v\n", "invalid argument: -weird"},
+		{"zstyle -weird s v\n", "invalid argument: -weird"},
+		{"zstyle -ed p s\n", "invalid argument: -ed"},
+	} {
+		out, st := runZsh(t, t.TempDir(), c.src)
+		if !strings.Contains(out, c.want) || st != 1 {
+			t.Errorf("%q gave %q at %d, want %q at 1", c.src, out, st, c.want)
+		}
+	}
+}

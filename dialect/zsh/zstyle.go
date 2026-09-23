@@ -206,24 +206,93 @@ func registerZstyle(r *interp.Runner) {
 	r.Register("zstyle", zstyleBuiltin)
 }
 
-// zstyleLetters are the option letters this builtin answers to. Anything else
-// is `invalid option: -z` and 1 — which is this builtin's wording and not
-// `bindkey`'s `bad option`, measured, so the two are refused in their own
-// words.
+// zstyleLetters are the option letters this builtin answers to. A word of two
+// characters holding anything else is `invalid option: -z` and 1 — which is
+// this builtin's wording and not `bindkey`'s `bad option`, measured, so the
+// two are refused in their own words. A *longer* dashed word is refused
+// differently again: `invalid argument: -weird`, because nothing that long
+// could have been an option in the first place.
 const zstyleLetters = "LdgsbatTme"
 
+// zstyleArity is how many operands each form reads once its option letter is
+// off the front: the fewest that say anything, and the most it will look at,
+// where -1 is no limit. Measured 2026-09-22 against zsh 5.9.2.
+//
+// The maxima are what make `--` visible at all from a script, since the forms
+// that do not skip it count it: `zstyle -g o2 p s` reads three operands and
+// `zstyle -g -- o2 p s` is four, which is `too many arguments` rather than a
+// retrieval one argument to the right.
+func zstyleArity(mode string) (minimum, maximum int) {
+	switch mode {
+	case "", "e":
+		return 2, -1
+	case "L":
+		return 0, 2
+	case "d":
+		return 0, -1
+	case "g":
+		return 1, 3
+	case "s":
+		return 3, 4
+	case "t", "T":
+		return 2, -1
+	default: // "a", "b", "m"
+		return 3, 3
+	}
+}
+
+// zstyleBuiltin reads the one option this builtin takes and hands the
+// operands to the form that was named.
+//
+// **`--` is not an end-of-options marker here**, and the three ways it is not
+// are measured rather than assumed (2026-09-22, zsh 5.9.2). It is the line
+// `add-zle-hook-widget` stores a hook's widget list with, so a shell that
+// refuses it registers the hook with nothing in it and every zle hook a
+// plugin installs goes uncalled (#4247).
+//
+//  1. A **leading** `--` is a no-op: it is dropped and what follows is read
+//     exactly as it would have been without it, option letter and all —
+//     `zstyle -- -d p1 s1` deletes, and `zstyle -- -x p s` is still
+//     `invalid option: -x`.
+//  2. A `--` in the option's own position **ends the options**, so the
+//     operands start at the next word whatever it looks like: `zstyle -- --
+//     -weird s v` sets a style for the pattern `-weird`, which the same line
+//     without the second `--` refuses.
+//  3. Everywhere else it is an ordinary word. After an option letter there is
+//     no option position left, so `zstyle -e -- p s v` stores the pattern
+//     `--` and `zstyle -g -- o p s` is one operand too many.
+//
+// A lone `-` is the second reading and not the first: it ends the options
+// where it stands, so `zstyle - -weird s v` sets `-weird` and `zstyle -` is
+// the set form with nothing to set rather than the listing.
 func zstyleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
+	if len(args) > 0 && args[0] == "--" {
+		args = args[1:]
+	}
 	if len(args) == 0 {
 		listStyles(r)
 		return 0
 	}
 	mode := ""
-	if a := args[0]; strings.HasPrefix(a, "-") && len(a) == 2 {
-		if !strings.ContainsAny(a[1:], zstyleLetters) {
+	if a := args[0]; strings.HasPrefix(a, "-") {
+		switch {
+		case a == "-" || a == "--":
+			args = args[1:]
+		case len(a) == 2 && strings.ContainsAny(a[1:], zstyleLetters):
+			mode, args = a[1:], args[1:]
+		case len(a) == 2:
 			r.Diagnosef("invalid option: %s\n", a)
 			return 1
+		default:
+			r.Diagnosef("invalid argument: %s\n", a)
+			return 1
 		}
-		mode, args = a[1:], args[1:]
+	}
+	switch minimum, maximum := zstyleArity(mode); {
+	case len(args) < minimum:
+		return notEnoughStyleArguments(r)
+	case maximum >= 0 && len(args) > maximum:
+		return tooManyStyleArguments(r)
 	}
 	switch mode {
 	case "":
@@ -243,12 +312,10 @@ func zstyleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 
 // setStyleCommand is the bare form and `-e`: a pattern, a style and its
 // values. Two arguments are the fewest that say anything — `zstyle ':a:*'`
-// alone is `not enough arguments`, measured — and a style may be set to no
-// values at all.
+// alone is `not enough arguments`, measured, which the arity check above
+// refuses before this is reached — and a style may be set to no values at
+// all.
 func setStyleCommand(r *interp.Runner, args []string, eval bool) int {
-	if len(args) < 2 {
-		return notEnoughStyleArguments(r)
-	}
 	setStyle(r, styleEntry{pattern: args[0], style: args[1], eval: eval, values: args[2:]})
 	return 0
 }
@@ -281,9 +348,6 @@ func deleteStyles(r *interp.Runner, args []string) int {
 // With no pattern it answers with the patterns themselves, which is how a
 // script asks what contexts have been styled at all.
 func retrieveStyles(r *interp.Runner, args []string) int {
-	if len(args) == 0 {
-		return notEnoughStyleArguments(r)
-	}
 	name, rest := args[0], args[1:]
 	switch len(rest) {
 	case 0:
@@ -304,7 +368,7 @@ func retrieveStyles(r *interp.Runner, args []string) int {
 		}
 		setStyleArray(r, name, seen)
 		return 0
-	default:
+	default: // a pattern and a style, which is the most this form reads
 		for _, e := range styleOrder(readStyles(r)) {
 			if e.pattern == rest[0] && e.style == rest[1] {
 				setStyleArray(r, name, e.values)
@@ -324,13 +388,6 @@ func retrieveStyles(r *interp.Runner, args []string) int {
 // tell "off" from "unsaid", and `-T` is the same test with the unsaid case
 // answering 0.
 func testStyle(r *interp.Runner, ctx context.Context, mode string, args []string) int {
-	need := 3
-	if mode == "t" || mode == "T" {
-		need = 2
-	}
-	if len(args) < need {
-		return notEnoughStyleArguments(r)
-	}
 	values, found := lookupStyle(r, ctx, args[0], args[1])
 	switch mode {
 	case "s":
@@ -463,6 +520,15 @@ func setStyleArray(r *interp.Runner, name string, values []string) {
 // is the same sentence whatever was short, and it is 1 rather than 2.
 func notEnoughStyleArguments(r *interp.Runner) int {
 	r.Diagnosef("not enough arguments\n")
+	return 1
+}
+
+// tooManyStyleArguments is the other half of the usage complaint, and it is
+// the one a `--` reaches: a form that does not skip the word counts it, so
+// the operand that would have been one past the end is refused rather than
+// read. Also the same sentence whatever was long, and also 1.
+func tooManyStyleArguments(r *interp.Runner) int {
+	r.Diagnosef("too many arguments\n")
 	return 1
 }
 

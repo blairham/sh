@@ -54,6 +54,17 @@ func (rec *shellOptionRecorder) install(r *interp.Runner) {
 			rec.listed = append(rec.listed, reissuable)
 			_, _ = rr.Out().Write([]byte("LISTING\n"))
 		},
+		// The reader is the third half of the namespace and is not what this
+		// file is about: it answers the names this recorder was asked to move,
+		// so an installed namespace is a complete one.
+		func(_ *interp.Runner, name string) (on, known bool) {
+			for _, moved := range rec.moved {
+				if moved[1:] == name {
+					return moved[0] == '-', true
+				}
+			}
+			return false, false
+		},
 	)
 }
 

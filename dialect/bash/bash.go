@@ -593,6 +593,26 @@ func Semantics() interp.Semantics {
 	// `argv[0]` of `sh` as well: `set -o` reports `emacs off` in a script and
 	// `emacs on` under `-i`, with or without a terminal.
 	s.InteractiveSelectsEmacs = interp.Yes
+	// A `#` typed at this shell's prompt opens a comment only while
+	// `interactive_comments` is on, and this shell has it on with nothing
+	// said. Measured 2026-09-23 on bash 5.3.15, `printf … | bash --norc
+	// --noprofile -i` on a pipe with a scratch HOME:
+	//
+	//	echo a #b                                a
+	//	shopt -u interactive_comments; echo a #b  a #b
+	//	…then shopt -s again; echo c #d           c
+	//
+	// The third line is why the axis holds a *name* rather than a bool: the
+	// state moves mid-session and the answer has to be asked for per line.
+	// The option is not a `set -o` name — `[[ -o interactive_comments ]]` is 1
+	// on the same shell — so this reaches the prompt through the `shopt`
+	// namespace's reader rather than the condition operator's lookup.
+	//
+	// The axis was the empty string here, which reads as "nothing has to be
+	// on": right at the default and wrong the moment a script turns the name
+	// off, and that is the whole of what `shopt -u interactive_comments` is
+	// for (#4149).
+	s.PromptCommentsNeedTheOption = "interactive_comments"
 	// `set +B` stops `{a,b}` expanding and `set -B` puts it back — measured
 	// 2026-09-11 on bash 5.3.15, both directions, and the letter leaves `$-`
 	// while it is off. So it is not one-way the way `noexec` is (#1856).
@@ -4773,7 +4793,7 @@ func Apply(r *interp.Runner) {
 	// of these names before the first line of the script. See shopt.go, and
 	// Semantics.ShellOptionInvocationLetter for the letter the front end
 	// reads (#3264).
-	r.SetShellOptionNamespace(shoptMoveAtInvocation, shoptListAll)
+	r.SetShellOptionNamespace(shoptMoveAtInvocation, shoptListAll, shoptState)
 	// This shell's only self-documenting builtin, and there is no other name
 	// for it — a script reaching for it used to get 127. See help.go, which
 	// carries what is answered and what is deliberately refused.

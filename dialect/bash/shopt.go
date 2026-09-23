@@ -336,6 +336,34 @@ var shoptSwitches = map[string]shoptSwitch{
 		get: (*interp.Runner).KeepsLastPipelineElement,
 		set: (*interp.Runner).SetKeepsLastPipelineElement,
 	},
+	// The fourth name here that moves a semantics axis, and the one whose
+	// axis holds a *name* rather than an answer:
+	// interp.Semantics.PromptCommentsNeedTheOption is this option's own
+	// spelling, so the front end asks this entry per accepted line and a `#`
+	// typed at the prompt stops opening a comment the moment a script turns
+	// it off.
+	//
+	// Measured 2026-09-23 on bash 5.3.15, into `bash --norc --noprofile -i`
+	// on a pipe with a scratch HOME:
+	//
+	//	echo a #b                                 a
+	//	shopt -u interactive_comments; echo a #b   a #b
+	//	…then shopt -s again; echo c #d            c
+	//
+	// It sat in shoptStates reading **on**, which was honest about the
+	// default and wrong about everything the name exists for: `shopt -s` was
+	// a silent grant and `shopt -u` was refused at 1, so the one state a
+	// script asks for was the one it could not have. The reading did not
+	// change — the axis this shell already had is now given bash's name for
+	// it, which is what the option was missing.
+	//
+	// Non-interactive input is not this option's business in bash either:
+	// `bash -c 'shopt -u interactive_comments; echo a #b'` is `a`, measured
+	// the same day, and the axis is read by the prompt alone (#4149).
+	"interactive_comments": {
+		get: func(r *interp.Runner) bool { return shoptStoredState(r, "interactive_comments", true) },
+		set: func(r *interp.Runner, on bool) { shoptSetStored(r, "interactive_comments", on, true) },
+	},
 	// The third name here that moves a semantics axis, and the one whose
 	// sense is inverted: what it asks for is the answer
 	// interp.Semantics.UnsetRemovesAnEnclosingLocal calls **No**. This shell
@@ -714,9 +742,16 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 //
 // The handful that are on are on because the behavior they name is simply
 // how this shell works: ranges match by byte, `*` never yields `.` or `..`,
-// comments are honored everywhere, `$'…'` is decoded inside `${…}`, the
-// prompt expands parameters, `.` searches PATH, and `cmdhist` describes the
-// history this shell already keeps.
+// `$'…'` is decoded inside `${…}`, the prompt expands parameters, `.`
+// searches PATH, and `cmdhist` describes the history this shell already
+// keeps.
+//
+// `interactive_comments` was in that list and is in shoptSwitches above now.
+// It is the same shape `compat31`…`compat44` were: a state recorded on the
+// side this shell happened to be on, over a switch the shell already had —
+// interp.Semantics.PromptCommentsNeedTheOption, which this preset was leaving
+// empty. Reading `on` was honest about the default and wrong about the one
+// state a script asks the name for (#4149).
 //
 // Which side a name falls on is measured, never assumed, and the history
 // names have to be measured through a terminal rather than through `-c`:
@@ -781,7 +816,6 @@ var shoptStates = map[string]bool{
 	"gnu_errfmt":           false,
 	"histreedit":           false,
 	"huponexit":            false,
-	"interactive_comments": true,
 	"mailwarn":             false,
 	"noexpand_translation": false,
 	"progcomp_alias":       false,

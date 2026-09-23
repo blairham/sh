@@ -356,3 +356,73 @@ func TestDialectOptionReadsTheNamespaceAndNotTheSetONames(t *testing.T) {
 		}
 	}
 }
+
+// A dialect's *second* option namespace — the table it keeps beside `set -o`
+// rather than inside it — is reachable through DialectOption and must not be
+// reachable through `[[ -o ]]`.
+//
+// Measured on bash 5.3.15, the one shell in the panel that has such a table:
+//
+//	[[ -o interactive_comments ]]     1
+//	shopt -q interactive_comments     0
+//
+// So the two namespaces really are two, and the seam has to serve a front end
+// asking by name without widening the condition operator. Wiring the reader
+// into the condition's own lookup would have made every `shopt` name answer
+// `[[ -o ]]` in a shell that answers none of them (#4149).
+func TestDialectOptionReachesTheSecondNamespaceAndTheConditionDoesNot(t *testing.T) {
+	var r *Runner
+	run(t, "true", func(got *Runner) { r = got })
+	if r == nil {
+		t.Fatal("no runner")
+	}
+	r.SetShellOptionNamespace(
+		func(_ *Runner, _ string, _ bool) int { return 0 },
+		func(_ *Runner, _ bool) {},
+		func(_ *Runner, name string) (on, known bool) {
+			switch name {
+			case "second_on":
+				return true, true
+			case "second_off":
+				return false, true
+			}
+			return false, false
+		},
+	)
+	for _, tc := range []struct {
+		name      string
+		on, known bool
+		why       string
+	}{
+		{"second_on", true, true, "a name only the second namespace has, on"},
+		{"second_off", false, true, "a name only the second namespace has, off"},
+		{"nobody_has_this", false, false, "a name nobody has"},
+		// The first namespace still answers first: this is a fallback for a
+		// name neither of the two earlier lookups has, not a replacement.
+		{"errexit", false, true, "a set -o name, still answered by the first lookup"},
+	} {
+		on, known := r.DialectOption(tc.name)
+		if on != tc.on || known != tc.known {
+			t.Errorf("%s: DialectOption(%q) = %v, %v; want %v, %v",
+				tc.why, tc.name, on, known, tc.on, tc.known)
+		}
+	}
+	// And the condition operator stops at the first namespace. Asked through
+	// the operator itself rather than through the lookup, because the operator
+	// is what bash answers 1 for — and this is the assertion that fails if the
+	// reader is ever moved into the condition's lookup, which is the change
+	// that would look like a simplification.
+	out, _ := run(t, `[[ -o second_on ]]; echo "on=$?"; [[ -o second_off ]]; echo "off=$?"`,
+		func(got *Runner) {
+			got.SetShellOptionNamespace(
+				func(_ *Runner, _ string, _ bool) int { return 0 },
+				func(_ *Runner, _ bool) {},
+				func(_ *Runner, name string) (on, known bool) {
+					return name == "second_on", name == "second_on" || name == "second_off"
+				},
+			)
+		})
+	if want := "on=1\noff=1\n"; out != want {
+		t.Errorf("the condition operator can see the second namespace: %q, want %q", out, want)
+	}
+}

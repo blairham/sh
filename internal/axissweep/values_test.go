@@ -188,7 +188,6 @@ func TestTheFlipVerdictsAreOnTheAxesTheyAnswer(t *testing.T) {
 		{"SelectEofEndsPromptLine", "zsh"},
 		{"PromptAsksAgainAfterARefusedToken", "bash"},
 		{"PromptAsksAgainAfterARefusedToken", "zsh"},
-		{"PromptCommentsNeedTheOption", "bash"},
 		{"PromptCommentsNeedTheOption", "zsh"},
 		{"LoginProfileWhenNonInteractive", "bash"},
 		// The startup family (#2059), and the reason the list is pairs and

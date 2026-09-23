@@ -2978,6 +2978,12 @@ type Runner struct {
 	// fields above are (#1855).
 	shellOptionMover   func(r *Runner, name string, on bool) int
 	shellOptionListing func(r *Runner, reissuable bool)
+	// shellOptionReader answers one name out of that second namespace. The
+	// front end needs it and `[[ -o ]]` must not have it: measured on bash
+	// 5.3.15, `[[ -o interactive_comments ]]` is **1** where
+	// `shopt -q interactive_comments` is 0, so the two namespaces are not one
+	// table read twice. Installed beside the two above; see extend.go.
+	shellOptionReader func(r *Runner, name string) (on, known bool)
 	// optionLetterNames are the `set` option letters this dialect spells its
 	// own way, mapped to the names in its namespace. Nil where every letter
 	// the shell has is one the panel shares. Installed through

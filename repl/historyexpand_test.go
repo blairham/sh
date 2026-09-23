@@ -163,3 +163,62 @@ func TestThePrintModifierIsUnmovedByVerification(t *testing.T) {
 		t.Errorf("remembered %q, want the expansion", remembered)
 	}
 }
+
+// With `shopt histreedit` on, a reference the list does not hold is handed back
+// to be edited instead of being thrown away — and the complaint is written in
+// **both** states, which is where this differs from `histverify` one case over:
+// that one replaces the echo, this one adds to nothing.
+//
+// Measured 2026-09-23 through a pty on bash 5.3.15, typing `!nosuchprefix` and
+// then ` ZMARK` at whatever prompt followed:
+//
+//	off   the complaint, then ` ZMARK` runs alone as `ZMARK: command not found`
+//	on    the complaint, then the prompt reads `!nosuchprefix`, so ` ZMARK`
+//	      makes `!nosuchprefix ZMARK` and fails the same way again
+//
+// The follow-up keystroke is what makes the second row readable at all: a
+// prompt handed a line back looks identical to a fresh one until something is
+// typed after it.
+func TestAFailedExpansionIsHandedBackWhenAsked(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		reedit  bool
+		want    string
+		outcome lineOutcome
+	}{
+		{"thrown away, which is the default", false, "", dropLine},
+		{"handed back as typed", true, "!nosuchprefix", verifyLine},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s, errs := expandingShell(t, true)
+			s.Runner.SetHistoryExpansionReedits(c.reedit)
+			got, outcome := s.expanded("!nosuchprefix", []string{"echo one"}, nil)
+			if outcome != c.outcome {
+				t.Errorf("outcome = %v, want %v", outcome, c.outcome)
+			}
+			if got != c.want {
+				t.Errorf("line = %q, want %q", got, c.want)
+			}
+			// The complaint either way. Without this row the option could be
+			// implemented as a replacement for the diagnostic — which is what
+			// `histverify` does to the echo — and every assertion above would
+			// still pass.
+			if !strings.Contains(errs.String(), "event not found") {
+				t.Errorf("said %q, want the complaint in both states", errs.String())
+			}
+		})
+	}
+}
+
+// TestAFailedExpansionHandsBackTheTextAsTyped: there is no partial expansion to
+// give back, because what failed is the reference — so the line must come back
+// exactly as it was typed, quoting and all.
+func TestAFailedExpansionHandsBackTheTextAsTyped(t *testing.T) {
+	s, _ := expandingShell(t, true)
+	s.Runner.SetHistoryExpansionReedits(true)
+	const typed = `echo "a b" !nosuchprefix 'c'`
+	got, outcome := s.expanded(typed, []string{"echo one"}, nil)
+	if outcome != verifyLine || got != typed {
+		t.Errorf("line = %q outcome = %v, want %q handed back", got, outcome, typed)
+	}
+}

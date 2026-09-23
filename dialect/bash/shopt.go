@@ -381,6 +381,47 @@ var shoptSwitches = map[string]shoptSwitch{
 		get: (*interp.Runner).SendsHangupToJobsAtExit,
 		set: (*interp.Runner).SetSendsHangupToJobsAtExit,
 	},
+	// Whether a command typed over several physical lines is **one** history
+	// entry. On with nothing said, and the count question rather than the
+	// separator one — `lithist` beside it decides what goes between the lines
+	// of a single entry and is moot once this is off. Measured 2026-09-23 on
+	// bash 5.3.15 through a pty, reading `history` rather than the file:
+	//
+	//	cmdhist on,  lithist off   one entry, `for i in 1 2; do   echo $i; done`
+	//	cmdhist on,  lithist on    one entry, holding the newlines
+	//	cmdhist off, either        four entries
+	//
+	// The file cannot tell the middle row from the last: one entry holding
+	// newlines and four entries are the same bytes there, which is what the
+	// first instrument read and why it reported the option doing nothing. See
+	// interp.Runner.HistoryKeepsATypedCommandWhole.
+	//
+	// It sat in shoptStates reading **on** — this shell does keep one entry —
+	// so `shopt -s` was a silent grant and `shopt -u` the refusal, leaving a
+	// script that asked for a line at a time with a construct it could only
+	// recall whole (#4149).
+	"cmdhist": {
+		get: (*interp.Runner).HistoryKeepsATypedCommandWhole,
+		set: (*interp.Runner).SetHistoryKeepsATypedCommandWhole,
+	},
+	// A history expansion that **failed** is handed back to be edited rather
+	// than thrown away. Off with nothing said, and it is `histverify` one case
+	// over — that one is an expansion that changed the line, this one a
+	// reference the list did not hold — so it reaches the same road.
+	//
+	// Measured 2026-09-23 through a pty on bash 5.3.15, typing
+	// `!nosuchprefix` and then ` ZMARK` at whatever prompt followed:
+	//
+	//	off   the complaint, then ` ZMARK` runs on its own
+	//	on    the complaint, then the prompt reads `!nosuchprefix`, so
+	//	      ` ZMARK` makes `!nosuchprefix ZMARK` and fails again
+	//
+	// The complaint prints either way, so this does not replace the
+	// diagnostic. See interp.Runner.HistoryExpansionReedits (#4149).
+	"histreedit": {
+		get: (*interp.Runner).HistoryExpansionReedits,
+		set: (*interp.Runner).SetHistoryExpansionReedits,
+	},
 	// A `cd` operand that named no directory is looked up as a *variable*
 	// holding one — the last resort, after the relative lookup and after
 	// CDPATH, both of which win. Measured 2026-09-23 on bash 5.3.15, each row
@@ -988,9 +1029,7 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 // that misleads rather than the one that is heard (#4262).
 var shoptStates = map[string]bool{
 	"bash_source_fullpath": false,
-	"cmdhist":              true,
 	"gnu_errfmt":           false,
-	"histreedit":           false,
 }
 
 const shoptUsage = "shopt: usage: shopt [-pqsu] [-o] [optname ...]"

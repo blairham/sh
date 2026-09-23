@@ -43,6 +43,7 @@
 package histjoin
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -237,6 +238,19 @@ func (e *Entry) SpaceNext() { e.spaceNext = true }
 
 // Len is how many physical lines have been collected.
 func (e *Entry) Len() int { return len(e.lines) }
+
+// Lines are the physical lines themselves, for the caller that keeps each one
+// as an entry of its own rather than joining them.
+//
+// The separators are deliberately not handed over with them. They exist to
+// join, and a caller that is not joining has no use for one — bash's
+// `shopt -u cmdhist` records the four lines of a `for` loop exactly as they
+// were typed, with nothing added between them. Measured; see
+// interp.Runner.HistoryKeepsATypedCommandWhole.
+//
+// A clone, because the collector is emptied by Take and a caller holding the
+// slice would be holding the next command's lines.
+func (e *Entry) Lines() []string { return slices.Clone(e.lines) }
 
 // String is the one entry those lines make.
 //

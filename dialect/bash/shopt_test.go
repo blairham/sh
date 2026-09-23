@@ -307,10 +307,19 @@ func TestShoptHistoryNamesAreOnAndTheRestStayRefused(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("shopt -s listing lacks %q: %q", want, out)
 		}
-		// Turning one off is a promise this shell cannot keep.
+		// And turning one off is taken now, which it was not when this loop
+		// was written: #4149 built the behavior, so the entry is a switch and
+		// the promise can be kept. One entry per typed line rather than one
+		// joined entry — see interp.Runner.HistoryKeepsATypedCommandWhole for
+		// the rows and repl/historykeeping_test.go for the assertion that the
+		// list really splits.
 		out, st = runBash(t, t.TempDir(), "shopt -u "+name)
-		if st != 1 || !strings.Contains(out, "shopt: "+name+": not implemented") {
-			t.Errorf("shopt -u %s = %q status %d, want a refusal", name, out, st)
+		if st != 0 || out != "" {
+			t.Errorf("shopt -u %s = %q status %d, want a quiet success", name, out, st)
+		}
+		if out, st := runBash(t, t.TempDir(), "shopt -u "+name+"; shopt "+name); st != 1 ||
+			out != fmt.Sprintf("%-20s\toff\n", name) {
+			t.Errorf("after `shopt -u %s`: %q status %d, want it readable as off", name, out, st)
 		}
 	}
 	// Nothing is left refused. The list was six names when #1429 wrote it and

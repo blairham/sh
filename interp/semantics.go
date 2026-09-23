@@ -24710,8 +24710,9 @@ const (
 	// TrapReturnTakesTheHandlersLastStatus hands back the action's own last
 	// command, which is what `return` means everywhere else. zsh.
 	TrapReturnTakesTheHandlersLastStatus
-	// TrapReturnIsZero hands back nothing at all. ksh93, which answers 0
-	// where the other three each answer a number they were holding.
+	// TrapReturnIsZero hands back nothing at all. ksh93 alone: it answers 0
+	// where bash, dash and BusyBox ash each answer the status the action was
+	// entered at and zsh answers the action's own last command.
 	TrapReturnIsZero
 )
 

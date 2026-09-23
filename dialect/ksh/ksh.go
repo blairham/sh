@@ -1239,6 +1239,12 @@ func Semantics() interp.Semantics {
 	// then stays there for the whole body, which the rule above is what
 	// says: nothing inside a body is at the input level.
 	s.UnderscoreMovesBeforeAFunctionBody = interp.No
+	// Written for the vector's sake and never read: `$_` here moves only
+	// between the commands the shell reads, so nothing inside an `eval`'s
+	// text or a sourced file wrote to it and there is no record to hold.
+	// See UnderscoreMovesOnlyBetweenInputCommands, and the guard in
+	// Runner.underscoreAcrossABuiltinsOwnCommands that skips the question.
+	s.UnderscoreHoldsTheCallAcrossEvalAndSource = interp.Yes
 	// A defined f-g stops the script; a.b is an invalid discipline function.
 	s.PunctuatedFunctionNameIsRefused = interp.Yes
 	// And `a.get` is not: a dotted name whose suffix is one of this shell's

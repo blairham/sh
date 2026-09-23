@@ -244,3 +244,32 @@ func (r *Runner) underscoreWrittenValue() (string, bool) {
 	value, ok := r.assigned["_"]
 	return value, ok
 }
+
+// underscoreAcrossABuiltinsOwnCommands is the same bracket for the two
+// builtins that run commands the script wrote rather than commands of their
+// own: `eval`, `.`, and the `source` a dialect registers beside it.
+//
+// It reuses the function call's restore rather than spelling a second one,
+// because it is the same rule and was measured to be: the entry value splits
+// exactly where UnderscoreMovesBeforeAFunctionBody splits, and the exit value
+// is the call's own last argument wherever the axis is Yes. A second helper
+// here is how this tree grows two spellings of one rule and then fixes only
+// one of them.
+//
+// Not asked where the answer could not be read. A shell that keeps no `$_`
+// has nothing to hold, and a shell whose `$_` moves only between the commands
+// it *reads* never wrote inside the text in the first place — so a bracket
+// there would hold a record that never moved, and asking would report an
+// unanswered axis on every `eval` in a script that never reads the name.
+func (r *Runner) underscoreAcrossABuiltinsOwnCommands(argv []string, beforeArg string, beforeSet bool) func() {
+	if !builtinRunsTheScriptsOwnCommands(argv) ||
+		r.sem().UnderscoreTracksTheLastArgument != Yes ||
+		r.sem().UnderscoreMovesOnlyBetweenInputCommands == Yes {
+		return func() {}
+	}
+	if !r.ask(r.sem().UnderscoreHoldsTheCallAcrossEvalAndSource,
+		"`$_` holding the call's own last argument across `eval` and `.`") {
+		return func() {}
+	}
+	return r.underscoreAcrossAFunctionCall(beforeArg, beforeSet)
+}

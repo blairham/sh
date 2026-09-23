@@ -1995,6 +1995,10 @@ func Semantics() interp.Semantics {
 	// into `$_` before the body runs: `: outer` then `f one two` reads `two`
 	// on the first line of the body, where bash and ksh93 read `outer`.
 	s.UnderscoreMovesBeforeAFunctionBody = interp.Yes
+	// And zsh alone lets the text write through: the same probe leaves
+	// `inner`, and a sourced file leaves its own last command's argument.
+	// Measured 2026-09-23 on zsh 5.9 over a script file.
+	s.UnderscoreHoldsTheCallAcrossEvalAndSource = interp.No
 	// And starts it empty regardless, alone in the panel: an exported `_`
 	// is discarded rather than carried in, so the parameter says nothing
 	// about the invocation until the first command has run.

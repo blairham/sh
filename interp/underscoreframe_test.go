@@ -90,6 +90,7 @@ func TestABodyOpensWithTheCallsOwnArgument(t *testing.T) {
 // moves it at all.
 func TestTheNarrowedReadingMovesForALoneTopLevelCommand(t *testing.T) {
 	sem := tracks()
+	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
 	got := underscoreOut(t, underscoreProbe, sem)
 	if want := "body [outer] after [outer] call [two]\n"; got != want {
@@ -105,6 +106,7 @@ func TestTheNarrowedReadingMovesForALoneTopLevelCommand(t *testing.T) {
 // there where ksh93 answers nothing at all.
 func TestTheNarrowedReadingIgnoresEverythingButALoneCommand(t *testing.T) {
 	sem := tracks()
+	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
 	for _, tc := range []struct {
 		name, src, want string
@@ -146,6 +148,7 @@ func TestTheNarrowedReadingIgnoresEverythingButALoneCommand(t *testing.T) {
 // the eval string whichever way round it happened.
 func TestTheNarrowedReadingIsBlindInsideAnEval(t *testing.T) {
 	sem := tracks()
+	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
 	got := underscoreOut(t, ": alpha\neval ': beta\nprintf \"in [%s] \" \"$_\"'\n"+
 		"printf 'out [%s]' \"$_\"\n", sem)
@@ -178,6 +181,7 @@ func TestTheGeneralReadingMovesForAllOfThem(t *testing.T) {
 // looked. See Runner.underscoreWrittenValue.
 func TestAWriteToUnderscoreStandsUntilTheNextInputCommand(t *testing.T) {
 	sem := tracks()
+	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
 	const src = ": alpha\n" +
 		"_=TOP\n" +
@@ -208,6 +212,7 @@ func TestAWriteToUnderscoreIsLostWhereEveryCommandStampsIt(t *testing.T) {
 // read.
 func TestTheWaysAScriptWritesUnderscore(t *testing.T) {
 	sem := tracks()
+	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
 	for _, row := range []struct{ src, want string }{
 		{
@@ -219,5 +224,66 @@ func TestTheWaysAScriptWritesUnderscore(t *testing.T) {
 		if got := underscoreOut(t, row.src, sem); got != row.want {
 			t.Errorf("%s\n got %q\nwant %q", row.src, got, row.want)
 		}
+	}
+}
+
+// `$_` across an `eval`, which is the function call's own question asked of
+// the builtin that is a function call in everything but name —
+// Semantics.UnderscoreHoldsTheCallAcrossEvalAndSource.
+//
+// Two readings, and this asserts both are reachable and that they are two.
+// Which value each preset picks is in dialect/underscoreeval_test.go against
+// the panel's own bytes.
+const underscoreEvalProbe = ": outer\n" +
+	"eval ': first; printf '\\''in [%s] '\\'' \"$_\"'\n" +
+	"printf 'out [%s]\\n' \"$_\"\n"
+
+func TestTheCallerReadsTheEvalsOwnLastArgument(t *testing.T) {
+	sem := tracks()
+	sem.UnderscoreHoldsTheCallAcrossEvalAndSource = Yes
+	// The entry half belongs to the function call's axis and is pinned here
+	// only so the vector is one reading rather than a mixture. It is not
+	// what this probe sees: the `in` cell is read *after* the text's own
+	// `: first`, so it answers `first` under either value, and the `out`
+	// cell is the whole of the discrimination — the `eval`'s own last
+	// argument, whatever the text left behind.
+	sem.UnderscoreMovesBeforeAFunctionBody = No
+	want := "in [first] out [: first; printf 'in [%s] ' \"$_\"]\n"
+	if got := underscoreOut(t, underscoreEvalProbe, sem); got != want {
+		t.Errorf("wrote %q, want %q", got, want)
+	}
+}
+
+// And the other reading, which is the one this shell had everywhere before the
+// axis existed: the text's last command writes through to the caller.
+func TestTheTextsLastCommandWritesThroughWhereTheAxisSaysSo(t *testing.T) {
+	sem := tracks()
+	sem.UnderscoreHoldsTheCallAcrossEvalAndSource = No
+	sem.UnderscoreMovesBeforeAFunctionBody = No
+	if got := underscoreOut(t, underscoreEvalProbe, sem); got != "in [first] out [first]\n" {
+		t.Errorf("wrote %q, want %q", got, "in [first] out [first]\n")
+	}
+}
+
+// The narrowed column is not asked at all, and this is what says so rather
+// than a comment: with the record moving only between the commands the shell
+// reads, nothing inside the text ever wrote — so the axis left Unspecified
+// must not produce the refusal an unanswered axis produces. A shell that
+// asked here would complain on every `eval` in a script that never reads the
+// name.
+func TestTheNarrowedReadingNeverAsksTheEvalAxis(t *testing.T) {
+	sem := tracks()
+	sem.UnderscoreMovesBeforeAFunctionBody = No
+	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
+	// Left at its zero value on purpose: Unspecified is the refusal.
+	sem.UnderscoreHoldsTheCallAcrossEvalAndSource = Answer(0)
+	got := underscoreOut(t, underscoreEvalProbe, sem)
+	if strings.Contains(got, "unanswered") || strings.Contains(got, "holding the call") {
+		t.Errorf("the axis was asked: %q", got)
+	}
+	// And the narrowed reading's own cell: nothing inside the text moved the
+	// record, so the first read answers what the caller had.
+	if !strings.Contains(got, "in [outer]") {
+		t.Errorf("wrote %q, want the caller's value inside the text", got)
 	}
 }

@@ -17602,6 +17602,43 @@ type Semantics struct {
 	// the name.
 	UnderscoreMovesBeforeAFunctionBody Answer
 
+	// UnderscoreHoldsTheCallAcrossEvalAndSource keeps `$_` on the call's own
+	// last argument across a builtin that runs commands the *script* wrote —
+	// `eval`, `.`, and the `source` a dialect registers beside it — rather
+	// than letting the last command inside it write through.
+	//
+	// The same bracket a function call already gets, asked for the two
+	// builtins that are a function call in everything but name. Without it
+	// `eval ': inner'` leaves `inner` in `$_` where bash leaves `: inner`,
+	// which is the call's own argument — see
+	// Runner.underscoreAcrossAFunctionCall, whose restore this reuses.
+	//
+	// Measured 2026-09-23 over a script file with `: SEED` on the line above
+	// and `$_` read on the line below, under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	                       bash 5.3.20   ksh93u+   zsh 5.9
+	//	eval ': inner'         : inner       : inner   inner
+	//	. ./f lastarg          lastarg       lastarg   <f's last command>
+	//
+	// **zsh alone lets the body write through**, and the entry value splits
+	// the same way: the first command inside reads `SEED` in bash and ksh93
+	// and the call's own argument in zsh, which is
+	// UnderscoreMovesBeforeAFunctionBody's answer over again and is why that
+	// axis carries this half rather than a second one.
+	//
+	// ksh93 is in the table for completeness and is **not** asked: its `$_`
+	// moves only between the commands the shell reads, so nothing inside an
+	// `eval`'s text or a sourced file ever wrote to it and a bracket would
+	// hold a record that never moved. See
+	// UnderscoreMovesOnlyBetweenInputCommands, which lists an `eval`'s text
+	// among the places that move nothing there.
+	//
+	// A trap action is **not** one of these, measured on the same day and in
+	// the same way: in every column the last command of a trap's body does
+	// write through to `$_`. So this is about the two builtins and not about
+	// running a string in general.
+	UnderscoreHoldsTheCallAcrossEvalAndSource Answer
+
 	// UnderscoreMovesOnlyBetweenInputCommands narrows `$_` to the commands
 	// the shell *reads*: a simple command standing alone on a line at the
 	// top level of the input, and nothing else.
@@ -25910,6 +25947,13 @@ func PosixSemantics() Semantics {
 		// entry value are each one column's, and each says so itself.
 		UnderscoreMovesOnlyBetweenInputCommands: No,
 		UnderscoreMovesBeforeAFunctionBody:      No,
+		// And the third of them, at the same reading and for the same
+		// reason: a builtin that runs the script's own commands is a
+		// function call in everything but name, and the caller reads the
+		// call's own last argument once it is over. bash and ksh93 both
+		// land there — ksh93 by its narrowing rather than by this — and
+		// zsh alone says otherwise and says so itself.
+		UnderscoreHoldsTheCallAcrossEvalAndSource: Yes,
 		// POSIX has no `$_`, so nothing is written at startup and a name
 		// the environment carried is an ordinary variable that shows
 		// through — which is also the majority, five of the six.
@@ -26344,6 +26388,13 @@ func CoreSemantics() Semantics {
 		// entry value — each say so themselves.
 		UnderscoreMovesOnlyBetweenInputCommands: No,
 		UnderscoreMovesBeforeAFunctionBody:      No,
+		// And the third of them, at the same reading and for the same
+		// reason: a builtin that runs the script's own commands is a
+		// function call in everything but name, and the caller reads the
+		// call's own last argument once it is over. bash and ksh93 both
+		// land there — ksh93 by its narrowing rather than by this — and
+		// zsh alone says otherwise and says so itself.
+		UnderscoreHoldsTheCallAcrossEvalAndSource: Yes,
 		// Every shell in the panel reads a profile for a login shell, so the
 		// core reads one too; the disagreement is only over what it is
 		// called. `.profile` is the standard's name and nobody's brand,

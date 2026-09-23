@@ -585,6 +585,20 @@ tree.
 linters `.golangci.yml` enables, so the lint job already runs it over the
 same code.
 
+**Never write a closing keyword next to an issue number you do not mean to
+close — not even to deny it.** GitHub matches `close`, `closes`, `closed`,
+`fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved` followed by a
+reference, and it does not parse the words around them: a pull request body
+opening "Does **not** close #4145, #4152 or #4158" closed #4145 the moment it
+merged. (It spared the other two only because the keyword was not repeated
+before each number, which is the same rule read from the other side — `Closes
+#1, #2` closes only #1, so a body meaning to close several says `Closes #1`,
+`Closes #2`.) This has cost real time more than once here, and the fix is a
+phrasing rule rather than more care: say **"#4145 stays open"**, "not a fix for
+#4145", or "partial: see #4145", and keep every keyword for the issues the
+change actually resolves. The parent tree's `Closes #N` rule is what this
+layers on.
+
 `main` is protected, and these four must pass before a merge:
 
     Build and test (ubuntu-latest)

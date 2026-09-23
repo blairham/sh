@@ -94,6 +94,23 @@ func TestASurvivedExecCarriesTheStatusTheExitWouldHave(t *testing.T) {
 			t.Errorf("%s: want a line %q in %q", tc.src, tc.want, out)
 		}
 	}
+
+	// And the status is the *command's* rather than something written beside
+	// it, which is what `||` and `set -e` read. Both measured on bash 5.3.15:
+	// the `||` fires, and `set -e` ends the script, because a survived `exec`
+	// is an ordinary failed command.
+	//
+	// These two are here because the rows above could not tell a status that
+	// reaches the script from one that merely exists. #4316 wrote the status
+	// twice — once as the return value and once onto the runner — and a
+	// mutation that zeroed the second copy broke nothing, which is what said
+	// the copy had no consequence and that no row was reading it.
+	if out, _ := execfailRun(t, `shopt -s execfail; exec nosuchcmd42 || echo or-fired`); !strings.Contains(out, "or-fired") {
+		t.Errorf("the `||` did not fire, so the failure never reached the script: %q", out)
+	}
+	if out, _ := execfailRun(t, `shopt -s execfail; set -e; exec nosuchcmd42; echo REACHED`); strings.Contains(out, "REACHED") {
+		t.Errorf("`set -e` should end the script for a survived `exec`: %q", out)
+	}
 }
 
 // TestASurvivedExecLeavesTheExitTrapAlone: two axes decide whether a failed

@@ -105,3 +105,30 @@ shopt promptvars`)
 		t.Errorf("status %d, output %q; want status 0 and %q", st, out, want)
 	}
 }
+
+// TestAnExpandedEscapeIsNotReRead is the row that pins which pass runs
+// **first**, and it is here because a mutation found that nothing did: swapping
+// interp.PromptStyle.ExpandBeforeEscapes to true left every other assertion in
+// this file passing.
+//
+// Measured 2026-09-23 on bash 5.3.15 through a pty:
+//
+//	x='\u'; PS1='[$x]> '     draws `[\u]> `, not `[root]> `
+//
+// So the escapes are drawn before the expansion and what the expansion
+// produces is never read as an escape. Expanding first would answer `[root]> `
+// — the user name from a value that only ever held two characters.
+//
+// This is the composition rather than either pass, which is the shape a
+// one-line prompt with one code in it cannot see.
+func TestAnExpandedEscapeIsNotReRead(t *testing.T) {
+	if got := drawnPrompt(t, `x='\u'`, `[$x]> `); got != `[\u]> ` {
+		t.Errorf("drew %q, want %q — an expanded escape must not be read again", got, `[\u]> `)
+	}
+	// And with the option off there is no expansion at all, so the operand
+	// stays as written. The pair keeps the row above from passing for the
+	// wrong reason: a shell that expanded nothing would also draw no escape.
+	if got := drawnPrompt(t, `shopt -u promptvars; x='\u'`, `[$x]> `); got != `[$x]> ` {
+		t.Errorf("with the option off drew %q, want %q", got, `[$x]> `)
+	}
+}

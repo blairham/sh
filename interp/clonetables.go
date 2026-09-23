@@ -308,6 +308,10 @@ func (c *Runner) ownTables(r *Runner) {
 	c.assignmentActions = maps.Clone(r.assignmentActions)
 	// And the removal half of the same message, for the same reason.
 	c.unsetActions = maps.Clone(r.unsetActions)
+	// And the startup half. A subshell never delivers these — the shell was
+	// launched once — but the table is cloned for the same reason the two
+	// above it are: a subshell registering a name must not reach the parent's.
+	c.inheritedParameterActions = maps.Clone(r.inheritedParameterActions)
 	// And the option half of a tie between a `set -o` name and a parameter,
 	// which is the same message from the other side. See
 	// interp/tiedoption.go.

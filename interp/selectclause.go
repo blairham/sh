@@ -26,6 +26,11 @@ import (
 
 // selectClause runs `select name [in words] do … done`.
 func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error {
+	// A `select` moves the register a function definition's refusals read,
+	// as `for` and `case` do — and unlike them it does **not** move the
+	// reader, which is the split Diagnostics.SelectNameIsLocatedAtTheReader
+	// records from the other side. See Runner.constructLine.
+	defer r.enterLineConstruct(c.Pos())()
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		if c.RefusedName != "" {
 			// The same answer the `for` spelling gets, inside the

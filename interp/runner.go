@@ -3097,6 +3097,48 @@ type Runner struct {
 	// put it back.
 	readersLine int
 
+	// constructLine is the first line of the innermost `for`, `case` or
+	// `select` this frame is executing, or zero where it is executing none.
+	//
+	// A cousin of readersLine above and not the same field, because the two
+	// were measured to have different setters and different fallbacks: a
+	// function call moves the reader to the body's first line and leaves this
+	// one alone, and `case` and `select` move this one and not the reader. It
+	// is read by the refusals a function **definition** raises — see
+	// Runner.functionDefinitionRefusalLine, which carries the table.
+	//
+	// Frame-scoped, which is measured rather than tidy: a definition inside a
+	// function called from a `for` reports the definition and not the loop, so
+	// the register does not cross a call — and a subshell is a shell of its
+	// own here for the same reason funcFloor is, since a definition inside
+	// `( )` inside a `for` reports the whole statement.
+	constructLine int
+
+	// inputUnitLine is the last line of the input **unit** being run — every
+	// statement the reader took in one go, which is a `;`-separated list up to
+	// the newline that ended it rather than one statement of it.
+	//
+	// A second field beside inputLine above and not a change to it, because
+	// the two answer different questions and only one of them is measured
+	// here: inputLine is how much of the input a give-up takes with it, and
+	// this is where the reader had got to. They differ exactly where a line
+	// holds two statements and the second one spans lines — `break() { :; };
+	// continue() { ⏎ : ⏎ }` gives up the first statement and reports at the
+	// third line. Read by Runner.functionDefinitionRefusalLine and by nothing
+	// else, so no give-up moves.
+	inputUnitLine int
+
+	// subshellLine is the last line of the `( )` this runner **is**, or zero
+	// in a runner that is not a subshell's.
+	//
+	// Set on the clone rather than in clone(), for the reason
+	// subshellLoopFloor is: a command substitution and a pipeline element are
+	// copies too and neither is a `( )` a script can see the end of. Read by
+	// Runner.functionDefinitionRefusalLine, where a definition refused inside
+	// parentheses is reported at the closing one and not at the statement the
+	// parentheses sit in.
+	subshellLine int
+
 	// assignFailed marks an assignment that was refused rather than made,
 	// so the status it left is not zeroed by the assignment that follows
 	// it. `readonly x=1; x=2` reports and carries on in one dialect, and
@@ -4031,6 +4073,10 @@ func (r *Runner) clone() *Runner {
 	c.heldTrace = heldTrace{}
 	// A subshell body is not running inside the frames the copy inherited.
 	c.funcFloor = c.depth
+	// And a subshell is not running inside the loop the copy was cloned from:
+	// measured, a definition refused inside `( )` inside a `for` names the
+	// whole top-level statement and not the loop. See Runner.constructLine.
+	c.constructLine = 0
 	// A pending process substitution belongs to the command being built in
 	// the runner that made it, not to a subshell cloned while it was being
 	// built. Carrying them over meant the second `<(…)` of a command cloned
@@ -4876,6 +4922,8 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	// is put back afterwards for a caller that drives a runner both ways.
 	outerInputLine := r.inputLine
 	defer func() { r.inputLine = outerInputLine }()
+	outerInputUnit := r.inputUnitLine
+	defer func() { r.inputUnitLine = outerInputUnit }()
 	// The here-document bodies this file's lexer read for substitutions that
 	// could not feed their own, in the two dialects that read one that way.
 	// Set here and put back, so that a body running as a file of its own is
@@ -4919,6 +4967,9 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		// this statement gives up this much of the input. See
 		// Runner.giveUpLine.
 		r.inputLine = r.inputLineOf(st)
+		// And how far the *reader* had got, which is the whole unit rather
+		// than this statement of it. See Runner.inputUnitLine.
+		r.inputUnitLine = r.inputUnitLineOf(f.Stmts, i)
 		err := r.stmt(ctx, st)
 		if arg, ok := r.takeInputLevelArgument(); ok {
 			// The statement is over, so the line's own last argument is what

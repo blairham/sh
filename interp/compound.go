@@ -125,6 +125,12 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// this is the boundary the panel splits over: a command substitution
 		// and a pipeline element are subshells too and neither is one.
 		sub.subshellLoopFloor = sub.loopDepth
+		// And where the parentheses close, which is where this dialect
+		// reports a refusal raised by a definition inside them — measured, and
+		// not the line of the statement the parentheses sit in. Recorded here
+		// for the reason above: a command substitution and a pipeline element
+		// are copies too and neither is a `( )`. See Runner.subshellLine.
+		sub.subshellLine = r.lineOf(c.End())
 		// And the arrays it inherited are a *view* rather than a fork's copy,
 		// which one column's element unset is about — the same reading a
 		// `$( … )` gets and a background job, a pipeline element and a
@@ -307,6 +313,9 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 	outerReader := r.readersLine
 	r.readersLine = r.lineOf(c.Pos())
 	defer func() { r.readersLine = outerReader }()
+	// And it moves the register a function definition's refusals read, which
+	// is a second field with its own setters — see Runner.constructLine.
+	defer r.enterLineConstruct(c.Pos())()
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		if c.RefusedName != "" {
 			// The word standing where the variable belonged is not a name,
@@ -784,6 +793,10 @@ func (r *Runner) caseSubjectLine() func() {
 }
 
 func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
+	// A `case` moves the register a function definition's refusals read, and
+	// the *reader* above is deliberately not moved with it: the two were
+	// measured to have different setters. See Runner.constructLine.
+	defer r.enterLineConstruct(c.Pos())()
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		// The subject expands but is neither field-split nor globbed, even
 		// unquoted — the same exemption `[[ ]]` operands and a scalar
@@ -963,16 +976,17 @@ func isPlainFuncName(s string) bool {
 }
 
 func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
-	if r.diag().FunctionDefinitionIsLocatedAtItsEnd && c.Body != nil {
-		// A definition's own complaints are located where the definition
-		// ends rather than where its name stands — the shell has read the
-		// whole of it before it runs any of it. Put back on the way out, the
-		// way every other line shift in this tree is: nothing here runs the
-		// body, so this reaches the definition's refusals and nothing else.
-		// See Diagnostics.FunctionDefinitionIsLocatedAtItsEnd for the five
-		// shapes measured.
+	if r.diag().FunctionDefinitionRefusalIsLocatedWhereTheShellWasReading && c.Body != nil {
+		// A definition's own complaints are located where the shell's own
+		// counter last stood rather than where the name was written — the
+		// shell has read the whole definition before it runs any of it. Put
+		// back on the way out, the way every other line shift in this tree
+		// is: nothing here runs the body, so this reaches the definition's
+		// refusals and nothing else. See
+		// Runner.functionDefinitionRefusalLine for the three terms and the
+		// shapes each was measured on.
 		was := r.line
-		r.line = r.lineOf(c.End())
+		r.line = r.functionDefinitionRefusalLine(c)
 		defer func() { r.line = was }()
 	}
 	if c.RefusedName != "" {
@@ -1680,8 +1694,14 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// and measured the same way. See Runner.readersLine.
 	outerReader := r.readersLine
 	r.readersLine = r.lineOf(fn.Body.Pos())
+	// And the loop register does not cross a call: measured, a definition
+	// inside a function called from a `for` is reported at the definition and
+	// not at the loop. See Runner.constructLine.
+	outerConstruct := r.constructLine
+	r.constructLine = 0
 	err := r.command(ctx, fn.Body)
 	r.readersLine = outerReader
+	r.constructLine = outerConstruct
 	// Whatever arrived while the body's *last* command ran, handled before
 	// the call unwinds. stmt drains between commands, which leaves the last
 	// one of a body with nobody to drain after it: the arrival waited for

@@ -182,3 +182,33 @@ func (r *Runner) GiveUpTheCommandAt(status int) int {
 	r.abandonTheCommand()
 	return status
 }
+
+// inputUnitLineOf is the last line of the input unit statement i belongs to:
+// every statement the reader took in one go, which is a `;`-separated list up
+// to the newline that ended it.
+//
+// Two statements are in one unit when the second begins on the line the first
+// *ends* on — which is what "no newline between them" means once a
+// backslash-continued command and a multi-line compound are both allowed to
+// end past their own first line. Walked forward rather than grouped up front,
+// because the loop already has the index and a unit is a handful of statements
+// at most.
+//
+// It is not [Runner.inputLineOf], and the difference is measured: a give-up
+// takes the statement's own line and the *reader* had got to the end of the
+// unit. See Runner.inputUnitLine.
+func (r *Runner) inputUnitLineOf(stmts []*syntax.Stmt, i int) int {
+	if i < 0 || i >= len(stmts) {
+		return 0
+	}
+	line := r.inputLineOf(stmts[i])
+	for next := i + 1; next < len(stmts); next++ {
+		if r.lineOf(stmts[next].Pos()) != r.lineOf(stmts[next-1].End()) {
+			break
+		}
+		if l := r.inputLineOf(stmts[next]); l > line {
+			line = l
+		}
+	}
+	return line
+}

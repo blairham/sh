@@ -141,15 +141,20 @@ func TestALengthPrefixOverABareOperatorIsRefused(t *testing.T) {
 	}
 }
 
-// TestADefinitionsRefusalIsLocatedAtItsEnd pins where a function definition's
-// own complaints are numbered.
+// TestADefinitionsRefusalIsLocatedWhereTheShellWasReading pins where a
+// function definition's own complaints are numbered.
 //
 // This shell reads the whole definition before it runs any of it and reports
-// where its reader had got to, which is the definition's last line and not
-// the line its name stands on. Measured 2026-09-22 on bash 5.3.20 and 3.2.57
-// alike; see interp.Diagnostics.FunctionDefinitionIsLocatedAtItsEnd for the
-// five spellings.
-func TestADefinitionsRefusalIsLocatedAtItsEnd(t *testing.T) {
+// where its own counter had got to, which for a definition standing alone as a
+// top-level statement is that statement's last line and not the line the name
+// stands on. Measured 2026-09-22 on bash 5.3.20 and 3.2.57 alike.
+//
+// **The definition's last line is not the rule**, only the answer these rows
+// happen to have: the statement and the definition end together here. See
+// interp.Runner.functionDefinitionRefusalLine, where the two come apart and
+// two further terms do as well — and
+// TestADefinitionsRefusalFollowsTheReadersUnit, which is those rows (#4174).
+func TestADefinitionsRefusalIsLocatedWhereTheShellWasReading(t *testing.T) {
 	for _, tc := range []struct {
 		name, src, want string
 	}{

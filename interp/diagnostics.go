@@ -5784,39 +5784,31 @@ type Diagnostics struct {
 	// builtin is where the third one parts.
 	BadNameRefusalOmitsTheLine map[string]bool
 
-	// FunctionDefinitionIsLocatedAtItsEnd puts a function definition's own
-	// complaints at the line the definition *ends* on, rather than at the
-	// line its name was written on.
+	// FunctionDefinitionRefusalIsLocatedWhereTheShellWasReading puts a
+	// function definition's own runtime complaints at the line the shell's own
+	// counter stands on rather than at the line the name was written on.
 	//
-	// bash, and it is the run-time refusals a definition raises — a name
-	// the shell will not bind, and a redefinition of a frozen name.
-	// Measured 2026-09-22 on bash 5.3.20 and bash 3.2.57 alike, from a
-	// script file, with a definition of `$1` written five ways and the line
-	// each refusal named:
+	// bash, and it is the three refusals a definition raises — a special
+	// builtin's name in POSIX mode, a redefinition of a frozen name, and a
+	// name the shell will not bind. All three answer identically, so it is the
+	// definition command and not one message.
 	//
-	//	$1 () { echo x; }          on one line       that line
-	//	$1 () ⏎ { echo x; }         two lines         the second
-	//	$1 () { ⏎ echo x ⏎ }        three lines       the third
-	//	function $1 { ⏎ … ⏎ }       three lines       the third
-	//	$1 () ( ⏎ echo x ⏎ )        three lines       the third
+	// **It is not simply the definition's end**, which is what this field said
+	// while it was called FunctionDefinitionIsLocatedAtItsEnd: that reading was
+	// measured over five shapes that are all one definition alone as a
+	// top-level statement, where the definition's end and the statement's end
+	// are the same line. They come apart, and so do two other terms — see
+	// [Runner.functionDefinitionRefusalLine], which carries the 49 shapes and
+	// the controls (#4174).
 	//
-	// and the frozen-name refusal on a four-line redefinition names the
-	// fourth. So it is the body's end and not a fixed offset, which is what
-	// makes it a rule rather than an off-by-one.
-	//
-	// **Only bash reaches the question**, which is why this is a
-	// Diagnostics field rather than an axis with four answers: dash and
-	// ksh93 refuse a definition whose name is not a name while *reading*
-	// the file, so their complaint is a syntax error located where the read
-	// stopped, and zsh binds the name without complaint. A dialect that
-	// leaves this false keeps the definition's own start, which is where
-	// every other command's diagnostic is located.
-	//
-	// The name's *word* is on the first line in every one of those rows, so
-	// this is not "where the failure was seen" — bash has finished reading
-	// the whole definition before it runs any of it, and the line it
-	// reports is the one its reader had reached (#4166).
-	FunctionDefinitionIsLocatedAtItsEnd bool
+	// **Only bash reaches the question**, which is why this is a Diagnostics
+	// field rather than an axis with four answers: dash and ksh93 refuse a
+	// definition whose name is not a name while *reading* the file, so their
+	// complaint is a syntax error located where the read stopped, and zsh binds
+	// the name without complaint. A dialect that leaves this false keeps the
+	// definition's own start, which is where every other command's diagnostic
+	// is located.
+	FunctionDefinitionRefusalIsLocatedWhereTheShellWasReading bool
 
 	// SelectNameIsLocatedAtTheReader puts a `select` clause's refused-name
 	// complaint where the shell's *reader* stands rather than at the clause

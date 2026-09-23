@@ -162,7 +162,9 @@ func (e *editor) take(in Line) {
 	e.pos = min(max(in.Cursor, 0), len(e.line))
 }
 
-func (e *editor) give() Line { return Line{Buffer: string(e.line), Cursor: e.pos} }
+func (e *editor) give() Line {
+	return Line{Buffer: string(e.line), Cursor: e.pos, Postdisplay: e.postdisplay}
+}
 
 // actionsKey is how the handle rides the widget call's context. A private type
 // so nothing outside this package can collide with it or read it out by

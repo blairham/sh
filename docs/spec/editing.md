@@ -882,6 +882,53 @@ backspaces where this editor addresses the cursor. Recorded rather than fixed �
 a transcript nobody compares byte for byte is not worth a rendering rewrite,
 and the rows that *are* compared are in the nine above (#4249).
 
+## Text after the line that is not the line — `POSTDISPLAY`
+
+An inline suggestion is not text in the buffer. zsh gives a widget a second
+place to put text — drawn after the line, never run, never counted — and
+zsh-autosuggestions is built out of it: `POSTDISPLAY`.
+
+Measured 2026-09-22 through a pseudo-terminal against zsh 5.9.2 with
+`TERM=xterm-256color`, by binding a widget that writes the parameter and
+reading the bytes that reached the terminal.
+
+| asked | answer |
+| --- | --- |
+| `${(t)POSTDISPLAY}` before the widget assigns to it | `scalar-local-special` |
+| and after | `scalar-local-special` — writable line state, not one of the read-only two |
+| `$#BUFFER` and `CURSOR` with a postdisplay set | 7 and 7 for `echo hi`: neither counts it |
+| where it is drawn | after the **line's end**, not at the cursor |
+| the cursor afterwards | back inside the line |
+| `region_highlight` with offsets past `$#BUFFER` | colors it — the offsets count one text and not two |
+| the next keystroke | redraws it; it survives the keystroke that did not set it |
+| accepting the line | runs the line alone, and the next read starts with none |
+
+The row that settles where it goes: with `abcdef` typed, a widget setting
+`POSTDISPLAY='<PD>'` and `CURSOR=2` draws `abcdef<PD>` and then moves the
+cursor **8** cells left — the rest of the line *and* the whole postdisplay —
+and accepting runs `abZcdef` after a `Z` is typed. A postdisplay drawn at the
+cursor would have put `<PD>` in the middle, and one counted in the line would
+have run it.
+
+Here it is `repl.Line.Postdisplay`, which rides the same round trip as the
+buffer and the cursor because it is the same keystroke's answer, and
+`editor.displayed()` is the text every geometry question is asked about: where
+the drawn text ends, how many rows it takes, and how far the cursor has to come
+back. The line stays what the shell is given to run.
+
+**What is drawn differs from zsh in spelling only**, measured the same day with
+the same widget and a two-row prompt: zsh writes ` --sugg` in `ESC[90m` and
+comes back over it with seven backspaces, where this editor writes `ESC[38;5;8m`
+and `ESC[7D`. Those are the same color and the same seven cells — the two
+spellings `internal/cellgrid` exists to resolve — and the same difference `TERM`
+decides at a terminal, since readline and zsh both reduce to backspaces where
+this editor addresses the cursor.
+
+**`PREDISPLAY` is still absent**, and it is the other half of the same pair in
+that shell. Nothing on this machine writes it: an element of
+`region_highlight` carrying the `P` flag is dropped rather than drawn at the
+wrong place, which is the rule above and is unchanged (#4217).
+
 ## Work put aside until a time
 
 A shell can be told to run a command later — zsh's `sched`. Nothing about that

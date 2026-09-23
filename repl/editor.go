@@ -128,6 +128,17 @@ type editor struct {
 	// paste — which is every line until one arrives and again from the next
 	// keystroke on. See paste.go.
 	bracketedPaste bool
+	// postdisplay is text drawn after the line's end without being part of
+	// the line: an inline suggestion. The shell that has it calls it
+	// `POSTDISPLAY`, a widget sets it, and it lives for the rest of the read —
+	// see Line.Postdisplay, which carries the measurements (#4217).
+	//
+	// It is not in e.line and never reaches the shell as a command. What it
+	// does reach is every calculation about the *screen*: it is displayed, so
+	// it takes cells, moves the end of the drawn text to the right, and is
+	// what the cursor has to come back over.
+	postdisplay string
+
 	// noTerminal says this session's input is **not** a terminal, which is not
 	// the same question as whether there is an editor: the editor reads bytes
 	// and a pipe delivers bytes, so a session on a pipe has one (#4249). What
@@ -328,6 +339,10 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		e.pos = len(e.line)
 	}
 	e.browsing = len(e.history)
+	// And nothing is drawn after the line yet. Measured: a postdisplay lives
+	// for the read that set it and the next one starts with none — the widget
+	// asked about it at the following prompt found it empty (#4217).
+	e.postdisplay = ""
 	e.row = 0
 	// Fresh for every line: an edit made to a recalled entry lasts as long as
 	// the line does and no longer, which is what both shells do — see drafts.
@@ -891,10 +906,13 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		b.WriteString("\r\x1b[K")
 		b.WriteString(prompt.text)
 		styled := e.styled()
+		shown := e.displayed()
 		b.WriteString(onScreen(styled))
 		// Cells to come back over, not characters: the cursor moves by
-		// columns, and one `日` to the right of it is two of them.
-		if back := cells(e.line[e.pos:]); back > 0 {
+		// columns, and one `日` to the right of it is two of them. Over the
+		// *displayed* text, so a postdisplay is come back over too — measured,
+		// zsh moves left by the rest of the line plus the whole of it (#4217).
+		if back := cells(shown[e.pos:]); back > 0 {
 			b.WriteString("\x1b[")
 			b.WriteString(itoa(back))
 			b.WriteString("D")
@@ -933,10 +951,11 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	// zero — which is where the carriage return inside it leaves the cursor.
 	// It draws nothing when it does not fit, and the erase above has already
 	// taken off whatever was there.
-	lineCells := cells(e.line)
+	shown := e.displayed()
+	lineCells := cells(shown)
 	drewRight := writeRightPrompt(&b, prompt, lineCells, cols)
 
-	curRow, curCol, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
+	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.pos, cols)
 	if endCol == cols {
 		// The line ends exactly at the right-hand edge. A terminal does not
 		// move to the next row until there is something to put there, so the
@@ -995,7 +1014,7 @@ func (e *editor) toLastRow(prompt drawnPrompt) {
 	if cols <= 0 {
 		return
 	}
-	_, _, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
+	_, _, endRow, endCol := place(prompt.cells, e.displayed(), e.pos, cols)
 	if endCol == cols {
 		// Sitting at the right-hand edge with the wrap still pending is being
 		// on the row already, not below it.
@@ -1031,9 +1050,10 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 	// have no other reason to know about each other. The bytes are the
 	// cheaper half of that trade.
 	if cols := e.cols(); cols > 0 {
-		_, curCol, _, _ := place(prompt.cells, e.line, e.pos, cols)
+		shown := e.displayed()
+		_, curCol, _, _ := place(prompt.cells, shown, e.pos, cols)
 		var erase strings.Builder
-		rightPromptErase(&erase, prompt, cells(e.line), cols, curCol)
+		rightPromptErase(&erase, prompt, cells(shown), cols, curCol)
 		if erase.Len() > 0 {
 			e.write(erase.String())
 		}
@@ -1084,6 +1104,23 @@ func (e *editor) recordDrawn(prompt drawnPrompt, styled string, cols int) {
 		valid: true, styled: styled,
 		prompt: prompt.text, cells: prompt.cells, cols: cols,
 	}
+}
+
+// displayed is the text on the row: the line, and then whatever a widget asked
+// to be shown after it.
+//
+// Every geometry question the editor asks is about this and not about the
+// line — where the drawn text ends, how many rows it takes, how far the cursor
+// has to come back — because a postdisplay occupies cells like anything else.
+// The *cursor* is still an offset into the line, which is what makes the two
+// safe to mix: the line is a prefix of this, so a position inside the line
+// means the same thing in both.
+func (e *editor) displayed() []rune {
+	if e.postdisplay == "" {
+		return e.line
+	}
+	out := make([]rune, 0, len(e.line)+len(e.postdisplay))
+	return append(append(out, e.line...), []rune(e.postdisplay)...)
 }
 
 // displayWidth is how many columns a string takes on the screen.

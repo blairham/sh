@@ -237,7 +237,21 @@ const (
 	// spell, the way the rest of this file keeps its state, so a subshell gets
 	// its own and nothing leaks past the keystroke.
 	zleAccept = ".zsh.zle.accept"
+	// zlePostdisplay is the text a widget asked to be drawn after the line
+	// without being part of it, which is what an inline suggestion is made of.
+	// A carrier for one keystroke rather than a store: the editor hands in
+	// what is on the screen and takes back what the widget left, so nothing
+	// here has to know when a line ended. See repl.Line.Postdisplay (#4217).
+	zlePostdisplay = ".zsh.zle.postdisplay"
 )
+
+// postdisplayName is what a widget reads the text drawn after the line under.
+//
+// A constant beside regionHighlightName rather than a literal at its three
+// sites, for the reason that one is: the name is written where the parameter is
+// opened, marked local and closed again, and three spellings of one string is
+// how one of them comes to be missed.
+const postdisplayName = "POSTDISPLAY"
 
 // zleLineParameters are the four a widget reads and writes the line through.
 //
@@ -1047,6 +1061,27 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 		left := string(runes[:widgetCursor(rr)])
 		rr.SetVar(zleBuffer, left+value)
 	})
+	// `POSTDISPLAY` is the text drawn after the line, and it is opened here
+	// beside the line rather than with `region_highlight`, because it *is*
+	// line state: a widget reads it, writes it and clears it, and what it
+	// holds is text. Measured 2026-09-22 through a pseudo-terminal against
+	// zsh 5.9.2 by pressing a key bound to a widget, `${(t)POSTDISPLAY}` is
+	// `scalar-local-special` both before the widget assigns to it and after —
+	// the same word BUFFER carries, which is what says it is writable line
+	// state and not one of the read-only two.
+	//
+	// Not in zleLineParameters, and that is measured rather than tidy: a
+	// **completion** widget gets the four read-only, and there is nothing in
+	// what a completion widget is that would stop it offering a suggestion.
+	// Putting it in that list would have made it read-only under `zle -C` on
+	// the strength of a guess.
+	r.SetDynamic(postdisplayName, func(rr *interp.Runner) string {
+		text, _ := rr.GetVar(zlePostdisplay)
+		return text
+	})
+	r.SetDynamicWriter(postdisplayName, func(rr *interp.Runner, value string) {
+		rr.SetVar(zlePostdisplay, value)
+	})
 	// `region_highlight` is opened here and is not one of the five: the other
 	// parameters are the line, and this one is what the widget wants *done*
 	// with it. It is also the only one backed by a store that outlives the
@@ -1113,6 +1148,14 @@ func openWidgetParameters(r *interp.Runner, completion bool) {
 		r.MarkLocal(name)
 	}
 	r.MarkLocal(regionHighlightName)
+	// And the text drawn after the line, which carries the same word: measured
+	// 2026-09-22 the same way, `${(t)POSTDISPLAY}` inside a `zle -N` widget is
+	// `scalar-local-special` both before the widget assigns to it and after
+	// (#4217). Said here rather than added to zleParameters because that list
+	// is what the completion branch above marks *read-only* as a set, and a
+	// completion widget offering a suggestion is not something the measurement
+	// forbids.
+	r.MarkLocal(postdisplayName)
 }
 
 // closeWidgetParameters takes them away again, so a script that is not running
@@ -1124,6 +1167,10 @@ func closeWidgetParameters(r *interp.Runner) {
 	for _, name := range zleQueueParameters {
 		r.UnsetDynamic(name)
 	}
+	// And the text drawn after the line, which is opened beside the line and
+	// closed beside it for the same reason: what a script finds between two
+	// keystrokes is nothing at all.
+	r.UnsetDynamic(postdisplayName)
 	// Not added to zleParameters, because that list is also what the
 	// completion branch above marks read-only and what the tests walk as "the
 	// line parameters". This one is neither: a completion widget may colour
@@ -1167,10 +1214,16 @@ func setWidgetCursor(r *interp.Runner, n int) {
 func setWidgetLine(r *interp.Runner, in repl.Line) {
 	r.SetVar(zleBuffer, in.Buffer)
 	setWidgetCursor(r, in.Cursor)
+	// What is already drawn after the line, so a widget that reads
+	// `POSTDISPLAY` before writing it sees what is on the screen — which is
+	// what a plugin's wrapper does: it saves the suggestion, clears it while a
+	// new one is fetched, and puts one of the two back.
+	r.SetVar(zlePostdisplay, in.Postdisplay)
 }
 
 func widgetLine(r *interp.Runner) repl.Line {
-	return repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r)}
+	post, _ := r.GetVar(zlePostdisplay)
+	return repl.Line{Buffer: widgetBuffer(r), Cursor: widgetCursor(r), Postdisplay: post}
 }
 
 // editorRunning reports whether the editor is holding a line for something to

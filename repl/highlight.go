@@ -111,8 +111,13 @@ type styleRun struct {
 // The cursor arithmetic elsewhere in this package is untouched by any of this,
 // and that is why highlighting is safe to add here: place and cells count the
 // *runes* of the line, and what this adds occupies no cells.
+// The text it colors is what is **displayed** rather than the line, which is
+// what lets a run reach into a postdisplay: measured, `region_highlight` with
+// offsets past `$#BUFFER` colors the suggestion after it, so the offsets count
+// one text and not two (#4217). A session with no postdisplay hands over
+// exactly the line, which is every session in every dialect but one.
 func (e *editor) styled() string {
-	line := string(e.line)
+	line := string(e.displayed())
 	runs := e.styleRuns(line)
 	if len(runs) == 0 {
 		return line

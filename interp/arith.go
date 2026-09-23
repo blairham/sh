@@ -3319,7 +3319,7 @@ func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
 	asked, protect := false, false
 	// Read before anything is expanded, because an expansion an apostrophe
 	// stops must not be performed at all. See Runner.stoppedArithSpans.
-	spans, read := r.rawSpans(text)
+	spans, read := r.arithSpans(text)
 	if !read {
 		return text
 	}

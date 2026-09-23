@@ -419,6 +419,11 @@ type Lexer struct {
 	// double-quoted.
 	inRawBody bool
 
+	// keepEscapesInBrackets keeps a backslash escape's own byte while the
+	// scan is inside brackets, which is what parts arithmetic text from a
+	// here-document's body. See ArithTextSpans.
+	keepEscapesInBrackets bool
+
 	// inCommandSubst counts the `$( … )` bodies this lexer has open. Read
 	// only where a construct runs out, to say whether the input ended inside
 	// one — see Error.RanOutInsideACommandSubstitution, and
@@ -3401,8 +3406,44 @@ func HeredocSpans(body string, d Dialect) ([]Span, error) {
 	return spans, l.Err()
 }
 
+// ArithTextSpans is HeredocSpans for the text of an arithmetic expression,
+// which differs from a here-document's body in one place: **a backslash
+// inside brackets keeps both of its bytes.**
+//
+// A here-document body is finished text, so the escape has done its work by
+// the time the body is written and the backslash goes. An arithmetic
+// expression's text is read *twice* — once here, and again when a subscript
+// found in it is read as a key or as an expression — and a backslash that
+// quoted a `$` has to survive the first read or the second one expands what
+// the first was told not to.
+//
+// Measured 2026-09-23 on bash 5.3.20, `declare -A a; k='a b'; a[$k]=5;
+// a['$k']=11`, each row from a script file:
+//
+//	$(( a[\$k] ))        11   the key is `$k`, the escaped `$` not expanded
+//	$(( a['\$k'] ))       0   the key is `\$k`, the apostrophes keeping it
+//	$(( a[$k] ))          5   the control: an unescaped `$` still expands
+//	$(( \$n + 1 ))      error  outside brackets the backslash still goes
+//
+// Reading the first row through a body's rules gave 5: the backslash came off
+// here, the second read saw a bare `$k`, and the element the script had asked
+// for by its literal name was answered by the one the expansion found. The
+// last row is why the brackets are part of the rule rather than the whole
+// text — bash removes the backslash where no subscript is open, and both
+// shells refuse `$n` there with the same token.
+func ArithTextSpans(text string, d Dialect) ([]Span, error) {
+	l := NewLexer(text, d)
+	l.keepEscapesInBrackets = true
+	spans := l.heredocSpans()
+	return spans, l.Err()
+}
+
 func (l *Lexer) heredocSpans() []Span {
 	l.inRawBody = true
+	// The brackets the *text* wrote, counted here because this is the only
+	// reader that sees them before anything is expanded: every bracket in
+	// the input at this point is one the script spelled.
+	depth := 0
 	var out []Span
 	var b strings.Builder
 	litPos := l.pos()
@@ -3469,9 +3510,15 @@ func (l *Lexer) heredocSpans() []Span {
 			l.advance()
 			l.advance()
 		case c == '\\' && strings.IndexByte(heredocEscapes, l.peekAt(1)) >= 0:
-			l.advance()
 			if b.Len() == 0 {
 				litPos = l.pos()
+			}
+			if l.keepEscapesInBrackets && depth > 0 {
+				// Both bytes, so the second reader of this text sees the
+				// escape the first one was handed. See ArithTextSpans.
+				b.WriteByte(l.advance())
+			} else {
+				l.advance()
 			}
 			b.WriteByte(l.advance())
 		default:
@@ -3479,6 +3526,11 @@ func (l *Lexer) heredocSpans() []Span {
 			// an ordinary character stays, both of it, and so does a quote.
 			if b.Len() == 0 {
 				litPos = l.pos()
+			}
+			if c == '[' {
+				depth++
+			} else if c == ']' && depth > 0 {
+				depth--
 			}
 			b.WriteByte(l.advance())
 		}

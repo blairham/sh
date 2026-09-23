@@ -194,6 +194,9 @@ ash   ReadonlyRecordsTheCompoundAttribute
 ash   RegexMatchOmitsGroupsThatDidNotMatch
 ash   RegexMatchSurvivesAFailedMatch
 ash   ReplacementEmptyMatchDeclined
+ash   RestrictedBuiltinRefusalIsFatal
+ash   RestrictedFreezeIsAReadonly
+ash   RestrictedModeIsLeftByTheLetter
 ash   ScalarAppendedToAnArrayBecomesANewElement
 ash   ScalarAssignedOverACompoundReplacesTheName
 ash   ScalarOverACompoundIsAnInconsistentType
@@ -487,6 +490,9 @@ dash  RegexMatchSurvivesAFailedMatch
 dash  ReplacementAnchors
 dash  ReplacementEmptyMatchDeclined
 dash  ReplacementOperandTakesTheEnclosingQuoting
+dash  RestrictedBuiltinRefusalIsFatal
+dash  RestrictedFreezeIsAReadonly
+dash  RestrictedModeIsLeftByTheLetter
 dash  ScalarAppendedToAnArrayBecomesANewElement
 dash  ScalarAssignedOverACompoundReplacesTheName
 dash  ScalarOverACompoundIsAnInconsistentType
@@ -630,6 +636,9 @@ zsh   ReadonlyReferenceLetter
 zsh   RegexMatchOmitsGroupsThatDidNotMatch
 zsh   RegexMatchSurvivesAFailedMatch
 zsh   ReportsAKilledCommandInACommandSubstitution
+zsh   RestrictedBuiltinRefusalIsFatal
+zsh   RestrictedFreezeIsAReadonly
+zsh   RestrictedModeIsLeftByTheLetter
 zsh   SubstringRangeThirdColonIsABadSubstitution
 zsh   TableLetterReachesItsOwnOperandsSubscript
 zsh   TransformLetterCheckedOnlyWhenValued

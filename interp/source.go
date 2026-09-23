@@ -863,7 +863,8 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		//
 		// Before the resolution rather than after, so a refused path is
 		// never looked for: the search is what the mode is confining.
-		return r.restrictedOperandRefusal(orElse(r.inBuiltin, "."), args[0])
+		r.restrictedOperandRefusal(orElse(r.inBuiltin, "."), args[0])
+		return r.endAfterRestrictedBuiltinRefusal()
 	}
 	display, path, err := r.resolveDotPath(args[0], here, search)
 	if err != nil {

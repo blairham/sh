@@ -561,11 +561,15 @@ var extraSetOptions = map[string]setOption{
 	// — so refusing them made the listing advertise names the shell then
 	// declined (#3128). What each is recorded *for* is the follow-up work;
 	// remembering it is not a claim to do it. See recordedOption.
-	"gmacs":      recordedOption("gmacs", false),
-	"letoctal":   recordedOption("letoctal", false),
-	"markdirs":   recordedOption("markdirs", false),
-	"restricted": recordedOption("restricted", false),
-	"showme":     recordedOption("showme", false),
+	"gmacs":    recordedOption("gmacs", false),
+	"letoctal": recordedOption("letoctal", false),
+	"markdirs": recordedOption("markdirs", false),
+	// "restricted" is here too and is added in an init, in
+	// interp/restricted.go: the mode reaches this table back, so an entry
+	// written in this literal is an initialization cycle. The same shape
+	// interp/command.go's builtins use.
+
+	"showme": recordedOption("showme", false),
 }
 
 // SetPosixMode enters or leaves POSIX mode, which is what the `posix` entry

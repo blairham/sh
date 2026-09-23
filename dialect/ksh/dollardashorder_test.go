@@ -28,8 +28,18 @@ import (
 // Two letters sit outside the sort, in opposite directions, which is why this
 // is neither "sorted" nor "sorted with capitals last": `i` stands in front of
 // a `c` it sorts after, and `l` stands behind capitals it sorts before.
+//
+// `r` is a third, added in #4205 with the restricted mode, and it took three
+// measurements because the two invocation letters cannot be had together:
+//
+//	set -r in a script       rhB
+//	-c with set -r           rchsB
+//	-i with set -r           irmsBE
+//
+// So it stands behind `i` and in front of `c` — one more letter out of order,
+// in the same direction `i` is.
 func TestDollarDashLetterOrder(t *testing.T) {
-	if got, want := ksh.Semantics().DollarDashLetterOrder, "icaefhkmnstuvxBCEHTl"; got != want {
+	if got, want := ksh.Semantics().DollarDashLetterOrder, "ircaefhkmnstuvxBCEHTl"; got != want {
 		t.Errorf("DollarDashLetterOrder = %q, want %q", got, want)
 	}
 }

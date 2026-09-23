@@ -7732,13 +7732,24 @@ shell `-o interactive` on a pipe makes.
 
 ### The restricted shell, and the letter `set -r`
 
-**One shell in the panel has this mode and this shell has built it.** Measured
-2026-09-22 on bash 5.3.20 with a scratch HOME and no startup files, each
-spelling run from a script file with `echo st=$?` behind it. ksh93 has the
-letter and a restricted mode of its own, with different refusals and different
-wording, and this shell has not built that one — so `r` stays in that
-dialect's unimplemented letters. zsh, dash and BusyBox ash have no such
-letter and refuse it outright.
+**Two shells in the panel have this mode and this shell has built both.**
+Measured 2026-09-22 on bash 5.3.20 and ksh93u+ 2012-08-01 with a scratch HOME
+and no startup files, each spelling run from a script file with `echo st=$?`
+behind it. bash's ten refusals are below; ksh93's eight are in *A second
+restricted shell, in its own words* after them, and they are not bash's under
+another name.
+
+**zsh has the letter too, and a third mode, and this file said it did not.**
+Measured 2026-09-22: `set -r` there is silent at 0 and `cd /` afterwards is
+`<script>:cd:3: restricted`, with `PATH=/bin` refused as `PATH: restricted` and
+fatal. That mode is **not built here** — the letter reaches a `setopt` name
+`dialect/zsh` records and nothing acts on — so `set -r` in this shell's zsh is
+taken at 0 and restricts nothing, which is exactly the dishonest half the axis
+below exists to prevent. It is recorded rather than claimed, in the corpus row
+`shopt/the-restricted-letter-and-what-the-mode-refuses` and in that dialect's
+`unanswered` notes, and `TestSetTakesTheRestrictedLetterAndDoesNothing` pins
+what is there today. dash and BusyBox ash are the two with no such letter and
+they refuse it outright, ending the input at 2.
 
 `Semantics.SetHasTheRestrictedLetter` is the axis, and it is deliberately one
 question about the letter **and** the mode rather than two. A dialect
@@ -7817,6 +7828,69 @@ writable, which is the door a script looking for a way out tries second.
 **The mode reaches inside a nested shell.** `( cd / )`, `x=$(cd /)` and a
 function body are each the refusal at 1, which here is a clone copying the
 state rather than a check of its own.
+
+### A second restricted shell, in its own words
+
+ksh93's mode is built too, since #4205, and it is a different mode. Measured
+2026-09-22 on ksh93u+ 2012-08-01 from a script file under `env -i
+PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME, one spelling at a time with
+`echo tail` behind it. **Eight refusals**, every one of them the single word
+`restricted` where bash writes a sentence:
+
+| what | what it says | status | the script |
+| --- | --- | --- | --- |
+| `cd`, any operand or none | `cd: restricted` | 1 | carries on |
+| assigning `PATH`, `SHELL`, `ENV`, `FPATH` | `PATH: restricted` | — | **ends**, exit 1 |
+| `unset` of one of those | `unset: PATH: restricted` | 1 | carries on |
+| a command word with a `/` in it | `/bin/echo: restricted` | 1 | carries on |
+| `.` on a path with a `/` | `.: /etc/profile: restricted` | — | **ends**, exit 1 |
+| a redirection that opens a file to write | `f: restricted` | 1 | carries on |
+| `exec cmd` | `exec: echo: restricted` | — | **ends**, exit 1 |
+| `command -p cmd` | `-p: restricted` | — | **ends**, exit 1 |
+
+Five things there are measurements and not readings of the table.
+
+- **The frozen names are not readonly names.** `readonly -p` in the mode lists
+  nothing at all, where bash lists `declare -r ENV`, and the sentence is the
+  mode's rather than the readonly one. `Semantics.RestrictedFreezeIsAReadonly`
+  is the axis; the mechanism is shared, because the *status* and the
+  *fatality* of a refused assignment are a readonly assignment's in both
+  shells and a second mechanism would have to reproduce both by hand.
+- **The frozen set differs at one name each way.** ksh93 freezes `FPATH`,
+  where an autoloaded function comes from, and does **not** freeze `HISTFILE`;
+  bash freezes `HISTFILE` and has no `FPATH`. Neither is derivable from the
+  other, which is why the extra name is a list a dialect supplies
+  (`Runner.FreezeInRestrictedMode`) and not an axis.
+- **Three of the eight end the script and five do not**, which is
+  `Semantics.RestrictedBuiltinRefusalIsFatal`. It is not the special-builtin
+  rule wearing a hat: `unset` is a special builtin and its refusal carries on,
+  `command` is not one and its refusal ends the script, and `command -p
+  /nosuch` — the same builtin failing for an ordinary reason — carries on in
+  both shells.
+- **`exec` names the command and `command -p` names neither builtin nor
+  operand.** `exec echo hi` is `exec: echo: restricted` where bash writes
+  `exec: restricted`, and `command -p echo hi` is `-p: restricted` where bash
+  writes `command: -p: restricted` — and that one is located as the *shell*,
+  `<script>: line 4:`, where the `cd` refusal one line away is the builtin's
+  `<script>[3]:`.
+- **The mode is a switch and not a door that locks.** `set +r` is granted,
+  silently at 0: `$-` loses the letter and `cd`, `PATH=/bin` and `/bin/echo
+  hi` are each taken again. The **long** spelling is refused all the same —
+  `set +o restricted` is `set: restricted: restricted` and ends the script at
+  1 — so the two doors are two. `Semantics.RestrictedModeIsLeftByTheLetter` is
+  the axis, and bash answers No to it with `set: +r: invalid option`.
+
+`set -o restricted` is real here and was a **recorded** name before #4205: a
+listing carried it, `set -o restricted` reported 0, and nothing acted on it, so
+a script that asked for a restricted shell through the long spelling was told
+yes and then ran everything the mode forbids. The letter said `-r is not
+implemented yet`, which was honest; the name was the lie.
+
+One row is knowingly short and is written here rather than guessed at:
+`command -p` with **no operand** behind it is refused in ksh93 and taken at 0 in
+bash, and this shell takes it in both. The refusal is behind the operand count
+for bash's measured reason, and moving it would need an axis for a line — `command
+-p` with nothing after it — that no script writes.
 
 ### What an emulation resets, and what it leaves standing
 

@@ -1397,6 +1397,15 @@ func (r *Runner) hasSetLetter(opt rune) bool {
 			strings.ContainsRune(r.diag().ImmovableOptionLetters["set"], opt)
 	case 'p':
 		return r.sem().SetHasThePrivilegedLetter != No
+	case 'r':
+		// The restricted mode's letter, and this is the *third* table it has
+		// to be in: the axis, the applying pass's switch, and here. A letter
+		// the validating pass does not know is refused as unknown before the
+		// switch that would have taken it ever runs — which is what `set -r`
+		// did in the one dialect that validates first, with `r` in that
+		// shell's own usage line one screen away (#4205, and #3152 for `-G`,
+		// which was the same shape).
+		return r.sem().SetHasTheRestrictedLetter != No
 	case 'f':
 		// Accepted by every dialect: either it turns globbing off, or it
 		// writes the name the dialect gives it, or it is inert.
@@ -1662,6 +1671,22 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			if on {
 				r.enterRestricted()
 				continue
+			}
+			if !r.restricted {
+				// Not in the mode, so the request is for the state this shell
+				// is already in and is granted — silently, at 0, in both
+				// columns that have the letter. The dialect is not asked,
+				// which is what keeps the axis on the one line that reaches
+				// it.
+				continue
+			}
+			if r.ask(r.sem().RestrictedModeIsLeftByTheLetter,
+				"`set +r` handing back what restricted mode withheld") {
+				r.leaveRestricted()
+				continue
+			}
+			if r.unspecified {
+				return false
 			}
 			if !r.restrictedLetterTurnedOff() {
 				return false
@@ -2531,6 +2556,11 @@ func (r *Runner) unsetReadonly(name string) int {
 		defer func() { r.inBuiltin = outer }()
 	}
 	msg := Wording(r.diag().UnsetReadonly, "unset: %s: cannot unset: readonly variable", name)
+	if r.restrictedFreeze(name) {
+		// The `unset` half of the same split — see Runner.restrictedFreeze and
+		// Diagnostics.RestrictedUnset.
+		msg = Wording(r.diag().RestrictedUnset, "unset: %[1]s: restricted", name)
+	}
 	if refused {
 		// See Runner.RefuseUnset: the same refusal with no reason given.
 		msg = Wording(r.diag().UnsetRefused, "unset: %s: cannot unset", name)

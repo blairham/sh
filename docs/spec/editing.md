@@ -65,6 +65,7 @@ Same key, same line, same result in bash 5.3 and zsh 5.9:
 | `^D` | on an empty line, end of input; otherwise delete the character under the cursor, and nothing at the end of a line |
 | `^K` | kill from the cursor to the end of the line |
 | `^L` | clear the screen, keeping the line |
+| `^O` | accept the line, and put the entry *after* it on the next prompt |
 | `^T` | swap the two characters around the cursor and step past them; at the end of the line, swap the last two and stay |
 | `^Y` | put the last kill back at the cursor |
 | `M-b` | back to the start of the word |
@@ -74,6 +75,24 @@ Same key, same line, same result in bash 5.3 and zsh 5.9:
 | `\e[A` `\e[B` `\eOA` `\eOB` | the previous line of history, the next |
 | `M-.` `M-_` | insert the last argument of the line before, at the cursor |
 | `^_` `^X^U` | take the last change back |
+
+`^O` is the one whose meaning is split across two prompts, so it is worth
+writing out. It accepts what is on the line and fetches the entry after the one
+the line came from, which is how a run of history is replayed a line at a time:
+hold it down and each entry runs in turn. The index is into the list **as it
+stands at each prompt**, and the row that pins that is the second one below.
+
+Measured 2026-09-23 on bash 5.3.20 and zsh 5.9.2 through a pseudo-terminal, and
+on a pipe as well for bash, which is the only one of the two with an editor
+there. With `echo 0`, `echo 1`, `echo 2` and `echo 3` in the history:
+
+    C-r 0 C-o C-o Return      runs echo 0, echo 1, echo 2
+    Up Up C-o C-o Return      runs echo 2, echo 3, echo 2
+
+The last of those is not a typo. `Up Up` lands on `echo 2`; `C-o` runs it and
+offers `echo 3`; and running `echo 2` appended it, so the entry now sitting one
+past `echo 3` is that copy. A `^O` at a fresh prompt fetches nothing: there is
+no current line for a next one to be relative to.
 
 Three more facts about the kill, all measured:
 

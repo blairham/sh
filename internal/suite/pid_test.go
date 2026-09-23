@@ -25,11 +25,14 @@ func TestThePidMaskIsAnchoredOnTheRole(t *testing.T) {
 			want: "bash: cannot set terminal process group (<pid>): Inappropriate ioctl for device",
 		},
 		{
-			// The same remark from a shell with no group to name, which is
-			// what the reference writes with every stream redirected.
-			name: "and the -1 it names when there is none",
+			// The same remark from a shell that already leads its own group,
+			// which is a different *answer* and not a second spelling of the
+			// one above. It survives the mask on purpose: this shell wrote it
+			// where the reference wrote a number until #4250, and a mask that
+			// covered both would have hidden that for as long as it existed.
+			name: "but not the -1 it writes when it leads the group already",
 			in:   "bash: cannot set terminal process group (-1): Inappropriate ioctl for device",
-			want: "bash: cannot set terminal process group (<pid>): Inappropriate ioctl for device",
+			want: "bash: cannot set terminal process group (-1): Inappropriate ioctl for device",
 		},
 		{
 			name: "a line number is not one, even with a pid's value",
@@ -85,85 +88,46 @@ func TestAReferenceReproducesItsRunUpToTheProcessGroup(t *testing.T) {
 	}
 }
 
-// The floor, counted. It is reported beside the differing lines and corrects
-// nothing, so what it has to be right about is the two ends: the line two
-// shells can never agree on is counted, and an ordinary disagreement is not.
+// What the mask is worth once it is applied: two shells naming their own
+// process groups are the same line, and everything else still differs.
 //
-// The seven-line figure #4012 records is this function over `history.tests`,
-// whose inner interactive shells each write the remark once.
-func TestTheProcessGroupFigureCountsTheRemarkAndNotContent(t *testing.T) {
+// It is applied in [normalize] rather than reported beside the count, which
+// is a change of mind #4250 earned — see pid.go. These rows are the reason it
+// is safe to have made: each pairs a difference that must survive with one
+// that must not.
+func TestTheAppliedMaskLeavesEveryRealDifference(t *testing.T) {
 	const remark = "bash: cannot set terminal process group (%s): Inappropriate ioctl for device"
-	ours := func(n string) string { return replaceOnce(remark, "%s", n) }
+	line := func(n string) string { return replaceOnce(remark, "%s", n) }
 	for _, c := range []struct {
 		name         string
-		mine, theirs []string
-		want         int
+		mine, theirs string
+		same         bool
 	}{
 		{
-			"two processes naming their own groups is entirely the floor",
-			[]string{ours("34551")},
-			[]string{ours("34608")},
-			1,
+			"two processes naming their own groups are one line",
+			line("34551"), line("34608"), true,
 		},
 		{
-			"and so is one standing against the other",
-			[]string{ours("34551")},
-			[]string{ours("-1")},
-			1,
+			// The disagreement #4250 fixed, which the mask must still show.
+			"a number against a -1 is not",
+			line("34551"), line("-1"), false,
 		},
 		{
-			"seven inner shells are seven lines, which is the figure #4012 records",
-			[]string{ours("1"), ours("2"), ours("3"), ours("4"), ours("5"), ours("6"), ours("7")},
-			[]string{ours("8"), ours("9"), ours("10"), ours("11"), ours("12"), ours("13"), ours("14")},
-			7,
+			"nor are two shells that both lead their own group and say so",
+			line("-1"), line("34608"), false,
 		},
 		{
-			"a real disagreement beside it is not counted",
-			[]string{ours("34551"), "one"},
-			[]string{ours("34608"), "two"},
-			1,
-		},
-		{
-			"an ordinary disagreement on its own is not",
-			[]string{"one", "two"},
-			[]string{"one", "three"},
-			0,
-		},
-		{
-			"runs that already agree have nothing to report",
-			[]string{ours("34551")},
-			[]string{ours("34551")},
-			0,
-		},
-		{
-			// The anchor again, from the counting side: a line number that
-			// happens to look like a pid is a disagreement we own.
-			"and a number nobody named a group is not reached",
-			[]string{"./f.tests: line 34551: oops"},
-			[]string{"./f.tests: line 34608: oops"},
-			0,
+			"and a line number that looks like a pid is untouched",
+			"./f.tests: line 34551: oops", "./f.tests: line 34608: oops", false,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			common, longest, _ := agreement(c.mine, c.theirs)
-			if got := processGroups(c.mine, c.theirs, longest-common); got != c.want {
-				t.Errorf("processGroups(%q, %q) = %d, want %d", c.mine, c.theirs, got, c.want)
+			got := normalize(c.mine, "<none>", "") == normalize(c.theirs, "<none>", "")
+			if got != c.same {
+				t.Errorf("normalize(%q) == normalize(%q) is %v, want %v",
+					c.mine, c.theirs, got, c.same)
 			}
 		})
-	}
-}
-
-// The figure may never claim more than there were, whatever the masking does
-// to the alignment — the bound [reordered] is held to, for the same reason.
-func TestTheProcessGroupFigureStaysInsideTheDifferingLines(t *testing.T) {
-	const remark = "bash: cannot set terminal process group (%s): Inappropriate ioctl for device"
-	mine := []string{replaceOnce(remark, "%s", "1"), "one", "two"}
-	theirs := []string{replaceOnce(remark, "%s", "2"), "three"}
-	common, longest, _ := agreement(mine, theirs)
-	differing := longest - common
-	got := processGroups(mine, theirs, differing)
-	if got < 0 || got > differing {
-		t.Errorf("processGroups = %d, outside 0..%d", got, differing)
 	}
 }
 

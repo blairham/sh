@@ -50,11 +50,19 @@ var tempPattern = regexp.MustCompile(`(/private)?/(tmp|var/folders)/[^\s:"']*`)
 // that fails — which is most of the interesting ones. The full path only,
 // never the base name: replacing a base name turns unrelated words into
 // `<shell>` and reports a difference between two identical outputs.
+//
+// The third is the process group a shell with no terminal names, and it is
+// here for the same reason the other two are: two shells are two processes,
+// so the number can never match and nothing about either shell is in it. It
+// is masked and not dropped, and only where the number is one the run chose —
+// see pid.go, where the anchor and the `-1` it deliberately leaves alone are
+// argued.
 func normalize(out, shell, dir string) string {
 	out = strings.ReplaceAll(out, shell, "<shell>")
 	if dir != "" {
 		out = strings.ReplaceAll(out, dir, "<dir>")
 	}
+	out = withoutTheRunsPid(out)
 	return tempPattern.ReplaceAllString(out, "<tmp>")
 }
 

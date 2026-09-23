@@ -23,13 +23,10 @@ import "regexp"
 //
 // # Where this is applied, and where it deliberately is not
 //
-// [repeats] only, exactly as [canonicalOrder] is. Against the reference's own
-// second run there is nothing to argue about: one shell disagreeing with
-// *itself* about a number the kernel chose is not a fact about either shell.
-//
-// Against **our** run it is not applied, and [processGroups] counts what that
-// costs instead of hiding it. That is a floor and not a defect, which took
-// measuring twice to establish — see below.
+// Applied in [normalize], so it reaches [repeats] and the comparison against
+// our own run alike. That is a change of mind and the argument for it is
+// below: it was reported beside the count and not applied, for as long as
+// there was a real disagreement it could have hidden.
 //
 // # The floor, and why the route matters (#4012)
 //
@@ -63,17 +60,34 @@ import "regexp"
 // Fixing the disagreement removed a parity bug and did not remove one of the
 // seven lines.
 //
-// So the arithmetic is: the fetched bash column's differing-line figure
-// carries seven lines that no change to this shell can ever take out, and
-// [Report.ProcessGroups] is where that is counted on every run rather than
-// being rediscovered by the next pass.
+// So the arithmetic was: the fetched bash column's differing-line figure
+// carried seven lines that no change to this shell could ever take out.
 //
-// **Whether a matching number is now worth masking in the comparison is left
-// open**, and it is a decision rather than an oversight. With both standings
-// answered alike there is less for a mask to hide than there was, but a mask
-// works on a line and cannot tell which of the two routes produced it, so it
-// would also cover a future disagreement on either. The count below says what
-// masking would be worth without spending anything to find out.
+// # Why it is masked now, having been counted and not masked before
+//
+// The objection that kept it out of the comparison was exact: a mask works on
+// a line and cannot tell which of the two routes produced it, so one that
+// covered the number would also cover a future disagreement on either. That
+// objection is answered rather than overruled, and in two pieces.
+//
+// The first is #4250. This shell used to put every child of every script in a
+// process group of its own, so its inner shells took the **leader** route and
+// wrote `-1` where the reference wrote a number. That was a real
+// disagreement, it was under the mask's anchor, and masking then would have
+// hidden it. It is fixed: a foreground command leads a group only where there
+// is a monitor and a terminal, so our inner shells inherit the file's group
+// exactly as the reference's do, and both now write a number.
+//
+// The second is the anchor itself, narrowed: the mask matches a number the
+// run chose and **not** the `-1`. So the two routes stay apart — a shell that
+// went back to leading its own group would write `-1` against the reference's
+// number and the line would differ, loudly, as it did before. What is hidden
+// is the digits of two numbers that can never be equal, because they belong
+// to two processes.
+//
+// With both halves in place the seven lines are not a floor any more; they
+// are a difference nobody was ever going to close, taken out of the count the
+// way the run's own directory and the shell's own path are.
 //
 // # Anchored on the role, not on the digits
 //
@@ -89,7 +103,14 @@ import "regexp"
 // usual: this decides whether a file is **scored**, so a genuinely
 // non-deterministic file passed through it would have the reference's own
 // per-run difference graded against us as though it were our disagreement.
-var pidOfAProcessGroup = regexp.MustCompile(`(process group \()-?\d+(\))`)
+// **A number the run chose, and not the `-1`.** The two are different answers
+// rather than two spellings of one: `-1` is what a shell writes when it
+// already leads its own group, and a number is what it writes when it does
+// not. A mask that covered both would hide a real disagreement — this shell
+// wrote `-1` where the reference wrote a number until #4250, for the whole of
+// the time the mask existed, and applying it then would have made that bug
+// invisible instead of counted. So the digits go and the branch stays.
+var pidOfAProcessGroup = regexp.MustCompile(`(process group \()\d+(\))`)
 
 // withoutTheRunsPid takes that number out and leaves everything else,
 // including the parentheses that make it recognizable.
@@ -105,36 +126,4 @@ func withoutTheRunsPid(out string) string {
 // reorder.go, the process group above.
 func reproduced(a, b string) bool {
 	return sameButForOrder(withoutTheRunsPid(a), withoutTheRunsPid(b))
-}
-
-// processGroups is how many of two runs' differing lines go away when the
-// process group's number is ignored.
-//
-// The floor the file comment argues, counted. It is the same shape as
-// [reordered] and stands on the same terms: a per-side rewrite, clamped into
-// the differing lines it is reported beside, **subtracted from nothing**. The
-// raw count stays what the two runs did.
-//
-// Unlike [reordered] it is neither an upper nor a lower bound but the figure
-// itself, and the reason is the anchor above: the only lines it can reach are
-// lines where both runs wrote a remark naming a process group in the same
-// place, which is a line neither shell was asked for and neither can match.
-// It is still reported rather than applied, because what a report may
-// subtract is a question for whoever reads it.
-func processGroups(mine, theirs []string, differing int) int {
-	if differing <= 0 {
-		return 0
-	}
-	common, longest, _ := agreement(withoutThePids(mine), withoutThePids(theirs))
-	return min(max(differing-(longest-common), 0), differing)
-}
-
-// withoutThePids is [withoutTheRunsPid] over one side's lines. A pure
-// function of one run, so it cannot be told what the other one wrote.
-func withoutThePids(ls []string) []string {
-	out := make([]string, len(ls))
-	for i, line := range ls {
-		out[i] = withoutTheRunsPid(line)
-	}
-	return out
 }

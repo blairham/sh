@@ -19,12 +19,15 @@ import (
 // text on either side of it, so `$var{x,y}` is the two names `$varx` and
 // `$vary` rather than one name with a character behind it.
 //
-// **The axis is asked only where the two readings part**, which is a small
-// minority of the braces anybody writes: `a{b,c}d` is `abd acd` either way,
-// because text re-entering a word as characters and text re-entering it as the
-// spans it was cut into are the same word wherever the characters are inert.
-// So the re-read is computed and compared, and a question whose two answers
-// are the same answer never refuses a script.
+// The comparison below decides **whether the axis is asked**, and never which
+// reading applies. That distinction is the whole of why it is sound: a dialect
+// that answered `Yes` re-reads every word the braces produced, because the
+// division of a word into spans is not always inert — `~{a,b}` is the text
+// `~a`, one literal, and the tilde reader answers a run of two spans
+// differently. What the comparison is for is the **refusal**: `a{b,c}d` is
+// `abd acd` under either reading, so a vector that has not answered must
+// expand it rather than refuse it, and a question whose two answers are the
+// same answer never stops a script.
 func (r *Runner) rereadBraceOutput(w *syntax.Word, words []*syntax.Word) []*syntax.Word {
 	// A word the braces left alone is the word the parse cut, and re-reading
 	// it could only give that word back — which is also what keeps every word
@@ -40,42 +43,56 @@ func (r *Runner) rereadBraceOutput(w *syntax.Word, words []*syntax.Word) []*synt
 	if r.sem().BraceExpansion != Yes || r.noBraceExpand {
 		return words
 	}
+	switch r.sem().BraceOutputRereadAsText {
+	case No:
+		// The output goes back as spans, so there is nothing to read again
+		// and nothing to compare — and this is the common answer, so it is
+		// the one that costs nothing.
+		return words
+	case Yes:
+		out, text, err := r.wordsRereadAsText(w, words)
+		if err != nil {
+			// The produced text will not read, which is a run-time failure
+			// belonging to the word: the line is abandoned at status 1 and
+			// the next one runs. The words are handed back in their span
+			// form so the caller has words at all; nothing expands them,
+			// because expandErr is what a simple command reads to know its
+			// word list failed.
+			r.refuseBraceOutput(text, err)
+			return words
+		}
+		return out
+	}
+	// Unanswered, which is the only state the comparison is for. A word that
+	// will not read at all is a difference by itself, since the other reading
+	// expands it.
+	out, _, err := r.wordsRereadAsText(w, words)
+	if err == nil && sameWords(out, words) {
+		return words
+	}
+	// Refuses, by name, and returns false: see askBrace.
+	r.askBrace(r.sem().BraceOutputRereadAsText,
+		"brace expansion's output re-entering the word as shell text")
+	return words
+}
+
+// wordsRereadAsText reads each produced word's text again as a word, stopping
+// at the first that will not read and handing back its text with the failure.
+func (r *Runner) wordsRereadAsText(w *syntax.Word, words []*syntax.Word) ([]*syntax.Word, string, error) {
 	d := syntax.Dialect{}
 	if r.Dialect != nil {
 		d = *r.Dialect
 	}
 	out := make([]*syntax.Word, 0, len(words))
-	var failedText string
-	var failure error
 	for _, bw := range words {
 		text := braceOutputText(bw)
 		spans, err := syntax.RereadWord(text, w.Start, d)
 		if err != nil {
-			// A word that will not read at all is a difference by itself:
-			// the other reading expands it. The complaint waits for the axis,
-			// since a dialect that takes the output as spans never meets it.
-			failedText, failure = text, err
-			break
+			return nil, text, err
 		}
 		out = append(out, &syntax.Word{Spans: spans, Start: bw.Start, Stop: bw.Stop})
 	}
-	if failure == nil && sameWords(out, words) {
-		return words
-	}
-	if !r.askBrace(r.sem().BraceOutputRereadAsText,
-		"brace expansion's output re-entering the word as shell text") {
-		return words
-	}
-	if failure != nil {
-		// The produced text will not read, which is a run-time failure
-		// belonging to the word: the line is abandoned at status 1 and the
-		// next one runs. The words are handed back in their span form so the
-		// caller has words at all; nothing expands them, because expandErr is
-		// what a simple command reads to know its word list failed.
-		r.refuseBraceOutput(failedText, failure)
-		return words
-	}
-	return out
+	return out, "", nil
 }
 
 // refuseBraceOutput reports produced text that will not read as a word.
@@ -121,13 +138,19 @@ func failedAt(err error) int {
 }
 
 // sameWords reports whether the two readings produced the same words, which is
-// what says the axis has nothing to decide about this one.
+// what says an unanswered axis has nothing here worth refusing a script over.
 //
 // Adjacent literal spans of one quoting are a single span for this comparison:
 // substituting an alternative between the text on either side of its group
-// leaves `a{b,c}d` as three literal spans where re-reading `abd` cuts one, and
-// a word divided differently into pieces that join back up is not a different
-// word.
+// leaves `a{b,c}d` as three literal spans where re-reading `abd` cuts one.
+//
+// That merge is why this may only gate the **question**. Two words that agree
+// once their literal runs are joined are the same *text*, and the text is what
+// the axis is about; they are not always the same thing to every later stage —
+// a tilde prefix is read off a span rather than off the word, so `[~][a]` and
+// `[~a]` are not one word to expandTilde. A caller choosing a reading from
+// this would inherit that, which is exactly what the Yes branch above does
+// not do.
 func sameWords(a, b []*syntax.Word) bool {
 	if len(a) != len(b) {
 		return false

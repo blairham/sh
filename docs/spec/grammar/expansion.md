@@ -219,11 +219,17 @@ stages 3-5 produce is never rescanned in any column, and this is stage
 disagreement is only over whether it goes back as characters or as the
 spans it was cut into.
 
-**Asked only where the two readings part.** `a{b,c}d` is `abd acd`
-either way and every range anybody counts is inert, so the axis is not a
-question a script writing a brace has to have answered — see
+**The axis is asked only where the two readings part, and the comparison
+that decides that never decides which reading applies.** `a{b,c}d` is
+`abd acd` either way and every range anybody counts is inert, so a vector
+that has not answered expands those rather than refusing them — see
 `inertElements` in `interp/brace.go`, and `rereadBraceOutput`, which
-compares the two readings and asks only when they differ.
+compares the readings only to decide whether to *ask*. A dialect that
+answered yes re-reads every word the braces produced, because the division
+of a word into spans is not always inert: `~{a,b}` is the text `~a`, one
+literal, and bash answers `[~a][~b]` — a tilde prefix is read off a span
+rather than off the word, so a run of two would be read as a bare `~` with
+an `a` behind it.
 
 The core expands what is unanimous and asks the vector where the answers
 part; `interp/brace.go` names the same fields, plus the ordering one

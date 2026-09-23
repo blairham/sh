@@ -41,6 +41,14 @@ func TestBraceOutputIsRereadAsShellText(t *testing.T) {
 		// contrast that says the empty element above is a quoted empty
 		// string rather than a word that vanished.
 		{"a produced word with no text is no field", `printf '[%s]' {,}`, "[]"},
+		// The row that says the span division is not always inert, and so
+		// that the re-reading is not a shortcut this shell may skip where
+		// the two look equivalent: a tilde prefix is read off a span rather
+		// than off the word, and `~a` is one literal here where the
+		// substitution alone leaves `[~][a]`. Measured on bash 5.3.20 with
+		// `HOME` set and no user called `a` — `[~a][~b]`, not the home
+		// directory with a letter on the end.
+		{"a produced tilde prefix is one literal", `printf '[%s]' ~{a,b}`, "[~a][~b]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if out, st := runBash(t, t.TempDir(), tc.src); out != tc.want || st != 0 {

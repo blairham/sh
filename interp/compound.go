@@ -1065,7 +1065,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 			"a function named after a special builtin being refused") {
 		// 2 rather than the dialect's generic fatal status, which is 1 in
 		// the one column that makes this refusal — the same split
-		// condWrongArity records, and written here for the same reason: the
+		// condUnknown records, and written here for the same reason: the
 		// number is the refusal's and not the shell's. Measured 2026-09-18,
 		// `set -o posix; export() { :; }; printf b` prints nothing and exits
 		// 2 where the same shell's ordinary fatal error exits 1.

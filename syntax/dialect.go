@@ -4558,7 +4558,7 @@ type Dialect struct {
 	//
 	// A count outside the range is the run-time refusal a known operator
 	// with a bad arity already gets here — see
-	// ConditionArityIsCheckedWhenItRuns, which is the same sentence and the
+	// ConditionIsResolvedWhenItRuns, which is the same sentence and the
 	// same status.
 	//
 	// zsh alone, and the other four have no such operator at all — `-prefix`
@@ -4596,9 +4596,11 @@ type Dialect struct {
 	// on (#3042).
 	CompletionConditions bool
 
-	// ConditionArityIsCheckedWhenItRuns lets `[[ … ]]` accept a known
-	// conditional operator standing with the wrong number of operands, and
-	// leaves the refusal to the interpreter.
+	// ConditionIsResolvedWhenItRuns lets `[[ … ]]` accept an operator whose
+	// name this shell will look up *when the condition runs*, and leaves the
+	// refusal to the interpreter. Two shapes reach it and the shell gives
+	// them one sentence: a known operator standing with the wrong number of
+	// operands, and a `-word` that is no condition here at all.
 	//
 	// The grammar question #965 is about, and it is the one place in this
 	// parser where a condition is *accepted* and then refused. Measured
@@ -4613,11 +4615,34 @@ type Dialect struct {
 	// and prints nothing in the other two, which is what says where the
 	// refusal happens rather than only how it is worded.
 	//
-	// **A known operator only**, which is measured and is the line between
-	// this and CompletionConditions above: `[[ -bogus ]]` is 0 in zsh — a
-	// bare word is a test for non-emptiness and `-bogus` is not empty — so a
-	// word that is not an operator here is not an operator with a bad arity
-	// either.
+	// **A name this shell has not got is the same reading**, measured
+	// 2026-09-22 on the same binary and the half this flag did not cover
+	// until #4261:
+	//
+	//	[[ -Q x ]]          unknown condition: -Q     at evaluation, status 2
+	//	[[ -R x ]]          unknown condition: -R     the same
+	//	[[ -bogus x ]]      unknown condition: -bogus the same
+	//	[[ -eq x ]]         unknown condition: -eq    the same
+	//	[[ 1 == 1 || -Q x ]]  0, and nothing said     — never evaluated
+	//
+	// The last row is what says this is a lookup rather than a wording: a
+	// short-circuit reaches the `]]` with the operator never resolved, so
+	// there is no complaint to make. This parser refused all five while
+	// reading, which no argument about wording could have fixed.
+	//
+	// **Two boundaries keep it from swallowing ordinary lines**, and both are
+	// measured on the same day. A name of three characters or more is an
+	// operator only where something stands behind it — `[[ -bogus ]]`,
+	// `[[ -zz ]]`, `[[ -eq ]]` and `[[ -bogus && -n x ]]` are all 0, the
+	// bare-word reading, where a two-character `-X` is an operator wherever
+	// it stands and `[[ -Q ]]` is the refusal. And a two-operand operator
+	// behind the word makes the word that operator's **left operand**:
+	// `[[ -Q == bar ]]` is a string comparison answering 1 and
+	// `[[ -1 -lt 2 ]]` is arithmetic answering 0, which a rule firing on
+	// every `-word` would have refused.
+	//
+	// A lone `-` is not a name in either half: `[[ - x ]]` is
+	// `parse error: condition expected: -` there.
 	//
 	// **And not where the operand is itself an operator**, which is the row
 	// that stops this being "everything after the operand is surplus":
@@ -4625,7 +4650,7 @@ type Dialect struct {
 	// is the run-time refusal — so an operator-shaped operand starts a
 	// reading of its own and the word after it is simply unexpected.
 	// `[[ -n -n ]]` is 0 in the same shell, which is that reading finishing.
-	ConditionArityIsCheckedWhenItRuns bool
+	ConditionIsResolvedWhenItRuns bool
 
 	// ParameterIsSetTest enables `[[ -v name ]]`, which asks whether a
 	// parameter is set rather than anything about its value.

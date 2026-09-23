@@ -1378,12 +1378,14 @@ func (p *printer) cond(e CondExpr) {
 	case *CondUnary:
 		p.str(x.Op + " ")
 		p.rawWord(x.X)
-	case *CondArity:
-		// An operator the grammar accepted with the wrong number of operands
-		// — see CondArity. Written back as it was read: the operator and
+	case *CondUnknown:
+		// A condition the grammar accepted and the interpreter refuses by
+		// name — a bad arity, or a name this dialect has no condition for.
+		// See CondUnknown. Written back as it was read: the operator and
 		// every word that stood with it, in order, because the line is
 		// still a line somebody wrote and a formatter may not decide which
-		// of its words was the surplus one.
+		// of its words was the surplus one — nor, for a name it does not
+		// know, which of them was the operator.
 		p.str(x.Op)
 		for _, w := range x.Words {
 			p.str(" ")

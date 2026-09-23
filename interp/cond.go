@@ -130,8 +130,8 @@ func (r *Runner) evalCond(ctx context.Context, c syntax.CondExpr) (bool, error) 
 		r.traceConditionOp(x.Op)
 		return r.evalCond(ctx, x.Y)
 
-	case *syntax.CondArity:
-		return r.condWrongArity(x)
+	case *syntax.CondUnknown:
+		return r.condUnknown(x)
 
 	case *syntax.CondCompletion:
 		return r.evalCondCompletion(ctx, x)
@@ -145,15 +145,22 @@ func (r *Runner) evalCond(ctx context.Context, c syntax.CondExpr) (bool, error) 
 	return false, arithError{msg: "unsupported condition"}
 }
 
-// condWrongArity refuses a known conditional operator that stood with the
-// wrong number of operands.
+// condUnknown refuses a condition the grammar accepted and this shell cannot
+// name: a known operator standing with the wrong number of operands, or a
+// `-word` that is no condition here at all.
 //
 // The refusal the grammar handed on rather than made — see
-// syntax.Dialect.ConditionArityIsCheckedWhenItRuns, which is what lets the
+// syntax.Dialect.ConditionIsResolvedWhenItRuns, which is what lets the
 // condition parse at all, and #965. The operator is named and nothing else
 // is: measured on zsh 5.9.2, `[[ -n ]]`, `[[ -n x y ]]` and `[[ -n x -z "" ]]`
 // are all `unknown condition: -n`, so it is the operator's name and not the
 // surplus word's.
+//
+// One sentence for both shapes because that shell gives one: `[[ -Q x ]]`,
+// `[[ -R x ]]` and `[[ -bogus x ]]` are `unknown condition: <word>` at the
+// same status and in the same position, measured 2026-09-22 (#4261). A second
+// refusal written beside this one would be the same complaint twice, and the
+// two would drift.
 //
 // It ends the shell at 2, in every position measured — before a `||`, inside
 // an `if` head, inside a function, from `-c` and from a script file — and the
@@ -162,7 +169,7 @@ func (r *Runner) evalCond(ctx context.Context, c syntax.CondExpr) (bool, error) 
 // FatalErrorStatusIsOne: that axis answers the *generic* fatal error and this
 // refusal is 2 in the one shell that has it, where the same shell's generic
 // answer is 1.
-func (r *Runner) condWrongArity(x *syntax.CondArity) (bool, error) {
+func (r *Runner) condUnknown(x *syntax.CondUnknown) (bool, error) {
 	d := r.diag()
 	r.diagf("%s\n", Wording(d.UnknownCondition, "unknown condition: %s", x.Op))
 	status := orDefault(d.UnknownConditionStatus, 2)
@@ -302,7 +309,7 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// == 1 ]]` is 0 in zsh with the complaint already written.
 		r.diagf("%s\n", Wording(d.UnknownConditionOption, "no such option: %s", s))
 		return false, condStatus{code: d.UnknownConditionOptionStatus}
-	case "-e", "-f", "-d", "-s", "-r", "-w", "-x",
+	case "-e", "-a", "-f", "-d", "-s", "-r", "-w", "-x",
 		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h",
 		"-O", "-G":
 		// The file questions are `test`'s, answered by the same code: the

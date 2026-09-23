@@ -93,7 +93,7 @@ func TestACompletionConditionWithNoOperandIsAWord(t *testing.T) {
 // on rather than answers. Measured on zsh 5.9.2, 2026-09-19, with `-n` for the
 // parse and a run for the verdict — every one of these reads, and every one of
 // them is `unknown condition: <op>` at status 2 when it runs, which is the
-// node [Dialect.ConditionArityIsCheckedWhenItRuns] already had.
+// node [Dialect.ConditionIsResolvedWhenItRuns] already had.
 //
 // The control rows are the counts that are *not* refused, so a reading that
 // simply accepted everything would fail the test above rather than pass this
@@ -101,7 +101,7 @@ func TestACompletionConditionWithNoOperandIsAWord(t *testing.T) {
 func TestACompletionConditionWithTheWrongArityParses(t *testing.T) {
 	t.Parallel()
 	d := completionConds()
-	d.ConditionArityIsCheckedWhenItRuns = true
+	d.ConditionIsResolvedWhenItRuns = true
 	for _, src := range []string{
 		"[[ -prefix a b c ]]\n",
 		"[[ -after a b ]]\n",

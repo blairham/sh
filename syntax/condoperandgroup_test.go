@@ -50,7 +50,7 @@ func condOperandGroupGrammar(d *Dialect) {
 	d.PatternAlternation = true
 	// One row is a named condition with two arguments, which this dialect
 	// accepts and refuses when it runs.
-	d.ConditionArityIsCheckedWhenItRuns = true
+	d.ConditionIsResolvedWhenItRuns = true
 	// And the completion-context tests, so the rows written with `-prefix`
 	// are refused for the position of the `(` rather than for the operator
 	// not being one.

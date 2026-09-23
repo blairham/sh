@@ -460,7 +460,7 @@ func Dialect() syntax.Dialect {
 	// ]]` writes `pre` and then `unknown condition: -n`, where bash and
 	// ksh93 name the offending token while reading and never run the `echo`
 	// (#965).
-	d.ConditionArityIsCheckedWhenItRuns = true
+	d.ConditionIsResolvedWhenItRuns = true
 	// A function definition's name is a *word*, so an expansion in one names
 	// the function the expansion produces: `w=foo; _p_${w}() { … }` defines
 	// `_p_foo`. This shell's alone — the other five refuse both spellings,

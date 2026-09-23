@@ -320,7 +320,7 @@ verdict. Every row **parses**; the difference is what happens next:
 
 So `-prefix` and `-suffix` take one or two operands, `-after` exactly one
 and `-between` exactly two, and a count outside the range is the refusal
-`ConditionArityIsCheckedWhenItRuns` already carries. An **operand that is
+`ConditionIsResolvedWhenItRuns` already carries. An **operand that is
 itself an operator ends the reading**: `[[ -prefix -n x ]]` is
 ``parse error near `x'`` there, the `-n` being the whole of `-prefix`'s
 operands — the same rule `[[ -n -z x ]]` follows above.
@@ -393,12 +393,11 @@ The look for an operand is at the source rather than at a token, because
 reading the token would consume it.
 
 **Three or more words is a different question and is not this flag.**
-`[[ -prefix -foo : ]]` parses in zsh and is refused here, and so is
-`[[ -nosuch x ]]`; the second is still the unknown-operator rule in "What
-this does not cover" below. The arity of a *known* operator is the
-section that follows.
+`[[ -prefix -foo : ]]` parses in zsh and is refused here. `[[ -nosuch x ]]`
+is the *named* condition of the section that follows, which is where the
+four were once the only `-word`s taken as operators.
 
-## A known operator's arity is checked when the condition runs — zsh only
+## A condition's name is looked up when it runs — zsh only
 
     echo pre; [[ -n x y ]]; echo post
 
@@ -422,8 +421,8 @@ condition: -n` there too, with no surplus word to name. Same status, same
 sentence, and the refusal reaches out of a negation, out of a group and
 out of the right-hand side of a `&&`.
 
-That is `syntax.Dialect.ConditionArityIsCheckedWhenItRuns`, and
-`syntax.CondArity` is the node it produces — an operator and every word
+That is `syntax.Dialect.ConditionIsResolvedWhenItRuns`, and
+`syntax.CondUnknown` is the node it produces — an operator and every word
 that stood with it, so a formatter writes the line back as it was and the
 interpreter names the operator. The sentence is
 `interp.Diagnostics.UnknownCondition` and the status
@@ -435,13 +434,79 @@ wrong:
 
 | written | zsh 5.9.2 | why it is not the rule above |
 | --- | --- | --- |
-| `[[ -bogus ]]` | 0 | a word that is no operator is a bare-word test, and `-bogus` is not empty |
 | `[[ -n -n ]]` | 0 | an operator-shaped *operand* is an ordinary word |
 | `[[ -n -z x ]]` | ``parse error near `x'`` | so that operand starts a reading of its own, and the word after it is unexpected rather than surplus |
 
 A reading that collected every word after the operand would answer
-`unknown condition: -n` for the third, and one that fired on any `-word`
-would refuse the first.
+`unknown condition: -n` for the second.
+
+### A name this shell has not got is the same reading — zsh only
+
+    echo pre; [[ -Q x ]]; echo post
+
+| shell | `pre` | what it says | status |
+| --- | --- | --- | --- |
+| bash 5.3, and as `sh` | no | ``unexpected token `x', conditional binary operator expected`` | 2 |
+| bash 3.2 | no | `conditional binary operator expected` | 2 |
+| ksh93u+ | no | ``syntax error at line 1: `x' unexpected`` | 3 |
+| zsh 5.9.2 | **yes** | `unknown condition: -Q` | 2 |
+| dash | yes, and `post` | `[[: not found` | 0 |
+
+`-Q` is the control rather than an operator anybody wants: nothing
+implements it, so the row is about the *spelling*. Measured 2026-09-22 on
+zsh 5.9.2 under `-c` with `LC_ALL=C`, the rule is that **every** `-word`
+standing where an operator stands is a condition's name, looked up when
+the condition runs:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `[[ -Q x ]]`, `[[ -R x ]]`, `[[ -1 x ]]`, `[[ -- x ]]` | `unknown condition: <word>`, 2 |
+| `[[ -eq x ]]`, `[[ -bogus x ]]` | the same |
+| `[[ -Q ]]`, `[[ -Q x y ]]`, `[[ ! -Q x ]]`, `[[ ( -Q ) ]]` | the same |
+| `[[ 1 == 1 \|\| -Q x ]]` | **0, and nothing said** |
+
+The last row is what says this is a lookup and not a wording: the
+short-circuit reaches the `]]` with the operator never resolved, so there
+is nothing to complain about. No argument about sentences could have
+produced it from a parse-time refusal, which is what this parser had until
+#4261.
+
+**Two boundaries keep it from swallowing ordinary lines**, and both are
+measured on the same day:
+
+| written | zsh 5.9.2 | why |
+| --- | --- | --- |
+| `[[ -bogus ]]`, `[[ -zz ]]`, `[[ -eq ]]` | 0 | a name of three characters or more with nothing behind it is a bare-word test, and `-bogus` is not empty |
+| `[[ -bogus && -n x ]]` | 0 | the connective is not something behind it either |
+| `[[ -Q ]]`, `[[ -1 ]]`, `[[ -- ]]` | `unknown condition`, 2 | a two-character `-X` is an operator wherever it stands |
+| `[[ -Q == bar ]]` | 1 | a two-operand operator behind the word makes the word its **left operand** |
+| `[[ -1 -lt 2 ]]` | 0 | the same, and the reason it matters: a negative number on the left of a comparison is not a rare thing to write |
+| `[[ - x ]]` | ``parse error: condition expected: -`` | a lone `-` is not a name |
+| `[[ "-Q" x ]]` | ``parse error: condition expected: "-Q"`` | nor is a quoted one |
+
+The look behind the word is at the source rather than at a token, for the
+reason the completion conditions' is: reading the token would consume it.
+
+**What is still refused while reading** is the infix position, and it is a
+shape of its own:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `[[ p -zz q ]]` | `unknown condition: -zz` |
+| `[[ p -zz ]]` | ``parse error: condition expected: p`` |
+| `[[ p -zz q r ]]` | `condition expected: p` |
+| `[[ -n -bogus x ]]` | `unknown condition: -bogus` |
+| `[[ -n -z x ]]` | ``parse error near `x'`` |
+
+So **which word is the operator moves with how many words the primary
+holds** — the middle one at exactly three, the first at two and at four or
+more — which is the same rule the two `condition expected` sentences turn
+on, one level down. A long `-word` in the middle of three is a named
+condition and a `-X` is not, which is why the fourth row names `-bogus` and
+the fifth refuses while reading. This parser reads the first word as the
+operator at every count, so it names `-n` where that shell names `-bogus`,
+and answers the ordinary token refusal for `[[ p -zz q ]]`. Both
+differences are unfixed.
 
 ## A process substitution as an operand — bash only
 
@@ -755,7 +820,8 @@ full length at every width, with no arithmetic anywhere having gone wrong
 ## Unary and logical operators
 
     -n s   -z s                     non-empty, empty
-    -e f   -f f   -d f   -r f
+    -e f   -a f                     exists, both spellings
+    -f f   -d f   -r f
     -w f   -x f   -s f              file tests
     -L f   -h f                     symbolic link, both spellings
     -b f   -c f   -p f   -S f       block, character, fifo, socket
@@ -771,6 +837,15 @@ shells that have the construct, measured against a fifo, `/dev/null`,
 a block device, and files with each bit set — and they are the same
 questions `test` asks, so the two constructs share the code that asks
 them.
+
+`-a` is the older spelling of `-e` and is unanimous too: `[[ -a /etc ]]`
+is 0 and `[[ -a /nosuch ]]` is 1 on bash 5.3, bash 3.2, ksh93u+ and zsh
+5.9.2, measured 2026-09-22, and none of them reads the word as a
+connective *inside* `[[ ]]` — `[[ -n x -a -n y ]]` is a syntax error in
+bash and ksh93 and the arity refusal in zsh. It is only the `[` builtin
+where the word is `and`, which is why it is here and not in the builtin's
+table. It was missing until #4261, whose whole subject is what a `-word`
+no dialect has means: this one every column has.
 
 ### An empty operand is not a path
 
@@ -1150,9 +1225,11 @@ which is the rule: an operator is either implemented or refused at parse,
 never parsed and then refused at run time. Recorded so their absence is a
 decision.
 
-zsh's `-word` conditions **other than the four completion ones**, which
-are the same gap reached from the other end. Measured 2026-09-05 on zsh 5.9.2, with `-n` for the parse and
-a run for the rest:
+zsh's `-word` conditions **other than the four completion ones** are
+implemented as far as the *grammar* goes — every one of them parses and is
+refused by name when it runs, which is "A condition's name is looked up
+when it runs" above (#4261) — and none of them is *answered*. Measured
+2026-09-05 on zsh 5.9.2, with `-n` for the parse and a run for the rest:
 
 | probe | parses | run |
 | --- | --- | --- |
@@ -1165,15 +1242,18 @@ a run for the rest:
 
 So the general rule in that shell is that **any** `-word` followed by an
 operand parses as a unary condition and an unknown one is refused when it
-runs — which is precisely the shape the rule above forbids, and adopting
-it would be a decision to change the rule rather than a gap to fill. That
-question is #965, which took the half of it that is about a **known**
-operator's arity — see the section above — and left this one: an operator
-this shell does not have at all is still refused while reading here.
-The four completion conditions were taken *as named operators* instead,
-which keeps the rule, and leaves `-before`, `-equal` and the rest here.
-The other four disagree with it and with each other: bash 5 and ksh93
-make `[[ -nosuch x ]]` a syntax error, and bash 3.2 accepts it.
+runs. That was a decision to change the rule rather than a gap to fill,
+and it was taken in two halves: #965 took a **known** operator's arity and
+#4261 took the rest, so `-before`, `-equal`, `-nosuch` and every other
+name now parse here and are refused by name at evaluation exactly as that
+shell refuses them. `-prefix`, `-suffix`, `-after` and `-between` keep
+their own sentence, being conditions this dialect *has*.
+
+What is left here is that none of the names has an **answer**: no
+condition outside the table above is ever true. The other four columns are
+outside the question rather than agreeing with it — bash 5 and ksh93 make
+`[[ -nosuch x ]]` a syntax error, bash 3.2 accepts it, and none of them
+resolves a condition when it runs.
 
 `-after` crashing rather than refusing is a bug in that build, not a
 behavior to model; it also means the row cannot be graded against a run.

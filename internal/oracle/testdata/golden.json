@@ -49453,6 +49453,57 @@
         "TimedOut": false
       }
     },
+    "cond/a-dashed-word-that-is-not-a-condition": {
+      "ash": {
+        "Stdout": "cmp=1~num=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "cmp=1~num=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "cmp=1~num=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "cmp=1~num=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "cmp=127~num=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "cmp=1~num=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "cmp=1~num=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/a-declaration-is-not-what-an-is-set-test-asks": {
       "ash": {
         "Stdout": "unset~alsoset",
@@ -51387,6 +51438,108 @@
         "Stdout": "pre",
         "Stderr": "\u003cshell\u003e:1: unknown condition: -n",
         "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/an-unknown-condition-is-refused-when-it-runs": {
+      "ash": {
+        "Stdout": "pre~post",
+        "Stderr": "\u003cshell\u003e: x: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected token `x', conditional binary operator expected~\u003cshell\u003e: -c: line 1: syntax error near `x'~\u003cshell\u003e: -c: line 1: `echo pre; [[ -Q x ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected token `x', conditional binary operator expected~\u003cshell\u003e: -c: line 1: syntax error near `x'~\u003cshell\u003e: -c: line 1: `echo pre; [[ -Q x ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: conditional binary operator expected~\u003cshell\u003e: -c: line 0: syntax error near `x'~\u003cshell\u003e: -c: line 0: `echo pre; [[ -Q x ]]; echo post'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre~post",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `x' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre",
+        "Stderr": "\u003cshell\u003e:1: unknown condition: -Q",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/an-unknown-condition-nobody-reached": {
+      "ash": {
+        "Stdout": "pre~st=2",
+        "Stderr": "\u003cshell\u003e: x: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected token `x', conditional binary operator expected~\u003cshell\u003e: -c: line 1: syntax error near `x'~\u003cshell\u003e: -c: line 1: `echo pre; [[ 1 == 1 || -Q x ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected token `x', conditional binary operator expected~\u003cshell\u003e: -c: line 1: syntax error near `x'~\u003cshell\u003e: -c: line 1: `echo pre; [[ 1 == 1 || -Q x ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: conditional binary operator expected~\u003cshell\u003e: -c: line 0: syntax error near `x'~\u003cshell\u003e: -c: line 0: `echo pre; [[ 1 == 1 || -Q x ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pre~st=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: -Q: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `x' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "pre~st=0",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }
@@ -53782,6 +53935,57 @@
       },
       "zsh": {
         "Stdout": "x=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/the-older-spelling-of-the-existence-test": {
+      "ash": {
+        "Stdout": "yes=2~no=2",
+        "Stderr": "\u003cshell\u003e: f: unknown operand~\u003cshell\u003e: nosuch: unknown operand",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "yes=0~no=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "yes=0~no=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "yes=0~no=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "yes=127~no=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "yes=0~no=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "yes=0~no=1",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

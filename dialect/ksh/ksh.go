@@ -1020,6 +1020,13 @@ func Semantics() interp.Semantics {
 	// The letter but not the copy, which is why the two are two axes:
 	// `umask g=u` is `bad format` here and `umask u=X` is taken.
 	s.SymbolicMaskTakesAPermissionCopy = interp.No
+	// unanswered MixedTableLiteral, EmptyKeyInATableLiteral: a table literal
+	// mixing `[key]=` heads with bare words is refused while the program is
+	// *read* here — syntax.Dialect.ArrayLiteralShapeFollowsTheFirstElement is
+	// what does it — so no run reaches either question. Measured 2026-09-23,
+	// `typeset -A a; a=([zero]=5 four)` is `syntax error at line 3: `four'
+	// unexpected` and nothing runs, and an all-subscripted literal carrying
+	// `[""]=` is refused the same way.
 	// unanswered UmaskPermissionCopyBesideLetters: a copy is `bad format`
 	// here whatever is beside it — the line above is that refusal — so a
 	// clause holding a copy and a letter never reaches the question.

@@ -2302,6 +2302,12 @@ func Semantics() interp.Semantics {
 	// scalar, at status 0 and with nothing said. See
 	// interp.Semantics.ArrayAttributeRemoval (#4241).
 	s.ArrayAttributeRemoval = interp.ArrayAttributeRemovalEmptiesTheName
+	// A table literal mixing `[key]=` heads with bare words is refused whichever
+	// way round it was written, and the script is given up. An empty key is a
+	// key like any other here. See interp.Semantics.MixedTableLiteral and
+	// .EmptyKeyInATableLiteral (#4241).
+	s.MixedTableLiteral = interp.MixedTableLiteralRefused
+	s.EmptyKeyInATableLiteral = interp.EmptyKeyInATableLiteralAccepted
 	// And an unset name found that way is a zero like any other unset name:
 	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
@@ -4052,6 +4058,12 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// A table literal mixing `[key]=` heads with bare words, refused
+		// whichever way round it was written and naming neither the variable nor
+		// the element: measured 2026-09-23, `typeset -A a; a=([zero]=5 four)` is
+		// `bad [key]=value syntax for associative array` and the script stops.
+		// See interp.Semantics.MixedTableLiteral (#4241).
+		MixedTableLiteralRefusal: "bad [key]=value syntax for associative array",
 		// The four loops this shell has, and the builtin's name is stripped
 		// back out of the front of it because this dialect puts it in the
 		// location: `zsh:break:1: not in while, …`.

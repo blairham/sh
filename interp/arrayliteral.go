@@ -51,6 +51,21 @@ type literalElem struct {
 	// has said which element this is. `nested` has no such need and is built
 	// where it is read.
 	members []*syntax.SimpleCmd
+	// operand marks an element expanded as a **declaration utility's operand**
+	// rather than as an assignment of its own, which is the one thing a refusal
+	// about it words differently: a declaration names the value the element came
+	// to and an assignment names the text. See
+	// Diagnostics.BareElementInASubscriptedTableLiteralOperand for the rows.
+	operand bool
+	// written is the element as the **source** wrote it, which is what a
+	// refusal about it names.
+	//
+	// The text and not the expansion, measured: with `k=zz`, bash's
+	// `m=([a]=1 $k)` is `m: $k: must use subscript when assigning associative
+	// array`, naming the two characters the script holds rather than the value
+	// they came to. Empty for an element with no word of its own — a nested
+	// literal standing alone — which is the one shape no refusal here reaches.
+	written string
 }
 
 // literalElems expands an array literal's elements once, and reports whether
@@ -101,10 +116,19 @@ type literalElem struct {
 // See [Runner.bareLiteralElementIsOneValue], which is where the question is
 // put and which is the only thing that ever passes this true.
 func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIsOneValue bool) ([]literalElem, bool) {
-	if parsed, ok := r.takeExpandedElements(elems); ok {
+	if parsed, operands, ok := r.takeExpandedElements(elems); ok {
 		// Already expanded, by the caller that is about to trace what they
-		// came to. See Runner.assignAll.
-		return parsed, true
+		// came to, or by the declaration utility whose operand this is. See
+		// Runner.assignAll and Runner.expandArrayOperands.
+		if !operands {
+			return parsed, true
+		}
+		marked := make([]literalElem, len(parsed))
+		for i, e := range parsed {
+			e.operand = true
+			marked[i] = e
+		}
+		return marked, true
 	}
 	out := make([]literalElem, 0, len(elems))
 	for _, el := range elems {
@@ -154,6 +178,7 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 			continue
 		}
 		w := el.Word
+		written := syntax.PrintWord(w)
 		// Asked before the element is read rather than after it, so that an
 		// element the shape has made a word is expanded once and not twice.
 		// A discarded reading is not free: `i=0; a=(p [$((i++))]=v)` is two
@@ -163,7 +188,8 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 		if readsSubscripts {
 			if sub, value, appends, ok := r.assocElem(w); ok {
 				out = append(out, literalElem{
-					sub: sub, value: value, subscripted: true, appendValue: appends,
+					sub: sub, value: value, subscripted: true,
+					appendValue: appends, written: written,
 				})
 				continue
 			}
@@ -173,10 +199,12 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 			// expansion, and a null result kept as a field rather than
 			// removed. One word in, one field out, whatever the expansion
 			// came to.
-			out = append(out, literalElem{fields: []string{r.expandAssignValue(w)}})
+			out = append(out, literalElem{
+				fields: []string{r.expandAssignValue(w)}, written: written,
+			})
 			continue
 		}
-		out = append(out, literalElem{fields: r.expandWord(w)})
+		out = append(out, literalElem{fields: r.expandWord(w), written: written})
 	}
 	return out, !r.failedHeading()
 }
@@ -280,13 +308,13 @@ func wordCanSplitOrMatch(w *syntax.Word) bool {
 // store has run. The mark is what keeps a *nested* literal with no elements in
 // it — the one shape whose slice cannot be told from the cached one — from
 // taking the outer list a second time.
-func (r *Runner) takeExpandedElements(elems []*syntax.ArrayElem) ([]literalElem, bool) {
+func (r *Runner) takeExpandedElements(elems []*syntax.ArrayElem) ([]literalElem, bool, bool) {
 	e := r.expanded
 	if e == nil || !e.elemsSet || e.elemsTaken || !sameWordList(e.assign.Elems, elems) {
-		return nil, false
+		return nil, false, false
 	}
 	e.elemsTaken = true
-	return e.elems, true
+	return e.elems, e.elemsAreOperands, true
 }
 
 // sameWordList reports whether two element lists are the same slice.
@@ -401,7 +429,12 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 			r.keyedLiteralOverAScalar(name)
 		}
 		r.markAssoc(name)
-		r.assignAssocElems(name, parsed, appendTo)
+		// Not the subscripted reading: this is the *indexed* name's route, and a
+		// literal reaches the keyed branch of it by every element carrying a
+		// head — which is what made the subscript a key. So there is no bare
+		// element here for Semantics.MixedTableLiteral to be about, and the axis
+		// is deliberately not asked on a path none of its rows reach.
+		r.assignAssocElems(name, parsed, appendTo, false)
 		return
 	}
 

@@ -304,11 +304,32 @@ func (r *Runner) indirectSubject(e *syntax.ParamExpr) string {
 // The row that says this is the *undeclared* sentence and not the whole road
 // is the fourth: `${!1-D}` is `D`, where a name nothing declared is refused
 // through the operator (#3985).
-func (r *Runner) refuseIndirection(e *syntax.ParamExpr, value string, set bool) bool {
+// aimed is the **target text** of an aimed reference, empty where the written
+// name is not one. The declaration the refusal asks after is that text's and
+// not the reference's: `declare -n foo=bar` with nothing ever declaring `bar`
+// makes `${!foo[2]}` `foo[2]: invalid indirect expansion` in bash 5.3.20,
+// while `declare -a bar` beside it is silent — so what decides is the cell the
+// reference points at, and asking the reference's own name finds a declaration
+// that was never the one in question, `foo` being declared by the very line
+// that made it a reference. The *written* word is still what is named,
+// subscript and all; only the question moves.
+//
+// The text is asked **whole**, subscript and all, rather than reduced to the
+// cell it lives in — and that is measured rather than tidy. A reference aimed
+// at an element, with a subscript written over the top of it, is refused by
+// bash however well declared the array is: `declare -a bar=(p q r); declare -n
+// foo='bar[1]'` makes `${!foo[2]}` and `${!foo[0]}` both `invalid indirect
+// expansion`. Asking after `bar` answers that it is declared and goes silent,
+// which is a row this change got wrong before the row was measured.
+func (r *Runner) refuseIndirection(e *syntax.ParamExpr, value string, set bool, aimed string) bool {
 	d := r.diag()
+	asked := e.Name
+	if aimed != "" {
+		asked = aimed
+	}
 	switch {
 	case !set && d.IndirectionUndeclared != "" && isNameLike(e.Name):
-		if _, declared := r.declarationOf(e.Name); declared || r.nameIsSet(e.Name) {
+		if _, declared := r.declarationOf(asked); declared || r.nameIsSet(asked) {
 			return false
 		}
 		written := e.Name

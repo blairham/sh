@@ -64,6 +64,7 @@ ash   BareSubscriptIsASubscript
 ash   BareTypesetListing
 ash   BlankArithSubscriptIsTheEmptyExpression
 ash   BraceCharRangeSpansAnyCharacter
+ash   BraceOutputRereadAsText
 ash   BraceRangeEndpointsExpanded
 ash   BraceRangeMissingEndCountsFromZero
 ash   BraceRangeNegativeStepReverses
@@ -330,6 +331,7 @@ dash  BareSubscriptIsASubscript
 dash  BareTypesetListing
 dash  BlankArithSubscriptIsTheEmptyExpression
 dash  BraceCharRangeSpansAnyCharacter
+dash  BraceOutputRereadAsText
 dash  BraceRangeEndpointsExpanded
 dash  BraceRangeMissingEndCountsFromZero
 dash  BraceRangeNegativeStepReverses

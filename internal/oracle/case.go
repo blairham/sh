@@ -890,6 +890,21 @@ var Corpus = []Case{
 		Why:     "braces resolve before parameter expansion, so variable ranges cannot work",
 	},
 	{
+		ID: "expand/brace-output-reread-as-text", Category: "expansion",
+		Snippet: `var=baz; varx=vx; vary=vy; echo $var{x,y}; echo ${var}{x,y}`,
+		Why:     "what the braces produced re-enters the word as shell *text* in bash and as the spans the parse cut everywhere else, which is the same answer wherever the produced text is inert and a different one where it is not: bash's words are the strings `$varx` and `$vary`, so the name runs on into the character the group wrote, where ksh93 and zsh still hold `[$var][x]` and answer `bazx bazy`. The braced spelling on the second line is what says it is the bare `$var` and not the brace — it is `bazx bazy` in every column. BraceOutputRereadAsText",
+	},
+	{
+		ID: "expand/brace-output-reread-shows-in-a-range", Category: "expansion",
+		Snippet: `printf "[%s]" {Z..a}; echo; printf "[%s]" ab{Z..a}; echo`,
+		Why:     "the same axis where the produced text is not the file's: a range counted between two letters walks the code points, and under the re-reading its elements are raw characters rather than data — bash's element for the backslash is *empty*, because the backslash reaches quote removal like any other unquoted one, and zsh keeps it. The second word is the same range with text in front of it, which is where the backtick the range counted stands at the end of a word and opens nothing. Ours answered zsh's way in every column (#4200)",
+	},
+	{
+		ID: "expand/brace-output-reread-refuses-a-word", Category: "expansion",
+		Snippet: `printf "[%s]" x{Z..a}y; echo "st=$?"; echo after`,
+		Why:     "the sharpest probe of the same axis, and what says it is a re-reading rather than a backslash being stripped: with text behind it the backtick the range counted *opens a command substitution* that nothing closes, so bash refuses the word at run time — `bad substitution` — abandons the line at 1 and runs the next one, where zsh and ksh93 print eight elements at 0. The status and the line after it are in the snippet because the refusal belongs to the word rather than to the file",
+	},
+	{
 		ID: "expand/tilde-unquoted", Category: "expansion",
 		Snippet: `case $(echo ~) in /*) echo abs;; *) echo literal;; esac`,
 		Why:     "an unquoted leading tilde expands",

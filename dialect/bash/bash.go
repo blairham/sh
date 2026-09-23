@@ -1420,6 +1420,11 @@ func Semantics() interp.Semantics {
 	// which is the indirection failing on the text it was handed (#2821).
 	s.OperatorAfterTheSubscriptListingIsBad = interp.No
 	s.BraceExpansion = interp.Yes
+	// And what the braces produced comes back to the word as shell *text*,
+	// which is this shell alone: `var=baz; varx=vx; echo $var{x,y}` is
+	// `vx vy` where ksh93 and zsh answer `bazx bazy`, and the backslash
+	// `{Z..a}` counts reaches quote removal like any other unquoted one.
+	s.BraceOutputRereadAsText = interp.Yes
 	// A group that does not expand does not end the word, and the scan
 	// resumes one byte past its open brace rather than past its close, so a
 	// list nested inside it is still found: `@{x}{a,b}@` is `@{x}a@ @{x}b@`,
@@ -3988,6 +3993,7 @@ func Diagnostics() interp.Diagnostics {
 		// ``bad substitution: no closing `}' in "${v-'a}"`` at 1, with the
 		// words beside it on the same line expanding normally (#2969).
 		SecondReadingBadSubstitution: "bad substitution: no closing `}' in %[1]s",
+		BraceOutputBadSubstitution:   "bad substitution: no closing \"%[1]s\" in %[2]s",
 		// `kill` puts the process in parentheses and the reason after a dash,
 		// which is the only wording in the panel a script could not confuse
 		// with a message about a signal name.

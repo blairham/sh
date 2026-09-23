@@ -109,11 +109,14 @@ on the first two:
   (`-stepped`). The step is a **bash 4** addition — bash 3.2 leaves the
   word alone, dated rather than vetoed per `../core.md` — and this
   implementation reads one wherever braces expand at all.
-- **A range's elements are data, a list's are text.** zsh's `{=..?}` is
-  the three characters `= > ?` with the `?` never matched against a
-  filename, while its `{?,x}` matches; bash writes the bracket, the
-  backslash and the caret of `{A..z}` out the same way. So a counted
-  element is put back quoted and an alternative is not.
+- **A range's elements are data, a list's are text — in the shells that
+  do not reread.** zsh's `{=..?}` is the three characters `= > ?` with
+  the `?` never matched against a filename, while its `{?,x}` matches.
+  So a counted element is put back quoted and an alternative is not.
+  This sentence used to say bash writes the bracket, the backslash and
+  the caret of `{A..z}` out the same way, and that is wrong about the
+  backslash on bash's own probe — see *What the braces produced, and how
+  it re-enters the word* below (#4200).
 
 The rest is disagreement, and each row is a semantics axis rather than a
 core answer:
@@ -157,6 +160,70 @@ core answer:
   column. A body with **no digit at either end** is left alone
   everywhere too, which is what separates zsh's `{..2..}` — the word —
   from its `{1..2..}`, which is `1..2..`.
+
+### What the braces produced, and how it re-enters the word
+
+One more disagreement, and it is not about what the braces *count* but
+about what the words that come out **are**. bash expands braces on the
+word's text and hands the result back to the rest of word expansion as
+ordinary unquoted text; ksh93 and zsh substitute the produced spans into
+the word the parse cut. That is the same answer everywhere the produced
+text is inert, and a different one wherever it is not.
+`BraceOutputRereadAsText`.
+
+Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+LC_ALL=C`, with `var=baz; varx=vx; vary=vy`:
+
+| probe | bash 5.3 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `echo $var{x,y}` | `vx vy` | `bazx bazy` | `bazx bazy` |
+| `echo ${var}{x,y}` | `bazx bazy` | `bazx bazy` | `bazx bazy` |
+
+In bash the words that come out are the *strings* `$varx` and `$vary`,
+so the name runs on into the character the group produced. Elsewhere the
+word is still `[$var][x]`, two spans, and `$var` is the name. The braced
+spelling is the row that says it is the bare `$var` and not the brace.
+
+A character range is the other half of the same fact, because it is
+where the produced text is not the file's:
+
+| probe | bash 5.3 | zsh |
+| --- | --- | --- |
+| `printf '[%s]' {Z..a}` | ``[Z][[][][]][^][_][`][a]`` | ``[Z][[][\][]][^][_][`][a]`` |
+
+bash's element for `\` is **empty** — the produced backslash reaches
+quote removal like any other unquoted one, leaving a quoted empty string
+and so a field that is empty rather than no field at all. zsh keeps the
+backslash.
+
+The sharpest probe is the produced text standing beside something:
+`printf '[%s]' x{Z..a}y` is ``bad substitution: no closing "`" in `y``
+in bash, at status 1 with the next line still running, because the
+backtick the range counted **opened a command substitution**. zsh
+answers ``[xZy][x[y][x\y][x]y][x^y][x_y][x`y][xay]``. So this is not
+"bash strips a backslash"; it is bash rereading the produced text as
+shell text, and the backslash is the visible half of it.
+
+Two things about the *end* of the produced text, measured on the same
+day and both the re-reading shell being permissive about a string it
+made rather than a file somebody wrote: a backtick there opens nothing
+(``printf '[%s]' ab{Z..a}`` answers ``[ab`]`` for that element), and a
+backslash there escapes nothing and leaves a quoted empty string.
+`printf '[%s]' {,}` is a single `[]` in the same shell, which is what
+says the empty element above is a field and two produced words with no
+text at all are none.
+
+It sits beside *Invariant 1* above rather than contradicting it: what
+stages 3-5 produce is never rescanned in any column, and this is stage
+1, whose output every column feeds back into stages 2-8. The
+disagreement is only over whether it goes back as characters or as the
+spans it was cut into.
+
+**Asked only where the two readings part.** `a{b,c}d` is `abd acd`
+either way and every range anybody counts is inert, so the axis is not a
+question a script writing a brace has to have answered — see
+`inertElements` in `interp/brace.go`, and `rereadBraceOutput`, which
+compares the two readings and asks only when they differ.
 
 The core expands what is unanimous and asks the vector where the answers
 part; `interp/brace.go` names the same fields, plus the ordering one

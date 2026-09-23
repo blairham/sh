@@ -34,8 +34,16 @@ import (
 // range is not that, and is measured: `{1..'3'}` is `1 2 3` in both shells
 // that expand endpoints at all, so the quotes hide the text from the brace
 // scanner and not from the range.
+//
+// What comes out then goes back into the word, and *how* is the second
+// disagreement: one shell hands it to the rest of word expansion as ordinary
+// text, where `$var{x,y}` is the two names `$varx` and `$vary`, and the other
+// two substitute the produced spans into the word the parse cut. See
+// rereadBraceOutput and Semantics.BraceOutputRereadAsText — and note that
+// braceCount below is unaffected either way, since the two readings differ
+// about what the words are and never about how many.
 func (r *Runner) braceExpand(w *syntax.Word) []*syntax.Word {
-	return r.braceWords(w, true)
+	return r.rereadBraceOutput(w, r.braceWords(w, true))
 }
 
 // braceCount is braceExpand asked only how many words the braces make, with
@@ -293,7 +301,7 @@ func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool)
 		alts, outcome := r.braceRange(text)
 		switch outcome {
 		case braceRangeCounted:
-			return rangeSpans(alts, pos), true
+			return r.rangeSpans(alts, pos), true
 		case braceRangeCollapsed:
 			return collapsedRange(text, pos), true
 		}
@@ -317,7 +325,7 @@ func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool)
 	alts, outcome := r.braceRange(text)
 	switch outcome {
 	case braceRangeCounted:
-		return rangeSpans(alts, pos), true
+		return r.rangeSpans(alts, pos), true
 	case braceRangeCollapsed:
 		return collapsedRange(text, pos), true
 	}
@@ -399,18 +407,69 @@ func rangeShaped(body []syntax.Span) bool {
 //	{=..?}   [=][>][?]     a range's `?` is a character
 //	{?,x}    [q][z][x]     a list's `?` is a pattern
 //
-// bash answers the same way about the range it has — `{A..z}` writes the
-// bracket, the backslash and the caret between the cases straight out — so
-// this is not an axis but the rule for both: what a *range* counted is data,
-// and what a list held is text the word still has to expand.
-func rangeSpans(alts []string, pos syntax.Pos) [][]syntax.Span {
+// So what a *range* counted is data and what a list held is text the word
+// still has to expand — in the shells that put the output back as spans.
+//
+// This comment used to say bash answers the same way, on the same probe, and
+// it is wrong about the backslash. Measured 2026-09-22 on bash 5.3.20:
+//
+//	printf '[%s]' {A..z}   …[Z][[][][]][^][_][`][a]…   the backslash is empty
+//	                       zsh keeps it: …[Z][[][\][]]…
+//
+// bash rereads what the braces produced as shell **text**, so its elements are
+// raw characters and the backslash reaches quote removal like any other
+// unquoted one. That is BraceOutputRereadAsText, and it is why the quoting
+// here is a question rather than a constant (#4200).
+func (r *Runner) rangeSpans(alts []string, pos syntax.Pos) [][]syntax.Span {
+	q := syntax.SingleQuoted
+	if !inertElements(alts) && r.askBrace(r.sem().BraceOutputRereadAsText,
+		"brace expansion's output re-entering the word as shell text") {
+		// Except where the word re-reads what the braces produced, which is
+		// the same question from the other end: there a range's elements are
+		// raw characters in a string rather than data in a span, so the
+		// backslash `{Z..a}` counts is an unquoted backslash and reaches
+		// quote removal. See Semantics.BraceOutputRereadAsText.
+		q = syntax.Unquoted
+	}
 	out := make([][]syntax.Span, 0, len(alts))
 	for _, a := range alts {
 		out = append(out, []syntax.Span{{
-			Kind: syntax.Literal, Quoting: syntax.SingleQuoted, Value: a, Pos: pos,
+			Kind: syntax.Literal, Quoting: q, Value: a, Pos: pos,
 		}})
 	}
 	return out
+}
+
+// inertElements reports whether every element of a counted range is text that
+// means the same thing quoted and unquoted.
+//
+// It is what keeps Semantics.BraceOutputRereadAsText out of the way of the
+// ranges anybody writes. `{1..10}`, `{a..z}` and `{01..12}` are the same words
+// however their elements re-enter the word, so a dialect that has not answered
+// that axis must not be refused over one; `{A..z}` counts the six characters
+// between the cases, and that is where the readings part.
+//
+// The inert set is written out rather than the active one, because the two
+// are not complements here: a character nobody has thought about has to land
+// on the side that asks the question, not on the side that answers it.
+func inertElements(alts []string) bool {
+	for _, a := range alts {
+		if strings.ContainsFunc(a, func(c rune) bool { return !inertInAWord(c) }) {
+			return false
+		}
+	}
+	return true
+}
+
+// inertInAWord reports whether a character stands for itself in an unquoted
+// word in every dialect: a letter, a digit, and the punctuation that opens
+// nothing, quotes nothing, matches nothing and ends no word.
+func inertInAWord(c rune) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	}
+	return strings.ContainsRune("-+._/,", c)
 }
 
 // sliceSpans copies the spans between two cursors, splitting the ones at the

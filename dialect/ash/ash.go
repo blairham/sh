@@ -2019,6 +2019,9 @@ func Semantics() interp.Semantics {
 	// unanswered BuiltinReadsOptions: BusyBox ash has no `builtin` for a
 	// dash-word to reach (#3217).
 	//
+	// unanswered BraceOutputRereadAsText: this shell has no brace expansion
+	// either, so nothing is ever produced for the word to read again.
+	//
 	// unanswered BraceRescanEntersFailedGroup: this shell has no brace
 	// expansion either, so nothing ever resumes a scan — `@{x}{a,b}@` is
 	// one word, and the nine `BraceRange…` and `BraceCharRange…` axes are

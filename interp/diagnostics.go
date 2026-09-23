@@ -3515,6 +3515,30 @@ type Diagnostics struct {
 	// of them but one (#2969).
 	SecondReadingBadSubstitution string
 
+	// BraceOutputBadSubstitution is a word that brace expansion produced and
+	// the rest of word expansion could not read — see
+	// [Semantics.BraceOutputRereadAsText], the axis that makes a produced word
+	// shell text in the first place. Two verbs: the character the unread tail
+	// opened with, and the tail itself.
+	//
+	// The **tail** and not the whole word, which is what says this sentence is
+	// about the text that would not read rather than about the word it was
+	// found in. Measured 2026-09-22 on bash 5.3.20, script files under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	printf '[%s]' x{Z..a}y      bad substitution: no closing "`" in `y
+	//	printf '[%s]' ab{Z..a}cd    bad substitution: no closing "`" in `cd
+	//
+	// The backtick is one a character range counted, and the text behind it is
+	// the word's own. It is a **run-time** failure belonging to the word: the
+	// line is abandoned at status 1 and the next one runs, which is
+	// [Semantics.FailedExpansionAbandonsTheLine] and not a syntax error.
+	//
+	// Empty leaves the lexer's own sentence, which is what every dialect that
+	// does not re-read its brace output gets — and they cannot reach this at
+	// all, since a word substituted back as spans carries no text to fail on.
+	BraceOutputBadSubstitution string
+
 	// FunctionNameIsASpecialBuiltin is a definition whose name is one of the
 	// special builtins, in the state where the dialect refuses one — see
 	// [Semantics.SpecialBuiltinNameIsNotAFunctionName]. One verb: the name.

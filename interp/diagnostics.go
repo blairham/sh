@@ -6355,6 +6355,36 @@ type Diagnostics struct {
 	// than the key alone, which is what the refusing column quotes back.
 	EmptyKeyInATableLiteralElement string
 
+	// ArithUnclosedSubscript is the reason a name whose subscript never closes
+	// earns inside an arithmetic expression, in the dialect that reads it as a
+	// **bad subscript** rather than as text the expression could not use.
+	//
+	// One verb, the leftover from the name — which is a wider extent than the
+	// reader stopped at, and the second half of what this field decides.
+	// Measured 2026-09-23 from a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C <shell> f.sh`, standard input on the null device:
+	//
+	//	expression      bash 5.3.20                      ksh93u+        zsh 5.9.2
+	//	let 'b[c'       `b[c: bad array subscript         `b[c:          accepted,
+	//	                (error token is "b[c")`           arithmetic     status 1
+	//	let 'a[1]+b[c'  the same, token `b[c`             syntax error`  the same
+	//	let 'b[c&'      the same, token `b[c&`            the same       the same
+	//	$(( b[c ))      the same, token `b[c ` — to the   refused at     `bad
+	//	                end, blank included               the read       pattern`
+	//
+	// and the two controls that keep the extent honest, both of which stay on
+	// the ordinary leftover sentences in that column:
+	//
+	//	let 'b[c]['     `invalid arithmetic operator`, token `[` — the bracket
+	//	                closed, and the stray one has no name in front of it
+	//	let '[c'        `operand expected`, token `[c` — no name at all
+	//
+	// Empty keeps whatever the dialect already said about leftover text, which
+	// is what the two other columns want: ksh93's sentence names no token at
+	// all and zsh does not refuse the shape. So a dialect that says nothing
+	// here is byte-identical to what it printed before the field existed.
+	ArithUnclosedSubscript string
+
 	// FdVariableWithoutADescriptor is `exec {name}>&-` when the name holds
 	// no descriptor number. One verb: the variable's name as written,
 	// braces stripped.
@@ -8734,8 +8764,83 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 			return Wording(d.ArithColonWithoutQuestionLine, "", d.arithBlamedText(expr))
 		}
 	}
+	if sub, ok := d.arithUnclosedSubscript(expr, se); ok {
+		// One dialect reads a name whose subscript never closes as a **bad
+		// subscript** rather than as text an expression could not use, and
+		// names it from the name rather than from the bracket. See
+		// ArithUnclosedSubscript.
+		return Wording(d.ArithError, "%[1]s: %[2]s",
+			d.arithBlamedText(expr), Wording(d.ArithUnclosedSubscript, "", sub), sub)
+	}
 	return Wording(d.ArithError, "%[1]s: %[2]s",
 		d.arithBlamedText(expr), Wording(reason, fallback, se.Token), se.Token)
+}
+
+// arithUnclosedSubscript reports the text a **bad subscript** refusal names,
+// where the leftover this failure is about is a name whose bracket never closed.
+//
+// Only where the dialect has the sentence, so nothing changes for a dialect
+// without it — neither the reason nor, which matters more, the extent the
+// refusal names. See ArithUnclosedSubscript for the rows and the controls.
+//
+// Read off the text rather than from the parser, because what parts the two
+// readings is lexical and the reader has already done its job: the leftover is
+// a name followed by a `[` that nothing closes. Backing over the name is the
+// whole of the extent change — the reader stops at the bracket, and the column
+// that words this blames from the name.
+func (d Diagnostics) arithUnclosedSubscript(expr string, se *syntax.Error) (string, bool) {
+	if d.ArithUnclosedSubscript == "" {
+		return "", false
+	}
+	switch se.Kind {
+	case syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+	default:
+		// The two leftover-text kinds and nothing else: a refusal about an
+		// operand, a byte or a conditional is not about a subscript however
+		// the text around it reads.
+		return "", false
+	}
+	at := strings.LastIndex(expr, se.Token)
+	if se.Token == "" || at < 0 {
+		return "", false
+	}
+	// Back over the name the bracket belongs to. Where the leftover already
+	// opens with one — `b[c` — the bracket is inside the token instead.
+	for at > 0 && isNameByte(expr[at-1]) {
+		at--
+	}
+	if !isNameStartByte(expr[at]) {
+		// No name at all: `[c` is an operand nobody wrote, and `b[c][` is a
+		// stray bracket whose own `]` stands in front of it.
+		return "", false
+	}
+	// The bracket has to follow the name **immediately**, which is the whole of
+	// what makes this a subscript rather than a name with an accident behind it:
+	// the subscript reader meets `name[` and looks for the closer, and text it
+	// gave up on earlier never reaches that point. `x],b[$(cmd)` is the shape
+	// that parts them — the leftover opens at the `]` after `x`, so the reader
+	// stopped there and the `b[` further along is not what it was refusing.
+	open := at
+	for open < len(expr) && isNameByte(expr[open]) {
+		open++
+	}
+	if open >= len(expr) || expr[open] != '[' {
+		return "", false
+	}
+	if strings.IndexByte(expr[open:], ']') >= 0 {
+		// The bracket closes after all, so whatever is wrong here is not that.
+		return "", false
+	}
+	return expr[at:], true
+}
+
+// isNameByte and isNameStartByte are the name alphabet, for the scan above.
+func isNameByte(c byte) bool {
+	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+func isNameStartByte(c byte) bool {
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // doubledPointInTheLeadingNumeral reports whether the expression opens with a

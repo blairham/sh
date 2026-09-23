@@ -3937,11 +3937,18 @@ func Diagnostics() interp.Diagnostics {
 		ListSliceNegativeLength: "%[1]s: substring expression < 0",
 		ArithOperandExpected:    "arithmetic syntax error: operand expected",
 		ArithOperatorExpected:   "arithmetic syntax error in expression",
-		ArithBadOperator:        "arithmetic syntax error: invalid arithmetic operator",
-		ArithAssignToNonPlace:   "attempted assignment to non-variable",
-		ArithMissingCloseParen:  "missing `)'",
-		ArithFailureStatus:      1,
-		SyntaxUnexpected:        "syntax error near unexpected token `%[1]s'",
+		// A name whose subscript never closes is a *bad subscript* here rather
+		// than leftover text, and the refusal names it from the name: measured
+		// 2026-09-23, `let 'b[c'` is `b[c: bad array subscript (error token is
+		// "b[c")` where this shell blamed `[c` as an operator. See
+		// interp.Diagnostics.ArithUnclosedSubscript for the rows and the two
+		// controls that stay on the sentence above (#4175).
+		ArithUnclosedSubscript: "bad array subscript",
+		ArithBadOperator:       "arithmetic syntax error: invalid arithmetic operator",
+		ArithAssignToNonPlace:  "attempted assignment to non-variable",
+		ArithMissingCloseParen: "missing `)'",
+		ArithFailureStatus:     1,
+		SyntaxUnexpected:       "syntax error near unexpected token `%[1]s'",
 		// And, inside a `$( … )` body, what the shell was still looking
 		// for. See Diagnostics.SubstitutionBodyExpecting for the six rows
 		// and for the two shapes that get nothing (#3467).

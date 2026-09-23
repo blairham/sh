@@ -599,6 +599,11 @@ func Dialect() syntax.Dialect {
 	d.NameReferenceTest = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.
 	d.RegexTakesAlternation = true
+	// And a `)` that closes nothing stays inside the operand here, where bash
+	// and zsh end the word on it and refuse the condition. Measured 2026-09-23:
+	// `[[ x =~ ) ]]` and `[[ x =~ a) ]]` both run and print the line after them
+	// in this shell alone. See syntax.Dialect.RegexKeepsAnUnbalancedCloser.
+	d.RegexKeepsAnUnbalancedCloser = true
 	// `cmd |&` is this shell's coprocess: an operator that terminates a
 	// command, not the pipe carrying both streams that bash and zsh spell
 	// the same way. PipeBothStreams stays off, which is what keeps the two

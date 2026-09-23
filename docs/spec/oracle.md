@@ -602,6 +602,54 @@ for an answer that is not text. A row that must show the byte itself does not
 belong in the corpus, for the reason the locale rows above do not: the record
 cannot hold it.
 
+## Grade against the reference the instrument grades against
+
+**A shell's behavior is not always the shell's.** Where an answer comes from the
+C library underneath it, the same release gives two answers on two platforms —
+and the two references in this tree are on different platforms:
+
+- the **oracle panel** is binaries on the machine running the harness, which
+  for this project's development is macOS, so `bash` there is linked against
+  BSD's `regcomp`;
+- the **`bash's own suite` column** runs inside a digest-pinned
+  `debian:sid-slim`, which is **glibc**. `make suite`'s own columns are pinned
+  images too.
+
+So a row of that suite is graded against a shell the panel never ran. Measuring
+the host binary and implementing what it said is then a change that is right on
+this machine and wrong in CI, and nothing local will say so.
+
+This is not hypothetical. #4173 measured `=~` against the macOS bash and
+implemented three of its answers; two were BSD's alone, and one of them would
+have turned six patterns the graded column *runs* into a status of 2. The
+container run that caught it is one command:
+
+    docker run --rm -i debian:sid-slim@sha256:<the digest ci.yml pins> bash -s < probe.sh
+
+The splits found there, as a warning about how ordinary they are — every row is
+bash 5.3 on both sides:
+
+| probe | glibc | BSD |
+| --- | --- | --- |
+| `[[ a =~ (a\|) ]]` — an empty branch | accepted | refused |
+| `[[ abc =~ a** ]]` — a repeat of a repeat | accepted | refused |
+| `[[ " " =~ [[.space.]] ]]` — a named collating element | refused | accepted |
+| `r='\w'; [[ 7 =~ $r ]]` | a word class | the letter `w` |
+| `v=; [[ x =~ $v ]]` — an empty expression | matches at 0 | refused at 2 |
+
+**So: when a suite row is the thing being closed, measure the image that row is
+graded in, and say in the change which reference each row came from.** Where the
+two disagree and no single value satisfies both — the last row above is one —
+that is a finding to write down and hand over, not a coin to toss: see
+`Semantics.EmptyRegexOperandIsAnError`, left at the panel's answer on purpose.
+
+**And fuzz the translation, not only the table.** A hand-written battery covers
+what its author thought to ask. 280 probes over `=~` left one bug standing that
+400 generated expressions found on the first run — a group's atom start
+mis-tracked, so `([^a])?{2}` was rewritten into a pattern neither shell has.
+Generating expressions from a small grammar and diffing status and captures
+against the graded reference costs one container run.
+
 ## Third-party suites
 
 bash's own `tests/` directory is a useful denominator and is **GPLv3**.

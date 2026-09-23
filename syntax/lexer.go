@@ -1087,7 +1087,19 @@ func (l *Lexer) next() Token {
 	// A regular expression's operand owns its parentheses even at the start
 	// of it — `[[ x =~ (b) ]]` — and the operator table would otherwise take
 	// the `(` before the word scanner ever saw it.
-	if l.inRegex && (l.peek() == '(' || l.peek() == ')') {
+	//
+	// **And its bare `|` at the start, in the dialects that take one at all.**
+	// endsWord already keeps a `|` inside such a word, so `[[ a =~ a|b ]]`
+	// read as one operand while `[[ a =~ |a ]]` did not: a word *beginning*
+	// with the character never reaches the scanner, so the operator table took
+	// it and the operand was missing. Measured 2026-09-23 against bash 5.3.15
+	// in the digest-pinned image the suite is graded in — `[[ a =~ |a ]]` and
+	// `[[ x =~ | ]]` are both 0 there, an empty branch being one that shell
+	// takes — where this was `unexpected argument `|' to conditional binary
+	// operator` (#4173).
+	if l.inRegex && (l.peek() == '(' ||
+		(l.peek() == ')' && l.dialect.RegexKeepsAnUnbalancedCloser) ||
+		(l.peek() == '|' && l.dialect.RegexTakesAlternation)) {
 		return l.scanWord(start)
 	}
 
@@ -1763,8 +1775,13 @@ func (l *Lexer) endsWord(c byte) bool {
 		// so: `[[ ab =~ a|b ]]` matches in two of the three shells with
 		// `[[ ]]` and is a parse error in the third.
 		switch c {
-		case '(', ')':
+		case '(':
 			return false
+		case ')':
+			// A balanced group was taken whole by the scanner above, so a `)`
+			// reaching here closes nothing — and two of the three columns end
+			// the word on it. See [Dialect.RegexKeepsAnUnbalancedCloser].
+			return !l.dialect.RegexKeepsAnUnbalancedCloser
 		case '|':
 			return !l.dialect.RegexTakesAlternation
 		}

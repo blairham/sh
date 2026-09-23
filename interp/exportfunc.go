@@ -41,8 +41,16 @@ func (r *Runner) SetFunctionExport(prefix, suffix string) {
 	r.funcExportPrefix, r.funcExportSuffix = prefix, suffix
 }
 
-// exportFuncs answers `export -f`.
-func (r *Runner) exportFuncs(names []string) int {
+// exportFuncs answers `export -f`, and `export -nf`, which takes the attribute
+// back off.
+//
+// The `-n` direction was not read here at all until #4143: `export -f ab;
+// export -nf ab` left the function in the environment, so a script that had
+// stopped exporting a function went on handing it to every child. Measured on
+// bash 5.3.20, the entry is gone and the status is 0 — and a name that is not a
+// function is still refused either way round, which is why that check stands in
+// front of the split rather than inside one arm.
+func (r *Runner) exportFuncs(names []string, remove bool) int {
 	status := 0
 	for _, name := range names {
 		if _, ok := r.funcs[name]; !ok {
@@ -53,12 +61,58 @@ func (r *Runner) exportFuncs(names []string) int {
 			status = 1
 			continue
 		}
+		if remove {
+			// Nothing is being put anywhere, so a name that could not be
+			// carried is not a refusal: measured, `export -nf 'a=b'` is silent
+			// at 0 where `export -f 'a=b'` is `cannot export` at 1.
+			delete(r.exportedFuncs, name)
+			continue
+		}
+		if r.funcNameCannotBeExported(name) {
+			r.diagf("%s\n", Wording(r.diag().ExportCannotExportFunction,
+				"export: %[1]s: cannot export", name))
+			status = 1
+			continue
+		}
 		if r.exportedFuncs == nil {
 			r.exportedFuncs = map[string]bool{}
 		}
 		r.exportedFuncs[name] = true
 	}
 	return status
+}
+
+// funcNameCannotBeExported reports whether a function's name is one this shell
+// will not carry in the environment.
+//
+// A function name is nearly anything, and an environment entry's name is not:
+// the entry is the name with this dialect's prefix and suffix around it, and a
+// name holding an `=` would make an entry no reader could take apart.
+//
+// **Measured rather than derived from that argument**, because the argument
+// alone would stop at the equals sign. On bash 5.3.20, and identically on the
+// 5.3.15 the suite is graded against in its image: `=` and `/` are refused —
+// `export -f 'foo=bar'` and `export -f '/bin/echo'` are each `cannot export` at
+// 1 — and `a-b`, `a.b`, `a+b`, `a:b`, `a!b` and `@x` all export at 0. So `/` is
+// this shell's own line and not POSIX's, and a rule written from the entry's
+// grammar would have let it through.
+//
+// Three things about the refusal are measured too. It comes **after** the
+// not-a-function check, so `export -f 'nosuch=name'` is `not a function`. It
+// does **not** stop the operand list: `export -f a=b ok` refuses the first,
+// exports `ok`, and reports 1 at the end. And it is only the exporting
+// direction — `export -nf 'a=b'` is silent at 0, since nothing is being put
+// anywhere.
+//
+// Behind the dialect having a form for it at all, which is the same test
+// functionEnviron makes: three of the four carry no functions in the
+// environment, and a name that cannot be carried is not a refusal in a shell
+// that carries none of them.
+func (r *Runner) funcNameCannotBeExported(name string) bool {
+	if r.funcExportPrefix == "" && r.funcExportSuffix == "" {
+		return false
+	}
+	return strings.ContainsAny(name, "=/")
 }
 
 // functionEnviron is the environment entries for the exported functions.

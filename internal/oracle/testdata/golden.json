@@ -182471,6 +182471,57 @@
         "TimedOut": false
       }
     },
+    "redirect/more-here-documents-than-one-command-carries": {
+      "ash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: maximum here-document count exceeded",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: maximum here-document count exceeded",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: maximum here-document count exceeded",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redirection/a-script-file-of-its-own-takes-a-number-in-one-shell": {
       "ash": {
         "Stdout": "",
@@ -218118,6 +218169,57 @@
       },
       "zsh": {
         "Stdout": "[abc]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "variable/a-function-name-that-cannot-be-exported": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error: unexpected \"{\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "\u003cscript\u003e: line 5: export: foo=bar: cannot export~st=1~ok=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "\u003cscript\u003e: line 5: export: foo=bar: cannot export~st=1~ok=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~ok=0~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "equals-1~\u003cscript\u003e: 5: export: Illegal option -f",
+        "Stderr": "\u003cscript\u003e: 1: function: not found",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: foo=bar: invalid function name",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cscript\u003e:export:5: invalid option(s)~st=1~\u003cscript\u003e:export:11: invalid option(s)~ok=1~tail",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

@@ -18923,6 +18923,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `variable/a-compatibility-level-out-of-range-in-the-environment` | `[abc]~tail` | `[abc]~tail` **2>** `<shell>: BASH_COMPAT: abc: compatibility value out of range~<script>: line 2: BASH_COMPAT: zzz: compatibility value out of range` | `[abc]~tail` **2>** `<shell>: BASH_COMPAT: abc: compatibility value out of range~<script>: line 2: BASH_COMPAT: zzz: compatibility value out of range` | `[abc]~tail` | `[abc]~tail` | `[abc]~tail` | `[abc]~tail` |
 | `variable/allexport-marks-a-declarations-assignment` | `none` **2>** `<script>: 2: typeset: not found~<script>: 5: Syntax error: "(" unexpected` *(status 2)* | `declare -x F="x"~declare -a A=([0]="1")~tail` | `declare -x F="x"~declare -a A=([0]="1")~tail` | `declare -x F="x"~declare -a A='([0]="1")'~tail` | `typeset -x F=x~typeset -a A=(1)~tail` | `export F=x~typeset -ax A=( 1 )~tail` | `none` **2>** `<script>: line 2: typeset: not found~<script>: line 5: syntax error: unexpected "("` *(status 2)* |
 | `variable/an-appending-prefix-asks-the-names-attributes` | `after:~tail` **2>** `<script>: 3: x+=5: not found` | `in:7~after:2~tail` | `in:7~after:2~tail` | `in:5~after:2~tail` | `in:7~after:7~tail` | `in:7~after:2~tail` | `after:~tail` **2>** `<script>: line 3: x+=5: not found` |
+| `variable/a-function-name-that-cannot-be-exported` | `equals-1~<script>: 5: export: Illegal option -f` **2>** `<script>: 1: function: not found` *(status 2)* | `<script>: line 5: export: foo=bar: cannot export~st=1~ok=0~tail` | `<script>: line 5: export: foo=bar: cannot export~st=1~ok=0~tail` | `st=0~ok=0~tail` | **2>** `<script>: line 1: foo=bar: invalid function name` *(status 1)* | `<script>:export:5: invalid option(s)~st=1~<script>:export:11: invalid option(s)~ok=1~tail` | **2>** `<script>: line 2: syntax error: unexpected "{"` *(status 2)* |
 | `variable/a-module-parameter-a-script-may-not-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~tail` | `st=0~tail` | `st=0~tail` | `st=0~tail` | **2>** `<script>:1: read-only variable: jobstates` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `variable/the-module-parameter-a-script-may-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 
@@ -19169,6 +19170,22 @@ grades it and nothing drift-checks it either, for the same reason.
   echo "after:$x"
   y=a
   y+=b f2 2>/dev/null
+  echo tail
+  ```
+- `variable/a-function-name-that-cannot-be-exported` — a function whose *name* cannot be an environment entry's, offered to `export -f`. The one column that carries functions that way refuses it -- `export: foo=bar: cannot export` at 1 -- and the second arm is the control that keeps the row about the name rather than about the letter, since a plain name exports at 0 in the same shell. ksh93 refuses the **definition** instead, `foo=bar: invalid function name`, and the shells with no function export answer the option itself. We exported it at 0, which put `BASH_FUNC_foo=bar%%` in the environment for a child to import and run -- bash's own test for this is the file that found it (#4143)
+  ```sh
+  function foo=bar
+  {
+  	echo equals-1
+  }
+  export -f 'foo=bar' 2>&1
+  echo "st=$?"
+  function plain
+  {
+  	:
+  }
+  export -f plain 2>&1
+  echo "ok=$?"
   echo tail
   ```
 - `variable/a-module-parameter-a-script-may-not-own` — a name one shell's module owns, written by a script that has not loaded the module. zsh refuses it as `read-only variable: jobstates` at status 1 and ends the script, whether or not `zsh/parameter` was ever loaded -- the freeze is a property of the name and not of the module being there. Every shell without the module takes the assignment and makes an ordinary array, which is also what this engine did: a script probing for the module by writing the name got a value where it should have been stopped (#1604). `dirstack` is the one name in the same set that zsh does let a script assign, which is the row below
@@ -24522,6 +24539,35 @@ grades it and nothing drift-checks it either, for the same reason.
   typeset -i c 2>&1
   typeset -p c 2>&1
   echo tail
+  ```
+
+## redirections
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh | ash |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `redirect/more-here-documents-than-one-command-carries` | `after` | **2>** `<script>: line 1: maximum here-document count exceeded` *(status 2)* | **2>** `<script>: line 1: maximum here-document count exceeded` *(status 2)* | **2>** `<script>: line 1: maximum here-document count exceeded` *(status 2)* | `after` | `after` | `after` |
+
+- `redirect/more-here-documents-than-one-command-carries` — seventeen here-documents on one command, which is one past the bound the one shell with a bound has. It answers `maximum here-document count exceeded` at the command's line, ends the input and exits 2; dash, ksh93, zsh and BusyBox ash have no bound and run the command, printing `after`. Sixteen is taken everywhere, which is why the case is written at seventeen. It is CVE-2014-7186's bound -- an unbounded redirection stack -- and we had none, so bash's own regression test for that CVE ran past the line it exists to stop (#4143)
+  ```sh
+  cat <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  EOF
+  echo after
   ```
 
 ## function library

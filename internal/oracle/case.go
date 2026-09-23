@@ -24763,6 +24763,18 @@ echo "st=$?"`,
 		Why:     "whether the `posix` option and `POSIXLY_CORRECT` are two spellings of one state. bash ties them in both directions and the two arms are the two directions a *listing* cannot show: turning the option on writes `y` into the name, and turning it off takes the name away even though a script had assigned it. Only the bash columns get that far -- dash, ksh93 and zsh have no `posix` name and `set` is a special builtin, so the first line ends them with nothing printed, and `|| :` does not save them either. That is the measured answer for those three rather than a gap in the case: the row is one shell's tie and three shells' refusal. BusyBox ash takes the unknown name in silence and leaves the parameter alone, which is the fourth answer. We ignored the parameter entirely, so a script that set it ran every later line from the wrong mode -- found as three lines of `appendop.tests`, which sets it and then depends on posix mode for whether an assignment before a special builtin persists (#4142)",
 	},
 	{
+		ID: "variable/a-function-name-that-cannot-be-exported", Category: "variables",
+		Script:  true,
+		Snippet: "function foo=bar\n{\n\techo equals-1\n}\nexport -f 'foo=bar' 2>&1\necho \"st=$?\"\nfunction plain\n{\n\t:\n}\nexport -f plain 2>&1\necho \"ok=$?\"\necho tail\n",
+		Why:     "a function whose *name* cannot be an environment entry's, offered to `export -f`. The one column that carries functions that way refuses it -- `export: foo=bar: cannot export` at 1 -- and the second arm is the control that keeps the row about the name rather than about the letter, since a plain name exports at 0 in the same shell. ksh93 refuses the **definition** instead, `foo=bar: invalid function name`, and the shells with no function export answer the option itself. We exported it at 0, which put `BASH_FUNC_foo=bar%%` in the environment for a child to import and run -- bash's own test for this is the file that found it (#4143)",
+	},
+	{
+		ID: "redirect/more-here-documents-than-one-command-carries", Category: "redirections",
+		Script:  true,
+		Snippet: "cat <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF <<EOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\nEOF\necho after\n",
+		Why:     "seventeen here-documents on one command, which is one past the bound the one shell with a bound has. It answers `maximum here-document count exceeded` at the command's line, ends the input and exits 2; dash, ksh93, zsh and BusyBox ash have no bound and run the command, printing `after`. Sixteen is taken everywhere, which is why the case is written at seventeen. It is CVE-2014-7186's bound -- an unbounded redirection stack -- and we had none, so bash's own regression test for that CVE ran past the line it exists to stop (#4143)",
+	},
+	{
 		ID: "variable/a-module-parameter-a-script-may-not-own", Category: "variables",
 		Script:  true,
 		Snippet: "jobstates=(a b c)\necho \"st=$?\"\necho tail\n",

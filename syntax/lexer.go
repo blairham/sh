@@ -628,6 +628,17 @@ func (l *Lexer) queueHeredoc(r *Redirect, quoted bool) {
 	if l.noHeredocBodies {
 		return
 	}
+	if max := l.dialect.HeredocMax; max > 0 && len(l.pending) >= max && l.err == nil {
+		// One more than this dialect will carry. The list is what the bound is
+		// about — it holds the operators still waiting for a body and is drained
+		// at every newline — which is why two commands of the bound each are
+		// both taken. See Dialect.HeredocMax for the measurement.
+		l.err = &Error{
+			Pos: r.OpPos, Kind: ErrHeredocCount,
+			Msg: "maximum here-document count exceeded",
+		}
+		return
+	}
 	l.pending = append(l.pending, r)
 	l.pendingQuoted = append(l.pendingQuoted, quoted)
 }

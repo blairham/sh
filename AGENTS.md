@@ -1376,6 +1376,32 @@ Three things follow, and the third is the general one:
   this in the first minute, and a wait is the failure mode that gets more
   expensive the longer you go on trusting it.
 
+**And the filesystem can collapse two of your cases into one.** This is a
+third shape again, and neither rule above reaches it: the instrument fired,
+the input was right, and the *storage* silently made two distinct probes into
+one.
+
+macOS is case-insensitive by default. A sweep of `set`'s option letters wrote
+each case to `lt/$L.sh` and ran it — and `P.sh` and `p.sh` are the same file
+there. The `-P` row executed the script `-p` had just written, the two rows
+agreed, and agreement is what a correct shell looks like. It was caught only
+because the answer was `hpB` where `hBP` was expected; had the two letters
+produced the same string, the row would have read clean forever.
+
+So: **when a probe's cases differ only in letter case, they cannot differ only
+by filename.** Put the case in the *contents* and give the files distinct
+names (`upperP.sh`, `lowerp.sh`), or keep each case in its own directory. The
+same applies to any pair of names a case-insensitive or Unicode-normalising
+filesystem folds together — `a.sh` and `A.sh`, and a composed `é` against a
+decomposed one.
+
+**The positive control that catches all three shapes is the same one: count
+what actually ran.** A mutation battery should print how many tests executed
+under its `-run` filter before it reports a single survivor — a filter that
+matches nothing reports every mutation as surviving, and a test renamed out of
+the filter's reach is indistinguishable from a test that passed. One line, and
+it is the difference between a battery and a decoration.
+
 `make bash-suite` fetches **bash's own `tests/`** and runs every file of it
 through real bash and through `cmd/bash`, comparing output and status.
 `internal/suite` holds it, `internal/cmd/suitecheck` prints the report, and

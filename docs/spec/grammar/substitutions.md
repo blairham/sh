@@ -1565,8 +1565,60 @@ there is no constant to choose.
 
 The four shapes #4239 tabulates are all of the first two kinds and are not
 held: a `for` loop in a body is the one `comsub2.tests` reaches, and it wants
-one line more than the anchor rule gives. Reaching it means modeling the
-counter, not choosing an offset.
+one line more than the anchor rule gives.
+
+#### Why that counter cannot be modeled from here
+
+The section below has the one shape where the counter **is** a rule — how many
+more times the grammar asked for input after the text ran out. It was worth
+pushing the body's shapes against the same reading, because a table with no
+mechanism under it and a mechanism nobody has found look the same until they
+are. They were pushed, on 2026-09-23 against bash 5.3.15 in the pinned image,
+and the answer is the first.
+
+**It is the body's re-parse alone.** A one-line `for` whose body command reads
+`$LINENO` answers the command's own physical line at the top level, in a
+function body, and inside `eval` — in the reference and here alike. Only in a
+`$( … )` or `${ … ;}` body does the reference answer something else.
+
+**Inside one the surcharge is a per-clause constant.** Anchor is the line the
+command holding the substitution reports itself at, the body holds one
+construct, and the figure is what the command inside it answers above the
+anchor:
+
+| the command sits inside | surcharge |
+| --- | --- |
+| nothing — a command of the body | 0 |
+| `{ …; }` or `( … )` | 0 |
+| `while`, `until`, `case … in` | 1 |
+| `if …; then` | 1 |
+| `if …; then :; else` | 3 |
+| `if …; then :; elif …; then` | 4 |
+| `for … in …; do`, `for …; do`, `for ((…)); do` | 2 |
+| `for … do for … do` | 4 — they accumulate |
+
+**It is not "a place a newline could stand".** Two rows kill that reading.
+Commands written before the one that reports cost **nothing** —
+`if true; then :; :; echo "$LINENO"; fi` is the same number as
+`if true; then echo "$LINENO"; fi` — and a second command in a `while`'s
+condition costs nothing either. List elements are free everywhere, so the
+surcharge belongs to the clause keywords alone.
+
+**The row that ends it** is `for` against `while`. Both are an introducer, a
+list, a terminator and a `do`, and the body command is 2 above the anchor in
+the first and 1 in the second. Nothing in the text distinguishes them. What
+does is where bash's own grammar puts a `newline_list` — one after a `for`'s
+word list and none after a `while`'s condition — and the same shape makes an
+`else` 2 more than a `then` while a command in the then-list is nothing at all.
+
+So recording the reductions where this parser *could* have asked does not reach
+it: this parser never asks at any of those points, the construct being on the
+line it already holds, and its own optional-newline positions are not bash's.
+Reproducing the numbers means writing bash's `newline_list` positions into a
+table of eight per-clause constants, fitted to the shapes above, moving every
+body's numbering in every dialect that shares the code, with nothing
+underneath. That is the shape of reading #4298 had to undo, and an open row is
+the better answer: `comsub2.tests` stays at 2 differing lines for this.
 
 ### The line an unterminated construct is reported at
 

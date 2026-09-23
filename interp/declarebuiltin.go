@@ -1901,7 +1901,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// bad target goes first. See there.
 			frozen := r.readonly[name] && !df.readonlyOff
 			if code := r.declareNameref(complaintName, name, value, df,
-				hasValue, frozen, !fresh, held, fresh); code != 0 {
+				hasValue, appends, frozen, !fresh, held, fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status

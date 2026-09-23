@@ -3795,7 +3795,10 @@ func (p *Parser) touchesPrevious(after Pos) bool {
 func (p *Parser) parseAssign(h assignHead) *Assign {
 	a := &Assign{Name: h.name, Member: h.member, Start: p.tok.Pos, Append: h.append}
 	if h.index != nil {
-		a.Index = p.newWord(h.index, h.index[0].Pos, p.tok.End)
+		// A `<(` between brackets the script wrote is the arithmetic `<` and
+		// a grouping, not a substitution. See ProcSubstInSubscriptAsText.
+		a.Index = ProcSubstInSubscriptAsText(
+			p.newWord(h.index, h.index[0].Pos, p.tok.End), true)
 		a.IndexFlags = p.assignIndexFlags(h.index)
 		a.IndexText = p.textBetween(h.from, h.to)
 	} else if h.subscripted {
@@ -3825,7 +3828,8 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			continue
 		}
 		a.Leading = append(a.Leading, LeadingIndex{
-			Index: p.newWord(link.spans, link.spans[0].Pos, p.tok.End),
+			Index: ProcSubstInSubscriptAsText(
+				p.newWord(link.spans, link.spans[0].Pos, p.tok.End), true),
 			Flags: p.assignIndexFlags(link.spans),
 			Text:  p.textBetween(link.from, link.to),
 		})

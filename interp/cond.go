@@ -323,6 +323,21 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	// operands are read left to right, so the sentence names the first of
 	// them where a condition holds two.
 	pattern := x.Op == "==" || x.Op == "=" || x.Op == "!="
+	// The operator decides what a `<(` between brackets in an operand is, and
+	// it is read before either word is expanded for the reason above: an
+	// arithmetic comparison reads its operand's subscript as an expression, so
+	// the substitution is not one and its command must never start. Measured
+	// 2026-09-22 on bash 5.3.20 with `a=(1 2 3)`: `[[ a[1<(2)] -lt 9 ]]` holds
+	// with nothing run, where `[[ a[1<(2)] = "a[1]" ]]` on the same word runs
+	// the substitution's command. One word, two readings, and only the
+	// operator parts them (#4253). See syntax.ProcSubstInSubscriptAsText.
+	if condOpReadsArithmetic(x.Op) {
+		x = &syntax.CondBinary{
+			Op: x.Op,
+			X:  syntax.ProcSubstInSubscriptAsText(x.X, false),
+			Y:  syntax.ProcSubstInSubscriptAsText(x.Y, false),
+		}
+	}
 	// The status the refusal leaves is a property of the **expression** and
 	// not of the word the sentence names, which is measured: `[[ <(x) ==
 	// <(y) ]]` and `[[ <(x) == >(y) ]]` both refuse the left one by name and
@@ -459,6 +474,22 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		return left > right, nil
 	}
 	return false, arithError{msg: "unsupported test " + x.Op}
+}
+
+// condOpReadsArithmetic reports whether this comparison reads its operands as
+// arithmetic expressions rather than as strings.
+//
+// The word-spelled six and nothing else: `<` and `>` compare strings, which is
+// why `[[ 10 > 9 ]]` is false and `[[ 10 -gt 9 ]]` is true. Named here because
+// the same set decides two things now — how the operands are compared, and
+// whether a `<(` between brackets in one is a substitution at all — and a
+// second list of the six is a second chance to write five.
+func condOpReadsArithmetic(op string) bool {
+	switch op {
+	case "-eq", "-ne", "-lt", "-le", "-gt", "-ge":
+		return true
+	}
+	return false
 }
 
 // condOperand expands a word to a single string. Nothing inside `[[ ]]` is

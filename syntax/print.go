@@ -2407,12 +2407,11 @@ func (p *printer) span(s Span) {
 			return
 		}
 		p.str("${" + p.ansiCInText(p.paramExpText(s.Value)) + "}")
-	case ProcSubstIn:
-		p.str("<(" + s.Value + ")")
-	case ProcSubstOut:
-		p.str(">(" + s.Value + ")")
-	case ProcSubstFile:
-		p.str("=(" + s.Value + ")")
+	case ProcSubstIn, ProcSubstOut, ProcSubstFile:
+		// Through the same spelling the subscript reading uses, so the two
+		// cannot come to disagree about what this span was written with. See
+		// procSubstSourceText.
+		p.str(procSubstSourceText(s))
 	default:
 		p.literal(s)
 	}

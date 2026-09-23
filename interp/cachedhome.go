@@ -31,6 +31,34 @@ package interp
 // A clone takes the copy with it and moves its own from there, which is what
 // makes `( /usr/bin/true; echo ~ )` the new home inside the parentheses and
 // the old one after them.
+//
+// # The copy is one patch range of one build
+//
+// Measured 2026-09-23 in `debian:sid-slim` at the digest the suite is graded
+// at — **GNU bash 5.3.15**, the same 5.3 — the whole table below answers the
+// *variable*: `HOME=/h; echo ~` is `/h`, and so is every row with a builtin, a
+// subshell, a function, an external command, a pipeline, a command
+// substitution or an `export -n` in front of it. Only `unset HOME` leaves the
+// password database, which is the standard's reading and not a cache.
+//
+// So the split is not bash against the panel, it is **bash 5.3.20 against
+// bash 5.3.15, bash 3.2, zsh, ksh93, dash, BusyBox ash and the standard**, and
+// the cache appeared somewhere in patches 16 to 20 of one release. The axis
+// stays because the behavior is real and reachable, and the answer this
+// dialect gives it is a *choice of reference version* rather than a reading of
+// bash: docs/spec/grammar/expansion.md already called it a candidate upstream
+// regression on the evidence of 3.2 alone, and a second 5.3 answering the
+// other way is the stronger form of that.
+//
+// Two consequences a reader should have in hand:
+//
+//   - It is the whole of what `glob.tests` still differs by in the graded
+//     image (#4158): two lines, both a `mkdir ~/…` landing in one home and the
+//     `touch ~/…/x` after it looking in another.
+//   - The suite lines #3484 and #4039 counted as won were counted against the
+//     laptop's 5.3.20. Against 5.3.15 the same modeling moves them the other
+//     way, so those rows want re-grading in the image before anybody reads
+//     them as closed.
 
 // ensureCachedHome seeds the copy from the environment the shell started with.
 //

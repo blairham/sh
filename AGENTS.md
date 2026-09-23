@@ -1542,6 +1542,27 @@ anybody can do. The job installs `locales-all`; without it a runner and a
 laptop count the same tree differently, which is #4106's argument one apt
 package over.
 
+**The reference's *version* is part of the measurement too, and a patch level
+is enough.** `glob.tests`' last two differing lines in the graded image are one
+modeled axis — `TildeReadsACachedHome`, whether a written `~` follows a `HOME`
+the script assigned — and the two bash 5.3 builds this repository grades
+against disagree about it: the laptop's **5.3.20** keeps a cached copy, and the
+image's **5.3.15** reads the variable, as bash 3.2, zsh, ksh93, dash, ash and
+the standard all do. Measured 2026-09-23, every row of that axis's own table.
+So a row can be at 0 on one instrument and open on the other with nothing
+wrong in either, and the answer is a decision about which build is the
+reference rather than work.
+
+Which generalises the two-instrument rule, and this is the useful form of it:
+**two instruments only count if their *references* differ, and if the platform
+each reference runs on differs.** Two methods over one reference catch a
+transport fault and nothing else — the same shape as `gh search` agreeing with
+`gh issue list` about a label that does not exist, above. A grading container
+and a laptop are a genuine pair because the reference binary and the libc under
+it are both different; two containers off the same image are one instrument
+counted twice, which is how a re-grade of this board came back with 17 for a
+file that measures 2.
+
 **The suite's C helpers are built, or the whole thing scores zero for reasons
 that have nothing to do with us.** Without `recho`, `zecho` and `printenv` the
 calls fail under both shells and the two failures match, so the run reads as

@@ -15055,8 +15055,15 @@ type Semantics struct {
 
 	// TildeReadsACachedHome answers a bare `~` from a copy of `HOME` that the
 	// shell's own assignments do not reach, rather than from the variable as
-	// it stands. bash 5.3 alone in the panel — its own 3.2 reads the
-	// variable, and so do zsh, ksh93, dash and BusyBox ash.
+	// it stands. bash 5.3.20 alone — its own 3.2 reads the variable, and so do
+	// zsh, ksh93, dash and BusyBox ash.
+	//
+	// **And so does bash 5.3.15**, measured 2026-09-23 in the image the suite
+	// is graded in: the whole table below answers `/h` there, every row of it.
+	// So this is one patch range of one build rather than a column of the
+	// panel, and which of the two bash 5.3s this dialect answers for is a
+	// decision about the reference and not a reading of the shell. See the
+	// note at the head of interp/cachedhome.go for what rides on it.
 	//
 	// **The copy is not the home the shell started with**, and that is the
 	// whole reason this axis is named for a cache. It is refreshed as a side

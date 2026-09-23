@@ -113,7 +113,13 @@ import (
 // there, so the two rows about it are written with the word and the one that
 // says the parenthesis form is not traced carries both spellings on one line.
 // Here they are two more ordinary keyword definitions.
-const keywordFunctionsInTheCorpus = 37
+// Thirty-eight since #4143, whose row offers `export -f` a function whose *name*
+// cannot be an environment entry's. It is written with the word because that is
+// what bash's own test for it writes — `function foo=bar` on a line of its own —
+// and the parenthesis form cannot spell the name at all: `foo=bar()` is an
+// assignment followed by an empty pair of parentheses. So this one is the word
+// out of necessity rather than out of style.
+const keywordFunctionsInTheCorpus = 38
 
 func TestPrintingTheCorpusRoundTripsToTheSameProgram(t *testing.T) {
 	t.Parallel()

@@ -2787,6 +2787,14 @@ type Diagnostics struct {
 	// ExportNotAFunction is `export -f` given a name that is not one. One
 	// verb: the name.
 	ExportNotAFunction string
+	// ExportCannotExportFunction is `export -f` given a function whose name
+	// cannot be carried in the environment. One verb: the name.
+	//
+	// Asked after ExportNotAFunction, which is the measured order: a name that
+	// holds an `=` and is *not* a function draws `not a function` and not this.
+	// Empty falls back to the one shell in the panel that carries functions
+	// this way and therefore the only one that can refuse to.
+	ExportCannotExportFunction string
 
 	// ReadonlyNotAFunction is `readonly -f` given a name that is not one —
 	// the same refusal ExportNotAFunction is, under the other word, and a
@@ -5596,6 +5604,13 @@ type Diagnostics struct {
 	// they never do, the refusal being one dialect's. See
 	// syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution.
 	HeredocOutsideSubstitution string
+	// HeredocCountExceeded is more here-documents on one command than this
+	// dialect carries. No verbs: the one shell with a bound names no token.
+	//
+	// Empty leaves the substrate's own sentence, which is what a dialect with no
+	// bound would say if it ever raised this — and none of them does, the bound
+	// being one shell's. See syntax.Dialect.HeredocMax.
+	HeredocCountExceeded string
 	// PromptHeredocOutsideSubstitution is the same sentence for a person at a
 	// prompt, where a line number is not a thing to name.
 	PromptHeredocOutsideSubstitution string
@@ -9172,6 +9187,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return Wording(d.EmptyAssignSubscript, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrHeredocOutsideSubstitution:
 		return Wording(d.HeredocOutsideSubstitution, se.Msg, se.Token, se.Pos.Line)
+	case syntax.ErrHeredocCount:
+		return Wording(d.HeredocCountExceeded, se.Msg)
 	case syntax.ErrForArithHeader:
 		form := d.ForArithHeader
 		if se.LastToken == "" && d.ForArithHeaderNoPart != "" {

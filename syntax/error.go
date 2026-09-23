@@ -282,6 +282,15 @@ const (
 	// `env -i PATH=/usr/bin:/bin`. Token is the operator and everything after
 	// it, which is what bash names: `=4 ` for `7=4 `.
 	ErrArithAssignToNonPlace
+	// ErrHeredocCount is more here-documents on one command than the dialect
+	// allows — see [Dialect.HeredocMax], which is one shell's bound and is zero
+	// everywhere else.
+	//
+	// Its own kind because the sentence names no token: bash writes `maximum
+	// here-document count exceeded` and nothing else, where every refusal of a
+	// token it did not want names the token. Pos is the operator that went over
+	// the bound, which is on the command's own line.
+	ErrHeredocCount
 )
 
 // TokenClass is what sort of thing a token is, for the dialect that words an

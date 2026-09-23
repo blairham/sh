@@ -2630,6 +2630,26 @@ type Dialect struct {
 	// <(cat <<EOF)` — while `${ cat <<EOF; }`, that shell's shared-state
 	// form, is refused with the same sentence.
 	HeredocBodyMustBeInsideTheSubstitution bool
+	// HeredocMax bounds the here-documents one command may open, and zero means
+	// no bound.
+	//
+	// One shell in the panel has a bound. Measured 2026-09-23 on bash 5.3.20 and
+	// identically on the 5.3.15 in the image its own suite is graded in: a `cat`
+	// with **sixteen** `<<EOF` redirections runs, a seventeenth is `maximum
+	// here-document count exceeded` at the command's line, the input ends and
+	// the shell exits 2. dash, ksh93 and zsh take seventeen — and a hundred —
+	// without a word, which is why this is a dialect's number and not the
+	// substrate's.
+	//
+	// **Per command and not per input**, which is the measurement that says what
+	// the counter is: two commands of sixteen each in one file both run. So the
+	// bound is on the redirections still waiting for a body, which is the list
+	// the lexer drains at every newline.
+	//
+	// It is the bound CVE-2014-7186 was about — an unbounded redirection stack —
+	// and bash's own `exportfunc1.sub` is the regression test for it, which is
+	// where this was found (#4143).
+	HeredocMax int
 
 	// HeredocBodyFromAfterTheCommand reads a here-document a substitution's
 	// text opened and could not feed **from the lines after the enclosing

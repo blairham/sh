@@ -21,6 +21,14 @@ func Dialect() syntax.Dialect {
 	// bash has documented it as deprecated for years and both builds
 	// in the panel still take it (#900).
 	d.DollarBracketArith = true
+	// Sixteen here-documents to a command, and the seventeenth is refused.
+	// Measured 2026-09-23 on 5.3.20 and on the 5.3.15 in the image this shell's
+	// own suite is graded in: sixteen `<<EOF` on one `cat` runs, seventeen is
+	// `maximum here-document count exceeded` at the command's line and the input
+	// ends at 2, and two commands of sixteen each in one file both run. dash,
+	// ksh93 and zsh have no bound at all. It is CVE-2014-7186's bound, and that
+	// CVE's own regression test is where this was found (#4143).
+	d.HeredocMax = 16
 	// `++` and `--` are operators here only against something that can be
 	// assigned to. Measured 2026-09-22: `$(( ++7 ))` is **7** — two signs —
 	// and `$(( 7++ ))` is `operand expected` blamed on `+ `, where ksh93 and

@@ -3535,7 +3535,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			// byte for byte what `declare -fx` writes (#3192).
 			return r.attributedFunctionListing(functionAttributeExported)
 		}
-		return r.exportFuncs(args)
+		return r.exportFuncs(args, strings.ContainsRune(opts, 'n'))
 	}
 	if strings.ContainsRune(opts, 'p') || (opts == "" && len(args) == 0) {
 		// The listing: exported names alone, in the dialect's shape. An

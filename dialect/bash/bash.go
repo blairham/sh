@@ -722,7 +722,7 @@ func Semantics() interp.Semantics {
 	// `aefhkruvxBCEHTc`, a shell started `-i` reads `hirBHc`, and `set -r`
 	// followed by `set -t` is `hrtBc`. So `k` is in front of it, `i` is in
 	// front of it, and `t` and `u` are behind it.
-	s.DollarDashLetterOrder = "aefhkilmnrtuvxBCEHTcs"
+	s.DollarDashLetterOrder = "aefhkilmnprtuvxBCEHPTcs"
 	s.ArrayScalarIsTheWholeArray = interp.No
 	// And the one element a plain `$m` on a keyed table gives is the one
 	// keyed `0`, which is nothing at all where no such key was written.
@@ -4303,7 +4303,17 @@ func Diagnostics() interp.Diagnostics {
 			// letter listed here while the mode exists would refuse what
 			// the mode grants — the same pairing `-t` and `-H` describe
 			// above.
-			"set": "bP",
+			//
+			// `-P` left in #4163, and it is the `-p` shape rather than the
+			// `-t` one: `physical` is a name this shell's `set -o` table
+			// already grants — it records the state and runs nothing — so
+			// the letter is the short spelling of a request that was
+			// already being taken. Listed here, `set -P` was refused while
+			// `set -o physical` was granted, which is the two-sentences-
+			// for-one-question the `-p` note above forbids. The letter now
+			// routes to the name through SetOptionLetterNames, which is
+			// also what puts `P` into `$-`.
+			"set": "b",
 			// Options these builtins have here and this shell does not.
 			"wait": "f",
 			// disown's sweepers: -a for every job, -h for HUP shielding
@@ -4587,6 +4597,29 @@ func Apply(r *interp.Runner) {
 		"posix",
 		"privileged",
 	)
+	// And the three of those names that `$-` spells with a letter this
+	// package has to declare, because the substrate has no field behind them
+	// — they are `set -o` names it records rather than behaviors it runs, and
+	// a name this shell *grants* must show its letter or a script cannot read
+	// back what it just asked for. See interp.Runner.SetOptionLetterNames,
+	// whose whole point is that the letter and the name are one request.
+	//
+	// Measured 2026-09-23 on bash 5.3.20 from a script file, each name by
+	// its long form and by its letter, in both signs:
+	//
+	//	set -o physical     hBP     set +o physical     hB
+	//	set -o privileged   hpB     set +o privileged   hB
+	//	set -o histexpand   hBH     set +o histexpand   hB
+	//
+	// — and the letter form gives the same four answers, which is what says
+	// they are one request rather than two. This shell granted all three
+	// names and showed none of the letters, so `set -o physical` was a
+	// request it took and then denied having taken (#4163).
+	r.SetOptionLetterNames(map[rune]string{
+		'H': "histexpand",
+		'P': "physical",
+		'p': "privileged",
+	})
 	// And the one of those names that is also a parameter. `IGNOREEOF` and
 	// `ignoreeof` are two spellings of one state here: an assignment turns
 	// the option on whatever it assigns, `unset` turns it off, `set -o

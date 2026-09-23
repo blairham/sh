@@ -1423,6 +1423,15 @@ With both sides traced, the markers make every output line addressable and an
 ordinary `diff` shows exactly where the two shells part company, and on which
 line of which file.
 
+**A region under `set -x` will trace the marker's own command.** A suite file
+that turns xtrace on to show what a construct did will print the marker's
+`printf` as `++ printf '@…'`, so the reconstruction above fails there — and that
+is the instrument working rather than lying, because it fails visibly and in
+exactly the region where it is unsound. Discount those lines only after checking
+that they are **added and not removed**, and identical on both sides; a line the
+reconstruction is *missing* is a real perturbation and means something behaved
+differently.
+
 Then ask **our parser** what is at that position, printing node kinds,
 positions and field *lengths* only — never a value. `L54 SimpleCmd` with an
 `Assign len(Name)=3`, four literal words and a `Redirect Op=<<<` says

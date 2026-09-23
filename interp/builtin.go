@@ -5016,8 +5016,13 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// substitution wrote the value in front of `cd: d: Not a directory`,
 	// which is a line bash does not write.
 	namedByAVariable, viaAVariable := "", false
-	if !announced && r.cdOperandCanNameAVariable && !filepath.IsAbs(dir) &&
-		!strings.Contains(dir, "/") && !dash {
+	// No guard on a `/` in the operand, though bash's rule is that a slash
+	// names a place: a variable's name cannot hold one, so `cd ./d` and
+	// `cd d/.` fall out of the lookup below finding nothing. The guard was
+	// written first and a mutation that removed it broke no test — which is
+	// what said it was a second statement of a rule the name syntax already
+	// makes true, and those are the branches that rot.
+	if !announced && r.cdOperandCanNameAVariable && !filepath.IsAbs(dir) && !dash {
 		if !r.enterableFromHere(old, dir) {
 			if value, ok := r.getVar(dir); ok {
 				namedByAVariable, viaAVariable, dir = value, true, value

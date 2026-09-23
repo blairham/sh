@@ -116,6 +116,12 @@ func TestAFailedVariableCdNamesTheOperandHere(t *testing.T) {
 
 // TestAnOperandWithASlashIsAPlaceHere: a dot or a slash names a place, so the
 // variable is never consulted — the same rule CDPATH follows one step up.
+//
+// It pins the **observable** and cannot pin the reason, and that is worth
+// saying rather than leaving to be rediscovered: a variable's name cannot
+// contain a slash, so no value of `d` could make these rows pass whatever the
+// lookup did. A mutation removing the slash guard survived this test for
+// exactly that reason, and the guard is gone.
 func TestAnOperandWithASlashIsAPlaceHere(t *testing.T) {
 	for _, src := range []string{
 		`shopt -s cdable_vars; d=target; cd ./d`,

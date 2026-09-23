@@ -419,6 +419,15 @@ type Lexer struct {
 	// double-quoted.
 	inRawBody bool
 
+	// inCommandSubst counts the `$( … )` bodies this lexer has open. Read
+	// only where a construct runs out, to say whether the input ended inside
+	// one — see Error.RanOutInsideACommandSubstitution, and
+	// interp.Runner.refuseUnreadableOperand for the column that reads it.
+	//
+	// A count rather than a flag because a body can hold another, and the
+	// question is whether *any* is still open.
+	inCommandSubst int
+
 	// inWordTail is set while the text being read is the tail of one word
 	// that has already been read once — a [ParamExpr.RawTail], divided again
 	// because a run in POSIX mode reads the closing brace of a `${ … }`
@@ -943,6 +952,10 @@ func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
 		Pos: open, Kind: ErrUnmatched, Msg: msg,
 		Token: opener, Expected: closer, LastToken: near,
 		EndLine: after, EofLine: l.line,
+		// Where the reader was rather than what it ran out on. See
+		// Error.RanOutInsideACommandSubstitution.
+		RanOutInsideACommandSubstitution: l.inCommandSubst > 0,
+		RanOutOnACommandSubstitution:     l.inCommandSubst > 0 && opener == openingOf(CommandSubst),
 	}
 }
 
@@ -3993,6 +4006,13 @@ func (l *Lexer) bodyRefusalSettlesTheRead() bool {
 // silently changes the program.
 func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	open := l.pos()
+	if kind == CommandSubst {
+		// What a failure inside this body will be asked afterwards: whether
+		// the input ran out with a substitution still open. See
+		// Error.RanOutInsideACommandSubstitution.
+		l.inCommandSubst++
+		defer func() { l.inCommandSubst-- }()
+	}
 	l.advance() // $
 	l.takeContinuationAfterADollar(q)
 	l.advance() // (

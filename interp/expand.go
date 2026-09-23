@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"errors"
 	"os"
 	"slices"
 	"sort"
@@ -3183,7 +3184,39 @@ func reachesItsOperand(e *syntax.ParamExpr, fires bool) bool {
 // then Semantics.FailedExpansionAbandonsTheLine's to say — bash gives up the
 // line and runs the next one, and the other three end the shell.
 func (r *Runner) refuseUnreadableOperand(e *syntax.ParamExpr) {
-	r.diagf("%s\n", r.diag().ParseFailure(e.OperandUnreadable))
+	d := r.diag()
+	// Where the failed read *was*, which is what one column names and counts
+	// from. The second read of an operand happens when the word expands, so
+	// a substitution it opened — one the line's own read could not see,
+	// because a `'` quoted it there — is read with the line already behind
+	// the shell. That column names the route and writes the line below.
+	//
+	// Asked of the construct that was open and not of the token the read ran
+	// out on: `"${v+'$('}"` and `"${v+'bar}"` both run out on a `'`, and the
+	// second holds no substitution at all. See
+	// syntax.Error.RanOutInsideACommandSubstitution and
+	// Diagnostics.HiddenSubstitutionIsRefusedBelowItsLine (#4201).
+	route, inside, onItself := "", false, false
+	var se *syntax.Error
+	if errors.As(e.OperandUnreadable, &se) {
+		inside, onItself = se.RanOutInsideACommandSubstitution, se.RanOutOnACommandSubstitution
+	}
+	if inside && d.SubstitutionParseFailureNamesTheConstruct {
+		route = "command substitution"
+	}
+	was := r.line
+	if inside && d.HiddenSubstitutionIsRefusedBelowItsLine {
+		// One line for the operand's own text, which ran out, and one more
+		// where what ran out is the substitution's body — a second text,
+		// named the same way one line further down. See
+		// syntax.Error.RanOutOnACommandSubstitution.
+		r.line++
+		if onItself {
+			r.line++
+		}
+	}
+	r.errf("%s", r.diagLineNamed(route, "%s\n", d.ParseFailure(e.OperandUnreadable)))
+	r.line = was
 	r.expandErr = true
 }
 

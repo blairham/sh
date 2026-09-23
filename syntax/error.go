@@ -404,6 +404,35 @@ type Error struct {
 	// Measured on bash 5.3.20, 2026-09-22. See
 	// Diagnostics.CondGroupCloserExpected.
 	CondGroupCloserWanted bool
+
+	// RanOutInsideACommandSubstitution says the input ran out with a `$( … )`
+	// still open around the construct this failure names.
+	//
+	// Read where a refusal is *located* rather than where it is worded: a
+	// `${ … }` operand inside double quotes is read a second time, and a `'`
+	// that quoted in the first read quotes nothing in the second, so the
+	// second read can open a substitution the line's own read never saw. The
+	// shell reaches that read when the word expands — the line is behind it
+	// by then — so one column names the route and counts the line
+	// differently for it.
+	//
+	// **The construct and not the token**: `"${v+'$('}"` and `"${v+'bar}"`
+	// both run out on a `'`, and only the first ran out inside a
+	// substitution. A rule reading the token alone cannot tell them apart
+	// (#4201).
+	RanOutInsideACommandSubstitution bool
+
+	// RanOutOnACommandSubstitution says the construct that ran out **is**
+	// that substitution rather than something written inside it.
+	//
+	// The pair is read together and only where the failure is located: a
+	// text handed to a reader that runs out is named on the line *after* it
+	// in one column, and a substitution's body is one more such text, so a
+	// quote left open inside a body and the body itself are one line apart.
+	// Measured over five shapes apiece — `"${v+'$('}"` names the quote and
+	// `"${v+'$('\'}"`, where the escaped quote closes it again, names the
+	// substitution two lines below the command instead of one (#4201).
+	RanOutOnACommandSubstitution bool
 	// Class is what sort of token Token is, when the kind is ErrUnexpected.
 	Class TokenClass
 	// TokenOpener is the operator the unexpected token *began* with, where

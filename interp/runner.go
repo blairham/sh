@@ -1604,6 +1604,12 @@ type Runner struct {
 	// return 42; }` from being a `return` with nothing to return from. See
 	// Runner.hasSomethingToReturnFrom and Runner.currentShellSubst.
 	currentShellSubstDepth int
+	// inSubstBody says that what is running was read out of a substitution's
+	// body rather than out of the shell's own input. One line counter behaves
+	// differently in there — see Runner.commandLine, which is the only reader.
+	// A flag rather than a count because the question is which text this is,
+	// not how deep it is, and a clone carries it over the boundary.
+	inSubstBody bool
 	// expandErr records that an expansion failed — a division by zero, a
 	// number that is not one. The command does not run, which is what every
 	// shell in the panel does and what the exit status has to say.
@@ -5856,7 +5862,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 			// location is this command's own. Nothing else the block below
 			// records belongs to a command that is not going to run.
 			if c != nil {
-				r.prevLine, r.line = r.line, r.lineOf(c.Pos())
+				r.prevLine, r.line = r.line, r.commandLine(c)
 			}
 			r.readWordsWithoutRunning(x)
 		}
@@ -5874,7 +5880,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// crashing. Our own parser never produces one, so no test can see
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
-		r.prevLine, r.line = r.line, r.lineOf(c.Pos())
+		r.prevLine, r.line = r.line, r.commandLine(c)
 		switch c.(type) {
 		case *syntax.Group, *syntax.Subshell, *syntax.NamespaceClause:
 			// A grouping's head is not a statement, so it does not advance

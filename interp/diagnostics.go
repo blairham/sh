@@ -3733,41 +3733,55 @@ type Diagnostics struct {
 	// answer it would have to refuse to report the line at all.
 	BackquotedSubstitutionRestartsLines bool
 
-	// SubstitutionBodyStartsAtItsOpenersLine numbers a `$( … )` body from the
-	// line the `$(` is on rather than from the line its text begins on, so
-	// the newlines between the opener and the first command of the body count
-	// for nothing.
+	// CommandIsLocatedWhereItsFirstWordEnds names a command at the line its
+	// first word ends on rather than at the line it begins on, so a first word
+	// that spans lines — a multi-line substitution, a multi-line quoted string,
+	// a backslash-newline — moves everything the command reports down with it.
 	//
-	// bash alone. Measured 2026-09-17 over a script file with `env -i
-	// PATH=/usr/bin:/bin LC_ALL=C`, stdin from /dev/null, `echo one` on line
-	// one and the substitution written from line two:
+	// bash and dash. zsh and ksh93 name the line the command began on.
+	// Measured 2026-09-23 over five shapes; the table and the two controls are
+	// on Runner.commandLine.
 	//
-	//	body                                    physical  bash  zsh/ksh93/dash
-	//	`$(⏎echo "L=$LINENO"⏎)`                        3     2   3
-	//	`$(⏎⏎echo "L=$LINENO"⏎)`                       4     2   4
-	//	`$(⏎⏎⏎echo "L=$LINENO"⏎)`                      5     2   5
-	//	`$(⏎echo x⏎echo "L=$LINENO"⏎)`                 4     3   4
-	//	`$(echo "L=$LINENO"⏎)`                         2     2   2
+	// What reads it is every located message a command produces — a failed
+	// redirection, `command not found`, an ERR trap's `$LINENO` — and the
+	// anchor a substitution body is numbered from, which is
+	// SubstitutionBodyIsNumberedFromWhereTheShellWasReading.
 	//
-	// The last row is the control and is why this is about the *opener* and
-	// not about the body: with text after the `$(`, every column including
-	// bash answers 2. The third row is what says it is not a constant offset
-	// of one — however many newlines stand between the opener and the first
-	// command, that command is the opener's line there.
+	// Here rather than in Semantics because it is a question about where a
+	// message says something happened, like Location and RedirectFailureLine.
+	CommandIsLocatedWhereItsFirstWordEnds bool
+
+	// SubstitutionBodyIsNumberedFromWhereTheShellWasReading numbers a substitution body's
+	// commands from the line the construct's closing delimiter is on rather
+	// than from the lines its text is written on: the body's first command is
+	// that line, and the body's later lines count up from there.
 	//
-	// The line *after* the substitution is 5 in every column, so nothing is
-	// shifted for the rest of the file; the offset lives inside the body.
+	// bash alone, both spellings that have a closer of their own — `$( … )`
+	// and `${ … ;}`. Measured 2026-09-23, nine shapes, against bash 5.3.15 in
+	// the pinned debian:sid-slim and bash 5.3.20 on macOS, which agree. The
+	// table and the two controls are on Runner.substRunBase.
 	//
-	// The same number shows in a diagnostic as well as in `$LINENO`, because
-	// both are read off the offset the body's runner is given — which is why
-	// this sits beside BackquotedSubstitutionRestartsLines rather than in the
-	// semantics vector: they are one question about where a body's lines are
-	// counted from, asked of the two spellings.
+	// The number shows in `$LINENO` and in a runtime diagnostic alike,
+	// because both are read off the offset the body's runner is given. It is
+	// *not* where a body that will not parse is reported: that is the line
+	// the text is on in every column, bash included, which is why
+	// Runner.readSubstBody carries two offsets and not one.
 	//
-	// The older spelling is a third answer in that shell and is not this
-	// field: `` v=`⏎echo "L=$LINENO"⏎` `` is 5 there, which is the numbering
-	// #3553 measures.
-	SubstitutionBodyStartsAtItsOpenersLine bool
+	// **This replaces a reading that was measured wrong**, recorded as "the
+	// body starts at its opener's line" over five shapes that all had the
+	// first command directly under the opener — where the opener's line and
+	// the closer's coincide. Its own control row, meant to rule out a
+	// constant offset, answers 6 in both binaries where it was written down
+	// as 2 (#4155).
+	//
+	// Here rather than in Semantics because it is a question about where a
+	// message says something happened, which is what Location and
+	// RedirectFailureLine already are — and it sits beside
+	// BackquotedSubstitutionRestartsLines because the two are one question
+	// about where a body's lines are counted from, asked of the spellings
+	// that answer it differently. The older spelling is a third answer again
+	// in that shell, one line above the closer, and is #3553's.
+	SubstitutionBodyIsNumberedFromWhereTheShellWasReading bool
 
 	// BackquotedSubstitutionFailureAddsItsBodysNewlines adds the number of
 	// newlines inside the backquotes to the line a refused backquoted body is

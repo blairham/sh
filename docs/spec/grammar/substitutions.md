@@ -1402,39 +1402,96 @@ in the same shell.
 
 ## Where a body's lines are counted from
 
-A `$( … )` body is parsed on its own, so something has to say which file
-line its first line is. Two of the three answers in the panel are already
-written down — a `$( … )` is numbered from the file everywhere, and the
-older spelling restarts from one in dash — and the third is a `$(` that
-ends the line.
+A substitution's body is parsed on its own, so something has to say which file
+line its first line is. Two of the answers in the panel were already written
+down — a body is numbered from the file in zsh, ksh93 and dash, and the older
+spelling restarts from one in dash — and the third is bash, where the body is
+numbered from **where the shell was reading**.
 
-Measured 2026-09-17 over a script file with `env -i PATH=/usr/bin:/bin
-LC_ALL=C` and stdin from `/dev/null`, `echo one` on line one and the
-substitution written from line two:
+Measured 2026-09-23 against bash 5.3.15 in the pinned `debian:sid-slim` and
+bash 5.3.20 on macOS, which agree on every row. A script file, `env -i
+PATH=/usr/bin:/bin LC_ALL=C`, stdin from `/dev/null`, `echo one` on line one
+and the substitution written from line two:
 
-| body | physical line of the command | bash 5.3.20 | zsh, ksh93, dash |
+| body | physical line of the command | bash | zsh, ksh93, dash |
 | --- | --- | --- | --- |
-| `$(⏎echo "L=$LINENO"⏎)` | 3 | **2** | 3 |
-| `$(⏎⏎echo "L=$LINENO"⏎)` | 4 | **2** | 4 |
-| `$(⏎⏎⏎⏎echo "L=$LINENO"⏎)` | 6 | **2** | 6 |
-| `$(⏎echo x⏎echo "L=$LINENO"⏎)` | 4 | **3** | 4 |
-| `$(echo "L=$LINENO"⏎)` | 2 | 2 | 2 |
+| `v=$(⏎echo "L=$LINENO"⏎)` | 3 | **4** | 3 |
+| `v=$(⏎⏎echo "L=$LINENO"⏎)` | 4 | **5** | 4 |
+| `v=$(⏎⏎⏎echo "L=$LINENO"⏎)` | 5 | **6** | 5 |
+| `v=$(⏎echo x⏎echo "L=$LINENO"⏎)` | 4 | **6** | 4 |
+| `v=$(⏎echo "L=$LINENO"⏎⏎⏎)` | 3 | **6** | 3 |
+| `v=$(⏎# c⏎echo "L=$LINENO"⏎)` | 4 | **5** | 4 |
+| `v=$(echo "L=$LINENO"⏎)` | 2 | 3 | 2 |
+| `v=$(⏎echo "L=$LINENO")` | 3 | 3 | 3 |
+| `echo "[$(⏎echo "L=$LINENO"⏎)]"` | 3 | **2** | 3 |
+| `echo "[$(⏎echo a⏎echo "L=$LINENO"⏎)]"` | 4 | **3** | 4 |
 
-The last row is the control and is why this is about the **opener**: with
-text after the `$(`, every column answers 2. The third row is what says it
-is not a constant offset of one — however many newlines stand between the
-opener and the first command, that command is the opener's line there.
+The number is the line the **command that holds the substitution** reports
+itself at, and the body's first command takes it; the body's later lines count
+up from there. The last two rows are what say it is that and not the closing
+delimiter: with the substitution in a command's *later* word the body is
+numbered from the command's own line, which is above the body rather than
+below it. Rows seven and eight are the controls — with the command and the
+closer on one line every column agrees, so nothing here is a constant offset.
 
-The line *after* the substitution is 5 in every column, so nothing is
-shifted for the rest of the file; the offset lives inside the body. The
-same number shows in a **diagnostic** as well as in `$LINENO`, because
-both are read off the one offset the body's runner is given.
+Which line a command reports itself at is its own question, one row up:
 
-Diagnostics value: `SubstitutionBodyStartsAtItsOpenersLine` — bash alone.
-It sits beside `BackquotedSubstitutionRestartsLines` because the two are
-one question about where a body's lines are counted from, asked of the two
-spellings. The older spelling is a third answer again in that shell, and it
-is the section below.
+| command | bash | dash | zsh | ksh93 |
+| --- | --- | --- | --- | --- |
+| `v=$(⏎:⏎) > /nonexistent/f` from line 2 | 4 | 4 | 2 | 2 |
+| `v="a⏎b" > /nonexistent/f` from line 2 | 3 | 3 | 2 | 2 |
+| `v=a\⏎b > /nonexistent/f` from line 2 | 3 | 3 | 2 | 2 |
+| `echo x "$(⏎:⏎)" > /nonexistent/f` | 2 | 2 | 2 | 2 |
+| `nosuchcmd "$(⏎:⏎)"` from line 2 | 2 | 2 | 2 | 2 |
+
+bash and dash name the line the command's **first word** ends on, so a first
+word that spans lines — a multi-line substitution, a multi-line quoted string,
+a backslash-newline alike — moves everything the command reports down with it.
+The last two rows are the controls: with the multi-line word in a later
+position every column names the command's own line, however far below the
+command runs on. Diagnostics value: `CommandIsLocatedWhereItsFirstWordEnds`.
+
+Put together, `v=$( … )` is numbered from its closing parenthesis because that
+is where its first word ends, and `cmd "$( … )"` is numbered from `cmd`. That
+is one fact, not two.
+
+A **refusal** is not this number. A body that will not parse is reported at
+the line its text is on in every column, bash included, because the refusal
+comes out of the scan that has not reached the closing delimiter yet:
+`v=$(⏎if; then :; fi⏎)` from line two is line 3 everywhere, and a blank line
+in front of the `if` makes it 4. So the body's text carries two offsets — one
+for what it says while being read and one for what it says while running.
+
+The older spelling is a third answer again, and it is the newlines: it counts
+the ones between the backquote and the first command, where `$( … )` and
+`${ … ;}` skip them. Nine shapes, same conditions: `` v=`echo "L=$LINENO"` ``
+on line two answers 2, and the same body with the backquote ending the line
+answers 5 with the closing backquote on line 4. A blank line in front adds
+another.
+
+Diagnostics value: `SubstitutionBodyIsNumberedFromWhereTheShellWasReading` —
+bash alone. It sits beside `BackquotedSubstitutionRestartsLines` because the
+two are one question about where a body's lines are counted from.
+
+### What is measured here and not held
+
+bash's body counter is not the physical line, and four of its rules are
+recorded rather than implemented. Each was measured 2026-09-23 in the pinned
+image; all four leave one line out of place and none of them is reachable
+without a line *map* for a body, where this shell carries a single offset.
+
+- A **blank line between two body commands** counts for nothing:
+  `echo x "[$(⏎nosuchcmd⏎⏎echo "L=$LINENO"⏎)]"` answers 3 there and 4 here.
+  Neither does a comment line between them.
+- A **here-document inside a body** costs one extra line for everything below
+  it, as though its delimiter line were read twice: one here-document in front
+  of the command is +1, two are +2, and the size of the body does not matter.
+- A **nested substitution's newlines** cost nothing for what follows it in the
+  same body, which is the mirror image of the first rule.
+- A command inside a body whose own **first word spans lines** does move down
+  with it, so `CommandIsLocatedWhereItsFirstWordEnds` is the file's rule and
+  not the body's — except where the newlines are a nested substitution's, in
+  which case it is not.
 
 ### Where a backquoted body's refusal is placed
 

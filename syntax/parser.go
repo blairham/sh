@@ -3065,6 +3065,23 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 	// dialect's and is otherwise dead weight: with the flag off no `]` is
 	// ever read as a link and these never move.
 	startSpan, startOff := 0, open+1
+	// The brackets are **counted** rather than searched for, and the closer is
+	// the one that brings the depth back to zero. Measured 2026-09-23 from a
+	// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> f.sh`,
+	// standard input on the null device, and unanimous:
+	//
+	//	m[a]b]=z    bash 5.3.20 `m[a]b]=z: command not found`, 127
+	//	            ksh93u+     `m[a]b]=z: not found`, 127
+	//	            zsh 5.9.2   `no matches found: m[a]b]=z`
+	//	a[1][2]=v   the same three answers, where the chain is not the grammar
+	//
+	// So a `]` that closes the subscript and is not followed by the `=` is the
+	// end of the *name* and the word is an ordinary one — not a license to look
+	// for a later `]` that does have an `=` behind it, which is what the search
+	// did: `m[a]b]=z` quietly stored a key spelled `a]b` in all three dialects
+	// at status 0, and `a[1][2]=v` reached an arithmetic reader with `1][2` in
+	// it (#4241).
+	depth := 1
 	for i, s := range t.Spans {
 		if s.Kind != Literal || s.Quoting != Unquoted {
 			continue
@@ -3074,7 +3091,17 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 			from = open + 1
 		}
 		for j := from; j < len(s.Value); j++ {
+			if s.Value[j] == '[' {
+				depth++
+				continue
+			}
 			if s.Value[j] != ']' {
+				continue
+			}
+			if depth--; depth > 0 {
+				// A `]` the subscript's own text holds: `a[x[y]]=v` closes at
+				// the second one, and the key is the four characters between
+				// the outer pair.
 				continue
 			}
 			rest := s.Value[j+1:]
@@ -3090,7 +3117,9 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 					from:  p.subscriptPos(t, startSpan, startOff),
 					to:    offsetBy(s.Pos, j),
 				})
-				startSpan, startOff = i, j+2
+				// Zero rather than one, because the scan is about to walk
+				// over the `[` that opens the next link and count it.
+				startSpan, startOff, depth = i, j+2, 0
 				continue
 			}
 			// A dotted member path may stand between the bracket and the
@@ -3102,11 +3131,13 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 			appends := false
 			if strings.HasPrefix(rest, "+=") {
 				if !p.dialect.AppendAssign {
-					continue
+					return h, false
 				}
 				appends = true
 			} else if !strings.HasPrefix(rest, "=") {
-				continue
+				// The subscript closed and no assignment operator follows, so
+				// this word is not one — see the count above for the rows.
+				return h, false
 			}
 			h.name = name
 			h.member = member

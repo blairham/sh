@@ -457,6 +457,10 @@ func Semantics() interp.Semantics {
 	// unanswered TraceElementSubscriptIsEvaluated: nor a subscript. `a[1]=v`
 	// is an ordinary word here, assigned to a variable literally named
 	// `a[1]`, so there is nothing for the trace to resolve.
+	// unanswered ArrayAttributeRemoval: this shell spells neither `-a` nor
+	// `-A`, so no declaration of its can write the `+` form the axis is about.
+	// Measured 2026-09-23, `typeset +A a` is `typeset: not found` here — there
+	// is no declaration builtin either.
 	// unanswered ArithRecursionBound: nothing here is ever bounded, because
 	// nothing here recurses. ArithNameValueRecurses is No, so a value that is
 	// no numeral is refused where the other columns read it again as an

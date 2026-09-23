@@ -1399,6 +1399,11 @@ func Semantics() interp.Semantics {
 	// ending in a number is `expression recursion level exceeded` rather
 	// than the number. Measured 2026-09-18 (#3416).
 	s.ArithRecursionBound = interp.ArithRecursionBoundedByDepth
+	// `typeset +A` over a name that is an array is refused by name, at status
+	// 1, with the table left intact; over a scalar or a name that does not
+	// exist it is silent at 0. See interp.Semantics.ArrayAttributeRemoval
+	// (#4241).
+	s.ArrayAttributeRemoval = interp.ArrayAttributeRemovalRefusedForAnArray
 	// And an unset name found that way is a zero like any other unset name:
 	// `x=abc; $((x+1))` is 1 and the script runs on. Measured 2026-09-11 —
 	// ksh93 is the panel's holdout, where it is a fatal `parameter not set`.
@@ -3738,6 +3743,7 @@ func Diagnostics() interp.Diagnostics {
 		EmptyAssociativeKeyLength:                "[%[1]s]: bad array subscript",
 		ArithEmptySubscript:                      "%[1]s[]: bad array subscript",
 		ArithEmptySubscriptTarget:                "`%[1]s[]': not a valid identifier",
+		ArrayAttributeNotRemovable:               "%[2]s: %[1]s: cannot destroy array variables in this way",
 		// A declaration's operand with a value complains about the
 		// *subscript*, in the words the read of one gets; with no value the
 		// whole operand is refused as a name, builtin and all. Measured

@@ -92,17 +92,33 @@ f`
 // `declare +a a` leaves `declare -- a` with no array attribute at all; ksh93
 // refuses the spelling outright. So a mark that ignored the `+` would answer
 // a declaration that removes an attribute by creating the store for it.
+//
+// Run under **both** readings of ArrayAttributeRemoval that a name which is not
+// an array reaches, because the claim is the mark's and not either one's: the
+// name here holds nothing, so the reading that refuses an array and the reading
+// that empties one are both silent, and a mark that created the store would
+// fail under each. The third reading refuses the letter outright and has a test
+// of its own in dialect/ksh.
 func TestThePlusSpellingBringsNoCompoundIntoBeing(t *testing.T) {
-	for _, decl := range []string{"typeset +a a", "local +a a", "typeset +A a", "local +A a"} {
-		t.Run(decl, func(t *testing.T) {
-			src := "f() { " + decl + `; typeset -p a; }
+	for _, p := range []ArrayAttributeRemovalPolicy{
+		ArrayAttributeRemovalRefusedForAnArray,
+		ArrayAttributeRemovalEmptiesTheName,
+	} {
+		for _, decl := range []string{"typeset +a a", "local +a a", "typeset +A a", "local +A a"} {
+			t.Run(p.String()+"/"+decl, func(t *testing.T) {
+				src := "f() { " + decl + `; typeset -p a; }
 f`
-			out, errs, st := declRun(t, src, withArrayLetters(Yes), Diagnostics{})
-			const want = "declare -- a=\"\"\n"
-			if out != want || errs != "" || st != 0 {
-				t.Errorf("%s = %q (stderr %q, status %d), want %q", decl, out, errs, st, want)
-			}
-		})
+				set := func(s *Semantics) {
+					withArrayLetters(Yes)(s)
+					s.ArrayAttributeRemoval = p
+				}
+				out, errs, st := declRun(t, src, set, Diagnostics{})
+				const want = "declare -- a=\"\"\n"
+				if out != want || errs != "" || st != 0 {
+					t.Errorf("%s = %q (stderr %q, status %d), want %q", decl, out, errs, st, want)
+				}
+			})
+		}
 	}
 }
 

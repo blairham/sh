@@ -38,6 +38,7 @@ ash   ArithSubscriptNameMustBeSet
 ash   ArithSubscriptSkippedWhenNameUnset
 ash   ArithWholeArraySubscriptIsReportedAsBad
 ash   ArithWholeArraySubscriptIsTheSlice
+ash   ArrayAttributeRemoval
 ash   ArrayLetterOverAnUnaimedReferenceDropsIt
 ash   ArrayLiteralAssignmentStartsTheNameOver
 ash   ArrayLiteralOperandRetypesAFrozenScalar
@@ -304,6 +305,7 @@ dash  ArithSubscriptNameMustBeSet
 dash  ArithSubscriptSkippedWhenNameUnset
 dash  ArithWholeArraySubscriptIsReportedAsBad
 dash  ArithWholeArraySubscriptIsTheSlice
+dash  ArrayAttributeRemoval
 dash  ArrayLetterOverAnUnaimedReferenceDropsIt
 dash  ArrayLiteralAssignmentStartsTheNameOver
 dash  ArrayLiteralOperandRetypesAFrozenScalar

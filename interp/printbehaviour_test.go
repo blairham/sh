@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -255,11 +256,70 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 		Name: "sh", Dir: dir, Env: append(testPATH(), "TMPDIR="+t.TempDir()),
 	})
 	status, rerr := r.Run(context.Background(), f)
-	text := strings.ReplaceAll(out.String(), dir, "<dir>")
+	text := maskTimings(strings.ReplaceAll(out.String(), dir, "<dir>"))
 	if rerr != nil {
 		return text + "refused: " + rerr.Error(), -1
 	}
 	return text, status
+}
+
+// timingReport is a `time` report's own numbers, anchored so that nothing else
+// in a case's output can match: the three labeled lines in the two shapes
+// reportTime writes them, and the per-element line one layout writes instead.
+//
+// Anchored rather than "every decimal number", because most of what this
+// comparison is for *is* the digits a snippet printed. A case that prints
+// `echo 1.5` must still be compared digit for digit.
+var timingReport = []*regexp.Regexp{
+	// `\nreal\t0m0.000s` — clockTime, which `times` writes as well.
+	regexp.MustCompile(`(?m)^(real|user|sys)\t[0-9]+m[0-9]+(\.[0-9]+)?s$`),
+	// `real 0.00` — the `-p` shape, and the one bash and ksh93 share.
+	regexp.MustCompile(`(?m)^(real|user|sys) [0-9]+(\.[0-9]+)?$`),
+	// `cmd  0.00s user 0.00s system 0% cpu 0.000 total` — per-element.
+	regexp.MustCompile(`(?m)[0-9]+(\.[0-9]+)?s user [0-9]+(\.[0-9]+)?s system [0-9]+% cpu [0-9]+(\.[0-9]+)? total$`),
+}
+
+// maskTimings takes the *values* out of a timing report while leaving its
+// shape, so that two runs of one snippet can be compared.
+//
+// An elapsed time is not the printer's doing and is not stable: a `time`
+// report over the same command is `0m0.000s` on an idle machine and
+// `0m0.001s` on a loaded one, so a comparison of two runs fails for a reason
+// that has nothing to do with what was printed. It failed on CI exactly that
+// way, under the race detector, on
+// `alias/a-time-alias-in-front-of-a-pipeline` — a case whose snippet takes
+// the alias in most columns and so has no report to normalise, and reaches
+// the `time` keyword in the vector this test builds.
+//
+// **Here rather than in the case**, which is the whole point: a snippet that
+// normalises its own numbers protects that snippet, and the next corpus case
+// to print a report arrives unprotected. Every vector and every future case
+// is covered by masking in the one place both runs go through.
+//
+// Digit by digit rather than run by run, so the *shape* survives: `0m0.000s`
+// becomes `NmN.NNNs` and a report that grew or lost a decimal place is still
+// a difference. That matters here — one corpus case is about exactly how many
+// decimals a column writes.
+func maskTimings(text string) string {
+	if !strings.Contains(text, "real") && !strings.Contains(text, "user") &&
+		!strings.Contains(text, "cpu ") {
+		return text
+	}
+	for _, re := range timingReport {
+		text = re.ReplaceAllStringFunc(text, maskDigits)
+	}
+	return text
+}
+
+// maskDigits replaces every digit with `N`, keeping the length and so the
+// shape of what it masked.
+func maskDigits(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return 'N'
+		}
+		return r
+	}, s)
 }
 
 // processState is the state a corpus case could change that is not the
@@ -340,5 +400,77 @@ func (before processState) unchangedBy(t *testing.T) {
 	}
 	if !slices.Equal(before.env, after.env) {
 		t.Errorf("this case changed the process's environment")
+	}
+}
+
+// What maskTimings takes out and what it leaves, at every shape reportTime
+// writes and at the one thing it must not touch.
+//
+// Its own test because the mask is the reason a green round-trip means
+// anything on a loaded machine, and because the two halves pull against each
+// other: a mask that took out too little leaves the flake, and one that took
+// out too much would compare two runs of a *changed* printer as equal.
+func TestMaskTimingsTakesTheValuesAndKeepsTheShape(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{
+			"the three labeled lines",
+			"\nreal\t0m0.000s\nuser\t0m0.000s\nsys\t0m0.000s\n",
+			"\nreal\tNmN.NNNs\nuser\tNmN.NNNs\nsys\tNmN.NNNs\n",
+		},
+		{
+			"the `-p` shape",
+			"real 0.00\nuser 0.00\nsys 0.00\n",
+			"real N.NN\nuser N.NN\nsys N.NN\n",
+		},
+		{
+			"the per-element line",
+			"true  0.00s user 0.01s system 0% cpu 0.003 total\n",
+			"true  N.NNs user N.NNs system N% cpu N.NNN total\n",
+		},
+		{
+			// The control, and the reason the patterns are anchored on a
+			// label rather than matching every decimal number: most of what
+			// this comparison is for is the digits a snippet printed.
+			"a number the snippet printed",
+			"echo 1.5\n1.5\nreal\t0m0.000s\n",
+			"echo 1.5\n1.5\nreal\tNmN.NNNs\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := maskTimings(tc.in); got != tc.want {
+				t.Errorf("= %q, want %q", got, tc.want)
+			}
+		})
+	}
+	// The flake itself: two runs whose elapsed times differ now compare
+	// equal. This is the failure CI hit under the race detector.
+	if a, b := maskTimings("\nreal\t0m0.000s\n"), maskTimings("\nreal\t0m0.017s\n"); a != b {
+		t.Errorf("two elapsed times still differ: %q against %q", a, b)
+	}
+	// And the power kept: a report that grew or lost a decimal place is still
+	// a difference, which one corpus case is about.
+	if a, b := maskTimings("\nreal\t0m0.000s\n"), maskTimings("\nreal\t0m0.00s\n"); a == b {
+		t.Errorf("a lost decimal place was masked away: both came to %q", a)
+	}
+}
+
+// And the comparison itself masks, which is the half a test of the helper
+// alone cannot reach.
+//
+// The wiring is what fixes the flake: a correct maskTimings that nothing calls
+// leaves CI failing on a loaded machine exactly as before, and the failure
+// arrives on whichever corpus case happens to print a report rather than here.
+// So this runs a report through the same helper the round-trip uses and looks
+// for the mask in what comes back.
+func TestTheRoundTripComparisonMasksATimingReport(t *testing.T) {
+	out, st := runUnderBash(t, "{ time true; } 2>&1\n")
+	if st != 0 {
+		t.Fatalf("status = %d, out = %q", st, out)
+	}
+	if !strings.Contains(out, "real") {
+		t.Skipf("this vector writes no timing report: %q", out)
+	}
+	if strings.ContainsAny(out, "0123456789") {
+		t.Errorf("= %q, want the report's digits masked before the two runs are compared", out)
 	}
 }

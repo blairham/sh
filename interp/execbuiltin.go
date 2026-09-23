@@ -340,13 +340,25 @@ func (r *Runner) execFailed(err error) int {
 //
 // It always stops it — `exec nosuchcmd; echo REACHED` prints nothing in any
 // shell in the panel, so unlike almost everything else here that is not an
-// axis. Whether the EXIT trap runs on the way out is **two** axes, because
+// axis. One shell lets a *script* ask for the other answer, which is a
+// capability rather than a disagreement and is read first: see
+// Runner.ExecFailureLeavesTheShellRunning, and bash's `shopt -s execfail`. Whether the EXIT trap runs on the way out is **two** axes, because
 // bash answers the two halves of the failure differently: it runs the trap
 // when the PATH search came up with nothing and drops it when a file was
 // named and would not start. dash and BusyBox ash run it either way, ksh93
 // and zsh drop it either way. See Semantics.ExecFailureRunsExitTrap and
 // Semantics.ExecFailureOnAPathnameRunsExitTrap (#3983).
 func (r *Runner) execEnds(err error, status int) int {
+	if r.ExecFailureLeavesTheShellRunning() {
+		// One shell lets a script ask for a failed `exec` to be an ordinary
+		// failed command, and then there is no way out to decide the trap
+		// question on: the EXIT trap is neither run nor dropped here and
+		// fires later at the shell's own end. The status is the one the exit
+		// would have carried, unchanged. See
+		// Runner.ExecFailureLeavesTheShellRunning for the measurement.
+		r.status = status
+		return status
+	}
 	axis, what := r.sem().ExecFailureRunsExitTrap,
 		"an EXIT trap running after an `exec` whose name PATH did not have"
 	if execNamedAFile(err) {

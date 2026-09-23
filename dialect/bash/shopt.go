@@ -336,6 +336,27 @@ var shoptSwitches = map[string]shoptSwitch{
 		get: (*interp.Runner).KeepsLastPipelineElement,
 		set: (*interp.Runner).SetKeepsLastPipelineElement,
 	},
+	// A failed `exec` is an ordinary failed command here rather than the end
+	// of the script, which is the one thing about `exec` this shell lets a
+	// script move. Measured 2026-09-23 on bash 5.3.15:
+	//
+	//	shopt -s execfail; exec nosuchcmd42; echo "st=$?"   complaint, st=127
+	//	shopt -s execfail; exec ./notexec;   echo "st=$?"   complaint, st=126
+	//
+	// The status is the one the exit would have carried and the wording does
+	// not change, so this moves the *ending* and nothing else — see
+	// interp.Runner.ExecFailureLeavesTheShellRunning, which is where the
+	// EXIT-trap consequence is written down.
+	//
+	// It sat in shoptStates refusing the write, and that refusal was the
+	// misleading kind: a script sets the option precisely so that a missing
+	// command does not take the shell down with it, and a quiet refusal left
+	// it taken down anyway with the line after the `exec` never reached
+	// (#4149).
+	"execfail": {
+		get: (*interp.Runner).ExecFailureLeavesTheShellRunning,
+		set: (*interp.Runner).SetExecFailureLeavesTheShellRunning,
+	},
 	// The fourth name here that moves a semantics axis, and the one whose
 	// axis holds a *name* rather than an answer:
 	// interp.Semantics.PromptCommentsNeedTheOption is this option's own
@@ -810,7 +831,6 @@ var shoptStates = map[string]bool{
 	"cdable_vars":          false,
 	"cmdhist":              true,
 	"complete_fullquote":   true,
-	"execfail":             false,
 	"extquote":             true,
 	"globasciiranges":      true,
 	"gnu_errfmt":           false,

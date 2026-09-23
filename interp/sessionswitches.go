@@ -302,6 +302,43 @@ func (r *Runner) KeepsLastPipelineElement() bool { return r.keepsLastPipelineEle
 // `shopt -s lastpipe` is the only name the panel has for it.
 func (r *Runner) SetKeepsLastPipelineElement(on bool) { r.keepsLastPipelineElement = on }
 
+// ExecFailureLeavesTheShellRunning reports whether an `exec` that could not
+// happen is an ordinary failed command rather than the end of the script.
+//
+// Off with nothing said, because ending the script is what every shell in the
+// panel does: `exec nosuchcmd; echo REACHED` prints nothing in any of them.
+// One shell lets a script ask for the other answer and calls it
+// `shopt -s execfail`.
+//
+// Measured 2026-09-23 on bash 5.3.15, `bash --norc -c` with the option set:
+//
+//	exec nosuchcmd42; echo "st=$?"    the complaint, then st=127
+//	exec ./notexec;   echo "st=$?"    the complaint, then st=126
+//	exec ./adir;      echo "st=$?"    the complaint, then st=126
+//
+// So the *status* is unchanged — it is the status the shell would have exited
+// with — and only the ending goes away. The wording is unchanged too, which
+// is why this is read where the script stops rather than where it speaks.
+//
+// The EXIT trap is untouched here, and that is the half an implementation is
+// most likely to get wrong. Two axes decide whether a failed `exec` runs the
+// trap on its way out; with this on there is no way out, so the trap is
+// neither run nor dropped and fires later at the shell's own end. Measured on
+// the same binary: `trap "echo TRAP" EXIT; exec nosuchcmd42; echo "after=$?"`
+// prints the complaint, `after=127`, then `TRAP`.
+//
+// The redirection-only form of the builtin never reaches this — `exec 3>f` is
+// silent at 0 with the option either way — because that form is not an exec.
+//
+// Not an axis, for the reason KeepsLastPipelineElement is not: an axis records
+// a disagreement between shells, and here there is nobody to disagree with.
+// One shell in the panel has the option at all (#4149).
+func (r *Runner) ExecFailureLeavesTheShellRunning() bool { return r.execFailureIsSurvivable }
+
+// SetExecFailureLeavesTheShellRunning moves it, for a dialect naming the
+// capability — `shopt -s execfail` is the only name the panel has for it.
+func (r *Runner) SetExecFailureLeavesTheShellRunning(on bool) { r.execFailureIsSurvivable = on }
+
 // ErrExitEntersACommandSubstitution reports whether the shell a `$(…)` body
 // runs in holds `set -e` — `shopt inherit_errexit` under its bash name.
 //

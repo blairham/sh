@@ -992,6 +992,43 @@ It reaches every spelling of quoting — `'a.b'`, `"$r"`, a partly quoted
 `b` at level 31. `Runner.regexQuotingIsLiteral` is where the level is read, and
 the axis is asked only where the level has not already decided it.
 
+### A bracket expression takes the quoting off and nothing more
+
+A character the script quoted in a `=~` operand is the character and not the
+syntax it spells — that is the whole of the rule above. **Inside a bracket
+expression it is only that**, and the two members that are still syntax there
+are not protected from being syntax. Measured 2026-09-23 against bash 5.3.15
+in the pinned image and bash 5.3.20 on macOS, which agree:
+
+| written | subject | answer |
+| --- | --- | --- |
+| `[[ . =~ [\.] ]]` | `.` | matches |
+| `[[ \\ =~ [\.] ]]` | `\` | no match — the set holds the dot alone |
+| `[[ ']' =~ [\]] ]]` | `]` | matches — a quoted `]` first is the member POSIX makes it |
+| `[[ 'a]' =~ [\a\]] ]]` | `a]` | matches, `BASH_REMATCH` `a]` |
+| `[[ a =~ [\a\]] ]]` | `a` | **no match** |
+| `[[ abc =~ [\[=a=\]].. ]]` | `abc` | matches — the class is read after the quoting comes off |
+
+Row four is the one that says it. `[\a\]]` is the set holding `a` and then a
+literal `]`: the quoted closer **closed the set**, exactly as `[a]]` would, so
+the quoting was removed and nothing was put in its place. `a`, `]`, `\`, `\a`
+and `\]` against that expression are all no match.
+
+The control is the same expression held in a parameter — `r='[\.]'; [[ \ =~ $r ]]`
+matches — where the backslash is an ordinary member of the set, which is POSIX's
+rule and the reference's. So the two readings of one text are the script's
+quoting and a value's characters, and they cannot be told apart once the text
+exists: `interp.condRegexMark` carries the first through the rewrite, on the
+NUL convention `syntax.ArithValueMark` set.
+
+Row six is why the quoting comes off the **whole** bracket before it is read
+rather than a character at a time: `[=a=]` is five characters, and a mark
+between them hides the class from the reader that reduces it.
+
+This was the last of `cond.tests`. Every row above answered the other way
+before, silently — a set that gained a backslash and lost the character it
+stood in front of.
+
 ## An operand ending in `(#q…)` is matched against the filesystem
 
 Nothing inside `[[ … ]]` is split or globbed, which is why `[[ -z $u ]]`

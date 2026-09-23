@@ -569,11 +569,36 @@ func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string) {
 		if regexSpanIsLive(s) {
 			b.WriteString(part)
 		} else {
-			b.WriteString(regexp.QuoteMeta(part))
+			// **Marked rather than escaped.** A backslash in front of a
+			// quoted character is the right spelling everywhere but inside a
+			// bracket expression, where a backslash is an ordinary member and
+			// the rewrite that follows reads it as one — so `[[ \\ =~ [\.] ]]`
+			// matched here and does not in the reference. The mark says the
+			// character is the script's own wherever it lands, and nothing
+			// reaches the engine holding one. See condRegexMark (#4173).
+			markQuotedRegex(&b, part)
 		}
 		return part
 	})
 	return text, b.String()
+}
+
+// markQuotedRegex writes a quoted span of a `=~` operand with every character
+// of it marked as the script's own.
+//
+// Per rune rather than per byte, so a mark never lands between the bytes of
+// one character; and a mark the *value* held is doubled, which is the
+// convention syntax.ArithValueMark set and the only way a NUL in a value can
+// still be a NUL.
+func markQuotedRegex(b *strings.Builder, part string) {
+	for _, c := range part {
+		b.WriteByte(condRegexMark)
+		if c == condRegexMark {
+			b.WriteByte(condRegexMark)
+			continue
+		}
+		b.WriteRune(c)
+	}
 }
 
 // regexSpanIsLive reports whether this span's metacharacters are the regular
@@ -862,7 +887,10 @@ func (r *Runner) regexMatch(pat, left string) (bool, error) {
 	if err != nil {
 		// The pattern as the script wrote it and never the rewrite, which is
 		// empty where the rewrite is what failed.
-		return false, arithError{msg: "invalid regular expression: " + pat}
+		// The pattern as the script wrote it, marks off: the message
+		// quotes the operand back and a mark is this shell's own
+		// bookkeeping.
+		return false, arithError{msg: "invalid regular expression: " + unmarkRegex(pat)}
 	}
 	pat = expr
 	expr, subject, back := r.regexOperands(pat, left)
@@ -870,7 +898,10 @@ func (r *Runner) regexMatch(pat, left string) (bool, error) {
 	if err != nil {
 		// The pattern as the script wrote it, never the folded spelling:
 		// a script that never asked for `(?i)` must not read about one.
-		return false, arithError{msg: "invalid regular expression: " + pat}
+		// The pattern as the script wrote it, marks off: the message
+		// quotes the operand back and a mark is this shell's own
+		// bookkeeping.
+		return false, arithError{msg: "invalid regular expression: " + unmarkRegex(pat)}
 	}
 	// Leftmost-**longest**, which is what a POSIX regular expression means
 	// and is not what this package matches by default: `regexp` prefers the

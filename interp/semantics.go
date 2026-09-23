@@ -7336,6 +7336,36 @@ type Semantics struct {
 	// first of those three — see Diagnostics.LoopControlOutsideALoop.
 	LoopControlOutsideALoopIsFatal Answer
 
+	// LoopControlOutsideALoopSilentInPosixMode withholds that sentence for the
+	// length of POSIX mode — the same shape
+	// Semantics.BadOptionToSpecialBuiltinFatalInPosixMode has, and asked of
+	// the dialect for the same reason: a value written into the mode reaches
+	// every dialect invoked as `sh`, and the panel does not agree.
+	//
+	// Measured 2026-09-23 with `break; echo st=$?` under `-c`, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	                     plain                       POSIX mode
+	//	bash 5.3.20          the sentence, status 0      nothing, status 0
+	//	bash 3.2.57          the sentence, status 0      nothing, status 0
+	//	bash as `sh`         nothing, status 0           — it is the mode
+	//	zsh 5.9.2            the sentence, and stops     no `posix` option
+	//	zsh as `sh`          the sentence, and stops     the same sentence
+	//	ksh93u+, dash        nothing, status 0           no `posix` option
+	//
+	// zsh's second row is the one that makes this a dialect's answer rather
+	// than the mode's: invoked as `sh` that shell comes through
+	// [Runner.SetPosixMode] like every other, and it keeps its sentence. A
+	// withholding written in here would have taken it away.
+	//
+	// The *withholding* rather than the reporting, for the reason
+	// [Runner.ReportsShiftPastTheEnd] carries: two columns are silent here
+	// because their Diagnostics holds no wording and not because anything
+	// took one away, so an axis phrased the other way would have had them
+	// answering a question they are not being asked. Only the status quo is
+	// the zero value.
+	LoopControlOutsideALoopSilentInPosixMode Answer
+
 	// LoopControlPlaceIsJudgedBeforeTheCount decides which of a `break`'s two
 	// complaints it makes when both are available: that there is no loop to
 	// leave, or that the count is not a number.
@@ -21421,6 +21451,70 @@ type Semantics struct {
 	// leaves this Unspecified refuses a script that reaches it by name.
 	SpecialBuiltinNameIsNotAFunctionNameInPosixMode Answer
 
+	// SpecialBuiltinOutranksAFunction puts a POSIX special builtin **ahead of
+	// a function of the same name** in the command search — the order XCU
+	// 2.9.1.1 sets out, where a special builtin is found first, a function
+	// second and a regular builtin third.
+	//
+	// It is one axis with two faces and they move together in the column that
+	// answers it: what *runs* when the word is reached, and what the
+	// name-reporting builtins say the word **is**. `type`, `type -t`,
+	// `command -V` and the first row of `type -a` all name the builtin where
+	// this is Yes; `declare -f` still lists the function, because that is a
+	// question about the table rather than about the search, and `command -v`
+	// prints the bare name either way.
+	//
+	// Measured 2026-09-23, `break() { echo FUNC; }` in a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C`, with `type break` and a bare
+	// `break` after it:
+	//
+	//	                     define?  type says     `break` runs
+	//	bash 5.3.20          yes      the function  the function
+	//	bash 3.2.57          yes      the function  the function
+	//	zsh 5.9.2            yes      the function  the function
+	//	ksh93u+ 2012-08-01   no — `break: invalid function name`
+	//	dash 0.5.12          no — `Syntax error: Bad function name`
+	//	bash as `sh`         no — `` `break': is a special builtin ``
+	//
+	// So **No is unanimous wherever the question can be put at all**, which is
+	// why the plain answer is the standard-agnostic one: the three refusals
+	// have no order to report, and
+	// SpecialBuiltinNameIsNotAFunctionName is the axis recording them. The
+	// mode is where the standard's order shows up — see the twin below.
+	SpecialBuiltinOutranksAFunction Answer
+
+	// SpecialBuiltinOutranksAFunctionInPosixMode is the axis above as POSIX
+	// mode leaves it, the way SpecialBuiltinNameIsNotAFunctionNameInPosixMode
+	// is: [Runner.SetPosixMode] swaps this value in on the way in and puts the
+	// answer above back on the way out.
+	//
+	// The state is only reachable from one side. In POSIX mode bash refuses
+	// the definition outright, so the function has to be defined **first** and
+	// the mode entered after it — which is the only route to a shell holding
+	// both. Measured 2026-09-23, `break() { echo FUNC; }; set -o posix` and
+	// then the four questions:
+	//
+	//	                     type / -t / command -V   type -a first row   runs
+	//	bash 5.3.20          the SPECIAL builtin      the SPECIAL builtin the builtin
+	//	bash 3.2.57          the function             the function        the builtin
+	//	zsh 5.9.2            `set: no such option: posix`
+	//
+	// bash 3.2 is why that note carries a version rather than a shell: twelve
+	// years apart, the same family moves the *search* in the mode and only the
+	// later build moves what `type` reports. This preset claims 5.3, where the
+	// two faces agree, and a preset that ever claims 3.2 needs them split
+	// rather than this field widened.
+	//
+	// Left at the plain answer in the standard's own vector rather than set to
+	// the standard's order, for the reason
+	// BadSetOptionNameFatalInPosixMode is asked of the dialect: a value
+	// written into the swap reaches every dialect invoked as `sh`, and the one
+	// column besides bash that lets such a function exist — BusyBox ash, which
+	// has no POSIX mode and arrives here only because `sh` is the one name it
+	// has — has not been measured on the order. The mode moves an answer and
+	// does not invent one.
+	SpecialBuiltinOutranksAFunctionInPosixMode Answer
+
 	// AliasBadOptionFatal ends the script over `unalias` **with no operand
 	// at all**, which is a usage error rather than a bad option. True in
 	// ksh93 alone.
@@ -24399,6 +24493,15 @@ func PosixSemantics() Semantics {
 		// refusal here and the one column that makes one says so itself.
 		SpecialBuiltinNameIsNotAFunctionName:            No,
 		SpecialBuiltinNameIsNotAFunctionNameInPosixMode: No,
+		// And the order between the two wherever the function exists anyway.
+		// Unanimous in every column that lets it be defined, so the plain
+		// answer is No rather than XCU 2.9.1.1's order; the mode is where the
+		// standard's order shows, and it is asked of the dialect there.
+		SpecialBuiltinOutranksAFunction:            No,
+		SpecialBuiltinOutranksAFunctionInPosixMode: No,
+		// And the mode does not take a loop-control sentence away by itself:
+		// the one column whose mode does says so in its own vector.
+		LoopControlOutsideALoopSilentInPosixMode: No,
 		// `alias` is not one of the fifteen the standard marks special, so
 		// the refusal is an ordinary one and the script goes on.
 		AliasBadOptionFatal: No,
@@ -25238,6 +25341,14 @@ func PosixSemantics() Semantics {
 func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,
+		// A function shadows a special builtin of the same name, which is
+		// unanimous in every column that lets such a function be defined at
+		// all — see Semantics.SpecialBuiltinOutranksAFunction for the panel.
+		// Answered here rather than left to refuse because the question is
+		// asked of every call to such a name, so a refusal would be the
+		// substrate refusing a shape nothing disagrees about. What POSIX mode
+		// makes of it is the dialect's, through the twin.
+		SpecialBuiltinOutranksAFunction: No,
 		// The reading XCU states for both utilities and six of the seven
 		// columns hold, which is what keeps a Runner with no dialect able to
 		// leave: see Semantics.BareExitReportsTheUnitsOwnStatus, whose other

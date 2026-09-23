@@ -1476,6 +1476,13 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 // check and the recursion bound. The file the body is remembered as coming
 // from is the implementation's too, because that is where its lines are.
 func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name string, args []string) error {
+	// The bound a script may have moved, asked before the shell's own: a
+	// script that set one is asking for a refusal well short of the ceiling
+	// below, and the two say different things and give up different amounts of
+	// the input. See Runner.refuseFunctionNesting.
+	if r.refuseFunctionNesting(fn.Name) {
+		return nil
+	}
 	if r.depth >= maxDepth {
 		r.diagf("%s: too deeply nested\n", fn.Name)
 		r.status = 1

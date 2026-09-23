@@ -138,3 +138,38 @@ func (r *Runner) HasFunction(name string) bool {
 	_, ok := r.funcs[name]
 	return ok
 }
+
+// specialBuiltinOutranksAFunction reports whether a POSIX special builtin of
+// this name is reached **before** a function of the same name — the order XCU
+// 2.9.1.1 sets out, which one column takes in POSIX mode and nothing takes
+// outside it.
+//
+// One predicate for the search and for every reader that reports what a word
+// is, because they move together in the column that answers it: a shell
+// running the builtin while `type` names the function is a shell whose own
+// `type` lies about it. The readers are the plain answer, `-t`, `command -V`
+// and the first row of `type -a`; `declare -f` is deliberately not one of
+// them, since a listing is a question about the table rather than about the
+// search, and neither is `command -v`, which prints the bare name either way.
+//
+// The membership and the presence are asked before the axis, which is what
+// keeps the question off every other command word: a name that is not one of
+// the special builtins, or one this shell has no builtin for, has no order to
+// report. See Semantics.SpecialBuiltinOutranksAFunction for the panel.
+func (r *Runner) specialBuiltinOutranksAFunction(name string) bool {
+	if !r.IsSpecialBuiltinHere(name) || !r.presentsAsBuiltin(name) {
+		return false
+	}
+	// And there has to be a function for the builtin to outrank. Asked before
+	// the axis because a name with nothing of the script's under it has no
+	// order to report, and the axis is one a vector may leave unanswered: a
+	// `type -a .` in a shell that never defined a `.` would otherwise be
+	// refused for a disagreement it is not standing in. A function the
+	// dialect's own prelude presents is not one either — that *is* the
+	// builtin, so there is nothing to put an order on.
+	if _, ok := r.reportedFunc(name); !ok {
+		return false
+	}
+	return r.ask(r.sem().SpecialBuiltinOutranksAFunction,
+		"a special builtin outranking a function of the same name")
+}

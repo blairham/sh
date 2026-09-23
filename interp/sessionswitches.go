@@ -116,6 +116,24 @@ func (r *Runner) ReportsShiftPastTheEnd() bool { return !r.shiftPastEndQuiet }
 // SetReportsShiftPastTheEnd moves it.
 func (r *Runner) SetReportsShiftPastTheEnd(on bool) { r.shiftPastEndQuiet = !on }
 
+// ReportsLoopControlOutsideALoop reports whether a `break` or `continue` with
+// no loop around it says so.
+//
+// The same shape ReportsShiftPastTheEnd has and for the same reason: two
+// columns are silent here because their Diagnostics carries no wording rather
+// than because anything withheld one, so the field behind this stores the
+// deviation and a Runner that was never told reports. What moves it is POSIX
+// mode in the one column whose mode moves it — see
+// Semantics.LoopControlOutsideALoopSilentInPosixMode.
+//
+// It governs the sentence alone. Whether the misuse also ends the script is
+// Semantics.LoopControlOutsideALoopIsFatal, which is read whatever this says:
+// the column that stops is not the column that withholds.
+func (r *Runner) ReportsLoopControlOutsideALoop() bool { return !r.loopControlQuiet }
+
+// SetReportsLoopControlOutsideALoop moves it.
+func (r *Runner) SetReportsLoopControlOutsideALoop(on bool) { r.loopControlQuiet = !on }
+
 // ExpandsAnOperandsSubscriptAgain reports whether a subscript that reaches a
 // builtin as **text** — `unset -v 'a[$k]'`, `printf -v 'c[$k]'`, `read
 // 'b[$k]'`, `test -v 'g[$k]'` — is expanded once more before the element is

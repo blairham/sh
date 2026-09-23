@@ -3019,6 +3019,21 @@ func Semantics() interp.Semantics {
 	// special builtins and not a table of its own, unlike ksh93's and
 	// dash's, which are the parser's (#2987).
 	s.SpecialBuiltinNameIsNotAFunctionNameInPosixMode = interp.Yes
+	// And in that mode a special builtin the shell already holds is reached
+	// **before** a function of the same name — the order XCU 2.9.1.1 sets out
+	// — in the search and in what the name-reporting builtins say. Measured
+	// 2026-09-23 on 5.3.20, the function defined before the mode is entered
+	// because the mode refuses the definition itself. See
+	// Semantics.SpecialBuiltinOutranksAFunctionInPosixMode, where bash 3.2 is
+	// the row that says the two faces can come apart.
+	s.SpecialBuiltinOutranksAFunctionInPosixMode = interp.Yes
+	// And the mode takes the loop-control sentence away: `break` with no loop
+	// around it names the three loops under bash's own name and says nothing
+	// at all under `set -o posix` or under the name `sh`, status 0 either way.
+	// Measured 2026-09-23 on 5.3.20 and 3.2.57 alike, so it is the mode and
+	// not the build. See Semantics.LoopControlOutsideALoopSilentInPosixMode,
+	// where zsh-as-`sh` is the row that keeps this off the core.
+	s.LoopControlOutsideALoopSilentInPosixMode = interp.Yes
 	s.BadSetOptionNameFatalInPosixMode = interp.Yes
 	s.BadSetOptionLetterFatalInPosixMode = interp.Yes
 	// `-o` takes the next word and never the rest of its own: measured,
@@ -3759,9 +3774,21 @@ func Diagnostics() interp.Diagnostics {
 		// the one above. See Diagnostics.ArithByteIsNoDigit.
 		ArithByteIsNoDigit: "invalid number",
 		// And a base outside 2..64 is a third: `$(( 1#0 ))`.
-		ArithInvalidBase:         "invalid arithmetic base",
-		ArithRecursionLimit:      "expression recursion level exceeded",
-		ArithErrorNamesThePrefix: true,
+		ArithInvalidBase: "invalid arithmetic base",
+		// A call the shell will not enter because too many are already
+		// active, at whatever bound `FUNCNEST` set. Measured 2026-09-23 on
+		// 5.3.20 with `FUNCNEST=5`.
+		FunctionNestingLimit: "%[1]s: maximum function nesting level exceeded (%[2]d)",
+		// A function name is written back bare, whatever is in it, and the one
+		// shape a bare header could not read back takes the keyword instead:
+		// `function a=2 () `, where `a=2 () ` would be an assignment followed
+		// by a group. Measured 2026-09-23 on 5.3.20 — see
+		// interp.FunctionListingNameSpelling for the panel and for `=x`, which
+		// is the control.
+		FunctionListingNameSpelling:         interp.FunctionListingNameIsBareWithAKeywordForAnAssignment,
+		FunctionListingAssignmentNameHeader: "function %[1]s () \n%[2]s",
+		ArithRecursionLimit:                 "expression recursion level exceeded",
+		ArithErrorNamesThePrefix:            true,
 		// set -o pads to fifteen and tabs; kill -l numbers five to a row.
 		// The width is named rather than written, because `shopt -o -s`
 		// writes this listing narrowed and has to pad it the same way.
@@ -4433,6 +4460,13 @@ func Apply(r *interp.Runner) {
 	// core keeps the record and this names it; ksh93 and zsh keep their
 	// captures under names and shapes of their own, never this one.
 	r.SetRegexMatch("BASH_REMATCH")
+	// And the parameter that moves the bound on function nesting. The bound is
+	// the core's and the name is this shell's; ksh93 has the bound and no name
+	// for it, and dash has neither. Measured 2026-09-23 on 5.3.20 — a positive
+	// integer only, so `FUNCNEST=0`, an empty value and `FUNCNEST=abc` are all
+	// "no bound of the script's own". See
+	// interp.Runner.SetFunctionNestingParameter.
+	r.SetFunctionNestingParameter("FUNCNEST")
 	// The long names of the options that are on, as a readonly produced
 	// variable bound to the option state in both directions. The core keeps
 	// the state and this names it; the other three leave the name an ordinary

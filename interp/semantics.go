@@ -555,6 +555,17 @@ type Semantics struct {
 	// recorded for it anyway, because a preset that left it unanswered would
 	// refuse the word the day that axis moved.
 	//
+	// One shape in this family is a **panel split** and is not yet an axis,
+	// recorded here so it is not mistaken for the defect beside it. Where the
+	// value's backslash stands in front of something the *script* quoted and
+	// that something is a metacharacter, dash and bash free it — `v='a\';
+	// $v\*b` lists two names in a tree holding `a\*b` and `a\\*b` — while ksh93
+	// and zsh keep the piece literal and list one. This shell answers with ksh93
+	// and zsh, so bash is the column it is wrong for, and giving bash its own
+	// answer wants a value on ValueBackslashInAPattern rather than a fix.
+	// Measured 2026-09-23; the seven-column table is in
+	// dialect/bash/valuebackslashquotedalready_test.go (#4158).
+	//
 	// Asked only of a piece that describes a name, and only where a value's
 	// backslash ran out of value in front of a separator — which is one shape
 	// and not a class: `./tmp${bs}/a/b/*` spells its `tmp` piece and is the

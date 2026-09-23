@@ -180,3 +180,36 @@ func TestTheTwoValueBackslashMarksAgree(t *testing.T) {
 		t.Errorf("the doubled mark is %q, want two of %q", ValueBackslashRanOutOfValueForTest, ValueBackslashMarkForTest)
 	}
 }
+
+// A value's trailing backslash has nothing to quote when the script had already
+// quoted what follows, so it is a character of the pattern like any other.
+//
+// Under the reading that has such a backslash quote what follows, this shell
+// spent it on a character that had nothing live about it — the `\*` the script
+// wrote — and the two collapsed into one. Every column in the panel produces one
+// field there and this shell produced two, which is what says it is a defect
+// rather than a reading: see dialect/bash/valuebackslashquotedalready_test.go
+// for the seven-column measurement (#4158).
+//
+// Asserted under all three readings, because the fix is about the *absence* of
+// something to quote and no reading has anything to quote here.
+func TestAValueBackslashBeforeSomethingAlreadyQuotedIsACharacter(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a*b", `a\*b`, `a\\*b`, "ab"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, reading := range []ValueBackslashPolicy{
+		ValueBackslashQuotesWhatFollows, ValueBackslashDisarmsWhatFollows, ValueBackslashIsData,
+	} {
+		ask := func(s *Semantics) { s.ValueBackslashInAPattern = reading }
+		// `v` ends in a backslash and `\\` is a backslash the script quoted, so
+		// the pattern spells `a`, two backslashes, a live `*` and a `b` — one
+		// name, the one with two backslashes in it.
+		out, st := axisRunIn(t, dir, `v='a\'; printf '[%s]' $v\\*b`, ask)
+		if want := `[a\\*b]`; out != want || st != 0 {
+			t.Errorf("%v: said %q (status %d), want %q at 0", reading, out, st, want)
+		}
+	}
+}

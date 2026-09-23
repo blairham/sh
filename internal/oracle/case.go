@@ -19767,6 +19767,12 @@ echo after`,
 		Why:     "a value's end is not the field's end. `bs='\\'` holds one backslash, and the three shells that have a value's backslash *quote* what follows it quote the **field's** next character rather than the value's — so the first two fields find `./tmp/a/b/c` in dash, bash in all three builds and BusyBox ash, where ksh93 keeps the backslash as a character of the pattern and misses and zsh refuses the word. The third field is the sharpest and the quietest: a file named `x*` is there, the `?` is quoted by the value's backslash so those columns have no live metacharacter left and never glob the word at all. This shell wrote such a backslash as an ordinary literal — a value's end was where it stopped looking — so the `?` stayed live, two files matched and were handed on at status 0 with no diagnostic anywhere (#4234)",
 	},
 	{
+		ID: "glob/a-value-backslash-before-something-the-script-quoted", Category: "expansion",
+		Script:  true,
+		Snippet: "mkdir -p g && cd g && : > 'a*b' && : > 'a\\*b' && : > 'a\\\\*b' && : > ab && v='a\\' && printf \"[%s]\" $v\\\\*b && echo && printf \"[%s]\" $v*b && echo",
+		Why:     "a value's trailing backslash standing in front of something the *script* had already quoted. There is nothing for it to take the meaning off — a second quoting removes nothing — so it is a character of the pattern like any other, and the first field is `[a\\\\*b]` in every column: dash, bash 5.3, bash 3.2, the same bash as `sh`, ksh93, zsh and BusyBox ash all name the one file with two backslashes in it. This shell answered `[a\\*b] [a\\\\*b]`, two fields, having spent the backslash on a `*` that was not live (#4158). The second field is the control that keeps the row about the *already quoted* case: with a live metacharacter behind it the backslash does quote, and every column but ksh93 and zsh names one file — those two list both, which is Semantics.ValueBackslashInAPattern's own split and not this row's question",
+	},
+	{
 		ID: "glob/a-value-backslash-in-front-of-a-separator", Category: "expansion",
 		Script:  true,
 		Snippet: "mkdir -p 'g/x\\' g/y && cd g && : > 'x\\/e' && : > y/e && bs='\\' && printf \"[%s]\" ./[x]${bs}/e && echo && printf \"[%s]\" ./[y]${bs}/e && echo && printf \"[%s]\" ./y${bs}/[e] && echo",

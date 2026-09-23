@@ -213,42 +213,51 @@ func (s *signalState) drainForwarded() {
 	for {
 		select {
 		case sig := <-s.ch:
-			name, ok := signalName(sig)
-			if !ok {
-				continue
-			}
-			if name == "PIPE" && s.pipeAbsorbed > 0 {
-				// The kernel's copy of a broken pipe the shell already
-				// answered at the write that caused it. One write is one
-				// arrival, and whether the runtime's forwarding goroutine
-				// gets to run before the script ends is not something a
-				// handler should fire a second time over — measured at one
-				// `handled` in some runs and two in others over the same
-				// script, which is the shape of a scheduler deciding.
-				//
-				// It is also how an element's broken pipe is kept out of the
-				// shell that started it: the copy is real and the runtime
-				// delivers it here whatever descriptor the write was on, and
-				// no panel shell runs the outer handler for a signal the
-				// outer process never had.
-				s.pipeAbsorbed--
-				continue
-			}
-			if name == "CHLD" {
-				// The kernel's answer to a fork this shell may not have made,
-				// and the set it names is not the set of children a real shell
-				// would have had: a background job here is a goroutine with no
-				// process, and the processes a subshell starts are this one's
-				// children rather than the subshell's. The condition is raised
-				// where a fork is finished with instead — see
-				// Runner.childReaped, where both directions of that are
-				// measured.
-				continue
-			}
-			s.pending = append(s.pending, name)
+			s.forwarded(sig)
 		default:
 			return
 		}
+	}
+}
+
+// forwarded records one arrival the runtime handed over, with the lock already
+// held, and is the only place that decides whether it counts.
+//
+// One place because there are two drains and they must not part company: this
+// one and the wait in awaitOrTrap, which reads the same channel while it is
+// blocked on a job. The filtering below was written for the drain alone and the
+// wait went on appending whatever arrived — which is how a phantom arrival came
+// back through the other door and cost a background job the rest of its body.
+// See awaitOrTrap.
+func (s *signalState) forwarded(sig os.Signal) {
+	name, ok := signalName(sig)
+	if !ok {
+		return
+	}
+	switch {
+	case name == "PIPE" && s.pipeAbsorbed > 0:
+		// The kernel's copy of a broken pipe the shell already answered at
+		// the write that caused it. One write is one arrival, and whether the
+		// runtime's forwarding goroutine gets to run before the script ended
+		// is not something a handler should fire a second time over —
+		// measured at one `handled` in some runs and two in others over the
+		// same script, which is the shape of a scheduler deciding.
+		//
+		// It is also how an element's broken pipe is kept out of the shell
+		// that started it: the copy is real and the runtime delivers it here
+		// whatever descriptor the write was on, and no panel shell runs the
+		// outer handler for a signal the outer process never had.
+		s.pipeAbsorbed--
+	case name == "CHLD":
+		// The kernel's answer to a fork this shell may not have made, and the
+		// set it names is not the set of children a real shell would have had:
+		// a background job here is a goroutine with no process, and the
+		// processes a subshell starts are this one's children rather than the
+		// subshell's. The condition is raised where a fork is finished with
+		// instead — see Runner.childReaped, where both directions of that are
+		// measured.
+	default:
+		s.pending = append(s.pending, name)
 	}
 }
 
@@ -850,9 +859,14 @@ func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, 
 		case <-s.wake:
 		case sig := <-s.ch:
 			s.mu.Lock()
-			if name, ok := signalName(sig); ok {
-				s.pending = append(s.pending, name)
-			}
+			// Through the same decision the drain uses, which is the whole of
+			// this: an arrival that does not count must not count here either.
+			// A job's own child raised the kernel's SIGCHLD, this wait took it
+			// for a trapped arrival, came back from the wait to run the
+			// handler, and the script carried on — so `trap 'echo T' CHLD; (
+			// sleep; echo b ) & wait` printed `T` and then lost the `echo b`,
+			// where bash 5.3.20 prints `b T`. See signalState.forwarded.
+			s.forwarded(sig)
 			s.mu.Unlock()
 		}
 	}

@@ -5626,7 +5626,32 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 		if p, ok := st.Expr.(*syntax.Pipeline); ok && len(p.Cmds) > 1 {
 			// A pipeline whose last element ran in this shell is judged by
 			// the dialect's reading of that element. See judgePipeline.
+			//
+			// With the line record pointed at the pipeline while it is
+			// judged, because the ERR trap fires from in there and its body
+			// reads `$LINENO`. The elements ran in copies of this runner, so
+			// nothing moved the shell's own record off whatever ran before
+			// the pipeline: measured 2026-09-23 against bash 5.3.20, `trap
+			// 'echo trap: $LINENO' ERR` over `echo 2` on line 4 and `false |
+			// false | false` on line 5 wrote `trap: 5` there and `trap: 4`
+			// here, with the traced prefix `++[5]` against `++[4]`. It is the
+			// ERR half of what #4332 fixed for DEBUG, and it is put back
+			// afterwards for the reason that one is: the statement holding
+			// the pipeline has not moved.
+			//
+			// **No test can kill the restore**, and that is recorded rather
+			// than left for the next reader to hunt: the next command's own
+			// dispatch sets the record again, and the two places that might
+			// read it in between do not. An EXIT trap's `$LINENO` is the
+			// trap's own line — `exit@1` in bash 5.3.20 and here, with or
+			// without `set -e` ending the script on the failing pipeline — and
+			// nothing else runs between the judging and that dispatch. It
+			// stays because leaving a record pointed at a statement that has
+			// finished is a fact waiting to be read wrongly.
+			saved := r.line
+			r.line = r.lineOf(p.Pos())
 			r.judgePipeline(ctx)
+			r.line = saved
 		} else {
 			r.checkErrExit(ctx)
 		}

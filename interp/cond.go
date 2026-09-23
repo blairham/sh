@@ -401,7 +401,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// keep it an expression, so quoting a regex is unportable in either
 		// direction. Asked only where a quote was written, so the axis is
 		// not consulted about a word that has nothing to quote.
-		if x.Y.IsQuoted() && r.ask(r.sem().RegexQuotingMakesLiteral, "quoting a =~ regex making it literal") {
+		if x.Y.IsQuoted() && r.regexQuotingIsLiteral() {
 			pat = literal
 		}
 		return r.regexMatch(pat, left)
@@ -843,6 +843,28 @@ func (r *Runner) regexMatch(pat, left string) (bool, error) {
 	// narrow the engine's is to write the characters it must not fold
 	// out of its reach. back maps an offset in the subject it matched
 	// against back to an offset in the script's own. See regexmatch.go.
+	// What a POSIX ERE is, over and above what the engine would compile: the
+	// two bracket constructs it has and RE2 has not, rewritten; and the two
+	// RE2 takes and ERE does not, refused. Both are silent wrong answers
+	// otherwise — `[[ a =~ [[.a.]] ]]` compiled to a set of three characters
+	// and missed, and `[[ a =~ (a|) ]]` matched where every shell in the panel
+	// refuses the expression. See interp/regexere.go (#4173).
+	// Validated before it is rewritten, because the rewrites deliberately
+	// write constructs the validator refuses: a repetition of a repetition
+	// becomes a non-capturing group, and `(?` is exactly the shape a POSIX ERE
+	// has no atom for. Reading the finished pattern instead had the rewrite
+	// tripping the check it had just been let through by.
+	err := validERE(pat)
+	expr := pat
+	if err == nil {
+		expr, err = asERE(pat)
+	}
+	if err != nil {
+		// The pattern as the script wrote it and never the rewrite, which is
+		// empty where the rewrite is what failed.
+		return false, arithError{msg: "invalid regular expression: " + pat}
+	}
+	pat = expr
 	expr, subject, back := r.regexOperands(pat, left)
 	re, err := regexp.Compile(expr)
 	if err != nil {

@@ -729,7 +729,13 @@ func TestAScriptCannotCallAWidgetAfterOneHasRun(t *testing.T) {
 	if st := zle(r, context.Background(), []string{"w"}); st != 1 {
 		t.Errorf("`zle w` from a script = status %d, want 1", st)
 	}
-	want := "zsh:1: widgets can only be called when ZLE is active\n"
+	// Line 2, which is the last line the *script* ran — `zle -N w`. It read
+	// line 1 while a returned call's line was left standing on the body it had
+	// finished; the line is put back at a call's return now, so what a
+	// diagnostic after one names is the caller's line. See
+	// Runner.callFuncAs (#4173). The number is not what this test is about:
+	// the status and the widget not having run are.
+	want := "zsh:2: widgets can only be called when ZLE is active\n"
 	if out.String() != want {
 		t.Errorf("output = %q, want %q — and above all not the widget having run", out.String(), want)
 	}

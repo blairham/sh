@@ -78,6 +78,21 @@ func (sh Shell) session(argv []string, in source) int {
 	// shell *is*, this one says where its program came from, and they part
 	// company inside a sourced file. See interp.Runner.AtPrompt (#2024).
 	r.AtPrompt = true
+	// And whether it is a **login** shell, which this route was not handing
+	// over at all. The script routes set it from the same place for the reason
+	// their own comment gives — interp never saw an argument vector, so no
+	// `set` letter could have turned login-ness on for it to read — and the
+	// prompt route needs it for exactly the same reason.
+	//
+	// Observable today through `shopt login_shell`, which read `off` in an
+	// interactive login shell where bash 5.3.15 reads `on`: measured
+	// 2026-09-23 through a pty, `bash --norc --noprofile -l -i`. A
+	// non-interactive login shell was right, which is what kept this hidden —
+	// the fact was carried on one route of two.
+	//
+	// It is also the condition `shopt -s huponexit` turns on, so a session's
+	// background jobs outlived the session it was set in (#4149).
+	r.LoginShell = in.loginShell()
 	// Whether the invocation said to read no startup files, handed over here
 	// for the reason the three facts above are stated here: the prompt route
 	// never reaches the place the script routes carry it. Before

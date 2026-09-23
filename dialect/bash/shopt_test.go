@@ -88,11 +88,16 @@ func TestShoptRefusals(t *testing.T) {
 		{`shopt -z`, "shopt: usage: shopt [-pqsu] [-o] [optname ...]", 2},
 		// A name this shell recognizes and cannot move: refused out loud,
 		// never accepted quietly. `sourcepath` was the example here until
-		// #3058 gave it the switch it names, `histappend` was the example
-		// after it, and `cdable_vars` after that — each replaced when the
-		// behavior it names was built. The example is always one that is
-		// still only a name, and #4149 is working through the rest.
-		{`shopt -s mailwarn`, "shopt: mailwarn: not implemented", 1},
+		// #3058 gave it the switch it names, then `histappend`, then
+		// `cdable_vars`, then `mailwarn` — each replaced when the behavior it
+		// names was built or when the name was recorded for a stated reason.
+		// The example is always one that is still only a name.
+		//
+		// `gnu_errfmt` should outlast the rest of them: it is a decision
+		// rather than work — the dominant rule is simple but its boundary is
+		// falsified twice and the surface is every diagnostic this shell
+		// writes, so it is not a lane's to choose (#4149).
+		{`shopt -s gnu_errfmt`, "shopt: gnu_errfmt: not implemented", 1},
 	} {
 		out, st := runBash(t, t.TempDir(), tc.src)
 		if st != tc.status || !strings.Contains(out, tc.said) {

@@ -3012,6 +3012,11 @@ type Runner struct {
 	// dialect names it, as `shopt -s cdable_vars`. See
 	// BareCdOperandCanNameAVariable in sessionswitches.go.
 	cdOperandCanNameAVariable bool
+	// hangUpJobsAtExit sends SIGHUP to the jobs this shell still has when it
+	// ends. Off with nothing said; one dialect names it, as
+	// `shopt -s huponexit`. See SendsHangupToJobsAtExit in
+	// sessionswitches.go.
+	hangUpJobsAtExit bool
 	// optionLetterNames are the `set` option letters this dialect spells its
 	// own way, mapped to the names in its namespace. Nil where every letter
 	// the shell has is one the panel shares. Installed through
@@ -5169,6 +5174,10 @@ func (r *Runner) Finish(ctx context.Context) int {
 	r.runPendingTraps(ctx)
 	r.runExitTrap(ctx)
 	r.runExitHook(ctx)
+	// After the EXIT trap, which is measured: with the option on, a login
+	// shell wrote the trap's line and *then* the job's handler saw the
+	// hangup. See Runner.SendsHangupToJobsAtExit.
+	r.hangUpJobsIfAsked()
 	r.finishHistoryFile()
 	if !r.inSubshell {
 		r.stopSignalsAndRestore()

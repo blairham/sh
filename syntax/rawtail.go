@@ -84,7 +84,175 @@ func (p *Parser) setRawTails(spans []Span, stop Pos) {
 // under the reading it was parsed with. bash answers it the same way, with a
 // run-time `bad substitution` at the word rather than a syntax error at the
 // line (#2604).
-func RereadWordTail(tail string, at Pos, d Dialect) ([]Span, error) {
+//
+// cutUnder is the reading the word was cut with — [ParamExpr.RawTailRead] —
+// and decode is what a `$'…'` written in one of the tail's **word** operands
+// stands for, and nil where the run has no such conversion to offer. It is the
+// second thing the one column that reaches here does to an already-cut word,
+// and it is a callback because the two halves live in two packages: the escape
+// table belongs to the run — interp's expandDollarSingle applies it — and the
+// scan for the closing brace belongs here. bash puts the escape's *value* back
+// into the operand's text and reads the division off that, so a value that
+// happens to be a quote character hides the `}` behind it and a value that
+// holds a `}` ends the expansion early (#4207).
+//
+// A pattern or a replacement operand is deliberately not converted, and that
+// is measured rather than a simplification. Under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C` from a script file, bash 5.3.20 and bash 3.2 both answer `[x]` to
+// `v="'"; printf '[%s]' "${v/$'\x27'/x}"` and `[']` to `v=Q; printf '[%s]'
+// "${v/Q/$'\x27'}"` — the produced quote does not reach the scan there —
+// while the word operand of the same expansion refuses. The split is the one
+// Lexer.braceOperandIsAPattern makes, read off the parsed operator instead of
+// off the text a scan has consumed; the two cannot be one function, because
+// that one runs before there is an operator to read.
+//
+// What comes back beside the spans is the text the division was read from,
+// which is the tail itself when nothing was converted. The one column that
+// reaches the failure quotes that text back in its diagnostic — with the
+// escape already converted, which is the evidence the re-reading is happening
+// at all — so the caller needs it rather than the word as written.
+//
+// Positions inside a converted tail are the honest ones the text has and not
+// the ones the file has: an escape is longer than its value, so everything
+// behind the first conversion sits that much earlier than it was written. The
+// failure this reaches names the word rather than a column, so nothing yet
+// reads one; a reader of the returned spans' positions is reading offsets into
+// the returned text.
+func RereadWordTail(tail string, at Pos, d Dialect, cutUnder BraceQuotePolicy, decode func(string) string) ([]Span, string, error) {
+	if decode == nil {
+		spans, err := readWordTail(tail, at, d)
+		return spans, tail, err
+	}
+	// Located under the reading the word was *cut* with and divided under the
+	// one the run has, which is two readings of one word and is measured. With
+	// `unset u` and a function body holding `printf "[%s]" "${u:-x$'\x27'}"`,
+	// bash 5.3.20 answers `[x']` when the body is read outside POSIX mode and
+	// called inside it — the escape it read is converted, and the `'` the
+	// conversion produced then fails to protect the brace the mode has moved.
+	// Reading the body inside the mode answers `[x$'\x27']` instead: there was
+	// no escape there to convert. So which runs the operand holds belongs to
+	// the parse and where the `}` lands belongs to the run.
+	located := d
+	located.QuoteProtectsTheClosingBrace = cutUnder
+	spans, err := readWordTail(tail, at, located)
+	if err != nil {
+		return spans, tail, err
+	}
+	text := dollarSingleValuesInWordOperands(tail, spans, decode)
+	if text == tail {
+		// Nothing converted, so the division the run wants is the one it would
+		// have read without any of this.
+		spans, err = readWordTail(tail, at, d)
+		return spans, tail, err
+	}
+	spans, err = readWordTail(text, at, d)
+	return spans, text, err
+}
+
+// dollarSingleValuesInWordOperands is tail with every `$'…'` standing in the
+// **word** operand of the expansion tail opens with replaced by what decode
+// says it stands for.
+//
+// The operand is bounded to that one expansion's own, which is the bound
+// setRawTails already draws and for its reason: a nested expansion carries no
+// tail, because a word inside a word is already inside one. A `$'…'` written
+// past the closing `}` is not converted either — it is the enclosing word's
+// text rather than an operand's, and one written inside double quotes is a
+// dollar and a quote there in every column.
+//
+// Where the operand *starts* is the one thing neither the spans nor the body
+// says outright: an operand's sub-word is parsed on its own, so its spans count
+// from the operand rather than from the program, and reading the offset off the
+// body would mean a second copy of the parser's operator table — the table that
+// knows `::=` is three bytes and `:^^` is three others. So the offset is found
+// instead of computed: the one shift at which every `$'…'` the operand holds
+// lands on its own text, byte for byte. A body no shift explains is left alone,
+// which is the honest answer for a node this package did not parse.
+func dollarSingleValuesInWordOperands(tail string, spans []Span, decode func(string) string) string {
+	if len(spans) == 0 || spans[0].Kind != ParamExp || spans[0].Param == nil {
+		return tail
+	}
+	e := spans[0].Param
+	if !takesAWordOperand(e.Op) || e.Arg == nil {
+		return tail
+	}
+	// The tail opens with the `${` the body stands inside, which is what makes
+	// the body a slice of it rather than a string to go looking for.
+	const braces = len("${")
+	if len(tail) < braces+len(spans[0].Value) {
+		return tail
+	}
+	body := tail[braces : braces+len(spans[0].Value)]
+	if body != spans[0].Value {
+		return tail
+	}
+	type run struct {
+		off   int
+		value string
+	}
+	var want []run
+	for _, a := range e.Arg.Spans {
+		if a.Kind == Literal && a.Quoting == DollarSingleQuoted {
+			want = append(want, run{int(a.Pos.Offset), a.Value})
+		}
+	}
+	if len(want) == 0 {
+		return tail
+	}
+	written := func(r run) string { return "$'" + r.value + "'" }
+	start := -1
+	for k := 0; k+want[len(want)-1].off <= len(body); k++ {
+		lands := true
+		for _, r := range want {
+			at, text := k+r.off, written(r)
+			if at+len(text) > len(body) || body[at:at+len(text)] != text {
+				lands = false
+				break
+			}
+		}
+		if lands {
+			start = k
+			break
+		}
+	}
+	if start < 0 {
+		return tail
+	}
+	var b strings.Builder
+	b.WriteString(tail[:braces])
+	cut := 0
+	for _, r := range want {
+		at := start + r.off
+		if at < cut {
+			// Two runs claiming the same bytes is not a shape the parser
+			// produces. Dropping the second keeps this a rewrite of the body
+			// rather than a scramble of it if one ever does.
+			continue
+		}
+		b.WriteString(body[cut:at])
+		b.WriteString(decode(r.value))
+		cut = at + len(written(r))
+	}
+	b.WriteString(body[cut:])
+	b.WriteString(tail[braces+len(body):])
+	return b.String()
+}
+
+// takesAWordOperand reports whether op's operand is read in the quoting that
+// encloses the whole expansion rather than on its own terms. See
+// [Lexer.braceOperandIsAPattern], which is the same split made on the text a
+// scan has consumed so far.
+func takesAWordOperand(op ParamOp) bool {
+	switch op {
+	case ParamDefault, ParamAssign, ParamAssignAlways, ParamError, ParamAlternate:
+		return true
+	}
+	return false
+}
+
+// readWordTail is one reading of text as a word's tail, which is the whole of
+// [RereadWordTail] where nothing is converted first.
+func readWordTail(tail string, at Pos, d Dialect) ([]Span, error) {
 	p := &Parser{lex: NewLexer(tail, d), dialect: d}
 	p.lex.inWordTail = true
 	// dquoteEscapes and not operandEscapes: the text was scanned with the

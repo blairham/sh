@@ -56185,6 +56185,108 @@
         "TimedOut": false
       }
     },
+    "core/a-dollar-single-value-ends-the-brace-it-holds": {
+      "ash": {
+        "Stdout": "[$'ab'}][$'\\x27'AB'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[ab}]['A}B']",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[$'ab'}][$'\\x27'AB'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[ab}]['A}B']",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[$'ab'}][$'\\x27'AB'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[$'ab'}][$'\\x27'AB'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[$'ab'}][$'\\x27'AB'}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "core/a-dollar-single-value-that-is-a-quote-hides-the-brace": {
+      "ash": {
+        "Stdout": "[x$'\\x27']after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: bad substitution: no closing `}' in \"${u:-x'}\"",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[x$'\\x27']after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: bad substitution: no closing `}' in \"${u:-x'}\"",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[x$'\\x27']after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[x$'\\x27']after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[x$'\\x27']after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-double-quoted-brace-in-an-expansion-operand": {
       "ash": {
         "Stdout": "[SET][a}b][]",

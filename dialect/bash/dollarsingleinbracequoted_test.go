@@ -75,15 +75,135 @@ func TestADollarSingleQuoteInAQuotedBraceOperand(t *testing.T) {
 			`v="'"; printf "[%s]" ${v/$'\x27'/x}`, `[x]`,
 		},
 		{
-			// A `}` inside the run is still the run's, in both readings.
+			// A `}` inside the run ends the expansion, because the value is
+			// what the scan for the brace reads — see the test below, which
+			// this row is the cheapest case of. It said `[a}b]` until #4207,
+			// which is the answer finding the run's *end* correctly gives when
+			// nothing reads the value afterwards.
 			"a brace inside the run",
-			`unset u; printf "[%s]" "${u:-$'a}b'}"`, `[a}b]`,
+			`unset u; printf "[%s]" "${u:-$'a}b'}"`, `[ab}]`,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st := runBash(t, t.TempDir(), c.src)
 			if out != c.want || st != 0 {
 				t.Errorf("%q said %q (status %d), want %q at 0", c.src, out, st, c.want)
+			}
+		})
+	}
+}
+
+// What bash does *after* reading that `$'…'`: it puts the escape's value where
+// the escape was written and reads the division off that text, so a value
+// holding a `}` ends the expansion early and a value that is a quote character
+// hides the `}` behind it (#4207).
+//
+// Measured 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C` from script
+// files, with `unset u`, `v="'"` and `w=Q`. bash 5.3.20 and bash 3.2 agree on
+// every row, and the four columns without the construct reach none of it and
+// print the dollar and the quotes back — `printf '[%s]' "${u:-x$'\x27'}"` is
+// `[x$'\x27']` in dash, ksh93, zsh and the same bash invoked as `sh`.
+//
+//	written                            bash 5.3.20 and 3.2
+//	printf '[%s]' "${u:-$'a}b'}"       [ab}]
+//	printf '[%s]' "${u:-$'\x7d'}"      [}]
+//	printf '[%s]' "${u:-$'\x27'A}B'}"  ['A}B']
+//	printf '[%s]' "${u:-x$'\x27'}"     no closing `}' in "${u:-x'}"
+//	printf '[%s]' "${u:-x$'\x22'}"     no closing `}' in "${u:-x"}"
+//	printf '[%s]' "${u:-x$'\x5c'}"     no closing `}' in "${u:-x\}"
+//	printf '[%s]' "${v/$'\x27'/x}"     [x]
+//	printf '[%s]' "${w/Q/$'\x27'}"     [']
+//
+// The diagnostic is the evidence, and it is what makes this a re-reading rather
+// than a rule about the escape: bash quotes the word back with the escape
+// already gone. Row three is the row saying the re-reading can also *succeed* —
+// the produced quote protects a brace and the expansion ends at the next one, a
+// division no reading of the written text produces.
+//
+// The last two rows are the bound. A pattern operand and a replacement operand
+// are not re-read, so a produced quote there reaches neither the scan nor a
+// refusal; the word operand is, which is the operand
+// syntax.Dialect.QuoteProtectsTheClosingBrace already answers for.
+//
+// One shape is measured and deliberately not modeled: a value holding `$(`
+// opens a command substitution and bash reports that instead of the brace —
+// `command substitution: line 2: unexpected EOF while looking for matching`.
+// Both refuse at status 1 and this shell says `no closing }` there.
+func TestADollarSingleValueIsWhatTheBraceScanReads(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want, diag string
+		status                int
+	}{
+		{
+			name: "a value holding the brace ends the expansion",
+			src:  `unset u; printf "[%s]" "${u:-$'a}b'}"`, want: `[ab}]`,
+		},
+		{
+			// The cheap spelling of the same thing, and the row that is not on
+			// its own evidence: an empty word operand with a leftover `}` after
+			// it prints what a protected `}` in the operand would print too.
+			name: "a value that is only the brace",
+			src:  `unset u; printf "[%s]" "${u:-$'\x7d'}"`, want: `[}]`,
+		},
+		{
+			// The re-reading succeeding rather than refusing: the produced
+			// quote protects the first `}` and the second ends the expansion,
+			// so the operand is text the written word did not hold.
+			name: "a produced quote protects a brace behind it",
+			src:  `unset u; printf "[%s]" "${u:-$'\x27'A}B'}"`, want: `['A}B']`,
+		},
+		{
+			name:   "a produced quote with nothing left to close it",
+			src:    `unset u; printf "[%s]" "${u:-x$'\x27'}"`,
+			status: 1, diag: "bash: line 1: bad substitution: no closing `}' in \"${u:-x'}\"",
+		},
+		{
+			name:   "a produced double quote",
+			src:    `unset u; printf "[%s]" "${u:-x$'\x22'}"`,
+			status: 1, diag: "bash: line 1: bad substitution: no closing `}' in \"${u:-x\"}\"",
+		},
+		{
+			// A produced backslash quotes the brace rather than opening a run,
+			// which is the same scan reaching the same end by another road.
+			name:   "a produced backslash",
+			src:    `unset u; printf "[%s]" "${u:-x$'\x5c'}"`,
+			status: 1, diag: "bash: line 1: bad substitution: no closing `}' in \"${u:-x\\}\"",
+		},
+		{
+			name: "a pattern operand is not re-read",
+			src:  `v="'"; printf "[%s]" "${v/$'\x27'/x}"`, want: `[x]`,
+		},
+		{
+			name: "a replacement operand is not re-read",
+			src:  `w=Q; printf "[%s]" "${w/Q/$'\x27'}"`, want: `[']`,
+		},
+		{
+			// The crossing: the escape belongs to what was *read* and the brace
+			// to the run, so a body read outside POSIX mode and called inside
+			// it converts the escape and then finds the `}` the mode stopped
+			// protecting.
+			name: "read outside POSIX mode and called inside it",
+			src: "unset u\n" +
+				`f(){ printf "[%s]" "${u:-x$'\x27'}"; }` + "\n" +
+				"set -o posix\nf",
+			want: `[x']`,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runBash(t, t.TempDir(), c.src)
+			if st != c.status {
+				t.Errorf("%q said status %d, want %d", c.src, st, c.status)
+			}
+			if c.diag != "" {
+				// The whole line, location and all: a fragment check cannot
+				// see a prefix that went missing in front of it. The
+				// location is the harness's route rather than the wording —
+				// real bash under `-c` names the path in `$0` there.
+				wantWholeLines(t, out, c.diag)
+				return
+			}
+			if out != c.want {
+				t.Errorf("%q said %q, want %q", c.src, out, c.want)
 			}
 		})
 	}

@@ -842,25 +842,97 @@ func (r *Runner) Randoms() string {
 	// A fresh generator per draw, keyed on the seed and the count, so that the
 	// whole of the state is two integers a subshell can carry away by value.
 	r.randomDrawn++
+	if r.seededRandoms != nil {
+		return strconv.Itoa(r.seededRandoms(r.randomSeed, r.randomDrawn))
+	}
 	return strconv.Itoa(rand.New(rand.NewPCG(r.randomSeed, r.randomDrawn)).IntN(randomModulus))
+}
+
+// SetSeededRandoms says what sequence this shell's `RANDOM` answers once a
+// script has seeded it.
+//
+// The seed and the number of draws since, and the number to print: a **pure
+// function** rather than a running generator, which is what keeps the seam
+// honest about subshells. The whole of a seeded generator's state stays the two
+// integers this Runner holds, so `( )` carries on from where its parent had got
+// to and its own draws leave the parent where it was (#2827) — a dialect that
+// kept a state of its own would have to reproduce that by hand, and a dialect
+// that kept a *shared* one would break it silently.
+//
+// It exists because reproducible is not the same as right. Before it, a seeded
+// script here got the same numbers every run and they were nobody's: three
+// shells in the panel have the parameter, all three seed, and **no two of them
+// draw the same sequence** — so a generator chosen by the substrate is
+// guaranteed to be wrong for all three. `docs/spec/random.md` records what each
+// one answers and how it was measured; MinimalStandardState holds the
+// recurrence they share, and the dialect holds the two answers that differ.
+//
+// A dialect that registers nothing keeps the substrate's own sequence, which is
+// reproducible and unmeasured. That is the honest state for a shell nobody has
+// put an oracle to, and it is not a placeholder for one that has.
+func (r *Runner) SetSeededRandoms(draw func(seed, drawn uint64) int) {
+	r.seededRandoms = draw
 }
 
 // SeedRandoms is what an assignment to `RANDOM` does.
 //
-// The text rather than a number, because what a shell does with a value that
-// is not one is measured rather than chosen: `RANDOM=abc` gives the same
-// sequence as `RANDOM=0` in bash 5.3.15, ksh93u+ and zsh 5.9.2 alike, so a
-// value this cannot read is a zero seed and not a refusal.
+// The text rather than a number, because the value is an **arithmetic
+// expression** and not a numeral. Measured 2026-09-22 under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` on bash 5.3.20, zsh 5.9.2 and ksh93u+:
+// `RANDOM=3+4` seeds 7 in all three, and `abc=5; RANDOM=abc` seeds **5**, not
+// 0. So "a value that is not a number is a zero seed", which is how #2827
+// recorded it, is the consequence of arithmetic rather than a rule of its own —
+// `abc` is a bare name and a bare name is its value, which is zero only while
+// nothing has set it. The two readings disagree about the whole sequence the
+// moment the name has a value (#4240).
+//
+// An expression that will not evaluate is complained about and **changes
+// nothing**: measured on bash 5.3.20, `RANDOM=nope; RANDOM=1/0; echo $RANDOM`
+// writes the division complaint and then the *second* number of the zero-seed
+// sequence, so the seed and the draw count both survived the failure. Note that
+// this is gentler than an ordinary integer-attributed name, where `declare -i v;
+// v=1/0` ends the script — measured on both, which is why the failure is not
+// routed through ArithValue's fatal path.
+//
+// One row short, knowingly: zsh and ksh93 *end* the script over the same failing
+// seed, so what is here is bash's answer given to all three. That is a
+// disagreement between real shells over identical syntax and therefore wants a
+// semantics axis rather than a conditional, which is not a thing to add in
+// passing — `docs/spec/random.md` records the measurement and what the axis
+// would owe. Before this, every shell here seeded zero in silence, so the row
+// was wrong in both halves rather than one.
 //
 // The count starts again as well, which is the half that makes the sequence
 // reproducible rather than merely derived: measured, a second `RANDOM=42`
 // after two draws gives the same first number as the first `RANDOM=42` did.
 func (r *Runner) SeedRandoms(value string) {
-	n, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
-	if err != nil {
-		n = 0
+	n, ok := r.seedExpression(value)
+	if !ok {
+		return
 	}
 	r.randomSeed, r.randomDrawn, r.randomSeeded = uint64(n), 0, true
+}
+
+// seedExpression evaluates a seed, and answers false where the expression
+// failed and the seed a script wrote must be left alone.
+//
+// ArithValue is the exported sibling and is not what this wants: it makes a
+// failure fatal, which is right for a builtin holding an expression and wrong
+// here — the shell being modeled carries on, and a produced parameter that
+// ended the script over a bad seed would be a difference in the direction
+// nobody could work around.
+func (r *Runner) seedExpression(value string) (int, bool) {
+	tree, text, err := r.arithTreeOver(nil, value, arithTextArrived)
+	if err != nil {
+		r.diagf("%s\n", r.diag().ParseFailure(err))
+		return 0, false
+	}
+	n, err := r.evalNum(tree)
+	if err != nil {
+		r.diagf("%s\n", r.arithFailure(text, err))
+		return 0, false
+	}
+	return n.asInt(), true
 }
 
 // Now is what this shell calls the current time: the Clock hook where one is

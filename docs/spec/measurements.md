@@ -18819,6 +18819,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `posassign/leading-zeros-are-read-as-a-number` | `[a] n=1` **2>** `<shell>: 1: 01=z: not found` | `[a] n=1` **2>** `<shell>: line 1: 01=z: command not found` | `[a] n=1` **2>** `<shell>: line 1: 01=z: command not found` | `[a] n=1` **2>** `<shell>: 01=z: command not found` | `[a] n=1` **2>** `<shell>: 01=z: not found` | `[z] n=1` | `[a] n=1` **2>** `<shell>: 01=z: not found` |
 | `posassign/a-digit-with-a-letter-is-not-a-name` | `st=127` **2>** `<shell>: 1: 1a=z: not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: not found` | `st=127` **2>** `<shell>:1: command not found: 1a=z` | `st=127` **2>** `<shell>: 1a=z: not found` |
 | `variable/a-compatibility-level-out-of-range` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` **2>** `<script>: line 1: BASH_COMPAT: abc: compatibility value out of range` | `st=0 [abc]~st=0 [5.1]~tail` **2>** `<script>: line 1: BASH_COMPAT: abc: compatibility value out of range` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` |
+| `variable/a-seeded-random-draws-a-sequence-of-its-own` | `42 42~42 42~4~tail` | `17772 26794~17772 26794~1693~tail` | `17772 26794~17772 26794~1693~tail` | `19081 17033~19081 17033~1817~tail` | `22700 13681~22700 13681~8403~tail` | `17766 11151~17766 11151~1692~tail` | `20351 9206~20351 9206~29829~tail` |
 | `variable/a-module-parameter-a-script-may-not-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~tail` | `st=0~tail` | `st=0~tail` | `st=0~tail` | **2>** `<script>:1: read-only variable: jobstates` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `variable/the-module-parameter-a-script-may-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 
@@ -19029,6 +19030,16 @@ grades it and nothing drift-checks it either, for the same reason.
   echo "st=$? [$BASH_COMPAT]"
   BASH_COMPAT=5.1
   echo "st=$? [$BASH_COMPAT]"
+  echo tail
+  ```
+- `variable/a-seeded-random-draws-a-sequence-of-its-own` — the one place a *random* parameter can be graded: an assignment seeds the generator, so the numbers are a function of the seed and the same in every run. The first two arms are the same seed twice, which is what makes the row a fact rather than a sample -- and every column that has the parameter answers a different pair, so a generator chosen rather than measured is guaranteed to be wrong for all of them. bash 3.2 differs from 5.3 here, which is the row saying the sequence is a fact about a *release* and not only about a shell. The third arm is seed 4, the first seed whose state has a bit above 16 and therefore the one where bash's fold and zsh's mask separate by exactly one. Only dash reads the name as an ordinary variable and answers `42 42`; BusyBox ash has a seeded `$RANDOM` of its own, which this row records and no dialect here claims yet. We drew four unrelated numbers before #2827 and two reproducible wrong ones after it (#4240)
+  ```sh
+  RANDOM=42
+  echo "$RANDOM $RANDOM"
+  RANDOM=42
+  echo "$RANDOM $RANDOM"
+  RANDOM=4
+  echo "$RANDOM"
   echo tail
   ```
 - `variable/a-module-parameter-a-script-may-not-own` — a name one shell's module owns, written by a script that has not loaded the module. zsh refuses it as `read-only variable: jobstates` at status 1 and ends the script, whether or not `zsh/parameter` was ever loaded -- the freeze is a property of the name and not of the module being there. Every shell without the module takes the assignment and makes an ordinary array, which is also what this engine did: a script probing for the module by writing the name got a value where it should have been stopped (#1604). `dirstack` is the one name in the same set that zsh does let a script assign, which is the row below

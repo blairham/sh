@@ -24626,6 +24626,12 @@ echo "st=$?"`,
 		Why:     "the parameter that selects an older release's reading, given a value that is not a release. bash complains at the **assignment** -- `BASH_COMPAT: abc: compatibility value out of range` -- stores the value anyway and leaves the status at 0, so the second arm is the control that shows the complaint is about the value rather than about the name: `5.1` is a level, the dot is legibility only, and it passes in silence. The shells without the parameter take both arms as ordinary assignments, which is the honest answer rather than a guess. We stored the bad value in silence, so a script that mistyped a level ran on at the modern reading with nothing said (#4262)",
 	},
 	{
+		ID: "variable/a-seeded-random-draws-a-sequence-of-its-own", Category: "variables",
+		Script:  true,
+		Snippet: "RANDOM=42\necho \"$RANDOM $RANDOM\"\nRANDOM=42\necho \"$RANDOM $RANDOM\"\nRANDOM=4\necho \"$RANDOM\"\necho tail\n",
+		Why:     "the one place a *random* parameter can be graded: an assignment seeds the generator, so the numbers are a function of the seed and the same in every run. The first two arms are the same seed twice, which is what makes the row a fact rather than a sample -- and every column that has the parameter answers a different pair, so a generator chosen rather than measured is guaranteed to be wrong for all of them. bash 3.2 differs from 5.3 here, which is the row saying the sequence is a fact about a *release* and not only about a shell. The third arm is seed 4, the first seed whose state has a bit above 16 and therefore the one where bash's fold and zsh's mask separate by exactly one. Only dash reads the name as an ordinary variable and answers `42 42`; BusyBox ash has a seeded `$RANDOM` of its own, which this row records and no dialect here claims yet. We drew four unrelated numbers before #2827 and two reproducible wrong ones after it (#4240)",
+	},
+	{
 		ID: "variable/a-module-parameter-a-script-may-not-own", Category: "variables",
 		Script:  true,
 		Snippet: "jobstates=(a b c)\necho \"st=$?\"\necho tail\n",

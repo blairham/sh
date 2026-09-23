@@ -942,6 +942,11 @@ type Runner struct {
 	randomSeed   uint64
 	randomDrawn  uint64
 	randomSeeded bool
+	// seededRandoms is the dialect's own sequence, and nil for a shell that has
+	// not claimed one — which then draws from the substrate's generator, a
+	// sequence nobody has measured and nobody has a row against. See
+	// SetSeededRandoms.
+	seededRandoms func(seed, drawn uint64) int
 
 	// dynamicDeclarations is how each produced parameter lists back, as the
 	// dialect that registered it states it — see SetDynamicDeclaration.

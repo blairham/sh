@@ -5742,6 +5742,15 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 	// Consumed here so that only the timed clause's own body is measured
 	// per element — a pipeline nested anywhere inside one of its elements
 	// is that element's work, not a row of the report.
+	if len(p.Cmds) > 1 {
+		// Every element of a real pipeline is a child, so the environment the
+		// first of them would be handed is built here — for its one visible
+		// effect, the cached home. A one-command "pipeline" is the ordinary
+		// command path and forks nothing of its own. See
+		// Runner.refreshCachedHomeForASubstitution, which names the same four
+		// constructs, and interp/cachedhome.go for the model.
+		r.refreshCachedHomeForASubstitution()
+	}
 	timing := r.timedPipeline
 	r.timedPipeline = nil
 	if timing != nil {

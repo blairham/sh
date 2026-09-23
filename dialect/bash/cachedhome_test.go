@@ -85,6 +85,64 @@ func TestABareTildeReadsACachedHome(t *testing.T) {
 	}
 }
 
+// The other three constructs that move it, each of which builds an environment
+// for a child without an external command being named.
+//
+// The head of interp/cachedhome.go has always listed four — "an external
+// command, a pipeline, a background job and a command substitution all move it"
+// — and only the first of them did. A body that is nothing but a builtin is the
+// shape that shows it: nothing calls the environment builder, so the copy stood
+// still where the reference moved it. Measured 2026-09-23 on bash 5.3.20 with
+// `HOME=/orig` in the environment, each row reading a bare `~` before and after
+// the construct:
+//
+//	HOME=/h1; ~ ; v=$(true); ~        /orig then /h1
+//	HOME=/h4; ~ ; : | : ;     ~        /orig then /h4
+//	HOME=/h6; ~ ; : & wait ;  ~        /orig then /h6
+//
+// `:` and `true` as a builtin are the point of each: an external command was
+// already covered and would not have told these three apart.
+func TestAChildlessConstructStillMovesTheCachedHome(t *testing.T) {
+	for _, tc := range []struct{ name, between string }{
+		{"a command substitution", "v=$(true)"},
+		{"a pipeline of builtins", ": | :"},
+		{"a background job", ": & wait"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runCachedHome(t, `echo ~; HOME=/h; `+tc.between+`; echo ~`)
+			if len(got) != 2 || got[0] != "/orig" {
+				t.Fatalf("read %q, want two lines opening /orig", got)
+			}
+			if got[1] != "/h" {
+				t.Errorf("after %s the tilde read %q, want /h — the construct builds an environment",
+					tc.between, got[1])
+			}
+		})
+	}
+}
+
+// And the two that do **not** move it, which is what keeps the rule from being
+// "anything at all refreshes it": a builtin on its own and an `eval` leave the
+// copy where it was. Measured the same day, same conditions.
+func TestABuiltinAndAnEvalLeaveTheCachedHomeAlone(t *testing.T) {
+	for _, tc := range []struct{ name, between string }{
+		{"a builtin", ":"},
+		{"an eval", `eval ':'`},
+		{"a one-command pipeline", "true"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runCachedHome(t, `echo ~; HOME=/h; `+tc.between+`; echo ~`)
+			if len(got) != 2 || got[0] != "/orig" {
+				t.Fatalf("read %q, want two lines opening /orig", got)
+			}
+			if got[1] != "/orig" {
+				t.Errorf("after %s the tilde read %q, want /orig — nothing built an environment",
+					tc.between, got[1])
+			}
+		})
+	}
+}
+
 // A subshell takes the copy with it and moves its own, which is the half that
 // says the refresh is not a message sent back to the parent: measured the same
 // day, `HOME=/h; ( /usr/bin/true; echo ~ )` is `/h` inside the parentheses and

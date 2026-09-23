@@ -1695,8 +1695,22 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// not about what it points at — so it is answered ahead of the
 		// redirect below, which would otherwise carry the rest of the
 		// declaration off to the target of a reference this line is removing.
-		if df.namerefOff && r.namerefAttributeRemoved(name) {
-			continue
+		if df.namerefOff {
+			finished, consumed := r.namerefAttributeRemoved(name)
+			if finished {
+				continue
+			}
+			if consumed {
+				// The letter has been **spent**: a reference with nothing to
+				// point at is gone, and what is left of this operand is the
+				// ordinary valueless declaration the comment there describes.
+				// Leaving the letter set made `withoutMatching(df)` non-empty
+				// below, which is what tells declareEmpty that the line names
+				// an attribute and so declares nothing — and the name then
+				// had no cell for a listing to print. See
+				// Runner.namerefAttributeRemoved.
+				df.namerefOff = false
+			}
 		}
 		r.refusalSpokenAs = outerSpokenAs
 		// Where the attributes and the value part company, which is a

@@ -1507,8 +1507,15 @@ type Runner struct {
 	// an uncomparable one is simply never matched and a child inherits, which
 	// is the answer a Runner without this field gives. A clone copies it, so
 	// a subshell's own input is still the shell's.
-	ownStdin    io.Reader
-	ownStdinSet bool
+	ownStdin io.Reader
+	// storingSelfNameref is the name a write through a self-aimed reference
+	// is landing on **right now**, and it exists to break one cycle: the
+	// borrowed compound rule calls storeArray, storeArray keeps the scalar
+	// copy in step by calling setVarAs, and setVarAs would divert through
+	// the very reference whose write is already in progress. See
+	// Runner.selfNamerefStoreOverACompound, where the borrowing is.
+	storingSelfNameref string
+	ownStdinSet        bool
 	// execStdin is what an `exec` redirection last installed as the shell's
 	// standard input, which is a different question from ownStdin and has a
 	// different reader. See Runner.noteExecReplacedStdin.
@@ -10046,7 +10053,14 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	// The write half of the member path above, and in the same place relative
 	// to the reference handling that storedValue puts it.
 	name = r.compoundMemberThroughAReference(name)
-	if r.selfNameref(name) {
+	if r.storingSelfNameref == name {
+		// A write through a self-aimed reference is **already landing**, and
+		// this is the store it borrowed doing its own bookkeeping — see
+		// Runner.selfNamerefStoreOverACompound. Every reference rule below
+		// has had its turn for this write: walking the reference again would
+		// warn about the cycle a second time and divert the value away from
+		// the cell the borrowed rule put it in.
+	} else if r.selfNameref(name) {
 		// The write half of the read above: a reference aimed at its own
 		// name lands on the global cell. Ahead of namerefAssignmentTarget,
 		// which would read the walk's `not aimed` as an invitation to
@@ -10054,8 +10068,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		// reference that points nowhere, and the wrong one for this shape.
 		r.selfNamerefAssignment(name, value, form)
 		return
-	}
-	if target, write := r.namerefAssignmentTarget(name, value, form); !write {
+	} else if target, write := r.namerefAssignmentTarget(name, value, form); !write {
 		// The value **aimed** the reference rather than being written
 		// through it, which is what a reference with nothing to point at
 		// does with its first assignment. See interp/nameref.go.

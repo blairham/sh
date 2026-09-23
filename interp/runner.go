@@ -7451,12 +7451,38 @@ func (r *Runner) prefixExpansion(a *syntax.Assign) string {
 
 // prefixJoined puts the name's current value in front of an append's, and is
 // the identity for a plain assignment.
+//
+// Through Runner.appendedValue rather than a `+` written here, which is the
+// whole of the fix #4142 needed: `+=` is one spelling over two operations and
+// the *name* says which — a plain name joins the characters and a name carrying
+// the integer or the float attribute **adds**. Measured on bash 5.3.20,
+// `typeset -i x=2; x+=5 printenv x` is `7`, and this concatenation made it
+// `25`. The statement form had asked the attribute since #2027's helper
+// existed; the prefix form was the second concatenation that did not.
 func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 	if !a.Append {
 		return value
 	}
 	old, _ := r.getVar(a.Name)
-	return old + value
+	if r.ctl == controlExit {
+		// The script is already ending, which here means an earlier reading of
+		// this same prefix failed and said so: the value is computed twice on
+		// the way to a store — once for what the command is handed and once for
+		// what the shell keeps — and the reference writes the sentence once.
+		// Measured, `typeset -i x=1; x+=2+ f` is one `arithmetic syntax error`
+		// in bash 5.3.20 and was two here the moment the join started
+		// evaluating (#4142).
+		return old
+	}
+	joined, ok := r.appendedValue(a.Name, old, value)
+	if !ok {
+		// The evaluation failed and has already said so, which ends the
+		// script — appendedValue's convention. The value handed back is the
+		// one the name already had, so nothing half-evaluated is stored on
+		// the way out.
+		return old
+	}
+	return joined
 }
 
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {

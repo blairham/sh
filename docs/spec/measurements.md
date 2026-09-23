@@ -12611,6 +12611,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/dash-o-listing-is-the-set-o-listing` | `differs` **2>** `<shell>: 1: shopt: not found` | `same` | `same` | `same` | `differs` **2>** `<shell>: shopt: not found` | `differs` **2>** `<shell>:1: command not found: shopt` | `differs` **2>** `<shell>: shopt: not found` |
 | `shopt/dash-o-rejects-a-shopt-name` | `st=127` **2>** `<shell>: 1: shopt: not found` | `st=1` **2>** `<shell>: line 1: shopt: cdspell: invalid option name` | `st=1` **2>** `<shell>: line 1: shopt: cdspell: invalid option name` | `st=1` **2>** `<shell>: line 0: shopt: cdspell: invalid option name` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` | `st=127` **2>** `<shell>: shopt: not found` |
 | `shopt/the-restricted-letter-and-what-the-mode-refuses` | **2>** `<script>: 1: set: Illegal option -r` *(status 2)* | `st=0~tail` **2>** `<script>: line 3: cd: restricted~<script>: line 4: PATH: readonly variable` | `st=0` **2>** `<script>: line 3: cd: restricted~<script>: line 4: PATH: readonly variable` *(status 1)* | `st=0~tail` **2>** `<script>: line 3: cd: restricted~<script>: line 4: PATH: readonly variable` | `st=0` **2>** `<script>[3]: cd: restricted~<script>: line 4: PATH: restricted` *(status 1)* | `st=0` **2>** `<script>:cd:3: restricted~<script>:4: PATH: restricted` *(status 1)* | **2>** `<script>: set: line 1: illegal option -r` *(status 2)* |
+| `variable/the-posix-option-and-its-parameter-are-one-state` | *(no output, status 2)* | `[y]~[unset]~tail` | `[y]~[unset]~tail` | `[y]~[unset]~tail` | *(no output, status 2)* | *(no output, status 1)* | `[unset]~[1]~tail` |
 | `shopt/the-compatibility-letters-and-the-parameter` | `[UNSET]~letter=127~[51]~tail` | `[44]~compat44            	off~letter=1~[51]~tail` | `[44]~compat44            	off~letter=1~[51]~tail` | `[UNSET]~letter=1~[51]~tail` | `[UNSET]~letter=127~[51]~tail` | `[UNSET]~letter=127~[51]~tail` | `[UNSET]~letter=127~[51]~tail` |
 | `shopt/patsub-replacement-reports-on` | `s=127` | `shopt -s patsub_replacement~s=0` | `shopt -s patsub_replacement~s=0` | `s=1` | `s=127` | `s=127` | `s=127` |
 | `shopt/turning-the-replacement-ampersand-off` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` |
@@ -13655,6 +13656,15 @@ grades it and nothing drift-checks it either, for the same reason.
   echo "st=$?"
   cd / && echo moved
   PATH=/bin
+  echo tail
+  ```
+- `variable/the-posix-option-and-its-parameter-are-one-state` — whether the `posix` option and `POSIXLY_CORRECT` are two spellings of one state. bash ties them in both directions and the two arms are the two directions a *listing* cannot show: turning the option on writes `y` into the name, and turning it off takes the name away even though a script had assigned it. Only the bash columns get that far -- dash, ksh93 and zsh have no `posix` name and `set` is a special builtin, so the first line ends them with nothing printed, and `|| :` does not save them either. That is the measured answer for those three rather than a gap in the case: the row is one shell's tie and three shells' refusal. BusyBox ash takes the unknown name in silence and leaves the parameter alone, which is the fourth answer. We ignored the parameter entirely, so a script that set it ran every later line from the wrong mode -- found as three lines of `appendop.tests`, which sets it and then depends on posix mode for whether an assignment before a special builtin persists (#4142)
+  ```sh
+  set -o posix 2>/dev/null
+  echo "[${POSIXLY_CORRECT-unset}]"
+  POSIXLY_CORRECT=1
+  set +o posix 2>/dev/null
+  echo "[${POSIXLY_CORRECT-unset}]"
   echo tail
   ```
 - `shopt/the-compatibility-letters-and-the-parameter` — the compatibility level in its two spellings, in both directions: `shopt -s compat44` writes `44` into BASH_COMPAT, the parameter answers the letter -- `BASH_COMPAT=51` makes `shopt compat44` report off at 1 -- and `shopt -u compat44` writes the level back whether or not it moved, so the last arm is `51` rather than this shell's own release. The letters are bash's alone and stop at 44, which is why the third arm is the discriminating one for every other column: the builtin is not there at all. We held the seven letters as off-by-default states nothing read, so setting one moved no reading and left the parameter where it was (#4262)
@@ -18894,6 +18904,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `variable/a-seeded-random-draws-a-sequence-of-its-own` | `42 42~42 42~4~tail` | `17772 26794~17772 26794~1693~tail` | `17772 26794~17772 26794~1693~tail` | `19081 17033~19081 17033~1817~tail` | `22700 13681~22700 13681~8403~tail` | `17766 11151~17766 11151~1692~tail` | `20351 9206~20351 9206~29829~tail` |
 | `variable/a-compatibility-level-out-of-range-in-the-environment` | `[abc]~tail` | `[abc]~tail` **2>** `<shell>: BASH_COMPAT: abc: compatibility value out of range~<script>: line 2: BASH_COMPAT: zzz: compatibility value out of range` | `[abc]~tail` **2>** `<shell>: BASH_COMPAT: abc: compatibility value out of range~<script>: line 2: BASH_COMPAT: zzz: compatibility value out of range` | `[abc]~tail` | `[abc]~tail` | `[abc]~tail` | `[abc]~tail` |
 | `variable/allexport-marks-a-declarations-assignment` | `none` **2>** `<script>: 2: typeset: not found~<script>: 5: Syntax error: "(" unexpected` *(status 2)* | `declare -x F="x"~declare -a A=([0]="1")~tail` | `declare -x F="x"~declare -a A=([0]="1")~tail` | `declare -x F="x"~declare -a A='([0]="1")'~tail` | `typeset -x F=x~typeset -a A=(1)~tail` | `export F=x~typeset -ax A=( 1 )~tail` | `none` **2>** `<script>: line 2: typeset: not found~<script>: line 5: syntax error: unexpected "("` *(status 2)* |
+| `variable/an-appending-prefix-asks-the-names-attributes` | `after:~tail` **2>** `<script>: 3: x+=5: not found` | `in:7~after:2~tail` | `in:7~after:2~tail` | `in:5~after:2~tail` | `in:7~after:7~tail` | `in:7~after:2~tail` | `after:~tail` **2>** `<script>: line 3: x+=5: not found` |
 | `variable/a-module-parameter-a-script-may-not-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~tail` | `st=0~tail` | `st=0~tail` | `st=0~tail` | **2>** `<script>:1: read-only variable: jobstates` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `variable/the-module-parameter-a-script-may-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 
@@ -19130,6 +19141,16 @@ grades it and nothing drift-checks it either, for the same reason.
   set -a
   typeset -a A=(1)
   typeset -p A 2>/dev/null || echo none
+  echo tail
+  ```
+- `variable/an-appending-prefix-asks-the-names-attributes` — `+=` in a command's **prefix**, on a name carrying the integer attribute. One spelling over two operations and the name says which: the columns with the letter add — `in:7` — where a plain name joins the characters. The `after:` arm is the other half of what a prefix assignment means, since the shell's own copy is untouched by it in every column that takes the line at all. dash and BusyBox ash have neither `typeset` nor `+=`, so the word is a command name there and the row records that rather than a gap. We joined the characters in the prefix while the statement form already added, which is a wrong *number* at status 0 — found as three lines of `appendop.tests` (#4142)
+  ```sh
+  typeset -i x=2 2>/dev/null
+  f() { echo "in:$x"; }
+  x+=5 f
+  echo "after:$x"
+  y=a
+  y+=b f2 2>/dev/null
   echo tail
   ```
 - `variable/a-module-parameter-a-script-may-not-own` — a name one shell's module owns, written by a script that has not loaded the module. zsh refuses it as `read-only variable: jobstates` at status 1 and ends the script, whether or not `zsh/parameter` was ever loaded -- the freeze is a property of the name and not of the module being there. Every shell without the module takes the assignment and makes an ordinary array, which is also what this engine did: a script probing for the module by writing the name got a value where it should have been stopped (#1604). `dirstack` is the one name in the same set that zsh does let a script assign, which is the row below

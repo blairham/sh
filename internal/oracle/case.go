@@ -11690,6 +11690,16 @@ echo "st=$?"`,
 		Why:     "the same set-ness read through `?`, which is where it reaches a *wording* as well as a firing. The plain form fires only where the list is unset: bash and ksh93 report `@: parameter not set` and dash and zsh print an empty field at status 0. The colon form fires everywhere — an empty value is null — and the sentence then depends on the same answer: the two columns that call the list unset say so, and the two that call it set name the null the way each of them does. Recorded together because a fix that moved the firing and left the wording would pass the first field and fail the second (#1941)",
 	},
 	{
+		ID: "expand/an-empty-expansion-beside-an-empty-positional-list", Category: "expansion",
+		Snippet: `set --; unset xxx; e=; n(){ echo "$#"; }; n "$@"; n "$xxx${@}"; n "$e$@"; n "$@$e"; n "x$@"; n "$xxx${*}"`,
+		Why:     "`\"$@\"` with no positional parameters is no word at all — the first field, unanimous — and the question is what an empty expansion *written beside it inside the same quotes* does. Three answers: bash in all three builds and ksh93 bring the word back for neither side, zsh brings it back for a trailing one and not a leading one, and dash and BusyBox ash bring it back for either. The last two fields are the boundary: a literal `x` is a word in all seven and `\"$*\"` is one word in all seven, so this is about `$@` and about expansions that came out empty rather than about concatenation. It is the line `exp.tests` costs in bash's own suite, and this shell answered dash's way in every column (#4203). Semantics.EmptyListTakesTheWord",
+	},
+	{
+		ID: "expand/an-empty-expansion-in-a-quoted-string-of-its-own", Category: "expansion",
+		Snippet: `set --; e=; n(){ echo "$#"; }; n "$e""$@"; n "$@""$e"; n "$@"''; n "$@"x`,
+		Why:     "the half of the same axis that says the reading is about one quoted **string** rather than about the word: two quote pairs are two strings, and the string the list is not in is a quoted null that survives. Every column but one answers all four fields 1 — where `\"$e$@\"` and `\"$@$e\"`, the same expansions inside the list's own quotes, are 0 in bash 5.3 and ksh93 — so the boundary between two runs of quoting is load-bearing and a reading that could not see it would answer these 0. The one column that does not is **bash 3.2**, which drops the word for a quoted null in a string of its own as well and keeps only the literal: dated rather than vetoed per docs/spec/core.md, and the preset here models 5.3. The third and fourth fields are the controls that are a quoted null and a literal rather than an expansion",
+	},
+	{
 		ID: "param/bang-with-an-operator-is-the-parameter", Category: "parameter expansion",
 		Snippet: `true & echo "${!:+set}"`,
 		Why:     "a `!` with an operator right after it is $! — not the start of an indirection that then has no name. All four shells print set",

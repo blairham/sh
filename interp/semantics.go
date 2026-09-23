@@ -22729,6 +22729,69 @@ type Semantics struct {
 	// spelled `@` is an array and answers elsewhere (#1941).
 	PositionalListWithNoneIsSet Answer
 
+	// EmptyListTakesTheWord says how far a quoted list expansion that produced
+	// **no fields** reaches when it takes the word with it. `"$@"` with no
+	// positional parameters is no word at all in every column — that much is
+	// unanimous — and the question is what an *empty expansion written beside
+	// it* does.
+	//
+	// Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, after `set --; unset xxx; e=; f=` with `n(){ echo "$#"; }`:
+	//
+	//	word            bash 5.3/3.2/as-sh, ksh93   zsh   dash, ash
+	//	"$@"                       0                  0        0
+	//	"$xxx${@}"                 0                  0        1
+	//	"$e$@"                     0                  0        1
+	//	"$e$@$f"                   0                  1        1
+	//	"$@$e"                     0                  1        1
+	//	"x$@"                      1                  1        1
+	//	"$xxx${*}"                 1                  1        1
+	//
+	// Three answers, and the zsh row is what makes it three rather than a
+	// switch: a fix written as "bash or not" would give zsh an answer no column
+	// has. The last two rows are the boundary — a *literal* `x` brings the word
+	// back in all seven, and `"$*"` is one word in all seven — so this is about
+	// `$@` and about expansions that came out empty, not about concatenation.
+	//
+	// It is the same question for an array, which is why the field is named for
+	// a *list* rather than for the positional parameters: with `a=()`, bash
+	// answers `"$e${a[@]}"` and `"${a[@]}$e"` with 0 and 0, and zsh with 0 and
+	// 1, exactly as they answer `$@`.
+	//
+	// **The reading is about one quoted string rather than about the word**,
+	// which the last two rows of the table cannot show and these two can:
+	//
+	//	"$e""$@"     1 in every column
+	//	"$@""$e"     1 in every column
+	//
+	// Two quote pairs are two strings, and the string the list is *not* in is a
+	// quoted null that survives. So an expansion in a string of its own brings
+	// the word back under every reading, and only one written inside the list's
+	// own quotes is what this axis is about. `interp.opensAQuotedRun` is where
+	// that boundary is read, and it says why it is read off the positions.
+	//
+	// **bash 3.2 is the one column that does not do that**: it drops the word
+	// for a quoted null in a string of its own as well, so its answer to both
+	// rows above — and to `"$@"''` — is 0, and only a literal keeps the word.
+	// Dated rather than vetoed per `docs/spec/core.md`: this preset models 5.3,
+	// and nothing here claims to be 3.2.
+	//
+	// One shape is measured and deliberately **not** folded in, because it
+	// splits the two columns that otherwise agree:
+	//
+	//	"$(:)$@"     0 in bash and ksh93, 1 in zsh and dash
+	//
+	// That is a *command* substitution rather than a parameter, and the reading
+	// here is asked of an empty **parameter** expansion only — which leaves
+	// that shape answering what it answered before, rather than trading one
+	// wrong column for another over a spelling nobody writes.
+	//
+	// Asked at the disagreement and nowhere else: a word holding a quoted list
+	// expansion that produced nothing, something else that also produced
+	// nothing, and no text at all. With any text in the word every column keeps
+	// it, and with nothing at all in the word every column drops it.
+	EmptyListTakesTheWord EmptyListReach
+
 	// EmptyAssociativeKeyIsAnError refuses to *store* under a key that is
 	// empty once the subscript has been read — `typeset -A m; m[""]=4`, and
 	// `m[$w]=4` with an empty `$w` beside it.
@@ -28399,6 +28462,54 @@ func (r *Runner) readTrailingEscapedSeparator() ReadTrailingEscapedSeparatorPoli
 	if p == ReadTrailingEscapedSeparatorUnspecified {
 		r.diagf("%s\n", r.unanswered(
 			"an escaped IFS whitespace character closing a `read` value"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// EmptyListReach is how far a quoted list expansion that produced no fields
+// reaches when it takes the word with it. See Semantics.EmptyListTakesTheWord
+// for the measurements.
+type EmptyListReach uint8
+
+const (
+	// EmptyListReachUnspecified is no answer, and is refused: the three below
+	// put a different number of arguments on the wire for `f "$e$@"`.
+	EmptyListReachUnspecified EmptyListReach = iota
+	// EmptyListReachNothing leaves the word to the ordinary rule, where a
+	// quoted expansion is a field whether or not it produced anything: `"$e$@"`
+	// and `"$@$e"` are one empty argument. dash and BusyBox ash.
+	EmptyListReachNothing
+	// EmptyListReachTheWord takes the whole word unless text is in it, on
+	// either side: `"$e$@"` and `"$@$e"` are no argument at all, where `"x$@"`
+	// is one. bash, bash 3.2, bash-as-sh and ksh93.
+	EmptyListReachTheWord
+	// EmptyListReachWhatStandsBeforeIt takes only what is in front of it, so
+	// an expansion written *behind* the list brings the word back however
+	// empty it came out: `"$e$@"` is no argument and `"$@$e"` is one. zsh.
+	EmptyListReachWhatStandsBeforeIt
+)
+
+func (p EmptyListReach) String() string {
+	switch p {
+	case EmptyListReachNothing:
+		return "nothing"
+	case EmptyListReachTheWord:
+		return "the word"
+	case EmptyListReachWhatStandsBeforeIt:
+		return "what stands before it"
+	}
+	return "unspecified"
+}
+
+// emptyListReach resolves the axis, and is reached only where the three
+// readings would put a different number of arguments on the wire.
+func (r *Runner) emptyListReach() EmptyListReach {
+	p := r.sem().EmptyListTakesTheWord
+	if p == EmptyListReachUnspecified {
+		r.diagf("%s\n", r.unanswered(
+			"what a quoted list expansion that produced no fields takes with it"))
 		r.status = 2
 		r.unspecified = true
 	}

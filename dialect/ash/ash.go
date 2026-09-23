@@ -294,6 +294,9 @@ func Semantics() interp.Semantics {
 	// there is no `[[ … ]]` here either — so the axis is unreachable in this
 	// column rather than unanswered.
 	s.PositionalListWithNoneIsSet = interp.Yes
+	// And it answers what an empty `$@` takes with it the way dash does: an
+	// expansion beside it is a field however empty it came out.
+	s.EmptyListTakesTheWord = interp.EmptyListReachNothing
 	// `${#@}` with three parameters is 5 — the width of `a b c` — rather than
 	// the count.
 	s.LengthOfSpecialIsCount = interp.No

@@ -806,6 +806,10 @@ func Semantics() interp.Semantics {
 	// either — so the axis is unreachable in this column rather than
 	// unanswered.
 	s.PositionalListWithNoneIsSet = interp.Yes
+	// An empty `$@` takes nothing with it here: a quoted expansion beside it is
+	// a field whether or not it produced anything, so `"$e$@"` and `"$@$e"` are
+	// each one empty argument.
+	s.EmptyListTakesTheWord = interp.EmptyListReachNothing
 	// The value is expanded and the redirection opened before the prefix is
 	// checked, so a failure in either is what gets reported and the frozen
 	// name is never named. Measured 2026-09-12, with ksh93 and zsh against

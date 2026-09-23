@@ -93518,6 +93518,108 @@
         "TimedOut": false
       }
     },
+    "expand/an-empty-expansion-beside-an-empty-positional-list": {
+      "ash": {
+        "Stdout": "0~1~1~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "0~0~0~0~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "0~0~0~0~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0~0~0~0~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "0~1~1~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "0~0~0~0~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "0~0~0~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/an-empty-expansion-in-a-quoted-string-of-its-own": {
+      "ash": {
+        "Stdout": "1~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "1~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "0~0~0~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1~1~1~1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "expand/arithmetic-text-is-not-split": {
       "ash": {
         "Stdout": "[3]",

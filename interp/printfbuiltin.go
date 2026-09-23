@@ -244,7 +244,10 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 	// before it, and ksh93's `[` arrives before its complaint about what
 	// followed. The others hold to the end, so their complaint reaches the
 	// reader first — their output is still in a buffer when it goes out.
-	b := &printfWriter{w: r.stdout(), r: r, through: r.printfWritesThrough()}
+	// The guarded stream, not the bare one: this writer runs while a
+	// substitution's body may be writing the same sink from its own goroutine,
+	// and the body takes the lock. See Runner.printf.
+	b := &printfWriter{w: r.lockedStdout(), r: r, through: r.printfWritesThrough()}
 	// On the runner for the length of the pass, because two things outside
 	// this loop need it: every diagnostic reveals what has been produced
 	// before it is written, and the one refusal that takes a pass back

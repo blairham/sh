@@ -797,6 +797,9 @@ func Semantics() interp.Semantics {
 	// way and on the same day: `v='a\*'; set -- $v` is `a\*` here, so the
 	// `*` behind the backslash is not a metacharacter (#1367).
 	s.ValueBackslashInAPattern = interp.ValueBackslashQuotesWhatFollows
+	// And it goes even from a piece that describes a name: `./[y]${bs}/e` is
+	// `./y/e` here where bash and ksh93 leave the word as written.
+	s.ValueBackslashSurvivesAPatternPiece = interp.No
 	// An empty positional list is a set parameter here, with zsh: measured
 	// 2026-09-12, `set --; "${@-word}"` is empty and `"${@+word}"` is
 	// `word`, where bash and ksh93 answer the other way round (#1941).

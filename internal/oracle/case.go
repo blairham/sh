@@ -19728,6 +19728,18 @@ echo after`,
 		Why:     "two different rules about a period, and this says they stay apart. A `.` *component* names a directory; a leading period in a *name* is hidden from a pattern that does not write one — so `./*` leaves `.hid` out in all seven even though the pattern begins with a period, and `./.h*` finds it",
 	},
 	{
+		ID: "glob/a-value-backslash-that-ran-out-of-value", Category: "expansion",
+		Script:  true,
+		Snippet: "mkdir -p g/tmp/a/b && cd g && : > tmp/a/b/c && : > 'x*' && : > 'x\\y' && : > xy && bs='\\' && printf \"[%s]\" ./tmp${bs}/a/b/* && echo && printf \"[%s]\" ./t${bs}mp/a/b/* && echo && printf \"[%s]\" x${bs}? && echo && printf \"[%s]\" x${bs}* && echo",
+		Why:     "a value's end is not the field's end. `bs='\\'` holds one backslash, and the three shells that have a value's backslash *quote* what follows it quote the **field's** next character rather than the value's — so the first two fields find `./tmp/a/b/c` in dash, bash in all three builds and BusyBox ash, where ksh93 keeps the backslash as a character of the pattern and misses and zsh refuses the word. The third field is the sharpest and the quietest: a file named `x*` is there, the `?` is quoted by the value's backslash so those columns have no live metacharacter left and never glob the word at all. This shell wrote such a backslash as an ordinary literal — a value's end was where it stopped looking — so the `?` stayed live, two files matched and were handed on at status 0 with no diagnostic anywhere (#4234)",
+	},
+	{
+		ID: "glob/a-value-backslash-in-front-of-a-separator", Category: "expansion",
+		Script:  true,
+		Snippet: "mkdir -p 'g/x\\' g/y && cd g && : > 'x\\/e' && : > y/e && bs='\\' && printf \"[%s]\" ./[x]${bs}/e && echo && printf \"[%s]\" ./[y]${bs}/e && echo && printf \"[%s]\" ./y${bs}/[e] && echo",
+		Why:     "the `/` is the one character a quote cannot take the meaning off: it separates however it was written, so a value's backslash that ran out of value in front of one stays at the end of the piece it ends — and what becomes of it there is the piece's own question. The tree holds the directories `x\\` and `y`, each with an `e`, so the first two fields are each other's control: bash in all three builds and ksh93 keep the backslash, match the name that ends in one and miss on the name that does not, and dash and BusyBox ash drop it and do the reverse. The third field is the half that is unanimous among the columns that quote — a piece that *spells* a name loses the backslash with the rest of its quoting — which is what says this is about a pattern piece and not about the separator. Semantics.ValueBackslashSurvivesAPatternPiece",
+	},
+	{
 		ID: "axis/assign-through-an-expansion-onto-a-list", Category: "semantics axes",
 		Script:  true,
 		Snippet: "set --\nprintf \"<%s>\" ${@:=abc}\nprintf \"<%s>\" ${*:=abc}\necho after",

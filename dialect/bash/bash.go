@@ -1992,6 +1992,11 @@ func Semantics() interp.Semantics {
 	// `*` was not live and the backslash was not removed. ksh93 is the one
 	// column that reads it the other way (#1367).
 	s.ValueBackslashInAPattern = interp.ValueBackslashQuotesWhatFollows
+	// And where the character it quoted is the `/` that closes a piece, the
+	// backslash stays in that piece: `./[x]${bs}/e` matches a directory named
+	// `x\` here and `./[y]${bs}/e` is the word as written, which is the
+	// opposite of what dash and BusyBox ash answer.
+	s.ValueBackslashSurvivesAPatternPiece = interp.Yes
 	// An escaped IFS whitespace character closing a `read` value is trimmed
 	// off a value that took the *remainder* of the line and left alone on a
 	// value that was its own field. Measured 2026-09-12 on 5.3.15, 3.2.57

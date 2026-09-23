@@ -105401,6 +105401,108 @@
         "TimedOut": false
       }
     },
+    "glob/a-value-backslash-in-front-of-a-separator": {
+      "ash": {
+        "Stdout": "[./[x]\\/e]~[./y/e]~[./y/e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[./x\\/e]~[./[y]\\/e]~[./y/e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[./x\\/e]~[./[y]\\/e]~[./y/e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[./[x]\\/e]~[./[y]\\/e]~[./y/e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[./[x]\\/e]~[./y/e]~[./y/e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[./x\\/e]~[./[y]\\/e]~[./y\\/[e]]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[./x\\/e]",
+        "Stderr": "\u003cscript\u003e:1: no matches found: ./[y]\\/e",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "glob/a-value-backslash-that-ran-out-of-value": {
+      "ash": {
+        "Stdout": "[./tmp/a/b/c]~[./tmp/a/b/c]~[x\\?]~[x\\*]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[./tmp/a/b/c]~[./tmp/a/b/c]~[x\\?]~[x\\*]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[./tmp/a/b/c]~[./tmp/a/b/c]~[x\\?]~[x\\*]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[./tmp/a/b/c]~[./tmp/a/b/c]~[x\\?]~[x\\*]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[./tmp/a/b/c]~[./tmp/a/b/c]~[x\\?]~[x\\*]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[./tmp\\/a/b/*]~[./t\\mp/a/b/*]~[x\\y]~[x\\y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: no matches found: ./tmp\\/a/b/*",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "glob/an-empty-component-behind-a-matched-one": {
       "ash": {
         "Stdout": "[cx//ax][sym//ax]",

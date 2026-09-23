@@ -2559,6 +2559,10 @@ func Semantics() interp.Semantics {
 	// directory holding `a\b` and `a*`: `v='a\*'; print -r -- ${~v}` is
 	// `a\*`, so the `*` behind the backslash was not live (#1367).
 	s.ValueBackslashInAPattern = interp.ValueBackslashDisarmsWhatFollows
+	// The piece question never arises with that answer either — the backslash
+	// stays a character of the pattern — and is answered for the reason ksh93's
+	// is: an axis left open refuses the word the day the one above moves.
+	s.ValueBackslashSurvivesAPatternPiece = interp.Yes
 	// ksh93's answer for the trim at the end of a `read` value, measured the
 	// same way: `printf 'a b\\ \n' | read x y` leaves `b` here (#1360).
 	s.ReadTrailingEscapedSeparator = interp.ReadTrailingEscapedSeparatorTrimmed

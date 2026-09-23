@@ -2392,7 +2392,7 @@ func (r *Runner) escapeResult(v string, glob Answer) string {
 	// alone. Answering no here escapes the whole value and the mark never
 	// reaches a field, which is what keeps the shell that globs no expansion
 	// result from being asked the backslash question at all.
-	if r.resultReadsAsPattern(rewriteValueBackslashes(esc, ValueBackslashIsData)) &&
+	if r.resultReadsAsPattern(r.rewriteValueBackslashes(esc, ValueBackslashIsData)) &&
 		!r.ask(glob, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behavior

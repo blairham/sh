@@ -312,6 +312,9 @@ func Semantics() interp.Semantics {
 	// A value's backslash quotes what follows it rather than standing as a
 	// character of the pattern: `v='a\*'; set -- $v` is `a\*`.
 	s.ValueBackslashInAPattern = interp.ValueBackslashQuotesWhatFollows
+	// And answers the piece question dash's way; see the corpus rows under
+	// `glob/a-value-backslash-…`.
+	s.ValueBackslashSurvivesAPatternPiece = interp.No
 	// `case x in [^a]) echo negates ;; *) echo plain ;; esac` reaches the
 	// first arm. dash is the panel's sole holdout on reading the caret as a
 	// negation, and this shell — its sibling — is not with it, so the "dash

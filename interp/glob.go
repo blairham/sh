@@ -69,6 +69,30 @@ import (
 // an alphabet on.
 const valueBackslashMark = '\x00'
 
+// valueBackslashRanOutOfValue is valueBackslashMark written twice, and stands
+// where a backslash that arrived in a **value** stood with nothing behind it
+// *in that value*.
+//
+// A value's end is not the field's end. `bs='\'; echo ./tmp${bs}/a/b/*` is one
+// word whose second span is `/a/b/` and whose third is a live `*`, and the
+// shells that have the backslash quote what follows it quote the **field's**
+// next character rather than the value's — so this cannot be written as the
+// ordinary mark, which names the character it quotes, and it cannot be written
+// as a plain marked backslash either, which is what it was and is why
+// `./tmp\/a/b/*` never found `./tmp/a/b/c` (#4234).
+//
+// Doubled rather than given a byte of its own, and that is a measurement rather
+// than taste. `\x01` was the first attempt and it is a byte a value legitimately
+// holds: `$'a\001b'` is in the tree's own minimal-quoting round trip, and with
+// the mark on that byte the value came back as `a\b`. NUL is the only byte the
+// escaped form can spend, for the reason valueBackslashMark gives — and it is
+// already spent, so a *second* one of it is free: a NUL that is data is always
+// written with a mark in front of it, so a bare mark can only be one this file
+// wrote, and two bare marks in a row can only be this. Spelled out rather than
+// built from the constant because a Go constant cannot be, and the two are held
+// together by TestTheTwoValueBackslashMarksAgree.
+const valueBackslashRanOutOfValue = "\x00\x00"
+
 // markedByGlobEscape is the alphabet above, named because two readers need
 // it: globEscape, which puts the marks on, and the value-backslash escaping,
 // which asks whether a mark on one of these could change what a field means.
@@ -76,7 +100,8 @@ const valueBackslashMark = '\x00'
 //
 // NUL is in it for valueBackslashMark's sake and for nothing else: marking a
 // byte no pattern reads costs nothing, and it is what makes a bare mark
-// unambiguous.
+// unambiguous — and a doubled one, which is the other mark. See
+// valueBackslashRanOutOfValue.
 const markedByGlobEscape = "*?[\\<()|\x00" + extendedPatternMeta
 
 func globEscape(s string) string {
@@ -118,8 +143,9 @@ func escapeValueBackslashes(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] == valueBackslashMark {
-			// A NUL that is *data*, marked so that a bare mark can only be the
-			// one this function writes. See valueBackslashMark.
+			// A NUL that is *data*, marked so that a bare mark can only be one
+			// this function wrote — and a bare pair only the other mark. See
+			// valueBackslashMark.
 			b.WriteByte('\\')
 			b.WriteByte(s[i])
 			continue
@@ -129,7 +155,11 @@ func escapeValueBackslashes(s string) string {
 			continue
 		}
 		if i+1 >= len(s) {
-			b.WriteString(`\\`)
+			// The value ran out, and the character this backslash quotes is
+			// the next one in the *field*. Marked rather than written as a
+			// literal backslash, which is what it was: see
+			// valueBackslashRanOutOfValue.
+			b.WriteString(valueBackslashRanOutOfValue)
 			continue
 		}
 		b.WriteByte(valueBackslashMark)
@@ -154,12 +184,48 @@ func escapeValueBackslashes(s string) string {
 //
 // A backslash behind the mark is the doubled case and is marked under every
 // reading, because a lone one would escape whatever came after it.
-func rewriteValueBackslashes(field string, p ValueBackslashPolicy) string {
-	if strings.IndexByte(field, valueBackslashMark) < 0 {
+func (r *Runner) rewriteValueBackslashes(field string, p ValueBackslashPolicy) string {
+	if !holdsAValueBackslash(field) {
 		return field
 	}
 	var b strings.Builder
 	for i := 0; i < len(field); i++ {
+		if strings.HasPrefix(field[i:], valueBackslashRanOutOfValue) {
+			i++
+			// The value ran out here, so what this backslash quotes is the
+			// next unit of the *field* — and that unit's escaping is the
+			// script's rather than the value's, which is what keeps a
+			// metacharacter the script quoted quoted under every reading.
+			unit, live, width := fieldUnitAt(field, i+1)
+			i += width
+			switch {
+			case width == 0:
+				// Nothing follows it in the field either, and there all three
+				// readings agree: it is a backslash.
+				b.WriteString(`\\`)
+			case p == ValueBackslashQuotesWhatFollows && live && unit == "/" &&
+				r.valueBackslashSurvivesAPatternPiece(componentSoFar(b.String())):
+				// The one character a quote cannot take the meaning off: a
+				// `/` still separates however it was quoted, so the backslash
+				// stays where it is — at the end of the piece in front of it —
+				// and that piece decides what becomes of it. A piece that
+				// *describes* a name keeps it as a character and matches a
+				// name with a backslash on the end; one that spells a name has
+				// it removed with the rest of its quoting, which is the branch
+				// below. See Semantics.ValueBackslashSurvivesAPatternPiece.
+				b.WriteString(`\\`)
+				b.WriteString(unit)
+			case p == ValueBackslashQuotesWhatFollows:
+				b.WriteString(globEscape(unit))
+			case p == ValueBackslashIsData && live:
+				b.WriteString(`\\`)
+				b.WriteString(unit)
+			default:
+				b.WriteString(`\\`)
+				b.WriteString(globEscape(unit))
+			}
+			continue
+		}
 		if field[i] != valueBackslashMark {
 			b.WriteByte(field[i])
 			if field[i] == '\\' && i+1 < len(field) {
@@ -215,12 +281,12 @@ func rewriteValueBackslashes(field string, p ValueBackslashPolicy) string {
 // The second result is false only for an unanswered axis, which has already
 // been reported: the field is not globbed and the caller restores it.
 func (r *Runner) resolveValueBackslashes(field string) (string, bool) {
-	if strings.IndexByte(field, valueBackslashMark) < 0 {
+	if !holdsAValueBackslash(field) {
 		return field, true
 	}
-	quotes := rewriteValueBackslashes(field, ValueBackslashQuotesWhatFollows)
-	disarms := rewriteValueBackslashes(field, ValueBackslashDisarmsWhatFollows)
-	data := rewriteValueBackslashes(field, ValueBackslashIsData)
+	quotes := r.rewriteValueBackslashes(field, ValueBackslashQuotesWhatFollows)
+	disarms := r.rewriteValueBackslashes(field, ValueBackslashDisarmsWhatFollows)
+	data := r.rewriteValueBackslashes(field, ValueBackslashIsData)
 	if !r.resultReadsAsPattern(quotes) && !r.resultReadsAsPattern(disarms) &&
 		!r.resultReadsAsPattern(data) {
 		return disarms, true
@@ -281,12 +347,18 @@ func globUnescape(s string) string {
 	// every field of every command reaches here, and a `strings.Builder` per
 	// field was 19% of the allocations in the gate's workload (#1403), which
 	// has no backslash anywhere in it.
-	if strings.IndexByte(s, valueBackslashMark) < 0 && strings.IndexByte(s, '\\') < 0 {
+	if !holdsAValueBackslash(s) && strings.IndexByte(s, '\\') < 0 {
 		return s
 	}
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] == valueBackslashMark {
+			// One backslash for a doubled mark as well as for a single one:
+			// the pair is one backslash that ran out of value, not two. See
+			// valueBackslashRanOutOfValue.
+			if strings.HasPrefix(s[i:], valueBackslashRanOutOfValue) {
+				i++
+			}
 			b.WriteByte('\\')
 			continue
 		}
@@ -296,6 +368,51 @@ func globUnescape(s string) string {
 		b.WriteByte(s[i])
 	}
 	return b.String()
+}
+
+// componentSoFar is the piece of a path a rewrite has built up to here: the
+// text after the last separator. A `/` is never marked — globEscape has no
+// reason to mark one — so every `/` byte in the escaped form is a separator.
+func componentSoFar(s string) string {
+	return s[strings.LastIndexByte(s, '/')+1:]
+}
+
+// valueBackslashSurvivesAPatternPiece answers whether a value's trailing
+// backslash stays in the piece it ends when a quoted `/` closes that piece, and
+// it is asked only of a piece that describes a name rather than spelling one:
+// where the piece spells one, every column removes the backslash with the rest
+// of its quoting, so there is nothing to decide.
+func (r *Runner) valueBackslashSurvivesAPatternPiece(piece string) bool {
+	if !r.describesRatherThanSpells(piece) {
+		return false
+	}
+	return r.ask(r.sem().ValueBackslashSurvivesAPatternPiece,
+		"a value's trailing backslash staying in the pattern piece a quoted separator closed")
+}
+
+// holdsAValueBackslash reports whether a field carries either of the marks a
+// value's backslash is written as. One question rather than two `IndexByte`
+// calls at each site, because a site that learned one mark and not the other is
+// the shape this file already has a #1370 about.
+func holdsAValueBackslash(s string) bool {
+	return strings.IndexByte(s, valueBackslashMark) >= 0
+}
+
+// fieldUnitAt reads the one unit of the escaped form that starts at i: the byte
+// it stands for, whether that byte is **live** there, and how many bytes of the
+// form it took.
+//
+// A unit and not a byte, for the reason escapedMarks gives: the form's rule is
+// that a backslash and the byte behind it are one thing. A width of zero means
+// the field ran out.
+func fieldUnitAt(s string, i int) (unit string, live bool, width int) {
+	switch {
+	case i >= len(s):
+		return "", false, 0
+	case s[i] == '\\' && i+1 < len(s):
+		return s[i+1 : i+2], false, 2
+	}
+	return s[i : i+1], true, 1
 }
 
 // hasUnescapedMeta reports whether a field is a pattern at all.

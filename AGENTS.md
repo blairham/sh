@@ -586,18 +586,34 @@ linters `.golangci.yml` enables, so the lint job already runs it over the
 same code.
 
 **Never write a closing keyword next to an issue number you do not mean to
-close — not even to deny it.** GitHub matches `close`, `closes`, `closed`,
-`fix`, `fixes`, `fixed`, `resolve`, `resolves`, `resolved` followed by a
-reference, and it does not parse the words around them: a pull request body
-opening "Does **not** close #4145, #4152 or #4158" closed #4145 the moment it
-merged. (It spared the other two only because the keyword was not repeated
-before each number, which is the same rule read from the other side — `Closes
-#1, #2` closes only #1, so a body meaning to close several says `Closes #1`,
-`Closes #2`.) This has cost real time more than once here, and the fix is a
-phrasing rule rather than more care: say **"#4145 stays open"**, "not a fix for
-#4145", or "partial: see #4145", and keep every keyword for the issues the
-change actually resolves. The parent tree's `Closes #N` rule is what this
-layers on.
+close — not in a pull request body, not in a commit message, and not even to
+deny it.** GitHub matches `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`,
+`resolve`, `resolves`, `resolved` followed by a reference, and it does not parse
+the words around them. Say **"#NNNN stays open"**, "not a fix for #NNNN", or
+"partial: see #NNNN", and keep every keyword for the issues the change actually
+resolves. Check the body and the message for the pattern before pushing. The
+parent tree's `Closes #N` rule is what this layers on.
+
+Three things make this worth a rule rather than care, and each of them is a
+recurrence:
+
+- **A denial closes.** A body opening "Does **not** close #NNNN" closed that
+  issue the moment it merged.
+- **A commit message closes too**, and merges here are squashes, so the pull
+  request's message is what lands on `main` — where GitHub reads keywords as
+  well. The commit that first wrote *this rule down* closed the same issue
+  again, by quoting the mistake it was documenting.
+- **An example is not exempt.** So an example uses `#NNNN`; a live number never
+  appears beside a keyword, however clearly the prose says otherwise. That is
+  why the two paragraphs above carry no real issue numbers.
+
+And the mirror-image rule, which is the same parser read from the other side:
+`Closes #NNNN, #MMMM` closes only the first, because the keyword is not
+repeated. A change resolving several repeats it: `Closes #NNNN`, `Closes #MMMM`.
+
+**A wrong close costs more than an open issue.** The release bar is counted from
+labels on open issues, and an epic closes when its rows reach parity — so a
+falsely-closed row lets a campaign finish on a premise nobody measured.
 
 `main` is protected, and these four must pass before a merge:
 

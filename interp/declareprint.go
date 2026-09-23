@@ -122,6 +122,7 @@ type declaration struct {
 	exported  bool
 	lower     bool
 	upper     bool
+	capital   bool
 	// hidden says the `-H` attribute is on the name. What it *does* is the
 	// dialect's — see Semantics.DeclareHideValueLetter — so this field is
 	// the record and hidesTheValue below is one of the two readings of it.
@@ -246,6 +247,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		exported:    r.isExported(name),
 		lower:       r.lowered[name],
 		upper:       r.uppered[name],
+		capital:     r.capitalized[name],
 		hidden:      r.hidden[name],
 		unique:      r.unique[name],
 		traced:      r.traced[name],
@@ -269,7 +271,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d.hidesTheValue = d.hidden &&
 		r.sem().DeclareHideValueLetter == DeclareHideValueLetterHidesTheValue
 	attributed := d.integer || d.float || d.readonly || d.exported || d.lower ||
-		d.upper || d.hidden || d.unique || d.traced || d.hasWidth
+		d.upper || d.capital || d.hidden || d.unique || d.traced || d.hasWidth
 	producedIsAnArray, producedListsElements := false, false
 	if d.isNameref {
 		// A reference lists as itself — `declare -n r="v"` — and the tables
@@ -1396,6 +1398,9 @@ func bareAssignmentFlags(d declaration) []string {
 	if d.upper {
 		flags = append(flags, "-u")
 	}
+	if d.capital {
+		flags = append(flags, "-c")
+	}
 	if d.float {
 		// The float letter and its number as a word of its own —
 		// `typeset -E 3 a=3.14` — which is where the integer base sits too
@@ -1508,7 +1513,12 @@ func bareAssignmentHead(flags []string, name string) string {
 // cannot stand with `n` at all — a `-n` declaration over an array is refused,
 // see NamerefArrayRefusal — so their side of it is unexercised and they keep
 // the place the rest of the order gives them.
-func (d declaration) flagLetters() string { return d.letters("aAinrtxlu") }
+//
+// `c` sits **last**, behind every other letter including the two it cannot
+// stand with. Measured 2026-09-23 on GNU bash 5.3.15: `declare -irtxc v="9"`,
+// `declare -axc v=([0]="A")`, `declare -Ac v`, `declare -nc v`, and `-xc`,
+// `-rc`, `-tc`, `-ic` for each letter on its own.
+func (d declaration) flagLetters() string { return d.letters("aAinrtxluc") }
 
 // letters spells the attributes present in the given order.
 func (d declaration) letters(order string) string {
@@ -1536,6 +1546,8 @@ func (d declaration) letters(order string) string {
 			on = d.lower
 		case 'u':
 			on = d.upper
+		case 'c':
+			on = d.capital
 		case 'U':
 			on = d.unique
 		case 't':

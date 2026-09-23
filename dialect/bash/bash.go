@@ -3225,7 +3225,7 @@ func Semantics() interp.Semantics {
 	// and interp/localinherit.go is the whole of it. `-t` joined them in
 	// #3101: it is the **trace attribute**, which this shell records and
 	// lists back and nothing else here reads — see Runner.traced.
-	s.DeclareOptions = "aAfFgiIlnprtux"
+	s.DeclareOptions = "aAcfFgiIlnprtux"
 	// unanswered FloatFormatLetterE: this shell has no `-E` on a declaration
 	// to give a rendering to. Measured 2026-09-15 on 5.3.15 and 3.2.57
 	// alike, `declare -E 3 a=1.5` is `declare: -E: invalid option` (#2559).

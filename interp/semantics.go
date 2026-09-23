@@ -610,6 +610,16 @@ type Semantics struct {
 	// Asked only where a bracket holding a live `/` is the question — a word
 	// carrying any other live metacharacter is a pattern in every column and never
 	// reaches here (#4158).
+	//
+	// **And asked through a function rather than a bool**, which is a general
+	// rule this axis is only the latest instance of. Passed as a value, the
+	// question is evaluated wherever the call is written — here, at the gate
+	// every field reaches — so a core with no dialect chosen refused ordinary
+	// word splitting rather than the one word the question was about. Caught by
+	// interp's own splitting rows before it left the machine. A question this
+	// shell cannot answer must refuse **only the word it is about**: whatever
+	// asks an axis has to be reached only on the path where the disagreement
+	// lies, and an argument is not that path.
 	BracketHoldingASlashIsStillABracket Answer
 
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of

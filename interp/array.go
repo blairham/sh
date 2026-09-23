@@ -618,7 +618,8 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 // failed and has already reported, and where the axis went unanswered.
 func (r *Runner) elementValueFolded(name, value string) (string, bool) {
 	_, width := r.fieldWidth[name]
-	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] && !width {
+	if !r.integer[name] && !r.lowered[name] && !r.uppered[name] &&
+		!r.capitalized[name] && !width {
 		return value, true
 	}
 	if !r.attributeWouldChange(name, value) {

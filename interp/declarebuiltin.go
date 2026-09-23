@@ -78,6 +78,7 @@ type declareFlags struct {
 	compoundVar bool
 	lower       bool
 	upper       bool
+	capital     bool
 	global      bool
 	hidden      bool
 	// hide is the sign of the last `h` letter written and hideNamed says one
@@ -491,6 +492,12 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				f.lower = true
 			case 'u':
 				f.upper = true
+			case 'c':
+				// The third case letter, which one dialect has and does not
+				// advertise — its own usage line omits it, and this shell
+				// prints that line back byte for byte. See
+				// Runner.capitalCase for what it makes of a value.
+				f.capital = true
 			case 'g':
 				// Global rather than local: the assignment reaches the
 				// global cell however deep the function stack is.
@@ -2921,7 +2928,8 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			delete(r.lowered, name)
 		} else {
 			r.lowered[name] = true
-			// The two case attributes cannot both stand: the later one
+			delete(r.capitalized, name)
+			// The case attributes cannot both stand: the later one
 			// speaks, which is what both shells measured do.
 			delete(r.uppered, name)
 			if !numeric {
@@ -2946,6 +2954,24 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		} else {
 			r.uppered[name] = true
 			delete(r.lowered, name)
+			delete(r.capitalized, name)
+			if !numeric {
+				r.caseLetterReplacesTheNumeric(name)
+			}
+		}
+	}
+	if f.capital && !canceled {
+		if r.capitalized == nil {
+			r.capitalized = map[string]bool{}
+		}
+		if f.remove {
+			delete(r.capitalized, name)
+		} else {
+			r.capitalized[name] = true
+			// The three case attributes cannot stand together: the later one
+			// speaks, the same rule the other two already follow.
+			delete(r.lowered, name)
+			delete(r.uppered, name)
 			if !numeric {
 				r.caseLetterReplacesTheNumeric(name)
 			}
@@ -3070,7 +3096,7 @@ func (f declareFlags) namesANumericType(r *Runner) bool {
 // tree keeps rediscovering.
 func (f declareFlags) namesAValueShapingAttribute() bool {
 	return f.integer || f.float || f.widthLetter != 0 ||
-		f.lower || f.upper || f.array || f.assoc
+		f.lower || f.upper || f.capital || f.array || f.assoc
 }
 
 // namesAValueBearingType is the narrower list one dialect refuses over a
@@ -3234,21 +3260,51 @@ func (r *Runner) numericTypeLetterRetypesFrozen(name string, f declareFlags) boo
 // in bash, so a letter written under a plus is not one of the two that cancel.
 // Same reading `readonlyOff` already takes for the `r` letter.
 func (r *Runner) caseLettersCancel(name string, f declareFlags) bool {
-	if !f.lower || !f.upper {
-		return false
+	// Three letters rather than two, and any pair of them cancels. `-c` is
+	// the third — the one dialect that has it answers `declare -- h` with the
+	// value untouched to `declare -cu h="mixed case"`, exactly as it does to
+	// `-l` with `-u`, so the letter joins this family rather than standing
+	// beside it. Measured 2026-09-23 on GNU bash 5.3.15 (#4160).
+	written := 0
+	for _, letter := range []rune{'l', 'u', 'c'} {
+		if !f.wroteCaseLetter(letter) {
+			continue
+		}
+		plus, ok := f.lastSign(letter)
+		if !ok || plus {
+			// A letter written under a plus is not one of the pair that
+			// cancels, which is measured: `typeset +l -u z=Ab` lists
+			// `typeset -u z=Ab` in zsh and `declare -u z="AB"` in bash.
+			continue
+		}
+		written++
 	}
-	lowerPlus, lowerWritten := f.lastSign('l')
-	upperPlus, upperWritten := f.lastSign('u')
-	if !lowerWritten || !upperWritten || lowerPlus || upperPlus {
+	if written < 2 {
 		return false
 	}
 	if !r.ask(r.sem().TwoCaseLettersOnOneDeclarationCancel,
-		"both case letters written on one declaration") {
+		"two case letters written on one declaration") {
 		return false
 	}
 	delete(r.lowered, name)
 	delete(r.uppered, name)
+	delete(r.capitalized, name)
 	return true
+}
+
+// wroteCaseLetter reports whether the declaration asked for one of the three
+// case attributes, read off the flag the letter set rather than off the letter
+// run — so a letter the dialect does not have cannot be counted.
+func (f declareFlags) wroteCaseLetter(letter rune) bool {
+	switch letter {
+	case 'l':
+		return f.lower
+	case 'u':
+		return f.upper
+	case 'c':
+		return f.capital
+	}
+	return false
 }
 
 // upperLetterRecordsNothing reports whether `-u` beside a numeric type letter
@@ -3277,7 +3333,7 @@ func (r *Runner) upperLetterRecordsNothing() bool {
 // float branch, because the two are one family and a second copy is where they
 // would come apart.
 func (r *Runner) numericLetterReplacesTheCase(name string) {
-	if !r.lowered[name] && !r.uppered[name] {
+	if !r.lowered[name] && !r.uppered[name] && !r.capitalized[name] {
 		return
 	}
 	if !r.ask(r.sem().NumericAttributeReplacesTheCaseAttribute,
@@ -3481,7 +3537,8 @@ func withoutListingLetters(f declareFlags) declareFlags {
 	f.width, f.widthNamed = 0, false
 	f.readonly, f.readonlyOff = false, false
 	f.export, f.assoc, f.array = false, false, false
-	f.lower, f.upper, f.unique, f.hidden = false, false, false, false
+	f.lower, f.upper, f.capital = false, false, false
+	f.unique, f.hidden = false, false
 	f.traced = false
 	f.global, f.inert = false, false
 	// The reference letter is a listing letter too — see attributeFilter,
@@ -4521,7 +4578,7 @@ func (r *Runner) declarationStartsAnInheritedNameOver(name string, keepsTheEnvir
 // where applyAttributes has just put them, and because `integer n` — the
 // spelling that carries the type in the word — never sets a letter at all.
 func (r *Runner) declaresAType(name string) bool {
-	return r.integer[name] || r.lowered[name] || r.uppered[name]
+	return r.integer[name] || r.lowered[name] || r.uppered[name] || r.capitalized[name]
 }
 
 // compoundNameHolds reports whether the name is holding an array or a keyed
@@ -4771,6 +4828,8 @@ func (r *Runner) attributeWouldChange(name, value string) bool {
 		return strings.ToLower(value) != value
 	case r.uppered[name]:
 		return strings.ToUpper(value) != value
+	case r.capitalized[name]:
+		return r.capitalCase(value) != value
 	}
 	return false
 }

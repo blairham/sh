@@ -128,6 +128,19 @@ type editor struct {
 	// paste — which is every line until one arrives and again from the next
 	// keystroke on. See paste.go.
 	bracketedPaste bool
+	// noTerminal says this session's input is **not** a terminal, which is not
+	// the same question as whether there is an editor: the editor reads bytes
+	// and a pipe delivers bytes, so a session on a pipe has one (#4249). What
+	// the terminal decides is what may be *written* — a paste cannot be
+	// bracketed by something that is not a terminal, and a transcript nobody
+	// can rewrite does not want redrawing.
+	//
+	// Negative so that the zero value is a terminal, which is what every
+	// editor built without saying is: this field narrows an old behavior
+	// rather than turning a new one on, and a default that made a terminal
+	// look like a pipe would change what is drawn for every caller that has
+	// not heard of it.
+	noTerminal     bool
 	pastedStyle    string
 	pastedStyleEnd string
 	pastedFrom     int
@@ -335,7 +348,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	e.groundForPrompt()
 	// Nothing is pasted on a line that has not started.
 	e.forgetPaste()
-	if e.bracketedPaste {
+	if e.bracketedPaste && !e.noTerminal {
 		// The terminal is asked to mark pasted text for the length of this
 		// read, and the request is taken back on the way out — where the
 		// command about to run wants its own answer, and would otherwise be
@@ -360,6 +373,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	}
 	e.write(opening.String())
 	e.promptDrawn(prompt)
+	if e.noTerminal {
+		// With no terminal, what was just written *is* the whole of the row,
+		// so the first draw of the line may write the line alone — see
+		// echoedTail. Recorded here only for that session: on a terminal the
+		// first keystroke draws the prompt again, which is what it has always
+		// done and what the pty instruments are written against.
+		e.recordDrawn(prompt, "", 0)
+	}
 	if len(e.line) > 0 {
 		// A line that starts with something on it has to be drawn before the
 		// first key rather than by it — the redraws below are a keystroke's,
@@ -384,6 +405,23 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		prompt = e.serveDescriptors(prompt)
 		n, err := e.nextByte(buf[:])
 		if err != nil {
+			if e.noTerminal && len(e.line) > 0 {
+				// The input ended part-way along a line, which is a thing only
+				// a pipe or a file can do — a terminal delivers ^D, and ^D
+				// with something typed is a delete and not an end. Measured
+				// 2026-09-22, bash 5.3.20 given `--norc -i` on a pipe holding
+				// `echo hi` with no newline after it runs the line and then
+				// meets the end at the next prompt, which is the same reading
+				// the loop without an editor already had for it (#4249, and
+				// TestAnEchoedLineGetsTheNewlineTheReadDidNotFind for the
+				// other loop).
+				//
+				// Through the accept path rather than beside it, so the line
+				// is ended, recorded and drawn exactly as a carriage return
+				// would have ended it.
+				e.endLine(prompt, "")
+				return string(e.line), nil
+			}
 			return "", err
 		}
 		if n == 0 {
@@ -833,6 +871,18 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	e.pendingDraw = false
 	cols := e.cols()
 	if cols <= 0 {
+		if tail, ok := e.echoedTail(prompt); ok {
+			// Nothing to redraw *for*: with no terminal the transcript is the
+			// record, and rewriting the line would put its earlier state in
+			// that record beside the new one. So the characters are written as
+			// they arrive, which is what the shell this is measured against
+			// does — bash 5.3.20 given `--norc -i` on a pipe writes the prompt
+			// and then the line, and nothing else (#4249).
+			e.row = 0
+			e.write(tail)
+			e.recordDrawn(prompt, e.styled(), 0)
+			return
+		}
 		// Nothing known about the terminal, so the line is assumed to fit on
 		// the row it started on. Wrong for a long line, and the best that can
 		// be done without a width: guessing one would be wrong for every
@@ -840,7 +890,8 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		var b strings.Builder
 		b.WriteString("\r\x1b[K")
 		b.WriteString(prompt.text)
-		b.WriteString(onScreen(e.styled()))
+		styled := e.styled()
+		b.WriteString(onScreen(styled))
 		// Cells to come back over, not characters: the cursor moves by
 		// columns, and one `日` to the right of it is two of them.
 		if back := cells(e.line[e.pos:]); back > 0 {
@@ -850,6 +901,7 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		}
 		e.row = 0
 		e.write(b.String())
+		e.recordDrawn(prompt, styled, 0)
 		return
 	}
 
@@ -992,8 +1044,46 @@ func (e *editor) endLine(prompt drawnPrompt, before string) {
 	// repaint between the two would be padding against a row that had moved.
 	prompt = e.trimPrompt(prompt)
 	e.toLastRow(prompt)
-	e.write(before + "\r\n")
+	e.write(before + e.newline())
 	e.row = 0
+}
+
+// echoedTail is what to write for a line that has only *grown* since the last
+// draw, and whether this session may write that rather than the whole line.
+//
+// Only a session with no terminal: a screen is redrawn because what is on it
+// can be replaced, and a transcript cannot be — a pipe keeps every byte, so a
+// second copy of the line is a second copy in the record. Measured 2026-09-22,
+// bash 5.3.20 on a pipe writes `bash-5.3$ echo hi` and a newline for a typed
+// line, where this editor wrote the prompt, then a carriage return, an erase,
+// the prompt again and the line (#4249).
+//
+// Three things have to hold, and each is a way the tail would be wrong: the
+// last draw has to be one this editor knows the shape of, the prompt has to be
+// the one it was drawn under, and the cursor has to be at the end of the line
+// — a cursor that has moved back needs the move written, which is a redraw.
+func (e *editor) echoedTail(prompt drawnPrompt) (string, bool) {
+	if !e.noTerminal || !e.drawn.valid || e.drawn.prompt != prompt.text {
+		return "", false
+	}
+	if e.pos != len(e.line) {
+		return "", false
+	}
+	styled := e.styled()
+	if !strings.HasPrefix(styled, e.drawn.styled) {
+		return "", false
+	}
+	return onScreen(styled[len(e.drawn.styled):]), true
+}
+
+// recordDrawn says what is on the screen after a draw that did not go through
+// the incremental path, so that the next one can reason about it. See
+// drawnLine, and repaint.go for the reasoning itself.
+func (e *editor) recordDrawn(prompt drawnPrompt, styled string, cols int) {
+	e.drawn = drawnLine{
+		valid: true, styled: styled,
+		prompt: prompt.text, cells: prompt.cells, cols: cols,
+	}
 }
 
 // displayWidth is how many columns a string takes on the screen.
@@ -1116,7 +1206,7 @@ func (e *editor) list(matches []Candidate, prompt drawnPrompt) {
 	// completer's answer rather than this editor's. See completelist.go.
 	for _, row := range listingRows(matches, e.cols()) {
 		e.write(row)
-		e.write("\r\n")
+		e.write(e.newline())
 	}
 	// The prompt and the line are not written back here: the caller redraws,
 	// and the redraw now knows it is starting from a fresh row.
@@ -1184,6 +1274,20 @@ func columns(matches []string, width int) []string {
 func (e *editor) write(s string) {
 	e.drawn.valid = false
 	_, _ = io.WriteString(e.out, s)
+}
+
+// newline is how this session ends a row it writes itself.
+//
+// `\r\n` at a terminal, whose mode this loop took and whose kernel is
+// therefore no longer returning the carriage for a line feed — see crlf. A
+// plain `\n` where there is no terminal: nothing took a mode there, so nothing
+// owes the translation, and measured, bash 5.3.20 on a pipe writes bare line
+// feeds around the line it read (#4249).
+func (e *editor) newline() string {
+	if e.noTerminal {
+		return "\n"
+	}
+	return "\r\n"
 }
 
 // ring sounds the bell, and is the one thing written to a terminal that does

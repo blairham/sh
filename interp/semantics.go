@@ -14361,6 +14361,46 @@ type Semantics struct {
 	// (TestTheFrontEndCarriesWhetherAPromptEchoesTheLine).
 	PromptEchoesTheLineWhereThereIsNoTerminal bool
 
+	// EditorReadsKeysWhereThereIsNoTerminal gives a session whose input is a
+	// pipe or a file a **line editor**: the editing keys are read as keys
+	// there, and not as characters of the line.
+	//
+	// What needs a terminal is raw mode, not the editor — the editor reads
+	// bytes and a pipe delivers bytes — and one shell in the panel acts on
+	// that. Measured 2026-09-22, `HISTFILE` seeded with `echo seeded-one` and
+	// `echo seeded-two`, `env -i`, a scratch HOME, no startup files, and each
+	// shell given `-i` with `C-r seeded-one CR` on a pipe:
+	//
+	//	bash 5.3.20   a reverse-i-search, drawn to standard error, and the
+	//	              line it recalls runs — `seeded-one` is printed
+	//	zsh 5.9.2     `command not found: ^Rseeded-one`
+	//	ksh93u+       `^Rseeded-one: not found`
+	//	dash          the same as ksh93
+	//
+	// and an up arrow splits them the same way: bash recalls the entry and
+	// runs it, where zsh answers `bad pattern: ^[[A` and the other two report
+	// the escape sequence as a command. So the three that have no editor here
+	// read every key as text, which is what this shell did in every dialect
+	// until #4249.
+	//
+	// **It travels with the echo above it**, and the pair is why one flag is
+	// enough: the shell that reads the keys is the shell that writes the line
+	// back, because the drawing *is* the echo once an editor is doing it —
+	// measured byte for byte on an ordinary line, where this shell's editor on
+	// a pipe now writes what bash's does. A dialect that read the keys and
+	// echoed nothing would need the two answers apart, and none does.
+	//
+	// Read by the front end rather than by the interpreter, and a plain bool,
+	// for the reasons the echo above gives.
+	//
+	// unpinned: reached, and the corpus cannot discriminate — every case runs
+	// under `-c` or a script file, where no prompt is drawn and no key is
+	// read. repl/pipeeditor_test.go drives a session on a pipe and pins both
+	// answers (TestAnEditorReadsKeysWhereThereIsNoTerminal), and
+	// driver/pipeeditor_test.go carries it to the front end
+	// (TestTheFrontEndCarriesWhetherTheEditorReadsKeysWithoutATerminal).
+	EditorReadsKeysWhereThereIsNoTerminal bool
+
 	// PromptCommentsNeedTheOption names the option a `#` typed at this
 	// shell's prompt has to have on before it opens a comment. Empty is
 	// "nothing has to be on", which is what four of the five say.

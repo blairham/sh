@@ -835,6 +835,53 @@ is a shape `region_highlight` can express and this does not.
 The offsets are converted from characters to bytes on the way in, because
 `repl.Highlight` counts bytes.
 
+## The editor without a terminal — one dialect
+
+What needs a terminal is **raw mode**, not the editor: the editor reads
+bytes, and a pipe delivers bytes. One shell in the panel acts on that.
+
+Measured 2026-09-22, `HISTFILE` seeded with `echo seeded-one` and `echo
+seeded-two`, `env -i`, a scratch `HOME`, no startup files, `PS1='P> '`, each
+shell given `-i` with its input on a pipe:
+
+| sent | bash 5.3.20 | zsh 5.9.2 | ksh93u+ | dash |
+| --- | --- | --- | --- | --- |
+| `C-r seeded-one CR` | a reverse-i-search, and the line it finds runs | `command not found: ^Rseeded-one` | `^Rseeded-one: not found` | as ksh93 |
+| up arrow, `CR` | the entry is recalled and runs | `bad pattern: ^[[A` | `^[[A: not found` | as ksh93 |
+
+So three of the four read every editing key as text, and the fourth has an
+editor there. That is
+`Semantics.EditorReadsKeysWhereThereIsNoTerminal` — bash `true`, and it
+travels with `PromptEchoesTheLineWhereThereIsNoTerminal` above it, because the
+shell that reads the keys is the shell that writes the line back: once an
+editor is drawing, the drawing **is** the echo.
+
+**What that editor writes is measured too**, and three of its habits are the
+terminal's rather than the line's. Standard **error** is where the prompt, the
+echoed line and the search go — standard output is left to the commands, so a
+suite file that keeps the two apart finds the prompt where it looks for it.
+**No redraw**: a screen is rewritten because what is on it can be replaced,
+where a transcript keeps every byte, so a line that only grew is written as the
+characters that were added. And **no bracketed paste**: a paste is something a
+terminal does, and bash writes neither `\e[?2004h` nor `\e[?2004l` here.
+
+Nine shapes come back byte for byte identical on both streams — an ordinary
+line, two of them, a line with no newline after it at all (which bash runs, as
+the loop with no editor already did), empty input, a blank line, `exit`, a
+comment, a `for`/`do`/`done` continuation, an up-arrow recall, and `C-a`
+followed by typing. Two differ, and both differ **only in the drawing**:
+
+| sent | bash 5.3.20 draws | this editor draws |
+| --- | --- | --- |
+| six backspaces over a line | `^H ^H` per character | the row again, `\r\e[K` and the line |
+| `C-a` and a character | `\r` and the row again | `\r\e[K`, the row, and a cursor move |
+
+The line that results and the command that runs are the same in both, and the
+difference is the same one `TERM` decides at a terminal: readline reduces to
+backspaces where this editor addresses the cursor. Recorded rather than fixed —
+a transcript nobody compares byte for byte is not worth a rendering rewrite,
+and the rows that *are* compared are in the nine above (#4249).
+
 ## Work put aside until a time
 
 A shell can be told to run a command later — zsh's `sched`. Nothing about that

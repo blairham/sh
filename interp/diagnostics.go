@@ -95,6 +95,45 @@ const (
 	UnexpectedWordIsSourceTextWhenItExpands
 )
 
+// FunctionListingNameSpelling is how a dialect writes a function's **name** in
+// the header of a body listing.
+//
+// A listing is meant to read back as the definition it describes, and the two
+// columns that can hold a name needing care do it two different ways.
+// Measured 2026-09-23, script files under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C`, each name defined with the keyword form and then listed:
+//
+//	name     bash 5.3.20            zsh 5.9.2
+//	a=2      function a=2 ()        'a=2' ()
+//	x=       function x= ()         'x=' ()
+//	=x       =x ()                  refused by the parser there
+//	a[b      a[b ()                 'a[b' ()
+//	a^b      a^b ()                 'a^b' ()
+//	~x       ~x ()                  '~x' ()
+//	a#b      a#b ()                 'a#b' ()
+//	11111    11111 ()               11111 ()
+//	f-g      f-g ()                 f-g ()
+//
+// So one quotes whatever falls outside the set a command word may hold bare,
+// and the other never quotes and reaches for the **keyword** in the one place
+// the bare header would not read back: a name holding an assignment, where
+// `a=2 ()` is an assignment followed by a group. `=x` is the control that says
+// it is the assignment and not the character — nothing stands before the `=`
+// there, so the word is not one and the header is bare.
+type FunctionListingNameSpelling uint8
+
+const (
+	// FunctionListingNameIsQuotedOutsideTheBareSet quotes a name holding
+	// anything a command word may not hold bare, which is the substrate's own
+	// answer and what a dialect gets by saying nothing. See
+	// listedFunctionName for the set and how it was measured.
+	FunctionListingNameIsQuotedOutsideTheBareSet FunctionListingNameSpelling = iota
+	// FunctionListingNameIsBareWithAKeywordForAnAssignment never quotes and
+	// puts the keyword in front of the header where the name would otherwise
+	// read as an assignment. bash in all its spellings.
+	FunctionListingNameIsBareWithAKeywordForAnAssignment
+)
+
 type Diagnostics struct {
 	// TiedNamesRequired, TieToItself, AlreadyTiedScalar and TieWithAValue are
 	// what `typeset -T` says when it cannot make a tie — see tiedscalar.go.
@@ -2356,6 +2395,23 @@ type Diagnostics struct {
 	// write `f () ` back for either spelling, which they may because
 	// `typeset` declares a local in both bodies there.
 	FunctionListingKeywordHeader string
+
+	// FunctionListingNameSpelling is how this dialect writes the name inside
+	// that header — see [FunctionListingNameSpelling], which carries the
+	// panel. Zero is the quoting answer, which is what the column that can
+	// hold the widest names takes.
+	FunctionListingNameSpelling FunctionListingNameSpelling
+
+	// FunctionListingAssignmentNameHeader is that header for a name the
+	// dialect above spells with the keyword — the one shape where a bare
+	// `name ()` would not read back as a definition. Two verbs, the same pair
+	// FunctionListingHeader takes: %[1]s the name and %[2]s the body.
+	//
+	// A wording of its own rather than a prefix pasted on, for the reason
+	// FunctionListingKeywordHeader is one: where the keyword goes and what
+	// stands around it is the dialect's sentence, not a string operation on
+	// somebody else's.
+	FunctionListingAssignmentNameHeader string
 
 	// UndefinedFunctionListing is the **whole row** a `-f` listing writes for
 	// a name the shell is still waiting to read a body for, in the dialect
@@ -6144,6 +6200,30 @@ type Diagnostics struct {
 	// after its own reason and takes one. dash never recurses — its
 	// ArithNameValueRecurses is No — so it has no row.
 	ArithRecursionLimit string
+	// FunctionNestingLimit is a **call** the shell will not enter because too
+	// many are already active. Two verbs: %[1]s the function that could not be
+	// entered and %[2]d the bound.
+	//
+	// Measured 2026-09-23 with a function that calls itself and `FUNCNEST=5`
+	// where the shell reads one, script files under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`:
+	//
+	//	bash 5.3.20   f: maximum function nesting level exceeded (5)
+	//	zsh 5.9.2     f: maximum nested function level reached; increase FUNCNEST?
+	//	ksh93u+       f: recursion too deep
+	//	dash 0.5.12   nothing — it segfaults instead
+	//
+	// The bound itself is separate and is in two parts: whether a script can
+	// move it at all is Runner.SetFunctionNestingParameter, which two of those
+	// shells answer and ksh93 does not, and what happens to the line is the
+	// core's — see Runner.refuseFunctionNesting. A shell may have the sentence
+	// without the parameter, which is why these are not one field.
+	//
+	// Empty is the substrate's own wording, which is the right answer for a
+	// dialect nobody has measured rather than a silence: an unbounded shell is
+	// a stack overflow away and the bound is enforced whatever the dialect
+	// says about it.
+	FunctionNestingLimit string
 	// ArithRecursionBlamesTheWrittenName reports the bound against the name
 	// the *expression* held rather than the one it stopped on. zsh alone.
 	//

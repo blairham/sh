@@ -3610,6 +3610,115 @@ The status is **2** and not the 1 that column gives an ordinary fatal error,
 which is the same split `unknown condition` records; zsh's own POSIX mode does
 not move the axis at all (#2987).
 
+### And a special builtin's name where the function exists anyway
+
+The section above is about the definition being **refused**. Where the function
+exists all the same — defined before the mode was entered, which is the only
+route to a shell holding both — the question is which of the two a word
+*finds*, and POSIX 2.9.1.1 puts a special builtin first, a function second and
+a regular builtin third.
+
+Measured 2026-09-23, `break() { echo FUNC; }` in a script file under `env -i
+PATH=/usr/bin:/bin LC_ALL=C`:
+
+| column | `type` says | `break` runs |
+| --- | --- | --- |
+| bash 5.3.20, bash 3.2.57 | the function | the function |
+| zsh 5.9.2 | the function | the function |
+| ksh93u+, dash, bash as `sh` | the name cannot be bound at all |
+
+**So outside the mode nothing disagrees**, which is why the plain answer is the
+standard-agnostic one: the three refusals have no order to report. Inside the
+mode bash moves it, and the two builds part company:
+
+| | `type` / `type -t` / `command -V` | `type -a` first row | `break` runs |
+| --- | --- | --- | --- |
+| bash 5.3.20 | the **special builtin** | the **special builtin** | the builtin |
+| bash 3.2.57 | the function | the function | the builtin |
+| zsh 5.9.2 | `set: no such option: posix` | | |
+
+Twelve years apart the same family moves the *search* in the mode and only the
+later build moves what `type` reports. Semantics axis:
+`SpecialBuiltinOutranksAFunction`, with
+`SpecialBuiltinOutranksAFunctionInPosixMode` as the twin `Runner.SetPosixMode`
+swaps in — one field, because the preset claims 5.3 where the two faces agree,
+and a preset that ever claims 3.2 needs them split rather than the field
+widened.
+
+**Two readers are deliberately outside it.** `declare -f` still lists the
+function, because a listing is a question about the *table* rather than about
+the search; and `command -v` prints the bare name either way. Measured on the
+same run.
+
+**The sentence a `break` with no loop around it draws goes with the mode**, and
+that is a third thing the mode moves rather than a consequence of the order:
+bash names the three loops under its own name and says nothing at all under
+`set -o posix` or under the name `sh`, status 0 either way, on 5.3.20 and
+3.2.57 alike. zsh invoked as `sh` comes through the same door and **keeps** its
+sentence, which is why the withholding is `Semantics.
+LoopControlOutsideALoopSilentInPosixMode` — asked of the dialect — rather than
+written into the mode (#4174).
+
+### How deep a function may call
+
+Every shell in the panel bounds function nesting, and two let a script move the
+bound by writing to a parameter. Measured 2026-09-23 with a function that calls
+itself and `FUNCNEST=5`:
+
+| column | says | bound movable? |
+| --- | --- | --- |
+| bash 5.3.20 | ``f: maximum function nesting level exceeded (5)`` | yes |
+| zsh 5.9.2 | ``f: maximum nested function level reached; increase FUNCNEST?`` | yes |
+| ksh93u+ | ``f: recursion too deep`` | no |
+| dash 0.5.12 | nothing — it faults instead | no |
+
+So the bound is the shell's, the parameter's name is the dialect's —
+`Runner.SetFunctionNestingParameter`, the same seam that names the `=~` capture
+record — and the sentence is `Diagnostics.FunctionNestingLimit`. Three separate
+things, because a shell may have the bound without the parameter.
+
+**Only a positive integer is a bound.** Measured on bash 5.3.20 against a
+function with a base case past six: `FUNCNEST=0`, `FUNCNEST=`, `FUNCNEST=abc`
+and `FUNCNEST=-2` all run to that base case, and none of the four draws a
+complaint about the value.
+
+**The refusal gives up the input line**, which is what parts it from a status:
+`f || echo or` prints no `or`, `for i in 1 2; do f; echo body; done` prints no
+`body`, and the next line runs normally at 1. The bound is read against the
+calls already active, so a bound of N lets N stand and refuses the N+1st — a
+counter in the body reaches exactly N. The name in the sentence is the
+**callee's** and the location is the call site's, which a chain of two
+functions is what distinguishes.
+
+`.` does not count toward it, measured, and the parameter is exported and read
+by a child.
+
+### A listed function's name
+
+A body listing is meant to read back as the definition it describes, and the
+two columns that can hold a name needing care do it two different ways.
+Measured 2026-09-23, each name defined with the keyword form and then listed:
+
+| name | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- |
+| `a=2` | `function a=2 () ` | `'a=2' () ` |
+| `x=` | `function x= () ` | `'x=' () ` |
+| `=x` | `=x () ` | refused by that parser |
+| `a[b`, `a^b`, `~x`, `a#b`, `a*b`, `a?b` | bare | quoted |
+| `11111`, `f-g`, `a.b` | bare | bare |
+
+One quotes whatever falls outside the set a command word may hold bare; the
+other never quotes and reaches for the **keyword** in the one place a bare
+header would not read back — a name holding an assignment, where `a=2 () ` is
+an assignment followed by a group. `=x` is the control that says it is the
+assignment and not the character: nothing stands before the `=`, so the word is
+not one.
+
+`Diagnostics.FunctionListingNameSpelling` chooses between the two and
+`Diagnostics.FunctionListingAssignmentNameHeader` is the keyword form's own
+wording. This shell applied zsh's quoting to every dialect, so seven of those
+names came back quoted where the reference writes them bare (#4174).
+
 ### One body, several names
 
     function clipcopy clippaste { … }

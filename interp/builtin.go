@@ -341,7 +341,13 @@ func (r *Runner) loopControlReach(name string, want int) (int, int, bool) {
 	if reach := min(want, r.loopDepth-r.loopControlFloor(want)); reach > 0 {
 		return reach, 0, false
 	}
-	if msg := Wording(r.diag().LoopControlOutsideALoop, "", name); msg != "" {
+	if msg := Wording(r.diag().LoopControlOutsideALoop, "", name); msg != "" &&
+		r.ReportsLoopControlOutsideALoop() {
+		// The wording says whether the dialect has a sentence at all and the
+		// capability says whether it is being withheld — POSIX mode takes it
+		// away in the one column whose mode does, which is why `bash` names
+		// the three loops and `bash` called as `sh` says nothing (#4174). See
+		// Runner.ReportsLoopControlOutsideALoop.
 		r.diagf("%s\n", msg)
 	}
 	if !r.ask(r.sem().LoopControlOutsideALoopIsFatal, "a `break` or `continue` with no loop around it") {

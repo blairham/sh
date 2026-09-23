@@ -3598,6 +3598,13 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 		body = text
 	}
 	header := r.diag().FunctionListingHeader
+	spelled, assignment := r.listedHeaderName(name)
+	if assignment && r.diag().FunctionListingAssignmentNameHeader != "" {
+		// The one name shape a bare header would not read back as a
+		// definition, in the dialect that reaches for the keyword rather than
+		// for quotes. See FunctionListingNameSpelling.
+		header = r.diag().FunctionListingAssignmentNameHeader
+	}
 	if fn.Keyword && r.diag().FunctionListingKeywordHeader != "" {
 		// The word the declaration was written with, put back — see
 		// Diagnostics.FunctionListingKeywordHeader. Only the dialect that
@@ -3607,7 +3614,35 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 		// reaches it.
 		header = r.diag().FunctionListingKeywordHeader
 	}
-	return Wording(header, "%[1]s () \n%[2]s", listedFunctionName(name), body)
+	return Wording(header, "%[1]s () \n%[2]s", spelled, body)
+}
+
+// listedHeaderName is the name as this dialect writes it in a listing's header,
+// and whether it is the one shape that wants a keyword in front.
+//
+// The two answers come from one place because they are one dialect's spelling:
+// the column that reaches for the keyword is the column that never quotes, and
+// a reader that asked them separately could produce `function 'a=2' () `, which
+// is neither shell's. See [FunctionListingNameSpelling] for the measurement.
+func (r *Runner) listedHeaderName(name string) (spelled string, assignment bool) {
+	if r.diag().FunctionListingNameSpelling !=
+		FunctionListingNameIsBareWithAKeywordForAnAssignment {
+		return listedFunctionName(name), false
+	}
+	return name, nameReadsAsAnAssignment(name)
+}
+
+// nameReadsAsAnAssignment reports whether writing this name in front of `()`
+// would be read as an assignment rather than as a command word.
+//
+// A name and then an `=`, which is the shell's own rule for an assignment word
+// and is why `=x` is not one: there is nothing in front of the `=` to be a
+// name. Measured against bash 5.3.20 a name at a time — `a=2`, `x=` and
+// `a=b=c` take the keyword and `=x`, `2f=x` and every name with no `=` in it
+// do not.
+func nameReadsAsAnAssignment(name string) bool {
+	eq := strings.IndexByte(name, '=')
+	return eq > 0 && isPlainName(name[:eq])
 }
 
 // listedFunctionNameOnly is one row of a **names-only** function listing.

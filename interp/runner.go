@@ -2123,6 +2123,17 @@ type Runner struct {
 	// range is not governed by it — bash names a negative count with the
 	// option off as well as on, measured.
 	shiftPastEndQuiet bool
+	// loopControlQuiet withholds the sentence a `break` or `continue` with no
+	// loop around it draws, which is what POSIX mode does to it in the one
+	// column whose mode does. Stored as the negative for the reason above: two
+	// columns are silent here because their Diagnostics holds no wording, and
+	// this field is for the shell that has the sentence and takes it away. See
+	// Runner.ReportsLoopControlOutsideALoop.
+	loopControlQuiet bool
+	// funcNestParam is the parameter a script writes to move the bound on
+	// function nesting, or empty in a shell whose bound is its own. See
+	// Runner.SetFunctionNestingParameter.
+	funcNestParam string
 	// fdVarClosedWithTheCommand takes back a `{name}` descriptor when the
 	// command carrying the redirection ends — bash's `varredir_close`, which
 	// is **off** by default there and is the only name any shell in the panel
@@ -2340,6 +2351,16 @@ type Runner struct {
 	// may enter the mode, define nothing, and leave it, and the dialect's
 	// own answer has to be the one that comes back.
 	posixSavedFuncSpecial Answer
+	// And the *order* between a special builtin and a function of the same
+	// name, which is the second half of the same state and a separate
+	// question: there the definition is refused, here it stands and the word
+	// does not find it. Saved for the reason above — a script may define the
+	// function, enter the mode, and leave it again.
+	posixSavedFuncOutranked Answer
+	// And whether the mode took the loop-control sentence away, saved for the
+	// same reason: the withholding is the runner's capability rather than an
+	// axis, so leaving the mode has to put back what the route gave.
+	posixSavedLoopControlQuiet bool
 	// posixSavedTypeSpecial is TypeDistinguishesSpecialBuiltins', for the
 	// reason every field here is one: the mode moves it in bash and the
 	// shells that are always in it answer it already, so leaving the mode has
@@ -6620,7 +6641,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.tracePrefixAfterTheCommand(c.Assigns)
 	}
 
-	// A function shadows a builtin and an external command alike.
+	// A function shadows a builtin and an external command alike — with one
+	// exception, and it is a state rather than a dialect: in POSIX mode the
+	// standard puts a **special** builtin ahead of a function of the same
+	// name, so the word does not find the function at all. See
+	// Runner.specialBuiltinOutranksAFunction, and
+	// Semantics.SpecialBuiltinNameIsNotAFunctionName for the mode's other
+	// half, which refuses such a definition outright — a function that
+	// outranks nothing here got defined before the mode was entered.
 	//
 	// The name is the namespace's where a `namespace NAME { … }` body defined
 	// one — measured, `namespace ns { f(){ echo IN; }; f; }` runs it and a
@@ -6628,7 +6656,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// holds nothing for falls through to the plain name, which is what lets a
 	// function defined outside be called from inside. See
 	// interp/namespace.go.
-	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok && !r.presentedButSwitchedOff(argv[0]) {
+	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok && !r.presentedButSwitchedOff(argv[0]) &&
+		!r.specialBuiltinOutranksAFunction(argv[0]) {
 		// A name the dialect's prelude presents is a builtin to every
 		// question asked about it, so switching it off has to stop the word
 		// finding it — and the implementation is a function in the one table

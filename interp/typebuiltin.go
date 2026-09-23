@@ -462,9 +462,24 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
 		}
 	}
-	if fn, ok := r.reportedFunc(name); ok && !m.noFuncs {
-		found = true
-		if !r.sayKind(m.asked(), name, "function", NamedKindWord(NameFunction)) {
+	// The function and the builtin, in the order the *search* would reach
+	// them: a listing is every resolution a name has, so the rows are in
+	// resolution order and a special builtin that outranks the function is the
+	// first row rather than the second. Measured 2026-09-23, bash 5.3.20 with
+	// a `break` function defined and `set -o posix` after it — `break is a
+	// special shell builtin` and then `break is a function` with its body,
+	// which is this pair the other way round. Both rows are printed either
+	// way; `-a` reports the whole list and only the order moves (#4174).
+	rows := []func() int{
+		func() int {
+			fn, ok := r.reportedFunc(name)
+			if !ok || m.noFuncs {
+				return 0
+			}
+			found = true
+			if r.sayKind(m.asked(), name, "function", NamedKindWord(NameFunction)) {
+				return 0
+			}
 			shows := r.ask(r.sem().TypePrintsFunctionBody, "`type` printing a function's body")
 			if r.unspecified {
 				return 2
@@ -473,16 +488,30 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			if shows {
 				r.printf("%s", r.listedFunctionLine(name, fn))
 			}
-		}
-	}
-	if r.presentsAsBuiltin(name) {
-		found = true
-		if !r.sayKind(m.asked(), name, "builtin", NamedKindWord(NameBuiltin)) {
+			return 0
+		},
+		func() int {
+			if !r.presentsAsBuiltin(name) {
+				return 0
+			}
+			found = true
+			if r.sayKind(m.asked(), name, "builtin", NamedKindWord(NameBuiltin)) {
+				return 0
+			}
 			line := r.BuiltinSentence(name)
 			if r.unspecified {
 				return 2
 			}
 			r.printf("%s\n", line)
+			return 0
+		},
+	}
+	if r.specialBuiltinOutranksAFunction(name) {
+		rows[0], rows[1] = rows[1], rows[0]
+	}
+	for _, row := range rows {
+		if code := row(); code != 0 {
+			return code
 		}
 	}
 	// The reserved-name guard the plain answer has, for the same reason;
@@ -649,7 +678,12 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 	if r.unspecified {
 		return 2
 	}
-	if fn, ok := r.reportedFunc(name); ok && !skipFuncs {
+	// The function, unless a special builtin of the same name outranks it —
+	// which is the search order and not a preference, exactly as the reserved
+	// word below is. A shell that ran the builtin while this named the
+	// function would be lying about its own word. See
+	// Runner.specialBuiltinOutranksAFunction.
+	if fn, ok := r.reportedFunc(name); ok && !skipFuncs && !r.specialBuiltinOutranksAFunction(name) {
 		if r.sayKind(kind, name, "function", NamedKindWord(NameFunction)) {
 			return 0
 		}

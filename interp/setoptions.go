@@ -649,9 +649,11 @@ func (r *Runner) SetPosixMode(on bool) {
 	aliasReserved := r.posixSavedAliasReserved
 	quoteProtects := r.posixSavedQuoteProtects
 	funcSpecial := r.posixSavedFuncSpecial
+	funcOutranked := r.posixSavedFuncOutranked
 	badDeclName, badUnsetName := r.posixSavedBadDeclarationName, r.posixSavedBadUnsetName
 	failedExpansion := r.posixSavedFailedExpansion
 	shiftVerbose := r.posixSavedShiftVerbose
+	loopQuiet := r.posixSavedLoopControlQuiet
 	typeSpecial := r.posixSavedTypeSpecial
 	if on {
 		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
@@ -756,8 +758,23 @@ func (r *Runner) SetPosixMode(on bool) {
 		// 12: shift count out of range` and leaves 1 either way.
 		r.posixSavedShiftVerbose = r.ReportsShiftPastTheEnd()
 		shiftVerbose = true
+		// And the second of that kind, asked of the dialect rather than
+		// written in: zsh invoked as `sh` comes through here and keeps its
+		// own loop-control sentence, so a withholding asserted for every
+		// dialect would have taken away a sentence that shell writes.
+		// Measured; see Semantics.LoopControlOutsideALoopSilentInPosixMode.
+		r.posixSavedLoopControlQuiet = !r.ReportsLoopControlOutsideALoop()
+		loopQuiet = r.sem().LoopControlOutsideALoopSilentInPosixMode == Yes
 		r.posixSavedFuncSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionName
 		funcSpecial = r.sem().SpecialBuiltinNameIsNotAFunctionNameInPosixMode
+		// And the order between a special builtin and a function of the same
+		// name, which the mode moves in the one column that can hold both.
+		// Asked of the dialect rather than written in, because a value here
+		// reaches every dialect invoked as `sh` and only one of them was
+		// measured on the order. See
+		// Semantics.SpecialBuiltinOutranksAFunctionInPosixMode.
+		r.posixSavedFuncOutranked = r.sem().SpecialBuiltinOutranksAFunction
+		funcOutranked = r.sem().SpecialBuiltinOutranksAFunctionInPosixMode
 		r.posixSavedTypeSpecial = r.sem().TypeDistinguishesSpecialBuiltins
 		typeSpecial = r.sem().TypeDistinguishesSpecialBuiltinsInPosixMode
 		r.posixSavedBadSetName = r.sem().BadSetOptionNameFatal
@@ -857,6 +874,12 @@ func (r *Runner) SetPosixMode(on bool) {
 		// declines to bind. Saved and restored the same way, since a script
 		// may enter the mode, define nothing, and leave it (#2987).
 		s.SpecialBuiltinNameIsNotAFunctionName = funcSpecial
+		// And the order between the two where the function exists anyway,
+		// which is a separate question reaching a separate set of readers:
+		// there the definition is refused, here it stands and is not what the
+		// word finds. Saved and restored the same way, since a script may
+		// define the function, enter the mode, and leave it again (#4174).
+		s.SpecialBuiltinOutranksAFunction = funcOutranked
 		// And the two about `.` reading a file, which move together because
 		// the mode's one change is what makes the other visible: with the
 		// current directory off the search there is nothing left for a bare
@@ -1004,6 +1027,7 @@ func (r *Runner) SetPosixMode(on bool) {
 		r.Dialect = &d
 	}
 	r.SetReportsShiftPastTheEnd(shiftVerbose)
+	r.SetReportsLoopControlOutsideALoop(!loopQuiet)
 	r.posixMode = on
 	r.posixDotSearchOnly = dotSearchOnly
 	// The standard has aliases expand in a script, so the mode turns the

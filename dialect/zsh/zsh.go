@@ -899,6 +899,12 @@ func Semantics() interp.Semantics {
 	// XCU 2.9.3 specifies the majority; this is the divergence, and it is
 	// this shell's to keep.
 	s.BackgroundJobInput = interp.BackgroundJobInputIsTheShells
+	// unanswered BackgroundJobInputIsOnlyTheShellsOwn: this shell substitutes
+	// nothing at all for a background job's input — the line above is the
+	// statement of that — so which streams a substitution reaches has no
+	// answer to observe here. Measured 2026-09-23 on 5.9.2: the job reads the
+	// shell's own input, an `exec`-installed one, an enclosing loop's
+	// redirection and a pipeline alike (#4153).
 	// `$!` before any background command is `0` here and nothing in the other
 	// five columns — a number nothing ever had. Measured,
 	// `sh -c 'echo "[$!]"'` writes `[0]`, and that zero is *set*: `${!-unset}`

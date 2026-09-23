@@ -1522,6 +1522,11 @@ func Semantics() interp.Semantics {
 	// A job started with `&` reads an empty standard input: `ash -c
 	// '/bin/cat & wait; echo ---' < f` writes `---` and nothing else.
 	s.BackgroundJobInput = interp.BackgroundJobInputEmpty
+	// And it reaches every inherited stream, as dash's does. Measured
+	// 2026-09-23 on BusyBox ash 1.38.0 over the same five shapes, which
+	// answers every one of them exactly as dash does. See
+	// interp.Semantics.BackgroundJobInputIsOnlyTheShellsOwn (#4153).
+	s.BackgroundJobInputIsOnlyTheShellsOwn = interp.No
 	// `$!` before any background command is unset rather than zero: measured
 	// 2026-09-18 in the pinned image, `${!-unset}` takes its default,
 	// `${!+set}` is empty, and `set -u; echo "[$!]"` is `!: parameter not

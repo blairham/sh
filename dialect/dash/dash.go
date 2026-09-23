@@ -303,6 +303,12 @@ func Semantics() interp.Semantics {
 	// measured 2026-09-07, `dash -c '/bin/cat & wait; echo ---; /bin/cat' < f`
 	// writes `---` and then the file's line. POSIX XCU 2.9.3.
 	s.BackgroundJobInput = interp.BackgroundJobInputEmpty
+	// And it reaches every inherited stream, not the shell's own alone: a
+	// `{ read line; … } &` inside `for … done < names` gets the empty input
+	// here where bash, ksh93 and zsh all read the file. Measured 2026-09-23
+	// on 0.5.12 over the five shapes; see
+	// interp.Semantics.BackgroundJobInputIsOnlyTheShellsOwn (#4153).
+	s.BackgroundJobInputIsOnlyTheShellsOwn = interp.No
 	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the `s` of the

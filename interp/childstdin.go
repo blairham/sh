@@ -76,3 +76,35 @@ func (r *Runner) ownInput(in io.Reader) bool {
 	}
 	return r.ownStdin != nil && in == r.ownStdin
 }
+
+// noteOwnStdinReplaced records that an `exec` redirection has made the
+// current stream the shell's own standard input.
+//
+// `exec < f` is the one redirection that does not wrap a region: it replaces
+// what the shell reads for the rest of the script, so from here on *this* is
+// the stream a background job's substitution is about. Without it the shell
+// would go on comparing against the descriptor the process started with, and
+// `exec < f; cat & wait` would hand the job the file — which no column does.
+// See Runner.backgroundStdin for the four shapes that part on this.
+func (r *Runner) noteOwnStdinReplaced() {
+	if in := r.Stdin; in != nil && reflect.TypeOf(in).Comparable() {
+		r.ownStdin = in
+		r.ownStdinSet = true
+	}
+}
+
+// inputIsAlreadyEmpty reports whether this stream reads end-of-file with
+// nothing in it, so that substituting an empty one for it changes nothing.
+//
+// Seen through the concurrency guard for ownInput's reason: the wrapper is
+// this package's and a stream inside it is the same stream.
+func inputIsAlreadyEmpty(in io.Reader) bool {
+	if l, ok := in.(*lockedReader); ok {
+		in = l.r
+	}
+	if in == nil {
+		return true
+	}
+	_, empty := in.(emptyReader)
+	return empty
+}

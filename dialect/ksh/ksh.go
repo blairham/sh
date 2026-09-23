@@ -3147,6 +3147,12 @@ func Semantics() interp.Semantics {
 	// at 0 in dash and bash and `cat: stdin: Bad file descriptor` here. What
 	// it cannot dup it leaves alone, so a closed fd 0 reaches the job closed.
 	s.BackgroundJobInput = interp.BackgroundJobInputEmptyUnlessClosed
+	// And the substitution reaches the shell's own input alone, which is
+	// bash's answer too: measured 2026-09-23 on ksh93u+ over the same five
+	// shapes, a redirection on an enclosing `for` and a pipeline both reach
+	// the job. See interp.Semantics.BackgroundJobInputIsOnlyTheShellsOwn
+	// (#4153).
+	s.BackgroundJobInputIsOnlyTheShellsOwn = interp.Yes
 	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No

@@ -2855,6 +2855,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	// Whether the parameter is read at all, which a reference that comes
 	// back to itself answers No — see the block below.
 	circular := false
+	// What an aimed reference points at, kept for the two readings below
+	// that need it once a **subscript** is written: the name the dialect
+	// yielding a name answers with, and the name whose declaration the
+	// refusal asks after.
+	indirectBase, indirectAimed := "", false
 	if e.Indirect {
 		// The two answers a **reference** gives this spelling, both of them
 		// in front of the read below because neither of them reads the
@@ -2871,7 +2876,23 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// the same shape #3121 found for a `.get` discipline — a hook fired
 		// for a read nothing wanted.
 		target, cycle, aimed := r.namerefWalk(e.Name)
-		if aimed {
+		indirectBase, indirectAimed = target, aimed
+		// **A written subscript is not swallowed by the reference.** The
+		// target's name is what the *bare* spelling answers; `${!ref[2]}` is
+		// an ordinary indirection of `ref[2]`, which the reference is
+		// followed for like any other read. Measured 2026-09-23 on bash
+		// 5.3.20 with `declare -n foo=bar; bar=(x y z); z=ZZ`:
+		//
+		//	${!foo}        bar          the target's name
+		//	${!foo[2]}     ZZ           bar[2] is `z`, and `z` holds ZZ
+		//	${!foo[0]}     []           bar[0] is `x`, which nothing set
+		//
+		// and ksh93u+ 2012-08-01, which yields the name rather than taking
+		// the indirection, keeps the subscript too: `${!foo[2]}` is `bar[2]`
+		// there and `${!foo}` is `bar`. So neither column discards it — this
+		// shell answered `bar` to all three, which is the target's name with
+		// the subscript dropped on the floor (#4178).
+		if aimed && e.Index == nil {
 			// A name reference answers with the name it points at, which is
 			// not the double read the same spelling means for an ordinary
 			// parameter: `v=1; typeset -n r=v; echo "${!r}"` is `v` in bash
@@ -2897,7 +2918,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// Ahead of the operators too, which is measured rather than assumed:
 		// `${!u-DEF}` and `${!u:?msg}` are the same refusal in bash 5.3.20,
 		// so the word behind the operator never stands in for the value.
-		if w := r.diag().IndirectionUnaimedReference; w != "" && r.isNameref(e.Name) {
+		// `!indirectAimed`, because an **aimed** reference now reaches here
+		// whenever a subscript was written — the answer above is the bare
+		// spelling's — and this refusal is for a reference with nothing to
+		// point at, which an aimed one is not.
+		if w := r.diag().IndirectionUnaimedReference; w != "" && !indirectAimed && r.isNameref(e.Name) {
 			r.diagf("%s\n", Wording(w, "", e.Name))
 			// What it costs the script is FailedExpansionAbandonsTheLine's
 			// question — bash gives up the rest of the line and runs the
@@ -2976,11 +3001,19 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// answer is the text the expansion resolved to and not the
 			// characters in the source.
 			if e.Index != nil {
-				return e.Name + "[" + r.subscriptAsWritten(e.Subscript()) + "]"
+				// On the **target** where the name is a reference, for the
+				// reason the block above gives: ksh93u+ answers `bar[2]` to
+				// `${!foo[2]}` with `foo` aimed at `bar`, and `a[0]` where
+				// nothing is aimed at all.
+				base := e.Name
+				if indirectAimed {
+					base = indirectBase
+				}
+				return base + "[" + r.subscriptAsWritten(e.Subscript()) + "]"
 			}
 			return e.Name
 		}
-		if refused := r.refuseIndirection(e, value, set); refused {
+		if refused := r.refuseIndirection(e, value, set, indirectBase); refused {
 			return ""
 		}
 		if !set || value == "" {

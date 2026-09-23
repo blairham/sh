@@ -846,9 +846,20 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 	if refuseFrozen() {
 		return 1
 	}
-	if target == name || aim == name {
+	if target == name || aim == name || r.namesAnElementOf(name, target) {
 		// A reference aimed straight at itself, and **where it is written
 		// decides what happens to it**.
+		//
+		// An **element of its own name** is aimed at itself too, and the same
+		// rule reaches it: measured 2026-09-23 against bash 5.3.15 in the
+		// pinned image and bash 5.3.20 on macOS, `declare -n g='g[0]'` and
+		// `declare -n m='m[2]'` are `nameref variable self references not
+		// allowed` at 1 with the name never brought into being, and
+		// `f() { local -n j='j[0]'; }` writes the circular warning twice at 0
+		// and keeps the reference — which is the same top-level-against-
+		// function split this branch already draws. The control is an element
+		// of *another* name: `declare -n h='k[0]'` is 0 in both. Every one of
+		// those was 0 and silent here (#4178).
 		//
 		// At the top level both shells refuse — measured, `typeset -n r=r`
 		// is `nameref variable self references not allowed` in bash 5.3.20

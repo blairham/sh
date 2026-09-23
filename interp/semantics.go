@@ -3549,6 +3549,51 @@ type Semantics struct {
 	// is rare. Unanswered is the POSIX answer, which puts a preset that has
 	// chosen nothing in the column five of the six shells are in.
 	BackgroundJobInput BackgroundJobInputPolicy
+	// BackgroundJobInputIsOnlyTheShellsOwn keeps the substitution above to
+	// the shell's **own** standard input, so a stream a *script* put there
+	// reaches the job unchanged.
+	//
+	// The axis above answers *what* is substituted; this one answers *when*
+	// it is substituted at all, and the two are orthogonal rather than four
+	// values of one enum.
+	//
+	// Measured 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C <shell>
+	// f.sh` over a script file, with `names` holding six words and the job
+	// spelled `{ read line; echo "[$line]"; } &` followed by a `wait`:
+	//
+	//	                                  5.3.20  3.2.57  ksh93  zsh  dash  ash
+	//	the shell's own input             empty   empty   empty  read empty empty
+	//	`exec < names` and then the job   empty   empty   empty  read empty empty
+	//	a redirection on the enclosing    read    read    read   read empty empty
+	//	  `for … done < names`
+	//	a pipeline feeding the group      read    empty   read   read empty empty
+	//	a redirection on the job itself   read    read    read   read read  read
+	//
+	// The first two rows are what the axis above already answers, and they
+	// are the control: `exec` does not wrap a region, it *replaces* what the
+	// shell reads, so the stream it installs is the shell's own from then on
+	// — which is why this is asked about the stream's identity and not about
+	// whether a redirection happens to be in force. See
+	// Runner.noteOwnStdinReplaced.
+	//
+	// The third row is the one a script meets. `while read -r line; do work
+	// "$line" & done < input` is an ordinary shape, and answering it the
+	// other way hands every job an empty input — which is silent, at status
+	// 0, with the loop printing blanks. It is the six lines `redir.tests`
+	// parts on (#4153).
+	//
+	// The last row is unanimous and is not this question: a redirection on
+	// the job is applied inside the job's own runner, after this.
+	//
+	// bash 3.2.57 departs from its own 5.3 on the pipeline row alone, where
+	// its last pipeline element runs in a subshell; that column is not
+	// modeled here and the row is recorded rather than answered.
+	//
+	// unanswered zsh: it substitutes nothing at all — BackgroundJobInput is
+	// BackgroundJobInputIsTheShells there — so the question of which streams
+	// the substitution reaches has no answer to observe. The early return
+	// above is what keeps it from being asked.
+	BackgroundJobInputIsOnlyTheShellsOwn Answer
 	// LastBackgroundPid is what `$!` reads before a background command has
 	// been started. See LastBackgroundPidPolicy for the answers, for the
 	// measurement across bash, dash, BusyBox ash, ksh93 and zsh, and for why

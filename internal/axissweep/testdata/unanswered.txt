@@ -607,6 +607,7 @@ ksh   UnsetEndsTheProducedPipelineStatus
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
 zsh   ArrayLetterOverAnUnaimedReferenceDropsIt
+zsh   BackgroundJobInputIsOnlyTheShellsOwn
 zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand

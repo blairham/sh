@@ -3083,6 +3083,14 @@ func Semantics() interp.Semantics {
 	// POSIX XCU 2.9.3 specifies, and what keeps the script's own `read` from
 	// losing the lines a background job would otherwise eat.
 	s.BackgroundJobInput = interp.BackgroundJobInputEmpty
+	// And the substitution reaches the shell's **own** input and nothing a
+	// script put there: `for … done < names` with a `{ read line; … } &`
+	// inside it reads the file here, where an empty input would print blanks
+	// at status 0. Measured 2026-09-23 on 5.3.20 and 3.2.57, which agree on
+	// this row; see interp.Semantics.BackgroundJobInputIsOnlyTheShellsOwn for
+	// the five shapes and for the pipeline row the two bash columns part on
+	// (#4153).
+	s.BackgroundJobInputIsOnlyTheShellsOwn = interp.Yes
 	s.ProcessSubstitutionIsTheLastBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No

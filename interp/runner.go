@@ -6718,6 +6718,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// one dialect needs to know: the descriptors it opened this way
 			// are the ones it keeps to itself when it runs anything.
 			r.markExecOpened(wroteFds)
+			// A redirection that outlives its command has replaced the
+			// shell's **own** standard input rather than wrapped a region
+			// in one, so the thing a background job's substitution is about
+			// has moved. See Runner.ownStdin and Runner.backgroundStdin.
+			r.noteOwnStdinReplaced()
 			return
 		}
 		for _, c := range closers {

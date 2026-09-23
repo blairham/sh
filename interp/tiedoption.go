@@ -60,6 +60,15 @@ package interp
 // The parameter side is registered through [Runner.SetAssignmentAction] and
 // [Runner.SetUnsetAction], so a name already carrying one of those cannot
 // also be tied — the later registration replaces the earlier.
+//
+// **A value the shell was launched with is not one of the two directions**, and
+// that is measured rather than an omission: the two names one shell ties do not
+// agree about it. Under `env NAME=1 bash -c 'set -o'`, an inherited `IGNOREEOF`
+// leaves `ignoreeof` **off** and an inherited `POSIXLY_CORRECT` turns `posix`
+// **on** — measured 2026-09-23 on bash 5.3.20. So the startup route is a
+// per-tie fact and a dialect says so with [Runner.TieAlsoFiresFromTheEnvironment]
+// beside the tie, rather than every tie inheriting a behavior only one of them
+// has (#4142).
 func (r *Runner) TieOptionToParameter(option, name, value string) {
 	r.SetAssignmentAction(name, func(rr *Runner, _ string) {
 		rr.withinOptionTie(func() { rr.setOption(option, true) })
@@ -102,4 +111,24 @@ func (r *Runner) withinOptionTie(write func()) {
 	r.inOptionTie = true
 	defer func() { r.inOptionTie = false }()
 	write()
+}
+
+// TieAlsoFiresFromTheEnvironment says this tie's parameter turns its option on
+// when the shell was **launched** holding it, not only when a script assigns it.
+//
+// A call of its own beside [Runner.TieOptionToParameter] because the two names
+// the panel ties do not agree: measured 2026-09-23 on bash 5.3.20 under `env
+// NAME=1 bash -c 'set -o'`, an inherited `POSIXLY_CORRECT` turns `posix` on and
+// an inherited `IGNOREEOF` leaves `ignoreeof` off. A tie that fired from the
+// environment by default would put one shell's answer on the other's name.
+//
+// Any value does it, the empty string included — `POSIXLY_CORRECT=` turns the
+// option on in bash exactly as `POSIXLY_CORRECT=1` does, which is why nothing
+// here reads the value. The delivery is
+// [Runner.SetInheritedParameterAction]'s, so a front end that calls
+// [Runner.ApplyInheritedParameters] gets it and one that does not is unchanged.
+func (r *Runner) TieAlsoFiresFromTheEnvironment(option, name string) {
+	r.SetInheritedParameterAction(name, func(rr *Runner, _ string) {
+		rr.withinOptionTie(func() { rr.setOption(option, true) })
+	})
 }

@@ -24739,6 +24739,18 @@ echo "st=$?"`,
 		Why:     "`set -a` marks an assignment for the environment, and the question is whether a **declaration utility's** assignment is one. bash, bash 3.2 and ksh93 all say yes for a scalar and the listing carries the letter; the second arm is the control that makes it a measurement rather than a rule about every store — an array literal earns no export mark in any column that has one. zsh has the option under another spelling and lists its own form; dash and BusyBox ash have no listing to ask, which is what the `|| echo none` arm is for. We marked the plain spelling and not the utility's, so a script that exported through the option and assigned through `typeset` handed its children nothing — found as a line of `varenv.tests` (#4163)",
 	},
 	{
+		ID: "variable/an-appending-prefix-asks-the-names-attributes", Category: "variables",
+		Script:  true,
+		Snippet: "typeset -i x=2 2>/dev/null\nf() { echo \"in:$x\"; }\nx+=5 f\necho \"after:$x\"\ny=a\ny+=b f2 2>/dev/null\necho tail\n",
+		Why:     "`+=` in a command's **prefix**, on a name carrying the integer attribute. One spelling over two operations and the name says which: the columns with the letter add — `in:7` — where a plain name joins the characters. The `after:` arm is the other half of what a prefix assignment means, since the shell's own copy is untouched by it in every column that takes the line at all. dash and BusyBox ash have neither `typeset` nor `+=`, so the word is a command name there and the row records that rather than a gap. We joined the characters in the prefix while the statement form already added, which is a wrong *number* at status 0 — found as three lines of `appendop.tests` (#4142)",
+	},
+	{
+		ID: "variable/the-posix-option-and-its-parameter-are-one-state", Category: "shell options",
+		Script:  true,
+		Snippet: "set -o posix 2>/dev/null\necho \"[${POSIXLY_CORRECT-unset}]\"\nPOSIXLY_CORRECT=1\nset +o posix 2>/dev/null\necho \"[${POSIXLY_CORRECT-unset}]\"\necho tail\n",
+		Why:     "whether the `posix` option and `POSIXLY_CORRECT` are two spellings of one state. bash ties them in both directions and the two arms are the two directions a *listing* cannot show: turning the option on writes `y` into the name, and turning it off takes the name away even though a script had assigned it. Only the bash columns get that far -- dash, ksh93 and zsh have no `posix` name and `set` is a special builtin, so the first line ends them with nothing printed, and `|| :` does not save them either. That is the measured answer for those three rather than a gap in the case: the row is one shell's tie and three shells' refusal. BusyBox ash takes the unknown name in silence and leaves the parameter alone, which is the fourth answer. We ignored the parameter entirely, so a script that set it ran every later line from the wrong mode -- found as three lines of `appendop.tests`, which sets it and then depends on posix mode for whether an assignment before a special builtin persists (#4142)",
+	},
+	{
 		ID: "variable/a-module-parameter-a-script-may-not-own", Category: "variables",
 		Script:  true,
 		Snippet: "jobstates=(a b c)\necho \"st=$?\"\necho tail\n",

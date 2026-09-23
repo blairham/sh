@@ -4524,6 +4524,20 @@ func Apply(r *interp.Runner) {
 	// and not `shopt`: `shopt ignoreeof` is `invalid shell option name` in
 	// that shell and in this one (#4047).
 	r.TieOptionToParameter("ignoreeof", "IGNOREEOF", "10")
+	// And the second of the two, which is the option this shell's own manual
+	// names a variable for: assigning `POSIXLY_CORRECT` turns `posix` on and
+	// unsetting it turns it off, `set -o posix` writes `y` into the name and
+	// `set +o posix` takes the name away. Measured 2026-09-23 on bash 5.3.20 in
+	// all four directions, and **any** value does it — `POSIXLY_CORRECT=` turns
+	// the option on exactly as `=1` does, which is the tie's contract and not a
+	// reading of the value (#4142).
+	r.TieOptionToParameter("posix", "POSIXLY_CORRECT", "y")
+	// And this one fires from the **environment** too, where `IGNOREEOF` does
+	// not: `env POSIXLY_CORRECT=1 bash -c 'set -o'` reads `posix on` and `env
+	// IGNOREEOF=1 bash -c 'set -o'` reads `ignoreeof off`. Two names, one tie
+	// mechanism, and a measured disagreement about the startup route — see
+	// interp.Runner.TieAlsoFiresFromTheEnvironment.
+	r.TieAlsoFiresFromTheEnvironment("posix", "POSIXLY_CORRECT")
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("PIPESTATUS")

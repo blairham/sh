@@ -77,20 +77,43 @@ func (r *Runner) ownInput(in io.Reader) bool {
 	return r.ownStdin != nil && in == r.ownStdin
 }
 
-// noteOwnStdinReplaced records that an `exec` redirection has made the
-// current stream the shell's own standard input.
+// noteExecReplacedStdin records that an `exec` redirection has replaced what
+// the shell reads.
 //
 // `exec < f` is the one redirection that does not wrap a region: it replaces
-// what the shell reads for the rest of the script, so from here on *this* is
-// the stream a background job's substitution is about. Without it the shell
-// would go on comparing against the descriptor the process started with, and
+// the shell's input for the rest of the script, so from here on a background
+// job's substitution is about *this* stream. Without it the shell would go on
+// comparing against the descriptor the process started with, and
 // `exec < f; cat & wait` would hand the job the file — which no column does.
-// See Runner.backgroundStdin for the four shapes that part on this.
-func (r *Runner) noteOwnStdinReplaced() {
+// See Runner.backgroundStdin for the shapes that part on this.
+//
+// **A field of its own rather than a write through ownStdin**, and the
+// difference is measured rather than tidy. The two readers ask different
+// questions of the same comparison: a background job asks what the *shell*
+// reads, and ChildStdin asks what the shell's own input was before any
+// redirection — so folding this into ownStdin made `exec < f; cat` hand the
+// child a front end's question stream where the file is what the script asked
+// for by name, which is the one sentence this file implements. Caught by
+// sweeping for siblings of the defect that motivated it.
+func (r *Runner) noteExecReplacedStdin() {
 	if in := r.Stdin; in != nil && reflect.TypeOf(in).Comparable() {
-		r.ownStdin = in
-		r.ownStdinSet = true
+		r.execStdin = in
 	}
+}
+
+// shellsOwnInput reports whether this stream is what the *shell* reads: the
+// input it started with, or whatever an `exec` redirection installed since.
+//
+// The background-job question's form of ownInput. See noteExecReplacedStdin
+// for why the two are not one predicate.
+func (r *Runner) shellsOwnInput(in io.Reader) bool {
+	if r.ownInput(in) {
+		return true
+	}
+	if l, ok := in.(*lockedReader); ok {
+		in = l.r
+	}
+	return r.execStdin != nil && in == r.execStdin
 }
 
 // inputIsAlreadyEmpty reports whether this stream reads end-of-file with

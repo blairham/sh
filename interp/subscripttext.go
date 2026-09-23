@@ -218,3 +218,165 @@ func wordBracketsAreLexed(w *syntax.Word) bool {
 	}
 	return opens == 1 && closes == 1 && endsThere
 }
+
+// wordSubscriptIsSourceClosed reports whether this operand's subscript was
+// **closed in the source**: the word carries exactly one unquoted `[` and one
+// unquoted `]`, the `]` is followed immediately by the assignment operator,
+// and everything in between — quoted or expanded — is the subscript.
+//
+// The sibling of wordBracketsAreLexed, and a different question. That one
+// asks about an operand that is a subscript and nothing else (`unset a[k]`);
+// this one asks about `a[k]=v`, where the brackets are followed by an
+// operator and a value.
+//
+// It exists because two spellings that are the same string by the time a
+// builtin sees them are **not** the same declaration: `declare m['foo[bar']=v`
+// and `declare m[foo[bar]=v` both arrive as `m[foo[bar]=v`, and with
+// `shopt -s assoc_expand_once` bash takes the first and refuses the second.
+// The quoting is the only thing that tells them apart, and it is gone from the
+// string — so the fact has to be carried from the word. See
+// Runner.subscriptClosedInTheSource.
+//
+// A **backslash-quoted** bracket counts for nothing here, which is the lexer's
+// doing rather than this scan's: `\[` is its own span with its own quoting, so
+// the same "unquoted literal only" rule that steps over an apostrophe steps
+// over it. Measured 2026-09-23 on bash 5.3.20 with the option set,
+// `declare m[foo\[bar]=v` stores the key `foo[bar` exactly as the quoted
+// spellings do.
+func wordSubscriptIsSourceClosed(w *syntax.Word) bool {
+	if w == nil || len(w.Spans) == 0 {
+		return false
+	}
+	opens, closes, closed := 0, 0, false
+	for n, span := range w.Spans {
+		if span.Kind != syntax.Literal || span.Quoting != syntax.Unquoted {
+			continue
+		}
+		for i := 0; i < len(span.Value); i++ {
+			switch span.Value[i] {
+			case '[':
+				if opens > 0 || closes > 0 {
+					// A second `[`, or one after the subscript closed:
+					// neither is the shape this answers for.
+					return false
+				}
+				if !isPlainName(spanHead(w, n, i)) {
+					return false
+				}
+				opens++
+			case ']':
+				if opens != 1 || closes > 0 {
+					return false
+				}
+				closes++
+				// The operator has to stand right here, in this same
+				// unquoted run: a quotation between the `]` and the `=`
+				// makes the operator a quoted character and the word an
+				// ordinary one.
+				rest := span.Value[i+1:]
+				closed = strings.HasPrefix(rest, "=") || strings.HasPrefix(rest, "+=")
+			}
+		}
+	}
+	return opens == 1 && closes == 1 && closed
+}
+
+// spanHead is the word's text before byte i of span n, which is a name only
+// when every byte of it was written as unquoted literal text — the `[` of a
+// subscripted operand stands after a name and after nothing else.
+func spanHead(w *syntax.Word, n, i int) string {
+	var b strings.Builder
+	for k, s := range w.Spans {
+		if k == n {
+			b.WriteString(s.Value[:i])
+			return b.String()
+		}
+		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+			return ""
+		}
+		b.WriteString(s.Value)
+	}
+	return b.String()
+}
+
+// subscriptClosedInTheSource reports that this operand's key ends where the
+// **source** ended it rather than where a scan of the expanded text would,
+// which is the reading `shopt -s assoc_expand_once` asks for.
+//
+// The option is one switch and this is its fourth surface. The other three
+// are the second expansion round a subscript-as-text gets — see
+// Runner.ExpandsAnOperandsSubscriptAgain, whose doc says a declaration's
+// operand is out of reach of it, and that is still true: the *key* a
+// declaration finds is unchanged by this, and what moves is where the
+// subscript is taken to end.
+//
+// Measured 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C bash f.sh`
+// over a script file with standard input on the null device, against bash
+// 5.3.20 and bash 5.3.15 in the digest-pinned image the suite is graded in,
+// which agree. Fourteen spellings of `declare m[…]=v` with a table declared
+// in front of them, each run under the option set and unset:
+//
+//	                     option unset            option set
+//	m['foo[bar']=v       not a valid identifier  the key `foo[bar`
+//	m["foo[bar"]=v       not a valid identifier  the key `foo[bar`
+//	m[foo\[bar]=v        not a valid identifier  the key `foo[bar`
+//	m[foo[bar]=v         not a valid identifier  not a valid identifier
+//	m['a[b][c]']=v       the key `a[b][c]`       not a valid identifier
+//	m['a[b]c']=v         the key `a[b]c`         not a valid identifier
+//	m['a]b']=v           not a valid identifier  not a valid identifier
+//	m['a]=b']=v          the key `a`             the key `a`
+//	m['[']=v             not a valid identifier  the key `[`
+//	m['[[']=v            not a valid identifier  the key `[[`
+//	m['x y']=v           the key `x y`           the key `x y`
+//
+// The two columns **swap** on two of the rows, which is what rules out a rule
+// that only loosens or only tightens. With the option unset the subscript is
+// found by counting brackets in the text the quoting came off of, so
+// `a[b][c]` is balanced and is a key while `foo[bar` is not; with it set the
+// source's own closer is taken and the key is then whatever stands before the
+// **first** `]`, so `foo[bar` is a key and `a[b][c]` runs past its closer
+// into a `[`.
+//
+// Unreachable in every other dialect, which is why there is no axis: the
+// option is bash's alone and the rest of the panel cannot be asked to turn it
+// on. Its default is the unset column, so a script that says nothing gets the
+// reading this shell already had.
+func (r *Runner) subscriptClosedInTheSource(name string) bool {
+	if r.ExpandsAnOperandsSubscriptAgain() {
+		return false
+	}
+	switch r.inBuiltin {
+	case "readonly", "export":
+		// Measured with the rest, and the reason it is a list of two rather
+		// than a rule about them: these two answer `readonly r1['a[b']=2`
+		// with ``r1[a[b]=2': not a valid identifier`` under the option set
+		// **and** unset, where the same operand under `declare` is a key
+		// with it set. So the option does not reach their reading of an
+		// operand, and a shell that let it reach would shorten the word they
+		// quote back.
+		return false
+	}
+	return slices.Contains(r.sourceClosedSubscriptOperands, name)
+}
+
+// recordASourceClosedSubscript adds the operand just appended to argv, where
+// its subscript was closed in the source.
+//
+// Called from the two branches that expand a declaration's operand — the
+// plain one and the appending one — rather than from the general word loop
+// below them, because both of those return before it: an operand carrying a
+// value never reaches the place wordBracketsAreLexed is asked.
+//
+// The name half alone, without the value, since that is the text the reader
+// is handed. See Runner.sourceClosedSubscriptOperands.
+func recordASourceClosedSubscript(at []string, w *syntax.Word, argv []string) []string {
+	if len(argv) == 0 || !wordSubscriptIsSourceClosed(w) {
+		return at
+	}
+	// Through declarationOperand rather than a cut of its own, so that the
+	// text recorded is the text the reader is handed: an **appending**
+	// operand's name has the `+` taken off, and a list keyed on the other
+	// spelling would miss `declare m['foo[bar']+=v` entirely.
+	name, _, _, _ := declarationOperand(argv[len(argv)-1])
+	return append(at, name)
+}

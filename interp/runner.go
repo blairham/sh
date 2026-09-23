@@ -3741,6 +3741,23 @@ type Runner struct {
 	// which is the one reader: a lexed subscript has already been expanded
 	// and is not expanded a second time.
 	lexedSubscriptOperands []string
+	// sourceClosedSubscriptOperands is this command's `name[sub]=value`
+	// operands whose subscript the **source** closed — the word carried one
+	// unquoted `[` and one unquoted `]` with the operator right behind it, so
+	// the parser knew where the key ended before anything was expanded.
+	//
+	// The name half of the operand, without its value: that is what the
+	// reader is given, and the value is not part of the question.
+	//
+	// It exists because two spellings that are one string by the time a
+	// builtin sees them are not one declaration. `declare m['foo[bar']=v` and
+	// `declare m[foo[bar]=v` both arrive as `m[foo[bar]=v`, and bash with
+	// `shopt -s assoc_expand_once` takes the first and refuses the second.
+	// See Runner.subscriptClosedInTheSource and wordSubscriptIsSourceClosed.
+	//
+	// Set for the length of one simple command and restored behind it, for
+	// the reason declarationOperands is.
+	sourceClosedSubscriptOperands []string
 	// retypingFrozen is the one name a frozen-scalar retype is under way for.
 	// See the method of the same name for why it is a field.
 	retypingFrozen string
@@ -6155,7 +6172,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// Where in argv the declaration operands land, for the trace. See
 	// Runner.declarationOperands.
 	var operandAt []int
-	var lexedAt []string
+	var lexedAt, sourceClosedAt []string
 	for i, w := range c.Args {
 		if r.expandErr || r.ctl == controlExit {
 			// The command is abandoned at its first failed expansion rather
@@ -6214,6 +6231,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				}
 				operandAt = append(operandAt, len(argv))
 				argv = append(argv, r.expandAssignArg(w))
+				sourceClosedAt = recordASourceClosedSubscript(sourceClosedAt, w, argv)
 				continue
 			}
 		}
@@ -6256,6 +6274,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			}
 			operandAt = append(operandAt, len(argv))
 			argv = append(argv, r.expandAssignArg(w))
+			sourceClosedAt = recordASourceClosedSubscript(sourceClosedAt, w, argv)
 			continue
 		}
 		operandStart := len(argv)
@@ -6307,6 +6326,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	savedLexed := r.lexedSubscriptOperands
 	r.lexedSubscriptOperands = lexedAt
 	defer func() { r.lexedSubscriptOperands = savedLexed }()
+	savedSourceClosed := r.sourceClosedSubscriptOperands
+	r.sourceClosedSubscriptOperands = sourceClosedAt
+	defer func() { r.sourceClosedSubscriptOperands = savedSourceClosed }()
 	if len(promoted) > 0 {
 		// The command as though the assignments had been written in front of
 		// it. A copy rather than a write through the pointer: the tree is the

@@ -146,6 +146,46 @@ waiting for, `Diagnostics.CondTermUndecidedPreamble`; the two lines it prints
 after that one still name the newline where bash names the word in front of
 it, which is the generic echo and is left as it stands.
 
+**It is the position and not the newline.** bash writes the same sentence for
+*any* token standing behind a term of one bare word, which is what makes this
+a rule about where the reading stood rather than about what a newline means.
+Measured 2026-09-22 on bash 5.3.20 under `-c`:
+
+| written | bash 5.3.20 |
+| --- | --- |
+| `[[ 4 & ]]` | ``unexpected token `&', conditional binary operator expected`` |
+| `[[ x ; ]]` | the same, naming the `;` |
+| `[[ x \| ]]` | the same, naming the `\|` |
+| `[[ x 7 ]]` | the same, naming the `7` |
+| `[[ -Q 7 ]]` | the same — `-Q` is no operator, so `-Q` is the bare word |
+| `[[ -n x && y z ]]` | the same, naming the `z` behind `y` |
+| `[[ -n x y ]]` | ``syntax error in conditional expression: unexpected token `y'`` |
+| `[[ a == b == c ]]` | the same, naming the second `==` |
+
+The last two rows are the control: a term the operator has already settled
+takes the ordinary conditional wording, so the two sentences are chosen by the
+shape of the term and not by the token.
+
+## A condition group that never closed
+
+A refusal falling where a group's `)` was wanted names **that closer** in the
+same sentence as the token, and the group is then not also counted among the
+ones still open. Measured 2026-09-22 on bash 5.3.20 under `-c`:
+
+| written | bash 5.3.20 |
+| --- | --- |
+| `[[ ((1 -eq 1) ]]` | ``unexpected token `]]', expected `)'``, then the ordinary `near` and echo |
+| `[[ ( -n x ; ]]` | the same, naming the `;` |
+| `[[ ( -t X` | ``unexpected token `EOF', expected `)'``, then ``unexpected end of file from `[[' command on line 1`` |
+| `[[ ( ( -t X` | the same, with one ``expected `)'`` between them for the outer group |
+| `[[ ( x & ) ]]` | the *term's* sentence instead — the `&` stood behind a one-word term — with ``expected `)'`` under it |
+| `[[ -t X` | ``unexpected EOF while looking for `]]'`` — the control, with no group around it |
+
+The last row is what says this is a sentence of its own rather than the
+unterminated-condition one reworded. This shell answered every one of these
+with `expected ) in a condition`, a sentence no shell in the panel writes
+(#4173).
+
 ## The right side of `==` is a pattern
 
     [[ abc == a*   ]]   →  matches
@@ -243,9 +283,21 @@ conditional operator wanted a word is `ErrCondOperand`, which bash alone
 words as a statement about the operator — "unexpected argument `(' to
 conditional binary operator", with `unary` for the one-operand family —
 where ksh93 and zsh say what they say about any token the grammar did not
-want. It replaced one message of our own that matched nobody. bash
-follows its line with a `syntax error near` line and an echo of the
-source; only the first of the three is written here.
+want. It replaced one message of our own that matched nobody.
+
+bash's sentence is a **preamble**: it is followed by the ordinary
+`syntax error near` line and the echoed source, the same three-line shape
+every other token refused inside a condition gets. Measured 2026-09-22 on
+bash 5.3.20 under `-c`:
+
+| written | bash 5.3.20 |
+| --- | --- |
+| `[[ -n & ]]` | ``unexpected argument `&' to conditional unary operator``, ``syntax error near `&'``, ``` `[[ -n & ]]' ``` |
+| `[[ 4 > & ]]` | the binary spelling of the same three |
+| `[[ -n ]]` | the `]]` named as the surplus argument, then the same two |
+
+This document used to say only the first line was written, and this shell
+wrote only the first line; that cost `cond.tests` six lines (#4173).
 
 ### The completion conditions are a different question
 
@@ -697,6 +749,42 @@ and POSIX has no answer either, since `=~` is not in the standard: bash
 is the outlier here rather than the rule, so an entry that called its
 behavior the default would have named the one shell that disagrees with
 the other two.
+
+**Quoting decides the operand a span at a time**, exactly as it decides a
+glob operand: the quoted *portions* are literal and the rest stays an
+expression. Measured 2026-09-22 on bash 5.3.20:
+
+| probe | bash 5.3.20 |
+| --- | --- |
+| `[[ ab =~ ^"a"b$ ]]` | matches — the anchors are still anchors |
+| `[[ ab =~ ^'ab'$ ]]` | matches |
+| `[[ ab =~ ^\ab$ ]]` | matches — a backslash quotes its one character |
+| `[[ axb =~ "a".b ]]` | matches — the `.` outside the quote is a `.` |
+| `[[ aab =~ "a"a*b ]]` | matches |
+| `[[ x =~ [$"a"-z] ]]` | matches — a quote inside a bracket expression |
+| `[[ axb =~ "a.b" ]]` | **no match** — the control, where the quote is about the `.` |
+| `[[ a.b =~ "a.b" ]]` | matches |
+
+So the operand cannot be escaped as a finished string: only the spans know
+which characters were quoted, which is why the tree keeps the word here as it
+does for a pattern. This shell asked the *word* whether anything in it was
+quoted and escaped the whole expanded value, so one quote anywhere turned
+every metacharacter in the operand into a letter (#4173).
+
+**The match is leftmost-longest.** POSIX defines a regular expression match
+that way, and Go's `regexp` prefers the leftmost match the first alternative
+reaches instead. The status is the same either way and the recorded match is
+not, so the difference is a value a script carries forward:
+
+| probe | bash 5.3.20 |
+| --- | --- |
+| `r='a\|ab'; [[ ab =~ $r ]]` | matches `ab` |
+| `r='ab\|a'; [[ ab =~ $r ]]` | matches `ab` |
+| `r='a\|aa\|aaa'; [[ aaa =~ $r ]]` | matches `aaa` |
+| `r='x\|aaa'; [[ xaaa =~ $r ]]` | matches `x` — leftmost still wins over longer |
+
+Not an axis: it is the expression language's rule and every column with the
+operator compiles ERE.
 
 ## An operand ending in `(#q…)` is matched against the filesystem
 

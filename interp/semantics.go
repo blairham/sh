@@ -540,6 +540,15 @@ type Semantics struct {
 	// has the backslash removed everywhere — which is what says this is about a
 	// pattern piece and not about the separator.
 	//
+	// bash 3.2 is on the other side of it for the piece that *describes* a
+	// name, and only for that one: `./[x]${bs}/e` in a tree holding `x\` is
+	// `[./x\/e]` on 5.3 and `[./[x]\/e]` on 3.2.57, while the control field
+	// beside it agrees in both builds. So this is a reading 5.3 has and 3.2
+	// does not, rather than one bash always had; 5.3 is the column
+	// dialect/bash follows, as elsewhere. Found by a retroactive sweep of this
+	// session's rows for a `Why` that names only 5.3 where the bash32 cell
+	// differs — which this one did (#4234).
+	//
 	// ksh93 reaches the same words by a different route: its
 	// ValueBackslashInAPattern is ValueBackslashIsData, so the backslash is a
 	// character wherever it stands and the question never arises. The answer is

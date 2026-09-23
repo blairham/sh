@@ -69,6 +69,25 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 	// not an ordering the engine may pick — see
 	// Semantics.TableLetterReachesItsOwnOperandsSubscript.
 	tableBefore := r.assocDeclared(base)
+	// Ahead of the shadow, because the shadow is what hides the answer: a
+	// local cell is not frozen just because the caller's was, so a check
+	// behind it asks about a cell nothing has ever frozen and takes the
+	// write. `readonly q; f(){ local q[0]=v; }` was silently 0 here and
+	// `local: q: readonly variable` at 1 in the reference — an assignment to
+	// a frozen name, accepted.
+	//
+	// The whole-name spelling beside it already asked first, which is why
+	// `local q=v` over the same name refused and only the subscripted form
+	// went through. Measured 2026-09-23 on bash 5.3.20, four shapes inside a
+	// function and all four refused: `local q[0]=v` and `declare q[0]=v`
+	// over a frozen scalar, `local a[0]=z` over a frozen array, and
+	// `declare t[k]=z` over a frozen table. At the top level, where no
+	// shadow is taken, this shell already refused all four — which is what
+	// says it is the shadow and not the subscript (#4163).
+	if r.refuseReadonly(base, assignedByDeclaration) {
+		// By the base's name, which is the same rule `unset a[0]` follows.
+		return
+	}
 	fresh := false
 	if shadows && !f.global {
 		// The array the element belongs to is what becomes local, and it has
@@ -110,12 +129,6 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 	// question of its own that the panel splits differently — see
 	// compoundKindChanged.
 	r.markCompoundForAnElementDeclaration(base, fresh, f)
-	if r.refuseReadonly(base, assignedByDeclaration) {
-		// A name already frozen refuses the element as it refuses the
-		// variable, and by the base's name: `readonly a; typeset a[1]=v`
-		// names `a`, which is the same rule `unset a[0]` follows.
-		return
-	}
 	// The store's own complaints do not name the builtin, where the refusals
 	// above do: measured, `export a[0]=v` and `typeset a[0]=v` in the shell
 	// whose arrays start at one both say `a: assignment to invalid subscript

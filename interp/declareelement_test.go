@@ -497,3 +497,59 @@ func TestAnIntegerElementIsEvaluatedOnce(t *testing.T) {
 	// the view's own fold is the only one and it is what makes a bare
 	// `integer k` read back as a zero. dialect/zsh's own suite pins that.
 }
+
+// A frozen name refuses a **subscripted** declaration too, and it has to be
+// asked before the shadow rather than after it.
+//
+// The shadow is what hid the answer: a local cell is not frozen because the
+// caller's was, so a check behind it asks about a cell nothing has ever
+// frozen and takes the write. The whole-name spelling beside it already asked
+// first, which is why `typeset q=v` over a frozen `q` refused and only the
+// subscripted form went through — silently, at 0, writing an element of a
+// name the script had frozen.
+//
+// Measured 2026-09-23 on bash 5.3.20, every row inside a function and every
+// one refused at 1 naming the base:
+//
+//	readonly q;                        f(){ local q[0]=v; }
+//	readonly q;                        f(){ declare q[0]=v; }
+//	a=(x y); readonly a;               f(){ local a[0]=z; }
+//	declare -A t=([k]=v); readonly t;  f(){ declare t[k]=z; }
+//
+// The control is the same line at the **top level**, where no shadow is
+// taken: this shell already refused it there, which is what says the shadow
+// and not the subscript was the difference. The second control is a name
+// nothing has frozen, which still takes the element — and it is the row that
+// reaches `REACHED`, so the three above are refusals rather than a harness
+// that prints nothing (#4163).
+func TestAFrozenNameRefusesASubscriptedDeclarationInsideAFunction(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"inside a function",
+			"readonly q=ro\nf(){ typeset q[0]=v; }\nf\necho REACHED",
+			"sh: q: readonly variable\n",
+		},
+		{
+			"over a frozen array",
+			"a=(x y)\nreadonly a\nf(){ typeset a[0]=z; }\nf\necho REACHED",
+			"sh: a: readonly variable\n",
+		},
+		{
+			"the control: the same line at the top level",
+			"readonly q=ro\ntypeset q[0]=v\necho REACHED",
+			"sh: q: readonly variable\n",
+		},
+		{
+			"the control: a name nothing has frozen",
+			"f(){ typeset ok[0]=v; echo \"[${ok[0]}]\"; }\nf\necho REACHED",
+			"[v]\nREACHED\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runDeclareElement(t, tc.src, nil)
+			if out != tc.want {
+				t.Errorf("out = %q, want %q", out, tc.want)
+			}
+		})
+	}
+}

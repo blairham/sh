@@ -5272,6 +5272,24 @@ type Diagnostics struct {
 	// Measured with the same run. Empty means no such line.
 	CondGroupUnclosed string
 
+	// CondGroupCloserExpected is that group's closer named in the same
+	// sentence as the token, for a refusal that happened where the closer
+	// was wanted rather than inside one of the group's terms. Two verbs:
+	// %[1]s the token the dialect names there and %[2]s the closer.
+	//
+	//	[[ ((1 -eq 1) ]]   unexpected token `]]', expected `)'
+	//	[[ ( -t X          unexpected token `EOF', expected `)'
+	//	[[ ( ( -t X        the same, then `expected `)'` for the outer group
+	//	[[ -t X            unexpected EOF while looking for `]]'
+	//
+	// Measured on bash 5.3.20, 2026-09-22. The last row is the control: the
+	// same run-out with no group around it takes CondUnterminatedPreamble,
+	// which is why this is a field of its own rather than that one reworded.
+	// The group named here is **not** also counted among the open ones — see
+	// syntax.Error.CondGroupCloserWanted. Empty means no such line, which is
+	// every dialect but one.
+	CondGroupCloserExpected string
+
 	// CondUnterminatedPreamble is the same idea for a `[[` the input ran
 	// out inside of, and the same dialect writes it: `unexpected EOF while
 	// looking for `]]'`, again at the `[[`'s line and again in front of the
@@ -8867,12 +8885,10 @@ func (d Diagnostics) ParseFailure(err error) string {
 	case syntax.ErrForArithSeparator:
 		return Wording(d.ForArithSeparator, se.Msg, se.LastToken, se.Token, se.Pos.Line)
 	case syntax.ErrCondOperand:
-		if d.CondOperand != "" {
-			return Wording(d.CondOperand, "", se.Token, se.Expected, se.LastToken, se.Pos.Line)
-		}
-		// A dialect with no sentence of its own names the token the way it
-		// names any token the grammar did not want, which is what three of
-		// the four do here: `\`(' unexpected` and nothing about `[[`.
+		// The token, the way this dialect names any token the grammar did not
+		// want. A dialect with a sentence about the *operator* writes it as a
+		// preamble in front of this one rather than in place of it — see
+		// condPreamble, which is where Diagnostics.CondOperand is rendered.
 		return d.unexpectedToken(se)
 	case syntax.ErrUnexpected:
 		return d.unexpectedToken(se)
@@ -9524,9 +9540,15 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 	}
 	form, verb := d.CondSyntaxPreamble, se.Token
 	line := se.ConstructLine
+	closerWanted := false
 	if se.Kind == syntax.ErrUnterminated {
 		form, verb = d.CondUnterminatedPreamble, se.Expected
-		if se.CondTermMissing && d.CondCommandPreamble != "" {
+		if se.CondGroupCloserWanted && d.CondGroupCloserExpected != "" {
+			// The input ran out where a group's closer was wanted, so it is
+			// that closer this dialect names and not the `[[`'s. See
+			// CondGroupCloserExpected.
+			form, verb, closerWanted = d.CondGroupCloserExpected, "EOF", true
+		} else if se.CondTermMissing && d.CondCommandPreamble != "" {
 			// The input ran out where the condition was to *begin*, which
 			// this dialect words as the token-in-a-conditional-command line
 			// with `EOF` for a token — and at the line the input ran out on
@@ -9537,6 +9559,22 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 			form, verb = d.CondCommandPreamble, "EOF"
 			line = se.EndLine
 		}
+	} else if se.Kind == syntax.ErrCondOperand {
+		// An operand a conditional operator cannot take is the same shape as
+		// a token it did not want: the dialect that words it as a statement
+		// about the *operator* writes that sentence **in front of** the
+		// ordinary two rather than instead of them. Measured 2026-09-22 on
+		// bash 5.3.20 under `-c`, three lines each:
+		//
+		//	[[ -n & ]]           unexpected argument `&' to conditional
+		//	                     unary operator, then near `&', then the line
+		//	[[ 4 > & ]]          the binary spelling of the same three
+		//	[[ -n ]]             the `]]` named as the surplus argument
+		//
+		// Empty for the three columns that name the token once and stop,
+		// which is what leaves them with the one line they have. See
+		// Diagnostics.CondOperand.
+		form = d.CondOperand
 	} else if se.Kind != syntax.ErrUnexpected {
 		return ""
 	} else if se.CondTermUndecided && d.CondTermUndecidedPreamble != "" {
@@ -9544,6 +9582,11 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 		// dialect words as a statement about the operator it was waiting for.
 		// See CondTermUndecidedPreamble.
 		form = d.CondTermUndecidedPreamble
+	} else if se.CondGroupCloserWanted && d.CondGroupCloserExpected != "" {
+		// A token where a group's closer was wanted, which the same dialect
+		// words as a statement about that closer. See
+		// CondGroupCloserExpected.
+		form, closerWanted = d.CondGroupCloserExpected, true
 	} else if se.CondTermMissing {
 		// A token where the condition was to begin, which this dialect words
 		// differently — and for the closer itself does not word at all. See
@@ -9558,7 +9601,17 @@ func (d Diagnostics) condPreamble(name, input string, err error) string {
 	}
 	out := ""
 	if form != "" {
-		out = d.ReportFrom(name, input, line, Wording(form, "", verb, line)+"\n")
+		text := Wording(form, "", verb, line)
+		switch {
+		case se.Kind == syntax.ErrCondOperand:
+			// Two verbs more than the other preambles take: the arity of the
+			// operator that was waiting, and the operator itself.
+			text = Wording(form, "", se.Token, se.Expected, se.LastToken, line)
+		case closerWanted:
+			// The closer stands in the sentence as well as the token.
+			text = Wording(form, "", verb, ")", line)
+		}
+		out = d.ReportFrom(name, input, line, text+"\n")
 	}
 	if w := d.CondGroupUnclosed; w != "" {
 		// One line per group still open, after the sentence about the token
@@ -9659,7 +9712,7 @@ func (d Diagnostics) offendingLine(line int, err error, src string) string {
 		// then the whole line back, where this wrote the complaint alone.
 		se = body
 	}
-	if se.Kind != syntax.ErrUnexpected {
+	if se.Kind != syntax.ErrUnexpected && se.Kind != syntax.ErrCondOperand {
 		return ""
 	}
 	if se.AliasSource != "" {

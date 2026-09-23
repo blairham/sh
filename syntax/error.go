@@ -379,6 +379,22 @@ type Error struct {
 	// not closed when it failed. The same dialect writes one line per open
 	// group in front of the rest.
 	CondGroupsOpen int
+
+	// CondGroupCloserWanted says the refusal happened where a condition
+	// group's `)` was wanted rather than inside one of its terms. One
+	// dialect names that closer in the same sentence as the token it did not
+	// get, and counts the group as reported rather than as still open:
+	//
+	//	[[ ((1 -eq 1) ]]   unexpected token `]]', expected `)'
+	//	[[ ( -n x ; ]]     unexpected token `;', expected `)'
+	//	[[ ( -t X          unexpected token `EOF', expected `)'
+	//	[[ ( x & ) ]]      the `&' stood behind a one-word term instead, so
+	//	                   the sentence is CondTermUndecided's and the group
+	//	                   is listed under CondGroupsOpen
+	//
+	// Measured on bash 5.3.20, 2026-09-22. See
+	// Diagnostics.CondGroupCloserExpected.
+	CondGroupCloserWanted bool
 	// Class is what sort of token Token is, when the kind is ErrUnexpected.
 	Class TokenClass
 	// TokenOpener is the operator the unexpected token *began* with, where

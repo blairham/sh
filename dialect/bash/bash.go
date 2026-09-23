@@ -3875,9 +3875,14 @@ func Diagnostics() interp.Diagnostics {
 		// to begin, with no sentence at all for the closer itself — see
 		// CondCommandPreamble, and CondGroupUnclosed for the line each open
 		// `(` adds under both (#2909).
-		CondCommandPreamble:  "unexpected token `%[1]s' in conditional command",
-		CondGroupUnclosed:    "expected `%[1]s'",
-		CondSyntaxUnexpected: "syntax error near `%[1]s'",
+		CondCommandPreamble: "unexpected token `%[1]s' in conditional command",
+		CondGroupUnclosed:   "expected `%[1]s'",
+		// And the same closer named in the sentence itself where the
+		// refusal fell where that closer was wanted rather than inside one
+		// of the group's terms. See Diagnostics.CondGroupCloserExpected for
+		// the measured rows.
+		CondGroupCloserExpected: "unexpected token `%[1]s', expected `%[2]s'",
+		CondSyntaxUnexpected:    "syntax error near `%[1]s'",
 		// And a `[[` the input ran out inside of gets a line of its own,
 		// naming the closer it was waiting for. Measured: this shell writes
 		// it for `[[` and for nothing else — `if`, `for`, `case`, `{` and

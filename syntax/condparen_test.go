@@ -153,7 +153,12 @@ func TestTouchingParensAtCommandPositionAreArithmetic(t *testing.T) {
 func TestCondUnbalancedTouchingParens(t *testing.T) {
 	t.Parallel()
 	tests := []struct{ src, want string }{
-		{`[[ ((1 -eq 1) ]]`, `1:15: expected ) in a condition`},
+		// The token the reading stopped on, here as below: the group's `)`
+		// never came and every shell in the panel names what stood in its
+		// place rather than the closer alone. `expected ) in a condition`
+		// was a sentence of ours that matched nobody, and it was one line
+		// where bash writes three (#4173).
+		{`[[ ((1 -eq 1) ]]`, `1:15: "]]" unexpected`},
 		// The token the reading stopped on, which is what every shell in the
 		// panel names here: ksh93 writes `` `)' unexpected `` for this input
 		// and bash and zsh name the same `)` inside a longer line. See

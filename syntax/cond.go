@@ -552,6 +552,11 @@ func (p *Parser) blameCondition(start Pos) {
 		return
 	}
 	se.Construct, se.ConstructLine = "[[", int(start.Line)
+	if se.Kind == ErrUnexpected && se.Pos == p.condUndecidedAt && p.condUndecidedAt.IsValid() {
+		// The token refused is the one that stood behind a one-word term, so
+		// it stood where a binary operator could have. See condPrimary.
+		se.CondTermUndecided = true
+	}
 	if se.Kind == ErrUnterminated {
 		// A `[[` that never closed is unclosed *by the condition*, and two
 		// dialects name it: one as the construct and one as the innermost
@@ -654,8 +659,42 @@ func (p *Parser) condPrimary() CondExpr {
 		// Nor here, and for the same reason.
 		stop := p.tok.End
 		if !p.at(TokRightParen) {
-			p.fail("expected ) in a condition")
+			// The group's `)` never came. Routed through the ordinary
+			// refusals rather than through a message of this construct's
+			// own, for the reason the `]]` test in condClause gives: every
+			// dialect words a token it did not want in its own way, and a
+			// sentence written here is nobody's. `expected ) in a condition`
+			// was that sentence, and it was one line where bash writes two
+			// for a run-out and four for a token (#4173).
+			//
+			// Which of two things the token was standing in the way of,
+			// because one dialect words them differently and counts the open
+			// groups differently under each. A token behind a term of one
+			// bare word stood where a *binary operator* could have, and the
+			// group this frame owns is then one of the ones still open;
+			// anything else stood where the group's *closer* was wanted, and
+			// that dialect names the closer in the sentence itself and
+			// leaves only the enclosing groups to the per-group lines.
+			// Measured on bash 5.3.20, 2026-09-22: `[[ ((1 -eq 1) ]]` is
+			// `unexpected token `]]', expected `)'` with no group line under
+			// it, where `[[ ( x & ) ]]` is the operator sentence with one.
+			undecided := p.condUndecidedAt.IsValid() && p.tok.Pos == p.condUndecidedAt
+			open := p.condGroups
+			if undecided {
+				open++
+			}
+			if p.at(TokEOF) {
+				p.ranOut()
+				p.err = p.unterminated("]]")
+			} else {
+				p.failUnexpected(")")
+			}
+			var se *Error
+			if errors.As(p.err, &se) {
+				se.CondGroupsOpen, se.CondGroupCloserWanted = open, !undecided
+			}
 			p.recordCondGroup()
+			p.blameCondition(p.condStart)
 			return nil
 		}
 		p.next()
@@ -708,6 +747,20 @@ func (p *Parser) condPrimary() CondExpr {
 		if p.condNewlineAfterATermsFirstWord() {
 			return nil
 		}
+		// The term is one word and no operator followed it, so whatever
+		// stands here stood where a binary operator could have. One dialect
+		// words a refusal at that token as a statement about the operator it
+		// was waiting for rather than about the token, and it is the same
+		// sentence it writes for a newline in the position — measured
+		// 2026-09-22 on bash 5.3.20, `[[ 4 & ]]`, `[[ x ; ]]`, `[[ x | ]]`,
+		// `[[ x 7 ]]` and `[[ -Q 7 ]]` all `unexpected token `X',
+		// conditional binary operator expected`, where `[[ -n x y ]]` — a
+		// term the operator already settled — gets the ordinary sentence.
+		//
+		// The position rather than a flag, because the refusal is raised a
+		// frame or two further out and a flag left set would reach a token
+		// that is not this one. See blameCondition.
+		p.condUndecidedAt = p.tok.Pos
 		// A bare word is a test for non-emptiness.
 		return &CondUnary{Op: "-n", X: left, Start: left.Pos()}
 	}
@@ -889,6 +942,13 @@ func (p *Parser) failCondOperand(op, arity string) {
 		Msg: p.tokenLiteral() + " unexpected",
 	}
 	p.recordCondGroup()
+	// And it was refused *inside* a `[[`, which is what lets the dialect
+	// that words this as a sentence about the operator write that sentence
+	// at the `[[`'s line and the ordinary one at the token's. Every other
+	// refusal in this file already says so; this one did not, and the
+	// missing mark was the whole of why `[[ -n ]]` got one line where bash
+	// writes three (#4173).
+	p.blameCondition(p.condStart)
 }
 
 // condPatternOps are the operators whose right operand is a *pattern* — the

@@ -367,6 +367,14 @@ type Parser struct {
 	// raised below the frame that knows it. See Parser.failCondTerm.
 	condStart Pos
 
+	// condUndecidedAt is where the token stood that followed a condition
+	// term of one bare word — a term a binary operator could still have
+	// continued. One dialect words a refusal *there* as a statement about
+	// the operator it was waiting for, and the refusal is raised a frame or
+	// two out, so the position is what lets it be recognized again. See
+	// Parser.condPrimary and Error.CondTermUndecided.
+	condUndecidedAt Pos
+
 	// condGroups is how many `(` of the condition being read have been
 	// entered and not yet closed. One dialect writes a line per open group
 	// in front of a refusal; see Error.CondGroupsOpen.

@@ -340,6 +340,51 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	}
 	left := syntax.UnmarkArithValue(leftMarked)
 
+	if x.Op == "=~" {
+		// The one place the pattern language is regular expressions rather
+		// than globs, and — like the glob operators below — a place where
+		// the right operand has to be read a span at a time rather than as
+		// the string it expands to. bash matches the **quoted portions** of
+		// the expression as literal text and leaves the rest an expression,
+		// so `[[ ab =~ ^"a"b$ ]]` holds: the `a` is a letter and the anchors
+		// on either side of it are still anchors.
+		//
+		// This used to ask the *word* whether anything in it was quoted and
+		// then escape the whole expanded value, which made one quote
+		// anywhere in the operand turn every metacharacter in it into a
+		// letter. Measured against bash 5.3.20, 2026-09-22 — the left column
+		// is what that reading answered:
+		//
+		//	[[ ab  =~ ^"a"b$ ]]    was 1, is 0 — the anchors became letters
+		//	[[ ab  =~ ^'ab'$ ]]    was 1, is 0
+		//	[[ ab  =~ ^\ab$ ]]     was 1, is 0 — a backslash counts as a quote
+		//	[[ axb =~ "a".b ]]     was 1, is 0 — and so did the `.`
+		//	[[ aab =~ "a"a*b ]]    was 1, is 0
+		//	[[ x   =~ [$"a"-z] ]]  was 1, is 0 — a quote inside a bracket
+		//
+		// The control that says the escaping still happens where it should
+		// is the row a quote is *about*: `[[ axb =~ "a.b" ]]` is 1 and
+		// `[[ a.b =~ "a.b" ]]` is 0, in bash and here alike.
+		text, literal := r.condRegexOperand(x.Y)
+		if r.condOperandDidNotExpand() {
+			return false, errCondOperandFailed
+		}
+		// The trace holds the operand as it expanded, without the escaping
+		// the match is about to apply: bash traces `[[ ab =~ ab ]]` for
+		// `[[ ab =~ "a"b ]]`, so the line says what the words came to rather
+		// than how the matcher was told to read them.
+		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(text))
+		pat := text
+		// bash treats a quoted portion as a literal string; ksh93 and zsh
+		// keep it an expression, so quoting a regex is unportable in either
+		// direction. Asked only where a quote was written, so the axis is
+		// not consulted about a word that has nothing to quote.
+		if x.Y.IsQuoted() && r.ask(r.sem().RegexQuotingMakesLiteral, "quoting a =~ regex making it literal") {
+			pat = literal
+		}
+		return r.regexMatch(pat, left)
+	}
+
 	if pattern {
 		// Unquoted, the right operand is a pattern; quoted, a literal. Only
 		// the spans still know which, which is why the tree keeps a word.
@@ -405,19 +450,6 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		}
 		return l >= rv, nil
 
-	case "=~":
-		// The one place the pattern language is regular expressions rather
-		// than globs. bash treats a *quoted* right operand as a literal
-		// string; ksh93 and zsh keep it a regex. Following bash, which
-		// docs/spec/semantics.md records as the axis default.
-		pat := right
-		// bash treats a quoted right operand as a literal string; ksh93 and
-		// zsh keep it a regex, so quoting one is unportable either way.
-		if x.Y.IsQuoted() && r.ask(r.sem().RegexQuotingMakesLiteral, "quoting a =~ regex making it literal") {
-			pat = regexp.QuoteMeta(pat)
-		}
-		return r.regexMatch(pat, left)
-
 	case "-nt", "-ot", "-ef":
 		return r.compareFiles(x.Op, left, right)
 
@@ -469,6 +501,52 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 // but the arithmetic one wants. See syntax.ArithValueMark.
 func (r *Runner) condOperandText(w *syntax.Word) string {
 	return syntax.UnmarkArithValue(r.condOperand(w))
+}
+
+// condRegexOperand expands a `=~` right operand once and gives back both
+// readings of it: the text the word came to, and the same text with the
+// **quoted spans** escaped so that a matcher reads them as letters.
+//
+// Two readings out of one pass, for the reason every other paired reading in
+// this file is built that way: the operand must be expanded exactly once
+// however many readers it has, and `[[ x =~ $(f) ]]` must not run `f` twice.
+//
+// Which spans are the expression's and which are text is the span's own
+// quoting, and nothing else: unquoted literal text and the result of an
+// unquoted expansion are both regular expression, and every other span is a
+// string. That is the same split [Runner.patternSpan] makes for globs, with
+// one difference that matters — a dialect can re-read an expansion's result
+// as a *pattern*, and no dialect re-reads one as an expression, so there is
+// no axis in the middle of this one.
+func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string) {
+	if r.condWordQualifies(w) {
+		// A word that ends in a glob qualifier group has already matched
+		// against the filesystem, so what comes back is a path and not
+		// something a quote could have divided. See interp/condqualifier.go.
+		t := syntax.UnmarkArithValue(r.condGlobbedOperand(w))
+		return t, t
+	}
+	var b strings.Builder
+	text = r.wordTextNoSplit(w, func(s syntax.Span, part string) string {
+		if regexSpanIsLive(s) {
+			b.WriteString(part)
+		} else {
+			b.WriteString(regexp.QuoteMeta(part))
+		}
+		return part
+	})
+	return text, b.String()
+}
+
+// regexSpanIsLive reports whether this span's metacharacters are the regular
+// expression's rather than letters.
+//
+// The quoting is the whole of the reading, and a backslash counts: `\.` is a
+// span of its own whose quoting says the script wrote a quote, which is why
+// `[[ ab =~ ^\ab$ ]]` matches where a reading that only looked for quotation
+// marks would have made the anchors literal too.
+func regexSpanIsLive(s syntax.Span) bool {
+	return s.Quoting == syntax.Unquoted
 }
 
 // conditionSubscriptText is which of the two readings of a comparison's
@@ -734,6 +812,24 @@ func (r *Runner) regexMatch(pat, left string) (bool, error) {
 		// a script that never asked for `(?i)` must not read about one.
 		return false, arithError{msg: "invalid regular expression: " + pat}
 	}
+	// Leftmost-**longest**, which is what a POSIX regular expression means
+	// and is not what this package matches by default: `regexp` prefers the
+	// leftmost match the first alternative reaches, so `[[ ab =~ a|ab ]]`
+	// matched `a` where every shell with the construct matches `ab`. The
+	// whole match is what a script reads back — the first element of the
+	// record, and the parameters that report where it began and ended — so
+	// the difference is a value carried forward rather than a status.
+	//
+	// Measured 2026-09-22 against bash 5.3.20, the record's first element:
+	//
+	//	[[ ab   =~ a|ab ]]      ab, where this package answered a
+	//	[[ abc  =~ ab|abc ]]    abc
+	//	[[ aaa  =~ a|aa|aaa ]]  aaa
+	//
+	// The rule is the expression's and not the dialect's: POSIX defines the
+	// match this way and ERE is what all three columns with `=~` compile, so
+	// there is nothing here for a semantics axis to hold.
+	re.Longest()
 	// The captures are the point of matching, not a by-product: element 0
 	// is the whole match and the rest are the groups. The core records
 	// them and a dialect names the record — see regexmatch.go.

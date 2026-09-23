@@ -148,6 +148,12 @@ func (r *Runner) putOptionBack(name string, o setOption, want bool) {
 	case o.apply != nil:
 		o.apply(r, want)
 	}
+	// And the parameter this name is a second spelling of. The same message
+	// the other restore has to send, and sent here for the same reason: a
+	// restore *is* the option moving, and the tie was wired to `set` alone —
+	// see interp/localdash.go, which had the identical gap (#4163). Folded
+	// rather than left to whichever restore somebody notices first.
+	r.optionTieMoved(name, want)
 	// A name with neither is one the dialect declared and this shell knows
 	// nothing else about: its state is the constant the table hands back, so
 	// it cannot have moved and there is nothing to put back. A *recorded*

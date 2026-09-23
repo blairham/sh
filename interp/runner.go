@@ -9801,6 +9801,14 @@ func (r *Runner) assignmentLandsOn(name string) string {
 }
 
 func (r *Runner) setVarAs(name, value string, form assignForm) {
+	if form == assignedByDeclaration {
+		// `set -a` reaches a declaration utility's assignment as much as a
+		// plain one's — measured, and it was missing: see
+		// Runner.markForAllexport. Here rather than at the five stores a
+		// declaration can reach, which is exactly how one of them came to be
+		// the only spelling that got it right.
+		r.markForAllexport(name)
+	}
 	// A write inside a namespace body always makes a member, which is the half
 	// of the region that keeps `x=IN` from leaving it. Ahead of the reference
 	// handling, for the reason storedValue's copy of this is.
@@ -9971,6 +9979,31 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if act, ok := r.assignmentActions[name]; ok {
 		act(r, value)
 	}
+}
+
+// markForAllexport marks a name for the environment where `set -a` is on.
+//
+// One helper rather than the marking written at each store, which is how the
+// declaration utilities came to miss it: measured on bash 5.3.20, `set -a;
+// typeset F=x` lists `declare -x F="x"` and this shell listed `declare -- F`,
+// so a script that exported through `set -a` and assigned through `typeset`
+// handed its children nothing (#4163).
+//
+// What is marked is measured and is narrower than "every store". A **compound**
+// is not: `set -a; declare -a A=(1)` is `declare -a A=([0]="1")` in bash with no
+// `x` on it, and neither a table nor an array literal earns one. Nor is a write
+// the shell makes for itself, which is why this is called from the assignment
+// sites rather than from setVarAs — `getopts` filling OPTIND in an exporting
+// shell would otherwise put the shell's own bookkeeping in every child's
+// environment.
+func (r *Runner) markForAllexport(name string) {
+	if !r.allexport {
+		return
+	}
+	if r.exported == nil {
+		r.exported = map[string]bool{}
+	}
+	r.exported[name] = true
 }
 
 // producerEndedByUnset reports whether `unset` has ended a produced parameter,
@@ -10949,14 +10982,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// *statement* the only spelling that got it right (#1645).
 		r.setVarAs(a.Name, value, assignedAlone)
 		lift()
-		if r.allexport {
-			// `set -a`: an assignment marks the name for the environment as
-			// well as setting it.
-			if r.exported == nil {
-				r.exported = map[string]bool{}
-			}
-			r.exported[a.Name] = true
-		}
+		r.markForAllexport(a.Name)
 	}
 }
 

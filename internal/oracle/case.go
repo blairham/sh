@@ -24733,6 +24733,12 @@ echo "st=$?"`,
 		Why:     "`set -r`, and the four answers the panel gives it. dash and BusyBox ash have no such letter and end the input over it; bash and ksh93 each enter a restricted mode and refuse the `cd`, in their own words — one sentence apiece against the single word `restricted` — and they part company on the assignment, where bash makes the frozen names *readonly* and carries on while ksh93 keeps its own refusal and ends the script. zsh is the fourth: it has the letter and a restricted mode of its own that is not built here, so it takes the letter and moves, which is what the row records rather than claims (#4205). The assignment is the last arm on purpose, since it is the one that ends the script in one column",
 	},
 	{
+		ID: "variable/allexport-marks-a-declarations-assignment", Category: "variables",
+		Script:  true,
+		Snippet: "set -a\ntypeset F=x\ntypeset -p F 2>/dev/null || echo none\nset -a\ntypeset -a A=(1)\ntypeset -p A 2>/dev/null || echo none\necho tail\n",
+		Why:     "`set -a` marks an assignment for the environment, and the question is whether a **declaration utility's** assignment is one. bash, bash 3.2 and ksh93 all say yes for a scalar and the listing carries the letter; the second arm is the control that makes it a measurement rather than a rule about every store — an array literal earns no export mark in any column that has one. zsh has the option under another spelling and lists its own form; dash and BusyBox ash have no listing to ask, which is what the `|| echo none` arm is for. We marked the plain spelling and not the utility's, so a script that exported through the option and assigned through `typeset` handed its children nothing — found as a line of `varenv.tests` (#4163)",
+	},
+	{
 		ID: "variable/a-module-parameter-a-script-may-not-own", Category: "variables",
 		Script:  true,
 		Snippet: "jobstates=(a b c)\necho \"st=$?\"\necho tail\n",

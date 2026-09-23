@@ -218175,6 +218175,57 @@
         "TimedOut": false
       }
     },
+    "variable/allexport-marks-a-declarations-assignment": {
+      "ash": {
+        "Stdout": "none",
+        "Stderr": "\u003cscript\u003e: line 2: typeset: not found~\u003cscript\u003e: line 5: syntax error: unexpected \"(\"",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -x F=\"x\"~declare -a A=([0]=\"1\")~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "declare -x F=\"x\"~declare -a A=([0]=\"1\")~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -x F=\"x\"~declare -a A='([0]=\"1\")'~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "none",
+        "Stderr": "\u003cscript\u003e: 2: typeset: not found~\u003cscript\u003e: 5: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -x F=x~typeset -a A=(1)~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "export F=x~typeset -ax A=( 1 )~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "variable/the-module-parameter-a-script-may-own": {
       "ash": {
         "Stdout": "",

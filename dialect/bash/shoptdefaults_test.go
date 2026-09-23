@@ -20,11 +20,13 @@ import (
 // three are behaviors this shell genuinely does not have — see #1712 and the
 // prose over shoptStates and shoptRecorded.
 
-// TestTheCompletionNamesReadBashsDefault: `complete_fullquote` is this
-// implementation's own state — the completer backslashes every shell
-// metacharacter in a name it offers — and the other three are recorded at
-// bash's default because the option decides what a *completer* offers and
-// this one offers nothing behind any of them.
+// TestTheCompletionNamesReadBashsDefault: all four read bash's default, and
+// since #4149 all four are recorded rather than three. `complete_fullquote`
+// was a shoptStates entry reading this implementation's own state — the
+// completer really does backslash every shell metacharacter in a name it
+// offers — and that reading is unchanged; what moved is that the name now
+// takes `shopt -u` as well, which a shoptStates entry cannot. See
+// shoptRecorded's third ground for the four shapes I could not tell apart.
 func TestTheCompletionNamesReadBashsDefault(t *testing.T) {
 	for _, name := range []string{
 		"complete_fullquote", "force_fignore", "hostcomplete", "progcomp",
@@ -77,11 +79,17 @@ func TestARecordedShoptNameRemembersAndPromisesNothing(t *testing.T) {
 }
 
 // TestTheStateNamesStillRefuseAMoveTheyCannotHonour: the other side of the
-// bargain, unchanged. `complete_fullquote` is a claim about this completer,
-// so turning it off would be promising to stop quoting.
+// bargain, and it has to keep being asserted about *some* name or the refusal
+// path would go untested while shoptStates still holds entries.
+//
+// `complete_fullquote` was the example here until #4149 moved it — the reading
+// was right and could not take `shopt -u`, which shopt1.sub asks of every name
+// bash lists. `mailwarn` is the example now: a behavior this shell genuinely
+// does not have, in a table that grants the state it holds and refuses the
+// other out loud.
 func TestTheStateNamesStillRefuseAMoveTheyCannotHonour(t *testing.T) {
-	out, st := runBash(t, t.TempDir(), "shopt -u complete_fullquote")
-	if !strings.Contains(out, "shopt: complete_fullquote: not implemented") || st != 1 {
+	out, st := runBash(t, t.TempDir(), "shopt -s mailwarn")
+	if !strings.Contains(out, "shopt: mailwarn: not implemented") || st != 1 {
 		t.Errorf("out %q status %d, want the refusal at 1", out, st)
 	}
 }

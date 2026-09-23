@@ -2220,7 +2220,7 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 	// its own — and one with no sentence of its own, which is the whole of
 	// what substLevel.arith says (#3355).
 	defer r.inArithText(s)()
-	tree, text, perr := r.arithTreeOver(s.Arith, s.Value)
+	tree, text, perr := r.arithTreeOver(s.Arith, s.Value, arithTextWritten)
 	if perr != nil {
 		// A failure to *read* the expression, which can only happen once
 		// it has been expanded — so it is reported here rather than by

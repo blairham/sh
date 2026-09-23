@@ -1911,10 +1911,53 @@ func removeUnmarkedDoubleQuotes(s string) string {
 	return b.String()
 }
 
+// RemoveArithDoubleQuotes is removeUnmarkedDoubleQuotes for the caller that
+// has to perform the removal **before** the text is expanded rather than
+// after, which is where the one dialect with the removal performs it.
+//
+// The quotes come off the text a script wrote inside `(( … ))`, and the
+// expansions in it are performed over what is left — so a quote a value
+// carries arrives after the removal has run and is a character of the result.
+// Measured 2026-09-22 from a script file under `LC_ALL=C` on bash 5.3.20,
+// with `i=1`:
+//
+//	$(( 1"0" + $i ))                   11
+//	q='"'; $(( 1${q}0${q} + $i ))      refused, `1"0" + 1` quoted back
+//
+// The same text either way once it is joined, so only the order of the two
+// steps parts them. See ArithValueMark for the other half of the same rule.
+func RemoveArithDoubleQuotes(s string) string { return removeUnmarkedDoubleQuotes(s) }
+
 // UnmarkArithValue takes the marks back off, leaving the text a value
 // actually held. Exported for whoever put them on: text that never became a
 // subscript still has to be shown without them.
 func UnmarkArithValue(s string) string { return unmarkArithValue(s) }
+
+// EscapeArithValue is UnmarkArithValue for a dialect that writes a value's
+// bytes back with a backslash in front of them.
+//
+// The marks say which bytes an expansion put inside brackets the script
+// wrote, and one shell shows exactly those escaped when it quotes the
+// expression back: measured 2026-09-22 on bash 5.3.20, `declare -A assoc;
+// key='x],b[$(echo 9)'; (( 'assoc[$key]++' ))` names
+// `'assoc[x\],b\[\$(echo 9)]++'`. So this is the same text UnmarkArithValue
+// produces with the marks turned into backslashes rather than dropped; which
+// of the two a dialect wants is interp.Diagnostics.ArithValueShownEscaped.
+func EscapeArithValue(s string) string {
+	if strings.IndexByte(s, ArithValueMark) < 0 {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == ArithValueMark && i+1 < len(s) {
+			b.WriteByte('\\')
+			i++
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
 
 // unmarkArithValue takes the marks back off, leaving the text a value
 // actually held.

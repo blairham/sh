@@ -2939,7 +2939,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		// in it reports is placed from the construct's line rather than from
 		// the text's own first. See Runner.inArithCommandText (#3810).
 		putBackLine := r.inArithCommandText(c.Pos())
-		tree, text, perr := r.arithTreeOver(c.Parsed, c.Expr)
+		tree, text, perr := r.arithTreeOver(c.Parsed, c.Expr, arithTextWritten)
 		putBackLine()
 		// Traced from the expanded text and after the expansion, which is
 		// where the shells put it: `(( $(echo 1) ))` traces the substitution
@@ -3118,7 +3118,7 @@ func (r *Runner) wordInvalidNumber(text string) string {
 // uses and the only order that makes `$(( $x$y ))` with x=`1+` and y=`2`
 // come to 3.
 func (r *Runner) arithTree(tree syntax.ArithExpr, text string) (syntax.ArithExpr, error) {
-	out, _, err := r.arithTreeOver(tree, text)
+	out, _, err := r.arithTreeOver(tree, text, arithTextArrived)
 	return out, err
 }
 
@@ -3159,11 +3159,11 @@ func (r *Runner) arithTreeRead(text string) (syntax.ArithExpr, error) {
 // The expansion happens once, here, and the text is handed back rather than
 // recomputed: expanding it a second time to find an offset would run a command
 // substitution on the right-hand side twice, which is the mistake #1915 was.
-func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string) (syntax.ArithExpr, string, error) {
+func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string, origin arithTextOrigin) (syntax.ArithExpr, string, error) {
 	if tree != nil && !r.arithPrecedenceOptionInCharge() {
 		return tree, text, nil
 	}
-	expanded := r.expandArithText(text)
+	expanded := r.expandArithText(text, origin)
 	p := syntax.NewParser("", r.dialect())
 	// Read as the *result* it now is. A `$` still standing after the
 	// expansion came out of a value, and begins no operand: measured
@@ -3182,11 +3182,62 @@ func (r *Runner) arithTreeOver(tree syntax.ArithExpr, text string) (syntax.Arith
 	// the marks all the way to the diagnostic: measured, our `dash` wrote a
 	// NUL either side of a value's quote into `arithmetic expression:
 	// expecting EOF`. See stripArithValueMarks.
-	shown := stripArithValueMarks(expanded)
+	shown := r.shownArithText(expanded)
 	if err := p.Err(); err != nil {
-		return nil, shown, unmarkArithFailure(err)
+		return nil, shown, r.shownArithFailure(err)
 	}
 	return out, shown, nil
+}
+
+// arithTextOrigin says whether text handed to [Runner.arithTreeOver] is the
+// source text of an arithmetic construct or a result that reached it already
+// expanded, which is the one thing the double-quote removal turns on.
+//
+// The removal is a rule about **text a script wrote inside `(( … ))`** and
+// about nothing else — see [syntax.Parser.ParseArithSubscript] for the rows —
+// and the reader cannot tell the two apart once the text is a string. The
+// parse-time reader is told the same thing by its own `dequote`; this is that
+// question asked again for the expression that had to be expanded first.
+type arithTextOrigin bool
+
+const (
+	// arithTextArrived: the text reached the evaluator already expanded, so
+	// a quote in it is a character of a result. `let 'x = 1"0"'` and
+	// `x='1"0"'; (( y = x ))` are the shape, and bash refuses both.
+	arithTextArrived arithTextOrigin = false
+	// arithTextWritten: the text is what a script wrote between `(( ))`,
+	// `$(( ))` or a C-style `for` header's semicolons.
+	arithTextWritten arithTextOrigin = true
+)
+
+// shownArithText is the expanded expression as this dialect quotes it back.
+//
+// The marks come off either way, since they are this implementation's
+// bookkeeping; the question is whether the bytes they stood in front of are
+// written with a backslash. See Diagnostics.ArithValueShownEscaped.
+func (r *Runner) shownArithText(text string) string {
+	if strings.IndexByte(text, syntax.ArithValueMark) < 0 {
+		return text
+	}
+	if r.diag().ArithValueShownEscaped {
+		return syntax.EscapeArithValue(text)
+	}
+	return syntax.UnmarkArithValue(text)
+}
+
+// shownArithFailure is unmarkArithFailure for the same reading: the error's
+// extent and token are slices of the marked text the parser was handed, so
+// they are shown the way the expression beside them is.
+func (r *Runner) shownArithFailure(err error) error {
+	se, ok := err.(*syntax.Error)
+	if !ok {
+		return err
+	}
+	out := *se
+	out.Expr = r.shownArithText(out.Expr)
+	out.Token = r.shownArithText(out.Token)
+	out.Msg = r.shownArithText(out.Msg)
+	return &out
 }
 
 // unmarkArithFailure is a parse failure worded about the text a script wrote
@@ -3232,8 +3283,22 @@ func (r *Runner) arithPrecedenceOptionInCharge() bool { return r.arithPrecedence
 //
 // It is the same scan a here-document body gets, and for the same reason: in
 // both, a quote is an ordinary character and only the expansions matter.
-func (r *Runner) expandArithText(text string) string {
+func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
+	// The double quotes a script wrote come out as the text is joined, which
+	// is a step later than it reads: the quotation is a quoting context while
+	// the expansions in it are performed and is gone from the result. Both
+	// halves are measured — `$(( 1"0" + $i ))` is 11 in bash 5.3.20 with
+	// `i=1`, and `(( m["'$kq'"] = 42 ))` stores under `'q'` there, the
+	// double quotation having decided that the apostrophes stop nothing.
+	// The parse-time reader runs the same removal over an expression with
+	// nothing to expand; without this one an expression that had to be
+	// expanded first never had it run, and `(( "assoc[$key]++" ))` was
+	// refused as an operand where bash increments the element (#4255).
+	dequote := origin == arithTextWritten &&
+		r.dialect().ArithDoubleQuote == syntax.ArithDoubleQuoteRemoved
 	if !strings.ContainsAny(text, "$`") {
+		// Nothing to expand, so the parse-time reader has already run the
+		// removal over this text and there is no second round to run.
 		return text
 	}
 	// The bytes a value puts *inside brackets the source wrote* are marked,
@@ -3279,30 +3344,65 @@ func (r *Runner) expandArithText(text string) string {
 			// either — and the state carries across the spans, because the
 			// quotation a span opens can hold the next expansion. The
 			// parser draws the same boundary with the same type.
+			//
+			// The extents are taken from what this span *writes* rather
+			// than from where the byte stood, since a removed quote shifts
+			// everything after it.
+			var b strings.Builder
+			b.Grow(len(part))
 			for i := 0; i < len(part); i++ {
 				was := scan.Quote()
-				switch b := part[i]; {
-				case quoted && scan.Content(b):
+				switch c := part[i]; {
+				case quoted && (was != 0 || scan.Depth > 0) && scan.Content(c):
+					// Inside a subscript the source opened, or inside a
+					// quotation that opened in one. The flag says a
+					// quotation *inside* a subscript holds its brackets,
+					// and a quotation the script wrote before any bracket
+					// holds nothing: measured 2026-09-22 on bash 5.3.20
+					// with `declare -A m; k='a]b'; m[$k]=1`, the refusal
+					// `(( 'm[$k]' ))` earns names `'m[a\]b]'` — the
+					// expansion escaped, so the apostrophe did not stop
+					// the `m[` from opening a subscript. Reading it as one
+					// left the expansion unmarked and the same refusal
+					// named `'m[a]b]'`, which says the key ended where it
+					// did not (#4255). See syntax.Dialect.ArithSubscriptQuoting.
 					if was == 0 && scan.Quote() == '\'' {
-						quoteOpen = at + i
+						quoteOpen = at + b.Len()
 					}
-				case b == '[':
+				case c == '[':
 					scan.Depth++
 					if scan.Depth == 1 {
-						open, runs = at+i+1, nil
+						open, runs = at+b.Len()+1, nil
 					}
-				case b == ']':
+				case c == ']':
 					scan.Depth--
 					if scan.Depth < 0 {
 						balanced = false
 					}
 					if scan.Depth == 0 && open >= 0 {
-						subs = append(subs, sourceSubscript{open, at + i, runs})
+						subs = append(subs, sourceSubscript{open, at + b.Len(), runs})
 						open, runs = -1, nil
 					}
 				}
+				if dequote && part[i] == '"' && scan.Depth == 0 {
+					// Dropped only now that the scan has read it, so the
+					// quotation still holds the brackets it was written
+					// around.
+					//
+					// Outside a subscript and nowhere else. A quotation
+					// *inside* one is removed by the reading that subscript
+					// gets — as a word's quoting where the brackets hold a
+					// key, which is what keeps an apostrophe inside it a
+					// character rather than a quotation: measured
+					// 2026-09-20, `declare -A m; kq=q; (( m["'$kq'"] = 42
+					// ))` stores under `'q'` in bash 5.3.20. Taking the
+					// byte out here left `'q'` behind for the key's own
+					// removal to strip, and the element landed under `q`.
+					continue
+				}
+				b.WriteByte(part[i])
 			}
-			return part
+			return b.String()
 		}
 		if scan.Depth <= 0 {
 			// Outside any bracket the source wrote, so a bracket in here is
@@ -3498,7 +3598,7 @@ func (r *Runner) arithSubscriptRead(marked string, reading subscriptReading) str
 	}
 	text := syntax.UnmarkArithValue(marked)
 	if reading == subscriptAsExpression {
-		return r.expandArithText(text)
+		return r.expandArithText(text, arithTextArrived)
 	}
 	return r.arithSubscriptKeyText(text)
 }

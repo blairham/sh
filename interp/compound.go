@@ -601,7 +601,7 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string, at syntax.Pos)
 	// substitution in it is placed from the header's line rather than from
 	// the text's own first. See Runner.inArithCommandText (#3810).
 	putBackLine := r.inArithCommandText(at)
-	resolved, expanded, perr := r.arithTreeOver(tree, text)
+	resolved, expanded, perr := r.arithTreeOver(tree, text, arithTextWritten)
 	putBackLine()
 	if r.failedHeading() {
 		// The expansion inside the part failed. Its diagnostic is written and

@@ -357,6 +357,30 @@ var shoptSwitches = map[string]shoptSwitch{
 		get: (*interp.Runner).ExecFailureLeavesTheShellRunning,
 		set: (*interp.Runner).SetExecFailureLeavesTheShellRunning,
 	},
+	// SIGHUP to the jobs this shell still has when it ends, for an
+	// interactive login shell. Off with nothing said, and **both** conditions
+	// are required — measured 2026-09-23 on bash 5.3.15 with a backgrounded
+	// subshell holding a `HUP` trap:
+	//
+	//	-l -i, on      the EXIT trap's line, then the job's
+	//	-l -i, off     the EXIT trap alone
+	//	-i not login   the EXIT trap alone
+	//	-l ./s.sh      the EXIT trap alone
+	//
+	// The last two are the rows that pin the conditions, and they had to be
+	// run without a terminal to mean anything: `script -qec 'bash -l'` gives
+	// the shell a pty and so makes it interactive by inference, which read as
+	// "interactive is not required" until `$-` was asked and said otherwise.
+	// See interp.Runner.SendsHangupToJobsAtExit.
+	//
+	// It sat in shoptStates refusing the write, and the refusal was the kind a
+	// person notices later: the option is set in an rc file so that a session's
+	// background work does not outlive the session, and a refused shell left
+	// every job of every login session running (#4149).
+	"huponexit": {
+		get: (*interp.Runner).SendsHangupToJobsAtExit,
+		set: (*interp.Runner).SetSendsHangupToJobsAtExit,
+	},
 	// A `cd` operand that named no directory is looked up as a *variable*
 	// holding one — the last resort, after the relative lookup and after
 	// CDPATH, both of which win. Measured 2026-09-23 on bash 5.3.15, each row
@@ -831,6 +855,18 @@ var shoptRecorded = map[string]bool{
 	"progcomp_alias": false,
 	// And the third ground, alone: see the comment above for the four shapes.
 	"complete_fullquote": true,
+	// The first ground once more, and the plainest instance of it: the option
+	// decides what a **mail check** reports, and this shell has no mail check.
+	// Nothing reads MAIL, MAILPATH or MAILCHECK anywhere under interp or repl,
+	// so there is no file whose access time could be noticed and no prompt
+	// cycle that would notice it. bash's message — `The mail in … has been
+	// read` — has nothing here to be said about.
+	//
+	// Its own entry rather than folded in with force_fignore and hostcomplete
+	// because it is not a completer's: the shape of the ground is the same —
+	// an option over a facility this shell does not have — and the facility is
+	// different, which is worth being able to read off the table.
+	"mailwarn": false,
 }
 
 // shoptStateStore is where a moved name this dialect keeps for itself is
@@ -955,8 +991,6 @@ var shoptStates = map[string]bool{
 	"cmdhist":              true,
 	"gnu_errfmt":           false,
 	"histreedit":           false,
-	"huponexit":            false,
-	"mailwarn":             false,
 }
 
 const shoptUsage = "shopt: usage: shopt [-pqsu] [-o] [optname ...]"

@@ -378,6 +378,40 @@ func (r *Runner) BareCdOperandCanNameAVariable() bool { return r.cdOperandCanNam
 // capability — `shopt -s cdable_vars` is the only name the panel has for it.
 func (r *Runner) SetBareCdOperandCanNameAVariable(on bool) { r.cdOperandCanNameAVariable = on }
 
+// SendsHangupToJobsAtExit reports whether this shell sends SIGHUP to the jobs
+// it still has when it ends.
+//
+// Off with nothing said. One shell in the panel has it and calls it
+// `shopt -s huponexit`.
+//
+// Measured 2026-09-23 on bash 5.3.15, a backgrounded subshell holding a `HUP`
+// trap and the shell holding an `EXIT` trap, so the order is read off which
+// line arrived first:
+//
+//	-l -i, option on    EXIT_TRAP then CHILD_HUP
+//	-l -i, option off   EXIT_TRAP alone — nothing is signaled
+//	-i, not login, on   EXIT_TRAP alone
+//	-l ./s.sh, on       EXIT_TRAP alone
+//	-l -c '…', on       EXIT_TRAP alone
+//
+// So **both** conditions are required: interactive and login. The last two
+// rows are the ones that say so, and they had to be run without a terminal to
+// mean anything — `script -qec 'bash -l'` gives the shell a pty, which makes
+// it interactive by inference, and under it a login shell with no `-i` signals
+// too. That row read as "interactive is not required" until `$-` was asked
+// directly and answered `IS_INTERACTIVE`.
+//
+// The EXIT trap runs first, which is why this is read after it rather than
+// before.
+//
+// Not an axis, for the reason KeepsLastPipelineElement is not: one shell in
+// the panel has the option at all (#4149).
+func (r *Runner) SendsHangupToJobsAtExit() bool { return r.hangUpJobsAtExit }
+
+// SetSendsHangupToJobsAtExit moves it, for a dialect naming the capability —
+// `shopt -s huponexit` is the only name the panel has for it.
+func (r *Runner) SetSendsHangupToJobsAtExit(on bool) { r.hangUpJobsAtExit = on }
+
 // ErrExitEntersACommandSubstitution reports whether the shell a `$(…)` body
 // runs in holds `set -e` — `shopt inherit_errexit` under its bash name.
 //

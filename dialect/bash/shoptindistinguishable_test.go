@@ -120,3 +120,22 @@ echo ok
 		t.Errorf("out %q status %d, want the three lines to say nothing", out, st)
 	}
 }
+
+// TestTheHuponexitNameIsListedAndMoves: the option is a capability now, not a
+// state — see interp.Runner.SendsHangupToJobsAtExit for the four measured rows
+// — and `mailwarn` is recorded beside it on the first ground, an option over a
+// facility this shell does not have at all.
+func TestTheHuponexitNameIsListedAndMoves(t *testing.T) {
+	for _, name := range []string{"huponexit", "mailwarn"} {
+		t.Run(name, func(t *testing.T) {
+			out, st := answersRun(t, "shopt "+name+"\n"+
+				"shopt -s "+name+"; echo \"s=$?\"\nshopt "+name+"\n"+
+				"shopt -u "+name+"; echo \"u=$?\"\nshopt "+name)
+			pad := name + strings.Repeat(" ", 20-len(name))
+			want := pad + "\toff\ns=0\n" + pad + "\ton\nu=0\n" + pad + "\toff\n"
+			if out != want || st != 1 {
+				t.Errorf("status %d, output %q; want status 1 and %q", st, out, want)
+			}
+		})
+	}
+}

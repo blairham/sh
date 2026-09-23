@@ -84,12 +84,13 @@ func TestARecordedShoptNameRemembersAndPromisesNothing(t *testing.T) {
 //
 // `complete_fullquote` was the example here until #4149 moved it — the reading
 // was right and could not take `shopt -u`, which shopt1.sub asks of every name
-// bash lists. `mailwarn` is the example now: a behavior this shell genuinely
-// does not have, in a table that grants the state it holds and refuses the
-// other out loud.
+// bash lists — and `mailwarn` after it, until that one was recorded as an
+// option over a facility this shell has none of. `gnu_errfmt` is the example
+// now, and should outlast them: it is a **decision** rather than work, so it
+// stays in this table until somebody makes it.
 func TestTheStateNamesStillRefuseAMoveTheyCannotHonour(t *testing.T) {
-	out, st := runBash(t, t.TempDir(), "shopt -s mailwarn")
-	if !strings.Contains(out, "shopt: mailwarn: not implemented") || st != 1 {
+	out, st := runBash(t, t.TempDir(), "shopt -s gnu_errfmt")
+	if !strings.Contains(out, "shopt: gnu_errfmt: not implemented") || st != 1 {
 		t.Errorf("out %q status %d, want the refusal at 1", out, st)
 	}
 }

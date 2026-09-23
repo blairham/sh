@@ -1475,11 +1475,24 @@ two are one question about where a body's lines are counted from.
 
 ### What is measured here and not held
 
-bash's body counter is not the physical line, and four of its rules are
-recorded rather than implemented. Each was measured 2026-09-23 in the pinned
-image; all four leave one line out of place and none of them is reachable
-without a line *map* for a body, where this shell carries a single offset.
+Inside a body, bash's number is **its parser's line counter** rather than a
+function of the body's text, and the counter does not advance the way the text
+reads. Six families of that were measured 2026-09-23 in the pinned image and
+none of them is implemented: each needs a line *map* for a body, where this
+shell carries a single offset, and two of them pull in opposite directions so
+there is no constant to choose.
 
+- A body that starts a command **on the opener's line** numbers everything
+  below it one lower than the anchor rule does: `echo "[${ :;⏎echo
+  "L=$LINENO"⏎}]"` from line two answers 2 there and 3 here, and a third body
+  line answers 3 against 4. Six shapes, in both spellings and in an assignment
+  as well as an argument.
+- But a **compound command** in a body goes the other way, by the grammar it
+  is: the command inside a one-line `while`, `until`, `if` or `case` is one
+  *higher* than the same command written bare, and inside a one-line `for` it
+  is two higher. A `{ …; }` group is neither. So numbering the body from its
+  second line — which the previous item wants — moves five of these shapes
+  wrong for six it puts right.
 - A **blank line between two body commands** counts for nothing:
   `echo x "[$(⏎nosuchcmd⏎⏎echo "L=$LINENO"⏎)]"` answers 3 there and 4 here.
   Neither does a comment line between them.
@@ -1487,11 +1500,16 @@ without a line *map* for a body, where this shell carries a single offset.
   it, as though its delimiter line were read twice: one here-document in front
   of the command is +1, two are +2, and the size of the body does not matter.
 - A **nested substitution's newlines** cost nothing for what follows it in the
-  same body, which is the mirror image of the first rule.
+  same body, which is the mirror image of the blank-line rule.
 - A command inside a body whose own **first word spans lines** does move down
   with it, so `CommandIsLocatedWhereItsFirstWordEnds` is the file's rule and
   not the body's — except where the newlines are a nested substitution's, in
   which case it is not.
+
+The four shapes #4239 tabulates are all of the first two kinds and are not
+held: a `for` loop in a body is the one `comsub2.tests` reaches, and it wants
+one line more than the anchor rule gives. Reaching it means modeling the
+counter, not choosing an offset.
 
 ### Where a backquoted body's refusal is placed
 

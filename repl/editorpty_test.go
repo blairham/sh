@@ -41,6 +41,10 @@ type session struct {
 	errs   *syncBuffer
 	done   chan error
 	prompt int
+	// ended says the shell's goroutine has been waited for, so the cleanup
+	// registered by newSessionWith has nothing left to do. Written and read on
+	// the test's own goroutine, which is the only one that ends a session.
+	ended bool
 }
 
 func newSession(t *testing.T) *session { return newSessionWith(t, nil) }
@@ -72,7 +76,45 @@ func newSessionWith(t *testing.T, configure func(*Shell)) *session {
 		done: make(chan error, 1),
 	}
 	go func() { _, err := s.Run(t.Context()); se.done <- err }()
+	// The shell goroutine has to be finished with the terminal before the
+	// terminal is closed, and most of these tests end without saying so: the
+	// last thing they assert is a command's output, and the shell is drawing
+	// the next prompt when the test body returns.
+	//
+	// Registered *after* openTerminal, which is what makes the order right —
+	// cleanups run last-registered-first, so this one stops the shell and the
+	// one that closes the pty runs after it. Without it the close raced the
+	// shell taking the terminal into raw mode for the next line: a read of the
+	// same `*os.File` the cleanup was closing, reported on the Linux leg of
+	// PR #4317 as a data race between `internal/tty.setMode` and
+	// `os.(*File).Close` (#4325).
+	t.Cleanup(se.stop)
 	return se
+}
+
+// stop ends the shell and waits for its goroutine, and does nothing where a
+// test has already done that for itself.
+//
+// Closing the *control* end is what ends it: the shell's reads of its own end
+// then fail, which is the same end of input a terminal going away gives it.
+// Sending `^D` would not do — a session may be sitting on a half-typed line,
+// where the byte is a delete rather than an end of input.
+//
+// The wait is the point of the whole thing, and it is bounded: a shell that
+// does not come back is a defect and the timeout says so, where a cleanup that
+// blocked would leave the package's timeout to report it as something else
+// entirely.
+func (s *session) stop() {
+	if s.ended {
+		return
+	}
+	s.ended = true
+	_ = s.control.Close()
+	select {
+	case <-s.done:
+	case <-time.After(20 * time.Second):
+		s.t.Error("the shell did not stop when its terminal was closed")
+	}
 }
 
 // typeLine waits for the next prompt and types one line at it, a byte at a
@@ -149,12 +191,42 @@ func (s *session) end() {
 	}
 	select {
 	case err := <-s.done:
+		// Waited for here, so the cleanup that waits for it has nothing left
+		// to do. See session.stop.
+		s.ended = true
 		if err != nil {
 			s.t.Fatal(err)
 		}
 	case <-time.After(20 * time.Second):
 		s.t.Fatal("the shell did not end on ^D")
 	}
+}
+
+// A session stops when its terminal's far end closes, which is what the
+// cleanup every session registers relies on.
+//
+// The race this is written against was between the *shell* taking the terminal
+// into raw mode for the next line and the *test's* cleanup closing that same
+// `*os.File` — reported on the Linux leg of PR #4317, green on a re-run, which
+// is how a real intermittent hides. Nothing in the shipped path was wrong: the
+// fixture was closing a terminal a live shell still held (#4325).
+//
+// This asserts the half that can be asserted without a race detector and
+// without loading the machine: that the stop returns at all. A shell left
+// drawing a prompt has to come back when the far end goes away, or every one
+// of these tests would pay a twenty-second timeout on the way out.
+func TestASessionStopsWhenItsTerminalCloses(t *testing.T) {
+	s := newSession(t)
+	s.typeLine("echo hi\r")
+	waitFor(t, s.ran, "hi\n", "the command's output")
+	// Mid-prompt, which is where the tests that never say `end()` leave it.
+	s.stop()
+	if !s.ended {
+		t.Error("the session is not marked ended, so the cleanup would wait for it twice")
+	}
+	// And a second stop is a no-op rather than a second wait on a channel
+	// nothing will write to again.
+	s.stop()
 }
 
 func TestEditingThroughATerminal(t *testing.T) {

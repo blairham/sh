@@ -67,6 +67,53 @@
 // accepted a static read of a file is a number about a binary, which is the
 // same kind of fact as its exit status.
 //
+// # Working a row down without reading the file
+//
+// The report says how many lines differ and nothing about which, which is the
+// rule above and is not negotiable. So a row is worked by **replaying the
+// invocations**, and the shape of the diff says whether that will help: a row
+// whose differing lines are *inserts* — the reference printed them and we
+// printed nothing, with no diagnostic of ours anywhere in the region — is a
+// construct that ran there and did not run here, and that is findable without
+// opening anything.
+//
+// The instrument is a wrapper standing in for `$THIS_SH`, which a suite file
+// uses whenever it starts a shell of its own. It counts its own invocations,
+// keeps each one's standard input in a file, feeds the real shell from that
+// file, and records the status and the *number* of output lines:
+//
+//	i=$(cat "$D/n" 2>/dev/null || echo 0); i=$((i+1)); echo "$i" > "$D/n"
+//	cat > "$D/in.$i"
+//	"$REAL" "$@" < "$D/in.$i" > "$D/out.$i" 2>&1
+//	echo "$i status=$? lines=$(wc -l < "$D/out.$i")" >> "$D/stats"
+//	cat "$D/out.$i"
+//
+// Run that under both shells and the per-invocation numbers line up beside
+// each other. `history.tests` starts twenty inner shells; four of them
+// differed, two by exiting 2 where the reference exited 0, and the wrapper
+// named them in one run (#4177).
+//
+// **Nothing read, and that is structural rather than careful.** The counts are
+// counts. The saved stdin is never opened — it is *replayed*, to both shells,
+// which is exactly what the harness does with the file itself, and the pair of
+// outputs is compared by a program. Snapshotting the history file each
+// invocation starts from is the same move: it can be diffed between the two
+// runs, and a byte-identical one rules out everything upstream of the session
+// in a single comparison.
+//
+// What that buys is a defect the size of a probe. The session that closed
+// #4177's last eighteen lines was twenty bytes of input and a history file of
+// eight lines, both replayable at will, and the mechanism — a `C-o` this
+// editor ignored — fell out of the first replay. Sessions are numbered per
+// run, so once the two runs diverge the numbering does too: match them by the
+// *content* of the saved stdin rather than by index, or the comparison starts
+// reading one session against another.
+//
+// The technique is for rows shaped like that one. A row whose lines are
+// *replaces* is a disagreement about what to print, which the report's own
+// figures already point at; a row with a diagnostic of ours in the region has
+// already said where to look.
+//
 // # Never the expected-output files
 //
 // The suites ship their own `.right` files and this never opens one. Partly

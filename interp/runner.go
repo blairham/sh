@@ -7533,7 +7533,8 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// again: `basename --bad` complains as `basename` in every shell in the
 	// panel and complained as `/usr/bin/basename` here.
 	cmd.Args[0] = argv[0]
-	ownGroup := (r.bg != nil && r.monitor) || (r.bg == nil && r.WaitForCommand != nil)
+	ownGroup := (r.bg != nil && r.monitor) ||
+		(r.bg == nil && r.monitor && r.Terminal && r.WaitForCommand != nil)
 	if ownGroup {
 		// A process group of its own, which is what makes signaling and
 		// terminal ownership answerable at all — for a foreground command as
@@ -7550,11 +7551,33 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// terminal to and stop; promising that with the monitor off promises
 		// something the option says is not happening.
 		//
-		// The foreground half is unchanged and deliberately so: it is not a
-		// promise about job control but the only way a shell that is watching
-		// a command can stop or interrupt it, and it is asked of
-		// WaitForCommand — which is the front end saying there is something
-		// able to notice.
+		// A **foreground** command needs the monitor *and* a terminal, which
+		// is one condition more than the job above and is measured rather than
+		// symmetrical. A group only serves a foreground command by being the
+		// terminal's foreground group; with no terminal there is nothing to
+		// hand it to, and the group is then a standing the command should not
+		// be in — a signal aimed at the shell's group reaches the shell and
+		// not the command it is waiting on, so a child of a script survives a
+		// stop that would have ended it anywhere else (#4250). A background
+		// job's group is bookkeeping the shell can do either way, and the
+		// panel lets it.
+		//
+		// Measured 2026-09-23, `ps -o pid,pgid` in the shell and in a child,
+		// with the shell's own group as the reference:
+		//
+		//	                        no terminal   terminal, set -m   a prompt
+		//	bash 5.3.20             the shell's   its own            its own
+		//	ksh93u+                 the shell's   the shell's        its own
+		//	zsh 5.9.2               the shell's   the shell's        its own
+		//
+		// with `set -m` making no difference to the first column in any of
+		// them — bash grants the option there and puts `m` in `$-`, and still
+		// leaves the child in its own group. The middle column is a
+		// disagreement this shell answers bash's way in every dialect, which
+		// is a deliberate divergence for ksh and zsh rather than an oversight:
+		// it needs a shell that is not interactive, holds a terminal, and has
+		// asked for job control in so many words. docs/spec/semantics.md
+		// records it.
 		setProcessGroup(cmd)
 	}
 	if pgid, ok := r.anchoredGroup(); ok {
@@ -7735,7 +7758,13 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	// runs, so ^C and ^Z reach it rather than this shell. Taken back
 	// afterwards however it ended — a shell that left the terminal with a
 	// stopped job would have no way to read the next line.
-	if r.Foreground != nil {
+	//
+	// Only where the command **leads** a group, which is what ownGroup says.
+	// Handing the terminal to a process that is not a group leader is asking
+	// the kernel for a group that does not exist; and where the command is in
+	// this shell's group there is nothing to hand over, because the shell's
+	// group is already the foreground one.
+	if ownGroup && r.Foreground != nil {
 		if err := r.Foreground(pid); err != nil {
 			// Not fatal: a shell with no controlling terminal — a script, a
 			// pipeline — has no foreground group to set, and the command

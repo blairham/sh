@@ -107,6 +107,16 @@ func TestAFileSubstitutionsBodyNeverTakesTheTerminal(t *testing.T) {
 		func(d *syntax.Dialect) { d.ProcessSubstitutionToFile = true },
 		func(r *Runner) {
 			r.WaitForCommand = waitForTestCommand
+			// A terminal and the monitor, which is what makes this assertion
+			// able to fail at all. A foreground command is given a process
+			// group of its own — and with it the terminal — only where both
+			// are true (#4250), so without them nothing would be handed the
+			// terminal whatever the body did, and a body that took it would
+			// pass this test.
+			r.Terminal = true
+			if code := r.SetOptionLetters("m", true); code != 0 {
+				t.Fatalf("set -m: status %d", code)
+			}
 			r.Foreground = func(pgid int) error {
 				mu.Lock()
 				defer mu.Unlock()

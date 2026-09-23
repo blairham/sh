@@ -3655,7 +3655,8 @@ func Diagnostics() interp.Diagnostics {
 		// `echo "$(` on line 2 with the command under it reports `$LINENO`
 		// as 2 where zsh, ksh93 and dash all report 3, and three blank lines
 		// between them still report 2. Measured 2026-09-17 (#3362).
-		SubstitutionBodyStartsAtItsOpenersLine: true,
+		CommandIsLocatedWhereItsFirstWordEnds:                 true,
+		SubstitutionBodyIsNumberedFromWhereTheShellWasReading: true,
 		// And a *backquoted* body's refusal is placed at the failure's own
 		// file line plus the newlines inside the backquotes, where the
 		// substitution stands in the command's first token: `` v=`echo hi⏎for`

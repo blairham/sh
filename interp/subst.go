@@ -74,7 +74,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// this is the second read of the same text. See
 	// Runner.readLineSubstitutions for which and for why the first read does
 	// not stand in for this one.
-	f, base, ok := r.readSubstBody(span)
+	f, base, _, ok := r.readSubstBody(span)
 	if !ok {
 		return ""
 	}
@@ -112,7 +112,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 				return r.readFileSubst(ctx, rd, span)
 			}
 		}
-		return r.currentShellSubst(ctx, f, span)
+		return r.currentShellSubst(ctx, f, base, span)
 	}
 
 	// `$(<file)` is the file, with nothing run. Asked after the parse because
@@ -161,6 +161,9 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// dialect that counts them. See Runner.tracePrefixDepth.
 	sub.indirection = r.indirection + 1
 	sub.lineBase = base
+	// The body is not the shell's own input, which one line counter asks
+	// about — see Runner.commandLine.
+	sub.inSubstBody = true
 	if span.Backquoted {
 		// The older spelling's body is the text its own refusals quote, in
 		// the dialect that quotes one: “ v=`echo $(for)` “ echoes `echo
@@ -234,9 +237,14 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 // 5.3.15 writes `printed` on its own line and then `[val]`. Splitting them
 // into two functions would put the line offset, the control-flow break and
 // the diagnostic in two places, where a fix to one is a fix to neither.
-func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syntax.Span) string {
+func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, base int, span syntax.Span) string {
 	var out bytes.Buffer
 	savedOut, savedBase := r.Stdout, r.lineBase
+	// Same fact the subshell form gets on its clone, and saved because this
+	// spelling runs on the runner it was written in — see Runner.commandLine.
+	savedInBody := r.inSubstBody
+	r.inSubstBody = true
+	defer func() { r.inSubstBody = savedInBody }()
 	// The body is a command list of its own, and the fields that say what
 	// *this* command's assignments did are the running command's rather than
 	// the shell's. Saved across the body for that reason: an assignment
@@ -300,11 +308,16 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, span syn
 		sc := r.pushScope(false)
 		closeScope = func() { r.popScope(sc) }
 	}
-	// The body was parsed on its own, so its lines count from one; the
-	// script it was written in did not. Same offset the subshell form
-	// carries, and put back afterwards because this runner goes on being
-	// used.
-	r.lineBase = savedBase + int(span.Pos.Line) - 1
+	// The body was parsed on its own, so its lines count from one; the script
+	// it was written in did not. **The offset readSubstBody worked out**, which
+	// is the one the subshell form is given and the one the refusal in there was
+	// placed by — this line used to compute a second copy of it from the span
+	// alone, so the dialect's own numbering reached the `$( )` spelling and not
+	// this one. That is the hazard readSubstBody's own note names: two copies of
+	// one rule, and the body's runner placing a command where the refusal would
+	// not have. Put back afterwards because this runner goes on being used
+	// (#4155, #4239).
+	r.lineBase = base
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			r.Stdout, r.lineBase = savedOut, savedBase
@@ -681,6 +694,94 @@ func (r *Runner) substFailureLocatedByNameAlone(failure error) func() {
 	return func() { r.locatedByNameAlone = false }
 }
 
+// substRunBase is the offset a substitution's body is *run* at, which is the
+// offset its text sits at in every dialect but one.
+//
+// bash numbers a body's commands from the line the construct's **closing**
+// delimiter is on: the body's first command is that line, and the lines below
+// it in the body count up from there. Measured 2026-09-23 against bash 5.3.15
+// in the pinned debian:sid-slim and bash 5.3.20 on macOS, which agree — a
+// script file, `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdin from /dev/null,
+// `echo one` on line one and the substitution written from line two:
+//
+//	body                                   physical  closer  bash  zsh
+//	`$(⏎echo "L=$LINENO"⏎)`                       3       4     4    3
+//	`$(⏎⏎echo "L=$LINENO"⏎)`                      4       5     5    4
+//	`$(⏎⏎⏎echo "L=$LINENO"⏎)`                     5       6     6    5
+//	`$(⏎echo x⏎echo "L=$LINENO"⏎)`                4       5     6    4
+//	`$(⏎echo "L=$LINENO"⏎⏎⏎)`                     3       6     6    3
+//	`$(⏎# c⏎echo "L=$LINENO"⏎)`                   4       5     5    4
+//	`$(echo "L=$LINENO"⏎)`                        2       3     3    2
+//	`$(⏎echo "L=$LINENO")`                        3       3     3    3
+//	`${⏎echo "L=$LINENO"⏎}`                       3       4     4    —
+//
+// Row four is what says the anchor is the *first command* rather than every
+// command: the second command of that body is one below the closer, not on
+// it. Row six is what says it is the first command and not the first line —
+// a comment before it takes the closer's line and the command is below it,
+// which is why this counts to the tree's first statement rather than counting
+// newlines. Rows seven and eight are the controls: with the command and the
+// closer on one line every column agrees, so nothing here is a constant
+// offset.
+//
+// **The earlier reading of this was measured wrong and recorded as the
+// opener's line** (#4155). Five shapes, all of them with the body's first
+// command directly under the opener, where the opener's line and "one below
+// the physical line" coincide — and the third row of that table, the one
+// written down as the control that ruled out a constant offset, is row three
+// here and answers 6 rather than 2 in both binaries. It is not a libc split
+// and not a version split; it was simply not what either shell does. See
+// docs/spec/oracle.md on grading against the reference the instrument grades
+// against.
+//
+// The refusal is *not* this number — a body that will not parse is reported
+// at the line its text is on in every column, bash included, because the
+// refusal comes out of the scan that has not reached the closer yet. That is
+// why readSubstBody carries two offsets.
+//
+// A body with no commands in it has nothing to anchor, so the count of
+// newlines it opens with stands in: there is no first statement to ask, and
+// the only positions left in it are its own refusals.
+func (r *Runner) substRunBase(span syntax.Span, src string, f *syntax.File, textBase int) int {
+	if !r.diag().SubstitutionBodyIsNumberedFromWhereTheShellWasReading {
+		return textBase
+	}
+	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
+		// The older spelling is numbered from the top of its own body in two
+		// columns, and textBase already carries that — see
+		// Diagnostics.BackquotedSubstitutionRestartsLines.
+		return textBase
+	}
+	// The line the command that holds this substitution reports itself at,
+	// which is where the shell's reader had got to — Runner.commandLine is the
+	// whole of why that is the closer's line for `v=$( … )` and the command's
+	// own line for `cmd "$( … )"`.
+	anchor := r.line - r.lineOrigin
+	if anchor <= 0 {
+		return textBase
+	}
+	// Which line of the body that number belongs to, and the two spellings
+	// differ: the newer one skips the newlines between the opener and the
+	// first command, so the first command *is* the anchor however many were
+	// written, while the older one counts them, so the anchor is the line the
+	// backquote is on and the body's first line is one below it. Measured
+	// 2026-09-23 over nine backquoted shapes — `` v=`echo "L=$LINENO"` `` on
+	// line 2 answers 2, and the same body with the backquote ending the line
+	// answers 5 with the closer on line 4.
+	if span.Backquoted {
+		return anchor - 1
+	}
+	// A body with no commands has nothing to anchor, so the newlines it opens
+	// with stand in — the only positions left in it are its own refusals. A
+	// comment in front of the first command takes no line of its own either,
+	// which falls out of counting to the tree's first statement.
+	first := leadingNewlines(src) + 1
+	if f != nil && len(f.Stmts) > 0 {
+		first = int(f.Stmts[0].Pos().Line)
+	}
+	return anchor - first
+}
+
 // leadingNewlines counts the newlines a substitution's body opens with, which
 // is how far one dialect's numbering of it is out from the file's.
 //
@@ -770,7 +871,7 @@ func (r *Runner) substSource(span syntax.Span) string {
 // at the same place or the split becomes a second diagnostic rather than a
 // second moment. See Runner.readLineSubstitutions and
 // syntax.Dialect.SubstitutionBodyRead (#2857).
-func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
+func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) {
 	// The body's own text, and any here-document bodies read for it from the
 	// lines after the enclosing command — see substSource, which is span.Value
 	// in every dialect but the two that read a body that way.
@@ -815,32 +916,25 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 		// syntax.Dialect.HeredocLastLineIsADelimiterPrefix.
 		p.InsideProgramParentheses()
 	}
-	// Where the body sits in the script, so that what it reports is reported
-	// where a reader can find it. The span's own line is the body's first,
-	// because a span starts at its opening delimiter — and it accumulates,
-	// so a substitution inside a substitution is still placed in the file
-	// rather than in whichever body most recently began. One dialect numbers
-	// the older spelling from the top of the body instead, which is
+	// Where the body's *text* sits in the script, so that what is refused in
+	// it is refused where a reader can find it. The span's own line is the
+	// body's first, because a span starts at its opening delimiter — and it
+	// accumulates, so a substitution inside a substitution is still placed in
+	// the file rather than in whichever body most recently began. One dialect
+	// numbers the older spelling from the top of the body instead, which is
 	// Diagnostics.BackquotedSubstitutionRestartsLines.
-	//
-	// **Read once and used twice**, by the refusal below and by the runner
-	// that runs what parsed. Two copies of this rule is how the refusal came
-	// to place a body its own runner would have placed correctly.
-	base := r.spanLineBase(span)
+	textBase := r.spanLineBase(span)
 	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
-		base = 0
-	}
-	if !span.Backquoted && r.diag().SubstitutionBodyStartsAtItsOpenersLine {
-		// The newlines between the opener and the first command of the body
-		// count for nothing in one dialect, so the first command is on the
-		// opener's line however many of them were written. Taken off the
-		// offset rather than off the text, which would move every position
-		// the body's own refusals and traces are written from. See
-		// Diagnostics.SubstitutionBodyStartsAtItsOpenersLine for the five
-		// rows and for the control that says this is the opener's question.
-		base -= leadingNewlines(src)
+		textBase = 0
 	}
 	f := p.Parse()
+	// And where its *run* counts from, which is a second question with a
+	// second answer in one dialect — see substRunBase, and
+	// Diagnostics.SubstitutionBodyIsNumberedFromWhereTheShellWasReading for the shapes.
+	// Two numbers rather than one because the refusal below wants the text's
+	// and the runner that runs what parsed wants the run's; a single base is
+	// how the two came to be one wrong answer for both.
+	base := r.substRunBase(span, src, f, textBase)
 	if err := p.Err(); err != nil {
 		// A substitution re-parses, so the syntax-error status is the
 		// dialect's here too — not only in whatever first read the script.
@@ -882,7 +976,7 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 		// The refusal's own base, which is the body's where the body was
 		// read at expansion time and has lines of its own. See
 		// Runner.expansionBodyLine for why this is not Runner.lineBase.
-		failureBase := base
+		failureBase := textBase
 		if !span.Backquoted && r.expansionBodyLine > 0 {
 			failureBase += r.expansionBodyLine - 1
 		}
@@ -922,7 +1016,7 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 			// is a failed *expansion* rather than a failed script. The
 			// status is left alone for the same reason: the command that
 			// holds the word is about to run and report its own.
-			return nil, 0, false
+			return nil, 0, 0, false
 		}
 		// **How far the abandonment reaches**, which is a second question and
 		// the one #3274 was: a subshell contains it in ksh93 and does not in
@@ -961,9 +1055,9 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, bool) {
 		// annotation is the whole fix; Runner.GiveUpTheLine already catches
 		// an error and already lets a request through.
 		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonSubstParse, false
-		return nil, 0, false
+		return nil, 0, 0, false
 	}
-	return f, base, true
+	return f, base, textBase, true
 }
 
 // readSubstitutionsUpTo parses the bodies of the substitutions a dialect reads
@@ -1030,7 +1124,7 @@ func (r *Runner) readSubstitutionsUpTo(f *syntax.File, from int, limit int32) in
 // is still placed in the file rather than in whichever body most recently
 // began.
 func (r *Runner) readNestedSubstitutions(span syntax.Span) bool {
-	body, base, ok := r.readSubstBody(span)
+	body, _, textBase, ok := r.readSubstBody(span)
 	if !ok {
 		return false
 	}
@@ -1038,7 +1132,7 @@ func (r *Runner) readNestedSubstitutions(span syntax.Span) bool {
 		return true
 	}
 	outer := r.lineBase
-	r.lineBase = base
+	r.lineBase = textBase
 	defer func() { r.lineBase = outer }()
 	for _, inner := range body.Substitutions {
 		if !r.readNestedSubstitutions(inner) {

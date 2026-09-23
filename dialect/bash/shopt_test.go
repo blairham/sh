@@ -88,10 +88,11 @@ func TestShoptRefusals(t *testing.T) {
 		{`shopt -z`, "shopt: usage: shopt [-pqsu] [-o] [optname ...]", 2},
 		// A name this shell recognizes and cannot move: refused out loud,
 		// never accepted quietly. `sourcepath` was the example here until
-		// #3058 gave it the switch it names and `histappend` was the example
-		// after it until #4149 did the same, so the example is now one that
-		// is still only a name.
-		{`shopt -s cdable_vars`, "shopt: cdable_vars: not implemented", 1},
+		// #3058 gave it the switch it names, `histappend` was the example
+		// after it, and `cdable_vars` after that — each replaced when the
+		// behavior it names was built. The example is always one that is
+		// still only a name, and #4149 is working through the rest.
+		{`shopt -s mailwarn`, "shopt: mailwarn: not implemented", 1},
 	} {
 		out, st := runBash(t, t.TempDir(), tc.src)
 		if st != tc.status || !strings.Contains(out, tc.said) {

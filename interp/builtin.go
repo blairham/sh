@@ -4989,6 +4989,31 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 			return 2
 		}
 	}
+	// The last resort before the failure, for the shell that has it: an
+	// operand that named no directory is looked up as a *variable* holding
+	// one. After the relative lookup and after CDPATH, both of which win —
+	// measured, and see Runner.BareCdOperandCanNameAVariable for the table.
+	//
+	// The announcement is the value **as written** rather than the directory
+	// arrived at, which is where it differs from CDPATH's one block up:
+	// `d=target; cd d` prints `target` where CDPATH's winner prints the
+	// joined path. And `named` is deliberately left alone, so a value that is
+	// not a directory is still reported against the operand the script wrote.
+	//
+	// Recorded rather than printed, and printed after the move like every
+	// other announcement here: measured, a value that is not a directory
+	// prints nothing at all and only the failure is heard. Printing at the
+	// substitution wrote the value in front of `cd: d: Not a directory`,
+	// which is a line bash does not write.
+	namedByAVariable, viaAVariable := "", false
+	if !announced && r.cdOperandCanNameAVariable && !filepath.IsAbs(dir) &&
+		!strings.Contains(dir, "/") && !dash {
+		if !r.enterableFromHere(old, dir) {
+			if value, ok := r.getVar(dir); ok {
+				namedByAVariable, viaAVariable, dir = value, true, value
+			}
+		}
+	}
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(old, dir)
 	}
@@ -5065,6 +5090,11 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	if announced {
 		r.printf("%s\n", dir)
 	}
+	if viaAVariable {
+		// The value as written, and written even when it is empty: measured,
+		// `d=; cd d` prints a blank line, moves nowhere and answers 0.
+		r.printf("%s\n", namedByAVariable)
+	}
 	if dash && r.ask(r.sem().CdDashPrintsTheDirectory, "`cd -` printing where it went") {
 		// Asked only for `cd -`, which is the only form any of them prints.
 		r.printf("%s\n", dir)
@@ -5110,6 +5140,21 @@ type cdFlags struct {
 // a dot, returning the joined path of the first entry holding a directory of
 // that name and the entry that held it. All four shells search; who prints
 // afterwards is the axis at the call.
+// enterableFromHere reports whether an operand names a directory this shell
+// could move into, resolved against the directory it is in now.
+//
+// Its own helper rather than the check below, because it is asked *before*
+// the move is attempted and must not speak: a miss here is not a failure, it
+// is the question `cd`'s last resort is asked. See
+// Runner.BareCdOperandCanNameAVariable.
+func (r *Runner) enterableFromHere(from, operand string) bool {
+	at := operand
+	if !filepath.IsAbs(at) {
+		at = filepath.Join(from, at)
+	}
+	return r.enterable(at) == nil
+}
+
 func (r *Runner) searchCdpath(operand string) (found, via string, searched bool) {
 	if strings.HasPrefix(operand, "./") || strings.HasPrefix(operand, "../") {
 		// A dot component names a place rather than starting a search, in

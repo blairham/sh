@@ -357,6 +357,29 @@ var shoptSwitches = map[string]shoptSwitch{
 		get: (*interp.Runner).ExecFailureLeavesTheShellRunning,
 		set: (*interp.Runner).SetExecFailureLeavesTheShellRunning,
 	},
+	// A `cd` operand that named no directory is looked up as a *variable*
+	// holding one — the last resort, after the relative lookup and after
+	// CDPATH, both of which win. Measured 2026-09-23 on bash 5.3.15, each row
+	// in a fresh directory:
+	//
+	//	d=$PWD/target; cd d    moves, printing `$PWD/target`
+	//	d=target;      cd d    moves, printing `target`
+	//	a real `d` exists      the directory wins, nothing printed
+	//	d=$PWD/afile;  cd d    `cd: d: Not a directory` — the *operand*
+	//
+	// See interp.Runner.BareCdOperandCanNameAVariable for the whole table and
+	// for the two details an implementation gets wrong: the announcement is
+	// the value as written rather than where it arrived, and the failure
+	// still names the operand.
+	//
+	// It sat in shoptStates refusing the write, and the refusal was the
+	// quiet kind: a script that sets this has written `cd d` meaning the
+	// variable, and a shell that refused the option read the word as a
+	// directory name and said it was not there (#4149).
+	"cdable_vars": {
+		get: (*interp.Runner).BareCdOperandCanNameAVariable,
+		set: (*interp.Runner).SetBareCdOperandCanNameAVariable,
+	},
 	// The fourth name here that moves a semantics axis, and the one whose
 	// axis holds a *name* rather than an answer:
 	// interp.Semantics.PromptCommentsNeedTheOption is this option's own
@@ -828,7 +851,6 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 // that misleads rather than the one that is heard (#4262).
 var shoptStates = map[string]bool{
 	"bash_source_fullpath": false,
-	"cdable_vars":          false,
 	"cmdhist":              true,
 	"complete_fullquote":   true,
 	"extquote":             true,

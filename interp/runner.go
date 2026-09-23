@@ -2998,6 +2998,11 @@ type Runner struct {
 	// nothing said; one dialect names it, as `shopt -s execfail`. See
 	// ExecFailureLeavesTheShellRunning in sessionswitches.go.
 	execFailureIsSurvivable bool
+	// cdOperandCanNameAVariable lets a `cd` operand that named no directory
+	// be looked up as a variable holding one. Off with nothing said; one
+	// dialect names it, as `shopt -s cdable_vars`. See
+	// BareCdOperandCanNameAVariable in sessionswitches.go.
+	cdOperandCanNameAVariable bool
 	// optionLetterNames are the `set` option letters this dialect spells its
 	// own way, mapped to the names in its namespace. Nil where every letter
 	// the shell has is one the panel shares. Installed through

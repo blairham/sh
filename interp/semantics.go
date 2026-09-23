@@ -14976,9 +14976,11 @@ type Semantics struct {
 	// database's answer in bash, the name having left the environment, and
 	// `HOME=/h; HOME=/z /usr/bin/true; echo ~` is `/h` rather than `/z`, so a
 	// command's own assignment prefix is not what the copy is taken from.
-	// This package carries no password database — see Runner.UserHomeDir —
-	// so a `~` whose cached home is absent is left as written, which is what
-	// a run with no `HOME` at all already does.
+	// That row is the one route to a `~` with no home behind it while the
+	// variable is still there to read, and what the word becomes then is a
+	// question of its own: see TildeWithNoHome, which is where this line
+	// used to say "left as written" and was reporting one column's answer as
+	// though it were the panel's.
 	//
 	// `~+`, `~-`, `~user` and a bare `cd` are outside it: measured the same
 	// day, `~+` and `~-` still read `PWD` and `OLDPWD`, `~root` still reads
@@ -14991,6 +14993,18 @@ type Semantics struct {
 	// accident would have `HOME=/x; cd ~` going to the old home for as long
 	// as a script runs nothing but builtins.
 	TildeReadsACachedHome Answer
+
+	// TildeWithNoHome is what a written `~` becomes when there is no home to
+	// answer it from — `HOME` unset, or, on the column above, a cached copy
+	// that is absent. See TildeWithNoHomePolicy, which carries the panel and
+	// the reason ksh93's answer is measured and not modeled.
+	//
+	// Read rather than asked. The question is put to every written tilde, so
+	// a refusal would be the substrate refusing `~/bin`; the zero value is
+	// the standard's reading — a prefix replaced by the value of `HOME`, and
+	// nothing to replace it with when there is no value — which is also
+	// dash's and BusyBox ash's answer.
+	TildeWithNoHome TildeWithNoHomePolicy
 
 	// TildePrefixStopsAtAQuoteOrAnExpansion leaves a `~` as written where the
 	// tilde prefix — the run from the tilde to the first unquoted `/`, or to
@@ -25811,6 +25825,11 @@ func PosixSemantics() Semantics {
 		// copy of it anywhere in the description, and six of the seven
 		// columns read the variable. bash 5.3 is the one that overrides it.
 		TildeReadsACachedHome: No,
+		// And with no `HOME` at all there is nothing for the prefix to be
+		// replaced by, so the word is what it was written as. The standard's
+		// reading and dash's; the two columns that read a password entry or
+		// an empty string override. See TildeWithNoHomePolicy.
+		TildeWithNoHome: TildeWithNoHomeStaysWritten,
 		// And a tilde prefix that is not plain text throughout stops the
 		// expansion: XCU 2.6.1 hands the prefix to a login name only "if none
 		// of the characters in the tilde-prefix are quoted", which is the
@@ -26119,6 +26138,12 @@ func CoreSemantics() Semantics {
 		// among them. The seventh says so itself; see
 		// Semantics.TildeReadsACachedHome and interp/cachedhome.go.
 		TildeReadsACachedHome: No,
+		// And a `~` with no home at all is the word as written, which is
+		// what this package has always done and what dash does. Answered
+		// here for the reason above it — the question is put to every
+		// written tilde — and overridden by the two columns that answer a
+		// missing home with something. See TildeWithNoHomePolicy.
+		TildeWithNoHome: TildeWithNoHomeStaysWritten,
 		// And a `~` whose prefix carries a quote or an expansion is the text
 		// it was written as. Six of the seven columns, the standard's own
 		// words for the quoting half, and answered here for the reason above

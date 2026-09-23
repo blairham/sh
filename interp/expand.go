@@ -1310,7 +1310,7 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 			continue
 		}
 		if !read {
-			home, ok = r.tildeHome()
+			home, ok = r.homeForAWrittenTilde()
 			read = true
 		}
 		if !ok {

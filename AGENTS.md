@@ -1342,6 +1342,16 @@ to completion at status 0**. No parser change moves such a file into the read
 column, so ranking it beside a real gap sends somebody to close a gap nobody
 can close.
 
+**The image's locale set is part of the measurement, not part of the machine.**
+A file here changes locale and then asks about multibyte matching, and a bare
+container carries only C, POSIX and C.utf8 — so the *reference* answers
+`setlocale: LC_ALL: cannot change locale` and every line after it in that file
+diverges from a shell that took the name. Seven of `glob.tests`' sixteen
+differing lines were that, measured 2026-09-23, and none of them is work
+anybody can do. The job installs `locales-all`; without it a runner and a
+laptop count the same tree differently, which is #4106's argument one apt
+package over.
+
 **The suite's C helpers are built, or the whole thing scores zero for reasons
 that have nothing to do with us.** Without `recho`, `zecho` and `printenv` the
 calls fail under both shells and the two failures match, so the run reads as

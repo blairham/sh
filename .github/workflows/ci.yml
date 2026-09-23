@@ -819,7 +819,38 @@ jobs:
       run: |
         apt-get update -qq
         DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-          make git ca-certificates gcc libc6-dev
+          make git ca-certificates gcc libc6-dev locales-all
+        # `locales-all` is load bearing for the same reason `gcc` is: what the
+        # suite asks for and a bare image does not have. A suite file changes
+        # locale and then asks the shell a question about multibyte matching;
+        # a `debian:sid-slim` carries only C, POSIX and C.utf8, so the
+        # *reference* answers `setlocale: LC_ALL: cannot change locale`, and
+        # every line of that `.sub` after the warning diverges from a shell
+        # that accepted the name. The column was measuring the image, exactly
+        # as it was when the bash in it was 5.2.21 -- #4106's argument, one
+        # apt package over.
+        #
+        # Measured 2026-09-23, this image at the digest below, one file at a
+        # time with `-jobs 1`: `glob.tests` reads **16** differing lines
+        # without it and **9** with it, while `braces.tests` (1) and
+        # `exp.tests` (3) do not move. The seven are not work anybody here can
+        # do -- a locale that is not generated cannot be changed to -- and on
+        # a laptop, where the locales exist, they were never counted, so the
+        # runner and the laptop disagreed about the same tree.
+        #
+        # `locales-all` rather than `locales` plus a generated list, and that
+        # is deliberate twice over. A list has to be maintained against files
+        # this repository may not read, so the next file to name a locale
+        # would silently measure the image again; and a locale *name* written
+        # here would be a fact read out of another project's suite, which is
+        # the line `internal/suite` draws everywhere else. It costs about eight
+        # seconds in a job that runs for five minutes.
+        #
+        # The absolute counts move with this, and that is the point rather
+        # than a cost: #2298 is counted from this column, and a count that
+        # holds the image's locale set in it is not a count about this shell.
+        # The comment above this job says the same thing about the bash
+        # version.
         # The container runs as root and the workspace is the runner's uid, so
         # git calls the checkout a dubious ownership and refuses it. That is
         # not cosmetic: `go build` stamps VCS status, so it stops with

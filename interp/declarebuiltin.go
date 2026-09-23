@@ -1464,6 +1464,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		r.dottedOperandRefusedByALetter = true
 		defer func() { r.dottedOperandRefusedByALetter = outer }()
 	}
+	if f.nameref {
+		// **An empty name references itself**, which is the one bad name the
+		// reference letter words differently. See
+		// Runner.emptyNameIsASelfReference.
+		outer := r.emptyNameIsASelfReference
+		r.emptyNameIsASelfReference = true
+		defer func() { r.emptyNameIsASelfReference = outer }()
+	}
 	args, code, ended := r.builtinNames(complaintName, args, false)
 	if r.unspecified {
 		// An unanswered axis inside the name check is not a refusal to carry

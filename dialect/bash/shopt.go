@@ -705,10 +705,48 @@ var shoptReadOnly = map[string]func(*interp.Runner) bool{
 // 5.3.15's own `shopt -p`, sourced into this shell, wrote seven
 // `not implemented` lines (#1712).
 //
-// Three names rather than the whole table, because recording is a cost and
-// not a free win — a recorded name reports a state nothing keeps. These three
-// earn it on one test: the option decides what a *completer* offers, and
-// there is nothing else a script can ask it.
+// Recording is a cost and not a free win — a recorded name reports a state
+// nothing keeps — so a name earns its place here by a stated test and never by
+// being inconvenient to implement. There are two grounds, and the second was
+// added by #4149 after measuring the reference rather than this shell.
+//
+// **The option decides what a completer offers, and there is nothing else a
+// script can ask it.** The first three below.
+//
+// **The reference does not exhibit the difference either.** Not "this shell
+// cannot tell the two states apart" — bash cannot. Measured 2026-09-23 on bash
+// 5.3.15 in the pinned image, every row run twice on the same binary, once in
+// each state, and compared byte for byte:
+//
+//   - extquote. Its documented effect is that `$'…'` and `$"…"` are decoded
+//     inside a `${…}` enclosed in double quotes. Eight shapes — a default
+//     value, an alternate value, a pattern removal, a substitution, `$"…"`,
+//     a nested expansion, an assignment, and a bare `$'…'` word — are
+//     **identical** with the option set and unset. The name is vestigial in
+//     5.3: the decoding happens either way. So there is no behavior to build,
+//     and a switch here would promise one.
+//   - noexpand_translation. Its effect is on how a *translated* `$"…"` is
+//     quoted, and bash's own manual says an untranslated string is
+//     unaffected. Five shapes — plain, with a parameter, with a command
+//     substitution, in a double-quoted argument, and with `TEXTDOMAIN` and
+//     `TEXTDOMAINDIR` exported — are identical in both states. Reaching the
+//     difference needs a message catalog, which is neither this shell's
+//     business nor the suite's environment.
+//   - globasciiranges. Range expressions compare as if in the C locale, and
+//     the suite runs every file under `LC_ALL=C` and `LANG=C`. There the two
+//     states *are* one state, so no observation — including the suite's own —
+//     could tell an implementation from a no-op. This one differs from the two
+//     above in that bash would show it outside the C locale; what makes it
+//     unfalsifiable is the environment rather than the reference, and that is
+//     recorded here rather than left as a gap to fill because an
+//     implementation nobody can falsify is worse than an absence with a
+//     reason. See #4230 for what measuring against a locale the machine does
+//     not have costs.
+//
+// A name here moves **out** the moment somebody finds an observable difference.
+// That is the whole guarantee: the table claims no behavior, so the only way it
+// can be wrong is by holding a name that does have some, and the reason stated
+// for each is the thing to falsify.
 //
 //   - force_fignore. bash's on state is that a word FIGNORE names is left out
 //     even when it is the only completion. This shell has no FIGNORE, so no
@@ -730,6 +768,11 @@ var shoptRecorded = map[string]bool{
 	"force_fignore": true,
 	"hostcomplete":  true,
 	"progcomp":      true,
+	// The second ground, with bash's own defaults kept so the listing does not
+	// move: see the measurements in the comment above.
+	"extquote":             true,
+	"globasciiranges":      true,
+	"noexpand_translation": false,
 }
 
 // shoptStateStore is where a moved name this dialect keeps for itself is
@@ -853,13 +896,10 @@ var shoptStates = map[string]bool{
 	"bash_source_fullpath": false,
 	"cmdhist":              true,
 	"complete_fullquote":   true,
-	"extquote":             true,
-	"globasciiranges":      true,
 	"gnu_errfmt":           false,
 	"histreedit":           false,
 	"huponexit":            false,
 	"mailwarn":             false,
-	"noexpand_translation": false,
 	"progcomp_alias":       false,
 	"promptvars":           true,
 }

@@ -311,6 +311,16 @@ var Panel = []Suite{
 		// 5.3.15, so the banner these two fields raise is now raised by a
 		// machine that has the wrong bash rather than by the runner every
 		// time.
+		//
+		// The image's **locale set** is the same question one apt package
+		// over, and it was answered the same way. A file here changes locale
+		// and then asks about multibyte matching; a bare image carries only
+		// C, POSIX and C.utf8, so the reference answers `setlocale: LC_ALL:
+		// cannot change locale` and every line after it diverges from a shell
+		// that accepted the name — seven of `glob.tests`' sixteen differing
+		// lines, measured 2026-09-23, and none of them work anybody can do.
+		// The job installs `locales-all`, which is why a runner and a laptop
+		// now count the same tree the same way.
 		Against:       "GNU bash 5.3",
 		AgainstReport: "version 5.3",
 		// Every builtin's help, four ways, plus the topic list. The suite

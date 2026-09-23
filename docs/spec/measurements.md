@@ -705,6 +705,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `glob/a-dot-component-under-a-file` | `[ax/./*]\|st=0~after` | `[ax/./*]\|st=0~after` | `[ax/./*]\|st=0~after` | `[ax/./*]\|st=0~after` | `[ax/./*]\|st=0~after` | **2>** `<script>:1: no matches found: ax/./*` *(status 1)* | `[ax/./*]\|st=0~after` |
 | `glob/a-quoted-dot-component` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` | `[./cx/ax]~[./cx/ax]` |
 | `glob/a-dot-component-and-the-leading-period-rule` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` | `[./ax][./cx]~[./.hid]` |
+| `glob/a-bracket-holding-a-separator` | `[2][[a/b]][[zQ]]` | `[1][[a/b]]` | `[1][[a/b]]` | `[0]` | `[2][[a/b]][[zQ]]` | `[0]` | `[2][[a/b]][[zQ]]` |
+| `glob/a-bracket-holding-a-quoted-separator` | `[2][[a/b]][[zQ]]` | `[0]` | `[0]` | `[0]` | `[2][[a/b]][[zQ]]` | `[0]` | `[2][[a/b]][[zQ]]` |
 | `glob/a-value-backslash-that-ran-out-of-value` | `[./tmp/a/b/c]~[./tmp/a/b/c]~[x\?]~[x\*]` | `[./tmp/a/b/c]~[./tmp/a/b/c]~[x\?]~[x\*]` | `[./tmp/a/b/c]~[./tmp/a/b/c]~[x\?]~[x\*]` | `[./tmp/a/b/c]~[./tmp/a/b/c]~[x\?]~[x\*]` | `[./tmp\/a/b/*]~[./t\mp/a/b/*]~[x\y]~[x\y]` | **2>** `<script>:1: no matches found: ./tmp\/a/b/*` *(status 1)* | `[./tmp/a/b/c]~[./tmp/a/b/c]~[x\?]~[x\*]` |
 | `glob/a-value-backslash-in-front-of-a-separator` | `[./[x]\/e]~[./y/e]~[./y/e]` | `[./x\/e]~[./[y]\/e]~[./y/e]` | `[./x\/e]~[./[y]\/e]~[./y/e]` | `[./[x]\/e]~[./[y]\/e]~[./y/e]` | `[./x\/e]~[./[y]\/e]~[./y\/[e]]` | `[./x\/e]` **2>** `<script>:1: no matches found: ./[y]\/e` *(status 1)* | `[./[x]\/e]~[./y/e]~[./y/e]` |
 | `length/of-a-one-element-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=0` | `one=5~two=5~none=3` | `one=1~two=2~none=0` | **2>** `<shell>: syntax error: unexpected "("` *(status 2)* |
@@ -2439,6 +2441,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `glob/a-dot-component-and-the-leading-period-rule` — two different rules about a period, and this says they stay apart. A `.` *component* names a directory; a leading period in a *name* is hidden from a pattern that does not write one — so `./*` leaves `.hid` out in all seven even though the pattern begins with a period, and `./.h*` finds it
   ```sh
   mkdir -p g/cx && cd g && : > ax && : > .hid && : > cx/ax && printf "[%s]" ./* && echo && printf "[%s]" ./.h* && echo
+  ```
+- `glob/a-bracket-holding-a-separator` — whether a bracket expression written across a `/` is a bracket expression at all, when the pattern is matched against pathnames. No metacharacter matches a separator, so such a bracket can never match — and bash reads that as the bracket not being one, so its `[` is an ordinary character and a word holding nothing else live is not a pattern. zsh and ksh93 read it as a bracket that matches nothing. Nothing observes the difference until something happens to a pattern that matched nothing, which is why each shell's own way of deleting one is turned on in its own spelling and the failures are thrown away: bash 5.3 answers `[1][[a/b]]` — the word kept, so never a pattern — while **bash 3.2 answers `[0]`**, deleting it as zsh does, so the reading is 5.x's rather than this shell's forever; dash, ksh93 and BusyBox ash have neither option and answer `[2][[a/b]][[zQ]]`, an unmatched pattern passing through. The second field is the control — a bracket that is a bracket under every reading, with nothing to match — so a shell that deleted both and one that deleted neither cannot read alike. The axis is BracketHoldingASlashIsStillABracket (#4158)
+  ```sh
+  { shopt -s nullglob; } 2>/dev/null
+  { setopt nullglob; } 2>/dev/null
+  set -- [a/b] [zQ]
+  printf '[%s]' "$#" "$@"
+  echo
+  ```
+- `glob/a-bracket-holding-a-quoted-separator` — the control that bounds the row above to a *live* separator: quoted, the `/` leaves the bracket a bracket in every column, so bash 5.3 deletes this word where it kept the other one and answers `[0]` beside bash 3.2's and zsh's — the one field of the row above where all three agree, which is what says the 5.3-to-3.2 departure is about the live separator and nothing else. The three columns with no option to delete an unmatched pattern answer `[2][[a/b]][[zQ]]` as before, the backslash gone with the rest of the word's quoting. Without this row the axis reads as a rule about the character rather than about its quoting, and an implementation answering it from a field that cannot tell the two apart moves half of a suite file to agreeing and the other half the other way (#4158)
+  ```sh
+  { shopt -s nullglob; } 2>/dev/null
+  { setopt nullglob; } 2>/dev/null
+  set -- [a\/b] [zQ]
+  printf '[%s]' "$#" "$@"
+  echo
   ```
 - `glob/a-value-backslash-that-ran-out-of-value` — a value's end is not the field's end. `bs='\'` holds one backslash, and the three shells that have a value's backslash *quote* what follows it quote the **field's** next character rather than the value's — so the first two fields find `./tmp/a/b/c` in dash, bash in all three builds and BusyBox ash, where ksh93 keeps the backslash as a character of the pattern and misses and zsh refuses the word. The third field is the sharpest and the quietest: a file named `x*` is there, the `?` is quoted by the value's backslash so those columns have no live metacharacter left and never glob the word at all. This shell wrote such a backslash as an ordinary literal — a value's end was where it stopped looking — so the `?` stayed live, two files matched and were handed on at status 0 with no diagnostic anywhere (#4234)
   ```sh

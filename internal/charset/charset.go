@@ -26,14 +26,22 @@
 // multibyte ones: Shift-JIS and Big5, which `ja_JP.SJIS` and `zh_TW.Big5`
 // name and which macOS, FreeBSD and glibc all ship.
 //
-// **Encoding only, and that is a decision rather than an omission.** A
-// charset is a two-way mapping and this package implements one way, because
-// one way is the whole of the question it exists for: an escape names a code
-// point and the shell has to write bytes. Nothing in this tree decodes a
-// multibyte charset — the shell reads its input as UTF-8 or as bytes — and a
-// decoder built now would be a table nobody searches, kept correct by nobody.
-// If a reader ever appears, the generated arrays are the encode direction of
-// the same data and the decode direction can be built beside them.
+// **Encoding, and one question from the other direction.** A charset is a
+// two-way mapping and this package still writes only one way: an escape names
+// a code point and the shell has to write bytes. What it also answers is
+// [Width] — *how many bytes* of a pair are one character — which is not a
+// decoder and is deliberately less than one. Nothing
+// here says what a multibyte character *means*; a shell reading its input as
+// bytes does not need to know, and a table nobody searches is a table nobody
+// keeps correct.
+//
+// Width exists because where a character *ends* is a question the shell cannot
+// avoid. In Big5 the character U+03B1 is `a3 5c`, and `5c` is a backslash: a
+// reader that walks bytes sees an escape in the middle of a letter, eats the
+// byte behind it, and hands back a field that runs into the next word (#4235).
+// So the decision "is this `0x5C` an escape or a trail byte" belongs to
+// whatever knows the charset, which is here — and it is asked by both of the
+// places that read an escape, the lexer and `read`, rather than answered twice.
 //
 // The other multibyte charsets a locale may name — eucJP, GB18030,
 // Big5-HKSCS — are absent, and absent loudly: [Encode] says no for them
@@ -42,7 +50,10 @@
 // shell's table is short of; docs/spec/semantics.md records what those are.
 package charset
 
-import "sort"
+import (
+	"sort"
+	"sync"
+)
 
 // mbTable is one multibyte charset's encode direction: the code points it can
 // write, sorted, and the codes it writes them as, index for index.
@@ -53,6 +64,32 @@ import "sort"
 type mbTable struct {
 	keys []rune
 	vals []uint16
+
+	// codes is vals sorted by the code rather than by the code point, built
+	// on first use, and once is what builds it. It answers the other
+	// direction's one question — is this pair of bytes a character of this
+	// charset — which vals cannot, being ordered for the encoder's search.
+	//
+	// Lazily rather than in the generated file, because the generator would
+	// be writing a second view of data it already wrote; and once rather
+	// than per call, because [Width] is asked of every byte above ASCII in
+	// every word the lexer reads.
+	once  sync.Once
+	codes []uint16
+}
+
+// pairs is the two-byte codes this charset writes, sorted.
+func (t *mbTable) pairs() []uint16 {
+	t.once.Do(func() {
+		t.codes = make([]uint16, 0, len(t.vals))
+		for _, code := range t.vals {
+			if code >= 0x100 {
+				t.codes = append(t.codes, code)
+			}
+		}
+		sort.Slice(t.codes, func(i, j int) bool { return t.codes[i] < t.codes[j] })
+	})
+	return t.codes
 }
 
 // Encode is the byte the named charset writes a code point as.
@@ -108,6 +145,53 @@ func Encode(codeset string, r rune) ([]byte, bool) {
 		}
 	}
 	return nil, false
+}
+
+// Width is how many bytes of the pair b, next are one character of the named
+// charset: 2 where the two spell a character of it, and 1 otherwise.
+//
+// The pair rather than the lead byte alone, and that is the point of the
+// signature. A lead byte is only half of a character: what follows it may be a
+// newline, the end of the input, or a byte the charset does not allow there,
+// and in each of those the lead byte is a byte and the one after it is its own.
+// A caller that asked about the lead alone would consume the newline that ends
+// its line. Pass 0 for next where there is nothing after b, which is not a
+// character in any of these charsets and so answers 1.
+//
+// 1 is also the answer for every charset this package has no table for, for
+// every single-byte charset, and for UTF-8 — deliberately, rather than as a
+// gap. UTF-8's trail bytes are all above 0x7F, so no character of it can hide
+// an ASCII byte and the question this exists for never arises there; a caller
+// walking UTF-8 that wants character boundaries has unicode/utf8.
+//
+// **The pairs are the generated table's own rather than a written-out range.**
+// The ranges are documented — Big5 leads 0x81..0xFE with trails 0x40..0x7E and
+// 0xA1..0xFE, Shift-JIS leads 0x81..0x9F and 0xE0..0xFC — but a range copied in
+// by hand is a second source of truth for data already in the tree, and it is
+// the copy that rots. What the generated arrays hold is every code this charset
+// writes, so a pair is a character exactly when it is one of those codes.
+//
+// It follows that a pair the table is short of answers 1, which is the honest
+// answer rather than a rounding: this package says what its own data says, and
+// a real charset's rows that Unicode's mapping lacks are already recorded as a
+// measured gap. bash reaches the same answer by a different route — its
+// mbrtowc refuses a sequence the locale does not define, and the lead byte
+// stands alone there too.
+func Width(codeset string, b, next byte) int {
+	if b < 0x80 {
+		return 1
+	}
+	table := lookupMultibyte(normalize(codeset))
+	if table == nil {
+		return 1
+	}
+	code := uint16(b)<<8 | uint16(next)
+	pairs := table.pairs()
+	i := sort.Search(len(pairs), func(i int) bool { return pairs[i] >= code })
+	if i < len(pairs) && pairs[i] == code {
+		return 2
+	}
+	return 1
 }
 
 // Known reports whether a table is held for the named charset, which is a

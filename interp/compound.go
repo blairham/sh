@@ -1502,6 +1502,9 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		r.status = 1
 		return nil
 	}
+	// Where the call was made, for the line the shell is back at once it
+	// returns. Read before anything moves into the body.
+	calledAt := r.line
 	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
 	// The list the body is given is a list of its own, so what a `set` in
 	// the body replaces is that one — which is why the mark travels with the
@@ -1762,12 +1765,31 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// that falls off the end fires at the line the **body opened** on. The
 	// first needs nothing here, because the line record is still sitting on
 	// the `return`; the second is this.
-	returnedAt := r.line
 	if r.ctl != controlReturn && fn.Body != nil {
 		r.line = r.lineOf(fn.Body.Pos())
 	}
 	r.runReturnTrap(ctx, frameSerial)
-	r.line = returnedAt
+	// And the shell is back where the call was made, which is a line the
+	// caller's own judging reads: an ERR trap that fires because the *call*
+	// failed is located at the call and not at the body's last command.
+	// Measured 2026-09-23 with `trap 'echo "ERR:$LINENO"' ERR`, `g() { false;
+	// }` on line 2 and `g` on line 3, over a script file:
+	//
+	//	bash 5.3.20, bash 5.3.15 (glibc)   `ERR:3`
+	//	ksh93u+ 2012-08-01                 `ERR:2` and then `ERR:3` — it fires
+	//	                                   inside the body as well, and the
+	//	                                   second firing is the call's
+	//	zsh 5.9.2                          `ERR:0` — that shell numbers a
+	//	                                   command trap's body from the body,
+	//	                                   so nothing here reaches it
+	//
+	// So it is the two columns that number a command trap's body from where it
+	// fired, and both of them put this firing at the call. We left the line on
+	// the body's last command, so bash read 2 for the first and ksh93 read 2
+	// twice. The RETURN trap above keeps the body's line, which is its own
+	// measured answer and is why this is set after it rather than instead of
+	// it (#4173).
+	r.line = calledAt
 	if r.ctl == controlReturn && !exitTrapReturned {
 		// Not a `return` the *trap* wrote. That one belongs to the frame
 		// this call is returning into — see runFunctionExitTrap — so it is

@@ -851,6 +851,104 @@ not, so the difference is a value a script carries forward:
 Not an axis: it is the expression language's rule and every column with the
 operator compiles ERE.
 
+### What a POSIX ERE is, and what the engine would compile
+
+The engine under `=~` is RE2, and it accepts a different language from POSIX
+ERE in **both** directions. Every row below was a silent wrong answer here.
+
+**Measured against the reference the suite is graded in** — bash 5.3.15 in a
+digest-pinned `debian:sid-slim` — and not only against the bash on the
+development machine, because the two C libraries disagree about three of these
+and the first attempt took the wrong one for two of them. `docs/spec/oracle.md`
+calls the trap by name; this is what it looks like.
+
+**Two constructs ERE has and RE2 has not**, both inside a bracket expression:
+
+| probe | reference | before |
+| --- | --- | --- |
+| `[[ a =~ [[.a.]] ]]` — a collating element | matches | **missed** |
+| `[[ a =~ [[=a=]] ]]` — an equivalence class | matches | missed |
+| `[[ x =~ [[.a.]x] ]]` — a member of a larger set | matches | missed |
+| `[[ b =~ [[.a.]-[.c.]] ]]` — an end of a range | matches | missed |
+| `[[ b =~ [^[.a.]] ]]` — negated | matches | missed |
+
+In the C locale every character is a collating element and an equivalence class
+of itself, so both reduce to the character. **A name longer than one character
+is refused**, which is narrower than the reference on one platform and exactly
+right on the other: `[[.space.]]` is a name in the *locale's* table, and the
+graded glibc reference refuses every such name where macOS accepts them. A
+table of locale names is what this shell deliberately does not carry.
+
+**Three readings RE2 has and ERE has not:**
+
+| probe | reference | before |
+| --- | --- | --- |
+| `r='[\Gg]'` | the set `\`, `G`, `g` | RE2 refused `\G` outright |
+| `r='[\n]'` against `n` and against `\` | both match | only the newline |
+| `r='[\d]'` against `d` and `1` | `d` only | `1` only |
+| `r='[a\-z]'` against `b` and `-` | `b` only | `-` only |
+| `r='\d'` against `d` and `7` | `d` only | `7` only |
+
+A backslash **inside** a bracket expression is an ordinary member, and a
+backslash before an ordinary character **outside** one is that character. The
+second was measured a letter at a time over the whole alphabet in both
+libraries: they agree on every letter but six — `b B s S w W`, the GNU word,
+space and boundary extensions — and RE2's readings of those six are glibc's, so
+they are left to the engine. `` \` `` and `\'` are the buffer anchors of the
+same family and are written as RE2's `\A` and `\z`; `\<` and `\>` are not,
+because RE2 has one word boundary and no way to say which side of a word it is
+on.
+
+**Four things the reference refuses and RE2 takes:**
+
+| probe | reference | before |
+| --- | --- | --- |
+| `(?:a)bc`, `(?i)abc` | 2 — a `?` with no operand | 0 |
+| `^*`, `$*`, `a^*`, `^{2}` | 2 — an anchor is not an atom | 0 |
+| `a{x` | 2 — a brace that is not a bound | 0 |
+| `[[:alpha:]-z]`, `[a-b-c]` | 2 — a class or a range as a range's end | 0 |
+
+**And three it takes that RE2 refuses:**
+
+| probe | reference | before |
+| --- | --- | --- |
+| `(a\|)`, `(\|a)`, `a\|` | an empty branch is taken | 2 |
+| `a**`, `a{1}{2}` | a repetition of a repetition | 2 |
+| `a{,2}` | a bound with no lower half | 2 |
+
+The empty branch is the row this got wrong first time: **BSD refuses it and
+glibc does not**, and a rule written from the macOS answer turned six patterns
+the graded column runs into a status of 2. The repetition of a repetition is
+handled by rewriting it into a **non-capturing** group — `(?:a*)*` — which has
+to be non-capturing or every group number behind it would shift, and the record
+a script reads back is numbered. `()` is the control that keeps the empty branch
+from being read as "a group with nothing in it": it is accepted everywhere.
+
+**One split is measured and not resolved.** An **empty** right operand is a
+match at status 0 under glibc and `invalid regular expression: empty
+(sub)expression` at 2 under BSD, both from bash 5.3. `EmptyRegexOperandIsAnError`
+therefore has no single answer for that dialect: the value in the tree is the
+one the oracle panel on this machine recorded, and a reader grading the suite in
+the pinned image will see the other. It is not what any suite row here turns on,
+which is how that was established rather than assumed (#4173).
+
+### A compatibility level takes the quoting rule back
+
+Quoting a `=~` operand became literal in bash 3.2, so at compatibility level 31
+the operand is an expression again. Measured 2026-09-23, `[[ axb =~ "a.b" ]]`:
+
+| level | answer |
+| --- | --- |
+| default, and 32 and above | no match — the quoted `.` is a dot |
+| `BASH_COMPAT=31`, `BASH_COMPAT=3.1` | **matches** |
+| `shopt -s compat31` | matches — the same state by its other name |
+| a value that is not a release, or below the floor | no match |
+
+It reaches every spelling of quoting — `'a.b'`, `"$r"`, a partly quoted
+`"a"'.'b` — and the captures are the expression's: `[[ abc =~ "(b)" ]]` captures
+`b` at level 31. `Runner.regexQuotingIsLiteral` is where the level is read, and
+the axis is asked only where the level has not already decided it.
+
 ## An operand ending in `(#q…)` is matched against the filesystem
 
 Nothing inside `[[ … ]]` is split or globbed, which is why `[[ -z $u ]]`

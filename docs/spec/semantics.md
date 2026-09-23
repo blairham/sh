@@ -17941,6 +17941,24 @@ BusyBox ash refuse the DEBUG condition and number every body from its own
 first line, so neither can be asked; the reason is recorded in their
 presets (#4193).
 
+**Where a failing *call* is judged.** The firing that judges a function call is
+located at the **call** and not at the body's last command, which is a fact about
+where the shell is once a call returns rather than about the trap. Measured
+2026-09-23 with `trap 'echo "ERR:$LINENO"' ERR`, `g() { false; }` on line 2 and
+`g` on line 3, over a script file:
+
+| shell | answer |
+| --- | --- |
+| bash 5.3.20, and 5.3.15 in the pinned image | `ERR:3` |
+| ksh93u+ 2012-08-01 | `ERR:2` and then `ERR:3` — it fires inside the body too, and the second firing is the call's |
+| zsh 5.9.2 | `ERR:0` — that shell numbers such a body from the body, so nothing here reaches it |
+
+So both columns that number a command trap's body from where it fired put this
+firing at the call, and it is the core's bookkeeping rather than an axis: the
+line is put back at a call's return, where it used to be left on the body's last
+command. bash read the body's line and ksh93 read it twice. The RETURN trap keeps
+the body's line, which is its own measured answer (#4173).
+
 **`ExitTrapIsFunctionLocal`** — bash no · dash no · ksh93 no · zsh yes
 
 Fires an EXIT trap set inside a function when that function returns,

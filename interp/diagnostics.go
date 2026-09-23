@@ -6282,6 +6282,17 @@ type Diagnostics struct {
 	// exactly the marked one.
 	ArithValueShownEscaped bool
 
+	// ArrayAttributeNotRemovable is what a declaration says when it will not
+	// take the array attribute off a name — see
+	// Semantics.ArrayAttributeRemoval for which shells refuse and when.
+	//
+	// One verb, the name, and one column declines to use it: bash writes
+	// `m: cannot destroy array variables in this way` and ksh93 writes
+	// `cannot unset attribute C or A or a`, naming the letter set rather than
+	// the variable. The builtin's own name goes in front of both through the
+	// machinery every declaration refusal already uses.
+	ArrayAttributeNotRemovable string
+
 	// FdVariableWithoutADescriptor is `exec {name}>&-` when the name holds
 	// no descriptor number. One verb: the variable's name as written,
 	// braces stripped.

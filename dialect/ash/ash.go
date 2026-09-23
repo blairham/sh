@@ -250,6 +250,11 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// unanswered ArrayAttributeRemoval: BusyBox spells neither `-a` nor `-A`,
+	// so no declaration of its can write the `+` form the axis is about — and
+	// it has no declaration builtin to write it on. Measured 2026-09-23,
+	// `typeset +A a` is `typeset: not found` at 127, which is the same absence
+	// every other array axis here records.
 	// unanswered AssignmentPrefixMakesAFreshCell: as in dash — no arrays and
 	// no `typeset`, so there is no binding here a prefix could overlay that a
 	// fresh cell would not match exactly, and the axis is asked only where a

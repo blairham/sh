@@ -1973,6 +1973,79 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	return status
 }
 
+// arrayLetterRemoved reports whether this declaration wrote `+a` or `+A`, which
+// is the only shape ArrayAttributeRemoval is about.
+//
+// Read off the letter and its sign rather than off f.remove, because a `+`
+// belongs to the letter it was written against: `typeset +r -A m` removes the
+// readonly attribute and declares a table, and f.remove alone cannot say which
+// of the two the plus was for.
+func (f declareFlags) arrayLetterRemoved() bool {
+	for _, c := range []rune{'a', 'A'} {
+		if plus, written := f.lastSign(c); written && plus {
+			return true
+		}
+	}
+	return false
+}
+
+// arrayAttributeRemoved does what this dialect does with a `+a` or `+A`, and
+// reports whether the declaration survives it.
+//
+// Three readings and no default — see Semantics.ArrayAttributeRemoval for the
+// rows. Two of them refuse and they refuse over different things: bash's is
+// about the *name being an array* and ksh93's about the letter, so a name
+// holding a scalar parts them, and ksh93's gives up the script where bash's
+// costs the operand. The third takes the attribute off and leaves an empty
+// scalar behind, which is a store and not a refusal.
+//
+// The axis is asked as soon as the letter is written and not only where the
+// name is an array, because that is where the two refusing columns part; a
+// dialect that spells neither letter never reaches it at all.
+func (r *Runner) arrayAttributeRemoved(name string, f declareFlags) bool {
+	if !f.arrayLetterRemoved() {
+		return true
+	}
+	p := r.arrayAttributeRemoval()
+	if p == ArrayAttributeRemovalEndsTheScript {
+		r.fatal("%s\n", Wording(r.diag().ArrayAttributeNotRemovable,
+			"%[2]s: %[1]s: cannot destroy array variables in this way", name, r.inBuiltin))
+		return false
+	}
+	if !r.arrayDeclared(name) && !r.assocDeclared(name) {
+		// Nothing to take off. Both remaining readings are silent here, which
+		// is measured: `typeset +A s` over a scalar and over a name that does
+		// not exist is status 0 in bash and zsh alike.
+		return true
+	}
+	switch p {
+	case ArrayAttributeRemovalRefusedForAnArray:
+		return r.refuseArrayAttributeRemoval(name)
+	case ArrayAttributeRemovalEmptiesTheName:
+		// The attribute comes off and the name is an empty scalar — not the
+		// other kind of container and not the elements as a string. Measured:
+		// `typeset -A a; a[x]=1; typeset +A a; typeset -p a` lists
+		// `typeset a=''` in zsh 5.9.2.
+		delete(r.Arrays, name)
+		delete(r.AssocArrays, name)
+		r.setVar(name, "")
+	}
+	return true
+}
+
+// refuseArrayAttributeRemoval writes the sentence and costs the operand and the
+// builtin's status, which is the shape every other declaration refusal has.
+//
+// The reading that gives up the script writes the same sentence through
+// Runner.fatal instead; see Semantics.ArrayAttributeRemoval for why the
+// fatality is a value of the policy rather than a field beside it.
+func (r *Runner) refuseArrayAttributeRemoval(name string) bool {
+	r.diagf("%s\n", Wording(r.diag().ArrayAttributeNotRemovable,
+		"%[2]s: %[1]s: cannot destroy array variables in this way", name, r.inBuiltin))
+	r.status, r.assignFailed = 1, true
+	return false
+}
+
 // markDeclaredCompound gives a name the array attribute its declaration named,
 // and it is one function because there are three declaration loops and they
 // disagreed about it.
@@ -2021,6 +2094,9 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 	// check one line below reading the array this would otherwise have taken
 	// away. See localinherit.go.
 	r.dropTheOuterCompound(name, fresh && !r.declarationInherits(f))
+	if !r.arrayAttributeRemoved(name, f) {
+		return false
+	}
 	if f.remove {
 		return true
 	}

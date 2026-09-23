@@ -2459,6 +2459,48 @@ type Semantics struct {
 	// in between (#3416).
 	ArithRecursionBound ArithRecursionBoundPolicy
 
+	// ArrayAttributeRemoval is what `typeset +a` or `typeset +A` does, and the
+	// panel gives it three readings rather than a yes and a no — so a shell
+	// that simply ignored the letter, which this one did, holds an answer no
+	// column was measured giving.
+	//
+	// Measured 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C <shell>
+	// f.sh` over a script file with standard input on the null device, against
+	// bash 5.3.20, ksh93u+ 2012-08-01 and zsh 5.9.2 on macOS arm64. Each row
+	// declares the container, stores one element, writes the `+` letter and
+	// then lists the name:
+	//
+	//	row                     bash 5.3.20            ksh93u+              zsh 5.9.2
+	//	+A over a table         `a: cannot destroy     `cannot unset        status 0, and
+	//	                        array variables in     attribute C or A     `typeset a=''`
+	//	                        this way`, status 1,   or a`, and the
+	//	                        the table intact       script stops
+	//	+a over an array        the same sentence      the same             the same
+	//	+A over an empty table  the same sentence      the same             status 0
+	//	+A over a scalar        status 0, silent       the same refusal     status 0, silent
+	//	+A over an absent name  status 0, silent       the same refusal     status 0, silent
+	//
+	// The last two rows are what part the two refusing columns: bash's refusal
+	// is about the *name being an array* and ksh93's is about the letter, so a
+	// single boolean could not hold both. The sentence each writes is
+	// Diagnostics.ArrayAttributeNotRemovable.
+	//
+	// The fatality is a value here rather than a second field, which is the
+	// shape CompoundKindChangePolicy already has for the same pair of columns:
+	// bash's refusal costs the operand and the status, ksh93's gives up the
+	// script, and no measured column refuses one way and ends the script the
+	// other.
+	//
+	// Wrong in the quiet direction when it is ignored: a script that takes the
+	// attribute off to reuse a name as a scalar keeps a table nothing said it
+	// still had, and a script written against the refusal carries on past a
+	// line it expected to stop at (#4241).
+	//
+	// unpinned dash, ash: neither dialect spells `-a` or `-A` at all, so no
+	// declaration of theirs can write the `+` form and the question cannot be
+	// put to either.
+	ArrayAttributeRemoval ArrayAttributeRemovalPolicy
+
 	// ArithSubscriptNameMustBeSet refuses an unset name written **inside an
 	// array subscript** in arithmetic, where the same name written outside
 	// the brackets is zero.
@@ -29802,4 +29844,51 @@ func (w WaitNextJobReading) String() string {
 		return "WaitNextJobFirstToSucceed"
 	}
 	return "WaitNextJobUnspecified"
+}
+
+// ArrayAttributeRemovalPolicy is what `typeset +a` or `+A` does to a name that
+// is an array — see Semantics.ArrayAttributeRemoval for the three measured
+// columns.
+type ArrayAttributeRemovalPolicy int
+
+const (
+	// ArrayAttributeRemovalUnspecified is no answer, and is refused like any
+	// other.
+	ArrayAttributeRemovalUnspecified ArrayAttributeRemovalPolicy = iota
+	// ArrayAttributeRemovalRefusedForAnArray refuses the line where the name
+	// is an array and takes it in silence otherwise, naming the variable.
+	// bash.
+	ArrayAttributeRemovalRefusedForAnArray
+	// ArrayAttributeRemovalEndsTheScript refuses the letter whatever the name
+	// holds — a scalar and a name that does not exist included — and gives up
+	// the script over it. ksh93, where the refusal names no variable.
+	ArrayAttributeRemovalEndsTheScript
+	// ArrayAttributeRemovalEmptiesTheName takes the attribute off and leaves
+	// the name an empty scalar, at status 0. zsh.
+	ArrayAttributeRemovalEmptiesTheName
+)
+
+func (p ArrayAttributeRemovalPolicy) String() string {
+	switch p {
+	case ArrayAttributeRemovalRefusedForAnArray:
+		return "refused for an array"
+	case ArrayAttributeRemovalEndsTheScript:
+		return "ends the script"
+	case ArrayAttributeRemovalEmptiesTheName:
+		return "empties the name"
+	}
+	return "unspecified"
+}
+
+// arrayAttributeRemoval resolves the axis, and only where a declaration really
+// wrote `+a` or `+A`.
+func (r *Runner) arrayAttributeRemoval() ArrayAttributeRemovalPolicy {
+	p := r.sem().ArrayAttributeRemoval
+	if p == ArrayAttributeRemovalUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("`typeset +a` or `+A` over a name that is an array")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
 }

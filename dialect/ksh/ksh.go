@@ -1264,6 +1264,11 @@ func Semantics() interp.Semantics {
 	// distinct names ending in a number is `recursion too deep`. Measured
 	// 2026-09-18 (#3416).
 	s.ArithRecursionBound = interp.ArithRecursionBoundedByDepth
+	// `typeset +A` and `+a` are refused whatever the name holds — a scalar and
+	// a name that does not exist included — the sentence names the letter set
+	// rather than the variable, and the script is given up over it. See
+	// interp.Semantics.ArrayAttributeRemoval (#4241).
+	s.ArrayAttributeRemoval = interp.ArrayAttributeRemovalEndsTheScript
 	// And an unset name reached that way is a refusal rather than a zero:
 	// `x=abc; $((x+1))` is `abc: parameter not set` at status 1 and the
 	// script stops, with nounset off. A name written in the expression
@@ -3578,6 +3583,12 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	d := interp.Diagnostics{
+		// The sentence for a refused `typeset +A` or `+a` names the letter set
+		// rather than the variable, which is why the verb is left unused:
+		// measured 2026-09-23, `typeset -A a; a[x]=1; typeset +A a` is
+		// `typeset: cannot unset attribute C or A or a` here where bash names
+		// the name. See interp.Semantics.ArrayAttributeRemoval (#4241).
+		ArrayAttributeNotRemovable: "%[2]s: cannot unset attribute C or A or a",
 		// A bare array name refused by `set -u` is named as its first
 		// *element* here: `a=(x y z); unset "a[0]"; set -u; echo "$a"` is
 		// `a[0]: parameter not set` where bash says `a` (#2818).

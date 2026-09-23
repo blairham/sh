@@ -45,10 +45,11 @@ import (
 // either site alone carries the value, and the pair is the change.
 //
 // It is the assignment's value and not every word: whether a colon closes a
-// prefix in an **ordinary** word is a separate question the panel splits four
+// prefix in an **ordinary** word is a separate question the panel splits three
 // ways on — `echo ~:x` is the home in bash and ksh93 and the characters as
-// written in dash, zsh and BusyBox ash, which is what this shell answers.
-// Measured the same day and filed as #4251; it is not this one.
+// written in dash, zsh and BusyBox ash, and bash alone declines it where the
+// word holds a quote. That is Semantics.TildeColonEndsAnOrdinaryWordsPrefix and
+// tildecolonword_test.go, answered in #4251; it is not this one.
 func TestAColonClosesATildePrefixInAnAssignmentsValue(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"a colon straight after the tilde", `foo=~:~; echo "$foo"`, "/h:/h"},

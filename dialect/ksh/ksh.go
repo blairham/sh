@@ -1158,6 +1158,10 @@ func Semantics() interp.Semantics {
 	// at 126. See [interp.PathCandidateReport] for the seven rows (#3249).
 	s.PathCandidateReported = interp.LastSearchedEntry
 	s.TildePlusMinusExpands = interp.Yes
+	// It closes an ordinary word's tilde prefix at a colon as bash does, and
+	// unlike bash it does not care what else the word holds: `echo ~:x"y"` is
+	// the home and a colon here where bash keeps the tilde.
+	s.TildeColonEndsAnOrdinaryWordsPrefix = interp.TildeColonAlwaysEndsAPrefix
 	// This shell has `$_`, and the row that said it did not was measured
 	// through a `;`-list — the one shape where a shell with the parameter
 	// and a shell without it give the same empty answer. `echo one two`

@@ -696,11 +696,11 @@ func (r *Runner) wordTextGlobMarked(w *syntax.Word) string {
 // a colon begins a tilde segment of its own.
 func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) string, keepMarks, colonTildes bool) string {
 	w = r.wordForRun(w)
-	ends := tildeEndsAtASlash
 	if colonTildes {
-		ends = tildeEndsAtASlashOrColon
+		r.expandTildeIn(w, tildeEndsAtASlashOrColon)
+	} else {
+		r.expandTilde(w)
 	}
-	r.expandTildeIn(w, ends)
 	failed := r.expandErr
 	// "Without globbing" has to reach the *nested* expansions too, and it did
 	// not: a `:-` word builds its fields through expandWord, which matches,
@@ -6347,26 +6347,204 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 	s.Value = path
 }
 
+// expandTilde expands the tilde prefix at the head of an ordinary word, whose
+// set of closing bytes is an **axis**: see
+// Semantics.TildeColonEndsAnOrdinaryWordsPrefix, and wordTildeHead, which is
+// where the two readings are compared so the axis is asked only where they part.
 func (r *Runner) expandTilde(w *syntax.Word) {
-	r.expandTildeIn(w, tildeEndsAtASlash)
+	if !tildeOpensTheWord(w) {
+		return
+	}
+	r.wordTildeHead(w.Spans).apply(w.Spans, 0)
 }
 
-// expandTildeIn is expandTilde with the closing bytes named, for the one road
-// that has a second one: an assignment's value, where a colon closes a tilde
-// prefix as surely as a slash does. Unanimous across the panel — `foo=~:x` is
-// the home directory and a colon in all six columns, and this shell left the
-// `~` as written because it looked for a slash and found none (#4156).
+// expandTildeIn is expandTilde with the closing bytes named, for the road that
+// does not ask: an assignment's value, where a colon closes a tilde prefix as
+// surely as a slash does. Unanimous across the panel — `foo=~:x` is the home
+// directory and a colon in all seven columns, and this shell left the `~` as
+// written because it looked for a slash and found none (#4156).
 func (r *Runner) expandTildeIn(w *syntax.Word, ends string) {
+	if !tildeOpensTheWord(w) {
+		return
+	}
+	r.tildeHead(w.Spans, 0, ends).apply(w.Spans, 0)
+}
+
+// tildeOpensTheWord reports whether the word begins with a `~` that is written
+// plainly, which every road asks before any of them reads a prefix.
+func tildeOpensTheWord(w *syntax.Word) bool {
 	if len(w.Spans) == 0 {
+		return false
+	}
+	s := w.Spans[0]
+	return s.Kind == syntax.Literal && s.Quoting == syntax.Unquoted &&
+		strings.HasPrefix(s.Value, "~")
+}
+
+// tildeHead is what expanding a tilde prefix at the head of a word came to:
+// the text it becomes, and how far into the word's spans the prefix reached.
+//
+// The **word's** spans and not the first one's, which is the whole reason this
+// is a value rather than a rewritten string. A prefix runs across a span
+// boundary wherever brace expansion put one there — `~{a,b}` is the two words
+// `[~][a]` and `[~][b]`, and the prefix is `~a`, a user nobody has. Reading
+// only the first span made it the bare `~` and answered the home directory
+// with a letter on the end, where zsh refuses the user and ksh93 keeps the
+// characters (found beside #4200, folded in here because it is this function's
+// bug rather than a second one).
+type tildeHead struct {
+	// dir is what the prefix expanded to, and moved says it expanded at all.
+	dir   string
+	moved bool
+	// span and off are where the prefix ended: the index of the span holding
+	// the byte that closed it, and that byte's offset in the span. With no
+	// closing byte they name the end of the last span the prefix reached.
+	span, off int
+}
+
+// same reports whether two readings of one word's prefix came to the same
+// thing, which is what says an axis between them has nothing to decide.
+func (h tildeHead) same(o tildeHead) bool {
+	return h.moved == o.moved && h.dir == o.dir && h.span == o.span && h.off == o.off
+}
+
+// apply writes the reading back into the word, replacing the text the prefix
+// occupied from start in the first span through span/off.
+//
+// A span the prefix consumed whole is left holding nothing rather than being
+// removed: an unquoted literal with no text reaches no field and no separator,
+// and removing one would move every index anything else in this pass is
+// holding.
+func (h tildeHead) apply(spans []syntax.Span, start int) {
+	if !h.moved {
 		return
 	}
-	s := &w.Spans[0]
-	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
-		!strings.HasPrefix(s.Value, "~") {
+	if h.span == 0 {
+		spans[0].Value = spans[0].Value[:start] + h.dir + spans[0].Value[h.off:]
 		return
 	}
-	text, _ := r.tildeAtHead(s.Value, w.Spans[1:], ends)
-	s.Value = text
+	spans[0].Value = spans[0].Value[:start] + h.dir
+	for i := 1; i < h.span; i++ {
+		spans[i].Value = ""
+	}
+	spans[h.span].Value = spans[h.span].Value[h.off:]
+}
+
+// wordTildeHead reads an ordinary word's leading tilde prefix, asking the axis
+// only where the two sets of closing bytes come to different words.
+//
+// Both readings are run and compared rather than the axis being consulted
+// first, because `~/m:x`, `~chet:x` and every `~/…` anybody writes is the same
+// word under either set — a question whose two answers are the same answer must
+// not be the thing that refuses a script. See
+// Semantics.TildeColonEndsAnOrdinaryWordsPrefix.
+func (r *Runner) wordTildeHead(spans []syntax.Span) tildeHead {
+	slash := r.tildeHead(spans, 0, tildeEndsAtASlash)
+	if !strings.ContainsRune(tildeColonReachable(spans), ':') {
+		// No colon stands in the plain run in front of the first slash, so the
+		// second set has nothing to close on. Equivalent to running it and
+		// comparing, and it keeps the ordinary `~/…` off both the second read
+		// and the axis.
+		return slash
+	}
+	colon := r.tildeHead(spans, 0, tildeEndsAtASlashOrColon)
+	if slash.same(colon) {
+		return slash
+	}
+	switch r.tildeColonReach() {
+	case TildeColonAlwaysEndsAPrefix:
+		return colon
+	case TildeColonEndsAPrefixInAPlainWord:
+		// bash applies it only to a word written plainly the whole way, and a
+		// quote or a backslash anywhere past the tilde turns it off — an
+		// expansion does not. See the axis for the rows.
+		if wordIsUnquotedThroughout(spans) {
+			return colon
+		}
+	}
+	return slash
+}
+
+// tildeColonReachable is the plain text a tilde prefix could reach in front of
+// its first slash, which is where a colon would have to stand to matter.
+func tildeColonReachable(spans []syntax.Span) string {
+	var b strings.Builder
+	for i, s := range spans {
+		v := s.Value
+		if i > 0 && (s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted) {
+			break
+		}
+		if j := strings.IndexByte(v, '/'); j >= 0 {
+			b.WriteString(v[:j])
+			break
+		}
+		b.WriteString(v)
+	}
+	return b.String()
+}
+
+// wordIsUnquotedThroughout reports whether nothing in the word is quoted or
+// escaped. An expansion is not quoting, which is measured: see the axis.
+func wordIsUnquotedThroughout(spans []syntax.Span) bool {
+	for _, s := range spans {
+		if s.Quoting != syntax.Unquoted {
+			return false
+		}
+	}
+	return true
+}
+
+// tildeHead reads the tilde prefix opening at start in the first span, under
+// one set of closing bytes.
+//
+// The prefix is gathered across the word's leading run of plain unquoted
+// literal text, for the reason tildeHead's own comment gives. Where it runs off
+// that run into something that is not plain text the prefix never ended, and
+// Semantics.TildePrefixStopsAtAQuoteOrAnExpansion decides the word.
+func (r *Runner) tildeHead(spans []syntax.Span, start int, ends string) tildeHead {
+	if len(spans) == 0 || start > len(spans[0].Value) ||
+		!strings.HasPrefix(spans[0].Value[start:], "~") {
+		return tildeHead{}
+	}
+	var b strings.Builder
+	span, off, ran := 0, 0, true
+	for i, s := range spans {
+		v := s.Value
+		if i == 0 {
+			v = v[start:]
+		} else if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+			// The prefix never ended: it ran into a quote or an expansion.
+			// `ran` is set here rather than left standing from before the
+			// loop, because a span the prefix crossed plainly has already
+			// cleared it — which is how the first draft of this answered
+			// `~"x"` with the home directory and an `x` on the end.
+			span, off, ran = i, 0, true
+			break
+		}
+		if j := strings.IndexAny(v, ends); j >= 0 {
+			b.WriteString(v[:j])
+			span, off, ran = i, j, false
+			if i == 0 {
+				off += start
+			}
+			break
+		}
+		b.WriteString(v)
+		// The word running out closes the prefix just as a closing byte does.
+		span, off, ran = i, len(s.Value), false
+	}
+	if ran && r.ask(r.sem().TildePrefixStopsAtAQuoteOrAnExpansion,
+		"a tilde prefix carrying a quote or an expansion") {
+		return tildeHead{}
+	}
+	if r.unspecified {
+		return tildeHead{}
+	}
+	dir, _, ok := r.tildeSplit(b.String())
+	if !ok {
+		return tildeHead{}
+	}
+	return tildeHead{dir: dir, moved: true, span: span, off: off}
 }
 
 // tildeEndsAtASlash and tildeEndsAtASlashOrColon are the two sets of bytes
@@ -6381,61 +6559,6 @@ const (
 	tildeEndsAtASlash        = "/"
 	tildeEndsAtASlashOrColon = "/:"
 )
-
-// tildeAtHead expands a `~` standing at the head of text, reporting whether
-// it moved.
-//
-// rest is the spans that follow the one text came from, and ends the bytes
-// that close a tilde prefix here. Both are the prefix question rather than the
-// home question: what decides is where the prefix ends and whether everything
-// up to there is written plainly, and only then is the name looked up.
-//
-// One function for every road — a word, a pattern, an assignment's value, the
-// value of a word merely shaped like one — because the roads have already
-// drifted apart once over exactly this. See tildeSplit for the lookup and
-// Semantics.TildePrefixStopsAtAQuoteOrAnExpansion for the panel.
-func (r *Runner) tildeAtHead(text string, rest []syntax.Span, ends string) (string, bool) {
-	if !strings.HasPrefix(text, "~") || !r.tildePrefixIsPlain(text, rest, ends) {
-		return text, false
-	}
-	seg, tail := text, ""
-	if i := strings.IndexAny(text, ends); i >= 0 {
-		seg, tail = text[:i], text[i:]
-	}
-	dir, _, ok := r.tildeSplit(seg)
-	if !ok {
-		return text, false
-	}
-	return dir + tail, true
-}
-
-// tildePrefixIsPlain reports whether a tilde prefix opening at the head of
-// text is written plainly the whole way, with nothing quoted and no expansion
-// standing inside it.
-//
-// The question is the word's and not the tilde's, which is why it cannot live
-// in tildeSplit: `~\/bar` and `~/bar` are the same string by the time a value
-// holds them, and one is expanded and the other is not.
-func (r *Runner) tildePrefixIsPlain(text string, rest []syntax.Span, ends string) bool {
-	if strings.ContainsAny(text, ends) {
-		// The prefix ended inside plain text, so whatever follows in the word
-		// is past it and cannot reach this.
-		return true
-	}
-	for _, s := range rest {
-		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
-			// Something that is not plain text stands inside the prefix, so
-			// the prefix never ended and the axis decides the word.
-			return !r.ask(r.sem().TildePrefixStopsAtAQuoteOrAnExpansion,
-				"a tilde prefix carrying a quote or an expansion")
-		}
-		if strings.ContainsAny(s.Value, ends) {
-			return true
-		}
-	}
-	// The word ran out first, which closes the prefix just as a slash does.
-	return true
-}
 
 // tildeDirVar resolves `~+` and `~-`, in the dialects that have them.
 func (r *Runner) tildeDirVar(name string) (string, bool) {

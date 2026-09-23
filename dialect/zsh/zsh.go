@@ -1950,6 +1950,11 @@ func Semantics() interp.Semantics {
 	// second copy and the table still holds the first.
 	s.APrefixedPathEmptiesTheCommandHash = interp.No
 	s.TildePlusMinusExpands = interp.Yes
+	// A colon closes nothing in an ordinary word here — `echo ~:x` is the
+	// characters as written, as in dash and BusyBox ash — which is the
+	// standard's reading and is inherited rather than set; it is named here
+	// because this is the column that departs from those two on the
+	// neighboring question above.
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// The parameter exists before anything has put a value in it: `${_+x}`
 	// is non-empty and `set -u` reads it, even though what it holds is the

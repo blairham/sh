@@ -343,6 +343,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/tilde-in-assignment` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 | `expand/tilde-plus-and-minus` | `~+ ~-~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~/tmp` | `~+ ~-~~-` |
 | `expand/tilde-after-a-colon-in-an-assignment` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` |
+| `expand/a-colon-closing-a-tilde-prefix-in-an-ordinary-word` | `[~:x][~:x/y][~:][~:~][~+:x][~chet:x][a~:x][x:~/m][H/m:x]` | `[H:x][H:x/y][H:][H:~][H:x][~chet:x][a~:x][x:~/m][H/m:x]` | `[H:x][H:x/y][H:][H:~][H:x][~chet:x][a~:x][x:~/m][H/m:x]` | `[H:x][H:x/y][H:][H:~][H:x][~chet:x][a~:x][x:~/m][H/m:x]` | `[H:x][H:x/y][H:][H:~][H:x][~chet:x][a~:x][x:~/m][H/m:x]` | `[~:x][~:x/y][~:][~:~][~+:x][~chet:x][a~:x][x:~/m][H/m:x]` | `[~:x][~:x/y][~:][~:~][~+:x][~chet:x][a~:x][x:~/m][H/m:x]` |
+| `expand/a-quote-past-the-colon-and-a-tilde-prefix` | `[~:xy][~:xy][~:xy][~:x][H/m:x]` | `[H:xy][~:xy][~:xy][~:x][H/m:x]` | `[H:xy][~:xy][~:xy][~:x][H/m:x]` | `[H:xy][~:xy][~:xy][~:x][H/m:x]` | `[H:xy][H:xy][H:xy][H:x][H/m:x]` | `[~:xy][~:xy][~:xy][~:x][H/m:x]` | `[~:xy][~:xy][~:xy][~:x][H/m:x]` |
+| `expand/a-tilde-prefix-is-the-words-leading-text` | `[~{a,b}][~x{a,b}]` | `[~a][~b][~xa][~xb]` | `[~a][~b][~xa][~xb]` | `[~a][~b][~xa][~xb]` | `[~a][~b][~xa][~xb]` | **2>** `<shell>:1: no such user or named directory: a` | `[~{a,b}][~x{a,b}]` |
 | `expand/tilde-into-an-expansion-diverges` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:H/x` | `a:~/x` |
 | `expand/tilde-naming-a-named-directory` | `st=2~~nd` **2>** `<shell>: 1: hash: Illegal option -d` | `st=0~~nd` | `st=0~~nd` | `st=0~~nd` | **2>** `alias: -d: bad option(s)` *(status 1)* | `st=0~/tmp` | `st=2~~nd` **2>** `<shell>: hash: line 0: illegal option -d` |
 | `expand/tilde-naming-a-user-with-no-entry` | `~nosuchuser12345~st=0` | `~nosuchuser12345~st=0` | `~nosuchuser12345~st=0` | `~nosuchuser12345~st=0` | `~nosuchuser12345~st=0` | **2>** `<shell>:1: no such user or named directory: nosuchuser12345` *(status 1)* | `~nosuchuser12345~st=0` |
@@ -961,6 +964,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/tilde-after-a-colon-in-an-assignment` — the context adds a tilde after each unquoted colon — PATH=~/bin:~/sbin — and quoting turns it back off; unanimous
   ```sh
   v=a:~/b:~; echo "$v" | sed "s|$HOME|H|g"; w=":~/q"; echo "$w"
+  ```
+- `expand/a-colon-closing-a-tilde-prefix-in-an-ordinary-word` — whether a colon closes a tilde prefix in an **ordinary word**, the way one does inside an assignment's value. bash in all three builds and ksh93 close it — the first five fields are the home and a colon — and dash, zsh and BusyBox ash leave the characters as written. POSIX 2.6.1 names a colon only for an assignment's value, so the three that do not are the standard's reading and the other two are the departure. The `/private` the sed takes out is one machine's symlink and not a shell's answer — without it the `~+` field records macOS rather than the colon. The last four fields are the boundary and are unanimous: a user nobody has expands nowhere, a tilde that does not open the word is ordinary text, one behind a colon opens nothing, and a slash still closes the prefix before the colon is reached. Semantics.TildeColonEndsAnOrdinaryWordsPrefix (#4251)
+  ```sh
+  printf "[%s]" ~:x ~:x/y ~: ~:~ ~+:x ~chet:x a~:x x:~/m ~/m:x | sed "s|/private||g;s|$HOME|H|g;s|$PWD|P|g"
+  ```
+- `expand/a-quote-past-the-colon-and-a-tilde-prefix` — the half that makes the row above three answers rather than two: bash applies the colon reading only where the whole word past the tilde is written **plainly**, and any quote or backslash turns it off, where ksh93 does not care what else the word holds. So the second, third and fourth fields are the home in ksh93 and the characters as written in bash, while the first is the home in both. The fifth is the control that says it is the colon reading and not the quote — there the prefix ended at the slash, and the quote behind it changes nothing in any column
+  ```sh
+  printf "[%s]" ~:xy ~:x"y" ~:x'y' ~:"x" ~/m:"x" | sed "s|$HOME|H|g"
+  ```
+- `expand/a-tilde-prefix-is-the-words-leading-text` — a tilde prefix is the **word's** leading plain text and not the first span of it, which brace expansion is what makes visible: the prefix of `~{a,b}` is `~a`, a user nobody has, rather than a bare `~` with a letter behind it. bash and ksh93 keep the characters and zsh refuses the user outright, where dash and BusyBox ash have no brace expansion and keep the word whole. This shell answered the home directory with an `a` on the end in every column that expands braces, which is one reading of the word too few and was found beside #4200
+  ```sh
+  printf "[%s]" ~{a,b} ~x{a,b} | sed "s|$HOME|H|g"
   ```
 - `expand/tilde-into-an-expansion-diverges` — a tilde whose segment runs into an expansion stays literal in three of the four; zsh alone expands it and then appends the value
   ```sh

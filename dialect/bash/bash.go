@@ -1340,6 +1340,12 @@ func Semantics() interp.Semantics {
 	// in silence.
 	s.AutoCdAnnouncesTheSubstitution = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
+	// And a colon closes a tilde prefix in an ordinary word, not only in an
+	// assignment's value — `echo ~:x` is the home and a colon — but only where
+	// the whole word past the tilde is written plainly: `echo ~:x"y"` keeps
+	// the tilde, and `echo ~/m:"x"` does not, because there the prefix ended
+	// at the slash.
+	s.TildeColonEndsAnOrdinaryWordsPrefix = interp.TildeColonEndsAPrefixInAPlainWord
 	// And a *numbered* tilde reads the directory stack: `~1` is the entry
 	// below the current directory and `~-1` the one above the bottom. The
 	// parameter is this dialect's own view over the prelude's storage — see

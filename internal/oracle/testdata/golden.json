@@ -92753,6 +92753,57 @@
         "TimedOut": false
       }
     },
+    "expand/a-colon-closing-a-tilde-prefix-in-an-ordinary-word": {
+      "ash": {
+        "Stdout": "[~:x][~:x/y][~:][~:~][~+:x][~chet:x][a~:x][x:~/m][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[H:x][H:x/y][H:][H:~][H:x][~chet:x][a~:x][x:~/m][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[H:x][H:x/y][H:][H:~][H:x][~chet:x][a~:x][x:~/m][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[H:x][H:x/y][H:][H:~][H:x][~chet:x][a~:x][x:~/m][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[~:x][~:x/y][~:][~:~][~+:x][~chet:x][a~:x][x:~/m][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[H:x][H:x/y][H:][H:~][H:x][~chet:x][a~:x][x:~/m][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[~:x][~:x/y][~:][~:~][~+:x][~chet:x][a~:x][x:~/m][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "expand/a-here-string-is-not-split": {
       "ash": {
         "Stdout": "",
@@ -92850,6 +92901,108 @@
       "zsh": {
         "Stdout": "[a:b:c]",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/a-quote-past-the-colon-and-a-tilde-prefix": {
+      "ash": {
+        "Stdout": "[~:xy][~:xy][~:xy][~:x][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[H:xy][~:xy][~:xy][~:x][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[H:xy][~:xy][~:xy][~:x][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[H:xy][~:xy][~:xy][~:x][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[~:xy][~:xy][~:xy][~:x][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[H:xy][H:xy][H:xy][H:x][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[~:xy][~:xy][~:xy][~:x][H/m:x]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/a-tilde-prefix-is-the-words-leading-text": {
+      "ash": {
+        "Stdout": "[~{a,b}][~x{a,b}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[~a][~b][~xa][~xb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[~a][~b][~xa][~xb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[~a][~b][~xa][~xb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[~{a,b}][~x{a,b}]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[~a][~b][~xa][~xb]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no such user or named directory: a",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

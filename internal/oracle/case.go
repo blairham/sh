@@ -24664,6 +24664,12 @@ echo "st=$?"`,
 		Why:     "the startup half of the row above, and the one a person actually reaches for -- `BASH_COMPAT=44 make`, a level exported from a parent shell. The environment is not an assignment, so the complaint #4262 put on the store could not be heard here at all and we said nothing. The two arms carry the same sentence at **two different locations**, which is what makes this a case rather than a duplicate: the inherited value is located by the shell's own name with no line, and the assignment on the next arm is located by the *script* at its line, in one run. The columns without the parameter take both as ordinary assignments and the value shows through unchanged (#4267)",
 	},
 	{
+		ID: "printf/the-radix-character-under-a-comma-locale", Category: "printf",
+		Env:     []string{"LC_ALL=", "LC_NUMERIC=de_DE.UTF-8"},
+		Snippet: "printf '%.4f\\n' 1\nprintf '%.2f\\n' 1,5\nprintf '%.2f\\n' 1.5\nprintf '%d\\n' 1,5\necho tail",
+		Why:     "the one datum of `LC_NUMERIC` this shell has data for, and the only case in this corpus that sets a locale with numeric data of its own — `LC_NUMERIC` alone, with the harness's own `LC_ALL=C` emptied rather than replaced, so that the messages stay English and only the numbers move. A `LC_ALL` naming the locale would record whichever translations the recording machine happens to have installed. Four of the five columns write the comma and dash never consults the locale at all; of the four, bash and ksh93 read a number *only* at the comma and refuse `1.5` as not a number, while zsh reads either — and zsh's fourth arm is `5` because an integer conversion's operand goes to its evaluator, where the comma is still the comma operator it has always been. So the row separates three readings and not two, which is why the axis is a policy. The data is the host's own and not a table: on a machine without `de_DE.UTF-8` every column writes the point, which is what the shells do there too (#2675, #4230)",
+	},
+	{
 		ID: "variable/a-module-parameter-a-script-may-not-own", Category: "variables",
 		Script:  true,
 		Snippet: "jobstates=(a b c)\necho \"st=$?\"\necho tail\n",

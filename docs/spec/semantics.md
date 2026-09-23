@@ -9746,10 +9746,13 @@ after, and the one a number's digit groups are parted by. `printf`'s `'`
 flag asks for the second (`Semantics.PrintfGroupingFlag`), and
 `$langinfo[RADIXCHAR]` and `[THOUSEP]` ask for both.
 
-**This shell has the C locale's numeric data and no other**, so `RADIXCHAR`
-is `.`, `THOUSEP` is empty, and a conversion carrying the `'` flag is
-written ungrouped. Every other locale is refused by name at `$langinfo`
-and produces the same ungrouped number at `printf`. Generating a table of
+**The radix character is read from the host's own locale database and the
+separator is not**, which is the split #4230 settled; the paragraphs below
+are the argument that produced it, and the subsection after them is what was
+decided. `THOUSEP` is empty for every locale and a conversion carrying the
+`'` flag is written ungrouped; `$langinfo` still refuses every non-C locale
+by name, because it publishes a whole category and one datum of fifty-five
+does not make one answerable. Generating a table of
 the rest — the shape `widthgen` and `normgen` use for the Unicode data,
 which is the shape #2675 filed this to consider — was measured and
 **declined**. Three findings, each of which would have to be answered
@@ -9816,27 +9819,86 @@ Two of the three refuse a number written with a point, because the point
 is not the radix character there — and the third accepts it and writes a
 comma back. An honest `LC_NUMERIC` is therefore not a lookup at the
 formatter: it is a locale-sensitive number *parser*, per dialect, with an
-axis over whether the C-locale spelling is still accepted. That is a
-larger piece of work than the flag that started it, and it has no caller
-asking for it.
+axis over whether the C-locale spelling is still accepted. That was a
+larger piece of work than the flag that started it and had no caller asking
+for it — until `intl.tests` did, which is #4230 below.
 
-**And nothing in this repository could grade the result.** `internal/oracle`
-pins `LC_ALL=C` for every case so the record does not depend on the
-developer's environment, and under `C` all seven columns agree with what
-this shell already writes. A case that set a locale would record a
-divergence and would also depend on that locale existing on whatever
-machine ran it — and the pinned Alpine image, which is the first table's
-second row, has none to exist. The evidence above is a hand measurement
-for that reason, and it is the reason there is no corpus row.
+**And grading the result needed the corpus to be able to set a locale.**
+`internal/oracle` pins `LC_ALL=C` for every case so the record does not
+depend on the developer's environment, and under `C` all seven columns agree
+with what this shell writes. That was read here as "nothing in this
+repository could grade the result", and it was half wrong: a case can empty
+`LC_ALL` and name `LC_NUMERIC` instead, which moves the numbers and leaves
+the *messages* in English — so the recorded row does not depend on which
+translations the recording machine has. `printf/the-radix-character-under-a-comma-locale`
+is that row. What stays true is that the row depends on the locale existing:
+the pinned Alpine image has none, which is why its column is the C locale's
+answer there and why `dialect/ash` records the axis as unanswered rather
+than copying dash's value.
 
-So the C locale's numeric data is the data. It is written down **once**,
-in `interp/localenumeric.go`, because two callers read it: `printf` drops
-the `'` flag on the strength of the separator being empty, and
-`dialect/zsh`'s `$langinfo` publishes the same two values. Neither keeps a
-copy. `TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty` joins
-the two halves, so teaching this shell a locale that groups fails a test
-that names `printf` rather than quietly writing a number with the flag
-thrown away.
+So the C locale's **separator** is the separator, and it is written down
+once in `interp/localenumeric.go` because two callers read it: `printf`
+drops the `'` flag on the strength of it being empty, and `dialect/zsh`'s
+`$langinfo` publishes it. Neither keeps a copy.
+`TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty` joins the two
+halves, so teaching this shell a locale that groups fails a test that names
+`printf` rather than quietly writing a number with the flag thrown away.
+
+### The radix character, and where its data comes from
+
+Decided in #4230, with `intl.tests` as the caller the paragraphs above said
+did not exist: two of that suite row's remaining differing lines were
+`printf '%.4f' 1` under a locale whose radix is a comma.
+
+**The data is the host's own locale database, not a table.** That follows
+from the first finding above rather than contradicting it: the answer every
+panel shell gives *is* the host C library's, so a table would disagree with
+the reference shell on the very machine it was running beside — on a
+machine with no `de_DE.UTF-8` generated, bash writes the point and a table
+saying otherwise would be wrong there. What is read is the BSD layout,
+which macOS publishes as plain text: `/usr/share/locale/<name>/LC_NUMERIC`,
+three lines holding the radix character, the thousands separator and the
+grouping, of which **only the first is read**. glibc compiles its locales
+into a binary archive and musl has none, so on those hosts there is nothing
+to read and every locale answers with the point — which is the same fallback
+a C library with no data for the named locale takes, and is a **known gap**
+rather than a silent one: a glibc machine where somebody has generated the
+locale has a reference shell writing a comma and this shell writing a point.
+
+**The axis is one policy with three values, not two axes.** Measured
+2026-09-22 on macOS 15 under `LC_NUMERIC=de_DE.UTF-8` and
+`LC_NUMERIC=fr_FR.ISO8859-1`, which answer alike:
+
+| | `printf '%.4f' 1` | `printf '%.2f' 1.5` | `printf '%.2f' 1,5` |
+| --- | --- | --- | --- |
+| bash 5.3.20 · bash 3.2.57 | `1,0000` | `invalid number`, `1,00` | `1,50` |
+| ksh93u+ | `1,0000` | `arithmetic syntax error`, `1,00` | `1,50` |
+| zsh 5.9.2 | `1,0000` | `1,50` | `1,50` |
+| dash | `1.0000` | `1.50` | `not completely converted`, `1.00` |
+
+The reader moves with the writer in every column — no shell writes a comma
+and reads only a point — which is what makes this `Semantics.NumberRadix`
+rather than one axis per direction. Three values: never consulting the
+locale (dash), the locale's radix *instead of* the point (bash, ksh93), and
+either (zsh).
+
+Two further rows separate the last two values and are the reason the policy
+is asked inside the reader rather than at one place on the way in:
+
+    printf '%d' 1,5      zsh 5   ksh93 1
+    printf '%.2f' 1,5.5  zsh 5,50   ksh93 arithmetic syntax error, 1,50
+
+zsh reads the locale's radix in a **floating** conversion's numeral and
+nowhere else: an integer conversion's operand and an operand that is not a
+numeral both go to its evaluator, where the comma is still the comma
+operator it has always been. In ksh93 the locale's radix *displaces* that
+operator for every conversion. Both fall out of the two policy values
+already named, so neither needs a fourth.
+
+`interp/localeradix.go` holds the data and the reading, and the operand is
+translated **at each reader and never for a complaint**: a first attempt
+rewrote the operand once on the way in and put `printf: 1\x015: arithmetic
+syntax error` on stderr, a sentence naming a word no script wrote.
 
 ### The classes a character falls in outside ASCII
 

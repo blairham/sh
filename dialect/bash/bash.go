@@ -1131,6 +1131,12 @@ func Semantics() interp.Semantics {
 	// normalized to four or eight upper-case digits, and the command carries
 	// on. Measured 2026-09-11 under `LC_ALL=C` (#1851).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeWritten
+	// And the radix character, which this shell takes from the locale and reads
+	// a number *only* at: measured on macOS 15 with the host's own
+	// `de_DE.UTF-8`, `printf '%.4f' 1` is `1,0000` and `printf '%.2f' 1.5` is
+	// `printf: 1.5: invalid number` at 1. bash 3.2.57 answers both the same
+	// way, so this is not a dated reading. See interp.Semantics.NumberRadix.
+	s.NumberRadix = interp.RadixIsTheLocalesOwn
 	// And a value the six-byte form cannot hold writes **nothing at all** for
 	// the escape, with the rest of the word carried on to the stream.
 	// Measured 2026-09-22 under both `LC_ALL=C` and `LC_ALL=en_US.UTF-8`,

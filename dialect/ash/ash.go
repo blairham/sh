@@ -618,6 +618,14 @@ func Semantics() interp.Semantics {
 	// are both `not found` at 127 — and unlike dash this shell *does* have a
 	// `$RANDOM`, so the wall is the missing builtin and not the missing
 	// parameter (#2518).
+	// unanswered NumberRadix: the axis is what a shell does about a locale
+	// whose radix character is not the point, and this column cannot be in one.
+	// musl carries no locale data at all — recorded under #2675, where bash on
+	// this same pinned image writes the C locale's answer under a locale name
+	// it accepts without complaint — so `LC_ALL=de_DE.UTF-8` in there changes
+	// nothing and a measurement would say "the point" whatever BusyBox's own
+	// reading is. Derived from dash it would be a guess: the two agree on most
+	// locale questions and this is not most of them (#4230).
 	// unanswered ExpansionResultSuppliesGroupSyntax: BusyBox ash has no
 	// pattern groups either, for the same reason dash has none.
 	// unanswered TableLetterReachesItsOwnOperandsSubscript: BusyBox ash has

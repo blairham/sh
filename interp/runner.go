@@ -71,6 +71,12 @@ type Runner struct {
 	// this from the process at construction, which is what makes the shell
 	// binaries inherit normally.
 	Env []string
+	// LocaleDatabase is where this shell reads a locale's numeric data from.
+	// Empty means the host's own, which is the only answer a shell binary
+	// wants; a test points it at a fixture so that what it asserts does not
+	// depend on which locales somebody has installed. See
+	// interp/localeradix.go, which is the whole of what is read from it.
+	LocaleDatabase string
 	// Dialect is what nested input — a command substitution, an `eval` — is
 	// parsed with. Nil means the core, not the zero value: the zero Dialect
 	// is posix and would refuse constructs the outer parse had accepted.

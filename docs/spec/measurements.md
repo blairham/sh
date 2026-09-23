@@ -10909,6 +10909,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/a-c-conversion-with-an-empty-operand` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 5d ` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 00 5d` |
 | `printf/a-c-conversion-with-no-operand-at-all` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 5d ` | ` 5b 00 5d ` | ` 5b 00 5d ` | ` 5b 00 5d` |
 | `printf/a-c-conversion-nul-fills-its-field` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 20 5d 5b 20 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d ` | ` 5b 20 20 00 5d 5b 00 20 20 5d` |
+| `printf/the-radix-character-under-a-comma-locale` | `1.0000~1.00~1.50~1~tail` **2>** `<shell>: 2: printf: 1,5: not completely converted~<shell>: 4: printf: 1,5: not completely converted` | `1,0000~1,50~1,00~1~tail` **2>** `<shell>: line 3: printf: 1.5: invalid number~<shell>: line 4: printf: 1,5: invalid number` | `1,0000~1,50~1,00~1~tail` **2>** `<shell>: line 3: printf: 1.5: invalid number~<shell>: line 4: printf: 1,5: invalid number` | `1,0000~1,50~0,00~0~tail` **2>** `<shell>: line 2: printf: 1.5: invalid number~<shell>: line 3: printf: 1,5: invalid number` | `1,0000~1,50~1,00~1~tail` **2>** `<shell>[3]: printf: 1.5: arithmetic syntax error~<shell>[3]: printf: 1.5: arithmetic syntax error~<shell>[3]: printf: warning: invalid argument of type f` | `1,0000~1,50~1,50~5~tail` | `1.0000~0.00~1.50~0~tail` **2>** `<shell>: invalid number '1,5'~<shell>: invalid number '1,5'` |
 
 - `printf/assigns-with-v` — `printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently
   ```sh
@@ -11181,6 +11182,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/a-c-conversion-nul-fills-its-field` — the NUL is a character in the field like any other: right-adjusted it arrives after two spaces, left-adjusted before them, in every column that writes it at all. Recorded in hex and not in od's character form, because `tr -s " "` squeezes the run of spaces that is half of what this row is asking about
   ```sh
   printf '[%3c][%-3c]' '' '' | od -An -tx1 | tr -s " "
+  ```
+- `printf/the-radix-character-under-a-comma-locale` — the one datum of `LC_NUMERIC` this shell has data for, and the only case in this corpus that sets a locale with numeric data of its own — `LC_NUMERIC` alone, with the harness's own `LC_ALL=C` emptied rather than replaced, so that the messages stay English and only the numbers move. A `LC_ALL` naming the locale would record whichever translations the recording machine happens to have installed. Four of the five columns write the comma and dash never consults the locale at all; of the four, bash and ksh93 read a number *only* at the comma and refuse `1.5` as not a number, while zsh reads either — and zsh's fourth arm is `5` because an integer conversion's operand goes to its evaluator, where the comma is still the comma operator it has always been. So the row separates three readings and not two, which is why the axis is a policy. The data is the host's own and not a table: on a machine without `de_DE.UTF-8` every column writes the point, which is what the shells do there too (#2675, #4230)
+  ```sh
+  printf '%.4f\n' 1
+  printf '%.2f\n' 1,5
+  printf '%.2f\n' 1.5
+  printf '%d\n' 1,5
+  echo tail
   ```
 
 ## kill

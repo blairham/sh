@@ -56,7 +56,8 @@ func (r *Runner) printfNumber(arg string, present bool) (int64, int, bool) {
 		return n, 0, false
 	}
 	text := afterLeadingBlanks(arg)
-	if v, ok := cAgreedInteger(text); ok {
+	_, radixRefused := r.radixRefusesThePoint(text)
+	if v, ok := cAgreedInteger(r.radixParsed(text, false)); ok && !radixRefused {
 		// The operand is an integer every reading in the panel agrees about,
 		// so no dialect is consulted: `printf '%d' 42` and `printf '%d' 0x10`
 		// are the same in all seven columns.
@@ -142,7 +143,8 @@ func (r *Runner) printfFloat(arg string, present bool) (float64, int, bool) {
 		return float64(n), 0, false
 	}
 	text := afterLeadingBlanks(arg)
-	if f, ranged, whole := cWholeNumber(text, true); whole {
+	_, radixRefused := r.radixRefusesThePoint(text)
+	if f, ranged, whole := cWholeNumber(r.radixParsed(text, true), true); whole && !radixRefused {
 		// Every reading agrees about a float C can read whole, the reading
 		// that evaluates included: it reads a numeral as a numeral before it
 		// reads anything as an expression. Only the range error needs a
@@ -176,9 +178,16 @@ func (r *Runner) printfFloat(arg string, present bool) (float64, int, bool) {
 // columns that evaluate — and truncating late is what lets `1.5` be `1` and
 // `1e3abc` be `1000` under the same rule.
 func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int, bool) {
+	// The operand as the readers below see it, and whether a point in it is a
+	// radix at all under the locale in force. `head` is `text` wherever the
+	// question does not arise, so every reading below reads exactly as it did
+	// before the axis existed. See radixParsed and radixRefusesThePoint.
+	parsed := r.radixParsed(text, float)
+	head, radixRefused := r.radixRefusesThePoint(text)
 	switch r.numberReading() {
 	case PrintfNumberWholeOperand:
-		v, ranged, whole := cWholeNumber(text, float)
+		v, ranged, whole := cWholeNumber(parsed, float)
+		whole = whole && !radixRefused
 		switch {
 		case !whole:
 			return 0, r.printfIncomplete(arg, text), false
@@ -195,23 +204,49 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 		}
 		return v, 0, false
 	case PrintfNumberLeadingNumber:
-		v, ranged, whole := cWholeNumber(text, float)
+		v, ranged, whole := cWholeNumber(parsed, float)
+		whole = whole && !radixRefused
 		switch {
 		case whole && ranged:
 			return v, r.printfOutOfRange(arg), false
 		case whole:
 			return v, 0, false
 		}
-		return r.leadingNumber(text, float), r.printfIncomplete(arg, text), false
+		return r.leadingNumber(r.radixParsed(head, float), float), r.printfIncomplete(arg, text), false
 	case PrintfNumberArithmetic:
-		if v, _, whole := cWholeNumber(text, true); whole {
+		if v, _, whole := cWholeNumber(parsed, true); whole && !radixRefused {
 			// A numeral is read as a numeral, which is why `printf '%d' 010`
 			// is 10 in ksh93 where `echo $((010))` there is 8. The reading is
 			// C's `strtod` and not the conversion's, so `1e3` is 1000 at `%d`
 			// as well.
 			return v, 0, false
 		}
-		n, err, reading := r.printfArithValue(text)
+		n, err, reading := arithNum{}, error(nil), false
+		if radixRefused {
+			// A point where this locale's radix is something else, which this
+			// shell's arithmetic cannot read as a number at all. The complaint
+			// is the one it already writes for an operand that is a number and
+			// then something else, so the error is built rather than a second
+			// sentence written — see radixRefusesThePoint.
+			se := &syntax.Error{Kind: syntax.ErrArithOperator, Expr: text, Token: cRadixChar}
+			err, reading = arithError{msg: r.expressionFailure(text, se), complete: true}, true
+		} else {
+			// The **expression** reading gets the operand translated only
+			// where the locale's radix displaces the comma operator, which is
+			// measured and is the row an operand holding both characters
+			// separates. Under `LC_NUMERIC=de_DE.UTF-8`, `printf '%.2f' 1,5.5`
+			// is `5,50` in zsh — the comma is still the operator there, and the
+			// numeral reading above has already had its chance at the whole
+			// word — and `arithmetic syntax error` with `1,50` in ksh93, where
+			// the comma has stopped being an operator at all. The same
+			// distinction the two policies already carry, so no third value is
+			// needed for it.
+			expr := parsed
+			if r.sem().NumberRadix.readsThePointAsWell() {
+				expr = text
+			}
+			n, err, reading = r.printfArithValue(expr, text)
+		}
 		if err == nil {
 			f := n.asFloat()
 			if !float && math.IsInf(f, 0) {
@@ -253,7 +288,7 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 		// Always the float read, whichever conversion asked: the column that
 		// keeps it answers `1000` for `printf '%d' 1e3abc`, which `strtoimax`
 		// could not have produced.
-		return r.leadingNumber(text, true), code, false
+		return r.leadingNumber(r.radixParsed(head, true), true), code, false
 	}
 	return 0, r.status, true
 }
@@ -274,7 +309,13 @@ func (r *Runner) printfPartialNumber(arg, text string, float bool) (float64, int
 // The third result says whether what failed was the *reading of the operand
 // as a number* rather than anything about the expression around it, which is
 // the one column that parts them: see Diagnostics.PrintfArithArgumentType.
-func (r *Runner) printfArithValue(text string) (arithNum, error, bool) {
+// Two texts rather than one: `parsed` is what the evaluator reads and `written`
+// is what a complaint names. They differ only under a locale whose radix
+// character is not the point — see radixParsed — and a first attempt at #4230
+// passed the rewritten text to both, which put `printf: 1\x015: arithmetic
+// syntax error` on stderr, a sentence naming a word no script wrote.
+func (r *Runner) printfArithValue(parsed, written string) (arithNum, error, bool) {
+	text := parsed
 	if text == "" {
 		// No expression at all, which every evaluating column reads as zero
 		// and says nothing about: `printf '%d' ' '` is `[0]` at 0 in both.
@@ -288,7 +329,7 @@ func (r *Runner) printfArithValue(text string) (arithNum, error, bool) {
 		// leaves for its caller. An operand has already been expanded once
 		// and does not go through it again, so a `$` left here is an operand
 		// failure — the same reading arithValueAsExpression takes of it.
-		err = &syntax.Error{Kind: syntax.ErrArithOperand, Expr: text, Token: text}
+		err = &syntax.Error{Kind: syntax.ErrArithOperand, Expr: written, Token: written}
 	}
 	if err != nil {
 		// Text left over after a complete expression is a reading failure:
@@ -296,7 +337,7 @@ func (r *Runner) printfArithValue(text string) (arithNum, error, bool) {
 		// operand, or a parenthesis that never closed, is not.
 		var se *syntax.Error
 		left := errors.As(err, &se) && se.Kind == syntax.ErrArithOperator
-		return intNum(0), arithError{msg: r.expressionFailure(text, err), complete: true}, left
+		return intNum(0), arithError{msg: r.expressionFailure(written, err), complete: true}, left
 	}
 	outer, held := r.arithValueSurvivesTheDivision, r.arithDivisionFailure
 	r.arithValueSurvivesTheDivision, r.arithDivisionFailure = true, nil
@@ -725,4 +766,76 @@ func hasNonZeroDigit(s string) bool {
 		}
 	}
 	return false
+}
+
+// radixParsed is the operand as this shell's number *readers* see it under a
+// locale whose radix is not the point: the locale's radix put back as a point,
+// which is the only character every reader here knows.
+//
+// Safe in both directions, because the locale's radix is never a character a
+// *numeral* could have held otherwise — `1,5` can only have meant `1.5`. So this
+// is a translation and not a guess. What a *point* means under such a locale is
+// the other half of the question and is radixRefusesThePoint's; where the
+// operand is an expression rather than a numeral the comma may still be the
+// comma operator, which is what the `float` argument is about.
+//
+// Applied at each reader and **never to the operand a complaint names**, which
+// is the half a first attempt at #4230 got wrong: rewriting the text once at the
+// top put `printf: 1\x015: arithmetic syntax error` on stderr, a sentence naming
+// a word no script wrote.
+func (r *Runner) radixParsed(text string, float bool) string {
+	radix, moved := r.localeHasItsOwnRadix()
+	if !moved {
+		return text
+	}
+	if !float && r.sem().NumberRadix.readsThePointAsWell() {
+		// The lenient policy reads the locale's radix in a **floating**
+		// conversion's numeral and nowhere else. Measured on zsh 5.9.2 under
+		// `LC_NUMERIC=de_DE.UTF-8`: `printf '%.2f' 1,5` is `1,50`, the comma
+		// read as a radix, and `printf '%d' 1,5` is `5`, the same comma read as
+		// the operator its arithmetic has always had. The stricter policy does
+		// not split this way — there the radix displaces the operator for every
+		// conversion — which is why the test is the policy and not the verb.
+		return text
+	}
+	return strings.ReplaceAll(text, radix, cRadixChar)
+}
+
+// radixRefusesThePoint reports whether a point in this operand is not a radix at
+// all, and answers the part of the operand in front of it.
+//
+// The stricter of the two locale-reading policies: bash and ksh93 take the
+// locale's radix *instead of* the point, so `printf '%.2f' 1.5` under a comma
+// locale is not a number with a fractional part — it is a number and then
+// something else. Which is exactly the shape each of them already refuses, and
+// is why this answers a head rather than a boolean: the value they write is the
+// leading number. Measured on ksh93u+ under `LC_NUMERIC=de_DE.UTF-8`, four
+// operands drawing one triple —
+//
+//	1.5    the syntax error twice, `invalid argument of type f`, then 1,00
+//	.5     the same, then 0,00
+//	1.     the same, then 1,00
+//	1.5x   the same, then 1,00
+//
+// — the last of which reaches that path with no locale involved at all, which is
+// what says the refusal is the dialect's own. bash's shape is its own and the
+// same shape: `printf: 1.5: invalid number` and 1,00.
+//
+// Expressed as a refusal rather than by rewriting the point into something no
+// reader takes, which was tried first and is where the sentence naming a word
+// nobody wrote came from: a rewrite has to be undone for every complaint, and it
+// cannot be undone at all under the lenient policy, where a point and the
+// locale's radix both become a point.
+func (r *Runner) radixRefusesThePoint(text string) (head string, refused bool) {
+	if _, moved := r.localeHasItsOwnRadix(); !moved {
+		return text, false
+	}
+	if r.sem().NumberRadix.readsThePointAsWell() {
+		return text, false
+	}
+	before, _, found := strings.Cut(text, cRadixChar)
+	if !found {
+		return text, false
+	}
+	return before, true
 }

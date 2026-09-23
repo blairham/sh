@@ -73,6 +73,11 @@ type Base struct {
 	Dir  string
 	Vars map[string]string
 	Env  []string
+	// LocaleDatabase points the locale numeric data at a fixture, so that a
+	// case about a locale's radix character does not depend on which locales
+	// somebody has installed. Empty is the host's own. See
+	// interp/localeradix.go.
+	LocaleDatabase string
 	// Interactive makes the runner one, for the behaviors a shell keeps for
 	// a person. `autocd` is the case this was added for: with the option on,
 	// bash 5.3.15 reads a bare directory name as a `cd` at a prompt and says
@@ -135,10 +140,11 @@ func (p Preset) Runner(b Base) *interp.Runner {
 		Semantics: &sem, Diagnostics: &diag,
 		Dialect: &d,
 		Name:    name, Dir: b.Dir, Vars: b.Vars, Env: b.Env,
-		Interactive: b.Interactive,
-		Terminal:    b.Terminal,
-		LoginShell:  b.LoginShell,
-		Route:       b.Route,
+		LocaleDatabase: b.LocaleDatabase,
+		Interactive:    b.Interactive,
+		Terminal:       b.Terminal,
+		LoginShell:     b.LoginShell,
+		Route:          b.Route,
 	}
 	p.Apply(r)
 	return r

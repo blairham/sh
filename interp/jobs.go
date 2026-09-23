@@ -634,11 +634,6 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// the foreground prints `[]`, and `{ ( … ); } &` agrees. So the
 	// parentheses there are the fork itself and their arrays are its own
 	// copy. See Runner.unsetEmptiesAnUnwrittenArray.
-	// A background job is a child too, and the environment it would be handed
-	// moves the cached home — the fourth of the constructs cachedhome.go names.
-	// On the parent rather than the clone, because the copy that outlives this
-	// is the parent's.
-	r.refreshCachedHomeForASubstitution()
 	sub.forkedForABackgroundJob = true
 	// A background job outlives the shell that started it, so where that
 	// shell is the body of a process substitution the job keeps the

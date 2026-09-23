@@ -5,15 +5,10 @@ package interp
 
 // A written `~` that has no home to become.
 //
-// `HOME` unset is not a rare shape. `env -i` has none, a login that never set
-// one has none, and on the column that answers a `~` from a cached copy —
-// Semantics.TildeReadsACachedHome — `export -n HOME` and then any construct
-// that builds an environment for a child leaves the copy absent even though
-// the variable is still there to read.
+// `HOME` unset is not a rare shape: `env -i` has none, and a login that never
+// set one has none.
 //
-// This package used to leave the word as written in every such case, and said
-// so in the TildeReadsACachedHome doc: "this package carries no password
-// database, so a `~` whose cached home is absent is left as written". That is
+// This package used to leave the word as written in every such case. That is
 // one column's answer and three others disagree.
 //
 // Measured 2026-09-23, `env -i PATH=/usr/bin:/bin LC_ALL=C <shell> -c` with
@@ -78,11 +73,38 @@ func (p TildeWithNoHomePolicy) String() string {
 //
 // The one place both roads a written tilde takes — Runner.tildeSplit for a
 // leading one and Runner.expandColonTildes for one after a colon — ask what
-// the home is. They asked Runner.tildeHome separately before, and a fallback
-// added to one of them would have been a second helper carrying half the
-// answer, which is the shape that keeps being found here.
+// the home is. They read `HOME` separately before, and a fallback added to one
+// of them would have been a second helper carrying half the answer, which is
+// the shape that keeps being found here.
+//
+// # A cache this shell deliberately does not keep
+//
+// `HOME` is read as it stands, every time. GNU bash 5.3.20 does not: it
+// answers a written `~` from a copy that a script's own assignment does not
+// reach, and that building an environment for a child refreshes, so the same
+// `~` is one home before an external command on the line and another after it.
+// Measured 2026-09-23, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/orig`,
+// `--norc --noprofile`, every line ending `HOME=/h; … ; echo ~`:
+//
+//	                          5.3.20   5.3.15   3.2.57   zsh   ksh93   dash
+//	nothing between           /orig    /h       /h       /h    /h      /h
+//	a builtin, eval, `.`      /orig    /h       /h       /h    /h      /h
+//	a subshell, a function    /orig    /h       /h       /h    /h      /h
+//	an external command       /h       /h       /h       /h    /h      /h
+//	a pipeline, a `&` job     /h       /h       /h       /h    /h      /h
+//	a command substitution    /h       /h       /h       /h    /h      /h
+//
+// **One patch range of one build**, and the reason this is a recorded refusal
+// rather than an axis. bash 5.3.15 — the same release, the build the suite is
+// graded in — answers the variable on every row, as its own 3.2 does, as zsh,
+// ksh93, dash and BusyBox ash do, and as POSIX XCU 2.6.1 says. A behavior that
+// appeared inside one release's patch series, that no other shell and no
+// standard shares, is an upstream regression, and the common denominator of
+// real shells is what this core is for. It was modeled as
+// Semantics.TildeReadsACachedHome for a day, on the 5.3.20 measurement alone;
+// docs/spec/grammar/expansion.md carries the argument and what it cost.
 func (r *Runner) homeForAWrittenTilde() (string, bool) {
-	if home, ok := r.tildeHome(); ok {
+	if home, ok := r.getVar("HOME"); ok {
 		return home, true
 	}
 	switch r.sem().TildeWithNoHome {

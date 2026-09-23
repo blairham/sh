@@ -20,32 +20,34 @@ import (
 // answers a bare `~` from a copy of `HOME` that its own assignments do not
 // reach, and refreshes that copy as a side effect of building an environment
 // for a child — so `~` there is one answer before an external command on the
-// line and a different one after it. Measured 2026-09-19, `env -i
-// PATH=/usr/bin:/bin LC_ALL=C HOME=/orig`, `HOME=/h; echo ~`:
+// line and a different one after it. Measured 2026-09-19 and again
+// 2026-09-23, `env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/orig`,
+// `HOME=/h; echo ~`:
 //
 //	bash 5.3.20          /orig     and /h once a child has been built
 //	bash as sh           /orig     the same binary, the same answer
+//	bash 5.3.15          /h        the same release, the other answer
 //	bash 3.2.57          /h
 //	zsh 5.9.2            /h
 //	ksh93u+              /h
 //	dash 0.5.12          /h
 //	BusyBox ash 1.37.0   /h
 //
-// Six of the seven read the variable, and the seventh disagrees with its own
-// older build. That seventh is modeled now — as
-// [Semantics.TildeReadsACachedHome], answered Yes in one dialect and No in
-// every other — and what is pinned here is the **No** answer: that the six
-// columns' reading is the variable and that it is *stable*, a guard against
-// the divergent reading arriving by accident or by a flipped default, in
-// which `HOME=/x; cd ~` would go to the old home for as long as a script runs
-// nothing but builtins.
+// **One patch range of one build**, which is why this reading is the shell's
+// and there is no axis beside it. The cache appeared inside one release's
+// patch series, and neither that release's own 5.3.15, nor bash 3.2, nor any
+// other shell, nor POSIX XCU 2.6.1 shares it. The common denominator of real
+// shells is what this core is for, so the cache is a recorded refusal — see
+// the note on Runner.homeForAWrittenTilde for the full table and
+// docs/spec/grammar/expansion.md for the argument and what it cost.
 //
-// The two are one pair and neither half stands alone. The Yes answer has a
-// test of its own beside the dialect that takes it —
-// dialect/bash/cachedhome_test.go — and it is the *twelve* rows there that
-// say what the cache is, because a cache a child's environment refreshes and
-// a home frozen at startup agree on everything this file asks. See
-// docs/spec/grammar/expansion.md, #3484 and #4039.
+// What is pinned here is that the reading is the variable and that it is
+// *stable*: a guard against the divergent reading arriving by accident, in
+// which `HOME=/x; cd ~` would go to the old home for as long as a script runs
+// nothing but builtins. The three reads below discriminate all three possible
+// readings, which is more than the question needs and is deliberate — a probe
+// of the last two alone passed against a runner mutated to freeze the first
+// home it read.
 func TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild(t *testing.T) {
 	dir := t.TempDir()
 	// Three reads, and the order is what makes them discriminate. One before
@@ -60,12 +62,6 @@ func TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild(t *testing.T) {
 	// A probe with only the last two lines cannot tell any of them apart,
 	// which is how the first draft of this test passed a runner mutated to
 	// freeze the home it first read.
-	// The axis is read off the core vector rather than set here, so that a
-	// default flipped to the one column's reading fails this test instead of
-	// quietly changing what it measures. See Semantics.TildeReadsACachedHome.
-	if a := CoreSemantics().TildeReadsACachedHome; a != No {
-		t.Fatalf("the core answers TildeReadsACachedHome %v, want No", a)
-	}
 	out, st := run(t, "echo ~\nHOME=/h\necho ~\n/usr/bin/true\necho ~\n", func(r *Runner) {
 		sem := CoreSemantics()
 		r.Semantics, r.Dir = &sem, dir

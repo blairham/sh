@@ -893,18 +893,14 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-17 on 5.3.20; ksh93 agrees and zsh takes the
 	// characters (#2298).
 	s.SubscriptKeyExpandsALeadingTilde = interp.Yes
-	// And a bare `~` is answered from a *copy* of HOME rather than from the
-	// variable — the one answer in the panel that is this shell's alone, its
-	// own 3.2 included. The copy is not the home the shell started with: it
-	// is refreshed whenever an environment is built for a child, so
-	// `HOME=/h; echo ~` is the old home and `HOME=/h; /usr/bin/true; echo ~`
-	// is the new one. Measured 2026-09-22 on 5.3.20 and unchanged by POSIX
-	// mode; see Semantics.TildeReadsACachedHome for the twelve rows that
-	// separate the three readings, and #3484 and #4039, which were each
-	// filed on the reading this is not (#4156).
-	s.TildeReadsACachedHome = interp.Yes
-	// And with no home to read — `HOME` never set, or the copy above left
-	// absent by `export -n HOME` and a child — the word becomes the home of
+	// A bare `~` reads `HOME` as it stands, which is the substrate's answer
+	// and is left alone here. GNU bash 5.3.20 answers from a *copy* instead —
+	// see the note on Runner.homeForAWrittenTilde for the table and for why
+	// that is a recorded refusal rather than a dialect's answer: bash 5.3.15,
+	// this shell's own 3.2, zsh, ksh93, dash, ash and POSIX all read the
+	// variable, so the cache is one patch range of one build.
+	//
+	// And with no home to read — `HOME` never set — the word becomes the home of
 	// the user the process runs as, out of the same password database
 	// `~user` reads. Measured 2026-09-23 on 5.3.20 and 3.2.57, which agree:
 	// `env -i PATH=… bash -c 'printf "<%s>" ~'` is a path while `$HOME` is

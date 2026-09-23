@@ -528,57 +528,61 @@ has just built for a child, and falls back to the password database when
 that block has no `HOME` in it. Neither "the variable" nor "the value at
 startup" can produce that row.
 
-**Modeled, as a `Semantics` axis of one dialect's own** —
-`TildeReadsACachedHome`, yes for `bash` and no for `posix`, `dash`, `zsh`,
-`ksh` and `ash`. It was recorded and not modeled for five days, on the
-reasoning that reproducing the cache means reproducing an invalidation that
-is incidental to building a child's environment — a `HOME=/x; cd ~` that goes
-to the old home for as long as the script runs only builtins, and a `~` that
-moves when a name's export attribute does. That reasoning is intact and is
-exactly why it is **not** a core rule and not a default: it is one build
-against its own 3.2, so it is a candidate upstream regression rather than a
-family rule, and a shell that arrived at it by accident would be wrong in a
-way scripts notice.
+**Not modeled, and deliberately so.** The cache was recorded and not modeled
+for five days, on the reasoning that reproducing it means reproducing an
+invalidation incidental to building a child's environment — a
+`HOME=/x; cd ~` that goes to the old home for as long as the script runs only
+builtins, and a `~` that moves when a name's export attribute does. Then it
+was modeled for a day, as `Semantics.TildeReadsACachedHome`. It is now
+**declined**: this shell reads `HOME` as it stands, in every dialect, and what
+bash 5.3.20 does is written down instead.
 
-**A second bash 5.3 answers the other way, which settles that.** Measured
-2026-09-23 in `debian:sid-slim` at the digest the bash suite is graded at —
-GNU bash 5.3.15 — every row of the table above answers `/h`, the variable:
-the builtin, the subshell, the function, the external command, the pipeline,
-the command substitution and the `export -n` alike, with only `unset HOME`
-reaching the password database. So the cache appeared somewhere in patches
-16 to 20 of one release, and the split is bash 5.3.20 against bash 5.3.15,
-bash 3.2, zsh, ksh93, dash, BusyBox ash and the standard.
+**A second bash 5.3 answers the other way, and that is what settled it.**
+Measured 2026-09-23 in `debian:sid-slim` at the digest the bash suite is
+graded at — GNU bash 5.3.15 — every row of the table above answers `/h`, the
+variable: the builtin, the subshell, the function, the external command, the
+pipeline, the command substitution and the `export -n` alike, with only
+`unset HOME` reaching the password database. So the cache appeared somewhere
+in patches 16 to 20 of one release, and the split is bash 5.3.20 against bash
+5.3.15, bash 3.2, zsh, ksh93, dash, BusyBox ash and the standard.
 
-Which of the two 5.3s the `bash` dialect answers for is therefore a decision
-about the **reference**, not a reading of the shell, and two things ride on
-it. It is the whole of what `glob.tests` still differs by in the graded image
-(#4158) — two lines, a `mkdir ~/…` landing in one home and the `touch ~/…/x`
-after it looking in another. And the suite lines #3484 and #4039 counted as
-won were counted against the laptop's 5.3.20; against 5.3.15 the same
-modeling moves them the other way, so those rows want re-grading in the image
-before anybody reads them as settled. What changed is only where it is written down. The cost
+That is the whole argument. This core is **the common denominator of real
+shells** — not strict POSIX and not bash — and a behavior that appeared inside
+one release's patch series, that neither the release's own earlier build nor
+any other shell nor any standard shares, is an upstream regression rather than
+a reading to adopt. The five days of hesitation were right and the day of
+modeling was not.
+
+What it cost is worth keeping, because it is the general lesson: the axis was
+measured on one build and the suite is graded against another, so a row could
+be at 0 on the laptop and open in the image with nothing wrong in either
+instrument. `glob.tests`' last two differing lines were exactly this — a
+`mkdir ~/…` landing in one home and the `touch ~/…/x` after it looking in
+another — and #3484 and #4039 were counted as won against the laptop's 5.3.20
+while moving the other way against 5.3.15. `AGENTS.md` carries the rule that
+came out of it: two instruments only count if their references differ, and if
+the platform each reference runs on differs. What changed is only where it is written down. The cost
 of not taking it was countable — seven lines of one fetched suite file
 (#3484), eight of two more (#4039), and the whole of three more rows of the
 suite epic — and an axis is what this repository has for exactly this shape:
 identical syntax, a column that disagrees, and no subset relationship between
 the two answers.
 
-The axis is asked at the two places a written `~` becomes a home — the word
-road in `Runner.tildeSplit` and the assignment's colon road in
-`Runner.expandColonTildes` — and the copy is refreshed in `Runner.environ`,
-which is the one function whose job is to build the block of `NAME=value`
-strings the row above says is read. Hanging it there rather than on "a
-process was started" is what gives the subshell row for free: a subshell
-starts a process, builds no environment, and does not move the copy.
+Both roads a written `~` takes — the word road in `Runner.tildeSplit` and the
+assignment's colon road in `Runner.expandColonTildes` — read `HOME` through
+`Runner.homeForAWrittenTilde`, which is the one place the question is put and
+where the table above is written down. While the cache was modeled, its copy
+was refreshed in `Runner.environ`: hanging it there rather than on "a process
+was started" was what gave the subshell row for free, and that shape is
+recorded here because it is the only correct place for it if anyone ever has
+to take the behavior back.
 
-**Two rows are not reproduced and are written down here instead.** A command
-substitution moves the copy in that shell even when its body is a builtin,
-which the refresh above does not reach — the body runs in a runner of its
-own, and what the parent goes on reading is the parent's. And a copy taken
-from an environment with no `HOME` in it falls back to the password database
-there, where here the `~` is left as written: this package carries no
-password database at all (see `Runner.UserHomeDir`), which is already what a
-run with no `HOME` does.
+**The rows a cache makes reachable are gone with it.** `export -n HOME` and
+then a child left bash 5.3.20's copy absent while the variable was still there
+to read, which was the one route to a `~` with no home behind it that did not
+need `HOME` unset at all. Here a set `HOME` is read however the environment is
+arranged around it, and `TildeWithNoHome` is reached only when the name is
+genuinely not there — which is bash 3.2's reading, measured.
 
 **Three corpus rows hold it, and the split between them is the point.**
 `expand/tilde-after-a-home-assignment` asks the word before *and* after a
@@ -590,12 +594,16 @@ is why there is one home for the tilde here and not three;
 `expand/tilde-with-no-home-at-all` records the second question, what a `~`
 is worth with nothing to expand it against, where the panel splits four ways.
 `TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild` and
-`TestEveryTildeRoadReadsTheOneCurrentHome` are the Go side of the **no**
-answer, in `interp`, where they pin the six columns' reading and the core's;
-`TestABareTildeReadsACachedHome` in `dialect/bash` is the Go side of the yes.
-Neither half stands alone — every case in the `interp` pair is one a freeze
-and a cache answer identically, which is why the twelve discriminating rows
-live beside the dialect that takes them.
+`TestEveryTildeRoadReadsTheOneCurrentHome` in `interp` are the Go side of the
+reading, and `TestABareTildeReadsTheVariableAndNotACachedHome` and
+`TestNoConstructMovesTheHomeATildeReads` in `dialect/bash` are the Go side of
+the refusal — kept beside the dialect the cache would have belonged to, and
+kept in the *discriminating* shape: three reads, before the assignment, after
+it, and after a child. A probe with fewer cannot tell the variable, a home
+frozen at startup and a refreshed cache apart, which is the trap that put a
+wrong premise in #3484 and #4039 (#4156), and the shape is worth keeping on
+the plain answer so that taking the cache by accident fails a test rather
+than passing one.
 
 **This has now been filed twice from the same one-line probe** — #3484 and
 #4039 — and both times as a home frozen at startup, because `HOME=/h; echo ~`

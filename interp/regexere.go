@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -65,6 +66,73 @@ const (
 // `a**` and `a{1}{2}` are the other side of the same coin — glibc accepts a
 // repetition of a repetition and RE2 refuses it — and they are handled by
 // rewriting rather than by refusing. See asERE.
+
+// condRegexMark marks a byte of a `=~` operand that the **script quoted**, so
+// that the readers below know it is a character and not syntax.
+//
+// The same NUL convention, and for the same reason, as syntax.ArithValueMark:
+// two readings of one text that cannot be told apart once the text exists. A
+// quoted `.` and a quoted `]` are ordinary characters wherever they stand,
+// and inside a bracket expression they are ordinary *members* — where a
+// backslash written by the script is a member in its own right. Escaping the
+// quoted one with a backslash, which is what a plain `regexp.QuoteMeta` does,
+// makes the two identical and the bracket rewriter then reads the escape as
+// that member. So the quoting is carried rather than spelled (#4173).
+//
+// A mark in front of a mark is a NUL the value held.
+const condRegexMark = 0
+
+// quotedAt reports the rune the script quoted at this offset, and how many
+// bytes the mark and it take together.
+func quotedAt(pat string, i int) (string, int, bool) {
+	if i >= len(pat) || pat[i] != condRegexMark {
+		return "", 0, false
+	}
+	if i+1 >= len(pat) {
+		return "", 1, true
+	}
+	_, w := utf8.DecodeRuneInString(pat[i+1:])
+	return pat[i+1 : i+1+w], 1 + w, true
+}
+
+// unmarkedHere steps past a mark, because **a bracket expression takes the
+// quoting off and nothing more**.
+//
+// Outside one a character the script quoted reaches the engine escaped, so
+// `\.` is the character and not the operator. Inside one every character is a
+// member already, and the reference does not protect the two that are still
+// syntax there: measured 2026-09-23 against bash 5.3.15 in the graded image,
+// `[[ a]  =~ [\a\]] ]]` is 0 with `BASH_REMATCH` `a]` — so the quoted `]`
+// closed the set and left a literal `]` behind it, exactly as `[a]]` would.
+// `a`, `]`, `\`, `\a` and `\]` against the same expression are all 1 there,
+// which is what says the set holds `a` alone. Protecting the member instead —
+// writing `\]` for it — made every one of those 0 here.
+func unmarkedHere(pat string, i int) int {
+	if i < len(pat)-1 && pat[i] == condRegexMark {
+		return i + 1
+	}
+	return i
+}
+
+// unmarkRegex is the pattern as the script wrote it, for a message that quotes
+// it back.
+func unmarkRegex(pat string) string {
+	if strings.IndexByte(pat, condRegexMark) < 0 {
+		return pat
+	}
+	var b strings.Builder
+	for i := 0; i < len(pat); {
+		if ch, w, ok := quotedAt(pat, i); ok {
+			b.WriteString(ch)
+			i += w
+			continue
+		}
+		b.WriteByte(pat[i])
+		i++
+	}
+	return b.String()
+}
+
 func validERE(pat string) error {
 	// Where an atom would have to stand: the start of the expression, just
 	// inside a `(`, and just after a `|`. A repetition operator there has
@@ -72,6 +140,12 @@ func validERE(pat string) error {
 	// does not — `(?` is that shape, the `?` standing where an atom belongs.
 	atomWanted := true
 	for i := 0; i < len(pat); {
+		if _, w, ok := quotedAt(pat, i); ok {
+			// A character the script quoted is an atom and never syntax.
+			i += w
+			atomWanted = false
+			continue
+		}
 		switch c := pat[i]; c {
 		case '\\':
 			// The escape and whatever it protects are one atom. A trailing
@@ -168,13 +242,18 @@ func readInterval(pat string, at int) (int, bool) {
 // skipped whole, because their own `]` is not the set's either.
 func skipEREBracket(pat string, at int) int {
 	i := at + 1
+	i = unmarkedHere(pat, i)
 	if i < len(pat) && pat[i] == '^' {
-		i++
+		i = unmarkedHere(pat, i+1)
 	}
 	if i < len(pat) && pat[i] == ']' {
 		i++
 	}
 	for i < len(pat) {
+		i = unmarkedHere(pat, i)
+		if i >= len(pat) {
+			break
+		}
 		switch {
 		case pat[i] == ']':
 			return i + 1
@@ -223,11 +302,15 @@ func skipEREBracket(pat string, at int) int {
 // graded in. A refusal in the reference's own words is the honest answer for a
 // construct this shell does not have; a silent mismatch is what it replaces.
 func asERE(pat string) (string, error) {
-	if !strings.ContainsAny(pat, `[\\*+?{`) {
-		// Nothing any of the three rewrites could reach: the bracket
-		// constructs need a `[`, the escape rule a `\`, and the repeated
-		// repetition an operator. Every one of those was left out of this
-		// guard at some point and the rewrite it gates then never ran.
+	if !strings.ContainsAny(pat, "[\\*+?{\x00") {
+		// Nothing any of the rewrites could reach: the bracket constructs
+		// need a `[`, the escape rule a `\`, the repeated repetition an
+		// operator, and a character the script quoted carries a mark that has
+		// to come off before the engine sees it. Every one of those was left
+		// out of this guard at some point and the rewrite it gates then never
+		// ran — the mark most recently, which sent NUL bytes to the engine
+		// and turned every quoted operand into a pattern that matched
+		// nothing.
 		return pat, nil
 	}
 	var b strings.Builder
@@ -244,6 +327,14 @@ func asERE(pat string) (string, error) {
 	// battery had not covered (#4173).
 	var groups []int
 	for i := 0; i < len(pat); {
+		if ch, w, ok := quotedAt(pat, i); ok {
+			// A character the script quoted stands for itself, so it reaches
+			// the engine escaped rather than as the syntax it spells.
+			atomAt = b.Len()
+			b.WriteString(regexp.QuoteMeta(ch))
+			i += w
+			continue
+		}
 		switch {
 		case pat[i] == '(':
 			groups = append(groups, b.Len())
@@ -268,8 +359,17 @@ func asERE(pat string) (string, error) {
 			i += 1 + w
 		case pat[i] == '[':
 			atomAt, afterRepeat = b.Len(), false
-			end, err := rewriteBracket(pat, i, &b)
-			if err != nil {
+			// **The quoting comes off before the set is read, not inside
+			// it.** A bracket expression takes every character as a member,
+			// so a mark in there says nothing the set does not already say —
+			// and the constructs it holds are several characters long, so a
+			// mark between them would hide `[=a=]` from the reader that
+			// reduces it. Measured: `[\[[=A=][=a=]]` is an equivalence class
+			// beside a literal `[` in the graded reference, and reading it a
+			// character at a time left the class standing as three members
+			// and a pair of brackets.
+			end := skipEREBracket(pat, i)
+			if _, err := rewriteBracket(unmarkRegex(pat[i:end]), 0, &b); err != nil {
 				return "", err
 			}
 			i = end

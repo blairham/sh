@@ -50,6 +50,21 @@ func firstAssignIn(t *testing.T, src string, d Dialect) *Assign {
 	return sc.Assigns[0]
 }
 
+// firstAssignOrNil is firstAssignIn for the question "is this an assignment at
+// all", which the fatal form cannot ask.
+func firstAssignOrNil(t *testing.T, src string, d Dialect) *Assign {
+	t.Helper()
+	f, err := Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	sc := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+	if len(sc.Assigns) == 0 {
+		return nil
+	}
+	return sc.Assigns[0]
+}
+
 // Every subscript is read, in written order, with the *last* one in Index —
 // the same way round a chained expansion keeps them, and for the same reason:
 // the final subscript is the one the value lands under.
@@ -106,19 +121,28 @@ func TestAChainedAssignmentKeepsItsValue(t *testing.T) {
 	}
 }
 
-// Without the flag no `]` is read as a link, so the text between the first
-// bracket and the last one is a single subscript — which is the reading every
-// other dialect keeps, and is what makes `a[1][2]=v` an operand they refuse.
-func TestWithoutTheFlagAChainIsOneSubscript(t *testing.T) {
+// Without the flag no `]` is read as a link, and the subscript closes at the
+// bracket that balances the one it opened — so `a[1][2]=v` is **not an
+// assignment at all**: the name ends at the first `]`, nothing after it is the
+// `=`, and the word is an ordinary one.
+//
+// Measured 2026-09-23 from a script file under `env -i PATH=/usr/bin:/bin
+// LC_ALL=C <shell> f.sh`, standard input on the null device, over the two
+// columns that do not have the chain:
+//
+//	a[1][2]=v   bash 5.3.20  `a[1][2]=v: command not found`, status 127
+//	            zsh 5.9.2    `no matches found: a[1][2]=v`
+//
+// This test used to require the text between the outer brackets — `1][2` — to
+// be read as one subscript, on the reading that the operand was then refused
+// for it. Neither column refuses an operand: neither sees an assignment (#4241).
+func TestWithoutTheFlagAChainIsNotAnAssignment(t *testing.T) {
 	t.Parallel()
 	d := assignChained()
 	d.ChainedAssignSubscript = false
-	a := firstAssignIn(t, `a[1][2]=v`, d)
-	if len(a.Leading) != 0 {
-		t.Errorf("Leading = %q, want none without the flag", assignSubscriptTexts(a))
-	}
-	if a.IndexText != "1][2" {
-		t.Errorf("IndexText = %q, want the whole run between the outer brackets", a.IndexText)
+	if a := firstAssignOrNil(t, `a[1][2]=v`, d); a != nil {
+		t.Errorf("read an assignment with subscript %q, want none: the word is a command name",
+			a.IndexText)
 	}
 }
 

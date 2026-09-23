@@ -119,6 +119,7 @@ ash   ErrTrapRunsInSubshells
 ash   ErrTrapRunsInsideFunctions
 ash   ExitTrapFiresPastTheEnd
 ash   ExpansionResultSuppliesGroupSyntax
+ash   ExportContainerLetterNeedsAValue
 ash   ExportLetterDeclaresAGlobal
 ash   ExportOrReadonlyTakesAReferenceToAnElement
 ash   ExportThroughASubscriptedOperandRecordsTheLetter
@@ -410,6 +411,7 @@ dash  ErrTrapRunsInsideFunctions
 dash  ErrexitSeesPipefailFailure
 dash  ExitTrapFiresPastTheEnd
 dash  ExpansionResultSuppliesGroupSyntax
+dash  ExportContainerLetterNeedsAValue
 dash  ExportLetterDeclaresAGlobal
 dash  ExportOrReadonlyTakesAReferenceToAnElement
 dash  ExportThroughASubscriptedOperandRecordsTheLetter
@@ -578,6 +580,7 @@ ksh   DeclareGlobalReachesPastALocal
 ksh   EchoLastEscapeFlagWins
 ksh   EmptyKeyInATableLiteral
 ksh   EmptySubscriptToAnAssignment
+ksh   ExportContainerLetterNeedsAValue
 ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin
 ksh   JobsStateFiltersAccumulate
@@ -608,6 +611,7 @@ zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ExpansionResultSuppliesGroupSyntax
+zsh   ExportContainerLetterNeedsAValue
 zsh   ExportOrReadonlyTakesAReferenceToAnElement
 zsh   ForNameWhenTheLoopRuns
 zsh   FunctionNameWhenTheDefinitionRuns

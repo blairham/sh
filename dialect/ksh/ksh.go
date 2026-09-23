@@ -1025,6 +1025,10 @@ func Semantics() interp.Semantics {
 	// The letter but not the copy, which is why the two are two axes:
 	// `umask g=u` is `bad format` here and `umask u=X` is taken.
 	s.SymbolicMaskTakesAPermissionCopy = interp.No
+	// unanswered ExportContainerLetterNeedsAValue: `export` takes no container
+	// letter here, which Semantics.ExportOptions is the statement of — it is
+	// empty in this dialect, so `export -A` is a bad option and the question has
+	// no line to be about. Measured 2026-09-23.
 	// unanswered MixedTableLiteral, EmptyKeyInATableLiteral: a table literal
 	// mixing `[key]=` heads with bare words is refused while the program is
 	// *read* here — syntax.Dialect.ArrayLiteralShapeFollowsTheFirstElement is

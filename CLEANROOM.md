@@ -102,6 +102,31 @@ Where a third-party suite must be run — bash's own `tests/`, which is
 GPLv3 — it is **fetched at test time and never committed**. Committing
 it would relicense this repository by accident.
 
+### A skeleton says what to quote, and nothing about what moved
+
+Such a suite may be **run** but its lines may not be reproduced, so a
+report about one writes them as **skeletons**: every letter becomes `a`
+or `A`, digits and punctuation stay. That keeps the shape a reviewer
+needs — how many fields, where the brackets are — without copying the
+text, and it is the right instrument for the question it answers, which
+is *may this line be quoted*.
+
+It is the wrong instrument for attributing a diff, and the failure is
+silent: **a skeleton cannot distinguish two different words of the same
+length.** `fooq` and `barq` are both `aaaa`, so two lines that differ in
+every letter render identically, and two lines whose *words* differ read
+as one line with a delimiter in a new place. Attributing a cause from
+that invents the cause. It happened here: `</aaaa//aaaa>` beside
+`<fooq//barq/>` was read as a `/` having moved and written up as a
+pattern-substitution defect worth ~25 lines. There was no such defect —
+the lines held different words, and the real split was ordering plus a
+reference-version difference.
+
+So: skeletonize when **writing**, and attribute from the **unskeletonized
+bytes you still hold** — the diff, the two runs, a re-measurement of the
+one case. If the only copy of a line left is its skeleton, the honest
+report is a count, not a cause.
+
 ## If you think you need to look
 
 You do not. The escalation path is:

@@ -971,6 +971,10 @@ func Semantics() interp.Semantics {
 	// the command name stays a positional and that is zsh's answer rather
 	// than a gap. See Semantics.KeywordAssignments.
 	s.KeywordAssignments = interp.No
+	// unanswered ExportContainerLetterNeedsAValue: `export` takes no container
+	// letter here, which Semantics.ExportOptions is the statement of — it is
+	// empty in this dialect, so `export -A` is a bad option and the question has
+	// no line to be about. Measured 2026-09-23.
 	// unanswered RestrictedModeIsLeftByTheLetter: this shell *does* have the
 	// letter and a restricted mode of its own — `set -r; cd /` is `cd:3:
 	// restricted` in zsh 5.9.2, measured 2026-09-22 — and that mode is not

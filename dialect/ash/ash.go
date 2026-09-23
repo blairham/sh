@@ -250,6 +250,10 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// unanswered ExportContainerLetterNeedsAValue: `export` takes no container
+	// letter here, which Semantics.ExportOptions is the statement of — it is
+	// empty in this dialect, so `export -A` is a bad option and the question has
+	// no line to be about. Measured 2026-09-23.
 	// unanswered RestrictedModeIsLeftByTheLetter: there is no `set -r` here to
 	// leave a mode with — `set: line 1: illegal option -r` at 2 in the pinned
 	// image, and TestSetRefusesTheRestrictedLetter pins it.

@@ -9336,6 +9336,49 @@ type Semantics struct {
 	// Only the listing observes it in the shell that says no: a frozen name
 	// cannot then be assigned an array to tell the two apart.
 	ReadonlyRecordsTheCompoundAttribute Answer
+
+	// ExportContainerLetterNeedsAValue makes the container letter on `export`
+	// take effect **only where the operand carries a value**, so a valueless
+	// `export -a n` or `export -A n` records no container, converts none and
+	// refuses none.
+	//
+	// Measured 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C bash f.sh`
+	// over a script file with standard input on the null device, bash 5.3.15 in
+	// the digest-pinned image the suite is graded in and 5.3.20 on macOS giving
+	// the same answer to every row:
+	//
+	//	with a value              export -a q=(1 2)        `declare -ax q=(…)`
+	//	                          export -A m=([k]=v)      `declare -Ax m=(…)`
+	//	                          export -A n=5            `declare -Ax n=([0]="5")`
+	//	valueless                 export -a b              `declare -x b`
+	//	                          export -A n2             `declare -x n2`
+	//	over a standing array     a=(x 1); export -A a     `declare -ax a=(…)`
+	//	over a standing table     declare -A d=([k]=1);    `declare -Ax d=(…)`
+	//	                          export -A d
+	//	and the element after      export -A y; y[k]=q      `declare -ax y=([0]="q")`
+	//
+	// The last row is what makes the valueless half observable beyond a listing:
+	// with no table attribute recorded, `y[k]` is arithmetic on an indexed array
+	// rather than a key.
+	//
+	// **Per operand, not per line**, which is measured rather than assumed:
+	// `export -A a b=1` is `declare -x a` and `declare -Ax b=([0]="1")` in one
+	// command.
+	//
+	// Wrong in two directions when it is not answered. The valueless form
+	// recorded a container this shell then kept — so `export -A y; y[k]=q`
+	// stored a key where the reference stores element zero — and a valueless
+	// letter over a name already holding the other kind reached the conversion
+	// refusal, so `a=(x 1); export -A a` was `cannot convert indexed to
+	// associative array` where the reference exports the array and says nothing.
+	//
+	// unpinned dash, ksh, zsh, ash: `export` takes no container letter in any of
+	// them, which Semantics.ExportOptions is the statement of — it is empty
+	// everywhere but the one dialect, and `export -A` is a bad option there.
+	// Measured the same day: ksh93u+ is `export: -A: unknown option` with its
+	// usage line and zsh 5.9.2 `bad option: -A`, and both of this shell's
+	// columns already answer exactly that.
+	ExportContainerLetterNeedsAValue Answer
 	// TypeLetterAndAnArrayLiteralIsAnInconsistentType refuses a declaration
 	// that names a *type* — the integer or the float letter — and assigns an
 	// array literal to the same name, and ends the script over it.

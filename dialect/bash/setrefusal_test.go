@@ -123,11 +123,22 @@ func TestBashRefusesAnInvocationOptionWithItsOwnUsageBlock(t *testing.T) {
 // in a restricted shell is `invalid option` at 1 rather than `not
 // implemented`, because that shell has no way back out. See
 // interp/restricted.go.
+//
+// `-P` left in #4163, and it is `-p`'s shape rather than any of the others:
+// nothing was built. `physical` was already a name this shell's `set -o`
+// table grants — it records the state and runs nothing — so the letter was
+// refusing a request the name was taking, which is the one thing the `-p`
+// note above says a routed letter must not do. What changed is which table
+// answers, not what the shell does about symbolic links.
+//
+// So `b` is alone here now, and it is the only letter of `set` whose *name*
+// this shell does not have either: `notify` is not in AddSetOptions, so there
+// is nothing for the letter to route to and the refusal is the whole answer.
 func TestBashKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
-	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "bP"; got != want {
+	if got, want := bash.Diagnostics().UnimplementedOptionLetters["set"], "b"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "bP" {
+	for _, l := range "b" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than invalid", src, got)

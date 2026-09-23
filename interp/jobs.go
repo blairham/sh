@@ -711,6 +711,11 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		status = sub.status
 	}, func() {
 		job.finish(status)
+		// A child of this shell has ended, which is what a `&` starts
+		// wherever it is backed by a process and wherever it is not. On the
+		// shell's list rather than a subshell's, because this runs on the
+		// job's own goroutine — see Runner.childReaped.
+		r.childReapedByTheShell()
 		// After the job is finished rather than before it, so nothing can
 		// observe a pipe that has ended while the job that was writing to
 		// it is still marked as running.
@@ -2212,5 +2217,9 @@ func (r *Runner) startAndWait(cmd *exec.Cmd, ownGroup bool) error {
 	pid := cmd.Process.Pid
 	r.tookJobProcess(pid, ownGroup)
 	defer r.releasedJobProcess(pid)
-	return cmd.Wait()
+	err := cmd.Wait()
+	// A child of this shell has been reaped, which is the whole of what the
+	// `CHLD` condition counts. See Runner.childReaped.
+	r.childReaped()
+	return err
 }

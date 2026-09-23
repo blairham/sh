@@ -161,6 +161,10 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// A fork this shell just waited for, which is where a coprocess that
 		// ended is noticed. See Runner.retireCoproc for the measurements.
 		r.retireCoproc()
+		// And it is a child reaped, which is the other thing that happens
+		// here in a shell that forks: one for the parentheses, whatever ran
+		// inside them. See Runner.childReaped.
+		r.childReaped()
 		return err
 	})
 }

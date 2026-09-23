@@ -229,6 +229,9 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// And what its `alias` *named* outlives it in one column, as an explicit
 	// `( … )`'s does. See Runner.adoptAliasNames.
 	r.adoptAliasNames(sub)
+	// A fork finished with: a real shell reads a substitution's output from
+	// a pipe to a child, and reaps that child here. See Runner.childReaped.
+	r.childReaped()
 	return strings.TrimRight(out.String(), "\n")
 }
 

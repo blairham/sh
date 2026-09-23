@@ -529,6 +529,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// while its end of the pipe is still open, because that is where
 			// the handler writes. See Runner.endSubshell.
 			subs[i].endSubshell(ctx)
+			// Every element is a fork of its own, and the shell reaps every
+			// one of them — a pipeline of two counts two. See
+			// Runner.childReaped.
+			r.childReaped()
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)
 			}

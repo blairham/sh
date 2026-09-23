@@ -2060,6 +2060,13 @@ type Runner struct {
 	// dialect names it, as `shopt -s histreedit`. See
 	// HistoryExpansionReedits.
 	histReedit bool
+	// dialectCompgen are the `compgen -A` actions a dialect generates and
+	// this package cannot, and dialectCompgenAfter is where each one sits in
+	// the order — the core action it follows. Nil in a shell whose dialect
+	// added none. Installed through SetCompgenAction; see
+	// interp/compgendialect.go.
+	dialectCompgen      map[string]func(*Runner, string) []string
+	dialectCompgenAfter [][2]string
 	// histRewrite is whether the history file is written from the session's
 	// list rather than appended to, where the two differ — bash's
 	// `shopt histappend` read the other way round. See

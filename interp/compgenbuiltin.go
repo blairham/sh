@@ -194,7 +194,7 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 							r.diagf("compgen: %s: invalid action name\n", arg)
 							return 2
 						}
-						if _, ok := compgenActions[arg]; !ok {
+						if r.compgenGenerator(arg) == nil {
 							// Said, and then contributed nothing. It used to
 							// end the call, which took the *implemented*
 							// action types down with it: `compgen -A builtin
@@ -274,11 +274,11 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 		return 0
 	}
 	var out []string
-	for _, name := range compgenActionOrder {
+	for _, name := range r.compgenOrder() {
 		if !asked[name] {
 			continue
 		}
-		for _, candidate := range compgenActions[name](r, word) {
+		for _, candidate := range r.compgenGenerator(name)(r, word) {
 			if strings.HasPrefix(candidate, word) {
 				out = append(out, candidate)
 			}

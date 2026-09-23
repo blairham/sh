@@ -786,6 +786,26 @@ func (r *Runner) takePending() []string {
 // An ignored signal — a trap with an empty body — is not one of these, which
 // is measured: with `trap ” USR1` set, every shell in the panel waits the
 // background job out and reports 0.
+//
+// **A child's death is never one of these either, however it is trapped.**
+// That condition is what the wait is *for*: every job this wait is about
+// raises it as it ends, so a `wait` that came back on it would come back on
+// its own first job every time. It did, and the job it stopped waiting for
+// went on writing — `trap 'echo T' CHLD; ( sleep 1; echo b ) & wait` printed
+// `T` here and lost the `b`, where bash 5.3.20 prints `b` and then `T`.
+//
+// Measured 2026-09-23 on bash 5.3.20 with three background sleeps ending a
+// tenth of a second apart and a counting CHLD trap: `wait` returns **0** with
+// the handler having run **three** times, once per child. Here it returned
+// 148 with the handler having run once, the other two children being reaped
+// after the script had already ended. Nothing is lost by leaving the arrivals
+// on the list — they run at the top of the next statement like every other
+// handler, which is where this function's own contract says they belong, and
+// the order a script sees is the same.
+//
+// A signal that is *not* a child's death still ends the wait: `wait` cut
+// short by a trapped USR1 is what the panel is unanimous about and what the
+// paragraph above this is measured from.
 func (r *Runner) pendingTrap() (syscall.Signal, bool) {
 	s := r.signals
 	if s == nil {
@@ -795,6 +815,9 @@ func (r *Runner) pendingTrap() (syscall.Signal, bool) {
 	defer s.mu.Unlock()
 	s.drainForwarded()
 	for _, name := range s.pending {
+		if name == "CHLD" {
+			continue
+		}
 		if body, ok := s.traps[name]; ok && body != "" {
 			return trapConditionSignal(name), true
 		}

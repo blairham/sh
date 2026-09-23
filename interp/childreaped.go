@@ -76,15 +76,14 @@ func (r *Runner) childReaped() {
 		// `S S T` where this prints `T`.
 		//
 		// What stands in the way is not the counting. A subshell's arrivals
-		// have to go on its own list — see Runner.selfPending — and a CHLD
-		// arrival there is read by the wait a `&` job is under: with one
+		// have to go on its own list — see Runner.selfPending — and until
+		// #4157 that list was read by the wait a `&` job is under: with one
 		// recorded, `trap 'echo T' CHLD; ( sleep; echo b ) & wait` returned
 		// from the wait before the job had finished and lost the `echo b`.
-		// That wait is woken by *any* pending arrival and does not re-wait,
-		// which is a defect of its own and older than this; raising a
-		// condition it cannot yet tell apart would make it visible where it
-		// is not visible today. So the shell counts its own children
-		// correctly and a subshell counts none, until that wait is fixed.
+		// **That wait no longer ends on a child's death** — see
+		// Runner.pendingTrap, which is where the reason is written down — so
+		// what is left here is a plain gap rather than a blocked one: the
+		// shell counts its own children and a subshell counts none.
 		return
 	}
 	r.recordChildDeath()

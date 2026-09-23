@@ -60,3 +60,36 @@ func TestABackgroundJobIsOneChildTrapArrival(t *testing.T) {
 		t.Errorf("got %q at status %d, want %q at 0", out, status, want)
 	}
 }
+
+// And the same wait is not ended by a child's death **that does count** either,
+// which is the other half of the rule and was the half still missing.
+//
+// Every job a `wait` is about raises that condition as it ends, so a wait that
+// came back on it came back on its own first job — and the children still
+// running were reaped after the script had finished, with nothing left to run
+// their handler. The trap fired once where bash fires once per child, and the
+// wait reported the signal rather than the job.
+//
+// Measured 2026-09-23 against bash 5.3.20, three background sleeps ending a
+// tenth of a second apart and a counting trap:
+//
+//	n=0; trap 'n=$((n+1))' CHLD
+//	sleep 0.1 & sleep 0.2 & sleep 0.3 &
+//	wait; echo "status=$? n=$n"
+//
+// bash prints `status=0 n=3`. This shell printed `status=148 n=1`.
+//
+// Three children rather than one, because one is what the test above already
+// holds and it passed against the defect: a single job's arrival lands as the
+// wait is ending anyway, so nothing is left behind to be lost. The count is
+// the discriminator.
+func TestAWaitIsNotEndedByTheDeathOfAChildItIsWaitingFor(t *testing.T) {
+	const src = "n=0\ntrap 'n=$((n+1))' CHLD\n" +
+		"/bin/sleep 0.1 &\n/bin/sleep 0.2 &\n/bin/sleep 0.3 &\n" +
+		"wait\n" +
+		"printf 'status=%s n=%s' \"$?\" \"$n\"\n"
+	out, status := run(t, src, nil)
+	if want := "status=0 n=3"; out != want || status != 0 {
+		t.Errorf("got %q at status %d, want %q at 0", out, status, want)
+	}
+}

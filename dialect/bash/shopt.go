@@ -1027,6 +1027,31 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 // spelling — so a `shopt -s compat44` that did not move `BASH_COMPAT`
 // reported a level the rest of the shell could not see, which is the refusal
 // that misleads rather than the one that is heard (#4262).
+// The two names left here are **decided** rather than pending, and the
+// decision is to refuse both. They are what `shopt.tests` has instead of
+// agreement, and #2298 classifies them as recorded decisions with their
+// reasoning rather than as work outstanding (#4149).
+//
+// `gnu_errfmt` makes every diagnostic take GNU's `prog:file:line: message`
+// shape. Implementing it means reproducing this shell's wording for **every
+// diagnostic it can emit**, and that surface is unbounded: it cannot be
+// enumerated from a manual, and CLEANROOM forbids reading the source that
+// defines it. A fit to the eighteen rows one suite file happens to exercise
+// would be right on those eighteen and wrong on a set nobody can bound, with
+// no way to state how wrong — which is this table's own principle, that an
+// implementation nobody can falsify is worse than a documented absence.
+//
+// `bash_source_fullpath` does not describe a rule a reader could predict.
+// Measured: the reference keeps **two copies** of the path — the frame
+// `BASH_SOURCE` reports is fixed at the `.` and never revisited, and the
+// value comes out absolute if the option was on at *either* the `.` or the
+// call. The same file, sourced once and called twice with the option moved
+// in between, answers differently for reasons that are about that shell's
+// bookkeeping. An implementation artifact, not a semantics axis, and refused
+// on the ground #4225 was decided on.
+//
+// So a name arriving here now needs an argument that it is neither of those
+// shapes. The table is no longer a queue.
 var shoptStates = map[string]bool{
 	"bash_source_fullpath": false,
 	"gnu_errfmt":           false,

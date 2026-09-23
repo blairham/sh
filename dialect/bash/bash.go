@@ -428,8 +428,10 @@ func Semantics() interp.Semantics {
 	s.IgnoredNamesVariable = "GLOBIGNORE"
 	// The compatibility level, which selects an older release's reading of a
 	// behavior. Only #4256's row is answered against it so far; see
-	// Semantics.CompatibilityLevelVariable.
-	s.CompatibilityLevelVariable = "BASH_COMPAT"
+	// Semantics.CompatibilityLevelVariable, and compat.go for the range this
+	// shell complains outside of and the `shopt` letters that spell the same
+	// state.
+	s.CompatibilityLevelVariable = compatVariable
 	// And the order the expansion comes back in, which is 5.3's and is this
 	// column's alone: no other shell in the panel has a parameter for it.
 	// See interp.Semantics.SortOrderVariable.
@@ -4594,6 +4596,10 @@ func Apply(r *interp.Runner) {
 	// Where `set -x` writes, which this shell alone lets a script move. See
 	// xtracefd.go for the three measurements that shape it.
 	registerTraceDescriptor(r)
+	// And the complaint a compatibility level out of range draws, which is
+	// the assignment's and not the first row's to read it. See compat.go,
+	// which also wires the `shopt compat44` spelling to the same state.
+	registerCompatibilityLevel(r)
 	// And the same table reached from the command line that started the
 	// shell, where there is no builtin to run: `bash -O checkhash` moves one
 	// of these names before the first line of the script. See shopt.go, and

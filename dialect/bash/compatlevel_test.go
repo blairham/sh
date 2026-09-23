@@ -31,7 +31,10 @@ func TestTheCompatibilityLevelChoosesWhatAWholeArrayUnsetTakes(t *testing.T) {
 		{"spelled with a dot", `BASH_COMPAT=5.1;`, "GONE"},
 		{"a dotted level above it", `BASH_COMPAT=5.2;`, "KEPT"},
 		// Out of range takes the modern reading, which is bash's answer too:
-		// it complains and carries on. The complaint itself is #4262.
+		// it complains and carries on. These three rows say the complaint as
+		// well since #4262, which is why the verdict is read off the last
+		// line rather than the whole output — a redirection on a bare
+		// assignment does not take the sentence away, in bash either.
 		{"not a number", `BASH_COMPAT=abc;`, "KEPT"},
 		{"below the floor", `BASH_COMPAT=0;`, "KEPT"},
 		{"past the ceiling", `BASH_COMPAT=99;`, "KEPT"},
@@ -43,8 +46,9 @@ func TestTheCompatibilityLevelChoosesWhatAWholeArrayUnsetTakes(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := runBash(t, dir, c.set+`a=(1 2 3)`+tail)
-			if got := strings.TrimSpace(out); got != c.want {
-				t.Errorf("%s: got %q, want %q", c.set, got, c.want)
+			lines := strings.Split(strings.TrimSpace(out), "\n")
+			if got := lines[len(lines)-1]; got != c.want {
+				t.Errorf("%s: got %q, want %q", c.set, out, c.want)
 			}
 		})
 	}

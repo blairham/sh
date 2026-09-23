@@ -280,6 +280,52 @@ func (f declareFlags) lastSign(c rune) (plus, written bool) {
 	return plus, written
 }
 
+// onlyTakesAttributesAway reports whether every attribute letter this
+// declaration wrote was written under a **plus**.
+//
+// Such a line leaves the name carrying nothing, so it is not "a declaration
+// that named an attribute" for the one question that phrase decides: whether
+// the letter is itself the record that the name exists. `declare -i n` needs
+// no bare record because every listing writes `declare -i n` for it — the
+// letter is the record. `declare +i n` writes no letter, so without a record
+// of its own the name stops existing at the moment its last attribute is
+// taken off.
+//
+// Measured 2026-09-23 on bash 5.3.20 from a script file, `declare -p` behind
+// each, every row over a name holding **no value**:
+//
+//	declare -x n; declare +x n        declare -- n
+//	declare -i n; declare +i n        declare -- n
+//	export n; export -n n             declare -- n
+//	export n; f(){ declare +x n; }    declare -- n   inside the function
+//
+// So the name survives the removal in every shape, and this shell lost it in
+// every shape: `declare: n: not found` at 1, which is what it says about a
+// name it has never heard of (#4163).
+//
+// The letters rather than the flag fields, because the sign belongs to the
+// letter it was written against: `typeset +r -i n` takes the freeze off and
+// adds the integer attribute, and that line does name one.
+func (f declareFlags) leavesAnAttribute() bool {
+	var any bool
+	for i, c := range f.letters {
+		// The scope and listing letters are not attributes and say nothing
+		// about what the name carries — the same reading withoutMatching
+		// takes of the inheritance letter one field along. `-g` in
+		// particular: no listing filters on it and no `declare -p` ever
+		// prints a `g`, so a valueless `declare -g v` is a bare declaration
+		// and brought no name into being here at all.
+		if c == 'g' || c == 'I' || c == 'm' || c == 'p' {
+			continue
+		}
+		if i < len(f.letterSigns) && f.letterSigns[i] == '+' {
+			continue
+		}
+		any = true
+	}
+	return any
+}
+
 // letterMissingOnAFunctionLine reports the first letter of `refused` this
 // line wrote under a **minus**, which is the sign that asks for the facility
 // rather than taking it away. Zero when none was.
@@ -2018,6 +2064,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			if !r.declarationCarriesAnArrayLiteral(name) {
 				r.declareEmpty(name, fresh, df.export || df.readonly,
 					withoutMatching(df) != (declareFlags{}),
+					df.leavesAnAttribute(),
 					df.inherit || r.LocalInheritsTheOuterValue(), false)
 			}
 		}
@@ -4378,7 +4425,9 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 // The name is now local, or attributed, or both — but whether it also *exists*
 // is a dialect's answer, so this is the one place that decides it and both
 // `local` and `typeset` come through here.
-func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, namesAnAttribute, inherits, standardWord bool) {
+func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, namesAnAttribute,
+	leavesAnAttribute, inherits, standardWord bool,
+) {
 	// A name that already holds a value is not one this declaration is
 	// bringing into being, and nothing about being declared empties it:
 	// `typeset -x v` on a `v=abc` leaves `abc` alone in all four shells that
@@ -4491,7 +4540,7 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 	if fresh && inherits && r.restoreTheOuterBinding(name) {
 		return
 	}
-	if !namesAnAttribute {
+	if !leavesAnAttribute {
 		r.recordBareDeclaration(name)
 	}
 	// Whether the *outer* value still shows through is a third disagreement,

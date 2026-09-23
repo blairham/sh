@@ -4,6 +4,7 @@
 package histexpand_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/blairham/sh/internal/histexpand"
@@ -155,6 +156,91 @@ func TestASubstitutionMakesAQuoteSpecialAgain(t *testing.T) {
 			}
 			if res.Line != c.want {
 				t.Errorf("expanded %q to %q, want %q", c.line, res.Line, c.want)
+			}
+		})
+	}
+}
+
+// Chars.ClosingQuoteEndsAName, both answers.
+//
+// A `"` ends an event's name where it closes a string that is open there and
+// is a letter of the name where nothing is open — which is one rule about
+// *which* quote rather than two rules about substitutions. #4187.
+//
+// Measured on bash 5.3.20 on 2026-09-22 from a script with `set -o history;
+// set -H`. The blamed text is what the rows compare, because that is the name
+// the engine read: with `echo seeded` in the list, `echo "!ec"` expands and
+// `echo "$( echo "!ec" )"` is `!ec": event not found` — the *lookup* used the
+// wider name too, which the last row holds down.
+func TestWhichDoubleQuoteEndsAnEventName(t *testing.T) {
+	bash := histexpand.Default
+	bash.ClosingQuoteEndsAName = true
+	for _, c := range []struct {
+		name, line string
+		// closing is the name bash reads, where a `"` ends the name only by
+		// closing a string; any is the name the other answer reads.
+		closing, any string
+	}{
+		{
+			name: "the quote that closes the string ends it",
+			line: `echo "!zz"`, closing: `!zz`, any: `!zz`,
+		},
+		{
+			name: "the same quote with the state toggled off is a letter",
+			line: `echo "$( echo "!zz" )"`, closing: `!zz"`, any: `!zz`,
+		},
+		{
+			name: "one quote inside a substitution closes as usual",
+			line: `echo $( echo "!zz" )`, closing: `!zz`, any: `!zz`,
+		},
+		{
+			name: "with nothing open there is nothing to close",
+			line: `echo !zz"`, closing: `!zz"`, any: `!zz`,
+		},
+		{
+			name: "and the name runs to the end of the line",
+			line: `echo "a"!zz"b"`, closing: `!zz"b"`, any: `!zz`,
+		},
+		{
+			name: "no substitution is needed either way",
+			line: `echo "a" b!zz"`, closing: `!zz"`, any: `!zz`,
+		},
+		{
+			name: "a quote reopened inside a substitution is still the parity",
+			line: `echo "$( echo x"!zz" )"`, closing: `!zz"`, any: `!zz`,
+		},
+		{
+			name: "and an event that exists is looked up under the wider name",
+			line: `echo "$( echo "!ec" )"`, closing: `!ec"`, any: "",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// `ec` is in the list and `zz` is not, so a row wanting a name
+			// reports it through the refusal and the one that finds an entry
+			// expands instead.
+			for _, answer := range []struct {
+				name string
+				c    histexpand.Chars
+				want string
+			}{
+				{"closing only", bash, c.closing},
+				{"any quote", histexpand.Default, c.any},
+			} {
+				res, err := histexpand.Expand(c.line, list("echo seeded"), answer.c)
+				if answer.want == "" {
+					if err != nil {
+						t.Errorf("%s: %q was refused as %v, want the expansion", answer.name, c.line, err)
+					}
+					continue
+				}
+				var nf *histexpand.NotFound
+				if !errors.As(err, &nf) {
+					t.Fatalf("%s: %q gave (%q, %v), want a name that was not found",
+						answer.name, c.line, res.Line, err)
+				}
+				if nf.Ref != answer.want {
+					t.Errorf("%s: %q named %q, want %q", answer.name, c.line, nf.Ref, answer.want)
+				}
 			}
 		})
 	}

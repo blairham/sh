@@ -110093,6 +110093,57 @@
         "TimedOut": false
       }
     },
+    "histexp/which-quote-ends-an-event-name": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cscript\u003e: line 3: !zz\": event not found~\u003cscript\u003e: line 3: !zz: event not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "!zz~!zz~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cscript\u003e: line 3: !zz: event not found~\u003cscript\u003e: line 3: !zz: event not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "ifs/a-value-backslash-before-a-separator": {
       "ash": {
         "Stdout": "2[a\\:2][b]",

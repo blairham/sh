@@ -110,6 +110,7 @@ func (r *Runner) HistoryChars() histexpand.Chars {
 	c.QuoteInPlace = r.sem().HistoryQuoteModifierInPlace == Yes
 	c.CommentStops = r.sem().HistoryCommentStopsExpansion == Yes
 	c.QuoteIsText = r.sem().HistoryQuoteEndsAnEventReference == Yes
+	c.ClosingQuoteEndsAName = r.sem().HistoryClosingQuoteEndsAnEventName == Yes
 	c.EventCharClosesAnEventName = r.sem().HistoryEventCharClosesAnEventName == Yes
 	c.BracedEvent = r.sem().HistoryBracedEventReference == Yes
 	c.LastWordEndsTheDesignator = r.sem().HistoryLastWordEndsTheDesignator == Yes

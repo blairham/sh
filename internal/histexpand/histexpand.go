@@ -80,6 +80,13 @@ type Chars struct {
 	// Semantics.HistoryQuoteEndsAnEventReference.
 	QuoteIsText bool
 
+	// ClosingQuoteEndsAName makes a `"` end an event's name only where it
+	// **closes** the double-quoted string the reference stands in. A `"`
+	// reached with the scan outside double quotes is then a letter of the
+	// name, where the column without this ends the name at either one. See
+	// Semantics.HistoryClosingQuoteEndsAnEventName.
+	ClosingQuoteEndsAName bool
+
 	// EventCharClosesAnEventName ends an event name at an event character
 	// inside it, that character included. See
 	// Semantics.HistoryEventCharClosesAnEventName.
@@ -367,7 +374,7 @@ func ExpandIn(line string, in Quote, hist List, c Chars) (Result, error) {
 				i++
 				continue
 			}
-			text, next, print, err := one(src, i, out.String(), hist, c, st)
+			text, next, print, err := one(src, i, out.String(), hist, c, st, double)
 			if err != nil {
 				return Result{}, err
 			}
@@ -440,7 +447,7 @@ func literal(src []rune, i int, c Chars, double bool) bool {
 // returning the text it became and the index just past it.
 //
 // sofar is the line built so far, which `!#` names.
-func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string, int, bool, error) {
+func one(src []rune, i int, sofar string, hist List, c Chars, st *state, double bool) (string, int, bool, error) {
 	j := i + 1
 	// `!{...}` puts the whole reference in braces so that what follows it
 	// cannot be read as part of it — where a shell has the form at all.
@@ -457,7 +464,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			return "", 0, false, &NotFound{Ref: string(src[i:])}
 		}
 		inner := append([]rune{c.Event}, src[j+1:end]...)
-		text, _, print, err := one(inner, 0, sofar, hist, c, st)
+		text, _, print, err := one(inner, 0, sofar, hist, c, st, double)
 		if err != nil {
 			return "", 0, false, err
 		}
@@ -548,7 +555,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 			// the string; only a later one ends it.
 			k++
 		}
-		for k < len(src) && !strings.ContainsRune(eventEnd, src[k]) && src[k] != '-' {
+		for k < len(src) && !endsAnEventName(src[k], c, double) && src[k] != '-' {
 			// A `-` ends the string because it begins a word range with
 			// no colon: measured 2026-09-16, `!ech-2` after `echo a b c d`
 			// is `echo a b` in bash 5.3.20, zsh 5.9.2 and ksh93u+ alike.
@@ -613,6 +620,39 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state) (string
 // for the reason noExpandAfter gives; see Chars.QuoteIsText for the column
 // that leaves a `!` against one alone instead.
 const eventEnd = " \t\n\r:^$*%=|&;()<>\""
+
+// endsAnEventName reports whether a character ends the `!string` name being
+// scanned, which for one of the two characters depends on where the scan is.
+//
+// The double quote is that character, and it is the only one in eventEnd whose
+// answer moves: it ends the name where it **closes** the string the reference
+// stands in and is a letter of the name where it does not, for the dialect
+// that says so. Measured on bash 5.3.20 on 2026-09-22 from a script with
+// `set -o history; set -H`, and the pair is what makes it a question about
+// which quote rather than about quotes:
+//
+//	echo "!zz"                  !zz    — the quote closes the string
+//	echo "$( echo "!zz" )"      !zz"   — the same quote, the flag toggled off
+//	echo $( echo "!zz" )        !zz    — one quote again, so it closes
+//	echo !zz"                   !zz"   — no string to close
+//	echo "a"!zz"b"              !zz"b" — and the name runs to the line's end
+//
+// The last two say the rule is not "a quote inside a substitution": there is
+// no substitution in either. What counts is whether a double quote is open
+// where the name is being read, which is the parity of the quotes in front of
+// it — the same state the scanner already keeps for whether a `!` expands at
+// all. zsh ends the name at either one, which is Chars.ClosingQuoteEndsAName
+// off and what this tree did everywhere until #4187.
+//
+// The character that *begins* a name is a separate question and not this one:
+// a `"` against the event character leaves the `!` as text in both shells, and
+// where bash parts company with us there is measured in docs/spec/history.md.
+func endsAnEventName(r rune, c Chars, double bool) bool {
+	if r == '"' && c.ClosingQuoteEndsAName && !double {
+		return false
+	}
+	return strings.ContainsRune(eventEnd, r)
+}
 
 // isWordDesignator reports whether r is one of the designators that may follow
 // the event character with no event of its own — `!$` and `!^` and `!*` and

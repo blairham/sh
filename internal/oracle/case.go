@@ -18301,6 +18301,16 @@ fc -l 2>&1`,
 		Why:    "a comment line read while a compound command is still open ran nothing, and the one column that records in a script writes a newline where it stood rather than keeping it — keeping it joined with a `;` records `for i in a b` followed by text that is commented out, which hangs waiting for a `do` when it is run again (#4077). From a file because that is the route the list is filled on",
 	},
 	{
+		ID: "histexp/which-quote-ends-an-event-name", Category: "builtins",
+		Snippet: `set -o history 2>/dev/null
+set -H 2>/dev/null
+echo "$( echo "!zz" )"
+echo "!zz"
+echo after`,
+		Script: true,
+		Why:    "which `\"` ends a `!string` event's name, asked twice in one script so the pair is in one row: bash 5.3 blames `!zz\"` on the first line and `!zz` on the second, so the quote ends the name where it **closes** a string that is open there and is a letter of the name where the two quotes in front of it have toggled the state off. `Semantics.HistoryClosingQuoteEndsAnEventName`. bash 3.2 is the column that says it is a version and not a mode — it blames `!zz` on both lines, and `BASH_COMPAT=32` does not move 5.3 — and bash-as-`sh` spares both, its posix mode reaching *past* the flag in a way ours does not (#4187, the second half unfixed). The setup line ends zsh, dash, ksh93 and BusyBox ash where they stand: none of them has `set -o history`, and a `set -o` name a shell does not have is fatal in a script, which is why four cells are empty rather than showing an unexpanded line",
+	},
+	{
 		ID: "fc/a-continuation-is-one-line-of-the-entry", Category: "builtins",
 		Snippet: `set -o history 2>/dev/null
 echo one \

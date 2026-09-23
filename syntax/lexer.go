@@ -2481,8 +2481,39 @@ func (l *Lexer) scanGroupSpans() []Span {
 		// that shell will not parse.
 		if quantified && c == '[' {
 			if width, ok := bracketExprAt(l.src[l.off:]); ok {
+				// The brackets protect the word-ending operators and **not the
+				// parentheses**, which is measured rather than assumed and is
+				// the one thing this take used to get wrong. With `extglob` on,
+				// `printf '<%s>' @(a[)]b)` is `syntax error near unexpected
+				// token ')'` in bash 5.3.20 and `')' unexpected` in ksh93u+,
+				// and zsh 5.9.2 refuses its own spelling of it too — so the
+				// `)` inside the bracket closes the group and the `]b)` behind
+				// it is left to the parser, which has no use for it. Measured
+				// 2026-09-23. `@(a[(]b)` is the same rule from the other side:
+				// the bracket's `(` counts as well, so the group never closes
+				// and both references run out of input looking for its `)`.
+				//
+				// Reading the brackets as protecting everything accepted a word
+				// no reference will parse — which is worse than the refusal,
+				// because the pattern then matched something in a script that
+				// cannot run anywhere else (#4197).
+				ended := false
 				for range width {
-					keep(l.peek())
+					b := l.peek()
+					keep(b)
+					if b == '(' {
+						depth++
+					} else if b == ')' {
+						depth--
+						if depth == 0 {
+							ended = true
+							break
+						}
+					}
+				}
+				if ended {
+					flush()
+					return spans
 				}
 				continue
 			}

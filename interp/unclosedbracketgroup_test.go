@@ -4,9 +4,16 @@
 package interp_test
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // A `[` that nothing closes takes the rest of the pattern with it, so the
@@ -51,10 +58,18 @@ func TestAnUnclosedBracketSwallowsTheGroupsCloser(t *testing.T) {
 // And the other half of the same rule: a bracket that *does* close may still
 // have taken a `)` on the way, and the group then closes at a later one.
 //
-// These two cannot be asked through pathname expansion, because bash's own
-// command grammar refuses the word before any pattern is matched — so they
-// are measured with `[[ $s == $p ]]`, where bash 5.3.20 and ksh93u+ both
-// answer yes to the first two and no to the third.
+// **The pattern has to reach the matcher from a value**, and this test used to
+// say so and then not do it. Its own comment named `[[ $s == $p ]]` — the route
+// where no word scan ever sees the pattern — while the helper it called wrote
+// the pattern into a `case` arm, which is a route the references refuse: with
+// `extglob` on, `case x in @(a[)]b))` is `syntax error near unexpected token
+// ')'` in bash 5.3.20 and `')' unexpected` in ksh93u+, so the rows could not
+// have been measured through it. The claim was right and the instrument was
+// not, and it is what made this test fail when the word scanner learned the
+// refusal (#4197).
+//
+// Re-measured 2026-09-23 through the route the comment names, and the two
+// references agree on every row: yes, yes, yes, no.
 func TestABracketMayTakeTheGroupsCloserAndStillClose(t *testing.T) {
 	for _, tc := range []struct{ subject, pattern, want string }{
 		// `[)]` is the one-member set `)`, so the body is `a[)]b`.
@@ -64,8 +79,74 @@ func TestABracketMayTakeTheGroupsCloserAndStillClose(t *testing.T) {
 		{"x", `@(a[)b]|x)`, "yes"},
 		{"a]b", `@(a[)b]|x)`, "no"},
 	} {
+		if got := matchFromAValue(t, tc.subject, tc.pattern); got != tc.want {
+			t.Errorf("%q ~ %q = %q, want %q", tc.subject, tc.pattern, got, tc.want)
+		}
+	}
+}
+
+// And the word scanner's side of the same text, which is the refusal both
+// references make and this shell did not.
+//
+// Measured 2026-09-23 with `extglob` on: a group closed only by a parenthesis
+// standing inside a bracket expression is `syntax error near unexpected token
+// ')'` in bash 5.3.20 and `')' unexpected` in ksh93u+, in command position and
+// in a `case` arm alike. zsh 5.9.2 refuses its own spelling of it too, so all
+// three columns agree and this is core rather than an axis.
+//
+// The bracket still protects the word-ending operators, which is the control:
+// `x@([;])y` matches `x;y` in both references and here, and the same for `<`,
+// `>` and `&`. So it is the parentheses alone that the bracket does not hold.
+func TestAGroupClosedInsideABracketIsRefusedInAWord(t *testing.T) {
+	for _, pattern := range []string{`@(a[)]b)`, `!(a[)]b)`, `@(a[)b]|x)`} {
+		if got := matchWith(t, "a)b", pattern, true, false); !strings.HasPrefix(got, "parse:") {
+			t.Errorf("%s = %q, want a parse failure — the group closes inside the bracket", pattern, got)
+		}
+	}
+	// The control, through the same helper: a bracket with no parenthesis in it
+	// leaves the group a group.
+	for _, tc := range []struct{ subject, pattern, want string }{
+		{"x;y", `x@([;])y`, "yes"},
+		{"x<y", `x@([<])y`, "yes"},
+		{"x&y", `x@([&])y`, "yes"},
+		{"x>y", `x@([>])y`, "yes"},
+		{"ab", `@(a[b])`, "yes"},
+	} {
 		if got := matchWith(t, tc.subject, tc.pattern, true, false); got != tc.want {
 			t.Errorf("%q ~ %q = %q, want %q", tc.subject, tc.pattern, got, tc.want)
 		}
 	}
+}
+
+// matchFromAValue matches with the **pattern in a variable**, so no word scan
+// ever reads it: `[[ $s == $p ]]` is the one route a pattern the command
+// grammar refuses can still reach the matcher by.
+func matchFromAValue(t *testing.T, subject, pattern string) string {
+	t.Helper()
+	d := syntax.Core()
+	d.ExtendedPattern, d.DoubleBracket = true, true
+	src := "s=" + singleQuotedForTest(subject) + "; p=" + singleQuotedForTest(pattern) +
+		`; if [[ $s == $p ]]; then echo yes; else echo no; fi`
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		return "parse: " + err.Error()
+	}
+	var out bytes.Buffer
+	s := PosixSemantics()
+	// A pattern that reaches the matcher from a value is the whole route, so the
+	// axis that says whether such a result *is* group syntax has to be answered
+	// or there is nothing to match with. Both references read it, which is what
+	// the rows below are measured against.
+	s.ExpansionResultSuppliesGroupSyntax = Yes
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s})
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(out.String())
+}
+
+// singleQuotedForTest wraps text so the shell reads it literally, which is what
+// keeps the pattern out of every scan but the matcher's.
+func singleQuotedForTest(v string) string {
+	return "'" + strings.ReplaceAll(v, "'", `'''`) + "'"
 }

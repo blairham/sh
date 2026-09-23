@@ -15783,6 +15783,47 @@ type Semantics struct {
 	// question can matter. See interp/multibyte.go for the order.
 	UnsetLocaleIsUnicodeAware Answer
 
+	// NumberRadix is whether a number written and read by this shell carries
+	// the locale's radix character, and whether the point stays a radix
+	// alongside it.
+	//
+	// A policy rather than an Answer because the panel gives **three** answers
+	// and the third is not a shade of the other two. Measured 2026-09-22 on
+	// macOS 15 with the host's own `de_DE.UTF-8` and `fr_FR.ISO8859-1`, one
+	// conversion at a time:
+	//
+	//	                    printf '%.4f' 1   printf '%.2f' 1.5   printf '%.2f' 1,5
+	//	bash 5.3.20         1,0000            invalid number, 1   1,50
+	//	bash 3.2.57         1,0000            invalid number, 1   1,50
+	//	ksh93u+             1,0000            syntax error, 1     1,50
+	//	zsh 5.9.2           1,0000            1,50                1,50
+	//	dash                1.0000            1.50                not converted, 1
+	//
+	// So four of the five write the comma and dash never consults the locale;
+	// and of the four, three take the comma *instead* of the point while zsh
+	// takes either. The reader moves with the writer in every one of them,
+	// which is why this is one axis and not two: no column writes a comma and
+	// reads only a point, or the other way about.
+	//
+	// It reaches `%d` as much as `%f` — under `de_DE.UTF-8` bash refuses
+	// `printf '%d' 1.5` too — because what moved is the shell's number reader
+	// and not one conversion.
+	//
+	// Asked only where it can matter, which is a narrow place: the locale in
+	// force for `LC_NUMERIC` must be one the host publishes numeric data for
+	// *and* its radix must not be the point. Under `LC_ALL=C`, under any
+	// locale the host has no data for, and on a host that publishes none at
+	// all, nothing here is consulted and no dialect is questioned — so the
+	// corpus, which pins `LC_ALL=C`, never reaches it. interp/localeradix.go
+	// holds the data half and argues why it is the host's rather than a table.
+	//
+	// unpinned: the corpus fixes `LC_ALL=C` for every case, where all three
+	// values write a point and read one, so no recorded row can object to a
+	// flip in any dialect. It is pinned per dialect in Go instead, against the
+	// host's own locale data through a fixture database —
+	// TestTheRadixPolicyDecidesWhatIsWrittenAndRead.
+	NumberRadix RadixPolicy
+
 	// DeclarationTakesAnAppendOperand reads a declaration builtin's
 	// `name+=value` operand as the append operator rather than as a name
 	// with a `+` on the end of it: `declare a=1; declare a+=2` leaves `12`.
@@ -29389,6 +29430,46 @@ const (
 	// makes this a policy with two shells to tell apart rather than one.
 	OutsideLocaleEscapeEncoded
 )
+
+// RadixPolicy is what a shell does about the locale's radix character. See
+// Semantics.NumberRadix for the measurements, and interp/localeradix.go for
+// where the character comes from.
+type RadixPolicy uint8
+
+const (
+	// RadixUnspecified is no answer, and is refused like any other.
+	RadixUnspecified RadixPolicy = iota
+	// RadixIsAlwaysThePoint never consults the locale: a number is written
+	// with a point and read at one whatever `LC_NUMERIC` says. dash, and
+	// BusyBox ash with it.
+	RadixIsAlwaysThePoint
+	// RadixIsTheLocalesOwn writes the locale's radix and reads a number at it
+	// **instead of** at the point, so `printf '%.2f' 1.5` under a comma locale
+	// is `invalid number`. bash and ksh93.
+	RadixIsTheLocalesOwn
+	// RadixIsTheLocalesOwnOrThePoint writes the locale's radix and reads a
+	// number at either, so the same `printf '%.2f' 1.5` is `1,50`. zsh, and
+	// the third answer that makes this a policy rather than an Answer.
+	RadixIsTheLocalesOwnOrThePoint
+)
+
+// consultsTheLocale reports whether a shell with this policy reads
+// `LC_NUMERIC` at all.
+//
+// Unspecified answers false, which is what keeps an unanswered axis off the
+// common path rather than making it a refusal: a shell with no answer writes
+// the point, exactly as it did before the axis existed, and is asked the
+// question only where a locale with its own radix is actually in force — see
+// Runner.LocaleRadixChar.
+func (p RadixPolicy) consultsTheLocale() bool {
+	return p == RadixIsTheLocalesOwn || p == RadixIsTheLocalesOwnOrThePoint
+}
+
+// readsThePointAsWell reports whether a point is still a radix under a locale
+// whose radix is something else. One shell in the panel says yes.
+func (p RadixPolicy) readsThePointAsWell() bool {
+	return p != RadixIsTheLocalesOwn
+}
 
 // consultsTheLocale reports whether a shell with this policy reads the
 // locale's charset at all, which is the half of the axis that matters before

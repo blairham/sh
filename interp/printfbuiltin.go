@@ -1485,7 +1485,7 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		}
 		if verb == 'a' || verb == 'A' {
 			text, stop := r.printfHexFloat(spec, verb, f)
-			return text, code, stop
+			return r.printfRadix(text), code, stop
 		}
 		f = r.printfFloatTie(spec, verb, f)
 		if verb == 'g' || verb == 'G' {
@@ -1498,11 +1498,33 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 			verb = 'f'
 		}
 		if printfWidePrecision(spec) {
-			return printfWideFloat(spec, verb, f), code, false
+			return r.printfRadix(printfWideFloat(spec, verb, f)), code, false
 		}
-		return fmt.Sprintf(spec+string(verb), f), code, false
+		return r.printfRadix(fmt.Sprintf(spec+string(verb), f)), code, false
 	}
 	return "", 0, false
+}
+
+// printfRadix puts the locale's radix character where a conversion wrote the
+// point.
+//
+// A substitution on the laid-out field rather than a radix handed to the
+// formatter, because Go's verbs write a point and nothing else: strconv has no
+// locale at all, which is the same reason interp/localeradix.go has to read one.
+// Every floating conversion goes through here, `%a` included — measured, ksh93
+// writes `0x1,8p+0` under a comma locale and so does bash, so the hexadecimal
+// form carries the radix exactly as `%f` does.
+//
+// Exactly one point can appear in any of these fields — the exponent is
+// digits, the `0x` and `p` of a hexadecimal float are letters, and a padded
+// field is spaces or zeros — so this replaces every one it finds rather than
+// counting, and under the C locale it is a comparison that returns.
+func (r *Runner) printfRadix(field string) string {
+	radix, moved := r.localeHasItsOwnRadix()
+	if !moved {
+		return field
+	}
+	return strings.ReplaceAll(field, cRadixChar, radix)
 }
 
 // printfHexFloat is C's `%a`: the value in hexadecimal, with a binary

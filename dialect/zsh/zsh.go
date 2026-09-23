@@ -2146,6 +2146,13 @@ func Semantics() interp.Semantics {
 	// before the escape, and abandons the script with the status it already
 	// had. Measured 2026-09-11 under `LC_ALL=C` (#1851).
 	s.UnicodeEscapeOutsideTheLocale = interp.OutsideLocaleEscapeRefused
+	// And the radix character, where this shell is the panel's third answer:
+	// it writes the locale's radix and reads a number at **either** that or
+	// the point. Measured on macOS 15 with the host's own `de_DE.UTF-8`,
+	// `printf '%.4f' 1` is `1,0000` and `printf '%.2f' 1.5` is `1,50` where
+	// bash and ksh93 call the operand invalid. See
+	// interp.Semantics.NumberRadix.
+	s.NumberRadix = interp.RadixIsTheLocalesOwnOrThePoint
 	// A value above what six bytes hold is still encoded here, the arithmetic
 	// overflowing into the lead byte: measured 2026-09-22 under
 	// `LC_ALL=en_US.UTF-8`, `printf '%s' $'a\UFFFFFFFFb'` is

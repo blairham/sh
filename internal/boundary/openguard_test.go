@@ -183,6 +183,19 @@ var exempt = map[string]string{
 	"interp.openGatedFile": "verifyopen.go: the open the gate has just agreed to, verified against " +
 		"the object it reached before the descriptor is returned. The seam itself.",
 	"interp.readFileGatedBytes": "verifyopen.go: the same, for the read-whole-file form. The\n\touter openGated and readFileGated are the errno-recording wrappers around\n\tthese two and reach nothing themselves.",
+	// The one read here that is not about a path a script named. The locale
+	// database is the host's, at a fixed root, and the only part a variable
+	// decides is which single directory name under it — checked for path
+	// separators and for `.`/`..` before the join, so `LC_ALL=../../etc` cannot
+	// reach a file outside it. Read once per name per process and cached, which
+	// is the second reason it is not a gate's business: whether a policy saw it
+	// would depend on which Runner in the process had asked first. See
+	// interp/localeradix.go, and #4230 for why the data is the host's rather
+	// than a table.
+	"interp.readHostRadixChar": "the host's own locale numeric data, at a fixed root, for the " +
+		"radix character a number is written with. Not a path a script named: the one " +
+		"variable-decided component is a single directory name, validated first, and the read " +
+		"is cached per process.",
 	"interp.settleBackgroundJobBeforeABlockingOpen": "a stat of the path a redirection is about " +
 		"to open, to learn whether the open can block. The open itself goes through the gate a " +
 		"moment later and is refused there; this answers a question about waiting, and a " +

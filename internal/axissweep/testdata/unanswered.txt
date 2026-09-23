@@ -164,6 +164,7 @@ ash   NamerefTargetResolvedWhenAimed
 ash   NegatedTestRecordsThePostNegationStatus
 ash   NegativeSubscriptCountsOverAPromotedScalar
 ash   NegativeSubscriptPastTheStartInserts
+ash   NumberRadix
 ash   NumericAttributeReplacesTheArrayAttribute
 ash   NumericAttributeReplacesTheCaseAttribute
 ash   NumericTypeLetterPrecedence

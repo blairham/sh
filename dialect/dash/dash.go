@@ -903,6 +903,13 @@ func Semantics() interp.Semantics {
 	// No `'` flag: the character is the conversion this shell does not
 	// have, and `%'d` is `printf: %': invalid directive` at 2.
 	s.PrintfGroupingFlag = interp.No
+	// And the radix character, which this shell never takes from the locale at
+	// all: measured on macOS 15 under the host's own `de_DE.UTF-8`, `printf
+	// '%.4f' 1` is `1.0000` and `printf '%.2f' 1,5` is `printf: 1,5: not
+	// completely converted` — the C locale's answer in both directions, which
+	// is this shell's answer to every locale question. See
+	// interp.Semantics.NumberRadix.
+	s.NumberRadix = interp.RadixIsAlwaysThePoint
 	s.PrintfGroupingFlagAfterTheWidth = interp.No
 	// A `*` beside a width's own digits is refused here too: `printf '%5*d' 4 42`
 	// is a conversion character this shell does not have (#2824).

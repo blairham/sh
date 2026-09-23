@@ -168242,6 +168242,57 @@
         "TimedOut": false
       }
     },
+    "printf/the-radix-character-under-a-comma-locale": {
+      "ash": {
+        "Stdout": "1.0000~0.00~1.50~0~tail",
+        "Stderr": "\u003cshell\u003e: invalid number '1,5'~\u003cshell\u003e: invalid number '1,5'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "1,0000~1,50~1,00~1~tail",
+        "Stderr": "\u003cshell\u003e: line 3: printf: 1.5: invalid number~\u003cshell\u003e: line 4: printf: 1,5: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1,0000~1,50~1,00~1~tail",
+        "Stderr": "\u003cshell\u003e: line 3: printf: 1.5: invalid number~\u003cshell\u003e: line 4: printf: 1,5: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1,0000~1,50~0,00~0~tail",
+        "Stderr": "\u003cshell\u003e: line 2: printf: 1.5: invalid number~\u003cshell\u003e: line 3: printf: 1,5: invalid number",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1.0000~1.00~1.50~1~tail",
+        "Stderr": "\u003cshell\u003e: 2: printf: 1,5: not completely converted~\u003cshell\u003e: 4: printf: 1,5: not completely converted",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1,0000~1,50~1,00~1~tail",
+        "Stderr": "\u003cshell\u003e[3]: printf: 1.5: arithmetic syntax error~\u003cshell\u003e[3]: printf: 1.5: arithmetic syntax error~\u003cshell\u003e[3]: printf: warning: invalid argument of type f",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1,0000~1,50~1,50~5~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "printf/unicode-escape-in-a-format": {
       "ash": {
         "Stdout": " 61 5c 75 30 30 34 31 5a",

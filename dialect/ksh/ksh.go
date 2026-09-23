@@ -2199,6 +2199,15 @@ func Semantics() interp.Semantics {
 	// the prefix: `%15'd` and `%.5'd` are accepted here and refused by the
 	// other two that have the flag at all.
 	s.PrintfGroupingFlag = interp.Yes
+	// And the radix character, which this shell takes from the locale and reads
+	// a number only at — bash's answer, measured separately rather than
+	// inherited. On macOS 15 under the host's own `de_DE.UTF-8`, `printf
+	// '%.4f' 1` is `1,0000`, `printf '%a' 1,5` is `0x1,8p+0`, and `printf
+	// '%.2f' 1.5` is this shell's own `arithmetic syntax error` at 1 rather
+	// than bash's sentence. Same value, different wording, which is exactly
+	// the split between a semantics axis and a diagnostic. See
+	// interp.Semantics.NumberRadix.
+	s.NumberRadix = interp.RadixIsTheLocalesOwn
 	s.PrintfGroupingFlagAfterTheWidth = interp.Yes
 	// And a `*` may stand beside a width's own digits, where it wins:
 	// `printf '[%5*d]' 4 42` is `[  42]` here (#2824).

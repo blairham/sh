@@ -649,6 +649,11 @@ func Semantics() interp.Semantics {
 	// which zsh and ksh93 both refuse as a modifier they do not know. See
 	// Semantics.HistoryWordwiseSubstitutionModifier.
 	s.HistoryWordwiseSubstitutionModifier = interp.Yes
+	// A `"` ends an event's name where it closes a string that is open there
+	// and is a letter of the name where nothing is open — measured, `echo
+	// "!zz"` blames `!zz` and `echo "$( echo "!zz" )"` blames `!zz"` (#4187).
+	// See Semantics.HistoryClosingQuoteEndsAnEventName.
+	s.HistoryClosingQuoteEndsAnEventName = interp.Yes
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.

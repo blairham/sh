@@ -175,3 +175,51 @@ func TestTheDesignatorsAtARangeEdge(t *testing.T) {
 		t.Errorf("err %q, want %q", errs, want)
 	}
 }
+
+// Which `"` ends an event's name: the one that **closes** a string open where
+// the reference stands, and not a quote reached with nothing open.
+//
+// #4187, and the transcripts are bash 5.3.20's own, run 2026-09-22 with
+// `set -o history; set -H` from a script file. The pair in the first two rows
+// is the whole of it — the same two characters, `zz"`, read twice under the
+// two quoting states — and the rows after them say it is not a rule about
+// `$( )`: there is no substitution in either.
+func TestWhichQuoteEndsAnEventName(t *testing.T) {
+	for _, c := range []struct{ line, want string }{
+		{`echo "!zz"`, `S: line 4: !zz: event not found`},
+		{`echo "$( echo "!zz" )"`, `S: line 4: !zz": event not found`},
+		{`echo $( echo "!zz" )`, `S: line 4: !zz: event not found`},
+		{`echo !zz"`, `S: line 4: !zz": event not found`},
+		{`echo "a"!zz"b"`, `S: line 4: !zz"b": event not found`},
+		{`echo "a" b!zz"`, `S: line 4: !zz": event not found`},
+		{`echo "$( echo x"!zz" )"`, `S: line 4: !zz": event not found`},
+		// A quote the scan never reaches with the state off still ends the
+		// name, which is the control: `!zz` and not `!zz"` here.
+		{`echo "a" "!zz"`, `S: line 4: !zz: event not found`},
+	} {
+		t.Run(c.line, func(t *testing.T) {
+			out, errs, code := historyRun(t, "set -o history\nset -H\necho a\n"+c.line+"\n")
+			if strings.TrimRight(errs, "\n") != c.want || code != 0 {
+				t.Errorf("err %q status %d, want %q at 0", errs, code, c.want)
+			}
+			if out != "a\n" {
+				t.Errorf("out %q, want only the seeded line — the refused one does not run", out)
+			}
+		})
+	}
+	// And the name is what was *looked up* rather than only what is blamed.
+	// The pair: `!ec` finds the seeded `echo aseed` inside the quotes and
+	// finds nothing once the state has been toggled off, because the name
+	// searched for was `ec"`. Both transcripts are bash 5.3.20's.
+	out, errs, code := historyRun(t, "set -o history\nset -H\necho aseed\necho \"!ec\"\n")
+	// The expanded line is echoed on standard *error*, which is where that
+	// shell puts it — see docs/spec/history.md — so the pair is read off both
+	// streams rather than one.
+	if out != "aseed\necho aseed\n" || strings.TrimRight(errs, "\n") != `echo "echo aseed"` || code != 0 {
+		t.Errorf("out %q err %q status %d, want the reference to expand", out, errs, code)
+	}
+	out, errs, code = historyRun(t, "set -o history\nset -H\necho aseed\necho \"$( echo \"!ec\" )\"\n")
+	if want := `S: line 4: !ec": event not found`; strings.TrimRight(errs, "\n") != want || out != "aseed\n" || code != 0 {
+		t.Errorf("out %q err %q status %d, want %q at 0", out, errs, code, want)
+	}
+}

@@ -20052,11 +20052,48 @@ type Semantics struct {
 	// which read the quote as part of the name, and `T!'x E` printed whole
 	// in zsh 5.9.2. A backquote splits the same way — the two shells that
 	// take the quote take it too, and the one that leaves it alone runs the
-	// command substitution it opens. A double quote ends the name in all
-	// three and is not this question.
+	// command substitution it opens. A double quote is a different question
+	// and has an axis of its own — see HistoryClosingQuoteEndsAnEventName,
+	// where the sentence this one used to carry ("a double quote ends the
+	// name in all three") turned out to hold only where the quote closes a
+	// string that is open (#4187).
 	//
 	// Read rather than asked, for the reason HistoryWords is.
 	HistoryQuoteEndsAnEventReference Answer
+
+	// HistoryClosingQuoteEndsAnEventName makes a `"` end a `!string` event
+	// name only where it **closes** a double-quoted string that is open
+	// there. A `"` reached with no string open is a letter of the name
+	// instead, and the name runs on to whatever ends it next.
+	//
+	// Measured 2026-09-22 (#4187) on bash 5.3.20, from a script with
+	// `set -o history; set -H` and a seeded list:
+	//
+	//	echo "!zz"                  !zz: event not found
+	//	echo "$( echo "!zz" )"      !zz": event not found
+	//	echo $( echo "!zz" )        !zz: event not found
+	//	echo !zz"                   !zz": event not found
+	//	echo "a"!zz"b"              !zz"b": event not found
+	//
+	// so the answer moves with whether a double quote is open where the name
+	// is read, which is the parity of the quotes in front of it — the second
+	// row is the first row's quote reached after two of them have toggled the
+	// state off. The last two rows hold the rule down from outside any
+	// substitution, which is what says it is not a rule about `$( )`.
+	//
+	// It is the *lookup* and not only the blamed text: with `echo seeded` in
+	// the list, `echo "!ec"` expands and `echo "$( echo "!ec" )"` is
+	// `!ec": event not found`, because the name bash searched for was `ec"`.
+	//
+	// zsh 5.9.2 is the other answer and is unanimous about it, measured the
+	// same day at a prompt with a scratch `HISTFILE`: `echo !zzX"`,
+	// `echo "!zzX"` and `echo "$( echo "!zzX" )"` are each
+	// `event not found: zzX`, so there a `"` ends the name wherever it
+	// stands. ksh93u+ does no `!` expansion at all through either route, so
+	// the question does not reach it.
+	//
+	// Read rather than asked, for the reason HistoryWords is.
+	HistoryClosingQuoteEndsAnEventName Answer
 
 	// HistoryEventCharClosesAnEventName ends a `!string` event name at a
 	// second event character inside it, that character included, rather than
@@ -24922,6 +24959,11 @@ func PosixSemantics() Semantics {
 		HistoryQuoteEndsAnEventReference:  No,
 		HistoryEventCharClosesAnEventName: No,
 		HistoryBracedEventReference:       No,
+		// And the standard has no expander to read a double quote with, so
+		// the preset takes the simpler of the two readings — a `"` ends a
+		// name wherever it stands — and bash, whose answer depends on
+		// whether a string is open there, overrides.
+		HistoryClosingQuoteEndsAnEventName: No,
 		// Two of the three end a word designator at its `$`, and two read a
 		// `^` at a range's end as word one — a different two, so neither
 		// preset value is anybody's whole answer.

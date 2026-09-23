@@ -554,6 +554,46 @@ is the half #3421 asserted and re-measurement disproved. `echo "!\x"` and
 applying a wrong one in both places rather than the outside-quotes rule in
 both.
 
+**Which `"` *ends* a name is a different question, and the quoting state does
+decide that one.** Measured on bash 5.3.20 on 2026-09-22 from a script with
+`set -o history; set -H` and `echo seeded` in the list:
+
+| written | bash 5.3.20 names | why |
+| --- | --- | --- |
+| `echo "!zz"` | `!zz` | the quote closes the string the reference stands in |
+| `echo "$( echo "!zz" )"` | `!zz"` | the same quote, with two in front of it, so nothing is open |
+| `echo $( echo "!zz" )` | `!zz` | one quote again, so it closes |
+| `echo !zz"` | `!zz"` | nothing open — and no substitution either |
+| `echo "a"!zz"b"` | `!zz"b"` | so the name runs to the end of the line |
+| `echo "$( echo "!ec" )"` | `!ec"`, not found | the **lookup** uses the wider name, where `echo "!ec"` expands |
+
+So it is the parity of the double quotes in front of the reference — the same
+state the scanner already keeps for whether a `!` expands at all — and the last
+two rows say it is not a rule about `$( )`, there being no substitution in
+either. zsh 5.9.2 ends the name at either quote and is unanimous about it
+(`echo !zzX"`, `echo "!zzX"` and `echo "$( echo "!zzX" )"` are each
+`event not found: zzX`), which is `Semantics.HistoryClosingQuoteEndsAnEventName`
+— bash `Yes`, everything else `No`. bash 3.2 answers zsh's way and
+`BASH_COMPAT=32` does not move 5.3, so it is a version rather than a mode, and
+this shell answered zsh's way in every dialect until #4187.
+
+**Two neighboring halves are measured and not implemented**, and both are
+recorded here rather than guessed at:
+
+- A `"` **against** the event character is ordinary text here and the name's
+  first letter in bash where nothing is open: `echo x!"y"` is
+  `!"y": event not found` there and `x!y` printed here. It is *not* the parity
+  rule, because bash reads `echo "$( echo "!" )"` as text where
+  `echo "a"!" )"` — same parity, same characters after the quote — is a
+  reference. What a substitution does to the **start** rule needs measuring
+  before anything is written down.
+- bash's posix mode spares a `!` inside the outer double quotes even where the
+  flag has been toggled off. As `sh`, `echo "$( echo "!zz" )"` prints the text
+  while the unquoted `echo !zz` above it is refused, so the sparing is wider
+  than the flag; ours reads
+  `Semantics.HistoryExpansionSparesDoubleQuotesInPosixMode` off the flag and
+  refuses that line.
+
 ## The script route
 
 bash expands in a script too, once `set -o history` and `set -H` have both

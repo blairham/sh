@@ -3694,6 +3694,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `builtin/ksh93s-registers-names` | `st=127` **2>** `<shell>: 1: builtin: not found` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `st=1` **2>** `builtin: hi: not found` | `hi~st=0` | `st=127` **2>** `<shell>: builtin: not found` |
 | `fc/with-no-history` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>: hist: 1-0: invalid range` | `st=1` **2>** `<shell>:fc:1: no such event: 1` | `st=127` **2>** `<shell>: fc: not found` |
 | `fc/a-comment-inside-a-command-is-no-part-of-the-entry` | *(no output, status 2)* | `a~b~1	 for i in a b~do echo $i; done` | `a~b~1	for i in a b~do echo $i; done` | `a~b~1	 for i in a b do echo $i; done` | *(no output, status 2)* | *(no output, status 1)* | `a~b~<script>: line 7: fc: not found` *(status 127)* |
+| `histexp/which-quote-ends-an-event-name` | *(no output, status 2)* | `after` **2>** `<script>: line 3: !zz": event not found~<script>: line 3: !zz: event not found` | `!zz~!zz~after` | `after` **2>** `<script>: line 3: !zz: event not found~<script>: line 3: !zz: event not found` | *(no output, status 2)* | *(no output, status 1)* | *(no output, status 2)* |
 | `fc/a-continuation-is-one-line-of-the-entry` | *(no output, status 2)* | `one two~1	 echo one two` | `one two~1	echo one two` | `one two~1	 echo one two` | *(no output, status 2)* | *(no output, status 1)* | `one two~<script>: line 4: fc: not found` *(status 127)* |
 | `cd/no-operand-with-a-home-that-is-not-there` | `st=2` **2>** `<shell>: 1: cd: can't cd to /nonexistent-dir` | `st=1` **2>** `<shell>: line 1: cd: /nonexistent-dir: No such file or directory` | `st=1` **2>** `<shell>: line 1: cd: /nonexistent-dir: No such file or directory` | `st=1` **2>** `<shell>: line 0: cd: /nonexistent-dir: No such file or directory` | `st=1` **2>** `<shell>: cd: /nonexistent-dir: [No such file or directory]` | `st=1` **2>** `<shell>:cd:1: no such file or directory: /nonexistent-dir` | `st=2` **2>** `<shell>: cd: line 0: can't cd to /nonexistent-dir: No such file or directory` |
 | `return/a-marker-in-front-of-the-status` | **2>** `<shell>: 1: return: Illegal number: --` *(status 2)* | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | **2>** `<shell>: return: line 0: Illegal number: --` *(status 2)* |
@@ -5313,6 +5314,14 @@ grades it and nothing drift-checks it either, for the same reason.
   echo $i
   done
   fc -l 2>&1
+  ```
+- `histexp/which-quote-ends-an-event-name` — which `"` ends a `!string` event's name, asked twice in one script so the pair is in one row: bash 5.3 blames `!zz"` on the first line and `!zz` on the second, so the quote ends the name where it **closes** a string that is open there and is a letter of the name where the two quotes in front of it have toggled the state off. `Semantics.HistoryClosingQuoteEndsAnEventName`. bash 3.2 is the column that says it is a version and not a mode — it blames `!zz` on both lines, and `BASH_COMPAT=32` does not move 5.3 — and bash-as-`sh` spares both, its posix mode reaching *past* the flag in a way ours does not (#4187, the second half unfixed). The setup line ends zsh, dash, ksh93 and BusyBox ash where they stand: none of them has `set -o history`, and a `set -o` name a shell does not have is fatal in a script, which is why four cells are empty rather than showing an unexpanded line
+  ```sh
+  set -o history 2>/dev/null
+  set -H 2>/dev/null
+  echo "$( echo "!zz" )"
+  echo "!zz"
+  echo after
   ```
 - `fc/a-continuation-is-one-line-of-the-entry` — the reader joins the two physical lines before the parser sees either, so the entry is the one line `echo one two`; joining them with a `;` records `echo one \` and then `two`, which is two commands and not the one that ran (#4076). From a file for the reason the row above is
   ```sh

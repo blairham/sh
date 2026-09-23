@@ -61,6 +61,11 @@ func (r *Runner) substFailureRoute(span syntax.Span) string {
 		// was all this answered before; the here-document body is the text
 		// *around* the substitution, so it is a fact about where the shell
 		// is rather than about the word.
+		//
+		// A third route reaches the same name without coming through here:
+		// an operand read a second time, where the failure is the read's
+		// rather than a parsed body's. See Runner.refuseUnreadableOperand
+		// (#4201).
 		return "command substitution"
 	}
 	if !d.NamesTheInputInLocation {

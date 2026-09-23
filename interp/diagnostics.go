@@ -3759,6 +3759,33 @@ type Diagnostics struct {
 	// message says something happened, like Location and RedirectFailureLine.
 	CommandIsLocatedWhereItsFirstWordEnds bool
 
+	// HiddenSubstitutionIsRefusedBelowItsLine places the refusal from a
+	// substitution the line's own read never saw one line below the command
+	// that held it, rather than on it.
+	//
+	// The body is reached only when the word expands, by which time the shell
+	// has finished the line and moved on, so the number it writes is where it
+	// then is. bash alone, and only reachable there — it is the one column
+	// that both reads a body with its line and lets a `'` in a double-quoted
+	// operand hide one from that read. See
+	// syntax.Dialect.AQuotedOperandHidesASubstitutionFromItsLine.
+	//
+	// Measured 2026-09-23 against bash 5.3.15 in the pinned debian:sid-slim,
+	// from script files under `env -i PATH=/usr/bin:/bin LC_ALL=C` with
+	// `a=4` on line one and `echo "${a+'$('}"` somewhere below it. Nine
+	// shapes: on its own line, with five lines after it, as the last line of
+	// the file — where the answer is one *past* the end — twice on one line,
+	// and inside an `if`, a `for`, a `case` and a function body, where the
+	// answer is the line below the command and not below the construct that
+	// encloses it.
+	//
+	// The ninth is the discriminating one and is why this is the command's
+	// line rather than the span's: with the command written `echo \` on one
+	// line and the operand on the next, the refusal is named at the operand's
+	// own line — one below the `echo`, which is where
+	// CommandIsLocatedWhereItsFirstWordEnds already puts the command.
+	HiddenSubstitutionIsRefusedBelowItsLine bool
+
 	// SubstitutionBodyIsNumberedFromWhereTheShellWasReading numbers a substitution body's
 	// commands from the line the construct's closing delimiter is on rather
 	// than from the lines its text is written on: the body's first command is

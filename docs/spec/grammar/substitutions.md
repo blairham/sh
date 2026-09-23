@@ -1264,6 +1264,63 @@ records. `syntax.Dialect.AQuotedOperandHidesASubstitutionFromItsLine` carries
 the dialect's standing answer and nothing swaps it at `set -o posix`, so the
 `sh` column of row 2 is a known gap.
 
+### What the hidden one's refusal is called, and where it is put
+
+The operand's second read is not the line's, and the shell reaches it only
+when the word expands — by which time the line is behind it. One column says
+so twice over. Measured 2026-09-23 against bash 5.3.15 in the pinned
+`debian:sid-slim` and bash 5.3.20 on macOS, which agree, with `a=4` on line
+one so the operand is reached:
+
+| script from line two | bash |
+| --- | --- |
+| `echo "${a+'$('}"` | `command substitution: line 3: unexpected EOF while looking for matching `''` |
+| `echo "${a+'$('\'}"` | `command substitution: line 4: unexpected EOF while looking for matching `)'` |
+| `echo "${a+'bar}"` | `line 2: unexpected EOF while looking for matching `''` |
+| `echo "${a-'$('}"` | nothing at all |
+
+So there are three facts, and the last two rows are the controls for two of
+them.
+
+**The route is named**, `command substitution`, exactly as it is for the two
+bodies that column reads at expansion time already — the older spelling's and
+a here-document's. Row 3 is what says the question is *where the read was*
+and not what it ran out on: it runs out on a `'` just as row 1 does, it holds
+no substitution at all, and it is named plainly. It is also refused by the
+line's own read rather than deferred, because the `'` that quotes nothing in
+the second read quoted the closing brace in the first — so a rule keyed on
+the token would name the route for a construct the shell never even reached.
+
+**The line is below the command**, not on it: the text that ran out is named
+on the line after it, which is the same convention every unterminated
+construct in that column follows. Row 2 is two lines below instead of one,
+and that is the same rule applied twice — there the escaped quote closes the
+quote again, so what runs out is the substitution's **body**, one more text
+handed to one more reader.
+
+It is the line of the *command* rather than of the operand, which a first word
+spanning lines separates: `echo \` on one line with the operand on the next is
+named at the operand's line, one below the `echo`, which is where
+`Diagnostics.CommandIsLocatedWhereItsFirstWordEnds` already puts the command.
+
+Row 4 is the control for the whole section: an operand a branch does not take
+is never read, so the same text says nothing.
+
+Diagnostics value: `HiddenSubstitutionIsRefusedBelowItsLine`, and the facts
+are carried out of the parse on `syntax.Error.RanOutInsideACommandSubstitution`
+and `syntax.Error.RanOutOnACommandSubstitution`.
+
+Three neighboring shapes are measured and **not** held. A hidden `$((`, a
+hidden backquote and a hidden `${` are a different sentence in that column —
+`bad substitution: no closing `)' in '$(('` — where this shell writes the
+unterminated-construct wording; and a hidden body that *parses* and then
+refuses — `echo "${v-'$(if)'}"` — is named and placed correctly there but
+echoes the body's own text rather than the script's line, and lets the script
+carry on where this one gives up. The first needs a wording, the second needs
+the hidden fact carried as far as the body's own reader, which the tree has no
+room for: `syntax.Span` is inside a size budget the `TestTheTwoShapesATreeIsMadeOfStayWithinTheirBudget`
+guard holds it to.
+
 ### Where this implementation stands
 
 **The eager side, in `bash`, `dash` and `ash`**, each on its own value of

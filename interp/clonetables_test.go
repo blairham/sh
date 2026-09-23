@@ -365,6 +365,7 @@ func seedTables(r *Runner) {
 	r.nameref = map[string]string{"seed": "target"}
 	r.floatExponent = map[string]bool{"seed": true}
 	r.uppered = map[string]bool{"seed": true}
+	r.capitalized = map[string]bool{"seed": true}
 	r.subshellWroteArrays = map[string]bool{"seed": true}
 }
 

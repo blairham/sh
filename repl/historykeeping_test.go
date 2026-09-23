@@ -236,8 +236,20 @@ func TestHowManyEntriesATypedCommandMakesFollowsTheDialect(t *testing.T) {
 
 // TestASingleLineCommandIsOneEntryEitherWay: the split is for a command that
 // took more than one line, and a one-line command must not be touched by it.
-// Without this the option would look right on the `for` loop above and record
-// every ordinary command twice the moment the collector held one line.
+//
+// It pins the **outcome** and cannot pin the guard, which is worth saying so
+// that nobody later reads it as covering more than it does. A mutation
+// loosening `len(typed) > 1` to `> 0` survives this test and the whole repl
+// package: for a single collected line the split loop remembers that one line
+// and the joined road remembers the same string, so the two arms agree on that
+// input and no observation can separate them.
+//
+// The guard stays even so, and this is the opposite call to the dead one
+// removed in #4335. That one restated a rule the name syntax already
+// guaranteed and could never fire; this one fires on every single-line command
+// and merely agrees with the other arm. Removing it would route every ordinary
+// command through a loop called "split", which would make the code say
+// something it does not mean.
 func TestASingleLineCommandIsOneEntryEitherWay(t *testing.T) {
 	got := runKept(t, nil, nil, "echo one\necho two\n", func(s *Shell) {
 		s.Runner.SetHistoryKeepsATypedCommandWhole(false)

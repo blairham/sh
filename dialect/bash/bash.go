@@ -4726,6 +4726,7 @@ func Apply(r *interp.Runner) {
 	// The command the shell is running, which a DEBUG action reads to find
 	// out which one it fired for. See bashcommand.go.
 	registerRunningCommand(r)
+	registerTrapSignalNumber(r)
 	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
 	// And an assignment seeds it, which is what makes a script that uses
 	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one

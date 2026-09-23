@@ -2985,6 +2985,11 @@ type Runner struct {
 	// `shopt -q interactive_comments` is 0, so the two namespaces are not one
 	// table read twice. Installed beside the two above; see extend.go.
 	shellOptionReader func(r *Runner, name string) (on, known bool)
+	// execFailureIsSurvivable makes an `exec` that could not happen an
+	// ordinary failed command rather than the end of the script. Off with
+	// nothing said; one dialect names it, as `shopt -s execfail`. See
+	// ExecFailureLeavesTheShellRunning in sessionswitches.go.
+	execFailureIsSurvivable bool
 	// optionLetterNames are the `set` option letters this dialect spells its
 	// own way, mapped to the names in its namespace. Nil where every letter
 	// the shell has is one the panel shares. Installed through

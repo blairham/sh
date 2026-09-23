@@ -303,6 +303,12 @@ type Parser struct {
 	// cannot be measured, and #1207 is explicit that guessing both halves at
 	// once is how a wrong rule gets into the tables.
 	separatorStood Pos
+	// separatorBeforeAWordWanted marks the one place the grammar is waiting
+	// for a separator *and* the word after it rather than for a single thing
+	// — requireSep, which is what a `for` reaches with its word list still
+	// open. One shell's line counter charges an ask for each. See
+	// Parser.unterminated.
+	separatorBeforeAWordWanted bool
 
 	// terminatorStood is where a `case` arm's terminator — `;;` or `;&` —
 	// stands when a command separator stood in front of it, and armTerminator
@@ -1060,6 +1066,39 @@ func (p *Parser) unterminated(expected string) *Error {
 	if !strings.HasSuffix(p.lex.src, "\n") {
 		// The text stopped mid-line, so the end of it is the line after.
 		e.EndLine++
+	}
+	// And then the line this is reported at is a *counter* in the shell whose
+	// wording names it, not a position in the text: it counts how many more
+	// times the grammar asked for input after the text ran out. Two things
+	// make it ask again.
+	//
+	// Measured 2026-09-23 on bash 5.3.15 in the pinned image, each text one
+	// line long inside an `eval` so the count is read directly:
+	//
+	//	                            no `\`   trailing `\`
+	//	X() { (a)>b                    2          3
+	//	X() { echo a                   2          3
+	//	if true; then echo a           2          3
+	//	while true; do echo a          2          3
+	//	( echo a                       2          3
+	//	case x in a) echo b            2          3
+	//	for i in a b; do echo          2          3
+	//	for i in a b                   2          4
+	//
+	// So an unsatisfied line continuation is one more ask on its own, and a
+	// `for` whose word list is still open is one more again — it wants the
+	// list terminated *and* then `do`, which is two asks where every other
+	// construct has one. A continuation followed by a real line costs
+	// nothing, because the line it asked for arrived: the same text with a
+	// newline after the backslash answers 2.
+	//
+	// A rule rather than a fitted table, which is what makes it safe: both
+	// increments are the grammar saying what it still needs.
+	if p.lex.endedOnALineContinuation {
+		e.EndLine++
+		if p.separatorBeforeAWordWanted {
+			e.EndLine++
+		}
 	}
 	e.Msg = "unexpected end of input"
 	if e.Construct != "" {
@@ -5585,7 +5624,13 @@ func (p *Parser) requireSep(before string) {
 			// wrong place and is reported as one.
 			p.ranOut()
 			if p.err == nil {
+				// Here and nowhere else the grammar wants *two* things: the
+				// separator that ends what it was reading, and then the word
+				// after it. One shell's line counter charges for both. See
+				// Parser.unterminated for the table.
+				p.separatorBeforeAWordWanted = true
 				p.err = p.unterminated(before)
+				p.separatorBeforeAWordWanted = false
 			}
 			return
 		}

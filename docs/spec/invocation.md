@@ -820,6 +820,54 @@ shells therefore name their own group, both are right, and the two numbers
 still differ, because they are two processes. That is seven lines of one file
 that no change here can close — see `internal/suite/pid.go` and #4012.
 
+#### Which children get a process group of their own (#4250)
+
+The branch above is decided by the shell's own standing, and that standing is
+its *parent's* decision — so the question of which children a shell puts in a
+group of their own is the same question seen from the other side.
+
+A **background** job gets one while the monitor is on, and the monitor alone is
+enough: measured, a `set -m` in a plain `-c` with no terminal anywhere puts the
+job in a group of its own in bash 5.3.20, ksh93u+ and here alike, and with the
+monitor off all three leave it in the shell's (#1738).
+
+A **foreground** command needs the monitor *and* a terminal, which is one
+condition more and is measured rather than symmetrical. Measured 2026-09-23,
+`ps -o pid,pgid` in the shell and in a child, against the shell's own group:
+
+| | no terminal | a terminal, `set -m` | a prompt |
+| --- | --- | --- | --- |
+| bash 5.3.20 | the shell's | its own | its own |
+| ksh93u+ | the shell's | the shell's | its own |
+| zsh 5.9.2 | the shell's | the shell's | its own |
+
+`set -m` does not move the first column in any of them — bash grants the
+option with no terminal, puts `m` in `$-`, and still leaves the child in the
+shell's group.
+
+The reason for the extra condition is what a group is *for* here: a
+foreground command's group only serves it by being the terminal's foreground
+group, so with no terminal there is nothing to hand over and the group is a
+standing the command should not be in. A signal aimed at the shell's group —
+which is what a terminal's `C-c` and what `kill -- -$$` both send — reaches
+the shell and not the command it is waiting on, so a child of a script
+survived a stop that would have ended it anywhere else. This shell gave
+every child of every script a group of its own until #4250, because the
+condition it asked was "is anything able to notice this command", which in
+the shipped binary is always true.
+
+**The middle column is answered bash's way in every dialect**, and that is a
+deliberate divergence for ksh and zsh rather than an oversight. It needs a
+shell that is not interactive, holds a terminal, and has asked for job control
+in so many words; modeling it would be an axis whose two answers are "the
+monitor decides" and "a prompt decides", and nothing measured yet needs one.
+
+One thing it does move: our inner `$THIS_SH -i` shells are now on the same
+branch as bash's — they inherit the file's group rather than leading one, so
+they write a number where they used to write `-1`. The seven lines still
+differ, in their digits, which is what makes a mask over the digits a slightly
+better bargain than it was.
+
 #### What the corpus says about this
 
 Two rows, `harness/an-interactive-bundle-runs-the-command-string` and

@@ -227,6 +227,15 @@ func jobRunShaped(t *testing.T, f *fakeJobs, src string, atAPrompt bool, tweak .
 	})
 	if f != nil {
 		t.Cleanup(func() { f.reapSaidStopped(t) })
+		// And a terminal, for the same reason one line further on: a shell
+		// whose commands can stop and be resumed is a shell with one. It is
+		// what makes the monitor grantable without a question, and it is the
+		// second half of what a foreground command needs before it is given a
+		// process group of its own — the group only serves the command by
+		// being the terminal's foreground group, so with no terminal there is
+		// nothing to hand over and the command stays in the shell's group
+		// (#4250).
+		r.Terminal = true
 		// A shell that is told its commands *stopped* is a shell running the
 		// monitor, and saying so is what these tests need after #2227: the
 		// stop of a command is an answer only where the shell is watching

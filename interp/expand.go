@@ -6279,7 +6279,19 @@ func (r *Runner) expandSpansWith(spans []syntax.Span, hook func(literal bool, pa
 // way the arithmetic reader's is, because it is the same kind of thing: text
 // that could only be read once it had been produced.
 func (r *Runner) rawSpans(text string) ([]syntax.Span, bool) {
-	spans, err := syntax.HeredocSpans(text, r.dialect())
+	return r.rawSpansRead(text, syntax.HeredocSpans)
+}
+
+// arithSpans is rawSpans for the text of an arithmetic expression, which is
+// read by different rules in one place: a backslash inside brackets keeps
+// both of its bytes, because the subscript it is in will be read a second
+// time. See syntax.ArithTextSpans for the rows that measure it.
+func (r *Runner) arithSpans(text string) ([]syntax.Span, bool) {
+	return r.rawSpansRead(text, syntax.ArithTextSpans)
+}
+
+func (r *Runner) rawSpansRead(text string, read func(string, syntax.Dialect) ([]syntax.Span, error)) ([]syntax.Span, bool) {
+	spans, err := read(text, r.dialect())
 	if err != nil {
 		r.reportRawTextRefusal(err)
 		r.expandErr = true

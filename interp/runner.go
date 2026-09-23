@@ -770,6 +770,14 @@ type Runner struct {
 	// first: measured on zsh 5.9.2, `hash -d root=/tmp; print -r -- ~root`
 	// is `/tmp` where the same line without the assignment is `/var/root`.
 	//
+	// **An empty name asks for the user the process runs as**, which is the
+	// one question about the database that has no name in the script to
+	// carry it: a bare `~` on a column that reads a password entry when
+	// `HOME` is unset. No user is called the empty string, so the name space
+	// is free to mean it, and a hook that does not expect the convention
+	// answers false and leaves the word as written — the same as no hook.
+	// See Semantics.TildeWithNoHome.
+	//
 	// The binaries wire it to `os/user` in driver, where process-wide
 	// questions belong. A test must not: `internal/testenv` exists because
 	// a test that reads the real user database passes on a laptop and fails

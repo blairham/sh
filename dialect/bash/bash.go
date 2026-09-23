@@ -903,6 +903,15 @@ func Semantics() interp.Semantics {
 	// separate the three readings, and #3484 and #4039, which were each
 	// filed on the reading this is not (#4156).
 	s.TildeReadsACachedHome = interp.Yes
+	// And with no home to read — `HOME` never set, or the copy above left
+	// absent by `export -n HOME` and a child — the word becomes the home of
+	// the user the process runs as, out of the same password database
+	// `~user` reads. Measured 2026-09-23 on 5.3.20 and 3.2.57, which agree:
+	// `env -i PATH=… bash -c 'printf "<%s>" ~'` is a path while `$HOME` is
+	// empty, and `v=a:~:b` takes the same answer after the colon. A `HOME=`
+	// that is *set* and empty is not this question and stays empty. See
+	// interp.TildeWithNoHomePolicy (#4179).
+	s.TildeWithNoHome = interp.TildeWithNoHomeReadsThePasswordEntry
 	// And a word that merely *looks* like an assignment is a tilde context
 	// here, which is this shell's alone: `echo make -k FOO=~/mumble` prints
 	// the home directory, as does `foo=~:~` after each colon, while dash,

@@ -976,6 +976,15 @@ func Semantics() interp.Semantics {
 	// `typeset -A m; m[~/k]=v` stores under `$HOME/k` and `${m[~/k]}` reads
 	// it back. Measured 2026-09-17 on ksh93u+ 2012-08-01 (#2298).
 	s.SubscriptKeyExpandsALeadingTilde = interp.Yes
+	// Semantics.TildeWithNoHome keeps the base's answer here, and the
+	// departure is recorded rather than modeled. Measured 2026-09-23 on
+	// ksh93u+ 2012-08-01, `env -i PATH=… ksh -c`: a `~` with no `HOME`
+	// becomes the word `root` — not a home but the session's *login name*,
+	// the same string `logname` prints, so `cd ~` is
+	// `cd: root: [No such file or directory]`. It follows whoever owns the
+	// controlling terminal rather than anything about the shell, so a
+	// dialect answering it would be pinning a value no run could reproduce
+	// (#4179).
 	s.ListingControlEscape = interp.ControlEscapeHex
 	// The column that leaves `^` bare, and the only one: `v=^` and `v=a^b`
 	// list unquoted here where bash and zsh write `'^'` and `'a^b'`.

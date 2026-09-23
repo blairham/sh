@@ -17,8 +17,20 @@ import "os/user"
 // in all three. zsh refuses it, `no such user or named directory`, and that
 // is a divergence this hook does not decide: it reports what the database
 // holds and nothing about what a miss costs.
+// An empty name is the user the process runs as, which is the convention
+// interp.Runner.UserHomeDir describes: a bare `~` with no `HOME` to read is
+// the password entry's home in bash, and there is no name in the script to
+// look up. os/user answers it from the process's own uid, so this is the
+// same database and one call rather than a name this program would have to
+// invent.
 func userHomeDir(name string) (string, bool) {
-	u, err := user.Lookup(name)
+	var u *user.User
+	var err error
+	if name == "" {
+		u, err = user.Current()
+	} else {
+		u, err = user.Lookup(name)
+	}
 	if err != nil || u.HomeDir == "" {
 		return "", false
 	}

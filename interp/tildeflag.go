@@ -157,8 +157,9 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 		// that answers it from a copy of HOME rather than from the variable
 		// is asked here and nowhere else — a second site answering
 		// differently is the shape #2298 keeps finding. See
-		// interp/cachedhome.go.
-		home, ok := r.tildeHome()
+		// interp/cachedhome.go, and interp/tildenohome.go for what the
+		// columns do when there is no home to read at all.
+		home, ok := r.homeForAWrittenTilde()
 		if !ok {
 			return "", "", false
 		}

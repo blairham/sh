@@ -1353,6 +1353,15 @@ func Semantics() interp.Semantics {
 	// on eleven shapes; see Semantics.TildePrefixStopsAtAQuoteOrAnExpansion
 	// (#4156).
 	s.TildePrefixStopsAtAQuoteOrAnExpansion = interp.No
+	// And an unset `HOME` answers a `~` the way an empty one does — `~` is
+	// nothing and `~/x` is `/x` — rather than leaving the word as written.
+	// Measured 2026-09-23 on 5.9.2 with `unset HOME`, which really does
+	// unset it here (`${HOME-UNSET}` is `UNSET`), and with `v=a:~:b` on the
+	// same line for the colon road. The startup row is not this question:
+	// this shell seeds `HOME` from the password entry before any line runs,
+	// so a bare `env -i zsh` has a home to read where bash has none. See
+	// interp.TildeWithNoHomePolicy (#4179).
+	s.TildeWithNoHome = interp.TildeWithNoHomeIsEmpty
 	s.ListedNonAsciiIsOrdinary = interp.Yes
 	s.ListedAssignmentPrefixIsBare = interp.No
 	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a

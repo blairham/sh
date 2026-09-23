@@ -518,6 +518,14 @@ func (r *Runner) dialect() syntax.Dialect {
 		// runner builds nested input with is told once.
 		d.ArithPrecedence = r.arithPrecedence
 	}
+	// Where a character ends, which the grammar has to know before it can say
+	// which bytes are metacharacters and cannot work out for itself: the
+	// locale is this runner's state and whether the reader decodes it at all
+	// is the dialect's answer. Handed over as a function rather than as a
+	// codeset so that a `LC_ALL=` on one line is in force for the next, the
+	// same reason ArithPrecedence above is applied here rather than kept
+	// beside the dialect. See syntax.Dialect.CharacterWidth (#4235).
+	d.CharacterWidth = r.CharacterWidth
 	return d
 }
 

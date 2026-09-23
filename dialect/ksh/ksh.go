@@ -1751,6 +1751,17 @@ func Semantics() interp.Semantics {
 	s.ReadExactCountKeepsPartial = interp.No
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.No
+	// The escape is a byte's here, not a character's: `read` without -r takes
+	// the second byte of a multibyte character as a backslash and rescues the
+	// separator behind it. Measured 2026-09-23 under `LC_ALL=zh_TW.Big5`,
+	// `read a b c` over the Big5 spelling of U+03B1 followed by ` b c` — `a`
+	// comes back holding the lead byte, a space and `b`, and `c` is never
+	// assigned. bash 5.3.20 and zsh 5.9.2 both hand the character over whole.
+	//
+	// The program text is the other way round here, taken a character at a
+	// time: see interp.Semantics.MultibyteCharacterIsReadWhole, which this
+	// shell answers Yes by inheriting the preset.
+	s.ReadTakesAMultibyteCharacterWhole = interp.No
 	// typeset in a keyword function hides the caller's value, as bash's
 	// local does.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes

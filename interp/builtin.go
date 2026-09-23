@@ -5723,7 +5723,8 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if readsKeys {
 		return r.readKeysInto(next, keys, args)
 	}
-	text, lits, end := readSegment(next, raw, delim, count, exact, r.countsTheLocalesCharacters)
+	text, lits, end := readSegment(next, raw, delim, count, exact,
+		r.countsTheLocalesCharacters, r.readCharacterWidth)
 
 	// A `read` that fails still assigns. All four shells clear the variables
 	// at end of input rather than leaving what was there, and the reason is
@@ -6468,12 +6469,28 @@ func (u *readUnits) add(c byte) {
 // locale question to a core whose answer is "unanswered". That is the
 // discipline countsCharacters keeps for a length and readKeysFrom keeps for
 // `read -k`.
+//
+// width is the same kind of reader for where a character *ends*, and it is
+// what keeps the backslash above from finding one inside a character. A Big5
+// character can be spelled with `0x5C` as its second byte — U+03B1 is
+// `a3 5c` — so a reader walking bytes escapes the separator behind a letter
+// and delivers two fields as one: `read a b c` over `α b c` put the lead byte,
+// the space and `b` into `a` and never assigned `c` (#4235). The pair is asked
+// about as it arrives, the lead byte held over from the turn before, which is
+// what a reader with no way to put a byte back has instead of a lookahead: a
+// lead byte the next byte does not finish is a byte, and the newline that ends
+// the line is not eaten waiting for a character.
 func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact bool,
-	chars func() bool,
+	chars func() bool, width func(b, next byte) int,
 ) (text string, literal []bool, end int) {
 	var b strings.Builder
 	var escapedAt []int // offsets in b whose byte arrived behind a backslash
 	pending := false    // a backslash read, its character not yet
+	// lead is the byte written last where a character of the locale's encoding
+	// may continue into the next one, and zero where none may. NUL cannot lead
+	// one in any of these encodings, so zero says "nothing held" without a
+	// second flag beside it.
+	var lead byte
 	units := readUnits{chars: chars}
 	write := func(c byte) {
 		b.WriteByte(c)
@@ -6497,6 +6514,21 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 			write(c)
 			continue
 		}
+		if lead != 0 {
+			held, ok := lead, false
+			lead = 0
+			if width != nil && width(held, c) > 1 {
+				// The second byte of a character, so it is data whatever it
+				// spells — a backslash, the delimiter, a separator.
+				ok = true
+			}
+			if ok {
+				write(c)
+				continue
+			}
+			// Not a character after all: the byte held is a byte, and this one
+			// is read as it stands.
+		}
 		if pending {
 			pending = false
 			if c == '\n' {
@@ -6518,6 +6550,17 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 		}
 		if c == delim {
 			return b.String(), literalMask(escapedAt, b.Len()), endDelim
+		}
+		if width != nil && c >= utf8.RuneSelf {
+			// A byte that may lead a character of the locale's encoding, held
+			// over so that the pair can be asked about once the second one
+			// arrives. Written either way, because whether it turns out to be
+			// a character or a byte it is this byte.
+			//
+			// After the delimiter and not before it: `-d` takes any byte, and
+			// a delimiter that arrives is the end of the field in this reader
+			// whatever else it might have begun.
+			lead = c
 		}
 		write(c)
 	}
@@ -6552,7 +6595,8 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 	r.settleBackgroundJobBeforeABlockingRead(in)
 	// No count, so nothing asks what a character is: readSegment puts the
 	// locale question only where a count has to land between characters.
-	text, _, end := readSegment(directByteSource(in), raw, '\n', -1, false, r.countsTheLocalesCharacters)
+	text, _, end := readSegment(directByteSource(in), raw, '\n', -1, false,
+		r.countsTheLocalesCharacters, r.readCharacterWidth)
 	return text, end == endEOF
 }
 

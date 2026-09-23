@@ -1053,6 +1053,30 @@ func (p *Parser) failCondOperand(op, arity string) {
 		p.err = p.unterminated("]]")
 		return
 	}
+	if op == "=~" && !p.atWord("]]") {
+		// The one operand read as a regular expression, where an operator
+		// token standing in its place is **a token the grammar did not want**
+		// rather than an argument the operator would not take. Measured
+		// 2026-09-23 against bash 5.3.15 in the digest-pinned image the suite
+		// is graded in:
+		//
+		//	[[ x =~ ) ]]   syntax error in conditional expression: unexpected
+		//	[[ x =~ & ]]   token `X' — the ordinary refusal for a token
+		//	[[ x =~ < ]]
+		//	[[ x =~ ; ]]
+		//	[[ x =~ ]]     unexpected argument `]]' to conditional binary
+		//	               operator — the closer keeps the operand form
+		//	[[ x == ) ]]   the operand form as well, so it is this operator
+		//	[[ -n ) ]]     and not this position
+		//
+		// So the closer is the exception and every other operator here takes
+		// the token reading. The two forms are one status and two sentences,
+		// and this shell wrote the operand one for all of them.
+		p.failUnexpected("]]")
+		p.recordCondGroup()
+		p.blameCondition(p.condStart)
+		return
+	}
 	p.err = &Error{
 		Pos: p.tok.Pos, Kind: ErrCondOperand,
 		Token: p.tokenLiteral(), Class: p.tokenClass(false),

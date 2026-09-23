@@ -932,6 +932,49 @@ one the oracle panel on this machine recorded, and a reader grading the suite in
 the pinned image will see the other. It is not what any suite row here turns on,
 which is how that was established rather than assumed (#4173).
 
+### How a `=~` operand is lexed
+
+The right operand of `=~` is a **word the shell reads as a regular expression**,
+so characters the shell would otherwise take as operators belong to it. Three
+rules, each measured 2026-09-23 with `echo after` behind the condition, against
+bash 5.3.15 in the digest-pinned image the suite is graded in, zsh 5.9.2 and
+ksh93u+ 2012-08-01:
+
+| written | bash | zsh | ksh93 |
+| --- | --- | --- | --- |
+| `[[ a =~ a\|b ]]` | runs | parse error | runs |
+| `[[ a =~ \|a ]]`, `[[ a =~ \| ]]` | runs | parse error | runs |
+| `[[ x =~ (x) ]]`, `[[ x =~ ((x)) ]]` | runs | runs | runs |
+| `[[ x =~ ) ]]`, `[[ x =~ a) ]]`, `[[ x =~ (x)) ]]` | parse error | parse error | **runs** |
+
+1. **Parentheses are the expression's**, in all three, so they need no flag — and
+   a balanced group is taken whole by the scanner, an alternation inside it
+   included.
+2. **A bare `|` is the expression's** in two of the three:
+   `Dialect.RegexTakesAlternation`, bash and ksh93. It holds **at the start of
+   the operand as well as inside it**, which is the half this shell was missing:
+   a word beginning with the character never reaches the word scanner, so the
+   operator table took it and the operand was reported missing.
+3. **A `)` that closes nothing ends the word** in two of the three:
+   `Dialect.RegexKeepsAnUnbalancedCloser`, ksh93 alone keeping it. The
+   difference is control flow and not wording — the two that end the word refuse
+   the condition while *reading* it and the script stops, where this shell read
+   `)x` as the operand and reported an invalid expression at run time with the
+   script carrying on.
+
+**And a token standing where the expression belongs is a token the grammar did
+not want**, not an argument the operator would not take. Measured on bash:
+
+| written | said |
+| --- | --- |
+| `[[ x =~ ) ]]`, `[[ x =~ & ]]`, `[[ x =~ < ]]`, `[[ x =~ ; ]]` | ``syntax error in conditional expression: unexpected token `X' `` |
+| `[[ x =~ ]]` | ``unexpected argument `]]' to conditional binary operator`` |
+| `[[ x == ) ]]`, `[[ -n ) ]]` | the argument form as well |
+
+So the construct's own closer is the exception and every *other* operator keeps
+the argument form — which is what makes this a fact about `=~` rather than about
+the third-word position. This shell wrote the argument form for all of them.
+
 ### A compatibility level takes the quoting rule back
 
 Quoting a `=~` operand became literal in bash 3.2, so at compatibility level 31

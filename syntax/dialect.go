@@ -5822,6 +5822,28 @@ type Dialect struct {
 	// never reaches the question.
 	RegexTakesAlternation bool
 
+	// RegexKeepsAnUnbalancedCloser keeps a `)` that closes nothing inside a
+	// `=~` operand rather than letting it end the word.
+	//
+	// ksh93 alone. Measured 2026-09-23 over script files with `echo after`
+	// behind the condition, against bash 5.3.15 in the digest-pinned image the
+	// suite is graded in, zsh 5.9.2 and ksh93u+ 2012-08-01:
+	//
+	//	written          bash              zsh               ksh93
+	//	[[ x =~ ) ]]     parse error       parse error       runs, `after`
+	//	[[ x =~ a) ]]    parse error       parse error       runs, `after`
+	//	[[ x =~ (x)) ]]  parse error       parse error       runs, `after`
+	//	[[ x =~ (x) ]]   runs              runs              runs
+	//
+	// A **balanced** group needs no flag: the scanner takes one whole in all
+	// three, so the `)` of `(x)` never reaches the question. This is only the
+	// closer that closes nothing, and two of the three columns end the word —
+	// and the script — on it, where this lexer kept it and reported an invalid
+	// regular expression at run time with the script carrying on. A parse
+	// error and a runtime complaint are different control flow, which is what
+	// makes this a grammar flag rather than a wording (#4173).
+	RegexKeepsAnUnbalancedCloser bool
+
 	// ArraySubscript enables `${a[i]}`, `${a[@]}` and `${a[*]}`, `a[i]`
 	// inside an arithmetic expression, and the element assignment `a[i]=v`
 	// and `a[i]+=v`. Absent from dash, which has no arrays at all and calls

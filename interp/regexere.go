@@ -236,8 +236,31 @@ func asERE(pat string) (string, error) {
 	// first is a repetition of a repetition, which the graded reference takes
 	// and RE2 refuses — see wrapRepeatedRepeat.
 	atomAt, afterRepeat := 0, false
+	// Where each open `(` began in the output, so that the atom a repetition
+	// operator behind a group would repeat is the **group** and not its closing
+	// parenthesis. Without it `([^a])?{2}` wrapped from the `)` and came out as
+	// a pattern neither shell has — found by fuzzing 400 generated expressions
+	// against the graded reference, which is the one thing a hand-written
+	// battery had not covered (#4173).
+	var groups []int
 	for i := 0; i < len(pat); {
 		switch {
+		case pat[i] == '(':
+			groups = append(groups, b.Len())
+			atomAt, afterRepeat = b.Len(), false
+			b.WriteByte(pat[i])
+			i++
+		case pat[i] == ')':
+			// The atom is the whole group, so a quantifier behind this closer
+			// repeats from where the group opened.
+			atomAt = b.Len()
+			if n := len(groups); n > 0 {
+				atomAt = groups[n-1]
+				groups = groups[:n-1]
+			}
+			afterRepeat = false
+			b.WriteByte(pat[i])
+			i++
 		case pat[i] == '\\' && i+1 < len(pat):
 			atomAt, afterRepeat = b.Len(), false
 			_, w := utf8.DecodeRuneInString(pat[i+1:])

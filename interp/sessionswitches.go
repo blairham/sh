@@ -339,6 +339,45 @@ func (r *Runner) ExecFailureLeavesTheShellRunning() bool { return r.execFailureI
 // capability — `shopt -s execfail` is the only name the panel has for it.
 func (r *Runner) SetExecFailureLeavesTheShellRunning(on bool) { r.execFailureIsSurvivable = on }
 
+// BareCdOperandCanNameAVariable reports whether a `cd` operand that named no
+// directory is looked up as a *variable* whose value names one.
+//
+// Off with nothing said. One shell in the panel has it and calls it
+// `shopt -s cdable_vars`.
+//
+// Measured 2026-09-23 on bash 5.3.15, each row in its own fresh directory so
+// one row's `mkdir` cannot answer the next — which it did on the first pass,
+// and three rows read as the option working when they had found a real
+// directory instead:
+//
+//	d=$PWD/target; cd d      moves, and prints `$PWD/target`
+//	d=target;      cd d      moves, and prints `target`
+//	a real directory `d` also exists   the directory wins, nothing printed
+//	CDPATH also finds `d`              CDPATH wins
+//	d unset;       cd d      `cd: d: No such file or directory`
+//	d=$PWD/afile;  cd d      `cd: d: Not a directory`
+//	d=/nosuch;     cd d      `cd: d: No such file or directory`
+//	d=;            cd d      an empty line, status 0, and nowhere moved
+//	cd ./d, cd d/.           never consulted — a slash names a place
+//	cd -- d, cd -P d         consulted
+//
+// So it is a **last resort**: the ordinary relative lookup and CDPATH both
+// run first, and this is what stands between them and the failure. Two
+// details an implementation is likely to get wrong, both measured above: the
+// announcement is the variable's value *as written* rather than the
+// directory arrived at — which is where it differs from CDPATH's, one line
+// up — and the failure still names the **operand**, so a value that is not a
+// directory is reported against `d` and never against the value.
+//
+// Not an axis, for the reason KeepsLastPipelineElement is not: an axis
+// records a disagreement between shells, and only one shell here has the
+// option at all (#4149).
+func (r *Runner) BareCdOperandCanNameAVariable() bool { return r.cdOperandCanNameAVariable }
+
+// SetBareCdOperandCanNameAVariable moves it, for a dialect naming the
+// capability — `shopt -s cdable_vars` is the only name the panel has for it.
+func (r *Runner) SetBareCdOperandCanNameAVariable(on bool) { r.cdOperandCanNameAVariable = on }
+
 // ErrExitEntersACommandSubstitution reports whether the shell a `$(…)` body
 // runs in holds `set -e` — `shopt inherit_errexit` under its bash name.
 //

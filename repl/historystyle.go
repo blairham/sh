@@ -52,6 +52,35 @@ type HistoryStyle struct {
 	// from a sentence.
 	SearchBelowTheLine bool
 
+	// SearchNewlineAcceptsTheLine says a newline ending a reverse incremental
+	// search also accepts the line it found, rather than being consumed by the
+	// search and leaving the line to go on being edited.
+	//
+	// A carriage return accepts in every column, which is what a person
+	// pressing Return at a terminal sends — so this is only ever reached by a
+	// `C-j`, or by input that is a file or a pipe, where every Return in the
+	// text is a newline. That is the shape a test suite feeds an interactive
+	// shell, and it is where this was found (#4177).
+	//
+	// Measured 2026-09-23 with `echo zone` in the history, `C-r` `one`, then
+	// the key, then `XX`, then a carriage return. Through a pseudo-terminal one
+	// keystroke at a time, and for bash on a pipe as well:
+	//
+	//	bash 5.3.20   ran `echo zXXone`  — the search's, XX typed at the match
+	//	ksh93u+       ran `echo zoneXX`  — the search's, XX typed at the end
+	//	zsh 5.9.2     ran `echo zone`, then `XX: command not found`
+	//
+	// So two columns take the newline for the search and one accepts with it,
+	// and the two that take it disagree about where the cursor lands rather
+	// than about the key. The zero value is theirs, which is also ksh's whole
+	// HistoryStyle — see dialect/ksh, where it is deliberately the zero value.
+	//
+	// Sending the whole sequence in one write hides this: with the keys
+	// arriving together bash accepts, so a probe that did not pause between
+	// them measures the reads rather than the keys. The rows above were taken
+	// with a second between each.
+	SearchNewlineAcceptsTheLine bool
+
 	// How the history *file* encodes an entry, which is two facts and not
 	// one — they were measured separately and one shell has both while the
 	// default has neither.

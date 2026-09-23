@@ -211,13 +211,39 @@ What they agree about:
 | backspace | shortens the query |
 | `C-r` again | the next older match |
 | `C-g` | abandons: the line and cursor go back to before the search |
-| Enter | accepts the found line and **runs** it |
+| Return (`C-m`) | accepts the found line and **runs** it |
 | `C-e`, `C-k`, an arrow, Tab | ends the search, keeps the found line, **and acts** |
 
 That last row is the one worth writing down. `C-r cho C-e` leaves the
 search, keeps `echo two`, and moves the cursor to the end of it; `C-r
 cho C-k` leaves `e`. The key that closes the mode is not swallowed by
 it.
+
+**A newline is the exception, and it is a third answer rather than a
+spelling of Return.** Measured 2026-09-23 with `echo zone` in the history
+and `C-r` `one`, then the key, then `XX`, then a Return — through a
+pseudo-terminal one keystroke at a time, and for bash on a pipe as well:
+
+| | what ran |
+| --- | --- |
+| bash 5.3.20 | `echo zXXone` — the newline is the search's, `XX` typed at the match |
+| ksh93u+ | `echo zoneXX` — the search's too, `XX` typed at the end |
+| zsh 5.9.2 | `echo zone`, then `XX: command not found` |
+
+So two columns take the newline for the search and leave the line to go
+on being edited, and one accepts with it. `repl.HistoryStyle.SearchNewline-
+AcceptsTheLine` is the field, zsh's answer is the one that is set, and the
+zero value is bash's and ksh93's.
+
+It is only ever reached by a `C-j` at a terminal, or by input that is a
+file or a pipe — where every Return in the text is a newline. That is the
+shape a test suite feeds an interactive shell, which is where it was
+found (#4177).
+
+**The probe has to pause between keystrokes.** With the whole sequence
+written at once bash accepts, so a run that sends `C-r one` and the
+newline together measures how the bytes arrived rather than what the key
+means. A second between each is what the rows above were taken with.
 
 **bash also highlights the match** in reverse video, and zsh does not.
 That is not implemented here — the match is found and the cursor is put

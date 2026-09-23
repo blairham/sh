@@ -7891,6 +7891,11 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		}
 	}
 	status, stopped := r.waitResult(w)
+	if !stopped {
+		// Reaped, so a child of this shell has ended — a stop is not one,
+		// the process being still there. See Runner.childReaped.
+		r.childReaped()
+	}
 	r.status = status
 	if w.Killed {
 		r.diedOfSig = w.Signal

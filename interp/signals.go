@@ -234,6 +234,17 @@ func (s *signalState) drainForwarded() {
 				s.pipeAbsorbed--
 				continue
 			}
+			if name == "CHLD" {
+				// The kernel's answer to a fork this shell may not have made,
+				// and the set it names is not the set of children a real shell
+				// would have had: a background job here is a goroutine with no
+				// process, and the processes a subshell starts are this one's
+				// children rather than the subshell's. The condition is raised
+				// where a fork is finished with instead — see
+				// Runner.childReaped, where both directions of that are
+				// measured.
+				continue
+			}
 			s.pending = append(s.pending, name)
 		default:
 			return

@@ -1285,6 +1285,52 @@ grader's own machinery — the verdict rule, the fixture isolation, the
 placeholder substitution, and that the denied policy grants exactly one
 thing.
 
+**Before trusting a null result, prove the instrument can produce a positive.**
+That is the paragraph above stated as a rule rather than as one grader's good
+habit, and it earns its own place because six separate measurements across four
+lanes in a single day reported *nothing found* while in fact finding nothing
+out.
+
+The six do not look alike, and that is the point. There is no signature to
+watch for — only the shape, which is that an instrument unable to fail reads
+exactly like a tree with nothing wrong in it.
+
+- A **mutation harness counted `--- FAIL:` lines** in output that was a compile
+  error. The mutation it had just applied left a variable unused, `go test`
+  printed `declared and not used` instead of running, and the harness scored it
+  *zero failing subtests* — which is precisely what a surviving mutation looks
+  like. That harness was measuring the right thing in the right place and still
+  could not tell "nothing failed" from "nothing ran". It now counts build
+  breakage as a column of its own, printed beside the failure count, and the
+  count is not believed while that column is non-zero. The mutation, once it
+  compiled, killed three subtests.
+- An **audit reported `0 flagged`** having parsed nothing at all: the record's
+  shape had been guessed wrong, so every row missed and the miss was the
+  result.
+- A **mutation "survived"** because the `sed` that was to introduce it matched
+  nothing, so the tree under test was the unmutated one.
+- A **British-spelling sweep came back clean** because its alternation is not
+  alternation in this shell's `grep`.
+- A **completion probe read "no difference"** because the heredoc fed the Tab
+  faster than readline could see it, so neither side was ever asked.
+- **Ten completion rows shared one directory**, so an earlier row's `mkdir`
+  answered three later ones — a pass, for something those rows never tested.
+
+The check is cheap and it is always the same shape: **make the thing you are
+looking for, and confirm the instrument says so.** Break by hand the code the
+mutation was meant to break; hand the auditor a row you know is bad; put one
+`colour` in the tree; point the grader at a commit known to be wrong. An
+instrument that has never once been seen to fire is not evidence, however many
+times it has run and however carefully it was written.
+
+Two rules elsewhere in this file are this one in particular clothes — the
+`suite-guard` cross-check, which exists because *the broken form of a file
+scanner is silence*, and the sandbox grader above, pointed at a commit known to
+be broken before its green table is allowed to mean anything. What generalises
+is that the rule applies with no less force to an instrument written ten
+minutes ago as a shell function than to one with a `make` target and a test
+package, and the improvised ones are where all six of these happened.
+
 `make bash-suite` fetches **bash's own `tests/`** and runs every file of it
 through real bash and through `cmd/bash`, comparing output and status.
 `internal/suite` holds it, `internal/cmd/suitecheck` prints the report, and

@@ -72,6 +72,15 @@ var shoptModes = map[string][]interp.MatchOption{
 	"failglob": {interp.UnmatchedPatternIsError},
 }
 
+// shoptSwitch is one name's two halves: what it reads now, and what setting
+// or unsetting it does. Named rather than written inline at the map, so that
+// an entry can be built by a helper — which is what the compatibility letters
+// need, being seven spellings of one state (see compat.go).
+type shoptSwitch struct {
+	get func(*interp.Runner) bool
+	set func(*interp.Runner, bool)
+}
+
 // shoptSwitches are the names wired to a switch the core holds rather than to
 // the matcher — the second kind of "really implemented".
 //
@@ -185,10 +194,19 @@ var shoptModes = map[string][]interp.MatchOption{
 // move is a semantics axis apiece and a pair of trap-carriage options rather
 // than a capability. Their own comments on the entries carry the
 // measurements; #2361, #3001 and #2426 are the issues.
-var shoptSwitches = map[string]struct {
-	get func(*interp.Runner) bool
-	set func(*interp.Runner, bool)
-}{
+var shoptSwitches = map[string]shoptSwitch{
+	// The seven compatibility letters, which are one state under a second
+	// spelling rather than seven switches: each reads and writes the level
+	// `BASH_COMPAT` carries, so the two doors move together in both
+	// directions. See compat.go, which holds the measurements and the reason
+	// the letters stop at 44.
+	"compat31": compatSwitch(31),
+	"compat32": compatSwitch(32),
+	"compat40": compatSwitch(40),
+	"compat41": compatSwitch(41),
+	"compat42": compatSwitch(42),
+	"compat43": compatSwitch(43),
+	"compat44": compatSwitch(44),
 	"expand_aliases": {
 		get: (*interp.Runner).AliasExpansion,
 		set: (*interp.Runner).SetAliasExpansion,
@@ -745,17 +763,17 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 // that lists every name finds it twice. A wash, so the honest half of the
 // answer was not bought with the dishonest half; what closed it was the
 // second expansion itself (#3298).
+//
+// `compat31` through `compat44` were seven more entries here and are in
+// shoptSwitches above now, for the same reason those two were: they are not
+// seven states at all — they are the compatibility level under a second
+// spelling — so a `shopt -s compat44` that did not move `BASH_COMPAT`
+// reported a level the rest of the shell could not see, which is the refusal
+// that misleads rather than the one that is heard (#4262).
 var shoptStates = map[string]bool{
 	"bash_source_fullpath": false,
 	"cdable_vars":          false,
 	"cmdhist":              true,
-	"compat31":             false,
-	"compat32":             false,
-	"compat40":             false,
-	"compat41":             false,
-	"compat42":             false,
-	"compat43":             false,
-	"compat44":             false,
 	"complete_fullquote":   true,
 	"execfail":             false,
 	"extquote":             true,

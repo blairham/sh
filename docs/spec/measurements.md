@@ -12532,6 +12532,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/dash-o-writes-then-reads-back` | **2>** `<shell>: 1: shopt: not found~<shell>: 1: shopt: not found~<shell>: 1: shopt: not found` *(status 127)* | `vi                  	on~set -o vi` | `vi                  	on~set -o vi` | `vi             	on~set -o vi` | **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* | **2>** `<shell>:1: command not found: shopt~<shell>:1: command not found: shopt~<shell>:1: command not found: shopt` *(status 127)* | **2>** `<shell>: shopt: not found~<shell>: shopt: not found~<shell>: shopt: not found` *(status 127)* |
 | `shopt/dash-o-listing-is-the-set-o-listing` | `differs` **2>** `<shell>: 1: shopt: not found` | `same` | `same` | `same` | `differs` **2>** `<shell>: shopt: not found` | `differs` **2>** `<shell>:1: command not found: shopt` | `differs` **2>** `<shell>: shopt: not found` |
 | `shopt/dash-o-rejects-a-shopt-name` | `st=127` **2>** `<shell>: 1: shopt: not found` | `st=1` **2>** `<shell>: line 1: shopt: cdspell: invalid option name` | `st=1` **2>** `<shell>: line 1: shopt: cdspell: invalid option name` | `st=1` **2>** `<shell>: line 0: shopt: cdspell: invalid option name` | `st=127` **2>** `<shell>: shopt: not found` | `st=127` **2>** `<shell>:1: command not found: shopt` | `st=127` **2>** `<shell>: shopt: not found` |
+| `shopt/the-compatibility-letters-and-the-parameter` | `[UNSET]~letter=127~[51]~tail` | `[44]~compat44            	off~letter=1~[51]~tail` | `[44]~compat44            	off~letter=1~[51]~tail` | `[UNSET]~letter=1~[51]~tail` | `[UNSET]~letter=127~[51]~tail` | `[UNSET]~letter=127~[51]~tail` | `[UNSET]~letter=127~[51]~tail` |
 | `shopt/patsub-replacement-reports-on` | `s=127` | `shopt -s patsub_replacement~s=0` | `shopt -s patsub_replacement~s=0` | `s=1` | `s=127` | `s=127` | `s=127` |
 | `shopt/turning-the-replacement-ampersand-off` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` | `[a[&]c][a[\&]c]` |
 
@@ -13568,6 +13569,17 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/dash-o-rejects-a-shopt-name` — the two namespaces are not one: `cdspell` is a perfectly good `shopt` name and not a `set -o` option, and bash's wording for the refusal is a word shorter here — `invalid option name` against the `invalid shell option name` its own names get
   ```sh
   shopt -o cdspell; echo st=$?
+  ```
+- `shopt/the-compatibility-letters-and-the-parameter` — the compatibility level in its two spellings, in both directions: `shopt -s compat44` writes `44` into BASH_COMPAT, the parameter answers the letter -- `BASH_COMPAT=51` makes `shopt compat44` report off at 1 -- and `shopt -u compat44` writes the level back whether or not it moved, so the last arm is `51` rather than this shell's own release. The letters are bash's alone and stop at 44, which is why the third arm is the discriminating one for every other column: the builtin is not there at all. We held the seven letters as off-by-default states nothing read, so setting one moved no reading and left the parameter where it was (#4262)
+  ```sh
+  shopt -s compat44 2>/dev/null
+  echo "[${BASH_COMPAT-UNSET}]"
+  BASH_COMPAT=51
+  shopt compat44 2>/dev/null
+  echo "letter=$?"
+  shopt -u compat44 2>/dev/null
+  echo "[${BASH_COMPAT-UNSET}]"
+  echo tail
   ```
 - `shopt/patsub-replacement-reports-on` — the reissuable line for the option that gates the ampersand reading, and its status. bash 5.3 writes `shopt -s patsub_replacement` at 0 because the option is on with nothing said; bash 3.2 has no such name and answers 1 with its complaint suppressed, and the three shells without the builtin answer 127. It is a capture surface -- a harness snapshots a shell with `shopt -p` and sources the result back -- so a shell reporting the wrong state here re-applies it to every later command (#1712, #1862)
   ```sh
@@ -18791,6 +18803,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `posassign/in-front-of-an-external-command-it-does-not` | `[a b]` **2>** `<shell>: 1: 1=X: not found` | `[a b]` **2>** `<shell>: line 1: 1=X: command not found` | `[a b]` **2>** `<shell>: line 1: 1=X: command not found` | `[a b]` **2>** `<shell>: 1=X: command not found` | `[a b]` **2>** `<shell>: 1=X: not found` | `hi~[a b]` | `[a b]` **2>** `<shell>: 1=X: not found` |
 | `posassign/leading-zeros-are-read-as-a-number` | `[a] n=1` **2>** `<shell>: 1: 01=z: not found` | `[a] n=1` **2>** `<shell>: line 1: 01=z: command not found` | `[a] n=1` **2>** `<shell>: line 1: 01=z: command not found` | `[a] n=1` **2>** `<shell>: 01=z: command not found` | `[a] n=1` **2>** `<shell>: 01=z: not found` | `[z] n=1` | `[a] n=1` **2>** `<shell>: 01=z: not found` |
 | `posassign/a-digit-with-a-letter-is-not-a-name` | `st=127` **2>** `<shell>: 1: 1a=z: not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: not found` | `st=127` **2>** `<shell>:1: command not found: 1a=z` | `st=127` **2>** `<shell>: 1a=z: not found` |
+| `variable/a-compatibility-level-out-of-range` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` **2>** `<script>: line 1: BASH_COMPAT: abc: compatibility value out of range` | `st=0 [abc]~st=0 [5.1]~tail` **2>** `<script>: line 1: BASH_COMPAT: abc: compatibility value out of range` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` |
 | `variable/a-module-parameter-a-script-may-not-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~tail` | `st=0~tail` | `st=0~tail` | `st=0~tail` | **2>** `<script>:1: read-only variable: jobstates` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `variable/the-module-parameter-a-script-may-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 
@@ -18994,6 +19007,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `posassign/a-digit-with-a-letter-is-not-a-name` — the control the whole group needs: a name that merely *starts* with a digit is not admitted anywhere, so all seven columns answer `command not found` at 127. Without it a flag that let any word beginning with a digit be an assignment would pass every other row here
   ```sh
   set -- a; 1a=z; echo "st=$?"
+  ```
+- `variable/a-compatibility-level-out-of-range` — the parameter that selects an older release's reading, given a value that is not a release. bash complains at the **assignment** -- `BASH_COMPAT: abc: compatibility value out of range` -- stores the value anyway and leaves the status at 0, so the second arm is the control that shows the complaint is about the value rather than about the name: `5.1` is a level, the dot is legibility only, and it passes in silence. The shells without the parameter take both arms as ordinary assignments, which is the honest answer rather than a guess. We stored the bad value in silence, so a script that mistyped a level ran on at the modern reading with nothing said (#4262)
+  ```sh
+  BASH_COMPAT=abc
+  echo "st=$? [$BASH_COMPAT]"
+  BASH_COMPAT=5.1
+  echo "st=$? [$BASH_COMPAT]"
+  echo tail
   ```
 - `variable/a-module-parameter-a-script-may-not-own` — a name one shell's module owns, written by a script that has not loaded the module. zsh refuses it as `read-only variable: jobstates` at status 1 and ends the script, whether or not `zsh/parameter` was ever loaded -- the freeze is a property of the name and not of the module being there. Every shell without the module takes the assignment and makes an ordinary array, which is also what this engine did: a script probing for the module by writing the name got a value where it should have been stopped (#1604). `dirstack` is the one name in the same set that zsh does let a script assign, which is the row below
   ```sh

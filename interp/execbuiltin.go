@@ -353,10 +353,15 @@ func (r *Runner) execEnds(err error, status int) int {
 		// One shell lets a script ask for a failed `exec` to be an ordinary
 		// failed command, and then there is no way out to decide the trap
 		// question on: the EXIT trap is neither run nor dropped here and
-		// fires later at the shell's own end. The status is the one the exit
-		// would have carried, unchanged. See
+		// fires later at the shell's own end. See
 		// Runner.ExecFailureLeavesTheShellRunning for the measurement.
-		r.status = status
+		//
+		// Returned rather than also written to r.status, which is what the
+		// exit route below has to do and this one does not: the builtin's
+		// return value *is* `$?` for a command that did not end the shell, so
+		// assigning it here as well was a second write of the same fact. It
+		// was written that way in #4316, and a mutation that zeroed the copy
+		// broke no test — which is how a line with no consequence gets found.
 		return status
 	}
 	axis, what := r.sem().ExecFailureRunsExitTrap,

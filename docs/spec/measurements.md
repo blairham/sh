@@ -18893,6 +18893,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `variable/a-compatibility-level-out-of-range` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` **2>** `<script>: line 1: BASH_COMPAT: abc: compatibility value out of range` | `st=0 [abc]~st=0 [5.1]~tail` **2>** `<script>: line 1: BASH_COMPAT: abc: compatibility value out of range` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` |
 | `variable/a-seeded-random-draws-a-sequence-of-its-own` | `42 42~42 42~4~tail` | `17772 26794~17772 26794~1693~tail` | `17772 26794~17772 26794~1693~tail` | `19081 17033~19081 17033~1817~tail` | `22700 13681~22700 13681~8403~tail` | `17766 11151~17766 11151~1692~tail` | `20351 9206~20351 9206~29829~tail` |
 | `variable/a-compatibility-level-out-of-range-in-the-environment` | `[abc]~tail` | `[abc]~tail` **2>** `<shell>: BASH_COMPAT: abc: compatibility value out of range~<script>: line 2: BASH_COMPAT: zzz: compatibility value out of range` | `[abc]~tail` **2>** `<shell>: BASH_COMPAT: abc: compatibility value out of range~<script>: line 2: BASH_COMPAT: zzz: compatibility value out of range` | `[abc]~tail` | `[abc]~tail` | `[abc]~tail` | `[abc]~tail` |
+| `variable/allexport-marks-a-declarations-assignment` | `none` **2>** `<script>: 2: typeset: not found~<script>: 5: Syntax error: "(" unexpected` *(status 2)* | `declare -x F="x"~declare -a A=([0]="1")~tail` | `declare -x F="x"~declare -a A=([0]="1")~tail` | `declare -x F="x"~declare -a A='([0]="1")'~tail` | `typeset -x F=x~typeset -a A=(1)~tail` | `export F=x~typeset -ax A=( 1 )~tail` | `none` **2>** `<script>: line 2: typeset: not found~<script>: line 5: syntax error: unexpected "("` *(status 2)* |
 | `variable/a-module-parameter-a-script-may-not-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~tail` | `st=0~tail` | `st=0~tail` | `st=0~tail` | **2>** `<script>:1: read-only variable: jobstates` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `variable/the-module-parameter-a-script-may-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 
@@ -19119,6 +19120,16 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   echo "[${BASH_COMPAT-UNSET}]"
   BASH_COMPAT=zzz
+  echo tail
+  ```
+- `variable/allexport-marks-a-declarations-assignment` — `set -a` marks an assignment for the environment, and the question is whether a **declaration utility's** assignment is one. bash, bash 3.2 and ksh93 all say yes for a scalar and the listing carries the letter; the second arm is the control that makes it a measurement rather than a rule about every store — an array literal earns no export mark in any column that has one. zsh has the option under another spelling and lists its own form; dash and BusyBox ash have no listing to ask, which is what the `|| echo none` arm is for. We marked the plain spelling and not the utility's, so a script that exported through the option and assigned through `typeset` handed its children nothing — found as a line of `varenv.tests` (#4163)
+  ```sh
+  set -a
+  typeset F=x
+  typeset -p F 2>/dev/null || echo none
+  set -a
+  typeset -a A=(1)
+  typeset -p A 2>/dev/null || echo none
   echo tail
   ```
 - `variable/a-module-parameter-a-script-may-not-own` — a name one shell's module owns, written by a script that has not loaded the module. zsh refuses it as `read-only variable: jobstates` at status 1 and ends the script, whether or not `zsh/parameter` was ever loaded -- the freeze is a property of the name and not of the module being there. Every shell without the module takes the assignment and makes an ordinary array, which is also what this engine did: a script probing for the module by writing the name got a value where it should have been stopped (#1604). `dirstack` is the one name in the same set that zsh does let a script assign, which is the row below

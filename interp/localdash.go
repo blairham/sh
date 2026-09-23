@@ -102,6 +102,15 @@ func (s shellOptions) restore(r *Runner) {
 			_ = o.try(r, want, name)
 			r.setOptionStatus = 0
 		}
+		// And the parameter this name is a second spelling of, where it is
+		// one. A restore is the option moving, so the tie has to hear it:
+		// measured on bash 5.3.20, `IGNOREEOF=0; set -o ignoreeof;
+		// f(){ local -; set +o ignoreeof; }; f; echo $IGNOREEOF` is **10**
+		// there — the return turns the option back on and the tie writes the
+		// parameter — and it was empty here, because the option went back
+		// through the table directly and the tie was only wired to `set`
+		// itself. See interp/tiedoption.go and #4163.
+		r.optionTieMoved(name, want)
 	}
 	r.pipefail = s.pipefail
 }

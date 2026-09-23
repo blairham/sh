@@ -230,6 +230,19 @@ func (r *Runner) rewriteValueBackslashes(field string, p ValueBackslashPolicy) s
 				// below. See Semantics.ValueBackslashSurvivesAPatternPiece.
 				b.WriteString(`\\`)
 				b.WriteString(unit)
+			case p == ValueBackslashQuotesWhatFollows && !live:
+				// Nothing for it to quote. The script had already quoted what
+				// follows, so a second quoting takes nothing off anything and
+				// the backslash is a character of the pattern like any other.
+				//
+				// Unanimous, and this shell was alone: `v='a\'; printf '[%s]'
+				// $v\\*b` in a directory holding `a*b`, `a\*b` and `a\\*b` is
+				// `[a\\*b]` in dash, bash 5.3, bash 3.2, the same bash as `sh`,
+				// ksh93 and zsh, and was `[a\*b] [a\\*b]` here — two fields where
+				// every column produces one, from a backslash this branch spent
+				// on a character that had nothing live about it (#4158).
+				b.WriteString(`\\`)
+				b.WriteString(globEscape(unit))
 			case p == ValueBackslashQuotesWhatFollows:
 				b.WriteString(globEscape(unit))
 			case p == ValueBackslashIsData && live:

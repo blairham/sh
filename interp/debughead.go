@@ -302,11 +302,23 @@ func (r *Runner) debugPipeline(ctx context.Context, p *syntax.Pipeline) (skip []
 		}
 		return skip, true
 	case DebugTrapPipelinePerSimpleElement:
+		// Each element fires **at its own line**, which is the pipeline's
+		// firing and not the element's own dispatch: the element has not been
+		// reached yet, so the line record still sits on whatever ran before
+		// the pipeline. Measured 2026-09-23 against bash 5.3.15 in the pinned
+		// image, a `DEBUG` trap printing `$LINENO` over `echo a` on line 4 and
+		// `echo b | cat | cat` on line 5: `4 5 5 5` there, `4 4 4 4` here —
+		// and with the three elements written on lines 5, 6 and 7, `4 5 6 7`
+		// there against `4 4 4 4` here. Put back afterwards, because the
+		// pipeline's own statement has not moved (#4155).
+		saved := r.line
+		defer func() { r.line = saved }()
 		for i, c := range p.Cmds {
 			if _, simple := c.(*syntax.SimpleCmd); !simple {
 				continue
 			}
 			r.recordRunning(c, WholeCommand)
+			r.line = r.commandLine(c)
 			r.runDebugTrap(ctx)
 			if r.debugTrapSkipped() {
 				if skip == nil {

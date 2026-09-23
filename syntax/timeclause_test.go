@@ -168,3 +168,128 @@ func TestTimePrintingRoundTrips(t *testing.T) {
 		}
 	}
 }
+
+// bashTime is the vector bash sets over `time`: the POSIX flag, the double
+// dash, and the folded repeat. Kept in one place so a test that means "as
+// bash reads it" does not have to enumerate three booleans.
+func bashTime() Dialect {
+	d := Core()
+	d.TimePosixFlag = true
+	d.TimeIgnoresADoubleDash = true
+	d.TimeFoldsARepeatedKeyword = true
+	return d
+}
+
+// firstWord returns the timed pipeline's first command word, so a test can
+// say which word the parser left for the command to be.
+func firstWord(t *testing.T, tc *TimeClause) string {
+	t.Helper()
+	pl, ok := tc.Pipeline.(*Pipeline)
+	if !ok {
+		t.Fatalf("timed body is %T, want *Pipeline", tc.Pipeline)
+	}
+	sc, ok := pl.Cmds[0].(*SimpleCmd)
+	if !ok || len(sc.Args) == 0 {
+		t.Fatalf("timed command is %#v, want a simple command", pl.Cmds[0])
+	}
+	return sc.Args[0].Literal()
+}
+
+// TestTimeReadsADoubleDashWhereTheFlagSaysSo pins both sides. Measured
+// 2026-09-23 with a TIMEFORMAT the POSIX layout cannot produce, so the two
+// reports are told apart rather than assumed: bash answers `time -- echo a`
+// with the output of `echo a` and the POSIX report, and zsh answers it with
+// `command not found: --`.
+//
+// The POSIX half is the part a weaker assertion would miss — consuming the
+// `--` and *not* switching layout would still run the right command.
+func TestTimeReadsADoubleDashWhereTheFlagSaysSo(t *testing.T) {
+	t.Parallel()
+	tc := parseTimeClause(t, `time -- echo a`, bashTime())
+	if got := firstWord(t, tc); got != "echo" {
+		t.Errorf("first word %q, want \"echo\" — the `--` should be consumed", got)
+	}
+	if !tc.Posix {
+		t.Error("`time -- echo a` should report in the POSIX layout, with no `-p` written")
+	}
+
+	d := Core()
+	d.TimePosixFlag = true
+	tc = parseTimeClause(t, `time -- echo a`, d)
+	if got := firstWord(t, tc); got != "--" {
+		t.Errorf("without the flag the first word should be %q, got %q", "--", got)
+	}
+	if tc.Posix {
+		t.Error("without the flag a `--` must not select the POSIX layout")
+	}
+}
+
+// TestTimeReadsAtMostOneDoubleDashAndOnlyAfterTheFlag: measured, bash
+// consumes one `--` and hands the second to the command, and a `-p` written
+// after the `--` is the command rather than the flag. Both cases would pass
+// against a parser that simply skipped every leading `-p` and `--`, which is
+// why they are here.
+func TestTimeReadsAtMostOneDoubleDashAndOnlyAfterTheFlag(t *testing.T) {
+	t.Parallel()
+	if got := firstWord(t, parseTimeClause(t, `time -p -- -- echo a`, bashTime())); got != "--" {
+		t.Errorf("second `--` should be the command, got %q", got)
+	}
+	if got := firstWord(t, parseTimeClause(t, `time -- -p echo a`, bashTime())); got != "-p" {
+		t.Errorf("`-p` after the `--` should be the command, got %q", got)
+	}
+}
+
+// TestTimeFoldsARepeatedKeywordWhereTheFlagSaysSo: measured 2026-09-23,
+// `time time echo a` reports **once** in bash and twice in ksh93 and zsh, and
+// a third `time` does not add a report either. The `-p` assertion is what
+// makes this a fold rather than a discard: the inner keyword's flag reaches
+// the one report bash writes.
+func TestTimeFoldsARepeatedKeywordWhereTheFlagSaysSo(t *testing.T) {
+	t.Parallel()
+	tc := parseTimeClause(t, `time time time echo a`, bashTime())
+	if got := firstWord(t, tc); got != "echo" {
+		t.Errorf("first word %q, want \"echo\" — repeats should fold into one clause", got)
+	}
+	if _, nested := tc.Pipeline.(*TimeClause); nested {
+		t.Error("a repeated `time` nested a clause where the dialect folds it")
+	}
+
+	if tc = parseTimeClause(t, `time time -p echo a`, bashTime()); !tc.Posix {
+		t.Error("the inner keyword's `-p` should reach the folded clause")
+	}
+
+	// Without the flag the second keyword is a clause of its own, which is
+	// what ksh93 and zsh do: two keywords, two reports.
+	tc = parseTimeClause(t, `time time echo a`, Core())
+	if _, nested := tc.Pipeline.(*TimeClause); !nested {
+		t.Errorf("without the flag the inner `time` should nest, got %T", tc.Pipeline)
+	}
+}
+
+// TestBareTimeTakesTheLayoutsSuffix: a function whose whole body is `time`
+// prints back from bash as `time ` — the separator written for a pipeline
+// that is not there. It is visible because `type` writes a body back, so the
+// trailing space is a measured character rather than a cosmetic one.
+func TestBareTimeTakesTheLayoutsSuffix(t *testing.T) {
+	t.Parallel()
+	f, err := Parse(`time`, Core())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got := PrintFileWith(f, Layout{Lines: true, BareTimeSuffix: " "}); got != "time " {
+		t.Errorf("printed %q, want %q", got, "time ")
+	}
+	if got := PrintFileWith(f, Layout{Lines: true}); got != "time" {
+		t.Errorf("without the suffix printed %q, want %q", got, "time")
+	}
+
+	// The suffix belongs to the bare form only: a `time` with a pipeline
+	// already has its separator and must not take a second one.
+	f, err = Parse(`time echo a`, Core())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got := PrintFileWith(f, Layout{Lines: true, BareTimeSuffix: " "}); got != "time echo a" {
+		t.Errorf("printed %q, want %q", got, "time echo a")
+	}
+}

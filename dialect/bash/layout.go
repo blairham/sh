@@ -79,7 +79,10 @@ func common() syntax.Layout {
 		DoAfterCommandOnItsOwnLine: false,
 		DoAfterWordsOnItsOwnLine:   true,
 		BraceOpenSuffix:            " ",
-		CaseHeaderSuffix:           " ",
+		// A body that is a bare `time` prints back as `time `, measured
+		// through `type` on a function holding nothing else (#4161).
+		BareTimeSuffix:   " ",
+		CaseHeaderSuffix: " ",
 
 		// What a listing says about a body beyond where its lines break,
 		// all of it measured on bash 5.3.15 and bash 3.2.57 through

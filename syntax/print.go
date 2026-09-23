@@ -213,6 +213,14 @@ type Layout struct {
 	// BraceOpenSuffix follows the `{` that opens a block — a space, or
 	// nothing.
 	BraceOpenSuffix string
+	// BareTimeSuffix follows a `time` that has no pipeline after it, which is
+	// a construct with nothing to separate it from and so needs saying.
+	//
+	// Measured 2026-09-23 on bash 5.3.20: a function whose whole body is
+	// `time` prints back as `    time ` — the keyword, then the space the
+	// pipeline would have been written after. It is visible because `type`
+	// and `declare -f` write a body back, and a suite file compares one.
+	BareTimeSuffix string
 	// OutermostBraceOpensALine puts the first statement of the outermost
 	// block on a line of its own. A block inside one always does.
 	OutermostBraceOpensALine bool
@@ -987,6 +995,10 @@ func (p *printer) expr(e Expr) {
 		if x.Pipeline != nil {
 			p.str(" ")
 			p.expr(x.Pipeline)
+		} else {
+			// Nothing to separate the keyword from, and one dialect writes
+			// the separator anyway. See Layout.BareTimeSuffix.
+			p.str(p.layout.BareTimeSuffix)
 		}
 	}
 }

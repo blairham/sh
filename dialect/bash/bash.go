@@ -21,6 +21,12 @@ func Dialect() syntax.Dialect {
 	// bash has documented it as deprecated for years and both builds
 	// in the panel still take it (#900).
 	d.DollarBracketArith = true
+	// `time -- cmd`, where the `--` is consumed and selects the POSIX report on
+	// its own, and `time time cmd`, which reports once. Both measured
+	// 2026-09-23 against a `TIMEFORMAT` the POSIX layout cannot produce, so the
+	// two reports are told apart — see the two flags for the rows (#4161).
+	d.TimeIgnoresADoubleDash = true
+	d.TimeFoldsARepeatedKeyword = true
 	// Sixteen here-documents to a command, and the seventeenth is refused.
 	// Measured 2026-09-23 on 5.3.20 and on the 5.3.15 in the image this shell's
 	// own suite is graded in: sixteen `<<EOF` on one `cat` runs, seventeen is

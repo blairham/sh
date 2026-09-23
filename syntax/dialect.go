@@ -2363,6 +2363,35 @@ type Dialect struct {
 	// found — so it is not core, and where it is off the word is left to the
 	// pipeline exactly as zsh leaves it.
 	TimePosixFlag bool
+	// TimeIgnoresADoubleDash lets the `time` keyword read a `--` after its
+	// optional `-p`, consume it, and report in the POSIX format.
+	//
+	// Measured 2026-09-23 with `TIMEFORMAT` set to something the POSIX layout
+	// cannot produce, so the two reports are told apart rather than assumed:
+	//
+	//	time -- echo a       bash `a` and the POSIX report; zsh `--: command not found`
+	//	time -p -- echo a    bash consumes both
+	//	time -p -- -- echo a bash consumes one `--`; the second is the command
+	//	time -- -p echo a    bash consumes the `--`; `-p` is the command
+	//
+	// So at most one of each, in that order, and **either one selects the
+	// POSIX report** — `time -- echo a` is the `-p` layout in bash even though
+	// no `-p` was written.
+	//
+	// Not ksh93's, which consumes the `--` as well and answers in a *third*
+	// layout of its own — neither its plain report nor its `-p` one — so the
+	// flag as written here would give that dialect a report it does not make.
+	// It is recorded rather than claimed. zsh reads the `--` as the command.
+	TimeIgnoresADoubleDash bool
+	// TimeFoldsARepeatedKeyword reads a second `time` in front of a pipeline
+	// as the same request rather than as a timed timing.
+	//
+	// Measured 2026-09-23: `time time echo a` reports **once** in bash and
+	// twice in ksh93 and zsh, and `time time time echo a` reports once there
+	// too. The flags accumulate rather than the clauses nesting, which is the
+	// half a second measurement pins: `time time -p echo a` is the POSIX
+	// layout, so the `-p` of the *inner* keyword reaches the one report.
+	TimeFoldsARepeatedKeyword bool
 
 	// InStandsAsACommandName takes the reservation off `in` everywhere but
 	// the headers that read it, so a bare `in` is a command name rather than

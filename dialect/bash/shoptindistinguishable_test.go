@@ -38,6 +38,10 @@ func TestTheIndistinguishableNamesReadBashsDefault(t *testing.T) {
 		"extquote":             true,
 		"globasciiranges":      true,
 		"noexpand_translation": false,
+		// The two completion names #4149 moved, on the first and third
+		// grounds respectively — see shoptRecorded.
+		"complete_fullquote": true,
+		"progcomp_alias":     false,
 	} {
 		t.Run(name, func(t *testing.T) {
 			state, status := "off", 1
@@ -62,7 +66,10 @@ func TestTheIndistinguishableNamesReadBashsDefault(t *testing.T) {
 // state this replaces and a silent grant of the state already held would pass
 // a test that only checked one side.
 func TestTheIndistinguishableNamesMoveBothWays(t *testing.T) {
-	for _, name := range []string{"extquote", "globasciiranges", "noexpand_translation"} {
+	for _, name := range []string{
+		"extquote", "globasciiranges", "noexpand_translation",
+		"complete_fullquote", "progcomp_alias",
+	} {
 		t.Run(name, func(t *testing.T) {
 			out, st := runBash(t, t.TempDir(), strings.Join([]string{
 				"shopt -s " + name + "; echo \"s=$?\"",
@@ -104,6 +111,8 @@ func TestASnapshotOfTheIndistinguishableNamesReadsBackSilently(t *testing.T) {
 	const snapshot = `shopt -s extquote
 shopt -s globasciiranges
 shopt -u noexpand_translation
+shopt -s complete_fullquote
+shopt -u progcomp_alias
 echo ok
 `
 	out, st := runBash(t, t.TempDir(), snapshot)

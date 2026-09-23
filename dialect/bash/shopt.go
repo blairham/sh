@@ -779,11 +779,37 @@ var shoptReadOnly = map[string]func(*interp.Runner) bool{
 //     interp/completebuiltin.go, which exists because a bash_completion.d
 //     file dies at 127 otherwise — and the completer consults none of them.
 //
-// `complete_fullquote` is *not* here, and the difference is the point of
-// having the category at all: this shell really does backslash every shell
-// metacharacter in a completed name — see escapeName in repl/completeword.go
-// — so bash's on state is this implementation's state and it belongs in
-// shoptStates below with the rest of what is true.
+// `complete_fullquote` was *not* here, on the ground that this shell really
+// does backslash every shell metacharacter in a completed name — see
+// escapeName in repl/completeword.go — so bash's on state is this
+// implementation's state. That reasoning was about the **listing** and it
+// still holds; what it cannot do is satisfy `shopt -u`, and #4149 is where
+// that started to matter: shopt1.sub sets every name bash lists and then
+// unsets every one of them, so a table that grants one direction and refuses
+// the other can never answer it. The name is below now, on the third ground,
+// with the shapes I could not tell apart named so that somebody can.
+//
+// **Not "the reference does not exhibit it" and not "the completer offers
+// nothing" — I could not construct an observation.** The third ground, and
+// the weakest of the three, so it says exactly what was tried. bash's off
+// state removes `$` and a backquote from the characters it quotes in a
+// completed filename *when they appear in a shell variable reference in the
+// word being completed*. Measured 2026-09-23 through a pty on bash 5.3.15,
+// paced keystrokes so readline actually saw the Tab, with a file named
+// `has$dollar` and a directory named `dir$x` present:
+//
+//	echo has<Tab>                     `echo has\$dollar ` in both states
+//	ls $V<Tab>, V unset               unchanged in both
+//	ls $V<Tab>, V=dir                 unchanged in both
+//	ls $V<Tab> with `dir$x` matching  unchanged in both
+//
+// Four shapes, no difference. Unlike extquote I am **not** claiming the
+// reference is vestigial here: the documented condition is narrow and I may
+// simply not have hit it. What I am claiming is that I have no measurement to
+// implement against, and an implementation nobody can falsify is worse than a
+// recorded state with its attempts written down. The off state does have
+// somewhere it *could* appear in this shell — escapeName could quote less —
+// which is why this is its own ground and not the completer one above.
 var shoptRecorded = map[string]bool{
 	"force_fignore": true,
 	"hostcomplete":  true,
@@ -793,6 +819,18 @@ var shoptRecorded = map[string]bool{
 	"extquote":             true,
 	"globasciiranges":      true,
 	"noexpand_translation": false,
+	// The first ground again — a completer option this completer has nothing
+	// behind. `progcomp` above is the same option one step out: it decides
+	// whether the specifications `complete` registers are used at all, and
+	// this one decides what happens when one of them yields nothing and the
+	// command name is an alias. A completer that consults no specification
+	// never reaches the question. Measured through a pty the same day:
+	// `myali pl<Tab>` after `alias myali=ls` completes `plainfile` in bash
+	// with the option on and off alike, because ordinary filename completion
+	// answers first either way.
+	"progcomp_alias": false,
+	// And the third ground, alone: see the comment above for the four shapes.
+	"complete_fullquote": true,
 }
 
 // shoptStateStore is where a moved name this dialect keeps for itself is
@@ -915,12 +953,10 @@ func shoptSetStored(r *interp.Runner, name string, on, def bool) {
 var shoptStates = map[string]bool{
 	"bash_source_fullpath": false,
 	"cmdhist":              true,
-	"complete_fullquote":   true,
 	"gnu_errfmt":           false,
 	"histreedit":           false,
 	"huponexit":            false,
 	"mailwarn":             false,
-	"progcomp_alias":       false,
 }
 
 const shoptUsage = "shopt: usage: shopt [-pqsu] [-o] [optname ...]"

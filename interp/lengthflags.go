@@ -150,7 +150,7 @@ func (r *Runner) countWords(e *syntax.ParamExpr, words []string, keepEmpty bool)
 		case keepEmpty:
 			n += separatedFieldCount(w, ifs, ifsSet)
 		default:
-			n += ifsWordCount(w, ifs, space, ifsSet, r.countsTheLocalesCharacters)
+			n += ifsWordCount(w, ifs, space, ifsSet, r.countsTheLocalesWideUnits)
 		}
 	}
 	return n
@@ -192,7 +192,7 @@ func flagWordSep(e *syntax.ParamExpr) (sep string, explicit bool) {
 // field either way.
 func literalWordCount(w, sep string, keepEmpty bool) int {
 	if sep == "" {
-		return max(characterCount(w), 1)
+		return max(characterCount(w, ""), 1)
 	}
 	if keepEmpty {
 		return strings.Count(w, sep) + 1
@@ -241,7 +241,7 @@ func separatedFieldCount(w, ifs string, ifsSet bool) int {
 // there. It is the *run* that decides, not the last byte — `IFS=': '` counts
 // `'a: '` as 2 and `'a '` as 1, so a run containing one non-whitespace
 // separator opens a field however much whitespace follows it.
-func ifsWordCount(w, ifs, space string, ifsSet bool, chars func() bool) int {
+func ifsWordCount(w, ifs, space string, ifsSet bool, chars func() (string, bool)) int {
 	n := len(splitFields(w, ifs, space, ifsSet, chars))
 	if trailingRunSeparates(w, nil, ifs, space, ifsSet) {
 		n++

@@ -939,7 +939,7 @@ func (o *patternOpts) unitWidth(s string) int {
 	if !o.chars {
 		return 1
 	}
-	return characterWidth(s)
+	return characterWidth(s, "")
 }
 
 // unitBefore is the start of the unit ending at i — unitWidth walked
@@ -2515,7 +2515,7 @@ func classDeclared(names, name string) bool {
 // found straddling two characters of the set.
 func unitIn(set, unit string) bool {
 	for i := 0; i < len(set); {
-		n := characterWidth(set[i:])
+		n := characterWidth(set[i:], "")
 		if set[i:i+n] == unit {
 			return true
 		}

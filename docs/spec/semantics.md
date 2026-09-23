@@ -6686,8 +6686,11 @@ reaches this axis there exactly as it does under `LC_ALL=C` (#2020).
 **Two multibyte charsets are held and the rest are not.** Shift-JIS and
 Big5 are, since #3029. `eucJP`, `GB18030` and `Big5-HKSCS` are not, and a
 locale naming one of them reaches the axis for every code point above
-ASCII. `multibyteLocale` records the same limit from the other side: every
-non-UTF-8 encoding counts bytes.
+ASCII. What the two held charsets are *not* short of is a width, which is
+the question a length and a field split ask — see the locale section
+below: `zh_TW.Big5` and `ja_JP.SJIS` measure characters even though
+nothing decodes them, and only an encoding with no table at all counts
+bytes.
 
 **The Big5 held here is the base one and macOS's is extended.** Unicode's
 table and macOS agree on every one of its 13,703 rows, and macOS has
@@ -21298,6 +21301,32 @@ encodings are right by that rule (`C`, `POSIX` and `en_US.ISO8859-1` all
 measure as bytes across the panel); `eucJP` and the other multibyte
 codesets would each be a decoder, and are a known limit rather than an
 answer.
+
+**Measuring is a weaker question than decoding, and the two charsets
+`internal/charset` holds are measured.** A length needs to know where a
+character *ends* and never what it means, which is what `charset.Width`
+answers — "not a decoder and deliberately less than one", in that
+package's own words. So `zh_TW.Big5` and `ja_JP.SJIS` count characters
+even though no code point is recovered from them: measured 2026-09-23
+with `v=$'\u3B1'Z`, whose first character Big5 writes as `a3 5c`, bash
+5.3.15, bash 3.2.57, ksh93u+ and zsh 5.9.2 all answer 2 for `${#v}` and
+all four give the whole two-byte character for `${v:0:1}`, while dash
+counts bytes there as everywhere. That is the split
+`MultibyteEncodingIsHonored` already records, on a second encoding, so it
+is not an axis of its own. BusyBox ash is unpinned for it rather than
+measured: musl ships no locales, so the pinned image the ash column runs
+in has no Big5 locale to put the question in — it answers 3 under
+`C.UTF-8` too.
+
+**Field splitting counts the same characters, and consumes them whole.**
+A separator of `IFS` is a character; told only where one *begins*, the
+walk stepped a single byte past it and handed the rest of the character
+to the next field. Under `zh_TW.Big5` with `IFS` holding that same
+character, `v='X<a3 5c>Y'` gives two fields of `X` and `Y` in bash,
+ksh93 and zsh, and it reaches the splitter by two routes that must agree:
+an unquoted expansion splits the **escaped** form, where the value's own
+backslash — this character's trail byte — carries a mark that sits
+*between* the halves of the letter, and `read` splits plain text.
 
 Asked only where the two readings differ — a value whose bytes are all
 ASCII is the same length and has its positions in the same places under

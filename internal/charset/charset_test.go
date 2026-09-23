@@ -196,3 +196,29 @@ func TestNoCharsetIsBothSingleByteAndMultibyte(t *testing.T) {
 		}
 	}
 }
+
+// Multibyte is answered from the table rather than from a list of names, which
+// is what keeps it in step with [Width]: the two charsets that have a width
+// above one are the two that say yes, an alias of one of them says yes, and a
+// single-byte charset says no even though [Known] says yes about it.
+func TestMultibyte(t *testing.T) {
+	for _, c := range []struct {
+		codeset string
+		want    bool
+	}{
+		{"Big5", true},
+		{"big5", true},
+		{"SJIS", true},
+		{"ISO8859-1", false},
+		// Known about, and one byte per character — the case a caller reaching
+		// for Known instead of this would get wrong.
+		{"UTF-8", false},
+		{"C", false},
+		{"", false},
+		{"eucJP", false},
+	} {
+		if got := Multibyte(c.codeset); got != c.want {
+			t.Errorf("Multibyte(%q) = %v, want %v", c.codeset, got, c.want)
+		}
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/blairham/sh/internal/charset"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -5753,7 +5754,7 @@ func (r *Runner) ifsSpace(ifs string) string {
 // non-whitespace separator delimits — so two adjacent ones produce an empty
 // field. A trailing separator is absorbed and a leading one is not, which is
 // the asymmetry a symmetric implementation gets wrong.
-func splitFields(s string, ifs, space string, ifsSet bool, chars func() bool) []string {
+func splitFields(s string, ifs, space string, ifsSet bool, chars func() (string, bool)) []string {
 	return splitFieldsLiteral(s, nil, ifs, space, ifsSet, chars)
 }
 
@@ -5763,7 +5764,7 @@ func splitFields(s string, ifs, space string, ifsSet bool, chars func() bool) []
 // one field — by the time the escapes are removed, an escaped space and a
 // separating one are the same byte, so only a mask can still tell them
 // apart. A nil mask exempts nothing.
-func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool, chars func() bool) []string {
+func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool, chars func() (string, bool)) []string {
 	return splitFieldsEdges(s, literal, ifs, space, ifsSet, false, false, chars)
 }
 
@@ -5783,7 +5784,7 @@ func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool
 // be told apart by looking, since a backslash is a legal character of a value
 // as well as the form's own mark — so it is the caller that knows.
 func splitFieldsEdges(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
-	chars func() bool,
+	chars func() (string, bool),
 ) []string {
 	fields, _, _ := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped, chars)
 	return fields
@@ -5798,14 +5799,21 @@ func splitFieldsEdges(s string, literal []bool, ifs, space string, ifsSet, keepE
 // which bytes are a delimiter is a rule with a mask, an escape form and a
 // run in it, and a copy of that rule is a second place for it to drift.
 func splitFieldsOpenEnd(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
-	chars func() bool,
+	chars func() (string, bool),
 ) ([]string, bool) {
 	fields, _, openEnd := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped, chars)
 	return fields, openEnd
 }
 
-// separatorStarts marks the bytes of s where a separator of ifs begins, and
-// is nil where reading the bytes on their own gives the same answer.
+// separatorWidths gives, for each byte of s, how many bytes of a separator of
+// ifs begin there — 0 where none does — and is nil where reading the bytes on
+// their own gives the same answer.
+//
+// The width and not just the fact, because a separator is consumed as well as
+// found. A caller told only where one *starts* advances a byte past it and
+// hands the rest of the character to the next field, which under `zh_TW.Big5`
+// left the backslash half of U+03B1 on the front of it (#4235 from the
+// splitting side).
 //
 // **A separator is a character, not a byte**, and the two part company only
 // where `IFS` holds a byte above ASCII: an ASCII byte never occurs inside a
@@ -5821,21 +5829,79 @@ func splitFieldsOpenEnd(s string, literal []bool, ifs, space string, ifsSet, kee
 // unanimous that a byte of `IFS` which is not a character of its own does not
 // cut a character in half, and splitting on the byte is simply wrong rather
 // than a dialect's reading of it.
-func separatorStarts(s, ifs string, chars func() bool) []bool {
-	if isASCII(ifs) || isASCII(s) || chars == nil || !chars() {
+func separatorWidths(s, ifs string, marks []bool, chars func() (string, bool)) []int {
+	if isASCII(ifs) || isASCII(s) || chars == nil {
+		return nil
+	}
+	codeset, wide := chars()
+	if !wide {
 		return nil
 	}
 	seps := make(map[string]bool, len(ifs))
-	for _, c := range characters(ifs) {
+	for _, c := range characters(ifs, codeset) {
 		seps[c] = true
 	}
-	starts := make([]bool, len(s))
+	widths := make([]int, len(s))
 	for i := 0; i < len(s); {
-		w := characterWidth(s[i:])
-		starts[i] = seps[s[i:i+w]]
-		i += w
+		b, at := dataByteAt(s, i, marks)
+		if at >= len(s) {
+			break
+		}
+		if codeset == "" {
+			// No character of UTF-8 above ASCII holds a byte below it, so no
+			// mark can ever sit inside one and the bytes of a character are
+			// contiguous. Reading them off s is both right and cheaper.
+			w := characterWidth(s[at:], "")
+			if seps[s[at:at+w]] {
+				widths[at] = w
+			}
+			i = at + w
+			continue
+		}
+		// Big5 and Shift-JIS are the two the escaped form can interleave: a
+		// trail byte of theirs may be an ASCII one — U+03B1 is `a3 5c`, and
+		// `5c` is a backslash (#4235) — so the value's own backslash carries
+		// a mark, and the mark stands between the halves of one character.
+		// The pair is therefore read off the *data* bytes, and the width
+		// recorded is the span in s, marks and all, because that is what the
+		// walk has to move past.
+		nb, nat := dataByteAt(s, at+1, marks)
+		if nat < len(s) && charset.Width(codeset, b, nb) == 2 {
+			if seps[string([]byte{b, nb})] {
+				widths[at] = nat + 1 - at
+			}
+			i = nat + 1
+			continue
+		}
+		if seps[string([]byte{b})] {
+			widths[at] = 1
+		}
+		i = at + 1
 	}
-	return starts
+	return widths
+}
+
+// dataByteAt is the first byte of the escaped form at or after i that stands
+// for a byte of the value, and where it stands. It answers len(s) for a
+// position with nothing but marks left after it.
+//
+// Three kinds of byte are in the form and only one of them is data. A mark is
+// not: it says the byte behind it was quoted, and skipping it is what makes
+// `\:` a separator rather than two bytes of a field. valueBackslashMark is
+// not itself either, but it stands for one — a backslash the value held — so
+// it answers that rather than the `\x00` it is written as. Everything else is
+// its own byte.
+func dataByteAt(s string, i int, marks []bool) (byte, int) {
+	for i < len(s) && marks != nil && marks[i] {
+		i++
+	}
+	if i >= len(s) {
+		return 0, len(s)
+	}
+	if s[i] == valueBackslashMark {
+		return '\\', i
+	}
+	return s[i], i
 }
 
 // splitFieldsAt is splitFieldsEdges with each field's offset in s reported
@@ -5851,7 +5917,7 @@ func separatorStarts(s, ifs string, chars func() bool) []bool {
 // one splitter rather than recomputed beside it, because a second walk of the
 // same rule is a second place for it to drift.
 func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
-	chars func() bool,
+	chars func() (string, bool),
 ) ([]string, []int, bool) {
 	if ifsSet && ifs == "" {
 		// Set and empty disables the stage entirely, which is a different
@@ -5881,18 +5947,27 @@ func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdge
 		return !isMark(i) && (literal == nil || !literal[i]) &&
 			strings.IndexByte(ifs, c) >= 0 && isIFSWhitespace(c, space)
 	}
-	// Which bytes of s a separator may be found at. Nil is every byte, which
-	// is the reading for a single-byte locale and for an IFS of ASCII — see
-	// separatorStarts.
-	starts := separatorStarts(s, ifs, chars)
+	// How many bytes of a separator begin at each byte of s. Nil is one byte
+	// at every byte, which is the reading for a single-byte locale and for an
+	// IFS of ASCII — see separatorWidths.
+	widths := separatorWidths(s, ifs, marks, chars)
 	isSep := func(i int) bool {
 		if isMark(i) || (literal != nil && literal[i]) {
 			return false
 		}
-		if starts != nil {
-			return starts[i]
+		if widths != nil {
+			return widths[i] > 0
 		}
 		return strings.IndexByte(ifs, s[i]) >= 0
+	}
+	// sepWidth is how far past the separator at i the walk moves. A
+	// single-byte reading moves one; a character's is the whole character,
+	// which is the half separatorWidths exists to supply.
+	sepWidth := func(i int) int {
+		if widths != nil && widths[i] > 0 {
+			return widths[i]
+		}
+		return 1
 	}
 	// cutAt is where the field in front of the separator at i ends. A marked
 	// separator still separates — a value's backslash quotes for the *match*
@@ -5939,7 +6014,7 @@ func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdge
 			i++
 		}
 		if i < len(s) && isSep(i) {
-			i++
+			i += sepWidth(i)
 			for i < len(s) && isWS(i) {
 				i++
 			}
@@ -7597,11 +7672,15 @@ func (r *Runner) ifsFirst(ifs string, set bool) string {
 	if ifs == "" {
 		return ""
 	}
-	if isASCII(ifs[:1]) || !r.countsTheLocalesCharacters() ||
+	if isASCII(ifs[:1]) {
+		return ifs[:1]
+	}
+	codeset, wide := r.countsTheLocalesWideUnits()
+	if !wide ||
 		!r.ask(r.sem().JoinTakesTheFirstCharacterOfIFS, "a list joining on a whole character of `IFS`") {
 		return ifs[:1]
 	}
-	return ifs[:characterWidth(ifs)]
+	return ifs[:characterWidth(ifs, codeset)]
 }
 
 // namesWithPrefix is every variable name beginning with prefix, sorted.

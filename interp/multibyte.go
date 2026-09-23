@@ -118,13 +118,34 @@ const (
 // localeEncoding reads the locale variables in POSIX's order and says which of
 // the three states holds.
 //
-// UTF-8 and nothing else counts as multibyte. The other multibyte encodings a
-// real shell may be asked for — eucJP, GB18030, Big5 — would each be a
-// decoder, and the panel under them is unreachable from the corpus anyway
-// because the harness runs every case under a fixed locale. Anything that is
-// not UTF-8 therefore counts bytes, which is the right answer for the
-// single-byte encodings (C, POSIX, ISO8859-1, measured above) and a known
-// limit for the rest.
+// UTF-8 is the encoding this shell *decodes*, and the three states are about
+// decoding: a code point is what `printf %d "'x"` and a case fold need, and
+// eucJP or GB18030 would each be a decoder this module does not have.
+//
+// Measuring is a weaker question than decoding, and localeSingleByte used to
+// answer it wrongly for the two charsets internal/charset does hold — Big5 and
+// Shift-JIS, which `zh_TW.Big5` and `ja_JP.SJIS` name. A length and a position
+// need to know where a character *ends* and never what it means, which is
+// exactly what charset.Width answers and exactly what charset.go's own comment
+// calls "not a decoder and deliberately less than one". So the length path
+// asks countsWideUnits below rather than this, and the two are different
+// questions rather than one question read twice.
+//
+// Measured 2026-09-23 under `LC_ALL=zh_TW.Big5` with `v=$(printf
+// "\xa3\x5cZ")`, whose first two bytes are one Big5 character — U+03B1, whose
+// trail byte is a backslash (#4235):
+//
+//	bash 5.3.15, bash 3.2.57, ksh93u+, zsh 5.9.2   ${#v} is 2, ${v:0:1} is a3 5c
+//	dash                                           counts bytes, as everywhere
+//	BusyBox ash                                    unpinned: musl ships no
+//	                                               locales, so the image the ash
+//	                                               column runs in has no Big5
+//	                                               locale to put the question in
+//	                                               — it answers 3 under
+//	                                               `C.UTF-8` too
+//
+// So it is the same split MultibyteEncodingIsHonored already records, on a
+// second encoding, and not an axis of its own.
 //
 // A locale with no codeset at all is single-byte: `LC_ALL=UTF-8` is not a
 // locale name, and the panel splits on it — bash reads a codeset out of it,
@@ -296,19 +317,66 @@ func isASCII(s string) bool {
 	return true
 }
 
+// countsWideUnits is the length-and-position question: whether the units of v
+// are characters rather than bytes, and which charset those characters belong
+// to — the empty string meaning UTF-8.
+//
+// Weaker than countsCharacters, deliberately. That one is asked where a code
+// point is wanted — `printf %d "'x"`, a case fold, a display column — and can
+// only be yes for an encoding this module decodes. A length wants a width, so
+// it can be yes for a charset internal/charset can only measure.
+//
+// The order the two are asked in is the usual one and it matters here twice
+// over. countsCharacters ends the question for a UTF-8 locale before any
+// charset name is looked at, so the common case costs nothing new; and it ends
+// it for `LC_ALL=C` before MultibyteEncodingIsHonored is reached, so the
+// corpus, whose harness pins `LC_ALL=C`, still asks the core nothing. Only a
+// non-ASCII value under a locale naming Big5 or Shift-JIS gets as far as the
+// axis, which is where the panel actually splits — dash counts bytes there
+// exactly as it counts bytes under UTF-8.
+func (r *Runner) countsWideUnits(v string) (string, bool) {
+	if isASCII(v) {
+		return "", false
+	}
+	return r.countsTheLocalesWideUnits()
+}
+
+// countsTheLocalesWideUnits is countsWideUnits with no value in hand, for the
+// sites that walk a string arriving a byte at a time: field splitting, which
+// has done its own ASCII check on both `IFS` and the subject before it asks.
+//
+// The pair countsTheLocalesCharacters is, with the weaker second half. The
+// first question is still asked first and still ends it for a UTF-8 locale and
+// for `LC_ALL=C`, which is what keeps the corpus from putting anything new to
+// the core.
+func (r *Runner) countsTheLocalesWideUnits() (string, bool) {
+	if r.countsTheLocalesCharacters() {
+		return "", true
+	}
+	codeset := LocaleCodeset(r.LocaleFor("LC_CTYPE"))
+	if !charset.Multibyte(codeset) {
+		return "", false
+	}
+	if !r.ask(r.sem().MultibyteEncodingIsHonored,
+		"a character being the locale's rather than a byte") {
+		return "", false
+	}
+	return codeset, true
+}
+
 // units splits v into the things a length counts and a subscript indexes:
 // characters where the dialect and the locale both say so, bytes otherwise.
 func (r *Runner) units(v string) []string {
-	if r.countsCharacters(v) {
-		return characters(v)
+	if codeset, wide := r.countsWideUnits(v); wide {
+		return characters(v, codeset)
 	}
 	return singleBytes(v)
 }
 
 // stringLength is `${#x}`.
 func (r *Runner) stringLength(v string) int {
-	if r.countsCharacters(v) {
-		return characterCount(v)
+	if codeset, wide := r.countsWideUnits(v); wide {
+		return characterCount(v, codeset)
 	}
 	return len(v)
 }
@@ -324,10 +392,10 @@ func (r *Runner) stringLength(v string) int {
 // value nothing put there — the trap #855 hit from the other side, where a
 // decoder that rejected the replacement rune made `$((##\x80))` answer 0 where
 // zsh answers 128.
-func characters(v string) []string {
+func characters(v, codeset string) []string {
 	out := make([]string, 0, len(v))
 	for i := 0; i < len(v); {
-		w := characterWidth(v[i:])
+		w := characterWidth(v[i:], codeset)
 		out = append(out, v[i:i+w])
 		i += w
 	}
@@ -357,19 +425,37 @@ func singleBytes(v string) []string {
 // non-empty string, both callers walk while i < len(v), and an empty one
 // would have panicked on v[0] a line earlier. A guard that cannot fire is
 // worse than none — it reads as a case somebody has thought about.
-func characterWidth(v string) int {
+//
+// codeset names the charset the characters belong to, and the empty string
+// means UTF-8. It is not optional and it is not defaulted, because a caller
+// that walks a Big5 string with a UTF-8 decoder gets an answer that is wrong
+// in a way nothing looks like: Big5's lead bytes run from 0xA1, so half of
+// them are UTF-8 continuation bytes and come back 1 byte wide — the byte walk
+// by another name — while the other half swallow whatever follows. Every
+// caller therefore says which walk it wants, and a caller passing "" is saying
+// it reads UTF-8 and nothing else. The sites that do are the ones a code point
+// reaches: a pattern match, a regex, IFS splitting and the printf widths all
+// decode, so they can only honor an encoding this module decodes.
+func characterWidth(v, codeset string) int {
 	if v[0] < utf8.RuneSelf {
 		return 1
+	}
+	if codeset != "" {
+		var next byte
+		if len(v) > 1 {
+			next = v[1]
+		}
+		return charset.Width(codeset, v[0], next)
 	}
 	_, size := utf8.DecodeRuneInString(v)
 	return size
 }
 
 // characterCount is len(characters(v)) without building the slice.
-func characterCount(v string) int {
+func characterCount(v, codeset string) int {
 	n := 0
 	for i := 0; i < len(v); n++ {
-		i += characterWidth(v[i:])
+		i += characterWidth(v[i:], codeset)
 	}
 	return n
 }

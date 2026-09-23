@@ -201,6 +201,23 @@ func Known(codeset string) bool {
 	return lookupSingle(name) != nil || lookupMultibyte(name) != nil
 }
 
+// Multibyte reports whether the named charset writes any character as more
+// than one byte.
+//
+// A third question again, and the one a *length* asks. [Known] is too broad
+// for it — every single-byte charset here is known and counts one byte per
+// character, so a caller that used Known would walk `en_US.ISO8859-1` looking
+// for pairs that cannot be there. [Width] is too narrow: it answers for one
+// byte pair, and a caller has to decide which walk to run before it has a
+// pair in hand.
+//
+// It is answered from the table and not from a list of names, so a charset
+// this package gains a multibyte table for is measured whole by whoever asks,
+// with nothing to keep in step.
+func Multibyte(codeset string) bool {
+	return lookupMultibyte(normalize(codeset)) != nil
+}
+
 // lookupSingle and lookupMultibyte take an already-normalized name, because
 // [Encode] has to ask both and normalizing twice would be the sort of thing
 // that stays correct until one of them stops.

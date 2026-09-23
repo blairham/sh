@@ -163,6 +163,24 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	// command's own dispatch recorded survives them.
 	onPath := r.lastSimpleRanOnPath
 	defer func() { r.lastSimpleRanOnPath = onPath }()
+	// The pipeline record is the same kind of thing as `$?` and moves with
+	// it. A body is commands, and commands set it — so without this a trap
+	// that ran anything left its own pipeline's statuses where the command's
+	// were, and the next `${PIPESTATUS[@]}` read the trap rather than the
+	// pipeline. Measured 2026-09-23 on GNU bash 5.3.20, `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C` from a script file, with the body running
+	// `false | false`:
+	//
+	//	trap … DEBUG;  exit 3 | true      after: [3 0] there, [1 1 0] here
+	//	trap … ERR;    exit 3 | exit 5    after: [3 5] there, [1 1] here
+	//
+	// bash 3.2.57 answers `[1 1 0]` to the first, so this is a reading bash
+	// changed rather than one it always had; 5.3 is the column followed.
+	//
+	// It is also what made a DEBUG trap unusable as an instrument: a trap
+	// that reports where the shell is must not move the state the next line
+	// reads.
+	pipe := r.pipeStatus
 	r.status = sees
 	r.ctl = controlNone
 	outer := r.inCommandTrap
@@ -179,7 +197,10 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	r.inCommandTrap = outer
 	acted := r.status
 	if r.ctl == controlNone {
-		r.status, r.ctl = st, ctl
+		// The pair moves together: a body that changed the control flow is
+		// carrying its own status out, and the pipeline behind that status is
+		// the body's too.
+		r.status, r.ctl, r.pipeStatus = st, ctl, pipe
 	}
 	r.pipefailRaised = raised
 	return acted

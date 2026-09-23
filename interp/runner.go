@@ -1623,6 +1623,11 @@ type Runner struct {
 	// A flag rather than a count because the question is which text this is,
 	// not how deep it is, and a clone carries it over the boundary.
 	inSubstBody bool
+	// emptyNameIsASelfReference says the declaration being read carries the
+	// reference letter under its on sign, where an empty name is refused as a
+	// reference to itself rather than as a bad name. See
+	// Runner.badBuiltinName.
+	emptyNameIsASelfReference bool
 	// expandErr records that an expansion failed — a division by zero, a
 	// number that is not one. The command does not run, which is what every
 	// shell in the panel does and what the exit status has to say.

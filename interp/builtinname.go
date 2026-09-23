@@ -505,6 +505,23 @@ func (r *Runner) badSubscriptOperand(builtin, operand, name string, fatal Answer
 // `unset` alone where it puts it after for the other two.
 func (r *Runner) badBuiltinName(builtin, operand, name string, fatal Answer) int {
 	d := r.diag()
+	if r.emptyNameIsASelfReference && name == "" && operand == "" {
+		// **An empty name references itself.** The reference letter is the
+		// only thing that words this name differently, and it is the same
+		// sentence a reference aimed straight at its own name gets: measured
+		// 2026-09-23 against bash 5.3.15 in the pinned image and bash 5.3.20
+		// on macOS, `declare -n ''` is `declare: : nameref variable self
+		// references not allowed` at 1, and so are `typeset -n ''`,
+		// `declare -rn ''`, `declare -gn ''` and each operand of
+		// `declare -n '' ''`. This shell wrote the ordinary bad-name refusal.
+		//
+		// Only where the operand carries no value, which is the control:
+		// `declare -n ''=x` is `` `=x': not a valid identifier `` in both, so
+		// it is the *name alone* being empty that reads as a reference to
+		// itself (#4178).
+		return r.refuseNameref(builtin, Wording(d.NamerefSelfReference,
+			"%[1]s: invalid self reference", name))
+	}
 	if d.BadNameRefusalHidesTheBuiltin[builtin] {
 		// The location does not name the builtin for this one where it does
 		// for the others — put aside for the report and given back, the way

@@ -1372,6 +1372,32 @@ to completion at status 0**. No parser change moves such a file into the read
 column, so ranking it beside a real gap sends somebody to close a gap nobody
 can close.
 
+**To narrow a differing line, locate it from our own shell rather than from the
+output.** A suite file may not be read, so the usual route — recognize the
+construct from the text either side of the line — runs out quickly: a dozen
+spellings of a glob and half a dozen of a pattern operand can all come out
+byte-identical, and then there is nothing left to guess with.
+
+What does work is asking our own shell where it was. A `DEBUG` trap with
+`set -T` prints the source file and line before every command, and `BASH_ENV`
+carries the same trap into the `$THIS_SH` children a suite file starts for each
+`.sub` — which a top-level trap cannot reach, since a trap is not inherited
+across an exec:
+
+    set -T
+    trap 'printf "@%s:%s\n" "${BASH_SOURCE[0]}" "$LINENO" >&2' DEBUG
+
+Run the file with both streams on one pipe and every line of output is preceded
+by the location that produced it. Nothing of the file is read: the markers are
+positions, and the output lines are ours.
+
+Then ask **our parser** what is at that position, printing node kinds,
+positions and field *lengths* only — never a value. `L54 SimpleCmd` with an
+`Assign len(Name)=3`, four literal words and a `Redirect Op=<<<` says
+`IFS=… read a b c <<< "$v"` without quoting a byte of it, which is enough to
+reconstruct the case and measure it against the real shell. That pair —
+locator, then structural read — is what broke rows the output alone could not.
+
 **The image's locale set is part of the measurement, not part of the machine.**
 A file here changes locale and then asks about multibyte matching, and a bare
 container carries only C, POSIX and C.utf8 — so the *reference* answers

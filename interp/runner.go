@@ -2042,6 +2042,17 @@ type Runner struct {
 	// was typed with — bash's `shopt lithist` read the other way round. See
 	// HistoryJoinsATypedCommand, where the measurement is.
 	histJoinLines bool
+	// histSplitLines is whether a command typed over several physical lines
+	// becomes one history entry per line rather than one entry. Held as the
+	// negative so that the zero value is this core's own state — one entry —
+	// the way histJoinLines beside it is. One dialect names the positive, as
+	// `shopt -u cmdhist`. See HistoryKeepsATypedCommandWhole.
+	histSplitLines bool
+	// histReedit hands a *failed* history expansion back to the person to
+	// edit rather than throwing the line away. Off with nothing said; one
+	// dialect names it, as `shopt -s histreedit`. See
+	// HistoryExpansionReedits.
+	histReedit bool
 	// histRewrite is whether the history file is written from the session's
 	// list rather than appended to, where the two differ — bash's
 	// `shopt histappend` read the other way round. See

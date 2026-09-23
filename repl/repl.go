@@ -1548,9 +1548,24 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	// The construct is whole, so nothing is waiting on the next line.
 	c.open = nil
 	c.entryAt = histjoin.At{}
+	// The lines before Take, which empties the collector: a dialect that keeps
+	// one entry per typed line needs them, and asking afterwards would ask an
+	// empty entry.
+	typed := c.entry.Lines()
 	joined := c.entry.Take()
 	text = strings.TrimSuffix(text, "\n")
-	if remember != nil {
+	if remember != nil && s.splitsHistoryLines() && len(typed) > 1 {
+		// One entry per physical line, for the dialect that asks — bash's
+		// `shopt -u cmdhist`. The lines as typed, with nothing between them:
+		// the separators exist to join and this is the road that does not.
+		//
+		// Before the joined form below rather than beside it, because the two
+		// are alternatives and a site that did both would record the command
+		// five times. See interp.Runner.HistoryKeepsATypedCommandWhole.
+		for _, line := range typed {
+			remember(line)
+		}
+	} else if remember != nil {
 		// Nil where there is nothing to recall with: a session without an
 		// editor has no way to reach a history and no reason to keep one.
 		//
@@ -1563,6 +1578,15 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 		remember(s.historyEntry(joined, text))
 	}
 	return stmts, text, err, true
+}
+
+// splitsHistoryLines is the dialect's answer about how many entries a command
+// typed over several lines makes, read at the moment the entry is recorded for
+// the reason rewritesHistory is read when the file is written: `shopt -u
+// cmdhist` in an rc file and one typed at the prompt have to mean the same
+// thing. See interp.Runner.HistoryKeepsATypedCommandWhole.
+func (s Shell) splitsHistoryLines() bool {
+	return s.Runner != nil && !s.Runner.HistoryKeepsATypedCommandWhole()
 }
 
 // rewritesHistory is the dialect's answer about the file at exit, read at the

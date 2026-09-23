@@ -79,6 +79,35 @@ func (r *Runner) HistoryExpansionVerifies() bool { return r.histVerify }
 // SetHistoryExpansionVerifies moves it.
 func (r *Runner) SetHistoryExpansionVerifies(on bool) { r.histVerify = on }
 
+// HistoryExpansionReedits reports whether an expansion that **failed** is
+// handed back to the person to edit instead of being thrown away.
+//
+// The state bash spells `shopt histreedit`, off. It is HistoryExpansionVerifies
+// one case over — that one is about an expansion that changed the line, this
+// one about a reference the list did not hold — and it reaches the same road,
+// because what both do is put text back on the editing line.
+//
+// Measured 2026-09-23 through a pseudo-terminal against bash 5.3.15, with
+// `!nosuchprefix` typed and then ` ZMARK` typed at whatever prompt followed:
+//
+//	off   `event not found`, then ` ZMARK` runs and says `ZMARK: command
+//	      not found` — the failed line was thrown away
+//	on    `event not found`, then the next prompt reads `!nosuchprefix`, so
+//	      ` ZMARK` makes `!nosuchprefix ZMARK` and fails the same way again
+//
+// Two things the rows pin. The complaint is printed in **both** states, so
+// this option does not replace the diagnostic the way `histverify` replaces
+// the echo. And what comes back is the line **as typed**, not a partial
+// expansion — there is none, since the reference is what failed.
+//
+// The follow-up keystroke is what makes the second row readable at all: a
+// prompt that has been handed a line back looks identical to a fresh one until
+// something is typed after it.
+func (r *Runner) HistoryExpansionReedits() bool { return r.histReedit }
+
+// SetHistoryExpansionReedits moves it.
+func (r *Runner) SetHistoryExpansionReedits(on bool) { r.histReedit = on }
+
 // HistoryExpansionInAScript reports whether this dialect reads a script one
 // physical line at a time, keeping the list and expanding against it. See
 // Semantics.HistoryExpansionInAScript, which is bash's row alone.

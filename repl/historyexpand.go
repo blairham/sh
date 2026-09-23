@@ -42,7 +42,18 @@ func (s Shell) expanded(line string, hist []string, remember func(string)) (stri
 	// starts it and what `!1` means.
 	res, err := s.Runner.ExpandHistory(line, hist, 1)
 	if err != nil {
+		// The complaint is written in both states — measured, so this option
+		// does not replace the diagnostic the way `histverify` replaces the
+		// echo one branch down.
 		s.errf("%s: %s\n", or(s.Name, "sh"), s.Runner.HistoryExpansionRefusal(err))
+		if s.Runner.HistoryExpansionReedits() {
+			// The line **as typed** goes back on the editing line. There is no
+			// partial expansion to hand back: what failed is the reference.
+			// See interp.Runner.HistoryExpansionReedits for the rows, and
+			// repl.lineStart for where the text lands — the same road
+			// verifyLine takes, which is why this is not a fourth outcome.
+			return line, verifyLine
+		}
 		return "", dropLine
 	}
 	if !res.Changed {

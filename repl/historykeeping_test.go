@@ -177,3 +177,73 @@ func TestTheHistoryFileIsRewrittenOnlyWhereTheListRanShort(t *testing.T) {
 		})
 	}
 }
+
+// How many entries a command typed over several lines makes is a **different**
+// question from what goes between its lines, and the two bits compose in one
+// direction only.
+//
+// The states bash spells `shopt -s cmdhist` (its default) and `shopt -u
+// cmdhist`. Measured 2026-09-23 on bash 5.3.15 through a pty, typing
+// `for i in 1 2` / `do` / `  echo $i` / `done` and reading `history`:
+//
+//	cmdhist on,  lithist off   one entry, `for i in 1 2; do   echo $i; done`
+//	cmdhist on,  lithist on    one entry, holding the newlines
+//	cmdhist off, either        four entries
+//
+// The third row is why `lithist` is moot once this is off, and the rows are
+// read off `history`'s numbering rather than the file: one entry holding
+// newlines and four separate entries are the same bytes in `$HISTFILE`, and an
+// instrument that read the file reported the option doing nothing.
+func TestHowManyEntriesATypedCommandMakesFollowsTheDialect(t *testing.T) {
+	const typed = "echo one\nfor q in ZZ\ndo\necho MARK$q\ndone\necho two\n"
+	for _, c := range []struct {
+		name        string
+		whole, join bool
+		want        []string
+	}{
+		{
+			name:  "whole, which is what bash records with nothing said",
+			whole: true, join: true,
+			want: []string{"echo one", "for q in ZZ; do echo MARK$q; done", "echo two"},
+		},
+		{
+			// The state `shopt -u cmdhist` asks for: one entry per typed line,
+			// with nothing added between them — the separators exist to join and
+			// this is the road that does not.
+			name:  "a line at a time",
+			whole: false, join: true,
+			want: []string{"echo one", "for q in ZZ", "do", "echo MARK$q", "done", "echo two"},
+		},
+		{
+			// And the joining bit is moot once the count bit is off, which is the
+			// row that says these are two questions and not three states of one.
+			name:  "a line at a time, with joining off as well",
+			whole: false, join: false,
+			want: []string{"echo one", "for q in ZZ", "do", "echo MARK$q", "done", "echo two"},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := runKept(t, nil, nil, typed, func(s *Shell) {
+				s.Runner.SetHistoryJoinsATypedCommand(c.join)
+				s.Runner.SetHistoryKeepsATypedCommandWhole(c.whole)
+			})
+			if strings.Join(got, "\u0000") != strings.Join(c.want, "\u0000") {
+				t.Errorf("history file = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// TestASingleLineCommandIsOneEntryEitherWay: the split is for a command that
+// took more than one line, and a one-line command must not be touched by it.
+// Without this the option would look right on the `for` loop above and record
+// every ordinary command twice the moment the collector held one line.
+func TestASingleLineCommandIsOneEntryEitherWay(t *testing.T) {
+	got := runKept(t, nil, nil, "echo one\necho two\n", func(s *Shell) {
+		s.Runner.SetHistoryKeepsATypedCommandWhole(false)
+	})
+	want := []string{"echo one", "echo two"}
+	if strings.Join(got, "\u0000") != strings.Join(want, "\u0000") {
+		t.Errorf("history file = %q, want %q", got, want)
+	}
+}

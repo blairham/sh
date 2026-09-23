@@ -49,6 +49,38 @@ func (r *Runner) HistoryJoinsATypedCommand() bool { return r.histJoinLines }
 // SetHistoryJoinsATypedCommand moves it.
 func (r *Runner) SetHistoryJoinsATypedCommand(on bool) { r.histJoinLines = on }
 
+// HistoryKeepsATypedCommandWhole reports whether a command typed over several
+// physical lines is **one entry** at all, which is a different question from
+// what goes between its lines.
+//
+// bash's name for the other side is `cmdhist`, **on** by default, and the two
+// bits compose in one direction only. Measured 2026-09-23 on bash 5.3.15
+// through a pty, typing `for i in 1 2` / `do` / `  echo $i` / `done` and then
+// reading `history`:
+//
+//	cmdhist on,  lithist off   one entry, `for i in 1 2; do   echo $i; done`
+//	cmdhist on,  lithist on    one entry, holding the newlines
+//	cmdhist off, lithist off   four entries
+//	cmdhist off, lithist on    four entries
+//
+// So this bit decides the **count** and HistoryJoinsATypedCommand decides only
+// the separator inside one entry — which makes `lithist` moot once `cmdhist`
+// is off, and is why two bits are needed rather than three states of one.
+//
+// **The history file cannot measure this.** Three of those four rows write
+// four lines to `$HISTFILE`, because one entry holding newlines and four
+// separate entries are the same bytes there. `history`'s own numbering is what
+// separates them: one entry numbered 3 against four numbered 3 to 6. The first
+// instrument read the file and reported the option doing nothing (#4149).
+//
+// On with nothing said, which is both this core's state — it records the
+// construct it was given — and bash's default, so a preset has nothing to say
+// unless a script moves it.
+func (r *Runner) HistoryKeepsATypedCommandWhole() bool { return !r.histSplitLines }
+
+// SetHistoryKeepsATypedCommandWhole moves it.
+func (r *Runner) SetHistoryKeepsATypedCommandWhole(on bool) { r.histSplitLines = !on }
+
 // RewritesTheHistoryFile reports whether a session that ends writes its list
 // over the history file rather than appending what it added to whatever the
 // file now holds.

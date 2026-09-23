@@ -139,3 +139,28 @@ func TestTheHuponexitNameIsListedAndMoves(t *testing.T) {
 		})
 	}
 }
+
+// TestTheLastTwoHistoryNamesMoveBothWays: `cmdhist` and `histreedit` are
+// capabilities now rather than states — see
+// interp.Runner.HistoryKeepsATypedCommandWhole and
+// interp.Runner.HistoryExpansionReedits for the measured rows.
+func TestTheLastTwoHistoryNamesMoveBothWays(t *testing.T) {
+	for name, on := range map[string]bool{"cmdhist": true, "histreedit": false} {
+		t.Run(name, func(t *testing.T) {
+			first, second := "off", "on"
+			firstFlag, secondFlag := "-s", "-u"
+			if on {
+				first, second = "on", "off"
+				firstFlag, secondFlag = "-u", "-s"
+			}
+			out, _ := answersRun(t, "shopt "+name+"\n"+
+				"shopt "+firstFlag+" "+name+"; echo \"a=$?\"\nshopt "+name+"\n"+
+				"shopt "+secondFlag+" "+name+"; echo \"b=$?\"\nshopt "+name)
+			pad := name + strings.Repeat(" ", 20-len(name))
+			want := pad + "\t" + first + "\na=0\n" + pad + "\t" + second + "\nb=0\n" + pad + "\t" + first + "\n"
+			if out != want {
+				t.Errorf("output %q; want %q", out, want)
+			}
+		})
+	}
+}

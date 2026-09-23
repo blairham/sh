@@ -512,7 +512,7 @@ func (r *Runner) backgroundStdin() io.Reader {
 	// something in it to keep. A job inheriting an already-empty input gets
 	// the same emptiness either way, which is what keeps `&` itself off this
 	// question in a runner built with no input at all. See the axis.
-	if !r.ownInput(in) && !inputIsAlreadyEmpty(in) &&
+	if !r.shellsOwnInput(in) && !inputIsAlreadyEmpty(in) &&
 		r.ask(r.sem().BackgroundJobInputIsOnlyTheShellsOwn,
 			"a background job's input substitution reaching a stream a script redirected") {
 		// A stream a *script* put there is not what the substitution is

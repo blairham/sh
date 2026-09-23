@@ -1509,6 +1509,10 @@ type Runner struct {
 	// a subshell's own input is still the shell's.
 	ownStdin    io.Reader
 	ownStdinSet bool
+	// execStdin is what an `exec` redirection last installed as the shell's
+	// standard input, which is a different question from ownStdin and has a
+	// different reader. See Runner.noteExecReplacedStdin.
+	execStdin io.Reader
 	// midPipeline says this runner is an element of a pipeline whose status
 	// it does not decide — everything but the last. Kept because a signal
 	// that ends such an element is announced by one dialect and passed over
@@ -6722,7 +6726,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// shell's **own** standard input rather than wrapped a region
 			// in one, so the thing a background job's substitution is about
 			// has moved. See Runner.ownStdin and Runner.backgroundStdin.
-			r.noteOwnStdinReplaced()
+			r.noteExecReplacedStdin()
 			return
 		}
 		for _, c := range closers {

@@ -1372,6 +1372,66 @@ to completion at status 0**. No parser change moves such a file into the read
 column, so ranking it beside a real gap sends somebody to close a gap nobody
 can close.
 
+**Before reaching for a shell-level probe, instrument the Go.** Every caution
+in the rest of this section — a descriptor of its own, both sides traced, a body
+that moves no state, the byte-for-byte reconstruction, the `set -x` caveat,
+bytes rather than decoded characters — exists because a probe written in shell
+**shares a universe with its subject**. It sets `$?`, it holds descriptors, it
+writes lines, and on a file whose subject *is* descriptors or statuses or array
+state that is not a detail. A hook compiled into this shell shares nothing: it
+is not a command, it opens no descriptor the script can see, and it writes to a
+file of its own.
+
+The shape is small, and it goes in a scratch file you delete before committing:
+
+    var dbg = func() *os.File {           // interp/zzdebug.go, never committed
+        p := os.Getenv("SH_DEBUG_LOG")
+        if p == "" {
+            return nil
+        }
+        f, _ := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+        return f
+    }()
+
+    func note(r *Runner, what string, v any) {
+        if dbg == nil {
+            return
+        }
+        var pcs [24]uintptr
+        n := runtime.Callers(2, pcs[:])
+        // … frames into a "<- func <- func" string …
+        fmt.Fprintf(dbg, "line=%d %s type=%T stack=%s\n", r.line, what, v, stack)
+    }
+
+Then call it from the handful of sites the question is about and run the file
+**untraced**. What comes back is the script's line number, a Go dynamic type and
+a call stack — and that triple is usually the whole answer: it named the stream
+a background job was handed, at the two positions in `redir.tests` that
+differed, under `background.func1`, on the first run (#4153).
+
+**Its soundness is a property rather than a claim.** The traced run is
+byte-identical to the untraced one, because the hook adds no command and writes
+nowhere the script can read. Check it once — `diff` the two runs and expect
+nothing — and then every conclusion drawn from the log stands without any of the
+reconstruction arithmetic a shell-level trace needs.
+
+**And it satisfies the clean-room rules by construction.** A line number is a
+position and a Go type name is this tree's own; neither is a byte of the file.
+The same discipline as the structural read below, arrived at from the other
+side: report structure, never content.
+
+Three things it reaches that a shell probe cannot. **A stream's identity** — `%T`
+distinguishes an `*os.File` from an `emptyReader` where `readlink /proc/self/fd/0`
+can only show you the pipe `os/exec` built on the way out, which is the
+consequence and not the cause. **A call stack**, which says *which construct*
+asked, not merely where the cursor was. And **a site that runs no command at
+all**, which a `DEBUG` trap cannot observe because there is no command for it to
+fire on.
+
+Reach for the shell-level locator when the question is genuinely about a
+position in the file and nothing in this tree is on the path — and then read the
+rest of this section, all of which was learned the expensive way.
+
 **To narrow a differing line, locate it from our own shell rather than from the
 output.** A suite file may not be read, so the usual route — recognize the
 construct from the text either side of the line — runs out quickly: a dozen
@@ -1887,6 +1947,15 @@ The main checkout stays on `main` and stays clean, so it is always there to
 compare against, to check whether something reproduces without your change,
 and to branch the next piece of work from. Two changes in flight never
 share a working tree.
+
+**Name it for the topic, not for the issue number.** Several agents work the
+same board, so an issue number is the one part of a name that is *likely* to be
+shared — and a near-miss is worse than a match: `sh-fd0-4153x` beside another
+lane's `sh-fd0-4153` reads as a stray copy of somebody else's tree rather than
+as a tree of its own, and the ownership rule then has to be applied by hand
+against a name that invites the wrong guess. `../sh-<what-you-are-changing>` is
+unambiguous, and a collision on it is a genuine duplicate-work signal worth
+stopping for.
 
 This is not a preference about tidiness. Working directly on `main` is how
 a local commit ends up rewritten to recover from a mistake, and how a

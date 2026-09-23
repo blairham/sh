@@ -180,3 +180,36 @@ func TestAReplacementStandInIsSubstitutedToo(t *testing.T) {
 type noInput struct{}
 
 func (noInput) Read([]byte) (int, error) { return 0, io.EOF }
+
+// An `exec <` redirection is a stream the script asked for by name, so a child
+// gets **it** and not the front end's question stream.
+//
+// The one sentence this file implements, at the one spelling that can be got
+// wrong by accident: every other redirection wraps a region and is plainly the
+// script's, while `exec <` replaces what the shell itself reads — so a
+// comparison that asks "is this what the shell reads now" answers yes and
+// substitutes, where the rule wants "is this what the shell's own input was".
+//
+// Written after exactly that: a background job's substitution needs the first
+// question, and folding the two into one field made this row hand the child an
+// Agent Client Protocol session's reader where the file is what the script
+// asked for. See Runner.noteExecReplacedStdin, and Runner.shellsOwnInput,
+// which is the other question kept apart from ownInput.
+func TestAnExecRedirectionReachesAChildUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	name := filepath.Join(dir, "execed")
+	if err := os.WriteFile(name, []byte("FROMFILE\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := run(t, "exec < "+name+"\n/bin/cat\n", func(r *Runner) {
+		sem := CoreSemantics()
+		r.Semantics = &sem
+		r.Dir = dir
+		r.Stdin = strings.NewReader("THE SHELL'S OWN\n")
+		r.ChildStdin = strings.NewReader("THE FRONT END'S QUESTION\n")
+		r.Vars = map[string]string{"PATH": "/usr/bin:/bin"}
+	})
+	if !strings.Contains(out, "FROMFILE") {
+		t.Errorf("= %q status %d, want the child reading the file the script execed", out, st)
+	}
+}

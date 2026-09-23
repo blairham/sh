@@ -301,18 +301,31 @@ func skipEREBracket(pat string, at int) int {
 // differs between the machine a case is measured on and the image the suite is
 // graded in. A refusal in the reference's own words is the honest answer for a
 // construct this shell does not have; a silent mismatch is what it replaces.
+// ereRewriteTriggers is every character that can make the rewrite below do
+// anything: a bracket construct needs a `[`, the escape rule a `\`, the
+// repeated repetition one of the three operators or a `{`, and a character the
+// script quoted carries a mark that has to come off before the engine sees it.
+//
+// **A guard that is wrong here is silent**, which is why it has its own test
+// rather than its own comment. Four times a construct has been added to the
+// rewrite and left out of this set, and each time the rewrite it gates simply
+// never ran: `[`, then `\`, then the repetition operators, then the mark —
+// the last of which sent NUL bytes to the engine and turned every quoted
+// operand into a pattern that matched nothing. TestTheFastPathIsOnlyTakenWhen-
+// TheRewriteWouldDoNothing holds the two halves together by running the
+// rewrite with the guard bypassed and requiring the two to agree.
+const ereRewriteTriggers = "[\\*+?{\x00"
+
 func asERE(pat string) (string, error) {
-	if !strings.ContainsAny(pat, "[\\*+?{\x00") {
-		// Nothing any of the rewrites could reach: the bracket constructs
-		// need a `[`, the escape rule a `\`, the repeated repetition an
-		// operator, and a character the script quoted carries a mark that has
-		// to come off before the engine sees it. Every one of those was left
-		// out of this guard at some point and the rewrite it gates then never
-		// ran — the mark most recently, which sent NUL bytes to the engine
-		// and turned every quoted operand into a pattern that matched
-		// nothing.
+	if !strings.ContainsAny(pat, ereRewriteTriggers) {
 		return pat, nil
 	}
+	return rewriteERE(pat)
+}
+
+// rewriteERE is asERE with the guard taken off, so that the guard can be
+// tested against what it gates rather than against a restatement of itself.
+func rewriteERE(pat string) (string, error) {
 	var b strings.Builder
 	// Where the atom now being written began in the *output*, and whether what
 	// was written last was a repetition operator. A second operator behind the

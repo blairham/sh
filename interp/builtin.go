@@ -2874,7 +2874,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// above, because the set records the text the command line carried.
 		// See Runner.subscriptOperandRead for the six spellings.
 		lexed := r.operandBracketsWereLexed(written)
-		base, sub, subscripted := r.subscriptOperandRead(name, lexed)
+		base, raw, sub, subscripted := r.subscriptOperandParts(name, lexed)
 		if !subscripted {
 			base = name
 		}
@@ -3032,7 +3032,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				// takes the expanded one. The axis is about the *text* shape
 				// and the switch beside it is a script turning that round
 				// off; a lexed subscript never reaches either.
-				sub = r.operandSubscriptText(base, sub, r.sem().UnsetExpandsAFlatSubscript,
+				sub = r.operandSubscriptText(base, raw, sub, r.sem().UnsetExpandsAFlatSubscript,
 					"`unset` expanding a subscript that reached it as text")
 				if r.unspecified {
 					return r.status
@@ -3798,23 +3798,53 @@ func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 // control and they remove nothing in bash either: `unset "a[$k]"` leaves all
 // five, which is what the rows above this comment already say.
 func (r *Runner) subscriptOperandRead(operand string, lexed bool) (string, string, bool) {
+	base, _, key, ok := r.subscriptOperandParts(operand, lexed)
+	return base, key, ok
+}
+
+// subscriptOperandParts is subscriptOperandRead with the subscript handed back
+// **twice**: as the operand carried it, quoting and all, and as the key the
+// quoting comes off to.
+//
+// A caller that makes a second round wants the first. The quoting is what
+// decides which expansions in a subscript are performed, and it comes off with
+// them rather than before them: measured 2026-09-22 from a script file under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C bash f.sh`, standard input on the null
+// device, bash 5.3.20, with `declare -A a; key='$(echo foo)'; a['$key']=2`,
+// `unset "a['\$key']"` removes the element and `unset "a[\$key]"` does not —
+// so the apostrophes protected the `$` from the round and were gone from the
+// key all the same. Taking them off first left `$key` for the round to expand,
+// which named an element nothing had, and `unset` says nothing when it removes
+// nothing (#4254).
+//
+// The **tilde** is on the same side of that line and reached the wrong text
+// for the same reason. It is taken where the subscript *as written* opens with
+// one, which is what operandSubscriptTilde has always said and not what it was
+// given: measured in the same run, with keys `~/k` and `$HOME/k` both stored,
+// `unset "m[~/k]"` removes the home-directory one and `unset "m[\"~/k\"]"`
+// removes the literal `~/k` — where an unquoted text handed the expansion took
+// the tilde on both spellings.
+//
+// A lexed operand has no quoting to take off, so its two results are the same
+// text: the brackets were the source's, and everything between them arrived
+// from an expansion already.
+func (r *Runner) subscriptOperandParts(operand string, lexed bool) (base, raw, key string, ok bool) {
 	open := strings.IndexByte(operand, '[')
 	if open <= 0 {
-		return "", "", false
+		return "", "", "", false
 	}
+	if !lexed && !r.operandBracketsBalance(operand[open:], lexed) {
+		return "", "", "", false
+	}
+	if lexed && !strings.HasSuffix(operand, "]") {
+		return "", "", "", false
+	}
+	base = operand[:open]
+	raw = r.operandSubscriptTilde(base, subscriptOperandText(operand[open+1:len(operand)-1]))
 	if lexed {
-		if !strings.HasSuffix(operand, "]") {
-			return "", "", false
-		}
-		sub := subscriptOperandText(operand[open+1 : len(operand)-1])
-		return operand[:open], r.operandSubscriptTilde(operand[:open], sub), true
+		return base, raw, raw, true
 	}
-	if !r.operandBracketsBalance(operand[open:], lexed) {
-		return "", "", false
-	}
-	base := operand[:open]
-	sub := subscriptOperandText(r.operandSubscriptUnquoted(operand[open+1 : len(operand)-1]))
-	return base, r.operandSubscriptTilde(base, sub), true
+	return base, raw, subscriptOperandText(r.operandSubscriptUnquoted(raw)), true
 }
 
 // subscriptOperandText is the space-trimming an operand's subscript gets, and

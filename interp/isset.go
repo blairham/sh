@@ -66,11 +66,11 @@ func (r *Runner) parameterIsSet(name string) (bool, error) {
 // permits it; operandSubscriptText reads both. Where nothing rounds, this is
 // parameterIsSet exactly.
 func (r *Runner) testParameterIsSet(operand string) (bool, error) {
-	base, sub, subscripted := r.subscriptOperand(operand)
+	base, raw, sub, subscripted := r.subscriptOperandParts(operand, false)
 	if !subscripted {
 		return r.parameterIsSet(operand)
 	}
-	sub = r.operandSubscriptText(base, sub, r.sem().TestIsSetExpandsAFlatSubscript,
+	sub = r.operandSubscriptText(base, raw, sub, r.sem().TestIsSetExpandsAFlatSubscript,
 		"`test -v` expanding a subscript that reached it as text")
 	if r.unspecified {
 		return false, nil

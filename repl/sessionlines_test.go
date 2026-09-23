@@ -51,13 +51,27 @@ func sessionLines(t *testing.T, text string, counting bool) string {
 	return said.String()
 }
 
-func TestALineMayBeNumberedByTheSession(t *testing.T) {
+// A line typed at a prompt is numbered by the session **whatever the dialect
+// writes**, which is the correction #4363 made and the reason this asserts the
+// same answer with the flag both ways.
+//
+// The base used to be gated on Shell.CountSessionLines, on the reading that six
+// of the seven columns name no line at a prompt so the number could not be seen
+// in them. That reading was measured on the *prefix* of a diagnostic and not on
+// a wording that **embeds** a line — and bash has one: an unterminated
+// construct at end of input names where it opened. So every dialect but dash
+// parsed each construct from line 1 and bash reported the wrong place, which
+// TestAnUnfinishedConstructNamesTheLineItOpenedOn below is about.
+//
+// The flag is left standing and now changes nothing. Removing it, and the axis
+// behind it, is a decision about the two questions being one; this is a base
+// that was gated on evidence which did not cover the case (#4363).
+func TestALineIsNumberedByTheSessionWhateverIsWritten(t *testing.T) {
 	const text = "echo one\nfi\nfi\n"
-	if got, want := sessionLines(t, text, false), "refused at 1\nrefused at 1\n"; got != want {
-		t.Errorf("without counting = %q, want %q — every construct starts at 1", got, want)
-	}
-	if got, want := sessionLines(t, text, true), "refused at 2\nrefused at 3\n"; got != want {
-		t.Errorf("counting = %q, want %q — the session's own lines", got, want)
+	for _, counting := range []bool{false, true} {
+		if got, want := sessionLines(t, text, counting), "refused at 2\nrefused at 3\n"; got != want {
+			t.Errorf("counting=%v gave %q, want %q — the session's own lines", counting, got, want)
+		}
 	}
 }
 

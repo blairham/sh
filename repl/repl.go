@@ -147,6 +147,22 @@ type Shell struct {
 	// written comes from the parse, and one about running it comes from the
 	// tree's own positions, and only a number carried in at the parse reaches
 	// both (#2022).
+	//
+	// **Vestigial since #4363, and left standing deliberately.** The parser is
+	// told the session's line whatever this says, because the reading behind
+	// the gate did not cover the case it was gating: it was measured on the
+	// *prefix* of a diagnostic, and bash has a wording that **embeds** a line —
+	// an unterminated construct at end of input names where it opened — so
+	// every dialect but dash parsed each construct from line 1 and bash
+	// reported the wrong place. The two numbers in that panel are two wordings
+	// over one base; which of them a dialect writes is
+	// Diagnostics.PromptLocation's.
+	//
+	// So this field now changes nothing, and removing it — and the
+	// Diagnostics.PromptCountsTheSessionsLines axis behind it — is a decision
+	// about whether those two questions are one, which is not what fixing the
+	// base was. It stays until that decision is made, in the shape
+	// dialect/bash's `extquote` note keeps.
 	CountSessionLines bool
 
 	// EchoTheLineWithoutATerminal writes each line this session read back to
@@ -1618,12 +1634,27 @@ func (s Shell) countLine(startsPending bool) int {
 	return s.pendingLine()
 }
 
-// pendingLine is the session line the text now accumulating began on, or 1
-// where the dialect numbers every construct from its own first line.
+// pendingLine is the session line the text now accumulating began on.
+//
+// **Told to the parser whatever the dialect says about its prefix**, which is
+// the correction #4363 is: the base is where the *text* is, and a wording that
+// embeds a line reads it whether or not the prefix carries one. Gating it on
+// Shell.CountSessionLines gave every dialect but one a base of 1, so a bash
+// session reported the wrong place for a construct it was still waiting to
+// finish — measured 2026-09-24 from a pipe under `-i`, three assignments and
+// then `{ echo a` on line 4:
+//
+//	bash 5.3.20   syntax error: unexpected end of file from `{' command on line 4
+//	here          the same wording, `on line 1`
+//	dash 0.5.12   `5: Syntax error: end of file unexpected (expecting "}")`
+//	zsh, ksh93    no line anywhere in either wording
+//
+// So the two numbers in that table are two *wordings* over one base: bash names
+// where the construct opened and dash's prefix names where the failure was
+// noticed. Which of them a dialect writes is Diagnostics.PromptLocation's, and
+// what neither of them is is a reason to give the parser a position that is not
+// where the text is.
 func (s Shell) pendingLine() int {
-	if !s.CountSessionLines {
-		return 1
-	}
 	if n := s.counted().pendingLine; n > 0 {
 		return n
 	}

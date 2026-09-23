@@ -114,6 +114,20 @@
 // figures already point at; a row with a diagnostic of ours in the region has
 // already said where to look.
 //
+// # Every probe of a construct a shell may not terminate gets a timeout
+//
+// Not a style rule: a batch of `trap.tests` probes was lost to one, and what
+// ran away was the **reference**. `f() { trap "echo T; return 123" RETURN;
+// return 222; }; f` in bash 5.3.20 re-triggers the trap from inside its own
+// action and printed 1.9MB of output in five seconds — which reads as a hung
+// machine rather than as a shell behavior, and cost a batch before it was
+// recognized. `timeout 5` around each probe turns it into a measurement: the
+// construct is not in the file, because the file does not hang.
+//
+// The same applies to anything recursive by construction — a trap whose action
+// re-raises its own condition, a function that calls itself, a `while` with an
+// empty condition — and it applies to the reference as much as to us.
+//
 // # Never the expected-output files
 //
 // The suites ship their own `.right` files and this never opens one. Partly

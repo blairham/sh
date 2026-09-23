@@ -5478,6 +5478,10 @@ func Apply(r *interp.Runner) {
 	// for the producer to find, and the producer had no state to find it
 	// with (#2827).
 	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
+	// And the sequence a seeded `RANDOM` answers, which differs from bash's in
+	// one bit of the state and from ksh93's in both halves. See random.go, and
+	// `docs/spec/random.md` (#4240).
+	registerRandoms(r)
 	// `typeset -p RANDOM` is `typeset -i10 RANDOM=13859` here — the base
 	// rides on the letter in this shell's listing form, and both are facts
 	// the parameter has to be told, having no attribute record of its own

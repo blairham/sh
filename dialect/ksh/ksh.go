@@ -5270,6 +5270,10 @@ func Apply(r *interp.Runner) {
 	// for the producer to find, and the producer had no state to find it
 	// with (#2827).
 	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
+	// And the sequence a seeded `RANDOM` answers, which is this shell's own in
+	// both halves — the narrowest seed in the panel and a shifted state. See
+	// random.go, and `docs/spec/random.md` (#4240).
+	registerRandoms(r)
 	// `typeset -i RANDOM=7000`, measured — where this shell answered
 	// `RANDOM: not found` from a name it had just expanded a number for
 	// (#2451). `LINENO` lists the same way here and does not in bash 5.3,

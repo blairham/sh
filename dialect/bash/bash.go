@@ -4555,6 +4555,10 @@ func Apply(r *interp.Runner) {
 	// for the producer to find, and the producer had no state to find it
 	// with (#2827).
 	r.SetDynamicWriter("RANDOM", func(rr *interp.Runner, value string) { rr.SeedRandoms(value) })
+	// And the sequence a seeded `RANDOM` answers, which is this shell's own:
+	// three shells in the panel have the parameter and no two of them draw the
+	// same numbers. See random.go, and `docs/spec/random.md` (#4240).
+	registerRandoms(r)
 	// How the two of them list back, which a produced parameter has to be
 	// told rather than carry: `declare -p RANDOM` is
 	// `declare -i RANDOM="16735"` in bash 5.3 and was `RANDOM: not found`

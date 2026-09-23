@@ -590,6 +590,16 @@ func (c *coprocReader) Read(p []byte) (int, error) {
 // alike. Nothing about SIGPIPE changes; what changes is that the shell stops
 // arriving at a broken pipe through a name it published itself.
 //
+// **The price, measured 2026-09-23**: two of the three differing lines of
+// `coproc.tests`, at its lines 62 and 63, which are the fast edge of that
+// race asked twice — once for each end. `coproc { echo hi; }`, a read, then
+// `echo x >&${COPROC[1]}` is `st=0` with the array still at 2 in bash 5.3.15
+// and an ambiguous redirect at 1 here. Holding that edge instead means
+// letting a write through a published end **absorb** rather than deliver the
+// notice, and it keeps the duplicate's SIGPIPE death only if a duplicate
+// resolves past the published end. A decision about which edge to hold, not a
+// defect — see docs/spec/semantics.md and #4136.
+//
 // Three conditions, and each is measured rather than convenient:
 //
 //   - **Only a write.** `read -r a <&${CP[0]}` on a coprocess that has ended

@@ -14828,6 +14828,37 @@ gives twice, so a redirection that aims a coprocess's published end at
 one of the command's own streams delivers the notice before the target
 is expanded, and the expansion that follows finds the array gone.
 
+**What that choice costs, measured 2026-09-23.** It is two of the three
+differing lines of `coproc.tests` in `make bash-suite`, and the whole
+shape fits in five lines:
+
+    coproc { echo hi; }
+    echo "arr ${COPROC[0]} ${COPROC[1]}"     arr 63 60      both
+    read -r l <&${COPROC[0]}
+    echo "got $l"                            got hi         both
+    echo x >&${COPROC[1]}                    st=0 n=2       bash
+                                             ambiguous, st=1 n=0   here
+
+bash answers `st=0` with the array still at 2 — the fast edge of the
+race, 100 runs of 100 — and the suite reaches the same shape twice, at
+its lines 62 and 63, once for each end. So the two answers bash gives
+whenever it is asked twice are *not* the two answers its own suite
+asks for: the file asks immediately, which is the edge this shell
+cannot reach without reproducing the window. Changing it means letting
+a write through a published end of a coprocess that has gone **absorb**
+rather than deliver the notice, which keeps the `exec 3>&…` duplicate's
+SIGPIPE death only if the duplicate resolves past the published end.
+That is a decision about which of bash's two edges to hold, not a
+defect, and it is recorded here rather than taken.
+
+The third line of that file is not this and is not reachable: the
+coprocess's body runs earlier here than bash schedules it. Traced with
+a `DEBUG` trap carried in through `BASH_ENV`, the reference runs the
+body's failing command after the parent has passed both redirections
+and this shell runs it before the parent's next statement, so one
+diagnostic lands in a different place in the merged stream. bash's own
+ordering there is its child not having been scheduled yet.
+
 **Three conditions, each measured rather than convenient.**
 
 *Only a write.* `read -r a <&${CP[0]}` on a coprocess that has ended

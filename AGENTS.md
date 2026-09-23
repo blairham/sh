@@ -1382,14 +1382,31 @@ What does work is asking our own shell where it was. A `DEBUG` trap with
 `set -T` prints the source file and line before every command, and `BASH_ENV`
 carries the same trap into the `$THIS_SH` children a suite file starts for each
 `.sub` — which a top-level trap cannot reach, since a trap is not inherited
-across an exec:
+across an exec.
 
+**The marker needs a descriptor of its own**, and `>&2` is not it. A redirection
+suite will steal it: `f &>> $file` takes 1 and 2 with it, so the markers land in
+the file the test then prints back, and every position after that reads wrong.
+That is not hypothetical — it produced a confident, wrong attribution before it
+was noticed. Open one at the top and write there instead, and the file's own
+redirections cannot reach it:
+
+    exec 200>&2
     set -T
-    trap 'printf "@%s:%s\n" "${BASH_SOURCE[0]}" "$LINENO" >&2' DEBUG
+    trap 'printf "@%s:%s\n" "${BASH_SOURCE[0]}" "$LINENO" >&200' DEBUG
 
 Run the file with both streams on one pipe and every line of output is preceded
 by the location that produced it. Nothing of the file is read: the markers are
 positions, and the output lines are ours.
+
+**Trace both shells and diff the traced streams, never one side alone.** A
+differing line is found by a *multiset* comparison, so the lines it names are
+not always the lines that differ — a line both runs print can be reported
+against the side that prints it once more. Tracing our own run and reading the
+marker above such a line attributes it to a position where the two runs agree.
+With both sides traced, the markers make every output line addressable and an
+ordinary `diff` shows exactly where the two shells part company, and on which
+line of which file.
 
 Then ask **our parser** what is at that position, printing node kinds,
 positions and field *lengths* only — never a value. `L54 SimpleCmd` with an

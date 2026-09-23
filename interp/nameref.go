@@ -680,6 +680,50 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 	return bracketed && isNameLike(base) && strings.HasSuffix(target, "]")
 }
 
+// namerefAppendedTarget is the word an **appending** declaration aims at.
+//
+// `typeset -n ref+=[@]` is not a re-aim at `[@]`. The `+=` joins the text to
+// whatever the reference is already pointing at, and the join is what is then
+// validated — so the operand reaches the ordinary target checks carrying
+// `var[@]`, not the fragment. Measured 2026-09-23 on bash 5.3.20, scripts
+// under a scratch HOME, with `var=abc`:
+//
+//	typeset -n ref=var;  typeset -n ref+=[@]     declare -n ref="var[@]"
+//	typeset -n ref=v;    typeset -n ref+=a
+//	                     typeset -n ref+=b       declare -n ref="vab"
+//	typeset -n ref=var;  typeset -n ref+=        declare -n ref="var"
+//	typeset -n ref;      typeset -n ref+=var     declare -n ref="var"
+//	plain=tgt;           typeset -n plain+=2     declare -n plain="tgt2"
+//	typeset -nx ref=v;   typeset -nx ref+=a      the child's entry is ref=va
+//
+// ksh93u+ 2012-08-01 has no appending spelling on a declaration at all —
+// every one of those lines is `typeset: ref+: is not an identifier` there,
+// which this shell's ksh column already answers — so the rule is core rather
+// than an axis, for the reason the frozen reference is. See the declaration
+// loop in interp/declarebuiltin.go.
+//
+// Three bases, in the order they are consulted:
+//
+//   - a reference already aimed joins onto its **target**, not onto the value
+//     read through it: `va=HI; typeset -n ref=v; typeset -n ref+=a` reads `HI`
+//     afterwards;
+//   - a name that is not a reference joins onto the **value it holds**, which
+//     is the same cell the valueless form adopts one branch down, and under
+//     the same `adopts` gate: `ref=abc; f(){ local -n ref+=X; }` is
+//     `declare -n ref="X"` in bash, because the binding `local` just made has
+//     never held anything;
+//   - a name with neither joins onto nothing, which leaves the fragment
+//     standing on its own.
+func (r *Runner) namerefAppendedTarget(name, value string, adopts bool) string {
+	if target, is := r.nameref[name]; is {
+		return target + value
+	}
+	if held, set := r.getVar(name); set && adopts {
+		return held + value
+	}
+	return value
+}
+
 // declareNameref is one operand of a declaration carrying the `n` letter.
 //
 // The letter does not store anything: `typeset -n r=v` records that `r` is a
@@ -700,17 +744,51 @@ func (r *Runner) namerefTargetIsAName(target string) bool {
 // -gn outer; }` — no new cell — aims at `good`, and `f(){ local x=good;
 // local -n x; }` aims at it too.
 func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
-	hasValue, frozen, adopts bool, held declarationHeld, fresh bool,
+	hasValue, appends, frozen, adopts bool, held declarationHeld, fresh bool,
 ) int {
 	// A refusal this declaration **reports** leaves the name the way the
 	// operand found it, letters and all — see declarationtakenback.go, where
 	// the rows are. Through one door because there are eight of them and they
 	// are the same answer: a `refuse(…)` that forgot the take-back would be a
 	// letter left standing under one wording alone.
-	refuse := func(wording string) int {
-		code := r.refuseNameref(builtin, wording)
+	refuseAs := func(speaker, wording string) int {
+		code := r.refuseNameref(speaker, wording)
 		r.takeTheDeclarationBack(name, held, fresh)
 		return code
+	}
+	refuse := func(wording string) int { return refuseAs(builtin, wording) }
+	// The word a reported refusal names, which is the operand's own except
+	// where the appending spelling has joined it onto something — see there.
+	reported := target
+	// namerefSelfReferenceIsSpokenByTheShell: the **appending** spelling's
+	// self-reference diagnostics carry no builtin name, and that is the one
+	// thing about them the plain spelling does not share. Measured 2026-09-23
+	// on bash 5.3.20, scripts under a scratch HOME:
+	//
+	//	typeset -n s=s                  typeset: s: nameref variable self
+	//	                                references not allowed
+	//	typeset -n ref=r
+	//	  typeset -n ref+=ef            ref: nameref variable self references
+	//	                                not allowed
+	//	f(){ local -n ref=ref; }        local: warning: ref: circular name
+	//	                                reference
+	//	                                warning: ref: circular name reference
+	//	f(){ local -n ref=r
+	//	     local -n ref+=ef; }        warning: ref: circular name reference
+	//
+	// So it is one warning where the plain spelling writes two, and the
+	// refusal is spoken as the shell where the plain one is spoken as the
+	// builtin. Both halves come out of the same empty name: the builtin's
+	// copy of the warning is the one that is not written, and the refusal
+	// loses the same prefix.
+	//
+	// Only these two. The append's **bad target** keeps the builtin's name —
+	// `typeset -n ref=var; typeset -n ref+=' bad'` is `typeset: ` bad': not a
+	// valid identifier` there — so the empty speaker is carried to the self
+	// reference alone rather than made the whole call's.
+	selfSpeaker := builtin
+	if appends {
+		selfSpeaker = ""
 	}
 	// The readonly refusal a **frozen reference** makes, in the one place its
 	// order against the other two is measured. bash 5.3.20 puts the bad
@@ -818,6 +896,72 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 	// contents reading is *not* an array, so the late check must not fire on
 	// it either.
 	refusedLate := arrayed && shape == NamerefArrayCheckedLastOnTheAttribute
+	// **The appending spelling joins before anything reads the word.** The
+	// `+=` is not a second way to aim a reference: `typeset -n ref=var;
+	// typeset -n ref+=[@]` points at `var[@]`, so every check below weighs
+	// the join rather than the fragment the operand carried. See
+	// namerefAppendedTarget for the three bases and their rows.
+	//
+	// The freeze is refused **ahead** of the join, which is the reverse of
+	// the order the plain spelling keeps and is measured that way rather than
+	// chosen. bash 5.3.20, 2026-09-23, after `v=1; declare -rn r=v`:
+	//
+	//	declare -n r=1x       `1x': invalid variable name for name reference
+	//	declare -n r+=-x      r: readonly variable
+	//	declare -n r+=x       r: readonly variable
+	//	declare -n r+=        r: readonly variable
+	//	declare -rn r='v[0]'
+	//	  then declare -n r+=x    r: readonly variable
+	//
+	// So the bad target goes first when the operand brought a whole word and
+	// the freeze goes first when it brought a fragment — in the second the
+	// name's own contents are half of the word, and there is nothing to weigh
+	// until the frozen name has been consulted. The array refusal stays in
+	// front of both: `declare -a a=(1); readonly a; typeset -n a+=X` is
+	// `a: reference variable cannot be an array` there, and it is already
+	// above.
+	if appends {
+		// **A name already carrying an array refuses the letter here** rather
+		// than at the end of the line. `declare -a a=(x); typeset -n a+=-b`
+		// is `a: reference variable cannot be an array` in bash 5.3.20, where
+		// the plain `typeset -n a=1b` over the same array answers the **bad
+		// target** instead: the written spelling weighs the word it was
+		// handed and never looks at the name, while this one has no word at
+		// all until the name has been read, and the name is what is wrong.
+		//
+		// The control that makes this a real order rather than a coincidence
+		// is a join that *would* have been a good target: `typeset -n a+=b`
+		// over the same array is the array sentence too, so the refusal is
+		// not the join's.
+		if refusedLate {
+			return refuse(Wording(d.NamerefCannotBeAnArray,
+				"%[1]s: reference variable cannot be an array", name))
+		}
+		// A **frozen** name is settled ahead of the join in the same way —
+		// `v=1; declare -rn r=v; declare -n r+=' x'` is `r: readonly
+		// variable` where the plain `declare -n r=1x` is the bad target —
+		// and there is deliberately no line for it here. Mutation says so:
+		// with a refusal written at this point and then taken away again,
+		// every frozen row answered the same, because the appending spelling
+		// already reaches the attribute-over-a-frozen-name refusal one level
+		// up and the written spelling does not. A second copy here would
+		// have been a line that could never be wrong, which is the same as a
+		// line that says nothing.
+		//
+		// The join is what is **weighed**; the fragment is what is **named**.
+		// bash reports the operand's own word and not the word the join made
+		// of it — `typeset -n ref=var; typeset -n ref+=' bad'` names ` bad`
+		// and `typeset -n ref=v; typeset -n ref+=-x` names `-x` — so the two
+		// part here and the reported refusals below take the written one.
+		//
+		// The sentence itself is deliberately left where it stands. bash
+		// draws the declaration's ordinary `not a valid identifier` for these
+		// and the `n` letter's own sentence for a whole word, and which of
+		// the two a refusal takes is the wordings group's question rather
+		// than this rule's: what is measured here is that the reference ends
+		// up aimed at the join.
+		reported, target = target, r.namerefAppendedTarget(name, target, adopts)
+	}
 	// A **member path with no parent**, which is refused in words of its own
 	// and ahead of the bad-name check: the parent is half of what makes a
 	// member path a name here, so behind that check this sentence could never
@@ -827,10 +971,10 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 	// See interp/namerefmember.go.
 	if r.namerefMemberWithoutAParent(target) {
 		return refuse(Wording(d.NamerefTargetHasNoParent,
-			"%[1]s: no parent", target))
+			"%[1]s: no parent", reported))
 	}
 	if !r.namerefTargetIsAName(target) {
-		return refuse(r.namerefBadTargetWording(target))
+		return refuse(r.namerefBadTargetWording(reported))
 	}
 	aim, aimIsAName := r.namerefAim(target, df)
 	if !aimIsAName {
@@ -897,7 +1041,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 		// given a second field of its own (#3048).
 		if len(r.scopes) == 0 ||
 			r.ask(r.sem().NamerefCycleIsRefused, "a name reference that reaches itself") {
-			return refuse(Wording(d.NamerefSelfReference,
+			return refuseAs(selfSpeaker, Wording(d.NamerefSelfReference,
 				"%[1]s: invalid self reference", name))
 		}
 		if r.unspecified {
@@ -909,7 +1053,7 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 		// reference` and then the array refusal at 1, and never the shell's
 		// second copy. So the array check sits inside the warning rather
 		// than before or after it.
-		r.warnAboutASelfReferenceOnTheBuiltin(builtin, name)
+		r.warnAboutASelfReferenceOnTheBuiltin(selfSpeaker, name)
 		if refusedLate {
 			return refuse(Wording(d.NamerefCannotBeAnArray,
 				"%[1]s: reference variable cannot be an array", name))
@@ -1287,7 +1431,7 @@ func (r *Runner) warnAboutACycle(name string) {
 // refuses this declaration outright and never reaches here.
 func (r *Runner) warnAboutASelfReferenceOnTheBuiltin(builtin, name string) {
 	w := r.diag().NamerefCircularWarning
-	if w == "" {
+	if w == "" || builtin == "" {
 		return
 	}
 	r.diagf("%s: %s\n", builtin, Wording(w, "warning: %[1]s: circular name reference", name))
@@ -1445,8 +1589,15 @@ func (r *Runner) namerefNameCannotBeSubscripted(builtin, name string) bool {
 	return true
 }
 
+// An empty builtin writes the sentence as the **shell** rather than as the
+// builtin, which is what the appending spelling's self-reference refusal
+// does. See namerefSelfReferenceIsSpokenByTheShell.
 func (r *Runner) refuseNameref(builtin, wording string) int {
-	r.diagf("%s: %s\n", builtin, wording)
+	if builtin == "" {
+		r.diagf("%s\n", wording)
+	} else {
+		r.diagf("%s: %s\n", builtin, wording)
+	}
 	if r.ask(r.sem().BadNameToDeclarationFatal, "a declaration's bad name ending the script") {
 		r.status = 1
 		r.fatalUsageQuiet()

@@ -220,6 +220,15 @@ func Semantics() interp.Semantics {
 	// under `LC_ALL=C` and 5 under a UTF-8 one. Measured 2026-09-05 across
 	// LC_ALL, LC_CTYPE and LANG, and dash does not move for any of them.
 	s.MultibyteEncodingIsHonored = interp.No
+	// Having no decoder, it reads its input as bytes, and the second byte of
+	// a multibyte character is whatever that byte means. Measured 2026-09-23
+	// under `LC_ALL=zh_TW.Big5` with the Big5 spelling of U+03B1, whose
+	// second byte is a backslash: `x=α` is a line continuation and `x=` is
+	// then a command dash cannot find, `x="α"` is `Unterminated quoted
+	// string`, and `read a b c` over `α b c` puts the lead byte, the space
+	// the backslash rescued and `b` into `a`.
+	s.MultibyteCharacterIsReadWhole = interp.No
+	s.ReadTakesAMultibyteCharacterWhole = interp.No
 	// The one shell that refuses the -h letter POSIX names.
 	s.SetHasTheHLetter = interp.No
 	// And no keyword option either. Measured 2026-09-16: `set -k` is

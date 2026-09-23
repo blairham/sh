@@ -21228,6 +21228,93 @@ off the end leave the same four. `../spec/grammar/patterns.md` has the
 range, the star and the character classes, each of which needed a
 measurement of its own.
 
+**`MultibyteCharacterIsReadWhole`** — bash yes · dash no · ksh93 yes · zsh no · ash no
+
+Reads the text of a program a character at a time rather than a byte at a
+time, so that no byte of a multibyte character is weighed as a
+metacharacter.
+
+A different question from `MultibyteEncodingIsHonored` above, and two
+columns answer them differently: zsh and BusyBox ash both decode the
+locale's encoding everywhere they measure a string and both still walk
+their input a byte at a time.
+
+It is only ever asked where a character *can* hide a metacharacter, which
+UTF-8 cannot — its trail bytes are all above 0x7F. Big5 and Shift-JIS
+can. The character this was found through is U+03B1, which Big5 spells
+`a3 5c`: a backslash as its second byte.
+
+Measured 2026-09-23 under `LC_ALL=zh_TW.Big5`, with that character
+written into the script as the two bytes it is (α below stands for
+them):
+
+    x=α              bash 5.3.20, 3.2.57, ksh93u+  the character
+                       zsh 5.9.2                     command not found: x=
+                       dash 0.5.12, ash 1.37.0       x=: not found
+    x="α"            the same three                the character
+                       zsh                           unmatched "
+                       dash, ash                     unterminated quoted string
+    case α in α)    the same three                matches
+                       zsh, dash, ash                a parse error
+    a body holding     bash, ksh93                   the character, then $v
+    α$v                zsh                           the lead byte, then $v
+                                                     as text
+
+The three that refuse do so because the trail byte escaped what came
+after it: the newline in the first shape, the closing quote in the
+second, the blank in front of `in` in the third. **Loud in those and
+silent in the fourth**, which is the one that matters most: the
+here-document writes a `$v` nobody wrote, at status 0, with nothing
+reported anywhere.
+
+`$'…'` is a **third** reading and is not this axis. Measured the same
+day, `x=$'α'` gives the character in bash 5.3.20, the lead byte alone in
+ksh93u+ — which agrees with bash on all four shapes above — and an
+unmatched quote in zsh 5.9.2. So a dialect answering this axis answers
+nothing about that one, and it is left unanswered rather than folded in.
+
+**Where the decision lives.** `internal/charset` holds the tables and
+answers where a character ends, from the pair of bytes; both readers ask
+it rather than each carrying a table of lead-byte ranges. The grammar
+learns the answer through `syntax.Dialect.CharacterWidth`, a hook the
+front end fills from the runner — the locale is runtime state, so no
+preset can hold it, and a `LC_ALL=zh_TW.Big5` on one line is in force
+when the next is read.
+
+A pattern group is left alone deliberately. `case α in @(α))` parses in
+bash 5.3.20 and **does not match** there, where ksh93u+ matches; that is
+a question about the matcher and the encoding rather than about the
+reader, and taking the character whole in the group scanner would trade
+one wrong answer for another (#4235).
+
+**`ReadTakesAMultibyteCharacterWhole`** — bash yes · dash no · ksh93 no · zsh yes · ash no
+
+The axis above for the `read` builtin's own reader, which is a second
+reader over a second kind of input.
+
+Without `-r`, `read` takes a backslash as escaping the byte behind it. A
+Big5 character whose second byte is `0x5C` therefore *rescues the
+separator that follows it*, and two fields become one — the value handed
+over is not the bytes that arrived, which is the sharpest form this
+defect takes.
+
+Measured 2026-09-23 under `LC_ALL=zh_TW.Big5`, `read a b c` over a line
+holding the Big5 spelling of U+03B1, a space, `b`, a space and `c`:
+
+    bash 5.3.20, zsh 5.9.2                       a=α        b=b  c=c
+    bash 3.2.57, ksh93u+, dash 0.5.12, ash       a=`a3 20 62` b=c  c=
+
+The second row is the corruption written out: `a` holds the lead byte, the
+space the backslash rescued, and the next field's text.
+
+**Not the same split as the axis above, in both directions.** zsh reads
+its program text as bytes and its `read` input as characters; ksh93 does
+the opposite; bash 5.3 does both and bash 3.2 only the first. No single
+answer covers the two readers, so there are two axes.
+
+Silent in every column, and `-r` is the reason that is tolerable: a
+script that wants the bytes says so, and nothing reports that it did not.
+
 **`DeclarationTakesAnAppendOperand`** — bash yes · dash no · ksh93 no · zsh no
 
 A declaration builtin's `name+=value` operand is the append operator

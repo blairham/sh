@@ -2177,6 +2177,19 @@ func Semantics() interp.Semantics {
 	// way it refuses it under `LC_ALL=C`. bash 5.3.15 answers 5, `CAFÉ` and
 	// the encoded character to the same three (#2020).
 	s.UnsetLocaleIsUnicodeAware = interp.No
+	// And the decoder does not reach the reader that takes the program text:
+	// this shell counts a multibyte character everywhere it measures a string
+	// and still walks its input a byte at a time. Measured 2026-09-23 under
+	// `LC_ALL=zh_TW.Big5` with the Big5 spelling of U+03B1, whose second byte
+	// is a backslash — `x=α` is `command not found: x=`, the trail byte having
+	// joined the next line, `x="α"` is `unmatched "`, and a here-document body
+	// holding `α$v` writes `$v` as text. bash 5.3.20 and ksh93u+ take the
+	// character in all three.
+	//
+	// `read` is the other way round here and is a separate axis: see
+	// interp.Semantics.ReadTakesAMultibyteCharacterWhole, which this shell
+	// answers Yes by inheriting the preset.
+	s.MultibyteCharacterIsReadWhole = interp.No
 	s.EchoEmptyHexDigitRunIsNul = interp.Yes
 	// `\e` is the escape character here and `\E` is two characters — the
 	// opposite of ksh93.

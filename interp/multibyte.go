@@ -6,6 +6,8 @@ package interp
 import (
 	"strings"
 	"unicode/utf8"
+
+	"github.com/blairham/sh/internal/charset"
 )
 
 // The unit a string is measured in.
@@ -440,4 +442,57 @@ func (r *Runner) caseMapper(value string, convert func(rune) rune) func(rune) ru
 // every character rather than the ones a pattern picks out.
 func (r *Runner) caseChanged(value string, convert func(rune) rune) string {
 	return strings.Map(r.caseMapper(value, convert), value)
+}
+
+// CharacterWidth is how many bytes of the pair b, next are one character of
+// the locale's encoding, for the reader that takes the text of a program: 2
+// where the two spell one, 1 otherwise.
+//
+// This is what fills syntax.Dialect.CharacterWidth, and it is exported for the
+// one caller outside this package that builds a parser of its own: a front end
+// reading a program. The grammar cannot answer the question, because it is two
+// things the grammar does not hold — which encoding the locale names, and
+// whether this shell's reader decodes it at all — and both of them are here.
+// A parser built with no runner to ask does without, which is one byte per
+// character. See Semantics.MultibyteCharacterIsReadWhole.
+func (r *Runner) CharacterWidth(b, next byte) int {
+	return r.localeCharacterWidth(b, next, r.sem().MultibyteCharacterIsReadWhole,
+		"a multibyte character being read whole")
+}
+
+// readCharacterWidth is the same question for the `read` builtin, which is a
+// second reader over a second kind of input and which the panel answers
+// differently: zsh takes the character here and reads its program text as
+// bytes, ksh93 does the opposite. See Semantics.ReadTakesAMultibyteCharacterWhole.
+func (r *Runner) readCharacterWidth(b, next byte) int {
+	return r.localeCharacterWidth(b, next, r.sem().ReadTakesAMultibyteCharacterWhole,
+		"a multibyte character reaching `read` whole")
+}
+
+// localeCharacterWidth is the pair of questions both of those are, asked in
+// the order that keeps the axis from being reached where it cannot move the
+// answer.
+//
+// The charset ends it for a single-byte locale, for UTF-8 — whose trail bytes
+// are all above 0x7F, so no character of it can hide a metacharacter — and for
+// a pair the encoding does not spell. Only a byte pair that really is one
+// character reaches the axis, which is countsTheLocalesCharacters's discipline
+// and it is the same one.
+//
+// The byte check in front of it is the one line here that is not about the
+// answer: charset.Width answers 1 for an ASCII byte too, so removing it changes
+// nothing but the cost — a variable lookup and a table search on every byte of
+// text that is almost all ASCII. An equivalent mutant, recorded so the next
+// reader does not go looking for the case that would kill it.
+func (r *Runner) localeCharacterWidth(b, next byte, a Answer, axis string) int {
+	if b < utf8.RuneSelf {
+		return 1
+	}
+	if charset.Width(LocaleCodeset(r.LocaleFor("LC_CTYPE")), b, next) < 2 {
+		return 1
+	}
+	if !r.ask(a, axis) {
+		return 1
+	}
+	return 2
 }

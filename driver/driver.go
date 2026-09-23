@@ -847,7 +847,11 @@ func (sh Shell) listProgram(in source, r *interp.Runner, src string) int {
 		}
 		src = string(b)
 	}
-	p := syntax.NewParser(src, sh.Dialect.On(in.programRoute()))
+	d := sh.Dialect.On(in.programRoute())
+	// The listing is a parse like any other and reads the same characters the
+	// run would. The runner is a parameter here, so it can be asked.
+	d.CharacterWidth = r.CharacterWidth
+	p := syntax.NewParser(src, d)
 	f := p.Parse()
 	err := p.Err()
 	if in.stringCatalog || in.stringCatalogPortable {
@@ -2396,6 +2400,14 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 	// KeepProcess: this reads system state rather than changing the
 	// process's, exactly as a PATH walk does (#2191).
 	r.UserHomeDir = userHomeDir
+	// And where a character ends, which the *parser* asks and only the runner
+	// can answer: the locale is its state and whether the reader decodes it at
+	// all is its dialect's answer. Written into the dialect the runner carries
+	// rather than kept beside it, so that the one parser the front end rebuilt
+	// for the next line is told by the loop that already hands the runner's
+	// dialect over. A `LC_ALL=zh_TW.Big5` on line 1 is therefore in force when
+	// line 2 is read. See syntax.Dialect.CharacterWidth (#4235).
+	r.Dialect.CharacterWidth = r.CharacterWidth
 	if !sh.KeepProcess {
 		// This is a shell, so `exec` may really replace it. interp will not
 		// reach for syscall.Exec itself — it is a library, and a Runner

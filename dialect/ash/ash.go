@@ -324,6 +324,15 @@ func Semantics() interp.Semantics {
 	// harness's fixed `LC_ALL=C`: `s=héllo; echo ${#s}` is 5 here and 6 in
 	// dash.
 	s.MultibyteEncodingIsHonored = interp.Yes
+	// The decoder does not reach the readers, though, which is the pair of
+	// answers zsh holds the other way round. Measured 2026-09-23 in the
+	// pinned image under `LC_ALL=zh_TW.Big5` with the Big5 spelling of
+	// U+03B1: `x=α` leaves `x=: not found`, `x="α"` is an unterminated
+	// quoted string, and `read a b c` over `α b c` puts the lead byte, a
+	// space and `b` into `a` — the same three answers dash gives, from a
+	// shell that counts characters where dash counts bytes.
+	s.MultibyteCharacterIsReadWhole = interp.No
+	s.ReadTakesAMultibyteCharacterWhole = interp.No
 	// A value's backslash quotes what follows it rather than standing as a
 	// character of the pattern: `v='a\*'; set -- $v` is `a\*`.
 	s.ValueBackslashInAPattern = interp.ValueBackslashQuotesWhatFollows

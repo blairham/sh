@@ -6826,6 +6826,34 @@ type Dialect struct {
 	// third belongs.
 	Comments CommentMode
 
+	// CharacterWidth is how many bytes of the pair b, next are one character
+	// of the encoding the text is written in: 2 where the two spell one, 1
+	// otherwise. nil, and every byte is a character of its own.
+	//
+	// A hook rather than an answer, and set per parse the way [Dialect.Comments]
+	// is, because it is two things the grammar cannot know. One is the locale,
+	// which is run state read off the shell's own variables — a plain
+	// `LC_ALL=zh_TW.Big5` on one line decides how the next is read, so no
+	// preset can hold it. The other is whether this shell's reader decodes the
+	// encoding at all, which is measured and differs: see
+	// interp.Semantics.MultibyteCharacterIsReadWhole, where the panel divides.
+	//
+	// Consulted before anything else in every loop that reads text a byte at a
+	// time, so that no byte of a multibyte character is ever weighed as a
+	// metacharacter. It has to be, because a trail byte can be one: in Big5
+	// the character U+03B1 is `a3 5c`, and a reader that walks bytes finds a
+	// backslash in the middle of a letter, escapes whatever follows, and
+	// changes what the script says (#4235). Big5 trail bytes reach `` ` ``,
+	// `|`, `{`, `}`, `[` and `]` as well, so the defect is not the backslash's
+	// alone and the fix is not the backslash's either: the character is taken
+	// whole.
+	//
+	// nil is the zero value and the right one: a single-byte encoding, a UTF-8
+	// one — whose trail bytes are all above 0x7F and so can hide nothing — and
+	// a caller that has no locale to offer all mean the same thing to a reader,
+	// which is one byte per character.
+	CharacterWidth func(b, next byte) int
+
 	// UnmatchedBlamesTheOutermost names the *enclosing* construct when the
 	// input runs out inside nested ones, where the default names the
 	// innermost.

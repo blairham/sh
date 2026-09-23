@@ -847,6 +847,55 @@ func (l *Lexer) advance() byte {
 	return c
 }
 
+// multibyteCharacterAt is how many bytes at the scan position are one
+// character of the encoding the text is written in, and true where that is
+// more than one — so a scanner can take the character whole before any byte of
+// it is weighed as a metacharacter.
+//
+// It has to be asked first, because a *trailing* byte can be one. In Big5 the
+// character U+03B1 is `a3 5c`, so a reader walking bytes finds a backslash in
+// the middle of a letter, escapes whatever follows it, and changes what the
+// script says — a word that runs into the next one, a quote that never closes,
+// an expansion that stops expanding (#4235). Big5 trail bytes reach “ ` “,
+// `|`, `{`, `}`, `[` and `]` as well, so this is not the backslash's defect
+// alone and the answer is not the backslash's either: the character is one
+// thing and is read as one.
+//
+// The shape is [Lexer.numericRangeAt]'s and the reason is the same — a run
+// taken whole ahead of the bytes that would otherwise claim its characters.
+//
+// False for every byte below 0x80, which is what keeps the hook, and the
+// measured axis behind it, unasked for the text a shell script is almost
+// entirely made of.
+//
+// A lead byte at the end of the input answers false through the hook rather
+// than through a check here: peekAt is 0 past the end, and no character of
+// these encodings has a NUL as its second byte, so the pair is not one. The
+// same route answers the shape a file actually holds — a lead byte with a
+// newline behind it — which is the one that matters, since consuming what
+// follows without asking would take the line ending with it.
+//
+// The bound on the offset is therefore unkillable by any test: with a hook
+// that answers for real pairs, n is 2 only where there is a second byte to be
+// had. It stays because the hook is the *caller's* arithmetic, and a reader
+// will not index past the end of its own input on the strength of somebody
+// else's — recorded here so the next reader does not go looking for the case
+// that would kill it.
+func (l *Lexer) multibyteCharacterAt() (width int, ok bool) {
+	if l.dialect.CharacterWidth == nil {
+		return 0, false
+	}
+	c := l.peek()
+	if c < 0x80 {
+		return 0, false
+	}
+	n := l.dialect.CharacterWidth(c, l.peekAt(1))
+	if n < 2 || l.off+n > len(l.src) {
+		return 0, false
+	}
+	return n, true
+}
+
 // failUnmatched records input that ran out inside a quoted or substituted
 // region, carrying everything a dialect might name: the opener, its closer,
 // the text from the opener to the end of its line, and the line the input
@@ -2774,6 +2823,18 @@ func (l *Lexer) scanWord(start Pos) Token {
 		if l.endsWord(c) {
 			break
 		}
+		if width, ok := l.multibyteCharacterAt(); ok {
+			// A character of the locale's encoding, taken whole: none of the
+			// cases below may see a byte of it. See
+			// [Lexer.multibyteCharacterAt].
+			if lit.Len() == 0 {
+				litPos = l.pos()
+			}
+			for range width {
+				lit.WriteByte(l.advance())
+			}
+			continue
+		}
 		if c == '}' && braces == 0 && l.pidBraces == 0 &&
 			(lit.Len() > 0 || len(spans) > 0) &&
 			l.closeBraceIsAWordOfItsOwn() {
@@ -3298,6 +3359,22 @@ func (l *Lexer) heredocSpans() []Span {
 	}
 	for !l.eof() {
 		c := l.peek()
+		if width, ok := l.multibyteCharacterAt(); ok {
+			// A body whose delimiter is unquoted is shell text, so the same
+			// bytes are live in it and the same character has to be taken
+			// whole. Measured 2026-09-23 under `LC_ALL=zh_TW.Big5` with the
+			// Big5 spelling of U+03B1 in front of a `$v`: bash 5.3.20 and
+			// ksh93u+ write the character and the value, where reading the
+			// trail byte as an escape leaves the `$v` standing as text. See
+			// [Lexer.multibyteCharacterAt].
+			if b.Len() == 0 {
+				litPos = l.pos()
+			}
+			for range width {
+				b.WriteByte(l.advance())
+			}
+			continue
+		}
 		// An unquoted body reaches across a line continuation behind a `$` in
 		// every dialect — see [Lexer.continuationAfterADollar], which reads
 		// inRawBody and stops at nothing here.
@@ -3435,6 +3512,18 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []
 			return out
 		}
 		c := l.peek()
+		if width, ok := l.multibyteCharacterAt(); ok {
+			// Before the `$`, the `` ` `` and the backslash, because a
+			// character of the locale's encoding can be spelled with any of
+			// them as its second byte. See [Lexer.multibyteCharacterAt].
+			if b.Len() == 0 {
+				litPos = l.pos()
+			}
+			for range width {
+				b.WriteByte(l.advance())
+			}
+			continue
+		}
 		// The same lookahead substitutionSpans does, asked of the quoting
 		// this run is: the panel splits widest here, and a `$` that reaches
 		// nothing across the pair is read as text exactly as it was before.

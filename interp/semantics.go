@@ -15791,6 +15791,87 @@ type Semantics struct {
 	// shell that never sees a non-ASCII byte never needs an answer.
 	MultibyteEncodingIsHonored Answer
 
+	// MultibyteCharacterIsReadWhole reads the text of a program a character at
+	// a time rather than a byte at a time, so that no byte of a multibyte
+	// character is weighed as a metacharacter.
+	//
+	// A different question from MultibyteEncodingIsHonored above, and the two
+	// disagree in two columns, which is what makes this an axis of its own:
+	// zsh honors the encoding everywhere it measures a string and still reads
+	// its input as bytes, and ash honors it and does the same.
+	//
+	// It is only ever asked where a character *can* hide a metacharacter,
+	// which UTF-8 cannot: its trail bytes are all above 0x7F. Big5 and
+	// Shift-JIS can, and the character this was found through is U+03B1,
+	// which Big5 spells `a3 5c` — a backslash as its second byte.
+	//
+	// Measured 2026-09-23 under `LC_ALL=zh_TW.Big5`, that character written
+	// into a script as the two bytes it is:
+	//
+	//	                       x=α    x="α"           α in a body, before $v
+	//	bash 5.3.20            a3 5c  a3 5c           the character, then VAL
+	//	bash 3.2.57            a3 5c  a3 5c           —
+	//	ksh93u+                a3 5c  a3 5c           the character, then VAL
+	//	zsh 5.9.2              x= not found  unmatched "   a3, then `$v` as text
+	//	dash 0.5.12            x= not found  unterminated quoted string
+	//	BusyBox ash 1.37.0     x=: not found unterminated quoted string
+	//
+	// where the three that refuse do so because the trail byte escaped what
+	// came after it — the newline in the first column, the closing quote in
+	// the second. `case α in α)` divides the panel the same way, matching in
+	// the first three and a parse error in the last three, so this is the
+	// reader and not one construct's rule.
+	//
+	// **Loud in two of the three shapes and silent in the third**, which is
+	// the reverse of the usual argument for an axis and does not weaken this
+	// one: the here-document writes a `$v` nobody wrote and nothing is
+	// reported, and a word that runs into the next line is a script that
+	// means something else.
+	//
+	// `$'…'` is a **third** reading and is not this axis. Measured the same
+	// day, `x=$'α'` gives the character in bash 5.3.20, `a3` alone in ksh93u+
+	// — which agrees with bash on the two columns above — and an unmatched
+	// quote in zsh 5.9.2, so a dialect answering this one answers nothing
+	// about that one. It is left unanswered rather than folded in here.
+	//
+	// The decision itself is not in this package: internal/charset holds the
+	// tables and says where a character ends, and syntax.Dialect.CharacterWidth
+	// is how a reader asks. This axis is only whether the reader asks at all.
+	MultibyteCharacterIsReadWhole Answer
+
+	// ReadTakesAMultibyteCharacterWhole is MultibyteCharacterIsReadWhole for
+	// the `read` builtin's own reader, which is a second reader over a second
+	// kind of input and answers differently in three columns.
+	//
+	// Without `-r`, `read` takes a backslash as escaping the byte behind it.
+	// A Big5 character whose second byte is `0x5C` therefore eats the
+	// separator that follows it, and two fields become one: the value handed
+	// over is not the bytes that arrived, which is the sharpest form this
+	// defect takes (#4235).
+	//
+	// Measured 2026-09-23 under `LC_ALL=zh_TW.Big5`, `read a b c` over a line
+	// holding the Big5 spelling of U+03B1, a space, `b`, a space and `c`:
+	//
+	//	                      a            b    c
+	//	bash 5.3.20           a3 5c        b    c
+	//	zsh 5.9.2             a3 5c        b    c
+	//	bash 3.2.57           a3 20 62     c    —
+	//	ksh93u+               a3 20 62     c    —
+	//	dash 0.5.12           a3 20 62     c    —
+	//	BusyBox ash 1.37.0    a3 20 62     c    —
+	//
+	// The second group is the corruption written out: `a` holds the lead byte,
+	// the separator the backslash rescued, and the next field's text.
+	//
+	// **Not the same split as the axis above, in both directions.** zsh reads
+	// its program text as bytes and its `read` input as characters; ksh93 does
+	// the opposite; bash 5.3 does both and bash 3.2 only the first. No single
+	// answer covers the two readers, so there are two.
+	//
+	// Silent in every column, which `-r` is the reason for: a script that
+	// wants the bytes says so, and nothing here reports that it did not.
+	ReadTakesAMultibyteCharacterWhole Answer
+
 	// UndecodablePatternComparesBytes matches a pattern the locale's encoding
 	// cannot decode against the subject **byte by byte**, rather than
 	// character by character with the undecodable bytes standing as characters
@@ -24994,6 +25075,16 @@ func PosixSemantics() Semantics {
 		// LC_CTYPE category says one is. So the standard's answer is yes,
 		// and it is also what every panel member but dash does.
 		MultibyteEncodingIsHonored: Yes,
+		// XCU's grammar is over tokens made of *characters*, and 2.2.1 has a
+		// backslash preserve the character after it — a character, not a
+		// byte. The second byte of a multibyte character is therefore not a
+		// backslash and not a metacharacter either, whatever its value, so
+		// the standard's answer to both of these is yes. That it is also the
+		// majority in one and the minority in the other is why they are
+		// separate axes and why the preset follows the text rather than the
+		// count.
+		MultibyteCharacterIsReadWhole:     Yes,
+		ReadTakesAMultibyteCharacterWhole: Yes,
 		// A pattern the encoding cannot decode is still matched by
 		// character. XBD matches a pattern against *characters*, and a byte
 		// sequence that begins no character is not one — so reading the

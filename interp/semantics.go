@@ -2891,6 +2891,54 @@ type Semantics struct {
 	// silent in the `&>` sense — `echo {1..3}` prints something either way,
 	// and nothing reports that one of them is not what was meant.
 	BraceExpansion Answer
+	// BraceOutputRereadAsText hands what the braces produced back to the
+	// rest of word expansion as ordinary shell **text** rather than as spans
+	// substituted into the word the parse cut. It is the same answer
+	// everywhere the produced text is inert, and a different one wherever it
+	// is not.
+	//
+	// Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, with `var=baz; varx=vx; vary=vy`:
+	//
+	//	echo $var{x,y}       vx vy in bash; bazx bazy in ksh93 and zsh
+	//	echo ${var}{x,y}     bazx bazy everywhere
+	//
+	// The braces are resolved before parameter expansion in all three — that
+	// is not this axis, and `echo {$a,2}` agrees — but in bash the words that
+	// come out are the *strings* `$varx` and `$vary`, so the name runs on into
+	// the character the group produced. Where the text re-enters as spans the
+	// word is still `[$var][x]` and `$var` is the name. The braced spelling is
+	// the row that says it is the bare `$var` and not the brace.
+	//
+	// A character range's output is the other half of the same fact, because
+	// it is where the produced text is not the file's:
+	//
+	//	printf '[%s]' {Z..a}     bash  [Z][[][][]][^][_][`][a]
+	//	                         zsh   [Z][[][\][]][^][_][`][a]
+	//
+	// bash's element for `\` is **empty** — the produced backslash reaches
+	// quote removal like any other unquoted backslash — where zsh keeps it. So
+	// a range's elements are raw characters under this reading and data under
+	// the other, which is why [Semantics.BraceCharRangeSpansAnyCharacter]'s
+	// output is quoted in one shell and not in the other.
+	//
+	// The sharpest probe is the produced text standing beside something:
+	// `printf '[%s]' x{Z..a}y` is `bad substitution: no closing "`" in `y` in
+	// bash — the backtick the range counted *opened a command substitution* —
+	// at status 1, with the next line still running. zsh answers
+	// ``[xZy][x[y][x\y][x]y][x^y][x_y][x`y][xay]``. So this is not "bash
+	// strips a backslash"; it is bash rereading the produced text as shell
+	// text, and the backslash is the visible half of it.
+	//
+	// A backtick at the very *end* of the text opens nothing and stays a
+	// character — `printf '[%s]' ab{Z..a}` answers ``[ab`]`` — which is the
+	// same shell being permissive about a string it produced rather than a
+	// file it read.
+	//
+	// Asked only in a dialect whose braces expand at all, and only once a
+	// group has actually produced something: a word the braces left alone is
+	// the word the parse cut, and re-reading it could only give it back.
+	BraceOutputRereadAsText Answer
 	// BraceRescanEntersFailedGroup decides where the scan resumes after a
 	// brace group that does not expand — `{x}`, which has no comma and no
 	// range, or a `{` that is never closed. Every shell with braces carries

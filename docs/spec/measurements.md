@@ -335,6 +335,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `expand/brace-inside-a-group-that-did-not-expand` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}{d,e}]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}d][{a{b,c}}e]` | `[{ab}][{ac}]~[{a}{bc}][{a}{bd}]~[{ab}d][{ab}e][{ac}d][{ac}e]` | `[{a{b,c}}]~[{a}{b{c,d}}]~[{a{b,c}}{d,e}]` |
 | `expand/brace-inside-an-unclosed-group` | `[{a{b,c}]` | `[{ab][{ac]` | `[{ab][{ac]` | `[{ab][{ac]` | `[{a{b,c}]` | `[{ab][{ac]` | `[{a{b,c}]` |
 | `expand/brace-before-param` | `{1,2}` | `1 2` | `1 2` | `1 2` | `1 2` | `1 2` | `{1,2}` |
+| `expand/brace-output-reread-as-text` | `baz{x,y}~baz{x,y}` | `vx vy~bazx bazy` | `vx vy~bazx bazy` | `vx vy~bazx bazy` | `bazx bazy~bazx bazy` | `bazx bazy~bazx bazy` | `baz{x,y}~baz{x,y}` |
+| `expand/brace-output-reread-shows-in-a-range` | `[{Z..a}]~[ab{Z..a}]` | `[Z][[][][]][^][_][`][a]~[abZ][ab[][ab][ab]][ab^][ab_][ab`][aba]` | `[Z][[][][]][^][_][`][a]~[abZ][ab[][ab][ab]][ab^][ab_][ab`][aba]` | `[Z][[][][]][^][_][`][a]~[abZ][ab[][ab][ab]][ab^][ab_][ab`][aba]` | `[{Z..a}]~[ab{Z..a}]` | `[Z][[][\][]][^][_][`][a]~[abZ][ab[][ab\][ab]][ab^][ab_][ab`][aba]` | `[{Z..a}]~[ab{Z..a}]` |
+| `expand/brace-output-reread-refuses-a-word` | `[x{Z..a}y]st=0~after` | **2>** `<shell>: line 1: bad substitution: no closing "`" in `y` *(status 1)* | **2>** `<shell>: line 1: bad substitution: no closing "`" in `y` *(status 1)* | **2>** `<shell>: bad substitution: no closing "`" in `y` *(status 1)* | `[x{Z..a}y]st=0~after` | `[xZy][x[y][x\y][x]y][x^y][x_y][x`y][xay]st=0~after` | `[x{Z..a}y]st=0~after` |
 | `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 | `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` |
 | `expand/tilde-in-assignment` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
@@ -924,6 +927,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `expand/brace-before-param` — braces resolve before parameter expansion, so variable ranges cannot work
   ```sh
   a=1; echo {$a,2}
+  ```
+- `expand/brace-output-reread-as-text` — what the braces produced re-enters the word as shell *text* in bash and as the spans the parse cut everywhere else, which is the same answer wherever the produced text is inert and a different one where it is not: bash's words are the strings `$varx` and `$vary`, so the name runs on into the character the group wrote, where ksh93 and zsh still hold `[$var][x]` and answer `bazx bazy`. The braced spelling on the second line is what says it is the bare `$var` and not the brace — it is `bazx bazy` in every column. BraceOutputRereadAsText
+  ```sh
+  var=baz; varx=vx; vary=vy; echo $var{x,y}; echo ${var}{x,y}
+  ```
+- `expand/brace-output-reread-shows-in-a-range` — the same axis where the produced text is not the file's: a range counted between two letters walks the code points, and under the re-reading its elements are raw characters rather than data — bash's element for the backslash is *empty*, because the backslash reaches quote removal like any other unquoted one, and zsh keeps it. The second word is the same range with text in front of it, which is where the backtick the range counted stands at the end of a word and opens nothing. Ours answered zsh's way in every column (#4200)
+  ```sh
+  printf "[%s]" {Z..a}; echo; printf "[%s]" ab{Z..a}; echo
+  ```
+- `expand/brace-output-reread-refuses-a-word` — the sharpest probe of the same axis, and what says it is a re-reading rather than a backslash being stripped: with text behind it the backtick the range counted *opens a command substitution* that nothing closes, so bash refuses the word at run time — `bad substitution` — abandons the line at 1 and runs the next one, where zsh and ksh93 print eight elements at 0. The status and the line after it are in the snippet because the refusal belongs to the word rather than to the file
+  ```sh
+  printf "[%s]" x{Z..a}y; echo "st=$?"; echo after
   ```
 - `expand/tilde-unquoted` — an unquoted leading tilde expands
   ```sh

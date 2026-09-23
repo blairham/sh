@@ -1793,6 +1793,10 @@ func Semantics() interp.Semantics {
 	// reading of `${!x}` (#2821).
 	s.OperatorAfterTheSubscriptListingIsBad = interp.Yes
 	s.BraceExpansion = interp.Yes
+	// It agrees with zsh and not with bash about what the braces produced:
+	// it goes back into the word rather than being read again as text, so
+	// `var=baz; varx=vx; echo $var{x,y}` is `bazx bazy`.
+	s.BraceOutputRereadAsText = interp.No
 	// A group that does not expand does not end the word — `@{x}{a,b}@` is
 	// `@{x}a@ @{x}b@` here too — but the scan resumes past that group's
 	// *close* brace rather than past its open, so a list nested inside a

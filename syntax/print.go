@@ -2464,10 +2464,25 @@ func (p *printer) paramExpText(text string) string {
 
 // bareParam reports whether a parameter can be written without its braces.
 //
-// Three conditions, and the second is the one that bites: the arrangement has
+// Three conditions, and the third is the one that bites: the arrangement has
 // to allow the braces to go, the name has to be one the shell would read
 // unbraced, and nothing may follow that would run into it. `${x}y` unbraced is
 // the parameter `xy`.
+//
+// A `{` counts as running into it, and that is measured rather than cautious:
+// brace expansion happens before parameter expansion, and in the shell that
+// hands its output back to the word as **text** the character a group produced
+// continues the name. With `var=baz; varx=vx; vary=vy`, bash 5.3.20 answers
+// `${var}{x,y}` with `bazx bazy` and `$var{x,y}` with `vx vy`, so dropping the
+// pair there writes a different program (#4200). See
+// interp.Semantics.BraceOutputRereadAsText, and note that the two spellings
+// were the same program in every column until that axis was measured — which
+// is why this had been right for as long as it was.
+//
+// So in front of a `{` the **spelling** is load-bearing and [Span.Bare] is
+// honored whatever the arrangement says: a pair that was written stays, and a
+// name that was written bare must not acquire one, since adding the braces
+// there changes the program in the same shell and in the other direction.
 func (p *printer) bareParam(s Span) (string, bool) {
 	if p.layout.ParameterBracesAsWritten && !s.Bare {
 		// Written with braces, so it keeps them: the tree records which
@@ -2479,10 +2494,21 @@ func (p *printer) bareParam(s Span) (string, bool) {
 	if v == "" || !plainParamName(v) {
 		return "", false
 	}
-	if next := p.after; next != "" && continuesName(next[0]) {
+	if next := p.after; next != "" &&
+		(continuesName(next[0]) || next[0] == '{' && !s.Bare && nameCanRunOn(v)) {
 		return "", false
 	}
 	return v, true
+}
+
+// nameCanRunOn reports whether a bare parameter's name could take another
+// character on the end of it, which only a *name* can: every special and every
+// positional parameter a bare `$` may be followed by is one character long, so
+// `$#{a,b}` is `$#` with text behind it however the text arrived and `$${a,b}`
+// is the run one shell spells that way. It is a name that has more to read —
+// `$var` against `$varx` — and so a name that a brace group's output can join.
+func nameCanRunOn(v string) bool {
+	return v != "" && (v[0] == '_' || (v[0] >= 'a' && v[0] <= 'z') || (v[0] >= 'A' && v[0] <= 'Z'))
 }
 
 // plainParamName reports whether a name needs no braces of its own — a name,

@@ -2288,6 +2288,11 @@ func Semantics() interp.Semantics {
 	s.ArithUnsetNameUnderNounsetIsRefused = interp.Yes
 	s.ArithNounsetRefusalIsFatal = interp.No
 	s.BraceExpansion = interp.Yes
+	// What the braces produced goes back into the word the parse cut rather
+	// than being read again as text, so `var=baz; varx=vx; echo $var{x,y}`
+	// is `bazx bazy` and `printf '[%s]' {Z..a}` keeps the backslash it
+	// counted — bash answers `vx vy` and an empty element.
+	s.BraceOutputRereadAsText = interp.No
 	// Agrees with bash on where the scan resumes after a group that did not
 	// expand: one byte past its open brace, so `{a{b,c}}` is `{ab} {ac}`
 	// and `@{x}{a,b}@` is two words.

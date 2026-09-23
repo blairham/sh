@@ -21,6 +21,7 @@ import (
 var sharedTables = map[string]string{
 	"preludeFuncs":      "written only while the prelude is sourced and never deleted from, so no subshell can change it",
 	"optionLetterNames": "the dialect's `set` option letters, handed in whole by Apply and never written to afterwards — the same terms optionLists is on, one field kind along",
+	"dialectCompgen":    "the `compgen -A` actions a dialect registered with SetCompgenAction, written at setup and never again — a script can ask compgen for one but has no way to add, replace or remove one",
 }
 
 // sharedStacks names every slice a clone is allowed to share with its parent,
@@ -44,6 +45,9 @@ var sharedStacks = map[string]string{
 	"RlimitOrder":     "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
 	"substLevelsOut":  "rebuilt with append([]substLevel{}, …) every time a level opens, so a write never lands in an array anyone else holds",
 	"carriedHeredocs": "the running file's own list, replaced wholesale by RunPart and never appended to — a subshell reads the same file's list, which is what it should see",
+	"dialectCompgenAfter": "where each dialect action sits in `compgen -A`'s order, " +
+		"appended to by SetCompgenAction at setup and never again — the order is the " +
+		"dialect's declaration, on the same terms as optionLists",
 	"restrictedFreezes": "the extra names this dialect's restricted mode freezes, " +
 		"appended to in Apply at setup and never again — Runner.FreezeInRestrictedMode " +
 		"is a dialect's declaration and not anything a script can reach",
@@ -120,6 +124,7 @@ func seedStacks(r *Runner) {
 	r.declaredTypes = append(make([]string, 0, 4), "seed")
 	r.cmdHashOrder = append(make([]string, 0, 4), "seed")
 	r.optionLists = append(make([]optionList, 0, 4), optionList{})
+	r.dialectCompgenAfter = append(make([][2]string, 0, 4), [2]string{"seed", "seed"})
 	r.prefixTraceAssigns = append(make([]*syntax.Assign, 0, 4), nil)
 	r.declarationOperands = append(make([]int, 0, 4), 0)
 	r.arrayOperands = append(make([]arrayOperand, 0, 4), arrayOperand{})
@@ -356,6 +361,7 @@ func seedTables(r *Runner) {
 	r.mathFuncs = map[string]mathFunc{"seed": {}}
 	r.precommands = map[string]PrecommandModifier{"seed": PrecommandNoGlob}
 	r.optionLetterNames = map[rune]string{'Z': "seed"}
+	r.dialectCompgen = map[string]func(*Runner, string) []string{"seed": nil}
 	r.preludeFuncs = map[string]*syntax.FuncDecl{"seed": nil}
 	r.readonly = map[string]bool{"seed": true}
 	r.removed = map[string]bool{"seed": true}

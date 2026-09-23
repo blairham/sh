@@ -434,7 +434,16 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 	// columns and the word in ksh93.
 	child.SetScriptFile(name)
 	src := string(image)
-	f, perr := syntax.Parse(src, r.dialect().On(syntax.RouteFromScriptFile))
+	// The **child's** grammar, not the caller's. The child is the shell this
+	// file is being run by, and its vector is the one SetUp just composed;
+	// reading the file with the caller's left the one half of the vector that
+	// is reached before execution — the grammar — still crossing from the
+	// shell that started it. `shopt -s extglob` in the caller and `@(a)b` in
+	// a shebang-less script is the shape: the pattern parsed, because the
+	// caller had the flag, and then matched literally, because the child did
+	// not. The diagnostic below already names the child for the same reason
+	// (#4149).
+	f, perr := syntax.Parse(src, child.dialect().On(syntax.RouteFromScriptFile))
 	if perr != nil {
 		// Reported as the file's own failure, by the dialect that would have
 		// reported it had this shell been started on the file — which is

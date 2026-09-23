@@ -2497,6 +2497,29 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 // sources it later, at its own point in runInput and after the parser's alias
 // tables are wired; calling it from both would source it twice.
 func (sh Shell) setUpFreshShell(r *interp.Runner) {
+	// The vector this front end composed, not the one the calling shell is
+	// holding. interp builds the child from the caller's exported fields, and
+	// two of those carry state a *script* has moved: `shopt -s extglob` lives
+	// in syntax.Dialect.ExtendedPattern, and `inherit_errexit` and
+	// `localvar_unset` in interp.Semantics. Copied across, they made a
+	// shebang-less script inherit option changes a fresh shell has no way to
+	// know about.
+	//
+	// Measured 2026-09-23 on bash 5.3.15, an executable file holding
+	// `shopt extglob` and no shebang, run from a shell that had just set it:
+	//
+	//	bash   extglob off — a fresh shell, the parent's set does not carry
+	//	ours   extglob on
+	//
+	// And the leak was exactly this narrow: variables, functions and `set -e`
+	// were all correctly fresh in the same run, because those are not carried
+	// on a field. Reset here rather than in interp because the pristine vector
+	// is the front end's — interp only has the one the caller is holding, and
+	// this hook is already the place that turns a Runner nobody has touched
+	// into a shell of this kind (#4149).
+	d := sh.Dialect
+	sem := sh.Semantics
+	r.Dialect, r.Semantics = &d, &sem
 	sh.setUpRunner(r)
 	if sh.Prelude != "" {
 		// A prelude that fails is the dialect being broken, which `source`

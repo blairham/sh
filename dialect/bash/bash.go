@@ -4818,6 +4818,14 @@ func Apply(r *interp.Runner) {
 	// Semantics.ShellOptionInvocationLetter for the letter the front end
 	// reads (#3264).
 	r.SetShellOptionNamespace(shoptMoveAtInvocation, shoptListAll, shoptState)
+	// And the same namespace reached a third way: `compgen -A shopt` lists
+	// these names, which is what bash's own shopt1.sub loops over. The action
+	// is this dialect's because the names are — see
+	// interp.Runner.SetCompgenAction, and "function" is where bash generates
+	// it, measured rather than chosen (#4149).
+	r.SetCompgenAction("shopt", "function", func(*interp.Runner, string) []string {
+		return shoptNames()
+	})
 	// This shell's only self-documenting builtin, and there is no other name
 	// for it — a script reaching for it used to get 127. See help.go, which
 	// carries what is answered and what is deliberately refused.

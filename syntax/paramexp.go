@@ -1008,7 +1008,11 @@ scan:
 				break
 			}
 			inner := s[1:i]
-			idx := p.wordFrom(inner, start, Unquoted)
+			// A `<(` between the brackets is the arithmetic `<` and a
+			// grouping rather than a substitution, which the *text* reading
+			// below deliberately does not do: see BareIndexText, and
+			// ProcSubstInSubscriptAsText for the rows.
+			idx := ProcSubstInSubscriptAsText(p.wordFrom(inner, start, Unquoted), true)
 			var g *SubscriptFlags
 			var rng *SubscriptRange
 			if p.dialect.ArraySubscriptFlags {

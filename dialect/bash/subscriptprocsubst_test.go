@@ -84,12 +84,18 @@ func TestAProcSubstInAWrittenSubscriptIsArithmetic(t *testing.T) {
 //
 // Same run:
 //
-//	[[ -e <(echo x) ]]        a substitution, on the same operand route
-//	echo a[1<(2)]             `a[1/dev/fd/63]` — brackets in an ordinary
-//	                          command word are no subscript in either shell
-//	x=a[1<(2)]                the same, an assignment's *value* being a word
-//	[[ a[1<(2)] = "a[1]" ]]   a substitution: one word, and the operator is
-//	                          what decides which reading it gets
+//	[[ -e <(echo x) ]]         a substitution, on the same operand route
+//	echo a[1<(:)]              `a[1/dev/fd/63]` — brackets in an ordinary
+//	                           command word are no subscript in either shell
+//	x=a[1<(:)]                 the same, an assignment's *value* being a word
+//	[[ a[1<(:)] == *dev/fd* ]] a substitution: one word, and the operator is
+//	                           what decides which reading it gets
+//
+// The bodies are `:` rather than a command that fails, deliberately. A
+// substitution's child writes its diagnostics from a goroutine of its own
+// and nothing waits for it, so a body that complains is a race against the
+// test's own buffer under `-race` and a message a real run drops — which is
+// a defect of its own and not one these rows are about.
 func TestAProcSubstOutsideAWrittenSubscriptIsStillOne(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -99,18 +105,21 @@ func TestAProcSubstOutsideAWrittenSubscriptIsStillOne(t *testing.T) {
 		},
 		{
 			"brackets in an ordinary command word",
-			`printf '[%s]' "$(echo a[1<(2)])"`,
+			`printf '[%s]' "$(echo a[1<(:)])"`,
 			"[a[1/dev/fd/",
 		},
 		{
 			"brackets in an assignment's value",
-			`x=a[1<(2)]; printf '[%s]' "$x"`,
+			`x=a[1<(:)]; printf '[%s]' "$x"`,
 			"[a[1/dev/fd/",
 		},
 		{
+			// The same word the arithmetic row leaves alone, under a string
+			// operator: the operand holds a descriptor's path, so it is
+			// matched by a pattern naming one and not by its own characters.
 			"the same operand under a string comparison",
-			`a=(1 2 3); [[ a[1<(2)] = "a[1]" ]] && printf '[yes]' || printf '[no]'`,
-			"[no]",
+			`a=(1 2 3); [[ a[1<(:)] == *dev/fd* ]] && printf '[yes]' || printf '[no]'`,
+			"[yes]",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

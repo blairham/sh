@@ -29,7 +29,11 @@ import (
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() interp.PromptStyle {
 	return interp.PromptStyle{
-		Expand: interp.PromptExpandsAlways,
+		// Not PromptExpandsAlways: this shell lets a script turn the
+		// expansion pass off, and calls it `shopt -u promptvars`. The
+		// backslash language is unaffected either way — see promptVarsIsOn,
+		// which carries the measurement.
+		Expand: promptVarsIsOn,
 		// Measured, one code per prompt, through a pty, against bash 5.3.15
 		// and bash 3.2.57. The two agree on the whole language: every
 		// difference between them was the value of the moment — the clock, the

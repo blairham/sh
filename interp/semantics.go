@@ -511,6 +511,47 @@ type Semantics struct {
 	// expansion there and has the third reading (#1367, #1370).
 	ValueBackslashInAPattern ValueBackslashPolicy
 
+	// ValueBackslashSurvivesAPatternPiece keeps a value's trailing backslash in
+	// the piece of a path it ends, where the character it quoted is the `/` that
+	// closes that piece.
+	//
+	// A `/` is the one character a quote cannot take the meaning off: it
+	// separates however it was written. So a value's backslash that runs out of
+	// value in front of one has nowhere to go and stays at the end of the piece
+	// in front of it — and what becomes of it there is the piece's own question.
+	// Where the piece **spells** a name it is removed with the rest of that
+	// piece's quoting in every column, so nothing is asked; where the piece
+	// **describes** one, the panel parts.
+	//
+	// Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`, with `bs` holding one backslash and a tree holding the
+	// directories `x\` and `y`, each with a file `e` in it:
+	//
+	//	word              bash 5.3 / as sh / 3.2, ksh93   dash, ash
+	//	./[x]${bs}/e      ./x\/e — the piece matched `x\`   the word as written
+	//	./[y]${bs}/e      the word as written              ./y/e
+	//	./[x]${bs}/[e]    ./x\/e                           the word as written
+	//	./d${bs}/[e]      ./d/e — `d` spells, so it goes   ./d/e
+	//
+	// The first two rows are the answer and each other's control: the columns
+	// that keep the backslash match the directory whose name ends in one and
+	// miss on the one that does not, and the columns that drop it do the
+	// reverse. The last row is the unanimous half — a piece that spells a name
+	// has the backslash removed everywhere — which is what says this is about a
+	// pattern piece and not about the separator.
+	//
+	// ksh93 reaches the same words by a different route: its
+	// ValueBackslashInAPattern is ValueBackslashIsData, so the backslash is a
+	// character wherever it stands and the question never arises. The answer is
+	// recorded for it anyway, because a preset that left it unanswered would
+	// refuse the word the day that axis moved.
+	//
+	// Asked only of a piece that describes a name, and only where a value's
+	// backslash ran out of value in front of a separator — which is one shape
+	// and not a class: `./tmp${bs}/a/b/*` spells its `tmp` piece and is the
+	// home directory in every column (#4234).
+	ValueBackslashSurvivesAPatternPiece Answer
+
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of
 	// passing it through. True only in zsh.
 	GlobNoMatchIsError Answer

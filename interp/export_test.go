@@ -65,3 +65,15 @@ func (r *Runner) PipesMadeForTest() uint64 {
 // directly: the behavior it gates is a dialect's, and a test that could only
 // reach it through one would be measuring two things at once.
 var SetControlWord = setControlWord
+
+// ValueBackslashMarkForTest and ValueBackslashRanOutOfValueForTest are the two
+// marks a value's backslash is written as in the escaped form.
+//
+// Exported for one test, and the smallest possible thing to export for it: the
+// doubled mark is spelled as a literal because a Go constant cannot be built
+// from another, so nothing but a test holds the two together. See
+// valueBackslashRanOutOfValue.
+const (
+	ValueBackslashMarkForTest          = valueBackslashMark
+	ValueBackslashRanOutOfValueForTest = valueBackslashRanOutOfValue
+)

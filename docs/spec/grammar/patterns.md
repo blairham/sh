@@ -461,6 +461,69 @@ carrying a backslash in an ordinary word, which is the shape a script
 actually writes, demands no dialect. `GlobExpansionResults` is *read*
 rather than asked for the same reason (#1367, #1370).
 
+##### And a value's end is not the field's end
+
+The character a value's backslash quotes is the **field's** next one, not
+the value's. `bs='\'; echo ./tmp${bs}/a/b/*` is one word of three spans —
+`./tmp`, the value's backslash, and `/a/b/` with a live `*` behind it —
+and the columns that quote quote the `/` in the span after it.
+
+This shell wrote a backslash at the end of a value as an ordinary marked
+backslash, because at the point of escaping the value has run out and
+there is nothing to name. The result was a separator that stayed
+unquoted and a metacharacter that stayed live. Measured 2026-09-22, `bs`
+holding one backslash:
+
+| written | dash, bash ×3, ash | ksh93 | here, before |
+| --- | --- | --- | --- |
+| `./tmp${bs}/a/b/*` | `./tmp/a/b/c` | the word as written | the word as written |
+| `./t${bs}mp/a/b/*` | `./tmp/a/b/c` | the word as written | the word as written |
+| `x${bs}?` | `x\?` | `x\y` | `x*` `xy` `xz` |
+| `x${bs}*` | `x\*` | `x\y` | `x*` `x\y` `xy` `xz` |
+
+The third row is the sharpest and the quietest: a file named `x*` is
+there, the `?` is quoted by the value's backslash so those columns have no
+live metacharacter left and never glob the word at all, and this shell
+matched two files and handed them on at status 0 with no diagnostic
+anywhere. `valueBackslashRanOutOfValue` is the mark that says so — the
+ordinary mark names the character it quotes and this one cannot, since the
+character is in a span it has not seen (#4234).
+
+##### A quoted separator still separates
+
+The `/` is the one character a quote cannot take the meaning off. So a
+value's backslash that ran out of value in front of one has nowhere to go:
+it stays at the end of the piece it ends, and **that piece** decides what
+becomes of it. Where the piece spells a name it goes with the rest of that
+piece's quoting; where the piece *describes* one, the panel parts, and
+that is `Semantics.ValueBackslashSurvivesAPatternPiece`.
+
+Measured the same day, in a tree holding the directories `x\` and `y`,
+each with a file `e` in it:
+
+| written | bash ×3, ksh93 | dash, ash |
+| --- | --- | --- |
+| `./[x]${bs}/e` | `./x\/e` — the piece matched `x\` | the word as written |
+| `./[y]${bs}/e` | the word as written | `./y/e` |
+| `./y${bs}/[e]` | `./y/e` in the columns that quote | `./y/e` |
+
+The first two rows are the answer and each other's control: the columns
+that keep the backslash match the name that ends in one and miss on the
+name that does not, and the columns that drop it do the reverse. The third
+is the unanimous half among the columns that quote — a piece that spells a
+name loses the backslash — which is what says this is about a pattern
+piece and not about the separator.
+
+ksh93 reaches the first two by the other route: its
+`ValueBackslashInAPattern` is *data*, so the backslash is a character
+wherever it stands and the piece question never arises. Its answer is
+recorded anyway, because a preset that left it open would refuse the word
+the day the reading above moved.
+
+One shape is measured and not modeled: **bash 3.2** keeps the backslash
+and still misses on `./[x]${bs}/e`, so it matches neither name. Dated
+rather than vetoed per `../core.md`; the preset models 5.3.
+
 
 **Process substitution is three questions, not one**, and the panel
 splits differently on each. The rules are in `parameter-expansion.md` and

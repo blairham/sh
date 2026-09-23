@@ -1940,6 +1940,12 @@ func Semantics() interp.Semantics {
 	// either reading, which is what makes the arrangement discriminating
 	// (#1367).
 	s.ValueBackslashInAPattern = interp.ValueBackslashIsData
+	// The piece question never arises with that answer — a backslash that is a
+	// character is one wherever it stands — and it is answered rather than left
+	// open, because a preset that left it open would refuse the word the day the
+	// axis above moved. It comes to bash's words by this other route:
+	// `./[x]${bs}/e` matches a directory named `x\` here too.
+	s.ValueBackslashSurvivesAPatternPiece = interp.Yes
 	// The trim ignores the mask and reaches the last name's value however it
 	// was arrived at. Measured 2026-09-12: `printf 'a b\\ \n' | read x y`
 	// leaves `b` here and `b ` in dash and the three bashes — one field per

@@ -3223,6 +3223,10 @@ func Semantics() interp.Semantics {
 	// against the four bash-and-ksh columns: measured 2026-09-12, `set --;
 	// "${@-word}"` is empty and `"${@+word}"` is `word` (#1941).
 	s.PositionalListWithNoneIsSet = interp.Yes
+	// The third reading of what an empty `$@` takes with it, and the one that
+	// makes the axis three-valued: only what stands *before* the list goes with
+	// it, so `"$e$@"` is no argument and `"$@$e"` is one.
+	s.EmptyListTakesTheWord = interp.EmptyListReachWhatStandsBeforeIt
 	// The expand-first order, with dash and ksh93 (#1943).
 	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedWithTheCommand
 	// A `*` or `@` subscript inside an expression is the slice, joined and

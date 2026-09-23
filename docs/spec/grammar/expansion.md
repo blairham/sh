@@ -603,6 +603,60 @@ One asymmetry is measured and is *not* what the names suggest — see
 `word-splitting.md`: zsh declines to split the result of a **parameter**
 expansion but splits a **command substitution** like every other shell.
 
+### An empty expansion beside a `"$@"` that produced nothing
+
+`"$@"` with no positional parameters is **no word at all** — unanimous, and
+the same for an empty array's `"${a[@]}"`. What an *empty expansion written
+beside it* does is a three-way split. Measured 2026-09-22, script files under
+`env -i PATH=/usr/bin:/bin LC_ALL=C`, after `set --; unset xxx; e=; f=` with
+`n(){ echo "$#"; }`:
+
+| word | bash 5.3, as `sh`, ksh93 | zsh | dash, ash |
+| --- | --- | --- | --- |
+| `"$@"` | 0 | 0 | 0 |
+| `"$xxx${@}"` | 0 | 0 | **1** |
+| `"$e$@"` | 0 | 0 | **1** |
+| `"$e$@$f"` | 0 | **1** | **1** |
+| `"$@$e"` | 0 | **1** | **1** |
+| `"x$@"` | 1 | 1 | 1 |
+| `"$xxx${*}"` | 1 | 1 | 1 |
+
+Three answers, and the zsh row is what makes it three: a reading written as
+"bash or not" would give zsh an answer no column has.
+`EmptyListTakesTheWord` is the axis. The last two rows are the boundary — a
+*literal* `x` brings the word back in all seven and `"$*"` is one word in all
+seven — so this is about `$@` and about expansions that came out empty, not
+about concatenation.
+
+**The reading is about one quoted string rather than about the word**, which
+the table cannot show and these two rows can:
+
+| word | every column |
+| --- | --- |
+| `"$e""$@"` | 1 |
+| `"$@""$e"` | 1 |
+
+Two quote pairs are two strings, and the string the list is *not* in is a
+quoted null that survives. Our spans record each span's quoting and not where
+one run of it ends, so `"$e$@"` and `"$e""$@"` are the same two spans; the
+boundary is read off the **positions** instead — spans inside one pair of
+quotes are contiguous in the source, and a gap is the closing quote and the
+opening one. `interp.opensAQuotedRun` says why that is read rather than
+recorded, and what its safe failure is.
+
+bash 3.2 is the one column that does not do that: it drops the word for a
+quoted null in a string of its own too, and keeps only a literal. Dated
+rather than vetoed per `../core.md`, and the preset models 5.3.
+
+One shape is measured and deliberately not folded in: `"$(:)$@"` is 0 in bash
+and ksh93 and 1 in zsh and dash, where those four agree about a *parameter*.
+That is a command substitution rather than a parameter, so the reading is
+asked of an empty parameter expansion only and the shape answers what it
+already answered.
+
+Corpus: `expand/an-empty-expansion-beside-an-empty-positional-list` and
+`expand/an-empty-expansion-in-a-quoted-string-of-its-own`.
+
 ## 6. Field splitting
 
 Its own document: `word-splitting.md`.

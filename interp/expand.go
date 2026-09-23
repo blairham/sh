@@ -179,6 +179,14 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		}
 		release()
 		if atList {
+			if len(parts) == 0 && s.Quoting != syntax.Unquoted {
+				// A quoted `$@` — or a quoted `${a[@]}` — that produced no
+				// field at all. What that takes with it is an axis, resolved
+				// by wordResult once the whole word has been read, because two
+				// of the three readings depend on what comes *after* this
+				// span. See Semantics.EmptyListTakesTheWord.
+				b.listProducedNothing(inAQuotedRunOfItsOwn(w.Spans, i))
+			}
 			b.add(s, parts)
 			continue
 		}
@@ -207,7 +215,17 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 				b.flush()
 			}
 			b.text(text)
-			b.any = b.any || text != "" || s.Quoting != syntax.Unquoted
+			if text != "" || s.Quoting != syntax.Unquoted {
+				// A quoted *literal* is a quoted null the word keeps whatever
+				// else is in it — `printf '[%s]' "$@"''` is one field in every
+				// column — and so is a command substitution that came out
+				// empty, in the one column that reads the two apart. What the
+				// axis is about is an empty **parameter** expansion, which is
+				// the only span here that does not bring the word back. See
+				// Semantics.EmptyListTakesTheWord.
+				b.reached(text != "" || s.Kind != syntax.ParamExp ||
+					inAQuotedRunOfItsOwn(w.Spans, i))
+			}
 			continue
 		}
 		ifs, set := r.ifs()
@@ -258,7 +276,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		}
 	}
 
-	return b.result()
+	return r.wordResult(&b)
 }
 
 // wordFields is the fields of one word as it is assembled, span by span.
@@ -293,6 +311,47 @@ type wordFields struct {
 	// a word that expanded to nothing cannot be told from a word that was
 	// never there, and the two are different: one field or none.
 	any bool
+	// noFields is whether a quoted list expansion in this word produced no
+	// field at all, sinceNoFields whether anything has reached the word since
+	// the last one that did, and revived whether anything that reached it
+	// brings the word back on its own. The three are what
+	// Semantics.EmptyListTakesTheWord is read against, and they are separate
+	// from `any` because that one cannot tell an empty quoted parameter from a
+	// quoted null the word keeps.
+	noFields      bool
+	sinceNoFields bool
+	revived       bool
+}
+
+// reached records that something arrived in the word, and whether it is
+// something that brings the word back on its own.
+//
+// It is `any` with the two halves the empty-list axis needs beside it: which
+// side of the list the arrival is on, and whether it was a quoted null rather
+// than an empty parameter. See Semantics.EmptyListTakesTheWord.
+func (b *wordFields) reached(revives bool) {
+	b.any = true
+	b.sinceNoFields = true
+	if revives {
+		b.revived = true
+	}
+}
+
+// listProducedNothing records a quoted list expansion that yielded no field.
+//
+// It clears sinceNoFields rather than only setting the flag, because the
+// reading that takes only what stands *before* the list asks about the last one
+// in the word: `"${@}${@}"` is no argument in zsh, where the second list is not
+// something standing behind the first.
+func (b *wordFields) listProducedNothing(ownQuotedRun bool) {
+	if ownQuotedRun && b.any {
+		// The list stands in a quoted string of its own, so whatever was in
+		// the string in front of it is a quoted null the word keeps — see
+		// inAQuotedRunOfItsOwn.
+		b.revived = true
+	}
+	b.noFields = true
+	b.sinceNoFields = false
 }
 
 func newWordFields() wordFields { return wordFields{all: []string{""}} }
@@ -395,7 +454,7 @@ func (b *wordFields) lay(parts []string) {
 		return
 	}
 	b.flush()
-	b.any = true
+	b.reached(true)
 	b.text(parts[0])
 	if len(parts) == 1 {
 		return
@@ -440,7 +499,7 @@ func (b *wordFields) spread(parts []string) {
 	// and the field that says so should not be made to lie by a caller that
 	// happens not to look.
 	if len(parts) > 0 {
-		b.any = true
+		b.reached(true)
 	}
 }
 
@@ -461,6 +520,46 @@ func (b *wordFields) result() []string {
 		return nil
 	}
 	return b.all
+}
+
+// inAQuotedRunOfItsOwn reports whether the span at i is in a pair of quotes
+// the span in front of it was not in.
+//
+// It is [syntax.QuotedRunBoundary] with the default a *run* wants taken: where
+// the boundary cannot be worked out this answers yes, because that is the
+// answer every column in the panel gives — the word is kept — so the worst a
+// span nothing can measure costs is a divergence left where it already was.
+// See Semantics.EmptyListTakesTheWord.
+func inAQuotedRunOfItsOwn(spans []syntax.Span, i int) bool {
+	opens, known := syntax.QuotedRunBoundary(spans, i)
+	return !known || opens
+}
+
+// wordResult is result with the empty-list axis applied, which is the one
+// question about a word's fields that cannot be answered span by span: two of
+// the three readings depend on what came *after* the list that produced nothing.
+//
+// Asked only where the three readings part. A word with text in it is a field
+// in every column, a word nothing reached at all is no field in every column,
+// and a word with no list that came up empty is not this question — so the
+// gate is a list that produced nothing, something else that reached the word,
+// and no text. See Semantics.EmptyListTakesTheWord.
+//
+// The redirection-target views deliberately do not go through this: a target is
+// one name rather than a list of fields, and nothing measured says the three
+// readings part there. See expandRedirectTargetViews.
+func (r *Runner) wordResult(b *wordFields) []string {
+	if b.noFields && b.any && !b.revived {
+		switch r.emptyListReach() {
+		case EmptyListReachTheWord:
+			return nil
+		case EmptyListReachWhatStandsBeforeIt:
+			if !b.sinceNoFields {
+				return nil
+			}
+		}
+	}
+	return b.result()
 }
 
 // globFields is pathname expansion, the last stage of a word: it acts on

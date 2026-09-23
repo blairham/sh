@@ -2774,6 +2774,10 @@ func Semantics() interp.Semantics {
 	// and `${@=abc}` is `${@=abc}: bad substitution` because the operator
 	// fires at all (#1941).
 	s.PositionalListWithNoneIsSet = interp.No
+	// It agrees with bash about what an empty `$@` takes with it, which is the
+	// one of the three brace-free readings that reaches both sides of the list:
+	// `"$e$@"` and `"$@$e"` are each no argument at all.
+	s.EmptyListTakesTheWord = interp.EmptyListReachTheWord
 	// This shell's own order for a frozen name in a prefix, and it is
 	// neither of the two this axis began with: the name is checked ahead of
 	// everything the command does in front of a **function** and a **special

@@ -2234,6 +2234,14 @@ func (p *printer) word(w *Word) {
 		q := w.Spans[i].Quoting
 		j := i
 		for j < len(w.Spans) && w.Spans[j].Quoting == q && q != Unquoted && q != BackslashQuoted {
+			// A run ends where the next pair of quotes begins, even where the
+			// quoting is the same on both sides of it: `"$e""$@"` written back
+			// as `"$e$@"` is a different program, because a shell that reads
+			// what an empty `"$@"` takes with it is reading one quoted string
+			// rather than the word. See OpensAQuotedRun.
+			if opens, known := QuotedRunBoundary(w.Spans, j); j > i && known && opens {
+				break
+			}
 			j++
 		}
 		if j == i {

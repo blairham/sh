@@ -2687,6 +2687,10 @@ func Semantics() interp.Semantics {
 	// is `word` and `"${@+word}"` is empty in 5.3.15, 3.2.57 and as `sh`,
 	// where dash and zsh answer the other way round (#1941).
 	s.PositionalListWithNoneIsSet = interp.No
+	// And an empty expansion written beside a `$@` that produced nothing does
+	// not bring the word back, on either side: `set --; e=; f "$e$@"` and
+	// `f "$@$e"` are both no argument at all, where `f "x$@"` is one.
+	s.EmptyListTakesTheWord = interp.EmptyListReachTheWord
 	// The prefix is checked before the command's values are expanded and
 	// before its redirections are opened, and this shell is alone in it.
 	// Measured 2026-09-12 with `readonly x=1`: `x=$((1/0)) /bin/echo RAN`

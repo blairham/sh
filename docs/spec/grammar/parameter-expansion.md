@@ -518,6 +518,82 @@ is a tab. `Parser.inRawBody` is what tells the two apart, and it is the
 same bool the lexer already carries for the diagnostics that would
 otherwise blame a quote character nobody wrote (#4169).
 
+### And the value that `$'…'` produces is read again
+
+Reading the run's *end* correctly is half of it. The other half is what
+bash does with the value: it puts it where the escape was written and
+reads the division off **that** text, so the produced bytes decide where
+the closing brace is. Measured 2026-09-23 under
+`env -i PATH=/usr/bin:/bin LC_ALL=C` from script files, with `unset u`,
+`v="'"` and `w=Q`; bash 5.3.20 and bash 3.2.57 agree on every row, and the
+four columns without the construct reach none of it and print the dollar
+and the quotes back:
+
+| written | bash 5.3.20 and 3.2.57 |
+| --- | --- |
+| `printf '[%s]' "${u:-$'a}b'}"` | `[ab}]` |
+| `printf '[%s]' "${u:-$'\x7d'}"` | `[}]` |
+| `printf '[%s]' "${u:-$'\x27'A}B'}"` | `['A}B']` |
+| `printf '[%s]' "${u:-x$'\x27'}"` | ``no closing `}' in "${u:-x'}"`` |
+| `printf '[%s]' "${u:-x$'\x22'}"` | ``no closing `}' in "${u:-x"}"`` |
+| `printf '[%s]' "${u:-x$'\x5c'}"` | ``no closing `}' in "${u:-x\}"`` |
+| `printf '[%s]' "${v/$'\x27'/x}"` | `[x]` |
+| `printf '[%s]' "${w/Q/$'\x27'}"` | `[']` |
+
+**The diagnostic is the evidence.** bash quotes the word back with the
+escape already gone, which is a sentence about text it produced rather
+than text anybody wrote — and it is why this is a second reading and not
+a rule about what an escape may hold.
+
+**Row one is the row that had to be measured rather than reasoned.** A
+`}` written inside the run is protected by the run's quotes on the first
+scan and then arrives in the value, where the second reading ends the
+expansion at it: the operand is `a`, and `b` — the rest of the value —
+falls out into the word in front of the source's own `}`. This spec and
+`dialect/bash` both said `[a}b]` until #4207, which is the answer the
+run's end being found correctly gives when nothing reads the value
+afterwards. Row two is the same thing spelled cheaply and is *not* on its
+own evidence: an empty operand with a leftover `}` prints what a protected
+brace would print too.
+
+**Row three says the second reading can succeed and not only refuse.** The
+produced quote protects the first `}`, the next one ends the expansion,
+and the operand is `'A}B'` — a division no reading of the written text
+produces.
+
+**The last two rows are the bound: a word operand only.** A pattern and a
+replacement are read on their own terms, and the produced quote reaches
+neither the scan nor a refusal there. That is the same line
+`QuoteProtectsTheClosingBrace` already draws, so no second flag records
+it.
+
+**Which reading locates and which divides are two different questions.**
+The escape belongs to what was *read* and the brace to the run, and the
+two come apart when POSIX mode moves under a function body. With `unset
+u` and a body holding `printf "[%s]" "${u:-x$'\x27'}"`:
+
+| the body is | bash 5.3.20 |
+| --- | --- |
+| read outside POSIX mode, called inside it | `[x']` |
+| read inside POSIX mode, called outside it | `[x$'\x27']` |
+
+The first row is modeled: the escape bash read is converted, and the `'`
+it produced then fails to protect a brace the mode has stopped
+protecting. The second is **not**, and this shell answers `[x']` there —
+there was no escape in what bash read, and nothing it re-divides adds
+one. Separating those means separating the one gate the lexer has on
+`QuoteProtectsTheClosingBrace`, which is where the construct was put, and
+that wants a measurement of its own rather than a change made in passing.
+
+One further shape is measured and left as it is: a value holding `$(`
+opens a command substitution, and bash reports *that* rather than the
+brace — `command substitution: line 2: unexpected EOF while looking for
+matching`. Both shells refuse at status 1 and this one says
+`no closing }`.
+
+Pinned by `core/a-dollar-single-value-ends-the-brace-it-holds` and
+`core/a-dollar-single-value-that-is-a-quote-hides-the-brace` (#4207).
+
 ### When the second read happens
 
 The operand of a `${ … }` written inside double quotes is read a second

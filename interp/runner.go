@@ -4062,6 +4062,13 @@ func (r *Runner) clone() *Runner {
 	if r.scriptStop == nil {
 		r.scriptStop = &scriptStop{}
 	}
+	// And the stream locks, for the third time the same reason: the field's own
+	// comment says they are "shared with every subshell", and they were made
+	// lazily — so a shell that had not yet needed one handed the copy a nil and
+	// each side then made its own. Two locks over one sink guard nothing, which
+	// is how a substitution's body and the shell that named it came to race on a
+	// caller's writer with both of them holding a lock. See lockedWriter.
+	r.streamLocks()
 	c := *r
 	c.inSubshell = true
 	// A new execution unit, so a bare `exit` in it reports a status of the
@@ -4247,9 +4254,17 @@ func (emptyReader) Read([]byte) (int, error) { return 0, io.EOF }
 // A failed write is recorded rather than returned, because none of the
 // builtins writing through here could do anything with it at the site: the
 // dispatcher folds it into the command's status once the builtin returns.
+// Through the stream guard, which is what makes the shell's own writes safe
+// beside the one writer nothing can join — a substitution's body. Two writers on
+// one descriptor are serialized by the kernel and a caller's io.Writer has no
+// such property, so both parties have to take the same lock or neither is
+// covered: the body already did and this did not, which left a locked writer and
+// a bare one on one sink. lockWriter is identity for an *os.File and for a stream
+// already guarded by this lock, so a shell binary pays nothing and the body's own
+// writer is not wrapped twice. See lockedWriter and streamseal.go.
 func (r *Runner) printf(format string, args ...any) {
 	r.releaseHeldTraceBeforeWriting()
-	if _, err := fmt.Fprintf(r.stdout(), format, args...); err != nil {
+	if _, err := fmt.Fprintf(r.lockedStdout(), format, args...); err != nil {
 		r.writeFailed = err
 	}
 }
@@ -4262,7 +4277,8 @@ func (r *Runner) errf(format string, args ...any) {
 		// is taken back, and only then does this go out. See printfWriter.
 		return
 	}
-	_, _ = fmt.Fprintf(r.stderr(), format, args...)
+	// Guarded for printf's reason above.
+	_, _ = fmt.Fprintf(r.lockedStderr(), format, args...)
 }
 
 // diagf writes a diagnostic with the dialect's own prefix.

@@ -60,6 +60,47 @@ func TestCompgenGeneratesShoptWhereBashDoes(t *testing.T) {
 	}
 }
 
+// TestCompgenPutsShoptBetweenFunctionAndVariable is the row the one above
+// cannot reach. With only `builtin` and `shopt` asked for, *any* position
+// after `builtin` produces the same output — a mutation moving the
+// registration from "function" to "variable" survived that assertion. These
+// two ask for a neighbor on each side, which is the only way the position
+// itself is observable.
+//
+// Measured on bash 5.3.15 with `exfunc` defined and `extvar` exported.
+func TestCompgenPutsShoptBetweenFunctionAndVariable(t *testing.T) {
+	// A function before it.
+	out, st := answersRun(t, "exfunc() { :; }\ncompgen -A function -A shopt ex")
+	if st != 0 {
+		t.Fatalf("status %d: %q", st, out)
+	}
+	if got := strings.Fields(out); len(got) == 0 || got[0] != "exfunc" {
+		t.Errorf("got %v, want the function first", got)
+	}
+	// And the variables after it, which is the half that pins the *upper*
+	// bound: a shopt generated last would put them in front.
+	out, st = answersRun(t, "extvar=1\ncompgen -v -A shopt ex")
+	if st != 0 {
+		t.Fatalf("status %d: %q", st, out)
+	}
+	got := strings.Fields(out)
+	shoptAt, varAt := -1, -1
+	for i, name := range got {
+		if name == "extglob" && shoptAt < 0 {
+			shoptAt = i
+		}
+		if name == "extvar" && varAt < 0 {
+			varAt = i
+		}
+	}
+	if shoptAt < 0 || varAt < 0 {
+		t.Fatalf("got %v, want both a shopt name and the variable", got)
+	}
+	if shoptAt > varAt {
+		t.Errorf("got %v, want the shopt names before the variables", got)
+	}
+}
+
 // TestCompgenShoptAnswersOneAtOne: a prefix nothing matches is a failure
 // rather than an empty success, which is what a completer asks about.
 func TestCompgenShoptAnswersOneAtOne(t *testing.T) {

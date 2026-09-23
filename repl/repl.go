@@ -2411,6 +2411,9 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		searchPrompt: s.History.SearchPrompt,
 		searchFailed: s.History.SearchFailedPrompt,
 		searchBelow:  s.History.SearchBelowTheLine,
+		// Whether the newline that ends a search also accepts the line. One
+		// dialect's answer; see HistoryStyle.SearchNewlineAcceptsTheLine.
+		searchNewlineAccepts: s.History.SearchNewlineAcceptsTheLine,
 		// How much of the line one `^_` takes back, where it leaves the
 		// cursor, and what `M-.` does past the oldest line it can reach.
 		undoPerKeystroke:     s.Editor.UndoTakesBackOneKeystrokeAtATime,

@@ -21,7 +21,8 @@ import (
 // last part is measured and is the part a naive implementation gets wrong —
 // `C-r cho C-e` in both bash and zsh leaves search, keeps the line it found,
 // *and* moves the cursor to the end. The key is not swallowed by the mode it
-// closed. See pushBack.
+// closed. See pushBack — with one exception, a newline, which
+// HistoryStyle.SearchNewlineAcceptsTheLine measures.
 //
 // In its own file because the key it hangs off is one line of editor.go's
 // switch, and the mode is a hundred lines that has nothing else to do with
@@ -108,7 +109,15 @@ func (e *editor) reverseSearch(prompt drawnPrompt) {
 				// first, so the search wording is off the screen before the
 				// caller draws anything of its own.
 				e.redraw(prompt)
-				e.pushBack(c)
+				if c != '\n' || e.searchNewlineAccepts {
+					// The exception, and it is one key in one dialect: a
+					// newline is the *search's* in two of the three columns
+					// that have this mode, so the line it found stays on the
+					// line and goes on being edited. See
+					// HistoryStyle.SearchNewlineAcceptsTheLine, where the
+					// three answers are measured.
+					e.pushBack(c)
+				}
 				return
 			}
 			r, err := e.readRune(c)

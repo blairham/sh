@@ -219,6 +219,11 @@ type editor struct {
 	searchPrompt string
 	searchFailed string
 	searchBelow  bool
+	// searchNewlineAccepts is one dialect's answer and the zero value is the
+	// other two's, deliberately: a newline ending the search is the search's in
+	// bash and ksh93 and accepts the line in zsh, so an editor built as a bare
+	// literal takes the majority. See HistoryStyle.SearchNewlineAcceptsTheLine.
+	searchNewlineAccepts bool
 
 	// pushed is input this editor reads before it reads the terminal: the byte
 	// a search mode took and did not want, or characters an action outside the

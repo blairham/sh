@@ -53,6 +53,14 @@ func HistoryStyle() repl.HistoryStyle {
 		SearchPrompt:       "bck-i-search: %s_",
 		SearchFailedPrompt: "failing bck-i-search: %s_",
 		SearchBelowTheLine: true,
+		// And the newline that ends a search accepts the line here, where bash
+		// and ksh93 take it for the search and leave the line to go on being
+		// edited. Measured 2026-09-23 through a pseudo-terminal, one keystroke
+		// at a time, with `echo zone` in the history: `C-r one` then a newline
+		// then `XX` then Return runs `echo zone` and then looks for a command
+		// called `XX`, where bash runs `echo zXXone` and ksh93 `echo zoneXX`.
+		// See repl.HistoryStyle.SearchNewlineAcceptsTheLine.
+		SearchNewlineAcceptsTheLine: true,
 		// The file's own encoding, measured 2026-09-12 by driving zsh 5.9.2
 		// through a pseudo-terminal and reading what it left behind. Both
 		// answers are yes, and they are two answers: a multi-line command is

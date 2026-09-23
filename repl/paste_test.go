@@ -81,7 +81,11 @@ func TestTheTerminalIsAskedToBracketAPaste(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			var out strings.Builder
-			e := Shell{Editor: c.style}.newEditor(t.Context(), nil)
+			// A terminal state rather than nil: a paste is something a
+			// terminal does, and the offer is withheld where there is none —
+			// measured, bash writes neither marker on a pipe (#4249). So the
+			// session this row is about is one that took a mode.
+			e := Shell{Editor: c.style}.newEditor(t.Context(), &terminalState{})
 			e.in, e.out = typing("echo hi\r"), &out
 			if _, err := e.readLine(drawPrompt("$ ")); err != nil {
 				t.Fatal(err)

@@ -3375,6 +3375,10 @@ func Semantics() interp.Semantics {
 	// The one dialect in the panel that does — see
 	// Semantics.PromptEchoesTheLineWhereThereIsNoTerminal.
 	s.PromptEchoesTheLineWhereThereIsNoTerminal = true
+	// And it reads the editing keys there too: measured, `C-r` on a pipe is a
+	// reverse-i-search in this shell and the characters of a command name in
+	// the other three. See Semantics.EditorReadsKeysWhereThereIsNoTerminal.
+	s.EditorReadsKeysWhereThereIsNoTerminal = true
 	return s
 }
 

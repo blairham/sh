@@ -160,6 +160,20 @@ type Shell struct {
 	// it: see interp.Semantics.PromptEchoesTheLineWhereThereIsNoTerminal.
 	EchoTheLineWithoutATerminal bool
 
+	// EditorWithoutATerminal gives a session whose input is not a terminal a
+	// line editor, so that `C-r`, the arrows and every other binding are read
+	// as keys rather than as characters of the line.
+	//
+	// The dialect's answer, because the panel splits on it: measured, bash
+	// 5.3.20 given `-i` on a pipe runs a reverse-i-search on `C-r` where zsh,
+	// ksh93 and dash read the byte as text (#4249). See
+	// interp.Semantics.EditorReadsKeysWhereThereIsNoTerminal, which is where
+	// the transcripts are.
+	//
+	// What it does *not* turn on is raw mode: there is no terminal to take a
+	// mode from, which is the whole of what the terminal was ever needed for.
+	EditorWithoutATerminal bool
+
 	// Leaving is what this session writes as it ends, after the last prompt
 	// it drew and on the error stream. Empty writes nothing, which is what a
 	// caller with no dialect gets and what four of the five panel shells do.
@@ -538,27 +552,51 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// Closed on the way out, so that whatever is still in the conduit reaches
 	// the terminal before the process does anything else with it.
 	defer capture.close()
-	if !IsTerminal(s.inFile()) {
+	// What needs a terminal is **raw mode**, not the editor: the editor reads
+	// bytes and a pipe delivers bytes. Measured 2026-09-22, bash 5.3.20 given
+	// `--norc -i` with its input on a pipe reads a `C-r` as the search key,
+	// draws the search to standard error and runs the line it recalls — so a
+	// session on a pipe can have a line editor, and gating the editor on the
+	// terminal is what left every editing key unread here (#4249).
+	//
+	// It is the dialect's answer and not this package's, because the panel
+	// splits: the other three read every one of those bytes as text, and a
+	// search where the shell prints `command not found: ^Rseeded-one` would be
+	// this shell inventing a feature. See Shell.EditorWithoutATerminal.
+	onTerminal := IsTerminal(s.inFile())
+	if !onTerminal && !s.EditorWithoutATerminal {
 		// A prompt without a terminal is not a mistake to refuse: every shell
 		// in the panel, given `-i` on a pipe, still prints a prompt and runs
-		// the lines — it only says that job control is off. The *editor* is
-		// what needs a terminal, and it is the editor that goes away.
+		// the lines — it only says that job control is off. For these three
+		// the *editor* is what goes away, and runPlain reads the lines and
+		// echoes them where the dialect says to.
 		return s.runPlain(ctx, store, capture, hist, earlier)
 	}
-	state, err := makeRaw(s.inFile())
-	if err != nil {
-		return 0, err
+	// So the terminal question below is about the *mode* alone. A nil state is
+	// a session that never made one, and restore takes nil.
+	var state *terminalState
+	if onTerminal {
+		var err error
+		state, err = makeRaw(s.inFile())
+		if err != nil {
+			return 0, err
+		}
+		// Deferred rather than restored at each return: a panic here would
+		// otherwise leave the terminal with echo off, which is a broken
+		// terminal and not merely a crash.
+		defer func() { _ = state.restore() }()
+		// Raw mode took the kernel's newline translation with it, so this loop
+		// does it — see crlf. On the copy of the Shell this loop runs on,
+		// which is what keeps it off the Runner's own streams (those are
+		// written with the terminal in its own discipline, where the kernel is
+		// still translating) and off the shell the caller handed in.
+		//
+		// **Only where a mode was taken.** A pipe never had the kernel's
+		// translation to lose, and measured, bash on one writes plain line
+		// feeds: translating there would put a carriage return in front of
+		// every one of them.
+		s.Out, s.Err = translating(s.Out), translating(s.Err)
 	}
-	// Deferred rather than restored at each return: a panic here would
-	// otherwise leave the terminal with echo off, which is a broken terminal
-	// and not merely a crash.
-	defer func() { _ = state.restore() }()
-	// Raw mode took the kernel's newline translation with it, so this loop
-	// does it — see crlf. On the copy of the Shell this loop runs on, which is
-	// what keeps it off the piped loop above, off the Runner's own streams
-	// (those are written with the terminal in its own discipline, where the
-	// kernel is still translating) and off the shell the caller handed in.
-	s.Out, s.Err = translating(s.Out), translating(s.Err)
 	// Registered after that, so the word this writes on the way out is
 	// written through the same translation every other line of this loop is:
 	// raw mode took the kernel's newline handling with it, and a bare line
@@ -2272,12 +2310,32 @@ func (s Shell) markIfAsked() string {
 	return s.Editor.UnfinishedOutputMark
 }
 
+// editorStream is where the editor draws.
+//
+// The session's output at a terminal, where both streams are the same terminal
+// and the question has never been asked. The **error** stream where there is
+// none, which is measured and is not a detail: bash 5.3.20 given `-i` on a
+// pipe writes the prompt, the line it echoes and a `C-r` search to standard
+// error and leaves standard output for what the commands print, so a suite
+// file that keeps the two apart sees the prompt on the stream it looks for it
+// on (#4249). Ours wrote all of it to standard output, which at a terminal is
+// the same file and on a pipe is the wrong one.
+func (s Shell) editorStream(state *terminalState) io.Writer {
+	if state == nil {
+		return s.Err
+	}
+	return s.Out
+}
+
 // newEditor is the line editor this shell types into.
 //
 // A method rather than a literal in the loop so that what a dialect says
-// reaches the editor is something a test can look at: the editor itself is
-// only built where there is a terminal, and a dialect's answer dropped on the
-// way looks exactly like a dialect that did not answer.
+// reaches the editor is something a test can look at: a dialect's answer
+// dropped on the way looks exactly like a dialect that did not answer.
+//
+// state is nil for a session whose input is not a terminal, which is a session
+// that still has an editor — see Shell.Run — and the editor is told, because
+// two of the things it writes are the terminal's and not the line's.
 //
 // The context is the session's and is here for one reason: completion reads
 // directories, those reads go through the gate, and the seam a completer
@@ -2285,7 +2343,7 @@ func (s Shell) markIfAsked() string {
 // shellCompleter.ctx.
 func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 	return &editor{
-		in: s.In, out: s.Out, comp: s.completer(ctx),
+		in: s.In, out: s.editorStream(state), comp: s.completer(ctx),
 		// What to collapse the prompt to once the line is accepted, which is
 		// nothing unless the front end said otherwise.
 		transient: s.Transient,
@@ -2310,6 +2368,12 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		bellsOnAPartialCompletion: s.Editor.BellRingsOnAnAmbiguousCompletionThatInserts,
 		// Whether to ask the terminal to mark a paste, and how a marked one
 		// is drawn. Two of the four ask and ksh93 does not; see paste.go.
+		// And whether there is a terminal to ask at all. Measured 2026-09-22,
+		// bash 5.3.20 given `--norc -i` on a pipe writes no `\e[?2004h` and no
+		// `\e[?2004l` around a line, where the same shell at a terminal writes
+		// both: a paste is something a terminal does, so the offer is the
+		// terminal's to receive.
+		noTerminal:     state == nil,
 		bracketedPaste: s.Editor.BracketedPaste,
 		pastedStyle:    s.Editor.PastedTextStyle,
 		pastedStyleEnd: s.Editor.PastedTextStyleEnd,

@@ -103,6 +103,55 @@ func (r *Runner) globalOperandsRunOnTheShellsOwnCell() func() {
 	}
 }
 
+// globalStoreRunsOnTheShellsOwnCell is the same lift for the one name a
+// **quoted** array literal is about to be stored under, and it exists because
+// that operand never reaches the route above.
+//
+// The machinery next door is keyed on Runner.literalOperands, which is filled
+// from the parser's `c.Assigns` — and a literal whose parentheses the quoting
+// hid is not an assignment the parser saw. `declare -ga "a=( 1 2 )"` is one
+// ordinary word, re-read by interp/quotedarrayliteral.go and stored by
+// assignArrayLiteral, which writes the cell that is *visible*. So the letter
+// was read, recorded and then had nothing to act on: a local of the same name
+// took the value and the shell's own cell was left alone.
+//
+// Measured 2026-09-23 on bash 5.3.20 from a script file, a local standing on
+// the name in each row:
+//
+//	declare -ga "a=( x y )"     bash  inside []   top [x y]
+//	declare -ga  a=( x y )      bash  inside []   top [x y]
+//	declare -g  "s=x"           bash  inside []   top x
+//
+// The middle row is the control and is the one this engine already answered:
+// unquoted, the parser sees the literal and the route above lifts the shadow.
+// The third is the control for the other half — the scalar spelling goes
+// through setGlobalVar, which walks the scopes, and was right all along. Only
+// the quoted literal had no counterpart, and it wrote the local in every
+// shape asked: `-gA` with a table, `+=` appending, `typeset` for the name,
+// and the name arriving from an expansion (#4163).
+//
+// One name rather than a set, because this is called from inside the operand
+// loop where the name being stored is known — the route above runs after the
+// builtin has returned and has to rediscover them.
+func (r *Runner) globalStoreRunsOnTheShellsOwnCell(name string) func() {
+	sc := r.outermostScopeHolding(name)
+	if sc == nil {
+		return func() {}
+	}
+	if !r.ask(r.sem().DeclareGlobalReachesPastALocal,
+		"`declare -g` with an array literal writing past a local of the same name") {
+		// The column that writes what is visible, which is what this route
+		// did for every name before the question reached it.
+		return func() {}
+	}
+	l := liftedShadow{name: name, holder: sc, held: r.captureBinding(name)}
+	r.installBinding(name, bindingFromScope(sc, name))
+	return func() {
+		writeBindingToScope(l.holder, l.name, r.captureBinding(l.name))
+		r.installBinding(l.name, l.held)
+	}
+}
+
 // liftedShadow is one name's local shadow, taken off for the length of a
 // global declaration's operand assignment.
 type liftedShadow struct {

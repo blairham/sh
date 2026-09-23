@@ -1930,7 +1930,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			continue
 		}
 		switch {
-		case hasValue && r.arrayLiteralHiddenByQuoting(name, value, appends):
+		case hasValue && r.arrayLiteralHiddenByQuotingUnder(name, value, appends, f.global):
 			// The operand's value came out as `( … )`, and in one column a
 			// declaration reads that text again as a literal rather than
 			// storing it. Ahead of every store below because it is the same

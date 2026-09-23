@@ -3696,7 +3696,14 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			// and the inherit answer never arrives; declareEmpty does the
 			// standing-empty half itself, which is why it replaces the call
 			// above rather than following it (#3345).
-			r.declareEmpty(name, false, true, true, false, true)
+			// `-n` takes the attribute away rather than giving one, so the
+			// line leaves the name carrying nothing and the letter cannot be
+			// its record. Without this, `export v; export -n v` lost `v`
+			// altogether — see declareFlags.onlyTakesAttributesAway, which
+			// is the same reading for the `+x` spelling one builtin along
+			// (#4163).
+			r.declareEmpty(name, false, true, true,
+				!strings.ContainsRune(opts, 'n'), false, true)
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}
@@ -6983,6 +6990,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			if !r.declarationCarriesAnArrayLiteral(name) {
 				r.declareEmpty(name, fresh, f.export || f.readonly,
 					withoutMatching(f) != (declareFlags{}),
+					f.leavesAnAttribute(),
 					f.inherit || r.LocalInheritsTheOuterValue(), false)
 			}
 		}
@@ -7408,7 +7416,9 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			// declaration: measured 2026-09-17, `readonly R` inside a
 			// function with the option on takes the enclosing value the same
 			// way `local R` does.
-			r.declareEmpty(name, fresh, true, true, r.LocalInheritsTheOuterValue(), true)
+			// `readonly` has no removal form, so the word always leaves the
+			// attribute it names: the two answers are the same here.
+			r.declareEmpty(name, fresh, true, true, true, r.LocalInheritsTheOuterValue(), true)
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}

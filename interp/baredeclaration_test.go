@@ -175,3 +175,97 @@ echo "end=$?"`
 		t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
 	}
 }
+
+// A letter that is taken **away** leaves no record behind it, so the name
+// needs the bare one — and a letter that says only *where* the binding goes
+// never was a record.
+//
+// The condition was "did this line name an attribute", which is the right
+// question for whether the line owns a standing empty and the wrong one for
+// whether the letter can stand in for the record. `typeset -i n` needs no
+// bare record because every listing writes `declare -i n` for it. `typeset
+// +i n` writes no letter at all, so without a record of its own the name
+// stopped existing at the moment its last attribute came off — and `-g` never
+// had a letter to write, so a valueless `declare -g v` brought no name into
+// being at any scope.
+//
+// Measured 2026-09-23 on bash 5.3.20 from a script file, every row over a
+// name holding no value, `declare -p` behind each:
+//
+//	declare -x n; declare +x n        declare -- n
+//	declare -i n; declare +i n        declare -- n
+//	export n; export -n n             declare -- n
+//	declare -g n                      declare -- n
+//	f(){ declare -g n; }; f           declare -- n   after the return
+//
+// This shell answered `n: not found` at 1 to all five — what it says about a
+// name it has never heard of (#4163).
+//
+// The rows keep their control beside them: the same letter under a minus
+// still carries its own record, which is what says the record is not simply
+// being made for everything now.
+func TestALetterTakenAwayOrNamingOnlyTheScopeLeavesTheBareRecord(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the export letter taken off",
+			"typeset -x n; typeset +x n; typeset -p n",
+			"declare -- n\n",
+		},
+		{
+			"the export letter still on, the control",
+			"typeset -x n; typeset -p n",
+			"declare -x n\n",
+		},
+		{
+			// The letter under a plus reached without a letter under a
+			// minus in front of it, which is what makes the *sign* the
+			// thing being tested: with the word making the attribute and
+			// the letter taking it off, a reading that recorded the name on
+			// the minus instead would have nothing to fall back on here.
+			"the word gives the attribute and the letter takes it off",
+			"export n; typeset +x n; typeset -p n",
+			"declare -- n\n",
+		},
+		{
+			"the export word taken off",
+			"export n; export -n n; typeset -p n",
+			"declare -- n\n",
+		},
+		{
+			"the export word, the control",
+			"export n; typeset -p n",
+			"declare -x n\n",
+		},
+		{
+			"the global letter at the top level",
+			"typeset -g n; typeset -p n",
+			"declare -- n\n",
+		},
+		{
+			"the global letter inside a function",
+			"f() { typeset -g n; }; f; typeset -p n",
+			"declare -- n\n",
+		},
+		{
+			"the global letter beside a real attribute, the control",
+			"f() { typeset -gx n; }; f; typeset -p n",
+			"declare -x n\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, st := declRun(t, tc.src, func(s *Semantics) {
+				withBareRecord(Yes)(s)
+				// The removal spelling the `export` word has, so the two
+				// rows that use it are reachable at all. Answered rather
+				// than chosen: what the rows are about is the record, and
+				// a dialect without the letter never asks the question.
+				s.ExportTakesTheAttributeOff = Yes
+				s.DeclareValueQuoting = ListingQuoteAlwaysDouble
+			}, Diagnostics{})
+			if out != tc.want || errs != "" || st != 0 {
+				t.Errorf("%s = %q (stderr %q, status %d), want %q",
+					tc.src, out, errs, st, tc.want)
+			}
+		})
+	}
+}

@@ -85,6 +85,51 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	return nil
 }
 
+// coprocEndClosedByName records a coprocess's near end as closed in the array
+// that published it, where the close was written through that array.
+//
+// The number is replaced by **-1** rather than left standing, which is the
+// reference's own bookkeeping and is visible to a script: measured 2026-09-23
+// against bash 5.3.15 in the pinned image and bash 5.3.20 on macOS, which
+// agree —
+//
+//	coproc { read x; echo "[$x]"; }
+//	echo "${COPROC[0]} ${COPROC[1]}"   63 60
+//	exec {COPROC[1]}>&-
+//	echo "${COPROC[0]} ${COPROC[1]}"   63 -1     — and 63 60 here
+//
+// The two controls say it is the coprocess's array and not the `{name}>&-`
+// form: a plain `exec {fd}</dev/null; exec {fd}<&-` leaves `$fd` at its number
+// in both shells, and so does an ordinary array element `{a[1]}`. So the
+// number is a fact the *coprocess* keeps about its own ends, and a script that
+// reads the array after closing one end saw a descriptor this shell no longer
+// had (#4136).
+//
+// Only the published names, only the two ends, and only where the name the
+// close was written through is the one that published them — a duplicate a
+// script parked on a number of its own is not this, and takes the ordinary
+// route above.
+func (r *Runner) coprocEndClosedByName(fdVar string, fd int) {
+	c := r.coproc
+	if c == nil || c.owner != r || c.name == "" || fdVar == "" {
+		return
+	}
+	base, sub, ok := r.subscriptOperand(fdVar)
+	if !ok || base != c.name {
+		return
+	}
+	idx, err := r.subscriptValue(sub)
+	if err != nil {
+		return
+	}
+	switch {
+	case idx == 0 && fd == c.read:
+		r.setArrayElem(c.name, 0, "0", "-1")
+	case idx == 1 && fd == c.write:
+		r.setArrayElem(c.name, 1, "1", "-1")
+	}
+}
+
 // coprocNamesAreFrozen reports whether either name a coprocess would publish
 // under is readonly, complaining once for the one that is.
 //

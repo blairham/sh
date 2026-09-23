@@ -501,6 +501,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 						}
 					}
 					r.redirWrote(n)
+					r.coprocEndClosedByName(fdVar, n)
 					continue
 				}
 				// `exec {name}>&2` picks a fresh descriptor aimed where the

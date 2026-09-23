@@ -4,6 +4,7 @@
 package bash
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/blairham/sh/interp"
@@ -104,21 +105,56 @@ func compatSwitch(level int) shoptSwitch {
 	}
 }
 
-// registerCompatibilityLevel puts the out-of-range complaint on the
-// parameter's assignment rather than on the first row that reads it.
+// registerCompatibilityLevel puts the out-of-range complaint on the two moments
+// a level arrives: the parameter's **assignment**, and the environment the shell
+// was **launched** with.
 //
-// Which is where bash puts it, and the difference is visible: a script that
-// sets a bad level and never reaches a compatibility row is complained about
-// all the same, at its own line, and a script that sets one and then runs a
-// hundred rows is complained about once.
+// Which is where bash puts them, and the difference from a lazy reading is
+// visible: a script that sets a bad level and never reaches a compatibility row
+// is complained about all the same, at its own line, and a script that sets one
+// and then runs a hundred rows is complained about once.
+//
+// The environment is the route a user actually reaches for — `BASH_COMPAT=44
+// make`, a level exported from a parent shell — and it is the one a store cannot
+// hear, because a name that came in that way was never put in the variable table
+// (#4267). It is the same sentence and a **different location**: measured on bash
+// 5.3.20, an assignment's complaint carries the script's line and the
+// environment's carries no location at all.
+//
+//	BASH_COMPAT=abc                <shell>: line 1: BASH_COMPAT: abc: …
+//	BASH_COMPAT=abc <shell> -c :    <shell>: BASH_COMPAT: abc: …
+//
+// The second is the shell's own name on every route, a script file included,
+// where an ordinary diagnostic names the script: nothing of the script has been
+// read when this is written. Once each, and the environment's comes before the
+// inherited option list's — see interp.Runner.ApplyInheritedParameters.
 func registerCompatibilityLevel(r *interp.Runner) {
 	r.SetAssignmentAction(compatVariable, func(rr *interp.Runner, value string) {
-		if value == "" {
-			return
+		if complaint, ok := compatComplaint(value); ok {
+			rr.Diagnosef("%s", complaint)
 		}
-		if n, ok := interp.CompatibilityLevel(value); ok && n <= compatCeiling {
-			return
-		}
-		rr.Diagnosef("%s: %s: compatibility value out of range\n", compatVariable, value)
 	})
+	r.SetInheritedParameterAction(compatVariable, func(rr *interp.Runner, value string) {
+		if complaint, ok := compatComplaint(value); ok {
+			rr.DiagnoseAsTheShell("%s", complaint)
+		}
+	})
+}
+
+// compatComplaint is the sentence a value out of range draws, and whether it
+// draws one at all.
+//
+// One function for both moments rather than the test written twice: the two
+// differ in where the complaint is located and in nothing else, and a second
+// copy of the range is how one door would go on accepting a value the other had
+// stopped taking. An empty value is silent and takes the level back to this
+// shell's own.
+func compatComplaint(value string) (string, bool) {
+	if value == "" {
+		return "", false
+	}
+	if n, ok := interp.CompatibilityLevel(value); ok && n <= compatCeiling {
+		return "", false
+	}
+	return fmt.Sprintf("%s: %s: compatibility value out of range\n", compatVariable, value), true
 }

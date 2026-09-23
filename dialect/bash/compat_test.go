@@ -4,8 +4,14 @@
 package bash_test
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/driver"
 )
 
 // A compatibility level outside the range this shell accepts is complained
@@ -180,4 +186,134 @@ func TestThereIsNoLetterPastTheLastOneBashHas(t *testing.T) {
 // the assignment as part of the word.
 func quoteForTest(value string) string {
 	return "'" + value + "'"
+}
+
+// A bad level the shell was **launched** with is complained about too, and the
+// complaint carries no location at all.
+//
+// The route a user actually reaches for — `BASH_COMPAT=44 make`, a level
+// exported from a parent shell — and the one a store cannot hear, since a name
+// that arrives in the environment is never written (#4267).
+//
+// Measured 2026-09-22 on `/opt/homebrew/bin/bash` 5.3.20 under `LC_ALL=C`: the
+// shell's own name and nothing after it, on `-c`, a script file and standard
+// input alike, where the same sentence from an assignment carries `line 1`. On a
+// script file that is the *shell's* name and not the script's, which is the row
+// that shows nothing of the script has been read when this is written.
+func TestABadCompatibilityLevelInTheEnvironmentIsComplainedAbout(t *testing.T) {
+	for _, c := range []struct {
+		name, value string
+		set         bool
+		want        string
+	}{
+		{name: "not a number", value: "abc", set: true, want: "bash: BASH_COMPAT: abc: compatibility value out of range"},
+		{name: "past the ceiling", value: "99", set: true, want: "bash: BASH_COMPAT: 99: compatibility value out of range"},
+		{name: "below the floor", value: "0", set: true, want: "bash: BASH_COMPAT: 0: compatibility value out of range"},
+		// In range, empty, and absent are each silent.
+		{name: "a level", value: "44", set: true},
+		{name: "a dotted level", value: "5.1", set: true},
+		{name: "empty", value: "", set: true},
+		{name: "absent"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if c.set {
+				t.Setenv("BASH_COMPAT", c.value)
+			} else {
+				// t.Setenv first, so the suite puts whatever was there
+				// back; then away, because absent is not empty.
+				t.Setenv("BASH_COMPAT", "")
+				if err := os.Unsetenv("BASH_COMPAT"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, route := range []struct {
+				name string
+				argv []string
+			}{
+				{"-c", []string{"bash", "-c", `echo ran`}},
+				{"a script file", []string{"bash", writeBashScript(t, "echo ran\n")}},
+			} {
+				t.Run(route.name, func(t *testing.T) {
+					var out, errs bytes.Buffer
+					if code := driver.MainArgs(bashShell(&out, &errs), route.argv); code != 0 {
+						t.Fatalf("status %d, out %q, stderr %q", code, out.String(), errs.String())
+					}
+					if strings.TrimSpace(out.String()) != "ran" {
+						t.Errorf("stdout = %q, want the script to have run", out.String())
+					}
+					lines := nonEmptyLines(errs.String())
+					if c.want == "" {
+						if len(lines) != 0 {
+							t.Errorf("stderr = %q, want nothing said", errs.String())
+						}
+						return
+					}
+					if len(lines) != 1 || lines[0] != c.want {
+						t.Errorf("stderr = %q, want exactly the one line %q", errs.String(), c.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+// The environment's complaint comes before the inherited option list's, and the
+// two carry different locations — which is why they are two doors rather than
+// one with a zero in it.
+//
+// Measured on bash 5.3.20: `SHELLOPTS=nosuchopt BASH_COMPAT=abc bash -c 'echo
+// hi'` writes the parameter's sentence with no location, then the list's at
+// `line 0`, then `hi`.
+func TestTheEnvironmentsLevelIsComplainedAboutBeforeItsOptionList(t *testing.T) {
+	t.Setenv("BASH_COMPAT", "abc")
+	t.Setenv("SHELLOPTS", "nosuchopt")
+	var out, errs bytes.Buffer
+	driver.MainArgs(bashShell(&out, &errs), []string{"bash", "-c", `echo hi`})
+	want := []string{
+		"bash: BASH_COMPAT: abc: compatibility value out of range",
+		"bash: line 0: nosuchopt: invalid option name",
+	}
+	if got := nonEmptyLines(errs.String()); !slices.Equal(got, want) {
+		t.Errorf("stderr lines = %q, want %q", got, want)
+	}
+	if strings.TrimSpace(out.String()) != "hi" {
+		t.Errorf("stdout = %q, want hi", out.String())
+	}
+}
+
+// Inherited and then assigned is two complaints and not one: the startup value
+// is its own event, and a script that writes the name is heard separately.
+func TestAnInheritedLevelAndAnAssignedOneAreEachComplainedAbout(t *testing.T) {
+	t.Setenv("BASH_COMPAT", "abc")
+	var out, errs bytes.Buffer
+	driver.MainArgs(bashShell(&out, &errs), []string{"bash", "-c", "BASH_COMPAT=99\necho done"})
+	want := []string{
+		"bash: BASH_COMPAT: abc: compatibility value out of range",
+		"bash: line 1: BASH_COMPAT: 99: compatibility value out of range",
+	}
+	if got := nonEmptyLines(errs.String()); !slices.Equal(got, want) {
+		t.Errorf("stderr lines = %q, want %q", got, want)
+	}
+}
+
+// writeBashScript puts a snippet in a file of its own, for the routes that are
+// about how the input was read.
+func writeBashScript(t *testing.T, src string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "case.sh")
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// nonEmptyLines is what a diagnostic stream said, one whole line per entry.
+func nonEmptyLines(s string) []string {
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		if strings.TrimSpace(line) != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }

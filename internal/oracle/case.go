@@ -24632,6 +24632,12 @@ echo "st=$?"`,
 		Why:     "the one place a *random* parameter can be graded: an assignment seeds the generator, so the numbers are a function of the seed and the same in every run. The first two arms are the same seed twice, which is what makes the row a fact rather than a sample -- and every column that has the parameter answers a different pair, so a generator chosen rather than measured is guaranteed to be wrong for all of them. bash 3.2 differs from 5.3 here, which is the row saying the sequence is a fact about a *release* and not only about a shell. The third arm is seed 4, the first seed whose state has a bit above 16 and therefore the one where bash's fold and zsh's mask separate by exactly one. Only dash reads the name as an ordinary variable and answers `42 42`; BusyBox ash has a seeded `$RANDOM` of its own, which this row records and no dialect here claims yet. We drew four unrelated numbers before #2827 and two reproducible wrong ones after it (#4240)",
 	},
 	{
+		ID: "variable/a-compatibility-level-out-of-range-in-the-environment", Category: "variables",
+		Script: true, Env: []string{"BASH_COMPAT=abc"},
+		Snippet: "echo \"[${BASH_COMPAT-UNSET}]\"\nBASH_COMPAT=zzz\necho tail\n",
+		Why:     "the startup half of the row above, and the one a person actually reaches for -- `BASH_COMPAT=44 make`, a level exported from a parent shell. The environment is not an assignment, so the complaint #4262 put on the store could not be heard here at all and we said nothing. The two arms carry the same sentence at **two different locations**, which is what makes this a case rather than a duplicate: the inherited value is located by the shell's own name with no line, and the assignment on the next arm is located by the *script* at its line, in one run. The columns without the parameter take both as ordinary assignments and the value shows through unchanged (#4267)",
+	},
+	{
 		ID: "variable/a-module-parameter-a-script-may-not-own", Category: "variables",
 		Script:  true,
 		Snippet: "jobstates=(a b c)\necho \"st=$?\"\necho tail\n",

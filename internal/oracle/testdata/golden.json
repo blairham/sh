@@ -217155,6 +217155,57 @@
         "TimedOut": false
       }
     },
+    "variable/a-compatibility-level-out-of-range-in-the-environment": {
+      "ash": {
+        "Stdout": "[abc]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[abc]~tail",
+        "Stderr": "\u003cshell\u003e: BASH_COMPAT: abc: compatibility value out of range~\u003cscript\u003e: line 2: BASH_COMPAT: zzz: compatibility value out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[abc]~tail",
+        "Stderr": "\u003cshell\u003e: BASH_COMPAT: abc: compatibility value out of range~\u003cscript\u003e: line 2: BASH_COMPAT: zzz: compatibility value out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[abc]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[abc]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[abc]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[abc]~tail",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "variable/a-module-parameter-a-script-may-not-own": {
       "ash": {
         "Stdout": "",

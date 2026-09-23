@@ -18820,6 +18820,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `posassign/a-digit-with-a-letter-is-not-a-name` | `st=127` **2>** `<shell>: 1: 1a=z: not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: line 1: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: command not found` | `st=127` **2>** `<shell>: 1a=z: not found` | `st=127` **2>** `<shell>:1: command not found: 1a=z` | `st=127` **2>** `<shell>: 1a=z: not found` |
 | `variable/a-compatibility-level-out-of-range` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` **2>** `<script>: line 1: BASH_COMPAT: abc: compatibility value out of range` | `st=0 [abc]~st=0 [5.1]~tail` **2>** `<script>: line 1: BASH_COMPAT: abc: compatibility value out of range` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` | `st=0 [abc]~st=0 [5.1]~tail` |
 | `variable/a-seeded-random-draws-a-sequence-of-its-own` | `42 42~42 42~4~tail` | `17772 26794~17772 26794~1693~tail` | `17772 26794~17772 26794~1693~tail` | `19081 17033~19081 17033~1817~tail` | `22700 13681~22700 13681~8403~tail` | `17766 11151~17766 11151~1692~tail` | `20351 9206~20351 9206~29829~tail` |
+| `variable/a-compatibility-level-out-of-range-in-the-environment` | `[abc]~tail` | `[abc]~tail` **2>** `<shell>: BASH_COMPAT: abc: compatibility value out of range~<script>: line 2: BASH_COMPAT: zzz: compatibility value out of range` | `[abc]~tail` **2>** `<shell>: BASH_COMPAT: abc: compatibility value out of range~<script>: line 2: BASH_COMPAT: zzz: compatibility value out of range` | `[abc]~tail` | `[abc]~tail` | `[abc]~tail` | `[abc]~tail` |
 | `variable/a-module-parameter-a-script-may-not-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~tail` | `st=0~tail` | `st=0~tail` | `st=0~tail` | **2>** `<script>:1: read-only variable: jobstates` *(status 1)* | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 | `variable/the-module-parameter-a-script-may-own` | **2>** `<script>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | `st=0 [a b c]` | **2>** `<script>: line 1: syntax error: unexpected "("` *(status 2)* |
 
@@ -19040,6 +19041,12 @@ grades it and nothing drift-checks it either, for the same reason.
   echo "$RANDOM $RANDOM"
   RANDOM=4
   echo "$RANDOM"
+  echo tail
+  ```
+- `variable/a-compatibility-level-out-of-range-in-the-environment` — the startup half of the row above, and the one a person actually reaches for -- `BASH_COMPAT=44 make`, a level exported from a parent shell. The environment is not an assignment, so the complaint #4262 put on the store could not be heard here at all and we said nothing. The two arms carry the same sentence at **two different locations**, which is what makes this a case rather than a duplicate: the inherited value is located by the shell's own name with no line, and the assignment on the next arm is located by the *script* at its line, in one run. The columns without the parameter take both as ordinary assignments and the value shows through unchanged (#4267)
+  ```sh
+  echo "[${BASH_COMPAT-UNSET}]"
+  BASH_COMPAT=zzz
   echo tail
   ```
 - `variable/a-module-parameter-a-script-may-not-own` — a name one shell's module owns, written by a script that has not loaded the module. zsh refuses it as `read-only variable: jobstates` at status 1 and ends the script, whether or not `zsh/parameter` was ever loaded -- the freeze is a property of the name and not of the module being there. Every shell without the module takes the assignment and makes an ordinary array, which is also what this engine did: a script probing for the module by writing the name got a value where it should have been stopped (#1604). `dirstack` is the one name in the same set that zsh does let a script assign, which is the row below

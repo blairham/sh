@@ -892,6 +892,10 @@ type Runner struct {
 	// stored the way any other name's is; this is the message that it
 	// happened. See SetAssignmentAction.
 	assignmentActions map[string]func(*Runner, string)
+	// inheritedParameterActions is the same seam for the one route a store
+	// cannot reach: the value this shell was *launched* holding. See
+	// SetInheritedParameterAction.
+	inheritedParameterActions map[string]func(*Runner, string)
 
 	// unsetActions is the other half of that message, for a name whose state
 	// outside the variable table outlives the name itself. See

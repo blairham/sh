@@ -142,6 +142,13 @@ func (sh Shell) session(argv []string, in source) int {
 	if code, ok := sh.applyOptions(r, opts); !ok {
 		return code
 	}
+	// The environment's own parameters first, which is measured: with both an
+	// unknown name in the inherited option list and an out-of-range
+	// `BASH_COMPAT`, bash 5.3.20 writes the **parameter's** complaint before
+	// the list's. Both are after the argument vector, since an option the
+	// shell does not have has already ended it. See
+	// interp.Runner.ApplyInheritedParameters.
+	r.ApplyInheritedParameters()
 	// And the environment's own option list, in the same place and for the
 	// same measured reasons as on the script routes: after the argument
 	// vector, before the files. A prompt reads it too — an inherited `xtrace`

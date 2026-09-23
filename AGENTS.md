@@ -1399,6 +1399,21 @@ Run the file with both streams on one pipe and every line of output is preceded
 by the location that produced it. Nothing of the file is read: the markers are
 positions, and the output lines are ours.
 
+**A body that reports state must not move state.** A `DEBUG` trap is commands,
+and commands set things — so a marker that reports `PIPESTATUS`, `BASH_REMATCH`
+or `$?` can overwrite the very thing the next line reads. That produced a whole
+group of traced "differences" that the untraced run does not have (#4321 fixed
+the one underneath it, where a trap body left its own pipeline's statuses where
+the command's were).
+
+The check is cheap and belongs before any conclusion drawn from a trace: **strip
+the markers and the traced run must reconstruct the untraced one byte for byte.**
+Not "the same line count" — a marker splices into a line that has no newline yet,
+so the counts differ for a benign reason and a count check reports a lie either
+way. Removing every `@…` line from the raw traced output and comparing with a
+plain run is exact, and it catches both a perturbing body and a marker that
+landed somewhere it should not have.
+
 **Trace both shells and diff the traced streams, never one side alone.** A
 differing line is found by a *multiset* comparison, so the lines it names are
 not always the lines that differ — a line both runs print can be reported
@@ -1829,6 +1844,15 @@ the half that cannot is still reported — with a per-shell tally, because
 four hundred lines of drift is not a report anyone reads and the shape is
 the part worth seeing: concentrated in one column is a shell that moved,
 spread evenly is a record that did.
+
+**When our answer disagrees with bash 5.3, check bash 3.2 before assuming we
+invented it.** Twice in one session a reading of ours that looked like a plain
+defect turned out to be what 3.2 does, with 5.3 having changed: a bracket
+written across a separator being a pattern, and a trap body leaving its own
+pipeline statuses behind. Both times the corpus row is what caught it, because a
+`Why` naming only 5.3 is a column short — and both times the fact is worth
+keeping, since "a reading bash changed" and "a reading we got wrong" are
+different entries in the record even when the fix is identical.
 
 ## Never work on `main`
 

@@ -60163,6 +60163,57 @@
         "TimedOut": false
       }
     },
+    "core/a-trap-body-does-not-disturb-the-pipeline-record": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: trap: line 1: DEBUG: invalid signal specification~\u003cscript\u003e: line 4: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[3 0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[3 0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1 1 0]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "trap: DEBUG: bad trap~\u003cscript\u003e: 3: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "core/a-try-always-block-ends-a-condition": {
       "ash": {
         "Stdout": "",

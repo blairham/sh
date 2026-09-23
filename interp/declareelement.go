@@ -46,9 +46,22 @@ package interp
 // arrives with it set unless it was written, so the columns that refuse the
 // operator never reach the join.
 func (r *Runner) declareElement(base string, leading []string, sub, value string, appends bool, f declareFlags, shadows bool) {
-	// In front of everything, because what the subscript *is* decides which
-	// element the refusals below are about: a text that a second round turns
-	// into `x y` names that key everywhere after this line, the store's
+	// **A name that is already a reference**, which is settled in front of
+	// everything else here because it decides what the rest of the operand is
+	// even about: one column takes the attribute off and writes the element
+	// on the name itself, the other leaves the reference standing and writes
+	// through it. See namerefUnderASubscriptedOperand.
+	//
+	// Ahead of the subscript's own text for the same reason bash puts its
+	// warning ahead of everything the operand could report: the question is
+	// about the name, and the element does not exist yet.
+	r.namerefUnderASubscriptedOperand(base)
+	if r.unspecified || r.ctl == controlExit {
+		return
+	}
+	// In front of everything else, because what the subscript *is* decides
+	// which element the refusals below are about: a text that a second round
+	// turns into `x y` names that key everywhere after this line, the store's
 	// complaints included. See declarationSubscriptText.
 	sub = r.declarationSubscriptText(base, sub)
 	if r.unspecified {
@@ -440,4 +453,62 @@ func (r *Runner) readonlyElementPolicy() ReadonlyElementPolicy {
 		r.unspecified = true
 	}
 	return p
+}
+
+// namerefUnderASubscriptedOperand settles what a declaration's **subscripted**
+// operand does to a name that is already a reference.
+//
+// Nothing comes back, for the reason declareElement itself gives: where the
+// attribute is taken off there is an ordinary name left and the operand
+// carries on over it, and where the reference stands and refuses, the refusal
+// has already ended the script. The caller reads r.ctl, which is the same
+// thing every other refusal in this file leaves behind.
+//
+// `typeset -n xref; typeset -a xref[1]=one` is two answers, and the aimed
+// shape is where they really part rather than only in the words. Measured
+// 2026-09-23 from script files under `env -i` with a scratch HOME, against
+// bash 5.3.20 and 5.3.15 — which agree — and ksh93u+ 2012-08-01:
+//
+//	array=(p q); typeset -n xref=array; typeset -a xref[1]=one
+//	  bash    warning: xref: removing nameref attribute, and `xref` *is*
+//	          the array afterwards while `array` still holds (p q)
+//	  ksh93   `xref` is still the reference and `array` is (p one)
+//
+// So one column takes the attribute off and lands the element on the name,
+// and the other writes through — which is
+// Semantics.NamerefDroppedByASubscriptedOperand, asked here because here is
+// where a subscripted operand meets a reference and nowhere else does.
+//
+// The **unaimed** shape is where this shell was wrong in both columns at
+// once: `typeset -n xref; typeset -a xref[1]=one` aimed the reference at
+// `one`, where bash takes the attribute off and writes the element and ksh93
+// answers `xref: no reference name` and ends the script at 1. Nobody aims a
+// reference with a subscript, and the refusal below is the ordinary
+// unaimed-use one — the cost is the script, which is what a *write* through
+// an unaimed reference costs everywhere else here. See
+// Diagnostics.NamerefUnaimedUse.
+//
+// The plain statement `xref[1]=one` is a different road and keeps the
+// reference in both columns; the literal `xref=([1]=one)` is a third, and
+// there the drop is the shell's own with only the sentence per dialect — see
+// Diagnostics.NamerefArrayLiteralDropsTheAttribute.
+func (r *Runner) namerefUnderASubscriptedOperand(base string) {
+	if !r.isNameref(base) {
+		return
+	}
+	if r.ask(r.sem().NamerefDroppedByASubscriptedOperand,
+		"a declaration's subscripted operand taking a name reference's attribute off") {
+		if w := r.diag().NamerefArrayLiteralDropsTheAttribute; w != "" {
+			r.DiagnoseAsTheShellf("%s\n", Wording(w, "warning: %[1]s: removing nameref attribute", base))
+		}
+		r.unsetNameref(base)
+		return
+	}
+	if r.unspecified {
+		return
+	}
+	if aimless, unaimed := r.unaimedReferenceBase(base); unaimed {
+		r.refuseUnaimedReference(aimless, "")
+		r.fatalQuiet()
+	}
 }

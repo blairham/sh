@@ -10108,6 +10108,53 @@ type Semantics struct {
 	// reading it cannot tell an empty array from an empty string (#1380).
 	ExportedCompoundReachesAChildAsItsFirstValue Answer
 
+	// NamerefDroppedByASubscriptedOperand takes a name reference's attribute
+	// **off** where a declaration's operand carries a subscript —
+	// `typeset -a xref[1]=one` over a name that is already a reference — and
+	// writes the element on that name instead of through the reference.
+	//
+	// Measured 2026-09-23 from script files under `env -i` with a scratch
+	// HOME, against bash 5.3.20 and bash 5.3.15, which agree, and ksh93u+
+	// 2012-08-01:
+	//
+	//	typeset -n xref
+	//	typeset -a xref[1]=one
+	//	  bash     warning: xref: removing nameref attribute, then
+	//	           `declare -a xref=([1]="one")`, and the script runs on at 0
+	//	  ksh93    `xref: no reference name`, and the script ends at 1
+	//
+	//	array=(p q); typeset -n xref=array
+	//	typeset -a xref[1]=one
+	//	  bash     the same warning, and `xref` *is* the array afterwards
+	//	           while `array` still holds `(p q)`
+	//	  ksh93    `xref` is still the reference and `array` is `(p one)` —
+	//	           the element went through it
+	//
+	// The **aimed** row is where the two really part, and it is why this is a
+	// field rather than a derivation: one column takes the attribute off and
+	// lands the element on the name, the other leaves the reference standing
+	// and writes through it. There is nothing to derive one from the other.
+	// The unaimed row parts only in the words — and neither column aims the
+	// reference at the value, which is what this shell did for both.
+	//
+	// Neither the letter nor the builtin changes the answer: a plain
+	// `typeset xref[1]=one`, a `typeset -A xref[k]=one` and a `local` inside
+	// a function each give the same answer as the rows above in each column.
+	//
+	// **Not the literal spelling, which is one row down and is already the
+	// shell's own.** `typeset -n xref; typeset -a xref=([1]=one)` drops the
+	// attribute in *both* columns — silently in ksh93, with the warning in
+	// bash — so there the drop is core and only the sentence is the
+	// dialect's, which is Diagnostics.NamerefArrayLiteralDropsTheAttribute.
+	// That was measured before this field was reached for rather than after:
+	// a subscripted *operand* is the one shape the two disagree about, so it
+	// is the shape that earns an axis.
+	//
+	// Asked only where a declaration's operand carries a subscript **and**
+	// the name is already a reference, which is a state only the two columns
+	// with an `n` letter can reach at all (#4178).
+	NamerefDroppedByASubscriptedOperand Answer
+
 	// SubscriptedOperandCarriesTheAttributes gives a declaration's letters to
 	// the *name* when the operand is subscripted — `typeset -x a[1]=v` —
 	// rather than to the element alone.

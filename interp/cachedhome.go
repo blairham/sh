@@ -68,6 +68,28 @@ func (r *Runner) noteChildEnvironment(env []string) {
 	}
 }
 
+// refreshCachedHomeForASubstitution moves the copy the way a command
+// substitution moves it, which is by building the environment a child would be
+// handed and reading it back.
+//
+// Only where the dialect keeps a copy at all: a shell on the standard's reading
+// has nothing to move, and building an environment it will not look at for every
+// `$( … )` in a script is a cost with no answer attached.
+//
+// The environment is built and discarded, which is exactly what is being
+// modeled: the reference forks and hands the child a block, and the one part of
+// that a caller of this package can observe is what a later `~` comes to. See
+// the note at the head of this file for the four constructs that move it.
+func (r *Runner) refreshCachedHomeForASubstitution() {
+	if r.sem().TildeReadsACachedHome != Yes {
+		return
+	}
+	// environ is where the refresh hangs — see its own note — so building one
+	// is the whole of this, and the block is discarded because the reference's
+	// child is the only thing that would have read it.
+	_ = r.environ()
+}
+
 // afterEquals reads an environment entry's value if it is the named one.
 func afterEquals(entry, name string) (string, bool) {
 	if len(entry) <= len(name) || entry[len(name)] != '=' || entry[:len(name)] != name {

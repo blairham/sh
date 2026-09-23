@@ -113,6 +113,24 @@ func (s Shell) believable(v string) error {
 // That was accepted (#2263) because it is the only shape where `make oracle`
 // on a developer's own machine can produce the column at all, and the
 // alternative was a dialect nothing re-checks.
+//
+// # A bind mount is only as wide as the runtime's own share list
+//
+// Written down here because it costs a run and says nothing while it does.
+// Docker on macOS is a Linux VM — colima, Docker Desktop — and it can only
+// bind-mount host paths the VM shares. colima shares the user's home by
+// default and **not `/tmp`**, so `-v /tmp/x:/x` does not fail: the daemon
+// creates an empty directory at that path and the container sees nothing. A
+// script mounted that way is `can't find '__main__'`, a cache mounted that way
+// is silently cold, and neither reads as a mount that did not happen.
+//
+// This package is already clear of it: it bind-mounts nothing, and copies the
+// cross-compiled runner in with `docker cp` instead — see open below. The note
+// is here for a **person** driving a container by hand beside these columns,
+// which is how the suite's own rows get narrowed: hand anything either from
+// under the repository, which is inside the shared home, or in the command
+// itself. Measured 2026-09-23 while working #4179's row: two runs lost to a
+// `/tmp` mount that was present, was empty, and said so nowhere.
 type ContainerReach struct {
 	// Image is the repository and Digest is the manifest the tag pointed at
 	// when the column was recorded. Both are written down: the digest is what

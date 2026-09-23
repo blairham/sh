@@ -46,6 +46,16 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// `false; x=$(false)` leaves the same 1 that was already there — so the
 	// fact that one ran is recorded rather than inferred.
 	r.substRan = true
+	// The environment a child would be handed is built here, for its one
+	// visible effect: it moves the cached home in the column that keeps one.
+	// cachedhome.go's model already named this case — "a command
+	// substitution, whose body may be nothing but a builtin, does" — and
+	// nothing built one, so the copy stood still where the reference moved it.
+	// Measured 2026-09-23 on bash 5.3.20 with `HOME=/orig` in the environment:
+	// `HOME=/h1; printf %s ~/a` is `/orig/a`, and the same tilde after a
+	// `v=$(true)` is `/h1/b`. A subshell is deliberately not on this list, so
+	// the refresh is made here rather than wherever a clone is taken.
+	r.refreshCachedHomeForASubstitution()
 	// Pathname expansion is the same containment asked of globbing. A word
 	// that substitutes as *text* expands with it suspended — an assignment's
 	// value, a `[[ ]]` operand, a redirection target — and that is a rule

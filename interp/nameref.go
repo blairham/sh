@@ -1350,6 +1350,39 @@ func (r *Runner) selfNamerefAssignment(name, value string, form assignForm) {
 // `typeset` among its special builtins, so both end the script there and
 // neither does in bash. Measured 2026-09-15: `typeset -n r=r; echo st=$?`
 // writes `st=1` in bash 5.3.15 and nothing at all in ksh93u+.
+// namerefNameCannotBeSubscripted refuses `declare -n name[sub]`, where the
+// name a reference is being made of carries a subscript.
+//
+// A reference is a *name*, and a subscript is not part of one: the operand is
+// refused before anything is declared, and the next operand on the line is
+// still declared. Measured 2026-09-23 against bash 5.3.15 in the pinned image
+// and bash 5.3.20 on macOS, which agree:
+//
+//	declare -n 'x[3]'                 x[3]: reference variable cannot be an array, 1
+//	declare -n 'x[3]'=y               the same
+//	declare -nr 'y[2]'=v              the same
+//	declare -n 'var[@]'=v             the same, the subscript unevaluated
+//	local -n 'x[3]'=y                 the same, named for `local`
+//	declare -n 'x[3]' good=v          refused, and `good` is still a reference
+//	v=1; declare -n r='v[0]'          **0** — the subscript is in the value
+//	declare +n 'z[1]'                 **0** — the letter under a plus
+//
+// The last two are the controls: it is the name's subscript and the letter's
+// on sign, not a subscript anywhere on the line. Every row answered 0 here
+// before, and `declare -n 'a[0]'` went further and created an indexed array
+// `a` — where the reference the operand asked for was never made (#4178).
+//
+// The subscript is never evaluated, which `var[@]` is what says: this shell
+// read it as arithmetic and reported `@` as a syntax error.
+func (r *Runner) namerefNameCannotBeSubscripted(builtin, name string) bool {
+	if _, _, subscripted := r.operandSubscripts(r.inBuiltin, name); !subscripted {
+		return false
+	}
+	r.refuseNameref(builtin, Wording(r.diag().NamerefCannotBeAnArray,
+		"%[1]s: reference variable cannot be an array", name))
+	return true
+}
+
 func (r *Runner) refuseNameref(builtin, wording string) int {
 	r.diagf("%s: %s\n", builtin, wording)
 	if r.ask(r.sem().BadNameToDeclarationFatal, "a declaration's bad name ending the script") {

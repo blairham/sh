@@ -6775,6 +6775,18 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		if f.nameref && r.namerefNameCannotBeSubscripted("local", name) {
+			// A reference is a name, and a subscript is not part of one —
+			// `local` refuses it in the same words `declare` does, under its
+			// own word. Ahead of the subscript branch below, which would
+			// otherwise declare the element the operand names. See
+			// Runner.namerefNameCannotBeSubscripted.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
 			// `local -i z=(1 2)` is refused in the same words `typeset -i
 			// z=(1 2)` is, with `local` in the location — see

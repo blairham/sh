@@ -244,6 +244,19 @@ func (r *Runner) operandHidesALiteral(name, value string, f declareFlags, letter
 // dealing with it was refusing it. The caller must read the give-up rather
 // than only the store — see Runner.operandGaveUpTheBuiltin.
 func (r *Runner) arrayLiteralHiddenByQuoting(name, value string, appends bool) bool {
+	return r.arrayLiteralHiddenByQuotingUnder(name, value, appends, false)
+}
+
+// arrayLiteralHiddenByQuotingUnder is that with the `-g` letter's answer, so a
+// declaration carrying it stores into the shell's own cell rather than into
+// whatever local is standing on the name.
+//
+// The lift wraps the store and nothing else: the re-read itself asks what the
+// *name* is — `arrayDeclared`, `assocDeclared` — and that question is about
+// the attribute this line has already recorded, not about which cell the
+// value lands in. See Runner.globalStoreRunsOnTheShellsOwnCell for why the
+// route next door cannot answer this one (#4163).
+func (r *Runner) arrayLiteralHiddenByQuotingUnder(name, value string, appends, global bool) bool {
 	elems, err := r.valueReadAgainAsALiteral(name, value)
 	switch {
 	case errors.Is(err, errTextIsNoLiteral):
@@ -258,7 +271,17 @@ func (r *Runner) arrayLiteralHiddenByQuoting(name, value string, appends bool) b
 		r.refuseTheHiddenLiteral(value, err)
 		return true
 	}
-	if r.assocDeclared(name) {
+	// Which of the two stores is the *name's* question and is asked before
+	// the lift, for the reason the re-read above is: both read the attribute
+	// this line has already recorded, and the local is where it was recorded.
+	// Lifting first made `declare -ga "a=( 1 2 )"` store the four characters
+	// in the shell's own cell — the value reached the right place having
+	// stopped being a literal on the way (#4163).
+	assoc := r.assocDeclared(name)
+	if global {
+		defer r.globalStoreRunsOnTheShellsOwnCell(name)()
+	}
+	if assoc {
 		r.assignAssocLiteral(name, elems, appends)
 		return true
 	}

@@ -111,6 +111,96 @@ w=7 h; echo "[${w[@]}]"`,
 	}
 }
 
+// And the same route with the parentheses **quoted**, which the machinery
+// above cannot see.
+//
+// Runner.literalOperands is filled from the parser's `c.Assigns`, and
+// `typeset -ga "y=(1 2)"` is one ordinary word — so the letter was read,
+// recorded, and had nothing to act on. The value was re-read as a literal and
+// then stored into whatever local was standing on the name, which is the one
+// place a `-g` declaration must never write.
+//
+// The rows are the unquoted ones above with the quotes put on, deliberately,
+// so that a reading which is right there and wrong here cannot pass: the two
+// spellings are one request in the column that re-reads them, and a test that
+// only asked the quoted form could not say that.
+//
+// The last two rows are the shapes the quoted form has and the written one
+// does not — a table, and an append — because the store branches on both and
+// each branch chooses its cell separately (#4163).
+func TestAGlobalQuotedArrayLiteralWritesUnderWhatStandsOnTheName(t *testing.T) {
+	rereads := func(reaches, fresh Answer) func(*Semantics) {
+		return func(s *Semantics) {
+			globalLiteral(reaches, fresh)(s)
+			s.DeclarationRereadsAParenthesizedValue = Yes
+			// The append row below writes `name+=value` on a declaration
+			// line, which is a question about whether the operand is an
+			// append at all — swept out of the way rather than chosen,
+			// because the letter's answer is the same either way and a row
+			// that stopped on an unanswered axis would be measuring that
+			// axis instead. See Semantics.DeclarationTakesAnAppendOperand.
+			s.DeclarationTakesAnAppendOperand = Yes
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		src     string
+		reaches Answer
+		want    string
+	}{
+		{
+			name:    "nothing in the way",
+			src:     `z=(9 9); g() { typeset -ga z="(1 2)"; }; g; echo "[${z[@]}]"`,
+			reaches: Yes, want: "[1 2]\n",
+		},
+		{
+			name:    "nothing in the way, the other answer",
+			src:     `z=(9 9); g() { typeset -ga z="(1 2)"; }; g; echo "[${z[@]}]"`,
+			reaches: No, want: "[1 2]\n",
+		},
+		{
+			name: "a local of the same name",
+			src: `y=(9 9); f() { typeset -a y=(5); typeset -ga y="(1 2)"; echo "1[${y[@]}]"; }
+f; echo "2[${y[@]}]"`,
+			reaches: Yes, want: "1[5]\n2[1 2]\n",
+		},
+		{
+			name: "a local of the same name, the other answer",
+			src: `y=(9 9); f() { typeset -a y=(5); typeset -ga y="(1 2)"; echo "1[${y[@]}]"; }
+f; echo "2[${y[@]}]"`,
+			reaches: No, want: "1[1 2]\n2[9 9]\n",
+		},
+		{
+			name: "the name arrives from an expansion",
+			src: `y=(9 9); f() { typeset -a y=(5); n=y; typeset -ga "$n=(1 2)"; echo "1[${y[@]}]"; }
+f; echo "2[${y[@]}]"`,
+			reaches: Yes, want: "1[5]\n2[1 2]\n",
+		},
+		{
+			name: "a table standing under a local",
+			src: `typeset -A m=([z]=9); f() { typeset -A m=([z]=5); typeset -gA m="([k]=v)"; echo "1[${m[k]-U}]"; }
+f; echo "2[${m[k]-U}]"`,
+			reaches: Yes, want: "1[U]\n2[v]\n",
+		},
+		{
+			name: "an append standing under a local",
+			src: `y=(9); f() { typeset -a y=(5); typeset -ga y+="(1)"; echo "1[${y[@]}]"; }
+f; echo "2[${y[@]}]"`,
+			reaches: Yes, want: "1[5]\n2[9 1]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, fresh := range []Answer{Yes, No} {
+				out, errs, st := declRun(t, tc.src, rereads(tc.reaches, fresh), Diagnostics{})
+				if out != tc.want || st != 0 || errs != "" {
+					t.Errorf("%v (fresh=%v) = %q (stderr %q, status %d), want %q",
+						tc.reaches, fresh, out, errs, st, tc.want)
+				}
+			}
+		})
+	}
+}
+
 // The scalar spelling under the declaration's **own** prefix, which is the
 // third stack and the innermost: a `-g` write goes under the entry this
 // command's prefix made, so the prefix's value goes away as it does after any

@@ -21248,16 +21248,17 @@ Measured 2026-09-23 under `LC_ALL=zh_TW.Big5`, with that character
 written into the script as the two bytes it is (α below stands for
 them):
 
-    x=α                       bash 5.3.20, bash 3.2.57, ksh93u+  → the character
-                              zsh 5.9.2                          → command not found: x=
-                              dash 0.5.12, ash 1.37.0            → x=: not found
-    x="α"                     the same three                     → the character
-                              zsh                                → unmatched "
-                              dash, ash                          → unterminated quoted string
-    case α in α)             the same three                     → matches
-                              zsh, dash, ash                     → a parse error
-    a here-document body      bash, ksh93                        → the character, then $v's value
-    holding α$v               zsh                                → the character's lead byte, then `$v` as text
+    x=α              bash 5.3.20, 3.2.57, ksh93u+  the character
+                       zsh 5.9.2                     command not found: x=
+                       dash 0.5.12, ash 1.37.0       x=: not found
+    x="α"            the same three                the character
+                       zsh                           unmatched "
+                       dash, ash                     unterminated quoted string
+    case α in α)    the same three                matches
+                       zsh, dash, ash                a parse error
+    a body holding     bash, ksh93                   the character, then $v
+    α$v                zsh                           the lead byte, then $v
+                                                     as text
 
 The three that refuse do so because the trail byte escaped what came
 after it: the newline in the first shape, the closing quote in the

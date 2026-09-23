@@ -6515,19 +6515,16 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 			continue
 		}
 		if lead != 0 {
-			held, ok := lead, false
+			held := lead
 			lead = 0
-			if width != nil && width(held, c) > 1 {
+			if width(held, c) > 1 {
 				// The second byte of a character, so it is data whatever it
 				// spells — a backslash, the delimiter, a separator.
-				ok = true
-			}
-			if ok {
 				write(c)
 				continue
 			}
-			// Not a character after all: the byte held is a byte, and this one
-			// is read as it stands.
+			// Not a character after all: what was held is a byte, and this
+			// byte is read as it stands.
 		}
 		if pending {
 			pending = false

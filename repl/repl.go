@@ -519,6 +519,20 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// because both of them number their prompts from where it left off:
 	// measured, bash given `-i` on a pipe with three lines in HISTFILE draws
 	// `!4 #1` at its first prompt, editor or no editor.
+	// **Read again when the session ends**, and that is the point of asking
+	// for it twice rather than carrying this one to the write: where a
+	// session's lines go is decided by HISTFILE as it stands *then*, which a
+	// session can have changed at the prompt. Measured 2026-09-23 on bash
+	// 5.3.20 with two lines already in the file:
+	//
+	//	HISTFILE=        on exit the file is untouched — nothing is written
+	//	HISTFILE=other   `other` gets this session's lines and the first
+	//	                 file is left as it was
+	//
+	// This shell read the variable once, at startup, so a cleared HISTFILE
+	// rewrote the file it used to name — which is a session asking not to be
+	// recorded and being recorded anyway, and it is what the suite's inner
+	// shells do on every one of their lines (#4177).
 	hist := s.historyFile()
 	earlier := s.recalled(ctx, hist)
 	// And into the dialect's list, once, before either loop: `history`, `fc`
@@ -672,7 +686,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// thing the file's contents depend on is what went into this slice.
 	var added, addedAt []string
 	defer func() {
-		if err := hist.save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
+		if err := s.historyFile().save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
@@ -1359,7 +1373,7 @@ func (s Shell) runPlain(
 	recall := &lineList{lines: earlier}
 	var added, addedAt []string
 	defer func() {
-		if err := hist.save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
+		if err := s.historyFile().save(ctx, earlier, added, addedAt, s.rewritesHistory()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()

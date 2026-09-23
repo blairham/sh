@@ -36,6 +36,18 @@ type editor struct {
 	line []rune
 	pos  int
 
+	// operateNext is the history entry the *next* read starts on, which is
+	// what `C-o` leaves behind: it accepts the line and says that the one
+	// after it is to be offered for editing. See operateAndGetNext.
+	//
+	// **One more than the index**, so that the zero value means "no key has
+	// asked" — which is every line but the one after a `C-o`. The polarity is
+	// deliberate and is #4249's lesson: an editor built as a bare literal, as
+	// the tests in this package build dozens of them, gets the zero value, and
+	// a field whose zero meant "start on the first entry" would put a history
+	// entry on every fresh prompt in every one of them.
+	operateNext int
+
 	// history is every line accepted so far, oldest first. browsing is where
 	// Up and Down have walked to: len(history) means "not browsing, on the
 	// line being typed".
@@ -339,6 +351,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		e.pos = len(e.line)
 	}
 	e.browsing = len(e.history)
+	e.operateAndGetNext()
 	// And nothing is drawn after the line yet. Measured: a postdisplay lives
 	// for the read that set it and the next one starts with none — the widget
 	// asked about it at the following prompt found it empty (#4217).
@@ -574,6 +587,12 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.write("\x1b[H\x1b[2J")
 			e.row = 0
 			e.redraw(prompt)
+		case ctrlO:
+			// `operate-and-get-next`: accept this line and offer the entry
+			// after it at the next prompt. See operateAndGetNext.
+			e.operateNext = e.browsing + 2
+			e.endLine(prompt, "")
+			return string(e.line), nil
 		case ctrlP:
 			e.browse(-1, prompt)
 		case ctrlN:
@@ -788,6 +807,40 @@ func (e *editor) readRune(first byte) (rune, error) {
 // back edited. Measured — both shells do the second as well as the first, and
 // doing only the first makes a typo fixed on the way past a reason to retype
 // the whole command.
+// operateAndGetNext starts this read on the entry after the one `C-o` accepted,
+// and does nothing where the key before it was anything else.
+//
+// `C-o` is how a run of history is replayed a line at a time: it accepts what
+// is on the line and fetches the *next* entry for editing, so holding it down
+// walks forward through the list running each entry as it goes. The state has
+// to outlive the read that set it, because the two halves are one key's
+// meaning split across the accept and the prompt that follows.
+//
+// Measured 2026-09-23 against bash 5.3.20, with `echo 0`, `echo 1`, `echo 2`
+// and `echo 3` in the history file and no terminal on any stream:
+//
+//	C-r 0 C-o C-o <newline>      0 1 2
+//	Up Up C-o C-o <newline>      2 3 2
+//
+// The second row is the one that pins *which* entry is next. `Up Up` lands on
+// `echo 2`; `C-o` runs it and offers `echo 3`; the second `C-o` runs that and
+// offers — because running `echo 2` appended it — the entry now sitting where
+// the walk had got to, which is `echo 2` again. So the index is into the list
+// as it stands at each prompt, and not a cursor that moves with the additions.
+//
+// An index past the end offers nothing, which is what `C-o` at a fresh prompt
+// does: there is no current line for a next one to be relative to.
+func (e *editor) operateAndGetNext() {
+	at := e.operateNext - 1
+	e.operateNext = 0
+	if at < 0 || at >= len(e.history) {
+		return
+	}
+	e.line = []rune(e.history[at])
+	e.pos = len(e.line)
+	e.browsing = at
+}
+
 func (e *editor) browse(dir int, prompt drawnPrompt) {
 	if len(e.history) == 0 {
 		return
@@ -1367,6 +1420,7 @@ const (
 	ctrlK     = 0x0b
 	ctrlL     = 0x0c
 	ctrlN     = 0x0e
+	ctrlO     = 0x0f
 	ctrlP     = 0x10
 	ctrlR     = 0x12
 	ctrlT     = 0x14

@@ -817,8 +817,10 @@ floor comes from.** `make bash-suite` gives each suite file's shell a process
 group of its own so the run can be ended as a group, and every inner
 `$THIS_SH -i` a file starts inherits that group rather than leading one. Both
 shells therefore name their own group, both are right, and the two numbers
-still differ, because they are two processes. That is seven lines of one file
-that no change here can close — see `internal/suite/pid.go` and #4012.
+still differ, because they are two processes. That was seven lines of one file
+that no change here could close; the comparison masks the digits now, and only
+the digits — a `-1` against a number is still a difference, which is the whole
+of what keeps the mask honest. See `internal/suite/pid.go`, #4012 and #4177.
 
 #### Which children get a process group of their own (#4250)
 
@@ -864,9 +866,10 @@ monitor decides" and "a prompt decides", and nothing measured yet needs one.
 
 One thing it does move: our inner `$THIS_SH -i` shells are now on the same
 branch as bash's — they inherit the file's group rather than leading one, so
-they write a number where they used to write `-1`. The seven lines still
-differ, in their digits, which is what makes a mask over the digits a slightly
-better bargain than it was.
+they write a number where they used to write `-1`. That is what made masking
+the digits honest, and #4177 took the bargain: with both shells on the same
+branch there is nothing left under the mask but two process ids, and the
+branch itself is deliberately left outside it.
 
 #### What the corpus says about this
 

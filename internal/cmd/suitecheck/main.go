@@ -372,33 +372,7 @@ func printDiffering(o out, rep suite.Report) {
 		o.printf("                            and a blank line are the page's too\n")
 	}
 	printReordered(o, rep)
-	printProcessGroups(o, rep)
 	o.println()
-}
-
-// printProcessGroups is the third floor under a differing-line count, and the
-// one no implementation can ever move.
-//
-// A shell told to be interactive with no terminal reports the process group
-// it could not hand the terminal to, by number. Both shells report their own
-// and both are right; they are two processes, so the numbers differ on every
-// run. That is not an order and not a text — it is the comparison asking two
-// processes to have one identity — and #4012 is where the arithmetic is
-// recorded rather than rediscovered.
-//
-// Printed as the figure rather than as a bound, because the count is anchored
-// on the role: the only lines it reaches are lines where both runs wrote that
-// remark in the same place. It corrects neither figure above it, and nothing
-// subtracts it — the raw count stays what the two runs did.
-func printProcessGroups(o out, rep suite.Report) {
-	if rep.ProcessGroups == 0 {
-		return
-	}
-	o.printf("                   %6d   of the first, a shell with no terminal naming the\n", rep.ProcessGroups)
-	o.printf("                            process group it could not hand the terminal to. Both\n")
-	o.printf("                            name their own and both are right; they are two\n")
-	o.printf("                            processes. A floor nothing here can move, and it\n")
-	o.printf("                            corrects neither figure above it\n")
 }
 
 // printRefused is what a refused static read actually cost, and what part of

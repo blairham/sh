@@ -147,6 +147,26 @@ const (
 // So it is the same split MultibyteEncodingIsHonored already records, on a
 // second encoding, and not an axis of its own.
 //
+// # A locale the platform does not have
+//
+// The encoding is read off the variable, not off the platform, and that is
+// deliberate — see the note on the run above. Where the two part company is a
+// machine whose locale set does not hold the name: bash calls setlocale, it
+// fails, bash warns and stays in C, and we carry on reading the name. Measured
+// 2026-09-23 in `debian:sid-slim` at the digest the suite is graded at, with
+// `locales-all` left out so that `locale -a` lists three entries: under
+// `LC_ALL=en_US.UTF-8`, `s=héllo; echo ${#s}` is 6 in bash and 5 here, and
+// under `LC_ALL=zh_TW.Big5` the Big5 spelling of U+03B1 is 3 in bash and 2
+// here.
+//
+// **Pre-existing, and the UTF-8 half is the larger one**: both readings were
+// already ours before Big5 was measured at all, and the same run scores
+// bash.tests' glob file at 9 differing lines against main. With `locales-all`
+// installed, which is the package set the CI job uses (#4295), the same digest
+// and the same binary score 3. So the gap belongs to the locale inventory
+// rather than to the shell, and a grading image without `locales-all` measures
+// the image.
+//
 // A locale with no codeset at all is single-byte: `LC_ALL=UTF-8` is not a
 // locale name, and the panel splits on it — bash reads a codeset out of it,
 // ksh93 and zsh refuse it and stay in C. Refusing it is ksh93's and zsh's

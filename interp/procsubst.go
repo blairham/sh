@@ -170,6 +170,12 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		if job != nil {
 			job.finish(status)
 		}
+		// A fork of this shell has ended, whether or not it was given a job to
+		// be named by: bash forks for a process substitution's body and reaps
+		// it like any other child. Measured 2026-09-23, `trap 'echo C' CHLD;
+		// cat <(echo x)` fires twice there — once for the `cat` and once for
+		// the body — where this fired once. See Runner.childReaped.
+		r.childReapedByTheShell()
 		// However the goroutine ended: this end closing is the end-of-file
 		// the far side is waiting for — the command's, for `<(cmd)`, and the
 		// body's own reader for `>(cmd)` — and skipping it would leave

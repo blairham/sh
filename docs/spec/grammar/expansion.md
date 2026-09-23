@@ -538,7 +538,25 @@ moves when a name's export attribute does. That reasoning is intact and is
 exactly why it is **not** a core rule and not a default: it is one build
 against its own 3.2, so it is a candidate upstream regression rather than a
 family rule, and a shell that arrived at it by accident would be wrong in a
-way scripts notice. What changed is only where it is written down. The cost
+way scripts notice.
+
+**A second bash 5.3 answers the other way, which settles that.** Measured
+2026-09-23 in `debian:sid-slim` at the digest the bash suite is graded at —
+GNU bash 5.3.15 — every row of the table above answers `/h`, the variable:
+the builtin, the subshell, the function, the external command, the pipeline,
+the command substitution and the `export -n` alike, with only `unset HOME`
+reaching the password database. So the cache appeared somewhere in patches
+16 to 20 of one release, and the split is bash 5.3.20 against bash 5.3.15,
+bash 3.2, zsh, ksh93, dash, BusyBox ash and the standard.
+
+Which of the two 5.3s the `bash` dialect answers for is therefore a decision
+about the **reference**, not a reading of the shell, and two things ride on
+it. It is the whole of what `glob.tests` still differs by in the graded image
+(#4158) — two lines, a `mkdir ~/…` landing in one home and the `touch ~/…/x`
+after it looking in another. And the suite lines #3484 and #4039 counted as
+won were counted against the laptop's 5.3.20; against 5.3.15 the same
+modeling moves them the other way, so those rows want re-grading in the image
+before anybody reads them as settled. What changed is only where it is written down. The cost
 of not taking it was countable — seven lines of one fetched suite file
 (#3484), eight of two more (#4039), and the whole of three more rows of the
 suite epic — and an axis is what this repository has for exactly this shape:

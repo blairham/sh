@@ -7209,7 +7209,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		// scalar here and `readonly -a q="(1 2)"` below could not see an
 		// array to read its text again for.
 
-		if (f.array || f.assoc) && (hasValue || r.readonlyRecordsTheCompound()) {
+		if (f.array || f.assoc) && (hasValue || r.literalOperands[name] || r.readonlyRecordsTheCompound()) {
 			// Ahead of the assignment, the order every other declaration
 			// loop keeps: the letters say what the name is and the value
 			// then lands in it.

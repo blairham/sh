@@ -4250,7 +4250,7 @@ func Diagnostics() interp.Diagnostics {
 		// the refusal above and the `not a valid identifier` a name the
 		// shell will not bind draws, both of which are the definition's own
 		// and neither of which any other column reaches at run time.
-		FunctionDefinitionIsLocatedAtItsEnd: true,
+		FunctionDefinitionRefusalIsLocatedWhereTheShellWasReading: true,
 		// And a `select` whose variable is not a name is located where this
 		// shell's reader stands rather than at the clause — the `for`
 		// spelling beside it is located at its own clause. Measured

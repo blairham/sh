@@ -3659,6 +3659,78 @@ sentence, which is why the withholding is `Semantics.
 LoopControlOutsideALoopSilentInPosixMode` — asked of the dialect — rather than
 written into the mode (#4174).
 
+### Where a definition's own refusals are numbered
+
+A function definition is not a simple command, so the shell reporting one of
+its refusals has no command line to point at and points at its own counter
+instead. That counter is **not the definition**, and it is not one thing
+either: measured 2026-09-23 on bash 5.3.20 over 66 shapes and over all three
+refusals a definition raises — a special builtin's name in POSIX mode, a
+redefinition of a frozen name, and a name that is not a name, which answer
+identically — it is the innermost of three terms.
+
+**1. A `for`, `case` or `select` the frame is running**, at that construct's own
+first line, innermost first:
+
+| written, with the refusal in it | reported at |
+| --- | --- |
+| `for i in 1; do` ⏎ `break() { :; }` ⏎ `done` | the `for`'s line |
+| the same with an `echo` before the definition | the `for`'s line still |
+| a `for` holding an `if` holding the definition | the `for`'s |
+| a `for` inside a `for` | the inner `for`'s |
+| `case x in` ⏎ `x)` ⏎ `break() { :; };;` ⏎ `esac` | the `case`'s line |
+| a `case` holding a `for` holding it | the `for`'s, being inner |
+| `select x in a; do` ⏎ `break() { :; }` ⏎ `done` | the `select`'s line |
+
+`while` and `until` are the controls and take term 2 at any depth, which is what
+makes this three constructs rather than "every compound command". A loop that
+has **finished** takes term 2 again, and a `( )` inside a loop takes the closing
+parenthesis — so the register does not cross a subshell either.
+
+**2. The unit the reader took**, at its last line, where no call is in progress:
+
+| written | reported at |
+| --- | --- |
+| `break() { :; }` alone on a line | that line |
+| `break() {` ⏎ `:` ⏎ `}` | the third — the definition's own end |
+| `break() { :; }; continue() {` ⏎ `:` ⏎ `}` | the third — the *unit's* end, which the definition's own end cannot explain |
+| `break() { :; }; echo a \` ⏎ `b \` ⏎ `c` | the fourth, for the same reason |
+| `if true; then` ⏎ `break() { :; }` ⏎ `fi` | the `fi`'s line |
+| `{` ⏎ `echo p` ⏎ `break() { :; }` ⏎ `}` | the `}`'s line |
+| `(` ⏎ `break() { :; }` ⏎ `)` | the `)`'s line |
+| `echo p` ⏎ `break() { :; }` | the definition's line — a unit of its own |
+
+A `;` puts two statements in one unit and a newline does not, which is the whole
+of what "the unit the reader took" means.
+
+**3. The definition itself**, at its own *first* line, inside a call:
+
+| written | reported at |
+| --- | --- |
+| `f() {` ⏎ `break() { :; }` ⏎ `}; f` | the definition's line |
+| `f() {` ⏎ `echo p` ⏎ `break() { :; }` ⏎ `}; f` | the definition's, not the `echo`'s |
+| `f() {` ⏎ `break() {` ⏎ `:` ⏎ `}` ⏎ `}; f` | the definition's **first** line, where term 2 would have given its last |
+
+**This is the refusal's rule and not the shell's line numbering.** Every other
+runtime refusal measured in the same shapes already agrees: a reassignment to a
+readonly name inside a `for` on lines 2-4 is reported at 4 by both shells rather
+than at the loop's line, and so is a bad name to `export`. A simple command has
+a line of its own to be pointed at; a definition has not.
+
+`Diagnostics.FunctionDefinitionRefusalIsLocatedWhereTheShellWasReading` is the
+field, bash alone — dash and ksh93 refuse such a definition while *reading* the
+file and zsh binds the name without complaint, so no other column reaches the
+question. It used to be called `FunctionDefinitionIsLocatedAtItsEnd` and said
+the definition's end, which is the answer all five of its measured shapes have
+because a definition standing alone as a top-level statement ends where its
+statement does (#4174).
+
+**One shape is measured and not held.** A definition refused inside a command
+substitution is reported by the reference past the end of the file —
+`v=$(break() { :; }; echo z)` on line 2 of a three-line script is `line 5`
+there — which is that shell's own accounting for substituted text rather than
+anything about definitions, and is left alone.
+
 ### How deep a function may call
 
 Every shell in the panel bounds function nesting, and two let a script move the

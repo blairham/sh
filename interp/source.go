@@ -547,6 +547,8 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// has stopped running.
 	outerInputLine := r.inputLine
 	defer func() { r.inputLine = outerInputLine }()
+	outerInputUnit := r.inputUnitLine
+	defer func() { r.inputUnitLine = outerInputUnit }()
 	abandoned, stopped := 0, false
 	for !stopped {
 		f, ok := nextBorrowedLine(p, &whole)
@@ -573,12 +575,16 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 			ran, r.status = true, 1
 			continue
 		}
-		for _, st := range f.Stmts {
+		for i, st := range f.Stmts {
 			ran = true
 			if abandoned != 0 && r.lineOf(st.Pos()) <= abandoned {
 				continue
 			}
 			r.inputLine = r.inputLineOf(st)
+			// Borrowed text is read a unit at a time like any other input, so
+			// the reader's own position is the unit's. See
+			// Runner.inputUnitLine.
+			r.inputUnitLine = r.inputUnitLineOf(f.Stmts, i)
 			if err := r.stmt(ctx, st); err != nil {
 				// A Builtin returns a status and not an error, so there is
 				// nowhere for this to go but a diagnostic — the same place

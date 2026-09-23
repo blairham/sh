@@ -1568,6 +1568,48 @@ held: a `for` loop in a body is the one `comsub2.tests` reaches, and it wants
 one line more than the anchor rule gives. Reaching it means modeling the
 counter, not choosing an offset.
 
+### The line an unterminated construct is reported at
+
+bash's number here is the same parser line counter, and for this shape the
+rule **is** known: it counts how many more times the grammar asked for input
+after the text ran out. Measured 2026-09-23 on bash 5.3.15 in the pinned
+image, each text one line long inside an `eval` so the count reads straight
+off the diagnostic.
+
+| written | no trailing `\` | trailing `\` |
+| --- | --- | --- |
+| `X() { (a)>b` | 2 | 3 |
+| `X() { echo a` | 2 | 3 |
+| `if true; then echo a` | 2 | 3 |
+| `while true; do echo a` | 2 | 3 |
+| `( echo a` | 2 | 3 |
+| `case x in a) echo b` | 2 | 3 |
+| `for i in a b; do echo` | 2 | 3 |
+| `for i in a b` | 2 | **4** |
+
+Two things make the grammar ask again.
+
+- Every construct asks once for its own terminator, which is the whole of the
+  left column.
+- An **unsatisfied line continuation** asks once more: the backslash wanted a
+  line and the input ended instead. A continuation whose line *did* arrive
+  costs nothing — the same text with a real newline after the backslash
+  answers 2 — which is what says the count is about asking rather than about
+  backslashes. An escaped backslash is not a continuation either:
+  `X() { echo a\\` answers 2 where `X() { echo a\` answers 3.
+- A `for` whose **word list is still open** asks twice rather than once: it
+  wants the list terminated, and then `do`. Past its `do` it is an ordinary
+  one-ask construct, which is the row that separates the two.
+
+That is a rule rather than a fitted table, and it is why this shape could be
+implemented where the six families above could not: both increments are the
+grammar saying what it still needs, so `for` follows from the grammar instead
+of from a constant chosen to fit it.
+
+Only bash reads this number — `Diagnostics.UnterminatedEndsOnNextLine` is
+this dialect's alone. zsh names the line the text began on and ksh93 names
+the construct without a count.
+
 ### Where a backquoted body's refusal is placed
 
 A backquoted body that will not parse is reported at a line, and the panel

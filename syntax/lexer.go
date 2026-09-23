@@ -176,6 +176,11 @@ type Lexer struct {
 	// quotes nothing there.
 	wordStart Pos
 
+	// endedOnALineContinuation records that the input ran out on a backslash
+	// — a line continuation whose line never came. Read by the parser's
+	// unterminated, for a shell whose line counter charges one more ask for
+	// input for it. Set in endOfInputBackslashSpan.
+	endedOnALineContinuation bool
 	// continuations is where the line continuations of the arithmetic
 	// expression being read stand, while one is being read, and nil
 	// otherwise. See Lexer.collectContinuations.
@@ -2755,6 +2760,13 @@ func (l *Lexer) inAssignmentValue() bool {
 // alone says the backslash is the first thing in the word, which only
 // [EndOfInputBackslashIsLiteralOnlyAtAWordStart] asks about.
 func (l *Lexer) endOfInputBackslashSpan(escPos Pos, alone bool) Span {
+	// The input ran out on a backslash, which is a line continuation whose
+	// continuation line never arrived. One shell's parser counts that as
+	// another time it asked for input — see Parser.unterminated, the only
+	// reader — so it is recorded here, where the fact is known, rather than
+	// rediscovered from the source text by a rule that would have to know
+	// about quoting to be right.
+	l.endedOnALineContinuation = true
 	value := "\\"
 	switch l.dialect.BackslashAtEndOfInput {
 	case EndOfInputBackslashIsDropped:

@@ -3869,7 +3869,17 @@ func (r *Runner) subscriptOperandParts(operand string, lexed bool) (base, raw, k
 	if open <= 0 {
 		return "", "", "", false
 	}
-	if !lexed && !r.operandBracketsBalance(operand[open:], lexed) {
+	if !lexed && r.subscriptClosedInTheSource(operand) {
+		// The source said where the key ends, so the scan does not: what is
+		// left is the reading bash applies to the text it reassembles, which
+		// is the **first** `]` and the operator behind it. The operator is
+		// already behind it here — the value was cut off in front of this —
+		// so the closer has to be the last byte. See
+		// Runner.subscriptClosedInTheSource.
+		if strings.IndexByte(operand[open+1:], ']') != len(operand)-open-2 {
+			return "", "", "", false
+		}
+	} else if !lexed && !r.operandBracketsBalance(operand[open:], lexed) {
 		return "", "", "", false
 	}
 	if lexed && !strings.HasSuffix(operand, "]") {

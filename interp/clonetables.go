@@ -389,6 +389,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// unquoted, for the same reason and with the same reading. See
 	// Runner.lexedSubscriptOperands.
 	c.lexedSubscriptOperands = slices.Clone(r.lexedSubscriptOperands)
+	c.sourceClosedSubscriptOperands = slices.Clone(r.sourceClosedSubscriptOperands)
 	// And the names the running command's prefix is holding, with what they
 	// held before it and what a declaration has done to them, for the same
 	// reason and with the same reading: a clone started inside a prefixed

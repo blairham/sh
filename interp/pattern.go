@@ -420,20 +420,22 @@ func (r *Runner) patternTilde(w *syntax.Word, b *strings.Builder) []syntax.Span 
 		!strings.HasPrefix(s.Value, "~") {
 		return w.Spans
 	}
-	// The same question a word asks, asked here for the same reason the rest
-	// of this function exists: a `case` arm and a `[[ ]]` operand are words
-	// and a rule written into one road only is a shell no column has. See
-	// Runner.tildePrefixIsPlain.
-	if !r.tildePrefixIsPlain(s.Value, w.Spans[1:], tildeEndsAtASlash) {
+	// The same question a word asks, asked here through the same function for
+	// the same reason the rest of this function exists: a `case` arm and a
+	// `[[ ]]` operand are words, and a rule written into one road only is a
+	// shell no column has. That includes the colon —
+	// `case /usr/xyz:x in ~:x)` matches in bash and ksh93 and not in the other
+	// three — so this takes wordTildeHead rather than naming a set. See
+	// Semantics.TildeColonEndsAnOrdinaryWordsPrefix.
+	h := r.wordTildeHead(w.Spans)
+	if !h.moved {
 		return w.Spans
 	}
-	dir, tail, ok := r.tildeSplit(s.Value)
-	if !ok {
-		return w.Spans
-	}
-	b.WriteString(escapePatternMeta(dir))
+	b.WriteString(escapePatternMeta(h.dir))
 	spans := slices.Clone(w.Spans)
-	spans[0].Value = tail
+	// The directory has gone into the builder already, so what the prefix
+	// occupied is replaced by nothing rather than by it.
+	tildeHead{moved: true, span: h.span, off: h.off}.apply(spans, 0)
 	return spans
 }
 

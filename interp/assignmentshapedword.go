@@ -65,13 +65,11 @@ func (r *Runner) expandAssignmentShapedWord(w *syntax.Word) {
 	// The value's head is the same position the front of a word is, and takes
 	// the same rule through the same function: the prefix closes at a `/` or
 	// a `:`, and one that runs off the end of this span into something that
-	// is not plain text closes nothing. Folded onto tildeAtHead rather than
+	// is not plain text closes nothing. Folded onto tildeHead rather than
 	// written again here — four roads reach a leading tilde and the last time
 	// one carried its own copy of the rule, it is what put `foo=~:~` a home
 	// short.
-	if text, moved := r.tildeAtHead(rest, w.Spans[1:], tildeEndsAtASlashOrColon); moved {
-		s.Value = s.Value[:eq+1] + text
-	}
+	r.tildeHead(w.Spans, eq+1, tildeEndsAtASlashOrColon).apply(w.Spans, eq+1)
 	// And the colons, through the one helper an assignment's value uses.
 	r.expandColonTildes(w)
 }

@@ -930,6 +930,21 @@ var Corpus = []Case{
 		Why:     "the context adds a tilde after each unquoted colon — PATH=~/bin:~/sbin — and quoting turns it back off; unanimous",
 	},
 	{
+		ID: "expand/a-colon-closing-a-tilde-prefix-in-an-ordinary-word", Category: "expansion",
+		Snippet: `printf "[%s]" ~:x ~:x/y ~: ~:~ ~+:x ~chet:x a~:x x:~/m ~/m:x | sed "s|/private||g;s|$HOME|H|g;s|$PWD|P|g"`,
+		Why:     "whether a colon closes a tilde prefix in an **ordinary word**, the way one does inside an assignment's value. bash in all three builds and ksh93 close it — the first five fields are the home and a colon — and dash, zsh and BusyBox ash leave the characters as written. POSIX 2.6.1 names a colon only for an assignment's value, so the three that do not are the standard's reading and the other two are the departure. The `/private` the sed takes out is one machine's symlink and not a shell's answer — without it the `~+` field records macOS rather than the colon. The last four fields are the boundary and are unanimous: a user nobody has expands nowhere, a tilde that does not open the word is ordinary text, one behind a colon opens nothing, and a slash still closes the prefix before the colon is reached. Semantics.TildeColonEndsAnOrdinaryWordsPrefix (#4251)",
+	},
+	{
+		ID: "expand/a-quote-past-the-colon-and-a-tilde-prefix", Category: "expansion",
+		Snippet: `printf "[%s]" ~:xy ~:x"y" ~:x'y' ~:"x" ~/m:"x" | sed "s|$HOME|H|g"`,
+		Why:     "the half that makes the row above three answers rather than two: bash applies the colon reading only where the whole word past the tilde is written **plainly**, and any quote or backslash turns it off, where ksh93 does not care what else the word holds. So the second, third and fourth fields are the home in ksh93 and the characters as written in bash, while the first is the home in both. The fifth is the control that says it is the colon reading and not the quote — there the prefix ended at the slash, and the quote behind it changes nothing in any column",
+	},
+	{
+		ID: "expand/a-tilde-prefix-is-the-words-leading-text", Category: "expansion",
+		Snippet: `printf "[%s]" ~{a,b} ~x{a,b} | sed "s|$HOME|H|g"`,
+		Why:     "a tilde prefix is the **word's** leading plain text and not the first span of it, which brace expansion is what makes visible: the prefix of `~{a,b}` is `~a`, a user nobody has, rather than a bare `~` with a letter behind it. bash and ksh93 keep the characters and zsh refuses the user outright, where dash and BusyBox ash have no brace expansion and keep the word whole. This shell answered the home directory with an `a` on the end in every column that expands braces, which is one reading of the word too few and was found beside #4200",
+	},
+	{
 		ID: "expand/tilde-into-an-expansion-diverges", Category: "expansion",
 		Snippet: `u=/x; v=a:~$u; echo "$v" | sed "s|$HOME|H|g"`,
 		Why:     "a tilde whose segment runs into an expansion stays literal in three of the four; zsh alone expands it and then appends the value",

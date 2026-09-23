@@ -14770,6 +14770,61 @@ type Semantics struct {
 	// `~\-` is the one that says so (#4156).
 	TildePrefixStopsAtAQuoteOrAnExpansion Answer
 
+	// TildeColonEndsAnOrdinaryWordsPrefix says whether a colon closes a tilde
+	// prefix in an **ordinary word**, the way a slash does.
+	//
+	// Inside an assignment's value it closes one in every column — `foo=~:x`
+	// is the home and a colon in all seven, which is core behavior and is not
+	// this. An ordinary word is where the panel parts.
+	//
+	// Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with `HOME=/usr/xyz`, each word given to `echo`:
+	//
+	//	word      bash 5.3 / as sh / 3.2, ksh93   dash, zsh, ash
+	//	~:x                /usr/xyz:x              ~:x
+	//	~:x/y              /usr/xyz:x/y            ~:x/y
+	//	~:                 /usr/xyz:               ~:
+	//	~:~                /usr/xyz:~              ~:~
+	//	~+:x               $PWD:x                  ~+:x
+	//
+	// POSIX mode does not move it — `as sh` is the same 5.3.20 binary under
+	// the `sh` name — and bash 3.2 agrees with 5.3, so it is a family rule
+	// rather than a build's. It reaches a `case` pattern and an unquoted `-`
+	// operand as well: `case /usr/xyz:x in ~:x)` matches in bash and ksh93
+	// and does not in dash, zsh or BusyBox ash (#4251).
+	//
+	// **Three values rather than two**, and bash is the third: it applies the
+	// closing only where the whole word is written **plainly**, and any quote
+	// or backslash anywhere past the tilde turns it off. Measured the same
+	// day, with `w=1`:
+	//
+	//	word        bash 5.3      ksh93u+
+	//	~:xy        /usr/xyz:xy   /usr/xyz:xy
+	//	~:x"y"      ~:xy          /usr/xyz:xy
+	//	~:x'y'      ~:xy          /usr/xyz:xy
+	//	~:x\y       ~:xy          /usr/xyz:xy
+	//	~:"x"       ~:x           /usr/xyz:x
+	//	~/m:"x"     /usr/xyz/m:x  /usr/xyz/m:x
+	//
+	// The last row is the control that says it is the *colon* reading and not
+	// the quote: there the prefix ends at the slash, which is the ordinary
+	// road, and the quote behind it changes nothing in either column. An
+	// **expansion** is not a quote for this — bash applies the closing to
+	// `~:$w` — so what the reading asks about is quoting and nothing else.
+	//
+	// One thing bash does here is measured and deliberately not folded in:
+	// having applied the closing, it leaves the rest of the word **unexpanded**
+	// — `~:$w` is `/usr/xyz:$w` and `~:$(echo q)` is `/usr/xyz:$(echo q)` —
+	// which is its colon-tilde machinery treating what it produced as literal.
+	// This shell expands the remainder, as ksh93 does, so those two shapes are
+	// a home nearer than they were and still not bash's.
+	//
+	// Asked at the disagreement and nowhere else: the leading tilde prefix is
+	// read under both sets and the axis is consulted only where the two come
+	// to different words. `~/m:x`, `x:~/m` and `a~:x` are the same word either
+	// way and are never a question.
+	TildeColonEndsAnOrdinaryWordsPrefix TildeColonReach
+
 	// AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode expands the
 	// tilde after the `=` — and after every unquoted `:` that follows it — in
 	// an ordinary word that merely *looks* like an assignment, so
@@ -24040,6 +24095,12 @@ const (
 func PosixSemantics() Semantics {
 	return Semantics{
 		SplitParamExpansion: Yes,
+		// 2.6.1's tilde prefix ends "at the first unquoted slash" or at the
+		// end of the word, and a colon is named there only for the *value of
+		// an assignment*. So the standard's reading is the one three of the
+		// seven columns have, and bash and ksh93 are the departures. See
+		// Semantics.TildeColonEndsAnOrdinaryWordsPrefix.
+		TildeColonEndsAnOrdinaryWordsPrefix: TildeColonEndsNothing,
 		// An operand-less `exit` or `return` reports `$?`, which is what
 		// XCU's own wording for both utilities says and what six of the
 		// seven columns do. The one that keeps a register of its own
@@ -28552,6 +28613,54 @@ func (r *Runner) emptyListReach() EmptyListReach {
 	if p == EmptyListReachUnspecified {
 		r.diagf("%s\n", r.unanswered(
 			"what a quoted list expansion that produced no fields takes with it"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// TildeColonReach is whether a colon closes a tilde prefix in an ordinary
+// word. See Semantics.TildeColonEndsAnOrdinaryWordsPrefix for the
+// measurements.
+type TildeColonReach uint8
+
+const (
+	// TildeColonReachUnspecified is no answer, and is refused: the three below
+	// put different words on the wire for `echo ~:x`.
+	TildeColonReachUnspecified TildeColonReach = iota
+	// TildeColonEndsNothing leaves a colon out of it: only a slash or the end
+	// of the word closes a prefix, so `~:x` is the characters as written.
+	// dash, zsh and BusyBox ash.
+	TildeColonEndsNothing
+	// TildeColonEndsAPrefixInAPlainWord closes the prefix at a colon, but only
+	// where the whole word past the tilde is written plainly — a quote or a
+	// backslash anywhere in it turns the reading off, so `~:xy` is the home
+	// and `~:x"y"` is not. bash, bash 3.2 and bash-as-sh.
+	TildeColonEndsAPrefixInAPlainWord
+	// TildeColonAlwaysEndsAPrefix closes it at a colon whatever else the word
+	// holds: `~:x"y"` is the home too. ksh93.
+	TildeColonAlwaysEndsAPrefix
+)
+
+func (p TildeColonReach) String() string {
+	switch p {
+	case TildeColonEndsNothing:
+		return "nothing"
+	case TildeColonEndsAPrefixInAPlainWord:
+		return "a prefix in a plain word"
+	case TildeColonAlwaysEndsAPrefix:
+		return "a prefix always"
+	}
+	return "unspecified"
+}
+
+// tildeColonReach resolves the axis, and is reached only where the two sets of
+// closing bytes would leave different words.
+func (r *Runner) tildeColonReach() TildeColonReach {
+	p := r.sem().TildeColonEndsAnOrdinaryWordsPrefix
+	if p == TildeColonReachUnspecified {
+		r.diagf("%s\n", r.unanswered(
+			"a colon closing a tilde prefix in an ordinary word"))
 		r.status = 2
 		r.unspecified = true
 	}

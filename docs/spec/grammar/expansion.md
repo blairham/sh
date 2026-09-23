@@ -331,10 +331,81 @@ Core behavior, no vector field — and it was wrong here: the leading tilde
 looked for a slash, found none, and asked for a user named `:~`, so `foo=~:~`
 came to `~:$HOME` rather than to two homes.
 
-Whether a colon closes one in an **ordinary** word is a different question and
-the panel splits on it: `echo ~:x` is the home in bash (every build, POSIX
-mode included) and in ksh93, and the characters as written in dash, zsh and
-BusyBox ash, which is this shell's answer. Recorded and filed as #4251.
+Whether a colon closes one in an **ordinary** word is a different question, and
+the panel splits **three** ways on it. `TildeColonEndsAnOrdinaryWordsPrefix`.
+
+| written | bash 5.3 / as sh / 3.2 | ksh93 | dash, zsh, ash |
+| --- | --- | --- | --- |
+| `~:x` | the home, then `:x` | same | `~:x` |
+| `~:x/y` | the home, then `:x/y` | same | `~:x/y` |
+| `~:` | the home, then `:` | same | `~:` |
+| `~:~` | the home, then `:~` | same | `~:~` |
+| `~+:x` | `$PWD`, then `:x` | same | `~+:x` |
+
+POSIX 2.6.1 names a colon only for the value of an assignment, so the three
+that leave the word alone are the standard's reading and the other two are the
+departure — and it is a family rule rather than a build's: `as sh` is the same
+5.3.20 binary under the `sh` name, and 3.2 agrees with 5.3. It reaches a `case`
+pattern and an unquoted `-` operand as well, which is why `patternTilde` and
+the word road ask through one function.
+
+**bash is the third answer**, and what makes it one is a condition on the rest
+of the word: it applies the closing only where everything past the tilde is
+written **plainly**, so any quote or backslash turns it off where ksh93 does not
+care.
+
+| written | bash 5.3 | ksh93 |
+| --- | --- | --- |
+| `~:xy` | the home, then `:xy` | same |
+| `~:x"y"` | `~:xy` | the home, then `:xy` |
+| `~:x'y'` | `~:xy` | the home, then `:xy` |
+| `~:x\y` | `~:xy` | the home, then `:xy` |
+| `~:"x"` | `~:x` | the home, then `:x` |
+| `~/m:"x"` | the home, `/m:x` | same |
+
+The last row is the control that says it is the colon reading and not the
+quote: there the prefix ended at the slash, which is the ordinary road, and the
+quote behind it changes nothing in either column. An **expansion** is not a
+quote for this — bash applies the closing to `~:$w` — so what the reading asks
+about is quoting and nothing else.
+
+One thing bash does here is measured and deliberately not folded in: having
+applied the closing it leaves the rest of the word **unexpanded**, so `~:$w` is
+`$HOME:$w` and `~:$(echo q)` is `$HOME:$(echo q)`. That is its colon-tilde
+machinery treating what it produced as literal. This shell expands the
+remainder, as ksh93 does, which leaves those two shapes a home nearer than they
+were and still not bash's.
+
+The axis is asked at the disagreement and nowhere else: the prefix is read under
+both sets of closing bytes and the question is put only where the two come to
+different words, so `~/m:x`, `x:~/m`, `a~:x` and every `~/…` anybody writes is
+never a question. Corpus:
+`expand/a-colon-closing-a-tilde-prefix-in-an-ordinary-word` and
+`expand/a-quote-past-the-colon-and-a-tilde-prefix` (#4251).
+
+### The prefix is the word's leading text, not one span's
+
+A prefix runs across a span boundary wherever brace expansion put one there,
+and reading only the first span answered a different word. `~{a,b}` is the two
+words `[~][a]` and `[~][b]`, and the prefix of each is `~a` — a user nobody has
+— rather than a bare `~` with a letter behind it.
+
+| written | bash 5.3 | ksh93 | zsh | dash, ash |
+| --- | --- | --- | --- | --- |
+| `~{a,b}` | `~a ~b` | `~a ~b` | `no such user … a` | the word whole |
+| `~x{a,b}` | `~xa ~xb` | `~xa ~xb` | `no such user … xa` | the word whole |
+
+This shell answered the home directory with the produced letter on the end in
+every column that expands braces, which is one reading of the word too few. It
+was found beside #4200 and belongs to `Runner.tildeHead`, which gathers the
+prefix over the word's leading run of plain unquoted literal text. Corpus:
+`expand/a-tilde-prefix-is-the-words-leading-text`.
+
+One shape is measured and not modeled: ksh93 does not treat a brace-produced
+tilde as a prefix at all — its `~{r,x}oot` is `~root ~xoot` where bash resolves
+the first — so what it recognizes is settled before the braces run. Its
+`~{a,b}` row above is the same answer either way, which is why the rows this
+records are the ones it records.
 
 ### A quote or an expansion inside the prefix
 

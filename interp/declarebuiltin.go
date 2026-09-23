@@ -1567,6 +1567,18 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		if r.unspecified {
 			return r.status
 		}
+		if df.nameref && r.namerefNameCannotBeSubscripted(complaintName, name) {
+			// **A reference is a name, and a subscript is not part of one.**
+			// Refused per operand and before anything is declared: the
+			// operand earns the status and the next one is still declared,
+			// which is the shape every other per-operand refusal in this
+			// loop takes. See Runner.namerefNameCannotBeSubscripted.
+			if r.unspecified || r.ctl == controlExit {
+				return r.status
+			}
+			r.assignFailed = true
+			continue
+		}
 		if base, subs, subscripted := r.operandSubscripts(r.inBuiltin, name); subscripted &&
 			hasValue && r.letterDropsTheSubscript(value, df) {
 			// The array letter is on this very line and the value is

@@ -779,6 +779,14 @@ func (r *Runner) substRunBase(span syntax.Span, src string, f *syntax.File, text
 	if f != nil && len(f.Stmts) > 0 {
 		first = int(f.Stmts[0].Pos().Line)
 	}
+	// Deliberately the first statement's own line, and **not** the body's
+	// second line, which six measured shapes want and five others refuse: a
+	// body that starts a command on the opener's line is numbered one lower
+	// than this from its next line down, and taking that here moved a command
+	// in a `while`, an `if`, a `case` and a `for` the other way. bash's number
+	// in there is its parser's line counter rather than a function of the
+	// text, and the shapes are in docs/spec/grammar/substitutions.md under
+	// what is measured and not held.
 	return anchor - first
 }
 

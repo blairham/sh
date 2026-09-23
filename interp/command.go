@@ -109,7 +109,18 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 		// After the whole option word is read, so a bundle refuses the same
 		// way a letter of its own does: `command -vp sed` and `command -pv
 		// sed` are one sentence, naming `-p` either way round.
-		return r.restrictedOperandRefusal("command", "-p")
+		// Located as the *shell* and not as the builtin, which is measured and
+		// splits the two columns the same way their wordings do: ksh93 writes
+		// `<script>: line 1: -p: restricted` where its `cd` refusal one line
+		// away is `<script>[1]: cd: restricted`, and bash writes `line 1` for
+		// both. So the builtin is put aside for this one report, the way
+		// Runner.reportReadonlyRefusal already does it.
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		r.diagf("%s\n", Wording(r.diag().RestrictedCommandOption,
+			"%[1]s: %[2]s: restricted", "command", "-p"))
+		r.inBuiltin = outer
+		return r.endAfterRestrictedBuiltinRefusal()
 	}
 	if !verbose && !sentence && r.expandedCommandOnlyReports() {
 		// The word `command` arrived through an expansion rather than being

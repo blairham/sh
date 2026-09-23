@@ -5744,6 +5744,38 @@ type Diagnostics struct {
 	// two routes really differ — see Runner.restrictedHashEntry, where the
 	// statuses differ too.
 	RestrictedHashNotFound string
+	// RestrictedVariable refuses an assignment to a name the mode froze, in a
+	// dialect that words it apart from an ordinary readonly's refusal. One
+	// verb: the name.
+	//
+	// Empty is the reading of the shell whose mode makes the names genuinely
+	// readonly, where the readonly sentence *is* the answer — see
+	// Semantics.RestrictedFreezeIsAReadonly, which is asked first and decides
+	// whether this field is read at all.
+	RestrictedVariable string
+	// RestrictedUnset refuses `unset` of a name the mode froze, in the same
+	// dialect and for the same reason. One verb: the name.
+	//
+	// A field of its own rather than RestrictedVariable reused, for the reason
+	// [UnsetReadonly] is one beside [ReadonlyVariable]: the shell that words
+	// these apart names the builtin in one sentence and not in the other —
+	// `PATH: restricted` from an assignment and `unset: PATH: restricted` from
+	// `unset`, measured on ksh93u+.
+	RestrictedUnset string
+	// RestrictedExec refuses `exec cmd`. Two verbs: the builtin's name and the
+	// command word, and a dialect may use either or both — one of the two
+	// shells with the mode names the command and one does not. Measured:
+	// `exec echo hi` is `exec: restricted` in bash and `exec: echo:
+	// restricted` in ksh93.
+	//
+	// Empty is bash's, which names the builtin alone.
+	RestrictedExec string
+	// RestrictedCommandOption refuses `command -p`. Two verbs: the builtin's
+	// name and the letter, in that order, and again a dialect may use either —
+	// bash writes `command: -p: restricted` and ksh93 writes `-p: restricted`.
+	//
+	// Empty is bash's.
+	RestrictedCommandOption string
 	// SetArrayNeedsAName is what `set -A` with nothing after it says, where
 	// the dialect refuses it. One verb: the letter as written, `-A` or `+A`.
 	//

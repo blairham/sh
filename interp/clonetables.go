@@ -312,6 +312,12 @@ func (c *Runner) ownTables(r *Runner) {
 	// launched once — but the table is cloned for the same reason the two
 	// above it are: a subshell registering a name must not reach the parent's.
 	c.inheritedParameterActions = maps.Clone(r.inheritedParameterActions)
+	// And the names restricted mode froze. A subshell of a restricted shell is
+	// restricted — measured, `( cd / )` is the refusal in both columns — so the
+	// record is carried; cloned rather than shared because `set +r` in the
+	// subshell empties it in the one dialect that grants that, and the parent
+	// must keep what it froze.
+	c.restrictedFrozen = maps.Clone(r.restrictedFrozen)
 	// And the option half of a tie between a `set -o` name and a parameter,
 	// which is the same message from the other side. See
 	// interp/tiedoption.go.

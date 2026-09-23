@@ -949,6 +949,12 @@ type Runner struct {
 	// from where its parent had got to and its own draws leave the parent
 	// where it was. A shared generator would have the subshell's reads
 	// advancing the sequence a later read in the parent gets.
+	// restrictedFrozen are the names restricted mode froze, and
+	// restrictedFreezes the extra names this dialect's mode freezes beyond the
+	// substrate's. See interp/restricted.go.
+	restrictedFrozen  map[string]bool
+	restrictedFreezes []string
+
 	randomSeed   uint64
 	randomDrawn  uint64
 	randomSeeded bool
@@ -9493,6 +9499,13 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is
 	// what Wording's own note is about.
 	msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
+	if r.restrictedFreeze(name) {
+		// A name restricted mode froze, in the dialect that words that apart
+		// from an ordinary readonly. The refusal's status and fatality are the
+		// readonly path's either way — measured in both shells — so only the
+		// sentence moves here. See Runner.restrictedFreeze.
+		msg = Wording(r.diag().RestrictedVariable, "%[1]s: restricted", name)
+	}
 	// A refusal made while the builtin was reading a value's hidden literal
 	// names the builtin whatever form the store used, which is the one place
 	// the form is not the question: the write is the builtin's own reading

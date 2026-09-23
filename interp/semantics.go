@@ -20046,10 +20046,132 @@ type Semantics struct {
 	// Measured on bash 5.3.20, 2026-09-22: `set -r` is silent at 0, `$-`
 	// grows an `r`, and `set +r` afterwards is `set: +r: invalid option`
 	// with the builtin's usage block at 1 — while the same `set +r` in a
-	// shell that never entered the mode is silent at 0. zsh, dash and
-	// BusyBox ash have no such letter and refuse it outright, which the
-	// preset's No already gives them.
+	// shell that never entered the mode is silent at 0.
+	//
+	// dash and BusyBox ash have no such letter and refuse it outright, which
+	// the preset's No already gives them — `set: Illegal option -r` at 2 and
+	// `set: line 1: illegal option -r` at 2, measured. **zsh is not one of
+	// them**, and this file said it was: measured 2026-09-22, `set -r` there is
+	// silent at 0 and `cd /` afterwards is `cd:3: restricted`, so zsh has the
+	// letter and a third restricted mode. That mode is not built here — the
+	// letter reaches a `setopt` name dialect/zsh records and nothing acts on —
+	// which is the dishonest half this axis exists to prevent and is filed
+	// rather than fixed here (#4205).
+	//
+	// **ksh93 answers Yes since #4205** and the sentence above is history:
+	// that mode is built too, with its own refusals in its own words. What the
+	// axis still says is the same thing — the letter and the mode are one
+	// question, and a dialect answering Yes owes the refusals.
 	SetHasTheRestrictedLetter Answer
+
+	// RestrictedModeIsLeftByTheLetter grants `set +r` in a restricted shell and
+	// hands back everything the mode was withholding.
+	//
+	// The two shells with the mode disagree, and the disagreement is the whole
+	// of why this is an axis rather than a line in interp/restricted.go.
+	// Measured 2026-09-22 from a script file with a scratch HOME:
+	//
+	//	set -r; set +r; echo "[$-]"; cd /; echo "$PWD"
+	//	  bash 5.3.20  set: +r: invalid option, the usage block, 1 — and cd refused
+	//	  ksh93u+      silent, `[hB]`, and the shell is in /
+	//
+	// So in one shell the mode is a door that locks behind you and in the other
+	// it is a switch. `PATH=/bin` and `/bin/echo hi` are each taken again in
+	// ksh93 afterwards, which is what says the *mode* was lifted rather than
+	// the letter alone.
+	//
+	// The **long** spelling is refused in both, and differently: bash has no
+	// `restricted` name in `set -o` at all, and ksh93 has the name and answers
+	// `set: restricted: restricted` fatally. So a dialect may not be read off
+	// this axis for the other door — see the `restricted` entry in
+	// setoptions.go.
+	//
+	// Asked only where a script writes `set +r` in a shell that is really
+	// restricted. A shell that never entered the mode grants it silently in
+	// both columns, which is the bargain every unimplemented `set -o` name
+	// keeps, so the axis is reached by nothing a script does until the mode is
+	// on.
+	//
+	// unpinned dash: there is no `-r` letter here at all, so the mode cannot be
+	// entered and `set +r` never reaches this question.
+	// TestSetRefusesTheRestrictedLetter pins the refusal.
+	// unpinned zsh: this shell **does** have the letter and a restricted mode
+	// of its own — measured 2026-09-22, `set -r; cd /` is `cd:3: restricted`
+	// there — and that mode is not built here: the letter maps to a `setopt`
+	// name this dialect records and acts on nothing. So the axis has no mode
+	// to move. TestSetTakesTheRestrictedLetterAndDoesNothing pins what is
+	// there today, and it is not the answer this axis wants.
+	// unpinned ash: the same, measured in the pinned image.
+	// TestSetRefusesTheRestrictedLetter pins the refusal.
+	RestrictedModeIsLeftByTheLetter Answer
+
+	// RestrictedFreezeIsAReadonly makes the names a restricted shell may no
+	// longer assign **readonly** names, so that the refusal is the readonly
+	// one and `readonly -p` lists them.
+	//
+	// Both shells with the mode refuse the assignment and both are fatal about
+	// it the way a readonly assignment is fatal there; what they disagree about
+	// is whether the name has become readonly. Measured 2026-09-22:
+	//
+	//	                      PATH=/bin in the mode      readonly -p lists them
+	//	bash 5.3.20           PATH: readonly variable    yes — `declare -r ENV`
+	//	ksh93u+               PATH: restricted           no, nothing at all
+	//
+	// and `unset PATH` splits the same way: `unset: PATH: cannot unset:
+	// readonly variable` against `unset: PATH: restricted`. So one shell says
+	// the mode made the names readonly and the other says the mode is guarding
+	// them, and a script can tell which by looking.
+	//
+	// The sentences are Diagnostics.RestrictedVariable and
+	// Diagnostics.RestrictedUnset, and the mechanism is shared either way —
+	// see Runner.restrictedFreeze for why the status and the fatality are a
+	// readonly assignment's in both columns and only the sentence and the
+	// listing move.
+	//
+	// Asked only where a name the mode itself froze is assigned, unset or
+	// listed, so a shell not in the mode never reaches it.
+	//
+	// unpinned dash: no restricted mode, so no name is ever mode-frozen.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	// unpinned zsh: this shell has a restricted mode of its own that is not
+	// built here, so no name is ever mode-frozen.
+	// TestSetTakesTheRestrictedLetterAndDoesNothing pins what is there today.
+	// unpinned ash: the same.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	RestrictedFreezeIsAReadonly Answer
+
+	// RestrictedBuiltinRefusalIsFatal ends the script when restricted mode
+	// refuses `.`, `exec` or `command -p`.
+	//
+	// **Those three and not every refusal**, which is the measurement and is
+	// why the doc comment names them. In ksh93 the three end the script and
+	// `cd`, an output redirection, a command word with a separator in it and
+	// `unset` of a frozen name each report 1 and carry on; in bash none of the
+	// ten is fatal. Measured 2026-09-22 from a script file with `echo tail`
+	// behind each refusal and the shell's own exit status taken:
+	//
+	//	                        ksh93u+            bash 5.3.20
+	//	. /etc/profile          nothing, exit 1    the sentence, `tail`, 0
+	//	exec echo hi            nothing, exit 1    the same
+	//	command -p echo hi      nothing, exit 1    the same
+	//	cd /                    `tail`, 0          the same
+	//	echo x > f              `tail`, 0          the same
+	//
+	// The split is not the special-builtin rule under another name, and that
+	// is worth saying because it looks like it: `unset` is a special builtin
+	// and its refusal is not fatal, `command` is not one and its refusal is,
+	// and `command -p /nosuch` — the same builtin failing for an ordinary
+	// reason — carries on in both shells. So this is a fact about the mode's
+	// refusals rather than about which builtin made them.
+	//
+	// unpinned dash: no restricted mode, so none of the three refusals exists.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	// unpinned zsh: this shell has a restricted mode of its own that is not
+	// built here, so none of the three refusals exists.
+	// TestSetTakesTheRestrictedLetterAndDoesNothing pins what is there today.
+	// unpinned ash: the same.
+	// TestSetRefusesTheRestrictedLetter pins the refusal that keeps it out.
+	RestrictedBuiltinRefusalIsFatal Answer
 
 	// KeywordAssignments is `set -k`: with it on, **every** `name=value` word
 	// of a simple command is a prefix assignment and not only the ones

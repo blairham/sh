@@ -88,6 +88,13 @@ func Semantics() interp.Semantics {
 	// 0 — the parentheses nest and the word inside them is a command name
 	// (#3364).
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// unanswered RestrictedModeIsLeftByTheLetter: there is no `set -r` here to
+	// leave a mode with — the letter is `set: Illegal option -r` at 2, measured,
+	// and TestSetRefusesTheRestrictedLetter pins it.
+	// unanswered RestrictedFreezeIsAReadonly: no restricted mode, so no name is
+	// ever mode-frozen. The same refusal keeps it out.
+	// unanswered RestrictedBuiltinRefusalIsFatal: no restricted mode, so none of
+	// the three refusals exists here (#4205).
 	// unanswered BuiltinReadsOptions: there is no `builtin` here to read one —
 	// `builtin -q` is `builtin: not found` at 127 (#3217).
 	//

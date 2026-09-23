@@ -250,6 +250,13 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// unanswered RestrictedModeIsLeftByTheLetter: there is no `set -r` here to
+	// leave a mode with — `set: line 1: illegal option -r` at 2 in the pinned
+	// image, and TestSetRefusesTheRestrictedLetter pins it.
+	// unanswered RestrictedFreezeIsAReadonly: no restricted mode, so no name is
+	// ever mode-frozen.
+	// unanswered RestrictedBuiltinRefusalIsFatal: no restricted mode, so none of
+	// the three refusals exists here (#4205).
 	// unanswered ArrayAttributeRemoval: BusyBox spells neither `-a` nor `-A`,
 	// so no declaration of its can write the `+` form the axis is about — and
 	// it has no declaration builtin to write it on. Measured 2026-09-23,

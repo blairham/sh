@@ -193998,6 +193998,57 @@
         "TimedOut": false
       }
     },
+    "shopt/the-restricted-letter-and-what-the-mode-refuses": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 1: illegal option -r",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=0~tail",
+        "Stderr": "\u003cscript\u003e: line 3: cd: restricted~\u003cscript\u003e: line 4: PATH: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cscript\u003e: line 3: cd: restricted~\u003cscript\u003e: line 4: PATH: readonly variable",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~tail",
+        "Stderr": "\u003cscript\u003e: line 3: cd: restricted~\u003cscript\u003e: line 4: PATH: readonly variable",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: set: Illegal option -r",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cscript\u003e[3]: cd: restricted~\u003cscript\u003e: line 4: PATH: restricted",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "\u003cscript\u003e:cd:3: restricted~\u003cscript\u003e:4: PATH: restricted",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "shopt/turning-off-a-held-history-name": {
       "ash": {
         "Stdout": "st=127",

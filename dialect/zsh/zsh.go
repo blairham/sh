@@ -971,6 +971,17 @@ func Semantics() interp.Semantics {
 	// the command name stays a positional and that is zsh's answer rather
 	// than a gap. See Semantics.KeywordAssignments.
 	s.KeywordAssignments = interp.No
+	// unanswered RestrictedModeIsLeftByTheLetter: this shell *does* have the
+	// letter and a restricted mode of its own — `set -r; cd /` is `cd:3:
+	// restricted` in zsh 5.9.2, measured 2026-09-22 — and that mode is not
+	// built here: the letter reaches a `setopt` name this dialect records and
+	// nothing acts on. So there is no mode for the axis to move.
+	// TestSetTakesTheRestrictedLetterAndDoesNothing pins what is there today,
+	// and #4205 filed the mode rather than claiming it.
+	// unanswered RestrictedFreezeIsAReadonly: the same — no mode here, so no
+	// name is ever mode-frozen.
+	// unanswered RestrictedBuiltinRefusalIsFatal: the same — none of the three
+	// refusals exists here.
 	// unanswered KeywordPromotesADeclarationsOperand: there is no keyword
 	// option here to reach a declaration with. `-k` is this shell's
 	// `interactivecomments` and `set -o keyword` is `no such option`, both

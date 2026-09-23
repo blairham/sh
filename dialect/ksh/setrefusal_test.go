@@ -113,10 +113,17 @@ func TestKshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
 	// this shell answers through the `set -o` table, so `set +p` is granted
 	// and `set -p` is refused by the name. A letter routed to a name must
 	// not also be listed here.
-	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "br"; got != want {
+	// `-r` left in #4205, when this shell's restricted mode was built: the
+	// letter enters it and `set +r` leaves it again, so a letter listed here
+	// would refuse what Semantics.SetHasTheRestrictedLetter grants. The pairing
+	// is the same one `-t`, `-B`, `-H`, `-k` and `-G` have each broken once, and
+	// there is a *third* table beside these two — Runner.hasSetLetter, the
+	// validating pass, where the letter was still unknown after the axis said
+	// yes and the refusal read `set: -r: unknown option`.
+	if got, want := ksh.Diagnostics().UnimplementedOptionLetters["set"], "b"; got != want {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, want %q", got, want)
 	}
-	for _, l := range "br" {
+	for _, l := range "b" {
 		src := "set -" + string(l) + "\n"
 		if got := refuseInScript(t, src); !strings.Contains(got, "is not implemented yet") {
 			t.Errorf("%q said %q, want it called missing rather than unknown", src, got)

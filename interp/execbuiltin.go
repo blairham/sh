@@ -92,7 +92,13 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// shell being replaced and not about `exec`. What the mode does stop
 		// is `exec > f`, and it stops it in applyRedirs as an output
 		// redirection like any other rather than here.
-		return r.restrictedRefusal("exec")
+		// The command word is handed over as well as the builtin's name, and
+		// one of the two dialects with the mode uses it: ksh93 writes `exec:
+		// echo: restricted`. See Diagnostics.RestrictedExec — bash's sentence
+		// names the builtin alone, which is why the two are one field a
+		// dialect spells rather than two sites.
+		r.diagf("%s\n", Wording(r.diag().RestrictedExec, "%[1]s: restricted", "exec", argv[0]))
+		return r.endAfterRestrictedBuiltinRefusal()
 	}
 
 	path, lookErr := r.lookPath(argv[0])

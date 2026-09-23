@@ -720,6 +720,33 @@ func Semantics() interp.Semantics {
 	// where the letter is taken. Measured on a script file, on standard input
 	// and at the invocation.
 	s.SetHasTheTLetter = interp.Yes
+	// `set -r`, and the restricted mode behind it — which is this shell's own
+	// and not bash's under another name. Measured 2026-09-22 on ksh93u+
+	// 2012-08-01 from a script file with a scratch HOME, one spelling at a
+	// time: the refusals are one word, `restricted`, where bash writes a
+	// sentence apiece; three of them end the script where none of bash's does;
+	// the frozen names are PATH, SHELL, ENV and FPATH against bash's PATH,
+	// SHELL, ENV, BASH_ENV and HISTFILE; and `set +r` hands the whole mode
+	// back where bash refuses the word. See
+	// Semantics.SetHasTheRestrictedLetter, which is one question about the
+	// letter and the mode together, and #4205.
+	s.SetHasTheRestrictedLetter = interp.Yes
+	// And the mode is a switch rather than a door that locks: `set -r; set +r`
+	// is silent at 0, `$-` loses the letter, and `cd /`, `PATH=/bin` and
+	// `/bin/echo hi` are each taken again. The **long** spelling is refused all
+	// the same — `set +o restricted` is `set: restricted: restricted` and ends
+	// the script — so the two doors are not one.
+	s.RestrictedModeIsLeftByTheLetter = interp.Yes
+	// And the frozen names are not readonly names here, which a script can see
+	// two ways: the refusal is `PATH: restricted` rather than `PATH: is read
+	// only`, and `readonly -p` in the mode lists nothing at all where bash
+	// lists `declare -r ENV`.
+	s.RestrictedFreezeIsAReadonly = interp.No
+	// And three of the refusals end the script: `.`, `exec` and `command -p`.
+	// The other five report 1 and carry on, which is measured rather than
+	// assumed — see Semantics.RestrictedBuiltinRefusalIsFatal, where the table
+	// also says why this is not the special-builtin rule wearing a hat.
+	s.RestrictedBuiltinRefusalIsFatal = interp.Yes
 	// And it reaches the command string too, which bash's does not: a two-line
 	// `-c` string that turns the option on writes nothing after it.
 	s.OneCommandStopsACommandString = interp.Yes
@@ -830,7 +857,11 @@ func Semantics() interp.Semantics {
 	// stands in front of a `c` it sorts after, and `l` stands behind
 	// capitals it sorts before. Both are stable across runs and both differ
 	// from every other member of the panel.
-	s.DollarDashLetterOrder = "icaefhkmnstuvxBCEHTl"
+	// `r` sits between `i` and `c`, measured three ways because the two
+	// invocation letters cannot be had together: `set -r` in a script is
+	// `rhB`, `ksh -c 'set -r; …'` is `rchsB` and `ksh -i` with `set -r` is
+	// `irmsBE` (#4205).
+	s.DollarDashLetterOrder = "ircaefhkmnstuvxBCEHTl"
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	// A numeral a double cannot hold is lost rather than saturated:
 	// `$((1e400))` is `-0` here where the same value *computed*,
@@ -3905,7 +3936,33 @@ func Diagnostics() interp.Diagnostics {
 		// A warning rather than an error, in so many words, and the only
 		// member of the panel that says so.
 		UnsetReadonly: "unset: warning: %s: is read only",
-		ShiftTooMany:  "shift: %[2]s: bad number",
+		// Restricted mode's refusals, and every one of them is the single word
+		// where bash writes a sentence. Measured 2026-09-22 on ksh93u+ from a
+		// script file, one spelling at a time (#4205):
+		//
+		//	cd /                  cd: restricted
+		//	PATH=/bin             PATH: restricted, and the script ends
+		//	unset PATH            unset: PATH: restricted
+		//	/bin/echo hi          /bin/echo: restricted
+		//	. /etc/profile        .: /etc/profile: restricted
+		//	echo x > f            f: restricted
+		//	exec echo hi          exec: echo: restricted
+		//	command -p echo hi    -p: restricted
+		//
+		// Four of the eight are the substrate's own shapes with a shorter
+		// sentence in them. The other four are why RestrictedExec and
+		// RestrictedCommandOption exist as fields of their own: this shell
+		// names the command after `exec` where bash names neither, and names
+		// the letter alone after `command -p` where bash names both.
+		Restricted:              "%[1]s: restricted",
+		RestrictedOperand:       "%[1]s: %[2]s: restricted",
+		RestrictedCommandName:   "%[1]s: restricted",
+		RestrictedRedirect:      "%[1]s: restricted",
+		RestrictedVariable:      "%[1]s: restricted",
+		RestrictedUnset:         "unset: %[1]s: restricted",
+		RestrictedExec:          "%[1]s: %[2]s: restricted",
+		RestrictedCommandOption: "%[2]s: restricted",
+		ShiftTooMany:            "shift: %[2]s: bad number",
 		// The same sentence for a count below zero, which is only reachable
 		// here after the end-of-options marker.
 		ShiftNegativeCount: "shift: %[2]s: bad number",
@@ -4173,7 +4230,12 @@ func Diagnostics() interp.Diagnostics {
 			// tables drifting apart, which is the drift #3088 swept for.
 			// `s` left it when the sort was built: Semantics.
 			// SetSLetterSortsTheOperands.
-			"set": "br",
+			// `r` left it in #4205, when this shell's restricted mode was
+			// built: the letter enters the mode and `set +r` leaves it again,
+			// so a letter refused here would refuse what
+			// Semantics.SetHasTheRestrictedLetter grants — the pairing `-t`,
+			// `-B`, `-H`, `-k` and `-G` have each broken once.
+			"set": "b",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",
@@ -4957,6 +5019,13 @@ func Apply(r *interp.Runner) {
 	// option is drawn from the option's own state, which is the rule that
 	// keeps `m` out of the same string.
 	r.SetOptionLetterNames(map[rune]string{'G': "globstar", 'E': "rc"})
+	// And the one name this shell's restricted mode freezes beyond the three
+	// POSIX ones and the non-interactive startup variable: `FPATH`, where an
+	// autoloaded function comes from, which is a way to reach a command the
+	// shell would otherwise not run in exactly the way `PATH` is. bash has no
+	// such name and freezes `HISTFILE`, which this shell does not — measured
+	// one assignment at a time, since `readonly -p` here lists nothing (#4205).
+	r.FreezeInRestrictedMode("FPATH")
 	// The `set -o` names beyond the ones every shell has. Measured 2026-09-15
 	// against ksh93u+ 2012-08-01 by diffing the whole listing: 32 rows there
 	// against 20 here, and five of the twenty spelled the other way round

@@ -1308,6 +1308,20 @@ func Semantics() interp.Semantics {
 	// Semantics.SetHasTheRestrictedLetter for what each of the nine
 	// refusals was measured doing, and interp/restricted.go for the sites.
 	s.SetHasTheRestrictedLetter = interp.Yes
+	// And the mode locks behind you: `set +r` in a restricted shell is
+	// `set: +r: invalid option` at 1 with the usage block, measured — where
+	// ksh93 grants it and hands everything back. See
+	// Semantics.RestrictedModeIsLeftByTheLetter.
+	s.RestrictedModeIsLeftByTheLetter = interp.No
+	// And the names the mode freezes really are readonly names here: the
+	// refusal is `PATH: readonly variable`, `unset PATH` is `cannot unset:
+	// readonly variable`, and `readonly -p` lists them — `declare -r ENV` in a
+	// shell with no `$ENV` set. ksh93 answers no to all three.
+	s.RestrictedFreezeIsAReadonly = interp.Yes
+	// And none of the ten refusals ends the script: every one of them reports
+	// 1 — or an assignment's 0 — and the line after it runs. Measured with
+	// `echo tail` behind each.
+	s.RestrictedBuiltinRefusalIsFatal = interp.No
 	// And the one route it does not reach. Measured: a `-c` string that turns
 	// the option on runs to its end anyway, with `$-` showing `t` throughout.
 	// The other shell with the letter stops there, which is what makes this
@@ -4681,6 +4695,12 @@ func Apply(r *interp.Runner) {
 	// Where `set -x` writes, which this shell alone lets a script move. See
 	// xtracefd.go for the three measurements that shape it.
 	registerTraceDescriptor(r)
+	// And the one name this shell's restricted mode freezes beyond the three
+	// POSIX ones and the non-interactive startup variable. Measured by asking
+	// `readonly -p` in a restricted shell: PATH, SHELL, ENV, BASH_ENV and
+	// HISTFILE are frozen and nothing else is. ksh93's extra name is a
+	// different one, which is why this is a list rather than an axis.
+	r.FreezeInRestrictedMode("HISTFILE")
 	// And the complaint a compatibility level out of range draws, which is
 	// the assignment's and not the first row's to read it. See compat.go,
 	// which also wires the `shopt compat44` spelling to the same state.

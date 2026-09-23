@@ -48,7 +48,11 @@ import (
 // would load or unload a builtin is refused. `command -p` with no operand
 // behind it is taken, because nothing would be searched for.
 
-// enterRestricted puts this shell in restricted mode, which it never leaves.
+// enterRestricted puts this shell in restricted mode.
+//
+// Whether it can be left again is the dialect's, and the two shells that have
+// the mode disagree: bash refuses `set +r` outright and ksh93 grants it and
+// hands everything back. See Semantics.RestrictedModeIsLeftByTheLetter.
 //
 // Idempotent, because `set -r` in a shell that is already restricted is a
 // request for the state it is in and every such request is granted: measured,
@@ -59,6 +63,13 @@ func (r *Runner) enterRestricted() {
 	}
 	r.restricted = true
 	for _, name := range r.restrictedFrozenVariables() {
+		if r.restrictedFrozen == nil {
+			r.restrictedFrozen = map[string]bool{}
+		}
+		// Recorded as well as frozen, because a dialect that words the
+		// refusal apart from a readonly's needs to know which names the
+		// *mode* froze — see Runner.restrictedFreeze.
+		r.restrictedFrozen[name] = true
 		// The ordinary freeze rather than a check of its own at every
 		// assignment site, which is the measurement and not a shortcut:
 		// `PATH=/bin` in a restricted bash is `PATH: readonly variable` —
@@ -73,6 +84,57 @@ func (r *Runner) enterRestricted() {
 	}
 }
 
+// leaveRestricted hands back what the mode was withholding, for the one shell
+// that lets a script ask.
+//
+// Measured 2026-09-22 on ksh93u+ 2012-08-01 from a script file: `set -r; set
+// +r` is silent at 0, `$-` loses the letter, and `cd /`, `PATH=/bin` and
+// `/bin/echo hi` are each taken afterwards — so this is the mode genuinely
+// lifted and not the letter alone. The long spelling is refused in the same
+// shell, which is why the two doors are not one: see the `restricted` entry in
+// setoptions.go.
+//
+// The freeze is lifted only for the names the *mode* froze. A script that had
+// already written `readonly PATH` of its own keeps it, which is what makes the
+// record worth keeping rather than re-deriving the list.
+func (r *Runner) leaveRestricted() {
+	if !r.restricted {
+		return
+	}
+	r.restricted = false
+	for name := range r.restrictedFrozen {
+		// The mark directly rather than removeReadonly, which asks a dialect
+		// whether `typeset +r` may take the attribute off: this is not a
+		// script asking to unfreeze a name, it is the mode giving back what
+		// the mode took, and the shell that allows it is not the shell that
+		// allows the attribute to be removed.
+		delete(r.readonly, name)
+	}
+	r.restrictedFrozen = nil
+}
+
+// restrictedFreeze reports whether a name is one this mode froze *and* the
+// dialect words that refusal apart from an ordinary readonly's.
+//
+// Two shells freeze names here and they do not say the same thing about them.
+// bash makes them readonly outright — `PATH=/bin` is `PATH: readonly
+// variable`, `readonly -p` lists them, and the two spellings cannot disagree
+// because there is one state. ksh93 keeps its own sentence, `PATH:
+// restricted`, and lists nothing under `readonly -p`; measured 2026-09-22.
+//
+// The mechanism is shared all the same — the names are marked readonly in both
+// — because the status and the fatality of a refused assignment are a readonly
+// assignment's in both shells, and those are measured facts that a second
+// mechanism would have to reproduce by hand. What the axis moves is the
+// sentence and the listing. See Semantics.RestrictedFreezeIsAReadonly.
+func (r *Runner) restrictedFreeze(name string) bool {
+	if !r.restrictedFrozen[name] {
+		return false
+	}
+	return !r.ask(r.sem().RestrictedFreezeIsAReadonly,
+		"a restricted shell's frozen names being readonly names")
+}
+
 // restrictedFrozenVariables are the names a restricted shell may no longer
 // assign, because every one of them is a way to reach a command the shell
 // would otherwise not run.
@@ -82,18 +144,39 @@ func (r *Runner) enterRestricted() {
 // `readonly -p` in a restricted shell: PATH, SHELL, ENV, BASH_ENV and
 // HISTFILE are frozen and nothing else is.
 //
-// Four of the five are written here and the fifth is asked of the dialect,
-// which is the split every startup file already keeps: PATH, SHELL and ENV
-// are POSIX's own names and HISTFILE is the name every shell in the panel
-// that has a history file uses, while the non-interactive startup variable is
-// one the shell picks for itself — see Semantics.NonInteractiveStartupVariable,
-// which is where the one that is not spelled here comes from.
+// Three of them are written here, the fourth is asked of the dialect's
+// semantics and the rest are the dialect's own, which is the split the
+// measurement asks for: PATH, SHELL and ENV are POSIX's own names and are
+// frozen in both shells that have the mode, the non-interactive startup
+// variable is one the shell picks for itself — see
+// Semantics.NonInteractiveStartupVariable — and beyond those the sets differ.
+// Measured 2026-09-22: bash freezes HISTFILE and ksh93 does not; ksh93 freezes
+// FPATH, where a function comes from, and bash has no such name. Neither is
+// derivable from the other, so each dialect names its own through
+// Runner.FreezeInRestrictedMode.
 func (r *Runner) restrictedFrozenVariables() []string {
-	names := []string{"PATH", "SHELL", "ENV", "HISTFILE"}
+	names := []string{"PATH", "SHELL", "ENV"}
 	if name := r.sem().NonInteractiveStartupVariable; name != "" && !slices.Contains(names, name) {
 		names = append(names, name)
 	}
+	for _, name := range r.restrictedFreezes {
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
 	return names
+}
+
+// FreezeInRestrictedMode names what else this shell's restricted mode freezes,
+// beyond the three POSIX names and the non-interactive startup variable.
+//
+// A list and not an axis because it is a list: bash freezes HISTFILE and ksh93
+// freezes FPATH, and neither shell has the other's name at all, so there is no
+// question with two answers to ask. Measured by asking each shell in the mode
+// — `readonly -p` in bash, one assignment at a time in ksh93, which lists
+// nothing.
+func (r *Runner) FreezeInRestrictedMode(names ...string) {
+	r.restrictedFreezes = append(r.restrictedFreezes, names...)
 }
 
 // restrictedRefusal writes `<what>: restricted` and the status every refusal
@@ -117,6 +200,25 @@ func (r *Runner) restrictedRefusal(what string) int {
 // it would send a script looking at the wrong word.
 func (r *Runner) restrictedOperandRefusal(name, operand string) int {
 	r.diagf("%s\n", Wording(r.diag().RestrictedOperand, "%[1]s: %[2]s: restricted", name, operand))
+	return restrictedStatus
+}
+
+// endAfterRestrictedBuiltinRefusal ends the script where the dialect says one
+// of the three builtin refusals does, and answers the status either way.
+//
+// Called after the sentence is written rather than instead of it: both shells
+// say the same words and only one of them stops. See
+// Semantics.RestrictedBuiltinRefusalIsFatal for which three and for why the
+// split is not the special-builtin rule.
+func (r *Runner) endAfterRestrictedBuiltinRefusal() int {
+	if r.ask(r.sem().RestrictedBuiltinRefusalIsFatal,
+		"restricted mode's refusal of `.`, `exec` or `command -p` ending the script") {
+		r.fatalQuiet()
+		return r.status
+	}
+	if r.unspecified {
+		return r.status
+	}
 	return restrictedStatus
 }
 
@@ -227,4 +329,51 @@ func (r *Runner) RestrictedHashPath(path string) bool {
 // slash alike.
 func restrictedPath(word string) bool {
 	return strings.Contains(word, "/")
+}
+
+// The long spelling of the mode joins the option table here rather than in the
+// literal beside its neighbors, for the reason interp/command.go's builtins do:
+// the mode reaches that table back — through the freeze, through the store —
+// so an entry written in the literal is an initialization cycle Go refuses to
+// compile.
+func init() {
+	extraSetOptions["restricted"] = setOption{
+		try: (*Runner).setRestrictedOption,
+		get: func(r *Runner) bool { return r.restricted },
+	}
+}
+
+// setRestrictedOption is the long spelling of the mode, `set -o restricted`.
+//
+// One shell in the panel has the name and one does not: bash has never had a
+// `restricted` row in `set -o`, so only a dialect that declares this name
+// reaches here. Measured 2026-09-22 on ksh93u+ 2012-08-01 from a script file:
+//
+//	set -o restricted    enters the mode; `set -o` then reads `restricted on`
+//	set +o restricted    `set: restricted: restricted`, and the script ends
+//
+// So the long spelling is refused in the same shell whose `set +r` is granted,
+// which is why the two doors are two and not one. See
+// Semantics.RestrictedModeIsLeftByTheLetter for the letter's half.
+//
+// The refusal is fatal, which is measured rather than inherited from the other
+// refusals in this file: every one of those reports 1 and leaves the shell
+// running, and this one stops it.
+func (r *Runner) setRestrictedOption(on bool, spelling string) bool {
+	if on {
+		r.enterRestricted()
+		return true
+	}
+	if !r.restricted {
+		// The state this shell is already in, granted as every such request
+		// is.
+		return true
+	}
+	r.fatal("%s\n", Wording(r.diag().RestrictedOperand,
+		"%[1]s: %[2]s: restricted", "set", spelling))
+	// The refusal's own status rather than `set`'s invalid-option one, which is
+	// measured: the shell exits **1** here where an option name it does not
+	// have exits 2. A refusal about the mode is the mode speaking.
+	r.setOptionStatus = restrictedStatus
+	return false
 }

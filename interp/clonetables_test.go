@@ -44,6 +44,9 @@ var sharedStacks = map[string]string{
 	"RlimitOrder":     "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
 	"substLevelsOut":  "rebuilt with append([]substLevel{}, …) every time a level opens, so a write never lands in an array anyone else holds",
 	"carriedHeredocs": "the running file's own list, replaced wholesale by RunPart and never appended to — a subshell reads the same file's list, which is what it should see",
+	"restrictedFreezes": "the extra names this dialect's restricted mode freezes, " +
+		"appended to in Apply at setup and never again — Runner.FreezeInRestrictedMode " +
+		"is a dialect's declaration and not anything a script can reach",
 }
 
 // seedStacks gives every slice on a Runner an element and spare capacity.
@@ -59,6 +62,7 @@ var sharedStacks = map[string]string{
 // the test below fails on any slice it left out.
 func seedStacks(r *Runner) {
 	r.Env = append(make([]string, 0, 4), "SEED=v")
+	r.restrictedFreezes = append(make([]string, 0, 4), "SEEDNAME")
 	r.Params = append(make([]string, 0, 4), "seed")
 	r.procSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.heldProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
@@ -280,6 +284,7 @@ func seedTables(r *Runner) {
 	r.assignmentActions = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.unsetActions = map[string]func(*Runner){"seed": func(*Runner) {}}
 	r.inheritedParameterActions = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
+	r.restrictedFrozen = map[string]bool{"seed": true}
 	r.optionTies = map[string]func(*Runner, bool){"seed": func(*Runner, bool) {}}
 	r.dynamicPresence = map[string]func(*Runner) bool{"seed": func(*Runner) bool { return true }}
 	r.dynamicDeclarations = map[string]ProducedDeclaration{"seed": {Integer: true}}

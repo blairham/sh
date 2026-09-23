@@ -235,9 +235,14 @@ type declaration struct {
 // still a declaration, and `declare -p` is how scripts ask.
 func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d := declaration{
-		name:        name,
-		integer:     r.integer[name],
-		readonly:    r.readonly[name],
+		name:    name,
+		integer: r.integer[name],
+		// A name restricted mode froze is readonly to the machinery and not to
+		// the listing, in the dialect that does not call the mode's freeze a
+		// readonly: measured, `readonly -p` in a restricted ksh93 lists none
+		// of them where bash lists `declare -r ENV`. See
+		// Semantics.RestrictedFreezeIsAReadonly and Runner.restrictedFreeze.
+		readonly:    r.readonly[name] && !r.restrictedFreeze(name),
 		exported:    r.isExported(name),
 		lower:       r.lowered[name],
 		upper:       r.uppered[name],
@@ -480,6 +485,15 @@ func (r *Runner) declarableNames() []string {
 		}
 	}
 	for name := range r.readonly {
+		if r.restrictedFreeze(name) {
+			// A name restricted mode froze, in the dialect that does not call
+			// that readonly: measured, `readonly -p` in a restricted ksh93
+			// lists nothing where bash lists `declare -r ENV`. The mark is
+			// shared machinery and the listing is the observable, so this is
+			// the one place the two part company. See
+			// Semantics.RestrictedFreezeIsAReadonly.
+			continue
+		}
 		seen[name] = true
 	}
 	for name := range r.integer {

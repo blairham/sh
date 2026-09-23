@@ -6,6 +6,8 @@ package interp_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // The `CHLD` trap fires once per child the shell reaps, and this shell has no
@@ -53,6 +55,52 @@ func TestTheChildTrapFiresOncePerFork(t *testing.T) {
 			out, status := run(t, src, nil)
 			// The settling command is an external and forks too, so the
 			// figure a row names is the one written here plus that one.
+			want := c.want + 1
+			if got := strings.TrimSpace(out); got != itoa(want) || status != 0 {
+				t.Errorf("counted %q at status %d, want %d", got, status, want)
+			}
+		})
+	}
+}
+
+// A process substitution and a coprocess are forks too, and neither raised
+// anything here.
+//
+// They are apart from the table above because they need the grammar turned on,
+// and they were found the same way the rows there were: by counting. Measured
+// 2026-09-23 on bash 5.3.20, with the settling command's own fork included in
+// the figure:
+//
+//	cat <(echo x)                 3 there, 2 here — the body was not counted
+//	cat <(echo x) <(echo y)       4 there, 2 here — nor was either of them
+//	coproc CP { echo x; }         2 there, 1 here
+//
+// bash forks for a substitution's body and for a coprocess and reaps both like
+// any other child; this shell runs each as a job of its own, which is the same
+// place the count belongs.
+func TestAProcessSubstitutionAndACoprocessAreForksToo(t *testing.T) {
+	for _, c := range []struct {
+		name, src string
+		enable    func(*syntax.Dialect)
+		want      int
+	}{
+		{
+			"a process substitution's body", `/bin/cat <(echo x) >/dev/null`,
+			func(d *syntax.Dialect) { d.ProcessSubstitution = true }, 2,
+		},
+		{
+			"two of them are two", `/bin/cat <(echo x) <(echo y) >/dev/null`,
+			func(d *syntax.Dialect) { d.ProcessSubstitution = true }, 3,
+		},
+		{
+			"and a coprocess", "coproc CP { echo x; }\nwait $CP_PID 2>/dev/null",
+			func(d *syntax.Dialect) { d.Coproc, d.CoprocName = true, true }, 1,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			src := "n=0\ntrap 'n=$((n+1))' CHLD\n" + c.src +
+				"\nwait\n/bin/sleep 0.15\n:\n:\nprintf '%s' \"$n\"\n"
+			out, status := runGrammar(t, src, c.enable, nil)
 			want := c.want + 1
 			if got := strings.TrimSpace(out); got != itoa(want) || status != 0 {
 				t.Errorf("counted %q at status %d, want %d", got, status, want)

@@ -331,6 +331,11 @@ func (r *Runner) startBeside(ctx context.Context, name string, s concurrentStrea
 	}, func() {
 		releaseFds()
 		job.finish(status)
+		// And a fork of this shell has ended: a coprocess is a child in bash
+		// and is reaped like one. Measured 2026-09-23, `trap 'echo C' CHLD;
+		// coproc CP { echo x; }` fires once for it there and fired not at all
+		// here. See Runner.childReaped.
+		r.childReapedByTheShell()
 		// **Finished first, and then the ends.** Closing them is what turns
 		// the command's exit into end-of-file for whoever reads the near end,
 		// so in this order a script that has read that end dry *knows* the

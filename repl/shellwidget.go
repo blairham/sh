@@ -64,6 +64,33 @@ type Line struct {
 	// has an editor which reads keys, draws them, and never runs anything —
 	// `exit` included, since that is committed by the same widget (#2082).
 	Accept bool
+
+	// Postdisplay is text drawn **after** the line without being part of it.
+	//
+	// What an inline suggestion is made of: the editor draws it where the line
+	// ends, leaves the cursor inside the line, and never gives it to the shell
+	// to run. The shell that has it calls it `POSTDISPLAY` — see dialect/zsh,
+	// which is where that name lives.
+	//
+	// Measured 2026-09-22 through a pseudo-terminal against zsh 5.9.2, with a
+	// widget bound to a key:
+	//
+	//	`abcdef`, then a widget setting POSTDISPLAY='<PD>' and CURSOR=2, draws
+	//	`abcdef<PD>` and then moves the cursor **8** cells left — the rest of
+	//	the line plus the whole of the postdisplay — so it is drawn after the
+	//	line's end and not at the cursor.
+	//	`$#BUFFER` is 7 and `CURSOR` 7 for `echo hi` with a postdisplay set,
+	//	so neither counts it.
+	//	`region_highlight=("$#BUFFER $(($#BUFFER + $#POSTDISPLAY)) fg=8")`
+	//	colors it, so the offsets run on past the line.
+	//	Typing another character redraws it, and accepting the line runs the
+	//	line alone — `abZcdef` from the run above — and leaves the next read
+	//	with it empty.
+	//
+	// It rides the same round trip as the line because it is the same
+	// keystroke's answer: a widget reads it, sets it, or clears it, and the
+	// editor draws whatever came back (#4217).
+	Postdisplay string
 }
 
 // runShellWidget runs one of the shell's own actions over the line, draws
@@ -97,6 +124,11 @@ func (e *editor) runShellWidget(name string, prompt drawnPrompt) (ran, accept bo
 	}
 	e.line = []rune(out.Buffer)
 	e.pos = min(max(out.Cursor, 0), len(e.line))
+	// And what the widget left to be drawn after the line, which is this
+	// editor's to keep for the rest of the read: measured, a postdisplay
+	// survives the keystrokes after the one that set it and is redrawn with
+	// the line. See Line.Postdisplay.
+	e.postdisplay = out.Postdisplay
 	e.redraw(prompt)
 	return true, out.Accept
 }

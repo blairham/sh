@@ -113,7 +113,8 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 	if !d.valid || d.cols != cols || d.cells != prompt.cells || d.prompt != prompt.text {
 		return false
 	}
-	if rightFits(prompt.cells, cells(e.line), prompt.rightCells, cols) != d.right {
+	shown := e.displayed()
+	if rightFits(prompt.cells, cells(shown), prompt.rightCells, cols) != d.right {
 		// The line has just grown into the right prompt, or shrunk back off
 		// it. An incremental repaint writes what changed and erases nothing,
 		// so it cannot take one off; the whole-line draw clears to the end of
@@ -124,15 +125,16 @@ func (e *editor) repaint(prompt drawnPrompt, cols int) bool {
 
 	styled := e.styled()
 	at, resume := sharedPrefix(d.styled, styled)
-	if resume > len(e.line) {
-		// The highlighter emitted more characters than the line has, which
-		// styled does not do. Rather than reason about a screen this cannot
-		// account for, fall back.
+	if resume > len(shown) {
+		// The highlighter emitted more characters than the screen holds, which
+		// styled does not do — the count is over what is *displayed*, so a
+		// postdisplay is part of it rather than past the end (#4217). Rather
+		// than reason about a screen this cannot account for, fall back.
 		return false
 	}
 
-	resRow, resCol := placeAt(prompt.cells, e.line, resume, cols)
-	curRow, curCol, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
+	resRow, resCol := placeAt(prompt.cells, shown, resume, cols)
+	curRow, curCol, endRow, endCol := place(prompt.cells, shown, e.pos, cols)
 	resRow, resCol = pastEdge(resRow, resCol, cols)
 	curRow, curCol = pastEdge(curRow, curCol, cols)
 

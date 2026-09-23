@@ -102,7 +102,22 @@ const valueBackslashRanOutOfValue = "\x00\x00"
 // byte no pattern reads costs nothing, and it is what makes a bare mark
 // unambiguous — and a doubled one, which is the other mark. See
 // valueBackslashRanOutOfValue.
-const markedByGlobEscape = "*?[\\<()|\x00" + extendedPatternMeta
+// A `/` is in it for one reader and means something weaker than the others do.
+// Every other byte in this set is marked to say "this was quoted, so it is a
+// character rather than an operator"; a `/` cannot be made a character, because
+// it separates the components a pattern is matched a piece at a time against
+// however it was written. So a mark on one records only that it **was quoted**
+// and commits to nothing — the shape valueBackslashMark already uses — and
+// splitFieldParts drops it while splitting on it like any other separator.
+//
+// The one reader is bracketHoldsASlash, and through it
+// Semantics.BracketHoldingASlashIsStillABracket: the column that reads a
+// bracket written across a separator as *not a bracket* reads one written
+// across a quoted separator as a bracket, so the two spellings have to arrive
+// here distinguishable. Before this they did not: `[qwe/]` and `[qwe\/]` were
+// the same field, and an axis answered from that field alone moved two of
+// glob.tests' lines to agreeing and two the other way (#4158).
+const markedByGlobEscape = "*?[\\<()|/\x00" + extendedPatternMeta
 
 func globEscape(s string) string {
 	var b strings.Builder
@@ -390,6 +405,19 @@ func (r *Runner) valueBackslashSurvivesAPatternPiece(piece string) bool {
 		"a value's trailing backslash staying in the pattern piece a quoted separator closed")
 }
 
+// slashLeavesABracket is Semantics.BracketHoldingASlashIsStillABracket, asked
+// where a bracket that closes holds a live `/` and nowhere else.
+//
+// A bracket carrying a separator can never match, so the question is only about
+// what becomes of the *word*: a pattern that matched nothing, or a word that was
+// never a pattern. Nothing downstream tells those apart until an option deletes
+// an unmatched pattern or refuses one, which is why this is asked at the gate
+// rather than in the matcher.
+func (r *Runner) slashLeavesABracket() bool {
+	return r.ask(r.sem().BracketHoldingASlashIsStillABracket,
+		"whether a bracket expression holding a `/` is still one when a pattern is matched against pathnames")
+}
+
 // holdsAValueBackslash reports whether a field carries either of the marks a
 // value's backslash is written as. One question rather than two `IndexByte`
 // calls at each site, because a site that learned one mark and not the other is
@@ -437,7 +465,9 @@ func fieldUnitAt(s string, i int) (unit string, live bool, width int) {
 // quantifier being a metacharacter in its own right — which is why the gap
 // showed up as three of the five quantifiers rather than as the construct
 // (#1042).
-func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, extendedOperators bool) bool {
+func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, extendedOperators bool,
+	slashLeavesABracket func() bool,
+) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' {
 			i++
@@ -495,7 +525,16 @@ func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, ext
 			// zsh alone goes further and rejects `[a` as a bad pattern where
 			// the others take it literally. That divergence is recorded in
 			// the corpus rather than guessed at here.
-			if closesBracket(s, i) {
+			//
+			// A bracket that closes and holds a *live* `/` is the second
+			// reading, and the panel parts on it: no metacharacter matches a
+			// separator, so such a bracket can never match, and one column
+			// reads that as the bracket not being one. See
+			// Semantics.BracketHoldingASlashIsStillABracket.
+			// The axis is a function and is called here and nowhere else: a
+			// question this shell cannot answer must refuse the one word it
+			// is about, not every field that reaches the gate.
+			if closesBracket(s, i) && (!bracketHoldsASlash(s, i) || slashLeavesABracket()) {
 				return true
 			}
 			continue
@@ -619,6 +658,75 @@ func closesBracket(s string, i int) bool {
 	return false
 }
 
+// splitFieldParts cuts a field into the components a pattern is matched one at
+// a time against.
+//
+// A `/` separates whether it was quoted or not — that is the one thing quoting
+// cannot take off it — so this splits on a marked separator exactly as on a
+// live one and drops the mark. `strings.Split` on the field would leave the
+// mark behind on the end of the piece in front, which is a backslash nobody
+// wrote and a pattern piece that matches nothing.
+//
+// Every other mark is left alone: it is the escaped form's own and belongs to
+// whatever reads the piece.
+func splitFieldParts(field string) []string {
+	var parts []string
+	var b strings.Builder
+	for i := 0; i < len(field); i++ {
+		switch {
+		case field[i] == '\\' && i+1 < len(field) && field[i+1] == '/':
+			// The mark and the separator it records. The piece ends here.
+			parts = append(parts, b.String())
+			b.Reset()
+			i++
+		case field[i] == '\\' && i+1 < len(field):
+			b.WriteByte(field[i])
+			i++
+			b.WriteByte(field[i])
+		case field[i] == '/':
+			parts = append(parts, b.String())
+			b.Reset()
+		default:
+			b.WriteByte(field[i])
+		}
+	}
+	parts = append(parts, b.String())
+	return parts
+}
+
+// bracketHoldsASlash reports whether the bracket expression opening at i holds
+// a **live** `/` before it closes.
+//
+// Asked only of a bracket [closesBracket] has already said closes, so the scan
+// cannot run off the end looking for one. A marked separator is skipped with
+// every other mark, which is the whole reason the mark exists: a quoted `/`
+// leaves the bracket a bracket in the column this question is for, and a
+// written one does not. The opening run `!`, `^` and a `]` written first are
+// stepped over for the reason closesBracket steps over them — they are the
+// bracket's own spelling rather than its contents.
+func bracketHoldsASlash(s string, i int) bool {
+	j := i + 1
+	if j < len(s) && (s[j] == '!' || s[j] == '^') {
+		j++
+	}
+	if j < len(s) && s[j] == ']' {
+		j++
+	}
+	for ; j < len(s); j++ {
+		if s[j] == '\\' {
+			j++
+			continue
+		}
+		switch s[j] {
+		case ']':
+			return false
+		case '/':
+			return true
+		}
+	}
+	return false
+}
+
 // glob expands one field against the filesystem.
 //
 // The two restrictions live here rather than in the matcher, which is what
@@ -654,7 +762,7 @@ func (r *Runner) describesRatherThanSpells(s string) bool {
 	}
 	if hasUnescapedMeta(s, r.dialect().NumericRangePattern,
 		r.dialect().PatternAlternation, r.dialect().ExtendedPattern,
-		r.MatchOption(ExtendedPatternOperators)) {
+		r.MatchOption(ExtendedPatternOperators), r.slashLeavesABracket) {
 		return true
 	}
 	// Only one of the two readings reaches the filesystem. ksh93 expands
@@ -820,7 +928,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		r.ignoredNamesRevealHidden()
 	starstar := r.MatchOption(StarStarCrossesDirectories)
 	starstarAlone := r.MatchOption(StarStarAloneCrossesDirectories)
-	parts := strings.Split(field, "/")
+	parts := splitFieldParts(field)
 	// Whether a zero-level `**` is reported with the separator the pattern
 	// wrote in front of it, which is decided by what stands ahead of the
 	// last `**` **as written** — ahead of it in the field, before the run

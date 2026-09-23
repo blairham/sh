@@ -2000,6 +2000,11 @@ func Semantics() interp.Semantics {
 	// axis above moved. It comes to bash's words by this other route:
 	// `./[x]${bs}/e` matches a directory named `x\` here too.
 	s.ValueBackslashSurvivesAPatternPiece = interp.Yes
+	// The reading zsh has, shown through this column's own way of deleting an
+	// unmatched pattern: `~(N)[a/b]` expands to nothing on ksh93u+ 2012-08-01,
+	// where a word that was never a pattern would have stayed. See
+	// interp.Semantics.BracketHoldingASlashIsStillABracket (#4158).
+	s.BracketHoldingASlashIsStillABracket = interp.Yes
 	// The trim ignores the mask and reaches the last name's value however it
 	// was arrived at. Measured 2026-09-12: `printf 'a b\\ \n' | read x y`
 	// leaves `b` here and `b ` in dash and the three bashes — one field per

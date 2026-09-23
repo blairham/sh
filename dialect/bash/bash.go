@@ -2028,6 +2028,15 @@ func Semantics() interp.Semantics {
 	// `x\` here and `./[y]${bs}/e` is the word as written, which is the
 	// opposite of what dash and BusyBox ash answer.
 	s.ValueBackslashSurvivesAPatternPiece = interp.Yes
+	// A bracket carrying a live `/` is not a bracket here, so a word whose only
+	// would-be metacharacter was that bracket is not a pattern: `shopt -s
+	// nullglob` keeps `[a/b]` and `shopt -s failglob` does not refuse it, which
+	// only a word that was never a pattern can do. Measured 2026-09-23 on
+	// 5.3.15 and 5.3.20; a quoted separator leaves the bracket a bracket even
+	// here. bash 3.2.57 answers the other way and is not followed, as elsewhere
+	// in this file. See interp.Semantics.BracketHoldingASlashIsStillABracket
+	// (#4158).
+	s.BracketHoldingASlashIsStillABracket = interp.No
 	// An escaped IFS whitespace character closing a `read` value is trimmed
 	// off a value that took the *remainder* of the line and left alone on a
 	// value that was its own field. Measured 2026-09-12 on 5.3.15, 3.2.57

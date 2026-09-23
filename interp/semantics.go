@@ -552,6 +552,66 @@ type Semantics struct {
 	// home directory in every column (#4234).
 	ValueBackslashSurvivesAPatternPiece Answer
 
+	// BracketHoldingASlashIsStillABracket says whether a `[ … ]` carrying a live
+	// `/` is a bracket expression when the pattern is matched against
+	// **pathnames**.
+	//
+	// A `/` is the one character no metacharacter matches — it separates the
+	// components a pattern is matched a piece at a time against — so a bracket
+	// written across one can never match anything. One column reads that as the
+	// bracket not being a bracket at all: its `[` is an ordinary character, and a
+	// word whose only would-be metacharacter was that bracket is therefore not a
+	// pattern. The others read the bracket as a bracket that matches nothing.
+	//
+	// Nothing observes the difference until something happens to a pattern that
+	// *matched nothing*, which is why this looks unanimous and is not. Measured
+	// 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C` in a directory
+	// holding `qwe/rty` and no single-character name, from script files:
+	//
+	//	shell             written                     answer
+	//	bash 5.3.15/.20   shopt -s nullglob; [a/b]    [a/b]  — kept, so not a pattern
+	//	bash 5.3.15/.20   shopt -s failglob; [a/b]    [a/b]  — kept, and no refusal
+	//	bash 3.2.57       shopt -s nullglob; [a/b]    removed — the other reading
+	//	zsh 5.9.2         [a/b]                       no matches found: [a/b]
+	//	zsh 5.9.2         setopt nullglob; [a/b]      removed
+	//	ksh93u+ 2012      ~(N)[a/b]                   removed
+	//
+	// bash's two rows are each other's control and are why this is not a story
+	// about `nullglob`: the option that *deletes* an unmatched pattern and the one
+	// that *refuses* one both leave the word alone, which only a word that was
+	// never a pattern can do. zsh needs no option at all, since a pattern matching
+	// nothing is an error there by default — see GlobNoMatchIsError.
+	//
+	// bash 3.2 is on the **other** side of it and is not modeled, for the reason
+	// its other departures are not: 5.3 is the column dialect/bash follows. It is
+	// recorded because it says what this axis is — a reading one shell changed,
+	// rather than a line the panel has always been split along.
+	//
+	// A **quoted** `/` inside the brackets does not disqualify them: `[a\\/b]` is a
+	// pattern in bash too, and was deleted under `nullglob` in the same run. That
+	// is why markedByGlobEscape marks a separator — the two spellings reach the
+	// gate as the same bytes otherwise, and answering this from that field alone
+	// moves two of glob.tests' lines to agreeing and two the other way. A bracket
+	// that cannot close was already not a metacharacter in every column, which is
+	// what makes `[ a = a ]` run the test builtin.
+	//
+	// The question is pathname expansion's alone. `case`, `[[ = ]]`, a trim and a
+	// replacement all read `[a/b]` as a bracket matching `a`, `/` or `b`, in both
+	// shells, measured in the same run — they have no components and no
+	// filesystem, which is the same split docs/spec/grammar/patterns.md already
+	// draws for the leading period.
+	//
+	// unpinned dash, ash: neither column can show it. Both pass an unmatched
+	// pattern through unchanged, neither has `nullglob` and neither refuses a
+	// pattern that matched nothing, so a word that is not a pattern and a pattern
+	// that matched nothing come out as the same bytes. They take the core's
+	// reading, which TestABracketHoldingASlashIsStillABracket pins.
+	//
+	// Asked only where a bracket holding a live `/` is the question — a word
+	// carrying any other live metacharacter is a pattern in every column and never
+	// reaches here (#4158).
+	BracketHoldingASlashIsStillABracket Answer
+
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of
 	// passing it through. True only in zsh.
 	GlobNoMatchIsError Answer
@@ -24590,9 +24650,15 @@ func PosixSemantics() Semantics {
 		// empty" — so a trailing separator is absorbed and opens nothing.
 		// dash, the shell in the panel that targets this text, complies, and
 		// so do bash and ksh93; zsh is the departure.
-		TrailingSeparatorEndsAField:              No,
-		GlobExpansionResults:                     Yes,
-		GlobNoMatchIsError:                       No,
+		TrailingSeparatorEndsAField: No,
+		GlobExpansionResults:        Yes,
+		GlobNoMatchIsError:          No,
+		// XCU 2.13.1 makes a `/` in a pattern a separator whatever stands
+		// around it and says nothing about the bracket one lands inside, so
+		// the bracket stays a bracket that matches nothing — which is what
+		// two of the three columns that can show it do. bash is the
+		// departure. See BracketHoldingASlashIsStillABracket.
+		BracketHoldingASlashIsStillABracket:      Yes,
 		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,
 		// XCU 2.9.1 gives the order plainly: the redirections are performed
 		// in step 3 and each variable assignment is expanded in step 4. So

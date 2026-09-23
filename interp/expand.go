@@ -2520,7 +2520,8 @@ func hasLiveByteOf(esc, set string) bool {
 // so a fix in glob could only have been one that lost the literal case.
 func (r *Runner) resultReadsAsPattern(esc string) bool {
 	if hasUnescapedMeta(esc, r.dialect().NumericRangePattern, r.dialect().PatternAlternation,
-		r.dialect().ExtendedPattern, r.MatchOption(ExtendedPatternOperators)) {
+		r.dialect().ExtendedPattern, r.MatchOption(ExtendedPatternOperators),
+		r.slashLeavesABracket) {
 		return true
 	}
 	// The second gap of the same shape, and #1331 is the one that opened it.

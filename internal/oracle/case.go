@@ -19738,6 +19738,18 @@ echo after`,
 		Why:     "two different rules about a period, and this says they stay apart. A `.` *component* names a directory; a leading period in a *name* is hidden from a pattern that does not write one — so `./*` leaves `.hid` out in all seven even though the pattern begins with a period, and `./.h*` finds it",
 	},
 	{
+		ID: "glob/a-bracket-holding-a-separator", Category: "expansion",
+		Script:  true,
+		Snippet: "{ shopt -s nullglob; } 2>/dev/null\n{ setopt nullglob; } 2>/dev/null\nset -- [a/b] [zQ]\nprintf '[%s]' \"$#\" \"$@\"\necho\n",
+		Why:     "whether a bracket expression written across a `/` is a bracket expression at all, when the pattern is matched against pathnames. No metacharacter matches a separator, so such a bracket can never match — and bash reads that as the bracket not being one, so its `[` is an ordinary character and a word holding nothing else live is not a pattern. zsh and ksh93 read it as a bracket that matches nothing. Nothing observes the difference until something happens to a pattern that matched nothing, which is why each shell's own way of deleting one is turned on in its own spelling and the failures are thrown away: bash 5.3 answers `[1][[a/b]]` — the word kept, so never a pattern — while **bash 3.2 answers `[0]`**, deleting it as zsh does, so the reading is 5.x's rather than this shell's forever; dash, ksh93 and BusyBox ash have neither option and answer `[2][[a/b]][[zQ]]`, an unmatched pattern passing through. The second field is the control — a bracket that is a bracket under every reading, with nothing to match — so a shell that deleted both and one that deleted neither cannot read alike. The axis is BracketHoldingASlashIsStillABracket (#4158)",
+	},
+	{
+		ID: "glob/a-bracket-holding-a-quoted-separator", Category: "expansion",
+		Script:  true,
+		Snippet: "{ shopt -s nullglob; } 2>/dev/null\n{ setopt nullglob; } 2>/dev/null\nset -- [a\\/b] [zQ]\nprintf '[%s]' \"$#\" \"$@\"\necho\n",
+		Why:     "the control that bounds the row above to a *live* separator: quoted, the `/` leaves the bracket a bracket in every column, so bash 5.3 deletes this word where it kept the other one and answers `[0]` beside bash 3.2's and zsh's — the one field of the row above where all three agree, which is what says the 5.3-to-3.2 departure is about the live separator and nothing else. The three columns with no option to delete an unmatched pattern answer `[2][[a/b]][[zQ]]` as before, the backslash gone with the rest of the word's quoting. Without this row the axis reads as a rule about the character rather than about its quoting, and an implementation answering it from a field that cannot tell the two apart moves half of a suite file to agreeing and the other half the other way (#4158)",
+	},
+	{
 		ID: "glob/a-value-backslash-that-ran-out-of-value", Category: "expansion",
 		Script:  true,
 		Snippet: "mkdir -p g/tmp/a/b && cd g && : > tmp/a/b/c && : > 'x*' && : > 'x\\y' && : > xy && bs='\\' && printf \"[%s]\" ./tmp${bs}/a/b/* && echo && printf \"[%s]\" ./t${bs}mp/a/b/* && echo && printf \"[%s]\" x${bs}? && echo && printf \"[%s]\" x${bs}* && echo",

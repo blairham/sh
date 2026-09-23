@@ -194,6 +194,58 @@ only channel quoting has, so the set it marks narrows to what the
 dialect itself reads wherever a surplus mark would become a surplus
 member.
 
+### A separator inside a bracket expression, and whether it is one at all
+
+No metacharacter matches a `/` — a pattern is matched against one pathname
+component at a time — so a bracket expression written *across* a separator can
+never match anything. What that makes the bracket is where the panel parts, and
+nothing observes it until something happens to a pattern that matched nothing.
+
+Measured 2026-09-23 under `env -i PATH=/usr/bin:/bin LC_ALL=C` from script
+files, in a directory holding one ordinary file and no single-character name:
+
+| shell | written | answer |
+| --- | --- | --- |
+| bash 5.3.20, 5.3.15 | `shopt -s nullglob; [a/b]` | `[a/b]` — kept |
+| bash 5.3.20, 5.3.15 | `shopt -s failglob; [a/b]` | `[a/b]` — kept, no refusal |
+| bash 3.2.57 | `shopt -s nullglob; [a/b]` | deleted |
+| zsh 5.9.2 | `[a/b]` | `zsh:1: no matches found: [a/b]` |
+| zsh 5.9.2 | `setopt nullglob; [a/b]` | deleted |
+| ksh93u+ 2012 | `~(N)[a/b]` | deleted |
+
+**bash 5.3's two rows are each other's control**, and they are why this is not a
+story about `nullglob`: the option that *deletes* an unmatched pattern and the
+option that *refuses* one both leave the word alone, which only a word that was
+never a pattern can do. So there the `[` is an ordinary character and a word
+holding nothing else live is not a pattern. Everywhere else it is a bracket
+expression that matches nothing. `Semantics.BracketHoldingASlashIsStillABracket`
+is the axis; bash 3.2 sits on the other side of it and is not followed, as
+elsewhere.
+
+**A quoted separator does not disqualify the bracket, in any column.**
+`[a\/b]` is a pattern in bash 5.3 too and is deleted under `nullglob`. That row
+is the whole difficulty of implementing this: the escaped form a field is
+carried in marks a character to say it was quoted, and a `/` was not marked,
+because a `/` cannot be made a character — it separates however it was written.
+So `[a/b]` and `[a\/b]` arrived at the gate as the same bytes, and an
+implementation answering the axis from that field alone moves half of a suite
+file to agreeing and the other half the other way.
+
+`markedByGlobEscape` therefore marks a separator as well, and the mark there
+means only **"this was quoted"** and commits to nothing — the shape
+`valueBackslashMark` already uses for a different unanswerable question.
+`splitFieldParts` splits on a marked separator exactly as on a live one and
+drops the mark, so no component boundary moves; `bracketHoldsASlash` is the one
+reader that looks at it.
+
+**The question is pathname expansion's alone.** `case`, `[[ = ]]`, a trim and a
+replacement all read `[a/b]` as a bracket matching `a`, `/` or `b`, in bash and
+here alike — they have no components and no filesystem, which is the same split
+this document already draws for the leading period.
+
+Pinned by `glob/a-bracket-holding-a-separator` and
+`glob/a-bracket-holding-a-quoted-separator` (#4158).
+
 ### The character classes
 
 All twelve POSIX class names are implemented, matched over bytes in the

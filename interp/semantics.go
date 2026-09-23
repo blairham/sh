@@ -14672,7 +14672,9 @@ type Semantics struct {
 
 	// PromptCommentsNeedTheOption names the option a `#` typed at this
 	// shell's prompt has to have on before it opens a comment. Empty is
-	// "nothing has to be on", which is what four of the five say.
+	// "nothing has to be on", which is what three of the five say — the two
+	// that name one are zsh, whose option is off by default, and bash, whose
+	// is on.
 	//
 	// Read by the front end rather than by the interpreter, for the reason
 	// the field above it is: it is about what a prompt does with a line. A
@@ -14697,6 +14699,14 @@ type Semantics struct {
 	// the other side of the same switch, which is what makes this an axis
 	// rather than a correction.
 	//
+	// Which is also why bash holds its option's name here rather than the
+	// empty string. It read empty until #4149 — right at the default and
+	// wrong the moment a script turns the name off, which is the whole of
+	// what `shopt -u interactive_comments` is for. bash's name is not a
+	// `set -o` name, so it is answered through the second option namespace
+	// (see [Runner.SetShellOptionNamespace]) and **not** through `[[ -o ]]`,
+	// which is 1 for it on bash 5.3.15.
+	//
 	// It is the *prompt* and not the shell's interactivity: measured the
 	// same day, `zsh -f -i -c 'echo a #b'` answers `a`, and so do `eval`
 	// and `.` on a file typed at that shell's own prompt. See
@@ -14708,15 +14718,13 @@ type Semantics struct {
 	// the shell's own splitter, and the two then disagree about where the
 	// words are (#2537).
 	//
-	// unpinned: reached, and the corpus cannot discriminate, for two reasons
-	// that land on the two dialects separately. In the shell that names an
-	// option, a `#` is a comment in every row already, because the question
-	// is what an *interactive line* does with one and no row is typed at a
-	// prompt. In the shell that names none the axis holds the empty string,
-	// and the only other value the sweep has for a string axis is a word it
-	// invented — a row could object only by passing that exact word, which
-	// would be a case written against the instrument rather than against a
-	// shell. Measured 2026-09-13 in bash and zsh.
+	// unpinned zsh: reached, and the corpus cannot discriminate — a `#` is a
+	// comment in every row already, because the question is what an
+	// *interactive line* does with one and no row is typed at a prompt.
+	// Measured 2026-09-13. bash is pinned: its name moves with the option a
+	// row can set, so dialect/bash/interactivecomments_test.go answers it
+	// (TestTheCommentOptionNamesItselfToThePrompt and the three beside it,
+	// including the one that keeps `[[ -o ]]` out of the second namespace).
 	// repl/promptcomments_test.go drives a session and pins both answers
 	// (TestAHashAtThePromptFollowsTheNamedOption,
 	// TestTheCommentOptionIsReReadForEveryLine), and

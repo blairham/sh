@@ -1682,8 +1682,22 @@ func (r *Runner) SetOptionTable(listed func(r *Runner) []ListedOption, move func
 //
 // Both halves are handed the runner to act on, for the reason
 // [Runner.SetOptionTable] gives.
-func (r *Runner) SetShellOptionNamespace(move func(r *Runner, name string, on bool) int, listed func(r *Runner, reissuable bool)) {
-	r.shellOptionMover, r.shellOptionListing = move, listed
+// read answers one name out of the namespace, and is the half a *front end*
+// needs: an option whose name reaches the prompt through a Semantics field —
+// Semantics.PromptCommentsNeedTheOption is the one there is — has to be
+// readable per line, and until this there was no way to reach a table
+// registered as a builtin for one answer rather than the whole listing.
+//
+// It is deliberately **not** reachable from `[[ -o name ]]`. Measured on bash
+// 5.3.15, `[[ -o interactive_comments ]]` is 1 and
+// `shopt -q interactive_comments` is 0 on the same shell, so the two
+// namespaces really are two — and a reader wired into the condition's lookup
+// would have made every `shopt` name answer `[[ -o ]]` in a shell that answers
+// none of them (#4149).
+func (r *Runner) SetShellOptionNamespace(move func(r *Runner, name string, on bool) int, listed func(r *Runner, reissuable bool),
+	read func(r *Runner, name string) (on, known bool),
+) {
+	r.shellOptionMover, r.shellOptionListing, r.shellOptionReader = move, listed, read
 }
 
 // SetOptionLetterNames declares the `set` option letters this shell spells
@@ -1724,8 +1738,16 @@ func (r *Runner) SetOptionLetterNames(names map[rune]string) {
 }
 
 // DialectOption reads one option name through this shell's own option
-// namespace: the names `setopt` and `[[ -o ]]` take where a dialect has
-// installed one, and the `set -o` names where it has not.
+// namespaces: the names `setopt` and `[[ -o ]]` take where a dialect has
+// installed one, the `set -o` names where it has not, and then the *second*
+// namespace a dialect keeps beside `set -o` — bash's `shopt` — for a name
+// neither of the first two has.
+//
+// That last step is what separates this from the condition operator's own
+// lookup, which stops at the first namespace. Measured on bash 5.3.15,
+// `[[ -o interactive_comments ]]` is 1 and `shopt -q interactive_comments` is
+// 0: the shopt names are not `-o` names, so a front end has to reach them and
+// `[[ -o ]]` must not (#4149).
 //
 // For a front end holding a *setting* a shell spells as an option rather than
 // as a variable — zsh's HIST_IGNORE_SPACE is the case this was added for. Its
@@ -1743,7 +1765,19 @@ func (r *Runner) SetOptionLetterNames(names map[rune]string) {
 // can tell a name that is off from a name nobody has — which is the whole
 // difference between a knob turned down and a knob that is not there.
 func (r *Runner) DialectOption(name string) (on, known bool) {
-	return r.conditionOption(name)
+	if on, known := r.conditionOption(name); known {
+		return on, true
+	}
+	// Then the dialect's *second* namespace, for the shell that keeps one.
+	// This is the difference between this method and conditionOption, and it
+	// is why `[[ -o ]]` calls that one directly: a front end asking for an
+	// option by the name a Semantics field gave it must reach whichever table
+	// the dialect put it in, and the condition operator must reach only the
+	// one bash's `-o` actually answers. See SetShellOptionNamespace's read.
+	if r.shellOptionReader != nil {
+		return r.shellOptionReader(r, name)
+	}
+	return false, false
 }
 
 // conditionOption reads one option name the way `[[ -o ]]` asks for it:

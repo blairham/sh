@@ -118,6 +118,17 @@ type Frame struct {
 	// sibling entered later at the same depth is still a different frame —
 	// which is the distinction the RETURN trap turns on.
 	serial int
+	// ran says this frame has dispatched at least one simple command.
+	//
+	// One diagnostic reads it, and it is the only thing that tells the two
+	// halves of a measured rule apart: a refusal raised by the *first*
+	// command a call runs is spoken for by the call, and the same refusal
+	// anywhere later in the same call is spoken for by nobody. See
+	// Runner.operandLocatedUnderTheCall for the nine shapes that pin it, and
+	// Runner.simple for where this is set — after the command rather than
+	// before it, because the command that raises the refusal is itself the
+	// first one.
+	ran bool
 
 	// zeroName is a `$0` this frame was *given*, and zeroNameHeld says it
 	// was. One dialect lets a builtin's output operand name position 0, and

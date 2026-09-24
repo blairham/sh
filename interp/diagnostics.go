@@ -6047,6 +6047,40 @@ type Diagnostics struct {
 	// file sourced rather than called answers `.`, the word the sourcing was
 	// written with, which this shell's frames do not keep.
 	LiteralOperandAfterADeclarationIsLocatedUnderTheCall bool
+	// LiteralOperandRefusedAlsoSpeaksForTheStore makes a declaration builtin
+	// that names itself write the refusal **twice** when the operand it
+	// refused was an array literal: once for the store, which names no
+	// builtin, and once for the builtin.
+	//
+	// Two writers, not one sentence twice. The declaration refuses the
+	// shadow it was asked to make, and the literal's store refuses the write
+	// it was going to make into it, and the dialect measured lets both
+	// speak. A *scalar* operand under the same builtin is one refusal,
+	// because there is no separate array store to raise a second.
+	//
+	// Measured 2026-09-23 on bash 5.3.20, each inside a function with the
+	// name already frozen by an enclosing `readonly`:
+	//
+	//	local qux=7              local: qux: readonly variable
+	//	local qux=(one two)      qux: readonly variable
+	//	                         local: qux: readonly variable
+	//	local -a qux=(one two)   both, the letter changing nothing
+	//	declare qux=(one two)    both, under `declare`
+	//	typeset qux=(one two)    both, under `typeset`
+	//	local qux=()             both — an empty literal is still a literal
+	//	local qux=7 quux=(a b)   one, for the scalar that was reached first
+	//
+	// The store's line comes **first**, and it carries the enclosing call's
+	// name under exactly the rule
+	// LiteralOperandAfterADeclarationIsLocatedUnderTheCall carries: the call
+	// speaks for the first command it runs and for nothing after it. So the
+	// two-line answer reads `g: qux: …` then `local: qux: …` when the
+	// declaration opens the function, and `qux: …` then `local: qux: …`
+	// anywhere later in it.
+	//
+	// Empty leaves one refusal, which is what a dialect with a single writer
+	// on this path wants.
+	LiteralOperandRefusedAlsoSpeaksForTheStore bool
 	// ReadonlyAttributeRefusalNamesBuiltin is the same set for a declaration
 	// refused over a frozen name's **attribute**, with no value in the line
 	// — see the assignForm attributeRatherThanAValue for the two shapes that

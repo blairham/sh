@@ -85,7 +85,17 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 		}
 		r.setArrayElem(name, 0, "0", itoa(r.coproc.read))
 		r.setArrayElem(name, 1, "1", itoa(r.coproc.write))
-		r.setVar(name+"_PID", itoa(job.Ident()))
+		// **A refusal here does not give up the rest of the line.**
+		// Publishing is a declaration and not a bare assignment: measured
+		// 2026-09-24 against bash 5.3.20 and bash 5.3.15, which agree,
+		// `declare -r RO2=a; declare -n ref_PID=RO2; coproc ref { :; };
+		// wait; declare -p RO2` on one line writes `RO2: readonly variable`
+		// and still reaches the listing. Through `setVar` it was
+		// assignedAnyhow, which abandons, so the rest of that line was lost
+		// — and on separate lines nothing showed it, because there was
+		// nothing left to give up. That is why the row only ever appeared
+		// inside the file. See refuseReadonly, where the form decides.
+		r.setVarAs(name+"_PID", itoa(job.Ident()), assignedByDeclaration)
 		// Kept so that the reaping can take back exactly what was published.
 		// See Semantics.ReapedCoprocessEnds and forgetCoprocNames.
 		r.coproc.name = name

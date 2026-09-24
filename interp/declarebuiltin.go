@@ -5222,6 +5222,29 @@ func (r *Runner) declarationShadowRefused(name string) bool {
 		// and is not this question.
 		return false
 	}
+	if sc := r.scopes[len(r.scopes)-1]; sc != nil {
+		if _, own := sc.saved[name]; own {
+			// The running scope already made this cell, so there is nothing
+			// left to shadow: this is a second declaration of the function's
+			// own local, and it is no more a shadow than the same line at the
+			// top level is. Refusing it here made an attribute letter
+			// unreachable on a name the function had frozen itself.
+			//
+			// Measured 2026-09-24 on bash 5.3.20 — a local reference frozen
+			// and then given `+n`, which is the one letter that is about the
+			// *reference* rather than about the value it guards:
+			//
+			//	declare -r -n v; declare +n v      at the top level
+			//	f(){ declare -r -n v; declare +n v; }
+			//
+			// Both take it at 0 and both leave `declare -r v`. This shell
+			// took the first and refused the second, which is the scope
+			// deciding a question that is not about scope. The store is a
+			// separate road and still refuses: a declaration carrying a
+			// *value* for a frozen local is refused as it always was (#4178).
+			return false
+		}
+	}
 	if r.ask(r.sem().DeclarationMayShadowAReadonly, "a declaration shadowing a readonly name") {
 		return false
 	}

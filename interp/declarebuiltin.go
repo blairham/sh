@@ -1742,6 +1742,65 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// redirect below, which would otherwise carry the rest of the
 		// declaration off to the target of a reference this line is removing.
 		if df.namerefOff {
+			// **A value on this operand goes through the reference before
+			// the letter comes off.** `declare -n foo=bar; declare +n -i
+			// foo=7+4` leaves `foo` the plain `bar` — the target's name, as
+			// the letter's removal always does — and `bar` holding `11`,
+			// evaluated under this line's `i`. Measured 2026-09-24 against
+			// bash 5.3.20 and bash 5.3.15, which agree; the plain spelling
+			// `declare +n foo=zz` writes `zz` into `bar` the same way.
+			//
+			// This operand's value was dropped on the floor here, because
+			// the letter was taken off first and the branch then gave the
+			// operand up as finished. The comment below is right that the
+			// letter is answered ahead of the redirect — what it missed is
+			// that a value **is** carried off to the target, and only the
+			// rest of the declaration is not.
+			//
+			// The through-write is this line's own store rather than a
+			// second one: the attributes go on the target first, so `-i`
+			// evaluates, which is exactly what the same line without the
+			// plus already does.
+			if hasValue {
+				through := df
+				through.nameref, through.namerefOff = false, false
+				if target, aimed := r.namerefTarget(name); aimed {
+					r.applyAttributes(target, through)
+					r.setVarAs(target, value, assignedByDeclaration)
+				} else {
+					// **Unaimed, and the value is still read as a target.**
+					// The plus does not make the operand an ordinary
+					// assignment: `declare -n foo; declare +n foo=tgt`
+					// leaves `declare -- foo="tgt"` — the reference aimed
+					// and then stripped, which is the same two steps the
+					// aimed row takes — and `declare +n -i foo=7+4` is
+					// `` `7+4': not a valid identifier `` at 1 with no `foo`
+					// left at all. Measured the same day, both shells.
+					//
+					// So the store is made on the name and the aiming rules
+					// answer it, exactly as they would without the plus.
+					//
+					// `name` rather than `target` for what it says, not for
+					// what it does: namerefWalk hands back the name itself
+					// where there is nothing to point at, so the two spell
+					// the same store here. A mutation swapping them changed
+					// no row, which is an identity rather than a surviving
+					// mutant — the branch is written out because the two
+					// cases mean different things, not because they compile
+					// differently.
+					r.setVarAs(name, value, assignedByDeclaration)
+				}
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+				if !r.isNameref(name) {
+					// The aim was refused and took the name with it, so
+					// there is no letter left to remove and nothing for the
+					// rest of this operand to declare. See
+					// namerefAssignmentTarget.
+					continue
+				}
+			}
 			finished, consumed := r.namerefAttributeRemoved(name)
 			if finished {
 				continue

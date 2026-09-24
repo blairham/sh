@@ -2924,6 +2924,10 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		if aimed, is := r.namerefTarget(name); is && !isNameLike(aimed) {
 			name = aimed
 		}
+		// Whether the subscript below is the **reference's** rather than the
+		// script's, which decides what a name that is no array does about it.
+		// See refuseSubscriptOnAScalar.
+		subscriptIsTheReferences := written != name
 		// The brackets this command wrote unquoted are the parser's, and the
 		// subscript between them is a word it already expanded: an
 		// apostrophe in it came out of a value and is a byte of the key.
@@ -3178,7 +3182,10 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				}
 				continue
 			}
+			outerRef := r.unsetElementThroughAReference
+			r.unsetElementThroughAReference = subscriptIsTheReferences
 			status = r.carryUnsetStatus(status, r.unsetArrayElem(base, idx, sub))
+			r.unsetElementThroughAReference = outerRef
 			continue
 		}
 		if handled, code := r.unsetTheFunctionInstead(name, letterV); handled {

@@ -3948,6 +3948,11 @@ type Runner struct {
 	// binding keeps its own and gets the outer one back on return —
 	// nameAttributes carries it through localattributes.go with the rest.
 	nameref map[string]string
+
+	// unsetElementThroughAReference says the subscript an `unset` is acting
+	// on came from a name reference's target rather than from the script's
+	// own operand. See refuseSubscriptOnAScalar, where the two part.
+	unsetElementThroughAReference bool
 	// hideInScope names the parameters carrying the hide-in-scope attribute
 	// — `typeset -h`, and `typeset +h` to take it off. It is what makes a
 	// local declaration of a name that is half of a tie an ordinary

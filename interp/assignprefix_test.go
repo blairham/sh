@@ -507,3 +507,70 @@ n=9 outer; echo "[${n-U}]"`, keeping())
 		}
 	})
 }
+
+// And a name a `local` inside the call has taken is **not** the shell's,
+// however much the inner prefix persists.
+//
+// The drop above is right when the store really did become the shell's. Where
+// the body has declared the name local first, the store lands in that scope's
+// cell and the return pops it — so the enclosing prefix's displaced value is
+// still the one that has to come back. Dropping it left the enclosing
+// prefix's own value standing: a value no line of the script ever asked for,
+// neither the caller's nor the callee's.
+//
+// Measured 2026-09-23 on bash 5.3.20 from a script file, `a=bcde` standing:
+//
+//	f(){ local a; a=3 readonly a; }
+//	a=4 f; echo "[$a]"                  [bcde]
+//	set -o posix; a=4 f; echo "[$a]"    [bcde]
+//
+// This shell read `[4]` under the mode, and `[4]` again on a first call with
+// no non-posix call before it — so the leak needed neither a warm-up nor the
+// second block the suite file happens to wrap it in.
+//
+// The controls are the three rows above, which must not move: with no `local`
+// in the body the name does become the shell's. And a body writing
+// `local -r a=3` or `readonly a=3` in place of the prefix never reaches this
+// code at all, because nothing persists — both were measured agreeing before
+// and after (#4163).
+func TestALocalInsideTheCallKeepsTheEnclosingFramesEntry(t *testing.T) {
+	keeping := func() Semantics {
+		sem := permissive()
+		sem.AssignmentPrefixPersistsOnSpecialBuiltin = Yes
+		sem.AssignmentPrefixPersistsAfterAFunction = No
+		return sem
+	}
+	t.Run("a local of the same name keeps the entry", func(t *testing.T) {
+		got := prefixAssignRun(t, `a=bcde
+f(){ local a; a=3 :; }
+a=4 f; echo "[${a-U}]"`, keeping())
+		if want := "[bcde]\n"; got != want {
+			t.Errorf("got %q, want %q — the store landed in the local, so the frame still owes bcde", got, want)
+		}
+	})
+	t.Run("the same with a value on the local", func(t *testing.T) {
+		got := prefixAssignRun(t, `a=bcde
+f(){ local a=0; a=3 :; }
+a=4 f; echo "[${a-U}]"`, keeping())
+		if want := "[bcde]\n"; got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+	t.Run("no local, so the name really does become the shell's", func(t *testing.T) {
+		got := prefixAssignRun(t, `a=bcde
+f(){ a=3 :; }
+a=4 f; echo "[${a-U}]"`, keeping())
+		if want := "[3]\n"; got != want {
+			t.Errorf("got %q, want %q — the control: without a local the drop is right", got, want)
+		}
+	})
+	// A fourth row belongs here and is deliberately absent: with the local in
+	// an **enclosing** call rather than in the one the prefix persists in —
+	// `outer(){ local a=0; a=7 inner; }` over `inner(){ a=3 :; }` — the
+	// reference reads `[3]` at the top and this shell reads `[bcde]`, because
+	// the store lands in the enclosing local instead of reaching past it. That
+	// is a separate defect and it reads the same **before and after** this
+	// change, measured on a baseline build; writing this shell's answer down
+	// as the expectation would pin it. Left out rather than skipped, so
+	// nothing here claims to cover it.
+}

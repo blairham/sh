@@ -278,6 +278,28 @@ func (r *Runner) callPrefixesLetTheNameGo(name string) {
 		if !slices.Contains(f.names, name) {
 			continue
 		}
+		if r.aLocalInsideThisFrameHoldsTheName(f, name) {
+			// The store did **not** become the shell's: a `local` inside the
+			// call took the name first, so what the persisting prefix wrote
+			// is that scope's cell and the return pops it. The frame's
+			// displaced value is still the one that has to come back, and
+			// dropping it left the *enclosing* prefix's value standing
+			// instead — a value no line of the script ever asked for.
+			//
+			// Measured 2026-09-23 on bash 5.3.20 from a script file, `a=bcde`
+			// standing and `f(){ local a; a=3 readonly a; }`:
+			//
+			//	a=4 f; echo "[$a]"                  [bcde]
+			//	set -o posix; a=4 f; echo "[$a]"    [bcde]
+			//
+			// — the same both ways, where this shell read `[4]` under the
+			// mode. The controls are the rows this function exists for: with
+			// no `local` in the body the name really does become the shell's
+			// and every one of #3447's rows still reads `[3]`. And
+			// `local -r a=3` or `readonly a=3` in place of the prefix never
+			// reaches here at all, because nothing persists (#4163).
+			continue
+		}
 		f.names = slices.DeleteFunc(slices.Clone(f.names),
 			func(n string) bool { return n == name })
 		// The undo entry goes with it and is **not** replayed, which is the
@@ -289,4 +311,37 @@ func (r *Runner) callPrefixesLetTheNameGo(name string) {
 			f.undo = slices.Delete(slices.Clone(f.undo), j, j+1)
 		}
 	}
+}
+
+// aLocalInsideThisFrameHoldsTheName reports whether a scope pushed **inside**
+// this call has taken the name.
+//
+// The frame's scopeDepth is the depth the prefix was read at, taken before the
+// call's own scope was pushed — so a scope at or past it belongs to the call
+// and a scope before it was the caller's. The same comparison
+// shellsOwnCellUnderACallPrefix makes, from the other side: that one asks
+// which cell a `-g` write should reach, and this asks whether a store about to
+// happen will reach the shell's.
+//
+// **The scopeDepth floor is not falsifiable by any row that can be written
+// today, and that is recorded rather than removed.** Starting the scan at zero
+// instead survives every test here, because the one shape that separates them
+// — a local in an *enclosing* call rather than in the one the prefix persists
+// in, `outer(){ local a=0; a=7 inner; }` over `inner(){ a=3 :; }` — is broken
+// for a different reason: the store lands in the enclosing local instead of
+// reaching past it, so the reference reads `[3]` at the top and this shell
+// reads `[bcde]` whatever this floor says. Measured on a baseline build, so it
+// is not this change's doing.
+//
+// Zero would be the wrong form even though nothing can tell it apart: once
+// that defect is fixed the drop has to *happen* for such a frame, which is
+// exactly what the floor allows and what a zero would forbid. A simplification
+// that is unfalsifiable today and wrong tomorrow is not a simplification.
+func (r *Runner) aLocalInsideThisFrameHoldsTheName(f *callPrefixFrame, name string) bool {
+	for i := f.scopeDepth; i < len(r.scopes); i++ {
+		if _, saved := r.scopes[i].saved[name]; saved {
+			return true
+		}
+	}
+	return false
 }

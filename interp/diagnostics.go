@@ -5995,6 +5995,58 @@ type Diagnostics struct {
 	// two spellings POSIX has. dash names both of the two it has. ksh93 and
 	// zsh name none, including ksh93's own `typeset`.
 	ReadonlyRefusalNamesBuiltin map[string]bool
+	// LiteralOperandAfterADeclarationIsLocatedUnderTheCall puts the
+	// *enclosing function's* name where a builtin's would go, for the one
+	// operand assignment that runs after its builtin has already returned.
+	//
+	// A container letter over an array literal is the shape: `readonly -a
+	// a=(1)` has to record the letter before the literal is stored, or the
+	// value lands as whatever kind it looks like and the letter then meets a
+	// name of the other kind — see Runner.containerLetterOverALiteral, which
+	// is the same predicate that orders the two halves. So the store happens
+	// *after* the builtin, with nothing left speaking, and a refusal it
+	// raises is located under whatever call the shell is inside.
+	//
+	// Measured 2026-09-23 on bash 5.3.20, each with `declare -air a=(1)`
+	// already standing and the refusal reported at status 0:
+	//
+	//	                            top level         inside `g() { … }`
+	//	readonly a=(1)              a: readonly …     a: readonly …
+	//	readonly -- a=(1)           a: readonly …     a: readonly …
+	//	readonly -p a=(1)           a: readonly …     a: readonly …
+	//	readonly -a a=(1)           a: readonly …     g: a: readonly …
+	//	readonly -A a=(1)           a: readonly …     g: a: readonly …
+	//	export   -a a=(1)           a: readonly …     g: a: readonly …
+	//	readonly -a a=1             readonly: a: …    readonly: a: …
+	//	readonly -a a="1"           readonly: a: …    readonly: a: …
+	//
+	// Three things are pinned by that table and each of them matters. The
+	// letter is what moves it, which is why this is not simply "a refusal
+	// inside a function names the function". A *scalar* operand under the
+	// same letter names the builtin instead, because that store is the
+	// builtin's own. And the top level answers with no name at all rather
+	// than the script's, which is what makes this the enclosing **call**
+	// rather than a location.
+	//
+	// It is the innermost call: `h() { readonly -a a=(1); }; g() { h; }; g`
+	// answers `h`, not `g`.
+	//
+	// Two rows in that table are measured and **not** answered. A *scalar*
+	// operand under the letter — `readonly -a a=1` and `readonly -a a="1"` —
+	// names the builtin in the dialect measured and names nothing here; that
+	// store is the builtin's own and is a divergence of its own rather than
+	// this one. And `export -a a=(1)` is the row measured here and **not** answered: its
+	// operand never reaches the store this field is read at, so the letter's
+	// ordering is somewhere else for that spelling. Recorded rather than
+	// guessed at — the answer is known and the route is not.
+	//
+	// Measured and not taken, because it is a line rather than a name: the
+	// declaration utilities that name themselves — `declare`, `typeset`,
+	// `local` — write the call's line *and then their own*, so `g() {
+	// declare -a a=(1); }` is two refusals there against one here. And a
+	// file sourced rather than called answers `.`, the word the sourcing was
+	// written with, which this shell's frames do not keep.
+	LiteralOperandAfterADeclarationIsLocatedUnderTheCall bool
 	// ReadonlyAttributeRefusalNamesBuiltin is the same set for a declaration
 	// refused over a frozen name's **attribute**, with no value in the line
 	// — see the assignForm attributeRatherThanAValue for the two shapes that

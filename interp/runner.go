@@ -1437,6 +1437,13 @@ type Runner struct {
 	// deliberately cleared by `.` and `eval` while they run borrowed text:
 	// what a sourced script reports is the script's, not the builtin's.
 	inBuiltin string
+	// locatedUnderACall says inBuiltin is holding the name of the enclosing
+	// **call** rather than of a builtin, which one operand store arranges
+	// for the dialect that words it that way. It is what keeps the refusal
+	// from stripping the name back off again: the table that decides whether
+	// a builtin names itself is about builtins, and a function is not in it.
+	// See Runner.operandLocatedUnderTheCall.
+	locatedUnderACall bool
 	// commandWordWasWritten says the word that reached the builtin now
 	// running was written out rather than produced by an expansion. Quoting
 	// does not take the writing away — `"command"` and `\command` are
@@ -7329,7 +7336,19 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// builtin, because that is where this value is written — see
 			// interp/globaloperand.go.
 			putShadowsBack := r.globalOperandsRunOnTheShellsOwnCell()
+			// Nothing is speaking here — the builtin has returned and
+			// r.inBuiltin is back to whatever was outside it — so a refusal
+			// this store raises carries no name. The dialect that answers
+			// with the enclosing call's puts it in the same place, which is
+			// what the letter's own ordering left empty. See
+			// Runner.operandLocatedUnderTheCall.
+			outerCall := r.inBuiltin
+			if call, under := r.operandLocatedUnderTheCall(); under &&
+				r.containerLetterOverALiteral(argv, c) {
+				r.inBuiltin, r.locatedUnderACall = call, true
+			}
 			r.assignOperands(ctx, c)
+			r.inBuiltin, r.locatedUnderACall = outerCall, false
 			putShadowsBack()
 			switch {
 			case r.ctl == controlExit:
@@ -9764,7 +9783,14 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 	// the form is not the question: the write is the builtin's own reading
 	// of its own operand, and it reaches the store through the ordinary
 	// array path. See Runner.operandHidesALiteral for the measurement.
-	if (form.namesTheBuiltin() || r.rereadingAQuotedLiteral) &&
+	if r.locatedUnderACall && r.diag().ReadonlyVariableInDeclaration != "" {
+		// The store ran after its builtin had returned, so the name in front
+		// of the variable is the enclosing call's rather than a builtin's.
+		// The same slot and the same wording: what the dialect puts there is
+		// whoever was speaking, and by this point that is the function. See
+		// Runner.operandLocatedUnderTheCall.
+		msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
+	} else if (form.namesTheBuiltin() || r.rereadingAQuotedLiteral) &&
 		r.diag().ReadonlyVariableInDeclaration != "" &&
 		r.readonlyRefusalNamesBuiltin(form) {
 		wording := r.diag().ReadonlyVariableInDeclaration

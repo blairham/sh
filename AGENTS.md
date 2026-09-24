@@ -1376,6 +1376,24 @@ Three things follow, and the third is the general one:
   this in the first minute, and a wait is the failure mode that gets more
   expensive the longer you go on trusting it.
 
+**A control that proves nothing is worse than a missing control, because it is
+counted.** The rule above is usually aimed at the instrument; it applies just
+as hard to a test's own controls, and there it is harder to see — a green row
+looks like coverage.
+
+A regression test had three rows: one asserting a name is *not* created, and
+two controls asserting that the neighboring spellings *do* create it. All
+three passed. The fixture was missing the one option letter the rows needed, so
+`typeset -n ref=var` was an invalid option in it, both controls printed nothing
+at all, and "nothing" was what they were comparing against an expectation of
+nothing. The row that mattered was real; the two rows vouching for it were
+measuring silence, and the suite reported three passes.
+
+So a control earns its place by being **seen to produce the positive it claims**
+— run it verbosely once and read the value, or make it fail on purpose and watch
+it fail. A control asserted only as an equality against a string you also chose
+is the same shape as a mutation that never applied.
+
 **And the filesystem can collapse two of your cases into one.** This is a
 third shape again, and neither rule above reaches it: the instrument fired,
 the input was right, and the *storage* silently made two distinct probes into
@@ -1531,6 +1549,22 @@ byte-identical to the untraced one, because the hook adds no command and writes
 nowhere the script can read. Check it once — `diff` the two runs and expect
 nothing — and then every conclusion drawn from the log stands without any of the
 reconstruction arithmetic a shell-level trace needs.
+
+**The hook must not call anything that can produce output, and the obvious
+resolver is exactly where that hides.** Byte-identity is the property the whole
+instrument rests on, and it is lost the moment the hook reaches a function that
+can write. A read trace wanted the name a reference resolves to, and
+`throughNamerefName` is the function for that everywhere else in the package —
+but it *warns* about a reference cycle, and a warning goes to stderr, which is
+one of the two streams the comparison is made of. `namerefWalk` answers the same
+question and has no side effects.
+
+That failure would have been near-invisible: the fabricated line lands in the
+middle of a diff of two shells' output, on a run the author has just proved
+sound by every other measure. So before calling anything from a hook, check what
+it does on its unhappy path — a warning, a diagnostic, a lazily-built cache that
+reports a refusal, an axis it might `ask`. Prefer the lowest-level accessor that
+answers the question, and read its body rather than its name.
 
 **And it satisfies the clean-room rules by construction.** A line number is a
 position and a Go type name is this tree's own; neither is a byte of the file.

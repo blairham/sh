@@ -4,6 +4,9 @@
 package suite
 
 import (
+	"errors"
+	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -64,6 +67,64 @@ func normalize(out, shell, dir string) string {
 	}
 	out = withoutTheRunsPid(out)
 	return tempPattern.ReplaceAllString(out, "<tmp>")
+}
+
+// ErrBaseNameDiffers is what a run is refused with when the shell being graded
+// is named neither like the reference nor like its own column.
+var ErrBaseNameDiffers = errors.New("the graded shell's base name differs from the reference's")
+
+// CheckBaseNames is [normalize]'s precondition, asked before a run rather than
+// discovered from its numbers.
+//
+// normalize above replaces each shell's **full path** and deliberately not its
+// base name — replacing a base name would turn unrelated words into `<shell>`.
+// The consequence is easy to miss and is the whole of this check: a line where
+// a shell names *itself* by base name is left alone, so it is compared
+// **literally**, and that is sound only while the two base names are equal.
+//
+// When they are not, every such line differs — and there is no sign of it in
+// the report, which prints a figure like any other. Measured 2026-09-24 in the
+// pinned image on one commit, changing nothing but the name of the binary
+// handed to -bin:
+//
+//	-bin …/bash            strict 1/1   0 differing lines
+//	-bin …/deep/nested/bash  strict 1/1   0 differing lines
+//	-bin …/ourbash         strict 0/1  10 differing lines
+//
+// Depth is irrelevant; the base name decides it. Five rows of bash's suite
+// were reported as regressions on the strength of figures produced that way —
+// 31 differing lines, of which 29 were the name — and each one reproduces
+// exactly on demand by renaming the binary. That is worse than a wrong answer
+// of the usual kind: a number reads as evidence and sends somebody to diagnose
+// lines that do not exist.
+//
+// The refusal is deliberate rather than a warning. A warning is what this
+// already had — the recorded trap that *a binary named `bash-base` is partly
+// graded on a build artifact's name* — and it did not stop the same fault
+// arriving from the other direction.
+//
+// The one mismatch that is **not** the caller's to fix is tolerated with a
+// loud line instead: a reference the machine keeps under another name, which
+// is `ksh93` for the `ksh` column and `busybox` for `ash`. There the base names
+// cannot be made equal, the comparison is unsound to exactly the same degree,
+// and refusing would take the column away rather than fix it — so it says so
+// on every run and grades anyway.
+func CheckBaseNames(s Suite, ours, reference string) (warning string, err error) {
+	ourBase, refBase := filepath.Base(ours), filepath.Base(reference)
+	if ourBase == refBase {
+		return "", nil
+	}
+	if ourBase == s.Dialect {
+		return fmt.Sprintf(
+			"the reference is %s on this machine and the column is %q, so the two base "+
+				"names cannot be made equal.\n  Lines where either shell names itself by "+
+				"base name are compared literally and will differ. Treat every figure "+
+				"below as a ceiling, not a measurement.",
+			refBase, s.Dialect), nil
+	}
+	// Short, and the paragraph that explains it belongs to the caller — the
+	// same division ErrDigest next door keeps.
+	return "", fmt.Errorf("%w: grading %q against %q", ErrBaseNameDiffers, ourBase, refBase)
 }
 
 // lines splits output for comparison, dropping a single trailing empty line

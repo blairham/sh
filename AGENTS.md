@@ -1413,6 +1413,45 @@ same applies to any pair of names a case-insensitive or Unicode-normalising
 filesystem folds together — `a.sh` and `A.sh`, and a composed `é` against a
 decomposed one.
 
+**And the mirror of all of it: a figure that reads as a defect and is an
+artifact of the instrument's own normalization.** Every shape above is a way for
+*silence* to read as a result. This is worse, because a number looks like
+evidence — it does not invite suspicion, it invites you to go and diagnose ten
+lines that do not exist.
+
+Five rows of bash's suite were reported as regressions, 31 differing lines
+between them, stable across two runs in the pinned image. Twenty-nine of the 31
+were the **name of the binary handed to `-bin`**. One commit, one image, nothing
+changed but that:
+
+    -bin …/bash                 strict 1/1    0 differing lines
+    -bin …/deep/nested/bash     strict 1/1    0 differing lines
+    -bin …/ourbash              strict 0/1   10 differing lines
+
+Depth is irrelevant; the base name decides it. The comparison strips each
+shell's full path and deliberately **not** its base name — replacing base names
+would turn unrelated words into `<shell>` — so a line where a shell names
+*itself* by base name is compared literally, and that is sound only while the
+two base names are equal. Nothing in the report says which state it is in.
+
+Two things to take from it. **Vary what the instrument itself consumes, not only
+the thing under test.** Every check above varies the subject — the code, the
+input, the fixture — and none of them would have found this, because the subject
+was innocent: the harness was being fed a differently-named binary and answering
+honestly about it. The question that found it is *what else does this tool read,
+and what happens if I change that?*
+
+**And a figure that contradicts another measurement is a reason to doubt the
+setup before doubting the code.** The row read 0 on the host and 10 in the
+image. That is either a real environment split or a broken invocation, and
+establishing which is one command; diagnosing ten lines is an afternoon. The
+contradiction is the cheapest evidence you will get, so spend it first.
+
+`suite.CheckBaseNames` now refuses that run outright rather than warning — a
+warning is what this already had, in the recorded note that *a binary named
+`bash-base` is partly graded on a build artifact's name*, and it did not stop
+the same fault arriving from the other direction.
+
 **The positive control that catches all three shapes is the same one: count
 what actually ran.** A mutation battery should print how many tests executed
 under its `-run` filter before it reports a single survivor — a filter that

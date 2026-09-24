@@ -1746,6 +1746,26 @@ type Runner struct {
 	// call I am inside holding this name", which is a different question and
 	// the one `unset` asks. See interp/unsetenclosinglocal.go.
 	callPrefixes []callPrefixFrame
+
+	// inATrapAction says a trap action is running anywhere below here, and
+	// trapActionOwnBody narrows that to the action's *own* commands — the
+	// second is cleared for the body of a function the action calls and the
+	// first is not. trapEntryStatus is what `$?` was when the action began.
+	//
+	// Two flags because the readings disagree about how far the answer
+	// reaches, which is measured rather than tidy. With
+	// `inner() { false; return; }` called from the action, bash, dash and
+	// zsh answer 1 — the function's own last command, the ordinary reading —
+	// and ksh93 answers 0, the same zero it gives in the action itself. So
+	// ksh93's reading covers the whole extent and the other two stop at the
+	// action's body. Outside a trap entirely all four answer 1, which is
+	// what says this is the trap's question and not `return`'s.
+	//
+	// See Semantics.TrapReturnStatus, Runner.runTrapHandler where both are
+	// written, and Runner.callFuncAs where the narrower one is cleared.
+	inATrapAction     bool
+	trapActionOwnBody bool
+	trapEntryStatus   int
 	// expandingWord is the word being expanded and expandingSpan which of
 	// its spans, so a diagnostic about an expansion can name the text around
 	// it: two dialects blame the word rather than the `${…}`, and by the

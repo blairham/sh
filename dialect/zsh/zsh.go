@@ -1999,6 +1999,9 @@ func Semantics() interp.Semantics {
 	// `inner`, and a sourced file leaves its own last command's argument.
 	// Measured 2026-09-23 on zsh 5.9 over a script file.
 	s.UnderscoreHoldsTheCallAcrossEvalAndSource = interp.No
+	// zsh reads it the way `return` reads everywhere else — the action's
+	// own last command. Same probe, entered at 4, answers 123.
+	s.TrapReturnStatus = interp.TrapReturnTakesTheHandlersLastStatus
 	// And starts it empty regardless, alone in the panel: an exported `_`
 	// is discarded rather than carried in, so the parameter says nothing
 	// about the invocation until the first command has run.

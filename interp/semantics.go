@@ -21415,6 +21415,45 @@ type Semantics struct {
 	// it is #3236 rather than an option.
 	EvalOptions EvalOptionReading
 
+	// TrapReturnStatus is what a bare `return` in a trap action's own body
+	// hands back — the whole of `return` with no operand written inside a
+	// handler, and nothing about one with an operand or one inside a
+	// function the handler called.
+	//
+	// Three readings, measured 2026-09-23 over a script file under
+	// `env -i PATH=/usr/bin:/bin`, with every shell entering the handler at
+	// the same `$?` so that delivery timing cannot be what splits them —
+	// the handler's first command prints `$?` and all four print `4`:
+	//
+	//	trap 'echo "entry $?"; f 123; return' USR1
+	//	h() { ( sleep .2; kill -USR1 $$ ) & ( sleep 1.2; exit 4 ); return 7; }
+	//	h; echo "exit=$?"
+	//
+	//	bash 5.3.20    entry 4    exit=4     the status it was entered at
+	//	dash 0.5.12    entry 4    exit=4     the same
+	//	zsh 5.9        entry 4    exit=123   the handler's last command
+	//	ksh93u+        entry 4    exit=0     zero
+	//
+	// BusyBox ash 1.37 answers 4 as well, measured in a container rather
+	// than derived from dash.
+	//
+	// So it is not one rule read three ways: each shell had the same number
+	// in front of it and answered differently. See TrapReturnReading.
+	//
+	// # The shape that did not fit, recorded rather than smoothed over
+	//
+	// ksh93 answered **3** to one earlier probe, stably over three runs,
+	// where six controlled ones answer 0. That probe differed in having no
+	// command before the `return` that reported anything, several background
+	// jobs, and a `wait` behind it, so what ksh93 was holding when the action
+	// ran is not known for it — and the reading it suggested, "the status
+	// before the command the trap interrupted", was put to a probe built to
+	// separate it (entry 4, previous command 9) and answered 0 rather than 9.
+	// Zero is what the controlled probes say and it is what is pinned; the
+	// outlier is written down here so that the next measurement starts from
+	// it rather than rediscovering it.
+	TrapReturnStatus TrapReturnReading
+
 	// EnableUnloadsABuiltin gives `enable` a `-d` letter, which takes away a
 	// builtin that was loaded from a shared object.
 	//
@@ -24580,6 +24619,39 @@ func (n NameOperands) String() string {
 // expected dash and BusyBox ash to part company with bash there, the way they
 // do over NumericOperandDoubleDashEndsOptions, and they do — but it also
 // expected ksh93 to take no options, and ksh93 reads them.
+// TrapReturnReading is what a bare `return` inside a trap action answers.
+//
+// It exists because a handler is not a function and `return` there is doing
+// something a function's `return` never does: ending an action the script did
+// not call, in the middle of whatever the script *was* doing. What `$?` should
+// be afterwards is a question with no obvious answer, and the panel gives
+// three.
+//
+// Only the handler's own body. A `return` inside a function the handler
+// called is that function's, read the ordinary way — measured, and it is why
+// the reading is recorded against the action rather than against a depth.
+type TrapReturnReading int
+
+const (
+	// TrapReturnReadingUnspecified is no answer, and is refused like any
+	// other.
+	TrapReturnReadingUnspecified TrapReturnReading = iota
+	// TrapReturnTakesTheStatusBeforeIt hands back what `$?` was when the
+	// handler began, so the action leaves the script's status where it found
+	// it however the action itself went. bash and dash, and the reading this
+	// shell takes where nothing else is said: it is the one that treats a
+	// handler as something the script did not ask for and should not be
+	// charged with.
+	TrapReturnTakesTheStatusBeforeIt
+	// TrapReturnTakesTheHandlersLastStatus hands back the action's own last
+	// command, which is what `return` means everywhere else. zsh.
+	TrapReturnTakesTheHandlersLastStatus
+	// TrapReturnIsZero hands back nothing at all. ksh93 alone: it answers 0
+	// where bash, dash and BusyBox ash each answer the status the action was
+	// entered at and zsh answers the action's own last command.
+	TrapReturnIsZero
+)
+
 type EvalOptionReading int
 
 const (
@@ -25883,6 +25955,10 @@ func PosixSemantics() Semantics {
 		// entry value are each one column's, and each says so itself.
 		UnderscoreMovesOnlyBetweenInputCommands: No,
 		UnderscoreMovesBeforeAFunctionBody:      No,
+		// A handler is something the script did not ask for, so what it did
+		// is not the script's status to carry: the reading two of the four
+		// share, and the one a shell with no opinion should take.
+		TrapReturnStatus: TrapReturnTakesTheStatusBeforeIt,
 		// And the third of them, at the same reading and for the same
 		// reason: a builtin that runs the script's own commands is a
 		// function call in everything but name, and the caller reads the
@@ -26316,6 +26392,10 @@ func CoreSemantics() Semantics {
 		// entry value — each say so themselves.
 		UnderscoreMovesOnlyBetweenInputCommands: No,
 		UnderscoreMovesBeforeAFunctionBody:      No,
+		// A handler is something the script did not ask for, so what it did
+		// is not the script's status to carry: the reading two of the four
+		// share, and the one a shell with no opinion should take.
+		TrapReturnStatus: TrapReturnTakesTheStatusBeforeIt,
 		// And the third of them, at the same reading and for the same
 		// reason: a builtin that runs the script's own commands is a
 		// function call in everything but name, and the caller reads the

@@ -1435,6 +1435,10 @@ func Semantics() interp.Semantics {
 	// text's own last command would otherwise write through. Measured
 	// 2026-09-23: `: SEED; eval ': inner'` leaves `: inner` here.
 	s.UnderscoreHoldsTheCallAcrossEvalAndSource = interp.Yes
+	// A bare `return` in a trap action hands back the status the action
+	// was entered at: measured 2026-09-23 with every panel shell entering
+	// the handler at 4 and this one answering 4.
+	s.TrapReturnStatus = interp.TrapReturnTakesTheStatusBeforeIt
 	// Alone in the panel, bash writes `$_` before the first command runs,
 	// and what it writes is argv[0]: the same binary reached through a
 	// symlink named `sh` writes `sh`. An `_` the environment carried wins

@@ -505,6 +505,27 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 	if haveOperand {
 		return operand
 	}
+	if r.inATrapAction {
+		// Written in a trap action's own body, where `return` is ending
+		// something the script never called and the panel gives three
+		// answers. See Semantics.TrapReturnStatus for the table.
+		switch r.sem().TrapReturnStatus {
+		case TrapReturnTakesTheStatusBeforeIt:
+			if r.trapActionOwnBody {
+				return r.trapEntryStatus
+			}
+		case TrapReturnIsZero:
+			return 0
+		case TrapReturnTakesTheHandlersLastStatus:
+			// The ordinary reading below, which is what `return` means
+			// everywhere else.
+		default:
+			r.diagf("%s\n", r.unanswered("what a bare `return` in a trap action hands back"))
+			r.status = 2
+			r.unspecified = true
+			return 2
+		}
+	}
 	// The same reading `exit` takes one builtin over: a bare `return` hands
 	// back what the last command did, and one column reads that as this
 	// execution unit's last command rather than the shell's. One helper for

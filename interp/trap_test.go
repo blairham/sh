@@ -313,3 +313,62 @@ func TestProcessIDParameter(t *testing.T) {
 }
 
 func itoaForTest(n int) string { return strconv.Itoa(n) }
+
+// A bare `return` in a trap action's own body — Semantics.TrapReturnStatus.
+//
+// Four readings, and this asserts each is reachable and that they are four.
+// Which value each preset picks is in dialect/trapreturn_test.go against the
+// panel's own bytes.
+//
+// The action's last command reports 123 and the status the handler is entered
+// at is 4, so every reading answers a different number: 4, 123, 0, and the
+// refusal an unanswered axis gives.
+func TestABareReturnInATrapActionHasFourReadings(t *testing.T) {
+	const src = "f() { return $1; }\n" +
+		"h() { ( /bin/sleep 0.1; kill -USR1 $$ ) & ( /bin/sleep 0.5; exit 4 ); return 7; }\n" +
+		"trap 'f 123; return' USR1\n" +
+		"h\n" +
+		"printf 'exit %s' \"$?\"\n"
+	for _, c := range []struct {
+		name    string
+		reading TrapReturnReading
+		want    string
+	}{
+		{"the status before it", TrapReturnTakesTheStatusBeforeIt, "exit 4"},
+		{"the handler's last", TrapReturnTakesTheHandlersLastStatus, "exit 123"},
+		{"zero", TrapReturnIsZero, "exit 0"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := permissive()
+			// The probe backgrounds a job inside a function, which asks an
+			// axis of its own; pinned so the refusal for that one is not
+			// what this test reads.
+			sem.SubshellJobTable = SubshellJobsCleared
+			sem.TrapReturnStatus = c.reading
+			out, _ := run(t, src, func(r *Runner) { r.Semantics = &sem })
+			if out != c.want {
+				t.Errorf("wrote %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// And a `return` inside a function the action *called* is that function's,
+// read the ordinary way — which is what keeps this an axis about the action
+// rather than about a depth. The same vector that answers 4 for the action's
+// own `return` leaves the interrupted function's own 7 standing here, because
+// the inner `return` ends only the inner function and the action then runs to
+// its end normally.
+func TestAReturnInsideAFunctionTheActionCalledIsThatFunctions(t *testing.T) {
+	const src = "inner() { return; }\n" +
+		"h() { kill -USR1 $$; printf 'resumed '; return 7; }\n" +
+		"trap 'inner' USR1\n" +
+		"h\n" +
+		"printf 'exit %s' \"$?\"\n"
+	sem := permissive()
+	sem.TrapReturnStatus = TrapReturnTakesTheStatusBeforeIt
+	out, _ := run(t, src, func(r *Runner) { r.Semantics = &sem })
+	if want := "resumed exit 7"; out != want {
+		t.Errorf("wrote %q, want %q", out, want)
+	}
+}

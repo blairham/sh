@@ -980,7 +980,15 @@ func (r *Runner) runTrapHandler(ctx context.Context, cond, body string) {
 	}
 	ctl := r.ctl
 	r.ctl = controlNone
+	// And the status a bare `return` in this action's own body hands back,
+	// which is a question of its own because a handler is not a function.
+	// Saved and put back rather than set, so a handler that fires inside
+	// another handler's action reports its own entry status and gives the
+	// outer one back untouched. See Semantics.TrapReturnStatus.
+	outerTrap, outerIn, outerOwn := r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody
+	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outer, true, true
 	r.runTrapBody(ctx, cond, body)
+	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outerTrap, outerIn, outerOwn
 	if r.ctl == controlNone {
 		r.ctl = ctl
 		r.status = outer

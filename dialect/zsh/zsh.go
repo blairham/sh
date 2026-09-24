@@ -2265,6 +2265,11 @@ func Semantics() interp.Semantics {
 	// there is no declaration for an array to be refused under. Measured
 	// 2026-09-16, `r=(a b); typeset -n r=v` is `typeset: bad option: -n` at 1
 	// and the array is untouched (#3103).
+	// unanswered NamerefDroppedByASubscriptedOperand: the same missing
+	// letter, so there is never a reference for a subscripted operand to
+	// take an attribute off. Measured 2026-09-23, `typeset -n xref` is
+	// `typeset: bad option: -n` at 1 and `typeset -a xref[1]=one` after it
+	// writes an ordinary array (#4178).
 	// unanswered UnsetReferenceLetterRemovesANonReference: `-n` is not one of
 	// this shell's letters. Measured 2026-09-12, `unset -n x` is
 	// `unset: bad option: -n` at 1 and `x` keeps its value (#932).

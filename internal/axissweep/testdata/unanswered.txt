@@ -162,6 +162,7 @@ ash   LongestMatchTakesTheWrittenArm
 ash   MixedTableLiteral
 ash   NamerefArrayRefusal
 ash   NamerefCycleIsRefused
+ash   NamerefDroppedByASubscriptedOperand
 ash   NamerefLetterStandsAlone
 ash   NamerefTargetResolvedWhenAimed
 ash   NegatedTestRecordsThePostNegationStatus
@@ -261,7 +262,6 @@ ash   WholeArraySubscriptAssigningAnArray
 ash   WholeArraySubscriptThroughAReferenceToATable
 ash   WidthJustificationPrecedence
 ash   WidthLettersExcludeTheIntegerLetter
-
 bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
@@ -295,7 +295,6 @@ bash  SetArrayWithNoValuesUnsetsTheName
 bash  SubscriptedPrefixIsTakenBack
 bash  WidthJustificationPrecedence
 bash  WidthLettersExcludeTheIntegerLetter
-
 dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
@@ -455,6 +454,7 @@ dash  LongestMatchTakesTheWrittenArm
 dash  MixedTableLiteral
 dash  NamerefArrayRefusal
 dash  NamerefCycleIsRefused
+dash  NamerefDroppedByASubscriptedOperand
 dash  NamerefLetterStandsAlone
 dash  NamerefTargetResolvedWhenAimed
 dash  NegatedTestRecordsThePostNegationStatus
@@ -565,7 +565,6 @@ dash  WholeArraySubscriptThroughAReferenceToATable
 dash  WidthJustificationPrecedence
 dash  WidthLettersExcludeTheIntegerLetter
 dash  WritingSubstitutionIsWaitedForAtTheCommand
-
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
@@ -603,7 +602,6 @@ ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
 ksh   UmaskPermissionCopyBesideLetters
 ksh   UnsetEndsTheProducedPipelineStatus
-
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
 zsh   ArrayLetterOverAnUnaimedReferenceDropsIt
@@ -628,6 +626,7 @@ zsh   LocalThroughCommandDeclaresNothing
 zsh   LongOptionValueIsANumber
 zsh   NamerefArrayRefusal
 zsh   NamerefCycleIsRefused
+zsh   NamerefDroppedByASubscriptedOperand
 zsh   NamerefLetterStandsAlone
 zsh   NamerefTargetResolvedWhenAimed
 zsh   NegativeSubscriptCountsOverAPromotedScalar

@@ -710,6 +710,9 @@ func Semantics() interp.Semantics {
 	// here (#4178).
 	// unanswered NamerefArrayRefusal: the same wall, and there are no arrays
 	// here either for a reference to be refused over (#3103).
+	// unanswered NamerefDroppedByASubscriptedOperand: the same wall twice
+	// over — no reference to take an attribute off, and no subscripted
+	// operand to take it with (#4178).
 	// unanswered UnsetReferenceLetterRemovesANonReference: no `-n` on `unset`
 	// here either. Measured 2026-09-12 on BusyBox v1.37.0, `unset -n x` is
 	// `unset: line 0: illegal option -n`, and the shell ends at 2 without

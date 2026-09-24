@@ -1731,6 +1731,15 @@ func Semantics() interp.Semantics {
 	// The associative attribute does make an object, `typeset -A m=()`, and
 	// is refused (#3103).
 	s.NamerefArrayRefusal = interp.NamerefArrayCheckedFirstOnTheContents
+	// And a declaration operand carrying a **subscript** leaves the
+	// reference standing: measured 2026-09-23 on ksh93u+, `array=(p q);
+	// typeset -n xref=array; typeset -a xref[1]=one` writes through it and
+	// leaves `typeset -a array=(p one)` with `xref` still the reference,
+	// where bash takes the attribute off and lands the element on `xref`.
+	// A reference with nothing to point at has no name for the element and
+	// is `xref: no reference name`, which ends the script at 1 — the
+	// ordinary cost of an unaimed use here (#4178).
+	s.NamerefDroppedByASubscriptedOperand = interp.No
 	// And an array letter over an unaimed reference leaves both letters
 	// standing here: measured 2026-09-22 on ksh93u+, `typeset -n foo;
 	// typeset -a foo` lists `typeset -n -a foo` and `foo[0]=7` is then

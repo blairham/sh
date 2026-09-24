@@ -673,6 +673,9 @@ func Semantics() interp.Semantics {
 	// unanswered NamerefArrayRefusal: the same wall, and no arrays either —
 	// `r=(a b)` is `Syntax error: "(" unexpected` — so neither half of the
 	// question can be put (#3103).
+	// unanswered NamerefDroppedByASubscriptedOperand: the same wall twice
+	// over — no `typeset -n` to make a reference and no subscripted operand
+	// to write one over, since there are no arrays at all (#4178).
 	// unanswered UnsetReferenceLetterRemovesANonReference: this shell has no
 	// `-n` on `unset` to ask it with. Measured 2026-09-12, `unset -n x` is
 	// `unset: Illegal option -n` and the operand is never read, so there is no

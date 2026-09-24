@@ -1267,6 +1267,16 @@ func Semantics() interp.Semantics {
 	// sentence instead. ksh93 answers both halves the other way round
 	// (#3103).
 	s.NamerefArrayRefusal = interp.NamerefArrayCheckedLastOnTheAttribute
+	// A declaration operand carrying a **subscript** takes the reference
+	// attribute off and writes the element on the name itself: measured
+	// 2026-09-23 on 5.3.20 and 5.3.15 alike, `typeset -n xref; typeset -a
+	// xref[1]=one` is `warning: xref: removing nameref attribute` and then
+	// `declare -a xref=([1]="one")` at 0, and an *aimed* reference goes the
+	// same way — `array=(p q); typeset -n xref=array; typeset -a
+	// xref[1]=one` leaves `xref` holding the array and `array` untouched,
+	// where ksh93 writes through it. The plain statement `xref[1]=one` is
+	// the other road and keeps the reference (#4178).
+	s.NamerefDroppedByASubscriptedOperand = interp.Yes
 	// And an array letter written over a reference that has never been
 	// aimed takes the reference away rather than standing beside it:
 	// measured 2026-09-22 on 5.3.20, `typeset -n foo; typeset -a foo` lists

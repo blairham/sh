@@ -6939,8 +6939,15 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// reference belongs to this call and the caller's own name of
 			// the same spelling gets itself back on return. See
 			// interp/nameref.go.
+			// The same adopt the `declare` spelling makes, and folded here
+			// rather than left behind: a value an assignment prefix put in
+			// this cell is this call's own, so `f() { local -n r; }; r=tgt
+			// f` aims at `tgt` where the *caller's* `r=tgt` is not adopted.
+			// See the declaration loop in interp/declarebuiltin.go, where
+			// the rows are.
+			adopts := !fresh || r.prefixEntryIsInThisCell(name)
 			if code := r.declareNameref("local", name, value, f, hasValue,
-				appends, r.readonly[name] && !f.readonlyOff, !fresh, held,
+				appends, r.readonly[name] && !f.readonlyOff, adopts, held,
 				fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {

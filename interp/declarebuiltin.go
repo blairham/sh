@@ -2012,8 +2012,27 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// its order against the other two refusals is measured and the
 			// bad target goes first. See there.
 			frozen := r.readonly[name] && !df.readonlyOff
+			// **A value an assignment prefix put here is this call's own**,
+			// so a valueless `-n` adopts it — the fresh binding the
+			// declaration just took is not empty, it holds what the prefix
+			// displaced into it. Measured 2026-09-24 against bash 5.3.20 and
+			// bash 5.3.15, which agree:
+			//
+			//	f() { declare -n r; declare -p r; }; r=tgt f
+			//	  `declare -nx r="tgt"` — aimed at what the prefix held
+			//	f() { declare -n r; }; r=/ f
+			//	  `` declare: `/': invalid variable name for name reference ``
+			//	r=/; f() { declare -n r; }; f
+			//	  silent, because the *caller's* value is not this call's
+			//
+			// The third is the control and it is why `!fresh` alone is the
+			// wrong test: an ordinary outer value is not adopted and a
+			// prefix's is, and both make the binding fresh. See
+			// prefixEntryIsInThisCell, which is the same record declareEmpty
+			// reads for the value the cell kept (#4178).
+			adopts := !fresh || r.prefixEntryIsInThisCell(name)
 			if code := r.declareNameref(complaintName, name, value, df,
-				hasValue, appends, frozen, !fresh, held, fresh); code != 0 {
+				hasValue, appends, frozen, adopts, held, fresh); code != 0 {
 				status = code
 				if r.ctl == controlExit {
 					return r.status

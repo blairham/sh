@@ -4371,6 +4371,12 @@ func Diagnostics() interp.Diagnostics {
 		ReadonlyRefusalNamesBuiltin: map[string]bool{
 			"declare": true, "typeset": true, "local": true,
 		},
+		// `readonly -a a=(1)` inside a function names the function where the
+		// two spellings above name themselves. The letter is what moves it —
+		// see Diagnostics.LiteralOperandAfterADeclarationIsLocatedUnderTheCall
+		// for the eight measured rows and for what the letter changes about
+		// when the store runs.
+		LiteralOperandAfterADeclarationIsLocatedUnderTheCall: true,
 		// The three sentences a frozen function has. Measured 2026-09-16 on
 		// 5.3.20 and 3.2.57 alike, each at status 1 and none of them fatal:
 		//

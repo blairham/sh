@@ -11225,7 +11225,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// The *stored* text, which is what an append joins — see
 			// storedVar, and Semantics.CaseAttributeFoldsWhenRead for the
 			// shell where that is not what a read answers.
-			old, _ := r.storedVar(a.Name)
+			old := r.appendedOldValue(a.Name)
 			if r.isCompoundVariable(a.Name) {
 				// A compound answers a value — its whole tree as text — and
 				// it is not one a scalar append joins: measured,

@@ -103,8 +103,10 @@ func (r *Runner) appendedScalar(name, value string, fresh bool) (string, bool) {
 	old := ""
 	if !fresh {
 		// storedVar and not getVar: an append joins what the name was
-		// assigned, which in one shell is not what a read of it answers.
-		old, _ = r.storedVar(name)
+		// assigned, which in one shell is not what a read of it answers —
+		// and through appendedOldValue, because a self-aimed reference's
+		// join must not carry the read's warning. See there.
+		old = r.appendedOldValue(name)
 	}
 	return r.appendedValue(name, old, value)
 }

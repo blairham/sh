@@ -1504,6 +1504,46 @@ func (r *Runner) selfNamerefValue(name string) (string, bool) {
 	return "", false
 }
 
+// appendedOldValue is the text an **append** joins, read without the read's
+// own warning where the name is a reference aimed at its own name.
+//
+// A write through a self reference says `maximum nameref depth (8) exceeded`
+// and a read says `circular name reference` — two sentences for two events,
+// which warnAboutNamerefDepth already records. An append is one event and
+// says one sentence: the write's. It reads the old text to join to, and that
+// read is part of the write rather than a read of its own.
+//
+// Measured 2026-09-23 on bash 5.3.20 and bash 5.3.15 alike, from a script
+// file, with an outer `ref=B`:
+//
+//	f() { typeset -n ref=ref; ref+=X; echo "[$ref]"; }
+//	  bash     the declaration's two warnings, then the depth sentence
+//	           alone for the append, then the read's own on the echo, and
+//	           `[BX]`
+//	  before   the same with a `circular name reference` in front of the
+//	           depth sentence — the join's read warning as if the script
+//	           had read the name itself
+//
+//	f() { typeset -n ref=ref; declare -g ref+=X; }
+//	  bash     the declaration's two warnings and **nothing** for the
+//	           append
+//	  before   a `circular name reference` for the join's read
+//
+// The second row is the sharper one: there is no depth sentence to hide
+// behind, so the extra line stood alone.
+//
+// Only the self-aimed shape. An ordinary aimed reference joins what its
+// target holds and the walk to it warns about nothing, which is the path this
+// keeps: `typeset -n r=v; r+=X` joins `v`'s text in both shells.
+func (r *Runner) appendedOldValue(name string) string {
+	if r.selfNameref(name) {
+		v, _ := r.selfNamerefValue(name)
+		return v
+	}
+	old, _ := r.storedVar(name)
+	return old
+}
+
 // selfNamerefStore is the write, and it reports whether the value landed
 // anywhere: a reference that is itself the global cell has nothing outside it
 // to write to, and bash says `circular name reference` there rather than the

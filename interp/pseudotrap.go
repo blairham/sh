@@ -410,10 +410,10 @@ func (r *Runner) fireDebugTrap(ctx context.Context, entering bool) {
 	// not share it — an ERR body, a signal body and an EXIT body each fire
 	// the DEBUG trap with tracing off, measured in the same run — which is
 	// what says this is about the *return* and not about trap bodies.
-	if r.inReturnTrap && !r.functrace {
+	if r.inReturnTrap && !r.tracesIntoFunctions() {
 		return
 	}
-	if cur := r.currentFrameSerial(); cur != 0 && cur != r.debugTrapFrame && !r.functrace &&
+	if cur := r.currentFrameSerial(); cur != 0 && cur != r.debugTrapFrame && !r.tracesIntoFunctions() &&
 		!r.ask(r.sem().DebugTrapRunsInsideCalls, "the DEBUG trap inside a call it was not set in") {
 		return
 	}
@@ -424,6 +424,9 @@ func (r *Runner) fireDebugTrap(ctx context.Context, entering bool) {
 	// puts a second D ahead of the `echo s` inside.
 	if r.debugTrapInherited && !r.functrace &&
 		!r.ask(r.sem().DebugTrapRunsInSubshells, "the DEBUG trap inside a subshell") {
+		// The mark is deliberately not asked here: it is a property of a
+		// *function*, and a subshell is not one. Measured — `declare -ft f`
+		// carries nothing into `( … )`.
 		return
 	}
 	if entering && !r.ask(r.sem().DebugTrapRefiresOnEnteringAFunction,
@@ -455,7 +458,7 @@ func (r *Runner) fireDebugTrap(ctx context.Context, entering bool) {
 // The action sees the status `return` was handed rather than the one it
 // set: measured, a `return 3` fires the trap with `$?` still naming the
 // command before it, and the 3 is what the caller then reports.
-func (r *Runner) runReturnTrap(ctx context.Context, serial int) {
+func (r *Runner) runReturnTrap(ctx context.Context, serial int, ending string) {
 	body := r.returnTrap
 	if body == nil || *body == "" || r.inReturnTrap || r.returnTrapInherited {
 		return
@@ -489,7 +492,13 @@ func (r *Runner) runReturnTrap(ctx context.Context, serial int) {
 	if serial == sourcedFrame {
 		frame = r.currentFunctionFrameSerial()
 	}
-	if r.returnTrapFrame != frame && (!r.functrace || r.inDebugTrap) {
+	// The mark is read from the function that is **ending**, not from the
+	// one running: by the time a call unwinds, the body that was marked is
+	// the frame being left. Measured — with `traced` marked and calling an
+	// unmarked `inner`, bash fires this for `traced` alone, and asking
+	// Runner.inFunc here fired it for `inner` instead.
+	carries := r.functrace || (ending != "" && r.tracedFuncs[ending])
+	if r.returnTrapFrame != frame && (!carries || r.inDebugTrap) {
 		return
 	}
 	if r.ctl != controlNone && r.ctl != controlReturn {
@@ -728,4 +737,29 @@ func (r *Runner) debugTrapSkipped() bool {
 func (r *Runner) debugTrapStopped() bool {
 	skip := r.debugTrapSkipped()
 	return skip || r.ctl != controlNone
+}
+
+// tracesIntoFunctions reports whether the DEBUG and RETURN traps reach inside
+// a call this shell is in the middle of: the shell-wide `set -T`, or the mark
+// on the function whose body is running.
+//
+// The mark is the second half of `declare -ft f` and was the half that did
+// nothing. `functionAttributeTraced` has been recorded since #3192 and shown
+// back by `declare -Fp`, and nothing ever read it — so the letter was accepted,
+// listed, and inert, which is the same shape the readonly half was filed as.
+//
+// Measured 2026-09-24 on bash 5.3.20 from a script file, `traced` marked and
+// `untraced` not, both calling a third function:
+//
+//	declare -ft traced; trap '…' DEBUG   fires inside traced, not inside
+//	                                      untraced, and not inside the
+//	                                      function traced calls
+//	the same with a RETURN trap           fires for traced alone
+//
+// So it stops at the body it is on, exactly as `set -T` does not: the mark is
+// read from the function currently running and no deeper. That is why this
+// asks Runner.inFunc rather than walking the frames — a function a traced one
+// calls has its own name there, and an unmarked name answers no.
+func (r *Runner) tracesIntoFunctions() bool {
+	return r.functrace || (r.inFunc != "" && r.tracedFuncs[r.inFunc])
 }

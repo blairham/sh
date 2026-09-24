@@ -135,7 +135,33 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 			// name empty and REPLY holding what was typed, and the body still
 			// runs. A script tests the name to find out.
 			r.setVar("REPLY", line)
+			// **A name that will not take the choice ends the loop.** The
+			// only way the store can fail here is the reference one: a
+			// `select` variable that is a reference with nothing to point at
+			// is aimed by the item it chose, and an item that is no possible
+			// name aims it nowhere. bash stops there rather than prompting
+			// again. Measured 2026-09-24 against bash 5.3.20 and bash
+			// 5.3.15, which agree:
+			//
+			//	declare -n r; select r in /; do :; done <<< 1
+			//	  the menu, then `` `/': not a valid identifier ``, and
+			//	  **no prompt** — the loop is over
+			//	declare -n r; select r in tgt; do echo body; done <<< 1
+			//	  the menu, a prompt, `body`, a second prompt, then EOF
+			//
+			// Here the refusal was reported and the loop went round again,
+			// so a second `#? ` reached the script's error stream and the
+			// EOF path wrote a line to its output that bash never writes.
+			//
+			// Read as a delta rather than as the flag's value, because
+			// assignFailed is a mark the builtin around a store reads and
+			// not a per-store result: a failure earlier in this command
+			// would otherwise end the first iteration of every later loop.
+			failedBefore := r.assignFailed
 			r.setVar(c.Name, selectChoice(items, line))
+			if r.assignFailed && !failedBefore {
+				return nil
+			}
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err
 			}

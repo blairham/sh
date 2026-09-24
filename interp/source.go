@@ -1480,7 +1480,8 @@ func (r *Runner) runDotText(ctx context.Context, args []string, display string, 
 	// so the action saw `source` where bash saw the caller — and the DEBUG
 	// firing in front of the action saw it too.
 	popSourceFrame()
-	r.runReturnTrap(ctx, sourcedFrame)
+	// A sourced file is not a function and carries no mark of its own.
+	r.runReturnTrap(ctx, sourcedFrame, "")
 	// And now whether the file's own `set` stands. Only a file that was
 	// given parameters of its own has a restore to cancel, and only one that
 	// replaced them has canceled it — so the axis is consulted where both

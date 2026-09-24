@@ -1780,7 +1780,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	if r.ctl != controlReturn && fn.Body != nil {
 		r.line = r.lineOf(fn.Body.Pos())
 	}
-	r.runReturnTrap(ctx, frameSerial)
+	r.runReturnTrap(ctx, frameSerial, name)
 	// And the shell is back where the call was made, which is a line the
 	// caller's own judging reads: an ERR trap that fires because the *call*
 	// failed is located at the call and not at the body's last command.

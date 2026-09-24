@@ -615,6 +615,31 @@ repeated. A change resolving several repeats it: `Closes #NNNN`, `Closes #MMMM`.
 labels on open issues, and an epic closes when its rows reach parity — so a
 falsely-closed row lets a campaign finish on a premise nobody measured.
 
+**So closing a parity row requires the figure, and the environment beside it.**
+Not the change that fixed it, not "nothing is left" — the number, from both
+instruments, with enough of the setup written down that somebody can reproduce
+it or contradict it:
+
+- the figure each way: differing lines, strict, line agreement;
+- **both instruments**, with each side's line count stated, so a run that
+  measured nothing is visible as such;
+- the **image digest**, the package set, and the reference's `--version`;
+- and the **base name of the binary handed to `-bin`**, because every figure the
+  harness prints is inflated when it is not the reference's.
+
+**An unfalsifiable close is worse than a wrong one, because nothing can disagree
+with it.** That is not a slogan: four rows of the 0/0 block were closed by a
+`Closes #NNNN` with no measurement recorded at all, and when the block was
+graded again the audit had nothing to check itself against. A misconfigured
+instrument became the only number in the room, five rows were reopened as
+regressions, 29 of their 31 differing lines were the binary's name, and the
+board moved five times through three lanes before anyone could show the
+contradiction. Any one of those closes carrying `0 differing, strict 1/1, image
+sha256:…, reference GNU bash 5.3.15` would have made it visible in seconds.
+
+A close that states a figure can be proved wrong by one command. A close that
+states none survives every review there is.
+
 `main` is protected, and these four must pass before a merge:
 
     Build and test (ubuntu-latest)
@@ -656,6 +681,24 @@ branch will be gone by then either way.
 
 Auto-merge is enabled, so a pull request can be queued to land the moment
 its required checks go green.
+
+**After arming `--auto`, land any further change as a follow-up pull request —
+amended or not.** The hazard is auto-merge acting on a state it has already
+validated, so a *new commit* races the merge exactly as an amend does: the merge
+fires on what it checked, and the push arrives after that decision and before
+the branch is deleted. Measured the hard way — a second commit pushed to an
+armed pull request was stranded when the first merged without it.
+
+**And after any merge, check that the change is on `main` — not that the pull
+request says `MERGED`.** `gh pr view` will say `MERGED` and be telling the truth
+about the wrong thing. One command settles it:
+
+    git fetch -q origin && git show origin/main:<file> | grep <the change>
+
+That is what caught the stranded commit above, which is why it is worth the ten
+seconds: the branch was already deleted and the only copy left was local. It is
+the same shape as the base-name finding in the instrument notes below —
+**check the artifact, not the report about it.**
 
 **Build, test and lint only do work when Go changed.** A pull request
 touching only `docs/` runs them as no-ops. Pre-commit always runs in full,

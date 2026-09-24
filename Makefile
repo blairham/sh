@@ -386,14 +386,29 @@ dash-suite: ## dash has no suite of its own; prints why
 # moved; ours ships no expected output, so a file the reference answers two
 # ways carries no expectation for anything to be graded against and is a bug
 # in a file we wrote. See suite.Report.CaseDefects (#2297).
+# The four binaries go under a directory rather than being named
+# own-<dialect>, so each one's **base name** is its dialect's and matches the
+# reference it is graded against. The comparison strips each shell's full path
+# and deliberately not its base name -- replacing base names would turn
+# unrelated words into <shell> -- so a line where a shell names *itself* by
+# base name is compared literally, and that is sound only while the two base
+# names are equal. Depth is irrelevant; only the base name is compared.
+#
+# Measured as **no movement**: the whole bash column of our own suite is 73/74
+# strict under both namings, identically, because no file here has such a line
+# today. So this is prophylaxis and not a fix for a live defect -- the first
+# file whose output named the shell would have started moving these figures
+# with nothing saying why. See suite.CheckBaseNames, which refuses the same
+# state outright on the fetched-suite path.
 suite: ## Run our own conformance suite in every dialect and report the per-dialect baseline
 	@mkdir -p $(BINDIR)
-	@for s in bash zsh ksh dash; do go build -o $(BINDIR)/own-$$s ./cmd/$$s || exit 1; done
+	@mkdir -p $(BINDIR)/own
+	@for s in bash zsh ksh dash; do go build -o $(BINDIR)/own/$$s ./cmd/$$s || exit 1; done
 	@go run ./internal/cmd/suitecheck -own -timeout 30s \
-		-own-bin bash=$(BINDIR)/own-bash \
-		-own-bin zsh=$(BINDIR)/own-zsh \
-		-own-bin ksh=$(BINDIR)/own-ksh \
-		-own-bin dash=$(BINDIR)/own-dash $(ARGS)
+		-own-bin bash=$(BINDIR)/own/bash \
+		-own-bin zsh=$(BINDIR)/own/zsh \
+		-own-bin ksh=$(BINDIR)/own/ksh \
+		-own-bin dash=$(BINDIR)/own/dash $(ARGS)
 
 # The campaign's leg-2 count, derived rather than remembered.
 #

@@ -1971,6 +1971,26 @@ func (r *Runner) unsetScalarElem(name string, idx int, sub string) int {
 // refuseSubscriptOnAScalar is what one dialect does about a subscript that
 // names no element of a name that is no array, and what the other does not.
 func (r *Runner) refuseSubscriptOnAScalar(name string) int {
+	if r.unsetElementThroughAReference {
+		// **A subscript the reference supplied is not the script's**, and a
+		// name that is no array says nothing about it. Measured 2026-09-24
+		// against bash 5.3.20 and bash 5.3.15, which agree, with `x=42`:
+		//
+		//	unset "x[2]"                   `x: not an array variable`, 1
+		//	typeset -n foo='x[2]'
+		//	  unset foo                    silent, 0, and `x` still `42`
+		//
+		// The control that says it is the route and not the subscript is
+		// element **zero**: `unset "x[0]"` and an `unset` through a reference
+		// aimed at `x[0]` both take the whole scalar away, in both shells.
+		// So the two spellings agree wherever a scalar has the element and
+		// part only where it does not.
+		//
+		// This is `nameref4.sub`'s row, which stood unreproduced for most of
+		// this campaign because every spelling of it written by hand used the
+		// direct subscript — the one that does refuse (#4178).
+		return 0
+	}
 	if !r.ask(r.sem().UnsetSubscriptOnAScalarIsAnError,
 		"a subscript naming no element of a name that is not an array") {
 		return 0

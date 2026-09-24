@@ -84,6 +84,48 @@ a`
 	}
 }
 
+// But a **letter** on the scope's own frozen cell is not a shadow question at
+// all, and the scope must not answer it.
+//
+// The row above is the control beside this one and they part on one thing: a
+// declaration carrying a *value* for a frozen local is refused by the store,
+// and one carrying only a letter has no store to be refused by. The shadow
+// check stood in front of both, so inside a function an attribute letter was
+// unreachable on a name that function had frozen itself — while the same line
+// at the top level was taken.
+//
+// `+n` is the letter that shows it, because it is the one that is about the
+// *reference* rather than about the value the freeze guards. Measured
+// 2026-09-24 on bash 5.3.20, both at 0 and both leaving `declare -r v`:
+//
+//	declare -r -n v; declare +n v
+//	f(){ declare -r -n v; declare +n v; }
+//
+// This shell took the first and refused the second (#4178).
+func TestALetterOnTheScopesOwnFrozenCellIsNotAShadow(t *testing.T) {
+	const src = `a() { typeset -r -n v; typeset +n v; echo "st=[$?]"; typeset -p v; }
+a`
+	for _, ans := range []Answer{Yes, No} {
+		out, errs, st := declRun(t, src, func(s *Semantics) {
+			enclosingFreeze(ans)(s)
+			// The reference letter and the listing letter, without which the
+			// row is an invalid option and measures nothing at all.
+			s.LocalOptions = "aAilnprux"
+			s.DeclareOptions = "aAilnprux"
+			// `-r` beside `-n` on one line, which is a question of its own
+			// and not this row's: answered flat so an unanswered axis cannot
+			// stand in for the freeze the row is about. See
+			// Semantics.NamerefLetterStandsAlone.
+			s.NamerefLetterStandsAlone = No
+		}, Diagnostics{})
+		want := "st=[0]\ndeclare -r v\n"
+		if out != want || st != 0 || errs != "" {
+			t.Errorf("a letter on the scope's own freeze under %v = %q (stderr %q, status %d), want %q",
+				ans, out, errs, st, want)
+		}
+	}
+}
+
 // And a freeze no scope holds is refused under either answer too, at every
 // depth — because the first refusal leaves no shadow for the second call to
 // be enclosed by.

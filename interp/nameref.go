@@ -509,6 +509,39 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 		return "", false
 	}
 	if !r.namerefTargetIsAName(value) {
+		// **A reference this call made local is the declaration's to refuse**,
+		// and the declaration keeps it. Measured 2026-09-24 against bash
+		// 5.3.20 and bash 5.3.15, which agree:
+		//
+		//	f() { typeset -n q; typeset q=42; typeset -p q; }
+		//	  `typeset: `42': invalid variable name for name reference`, and
+		//	  `declare -n q` still standing afterwards
+		//	typeset -n q; typeset q=42          (at the top level)
+		//	  `typeset: `42': not a valid identifier`, and no `q` at all
+		//
+		// So the same two lines part on nothing but whose binding the
+		// reference is.
+		//
+		// One row of this family is measured and **left**: a letter written
+		// on the refused line itself sticks here and does not in bash —
+		// `typeset -i q=7*6` over the call's own reference is `declare -n q`
+		// there and `declare -in q` here. Taking back only what this line
+		// applied wants the declaration's held snapshot, which this function
+		// is below; clearing the letters outright is the wrong tool and was
+		// measured so — bash **keeps** a letter that predates the line
+		// (`typeset -in q; typeset q=42` is `declare -in q`), and clearing
+		// them here left no cell for a listing at all. The controls all agree and say it is the *call's own*
+		// that matters rather than being in a function at all: the caller's
+		// reference with `declare -g q=42` inside a function takes the
+		// top-level answer, a plain `q=42` over the call's own reference is
+		// the bare assignment's sentence with the reference left standing,
+		// and a second function declaring `q` makes a fresh local and writes
+		// into it.
+		if form.declaresRatherThanAssigns() && r.referenceIsThisCallsOwn(name) {
+			r.refuseNameref(r.builtinComplaintName(r.inBuiltin),
+				r.namerefBadTargetWording(value, false))
+			return "", false
+		}
 		r.refuseNamerefAim(value, form)
 		// **A declaration's refused aim takes the name away**, where the
 		// bare assignment's leaves the reference standing. Measured
@@ -546,6 +579,18 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 	}
 	r.setNameref(name, value)
 	return name, false
+}
+
+// referenceIsThisCallsOwn reports whether the reference under this name was
+// made local by the call that is running — the innermost scope holds the outer
+// name it displaced, which is what says the binding is this call's rather than
+// one it inherited.
+func (r *Runner) referenceIsThisCallsOwn(name string) bool {
+	if len(r.scopes) == 0 {
+		return false
+	}
+	_, saved := r.scopes[len(r.scopes)-1].saved[name]
+	return saved
 }
 
 // refuseNamerefAim reports a value that cannot aim a reference, and is the

@@ -420,6 +420,42 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 				if i+j < len(items) {
 					it = items[i+j]
 				}
+				if r.selfNameref(name) {
+					// A reference aimed at its **own name** is written
+					// *through* rather than re-pointed, which is the one
+					// shape the rule below does not reach: there is no other
+					// name for it to be re-aimed at, and an assignment to it
+					// resolves outward to the cell the binding stands in
+					// front of. So the loop variable takes the same road
+					// `ref=X` takes, warning and all.
+					//
+					// Measured 2026-09-24 on bash 5.3.20 and bash 5.3.15
+					// alike, from script files, with an outer `ref=B`:
+					//
+					//	f() { typeset -n ref=ref
+					//	      for ref in X Y; do printf '<%s>' "$ref"; done; }
+					//	  `<X><Y>`, the outer `ref` left holding `Y`, and per
+					//	  iteration the write's `maximum nameref depth (8)
+					//	  exceeded` then the read's `circular name reference`
+					//
+					// Here the loop re-pointed it, so `$ref` read empty on
+					// every pass and the caller's value never changed — a
+					// write that went nowhere at status 0.
+					//
+					// **A word that is no name is a value here, not a
+					// refusal**, which is the other half of not being a
+					// re-aim: `for ref in /` writes `/` through at 0 and runs
+					// the body, where the same word over an *aimed* reference
+					// ends the loop. So this branch stands ahead of that
+					// check rather than behind it.
+					if !r.selfNamerefStored(name, it) {
+						// Nowhere outside the reference to land: the loop
+						// gives up and the body does not run. See
+						// selfNamerefStored, where the row is.
+						return nil
+					}
+					continue
+				}
 				if r.isNameref(name) {
 					// A loop whose variable is a **name reference**
 					// re-points the reference rather than writing through

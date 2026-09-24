@@ -1575,15 +1575,34 @@ func (r *Runner) selfNamerefStore(name, value string) bool {
 // takes here, the command list given up and the caller carrying on. See
 // refuseReadonly, whose two lines these are.
 func (r *Runner) selfNamerefAssignment(name, value string, form assignForm) {
-	if r.selfNamerefStore(name, value) {
-		r.warnAboutNamerefDepth(name)
+	if r.selfNamerefStored(name, value) {
 		return
 	}
-	r.warnAboutACycle(name)
-	r.status, r.assignFailed = 1, true
+	r.assignFailed = true
 	if !form.declaresRatherThanAssigns() {
 		r.abandonTheCommand()
 	}
+}
+
+// selfNamerefStored is the store and the sentence it earns: the depth warning
+// where the value landed, and the cycle warning with a status of 1 where there
+// was nowhere outside the reference for it to land.
+//
+// The **cost** of a failure is the caller's and is deliberately not in here,
+// because the two callers pay different ones. An assignment gives up the
+// command; a `for` loop's variable gives up the loop and never runs the body —
+// measured 2026-09-24 on bash 5.3.20, `ref=B; f() { declare -gn ref=ref; for
+// ref in X; do echo body; done; }` writes the warning, reports 1, prints no
+// `body` and leaves `ref` the reference it was. Folding the cost in would have
+// meant one of the two spellings borrowing the other's.
+func (r *Runner) selfNamerefStored(name, value string) bool {
+	if r.selfNamerefStore(name, value) {
+		r.warnAboutNamerefDepth(name)
+		return true
+	}
+	r.warnAboutACycle(name)
+	r.status = 1
+	return false
 }
 
 // refuseNameref reports a declaration this shell will not make, and gives up

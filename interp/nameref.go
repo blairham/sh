@@ -855,7 +855,11 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 			// else.
 			if held, set := r.getVar(name); set && adopts {
 				if !r.namerefTargetIsAName(held) {
-					return refuse(r.namerefBadTargetWording(held))
+					// A value the name was already holding takes the
+					// `n` letter's sentence whatever it is, the empty
+					// string included — the written route's exception is
+					// the written route's. See namerefBadTargetWording.
+					return refuse(r.namerefBadTargetWording(held, false))
 				}
 				r.namerefEmptiesTheCell(name, df)
 				r.setNameref(name, held)
@@ -974,7 +978,10 @@ func (r *Runner) declareNameref(builtin, name, target string, df declareFlags,
 			"%[1]s: no parent", reported))
 	}
 	if !r.namerefTargetIsAName(target) {
-		return refuse(r.namerefBadTargetWording(reported))
+		// The empty word is the written route's own exception, and an
+		// **appended** fragment takes the builtin's sentence outright. See
+		// namerefBadTargetWording, where the eleven words are.
+		return refuse(r.namerefBadTargetWording(reported, appends || reported == ""))
 	}
 	aim, aimIsAName := r.namerefAim(target, df)
 	if !aimIsAName {
@@ -1806,16 +1813,47 @@ func (r *Runner) exportedNamerefs() []string {
 // namerefBadTargetWording is the refusal a declaration gives a word it will
 // not aim a reference at, and there are two of them in one column.
 //
-// The empty word is the one that parts them. bash has a sentence the `n`
-// letter owns, `invalid variable name for name reference`, and an empty
-// operand never reaches it: `declare -n r=` draws `not a valid identifier`
-// instead, which is what that builtin says about any word it will not bind.
-// ksh93 writes one sentence for both, with the word dropped in.
+// bash has a sentence the `n` letter owns, `invalid variable name for name
+// reference`, and a second the builtin says about any word it will not bind,
+// `not a valid identifier`. ksh93 writes one sentence for every shape, with
+// the word dropped in.
 //
-// Which shell is which is Diagnostics.NamerefEmptyTargetIsAnOrdinaryBadName,
-// and an empty wording there means the dialect has only the one sentence.
-func (r *Runner) namerefBadTargetWording(target string) string {
-	if target == "" {
+// **Which of the two a refusal takes is decided by the route, not by the
+// word.** That is the correction this function carries: it used to read the
+// word, and an empty operand was the only shape sent down the ordinary road.
+// Measured 2026-09-24 against bash 5.3.20 and bash 5.3.15, which agree, over
+// eleven words — the empty one, `12345`, `/`, `1bad`, `a b`, `-x`, `.b`, `a[`,
+// `0`, `@` and `+` — down each route:
+//
+//	declare -n r=WORD          the `n` letter's sentence for every word
+//	                           **except** the empty one, which takes the
+//	                           builtin's
+//	WORD as a held value,
+//	  then declare -n r        the `n` letter's sentence for every word,
+//	                           the empty one included
+//	declare -n r
+//	  then typeset -n r+=WORD  the builtin's sentence for every word,
+//	                           whatever it is
+//
+// So the empty exception belongs to the **written** route alone, an adopted
+// value never takes it, and an appended fragment takes the builtin's sentence
+// outright. Both of the latter were wrong here: an adopted empty drew the
+// builtin's sentence and every appended word but the empty one drew the `n`
+// letter's.
+//
+// This is why the word was the wrong thing to read. Across fourteen target
+// shapes and seven aiming routes the two wordings were already right
+// everywhere else, which is exactly what a rule keyed on the word looks like
+// when the real key is the route: it agrees wherever the two happen to line
+// up (#4178).
+//
+// ordinary says this route takes the builtin's sentence. Which sentence that
+// is, and whether the dialect has a second one at all, is
+// Diagnostics.NamerefEmptyTargetIsAnOrdinaryBadName — an empty wording there
+// means the dialect has only the one, which is ksh93 and is why none of this
+// moves that column.
+func (r *Runner) namerefBadTargetWording(target string, ordinary bool) string {
+	if ordinary {
 		if w := r.diag().NamerefEmptyTargetIsAnOrdinaryBadName; w != "" {
 			return Wording(w, "`%[1]s': not a valid identifier", target)
 		}

@@ -69,6 +69,17 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 			// A name the script has frozen is not written, and neither is
 			// the other one: the coprocess runs, its status is 0, and the
 			// ends reach nothing. See coprocNamesAreFrozen.
+			//
+			// **The name is still recorded**, because the reaping takes both
+			// names back whether or not the publishing managed to put
+			// anything in them — and that take-back is what writes the
+			// second sentence a frozen array earns. Leaving the record empty
+			// here meant forgetCoprocNames returned at its first line, so
+			// `declare -r B=1; coproc B { :; }; wait` said `B: readonly
+			// variable` and never `B: cannot unset: readonly variable`, and
+			// a frozen `B_PID` was left standing. See forgetCoprocNames,
+			// where the three shapes are.
+			r.coproc.name = name
 			r.status = 0
 			return nil
 		}
@@ -154,15 +165,20 @@ func (r *Runner) coprocEndClosedByName(fdVar string, fd int) {
 // The status stays 0 either way, which is the reference's answer and this
 // shell's: what the clause failed at is publishing the ends, not starting the
 // coprocess.
+// **One sentence, not one per name.** Where both the array and its companion
+// are frozen the refusal names the array alone: measured 2026-09-24 against
+// bash 5.3.20 and bash 5.3.15, which agree, `declare -r A=1; declare -r
+// A_PID=2; coproc A { :; }` is `A: readonly variable` and nothing about
+// `A_PID`. Freezing the companion alone still names the companion, which is
+// the row above — so it is the first frozen name that speaks, not a fixed one.
 func (r *Runner) coprocNamesAreFrozen(name string) bool {
-	frozen := false
 	for _, n := range []string{name, name + "_PID"} {
 		if r.readonly[n] {
 			r.refuseReadonly(n, assignedByDeclaration)
-			frozen = true
+			return true
 		}
 	}
-	return frozen
+	return false
 }
 
 // coprocName is what this clause's near ends are published under, and reports
@@ -543,8 +559,52 @@ func (r *Runner) forgetCoprocNames() {
 	if r.sem().CoprocEndsInAnArray != Yes {
 		return
 	}
-	r.unsetName(r.coproc.name)
-	r.unsetName(r.coproc.name + "_PID")
+	// **The array's unset speaks and the companion's does not**, and that is
+	// measured rather than tidy. Reaping is an ordinary `unset` of the array,
+	// so a frozen name refuses it in the words any `unset` would use — the
+	// second sentence `nameref11.sub` grades, which this shell wrote none of
+	// because the reap never asked. The companion goes whatever its
+	// attributes say. Measured 2026-09-24 against bash 5.3.20 and bash
+	// 5.3.15, which agree, over the three shapes a freeze can take:
+	//
+	//	declare -r B=1; coproc B { :; }; wait
+	//	  `B: readonly variable`, then `B: cannot unset: readonly variable`,
+	//	  `B` still `-r B="1"` and `B_PID` gone
+	//	declare -r C_PID=2; coproc C { :; }; wait
+	//	  `C_PID: readonly variable`, and both names gone afterwards
+	//	declare -r A=1; declare -r A_PID=2; coproc A { :; }; wait
+	//	  `A: readonly variable`, then `A: cannot unset: readonly variable`,
+	//	  `A` standing and `A_PID` gone
+	//
+	// So a frozen companion is removed without a word in all three, where a
+	// frozen array is kept and complained about. Asking the readonly question
+	// for the companion left `A_PID` and `C_PID` standing here, which is a
+	// name the reference shell has none of.
+	if r.readonly[r.coproc.name] {
+		// The refusal the reap's own take-back writes, and it is **spoken as
+		// the shell**: `unsetName` is the raw removal and the readonly
+		// question belongs to the builtin around it, but no builtin is
+		// running here. bash writes `B: cannot unset: readonly variable`
+		// with no name in front of it, where the `unset` builtin's own
+		// sentence carries one.
+		//
+		// Written out rather than taken from Diagnostics for the reason
+		// refuseNamerefAim gives about its own: the field's wording has the
+		// builtin baked into it, and only the dialect that publishes a
+		// coprocess in an array reaches this at all.
+		r.diagf("%s: cannot unset: readonly variable\n", r.coproc.name)
+		r.status = 1
+	} else {
+		r.unsetName(r.coproc.name)
+	}
+	// The companion goes whatever its attributes say, and **its letters go
+	// with it**: `unsetOneName` clears the value and leaves the record, so a
+	// frozen `A_PID` listed as a bare `declare -r A_PID` where bash has no
+	// such name. Measured over all three freeze shapes.
+	pid := r.coproc.name + "_PID"
+	r.unsetOneName(pid)
+	r.restoreAttributes(pid, nameAttributes{})
+	delete(r.readonly, pid)
 }
 
 // coprocEnds is the pair of descriptors a running coprocess is reached by,

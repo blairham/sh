@@ -1349,20 +1349,40 @@ func (r *Runner) namerefAttributeRemoved(name string) (finished, consumed bool) 
 	if !r.isNameref(name) {
 		return false, false
 	}
-	if r.refuseReadonly(name, attributeRatherThanAValue) {
-		// A **frozen reference** may not be taken apart: measured the same
-		// day, `w=2; declare -rn k=w; declare +n k` is `declare: k: readonly
-		// variable` at 1 in bash 5.3.20 and `typeset: k: is read only` in
-		// ksh93u+, and `k` is still the frozen reference afterwards. It is
-		// the freeze the *reference* carries, which is the half `unset -n`
-		// already asks and the opposite of what a write through one asks.
-		//
-		// attributeRatherThanAValue is the form this is: a declaration asking a name
-		// to give an attribute up, whose sentence is the declaration's and
-		// which gives up nothing of the enclosing line.
+	target, aimed := r.namerefTarget(name)
+	// A **frozen reference that is aimed** may not be taken apart: measured
+	// 2026-09-17, `w=2; declare -rn k=w; declare +n k` is `declare: k:
+	// readonly variable` at 1 in bash 5.3.20, and `k` is still the frozen
+	// reference afterwards. It is the freeze the *reference* carries, which
+	// is the half `unset -n` already asks and the opposite of what a write
+	// through one asks.
+	//
+	// **A frozen reference with nothing to point at is not refused**, and
+	// that is the half this used to get wrong by asking before it knew.
+	// Measured 2026-09-24 against bash 5.3.20 and bash 5.3.15, which agree:
+	//
+	//	declare -rn foo; typeset +n foo    0, and `declare -r foo` after it
+	//	w=2; declare -rn k=w; typeset +n k `k: readonly variable` at 1
+	//
+	// Here both were refused, so the first left `declare -nr foo` standing
+	// and wrote a sentence bash does not. The split is the whole of it: an
+	// aimed reference has a target whose name the letter would leave behind
+	// as a **value**, and writing a value into a frozen name is what the
+	// freeze is about; an unaimed one has no value to leave, so taking the
+	// letter off changes nothing the freeze protects and the name is simply
+	// the frozen empty declaration it already was.
+	//
+	// Core rather than an axis, because bash is the only column that can be
+	// asked: ksh93u+ answers `typeset -rn` with its usage block at 2 and so
+	// never makes a frozen reference at all — the same ground the frozen
+	// reference's other rules are already recorded on.
+	//
+	// attributeRatherThanAValue is the form this is: a declaration asking a name
+	// to give an attribute up, whose sentence is the declaration's and
+	// which gives up nothing of the enclosing line.
+	if aimed && r.refuseReadonly(name, attributeRatherThanAValue) {
 		return true, false
 	}
-	target, aimed := r.namerefTarget(name)
 	r.unsetNameref(name)
 	if !aimed {
 		// Nothing to leave behind, so the operand falls through to the

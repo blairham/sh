@@ -10992,6 +10992,46 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	if r.unspecified {
 		return
 	}
+	// **A subscript does not aim a reference.** A write to a name with
+	// nothing to point at is the write that aims it — `typeset -n ref;
+	// ref=foo` leaves `declare -n ref="foo"` — but a *subscripted* write is
+	// not that write: it names an element of whatever the reference points
+	// at, and it points at nothing, so the element has no name to belong to.
+	// Here the subscript was thrown away and the value aimed the reference,
+	// so `ref` came out pointing at the value and the element was never
+	// written anywhere (#4178).
+	//
+	// Measured 2026-09-24, and **both** columns were wrong, each in its own
+	// words. bash 5.3.20 and bash 5.3.15 agree with each other:
+	//
+	//	typeset -n ref; ref[0]=foo    `` `': not a valid identifier ``, 1,
+	//	                              and `ref` still `declare -n ref`
+	//	typeset -n ref; ref[k]=foo    the same
+	//	typeset -n ref; ref=foo       taken, and the reference is aimed
+	//	v=(p q); typeset -n ref=v
+	//	  ref[0]=foo                  written through into `v`
+	//
+	// and ksh93u+ 2012-08-01 answers `ref: no reference name` and ends the
+	// script — the ordinary unaimed *use* refusal it already has, at the cost
+	// a write through one already pays here. See
+	// Diagnostics.NamerefUnaimedUse.
+	//
+	// The empty name in bash's sentence is the reference's target standing
+	// where the element's base belongs, which is why the word it quotes is
+	// empty whatever the subscript was. assignedAlone is the cost bash gives
+	// it: measured, `ref[0]=foo; echo after` on one line writes the sentence
+	// and never reaches `after`, and the next line runs.
+	if a.Index != nil && r.isNameref(a.Name) {
+		if _, aimed := r.namerefTarget(a.Name); !aimed {
+			if aimless, unaimed := r.unaimedReferenceBase(a.Name); unaimed {
+				r.refuseUnaimedReference(aimless, "")
+				r.fatalQuiet()
+				return
+			}
+			r.refuseNamerefAim("", assignedAlone)
+			return
+		}
+	}
 	switch {
 	case a.Members != nil && a.Index != nil:
 		// The body standing where one *element's* value goes, which is the

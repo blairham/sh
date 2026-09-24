@@ -874,9 +874,34 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 			// one (#1063).
 			return nil
 		}
-		// A case matching nothing exits 0.
+		// A case matching nothing exits 0 — but a **body** reads the status
+		// the subject expansion left, not this zero.
+		//
+		// The two were one line, and the zero reached the body: with `wait`
+		// reporting 5 above it, `case "$x" in "$p") echo $?;;` wrote 0 here
+		// and writes 5 in bash 5.3.20, zsh 5.9, ksh93u+ and dash 0.5.12 —
+		// unanimous, so this is the shell's own reading rather than an axis
+		// (#4179). The `*)` arm is the same, and so is a body reached by a
+		// `;&` fall-through: it is where the arm's commands run that
+		// matters, not which arm was chosen.
+		//
+		// Captured after the subject is expanded, which is the half a
+		// "before the case" reading gets wrong: `case $(echo x) in x) echo
+		// $?;;` writes **0** in all four, because the substitution ran and
+		// set it. What the body sees is simply what the last command left,
+		// and the zero belongs to the construct's own result.
+		before := r.status
+		// A case matching nothing exits 0, and so does one whose chosen arms
+		// hold no commands at all — measured, an empty body and an empty
+		// `;&` chain both report 0 over a preceding failure.
 		r.status = 0
-
+		// **The arm the subject matched, and not a body a terminator reached.**
+		// That looks like an omission and is measured: with the matched arm's
+		// body *empty* and a `;&` carrying the run into the next one,
+		// bash 5.3.20 and ksh93u+ hand that next body the 5, and zsh 5.9
+		// hands it 0. The panel splits there, so this shell keeps the answer
+		// it already had for that shape in every dialect rather than picking
+		// one — see the note on the terminator loop below.
 		for i, item := range c.Items {
 			matched, ok := r.caseItemMatched(item, subject)
 			if !ok {
@@ -885,6 +910,15 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 			if !matched {
 				continue
 			}
+			// Hand the body the status it would have seen with no `case`
+			// around it.
+			//
+			// Unconditionally, and an empty body is not an exception needing
+			// a guard here: Runner.runList already answers 0 for a body
+			// written as nothing, for its own measured reason. A
+			// `len(item.Body) > 0` test was here and was dead — the mutant
+			// that removes it changes no measured row.
+			r.status = before
 			if err := r.runList(ctx, item.Body); err != nil {
 				return err
 			}
@@ -923,6 +957,10 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 				default:
 					return nil
 				}
+				// No hand-off here: a body a `;&` or `;;&` reached runs
+				// with whatever the arms before it left, which is what this
+				// shell has always done and is the shape the panel disagrees
+				// about. Deliberately not the line above.
 				if err := r.runList(ctx, c.Items[at].Body); err != nil {
 					return err
 				}

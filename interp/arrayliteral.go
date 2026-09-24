@@ -412,6 +412,44 @@ func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.ArrayElem) bool {
 // is two elements, at 0 and 2, with nothing between them. It used to keep the
 // text — `${a[0]}` answered the six characters `[2]=c` — and nothing reported
 // it, so the array looked populated and was not.
+// A literal whose *subscript* the shell refuses stores the elements placed
+// before it, and starts the name over first where the literal is not an
+// append. That is a **stream** where the rest of this path is all-or-nothing,
+// and the difference is deliberate: Runner.failedHeading names three ways a
+// heading can fail, and only one of them is the element's own.
+//
+// Measured 2026-09-23, one statement per line because the refusal ends the
+// rest of a list, on bash 5.3.20, bash 5.3.15 and bash 3.2.57 — which agree
+// on every row:
+//
+//	unset v; v=( [1+]=x )                     declare -a v=()
+//	v=(a b); v=( [1+]=x )                     declare -a v=()
+//	w=scalar; w=( [1+]=x )                     declare -a w=()
+//	x=(a b); x=( [0]=z [1+]=bad [2]=q )        declare -a x=([0]="z")
+//	unset u; u+=( [1+]=x )                     declare -a u=()
+//	y=(a b); y+=( [1+]=bad )                   declare -a y=([0]="a" [1]="b")
+//
+// The `x=` row is what says it is a stream and not simply a clear: the
+// element before the refusal survives. And one more row says the clear does
+// **not** come before the words are expanded, which is what keeps the
+// ordinary spelling working: `v=(a b); v=( "${v[@]}" c )` is `(a b c)` in
+// every column, here included. So the order is words first, then the name
+// started over, then placement one element at a time, stopping at the first
+// refusal.
+//
+// # Why this narrows #1568's guard rather than removing it
+//
+// The early return this replaces is #1568's fix — Runner.failedHeading's own
+// comment records the defect as "the assignment was made from" a list the
+// shell had refused. That guard is intact for the two causes it was written
+// for. A heading can fail because an **axis nothing answered** refused it, and
+// because an expansion raised a **fatal error of its own** that unwound; in
+// both of those the elements are not evidence about anything and nothing is
+// stored, exactly as before. What is separated out is the third: a subscript
+// that would not evaluate, which Runner.badSubscript has recorded as its own
+// cause since #3502 precisely because the give-up it leads to differs. The
+// flag is read rather than re-derived, so there is one answer to "was it the
+// subscript" and not two.
 func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
 	parsed, ok := r.literalElems(elems, r.literalReadsSubscripts(name, elems, appendTo),
 		r.bareLiteralElementIsOneValue(name, elems, false))
@@ -456,9 +494,12 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		}
 	}
 	built, ok := r.literalInto(name, a, next, parsed, true)
-	if !ok {
+	if !ok && !r.badSubscript {
 		return
 	}
+	// A refused *subscript* stores what was placed before it, which is the
+	// one of failedHeading's three causes that streams. See the note at the
+	// head of this function.
 	if !appendTo && nestingRetypesTheLiteral(parsed) {
 		r.storeRetypedNestedLiteral(name, built)
 		return
@@ -749,7 +790,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			idx, err := r.subscriptValue(e.sub)
 			if err != nil {
 				r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
-				return nil, false
+				return a, false
 			}
 			pos, ok := r.elemPos(a, idx)
 			if !ok {
@@ -759,7 +800,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 				}
 				r.failedSubscript("%s\n", Wording(wording,
 					"%[1]s[%[2]s]: bad array subscript", name, e.sub, ""))
-				return nil, false
+				return a, false
 			}
 			value, ok := r.literalElementCompound(name, itoa(pos), e.members)
 			if !ok {
@@ -778,7 +819,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			idx, err := r.subscriptValue(e.sub)
 			if err != nil {
 				r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
-				return nil, false
+				return a, false
 			}
 			pos, ok := r.elemPos(a, idx)
 			if !ok {
@@ -788,7 +829,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 				}
 				r.failedSubscript("%s\n", Wording(wording,
 					"%[1]s[%[2]s]: bad array subscript", name, e.sub, ""))
-				return nil, false
+				return a, false
 			}
 			a[pos], wrote[pos] = nestedAppended(a[pos], *e.nested, e.appendValue), true
 			if pos >= next {
@@ -804,7 +845,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			// arithmetic failure and end the script. The third reads the
 			// text as a key and never reaches this.
 			r.failedSubscript("%s\n", r.subscriptFailure(e.sub, err))
-			return nil, false
+			return a, false
 		}
 		pos, ok := r.elemPos(a, idx)
 		if !ok {
@@ -817,7 +858,7 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 			}
 			r.failedSubscript("%s\n", Wording(wording,
 				"%[1]s[%[2]s]: bad array subscript", name, e.sub, e.value))
-			return nil, false
+			return a, false
 		}
 		value := e.value
 		if e.appendValue {

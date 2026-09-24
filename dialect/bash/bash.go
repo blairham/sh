@@ -4387,6 +4387,9 @@ func Diagnostics() interp.Diagnostics {
 		// for the eight measured rows and for what the letter changes about
 		// when the store runs.
 		LiteralOperandAfterADeclarationIsLocatedUnderTheCall: true,
+		// `local qux=(one two)` over a frozen name refuses twice here: the
+		// store, then the builtin. See the field for the eight measured rows.
+		LiteralOperandRefusedAlsoSpeaksForTheStore: true,
 		// The three sentences a frozen function has. Measured 2026-09-16 on
 		// 5.3.20 and 3.2.57 alike, each at status 1 and none of them fatal:
 		//

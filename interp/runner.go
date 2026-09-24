@@ -6185,6 +6185,18 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// Measured — `echo "A:[$BASH_COMMAND]" | sed …` names the `echo` in bash
 	// 5.3.15, not the `sed`.
 	r.recordRunning(c, WholeCommand)
+	// This frame has now run something, for the one diagnostic that asks —
+	// see Frame.ran. Marked on the way *out* so that the command raising a
+	// refusal is still the frame's first, and by captured index rather than
+	// by reading the top of the stack at exit, because a call made from here
+	// pushes and pops frames of its own in between.
+	if fi := len(r.frames) - 1; fi >= 0 {
+		defer func() {
+			if fi < len(r.frames) {
+				r.frames[fi].ran = true
+			}
+		}()
+	}
 	// The first token's word, for the one message that asks where in the
 	// command a substitution stands. Put back rather than cleared: a command
 	// substitution's body runs in a runner of its own, but a function called
@@ -9766,6 +9778,12 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 		// the cell the write would have landed in. See
 		// Runner.declarationRefusalNamesTheOperand.
 		name = r.refusalSpokenAs
+	}
+	if r.storeSpeaksBeforeTheBuiltin(form, name) {
+		// Two writers on this path in the dialect measured, and the store is
+		// the one that speaks first. See
+		// Diagnostics.LiteralOperandRefusedAlsoSpeaksForTheStore.
+		r.reportTheStoresOwnRefusal(name)
 	}
 	// Two arguments only where the wording asks for two: a format with no
 	// explicit indexes and a spare argument becomes "%!(EXTRA …)", which is

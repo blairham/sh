@@ -510,6 +510,38 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 	}
 	if !r.namerefTargetIsAName(value) {
 		r.refuseNamerefAim(value, form)
+		// **A declaration's refused aim takes the name away**, where the
+		// bare assignment's leaves the reference standing. Measured
+		// 2026-09-24 against bash 5.3.20 and bash 5.3.15, which agree, over
+		// seven values — `/`, `42`, `7*6`, `a b`, `-x`, `1bad` and `@` —
+		// each after a `declare -n q` on the line before:
+		//
+		//	declare q=VALUE    the refusal, status 1, and `declare -p q` is
+		//	                   then `q: not found`
+		//	q=VALUE            the refusal, status 1, and `declare -p q` is
+		//	                   still `declare -n q`
+		//
+		// The value reads UNSET and the next line runs on both spellings and
+		// in both shells; what parts is only whether the name is still
+		// there. Here the reference stood after either, so a listing showed
+		// a name bash has none of.
+		//
+		// This corrects the row written in refuseNamerefAim's own table
+		// below, which recorded `declare -p q` as `declare -n q` after the
+		// declaration spelling. That was measured with one value on one
+		// spelling and read as covering both; the seven values above say the
+		// value never mattered and the spelling always did.
+		if form.declaresRatherThanAssigns() {
+			// Everything, including the letters this line put on: bash
+			// leaves no trace of the operand at all. `declare -n foo;
+			// declare -i foo=7*6` is `foo: not found` there, where clearing
+			// only the reference left `declare -i foo` standing — the `i`
+			// applied before the store, and a refusal that takes the name
+			// away has to take what the same line gave it.
+			r.unsetNameref(name)
+			delete(r.Vars, name)
+			r.restoreAttributes(name, nameAttributes{})
+		}
 		return "", false
 	}
 	r.setNameref(name, value)
@@ -534,9 +566,14 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 //	q=a, q=a[0], q=a[@]  taken, and the reference is aimed there
 //
 // So the sentence is the one a bad *target* earns everywhere else, the
-// builtin that made the write names itself where there was one, and the
-// reference is left unaimed: `declare -p q` is `declare -n q` afterwards and
-// the name never becomes the text. This shell aimed the reference at whatever
+// builtin that made the write names itself where there was one, and the name
+// never becomes the text.
+//
+// **Whether the reference survives is the spelling's, not this function's**,
+// and this table used to say it was neither: it recorded the reference as
+// left unaimed after every row, which is true of the bare assignment and of
+// `read`, and false of the declaration — `declare q=/` leaves no `q` at all.
+// See namerefAssignmentTarget, where the seven values that say so are. This shell aimed the reference at whatever
 // it was handed, so `${!q}` answered `/` and every later write through it
 // went to a parameter no shell can name.
 //

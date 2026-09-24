@@ -22,7 +22,14 @@ panel of the real shells they model. Measured on macOS with
 
 **Exact** is byte-identical stdout, stderr and exit status. **Behavioral**
 lets a diagnostic be worded differently so long as the status and the output
-agree. The distance between the two columns is now mostly wording, which it
+agree.
+
+**Two bash builds are in play and they do not always agree.** This table is
+the laptop's `bash 5.3.20`; the bash suite in CI is graded against
+`debian:sid-slim`'s **5.3.15**, the same release and a different patch level.
+Where the two disagree, the common denominator of the panel decides and the
+difference is written down — `~` after a `HOME` assignment is the worked
+example, in `docs/spec/grammar/expansion.md`. The distance between the two columns is now mostly wording, which it
 was not when this paragraph last said otherwise: in `ksh`, the column that has
 been counted, the 172 non-exact cases split **142 wording to 30 behavioral**,
 against 93 to 126 on 2026-09-15. Behavior lands spec-first, per `CLEANROOM.md`.

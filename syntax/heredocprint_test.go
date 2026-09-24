@@ -184,6 +184,33 @@ func TestALayoutWritesNoSeparatorAfterAHereDocumentBody(t *testing.T) {
 			why:  "the header owed the body, so `then` opens the line the body ended rather than following a separator on it",
 		},
 		{
+			// The same opener with **more than one** statement behind it,
+			// which is where the second skip used to be spent. A body on the
+			// header never reaches a terminator — the opener is what its line
+			// was owed to — so every separator in the body is written.
+			name: "the keyword that opens a body, with a list behind it",
+			src:  "f() {\nif cat <<END\nbody\nEND\nthen\necho y\necho z\nfi\n}\n",
+			want: "f() { \n    if cat <<END\nbody\nEND\n    then\n        echo y;\n        echo z;\n    fi\n}",
+			why:  "the opener cancels the skip the body still owed, so the first statement of the body keeps its separator",
+		},
+		{
+			// And the closer keeps its terminator too, which says the skip is
+			// gone rather than carried past the body to `fi`.
+			name: "the closer after an opener that canceled the skip",
+			src:  "f() {\nif cat <<END\nbody\nEND\nthen\necho y\nfi\necho a\n}\n",
+			want: "f() { \n    if cat <<END\nbody\nEND\n    then\n        echo y;\n    fi;\n    echo a\n}",
+			why:  "nothing is owed by the time the body closes, so the keyword terminator is written as usual",
+		},
+		{
+			// The contrast that keeps the two halves apart: a body carried by
+			// a statement *inside* a keyword body does still hand its skip to
+			// that body's terminator, so `done` goes without one.
+			name: "a body inside a keyword body still spends the skip on the terminator",
+			src:  "f() {\nfor i in a; do\ncat <<END\nbody\nEND\ndone\necho a\n}\n",
+			want: "f() { \n    for i in a;\n    do\n        cat <<END\nbody\nEND\n\n    done\n    echo a\n}",
+			why:  "the carrier was the last statement of the body, so the next separator position is the terminator",
+		},
+		{
 			name: "nothing owed a body",
 			src:  "f() {\necho a\necho b\n}\n",
 			want: "f() { \n    echo a;\n    echo b\n}",

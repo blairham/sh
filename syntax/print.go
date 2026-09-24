@@ -1474,6 +1474,28 @@ func (p *printer) opener(word string, ownLine bool) {
 		// line it is already at the start of — which is where bash puts it,
 		// whether or not the arrangement would have kept it inline.
 		p.str(p.pad() + word)
+		// And the *second* skip the body owed is canceled here, for the
+		// reason a closing bracket cancels it: the keyword has already begun
+		// a new line, so there is no separator left for the skip to land on.
+		// Without this it was paid out of the body's first statement, which
+		// is a separator bash writes. Measured 2026-09-24 on bash 5.3.20
+		// through `declare -pf`, with the body on the *header*:
+		//
+		//	if cat <<E … then echo a; echo b; echo c; fi
+		//	                  every separator in the body is written
+		//	while read v <<E … do echo a; echo b; echo c; done
+		//	                  the same through the other opener
+		//	if cat <<E … then echo q; fi; echo a; echo b
+		//	                  `fi` keeps its terminator too — the skip is
+		//	                  gone rather than carried to the closer
+		//
+		// Which is the other half of the rows on printer.oweASkippedSeparator:
+		// a body carried by a statement *inside* a keyword body still hands
+		// its skip to that body's terminator, so `for i in 1; do cat <<E …
+		// done` writes `done` without one where the control writes `done;`.
+		// A header's body never reaches a terminator, because the opener is
+		// what its line was owed to.
+		p.oweASkippedSeparator = false
 		return
 	}
 	if ownLine {

@@ -4,6 +4,8 @@
 package interp
 
 import (
+	"bytes"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,13 +48,51 @@ import (
 // dropped and interp/localenumeric.go is still the whole of what this shell
 // says about grouping.
 //
-// glibc compiles its locales into a binary archive and musl has none, so on
-// those hosts there is nothing here to read and every locale answers with the
-// point. That is a **known gap and not a silent one**: a glibc machine where
-// somebody has generated `de_DE.UTF-8` has a reference shell writing a comma
-// and this shell writing a point. Closing it means parsing either the archive
-// or glibc's `/usr/share/i18n/locales` sources, which is a platform file and a
-// separate decision; what is here needs no platform file at all.
+// # The glibc layout, which is the same path and a different format
+//
+// That paragraph used to end "a known gap and not a silent one", and the gap
+// was real: a glibc machine with `de_DE.UTF-8` generated had a reference shell
+// writing a comma and this shell writing a point. It is two lines of
+// `intl.tests` (#4172), and it became worth closing when the bash suite moved
+// to a glibc image — the reference the suite is graded against now publishes
+// its numeric data in glibc's form, so the point this shell wrote was a
+// difference CI could see.
+//
+// **glibc publishes the same category at the same relative path**,
+// `/usr/lib/locale/<name>/LC_NUMERIC`, compiled rather than as text. So there
+// is one relative path here and two roots, and the *format* is decided by
+// looking at the bytes rather than at which root they came from — which is
+// what lets one LocaleDatabase knob point a test at either layout.
+//
+// The compiled form is a header of little- or big-endian uint32s — a magic, a
+// count, then one offset per element, each from the start of the file — and the
+// first element is the radix character as a NUL-terminated string. Measured
+// 2026-09-24 on `debian:sid-slim` at the digest the suite is graded at:
+// `de_DE.utf8`'s file is 38 bytes, `14 11 03 20` then `06 00 00 00`, six
+// offsets beginning `20 00 00 00`, and at 0x20 the bytes `2c 00` — the comma,
+// which is what `locale -k decimal_point` reports there.
+//
+// The magic is checked and an unknown one reads as no data, which is the whole
+// of the version guard: a layout this does not recognize answers with the point
+// exactly as a host with no database does, rather than writing some byte of a
+// header into every number.
+//
+// **Two routes were declined and are worth naming.** glibc's
+// `/usr/share/i18n/locales` *sources* are plain text and would need no binary
+// format at all — but they are not installed by `locales-all` on the graded
+// image, where that directory is empty, so they answer nothing exactly where
+// the answer is wanted. And the `locale` utility publishes `decimal_point`
+// directly and portably, but reaching it means this shell forking a program
+// from PATH to format a number: a startup cost, a dependency on a command that
+// may be absent or shadowed, and a new route out through the sandbox boundary.
+// Reading a file needs none of those.
+//
+// What is still a gap, unchanged and for the same reason: a glibc host whose
+// locales live only in `locale-archive` with no per-locale directories — which
+// is what `locales` plus `locale-gen` leaves behind — publishes nothing here
+// and answers with the point. musl has no locale data at all and answers the
+// same. Both degrade to the C locale's character, which is the fallback a C
+// library with no data for the named locale takes.
 
 // localeNumericFile is the category's file inside a locale's directory, and
 // localeDatabaseRoot is where the directories are on a host that publishes
@@ -60,7 +100,12 @@ import (
 const (
 	localeNumericFile  = "LC_NUMERIC"
 	localeDatabaseRoot = "/usr/share/locale"
+	compiledLocaleRoot = "/usr/lib/locale"
 )
+
+// compiledLocaleMagic is the first word of a compiled locale category, and the
+// version guard: read in either byte order, anything else is not this format.
+const compiledLocaleMagic = 0x20031114
 
 // cRadixChar is the radix every shell in the panel writes and reads under the C
 // locale, and the answer for every locale this shell has no data for.
@@ -143,9 +188,6 @@ var radixCache sync.Map // string -> string, "" meaning the host has no data
 // a shell that re-read it per conversion would be measuring the disk rather
 // than the locale.
 func hostRadixChar(root, locale string) (string, bool) {
-	if root == "" {
-		root = localeDatabaseRoot
-	}
 	key := root + "\x00" + locale
 	if cached, ok := radixCache.Load(key); ok {
 		radix := cached.(string)
@@ -173,18 +215,120 @@ func readHostRadixChar(root, locale string) (string, bool) {
 	if locale == "" || strings.ContainsAny(locale, `/\`) || locale == "." || locale == ".." {
 		return "", false
 	}
-	text, err := os.ReadFile(filepath.Join(root, locale, localeNumericFile))
-	if err != nil {
+	roots := []string{root}
+	if root == "" {
+		roots = []string{localeDatabaseRoot, compiledLocaleRoot}
+	}
+	// The name as written first, and glibc's own spelling of it second.
+	// Normalizing is not aliasing: `de_DE.utf8` is the same locale as
+	// `de_DE.UTF-8` spelled the way glibc stores it, which is what a script
+	// setting `LANG=de_DE.UTF-8` has to reach. The alias *table* is still not
+	// consulted, so `german` names nothing here.
+	names := []string{locale}
+	if normalized := glibcLocaleName(locale); normalized != locale {
+		names = append(names, normalized)
+	}
+	for _, dir := range roots {
+		for _, name := range names {
+			b, err := os.ReadFile(filepath.Join(dir, name, localeNumericFile))
+			if err != nil {
+				continue
+			}
+			if radix, ok := radixFromCategory(b); ok {
+				return radix, true
+			}
+		}
+	}
+	return "", false
+}
+
+// glibcLocaleName is a locale name spelled the way glibc's directories are: the
+// codeset lowercased with its punctuation dropped. `de_DE.UTF-8` becomes
+// `de_DE.utf8` and `en_US.ISO-8859-15` becomes `en_US.iso885915`, which are the
+// names `locale -a` lists on such a host.
+//
+// The language and territory are left exactly as written, because glibc does
+// not case-fold them and a directory named `DE_de` is a different name rather
+// than the same one.
+func glibcLocaleName(locale string) string {
+	name, modifier, hasModifier := strings.Cut(locale, "@")
+	base, codeset, hasCodeset := strings.Cut(name, ".")
+	if !hasCodeset {
+		return locale
+	}
+	var b strings.Builder
+	for i := 0; i < len(codeset); i++ {
+		switch c := codeset[i]; {
+		case c >= 'A' && c <= 'Z':
+			b.WriteByte(c + 'a' - 'A')
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+			b.WriteByte(c)
+		}
+	}
+	out := base + "." + b.String()
+	if hasModifier {
+		out += "@" + modifier
+	}
+	return out
+}
+
+// radixFromCategory reads the radix character out of whichever of the two
+// layouts the bytes are in, and answers nothing for anything else.
+//
+// The format is decided from the content and not from the directory it came out
+// of, which is what keeps one LocaleDatabase knob able to point at either — and
+// what makes a host publishing both layouts answer from whichever one it
+// actually filled in.
+func radixFromCategory(b []byte) (string, bool) {
+	if radix, ok := radixFromCompiled(b); ok {
+		return radix, true
+	}
+	first, _, _ := strings.Cut(string(b), "\n")
+	return oneRadixCharacter(strings.TrimSuffix(first, "\r"))
+}
+
+// radixFromCompiled reads glibc's compiled category: a magic, a count, then one
+// file offset per element, and the first element is the radix.
+func radixFromCompiled(b []byte) (string, bool) {
+	if len(b) < 12 {
 		return "", false
 	}
-	first, _, _ := strings.Cut(string(text), "\n")
-	first = strings.TrimSuffix(first, "\r")
-	// Exactly one character, and a printable one. The file is a fixed
-	// three-line format, so anything else is a file that is not it — and a
-	// radix of several characters, or of a control byte, would be written into
-	// every number this shell printed.
-	if r, size := utf8.DecodeRuneInString(first); size != len(first) || r == utf8.RuneError || r < ' ' {
+	order, ok := compiledByteOrder(b)
+	if !ok {
 		return "", false
 	}
-	return first, true
+	if order.Uint32(b[4:8]) < 1 {
+		return "", false
+	}
+	off := int(order.Uint32(b[8:12]))
+	if off < 12 || off >= len(b) {
+		return "", false
+	}
+	end := bytes.IndexByte(b[off:], 0)
+	if end < 0 {
+		return "", false
+	}
+	return oneRadixCharacter(string(b[off : off+end]))
+}
+
+// compiledByteOrder is the version guard and the endianness at once: the magic
+// reads as itself in the order the file was written in, and in no other.
+func compiledByteOrder(b []byte) (binary.ByteOrder, bool) {
+	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		if order.Uint32(b[:4]) == compiledLocaleMagic {
+			return order, true
+		}
+	}
+	return nil, false
+}
+
+// oneRadixCharacter is the check both layouts need: exactly one character, and a
+// printable one. Anything else is a file that is not what it looked like — and a
+// radix of several characters, or of a control byte, would be written into every
+// number this shell printed.
+func oneRadixCharacter(s string) (string, bool) {
+	if r, size := utf8.DecodeRuneInString(s); size != len(s) || r == utf8.RuneError || r < ' ' {
+		return "", false
+	}
+	return s, true
 }

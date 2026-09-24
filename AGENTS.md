@@ -1714,6 +1714,19 @@ it are both different; two containers off the same image are one instrument
 counted twice, which is how a re-grade of this board came back with 17 for a
 file that measures 2.
 
+**The binary under test must be *named* `bash`, or `type.tests` scores a
+difference that is only its filename.** The harness replaces each shell's full
+path and deliberately **not** its base name — `internal/suite/score.go` argues
+that, because a base name is an ordinary word in a shell's own tests and
+replacing it would turn matching lines into differences. So a shell handed to
+`-bin` as `our-bash` differs on every line where the suite prints the command
+it found: `type -a`, a `hash` listing, `command -v`. `make bash-suite` builds
+`$(BINDIR)/shells/bash` and never sees it; a hand-grader pointing `-bin` at a
+build of their own does. #4144 was reopened at "1 differing line" for exactly
+this, and measured **0** with the same binary copied to a path ending in
+`/bash` — so check the name before reporting a count, and prefer copying the
+build to `.../shells/bash` rather than grading it where `go build -o` left it.
+
 **The suite's C helpers are built, or the whole thing scores zero for reasons
 that have nothing to do with us.** Without `recho`, `zecho` and `printenv` the
 calls fail under both shells and the two failures match, so the run reads as

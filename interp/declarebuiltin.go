@@ -1764,7 +1764,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// redirect below replaces the name, since afterwards the subscript
 		// the value belongs to is gone. See Runner.referenceValueTarget.
 		valueTarget := r.referenceValueTarget(name, df)
+		// Whether this operand is about the name the script wrote or about
+		// what a reference points at, kept for the record question below: the
+		// global letter does **not** bring a reference's target into being,
+		// where every other valueless declaration does. See declareEmpty's
+		// leavesAnAttribute argument (#4163).
+		followedAReference := false
 		if target, follows := r.attributeFollowsTheReference(name, df); follows {
+			followedAReference = true
 			// The refusal the redirect leads to may still be spoken of under
 			// the name the script wrote, which is one column's answer and
 			// only for a declaration carrying a value. Recorded before the
@@ -2064,7 +2071,21 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			if !r.declarationCarriesAnArrayLiteral(name) {
 				r.declareEmpty(name, fresh, df.export || df.readonly,
 					withoutMatching(df) != (declareFlags{}),
-					df.leavesAnAttribute(),
+					// `-g` through a **reference** leaves the target alone.
+					// Measured 2026-09-23 on bash 5.3.20, inside a function
+					// with `local -n ref=var` and no `var` anywhere:
+					//
+					//	declare ref      declare -- var    created
+					//	declare +x ref   declare -- var    created
+					//	declare -g ref   var: not found    not created
+					//
+					// So the letter that says *where* a binding goes is also
+					// the one that stops the redirect bringing a name into
+					// being — the bare word and an attribute taken off both
+					// reach the target and `-g` does not. Without this the
+					// record landed on `var` and nameref.tests grew two
+					// lines (#4376's regression).
+					df.leavesAnAttribute() || (df.global && followedAReference),
 					df.inherit || r.LocalInheritsTheOuterValue(), false)
 			}
 		}

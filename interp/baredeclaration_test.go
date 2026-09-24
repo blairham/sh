@@ -269,3 +269,56 @@ func TestALetterTakenAwayOrNamingOnlyTheScopeLeavesTheBareRecord(t *testing.T) {
 		})
 	}
 }
+
+// And the global letter does **not** bring a reference's target into being,
+// where every other valueless declaration through a reference does.
+//
+// This is the boundary of the rule above, and it was found as a regression:
+// treating `-g` as "names no attribute" made the bare record land on the
+// *target* of a reference, and `nameref.tests` grew two lines for names bash
+// had never heard of.
+//
+// Measured 2026-09-23 on bash 5.3.20, inside a function holding
+// `local -n ref=var` with no `var` anywhere:
+//
+//	declare ref        declare -- var     the target is created
+//	declare +x ref     declare -- var     the target is created
+//	declare -g ref     var: not found     the target is not
+//
+// So the letter that says *where* a binding goes is also the one that stops
+// the redirect from creating a name. The first two rows are the controls, and
+// they are what keep this from being "a redirect never creates anything" —
+// which is the reading that would undo the rule above (#4163).
+func TestTheGlobalLetterDoesNotCreateAReferencesTarget(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the global letter leaves the target alone",
+			"f(){ typeset -n ref=var; typeset -g ref; }\nf\ntypeset -p var\n",
+			"",
+		},
+		{
+			"the control: a bare declaration creates it",
+			"f(){ typeset -n ref=var; typeset ref; typeset -p var; }\nf\n",
+			"declare -- var\n",
+		},
+		{
+			"the control: an attribute taken off creates it",
+			"f(){ typeset -n ref=var; typeset +x ref; typeset -p var; }\nf\n",
+			"declare -- var\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, _ := declRun(t, tc.src, func(s *Semantics) {
+				withBareRecord(Yes)(s)
+				// The reference letter, without which `typeset -n ref=var`
+				// is an invalid option and every row below tests nothing.
+				s.DeclareOptions = "aAginprux"
+				s.LocalOptions = "aAinprux"
+				s.DeclareValueQuoting = ListingQuoteAlwaysDouble
+			}, Diagnostics{})
+			if out != tc.want {
+				t.Errorf("%s: out = %q (stderr %q), want %q", tc.src, out, errs, tc.want)
+			}
+		})
+	}
+}

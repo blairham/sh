@@ -1854,17 +1854,28 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	if (e.Name == "@" || e.Name == "*") && e.Op == syntax.ParamTransform &&
 		e.Index == nil && !e.Length && !e.Indirect {
 		elems := r.transformElems(e, r.params())
-		ifs, set := r.ifs()
-		if e.Name == "*" {
-			joined := strings.Join(elems, r.ifsFirst(ifs, set))
-			if s.Quoting != syntax.Unquoted {
-				return []string{globEscape(joined)}, true
-			}
-			return r.splitFieldsAskPlain(joined, ifs, set), true
-		}
+		// Quoted, the two spellings are the whole of the difference: `*`
+		// joins on the first character of IFS and `@` keeps its fields.
 		if s.Quoting != syntax.Unquoted {
+			if e.Name == "*" {
+				ifs, set := r.ifs()
+				return []string{globEscape(strings.Join(elems, r.ifsFirst(ifs, set)))}, true
+			}
 			return escapeAll(elems), true
 		}
+		// Unquoted, both spellings go the way every other unquoted list
+		// expansion goes. This branch used to join `*` and split what came
+		// out, which is the reading elementFields already holds — and holds
+		// *conditionally*, because the join is only a different answer where
+		// the split then runs on what it produced. With `IFS=` set and empty
+		// there is no split to undo it, so joining gave one field where the
+		// panel gives one per parameter: `set -- ' a ' ' b '; IFS=;
+		// printf '<%s>' ${*@Q}` is `<' a '><' b '>` in bash 5.3.20, 5.3.15
+		// and ksh93, and was `<' a '' b '>` here. Every other operator on
+		// `*` — `${*,,}`, `${*##}`, `${*:1:2}` — already came through here
+		// and was right, and so was a bare `$*`, which is the same defect
+		// this branch was left holding after the scalar path was fixed
+		// below.
 		return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
 	}
 	if e.Op != syntax.ParamNone || e.Length {

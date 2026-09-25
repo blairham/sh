@@ -3278,6 +3278,12 @@ type Runner struct {
 	// to the whole refusal would take the second one's line away too.
 	locatedByNameAlone bool
 
+	// interpRetry is the start being made a second time with the interpreter
+	// a `#!` line named — set around that one retry, which is what keeps it
+	// to one level and what the second failure is reported against. See
+	// Runner.startViaNamedInterpreter.
+	interpRetry *interpreterRetry
+
 	// suppressedHead says the next command dispatched is a function's body
 	// and fires no compound head of its own. Set by callFuncAs and cleared
 	// by the dispatch it was set for, so nothing deeper inherits it.
@@ -7850,6 +7856,13 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 				r.status = st
 				return nil
 			}
+			// And a file the kernel would not start because its `#!` names
+			// something it cannot resolve, which this shell may still be
+			// able to — the second question asked at every one of these
+			// doors, for the same reason as the first.
+			if ran, runErr := r.startViaNamedInterpreter(ctx, path, argv, env, err); ran {
+				return runErr
+			}
 			r.status = r.reportStartFailure(ctx, action, argv, path, err)
 			return nil
 		}
@@ -7891,6 +7904,9 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		if st, ran := r.imageAsScript(ctx, action, path, argv, env, err); ran {
 			r.status = st
 			return nil
+		}
+		if ran, runErr := r.startViaNamedInterpreter(ctx, path, argv, env, err); ran {
+			return runErr
 		}
 		r.status = r.reportStartFailure(ctx, action, argv, path, err)
 		return nil
@@ -7966,6 +7982,9 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		if st, ran := r.imageAsScript(ctx, action, cmd.Path, argv, cmd.Env, err); ran {
 			r.status = st
 			return nil
+		}
+		if ran, runErr := r.startViaNamedInterpreter(ctx, cmd.Path, argv, cmd.Env, err); ran {
+			return runErr
 		}
 		r.status = r.reportStartFailure(ctx, action, argv, cmd.Path, err)
 		return nil

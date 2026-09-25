@@ -21307,6 +21307,68 @@ type Semantics struct {
 	// same string under either reading.
 	ScriptImageSeesTheResolvedPath Answer
 
+	// EmptyInterpreterLineIsNotAScript refuses a file whose first line is a
+	// `#!` with no interpreter word after it, rather than reading the file as
+	// a shell script the way a file with no `#!` at all is read.
+	//
+	// The kernel answers ENOEXEC for both — there is nothing on the line to
+	// start — so the two failures arrive here indistinguishable from one
+	// another, and only a shell that reads the line itself can tell them
+	// apart. This is the mirror of BinaryContentIsNotRunAsAScript: the same
+	// fallback declined, for a different reason found in the same read.
+	//
+	// Measured 2026-09-25 with `printf '#!\necho hi\n' > empty` and again
+	// with a `#!` followed only by blanks, both `chmod +x` and run off PATH:
+	//
+	//	dash, bash 5.3.20, bash as `sh`, bash 3.2.57, ksh93u+, BusyBox ash
+	//	                 `hi`, status 0 — the file is read as a script
+	//	zsh 5.9.2        `<shell>:1: exec format error: <word>`, status 126
+	//
+	// zsh alone, and it is the direction that refuses: answering No leaves a
+	// file running where that shell would have stopped it, which is why the
+	// axis is asked rather than assumed (#4454).
+	EmptyInterpreterLineIsNotAScript Answer
+
+	// SlashlessInterpreterIsPathSearched looks a `#!` line's first word up on
+	// PATH when it has no slash in it, and runs the file with what the search
+	// found.
+	//
+	// The kernel never searches: `#!cat` is handed to execve as the three
+	// characters `cat`, which is not a path, and comes back ENOENT whatever
+	// `cat` is on PATH. So this is a shell doing for an interpreter what it
+	// already does for a command word.
+	//
+	// Measured 2026-09-25 with `printf '#!cat\necho hi\n' > tstcmd`, `chmod
+	// +x`, run off PATH:
+	//
+	//	zsh 5.9.2        the file's own two lines, status 0 — `cat` ran on it
+	//	bash 5.3.20, bash as `sh`, bash 3.2.57
+	//	                 `<path>: cat: bad interpreter: No such file or
+	//	                 directory`, status 126
+	//	dash, ksh93u+, BusyBox ash
+	//	                 `tstcmd: not found`, status 127
+	//
+	// The interpreter is given what the kernel would have given it: its own
+	// resolved path as argv[0], the one argument the `#!` line may carry
+	// after the name, the file, and then the command's own operands. One
+	// argument and not several — measured, `#!myinterp   one   two  ` hands
+	// the interpreter a single `  one   two`.
+	//
+	// **One level only.** Measured on an interpreter that is itself a script
+	// with an unresolvable `#!` of its own: zsh does not search again, and
+	// reports the *first* file with the word that file's line held (#4454).
+	//
+	// One cell is measured and deliberately not claimed. The two shells that
+	// read the line disagree about where the first word *ends*: bash treats
+	// a tab as a separator and zsh does not, so `#!nosuchz<TAB> arg` is
+	// `nosuchz` to bash and `nosuchz<TAB>` to zsh. interpreterWords follows
+	// bash, which is the reading that has a sentence to print it in, and the
+	// cost is that a slashless interpreter with a tab after it is searched
+	// for here where zsh would refuse it. It needs both a `#!` word with no
+	// slash in it and a tab rather than a space after it, which is why it is
+	// written down rather than made a third axis.
+	SlashlessInterpreterIsPathSearched Answer
+
 	// ExecTakesOptions lets `exec` read options of its own, such as
 	// `-a name` to choose the argv[0] the command sees. True in bash, ksh93,
 	// zsh and BusyBox ash; false in dash alone, where a leading `-a` is the
@@ -25848,6 +25910,15 @@ func PosixSemantics() Semantics {
 		// script found on PATH.
 		BinaryContentIsNotRunAsAScript: Yes,
 		ScriptImageSeesTheResolvedPath: Yes,
+		// And the two halves of the `#!` line, which the standard leaves to
+		// the system: it says nothing about a `#!` at all, so the preset is
+		// what the kernel does with one and what six of the seven columns
+		// therefore do. A `#!` naming nothing is an ENOEXEC like any other
+		// and is read as a script; a `#!` naming a word with no slash in it
+		// is handed to execve as written and is not searched for. zsh is the
+		// one column that reads the line itself and overrides both.
+		EmptyInterpreterLineIsNotAScript:   No,
+		SlashlessInterpreterIsPathSearched: No,
 		// POSIX's hash concerns utilities, and dash — its closest reading —
 		// counts builtins and functions too, and reports a missing name.
 		HashReportsAMissingName: Yes,

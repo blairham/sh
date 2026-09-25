@@ -124,6 +124,53 @@ func looksBinary(image []byte) bool {
 	return bytes.IndexByte(image, 0) >= 0
 }
 
+// interpreterWords splits a file's `#!` line into the two words the kernel
+// would have read off it: the program to start and the one argument such a
+// line may carry.
+//
+// One argument and not several. Measured 2026-09-25 on zsh 5.9.2, a line
+// reading `#!myinterp   one   two  ` hands the interpreter a single argument
+// spelled `  one   two` — everything after the first separator, with the
+// trailing blanks taken off and the leading ones kept.
+//
+// ok is false for a file with no `#!` line at all, which is a different
+// answer from a `#!` naming nothing: the second is what
+// Semantics.EmptyInterpreterLineIsNotAScript is asked about.
+func interpreterWords(image []byte) (name, arg string, ok bool) {
+	line, _, _ := bytes.Cut(image, []byte("\n"))
+	rest, ok := bytes.CutPrefix(line, []byte("#!"))
+	if !ok {
+		return "", "", false
+	}
+	text := strings.TrimLeft(string(rest), " \t")
+	if cut := strings.IndexAny(text, " \t"); cut >= 0 {
+		// One separator is consumed and the rest is the argument, blanks and
+		// all — see the measurement above.
+		name, arg = text[:cut], strings.TrimRight(text[cut+1:], " \t")
+	} else {
+		name = strings.TrimRight(text, " \t")
+	}
+	return name, arg, true
+}
+
+// interpreterLine reads a file's `#!` line, for a start the kernel refused.
+//
+// It reads the file for the reason classifyImage does, through the same gate
+// and for the same re-entry: a policy that hides a path hides what is written
+// inside it too.
+func (r *Runner) interpreterLine(ctx context.Context, path string) (name, arg string, ok bool) {
+	open := r.act(Action{Kind: ActionOpen, Path: path})
+	if r.openQuietlyDenied(open) {
+		return "", "", false
+	}
+	image, readErr := r.readFileGated(ctx, &open, path)
+	if readErr != nil {
+		return "", "", false
+	}
+	r.emit(ctx, Event{Kind: EventAccess, Action: open})
+	return interpreterWords(image)
+}
+
 // interpreterNamed is the name on a file's `#!` line, for a start the kernel
 // refused because something was not there.
 //
@@ -133,34 +180,119 @@ func looksBinary(image []byte) bool {
 // why the errno is the whole of the test and the `#!` line is only read to
 // find the name to print.
 //
-// It reads the file for the reason classifyImage does, through the same gate
-// and for the same re-entry: a policy that hides a path hides what is written
-// inside it too. Empty where the dialect has nothing to say about it, so the
-// read is not made at all in three of the four.
+// Read in every dialect rather than only in the two that have a sentence for
+// it. What the read decides is not only the wording: a dialect with nothing
+// to say about the interpreter still has to number this failure the way it
+// numbers a name that was not found, which is 127 and not the 126 a start
+// this shell could not make otherwise reports (#4454).
 func (r *Runner) interpreterNamed(ctx context.Context, path string, err error) string {
-	if r.diag().BadInterpreter == "" || !errors.Is(err, syscall.ENOENT) {
+	if !errors.Is(err, syscall.ENOENT) {
 		return ""
 	}
-	open := r.act(Action{Kind: ActionOpen, Path: path})
-	if r.openQuietlyDenied(open) {
-		return ""
-	}
-	image, readErr := r.readFileGated(ctx, &open, path)
-	if readErr != nil {
-		return ""
-	}
-	r.emit(ctx, Event{Kind: EventAccess, Action: open})
-	line, _, _ := bytes.Cut(image, []byte("\n"))
-	rest, ok := bytes.CutPrefix(line, []byte("#!"))
-	if !ok {
-		return ""
-	}
-	// The first word of the line, which is the program the kernel was asked
-	// for; anything after it is that program's own argument.
-	name := strings.TrimSpace(string(rest))
-	name, _, _ = strings.Cut(name, " ")
-	name, _, _ = strings.Cut(name, "\t")
+	name, _, _ := r.interpreterLine(ctx, path)
 	return name
+}
+
+// interpreterRetry records a start this shell is making a second time, with
+// the interpreter a `#!` line named and a PATH search found.
+//
+// It is what keeps the retry to one level, and it is also what the second
+// failure is reported against: the file whose line named the interpreter,
+// with the word that line held — not the interpreter's own file and not
+// whatever its own first line says. Measured on zsh 5.9.2 with an interpreter
+// that is itself a script with an unresolvable `#!`.
+type interpreterRetry struct {
+	// name is the command word as the script wrote it.
+	name string
+	// resolved is the file whose `#!` line was read.
+	resolved string
+	// interpreter is the word that line held, as written.
+	interpreter string
+}
+
+// interpreterFailure is the pathError a start the kernel refused with ENOENT
+// is reported as: the file is present, so what was not there is the program
+// its `#!` line named.
+//
+// missing, because that is what it is, and it is not only a wording: it is
+// what numbers the failure 127 rather than 126 in the dialects that have no
+// `bad interpreter` sentence of their own. Empty interpreter where the line
+// could not be read, which leaves the caller's own reporting unchanged.
+func (r *Runner) interpreterFailure(ctx context.Context, name, path string, err error) *pathError {
+	named := r.interpreterNamed(ctx, path, err)
+	if retry := r.interpRetry; retry != nil {
+		// The interpreter this shell went and found would not start either.
+		// The file at fault is still the one whose `#!` line named it, and
+		// the word to print is the one that line held — see interpreterRetry.
+		name, path, named = retry.name, retry.resolved, retry.interpreter
+	}
+	if named == "" {
+		return nil
+	}
+	return &pathError{name: name, resolved: path, interpreter: named, missing: true, err: err}
+}
+
+// interpreterArgv is the command line a start refused with ENOENT should be
+// tried again as, having looked the `#!` line's first word up on PATH — which
+// is Semantics.SlashlessInterpreterIsPathSearched.
+//
+// It reports false for a word with a slash in it, a dialect that does not
+// search and a search that found nothing, all of which fall through to the
+// diagnostic, which is where `bad interpreter` is said. On true it has set
+// Runner.interpRetry, and the caller clears it once the retry is over.
+func (r *Runner) interpreterArgv(ctx context.Context, path string, argv []string, err error) ([]string, bool) {
+	if r.interpRetry != nil || !errors.Is(err, syscall.ENOENT) {
+		// One level. An interpreter that is itself a file with a `#!` this
+		// shell cannot resolve would otherwise be searched for again, and
+		// each round would add a word to the argv it is building.
+		return nil, false
+	}
+	name, arg, ok := r.interpreterLine(ctx, path)
+	if !ok || name == "" || strings.ContainsRune(name, '/') {
+		// Nothing to search for. A name with a slash in it is a path and was
+		// already handed to the kernel as one, which is unanimous.
+		return nil, false
+	}
+	if !r.ask(r.sem().SlashlessInterpreterIsPathSearched,
+		"a `#!` line naming an interpreter with no slash in it being looked up on PATH") {
+		return nil, false
+	}
+	found, lookErr := r.lookPath(name)
+	if lookErr != nil {
+		// Not on PATH either, so the interpreter genuinely is not there and
+		// the caller says so — the same sentence it would have said had the
+		// name been written as a path.
+		return nil, false
+	}
+	// The file as the kernel would have handed it over: the path the search
+	// resolved for a bare name, and the word as written for one that already
+	// had a slash in it. Relative is safe either way, because the child is
+	// started in this runner's directory rather than the process's.
+	script := path
+	if strings.ContainsRune(argv[0], '/') {
+		script = argv[0]
+	}
+	next := make([]string, 0, len(argv)+2)
+	next = append(next, found)
+	if arg != "" {
+		next = append(next, arg)
+	}
+	next = append(next, script)
+	next = append(next, argv[1:]...)
+	r.interpRetry = &interpreterRetry{name: argv[0], resolved: path, interpreter: name}
+	return next, true
+}
+
+// startViaNamedInterpreter answers a command word whose start the kernel
+// refused, by running the file with the interpreter its `#!` line named and a
+// PATH search found. It reports whether it answered at all.
+func (r *Runner) startViaNamedInterpreter(ctx context.Context, path string, argv, env []string, err error) (bool, error) {
+	next, ok := r.interpreterArgv(ctx, path, argv, err)
+	if !ok {
+		return false, nil
+	}
+	defer func() { r.interpRetry = nil }()
+	return true, r.exec(ctx, next, env)
 }
 
 // reportStartFailure is the tail every door a start can fail at shares: the
@@ -173,11 +305,11 @@ func (r *Runner) interpreterNamed(ctx context.Context, path string, err error) s
 // and not the others.
 func (r *Runner) reportStartFailure(ctx context.Context, action Action, argv []string, path string, err error) int {
 	r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-	if named := r.interpreterNamed(ctx, path, err); named != "" {
+	if pe := r.interpreterFailure(ctx, argv[0], path, err); pe != nil {
 		// Through cannotRun, so this failure is named the way every other
 		// one at this door is — `exec` absolutises the path and a command
 		// word does not, in the dialect that tells them apart.
-		return r.cannotRun(&pathError{name: argv[0], resolved: path, interpreter: named, err: err}, naming{
+		return r.cannotRun(pe, naming{
 			bare:     r.diag().NotFound,
 			fallback: "%[1]s: not found",
 		})
@@ -202,6 +334,13 @@ const (
 	imageNotOurs imageVerdict = iota
 	// imageBinary is a file with binary content in it — reported, never run.
 	imageBinary
+	// imageNoInterpreter is a file whose first line is a `#!` naming nothing.
+	// Reported rather than run too, and for the same reason — the shell read
+	// the file and declined what came out — but it is a second question with
+	// a second answer behind it, so it is a second verdict rather than a
+	// widening of the one above. See
+	// Semantics.EmptyInterpreterLineIsNotAScript.
+	imageNoInterpreter
 	// imageScript is the ordinary case: shell text with no `#!` line.
 	imageScript
 )
@@ -234,6 +373,16 @@ func (r *Runner) classifyImage(ctx context.Context, path string, err error) ([]b
 			"a file with binary content in it not being read as a shell script") {
 		return image, imageBinary
 	}
+	if name, _, ok := interpreterWords(image); ok && name == "" &&
+		r.ask(r.sem().EmptyInterpreterLineIsNotAScript,
+			"a file whose `#!` line names no interpreter being refused rather than read as a shell script") {
+		// A `#!` with nothing on it is the one ENOEXEC that is not the
+		// fallback's: the file says it wants an interpreter and does not say
+		// which. Asked after the binary check and not instead of it, because
+		// the two are different questions about the same read and a file can
+		// only fail one of them.
+		return image, imageNoInterpreter
+	}
 	return image, imageScript
 }
 
@@ -247,7 +396,7 @@ func (r *Runner) imageAsScript(ctx context.Context, action Action, path string, 
 	switch verdict {
 	case imageNotOurs:
 		return 0, false
-	case imageBinary:
+	case imageBinary, imageNoInterpreter:
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		// Reported with the errno rather than with Go's wrapper, so the
 		// sentence comes out of the same place every other exec failure's
@@ -280,7 +429,7 @@ func (r *Runner) execImageAsScript(ctx context.Context, action Action, path stri
 	switch verdict {
 	case imageNotOurs:
 		return 0, false
-	case imageBinary:
+	case imageBinary, imageNoInterpreter:
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		return r.execFailed(&pathError{name: argv[0], resolved: path, err: notAnImage}), true
 	}

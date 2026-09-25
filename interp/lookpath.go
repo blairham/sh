@@ -461,14 +461,26 @@ func (r *Runner) cannotRun(err error, how naming) int {
 	if pe.interpreter != "" && r.diag().BadInterpreter != "" {
 		// The file is there and the program named on its first line is not,
 		// so the errno alone would say "No such file or directory" about a
-		// file this shell had just opened. One dialect reads the line and
-		// says which name it could not find; see Diagnostics.BadInterpreter.
+		// file this shell had just opened. Two dialects read the line and
+		// say which name they could not find; see Diagnostics.BadInterpreter.
 		if r.diag().BadInterpreterLocatedByNameAlone {
 			r.locatedByNameAlone = true
 			defer func() { r.locatedByNameAlone = false }()
 		}
+		// What was *started*, not the word that was typed, and this message
+		// alone asks for it: both shells that word it print the path a PATH
+		// search resolved even where they name the word everywhere else.
+		// Measured on zsh 5.9.2 and bash 5.3.20, `bad` off PATH against
+		// `./bad` in the current directory.
+		started := name
+		if fromPath && pe.resolved != "" {
+			started = pe.resolved
+		}
 		r.diagf("%s\n", Wording(r.diag().BadInterpreter, "%[1]s: %[2]s: %[3]s",
-			name, pe.interpreter, r.diag().reasonText(reason(pe.err))))
+			started, pe.interpreter, r.diag().reasonText(reason(pe.err))))
+		if st := r.diag().BadInterpreterStatus; st != 0 {
+			return st
+		}
 		return 126
 	}
 	if !pe.missing {
@@ -507,7 +519,10 @@ func (r *Runner) cannotRun(err error, how naming) int {
 	// format tolerates an unused argument and a plain one does not, which is
 	// the same trap interp/wording_test.go already pins.
 	r.diagf("%s\n", Wording(format, how.fallback, r.NamedWord(name)))
-	if r.NotFoundHint != nil {
+	if r.NotFoundHint != nil && pe.interpreter == "" {
+		// Not for a `#!` this shell could not resolve: the command really is
+		// there, and a hint offering another spelling of it would send the
+		// reader after the wrong file.
 		// A second line, from a caller that knows something this package may
 		// not — see Runner.NotFoundHint. The operand as written rather than
 		// the resolved path: a hint is about the word the person typed.

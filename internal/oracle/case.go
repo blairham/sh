@@ -14741,7 +14741,17 @@ printf 'TWO=still-running\n'`,
 	{
 		ID: "path/missing-interpreter-is-not-the-script-fallback", Category: "command lookup",
 		Snippet: `printf '#!/nonexistent/interp\necho SHOULD-NOT-RUN\n' > bad.scr; chmod +x bad.scr; ./bad.scr; echo "st=$?"`,
-		Why:     "the other control, and the one that fails the other way round: a `#!` naming an interpreter that is not there is ENOENT rather than ENOEXEC, and no column runs the file itself — the three bash columns say `bad interpreter` at 126 and dash, ksh93, zsh and ash say some form of `not found` at 127. A fallback keyed on \"the start failed\" instead of on the one errno would print SHOULD-NOT-RUN here. We report Go's wrapper at 126 and so are wrong in both the wording and, for four columns, the status; the row records the target rather than the fix, which is a separate failure from #2580",
+		Why:     "the other control, and the one that fails the other way round: a `#!` naming an interpreter that is not there is ENOENT rather than ENOEXEC, and no column runs the file itself — the three bash columns say `bad interpreter` at 126 and dash, ksh93, zsh and ash say some form of `not found` at 127. A fallback keyed on \"the start failed\" instead of on the one errno would print SHOULD-NOT-RUN here. We answered Go's `fork/exec <abs path>` at 126 and were wrong in the wording everywhere and in the status in four columns, which is a separate failure from #2580 and was fixed in #4454: the shell reads the line in every dialect now, so the ones with no sentence of their own still number this the way they number a name that was not found",
+	},
+	{
+		ID: "path/slashless-interpreter-is-path-searched", Category: "command lookup",
+		Snippet: `mkdir -p d; printf '#!cat\necho SCRIPT-BODY\n' > d/tst.cmd; chmod +x d/tst.cmd; PATH=$PWD/d:$PATH; tst.cmd; echo "st=$?"`,
+		Why:     "a `#!` word with no slash in it is not a path, so the kernel cannot resolve it and answers ENOENT whatever is on PATH — and one column then looks for it itself. zsh finds `cat`, runs it on the file and prints the file's own two lines at 0; the three bash columns read the line only to name it, `cat: bad interpreter` at 126; dash, ksh93 and ash never look inside and say `not found` at 127. Three answers to one shape, which is Semantics.SlashlessInterpreterIsPathSearched. `cat` is the interpreter because it is the one program certain to be on every column's PATH and to make the file's own text the evidence — a row whose interpreter printed nothing could not tell \"searched and ran\" from \"searched and found nothing\" (#4454)",
+	},
+	{
+		ID: "path/empty-interpreter-line-is-not-a-script", Category: "command lookup",
+		Snippet: `printf '#!\necho RAN-ANYWAY\n' > e.scr; chmod +x e.scr; ./e.scr; echo "st=$?"`,
+		Why:     "the mirror of the NUL row above, and the one place a shell is *stricter* than the fallback: a `#!` naming nothing is an ENOEXEC like a file with no `#!` at all, so only a shell that reads the line can tell the two apart. Six columns read it as a script and print RAN-ANYWAY at 0; zsh refuses it, `exec format error`, at 126 — which is Semantics.EmptyInterpreterLineIsNotAScript. We ran it everywhere, so this is the direction where being wrong is silent (#4454)",
 	},
 	{
 		ID: "path/exec-on-a-file-with-no-shebang-runs-it", Category: "command lookup",

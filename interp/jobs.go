@@ -73,6 +73,25 @@ type Job struct {
 	// the shell had nothing to record — a job with no process of its own.
 	Command string
 
+	// Dir is the shell's own working directory at the moment this job
+	// entered the table, which is the directory `jobs -d` names under the
+	// job's row.
+	//
+	// Kept for the reason StopSig and EndSig are kept: a listing cannot
+	// reconstruct it. The **job**'s directory and not the shell's — a `cd`
+	// between starting a job and listing it does not move the line, which is
+	// the whole discriminating case, and two jobs started in two directories
+	// name their own from a third. Reading the shell's directory at print
+	// time would agree with this on every listing where nothing moved, and
+	// that is most of them, so the fact has to travel with the job.
+	//
+	// The shell's own directory rather than `$PWD`: measured, a script that
+	// assigns `PWD=/bogus` and then lists still names the directory the shell
+	// is really in. Written once, in Runner.addJob, so every route into the
+	// table records it — a background job, a foreground command that was
+	// stopped, and a coprocess alike.
+	Dir string
+
 	// polled says nothing is blocked on this job's process, so the shell has
 	// to ask after it rather than being told. True of what ^Z leaves behind:
 	// the command was in the foreground, so no goroutine is waiting on it the
@@ -1920,6 +1939,11 @@ func (r *Runner) setLastJob(j *Job) {
 // table has a *hole* in it — see nextJobNumber.
 func (r *Runner) addJob(job *Job) {
 	job.num = r.nextJobNumber()
+	// Where the job started, recorded here because here is where "the job
+	// entered the table" happens for every route into it. See Job.Dir: the
+	// one listing that names a directory names the job's and not the
+	// shell's, so it cannot be read back later.
+	job.Dir = r.workDir()
 	r.jobs = append(r.jobs, job)
 }
 

@@ -3524,11 +3524,12 @@ func Semantics() interp.Semantics {
 	// option off and `[1]  + 96801 done       :` with it on.
 	s.JobNoticeNamesThePID = interp.No
 
-	// `jobs`' letters: POSIX's pair, the state filters, and three of zsh's
-	// own — `-d` adds the directory the job was started in, `-z` and `-Z`
-	// are about the process title — which ride UnimplementedOptionLetters.
-	// `-n` and `-x`, which bash has, are bad options here.
-	s.JobsOptions = "lprs"
+	// `jobs`' letters: POSIX's pair, the state filters, `-d` — the directory
+	// each job was started in, which is this shell's alone — and `-z` and
+	// `-Z`, which are about the process title and ride
+	// UnimplementedOptionLetters. `-n` and `-x`, which bash has, are bad
+	// options here.
+	s.JobsOptions = "dlprs"
 	// The split this issue was about. zsh reads `-p` as "put the job's
 	// process *group* id in the listing" and prints its ordinary rows,
 	// where the other three print the ids and nothing else — so
@@ -4293,6 +4294,11 @@ func Diagnostics() interp.Diagnostics {
 		// `jobs -l`, and `jobs -p` too: the process id after the marker,
 		// with the same state column after it.
 		JobLineLong: "[%[1]d]  %[2]s %[3]d %-9[4]s  %[5]s",
+		// `jobs -d`, under the row rather than in it. Spaces either side of
+		// the colon, and the directory with the home directory written `~`.
+		// Measured 2026-09-25 on 5.9.2: `(pwd : /tmp/jobsdir/a)` from `/tmp`
+		// and `(pwd : ~/x)` from the home directory (#4507).
+		JobDirectoryLine: "(pwd : %[1]s)",
 		// The builtin's name is in the location here rather than in the
 		// sentence, which is this shell's rule for every message.
 		// About its table rather than about the function, and the builtin
@@ -4666,7 +4672,10 @@ func Diagnostics() interp.Diagnostics {
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.
-			"jobs":    "dzZ",
+			// `-d` came off this list in #4507: the directory line it
+			// writes needed the job table to record where each job
+			// started, which nothing here did before.
+			"jobs":    "zZ",
 			"declare": "k",
 			// The same list as `typeset` and `declare`, which is the point:
 			// `-F` is one attribute and the three names declare it alike.

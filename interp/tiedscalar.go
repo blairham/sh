@@ -133,6 +133,68 @@ func (r *Runner) mirrorArrayToScalar(name string, a Array) {
 // nothing. Measured: `typeset -T S s` then `S=a:b` is two elements.
 const defaultTieSeparator = ":"
 
+// nulTieSeparator is the separator an operand with no bytes in it names.
+//
+// Not a special case bolted onto the empty operand: it falls out of
+// tieSeparatorOperand's rule, since the first byte of a string with no bytes
+// in it is the zero byte. Named because two readers need it — the operand
+// and the listing — and a second spelling of `"\x00"` is how they would come
+// apart.
+const nulTieSeparator = "\x00"
+
+// tieSeparatorOperand reads the third operand of `typeset -T`: **one byte**,
+// the operand's first, and NUL where the operand has none.
+//
+// Three readings agree on every separator anybody writes and part only at the
+// edges, so the edges are what settled it. Measured 2026-09-25 on zsh 5.9.2
+// with `-f`, by `typeset -T A a SEP; a=(p q); printf '%s' "$A" | od -c`:
+//
+//	SEP        joins           lists back
+//	'ab'       p a q           `a`
+//	$'x\0'     p x q           `x`
+//	'é'        p \303 q        `$'\M-C'`
+//	$'\0'      p \0 q          `''`
+//	''         p \0 q          `''`
+//
+// The first two rows part "the whole operand" from the other two readings;
+// the third parts "the first character" from "the first byte", since `é` is
+// two bytes and only its lead one reaches the join. The last two rows are the
+// same separator written two ways, which is what says the rule is keyed on
+// the **byte** rather than on the operand: an operand with no bytes gives the
+// zero byte exactly as one starting with a NUL does.
+//
+// The whole operand was the separator here, so an empty one joined with
+// nothing and split a value into its characters, and `'ab'` put two bytes
+// between fields (#4515).
+func tieSeparatorOperand(operand string) string {
+	if operand == "" {
+		return nulTieSeparator
+	}
+	return operand[:1]
+}
+
+// tieSeparatorWord is the separator as a *word*, for a listing that has to be
+// the declaration it read back.
+//
+// Every byte but one is written by the ordinary value quoting. The NUL is the
+// one no word can carry, so the quoting has nowhere to put it — and it does
+// not have to: by tieSeparatorOperand's rule the empty word names that byte,
+// and it is the only word that does, so the listing round-trips through the
+// one spelling there is. Measured 2026-09-25 on zsh 5.9.2:
+//
+//	typeset -T A a $'\0'   lists back with an empty word for the separator,
+//	                       and reading that line again gives the same one
+//
+// This shell wrote the byte as an escape instead, which is the readable
+// answer and the wrong one: pasting `$'\C-@'` back declares a tie separated
+// by an escape's *first byte* — a `$` — rather than by a NUL.
+func (r *Runner) tieSeparatorWord(sep string) string {
+	if sep == nulTieSeparator {
+		return "''"
+	}
+	return r.declareQuoted(sep, ListedValueAlone)
+}
+
 // declareTie is `typeset -T SCALAR array [sep]`.
 //
 // Its own path out of biDeclare because its operands are not a list of names:
@@ -185,7 +247,7 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	}
 	sep := defaultTieSeparator
 	if len(args) > 2 {
-		sep = args[2]
+		sep = tieSeparatorOperand(args[2])
 	}
 	if scalar == array {
 		// Reported and then fatal, where the dialect says a declaration's

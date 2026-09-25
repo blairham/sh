@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -139,6 +140,7 @@ func TestFetchRefusesAnArchiveThatIsNotThePin(t *testing.T) {
 }
 
 func TestFetchReportsAnAbsentServerAsOffline(t *testing.T) {
+	quickBackoff(t)
 	s, _ := sample()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -217,6 +219,7 @@ func TestFetchLandsWhereMakeWildRefusesToLook(t *testing.T) {
 // Asserting the wall clock as well as the error: a fetch that returned the
 // right error after thirty minutes would still be the bug.
 func TestFetchGivesUpOnAServerThatNeverAnswers(t *testing.T) {
+	quickBackoff(t)
 	stall := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		<-stall
@@ -250,4 +253,160 @@ func TestTheShippedFetchIsBounded(t *testing.T) {
 	if fetchClient.Timeout != fetchTimeout {
 		t.Errorf("fetch client timeout = %v, want the declared %v", fetchClient.Timeout, fetchTimeout)
 	}
+}
+
+// quickBackoff holds the retry pause to something a test can afford. The
+// shipped value is seconds because a resolver having a bad moment needs a
+// moment; a test asserting the *shape* of the retry does not.
+func quickBackoff(t *testing.T) {
+	t.Helper()
+	was := fetchBackoff
+	fetchBackoff = time.Millisecond
+	t.Cleanup(func() { fetchBackoff = was })
+}
+
+// The retry, exercised rather than asserted.
+//
+// #4435's failure was a `server misbehaving` from a resolver — transient by
+// name, and fatal to the whole column because one answer was the whole of the
+// fetch. This drives a source that fails twice and then serves the archive,
+// and requires the fetch to come back with the suite. A retry path nothing
+// takes is untested code that first runs on the day it is needed.
+func TestFetchRetriesASourceThatFailsTransiently(t *testing.T) {
+	quickBackoff(t)
+	s, members := sample()
+	body := archive(t, members)
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		if hits < 3 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+	s.URL, s.SHA256 = srv.URL, digest(body)
+
+	build := t.TempDir()
+	dir, err := Fetch(context.Background(), s, build, false)
+	if err != nil {
+		t.Fatalf("two transient failures ended the column: %v", err)
+	}
+	if hits != 3 {
+		t.Errorf("the source was asked %d times, want 3", hits)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tests", "a.tests")); err != nil {
+		t.Errorf("the retry returned but the suite is not unpacked: %v", err)
+	}
+}
+
+// And the fall-through, driven by a host that genuinely does not resolve.
+//
+// `.invalid` is reserved by RFC 2606 precisely so that it never has an
+// address, so this is the real failure #4435 saw — a name that does not
+// resolve — and not a stub standing in for one. The mirror then has to carry
+// the column.
+func TestFetchFallsThroughToAMirrorWhenTheFirstHostIsUnreachable(t *testing.T) {
+	quickBackoff(t)
+	s, members := sample()
+	body := archive(t, members)
+	hits := 0
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		_, _ = w.Write(body)
+	}))
+	defer mirror.Close()
+	s.URL = "https://suite-fetch-4435.invalid/sample-1.0.tar.gz"
+	s.Mirrors = []string{mirror.URL}
+	s.SHA256 = digest(body)
+
+	build := t.TempDir()
+	dir, err := Fetch(context.Background(), s, build, false)
+	if err != nil {
+		t.Fatalf("an unreachable canonical host still ended the column: %v", err)
+	}
+	if hits != 1 {
+		t.Errorf("the mirror was asked %d times, want 1", hits)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tests", "a.tests")); err != nil {
+		t.Errorf("the mirror answered but the suite is not unpacked: %v", err)
+	}
+}
+
+// A mirror is a second route to the pinned bytes and never a second version.
+// A source serving something else is skipped, the next one is tried, and the
+// measurement is the one the pin names.
+func TestFetchSkipsASourceThatIsNotThePin(t *testing.T) {
+	quickBackoff(t)
+	s, members := sample()
+	body := archive(t, members)
+	wrong := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(archive(t, map[string]string{"sample-1.0/tests/b.tests": "echo b\n"}))
+	}))
+	defer wrong.Close()
+	right := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	defer right.Close()
+	s.URL, s.Mirrors, s.SHA256 = wrong.URL, []string{right.URL}, digest(body)
+
+	build := t.TempDir()
+	dir, err := Fetch(context.Background(), s, build, false)
+	if err != nil {
+		t.Fatalf("want the mirror's pinned archive, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tests", "a.tests")); err != nil {
+		t.Errorf("the tree is not the pinned one: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tests", "b.tests")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the unpinned archive reached the disk: %v", err)
+	}
+
+	// And when every source fails the pin, that is a stale pin rather than an
+	// absent network, and the error has to say which.
+	s.Mirrors = []string{wrong.URL}
+	s.URL = wrong.URL
+	if _, err := Fetch(context.Background(), s, t.TempDir(), false); !errors.Is(err, ErrDigest) {
+		t.Fatalf("want ErrDigest when no source serves the pin, got %v", err)
+	}
+}
+
+// The skip message is the only thing a reader of a report-only job gets, so
+// it has to name every source that was tried rather than only the first.
+func TestFetchSaysEverySourceItTried(t *testing.T) {
+	quickBackoff(t)
+	s, _ := sample()
+	s.URL = "https://suite-fetch-4435-primary.invalid/a.tar.gz"
+	s.Mirrors = []string{"https://suite-fetch-4435-mirror.invalid/a.tar.gz"}
+	_, err := Fetch(context.Background(), s, t.TempDir(), false)
+	if !errors.Is(err, ErrOffline) {
+		t.Fatalf("want ErrOffline, got %v", err)
+	}
+	for _, want := range []string{"primary.invalid", "mirror.invalid", "3/3"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the skip does not mention %q: %v", want, err)
+		}
+	}
+}
+
+// The shipped bash column keeps a mirror. It is the column #2298 is counted
+// from and the one whose canonical host is a single project-run server, so a
+// change that drops the mirror should have to say so here.
+func TestTheBashColumnHasASecondSource(t *testing.T) {
+	for _, s := range Panel {
+		if s.Name != "bash" {
+			continue
+		}
+		if got := len(s.sources()); got < 2 {
+			t.Errorf("the bash column has %d source(s); one name resolution decides the column again", got)
+		}
+		for _, u := range s.sources() {
+			if !strings.HasPrefix(u, "https://") {
+				t.Errorf("source %q is not https; a mirror that can be rewritten in flight is not a second route to the same bytes", u)
+			}
+		}
+		return
+	}
+	t.Fatal("no bash column in the panel")
 }

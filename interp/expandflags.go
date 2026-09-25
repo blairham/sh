@@ -655,13 +655,18 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		if !rok {
 			return nil, false, false, false
 		}
-		// Rule 23's rejoin, when it ran, leaves as many words as it was
-		// given, so what the result *is* has not changed; without it every
-		// field the re-reading made is a word of its own.
-		words = fields
-		if !joined {
+		// Rule 23's single word, when it applied, leaves as many words as it
+		// was given, so what the result *is* has not changed; without it
+		// every field the re-reading made is a word of its own. The count is
+		// checked rather than assumed, because the one thing that survives
+		// the quoting is `"$@"`: `set -- one "two three" four; a='$@'` makes
+		// `"${(e)a}"` three words and an empty `$@` makes it none, so a
+		// result taken as a single word here would keep only the first of
+		// the three and index past the end of the none.
+		if !joined || len(fields) != len(words) {
 			isList = true
 		}
+		words = fields
 	}
 	return words, isList, markJoin && escapeSep != nil, true
 }

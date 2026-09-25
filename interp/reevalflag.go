@@ -81,26 +81,40 @@ func reevalFlagApplies(e *syntax.ParamExpr) bool {
 // produced and the `x` — so the flag reaches an element at a time and the
 // fields it makes are laid into the result in order.
 //
-// And the rejoin of rule 23 is per word too, which is the half that is not
+// And rule 23's single word is per word too, which is the half that is not
 // obvious and is the half that has to be measured. Where the expansion has to
-// come to a single word, the fields *one* word produced go back together with
-// the first character of IFS; the words the pipeline already held stay apart.
-// With `arr=(p q r)`, `z='$arr'`, `u='$arr:$arr'` and `v='$arr $arr'`:
+// come to a single word, *one* word in is one word out; the words the pipeline
+// already held stay apart. With `arr=(p q r)`, `z='$arr'` and
+// `u='$arr:$arr'`:
 //
 //	"${(e)z}"        1  [p q r]              one word in, one out
 //	"${(@e)z}"       3  [p][q][r]            the `@` keeps the fields
 //	${(e)z}          3  [p][q][r]            and so does being unquoted
 //	"${(es.:.)u}"    2  [p q r][p q r]       two words in, two out
-//	"${(e)=v}"       2  [p q r][p q r]       however the two were made
 //	"${(@es.:.)u}"   6                       and `@` keeps all six
 //	IFS=-; "${(e)z}" 1  [p-q-r]              IFS and not a space
 //	"${(ej:-:)z}"    1  [p q r]              IFS even beside a `j`
 //
-// Rows four and five are the discriminating ones: a rejoin over the whole
-// result would answer both with one field, and one that never joined would
-// answer the first with three. The last row is worth keeping because rule 5's
-// join takes the `j` separator and this one does not, so reusing flagJoinSep
-// here would answer it `p-q-r`.
+// **What makes the single word is the quoting, not a rejoin afterwards.** The
+// two are the same answer on every row above, because an array reference
+// split into fields and put back together with IFS's first character is
+// exactly what one quoted `"$arr"` comes to — so a grid of array references,
+// however wide, cannot tell them apart. It is keyed on the substitutions: a
+// re-reading that has to come to one word reads them *quoted*, and one that
+// does not reads them unquoted. With `c='$(printf "a\nb\nc\n")'`,
+// `t='$(printf "a  b")'` and `$@` set to `one`, `two three`, `four`:
+//
+//	"${(e)c}"        1  [a\nb\nc]            a command substitution keeps its
+//	${(e)c}          3  [a][b][c]            newlines quoted and splits unquoted
+//	IFS=-; "${(e)c}" 1  [a\nb\nc]            and IFS never reaches it
+//	"${(e)t}"        1  [a  b]               so the runs inside it survive
+//	"${(e)a}"        3  [one][two three][four]   `"$@"` is a list even quoted
+//	set --; "${(e)a}" 0                      and an empty one is no field
+//
+// Rows one and four are the discriminating pair, and row five is the one a
+// rejoin cannot reach at all: splitting `a\nb\nc` and joining it with a space
+// answers `a b c`, which is what this did until #4485, and no amount of IFS
+// makes a rejoin give `"$@"` back its fields.
 func (r *Runner) reevalFlagged(e *syntax.ParamExpr, words []string, quoted bool) (out []string, joined, ok bool) {
 	if r.reevalDepth >= maxReevalDepth {
 		// A value that names its own expansion, which the shell being
@@ -122,28 +136,28 @@ func (r *Runner) reevalFlagged(e *syntax.ParamExpr, words []string, quoted bool)
 	join := quoted && !r.flagKeepsFields(e)
 	out = make([]string, 0, len(words))
 	for _, w := range words {
-		fields, fok := r.reevalText(w)
+		fields, fok := r.reevalText(w, join)
 		if !fok {
 			return nil, false, false
-		}
-		if join {
-			out = append(out, strings.Join(fields, r.ifsFirst(r.ifs())))
-			continue
 		}
 		out = append(out, fields...)
 	}
 	return out, join, true
 }
 
-// reevalText is one word read again.
+// reevalText is one word read again. quoted says whether the substitutions it
+// finds are themselves quoted, which is the caller's rule 23 question: a
+// re-reading that has to come to a single word reads them quoted, and one that
+// may yield fields reads them unquoted.
 //
 // The spans come from the here-document reader, which is what makes a
 // backslash an escape in front of `$`, a backtick and a backslash and text
 // everywhere else, and makes a quote a character rather than a quoting. It
-// marks every span double-quoted, because a body is one blob of input; here
-// the substitutions are unquoted instead, so each of them splits, globs and
-// yields fields by the ordinary rules — which is measured, `${(e)v}` on an
-// array reference being three fields and on `$(echo a; echo b)` being two.
+// marks every span double-quoted, because a body is one blob of input — which
+// is already the marking the quoted case wants, so that case leaves them
+// alone. Unquoted, each substitution splits, globs and yields fields by the
+// ordinary rules — which is measured, `${(e)v}` on an array reference being
+// three fields and on `$(echo a; echo b)` being two.
 //
 // The literals stay marked as the reader left them. That is not a detail: an
 // unquoted literal's metacharacters are live for the *enclosing* word's match,
@@ -153,16 +167,18 @@ func (r *Runner) reevalFlagged(e *syntax.ParamExpr, words []string, quoted bool)
 // are not a pattern here anyway, measured: `${(e)v}` on `a*` is `a*`, and it
 // matches only when `GLOB_SUBST` makes the *result* of the whole expansion a
 // pattern, which is the enclosing expansion's question and not this one's.
-func (r *Runner) reevalText(text string) ([]string, bool) {
+func (r *Runner) reevalText(text string, quoted bool) ([]string, bool) {
 	// Text that ran out inside an expansion is refused rather than read as
 	// the expansion the lexer had to invent to hand it back; see rawSpans.
 	spans, ok := r.rawSpans(text)
 	if !ok {
 		return nil, false
 	}
-	for i := range spans {
-		if spans[i].Kind != syntax.Literal {
-			spans[i].Quoting = syntax.Unquoted
+	if !quoted {
+		for i := range spans {
+			if spans[i].Kind != syntax.Literal {
+				spans[i].Quoting = syntax.Unquoted
+			}
 		}
 	}
 	failed := r.expandErr

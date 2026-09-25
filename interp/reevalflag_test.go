@@ -169,28 +169,44 @@ func TestTheReevalFlagProducesFields(t *testing.T) {
 			count + `a=(p q r); v='${a[@]}'; f ${(e)v}`, `3:[p][q][r]`,
 		},
 		{
-			"quoted, they come back together with IFS's first character",
-			count + `a=(p q r); v='${a[@]}'; f "${(e)v}"`, `1:[p q r]`,
+			"quoted, one word in is one word out",
+			count + `a=(p q r); v='${a[*]}'; f "${(e)v}"`, `1:[p q r]`,
 		},
 		{
-			"and IFS is what joins them, not a space",
-			count + `a=(p q r); v='${a[@]}'; IFS=-; f "${(e)v}"`, `1:[p-q-r]`,
+			"and IFS is what makes it one, not a space",
+			count + `a=(p q r); v='${a[*]}'; IFS=-; f "${(e)v}"`, `1:[p-q-r]`,
 		},
 		{
 			"nor the join separator the group named",
-			count + `a=(p q r); v='${a[@]}'; f "${(ej:_:)v}"`, `1:[p q r]`,
+			count + `a=(p q r); v='${a[*]}'; f "${(ej:_:)v}"`, `1:[p q r]`,
 		},
 		{
 			"a group asking for the fields by name keeps them",
-			count + `a=(p q r); v='${a[@]}'; f "${(@e)v}"`, `3:[p][q][r]`,
+			count + `a=(p q r); v='${a[*]}'; f "${(@e)v}"`, `3:[p][q][r]`,
 		},
 		{
-			"the rejoin is per word, so words the pipeline held stay apart",
-			count + `a=(p q); v='${a[@]}:${a[@]}'; f "${(es.:.)v}"`, `2:[p q][p q]`,
+			"it is per word, so words the pipeline held stay apart",
+			count + `a=(p q); v='${a[*]}:${a[*]}'; f "${(es.:.)v}"`, `2:[p q][p q]`,
 		},
 		{
 			"and every one of them survives when the fields are kept",
-			count + `a=(p q); v='${a[@]}:${a[@]}'; f "${(@es.:.)v}"`, `4:[p][q][p][q]`,
+			count + `a=(p q); v='${a[*]}:${a[*]}'; f "${(@es.:.)v}"`, `4:[p][q][p][q]`,
+		},
+		{
+			// The pair that says what the single word is *keyed on*. Every
+			// row above holds for a rejoin — the fields of `${a[*]}` put
+			// back together with IFS's first character are the one word a
+			// quoted reading arrives at directly — so a grid of array
+			// references cannot tell the two apart however wide it gets.
+			// These two hold the flag and the quoting fixed and change the
+			// substitution, and the answers part: a `[@]` reference is a
+			// list quoted, and IFS never reaches it.
+			"a [@] reference keeps its fields even where one word is asked for",
+			count + `a=(p q r); v='${a[@]}'; f "${(e)v}"`, `3:[p][q][r]`,
+		},
+		{
+			"and IFS does not join them either",
+			count + `a=(p q r); v='${a[@]}'; IFS=-; f "${(e)v}"`, `3:[p][q][r]`,
 		},
 		{
 			"a reference to nothing is no field at all unquoted",
@@ -211,6 +227,45 @@ func TestTheReevalFlagProducesFields(t *testing.T) {
 		{
 			"and is one field where quoting suppresses the question",
 			count + `sp="a b"; v='$sp'; f "${(e)v}"`, `1:[a b]`,
+		},
+		{
+			// The row the suite found, and the reason the quoting is what
+			// decides. A command substitution read quoted keeps the
+			// newlines inside it; the fields it would split into, put back
+			// together with IFS's first character, are `x y` — which is
+			// what a listed function body came back as until #4485, 496
+			// lines arriving as one.
+			"a command substitution read quoted keeps its newlines",
+			count + `v='$(printf "x\ny\n")'; f "${(e)v}"`, "1:[x\ny]",
+		},
+		{
+			"and splits on them unquoted",
+			count + `v='$(printf "x\ny\n")'; f ${(e)v}`, `2:[x][y]`,
+		},
+		{
+			"IFS does not reach a quoted one",
+			count + `v='$(printf "x\ny\n")'; IFS=-; f "${(e)v}"`, "1:[x\ny]",
+		},
+		{
+			"nor do the runs of blanks inside it collapse",
+			count + `v='$(printf "a  b")'; f "${(e)v}"`, `1:[a  b]`,
+		},
+		{
+			// `"$@"` is the one substitution whose fields survive being
+			// quoted, so it survives here too — and a result taken as a
+			// single word would keep only the first of the three.
+			"the positional parameters are a list even where one word is asked for",
+			count + `set -- one "two three" four; v='$@'; f "${(e)v}"`,
+			`3:[one][two three][four]`,
+		},
+		{
+			"and an empty one is no field at all",
+			count + `set --; v='$@'; f "${(e)v}"`, `0:[]`,
+		},
+		{
+			"where `$*` is the one word, joined by IFS",
+			count + `set -- one "two three"; v='$*'; IFS=-; f "${(e)v}"`,
+			`1:[one-two three]`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

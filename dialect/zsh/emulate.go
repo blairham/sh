@@ -138,6 +138,28 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 		if !o.recorded || !resetByEmulation(o.base, strict) {
 			continue
 		}
+		// A name whose base state is not the table's default needs the
+		// deviation *written* rather than dropped, and it is the one case
+		// where dropping is wrong in both directions. The store is read
+		// against the base, so a dropped `rcs` in a `zsh -f` shell reads off
+		// — the invocation's answer, which is exactly what the emulation was
+		// asked to undo.
+		//
+		// Measured on zsh 5.9.2, 2026-09-25, `zsh +Z -f -c`: the four
+		// recordedOver names read `rcs` off, `hashdirs` off, `login` off and
+		// `zle` off in that shell, and after `emulate -R zsh` — or `-R sh`,
+		// `-R ksh`, `-R csh`, which agree — `rcs` and `hashdirs` read **on**
+		// while `login` and `zle` stay off. The last two are the control:
+		// both are in emulationNeverReset, so neither reaches this branch,
+		// and a change that put every recordedOver name back would be wrong
+		// about them. A bare `emulate sh` leaves all four, since the two
+		// that move are in emulationStrictReset rather than in the 81.
+		if o.over != nil {
+			if emulationDefault(o, mode) != o.over(r) {
+				kept = append(kept, o.base)
+			}
+			continue
+		}
 		if dev, known := emulationDeviates(o, mode); known && dev {
 			kept = append(kept, o.base)
 		}

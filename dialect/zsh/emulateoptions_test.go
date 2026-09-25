@@ -4,8 +4,11 @@
 package zsh
 
 import (
+	"io"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // TestTheEmulationPartitionCoversTheTable — the three measured lists are a
@@ -201,4 +204,97 @@ func TestAnEmulationLeavesItsOwnDefaults(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestAStrictEmulationPutsBackAnOptionTheInvocationTurnedOff is `rcs` and
+// `hashdirs`: the two [recordedOver] names an `emulate -R` resets.
+//
+// The store holds deviations and an emulation resets an ordinary recorded
+// name by dropping it, which lands the name on the table's default. These two
+// do not deviate from the table's default — they deviate from a base the
+// *invocation* set — so dropping them left them exactly where the invocation
+// had put them and the emulation undid nothing. `zsh -f` then `emulate -R
+// zsh` read `norcs`, where real zsh reads `rcs`, and `C02cond.ztst` stopped
+// on its `-o cond` line for that reason alone.
+//
+// Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0), 2026-09-25, through
+// `zsh +Z -f -c` so that the shell is non-interactive with its startup files
+// suppressed — which is what puts all four names off to begin with:
+//
+//	                     before   -R zsh   -R sh   -R ksh   -R csh   emulate sh
+//	rcs                  off      on       on      on       on       off
+//	hashdirs             off      on       on      on       on       off
+//	login                off      off      off     off      off      off
+//	zle                  off      off      off     off      off      off
+//
+// The last two rows are the control and they are why this is not "put every
+// recordedOver name back": both are in emulationNeverReset, and a fix that
+// reached them would be wrong in exactly the way the old one was right. The
+// last column is the second control — the two that move are strict-reset
+// names, so the bare form leaves them alone.
+func TestAStrictEmulationPutsBackAnOptionTheInvocationTurnedOff(t *testing.T) {
+	read := func(r *interp.Runner, name string) bool {
+		t.Helper()
+		o, _, ok := exactOptionName(name)
+		if !ok {
+			t.Fatalf("%s is not in the option table", name)
+		}
+		return o.get(r)
+	}
+	for _, mode := range []string{"zsh", "sh", "ksh", "csh"} {
+		for _, tc := range []struct {
+			name            string
+			strict, relaxed bool
+		}{
+			{"rcs", true, false},
+			{"hashdirs", true, false},
+			{"login", false, false},
+			{"zle", false, false},
+		} {
+			for _, form := range []struct {
+				strict bool
+				want   bool
+			}{{true, tc.strict}, {false, tc.relaxed}} {
+				r := suppressedStartupRunner(t)
+				if got := read(r, tc.name); got {
+					t.Fatalf("%s reads on in a fresh `zsh -f` shell; the case is about a name the invocation turned off", tc.name)
+				}
+				applyEmulation(r, mode, form.strict)
+				if got := read(r, tc.name); got != form.want {
+					t.Errorf("emulate %s%s leaves %s %v, want %v",
+						strictLetter(form.strict), mode, tc.name, onOff(got), onOff(form.want))
+				}
+			}
+		}
+	}
+}
+
+// suppressedStartupRunner is a `zsh -f` shell that is not interactive: the
+// invocation both four recordedOver names read their base state from, and the
+// one where dropping a deviation and writing one part company.
+func suppressedStartupRunner(t *testing.T) *interp.Runner {
+	t.Helper()
+	sem, diag, dl := Semantics(), Diagnostics(), Dialect()
+	r := &interp.Runner{
+		Stdout: io.Discard, Stderr: io.Discard,
+		Semantics: &sem, Diagnostics: &diag, Dialect: &dl,
+		Dir: t.TempDir(), Name: "zsh",
+		StartupFilesSuppressed: true,
+	}
+	Apply(r)
+	return r
+}
+
+func strictLetter(strict bool) string {
+	if strict {
+		return "-R "
+	}
+	return ""
+}
+
+func onOff(on bool) string {
+	if on {
+		return "on"
+	}
+	return "off"
 }

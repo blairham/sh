@@ -455,7 +455,52 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		// `zle` with nothing at all: status 1 and not a word, measured.
 		return 1
 	}
-	return callWidget(r, ctx, rest[0], rest[1:])
+	return callWidget(r, ctx, rest[0], widgetCallArgs(rest[1:]))
+}
+
+// widgetCallArgs is what a called widget is given, with the `--` that ends
+// *its* option list taken off.
+//
+// `zle name -- args` has two option lists in it and they are parsed in two
+// places. The first belongs to the builtin and is read above; this is the
+// second, which begins after the widget's name — zsh documents the call form
+// as `zle widget [-n num] [-N] [-K keymap] [-w] [--] [arg ...]`.
+//
+// **Exactly one, and only where it is first.** Measured 2026-09-24 against
+// zsh 5.9.2 through a pseudo-terminal, a widget printing `$#` and its
+// arguments joined:
+//
+//	zle inner -- "a b"    1   a b
+//	zle inner -- -x       1   -x
+//	zle inner --          0
+//	zle inner -- -- q     2   --|q
+//	zle inner a -- b      3   a|--|b
+//	zle inner a b         2   a|b
+//
+// So the second `--` of a pair is an ordinary operand and a `--` after an
+// operand is one too: it is the marker ending an option list, not a word with
+// a meaning of its own. This shell passed it straight through, so every one
+// of the first four rows arrived with an extra leading `--`.
+//
+// **That is what made the async suggestion wrong rather than absent.**
+// zsh-autosuggestions' response handler draws with
+// `zle autosuggest-suggest -- "$suggestion"`, and the widget behind it reads
+// `$1` — so once the callback was reaching the line at all (#4413), what it
+// drew was `--` instead of the suggestion. The plugin's synchronous path
+// calls the same function *directly* rather than through `zle`, which is why
+// only the asynchronous one showed it.
+//
+// The other options of that list are **not** read here and this does not
+// pretend to: measured, `zle inner -x` is `unknown option: x` at status 1 with
+// the widget never run, where this shell passes `-x` through as an operand.
+// That is a separate divergence from the one being fixed, and guessing at
+// `-n`, `-N`, `-K` and `-w` from the documentation rather than from a
+// measurement is how a preset comes to hold an answer no shell gives.
+func widgetCallArgs(args []string) []string {
+	if len(args) > 0 && args[0] == "--" {
+		return args[1:]
+	}
+	return args
 }
 
 // operationsAsked is how many *distinct* operations the letters chose.
@@ -904,6 +949,36 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 	if !r.HasFunction(def.function) {
 		return 1
 	}
+	if !insideWidget(r) {
+		// **`zle some-widget` from a plain `zle -F` handler is the widget's
+		// own context and not a nested call**, because there is no outer
+		// widget to nest inside. The handler is an ordinary function — it has
+		// no `BUFFER`, no `CURSOR` and no `$WIDGET`, measured — so a widget it
+		// invokes has to be *given* the line here, or its assignment to
+		// `POSTDISPLAY` lands on a plain variable nothing ever reads back.
+		//
+		// That is the whole of zsh-autosuggestions' async path: the response
+		// handler is a plain handler and every suggestion it has to show is
+		// drawn by the `zle autosuggest-suggest` it calls. See zlewatch.go,
+		// which holds the line for the length of the handler so this call has
+		// something to hand over.
+		out, ran := runWidgetFunction(r, ctx, name, widgetLine(r), args...)
+		if !ran {
+			return 1
+		}
+		// Back into the held line, so the rest of the handler — and the
+		// editor after it — see what the widget left. `zle` twice in one
+		// handler is ordinary, and the second call reads the first's line.
+		setWidgetLine(r, out)
+		if out.Accept {
+			r.SetVar(zleAccept, "1")
+		}
+		// And the editor is still running for the rest of the handler:
+		// runWidgetFunction's own cleanup cleared the flag that openEditorActive
+		// set, and without this a handler's *second* `zle` would be refused.
+		r.SetVar(zleActive, "1")
+		return 0
+	}
 	// `$WIDGET` is left alone: measured, a widget invoked from inside another
 	// still reports the *outer* one's name.
 	status := r.ExitStatus()
@@ -913,6 +988,19 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 		return 1
 	}
 	return 0
+}
+
+// insideWidget reports whether this call is happening inside a widget, as
+// against inside a plain `zle -F` descriptor handler.
+//
+// `$WIDGET` is the question, because it is what the two contexts are measured
+// to differ in: a widget has the name of the widget that is running, and a
+// plain handler has it unset. editorRunning cannot answer this — it is true in
+// both, which is the point of it — so the two predicates are not
+// interchangeable however close they read.
+func insideWidget(r *interp.Runner) bool {
+	name, _ := r.GetVar(zleWidget)
+	return name != ""
 }
 
 // RunWidget runs one of this shell's widget functions over the line.

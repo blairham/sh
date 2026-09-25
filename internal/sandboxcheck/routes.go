@@ -52,6 +52,37 @@ type Route struct {
 	// not a way to pass a policy — the mode and the policy are separate
 	// arguments and the grader owns the second.
 	Args []string
+	// Cites is where docs/design/sandboxing.md accounts for this route
+	// escaping, and setting it is what makes a row grade DOCUMENTED rather
+	// than ESCAPED.
+	//
+	// Empty for every route but one, and it is meant to stay that way: the
+	// package comment argues the case for the verdict, and the argument is
+	// about a hole the operating system owns rather than about a hole that
+	// is inconvenient to close. A row with this set is claiming that no
+	// amount of work inside this repository would contain it, and the
+	// citation is where a reader goes to check that claim.
+	//
+	// It softens exactly one clause of verdictOf. A route carrying this
+	// still grades INERT if it stops working and CONTAINED if the gate
+	// starts holding it, both without anybody editing the table.
+	Cites string
+	// Grant is extra rules the *denied* policy carries for this route only.
+	//
+	// The denied policy is the one every verdict turns on and opening it is
+	// how an instrument grades itself green, so this is deliberately narrow:
+	// it may only appear on a route that sets Cites, and it may only grant
+	// the exec slot. Both are held by a test rather than by this comment.
+	//
+	// The one route that needs it is the documented escape. Its question is
+	// "does a policy that *grants* an exec still hold its path denies
+	// against the child", and the ordinary denied set grants no exec at all
+	// — so without this the child would never start, the row would grade
+	// contained, and the pass would be about the exec being refused rather
+	// than about the route. Measured: the same script under the denied
+	// policy without the grant is `exec: refused`, which is the falsifier
+	// that says this field is load-bearing and not a way out.
+	Grant []string
 }
 
 func (rt Route) dialects() []string {
@@ -105,6 +136,18 @@ func leaked(_ Fixture, o Outcome) bool { return o.Says(SecretMark) }
 
 // made reports that the route created the target.
 func made(f Fixture, _ Outcome) bool { return there(f.Target) }
+
+// DesignDocSection is what a DOCUMENTED row cites: the file, and the section
+// of it that accounts for the escape.
+//
+// A section and not a line number, which is what #4410 proposed and what the
+// issues either side of it quote. `sandboxing.md:23` is exact today and is
+// wrong the first time anybody adds a paragraph above it — and wrong
+// silently, because a citation is prose and nothing reads it. The heading is
+// stable, it is what a reader searches for anyway, and
+// TestTheDocumentedRowCitesSomethingThatIsActuallyThere opens the file and
+// checks the section is still in it.
+const DesignDocSection = "docs/design/sandboxing.md § What a sandbox here is, and what it is not"
 
 // Routes is every way in, in the order a reader wants them: the ordinary
 // language first, then the places a builtin reaches past it.
@@ -265,6 +308,32 @@ read -r L <&${COPROC[0]}; echo $L`,
 		Script: `/bin/echo RAN`,
 		Did:    func(_ Fixture, o Outcome) bool { return o.Says("RAN") },
 		Why:    "an allowed exec is the whole filesystem, so a denied one has to hold",
+	}, {
+		// The other half of the row above, and the one it had been stating
+		// as a premise and then not grading (#4410). `exec/external` asks
+		// whether a *denied* exec is refused; this asks what an *allowed*
+		// one costs, which is the question its own Why line answers in
+		// prose.
+		//
+		// `cat` because the escape has to be visible in the shell's output
+		// to be graded at all, and a child that prints the file is the
+		// shortest thing that makes it so. Nothing about the route is
+		// specific to cat: the grant is the whole of it, and #4409 measured
+		// the same escape through `python3 -c`.
+		//
+		// This is the package's one DOCUMENTED row. It escapes, it is meant
+		// to, and the citation is where the reason lives — see Route.Cites
+		// and the package comment. The two things worth restating here are
+		// what the row still catches: it grades under both denied shapes,
+		// and it reverts to an ordinary verdict on its own if either end
+		// moves. Contain the process tree and it goes green; break `cat`
+		// or the fixture and it goes inert.
+		Name:   "exec/child-reads-denied",
+		Script: `/bin/cat {{secret}}`,
+		Did:    leaked,
+		Grant:  []string{"allow exec-unconfined /bin/cat"},
+		Cites:  DesignDocSection,
+		Why:    "an allowed exec makes its own syscalls, so the deny never reaches the child",
 	}, {
 		Name:   "signal/kill",
 		Script: `kill -0 $$ && echo SIGNALED`,

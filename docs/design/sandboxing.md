@@ -55,6 +55,27 @@ thing that can, because `eval` walks around anything applied from
 outside.** A policy that also has to contain children composes this with
 an OS sandbox; it does not replace it with one.
 
+**And the claim is measured rather than asserted.** Re-measuring it by
+hand every few months is what the two dates above record, and a limit
+that is only ever checked when somebody thinks to check it is one that
+stops being checked. `make sandbox` grades it on every run as the route
+`exec/child-reads-denied`, under both shapes of denied policy, and
+reports it as **`documented`** — a verdict of its own, because the row
+escapes on purpose and a permanently red one would be trained away
+(#4410).
+
+That verdict is worth more than this paragraph for two reasons, and both
+of them are about what happens without anybody remembering:
+
+- the day a `Gate` implementation contains the process tree, the row goes
+  **`contained`** by itself, and the sentence above becomes false with
+  something in the tree saying so;
+- if the route ever stops working, the row goes **`inert`** and says so,
+  rather than a documented hole quietly becoming an unmeasured one.
+
+So a change here is checked against the instrument, not against this
+section. `internal/sandboxcheck` has the argument for the verdict in full.
+
 ## The policy file
 
 ### Format: a line per rule

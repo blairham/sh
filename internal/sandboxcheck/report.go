@@ -47,11 +47,39 @@ func (r Report) Text(verbose bool) string {
 		}
 	}
 
+	// The documented ledger, printed on the same terms and for the same
+	// reason: these rows escape, they are the boundary's stated limits
+	// rather than its defects, and a limit that is only ever described in a
+	// document is one nothing re-measures. Each row names where the reason
+	// is written, so the claim can be checked rather than taken.
+	var documented []string
+	for _, res := range r.Results {
+		if res.Verdict == Documented {
+			documented = append(documented,
+				res.Route+"/"+res.Dialect+" ("+res.Shape.String()+") — "+res.Cites)
+		}
+	}
+	if len(documented) > 0 {
+		fmt.Fprintf(w, "\n  escapes, and is documented as escaping — each goes green by itself\n"+
+			"  the day a Gate contains the process tree:\n")
+		for _, s := range documented {
+			fmt.Fprintf(w, "    %s\n", s)
+		}
+	}
+
 	for _, res := range r.Results {
 		if res.Verdict == Contained && !verbose {
 			continue
 		}
 		if res.Verdict == Inert && !verbose {
+			continue
+		}
+		// Same rule as inert, and for the same reason: the ledger above
+		// already names every documented row and says where its reason is
+		// written, so repeating three identical runs for each of them
+		// buries the rows that are printed here because they need
+		// explaining. `-v` still shows the leak.
+		if res.Verdict == Documented && !verbose {
 			continue
 		}
 		fmt.Fprintf(w, "\n  %s (%s, %s): %s\n", res.Route, res.Dialect, res.Shape, res.Verdict)
@@ -127,8 +155,8 @@ func (r Report) table(w *strings.Builder, shape Shape) {
 	}
 
 	n := r.CountsFor(shape)
-	fmt.Fprintf(w, "\n  contained %d   ESCAPED %d   OVERBLOCKED %d   inert %d\n",
-		n[Contained], n[Escaped], n[Overblocked], n[Inert])
+	fmt.Fprintf(w, "\n  contained %d   ESCAPED %d   OVERBLOCKED %d   inert %d   documented %d\n",
+		n[Contained], n[Escaped], n[Overblocked], n[Inert], n[Documented])
 }
 
 func mark(v Verdict) string {
@@ -141,6 +169,8 @@ func mark(v Verdict) string {
 		return "OVERBLOCK"
 	case Inert:
 		return "inert"
+	case Documented:
+		return "documented"
 	}
 	return "?"
 }

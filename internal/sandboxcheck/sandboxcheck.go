@@ -58,6 +58,50 @@
 // are the rows that become escapes the day the feature lands, so they are
 // printed as a ledger rather than hidden, and the day one of them starts
 // working it moves to CONTAINED or to ESCAPED on its own.
+//
+// # Why a documented escape is a verdict and not a paragraph
+//
+// One route here escapes on purpose. An allowed `exec` starts a process that
+// makes its own system calls, so a child of the shell reads a path the
+// policy denies — and that is not a defect to be fixed inside this
+// repository, because containing a running child needs the operating system
+// and the substrate does not ship an OS backend. The design doc states it
+// outright, and since #4411 the grammar makes a policy state it too: the
+// rule is spelled `allow exec-unconfined`.
+//
+// The obvious thing to do with a hole like that is leave it out of the sweep
+// and describe it in prose. That was the state this package was in, and it
+// is worse than it looks. #4409 found the route by measuring it by hand;
+// what the table said was `exec/external`, which asks the *opposite*
+// question — that a **denied** exec is refused — and whose one-line reason
+// states the premise of the missing row and then grades the other half of
+// it. A hole nothing measures is indistinguishable from a hole nobody has
+// found, which is this package's own founding argument turned on the
+// package.
+//
+// Grading it ESCAPED does not work either: the row would be permanently red,
+// `make sandbox` would exit non-zero forever, and a red light nobody can
+// ever turn green is trained away inside a week.
+//
+// So it has a verdict of its own, and the verdict earns two things a
+// paragraph cannot:
+//
+//   - the day a Gate implementation contains the process tree — a seccomp
+//     backend, Landlock, a sandbox profile — the denied run stops leaking and
+//     the row moves to CONTAINED **by itself**, rather than waiting for
+//     somebody to remember that a paragraph has gone stale;
+//   - if the route ever stops working at all, the ungated run fails and it
+//     reports INERT, out loud, instead of a documented hole quietly becoming
+//     an unmeasured one.
+//
+// Both halves of the discipline above still apply to it, and neither is a
+// formality. The route must work ungated or it is measuring nothing, and it
+// is graded under both denied shapes, since #2044 was live for as long as it
+// was because of the shape rather than the route.
+//
+// A DOCUMENTED row is not a pass. It does not fail the sweep, and it is
+// printed as a ledger of its own, each row naming the line of the design doc
+// that accounts for it.
 package sandboxcheck
 
 import (
@@ -89,6 +133,13 @@ const (
 	// two runs say nothing about the gate. Not a pass and not a failure —
 	// a note that this way in is not open yet.
 	Inert
+	// Documented means the route escaped, and the design doc says it does.
+	//
+	// It is the same three runs as Escaped and the same answer from the
+	// filesystem; what differs is that a line of docs/design/sandboxing.md
+	// names this hole and gives the reason it is one. See "Why a documented
+	// escape is a verdict and not a paragraph" on the package.
+	Documented
 )
 
 func (v Verdict) String() string {
@@ -101,6 +152,8 @@ func (v Verdict) String() string {
 		return "OVERBLOCKED"
 	case Inert:
 		return "inert"
+	case Documented:
+		return "documented"
 	}
 	return "?"
 }
@@ -291,6 +344,10 @@ type Result struct {
 	Dialect string
 	Shape   Shape
 	Verdict Verdict
+	// Cites is where the design doc accounts for this route escaping, copied
+	// off the route so the report can print the ledger without looking the
+	// row back up. Empty for every route that is not meant to escape.
+	Cites string
 	// The three runs, kept so a row that did not come out contained can be
 	// explained without running it again.
 	Runs [3]Outcome
@@ -331,6 +388,11 @@ func (r Report) CountsFor(shape Shape) map[Verdict]int {
 // An inert row is not a failure: it is a route that is not open, which is a
 // fact about the shell rather than a fault in the gate. An overblocked one
 // is, for the reason given on the constant.
+//
+// Nor is a documented one. It is the one row here that escapes on purpose,
+// and a permanently red light is a light people learn to read past — which
+// would cost the sweep the rows that are red for a reason. It is counted and
+// laid out in a ledger instead; see the package comment.
 func (r Report) Failed() bool {
 	n := r.Counts()
 	return n[Escaped] > 0 || n[Overblocked] > 0
@@ -411,7 +473,7 @@ func run(cols []column, label, root, only string) (Report, error) {
 			// exists to prevent, and it is not worth saving: the extra runs
 			// cost seconds.
 			for _, shape := range Shapes {
-				res := Result{Route: rt.Name, Dialect: col.dialect, Shape: shape}
+				res := Result{Route: rt.Name, Dialect: col.dialect, Shape: shape, Cites: rt.Cites}
 				var did [3]bool
 				for _, mode := range []Mode{Ungated, Denied, Allowed} {
 					n++
@@ -432,7 +494,7 @@ func run(cols []column, label, root, only string) (Report, error) {
 						break
 					}
 				}
-				res.Verdict = verdictOf(did)
+				res.Verdict = verdictOf(did, rt.Cites != "")
 				rep.Results = append(rep.Results, res)
 			}
 		}
@@ -457,11 +519,22 @@ func run(cols []column, label, root, only string) (Report, error) {
 // inert whatever the other two did, because a policy cannot be credited with
 // stopping something that was never going to happen — which is the failure
 // this whole instrument is shaped around.
-func verdictOf(did [3]bool) Verdict {
+//
+// documented says the design doc accounts for this route escaping, and it is
+// read in exactly one clause: it softens ESCAPED and touches nothing else.
+// That placement is the whole of what makes the verdict worth having rather
+// than a way of hiding a row. The inert clause still comes first, so a
+// documented route that stops working says so instead of staying quiet; and
+// a documented route that the gate starts containing falls through to
+// CONTAINED on its own, with nobody editing this file.
+func verdictOf(did [3]bool, documented bool) Verdict {
 	switch {
 	case !did[Ungated]:
 		return Inert
 	case did[Denied]:
+		if documented {
+			return Documented
+		}
 		return Escaped
 	case !did[Allowed]:
 		return Overblocked
@@ -557,7 +630,17 @@ func newFixture(root string, n int, shape Shape) (Fixture, error) {
 // The allowed set grants the whole tree through `path`, which is the selector
 // covering every kind that names one, plus signals, which name a process
 // instead and so have to be said separately.
-func policy(f Fixture, mode Mode) (string, error) {
+//
+// grant is the denied set's one opening, and it belongs to a single route —
+// see Route.Grant, which is the only caller that passes a non-empty one. It
+// exists because "an allowed exec escapes" is not a question this shape can
+// otherwise ask: with no exec rule at all, the child never starts, the row
+// grades contained, and the contained verdict would be about the exec having
+// been refused rather than about the route. Appended after the denies, but
+// the order is not what makes it safe: what makes it safe is that it grants
+// the exec slot only, so the path rules the route aims past are untouched.
+// TestOnlyADocumentedRouteMayOpenTheDeniedPolicy holds that line.
+func policy(f Fixture, mode Mode, grant []string) (string, error) {
 	var lines []string
 	switch mode {
 	case Ungated:
@@ -583,6 +666,7 @@ func policy(f Fixture, mode Mode) (string, error) {
 				"deny path "+f.Denied,
 				"deny path "+f.Denied+"/**")
 		}
+		lines = append(lines, grant...)
 	case Allowed:
 		// `exec` is named on its own because `path` does not reach it (#4409),
 		// and it is named here because this shape has to permit *everything*
@@ -604,7 +688,7 @@ func policy(f Fixture, mode Mode) (string, error) {
 
 // run executes one route once.
 func (rt Route) run(col column, f Fixture, mode Mode) Outcome {
-	p, err := policy(f, mode)
+	p, err := policy(f, mode, rt.Grant)
 	if err != nil {
 		return Outcome{Err: err.Error(), Code: -1}
 	}

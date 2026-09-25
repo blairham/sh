@@ -1289,6 +1289,41 @@ leftovers.
 escapes the day the feature lands. They are printed rather than hidden, and
 each moves to `contained` or `ESCAPED` on its own when it starts working.
 
+**`documented` is the fifth verdict and there is exactly one row in it.** An
+allowed `exec` starts a process that makes its own system calls, so its child
+reads a path the policy denies — which no amount of work inside this repository
+closes, because containing a running child needs the operating system.
+`docs/design/sandboxing.md` has said so since it was written, and the grammar
+has said so since #4409 made the rule `allow exec-unconfined`.
+
+The row exists because **a hole nothing measures is indistinguishable from a
+hole nobody has found**, which is this instrument's founding argument turned on
+the instrument. It was described in prose and left out of the sweep, and what
+the table actually carried was `exec/external`, which asks the *opposite*
+question — that a **denied** exec is refused — and whose one-line reason states
+the premise of the missing row before grading the other half of it (#4410).
+Grading it `ESCAPED` was not the answer either: the row would be permanently
+red, `make sandbox` would exit non-zero forever, and a light nobody can turn
+green is one people learn to read past.
+
+So it is a verdict, and the verdict earns two things the paragraph could not.
+**The day a `Gate` contains the process tree the row goes `contained` by
+itself**, rather than waiting for somebody to notice a document has gone stale;
+and **the day the route stops working it goes `inert` out loud**, rather than a
+documented hole quietly becoming an unmeasured one. It does not fail the sweep,
+it is counted, and it is printed in a ledger of its own naming the section of
+the design doc that accounts for it.
+
+**It is the one row whose denied policy is opened, and that is the part to
+watch.** The ordinary denied set grants no exec at all, so without a grant the
+child never starts and the row would grade `contained` — for the wrong reason
+entirely, the exec having been refused rather than the deny having held.
+`Route.Grant` is that opening and is deliberately narrow: only a route that
+cites a reason may carry one, and it may only grant the exec slot, both enforced
+by tests rather than by comment. The falsifier is one command — the same script
+under the denied policy without the grant is `exec: refused` — and it is what
+says the field is load-bearing rather than a way out.
+
 **The ledger is empty, and emptying it is the worked example of what it is
 for.** Three features landed against it over #2260, #2271 and #2283 —
 `zsh/mapfile`, bash's `history` and zsh's `fc` file letters — and every one

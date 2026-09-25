@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -26,19 +27,19 @@ func TestARouteThatDoesNothingUngatedIsInertRatherThanContained(t *testing.T) {
 	// Nothing happened in any of the three runs — which is what a shell
 	// that failed to start looks like, and what sixteen "refused" rows once
 	// looked like.
-	if got := verdictOf([3]bool{false, false, false}); got != Inert {
+	if got := verdictOf([3]bool{false, false, false}, false); got != Inert {
 		t.Errorf("verdict = %v, want %v: a route that never worked cannot be a pass", got, Inert)
 	}
 	// And it stays inert even when the denied and allowed runs would have
 	// read well on their own.
-	if got := verdictOf([3]bool{false, false, true}); got != Inert {
+	if got := verdictOf([3]bool{false, false, true}, false); got != Inert {
 		t.Errorf("verdict = %v, want %v", got, Inert)
 	}
 }
 
 func TestARouteThePolicyDidNotStopIsAnEscape(t *testing.T) {
 	t.Parallel()
-	if got := verdictOf([3]bool{true, true, true}); got != Escaped {
+	if got := verdictOf([3]bool{true, true, true}, false); got != Escaped {
 		t.Errorf("verdict = %v, want %v", got, Escaped)
 	}
 }
@@ -48,27 +49,29 @@ func TestARouteThePolicyDidNotStopIsAnEscape(t *testing.T) {
 // sandboxing off over.
 func TestARoutePermittedAndStillRefusedIsOverblocked(t *testing.T) {
 	t.Parallel()
-	if got := verdictOf([3]bool{true, false, false}); got != Overblocked {
+	if got := verdictOf([3]bool{true, false, false}, false); got != Overblocked {
 		t.Errorf("verdict = %v, want %v", got, Overblocked)
 	}
 }
 
 func TestContainedNeedsAllThreeRunsToAgree(t *testing.T) {
 	t.Parallel()
-	if got := verdictOf([3]bool{true, false, true}); got != Contained {
+	if got := verdictOf([3]bool{true, false, true}, false); got != Contained {
 		t.Errorf("verdict = %v, want %v", got, Contained)
 	}
 }
 
 // Only an escape or an overblocked row is a failure. An inert one is a fact
 // about what the shell implements, and failing on it would mean the sweep
-// went red for a feature nobody has written yet.
+// went red for a feature nobody has written yet. A documented one is a fact
+// about what an OS-less boundary can claim, and failing on it would mean the
+// sweep went red permanently — which is the state a reader stops reading.
 func TestOnlyABrokenBoundaryFailsTheSweep(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
 		v    Verdict
 		fail bool
-	}{{Contained, false}, {Inert, false}, {Escaped, true}, {Overblocked, true}} {
+	}{{Contained, false}, {Inert, false}, {Escaped, true}, {Overblocked, true}, {Documented, false}} {
 		rep := Report{Results: []Result{{Verdict: c.v}}}
 		if got := rep.Failed(); got != c.fail {
 			t.Errorf("%v: Failed() = %v, want %v", c.v, got, c.fail)
@@ -256,9 +259,9 @@ func TestTheRelativeNameFollowsTheShape(t *testing.T) {
 	}
 }
 
-func readPolicy(t *testing.T, f Fixture, mode Mode) string {
+func readPolicy(t *testing.T, f Fixture, mode Mode, grant ...string) string {
 	t.Helper()
-	at, err := policy(f, mode)
+	at, err := policy(f, mode, grant)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +281,7 @@ func TestThePolicyIsNotInsideTheWorkspaceItGoverns(t *testing.T) {
 	dir := t.TempDir()
 	f := Fixture{Root: dir, Ws: filepath.Join(dir, "ws")}
 	for _, mode := range []Mode{Denied, Allowed} {
-		at, err := policy(f, mode)
+		at, err := policy(f, mode, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -293,7 +296,7 @@ func TestThePolicyIsNotInsideTheWorkspaceItGoverns(t *testing.T) {
 // happened to refuse would grade inert and hide a real escape.
 func TestTheUngatedRunHasNoPolicyAtAll(t *testing.T) {
 	t.Parallel()
-	at, err := policy(Fixture{Root: t.TempDir()}, Ungated)
+	at, err := policy(Fixture{Root: t.TempDir()}, Ungated, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,4 +372,225 @@ func mustRead(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// The DOCUMENTED verdict is the one addition here that could be used to make
+// a red row go away, so the tests below are about the ways it must not.
+//
+// It softens exactly one clause of verdictOf, and the point of that placement
+// is that the row keeps reporting on itself: it goes green on its own the day
+// the gate contains the process tree, and it goes inert out loud the day the
+// route stops working. Both of those would be lost by a verdict that simply
+// meant "ignore this row".
+
+// The day a Gate implementation contains the process tree, the denied run
+// stops leaking and this has to become an ordinary pass — with nobody
+// remembering to come back and edit the table. That is half of why the hole
+// is a row rather than a paragraph.
+func TestADocumentedRouteThatStopsEscapingBecomesContainedOnItsOwn(t *testing.T) {
+	t.Parallel()
+	if got := verdictOf([3]bool{true, false, true}, true); got != Contained {
+		t.Errorf("verdict = %v, want %v: a documented row must go green by itself once the gate holds it", got, Contained)
+	}
+}
+
+// And the other half. A documented hole that quietly stops being measured is
+// worse than an undocumented one, because the ledger goes on printing a claim
+// nothing is checking. The inert clause comes first for exactly this.
+func TestADocumentedRouteThatStopsWorkingIsInertRatherThanDocumented(t *testing.T) {
+	t.Parallel()
+	for _, did := range [][3]bool{{false, false, false}, {false, true, true}} {
+		if got := verdictOf(did, true); got != Inert {
+			t.Errorf("verdictOf(%v, documented) = %v, want %v: a route that does nothing ungated is measuring nothing, documented or not", did, got, Inert)
+		}
+	}
+}
+
+// Overblocked is a defect wherever it turns up. A documented row whose
+// *permitting* policy refuses it is a gate that cannot be opened where it was
+// told to, which the citation says nothing about.
+func TestADocumentedRouteIsStillOverblockedWhenAPermittingPolicyRefusesIt(t *testing.T) {
+	t.Parallel()
+	if got := verdictOf([3]bool{true, false, false}, true); got != Overblocked {
+		t.Errorf("verdict = %v, want %v", got, Overblocked)
+	}
+}
+
+// The verdict has to change something. If `documented` were ignored the two
+// tests above would still pass — every one of their cases is a clause the
+// flag does not reach — and the row would be graded ESCAPED while reading as
+// though it had been accounted for.
+func TestTheDocumentedFlagIsWhatSeparatesThisFromAnEscape(t *testing.T) {
+	t.Parallel()
+	const escaping = true
+	if got := verdictOf([3]bool{true, escaping, true}, false); got != Escaped {
+		t.Errorf("undocumented: verdict = %v, want %v", got, Escaped)
+	}
+	if got := verdictOf([3]bool{true, escaping, true}, true); got != Documented {
+		t.Errorf("documented: verdict = %v, want %v", got, Documented)
+	}
+}
+
+// A citation nobody opens is prose, and prose is what this row exists to stop
+// the hole being. The section has to still be in the file it names.
+func TestTheDocumentedRowCitesSomethingThatIsActuallyThere(t *testing.T) {
+	t.Parallel()
+	file, section, ok := strings.Cut(DesignDocSection, " § ")
+	if !ok {
+		t.Fatalf("DesignDocSection = %q, want `<file> § <section heading>`", DesignDocSection)
+	}
+	// From internal/sandboxcheck up to the repository root.
+	b, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(file)))
+	if err != nil {
+		t.Fatalf("the documented row cites %s, which cannot be read: %v", file, err)
+	}
+	if !strings.Contains(string(b), "## "+section) {
+		t.Errorf("%s has no section %q: the citation has rotted, and a rotted citation is why this is a heading and not a line number", file, section)
+	}
+	// And the section has to be the one that accounts for the escape, not
+	// merely a heading that still exists. This is the sentence the row is
+	// standing on, and #4411 is the grammar half of it.
+	for _, claim := range []string{"contains the shell, not the process tree", "exec-unconfined"} {
+		if !strings.Contains(string(b), claim) {
+			t.Errorf("%s no longer says %q, so the documented row is citing a reason that is gone", file, claim)
+		}
+	}
+}
+
+// Every route that carries a citation is claiming its escape is the operating
+// system's to close, and every route that does not is claiming the opposite.
+// A row that escapes without a citation must stay ESCAPED and red.
+func TestOnlyRoutesThatMeanToEscapeCarryACitation(t *testing.T) {
+	t.Parallel()
+	var cited []string
+	for _, rt := range Routes() {
+		if rt.Cites != "" {
+			cited = append(cited, rt.Name)
+			if rt.Cites != DesignDocSection {
+				t.Errorf("route %s cites %q, which is not the section this package checks exists", rt.Name, rt.Cites)
+			}
+		}
+	}
+	// Named rather than counted, so that adding a second documented hole is
+	// a deliberate edit to this list with a reason in the commit, rather
+	// than a number going up.
+	want := []string{"exec/child-reads-denied"}
+	if !slices.Equal(cited, want) {
+		t.Errorf("documented routes = %v, want %v: a new one needs the argument on the package comment made for it too", cited, want)
+	}
+}
+
+// Grant opens the denied policy, which is the one thing in this package that
+// every verdict turns on. Two limits, both narrow on purpose: only a route
+// that is admitting an escape may use it, and it may only grant the exec
+// slot — so the path rules a route aims past are never what it loosened.
+func TestOnlyADocumentedRouteMayOpenTheDeniedPolicy(t *testing.T) {
+	t.Parallel()
+	for _, rt := range Routes() {
+		if len(rt.Grant) == 0 {
+			continue
+		}
+		if rt.Cites == "" {
+			t.Errorf("route %s opens the denied policy with %v but does not cite a reason: a grant that is not admitting a documented hole is an instrument grading itself",
+				rt.Name, rt.Grant)
+		}
+		for _, rule := range rt.Grant {
+			if !strings.HasPrefix(rule, "allow exec-unconfined ") {
+				t.Errorf("route %s grants %q; only `allow exec-unconfined` may be granted, or the row could be passing on a path rule it was supposed to be refused by",
+					rt.Name, rule)
+			}
+		}
+	}
+}
+
+// And what that grant does to the file, since the base policy test asserts a
+// single allow and would not notice a second one arriving for one route.
+func TestAGrantAddsTheExecRuleAndLeavesTheDeniesAlone(t *testing.T) {
+	t.Parallel()
+	for _, shape := range Shapes {
+		f, err := newFixture(t.TempDir(), 1, shape)
+		if err != nil {
+			t.Fatal(err)
+		}
+		base := readPolicy(t, f, Denied)
+		granted := readPolicy(t, f, Denied, "allow exec-unconfined /bin/cat")
+		// Every line of the ungranted policy survives, in order. The grant
+		// is an addition and must not be able to be a replacement.
+		if !strings.HasPrefix(granted, base) {
+			t.Errorf("%s: granted policy\n%s\ndoes not start with the ungranted one\n%s", shape, granted, base)
+		}
+		if got := strings.TrimPrefix(granted, base); got != "allow exec-unconfined /bin/cat\n" {
+			t.Errorf("%s: the grant added %q, want the one exec rule", shape, got)
+		}
+		// The denies the route is graded against are still there.
+		if strings.Count(granted, "deny path ") != strings.Count(base, "deny path ") {
+			t.Errorf("%s: the grant changed the denies:\n%s", shape, granted)
+		}
+	}
+}
+
+// The grant reaches the shell that runs the route, not merely the file. A
+// route whose script never sees it would grade contained for the wrong
+// reason — the exec refused rather than the deny holding — which is the
+// false calm this whole package is shaped around.
+func TestTheGrantOnARouteReachesThePolicyThatRouteIsRunUnder(t *testing.T) {
+	t.Parallel()
+	var documented Route
+	for _, rt := range Routes() {
+		if rt.Cites != "" {
+			documented = rt
+		}
+	}
+	if len(documented.Grant) == 0 {
+		t.Fatal("the documented route carries no grant, so this test is measuring nothing")
+	}
+	f, err := newFixture(t.TempDir(), 1, Outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at, err := policy(f, Denied, documented.Grant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range documented.Grant {
+		if !strings.Contains(string(b), rule) {
+			t.Errorf("the denied policy the route runs under is %q, which does not carry %q", b, rule)
+		}
+	}
+	// The program the script actually names has to be the program the grant
+	// names, or the grant is exact and irrelevant and the row grades on a
+	// refused exec.
+	for _, rule := range documented.Grant {
+		prog := strings.TrimPrefix(rule, "allow exec-unconfined ")
+		if !strings.Contains(documented.Script, prog) {
+			t.Errorf("route %s grants %s but its script %q never runs it", documented.Name, prog, documented.Script)
+		}
+	}
+}
+
+// The ledger is the whole visible output of the verdict. A documented row
+// that printed like any other escape, or that printed without saying where
+// the reason is written, would leave the reader exactly where the paragraph
+// left them.
+func TestTheReportLaysOutTheDocumentedRowsAndSaysWhereTheReasonIs(t *testing.T) {
+	t.Parallel()
+	rep := Report{Shell: "test", Results: []Result{{
+		Route: "exec/child-reads-denied", Dialect: "bash", Shape: Outside,
+		Verdict: Documented, Cites: DesignDocSection,
+	}}}
+	text := rep.Text(false)
+	for _, want := range []string{"exec/child-reads-denied", DesignDocSection, "documented 1"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("report does not mention %q:\n%s", want, text)
+		}
+	}
+	// And it is not reported as a failure, which is the whole reason it is
+	// not spelled ESCAPED.
+	if rep.Failed() {
+		t.Error("a documented row failed the sweep")
+	}
 }

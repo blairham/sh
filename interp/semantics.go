@@ -22032,6 +22032,36 @@ type Semantics struct {
 	// carries DEBUG into the child and not ERR.
 	DebugTrapRunsInSubshells Answer
 
+	// DebugTrapRunsBeforeTheCommand fires the DEBUG trap ahead of the command
+	// it belongs to rather than behind it. Yes everywhere the condition
+	// exists, and it is the only one of these axes a *script* can move: zsh
+	// spells it `DEBUG_BEFORE_CMD`, on by default, and `unsetopt` puts every
+	// firing behind the command it would have preceded.
+	//
+	// Measured on zsh 5.9.2 under `-f`, 2026-09-25, with the action printing
+	// `$LINENO` and the file's own line numbers beside it. `unsetopt
+	// DEBUG_BEFORE_CMD` is an exact mirror rather than a rule of its own:
+	// every firing keeps its line, its command and its order relative to the
+	// other firings, and only its position around the command moves.
+	//
+	//	trap … DEBUG   on line 2     fires nothing before, `2` after
+	//	print A        on line 3     `3` then A, against A then `3`
+	//	if/then/fi     3, 5          before: 3 (head), 3, 5, then C
+	//	                             after:  3, then C, 5, and 3 last
+	//	for/do/done    7, 9          before: 7 (head), 9, then 1
+	//	                             after:  1, then 9, and 7 last
+	//	print a | cat  one firing    before the `a`, against after it
+	//
+	// So a compound's head fires *after* the whole construct in this state,
+	// at the head's own line, behind everything its body fired — which is
+	// what makes the two readings one question about placement and not a
+	// second table of which commands fire.
+	//
+	// The status the action sees moves with it: `false` on its own line
+	// fires with `$?` naming the previous command before, and naming the
+	// `false` itself after. The command's own status is put back either way.
+	DebugTrapRunsBeforeTheCommand Answer
+
 	// A subshell starts with the parent's handled traps back at their
 	// defaults and only an ignored signal still ignored — POSIX, and
 	// unanimous in the working state. What `trap` *lists* in the child is

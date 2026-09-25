@@ -36,6 +36,7 @@ import (
 func pipeSem(how DebugTrapPipeline, subshells, lastHere Answer) func(*Semantics) {
 	return func(s *Semantics) {
 		s.TrapHasDebugCondition = Yes
+		s.DebugTrapRunsBeforeTheCommand = Yes
 		s.DebugTrapRunsInsideCalls = No
 		s.DebugTrapRunsInSubshells = subshells
 		s.DebugTrapRefiresOnEnteringAFunction = No

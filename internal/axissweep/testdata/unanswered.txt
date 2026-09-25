@@ -87,6 +87,7 @@ ash   CompoundRedirectionFailureIsJudged
 ash   ConditionWholeArraySubscript
 ash   CoprocEndsInAnArray
 ash   DebugTrapRefiresOnEnteringAFunction
+ash   DebugTrapRunsBeforeTheCommand
 ash   DebugTrapRunsInSubshells
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
@@ -360,6 +361,7 @@ dash  CompoundPipelineStatusRecord
 dash  ConditionWholeArraySubscript
 dash  CoprocEndsInAnArray
 dash  DebugTrapRefiresOnEnteringAFunction
+dash  DebugTrapRunsBeforeTheCommand
 dash  DebugTrapRunsInSubshells
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter

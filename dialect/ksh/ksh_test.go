@@ -203,6 +203,8 @@ func TestSemantics(t *testing.T) {
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
+		// Ahead of the command, and no option here moves it.
+		{"DebugTrapRunsBeforeTheCommand", s.DebugTrapRunsBeforeTheCommand, interp.Yes},
 		// And once per command, not twice for a call: the nested snippet
 		// `trap "echo D" DEBUG; g(){ echo g; }; f(){ g; }; f` writes three
 		// D lines here where bash writes five (#2437). Measured on ksh93,

@@ -2647,6 +2647,10 @@ func Semantics() interp.Semantics {
 	// is the first element's own action written down the pipe.
 	s.DebugTrapPipelines = interp.DebugTrapPipelineInEachElement
 	s.DebugTrapRunsInSubshells = interp.Yes
+	// Ahead of the command, and the same file measured the same day writes
+	// the same five lines here as in the bash columns — `2`, `A`, `3`,
+	// `4 st=1`, `B`. There is no option in this shell that moves it.
+	s.DebugTrapRunsBeforeTheCommand = interp.Yes
 	// `(trap)` and `$(trap)` still list the parent's traps, EXIT included —
 	// measured, and the working state is still reset: `trap 'echo x' USR1;
 	// (trap)` prints the trap it will not fire. A pipeline element or a

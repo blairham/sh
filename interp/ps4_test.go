@@ -213,6 +213,7 @@ func TestATrapBodyCountsAsIndirectionExceptExits(t *testing.T) {
 			sem := permissive()
 			sem.TrapHasReturnCondition = Yes
 			sem.TrapHasDebugCondition = Yes
+			sem.DebugTrapRunsBeforeTheCommand = Yes
 			sem.TrapHasErrCondition = Yes
 			style := PromptStyle{Expand: PromptExpandsAlways}
 			on := tracedSem(t, c.src, sem, Diagnostics{TraceQuoting: QuoteShell, TracePrefixRepeatsAtIndirection: true}, style, "")

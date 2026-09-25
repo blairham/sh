@@ -189,6 +189,8 @@ func TestSemantics(t *testing.T) {
 		// 2026-09-12 (#2437).
 		{"DebugTrapRefiresOnEnteringAFunction", s.DebugTrapRefiresOnEnteringAFunction, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.No},
+		// Ahead of the command, and no option here moves it.
+		{"DebugTrapRunsBeforeTheCommand", s.DebugTrapRunsBeforeTheCommand, interp.Yes},
 		// The parent's trap listing survives every boundary but a process
 		// substitution, EXIT trap included, and an inherited ignore is
 		// listed like any other trap.

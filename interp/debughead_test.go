@@ -26,6 +26,7 @@ import (
 func headSem(heads DebugTrapHeads) func(*Semantics) {
 	return func(s *Semantics) {
 		s.TrapHasDebugCondition = Yes
+		s.DebugTrapRunsBeforeTheCommand = Yes
 		s.DebugTrapRunsInsideCalls = No
 		s.DebugTrapRunsInSubshells = No
 		s.DebugTrapRefiresOnEnteringAFunction = No

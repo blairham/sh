@@ -3445,6 +3445,19 @@ type Runner struct {
 	inErrTrap    bool
 	inDebugTrap  bool
 	inReturnTrap bool
+	// debugHeld are the DEBUG firings this command has put off until it has
+	// finished, for the dialect that fires behind the command rather than
+	// ahead of it — see Semantics.DebugTrapRunsBeforeTheCommand. Held rather
+	// than fired late in place, because what the action reads about the
+	// command has moved on by then: each entry carries the line and the
+	// running-command record the firing would have had, and the flush puts
+	// both back around the body.
+	//
+	// The slot is swapped for an empty one at every command and every
+	// pipeline and put back as each ends, so a firing held by an enclosing
+	// compound is not flushed by something in its body. See
+	// Runner.debugAfterScope.
+	debugHeld []debugHeld
 	// errTrapFired says the ERR trap has already fired for the failure the
 	// status now reports. A group, a loop, an `if` and a `case` report the
 	// status their last command left, and judging that status again is how
@@ -4226,6 +4239,12 @@ func (r *Runner) clone() *Runner {
 	// into the middle of the operand it is waiting for. See
 	// interp/compoundoperandorder.go.
 	c.heldTrace = heldTrace{}
+	// And a DEBUG firing a command is holding back belongs to the shell
+	// holding it, for the reason the trace line above does: the command that
+	// held it is this shell's, the flush is this shell's, and a copy running
+	// on a goroutine must neither fire it nor append into the array it sits
+	// in. See Runner.debugAfterScope.
+	c.debugHeld = nil
 	// A subshell body is not running inside the frames the copy inherited.
 	c.funcFloor = c.depth
 	// And a subshell is not running inside the loop the copy was cloned from:
@@ -5893,6 +5912,13 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 }
 
 func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
+	// The pipeline's own DEBUG firing is held here rather than in an
+	// element's slot: what it precedes is the whole statement, so a
+	// dialect that fires behind the command fires behind the last element
+	// and not behind the first. See Runner.debugAfterScope.
+	if r.debugTrapRunsBehindTheCommand() {
+		defer r.debugAfterScope(ctx)()
+	}
 	// Consumed here so that only the timed clause's own body is measured
 	// per element — a pipeline nested anywhere inside one of its elements
 	// is that element's work, not a row of the report.
@@ -5996,6 +6022,15 @@ func (r *Runner) negationInverts() bool {
 }
 
 func (r *Runner) command(ctx context.Context, c syntax.Command) error {
+	// A DEBUG firing this command holds until it has run is flushed here, on
+	// the way back out — see Runner.debugAfterScope for why the slot is the
+	// command's and not the runner's. Installed only in the one state that
+	// holds anything, because this is the door every command in the shell
+	// goes through and the other five columns must not pay a closure for a
+	// question they answer the other way.
+	if r.debugTrapRunsBehindTheCommand() {
+		defer r.debugAfterScope(ctx)()
+	}
 	// Whatever ended the last command is not what ends this one. Cleared
 	// here rather than beside each assignment to status, because this is the
 	// one door every command goes through.

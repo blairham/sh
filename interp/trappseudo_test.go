@@ -28,6 +28,7 @@ func pseudoSem() Semantics {
 	s := CoreSemantics()
 	s.TrapHasErrCondition = Yes
 	s.TrapHasDebugCondition = Yes
+	s.DebugTrapRunsBeforeTheCommand = Yes
 	s.TrapHasReturnCondition = Yes
 	s.TrapBodyRunsWhatParsed = Yes
 	s.ErrTrapRunsInsideFunctions = No

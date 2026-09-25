@@ -33,6 +33,7 @@ func runWithSourced(t *testing.T, inc, src string) string {
 	// `trap` outright, which would make every count below zero.
 	sem.TrapHasReturnCondition = Yes
 	sem.TrapHasDebugCondition = Yes
+	sem.DebugTrapRunsBeforeTheCommand = Yes
 	sem.TrapHasErrCondition = Yes
 	sem.SetHasTheFunctraceLetter = Yes
 	// And the axis for the trap reaching a call it was not set in, at the

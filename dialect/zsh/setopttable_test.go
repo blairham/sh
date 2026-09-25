@@ -23,8 +23,14 @@ import "testing"
 // (#3093). `octalzeroes` is the seventh and is not read by a session at all:
 // it moves Semantics.ArithLeadingZeroIsOctal, which is what makes `$(( 010 ))`
 // eight rather than ten, and it was accepted and inert until #2884.
+// `debugbeforecmd` is the eighth: it moves
+// Semantics.DebugTrapRunsBeforeTheCommand, which is where the DEBUG trap
+// fires, and until #4473 both states of it produced the same output.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
-	for _, base := range []string{"histignorespace", "histignoredups", "promptsp", "promptcr", "interactivecomments", "banghist", "autolist"} {
+	for _, base := range []string{
+		"histignorespace", "histignoredups", "promptsp", "promptcr",
+		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
+	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
 			t.Fatalf("%s is not in the table at all", base)
@@ -45,7 +51,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 138; recordedCount != want {
+	if want := 137; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

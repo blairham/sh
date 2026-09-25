@@ -34,6 +34,7 @@ func runningRun(t *testing.T, src string, set func(*Semantics)) string {
 	}
 	sem := permissive()
 	sem.TrapHasDebugCondition = Yes
+	sem.DebugTrapRunsBeforeTheCommand = Yes
 	sem.DebugTrapRunsInsideCalls = No
 	sem.DebugTrapRunsInSubshells = No
 	sem.DebugTrapRefiresOnEnteringAFunction = No

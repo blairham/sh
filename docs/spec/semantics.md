@@ -7591,11 +7591,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 15 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 16 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 8 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All eight are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 5 | `aliases`, `autocd`, `banghist`, `checkjobs` and `cprecedences`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, and the arithmetic operators really do change the order they bind in |
-| **recorded** | 138 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 137 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -7804,7 +7804,30 @@ axis of its own, `Semantics.HistoryExpansionInAScript`: bash expands a script
 it reads and zsh and ksh93 do not, whatever their options say (#3111). See
 docs/spec/history.md.
 
-So 140 of 185 are recorded, the count above is the one produced by counting
+`debugbeforecmd` is the most recent to leave (#4473), and it is the sharpest
+example of the bargain failing quietly rather than loudly. DEBUG_BEFORE_CMD
+decides whether the DEBUG trap fires ahead of each command or behind it, this
+shell had only the *ahead* reading, and `unsetopt DEBUG_BEFORE_CMD` went into
+the recorded store and changed nothing — so a debugger that asked for the
+other placement got the first one, silently, and the two states of the option
+produced **byte-identical output**. No complaint, no missing feature to
+notice, and nothing in the listings to contradict: the option reported itself
+off while the shell went on behaving as though it were on. It is
+`Semantics.DebugTrapRunsBeforeTheCommand` now, and it is the only one of the
+DEBUG trap's axes a running script can move.
+
+Two things about it are worth keeping. The first is that the reading is a
+*mirror* rather than a second rule: every firing keeps its line, its command
+and its order relative to the other firings, and only its side of the command
+moves — so a compound's head fires behind the whole construct, at the head's
+own line, after everything its body fired. The second is the one case the
+mirror does not cover, and it is the case the reduction in #4473 opens with:
+the `trap` command that *sets* the trap fires for itself in the behind
+reading, because by the time the placement is decided there is a trap to fire.
+A held firing therefore has to be held whether or not a trap is set when it is
+made, and what comes of it is decided at the flush.
+
+So 139 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

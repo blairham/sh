@@ -481,4 +481,15 @@ func TestEndOfInputSurvivesARedefinedCompletionWidget(t *testing.T) {
 	if b, present := zsh.KeyBindings(r, repl.KeymapMain)["\x04"]; !present || b != (repl.Binding{}) {
 		t.Errorf("^D removed = %#v, want present and doing nothing", b)
 	}
+
+	// **Return is the other editorControlKey and it is deliberately not in
+	// endOfInputKeys.** A plugin's wrapper around `accept-line` is exactly a
+	// redefinition that leaves the key where it was, and repl runs the
+	// wrapper and then ends the line for it (#2082) — so there, unlike here,
+	// the redefinition must take the key. Pinned because the restriction to
+	// one key is the whole of what keeps that true, and nothing else asked.
+	r = bindkeyRunner(t, "f(){ :; }\nzle -N accept-line f\n")
+	if got, want := zsh.KeyBindings(r, repl.KeymapMain)["\r"], (repl.Binding{Function: "accept-line"}); got != want {
+		t.Errorf("Return = %#v, want %#v", got, want)
+	}
 }

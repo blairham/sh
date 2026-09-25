@@ -26,53 +26,77 @@ import (
 // ksh93 `3 4 5`, BusyBox 1.37.0 `64 65 66`. This shell answered `10 11 12` in
 // every dialect. See Semantics.SubstitutionEndPlacement.
 //
-// # What a test in this process can and cannot hold
+// # Against the kernel's own answer, not against digits
 //
-// These numbers come from the kernel's table for the **whole test binary**,
-// so a parallel test that opens a file moves them: this case was first
-// written asserting the three digits and answered `63 58 62` and `13 15 14`
-// under `go test ./interp/`, which is the rule working beside other tests
-// rather than the rule being wrong. So what is asserted here is the
-// **region** each rule allocates from, which no other test can perturb —
-// upward rules never answer below their base, and the downward rule never
-// answers above 63.
+// These numbers come from the kernel's table for the **whole test binary**, so
+// a parallel test that opens a file moves them: this case was first written
+// asserting the three digits and answered `63 58 62` and `13 15 14` under
+// `go test ./interp/`, which is the rule working beside other tests rather
+// than the rule being wrong.
 //
-// The digits themselves are pinned where the table is quiet and the shell is
-// the only thing in the process: against the real shells through each built
-// dialect binary, which is where the four rows above were measured, and by
-// the bash column of `make bash-suite`, which runs a whole file of them.
+// What it asserted next was the **region** each rule allocates from — upward
+// rules never below their base, the downward one never above 63 — and that
+// was a bound on a digit in disguise. `3` and `63` are a statement about how
+// many descriptors the host had open, and on the macOS runner, which handed
+// the binary some seventy of them, every one of the three answers was in the
+// seventies and this case failed for a diff that touched no Go at all
+// (#4459).
+//
+// So the run is compared against **what this rule's own walk finds free**,
+// taken from the kernel the way the neighbors below take theirs. That is
+// exactly as portable as a region, strictly sharper — a region cannot see a
+// rule that lands one number off — and it says the thing the rule says rather
+// than a thing about the table. The table is quiet in the first place because
+// TestMain made it so; see restartWithAQuietDescriptorTable, without which the
+// walk has nothing free to find and says so.
+//
+// A retry for the interloper, on the same terms as the neighbors: another test
+// may take a number *during* a run, and can only ever make the answer worse,
+// so one clean attempt is the claim.
+//
+// The digits themselves are pinned where the shell is the only thing in the
+// process: against the real shells through each built dialect binary, which is
+// where the four rows above were measured, and by the bash column of
+// `make bash-suite`, which runs a whole file of them.
 func TestASubstitutionEndTakesTheDialectsRegion(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		where   SubstEndPlacement
-		base    DescriptorAllocationBase
-		lowest  int
-		highest int
+		name  string
+		where SubstEndPlacement
+		base  DescriptorAllocationBase
+		// from and to are the rule's own walk: where it starts looking and
+		// the last number it would look at.
+		from, to int
 	}{
 		{
-			"the top of the table, at or below 63", SubstitutionEndsAtTheTopOfTheTable,
-			AllocateDescriptorsFromTen, 3, 63,
+			"the top of the table, down from 63", SubstitutionEndsAtTheTopOfTheTable,
+			AllocateDescriptorsFromTen, 63, 10,
 		},
 		{
-			"above the top of the table, at or above 64", SubstitutionEndsAboveTheTopOfTheTable,
-			AllocateDescriptorsFromTen, 64, 1 << 20,
+			"above the top of the table, up from 64", SubstitutionEndsAboveTheTopOfTheTable,
+			AllocateDescriptorsFromTen, 64, 64 + 63,
 		},
 		{
-			"where any descriptor goes, at or above the base of 11",
-			SubstitutionEndsWhereAnyDescriptorGoes, AllocateDescriptorsFromEleven, 11, 1 << 20,
+			"where any descriptor goes, up from the base of 11",
+			SubstitutionEndsWhereAnyDescriptorGoes, AllocateDescriptorsFromEleven, 11, 11 + 63,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := substNumbers(t, runSubstPlacement(t, tc.where, tc.base, nil,
-				"echo <(true) <(true) <(true)", nil))
-			if len(got) != 3 {
-				t.Fatalf("got %v, want three numbers", got)
-			}
-			for _, n := range got {
-				if n < tc.lowest || n > tc.highest {
-					t.Errorf("got %v, want every number in [%d,%d]", got, tc.lowest, tc.highest)
+			const attempts = 3
+			var got, want []int
+			for i := range attempts {
+				want = freeFdsAlong(t, tc.from, tc.to, 3)
+				got = substNumbers(t, runSubstPlacement(t, tc.where, tc.base, nil,
+					"echo <(true) <(true) <(true)", nil))
+				if len(got) != 3 {
+					t.Fatalf("got %v, want three numbers", got)
 				}
+				if sameFds(got, want) {
+					return
+				}
+				t.Logf("attempt %d: got %v, wanted %v", i+1, got, want)
 			}
+			t.Errorf("got %v over %d attempts, want %v — the numbers this rule's own "+
+				"walk from %d found free", got, attempts, want, tc.from)
 		})
 	}
 }
@@ -106,25 +130,41 @@ func TestASubstitutionEndStepsOverAParkedNumber(t *testing.T) {
 // axis's second value is what the third one degrades into rather than an
 // invention.
 //
-// The assertion is one-sided for the reason the first case in this file
-// gives: below the limit the number is free to be anything the process had
-// spare, and only "never at or above the limit it was told about" is a
-// property of the rule rather than of the table.
+// Both halves are asserted, and against the kernel rather than against digits
+// for the reason the case above this one gives. The old shape compared the
+// answer with the limit it was told about and with the literal 63, and both
+// are claims about the host: on the macOS runner, holding seventy descriptors,
+// a correct fallback to the lowest free number was in the seventies and read
+// as a number "above the top of the table" and "not below the limit of 63"
+// (#4459). Where the walk goes is the rule; which digits the walk finds is the
+// table, and TestMain is what makes the table one the walk can be seen in.
 func TestTheSubstitutionTopOfTheTableGivesWayToTheOpenFileLimit(t *testing.T) {
 	for _, soft := range []int64{63, 64, 1024, RlimitInfinity} {
 		t.Run(strconv.FormatInt(soft, 10), func(t *testing.T) {
 			limit := func(Resource) (int64, int64, error) { return soft, soft, nil }
-			got := substNumbers(t, runSubstPlacement(t, SubstitutionEndsAtTheTopOfTheTable,
-				AllocateDescriptorsFromTen, limit, "echo <(true)", nil))
-			if len(got) != 1 {
-				t.Fatalf("got %v, want one number", got)
+			// The descent is walked only where its top is a legal descriptor.
+			// Below that the rule gives way to the walk up from the first
+			// number above stdio, which is what every other dialect does.
+			from, to := 63, 10
+			if soft != RlimitInfinity && soft <= 63 {
+				from, to = 3, 3+63
 			}
-			if soft != RlimitInfinity && int64(got[0]) >= soft {
-				t.Errorf("got %v, want a number below the limit of %d", got, soft)
+			const attempts = 3
+			var got, want []int
+			for i := range attempts {
+				want = freeFdsAlong(t, from, to, 1)
+				got = substNumbers(t, runSubstPlacement(t, SubstitutionEndsAtTheTopOfTheTable,
+					AllocateDescriptorsFromTen, limit, "echo <(true)", nil))
+				if len(got) != 1 {
+					t.Fatalf("got %v, want one number", got)
+				}
+				if sameFds(got, want) {
+					return
+				}
+				t.Logf("attempt %d: got %v, wanted %v", i+1, got, want)
 			}
-			if got[0] > 63 {
-				t.Errorf("got %v, want a number at or below the top of the table", got)
-			}
+			t.Errorf("got %v over %d attempts, want %v — the first number the walk "+
+				"from %d found free under a limit of %d", got, attempts, want, from, soft)
 		})
 	}
 }
@@ -279,6 +319,42 @@ func lowestFreeFds(t *testing.T, n int) []int {
 	}
 	for _, fd := range got {
 		_ = syscall.Close(fd)
+	}
+	return got
+}
+
+// freeFdsAlong is the first n numbers a walk from `from` towards `to` finds
+// free — the same question a rule's wish list asks, asked of the kernel.
+//
+// The twin of lowestFreeFds, and here because that one cannot express a walk
+// that goes *down*: F_DUPFD answers with the lowest free number at or above
+// the one it is given, which is the upward rules' question and the opposite of
+// the descent from the top of the table. So this one reads the table rather
+// than taking from it — see fdIsOpen — which also means it holds nothing while
+// it looks, and n numbers come back in the order the rule would meet them.
+//
+// Running out is a failure and not an empty answer. A walk that finds fewer
+// than n free numbers is a walk in a table this rule cannot be seen in, which
+// is exactly the state #4459 was reported from; saying so names the cause
+// rather than leaving a case to fail on digits further down.
+func freeFdsAlong(t *testing.T, from, to, n int) []int {
+	t.Helper()
+	step := 1
+	if to < from {
+		step = -1
+	}
+	var got []int
+	for fd := from; len(got) < n; fd += step {
+		if !fdIsOpen(fd) {
+			got = append(got, fd)
+		}
+		if fd == to {
+			break
+		}
+	}
+	if len(got) != n {
+		t.Fatalf("only %v free between %d and %d, want %d numbers — this process was "+
+			"handed a table this rule cannot be seen in", got, from, to, n)
 	}
 	return got
 }

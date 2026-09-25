@@ -26,21 +26,29 @@ import (
 // `tests/redir10.sub` — a file named for this shape, which has been failing
 // the same way — and it is what moved that row of `make bash-suite`.
 //
-// # Why the region and not a count
+// # Why the same script's own answer and not a count
 //
 // The assertion this file's neighbor explains: the numbers come from the
 // kernel's table for the whole test binary, so a parallel test that opens a
 // file moves them and a count of open descriptors measures the suite. What
-// repetition may not do is push a substitution **out of the region its rule
-// allocates from** — the descent from 63 is some sixty numbers deep, so a
-// leak of one per turn walks off the end of it well inside this loop and
-// parkDescriptor's floor then answers far above 63. Without the leak the
-// number is free every time and the last turn is in the region like the
-// first.
+// repetition may not do is move the number at all — a substitution the loop
+// let go of is a number free again, so the last turn lands exactly where the
+// first one did.
+//
+// So the script asks **before and after** and the two must agree, whatever
+// digit they agree on. That is what the old shape was reaching for with "at
+// or below 63" and could not say portably: 63 is the top of this rule's walk
+// on a quiet machine and a statement about the host's table everywhere else,
+// and on the macOS runner, which handed the binary seventy open descriptors,
+// a leak-free run answered 70 and failed (#4459). A leak of one per turn still
+// cannot pass: the descent from 63 is some sixty numbers deep, so it walks off
+// the end of the region well inside this loop and the last answer is nowhere
+// near the first.
 func TestACompoundRedirectionsSubstitutionIsRemovedWithIt(t *testing.T) {
 	const turns = 80
 	out := runSubstPlacement(t, SubstitutionEndsAtTheTopOfTheTable,
 		AllocateDescriptorsFromTen, nil, `
+			echo <(true)
 			n=0
 			while [ $n -lt `+strconv.Itoa(turns)+` ]; do
 				{ true; } < <(true)
@@ -48,13 +56,12 @@ func TestACompoundRedirectionsSubstitutionIsRemovedWithIt(t *testing.T) {
 			done
 			echo <(true)`, nil)
 	got := substNumbers(t, out)
-	if len(got) != 1 {
-		t.Fatalf("got %v, want one number", got)
+	if len(got) != 2 {
+		t.Fatalf("got %v, want two numbers", got)
 	}
-	if got[0] > 63 {
-		t.Errorf("got /dev/fd/%d after %d compound redirections, want a number still "+
-			"at or below the top of the table — each of those turns kept its pipe",
-			got[0], turns)
+	if got[0] != got[1] {
+		t.Errorf("got %v after %d compound redirections, want the same number the "+
+			"script started on — each of those turns kept its pipe", got, turns)
 	}
 }
 

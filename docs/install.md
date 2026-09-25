@@ -264,10 +264,12 @@ refusals and be useless.
 **The boundary is around the shell, not around the process tree.** A
 policy decides what the *shell* opens, stats, runs and signals. A command
 the shell was allowed to start then makes its own accesses, and nothing
-here sees them — `allow exec /bin/cat` is `allow read /**` spelled less
-obviously. Containing a running child needs an OS sandbox, which sits
-above this; `docs/design/sandboxing.md` has the argument and the policy
-file's grammar.
+here sees them — granting exec of `/bin/cat` is `allow read /**` spelled
+less obviously. The grammar makes the policy file say so: the rule is
+written `allow exec-unconfined /bin/cat`, and `allow exec` is a parse
+error. Containing a running child needs an OS sandbox, which sits above
+this; `docs/design/sandboxing.md` has the argument and the policy file's
+grammar.
 
 **A policy is never discovered.** No environment variable, no dotfile. It
 comes from `--policy` and from nowhere else, because a policy that could

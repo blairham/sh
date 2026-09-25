@@ -509,8 +509,9 @@ process exists it makes its own system calls and nothing in this
 repository has a say over them.
 
 This is not a weakness peculiar to plugins. It is the same sentence
-`docs/design/sandboxing.md` writes about every allowed command:
-`allow exec /bin/cat` is `allow read /**` spelled less obviously. So:
+`docs/design/sandboxing.md` writes about every allowed command: granting
+exec of `/bin/cat` is `allow read /**` spelled less obviously, and the
+grammar makes a policy spell it `allow exec-unconfined`. So:
 
 > **A plugin is trusted exactly as much as an allowed exec, and no more
 > and no less.**

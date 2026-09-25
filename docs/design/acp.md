@@ -665,7 +665,7 @@ rule above was written and unit-tested before there was a policy to put
 inside it, and `session/new` then assigned its gate *over* the
 template's rather than around it — so `sh -acp -policy p` took the flag
 and consulted the rules nowhere. Measured on `main` at the time (#1335):
-a policy of `default deny exec` plus `allow exec /bin/echo` refused
+a policy of `default deny exec` plus `allow exec-unconfined /bin/echo` refused
 `/usr/bin/curl` under `-c`, and ran it under `-acp` as soon as the
 client answered `allow-once`. The tell was not that curl ran. It was
 that permission was **requested at all**, with a policy present and

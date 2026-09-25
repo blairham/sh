@@ -20,7 +20,9 @@ import (
 //	default deny
 //
 //	# the build reads its own tree and writes only into out/
-//	allow exec  /usr/bin/git
+//	# — and `exec-unconfined` because git is a process this gate cannot
+//	#   follow, which is the one thing the grammar insists you write down
+//	allow exec-unconfined /usr/bin/git
 //	allow read  /srv/build/**
 //	allow write /srv/build/out/**
 //	deny  read  /srv/build/.env
@@ -111,6 +113,13 @@ func Parse(r io.Reader) (*Policy, error) {
 		if err := p.directive(word, rest); err != nil {
 			return nil, lineErr(n, err)
 		}
+		// The line each rule came from, for a diagnostic raised after the
+		// whole file has been read. A directive adds one rule or none, but
+		// the loop is written for any number so that a future one that adds
+		// two cannot silently misattribute the second.
+		for len(p.lines) < len(p.rules) {
+			p.lines = append(p.lines, n)
+		}
 	}
 	if err := sc.Err(); err != nil {
 		return nil, err
@@ -126,7 +135,71 @@ func Parse(r io.Reader) (*Policy, error) {
 			p.allowSlot[i] = p.allowBase
 		}
 	}
+	if err := p.checkExecGrants(); err != nil {
+		return nil, err
+	}
+	p.lines = nil
 	return p, nil
+}
+
+// checkExecGrants refuses a file that grants exec without saying what that
+// gives away.
+//
+// The boundary is drawn around the interpreter and not around the process
+// tree, which docs/design/sandboxing.md states in its second section and this
+// is the grammar finally carrying it: an allowed exec starts a process that
+// makes its own system calls, and no rule in the file reaches it. So
+// `allow exec /usr/bin/python3` beside `deny read /proj/.env` is not a narrow
+// grant of one program — it is the deny rescinded, spelled as an allow of
+// something else.
+//
+// Refused rather than warned, and that is the parser's existing rule rather
+// than a new one: there is no "unknown directive ignored" here, because a
+// policy half-understood is a policy that allows what it was written to
+// refuse. A warning is read by whoever is watching stderr, and the reader a
+// policy is actually defended by is the second person reading the diff.
+//
+// After the whole file rather than at the line, so the diagnostic can say how
+// much is being given away. The count is what makes it land: "does not gate
+// the child" is an abstraction, and "the 2 deny rules in this policy do not
+// apply to it" is the thing the author thought they had.
+//
+// Only the file route. `New` and `ParseRule` are untouched, because a Go
+// embedder is writing code rather than a policy and `cmd/sh -deny` reaches
+// the gate through ParseRule — see the design doc on why that flag's base
+// default stays `allow`.
+func (p *Policy) checkExecGrants() error {
+	for i, r := range p.rules {
+		if r.Decision != interp.Allow || r.Sel != SelExec {
+			continue
+		}
+		return lineErr(p.lines[i], fmt.Errorf(
+			"`allow exec %s` does not gate the child process: it runs with the shell's own access, and %s. Write `allow exec-unconfined %s` to say so",
+			r.Pattern, p.whatIsRescinded(), r.Pattern))
+	}
+	return nil
+}
+
+// whatIsRescinded names the thing an exec grant takes back, in the words the
+// policy itself used. A rule count when there are rules, because that is what
+// the author wrote and will recognize; the default otherwise, because a policy
+// whose refusals are all defaults still has refusals.
+func (p *Policy) whatIsRescinded() string {
+	n := 0
+	for _, r := range p.rules {
+		if r.Decision == interp.Deny {
+			n++
+		}
+	}
+	switch {
+	case n == 1:
+		return "the deny rule in this policy does not apply to it"
+	case n > 1:
+		return fmt.Sprintf("the %d deny rules in this policy do not apply to it", n)
+	case !p.allowBase:
+		return "this policy's `default deny` does not apply to it"
+	}
+	return "nothing in this policy applies to it"
 }
 
 func (p *Policy) directive(word, rest string) error {
@@ -164,6 +237,15 @@ func (p *Policy) defaultDirective(rest string) error {
 	s, err := selectorOf(sel)
 	if err != nil {
 		return err
+	}
+	if decision == interp.Allow && s == SelExec {
+		// The same refusal checkExecGrants makes about a rule, raised here
+		// because a default is not a rule and never reaches it. Line-local
+		// rather than deferred: a default names no pattern, so there is no
+		// count to gather and nothing a later line could add.
+		return errors.New(
+			"`default allow exec` does not gate the child process: a process this policy starts runs with the shell's own access. " +
+				"Write `default allow exec-unconfined` to say so")
 	}
 	for _, sl := range s.slots() {
 		if p.setSlot[sl] {
@@ -279,7 +361,8 @@ func selectorOf(name string) (Selector, error) {
 		return 0, errors.New(
 			"inherit is recorded and never gated: a descriptor the shell was handed is already in the process's table")
 	}
-	return 0, fmt.Errorf("unknown selector %q, want exec, read, write, open, stat, list, path or signal", name)
+	return 0, fmt.Errorf(
+		"unknown selector %q, want exec, exec-unconfined, read, write, open, stat, list, path or signal", name)
 }
 
 // cut splits the first whitespace-delimited word off a line and returns the

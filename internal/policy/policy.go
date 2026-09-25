@@ -18,8 +18,10 @@
 //
 // It refuses what the *shell* does. A denied open stops the shell reading a
 // file; an allowed exec starts a process that makes its own system calls, and
-// nothing here has any say over those. `allow exec /bin/cat` is `allow read
-// /**` spelled less obviously, and allowing an interpreter allows everything.
+// nothing here has any say over those. Granting exec of `/bin/cat` is `allow
+// read /**` spelled less obviously, and allowing an interpreter allows
+// everything — so a policy file has to spell the grant `exec-unconfined`,
+// which is the whole of what SelExecUnconfined adds (#4409).
 // Containing a running child needs the operating system, which sits above this
 // layer. What this can do — and what nothing outside the interpreter can do,
 // because `eval` walks around anything applied from outside — is refuse the
@@ -103,6 +105,14 @@ type Selector uint8
 // because reading a directory and asking whether a file is there are both
 // reading: someone who writes `allow read /srv/**` and then finds `[ -f /srv/x ]`
 // false has been given a policy that does not mean what it says.
+//
+// SelExecUnconfined is the same slot as SelExec under a second name, and the
+// name is the whole of what it adds. A rule that grants exec grants a process
+// this package has no say over — see the head of docs/design/sandboxing.md —
+// so in a policy *file* the grant has to be spelled with the word that says
+// so, and `allow exec` is refused (#4409). Both values exist because a rule
+// remembers how it was written: normalized text is shown to an operator, and
+// text that round-trips to a rule the parser would refuse is text that lies.
 const (
 	SelExec Selector = iota
 	SelRead
@@ -112,17 +122,19 @@ const (
 	SelList
 	SelPath
 	SelSignal
+	SelExecUnconfined
 )
 
 var selectorNames = map[string]Selector{
-	"exec":   SelExec,
-	"read":   SelRead,
-	"write":  SelWrite,
-	"open":   SelOpen,
-	"stat":   SelStat,
-	"list":   SelList,
-	"path":   SelPath,
-	"signal": SelSignal,
+	"exec":            SelExec,
+	"read":            SelRead,
+	"write":           SelWrite,
+	"open":            SelOpen,
+	"stat":            SelStat,
+	"list":            SelList,
+	"path":            SelPath,
+	"signal":          SelSignal,
+	"exec-unconfined": SelExecUnconfined,
 }
 
 func (s Selector) String() string {
@@ -139,7 +151,7 @@ func (s Selector) String() string {
 // disagree about the answer.
 func (s Selector) slots() []slot {
 	switch s {
-	case SelExec:
+	case SelExec, SelExecUnconfined:
 		return []slot{slotExec}
 	case SelRead:
 		return []slot{slotOpenRead, slotStat, slotReadDir}
@@ -152,10 +164,15 @@ func (s Selector) slots() []slot {
 	case SelList:
 		return []slot{slotReadDir}
 	case SelPath:
-		// Every kind that carries a path, and deliberately not every kind: a
-		// signal names a process rather than a file, so no pattern could
-		// select one and `signal` has to be named on its own.
-		return []slot{slotExec, slotOpenRead, slotOpenWrite, slotStat, slotReadDir}
+		// Every kind that carries a *file* path, and deliberately not every
+		// kind that carries one. A signal names a process rather than a file,
+		// so no pattern could select one and `signal` has to be named on its
+		// own — and exec is left out for the opposite reason (#4409): it
+		// carries a path and is the one action whose grant reaches past this
+		// package entirely, so it is never given by a word that does not say
+		// `exec`. Without that, refusing `allow exec` only moves the silent
+		// grant one word over, to a rule that reads as a file rule.
+		return []slot{slotOpenRead, slotOpenWrite, slotStat, slotReadDir}
 	case SelSignal:
 		return []slot{slotSignal}
 	}
@@ -219,6 +236,11 @@ func (r Rule) String() string {
 // everything would be a fail-open security type.
 type Policy struct {
 	rules []Rule
+	// lines[i] is the file line rules[i] was read from, kept only while Parse
+	// is running so that a check made after the whole file has been read can
+	// still name a line. Cleared before Parse returns: it is scaffolding for a
+	// diagnostic, not part of a policy, and a Policy built by New has none.
+	lines []int
 	// allowSlot[i] is the default for slot i, and setSlot[i] records that a
 	// `default <decision> <selector>` line named it. Anything unnamed falls to
 	// allowBase.
@@ -358,7 +380,7 @@ func (p *Policy) NormalizedText() []string {
 
 func (p *Policy) execAllows(path string) bool {
 	for _, r := range p.rules {
-		if r.Decision == interp.Allow && r.Sel == SelExec && r.matches(path) {
+		if r.Decision == interp.Allow && r.Sel.covers(slotExec) && r.matches(path) {
 			return true
 		}
 	}

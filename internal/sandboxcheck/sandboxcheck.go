@@ -584,7 +584,14 @@ func policy(f Fixture, mode Mode) (string, error) {
 				"deny path "+f.Denied+"/**")
 		}
 	case Allowed:
-		lines = []string{"version 1", "default deny", "allow path /**", "allow signal"}
+		// `exec` is named on its own because `path` does not reach it (#4409),
+		// and it is named here because this shape has to permit *everything*
+		// or a route it forbids reports Overblocked and reads as a bug in the
+		// shell rather than as a gap in the fixture.
+		lines = []string{
+			"version 1", "default deny",
+			"allow path /**", "allow exec-unconfined /**", "allow signal",
+		}
 	}
 	// Beside the run rather than inside the workspace, so that a route which
 	// enumerates or writes the workspace cannot see the file deciding its own

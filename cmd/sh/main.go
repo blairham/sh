@@ -76,9 +76,10 @@
 // Neither half contains a *process*. The boundary is drawn around the
 // interpreter: a policy refuses what the shell itself opens, stats and runs,
 // and a command the shell was allowed to start makes its own accesses that
-// nothing here sees — `allow exec /bin/cat` is `allow read /**` spelled less
-// obviously. Containing a running child is the job of an OS sandbox, which
-// sits above the substrate.
+// nothing here sees — granting exec of `/bin/cat` is `allow read /**` spelled
+// less obviously, which is why a policy has to write it `allow
+// exec-unconfined /bin/cat`. Containing a running child is the job of an OS
+// sandbox, which sits above the substrate.
 //
 // A policy is never discovered: no environment variable, no dotfile. One that
 // could be named by the environment could be replaced by anything able to set

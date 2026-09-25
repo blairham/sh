@@ -23,8 +23,11 @@ specification.
 **It contains the shell, not the process tree.** A denied `open` stops
 the shell reading a file. An allowed `exec` starts a process that makes
 its own system calls, and nothing in this repository has any say over
-them. `allow exec /bin/cat` is `allow read /**`, spelled less
-obviously, and `allow exec /bin/sh` is `allow` everything.
+them. Granting exec of `/bin/cat` is `allow read /**`, spelled less
+obviously, and granting `/bin/sh` is `allow` everything. The grammar
+makes a policy say it — the rule is written `allow exec-unconfined`, and
+`allow exec` is a parse error — but saying it is all the grammar can do.
+*An exec grant says what it gives away*, below, is that rule.
 
 Re-measured 2026-09-15 (#3088), and the two halves have to be run
 together or the probe proves nothing — a policy that refused both would
@@ -91,8 +94,8 @@ it fits in a paragraph.
     default  := 'default' ws decision [ws selector]
     rule     := decision ws selector [ws pattern]
     decision := 'allow' | 'deny'
-    selector := 'exec' | 'read' | 'write' | 'open' | 'stat' | 'list'
-              | 'path' | 'signal'
+    selector := 'exec' | 'exec-unconfined' | 'read' | 'write' | 'open'
+              | 'stat' | 'list' | 'path' | 'signal'
     pattern  := rest of the line, trailing whitespace trimmed
 
 The pattern is *the rest of the line* rather than a whitespace-delimited
@@ -130,10 +133,13 @@ So an allowlist is written with `default deny` and narrow `allow` rules, and wit
 ```
 version 1
 default deny exec
-allow exec /bin/echo
+allow exec-unconfined /bin/echo
 ```
 
-That runs `/bin/echo` and refuses every other program.
+That runs `/bin/echo` and refuses every other program. The selector is
+`exec-unconfined` and not `exec` because an `allow` of an exec is not a
+grant of one program — see *An exec grant says what it gives away* below,
+which is the whole reason for the longer word.
 
 The shape that does **not** work — and this is the one a reader reaches for
 first, so it is worth naming — is a broad deny with a narrow allow beside it:
@@ -141,8 +147,8 @@ first, so it is worth naming — is a broad deny with a narrow allow beside it:
 ```
 version 1
 default allow
-deny exec /**          # matches /bin/echo too
-allow exec /bin/echo   # cannot rescue it, in either order
+deny exec /**                      # matches /bin/echo too
+allow exec-unconfined /bin/echo    # cannot rescue it, in either order
 ```
 
 Both lines match `/bin/echo`, the deny decides, and the allow does nothing. The
@@ -164,14 +170,15 @@ for a subset of it.
 
 | selector | action kinds |
 | --- | --- |
-| `exec`   | exec |
-| `read`   | open for reading, stat, read-dir |
-| `write`  | open for writing |
-| `open`   | open, either direction |
-| `stat`   | stat |
-| `list`   | read-dir |
-| `path`   | exec, open either direction, stat, read-dir |
-| `signal` | signal |
+| `exec`             | exec — **`deny` only** |
+| `exec-unconfined`  | exec — the spelling an `allow` has to use |
+| `read`             | open for reading, stat, read-dir |
+| `write`            | open for writing |
+| `open`             | open, either direction |
+| `stat`             | stat |
+| `list`             | read-dir |
+| `path`             | open either direction, stat, read-dir |
+| `signal`           | signal |
 
 `read` covers the probes because reading a directory and asking whether
 a file is there are both reading. Someone who writes `allow read
@@ -404,7 +411,7 @@ Open, by construction and not by omission:
   but not read. The disclosure is metadata rather than content.
 - **`exec` through a link.** Verifying it means opening the program to
   look at it, and execute permission does not imply read permission.
-  `allow exec` is already total in the sense this page opens with.
+  An exec grant is already total in the sense this page opens with.
 - **Platforms other than Darwin and Linux**, where there is no way to
   ask the kernel and the gate matches the name alone, as it always did.
 
@@ -583,7 +590,7 @@ The outside one asks whether the boundary of an allowed region holds; the
 carved-out one asks whether a deny holds *inside* a region the policy
 otherwise allows. They are different questions of the same gate, because a
 deny is an early return in `Policy.Allow` while the absence of an allow is a
-fallthrough past `defaultFor` and past the stat exemption `allow exec` earns
+fallthrough past `defaultFor` and past the stat exemption an exec grant earns
 — so a table built from the first shape alone leaves the deny path untried
 for all but a handful of selectors. Measured by breaking deny-overrides on
 purpose: the outside shape catches 24 escapes and the carved-out shape 125.
@@ -1551,12 +1558,93 @@ fact, a rule must name the place the path *reaches* rather than the
 place it is spelled. A `HISTFILE` under a home directory that is itself
 a symbolic link needs a rule naming what the link reaches.
 
-**Allowing an interpreter allows everything.** `allow exec /bin/sh`,
+**Allowing an interpreter allows everything.** `/bin/sh`,
 `/usr/bin/python3`, `/bin/busybox`, and anything else that runs a
 program of its own, ends the usefulness of the rest of the policy. This
-is the sharpest footgun in the format and there is no way for the parser
-to detect it — an allowlisted binary is a name, and what a name can do is
-not knowable from here.
+is the sharpest footgun in the format, and the parser cannot detect it:
+an allowlisted binary is a name, and what a name can do is not knowable
+from here.
+
+So the parser stopped trying to tell them apart, and treats every one of
+them as the interpreter. That is the next section.
+
+### An exec grant says what it gives away
+
+`allow exec P` is a parse error. The rule that works is:
+
+```
+allow exec-unconfined P
+```
+
+They mean the same thing to the gate — the decision is unchanged, and
+this is a change to what the file *says* rather than to what it does.
+
+It is the paragraph at the head of this page, finally carried by the
+grammar instead of by a reader's memory of having read it. `allow exec
+/bin/cat` is `allow read /**` spelled less obviously; a policy file is
+defended by a second person reading the diff; and the diff for a line
+like that reads as a narrow grant of one program. The shape it was
+measured in (#4409) is the one an agent sandbox is actually given:
+
+```
+version 1
+default deny
+allow read  $WS/**
+allow write $WS/**
+deny  read  $WS/.env
+allow exec  /usr/bin/python3
+```
+
+Three refusals the author believes in, and a fourth line that hands the
+filesystem to a process this package never hears about. Both controls
+fired, which is what makes it a measurement rather than a claim — the
+shell's own read of the secret was refused in the same run that
+`python3 -c "print(open(SECRET).read())"` printed it.
+
+Refused rather than warned. That is this parser's existing rule and not a
+new one: there is no "unknown directive ignored" here, because a policy
+half-understood is a policy that allows what it was written to refuse. A
+warning is read by whoever happens to be watching stderr, and the reader
+a policy is defended by is the one reading the diff.
+
+The diagnostic names the line, the program, and the size of what is being
+given back, because "does not gate the child" is an abstraction and *the
+deny you thought you had* is the thing the author will recognize:
+
+    line 6: `allow exec /usr/bin/python3` does not gate the child
+    process: it runs with the shell's own access, and the deny rule in
+    this policy does not apply to it. Write `allow exec-unconfined
+    /usr/bin/python3` to say so
+
+**`path` no longer covers exec**, and without that half the rest is
+decoration: refusing `allow exec` would only move the silent grant one
+word over, to `allow path /**`, which reads as a rule about files and
+granted execution of every program on the machine. Exec is now never
+granted by a word that does not say `exec`. The narrowing is fail-closed
+— a policy relying on `path` for exec gets a refusal, not a hole.
+
+`deny exec P` keeps the plain word. Requiring `deny exec-unconfined`
+would be the grammar asking an author to say that a *refusal* gives
+something away, which is false.
+
+Three things this deliberately does not touch, recorded here so they are
+not rediscovered as oversights:
+
+- **`cmd/sh -deny`'s base default stays `allow`,** so exec is permitted
+  and ungated on that route. The flag has no file for anyone to annotate
+  and claims no containment; it is this page's own opening example. The
+  grammar rule is about a policy that claims to refuse things.
+- **A bare `default allow` still sets the exec slot.** A policy that
+  allows everything by default is not claiming containment either, so
+  there is nothing for an exec grant to take back.
+- **`New` and `ParseRule` are unchanged.** A Go embedder is writing code
+  rather than a security artifact a second person reads, and `-deny`
+  reaches the gate through `ParseRule`.
+
+What this does **not** do is contain the child. Nothing in this
+repository can; that is the scope decision at the head of this page and
+it is unmoved. An `allow exec-unconfined` is exactly as wide as an `allow
+exec` was. The policy file now says so.
 
 ## What is deliberately not here
 

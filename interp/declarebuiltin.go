@@ -3219,6 +3219,12 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			if a, ok := r.Arrays[name]; ok {
 				r.storeArray(name, a)
 			}
+			// And the scalar half of a tie, whose value is the fields a
+			// separator names rather than elements in that table: the same
+			// re-read, on the side the line above cannot see. This is the
+			// half #4495 was missing — the `-T` a line earlier is what had
+			// assigned the value the letter then had nothing to say about.
+			r.uniquifyTiedScalar(name)
 		}
 	}
 	if f.traced {

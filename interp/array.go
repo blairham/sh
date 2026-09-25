@@ -353,7 +353,13 @@ func (r *Runner) storeArray(name string, a Array) {
 	// `a+=(2 4 4)` dedupes, and `a[2]=3` dedupes the whole array and not
 	// only the element written. One choke point is what makes those one
 	// rule instead of three that can drift apart.
-	if r.unique[name] {
+	//
+	// A write that is the tie's own **mirror** is the one exception, and it
+	// is measured rather than convenient: `typeset -T S s; typeset -U s;
+	// S=p:q:p` leaves `s` holding three elements, because the letter belongs
+	// to the name a script wrote and not to the pair. See
+	// interp/tiedunique.go, which is the scalar side of the same guard.
+	if r.unique[name] && !r.mirroring {
 		a = r.uniqueElems(a)
 	}
 	// What the name's other attributes make of an element is **not** asked
@@ -437,17 +443,10 @@ func (r *Runner) storeArray(name string, a Array) {
 // goes. Reading first is what makes that true; deduping the store's
 // subscripts instead would have left two elements and no empty at all.
 func (r *Runner) uniqueElems(a Array) Array {
-	elems := r.readArray(a)
+	elems := uniqueStrings(r.readArray(a))
 	out := make(Array, len(elems))
-	seen := make(map[string]bool, len(elems))
-	pos := 0
-	for _, e := range elems {
-		if seen[e] {
-			continue
-		}
-		seen[e] = true
-		out[pos] = Scalar(e)
-		pos++
+	for i, e := range elems {
+		out[i] = Scalar(e)
 	}
 	return out
 }

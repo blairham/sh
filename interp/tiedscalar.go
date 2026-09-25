@@ -142,7 +142,9 @@ const defaultTieSeparator = ":"
 //
 // The other letters still apply, and to the halves they belong to: `-x`
 // exports the scalar the way `typeset -gxTU LOG_PATH logpath` means it, and
-// `-U` makes the array unique so the joined scalar has no duplicates either.
+// `-U` goes to both names, where it deduplicates whichever of them a script
+// writes — see interp/tiedunique.go, which is the whole of that letter on a
+// tie and the reason it is not a property of the pair.
 func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	if len(args) < 2 {
 		r.diagf("%s\n", Wording(r.diag().TiedNamesRequired,
@@ -224,6 +226,30 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// save-and-restore does not carry it. Undone by hand on the way out,
 		// and only where there was a scope to undo it in.
 		r.AtFunctionReturn(func() { r.untie(scalar) })
+	}
+	// A tie **starts both names over**: every attribute either name carried
+	// before is dropped and only export survives. Measured 2026-09-25 on zsh
+	// 5.9.2 with `-f`, one letter to a run — `typeset -X S; typeset -T S s;
+	// typeset -p S` lists a plain `typeset -T S s` for `X` in `u`, `l`, `U`,
+	// `L`, `R`, `Z`, `i`, `E`, `F` and `t`, and the array half answers the
+	// same way (`typeset -it s` then the tie lists `typeset -aT S s`), while
+	// `typeset -x S` stays `export -T S s` and `export s` stays
+	// `typeset -axT S s`.
+	//
+	// It is load-bearing for the letters written on the declaration's *own*
+	// line, which is why it arrived with them rather than as a tidy-up:
+	// `typeset -TU S=a:b:a s` is `a:b` because the `-U` came with the tie,
+	// and `typeset -U S; typeset -T S=a:b:a s` is `a:b:a` because the tie
+	// threw that `-U` away before the value reached it. Without this, the
+	// second spelling would be deduplicated by an attribute this shell was
+	// measured to have already dropped.
+	//
+	// Re-declaring the **same** pair keeps what it has — measured,
+	// `typeset -TU S=a:b:a s; typeset -T S s` still lists `-UT` — so the
+	// drop is for a name arriving at a tie it is not already half of.
+	if _, already := r.tieOf(scalar); !already {
+		r.dropNameAttributes(scalar)
+		r.dropNameAttributes(array)
 	}
 	// The attributes go to the halves they belong to. `-U` and the rest go
 	// to both — measured, `typeset -TU A a` lists as `export -UT` and

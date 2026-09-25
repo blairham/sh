@@ -123,7 +123,7 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 				// runs on, where the same words inside `[[ ]]` abandon the
 				// input. The complaint is already worded; all that is added
 				// here is the name the builtin was called by.
-				r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand, name))
+				r.diagf("%s\n", Wording(te.format(*r.diag()), te.fallback(), te.operand, name))
 				return 1
 			}
 			if r.unspecified {
@@ -166,7 +166,7 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 			// was called by rather than a fixed one — including zsh, which
 			// carries it in the location instead of the message and so needs
 			// nothing here.
-			r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand, name))
+			r.diagf("%s\n", Wording(te.format(*r.diag()), te.fallback(), te.operand, name))
 		} else {
 			r.diagf("%s: %v\n", name, err)
 		}

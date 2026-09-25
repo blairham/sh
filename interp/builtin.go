@@ -2087,7 +2087,7 @@ func (r *Runner) setRefusalStatus(sp setRefusalSpelling, why string) bool {
 			return false
 		}
 	}
-	status := sp.status(r.diag())
+	status := sp.status(*r.diag())
 	r.setOptionStatus = status
 	if r.reportsEveryBadSetOption() || r.setAppliesPastARefusal() {
 		if !r.setRefusalOwed {
@@ -2169,7 +2169,7 @@ func (r *Runner) finishSetRefusals() int {
 		r.sayBuiltinUsage(block)
 	}
 	sp := r.setRefusalSpelling
-	status := sp.status(r.diag())
+	status := sp.status(*r.diag())
 	if r.ask(sp.fatal(r.sem()),
 		"a refused `set` option ending the script after every bad word is reported") {
 		r.status = status

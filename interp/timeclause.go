@@ -112,7 +112,7 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 		// A dialect that answers a bare `time` with accumulated state
 		// rather than with a run of nothing. The run-of-nothing answer
 		// falls through: it is the ordinary report over an empty interval.
-		r.reportBareTime(d)
+		r.reportBareTime(*d)
 		r.status = 0
 		if tc.Negated {
 			r.status = 1
@@ -181,7 +181,7 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 	} else {
 		user := (selfAfter.user - selfBefore.user) + (childrenAfter.user - childrenBefore.user)
 		sys := (selfAfter.system - selfBefore.system) + (childrenAfter.system - childrenBefore.system)
-		r.reportTime(d, tc.Posix, elapsed, user, sys, timing)
+		r.reportTime(*d, tc.Posix, elapsed, user, sys, timing)
 	}
 	if tc.Negated {
 		// `! time x` negates the timed pipeline's status, exactly as the

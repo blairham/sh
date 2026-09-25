@@ -427,7 +427,7 @@ func (r *Runner) printfIncomplete(arg, text string) int {
 		// Measured in the pinned image, BusyBox v1.37.0, 2026-09-15.
 		arg = text
 	}
-	if w := printfBadNumberBase(d, arg); w != "" {
+	if w := printfBadNumberBase(*d, arg); w != "" {
 		// One column names the base the operand was *spelled* in — `invalid
 		// hex number` for `0x10zz`, `invalid octal number` for `08` — and
 		// asks it of the operand rather than of the conversion or of the

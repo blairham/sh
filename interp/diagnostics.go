@@ -10458,13 +10458,47 @@ func PosixDiagnostics() Diagnostics { return Diagnostics{SyntaxErrorStatus: 2} }
 // nothing: a status is not a claim about another shell.
 func CoreDiagnostics() Diagnostics { return Diagnostics{} }
 
+// promptLocated reports whether a message belongs to a line the person typed
+// rather than to a line of a file. One expression rather than two, because
+// diag asks it twice — once to decide whether the runner's own vector can be
+// handed back untouched, and once to make the adjustment — and two spellings
+// of one question is how the fast path comes to disagree with the slow one.
+func (r *Runner) promptLocated() bool {
+	return r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile()
+}
+
 // diag reports the runner's diagnostics, defaulting to the substrate's own.
-func (r *Runner) diag() Diagnostics {
+//
+// **By pointer, and the caller may not write through it.** Diagnostics is 9112
+// bytes and this is read a field at a time from several hundred places — 667
+// of them in this package — so returning a value meant copying nine kilobytes
+// to answer one question. It was worse than that: the old form was
+// `d := CoreDiagnostics()` with the runner's own assigned over it, which is
+// the zero value *written out* and then overwritten, so the common path moved
+// eighteen kilobytes to read a bool. Measured on a real ~/.zshrc it was about
+// a sixth of the whole startup (−92ms of 585ms, faster in 30 of 30 paired
+// runs), and none of it appeared as anything but `memclrNoHeapPointers` and
+// `memmove` in a profile.
+//
+// So the common path hands back the runner's own vector and copies nothing.
+// The alias that creates is the price: a write through this pointer does not
+// change one message, it changes the shell for the rest of the run. A caller
+// that needs to move an axis takes a copy first — `d := *r.diag()`, which is
+// what locationPrefixNamed does — and TestNothingWritesThroughTheDiagnostics
+// reads this package's source and fails on anything that does not.
+//
+// The prompt path below still builds a copy, because it is an adjustment to
+// the vector rather than the vector, and a shell at a prompt is not in a
+// loop.
+func (r *Runner) diag() *Diagnostics {
+	if r.Diagnostics != nil && !r.promptLocated() {
+		return r.Diagnostics
+	}
 	d := CoreDiagnostics()
 	if r.Diagnostics != nil {
 		d = *r.Diagnostics
 	}
-	if r.AtPrompt && r.borrowedFiles == 0 && !r.inFunctionReadFromAFile() {
+	if r.promptLocated() {
 		// A line typed at a prompt is located the prompt's way — see
 		// Runner.AtPrompt and Diagnostics.ForPrompt. Applied here rather
 		// than once by the front end because it must *stop* applying inside
@@ -10493,7 +10527,7 @@ func (r *Runner) diag() Diagnostics {
 		// about being inside a function at all (#2052).
 		d = d.ForPrompt()
 	}
-	return d
+	return &d
 }
 
 // inFunctionReadFromAFile reports whether the body running now was read from

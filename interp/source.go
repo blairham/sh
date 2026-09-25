@@ -306,10 +306,10 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// Diagnostics.BorrowedTextRendersTheCallStack — the run-time half is
 		// Runner.locationPrefixNamed, and the two render one rule from the two
 		// places a diagnostic about borrowed text is written.
-		chain, innermost := r.borrowedStack(d, r.locationFileOrName())
+		chain, innermost := r.borrowedStack(*d, r.locationFileOrName())
 		r.errf("%s%s: %s\n", chain, innermost, d.ParseFailure(err))
 	} else {
-		r.errf("%s\n", d.SourceReport(s.naming(d), r.name(), s.sourceName(d),
+		r.errf("%s\n", d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
 			line, d.ParseFailure(err)))
 	}
 	// And the offending line quoted back, for the dialect that writes
@@ -321,7 +321,7 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		// the quote. The same number for both is right only where the text
 		// numbers itself from one, and wrong in exactly the dialects the line
 		// above shifts (#3194).
-		r.errf("%s", d.SourceEcho(s.naming(d), r.name(), s.sourceName(d), line, own, err, src))
+		r.errf("%s", d.SourceEcho(s.naming(*d), r.name(), s.sourceName(*d), line, own, err, src))
 	}
 }
 

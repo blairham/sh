@@ -79,6 +79,6 @@ func setLocalTraps(r *interp.Runner, on bool) int {
 	if on {
 		locality = interp.TrapsGoBackAtTheReturn
 	}
-	swapAxes(r, func(s *interp.Semantics) { s.FunctionLocalTraps = locality })
+	setAxis(r, func(s *interp.Semantics) *interp.TrapLocality { return &s.FunctionLocalTraps }, locality)
 	return 0
 }

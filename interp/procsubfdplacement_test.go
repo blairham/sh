@@ -47,8 +47,9 @@ import (
 // exactly as portable as a region, strictly sharper — a region cannot see a
 // rule that lands one number off — and it says the thing the rule says rather
 // than a thing about the table. The table is quiet in the first place because
-// TestMain made it so; see restartWithAQuietDescriptorTable, without which the
-// walk has nothing free to find and says so.
+// this case is measured in a child of the test binary that has nothing else in
+// it; see measuredInAQuietDescriptorTable, without which the walk has nothing
+// free to find and says so.
 //
 // A retry for the interloper, on the same terms as the neighbors: another test
 // may take a number *during* a run, and can only ever make the answer worse,
@@ -59,6 +60,9 @@ import (
 // where the four rows above were measured, and by the bash column of
 // `make bash-suite`, which runs a whole file of them.
 func TestASubstitutionEndTakesTheDialectsRegion(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
 	for _, tc := range []struct {
 		name  string
 		where SubstEndPlacement
@@ -110,6 +114,9 @@ func TestASubstitutionEndTakesTheDialectsRegion(t *testing.T) {
 // entries on one number in the table childFiles builds, with which of them
 // survived decided by map iteration order.
 func TestASubstitutionEndStepsOverAParkedNumber(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
 	got := substNumbers(t, runSubstPlacement(t, SubstitutionEndsAtTheTopOfTheTable,
 		AllocateDescriptorsFromTen, nil,
 		"exec 63</dev/null\necho <(true) <(true)", nil))
@@ -137,8 +144,12 @@ func TestASubstitutionEndStepsOverAParkedNumber(t *testing.T) {
 // a correct fallback to the lowest free number was in the seventies and read
 // as a number "above the top of the table" and "not below the limit of 63"
 // (#4459). Where the walk goes is the rule; which digits the walk finds is the
-// table, and TestMain is what makes the table one the walk can be seen in.
+// table, and measuredInAQuietDescriptorTable is what makes the table one the
+// walk can be seen in.
 func TestTheSubstitutionTopOfTheTableGivesWayToTheOpenFileLimit(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
 	for _, soft := range []int64{63, 64, 1024, RlimitInfinity} {
 		t.Run(strconv.FormatInt(soft, 10), func(t *testing.T) {
 			limit := func(Resource) (int64, int64, error) { return soft, soft, nil }
@@ -272,6 +283,9 @@ func runSubstPlacement(t *testing.T, where SubstEndPlacement,
 // interloper case instead — another test may take a number *during* a run,
 // and can only ever make the answer worse, so one clean attempt is the claim.
 func TestSeveralSubstitutionEndsTakeConsecutiveNumbers(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
 	const attempts = 3
 	var got, want []int
 	for i := range attempts {
@@ -395,6 +409,9 @@ func sameFds(got, want []int) bool {
 // of 8 was 6. A bound on a digit is a bound on what else the binary happens
 // to have open.
 func TestTheShellEndIsTidiedAwayUnderALowOpenFileLimit(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
 	limit := func(Resource) (int64, int64, error) { return 8, 8, nil }
 	const attempts = 3
 	var got []int
@@ -432,6 +449,9 @@ func TestTheShellEndIsTidiedAwayUnderALowOpenFileLimit(t *testing.T) {
 // the case passes however `dupFile` is written — which is exactly what it did
 // while being written, and is why the input is a parameter.
 func TestABodysOwnCopyOfTheTableIsNotInTheAnswer(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
 	f, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Fatal(err)
@@ -476,6 +496,9 @@ func TestABodysOwnCopyOfTheTableIsNotInTheAnswer(t *testing.T) {
 // number whatever number that is. Before the fix the second line was one
 // below the first; a parallel test taking a descriptor moves both together.
 func TestANestedSubstitutionTakesTheEnclosingNumber(t *testing.T) {
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
 	got := substNumbers(t, runSubstPlacement(t, SubstitutionEndsAtTheTopOfTheTable,
 		AllocateDescriptorsFromTen, nil,
 		"echo <(true)\nread line < <(echo <(true))\necho \"$line\"", nil))

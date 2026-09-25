@@ -10284,6 +10284,12 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 			return
 		}
 	}
+	// And the unique attribute on the scalar half of a tie, which is not a
+	// fold of the value's characters but of the fields the separator names —
+	// so it is here rather than in attributeFolded, whose other caller writes
+	// the cell by hand and would leave the array half holding the old fields.
+	// See interp/tiedunique.go.
+	value = r.tiedUniqueFold(name, value)
 	if _, dynamic := r.Dynamic[name]; dynamic && r.producerEndedByUnset(name) {
 		// The `unset` ended the parameter in this dialect, so what the
 		// assignment makes is an ordinary variable: the producer goes with

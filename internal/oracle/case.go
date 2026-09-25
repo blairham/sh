@@ -11987,6 +11987,11 @@ echo "st=$?"`,
 		Why:     "what the re-reading is *not*: a leading tilde stays a tilde where an ordinary word would make it a home directory, a quote is a character that does not protect what is inside it, and a backslash in front of anything but `$`, a backtick or another backslash is text, both of it. `[~]['DD'][a\\tb]`, and every one of the three would read the other way if the value were expanded as a word — which is the plausible implementation, and the one the vendor manual's \"re-examined for new parameter substitutions\" does not rule out",
 	},
 	{
+		ID: "param/the-reeval-flag-is-quoted-by-its-own-quoting", Category: "parameter expansion",
+		Snippet: `v='$(printf "x\ny\n")'; printf "[%s]" "${(e)v}" ${(e)v}; echo`,
+		Why:     "what the re-reading does with the *result* is decided by the quoting of the expansion that asked for it: quoted, the command substitution inside keeps its newlines and the whole thing is one word; unquoted, it splits on them. `[x\ny][x][y]`. The row exists because the plausible implementation is a split followed by a rejoin on IFS's first character, which agrees with this one on every array reference — `${a[*]}` split and put back together is the same one word — and answers the quoted half here `[x y]`, which is what a `typeset -f` listing came back as in zsh's own B02typeset before #4485",
+	},
+	{
 		ID: "param/the-escape-flag-is-one-dialects", Category: "parameter expansion",
 		Snippet: `v='a\tb'; printf "[%s][%s]" "${(g::)v}" "${v}"; echo`,
 		Why:     "the `(g::)` flag reads the value's backslash escapes the way this shell's output builtins do: zsh answers a real tab beside the two characters it was written as, where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading. The unflagged reading is in the same row because a `(g)` implemented as a no-op is *right* for every value with no backslash in it — the control is what makes the row discriminating at all. powerlevel10k reads POWERLEVEL9K_BATTERY_STAGES with it",

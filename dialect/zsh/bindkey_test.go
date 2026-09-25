@@ -446,3 +446,50 @@ func TestTheCommandKeymapIsTheChangesAndNothingElse(t *testing.T) {
 		t.Errorf("vicmd = %v, want only the key that was bound", got)
 	}
 }
+
+// TestEndOfInputSurvivesARedefinedCompletionWidget is #4422, and it is the
+// hole in TestOnlyTheChangesReachTheEditor above rather than a new question.
+//
+// `^D` is an editorControlKey and not a binding, deliberately: the key ends a
+// session and the action it shares a name with offers to list. That separation
+// held only while the key was dropped as a default, and the drop was guarded
+// on the widget *not* being redefined. `compinit` ends by redefining the eight
+// standard completion widgets, and `delete-char-or-list` is one of the eight —
+// so on any ordinary rc the guard opened, `\x04` reached the editor as an
+// override pointing at the completion widget, and the key loop's own `^D` was
+// never asked. The session could not be ended from the keyboard.
+func TestEndOfInputSurvivesARedefinedCompletionWidget(t *testing.T) {
+	r := bindkeyRunner(t, "zle -C delete-char-or-list .delete-char-or-list _main_complete\n")
+	if b, present := zsh.KeyBindings(r, repl.KeymapMain)["\x04"]; present {
+		t.Errorf("^D reached the editor as %#v, want it left to the editor's own dispatch", b)
+	}
+
+	// The redefinition is real and must still reach the keys it is *bound*
+	// to — this takes the key away from the action, not the action away.
+	r = bindkeyRunner(t, "zle -C delete-char-or-list .delete-char-or-list _main_complete\nbindkey '^G' delete-char-or-list\n")
+	if b, present := zsh.KeyBindings(r, repl.KeymapMain)["\a"]; !present || b == (repl.Binding{}) {
+		t.Errorf("^G = %#v, want the redefined completion widget", b)
+	}
+
+	// And rebinding the key away is still a rebinding: what is dropped is the
+	// key still holding its own default name, not the sequence.
+	r = bindkeyRunner(t, "bindkey '^D' beginning-of-line\n")
+	if b, present := zsh.KeyBindings(r, repl.KeymapMain)["\x04"]; !present || b.Widget != repl.WidgetBeginningOfLine {
+		t.Errorf("^D rebound = %#v, want beginning-of-line", b)
+	}
+	r = bindkeyRunner(t, "bindkey -r '^D'\n")
+	if b, present := zsh.KeyBindings(r, repl.KeymapMain)["\x04"]; !present || b != (repl.Binding{}) {
+		t.Errorf("^D removed = %#v, want present and doing nothing", b)
+	}
+
+	// **Return is the other editorControlKey and it is deliberately not in
+	// endOfInputKeys.** A plugin's wrapper around `accept-line` is exactly a
+	// redefinition that leaves the key where it was, and repl runs the
+	// wrapper and then ends the line for it (#2082) — so there, unlike here,
+	// the redefinition must take the key. Pinned because the restriction to
+	// one key is the whole of what keeps that true, and nothing else asked.
+	r = bindkeyRunner(t, "f(){ :; }\nzle -N accept-line f\n")
+	if got, want := zsh.KeyBindings(r, repl.KeymapMain)["\r"], (repl.Binding{Function: "accept-line"}); got != want {
+		t.Errorf("Return = %#v, want %#v", got, want)
+	}
+}

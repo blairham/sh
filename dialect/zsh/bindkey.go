@@ -246,6 +246,48 @@ var editorControlKeys = map[string]string{
 	"\x0d": "accept-line",
 }
 
+// endOfInputKeys are the editorControlKeys whose meaning a redefinition of the
+// widget they are named for cannot take away.
+//
+// One key, and the set exists to say *which* rather than to hold a list: the
+// other two are `accept-line`, and there a redefinition taking the key is the
+// point. `zle -N accept-line my-accept` is how every plugin wrapper works, and
+// repl runs the wrapper and then ends the line for it — the key still accepts,
+// through the function somebody wrote. See editor.runShellWidget.
+//
+// `^D` has no such half. The key *is* end of input, `repl` has no widget for
+// it on purpose (see repl.WidgetDeleteCharOrList), and a redefined
+// `delete-char-or-list` reached from this key would offer to list rather than
+// end anything. So the key is dropped here whenever it is still bound to the
+// name it is bound to by default, and reaches the editor's own dispatch.
+//
+// **This is #4422, and it is the hole the editorControlKeys comment above was
+// written to describe without closing.** The drop used to be the `!defined`
+// one below, which asks whether the *name* still means what it did. `compinit`
+// ends by redefining the eight standard completion widgets —
+//
+//	for _i_line in complete-word delete-char-or-list expand-or-complete \
+//	  expand-or-complete-prefix list-choices menu-complete \
+//	  menu-expand-or-complete reverse-menu-complete; do
+//	  zle -C $_i_line .$_i_line _main_complete
+//	done
+//
+// — so on any rc that runs `compinit`, which is the ordinary shape and not an
+// exotic one, `delete-char-or-list` was defined, the drop was skipped, and
+// `\x04` arrived at the editor as an override bound to the completion widget.
+// repl's matchBinding claims a key in that table before the key loop's own
+// `case ctrlD` is reached, so `editor.stopped` never ran: measured against
+// this machine's own `~/.zshrc`, `^D` at an empty prompt answered
+//
+//	zsh: do you wish to see all 1308 possibilities (437 lines)?
+//
+// and the session could not be ended from the keyboard at all.
+//
+// Rebinding the key *away* is still a rebinding and still reaches the editor:
+// the drop asks that the key still hold its own default name, so `bindkey '^D'
+// beginning-of-line` and `bindkey -r '^D'` both survive it.
+var endOfInputKeys = map[string]bool{"\x04": true}
+
 func buildDefaultBindings() map[string]string {
 	out := map[string]string{}
 	for seq, w := range repl.DefaultBindings() {
@@ -282,6 +324,12 @@ func KeyBindings(r *interp.Runner, km repl.Keymap) map[string]repl.Binding {
 	out := map[string]repl.Binding{}
 	for seq, widget := range keymapBindings(r, km) {
 		def, defined := widgetDefinitionOf(r, widget)
+		if km == repl.KeymapMain && endOfInputKeys[seq] && editorControlKeys[seq] == widget {
+			// **End of input is the key's and a redefinition cannot take
+			// it.** See endOfInputKeys, which carries the whole of why this
+			// is asked before the `!defined` question rather than inside it.
+			continue
+		}
 		if km == repl.KeymapMain && !defined {
 			// A key left at the editor's own default is left out, so that the
 			// table stays the override layer repl/bindings.go describes.

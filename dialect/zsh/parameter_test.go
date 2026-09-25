@@ -987,7 +987,7 @@ func moduleParams() []string {
 	}
 }
 
-// implementedModuleParams is the thirteen that are live views: the five a real
+// implementedModuleParams is the fifteen that are live views: the five a real
 // plugin manager reads and the only five it reads (#1060), `funcstack`, which
 // the completion system touches on its fourth line (#1598), `galiases` and
 // `saliases` for the two alias namespaces `alias -g` and `alias -s` brought
@@ -996,13 +996,14 @@ func moduleParams() []string {
 // (#2517).
 func implementedModuleParams() []string {
 	return []string{
-		"aliases", "builtins", "commands", "funcstack", "functions",
-		"functrace", "galiases", "history", "nameddirs", "options",
-		"parameters", "reswords", "saliases",
+		"aliases", "builtins", "commands", "funcfiletrace",
+		"funcsourcetrace", "funcstack", "functions", "functrace",
+		"galiases", "history", "nameddirs", "options", "parameters",
+		"reswords", "saliases",
 	}
 }
 
-// absentModuleParams is the thirteen this shell has not got, each registered
+// absentModuleParams is the eleven this shell has not got, each registered
 // with [interp.Runner.SetAbsentParameter] so that reading one is refused at
 // the expansion that asked (#1152).
 //
@@ -1021,11 +1022,13 @@ func implementedModuleParams() []string {
 // every keystroke and the refusal was written over the line being typed.
 // `functrace` left third (#4447): `$funcstack` already walked the stack it
 // reports on, and a handler that reads it to say where it was entered from
-// was stopped rather than left with a blank field.
+// was stopped rather than left with a blank field. `funcfiletrace` and
+// `funcsourcetrace` left with it (#4470, #4469) — the same walk asked for a
+// different field, sharing its frame selection so the three can never report
+// different lengths.
 func absentModuleParams() []string {
 	return []string{
-		"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
-		"functions_source", "historywords",
+		"dirstack", "dis_builtins", "functions_source", "historywords",
 		"jobdirs", "jobstates", "jobtexts", "modules",
 		"patchars", "userdirs", "usergroups",
 	}

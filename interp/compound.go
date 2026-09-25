@@ -1623,9 +1623,15 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// selection reads `$1`, `$@`, `$*` and `$#` out of the frame it names,
 	// and the list of the frame below this one is only knowable here. See
 	// Frame.outerParams.
+	//
+	// The one read of the definition's line, shared by the frame and by the
+	// location below: a second `fn.Pos().Line` here would be two spellings
+	// of one fact, free to disagree the day a route sets one and not the
+	// other.
+	defLine := int(fn.Pos().Line)
 	r.pushFrame(Frame{
 		File: r.functionFile(fn.Name), Name: name, Keyword: fn.Keyword,
-		outerParams: saved,
+		FuncLine: defLine, outerParams: saved,
 	})
 	defer r.popFrame()
 	// And the arguments, where a debugger has asked for them. After the
@@ -1668,8 +1674,10 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	}
 	defer func() { r.speaker, r.speakerLine = savedSpeaker, savedSpeakerLine }()
 	// Where the function was written, so a dialect that numbers a message
-	// from the function rather than from the file can subtract it.
-	r.funcLine = int(fn.Pos().Line)
+	// from the function rather than from the file can subtract it. The frame
+	// above carries the same line, for the dialect that reports it per frame
+	// rather than only for the one running.
+	r.funcLine = defLine
 	// And the body's lines are the body's, whatever offset the *caller* was
 	// running under. A command substitution and — in two dialects — `eval`
 	// run their text at an offset into the script (Runner.lineBase), and it

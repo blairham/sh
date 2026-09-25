@@ -65,6 +65,34 @@ type Frame struct {
 	OuterFunc     string
 	OuterFuncLine int
 
+	// FuncLine is the line the function running in this frame was written
+	// on — where its *declaration* starts, whichever of the two spellings
+	// was used, so `f()` with its `{` on the next line counts from the
+	// `f()`. Zero for a frame that is not a function.
+	//
+	// It is the callee's half of what OuterFuncLine is the caller's half of,
+	// and neither can be derived from the other: OuterFuncLine is on a frame
+	// only once something has been called from inside the function it names,
+	// so a walk over the stack has nothing to read for the innermost frame,
+	// nor for any frame that called nothing. It exists because one dialect
+	// reports, per frame, where the unit running in it was **defined** —
+	// which is this line and this frame's File — beside the two arrays that
+	// report where the shell *is* and where each frame was entered *from*.
+	FuncLine int
+
+	// NoFile marks a frame whose unit was read from no file at all: a
+	// function defined at the top level of `-c` or of standard input.
+	//
+	// File is not empty there — pushFrame fills it in with the shell's own
+	// `$0`, which is the measured answer for one dialect's `${BASH_SOURCE[@]}`:
+	// the same binary reached through a symlink `./mybash` reports
+	// `./mybash` for `./mybash -c 'f(){ …; }; f'`. Another dialect names that
+	// same non-file after *itself* rather than after `$0`, and the two
+	// strings differ in a single ordinary run, so a dialect reading File
+	// cannot tell a stand-in from a real path without being told. See
+	// dialect/zsh's unitFile.
+	NoFile bool
+
 	// Keyword marks a function defined with the `function` keyword rather
 	// than with `name()`, for the dialect whose `$0` answers only for those
 	// — see [DollarZeroIsTheInnermostKeywordFunction]. False for a sourced
@@ -217,7 +245,11 @@ func (r *Runner) pushFrame(f Frame) {
 		// standard input — belongs to whatever the shell calls itself, which
 		// is what bash puts there: `bash -c 'f(){ …; }; f'` reports the
 		// frame's file as `bash`.
-		f.File = r.Name
+		//
+		// Marked as well as filled in, because that is a *name* standing in
+		// for a file rather than a file, and one dialect wants a different
+		// name in the same place. See Frame.NoFile.
+		f.NoFile, f.File = true, r.Name
 	}
 	r.frames = append(r.frames, f)
 }

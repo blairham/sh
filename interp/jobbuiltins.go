@@ -180,7 +180,7 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// for the same reason: a filter the dialect applied is still the shell
 	// having looked.
 	r.markJobsReported(jobs)
-	if code := r.printJobs(jobs, form, wanted, explicit); code != 0 {
+	if code := r.printJobs(jobs, form, wanted, explicit, jobsShowsDirectory(opts)); code != 0 {
 		return code
 	}
 	if badLookup != jobFound {
@@ -240,9 +240,30 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	return 0
 }
 
+// jobsShowsDirectory reads `-d`, which adds a line naming the directory each
+// listed job was started in.
+//
+// Read rather than asked, and the letter set is the whole of the dialect's
+// answer. The other five columns do not have the letter at all — measured
+// 2026-09-25, `sleep 3 & jobs -d` is `invalid option` in bash 5.3.15 and
+// 3.2.57, `unknown option` in ksh93u+, `Illegal option -d` in dash, and
+// `illegal option -d` in BusyBox ash 1.37.0 inside the pinned alpine image —
+// so there is no second reading of the letter for an axis to switch between.
+// That is the difference from `jobs -n`, which is an axis precisely because
+// bash holds the same letter and means something else by it. See
+// Semantics.JobsOptions, which is what lets the letter through at all.
+func jobsShowsDirectory(opts string) bool {
+	return strings.ContainsRune(opts, 'd')
+}
+
 // printJobs writes the listing itself, once the form, the filter and the set
 // of jobs are settled.
-func (r *Runner) printJobs(jobs []*Job, form jobsForm, wanted jobState, explicit bool) int {
+//
+// showDir is `-d`: a line of its own under each job's row naming where that
+// job was started. Under the row rather than in it — the row is the ordinary
+// state row and `-d` composes with `-l` and with the state filters rather
+// than replacing anything.
+func (r *Runner) printJobs(jobs []*Job, form jobsForm, wanted jobState, explicit, showDir bool) int {
 	rows, code := r.jobRows(jobs, explicit)
 	if code != 0 {
 		return code
@@ -271,8 +292,25 @@ func (r *Runner) printJobs(jobs []*Job, form jobsForm, wanted jobState, explicit
 		default:
 			r.printf("%s\n", r.jobLine(row.n, row.job, showBg))
 		}
+		if showDir {
+			r.printf("%s\n", r.jobDirectoryLine(row.job))
+		}
 	}
 	return 0
+}
+
+// jobDirectoryLine is the line `jobs -d` adds under a job's row.
+//
+// The directory is written the way a prompt writes one — the home directory
+// as `~` — and that shortening is read at *print* time rather than recorded
+// with the job: measured 2026-09-25 on zsh 5.9.2, a job started under the
+// home directory and then listed after `HOME` was assigned somewhere else is
+// named by its full path, so what is stored is the path and what is decided
+// here is how to spell it. abbreviateHome is the prompt's own, shared rather
+// than written twice.
+func (r *Runner) jobDirectoryLine(j *Job) string {
+	dir := abbreviateHome(j.Dir, r.promptVar("HOME"))
+	return Wording(r.diag().JobDirectoryLine, "(pwd : %[1]s)", dir)
 }
 
 // jobsForm reads `-l` and `-p` out of the letters that were given.

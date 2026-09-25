@@ -88,11 +88,15 @@ wait`)
 	}
 
 	out, _ = runZsh(t, t.TempDir(), `jobs -n; echo n=$?
-jobs -d; echo d=$?`)
+jobs -Z; echo Z=$?`)
 	if !strings.Contains(out, "bad option: -n") || !strings.Contains(out, "n=1") {
 		t.Errorf("got %q, want the letter zsh does not have refused at 1", out)
 	}
-	if !strings.Contains(out, "-d is not implemented yet") {
+	// `-d` used to be the second half of this pair. It is implemented since
+	// #4507 — see TestJobsDashDNamesWhereTheJobStarted — and `-Z` is a letter
+	// zsh does have and this engine still does not, which is the shape the
+	// row was here to hold.
+	if !strings.Contains(out, "-Z is not implemented yet") {
 		t.Errorf("got %q, want the letter zsh does have named as missing", out)
 	}
 }

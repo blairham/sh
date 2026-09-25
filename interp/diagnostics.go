@@ -2542,6 +2542,26 @@ type Diagnostics struct {
 	// which no dialect in the panel relies on.
 	JobLineLong string
 
+	// JobDirectoryLine is the line `jobs -d` writes under a job's row, naming
+	// the directory that job was started in. One verb: the directory, with
+	// the home directory already written `~`.
+	//
+	// A line of its own rather than a column, because that is what was
+	// measured. zsh 5.9.2, 2026-09-25, `cd /tmp/x; sleep 5 & jobs -d`:
+	//
+	//	[1]  + running    sleep 5
+	//	(pwd : /tmp/x)
+	//
+	// The row above it is the ordinary state row, unchanged — `jobs -ld`
+	// writes the long row and then this line, and the state filters keep or
+	// drop the pair together.
+	//
+	// zsh is the only shell in the panel with the letter, so this is the only
+	// dialect that fills it in and the fallback is that shell's spelling.
+	// See Semantics.JobsOptions for why the letter set, not an axis, is what
+	// decides who can reach it.
+	JobDirectoryLine string
+
 	// JobRunning, JobStopped and JobDone are the states a job is listed in.
 	// No verbs.
 	//

@@ -5538,6 +5538,47 @@ func Apply(r *interp.Runner) {
 	// $UID has no other source. Same class as $$, which .golangci.yml has
 	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
+	// And the *group* id beside it, which is this shell's and not bash's.
+	//
+	// Measured 2026-09-25, `-f -c`, against zsh 5.9.2 on this machine, where
+	// the uid and the gid differ — `uid=501 gid=20`, which is what makes the
+	// row evidence rather than a coincidence:
+	//
+	//	zsh 5.9.2    UID=[501] EUID=[501] GID=[20] EGID=[20]
+	//	bash 5.3.20  UID=[501] EUID=[501] GID=[]   EGID=[]
+	//	bash 3.2.57  UID=[501] EUID=[501] GID=[]   EGID=[]
+	//
+	// So the pair is gated to this dialect, measured rather than assumed:
+	// dialect/bash sets `UID` and `EUID` on the two lines this one models and
+	// must not grow these, and `env GID=999 bash -c 'echo $GID'` writes 999
+	// there because the name is nothing to that shell.
+	//
+	// `SetSpecial` rather than a plain store for the reason `$UID` uses it:
+	// measured, `env GID=999 zsh -f -c 'print $GID'` and `env EGID=999 …`
+	// both write 20, so this is a name the environment may not supply. It is
+	// the same read-of-the-process the comment above blesses — a gid is
+	// per-process, no script changes it, and two Runners in one program
+	// genuinely have the same one.
+	//
+	// **Unset is not a refusal**, which is what the issue that asked for this
+	// was about (#4476): a word that expands to nothing is dropped from the
+	// command line rather than complained about, so `chgrp $EGID file` ran as
+	// `chgrp file` and the *system's* `chgrp` wrote the `usage:` line. The
+	// symptom was a third-party program's message and none of ours.
+	//
+	// Not marked integer or readonly, and that is measured too rather than
+	// left out. `${(t)GID}` is `integer-special` there against a bare
+	// `scalar` here — but so is `${(t)UID}`, and `${(t)IFS}` is
+	// `scalar-special` against `scalar`, so the missing mark belongs to
+	// `SetSpecial` as a whole and is filed against all four rather than
+	// grown for the new pair alone. Assignment is the other half and is
+	// deliberately absent: `GID=999` in an unprivileged shell is `failed to
+	// change group ID: operation not permitted` and stops the shell, while
+	// `GID=20` — the gid it already has — is taken at 0, so the rule is "the
+	// setgid call happened", not a flat refusal. A library may not make that
+	// call (see the purity rule above), and a privileged path is not
+	// testable from here, so neither is guessed at.
+	r.SetSpecial("GID", strconv.Itoa(os.Getgid()))
 	// The login name for that same uid, for the `%n` prompt escape. Asked
 	// here for the reason the uid above is: nothing a script does changes
 	// it, two shells in one program genuinely have the same one, and it has
@@ -5610,6 +5651,10 @@ func Apply(r *interp.Runner) {
 	// prompt and refused it by name in a script (#1090).
 	r.SetPromptStyle(PromptStyle())
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
+	// And the effective gid, the fourth of the identity parameters this shell
+	// starts with. See the `$GID` line above for what was measured and for
+	// why the pair stops at the value.
+	r.SetSpecial("EGID", strconv.Itoa(os.Getegid()))
 	r.SetDynamic("RANDOM", func(rr *interp.Runner) string { return rr.Randoms() })
 	// And an assignment seeds it, which is what makes a script that uses
 	// `RANDOM` reproducible: measured 2026-09-14, `RANDOM=42` twice in one

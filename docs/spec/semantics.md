@@ -5553,6 +5553,59 @@ call — where one answering no elements is an empty array, `declare -a
 BASH_ARGV=()`. That is the contract a producer already answers an expansion
 under, and the listing now says the same two things.
 
+## The four identity parameters, and which shell has which
+
+Measured 2026-09-25 on a machine whose uid and gid differ — `uid=501(bhamilton)
+gid=20(staff)`, which is what makes the row evidence rather than a coincidence a
+single number would produce either way — over `zsh -f -c` and `bash --norc
+--noprofile -c`:
+
+    print "UID=[$UID] EUID=[$EUID] GID=[$GID] EGID=[$EGID]"
+
+| shell | `$UID` | `$EUID` | `$GID` | `$EGID` |
+| --- | --- | --- | --- | --- |
+| zsh 5.9.2 | `501` | `501` | `20` | `20` |
+| bash 5.3.20 | `501` | `501` | *(unset)* | *(unset)* |
+| bash 3.2.57 | `501` | `501` | *(unset)* | *(unset)* |
+
+So the group pair is zsh's and the user pair is shared, and it is a fact about
+which parameters a shell **provides** rather than an axis: the same kind of
+question as which builtins it has, answered through the same seam.
+
+**Unset is not a refusal, and that is why the pair is worth a section.** A
+parameter that expands to nothing is silently dropped from a command line, so
+`chgrp $EGID file` runs as `chgrp file` — one argument short, and the complaint
+comes from the *system's* `chgrp` rather than from the shell. Measured with a
+script that prints its own argument count: `count $EGID file` is `argc=2` in
+zsh and was `argc=1` here, and zsh's own `C02cond.ztst` abandoned its whole
+file on that before reaching its first condition test (#4476).
+
+Three further attributes were measured at the same time, and only the first is
+implemented:
+
+**The environment may not name them.** `env GID=999 zsh -f -c 'print $GID'` and
+`env EGID=999 …` both write the real id, exactly as `env UID=999 …` does. bash
+is the opposite for the two it does not have — `env GID=999 bash --norc -c 'echo
+$GID'` writes `999`, because the name means nothing there.
+
+**They carry the integer and special marks, and this shell writes neither.**
+`${(t)GID}` is `integer-special` and `typeset -p GID` is `typeset -i10 GID=20`
+in zsh, against a bare `scalar` and `typeset GID=20` here. That is not the new
+pair's gap: `${(t)UID}` and `${(t)IFS}` are short of `special` in exactly the
+same way, so the mark belongs to the seam that stores them rather than to any
+one parameter, and widening it for the group pair alone would spread the
+divergence rather than close it.
+
+**Assignment is a `setgid` call, not a store.** In an unprivileged shell
+`GID=999` is `failed to change group ID: operation not permitted` and stops the
+shell at 1; `EGID=999` is the same with `effective` in it; and `GID=20` — the
+gid the shell already has — is taken at 0. So the rule is "the system call
+happened", which a flat refusal would model wrongly in the third row. Changing
+the process's identity is process-wide state, which the core may not touch (see
+*The core is a library, so it may not touch the process*), and the privileged
+path is not testable from an unprivileged shell — so this shell sets the four
+parameters and takes no assignment to them as an instruction.
+
 ## Listing a parameter that is produced rather than stored
 
 A produced parameter — `RANDOM`, `SECONDS`, `LINENO`, a clock — is in none

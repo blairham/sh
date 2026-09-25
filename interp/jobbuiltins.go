@@ -543,6 +543,15 @@ func (r *Runner) jobState(j *Job, noticing bool) string {
 		if noticing && dg.JobDoneNotice != "" {
 			state = dg.JobDoneNotice
 		}
+		if j.EndSig != 0 && dg.JobSignaled != "" {
+			// A dialect that names the signal that ended the job. Asked
+			// before the status below, because a signal death has a status
+			// too and the two wordings would otherwise both apply — see
+			// Diagnostics.JobSignaled, and Job.EndSig for why the signal is
+			// carried rather than read back out of that status.
+			sig := syscall.Signal(j.EndSig)
+			return Wording(dg.JobSignaled, "Killed", r.signalDescription(sig), j.EndSig)
+		}
 		if j.Status != 0 && dg.JobExited != "" {
 			// A dialect that says something else for a job that failed. One
 			// verb, the status, and no dialect words it without one.

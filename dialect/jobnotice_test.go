@@ -39,7 +39,13 @@ func TestWhatEachDialectSaysAboutAResumedJob(t *testing.T) {
 		alreadyBg       string
 		alreadyBgStatus int
 		// resumedFg is the wording `fg` uses, and the one that carries the
-		// state verb is the one dialect whose notice is a listing row.
+		// state verb is the one dialect whose notice is a listing row. Its
+		// state column is spelled as that dialect's JobLine spells it —
+		// nine wide with two spaces after it rather than a flat eleven —
+		// because it *is* that column. The two spellings are byte-identical
+		// for every word this row can hold, `running`, `suspended` and
+		// `continued` all being nine or fewer; what parts them is a word
+		// longer than nine, which only the signal names reach (#4508).
 		resumedFg string
 	}{
 		{
@@ -53,7 +59,7 @@ func TestWhatEachDialectSaysAboutAResumedJob(t *testing.T) {
 			announces:       interp.Yes,
 			alreadyBg:       "job already in background",
 			alreadyBgStatus: 1,
-			resumedFg:       "[%[1]d]  %[2]s %-11[4]s%[3]s",
+			resumedFg:       "[%[1]d]  %[2]s %-9[4]s  %[3]s",
 		},
 		{name: "ksh", sem: ksh.Semantics(), diag: ksh.Diagnostics(), announces: interp.No},
 		{name: "dash", sem: dash.Semantics(), diag: dash.Diagnostics(), announces: interp.No},

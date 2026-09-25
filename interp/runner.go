@@ -7991,7 +7991,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 // plain os/exec wait it has always been, and nothing moves.
 func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 	if !r.monitor || r.WaitForCommand == nil || r.bg == nil {
-		return r.exitStatus(cmd.Wait())
+		return r.backgroundExitStatus(cmd.Wait())
 	}
 	pid := cmd.Process.Pid
 	for {
@@ -7999,7 +7999,7 @@ func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 		if err != nil {
 			// Nothing to be learned from the front end's wait, so fall back
 			// to os/exec's: it is the one that still holds the child.
-			return r.exitStatus(cmd.Wait())
+			return r.backgroundExitStatus(cmd.Wait())
 		}
 		if w.Stopped {
 			r.bg.noteStopped(w.Signal)
@@ -8017,9 +8017,30 @@ func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 		} else if r.elemCPU != nil {
 			r.elemCPU.add(w.User, w.System)
 		}
+		// What ended it, where a signal did — recorded and not announced.
+		// A background job's death is the *job notice*'s to report and not
+		// a sentence's, which is the difference between this and runWatched:
+		// the signal is carried out to Job.EndSig so the notice can name it,
+		// and nothing is written here. Without it a killed job reached that
+		// notice with a status of 128 plus the number and no way to tell it
+		// from an `exit 143`, and was reported `done` (#4508).
+		r.diedOfSig = endingSignal(w)
 		status, _ := r.waitResult(w)
 		return status
 	}
+}
+
+// backgroundExitStatus is the status from os/exec's own wait, with the signal
+// that ended the process kept beside it.
+//
+// The fallback route above, and it has to record what the watched route
+// records or a job would be named for the signal that killed it only while
+// the front end's wait is in the picture.
+func (r *Runner) backgroundExitStatus(err error) int {
+	if sig, killed := killedBy(err); killed {
+		r.diedOfSig = sig
+	}
+	return r.exitStatus(err)
 }
 
 // runWatched runs a foreground command through the caller's own wait, which is

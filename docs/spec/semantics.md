@@ -15534,9 +15534,7 @@ say `bad interpreter: No such file or directory` at 126, and dash,
 ksh93, zsh and ash say some form of `not found` at 127. The fallback is
 therefore keyed on `ENOEXEC` **specifically** — a fallback keyed on "the
 start failed" would run the file, which is exactly the error a person
-needs to see. We still report Go's wrapper for this one, at 126, so the
-corpus row records the target rather than our answer; it is a separate
-failure from #2580 and the row is where the next fix starts.
+needs to see. That one is the next section.
 
 ### The degenerate ends, and the second door
 
@@ -15564,6 +15562,118 @@ from this. The reading behind that is the one the shells implement — the
 script is the shell running on, not a command it launched — which is why
 `imageFiles` is a second caller of the one table rather than a second
 table.
+
+
+## The `#!` line, for the shell that reads it
+
+Oracle runs, 2026-09-25, on macOS: bash 5.3.20, that bash as `sh`, bash
+3.2.57, ksh93u+, zsh 5.9.2, dash, and BusyBox ash in the pinned alpine
+image. Corpus rows `path/missing-interpreter-is-not-the-script-fallback`,
+`path/slashless-interpreter-is-path-searched` and
+`path/empty-interpreter-line-is-not-a-script`. Issue #4454.
+
+A `#!` line is the kernel's business, right up until the kernel cannot
+make anything of it. Then it is the shell's, and the panel divides three
+ways over how much of it a shell reads.
+
+### A missing interpreter is not a missing command
+
+    printf '#!/nonexistent/interp\necho SHOULD-NOT-RUN\n' > bad.scr
+    chmod +x bad.scr; ./bad.scr; echo "st=$?"
+
+| column | | |
+| --- | --- | --- |
+| bash 5.3.20, bash as `sh`, bash 3.2.57 | `<file>: /nonexistent/interp: bad interpreter: No such file or directory` | 126 |
+| zsh 5.9.2 | `<shell>:1: <file>: bad interpreter: /nonexistent/interp: no such file or directory` | 127 |
+| dash, ksh93u+, ash | `<file>: not found` | 127 |
+| **ours, before** | `<shell>:1: <word>: fork/exec <abs path>: no such file or directory` | 126 |
+
+Two shells read the line to say **which** name they could not find and
+word it in opposite orders, which is `Diagnostics.BadInterpreter`. They
+number it differently too, which is `Diagnostics.BadInterpreterStatus`:
+126 for bash, because the file is there and would not start, and 127 for
+zsh, because what was not there is a name. The other three say nothing
+about the interpreter and still answer **127**, so the read is not only
+about wording — a shell that skipped it because it had no sentence to
+print would number the failure 126 and tell a script testing
+`$? -eq 127` for "not found" the wrong thing. So the line is read in
+every dialect.
+
+The wrapper on our old row is Go's, from `os/exec`. It is a sentence no
+shell writes, it carries an absolute path next to the word the script
+typed, and it was the only diagnostic of ours in the zsh column that
+read as a Go error.
+
+### A slashless interpreter, and who looks for it
+
+    printf '#!cat\necho SCRIPT-BODY\n' > d/tst.cmd
+    chmod +x d/tst.cmd; PATH=$PWD/d:$PATH; tst.cmd; echo "st=$?"
+
+`cat` is not a path, so `execve` cannot resolve it and answers `ENOENT`
+whatever is on `PATH`.
+
+| column | | |
+| --- | --- | --- |
+| zsh 5.9.2 | the file's own two lines — `cat` ran on it | 0 |
+| bash 5.3.20, bash as `sh`, bash 3.2.57 | `<file>: cat: bad interpreter: No such file or directory` | 126 |
+| dash, ksh93u+, ash | `tst.cmd: not found` | 127 |
+
+One column does for the interpreter what it already does for a command
+word. That is `Semantics.SlashlessInterpreterIsPathSearched`, and the
+preset answers no.
+
+What the interpreter is handed is what the kernel would have handed it:
+its own resolved path as `argv[0]`, the **one** argument the line may
+carry, the file, and then the command's own operands. One argument and
+not several — measured, `#!myint   one   two  ` hands over a single
+`  one   two`, everything after the first separator with the trailing
+blanks taken off. The file is named the way the kernel would have named
+it: the path the search resolved for a bare command word, and the word
+as written for one that already had a slash in it.
+
+**One level.** An interpreter that is itself a file with a `#!` the
+shell cannot resolve is not searched for a second time; the failure is
+reported against the *first* file, with the word that file's line held.
+Measured, and it is what stops each round adding a word to the argv it
+is building.
+
+A relative `#!` word is resolved by the **kernel** against the child's
+working directory, so an interpreter sitting beside its script is found
+before the shell is asked anything. A probe that puts the two in one
+directory therefore measures nothing, and a test of the search has to
+keep them apart.
+
+### A `#!` naming nothing, and the one column that refuses it
+
+    printf '#!\necho RAN-ANYWAY\n' > e.scr; chmod +x e.scr
+    ./e.scr; echo "st=$?"
+
+| column | | |
+| --- | --- | --- |
+| dash, bash 5.3.20, bash as `sh`, bash 3.2.57, ksh93u+, ash | `RAN-ANYWAY` | 0 |
+| zsh 5.9.2 | `<shell>:1: exec format error: e.scr` | 126 |
+
+The same for a `#!` followed only by blanks. This is the mirror of the
+NUL check above — the same fallback declined, for a different reason
+found in the same read — and it is the one place a shell is *stricter*
+than the fallback rather than looser. That is
+`Semantics.EmptyInterpreterLineIsNotAScript`, and the preset answers no,
+because the kernel cannot tell a `#!` naming nothing from a file with no
+`#!` at all and six of the seven columns do not either.
+
+Being wrong in this direction is silent: we ran the file and reported 0
+where the reference refused it, so nothing complained.
+
+### One cell measured and deliberately not claimed
+
+The two shells that read the line disagree about where the first word
+*ends*. bash treats a tab as a separator and zsh does not:
+`#!nosuchz<TAB> arg` is `nosuchz` to bash and `nosuchz<TAB>` to zsh. We
+follow bash, which is the reading that has a sentence to print it in,
+and the cost is that a slashless interpreter with a tab rather than a
+space after it is searched for here where zsh would refuse it. It needs
+both a `#!` word with no slash in it and a tab, which is why it is
+written down rather than made a third axis.
 
 ## A subscript that will not read
 

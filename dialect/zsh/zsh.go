@@ -788,6 +788,22 @@ func Dialect() syntax.Dialect {
 // Semantics is what zsh means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+
+	// This shell reads a `#!` line itself rather than leaving it to the
+	// kernel, which is two answers and not one.
+	//
+	// A line naming nothing is refused: measured 2026-09-25, `printf
+	// '#!\necho hi\n' > empty; chmod +x empty; empty` is
+	// `zsh:1: exec format error: empty` at 126 here and `hi` at 0 in the
+	// other six columns — the same for a `#!` followed only by blanks. See
+	// TestAnEmptyInterpreterLineIsRefused.
+	s.EmptyInterpreterLineIsNotAScript = interp.Yes
+	// And a line naming a word with no slash in it is looked up on PATH:
+	// `printf '#!cat\necho hi\n' > tstcmd; chmod +x tstcmd; tstcmd` prints
+	// the file's own two lines at 0 here, where the three bash columns say
+	// `cat: bad interpreter` at 126 and dash, ksh93 and BusyBox ash say
+	// `not found` at 127. See TestASlashlessInterpreterIsFoundOnPath.
+	s.SlashlessInterpreterIsPathSearched = interp.Yes
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	// A pathname operand is written back as typed, through `command -v`,
 	// `type` and `whence -p` alike: `./bb/tool` is `./bb/tool`. Measured
@@ -4948,6 +4964,16 @@ func Diagnostics() interp.Diagnostics {
 		StdinLocation:        interp.LocationNameOnly,
 		StdinBuiltinLocation: interp.LocationBuiltinNameOnly,
 		CannotExecute:        "%[2]s: %[1]s",
+		// A `#!` line naming an interpreter that is not there, which this
+		// shell reads the file to find out about — and words the other way
+		// round from bash, with the complaint before the name it could not
+		// find. Measured 2026-09-25 on 5.9.2: `./bad` whose first line is
+		// `#!/nonexistent/interp` is `zsh:1: ./bad: bad interpreter:
+		// /nonexistent/interp: no such file or directory`, keeping the line
+		// bash drops and numbering it 127 where bash says 126. A script
+		// testing `$? -eq 127` for "not found" is reading that number.
+		BadInterpreter:       "%[1]s: bad interpreter: %[2]s: %[3]s",
+		BadInterpreterStatus: 127,
 		// zsh says "command not found" for a bare name it could not resolve,
 		// where the other three say "not found".
 		// zsh leads with the complaint and names the command after it, for a

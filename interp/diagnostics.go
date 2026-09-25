@@ -4616,14 +4616,25 @@ type Diagnostics struct {
 	//
 	// So two of the four look inside the file and two report the start
 	// failure as a name that was not found. Empty — which is what the second
-	// pair want — means the shell says what it already said about a start it
-	// could not make.
+	// pair want — is *not* silence: the failure is still a name that was not
+	// found, reported at NotFound's wording and its 127, which is what those
+	// two print. It was Go's `fork/exec …` at 126 in all four until the two
+	// answers here were separated (#4454).
 	//
-	// zsh's row is recorded and not answered here: it keeps the location
-	// bash drops and numbers the failure 127 where bash numbers it 126, so
-	// filling this field in for it would be two more answers than the field
-	// holds.
+	// The command is named by what was started rather than by the word that
+	// was typed, which is the one place this message parts from the failures
+	// beside it: both shells that read the line print the path a PATH search
+	// resolved for a bare name, and the word as written for one that already
+	// had a slash in it.
 	BadInterpreter string
+
+	// BadInterpreterStatus numbers that failure, for the two shells that word
+	// it. bash is 126 — the file is there and would not start — and zsh is
+	// 127, which is the answer a script testing `$? -eq 127` for "not found"
+	// is looking for. Measured 2026-09-25 on `#!/nonexistent/interp`.
+	//
+	// Zero means 126, which is what every other unstartable file reports.
+	BadInterpreterStatus int
 
 	// BadInterpreterLocatedByNameAlone drops the line from that one message.
 	//

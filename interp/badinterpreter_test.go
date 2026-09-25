@@ -71,15 +71,32 @@ func TestTheBadInterpreterLineIsLocatedByNameAlone(t *testing.T) {
 	}
 }
 
-// A dialect with nothing to say about it reports the start failure it already
-// had, which is what the two columns that do not look inside the file do.
-func TestADialectThatNamesNoBadInterpreterWordingSaysWhatItSaid(t *testing.T) {
+// A dialect with nothing to say about it says what it says about a name that
+// was not found, which is what the columns that do not look inside the file
+// do — the wording *and* the 127, where an unstartable file is otherwise 126.
+//
+// It was Go's `fork/exec <abs path>: no such file or directory` at 126 here,
+// which is a sentence no shell writes, about a file that is plainly there,
+// numbered so that a script testing `$? -eq 127` for "not found" is told 126
+// (#4454).
+func TestADialectThatNamesNoBadInterpreterWordingSaysNotFound(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "x")
 	if err := os.WriteFile(path, []byte("#!nosuchfile\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	out, _ := run(t, path+"\n", nil)
+	out, status := run(t, path+"\n", func(r *Runner) {
+		r.Diagnostics = &Diagnostics{PathNotFound: "%[1]s: not found"}
+	})
 	if strings.Contains(out, "bad interpreter") {
 		t.Errorf("got %q, want no wording this dialect does not have", out)
+	}
+	if strings.Contains(out, "fork/exec") {
+		t.Errorf("got %q, want no Go error in a shell diagnostic", out)
+	}
+	if want := path + ": not found\n"; !strings.HasSuffix(out, want) {
+		t.Errorf("got %q, want it to end in %q", out, want)
+	}
+	if status != 127 {
+		t.Errorf("status %d, want 127", status)
 	}
 }

@@ -156869,6 +156869,57 @@
         "TimedOut": false
       }
     },
+    "path/empty-interpreter-line-is-not-a-script": {
+      "ash": {
+        "Stdout": "RAN-ANYWAY~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "RAN-ANYWAY~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "RAN-ANYWAY~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "RAN-ANYWAY~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "RAN-ANYWAY~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "RAN-ANYWAY~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=126",
+        "Stderr": "\u003cshell\u003e:1: exec format error: ./e.scr",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "path/exec-on-a-file-with-no-shebang-runs-it": {
       "ash": {
         "Stdout": "ran-under-exec 2",
@@ -157424,6 +157475,57 @@
       },
       "zsh": {
         "Stdout": "on-path",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "path/slashless-interpreter-is-path-searched": {
+      "ash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: tst.cmd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=126",
+        "Stderr": "\u003cshell\u003e: /private\u003ctmp\u003e/d/tst.cmd: cat: bad interpreter: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=126",
+        "Stderr": "\u003cshell\u003e: /private\u003ctmp\u003e/d/tst.cmd: cat: bad interpreter: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=126",
+        "Stderr": "\u003cshell\u003e: /private\u003ctmp\u003e/d/tst.cmd: cat: bad interpreter: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: tst.cmd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: tst.cmd: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "#!cat~echo SCRIPT-BODY~st=0",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

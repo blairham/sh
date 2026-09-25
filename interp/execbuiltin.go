@@ -78,6 +78,18 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		r.keepRedirs = true
 		return 0
 	}
+	return r.replaceSelfWith(ctx, argv, flags)
+}
+
+// replaceSelfWith is replaceSelf once the builtin's own options have been
+// read off the front.
+//
+// A seam rather than a style: the interpreter a `#!` line names is a second
+// command word for the *same* `exec`, so the retry has to arrive here with
+// the flags the first attempt was given. Re-entering through replaceSelf
+// would read the interpreter's path as a fresh option word and would lose an
+// `-a` or a `-c` the script wrote.
+func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execFlags) int {
 	if r.restricted {
 		// A restricted shell will not be replaced, and it says so before it
 		// looks: measured, `exec /bin/sh`, `exec sh` and `exec nosuchcmd`
@@ -184,19 +196,28 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		if st, ran := r.execImageAsScript(ctx, action, path, argv, r.execEnviron(flags), err); ran {
 			return st
 		}
+		// And a `#!` naming an interpreter with no slash in it, which this
+		// shell may be able to find where the kernel could not. Both doors
+		// ask, for the reason the line above says (#4454).
+		if next, ok := r.interpreterArgv(ctx, path, argv, err); ok {
+			defer func() { r.interpRetry = nil }()
+			return r.replaceSelfWith(ctx, next, flags)
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		// A start that failed rather than a lookup that did: wrapped so the
 		// shared reporter has a name and a resolved path to work from. The
 		// resolved path is also what puts this on the pathname side of the
 		// exit-trap question, which is right — the file was found.
-		// The interpreter a `#!` line named, for the dialect that reads the
+		// The interpreter a `#!` line named, for the dialects that read the
 		// file to tell "this command is not there" from "the program its
 		// first line names is not there" — see Runner.interpreterNamed. Both
-		// doors ask, because `exec ./x` and `./x` word it identically.
-		return r.execFailed(&pathError{
-			name: argv[0], resolved: path,
-			interpreter: r.interpreterNamed(ctx, path, err), err: err,
-		})
+		// doors ask, because `exec ./x` and `./x` word it identically, and
+		// missing is what numbers it 127 in the dialects with no sentence of
+		// their own for it.
+		if pe := r.interpreterFailure(ctx, argv[0], path, err); pe != nil {
+			return r.execFailed(pe)
+		}
+		return r.execFailed(&pathError{name: argv[0], resolved: path, err: err})
 	}
 
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
@@ -219,19 +240,28 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		if st, ran := r.execImageAsScript(ctx, action, path, argv, cmd.Env, err); ran {
 			return st
 		}
+		// And a `#!` naming an interpreter with no slash in it, which this
+		// shell may be able to find where the kernel could not. Both doors
+		// ask, for the reason the line above says (#4454).
+		if next, ok := r.interpreterArgv(ctx, path, argv, err); ok {
+			defer func() { r.interpRetry = nil }()
+			return r.replaceSelfWith(ctx, next, flags)
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		// A start that failed rather than a lookup that did: wrapped so the
 		// shared reporter has a name and a resolved path to work from. The
 		// resolved path is also what puts this on the pathname side of the
 		// exit-trap question, which is right — the file was found.
-		// The interpreter a `#!` line named, for the dialect that reads the
+		// The interpreter a `#!` line named, for the dialects that read the
 		// file to tell "this command is not there" from "the program its
 		// first line names is not there" — see Runner.interpreterNamed. Both
-		// doors ask, because `exec ./x` and `./x` word it identically.
-		return r.execFailed(&pathError{
-			name: argv[0], resolved: path,
-			interpreter: r.interpreterNamed(ctx, path, err), err: err,
-		})
+		// doors ask, because `exec ./x` and `./x` word it identically, and
+		// missing is what numbers it 127 in the dialects with no sentence of
+		// their own for it.
+		if pe := r.interpreterFailure(ctx, argv[0], path, err); pe != nil {
+			return r.execFailed(pe)
+		}
+		return r.execFailed(&pathError{name: argv[0], resolved: path, err: err})
 	}
 	status := r.exitStatus(cmd.Wait())
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: status})

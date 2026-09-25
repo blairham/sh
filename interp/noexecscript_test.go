@@ -451,3 +451,191 @@ func TestTheFreshShellIsSetUpTheWayTheFrontEndSetsOneUp(t *testing.T) {
 		t.Errorf("the dialect's own builtins, one level down and two:\n got %q\nwant %q", buf.String(), want)
 	}
 }
+
+// A `#!` line naming *nothing* is the other file the kernel refuses with
+// ENOEXEC, and whether the fallback swallows it is an axis of its own — see
+// Semantics.EmptyInterpreterLineIsNotAScript. Both answers are asserted,
+// because a test holding only the refusing one would pass against a shell
+// that refused every shebang-less file.
+func TestWhetherAnEmptyInterpreterLineStopsTheFallbackIsAnAxis(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		axis  Answer
+		line  string
+		wants string
+	}{
+		{"refused", Yes, "#!\n", "st=126"},
+		{"refused-blanks", Yes, "#!  \t \n", "st=126"},
+		{"read-as-a-script", No, "#!\n", "ran-anyway"},
+		{"read-as-a-script-blanks", No, "#!  \t \n", "ran-anyway"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeImage(t, dir, "e.scr", []byte(tc.line+"echo ran-anyway\n"), 0o755)
+			sem := imageSemantics()
+			sem.EmptyInterpreterLineIsNotAScript = tc.axis
+			out, _ := imageRun(t, dir, `./e.scr; echo "st=$?"`, sem, Diagnostics{})
+			if !strings.Contains(out, tc.wants) {
+				t.Errorf("axis %v on %q: got %q, want it to contain %q", tc.axis, tc.line, out, tc.wants)
+			}
+			if strings.Contains(out, "fork/exec") {
+				t.Errorf("a Go error must not reach a shell diagnostic: got %q", out)
+			}
+		})
+	}
+}
+
+// searchingSemantics is imageSemantics with the PATH search for a slashless
+// `#!` word turned on — the answer one shell in the panel gives and the
+// preset does not, so a row about the search has to say so.
+func searchingSemantics() Semantics {
+	s := imageSemantics()
+	s.SlashlessInterpreterIsPathSearched = Yes
+	return s
+}
+
+// interpreterRun is imageRun with the interpreter kept in a second directory
+// — on PATH, and never the one the command runs in.
+//
+// That separation is the whole of the fixture and it is not tidiness. A
+// relative `#!` word is resolved by the *kernel* against the child's working
+// directory, so an interpreter sitting beside the script is found before this
+// shell is ever asked, and a row arranged that way would report a PATH search
+// that never happened.
+func interpreterRun(t *testing.T, dir, bin, src string, sem Semantics, dg Diagnostics) (string, int) {
+	t.Helper()
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	r := newTestRunner(t, &Runner{
+		Stdout: &buf, Stderr: &buf,
+		Semantics: &sem, Diagnostics: &dg,
+		Dir: dir, Name: "testsh",
+	})
+	r.Vars = map[string]string{"PATH": dir + string(os.PathListSeparator) + bin}
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		return buf.String() + "unsupported: " + rerr.Error(), -1
+	}
+	return buf.String(), st
+}
+
+// And a `#!` naming a word with no slash in it, which the kernel hands to
+// execve as written and never searches for. Whether the shell searches is
+// Semantics.SlashlessInterpreterIsPathSearched.
+//
+// The interpreter writes its own argv, which is the discriminating half: a
+// shell that merely stopped complaining would print nothing at all here, and
+// a shell that ran the file with *itself* would print `body` instead.
+func TestWhetherASlashlessInterpreterIsSearchedForIsAnAxis(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		axis  Answer
+		wants string
+	}{
+		{"searched", Yes, "INTERP ran"},
+		{"not-searched", No, "st=127"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir, bin := t.TempDir(), t.TempDir()
+			writeImage(t, bin, "myint", []byte("#!/bin/sh\necho INTERP ran\n"), 0o755)
+			writeImage(t, dir, "uses.scr", []byte("#!myint\necho body\n"), 0o755)
+			sem := imageSemantics()
+			sem.SlashlessInterpreterIsPathSearched = tc.axis
+			out, _ := interpreterRun(t, dir, bin, `uses.scr a1; echo "st=$?"`, sem,
+				Diagnostics{PathNotFound: "%[1]s: not found"})
+			if !strings.Contains(out, tc.wants) {
+				t.Errorf("axis %v: got %q, want it to contain %q", tc.axis, out, tc.wants)
+			}
+			if strings.Contains(out, "body") {
+				t.Errorf("the file must not be read by this shell: got %q", out)
+			}
+			if strings.Contains(out, "fork/exec") {
+				t.Errorf("a Go error must not reach a shell diagnostic: got %q", out)
+			}
+		})
+	}
+}
+
+// The interpreter is handed what the kernel would have handed it: its own
+// resolved path as argv[0], the one argument the `#!` line carried, the file,
+// and then the command's own operands.
+func TestASearchedInterpreterIsGivenTheKernelsArgv(t *testing.T) {
+	t.Parallel()
+	dir, bin := t.TempDir(), t.TempDir()
+	writeImage(t, bin, "myint", []byte("#!/bin/sh\nprintf '[%s]' \"$0\" \"$@\"; echo\n"), 0o755)
+	writeImage(t, dir, "uses.scr", []byte("#!myint extra\necho body\n"), 0o755)
+	out, _ := interpreterRun(t, dir, bin, `uses.scr a1 a2`, searchingSemantics(), Diagnostics{})
+	want := "[" + filepath.Join(bin, "myint") + "][extra][" +
+		filepath.Join(dir, "uses.scr") + "][a1][a2]\n"
+	if out != want {
+		t.Errorf("the argv the kernel would have built:\n got %q\nwant %q", out, want)
+	}
+}
+
+// One level, and no more. An interpreter that is itself a file with a `#!`
+// this shell cannot resolve is not searched for a second time: the failure is
+// reported against the *first* file, with the word that file's line held.
+func TestASearchedInterpreterIsNotSearchedForAgain(t *testing.T) {
+	t.Parallel()
+	dir, bin := t.TempDir(), t.TempDir()
+	writeImage(t, bin, "selfint", []byte("#!selfint\necho never\n"), 0o755)
+	writeImage(t, dir, "loop.scr", []byte("#!selfint\necho body\n"), 0o755)
+	dg := Diagnostics{BadInterpreter: "%[1]s: bad interpreter: %[2]s: %[3]s"}
+	out, _ := interpreterRun(t, dir, bin, `loop.scr; echo "st=$?"`, searchingSemantics(), dg)
+	want := filepath.Join(dir, "loop.scr") + ": bad interpreter: selfint: "
+	if !strings.Contains(out, want) {
+		t.Errorf("the first file and its own word:\n got %q\nwant it to contain %q", out, want)
+	}
+	if strings.Contains(out, "never") || strings.Contains(out, "body") {
+		t.Errorf("nothing may have run: got %q", out)
+	}
+}
+
+// A dialect with no `bad interpreter` sentence still numbers this 127 rather
+// than the 126 an unstartable file otherwise reports — the answer a script
+// testing `$? -eq 127` for "not found" is reading. It was 126, with Go's
+// `fork/exec` wrapper in front of it, in every dialect (#4454).
+func TestAMissingInterpreterIsNotFoundRatherThanUnstartable(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeImage(t, dir, "bad.scr", []byte("#!/nonexistent/interp\necho SHOULD-NOT-RUN\n"), 0o755)
+	out, _ := imageRun(t, dir, `./bad.scr; echo "st=$?"`, imageSemantics(),
+		Diagnostics{PathNotFound: "%[1]s: not found"})
+	if !strings.Contains(out, "./bad.scr: not found") {
+		t.Errorf("the not-found wording: got %q", out)
+	}
+	if !strings.Contains(out, "st=127") {
+		t.Errorf("status: got %q, want st=127", out)
+	}
+	if strings.Contains(out, "fork/exec") {
+		t.Errorf("a Go error must not reach a shell diagnostic: got %q", out)
+	}
+}
+
+// And the dialect that does have one numbers it as that dialect says —
+// Diagnostics.BadInterpreterStatus, which is 126 in one of the two shells
+// that word this and 127 in the other.
+func TestTheBadInterpreterStatusIsTheDialectsOwn(t *testing.T) {
+	t.Parallel()
+	for _, want := range []int{126, 127} {
+		t.Run(fmt.Sprint(want), func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeImage(t, dir, "bad.scr", []byte("#!/nonexistent/interp\n"), 0o755)
+			out, _ := imageRun(t, dir, `./bad.scr; echo "st=$?"`, imageSemantics(), Diagnostics{
+				BadInterpreter:       "%[1]s: bad interpreter: %[2]s: %[3]s",
+				BadInterpreterStatus: want,
+			})
+			if !strings.Contains(out, fmt.Sprintf("st=%d", want)) {
+				t.Errorf("got %q, want st=%d", out, want)
+			}
+		})
+	}
+}

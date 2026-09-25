@@ -3900,6 +3900,13 @@ type Runner struct {
 	// `E` letter rather than from `F` — a **format** and not a width. See
 	// interp/floatformat.go, where the two renderings are.
 	floatExponent map[string]bool
+	// floatExact is the number behind the rendering, for the float names
+	// that have one. The rendering is what is stored — `${#f}` counts its
+	// characters and a child is told it — and the letters decide only how it
+	// is written, so a `-E3` name still holds every digit it was assigned
+	// and a later `-F` writes them. See interp/floatformat.go, where the
+	// measurements and the one place the record is dropped are.
+	floatExact map[string]storedFloat
 	// fieldWidth is the width attribute a name carries — `typeset -L 5 s`
 	// and its two neighbors. Presence is the attribute, the way it is for
 	// floatPrecision; see fieldwidth.go, which holds the measurements and
@@ -9537,11 +9544,18 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 		}
 		// The rendered text is what is *stored*, exactly as an integer
 		// name's base is: `${#x}` counts the five characters of `1.500`, a
-		// child is told `x=1.500`, and arithmetic reads them back.
+		// child is told `x=1.500`, and `typeset -p` lists it.
 		value, ok = r.floatFormatted(name, v)
 		if !ok {
 			return "", false
 		}
+		// And the number it was written from is kept beside it, because the
+		// letters say how a float is *written* and not what it is:
+		// arithmetic reads every digit that was assigned, and a later letter
+		// writes them. Recorded here and nowhere else — this is the one
+		// place a float name's text is made — so the record cannot describe
+		// a rendering that was never stored. See interp/floatformat.go.
+		r.rememberStoredFloat(name, value, v)
 	} else if r.integer[name] {
 		// The name was declared integer, so what is assigned to it is an
 		// expression rather than text.
@@ -9744,15 +9758,31 @@ func (r *Runner) appendedValue(name, old, add string) (string, bool) {
 		// Ahead of the integer branch for attributeFolded's reason: the two
 		// attributes cannot both stand, and reaching this first is what makes
 		// that a statement rather than a hope.
-		lhs, ok := r.floatValue(old)
+		//
+		// The left side is the *number* the name is holding where it still
+		// has one, and not the characters the letters wrote it as: measured
+		// 2026-09-25 on zsh 5.9.2, `typeset -F1 f=3.14159265358979; f+=1`
+		// reads `4.1` back and answers `4.1415926535897896` to `$(( f ))`, so
+		// the join added to every digit and not to the one that was printed.
+		lhs, ok := r.storedFloatValue(name, old)
 		if !ok {
-			return "", false
+			if lhs, ok = r.floatValue(old); !ok {
+				return "", false
+			}
 		}
 		rhs, ok := r.floatValue(add)
 		if !ok {
 			return "", false
 		}
-		return r.floatFormatted(name, lhs+rhs)
+		// Written out at its full width and deliberately not rendered in the
+		// name's places here, for the reason the integer branch below gives
+		// about its base: the store this is on its way to folds what it is
+		// handed through attributeFolded, which renders it and records the
+		// number behind the rendering. Rendering at this end would be a
+		// second copy of that one — and the second copy is the one that
+		// rounds, because the fold would then read the rounded characters
+		// back.
+		return floatWrittenInFull(lhs + rhs), true
 	case r.integer[name]:
 		r.learnIntegerBase(name, add)
 		if r.unspecified {

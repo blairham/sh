@@ -222,6 +222,13 @@ func (r *Runner) inheritAttributes(name string, a nameAttributes) bool {
 	if a.isFloat {
 		setInt(&r.floatPrecision, name, a.precision, true)
 		setBool(&r.floatExponent, name, a.floatExponent)
+		if a.hasFloatExact {
+			// The number behind the rendering comes with the letter, for the
+			// reason the letter itself does: a name that inherits `-E3`
+			// inherits the digits `-E3` is not printing. See
+			// interp/floatformat.go.
+			r.rememberStoredFloat(name, a.floatExact.text, a.floatExact.value)
+		}
 		had = true
 	}
 	if a.hasWidth {

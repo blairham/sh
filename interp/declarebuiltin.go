@@ -3052,6 +3052,22 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			if r.floatPrecision == nil {
 				r.floatPrecision = map[string]int{}
 			}
+			if _, had := r.floatPrecision[name]; !had {
+				// The attribute *arriving* at a name that did not carry it:
+				// whatever the name is holding is characters, and the number
+				// behind them can only be read out of those characters.
+				// Measured, `typeset -F1 f=3.14159265358979; typeset +F f;
+				// typeset -F1 f` reads `3.1000000000000001` from `$(( f ))`
+				// in zsh 5.9.2 — the plus form leaves a scalar, and every
+				// digit past the rendering is gone with it.
+				//
+				// The one place any of that is said, because every route
+				// that takes the attribute off — `+F`, `-i` over it, a case
+				// letter, `unset`, a shadow — has to pass through here
+				// before the number can be read again. See
+				// interp/floatformat.go.
+				r.forgetStoredFloat(name)
+			}
 			// Which of the two letters declared it. Written whichever way
 			// round, so `typeset -E 3 x; typeset -F 3 x` really is the plain
 			// rendering afterwards and the attribute is not half of each.
@@ -4979,6 +4995,33 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 		"an attribute re-reading the value the name already holds") {
 		return false
 	}
+	if exact, held := r.storedFloatValue(name, v); held {
+		// The name is holding a *number* and the letter that just arrived
+		// says how to write it, so the new rendering is made from the number
+		// and not from the old rendering's characters. attributeFolded is
+		// the wrong door for this one case: it reads what it is handed, which
+		// is right for an assignment — measured, `typeset -F1
+		// f=3.14159265358979; f=3.1` really does leave 3.1 behind — and
+		// wrong for a re-read, where nothing was assigned at all.
+		//
+		// **ksh93 keeps the number across a change of *precision* and not
+		// across a change of *letter*, and that divergence is recorded and
+		// not modeled.** Measured 2026-09-25 on ksh93u+ 2012-08-01 beside
+		// the zsh rows above: `typeset -F1 f=3.14159265358979; typeset -F17
+		// f` reads 3.14159265358979000 there, and `typeset -E3 f=$same;
+		// typeset -F17 f` reads 3.14000000000000000 — so the one transition
+		// between the two letters re-reads the rendering, where zsh writes
+		// 3.14159 for the same pair. Every other row of this rule is shared:
+		// the same run has ksh93 answering 3.14159265358979 to `$(( f ))`
+		// under `-F1`, 6.3 to a doubling, and 4.14159265358979 to an append.
+		// One row in one dialect is a measurement to model deliberately, not
+		// an inline conditional, so it is written down here and left alone.
+		if text, ok := r.floatFormatted(name, exact); ok {
+			r.Vars[name] = text
+			r.rememberStoredFloat(name, text, exact)
+		}
+		return false
+	}
 	if folded, ok := r.attributeFolded(name, v); ok {
 		r.Vars[name] = folded
 	}
@@ -5011,9 +5054,21 @@ func (r *Runner) attributeWouldChange(name, value string) bool {
 		// not floatValue, which would run the arithmetic reader for a
 		// question that only asks whether to bother, and which complains
 		// where this must only answer.
-		v, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return true
+		//
+		// The number the name is *holding* comes first, because that is what
+		// the re-read would write: a `-E3` name holding 3.14159265358979
+		// renders as the eight characters `3.14e+00`, and what a later `-F`
+		// asks is whether the *number* would come out differently — not
+		// whether those characters would. Reading them back instead is what
+		// made `float -E3 f; float -F f` write `3.140` where zsh writes
+		// `3.142` (#4475).
+		v, ok := r.storedFloatValue(name, value)
+		if !ok {
+			f, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return true
+			}
+			v = f
 		}
 		// The rendering may itself refuse — a dialect that spells the `E`
 		// letter and has not said what it means — and an unanswered axis is

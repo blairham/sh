@@ -1961,6 +1961,20 @@ func (r *Runner) arithValueOf(name string) (arithNum, error) {
 		// are asked of a plain name.
 		value, ok = v, iset
 	}
+	if ok {
+		if f, held := r.storedFloatValue(name, value); held {
+			// A float name is holding a number, and the `-E` or `-F` letter
+			// decides how that number is *written* rather than what it is.
+			// Measured 2026-09-25 on zsh 5.9.2: `typeset -E3
+			// f=3.14159265358979` prints `3.14e+00` and answers
+			// `3.14159265358979` to `$(( f ))`, and `typeset -F1 f=$same; ((
+			// f = f * 2 ))` leaves `6.3` where `$(( f ))` is
+			// `6.28318530717958` — the doubling was of every digit and not
+			// of the one the format printed. Reading the characters instead
+			// is the whole of #4475.
+			return floatNum(f), nil
+		}
+	}
 	if !ok {
 		if n, err, refused := r.arithNounsetRefusal(name); refused {
 			return n, err

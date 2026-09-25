@@ -169,3 +169,92 @@ func (p NumericTypeLetterPrecedencePolicy) String() string {
 	}
 	return "unspecified"
 }
+
+// storedFloat is the number a float name is **holding**, beside the text that
+// number renders as.
+//
+// `-E` and `-F` decide how a float is *written* and not what it is. Measured
+// 2026-09-25 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f`, through `-c`:
+//
+//	typeset -E3 f=3.14159265358979   print $f        3.14e+00
+//	                                 print $(( f ))  3.14159265358979
+//	                                 print ${#f}     8
+//	typeset -F1 f=3.14159265358979   (( f = f * 2 ))
+//	                                 print $f        6.3
+//	                                 print $(( f ))  6.28318530717958
+//	typeset -F3 f=3.14159265358979   typeset -p f    typeset -F f=3.142
+//	                                 typeset -E5 f   typeset -E f=3.1416e+00
+//	                                 typeset -F f    typeset -F f=3.14159
+//
+// The last block is what this is for: three renderings of one number, and the
+// third could not be written from the second's characters. A `-E3` name that
+// holds `3.14` is a number a later `-F` can only write as `3.140`, where zsh
+// writes `3.142`, so the digits past the format are not the format's to throw
+// away.
+//
+// Everything that is not arithmetic still reads the **text**: `${#f}` is the
+// eight characters of `3.14e+00`, a child is told `3.14e+00`, `typeset -p`
+// lists the rendering, and `f[2]=9` replaces the whole of it. So the rendering
+// stays what is stored, exactly as it was, and the number is remembered beside
+// it rather than in place of it — which is also why this is a record of a
+// rendering and not a second value anyone may write.
+type storedFloat struct {
+	// text is the rendering the number was stored under, and is what makes
+	// this a record rather than a guess. A store by any route that does not
+	// come through attributeFolded leaves the two disagreeing, and a
+	// disagreement reads the characters — which is what every float read did
+	// before this existed, so the worst a stale record can do is nothing.
+	text string
+	// value is the number those characters were written from.
+	value float64
+}
+
+// floatWrittenInFull is a number written so that reading the characters back
+// gives the same number — the shortest spelling that round-trips, which is
+// what a value on its way *to* a rendering has to be written as so that the
+// rendering is made from the number and not from a shorter copy of it.
+//
+// Beside the renderings rather than at its one call site, because it is the
+// same question they answer with a precision: how a float becomes characters.
+func floatWrittenInFull(v float64) string {
+	return strconv.FormatFloat(v, 'g', -1, 64)
+}
+
+// rememberStoredFloat records the number a rendering was made from.
+func (r *Runner) rememberStoredFloat(name, text string, v float64) {
+	if r.floatExact == nil {
+		r.floatExact = map[string]storedFloat{}
+	}
+	r.floatExact[name] = storedFloat{text: text, value: v}
+}
+
+// storedFloatValue is the number a float name is holding, and false where the
+// characters it is holding are all there is.
+//
+// Guarded on the attribute as well as on the text, because a name that has
+// lost the attribute is holding characters and not a number: measured in the
+// same run, `typeset -F1 f=3.14159265358979; typeset +F f; typeset -F1 f` then
+// reads `3.1000000000000001` out of `$(( f ))`, so the plus form is where the
+// number is really destroyed. forgetStoredFloat is where that is said, and it
+// is said once — on the way *in*, where a name that did not already carry the
+// attribute is one whose number can only come from its characters.
+func (r *Runner) storedFloatValue(name, text string) (float64, bool) {
+	if _, ok := r.floatPrecision[name]; !ok {
+		return 0, false
+	}
+	c, ok := r.floatExact[name]
+	if !ok || c.text != text {
+		return 0, false
+	}
+	return c.value, true
+}
+
+// forgetStoredFloat drops the number a name was holding.
+//
+// One caller, deliberately: the float attribute *arriving* at a name that did
+// not have it. Every route that takes the attribute off — `+F`, `-i` over it,
+// a case letter, `unset`, a shadow — has to end with the number gone, and
+// writing that at each of them is five chances to add a sixth route and
+// forget. Arriving is the one event they all have to pass through before the
+// number can be read again, so it is the one place that has to say it.
+func (r *Runner) forgetStoredFloat(name string) { delete(r.floatExact, name) }

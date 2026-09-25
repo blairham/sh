@@ -48,15 +48,22 @@ type Frame struct {
 	// Line is the line this frame was entered from, in the frame below it.
 	Line int
 
-	// outerFunc and outerFuncLine are the function the frame was entered
+	// OuterFunc and OuterFuncLine are the function the frame was entered
 	// from and the line that function was written on — the pair
 	// locationPrefixNamed counts a message's line against, as it stood one frame
 	// down. They are Line's companions and are filled in beside it: Line
 	// alone says where the call was made and not what it was made *inside*,
 	// and a diagnostic located at the call needs both. See
 	// [Runner.LocatedAtTheCall].
-	outerFunc     string
-	outerFuncLine int
+	//
+	// Exported for the same reason Line is: one dialect reports a call site
+	// **counted from the calling function** rather than from the file — the
+	// offset into the caller's body, which is the pair of numbers Line alone
+	// cannot produce. OuterFunc is empty where the call was made from a file
+	// rather than from inside a function body, and the file is then the File
+	// of the frame below this one.
+	OuterFunc     string
+	OuterFuncLine int
 
 	// Keyword marks a function defined with the `function` keyword rather
 	// than with `name()`, for the dialect whose `$0` answers only for those
@@ -202,7 +209,7 @@ func (r *Runner) SetScriptFile(path string) { r.scriptFile = path }
 // after the move would record the callee's.
 func (r *Runner) pushFrame(f Frame) {
 	f.Line = r.line
-	f.outerFunc, f.outerFuncLine = r.inFunc, r.funcLine
+	f.OuterFunc, f.OuterFuncLine = r.inFunc, r.funcLine
 	r.frameSerial++
 	f.serial = r.frameSerial
 	if f.File == "" {
@@ -357,7 +364,7 @@ func (r *Runner) LocatedAtTheCall(report func()) {
 	}
 	f := r.frames[n-1]
 	savedFunc, savedFuncLine, savedLine := r.inFunc, r.funcLine, r.line
-	r.inFunc, r.funcLine, r.line = f.outerFunc, f.outerFuncLine, f.Line
+	r.inFunc, r.funcLine, r.line = f.OuterFunc, f.OuterFuncLine, f.Line
 	r.outsideCall++
 	defer func() {
 		r.outsideCall--

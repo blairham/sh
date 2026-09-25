@@ -987,7 +987,7 @@ func moduleParams() []string {
 	}
 }
 
-// implementedModuleParams is the ten that are live views: the five a real
+// implementedModuleParams is the thirteen that are live views: the five a real
 // plugin manager reads and the only five it reads (#1060), `funcstack`, which
 // the completion system touches on its fourth line (#1598), `galiases` and
 // `saliases` for the two alias namespaces `alias -g` and `alias -s` brought
@@ -997,12 +997,12 @@ func moduleParams() []string {
 func implementedModuleParams() []string {
 	return []string{
 		"aliases", "builtins", "commands", "funcstack", "functions",
-		"galiases", "history", "nameddirs", "options", "parameters",
-		"reswords", "saliases",
+		"functrace", "galiases", "history", "nameddirs", "options",
+		"parameters", "reswords", "saliases",
 	}
 }
 
-// absentModuleParams is the fourteen this shell has not got, each registered
+// absentModuleParams is the thirteen this shell has not got, each registered
 // with [interp.Runner.SetAbsentParameter] so that reading one is refused at
 // the expansion that asked (#1152).
 //
@@ -1019,10 +1019,13 @@ func implementedModuleParams() []string {
 // same reason (#4408) — `fc` had kept the list all along — and it is the one
 // that says what staying here costs, since zsh-autosuggestions reads it on
 // every keystroke and the refusal was written over the line being typed.
+// `functrace` left third (#4447): `$funcstack` already walked the stack it
+// reports on, and a handler that reads it to say where it was entered from
+// was stopped rather than left with a blank field.
 func absentModuleParams() []string {
 	return []string{
 		"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
-		"functions_source", "functrace", "historywords",
+		"functions_source", "historywords",
 		"jobdirs", "jobstates", "jobtexts", "modules",
 		"patchars", "userdirs", "usergroups",
 	}

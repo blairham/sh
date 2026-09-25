@@ -4512,6 +4512,54 @@ type Semantics struct {
 	// advances.
 	GetoptsCountsTheWordOnTheNextCall Answer
 
+	// GetoptsErrorEndsTheWord gives the rest of a clustered word up when
+	// `getopts` refuses a letter in it, and counts the word there and then:
+	// the letters after the refused one are never reported, and OPTIND names
+	// the word *after* the one the refusal was in on the call that refused.
+	//
+	// The third question about the same parameter and the only one of the
+	// three that is not a column's constant. The two above ask *when* a word
+	// is counted; this asks whether a refusal ends it. Six columns answer no
+	// — a refused letter costs one letter and the scan carries on with the
+	// next letter of the same word — and the seventh answers no by default
+	// and yes under an option, which is the only switch in the panel that
+	// moves it (zsh's POSIX_BUILTINS; see dialect/zsh's `posixbuiltins`).
+	//
+	// Measured 2026-09-25, `getopts ab o` called until it fails over
+	// `set -- -axb -b`, reporting the letter and OPTIND after each call,
+	// from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with
+	// stdin from /dev/null:
+	//
+	//	bash 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01   a 1  ? 1  b 2  b 3
+	//	dash 0.5.12, BusyBox ash 1.37.0                a 2  ? 2  b 2  b 3
+	//	zsh 5.9.2, no_posix_builtins                   a 1  ? 1  b 1  b 2
+	//	zsh 5.9.2, posix_builtins                      a 1  ? 2  b 2
+	//
+	// The last row is a call short, and that short call is the axis: the `b`
+	// inside `-axb` is never reported at all, because the `x` ended the word
+	// it was in. The three rows above it differ from each other only in the
+	// two counting axes, and all three report four letters.
+	//
+	// It is the same question at a missing argument, where the word is
+	// already exhausted so only the count can show it: `getopts ba: o` over
+	// `set -- -ba` is `b` then `?`, and the `?` leaves OPTIND at 2 under
+	// POSIX_BUILTINS where a plain zsh leaves it at 1. That is this axis
+	// rather than GetoptsCountsTheWordOnTheNextCall going away — a
+	// *successful* letter still lags in both, `getopts ab o` over
+	// `set -- -b -c` being `b` at 1 in either.
+	//
+	// zsh reaches the option from two doors and they agree: `setopt
+	// posixbuiltins` and `emulate sh` both produce the last row, and
+	// `unsetopt posixbuiltins` in an `sh`-emulating zsh puts the third row
+	// back. bash's own posix mode is the control and moves nothing here —
+	// `bash --posix` reports all four letters, exactly as a plain bash does
+	// — so this belongs to zsh's option and not to POSIX mode as such.
+	//
+	// The numeric option type is ksh93's alone
+	// (GetoptsOptionStringHasANumericType) and no column holds both, so a
+	// refused numeral never meets this axis and does not ask it.
+	GetoptsErrorEndsTheWord Answer
+
 	// GetoptsTakesAPlusPrefixedOption reads a word beginning with `+` as an
 	// option word, exactly as a word beginning with `-`, and reports the
 	// letter with the sign still in front of it.
@@ -25102,6 +25150,13 @@ func PosixSemantics() Semantics {
 		// And it does not wait for the next call either: the standard's
 		// wording is the same one, and zsh is the only column that lags.
 		GetoptsCountsTheWordOnTheNextCall: No,
+		// A refused letter costs the letter and not the word: XCU says the
+		// utility writes a question mark into the name and goes on, with
+		// nothing about the letters after it, and six of the seven columns
+		// report every one of them. zsh under POSIX_BUILTINS is the single
+		// departure and reaches it through its own option rather than
+		// through a preset.
+		GetoptsErrorEndsTheWord: No,
 		// The standard has the name set to a question mark when the options
 		// run out.
 		GetoptsEndOfOptionsNamesIt: Yes,
@@ -26454,6 +26509,13 @@ func CoreSemantics() Semantics {
 		// every clustered `getopts` read a refusal.
 		GetoptsCountsTheWordAtItsFirstLetter: No,
 		GetoptsCountsTheWordOnTheNextCall:    No,
+		// And a refused letter in a cluster costs that letter alone, which
+		// is six of the seven columns. Answered here for the reason the two
+		// above it are: `getopts` over a cluster with a letter the script
+		// does not know is ordinary, and the substrate refusing it would
+		// refuse the builtin's ordinary use. zsh moves it under an option
+		// of its own and says so there.
+		GetoptsErrorEndsTheWord: No,
 		// `getopts` writes `?` into the name when it runs out of options,
 		// which is the standard's own words and six of the seven columns.
 		// The substrate answers it rather than refusing it because the run

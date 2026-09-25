@@ -659,7 +659,7 @@ var zshOptions = []zshOption{
 	recorded("posixaliases", false),
 	recorded("posixargzero", false),
 	{
-		// zsh's POSIX_BUILTINS, and the two things it does that this shell
+		// zsh's POSIX_BUILTINS, and the three things it does that this shell
 		// can speak about.
 		//
 		// The first: with it on, `command name` reaches the builtin of that
@@ -680,8 +680,28 @@ var zshOptions = []zshOption{
 		// way, which is what keeps this the special-builtin rule and not the
 		// prefix rule as a whole (#2659).
 		//
-		// Both read off their axis rather than off a stored bit, which is
-		// what makes `(setopt posixbuiltins)` stay in the subshell — the
+		// The third: `getopts` gives up the rest of a clustered word when it
+		// refuses a letter in it, and counts the word there and then.
+		// Measured 2026-09-25 on zsh 5.9.2, `getopts ab o` called until it
+		// fails over `set -- -axb -b`, the letter and OPTIND after each:
+		//
+		//	no_posix_builtins   a 1   ? 1   b 1   b 2
+		//	posix_builtins      a 1   ? 2   b 2
+		//
+		// The `b` inside `-axb` is reported in the first row and never in
+		// the second, so this is a letter the script stops seeing and not
+		// only a number that moves. A missing argument is the same question
+		// at a word that is already spent — `getopts ba: o` over
+		// `set -- -ba` leaves OPTIND at 1 with the option off and 2 with it
+		// on — while a letter that was *accepted* still lags either way,
+		// which is what keeps this apart from the counting axis it sits
+		// beside. `emulate sh` produces the second row through this entry
+		// and `bash --posix` produces the first, so it is this option rather
+		// than POSIX mode at large. See Semantics.GetoptsErrorEndsTheWord
+		// and zsh's own B10getopts test (#4474).
+		//
+		// All three read off their axis rather than off a stored bit, which
+		// is what makes `(setopt posixbuiltins)` stay in the subshell — the
 		// same arrangement `shwordsplit` and `globsubst` use. The state is
 		// reported from the first of the two because a shell invoked as `sh`
 		// reaches the second through interp.Runner.SetPosixMode without
@@ -696,6 +716,9 @@ var zshOptions = []zshOption{
 			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.CommandReachesABuiltin }, answer(on))
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.AssignmentPrefixPersistsOnSpecialBuiltin
+			}, answer(on))
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.GetoptsErrorEndsTheWord
 			}, answer(on))
 			return 0
 		},

@@ -104585,6 +104585,57 @@
         "TimedOut": false
       }
     },
+    "getopts/optind-after-a-refused-letter-in-a-cluster": {
+      "ash": {
+        "Stdout": "[a 2][? 2][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[a 1][? 1][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a 1][? 1][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a 1][? 1][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[a 2][? 2][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a 1][? 1][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a 1][? 1][b 1][b 2] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "getopts/optind-ignores-an-inherited-value": {
       "ash": {
         "Stdout": "OPTIND=[1]",
@@ -104732,6 +104783,57 @@
       },
       "zsh": {
         "Stdout": "in=9~after=[5]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/posixbuiltins-ends-the-word-at-a-refused-letter": {
+      "ash": {
+        "Stdout": "[a 2][? 2][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "[a 1][? 1][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a 1][? 1][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a 1][? 1][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[a 2][? 2][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a 1][? 1][b 2][b 3] end=3",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a 1][? 2][b 2] end=3",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

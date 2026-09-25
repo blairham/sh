@@ -646,3 +646,62 @@ func TestEveryOtherRefusedNameIsWordedByTheSubstrate(t *testing.T) {
 		})
 	}
 }
+
+// The third thing `posixbuiltins` decides: whether a `getopts` letter the
+// spec string does not name gives up the rest of the word it was in.
+//
+// Measured 2026-09-25 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), from a
+// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with stdin from
+// /dev/null, `getopts ab o` called until it fails over `set -- -axb -b`,
+// printing the letter and OPTIND after each call:
+//
+//	no_posix_builtins   [a 1][? 1][b 1][b 2] end=3
+//	posix_builtins      [a 1][? 2][b 2] end=3
+//
+// Three calls rather than four: the `b` inside `-axb` is never reported,
+// because the `x` ended the word. That is the half a test reading only
+// OPTIND would miss, so the probe prints the letters too.
+//
+// The missing-argument probe is the same refusal at a word already spent,
+// where only the number can show it, and the accepted-letter probe is the
+// control that keeps this the refusal's rule rather than the counting rule:
+// a letter the spec string names still lags with the option on (#4474).
+func TestPosixBuiltinsDecidesWhetherARefusedGetoptsLetterEndsTheWord(t *testing.T) {
+	const cluster = `set -- -axb -b; OPTIND=1
+while getopts 'ab' o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done
+printf ' end=%s\n' "$OPTIND"`
+	const missing = `set -- -ba; OPTIND=1
+while getopts 'ba:' o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done
+printf ' end=%s\n' "$OPTIND"`
+	const accepted = `set -- -b -c; OPTIND=1
+while getopts 'bc' o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done
+printf ' end=%s\n' "$OPTIND"`
+
+	for _, tc := range []struct {
+		name, src, off, on string
+	}{
+		{"a refused letter in a cluster", cluster, "[a 1][? 1][b 1][b 2] end=3\n", "[a 1][? 2][b 2] end=3\n"},
+		{"a missing argument", missing, "[b 1][? 1] end=2\n", "[b 1][? 2] end=2\n"},
+		{"and an accepted letter, either way", accepted, "[b 1][c 2] end=3\n", "[b 1][c 2] end=3\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if out, _ := runZsh(t, t.TempDir(), tc.src); out != tc.off {
+				t.Errorf("off: out %q, want %q", out, tc.off)
+			}
+			if out, _ := runZsh(t, t.TempDir(), "setopt posixbuiltins; "+tc.src); out != tc.on {
+				t.Errorf("on: out %q, want %q", out, tc.on)
+			}
+			// And the round trip, which is what says the option reads off
+			// the axis rather than latching it.
+			if out, _ := runZsh(t, t.TempDir(), "setopt posixbuiltins; unsetopt posixbuiltins; "+tc.src); out != tc.off {
+				t.Errorf("round trip: out %q, want %q", out, tc.off)
+			}
+		})
+	}
+
+	// `emulate sh` is the second door to the same option, and it goes
+	// through this entry rather than beside it.
+	if out, _ := runZsh(t, t.TempDir(), "emulate sh; "+cluster); out != "[a 1][? 2][b 2] end=3\n" {
+		t.Errorf("emulate sh: out %q, want the word ended at the refusal", out)
+	}
+}

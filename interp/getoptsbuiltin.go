@@ -245,6 +245,12 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 	kind, known := r.getoptsLetterTakes(spec, c)
 	switch {
 	case !known || c == ':':
+		if r.getoptsErrorEndsTheWord() {
+			return r.getoptsBad(name, sign, c, silent, getoptsUnknownOption, func() bool {
+				r.optChar = 1
+				return r.setOptind(ind + 1)
+			})
+		}
 		return r.getoptsBad(name, sign, c, silent, getoptsUnknownOption, func() bool { return r.advance(word, ind) })
 	case kind == getoptsTakesANumber:
 		return r.getoptsNumericArgument(name, sign, c, silent, word, words, ind)
@@ -268,8 +274,11 @@ func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind i
 		if ind >= len(words) {
 			// The argument is missing, so nothing was consumed and this is
 			// the same question advance asks: the word is spent and the
-			// count stays where it was in the one column that lags.
-			if r.ask(r.sem().GetoptsCountsTheWordOnTheNextCall,
+			// count stays where it was in the one column that lags — unless
+			// the refusal is what ends the word, which counts it here and
+			// is the only thing that can show this axis at a missing
+			// argument. See Semantics.GetoptsErrorEndsTheWord.
+			if !r.getoptsErrorEndsTheWord() && r.ask(r.sem().GetoptsCountsTheWordOnTheNextCall,
 				"OPTIND staying on a spent word until the next `getopts` call") {
 				r.optChar = len(word)
 				return r.getoptsBad(name, sign, c, silent, getoptsMissingArgument, func() bool { return r.setOptind(ind) })
@@ -672,6 +681,19 @@ func (r *Runner) getoptsSetName(name, value string, ok int) int {
 func (r *Runner) getoptsRefusalEndsTheBuiltin() bool {
 	return r.ask(r.sem().GetoptsRefusedWriteEndsTheBuiltin,
 		"a freeze on OPTARG or OPTIND ending `getopts` rather than only being reported")
+}
+
+// getoptsErrorEndsTheWord reports whether a refused letter gives up the rest
+// of the word it was in and counts the word on the spot.
+//
+// Asked at the two refusals a script can reach without the numeric type — an
+// unknown letter and a missing argument — and nowhere else, because it is
+// only about what a refusal does. A letter that was accepted is counted by
+// the two axes beside it, whatever this one says. See
+// Semantics.GetoptsErrorEndsTheWord.
+func (r *Runner) getoptsErrorEndsTheWord() bool {
+	return r.ask(r.sem().GetoptsErrorEndsTheWord,
+		"a refused `getopts` letter giving up the rest of its word")
 }
 
 // advance moves past the character just read, staying inside the word while

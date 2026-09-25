@@ -3385,6 +3385,13 @@ func spansHoldAnExpansion(spans []Span) bool {
 // decides it and is read per span: `'a*b'` is ordinary text and is a name,
 // `a*'b'` is not, because the `*` in it is still bare.
 func (p *Parser) keywordFuncName(t Token) bool {
+	if p.funcNameIsGenerated(t) {
+		// A name the shell generates from the filesystem is a name here: the
+		// word is kept and the match happens at the definition. See
+		// [Dialect.FunctionNameIsFilenameGenerated], and funcKeywordName,
+		// which is where the word is kept rather than flattened.
+		return true
+	}
 	if p.dialect.FunctionNameIsAnyBareWord {
 		// The third reading: how the word was *written* decides it, so a
 		// bare word is a name whatever its characters — `function a*b { … }`
@@ -3432,6 +3439,16 @@ func tokenIsWrittenBare(t Token) bool {
 // the difference between defining `f` from `function 'f'` and refusing it.
 // The refused word is carried on the declaration as source text either way,
 // so this changes which words are refused and never how one is named.
+// funcNameIsGenerated reports whether a definition's name is a word this
+// dialect matches against the filesystem rather than a name in itself.
+//
+// One function for both spellings, because the question is the same one and
+// a second copy of it is how the keyword form and the `name()` form came
+// apart last time. See [Dialect.FunctionNameIsFilenameGenerated].
+func (p *Parser) funcNameIsGenerated(t Token) bool {
+	return p.dialect.FunctionNameIsFilenameGenerated && holdsBarePatternCharacter(t)
+}
+
 func (p *Parser) funcNameText(t Token) string {
 	if p.dialect.FunctionNameIsSourceText {
 		return p.textBetween(t.Pos, t.End)
@@ -4633,13 +4650,17 @@ func (p *Parser) tokenIsPlainText(t Token) bool {
 //	            `'a=b'()` and `a\=b()` are definitions of `a=b` there. The
 //	            same lexical test [Dialect.FunctionNameExpands] makes.
 //	a*b()       matched against the filesystem in the shell this models, so
-//	            it defines nothing there and must not define anything here.
-//	            Quoted the characters are ordinary text and are taken.
+//	            the *name* is whatever that match produces. Where the dialect
+//	            says so — [Dialect.FunctionNameIsFilenameGenerated] — the word
+//	            is kept and generated when the definition runs; without it the
+//	            definition reading is taken away here, which is what this did
+//	            for every dialect before #4437. Quoted the characters are
+//	            ordinary text and are taken either way.
 func (p *Parser) anyWordFuncDef() bool {
 	if _, isAssign := p.isAssign(p.tok); isAssign {
 		return false
 	}
-	if holdsBarePatternCharacter(p.tok) {
+	if holdsBarePatternCharacter(p.tok) && !p.dialect.FunctionNameIsFilenameGenerated {
 		return false
 	}
 	if !p.dialect.FunctionNameExpands && tokenHoldsAnExpansion(p.tok) {
@@ -4760,7 +4781,8 @@ func (p *Parser) parseFuncPosix() Command {
 		// parseFuncKeyword; only these two spellings have a name at all.
 		fn.RefusedName = text
 	}
-	if p.dialect.FunctionNameExpands && tokenHoldsAnExpansion(p.tok) {
+	if (p.dialect.FunctionNameExpands && tokenHoldsAnExpansion(p.tok)) ||
+		p.funcNameIsGenerated(p.tok) {
 		// A name that is not text until the shell runs, kept whole. p.word()
 		// consumes it, which is the p.next() the plain path takes.
 		fn.NameWord = p.word()
@@ -4984,7 +5006,8 @@ func (p *Parser) parseFuncPosixNamesAtParen(c *SimpleCmd) Command {
 // answer and not this word's.
 func (p *Parser) funcNameFromWord(w *Word) FuncName {
 	n := FuncName{Name: w.Literal()}
-	if p.dialect.FunctionNameExpands && spansHoldAnExpansion(w.Spans) {
+	if (p.dialect.FunctionNameExpands && spansHoldAnExpansion(w.Spans)) ||
+		(p.dialect.FunctionNameIsFilenameGenerated && spansHoldBarePatternCharacter(w.Spans)) {
 		n.Word = w
 	}
 	return n
@@ -4996,8 +5019,10 @@ func (p *Parser) funcNameFromWord(w *Word) FuncName {
 // names at all.
 //
 // One production, so one rule: a bare pattern character is matched against the
-// filesystem and names nothing, and a name that is not text until the shell
-// runs is kept only where the dialect expands one. What is *not* asked here is
+// filesystem, so its literal spelling names nothing — kept as a word where the
+// dialect generates the name from that match and refused where it does not —
+// and a name that is not text until the shell runs is kept only where the
+// dialect expands one. What is *not* asked here is
 // whether the word is an assignment — that reading belongs to the first word
 // of a command and nowhere else, so measured 2026-09-10 on zsh 5.9.2,
 // `a c=d () { :; }` defines `a` and `c=d` where `c=d () { :; }` alone is an
@@ -5005,7 +5030,7 @@ func (p *Parser) funcNameFromWord(w *Word) FuncName {
 // there and `a "b c" () { :; }` defines both names.
 func (p *Parser) canBeFuncName(spans []Span, literal string) bool {
 	if spansHoldBarePatternCharacter(spans) {
-		return false
+		return p.dialect.FunctionNameIsFilenameGenerated
 	}
 	if spansHoldAnExpansion(spans) {
 		return p.dialect.FunctionNameExpands
@@ -5264,6 +5289,17 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 // raises the diagnostic — the token has not been consumed, so the failure is
 // reported at the word that was refused.
 func (p *Parser) funcKeywordName() (FuncName, bool) {
+	if p.funcNameIsGenerated(p.tok) {
+		// A name the shell matches against the filesystem, kept whole for the
+		// same reason an expansion is: its literal spelling names a different
+		// function, and what it comes to is not known until the definition
+		// runs. The `name()` spelling keeps it in parseFuncPosix; this is the
+		// keyword's half, and the two share funcNameIsGenerated so that they
+		// cannot come apart — which is how they came apart before (#1743).
+		n := FuncName{Name: p.tok.Literal()}
+		n.Word = p.word()
+		return n, true
+	}
 	if tokenHoldsAnExpansion(p.tok) {
 		// A name that is not text until the shell runs. Where the dialect
 		// expands one it is kept as a word; where it does not, it is refused

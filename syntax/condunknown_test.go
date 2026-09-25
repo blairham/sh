@@ -236,3 +236,100 @@ func firstPrimaryOf(t *testing.T, f *File) CondExpr {
 		}
 	}
 }
+
+// The same flag over the **infix** half: a `-word` this dialect has no
+// condition for, written between two operands, parses and the tree names it.
+//
+// #4437. The two positions are one rule in the dialect that has the flag and
+// were two here — a name in front of its operand parsed and the same name
+// between two operands was a syntax error — which is how a file the reference
+// shell's own `-n` reads came to be refused by this parser's static read.
+//
+// [CondUnknown.Left] is checked on every row, because writing the left operand
+// into Words would put the tree back in the wrong order and a printer would
+// move the operator in front of a line somebody wrote infix.
+func TestAnInfixConditionsNameMayBeLeftForTheInterpreter(t *testing.T) {
+	t.Parallel()
+	named := Core()
+	named.ConditionIsResolvedWhenItRuns = true
+	for _, tc := range []struct{ name, src, op string }{
+		{"a name nothing implements", `[[ x -zzz y ]]`, "-zzz"},
+		{"the shortest name that is one", `[[ x -zz y ]]`, "-zz"},
+		{"a name a module would add", `[[ x -pcre-match y ]]`, "-pcre-match"},
+		// A completion condition is a condition only in front of its
+		// operands; written infix it is a name like any other, which is the
+		// one place this parts from the prefix reading.
+		{"a completion condition written infix", `[[ x -prefix y ]]`, "-prefix"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := named
+			d.CompletionConditions = true
+			f, err := Parse(tc.src, d)
+			if err != nil {
+				t.Fatalf("with the flag on, parse %q: %v", tc.src, err)
+			}
+			got := testClauseOf(t, f)
+			x, isUnknown := got.(*CondUnknown)
+			if !isUnknown {
+				t.Fatalf("with the flag on, %q parsed to %T, want *CondUnknown", tc.src, got)
+			}
+			if x.Op != tc.op {
+				t.Errorf("the tree names %q, want %q", x.Op, tc.op)
+			}
+			if x.Left == nil {
+				t.Fatalf("%q kept no left operand — an infix operand written in "+
+					"front of the operator belongs on Left, not in Words", tc.src)
+			}
+			if got, want := PrintWord(x.Left), "x"; got != want {
+				t.Errorf("the left operand is %q, want %q", got, want)
+			}
+			if len(x.Words) != 1 {
+				t.Fatalf("the tree kept %d words after the operator, want 1", len(x.Words))
+			}
+			if got, want := PrintWord(x.Words[0]), "y"; got != want {
+				t.Errorf("the right operand is %q, want %q", got, want)
+			}
+			// And with the flag off the same text is refused while reading,
+			// which is what every other column in the panel does.
+			if _, err := Parse(tc.src, Core()); err == nil {
+				t.Errorf("with the flag off, %q parsed — it is a syntax error everywhere else", tc.src)
+			}
+		})
+	}
+}
+
+// The infix half's boundaries: each row holds one thing fixed and is what a
+// rule reading "a `-word` between two words is an operator" gets wrong.
+func TestAnInfixConditionsNameStopsWhereItWasMeasuredTo(t *testing.T) {
+	t.Parallel()
+	d := Core()
+	d.ConditionIsResolvedWhenItRuns = true
+	for _, tc := range []struct {
+		name, src string
+		refused   bool
+	}{
+		// Nothing behind the name, so it is no infix operator: the group
+		// refusal, not this one.
+		{"a name with no operand behind it", `[[ x -zz ]]`, true},
+		// A one-operand test this dialect **has** keeps its own arity
+		// wherever it stands.
+		{"a one-operand test written infix", `[[ x -z y ]]`, true},
+		// A two-operand operator this dialect has is read as itself, which
+		// is what keeps a negative number on the left of a comparison out of
+		// the refusal.
+		{"a comparison this dialect has", `[[ -1 -lt 2 ]]`, false},
+		// A quoted word is no operator: the reading is of the word as it was
+		// written.
+		{"a quoted name", `[[ x "-zzz" y ]]`, true},
+		// And two characters is not a name — every one-operand test is
+		// spelled that way, so the shortest infix name is three.
+		{"a two-character name", `[[ x -q y ]]`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Parse(tc.src, d)
+			if tc.refused != (err != nil) {
+				t.Errorf("parse %q: err = %v, want refused = %v", tc.src, err, tc.refused)
+			}
+		})
+	}
+}

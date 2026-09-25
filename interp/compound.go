@@ -1118,7 +1118,21 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 		// there. It may also produce none, which defines nothing.
 		named := *c
 		named.NameWord = nil
-		for _, name := range r.expandWord(c.NameWord) {
+		names := r.expandWord(c.NameWord)
+		if r.ctl != controlNone {
+			// The expansion refused, and a refused expansion is not an empty
+			// one: a pattern that matched nothing comes back as *itself*
+			// here, so carrying on would define a function called
+			// `nomatch?zz` at status 0 one line under the shell's own
+			// `no matches found: nomatch?zz`. Measured on zsh 5.9.2,
+			// 2026-09-25: the definition ends the script at 1 and defines
+			// nothing, where the same word as a command's argument ends it
+			// at 1 as well — the status is the give-up's either way and the
+			// declaration must not overwrite it. See
+			// syntax.Dialect.FunctionNameIsFilenameGenerated (#4437).
+			return nil
+		}
+		for _, name := range names {
 			one := named
 			one.Name = name
 			if err := r.funcDecl(&one); err != nil {

@@ -510,6 +510,19 @@ func Dialect() syntax.Dialect {
 	// `user:_complete_help -C .complete-word _complete_help`, quotes the
 	// blanks with backslashes and `eval`s a `name()` definition of it (#1743).
 	d.FunctionNameIsAnyWord = true
+	// And a name holding a bare `*`, `?` or `[` is the one group neither of
+	// those two flags carried: this shell matches such a word against the
+	// **filesystem** and defines one function per match, so the name is a
+	// pattern rather than a name. Both spellings, measured 2026-09-25 in a
+	// directory holding `ax` and `bx`: `?x() { :; }` and `function ?x { :; }`
+	// each leave `ax` and `bx` defined, and a pattern matching nothing is
+	// `no matches found: <word>` at 1 with the next line unrun.
+	//
+	// It was refused while reading here, which bought a visible answer at the
+	// cost of a parse failure where this shell's own `-n` accepts — two of
+	// the files the zsh column's static read refused were refused for it. See
+	// syntax.Dialect.FunctionNameIsFilenameGenerated (#4437).
+	d.FunctionNameIsFilenameGenerated = true
 	// A `(` where an argument may stand belongs to the word: `echo MY ( x )`
 	// is two words there and a syntax error in the other four. Measured
 	// 2026-09-06 on zsh 5.9.2 — `unknown file attribute:` names the space

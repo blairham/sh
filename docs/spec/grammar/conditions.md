@@ -539,26 +539,44 @@ measured on the same day:
 The look behind the word is at the source rather than at a token, for the
 reason the completion conditions' is: reading the token would consume it.
 
-**What is still refused while reading** is the infix position, and it is a
-shape of its own:
+### The infix position, and which word the operator is
+
+The same lookup reaches a name written **between two operands**, and there
+the count decides which word is the operator:
 
 | written | zsh 5.9.2 |
 | --- | --- |
-| `[[ p -zz q ]]` | `unknown condition: -zz` |
-| `[[ p -zz ]]` | ``parse error: condition expected: p`` |
-| `[[ p -zz q r ]]` | `condition expected: p` |
-| `[[ -n -bogus x ]]` | `unknown condition: -bogus` |
-| `[[ -n -z x ]]` | ``parse error near `x'`` |
+| `[[ p -zz q ]]` | `unknown condition: -zz`, 2 |
+| `[[ p -zz ]]` | ``parse error: condition expected: p``, 1 |
+| `[[ p -zz q r ]]` | `condition expected: p`, 1 |
+| `[[ -n -bogus x ]]` | `unknown condition: -bogus`, 2 |
+| `[[ -n -zz x y ]]` | `unknown condition: -n`, 2 |
+| `[[ -n -zz ]]` | 0 |
+| `[[ -n -z x ]]` | ``parse error near `x'``, 1 |
 
 So **which word is the operator moves with how many words the primary
 holds** — the middle one at exactly three, the first at two and at four or
 more — which is the same rule the two `condition expected` sentences turn
 on, one level down. A long `-word` in the middle of three is a named
 condition and a `-X` is not, which is why the fourth row names `-bogus` and
-the fifth refuses while reading. This parser reads the first word as the
-operator at every count, so it names `-n` where that shell names `-bogus`,
-and answers the ordinary token refusal for `[[ p -zz q ]]`. Both
-differences are unfixed.
+the last refuses while reading.
+
+Three more rows say what the middle word has to be, and each holds one
+thing fixed — measured with `echo pre` in front of every line, 2026-09-25:
+
+| written | zsh 5.9.2 | why |
+| --- | --- | --- |
+| `[[ x -prefix y ]]` | `unknown condition: -prefix`, 2 | a completion condition is one only in *front* of its operands; infix it is a name like any other, where `[[ -prefix y ]]` is the completion refusal at 1 |
+| `[[ x "-zzz" y ]]` | `condition expected: "-zzz"`, 1 | a quoted word is no operator: the reading is of the word as written |
+| `[[ -n < b ]]`, `[[ -e < b ]]` | 0 | an operator this shell **has** is still the left operand of a two-operand one behind it |
+| `[[ -e <(echo x) ]]` | the process-substitution refusal | unless the angle bracket opens a process substitution, which is a word and is that operator's operand |
+
+`zsh/pcre` is why the set cannot be the grammar's: loading a module adds a
+condition, so `[[ str -pcre-match pat ]]` is a line real zsh's own `-n`
+reads and a parser keyed on a fixed table refuses. That is how this was
+found — it is two of the files the zsh column's static read refused and the
+reference read (#4437) — and it is what
+`Dialect.ConditionIsResolvedWhenItRuns` now answers in both positions.
 
 ## A process substitution as an operand — bash only
 

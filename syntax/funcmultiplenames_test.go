@@ -165,10 +165,12 @@ func TestEveryNameInTheListIsReadTheSameWay(t *testing.T) {
 	// flattened to `_q_w`.
 	mustFail(t, `function a _q_${w} { :; }`, manyFuncNames(), "an expansion in a later name")
 
-	// A bare pattern character is not a name here in any position, for the
-	// reason keywordFuncName gives: the shell matches such a word against the
-	// filesystem, and defining `a*b` at status 0 is a plausible wrong answer
-	// where a refusal is a visible one.
+	// A bare pattern character is not a name here in any position: the shell
+	// matches such a word against the filesystem, so its literal spelling
+	// names nothing there. Where the dialect says the name is *generated*
+	// rather than refused it is kept as a word instead — see
+	// [Dialect.FunctionNameIsFilenameGenerated], which this dialect has not
+	// got, so this is that flag's off answer.
 	mustFail(t, `function a b*c { :; }`, any, "a bare pattern character in a later name")
 }
 
@@ -282,8 +284,10 @@ func TestEveryNameBeforeTheParensIsReadTheSameWay(t *testing.T) {
 		t.Errorf(`a "b c" (): extra names %v`, fn.AlsoNamed)
 	}
 	// A bare pattern character is matched against the filesystem in the shell
-	// this models, so it names nothing there and must name nothing here —
-	// in the list as in front of it.
+	// this models, so its literal spelling names nothing there and names
+	// nothing here — in the list as in front of it. The dialect that
+	// generates the name from that match keeps the word instead; see
+	// [Dialect.FunctionNameIsFilenameGenerated], which is off here.
 	mustFail(t, `a*b c () { :; }`, d, "a bare pattern character in an earlier name")
 	mustFail(t, `a b*c () { :; }`, d, "a bare pattern character in a later name")
 

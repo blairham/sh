@@ -3426,13 +3426,11 @@ characters.
 
 **The one group the flag does not carry** is the names that shell
 matches against the **filesystem**: bare `a*b` is `no matches found:
-a*b`, `a?b` the same, `a[b` is `bad pattern: a[b`, so nothing is
-defined there either. This parser refuses those while reading rather
-than defining a function literally called `a*b` at status 0 — a refusal
-is visible and a plausible wrong definition is not. The wording is the
-keyword's own rather than that shell's, which is a diagnostics gap and
-not a semantic one. Quoted, the same characters are ordinary text and
-are taken (`cmd/function-keyword-with-a-quoted-pattern-in-the-name`).
+a*b`, `a?b` the same, `a[b` is `bad pattern: a[b`. It is a group of its
+own because the name there is a *pattern* and not a name —
+`FunctionNameIsFilenameGenerated` is the flag, and the section below has
+the rows. Quoted, the same characters are ordinary text and are taken
+(`cmd/function-keyword-with-a-quoted-pattern-in-the-name`).
 
 Three neighboring readings say this is a *name* rather than a hole in a
 check, all measured on zsh 5.9.2. `function "" { … }` is the same
@@ -3507,9 +3505,44 @@ backslash, so the check the definition then meets is
 
 The one group the flag does not carry is the same one: a name whose
 *bare* text holds `*`, `?` or `[` is matched against the filesystem
-there — `a*b() { :; }` is `no matches found: a*b` and defines nothing —
-so it is refused here rather than defining a function literally called
-`a*b`. Quoted, `'a*b'() { … }` defines it.
+there, which is `FunctionNameIsFilenameGenerated` below rather than a
+hole in this flag. Quoted, `'a*b'() { … }` defines it.
+
+### A name matched against the filesystem — zsh only
+
+    ?x() { :; }
+    function ?x { :; }
+
+A name whose bare text holds `*`, `?` or `[` is a **pattern** in one
+shell: it is matched against the filesystem when the definition runs and
+defines **one function per match**. Measured on zsh 5.9.2, 2026-09-25,
+from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`, in a
+directory holding `ax` and `bx`:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `?x() { :; }` | defines `ax` **and** `bx`, and no `?x` |
+| `function ?x { :; }` | the same two, so the two spellings agree |
+| `nomatch?zz() { :; }` | `no matches found: nomatch?zz`, status 1, the next line unrun |
+| `function a*b { :; }` | the same sentence, `a*b` matching nothing there |
+| `'a*b'() { … }`, `a\*b() { … }`, `function a\*b { … }` | define `a*b`: quoted or escaped the characters are text |
+| `if false; then nomatch?zz() { :; }; fi` | nothing said, status 0 |
+| `setopt nonomatch; nomatch?zz() { :; }` | defines `nomatch?zz` literally |
+
+The last two rows are what say this happens when the definition **runs**
+rather than while the line is read, and no parse-time refusal can produce
+either of them. bash is the contrast and it is not a near miss: `?x() {
+:; }` there defines a function literally called `?x` and the filesystem is
+never consulted, which is the row `FunctionKeywordNameIsAnyBareWord`
+already carries.
+
+This parser refused the whole definition while reading, in both
+spellings. What that bought was a visible refusal; what it cost was the
+rest of the file, in a shell whose own `-n` reads the line — two of the
+files the zsh column's static read refused were refused for it (#4437).
+Nothing new carries the fix: a name that is not text until the shell runs
+already rides on `FuncDecl.NameWord`, already expands at the definition,
+and already defines one function per field it produces.
 
 An assignment still wins at the same parenthesis: `a=()` is an empty
 array and not a definition of a function called `a=`. The reading is

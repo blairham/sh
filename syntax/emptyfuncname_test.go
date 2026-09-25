@@ -68,10 +68,13 @@ func TestAnyWordIsAKeywordFunctionName(t *testing.T) {
 // filesystem.
 //
 // Measured on zsh 5.9.2 — `function a*b { :; }` is `no matches found: a*b`,
-// `a?b` the same, `a[b` is `bad pattern: a[b` — so nothing is defined there
-// either, and taking the word as a literal name here would put `a*b` in the
-// table at status 0. Quoting is what decides it and is read per span, which
-// only the last two rows can say: `a*'b'` still has a bare `*`.
+// `a?b` the same, `a[b` is `bad pattern: a[b` — so taking the word as a
+// literal name here would put `a*b` in the table at status 0. The dialect
+// that reads the name as a *pattern* keeps the word and generates it when
+// the definition runs, which is [Dialect.FunctionNameIsFilenameGenerated];
+// this file is that flag's off answer. Quoting is what decides it either way
+// and is read per span, which only the last two rows can say: `a*'b'` still
+// has a bare `*`.
 func TestABarePatternIsNotAKeywordFunctionName(t *testing.T) {
 	t.Parallel()
 	on := anyWordNamed()

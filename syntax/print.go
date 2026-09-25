@@ -1398,6 +1398,14 @@ func (p *printer) cond(e CondExpr) {
 		// still a line somebody wrote and a formatter may not decide which
 		// of its words was the surplus one — nor, for a name it does not
 		// know, which of them was the operator.
+		//
+		// An operand written in *front* of the operator goes back in front
+		// of it: `[[ str -pcre-match pat ]]` is the infix shape and the
+		// three words are its own. See [CondUnknown.Left].
+		if x.Left != nil {
+			p.rawWord(x.Left)
+			p.str(" ")
+		}
 		p.str(x.Op)
 		for _, w := range x.Words {
 			p.str(" ")

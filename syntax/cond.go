@@ -50,6 +50,18 @@ type CondUnknown struct {
 	// for `[[ -Q x ]]` and two or more for `[[ -n x y ]]`. A known operator
 	// with exactly one is an ordinary CondUnary and never reaches here.
 	Words []*Word
+	// Left is the operand that stood *before* the operator, where the name
+	// the dialect has not got was written between two operands:
+	// `[[ str -pcre-match pat ]]`. Nil for the prefix shapes, which is every
+	// other way this node is reached.
+	//
+	// A field of its own rather than the first entry of Words, because what
+	// the two hold is not the same thing. Words is "what stood after it" and
+	// a printer writes them back in that order; an infix operand written in
+	// front of the operator has to go back in front of it, and a node that
+	// could not tell the two apart would write `-pcre-match str pat` for a
+	// line somebody wrote the other way round.
+	Left  *Word
 	Start Pos
 	// Stop is the end of the operator itself, so a node with no words at all
 	// still has an end.
@@ -505,13 +517,23 @@ func (p *Parser) condOperatorHasItsOperand(op string) bool {
 // is: reading the next token would consume it, and there is nothing to put it
 // back into.
 func (p *Parser) condOperandAhead() bool {
-	rest := p.condSourceAhead()
+	return condOperandIn(p.condSourceAhead())
+}
+
+// condOperandIn is condOperandAhead over source already in hand, for the look
+// that has to skip a word first — see [Parser.condBinaryOperatorAhead], where
+// the question is whether something stands behind the *next* word rather than
+// behind the token current.
+func condOperandIn(rest string) bool {
+	for len(rest) > 0 && isBlank(rest[0]) {
+		rest = rest[1:]
+	}
 	for _, end := range []string{"]]", "&&", "||", ")"} {
 		if strings.HasPrefix(rest, end) {
 			return false
 		}
 	}
-	return rest != ""
+	return rest != "" && rest[0] != '\n'
 }
 
 // condBinaryOperatorAhead reports whether the word behind the operator
@@ -530,13 +552,53 @@ func (p *Parser) condOperandAhead() bool {
 func (p *Parser) condBinaryOperatorAhead() bool {
 	rest := p.condSourceAhead()
 	if strings.HasPrefix(rest, "<") || strings.HasPrefix(rest, ">") {
+		// Unless the angle bracket opens a process substitution, which is a
+		// *word* and belongs to the operator in hand: measured on zsh 5.9.2,
+		// 2026-09-25, `[[ -e <(echo x) ]]` is the process-substitution
+		// refusal — so the `<(` was read as an operand — where `[[ -e < b ]]`
+		// is the string comparison at 0.
+		if !p.dialect.ProcessSubstitution || len(rest) < 2 || rest[1] != '(' {
+			return true
+		}
+	}
+	word, tail := condWordIn(rest)
+	if condBinaryWordOps[word] {
 		return true
+	}
+	// And where a condition's name is looked up when it *runs*, a named one
+	// behind the word is a two-operand operator too — but only when the
+	// primary is **exactly three words**, which is the rule that shell turns
+	// on and the reason this counts rather than stopping at the name.
+	// Measured on zsh 5.9.2, 2026-09-25, `echo pre` in front of each:
+	//
+	//	[[ -n -zz x ]]     unknown condition: -zz, 2    the middle word
+	//	[[ -n -zz ]]       0                            an ordinary operand
+	//	[[ -n -zz x y ]]   unknown condition: -n, 2     the first word again
+	//
+	// So the word in hand is the *left operand* of a named condition at
+	// three and is the operator itself at two and at four or more. See
+	// [Parser.condUnknownBinary] (#4437).
+	if !p.dialect.ConditionIsResolvedWhenItRuns || !namedConditionWord(word) {
+		return false
+	}
+	if !condOperandIn(tail) {
+		return false
+	}
+	_, after := condWordIn(tail)
+	return !condOperandIn(after)
+}
+
+// condWordIn is the first blank-separated word of rest and what follows it,
+// which is the whole of the look this file makes at source it has not lexed.
+func condWordIn(rest string) (word, tail string) {
+	for len(rest) > 0 && isBlank(rest[0]) {
+		rest = rest[1:]
 	}
 	end := 0
 	for end < len(rest) && !isBlank(rest[end]) && rest[end] != '\n' {
 		end++
 	}
-	return condBinaryWordOps[rest[:end]]
+	return rest[:end], rest[end:]
 }
 
 // condSourceAhead is the source standing after the token current, with the
@@ -564,9 +626,7 @@ func (p *Parser) condUnaryOperatorAhead() bool {
 	}
 	lit := p.tok.Literal()
 	switch {
-	case p.condUnaryOp(lit):
-		return p.condOperatorHasItsOperand(lit)
-	case p.condUnknownOp(lit):
+	case p.condUnaryOp(lit), p.condUnknownOp(lit):
 		return p.condOperatorHasItsOperand(lit) && !p.condBinaryOperatorAhead()
 	}
 	return false
@@ -862,6 +922,9 @@ func (p *Parser) condPrimary() CondExpr {
 	p.condWords = append(p.condWords, condWord{word: left})
 	op := p.condOperator()
 	if op == "" {
+		if x := p.condUnknownBinary(left); x != nil {
+			return x
+		}
 		if p.condNewlineAfterATermsFirstWord() {
 			return nil
 		}
@@ -890,6 +953,72 @@ func (p *Parser) condPrimary() CondExpr {
 	}
 	p.condWords = append(p.condWords, condWord{word: right})
 	return &CondBinary{Op: op, X: left, Y: right}
+}
+
+// condUnknownBinary is the term `word -name word`, where `-name` is no
+// condition this dialect has: it is read and refused when it runs, the way a
+// `-name` standing in *front* of its operand already is.
+//
+// The two positions are one rule in the shell being modeled and were two
+// here. Measured on zsh 5.9.2, 2026-09-25, over a script file:
+//
+//	[[ pre -zzz b ]]          unknown condition: -zzz, status 2
+//	[[ pre -pcre-match b ]]   unknown condition: -pcre-match, status 2
+//	[[ pre -zz b ]]           unknown condition: -zz, status 2
+//	[[ -zzz b ]]              unknown condition: -zzz, status 2   (already read)
+//
+// and in each of them the commands before it on the line have already run,
+// which is what says the refusal happens at the condition rather than while
+// the line is read. The name is looked up when the condition runs, so the
+// parser cannot hold the set: `zsh/pcre` adds `-pcre-match` to it by being
+// loaded, and a grammar keyed on a fixed table would refuse a file real
+// zsh's own `-n` reads (#4437).
+//
+// Two shapes are deliberately *not* this one, and both are measured beside it:
+//
+//	[[ a -zzz ]]      parse error: condition expected: a
+//	[[ a -z b ]]      parse error: condition expected: a
+//
+// — a name with nothing behind it is not an infix operator at all, and a name
+// this dialect *has* keeps its own arity. So an operand has to stand behind
+// the word, and a known one-operand test is left to the refusal it already
+// gets. [Parser.namedConditionWord] draws both lines: the two-operand word
+// operators are excluded because condOperator has already taken them, and a
+// `-x` of two characters is excluded because every one-operand test is spelled
+// that way.
+//
+// The completion conditions are **not** excluded, which is the one place this
+// parts from [Parser.condUnknownOp]. `-prefix` names a condition only where it
+// stands in front of its operands; written between two of them it is a name
+// like any other, and `[[ p -prefix q ]]` is `unknown condition: -prefix` at 2
+// where `[[ -prefix q ]]` is the completion refusal at 1 — both measured on
+// zsh 5.9.2 the same day.
+func (p *Parser) condUnknownBinary(left *Word) CondExpr {
+	if left == nil || p.tok.Kind != TokWord || p.tok.IsQuoted() {
+		return nil
+	}
+	op := p.tok.Literal()
+	if !p.dialect.ConditionIsResolvedWhenItRuns || !namedConditionWord(op) ||
+		!p.condOperandAhead() {
+		return nil
+	}
+	stop := p.tok.End
+	// The word after the operator is the condition's third, which is the one
+	// position a `(` belongs to the word in — the same hand-off to the lexer
+	// the known operators make in condOperator.
+	p.lex.inCondOperandGroup = p.dialect.ConditionOperandMayOpenWithAGroup
+	p.next()
+	p.lex.inCondOperandGroup = false
+	right := p.condWord()
+	if right == nil {
+		p.failCondOperand(op, "binary")
+		return nil
+	}
+	// The words are recorded as the plain form's are, so that a refusal
+	// further out — `[[ a -zzz b c ]]`, which the shell being modeled calls
+	// `condition expected: a` — names the group rather than the token.
+	p.condWords = append(p.condWords, condWord{op: op}, condWord{word: right})
+	return &CondUnknown{Op: op, Left: left, Words: []*Word{right}, Start: left.Pos(), Stop: stop}
 }
 
 // condNewlineAfterATermsFirstWord refuses the newline standing behind a
@@ -985,7 +1114,8 @@ func (p *Parser) recordCondGroup() {
 	if len(words) < 2 {
 		return
 	}
-	if namedConditionWord(words[0]) || namedConditionWord(words[1]) {
+	if !p.dialect.ConditionIsResolvedWhenItRuns &&
+		(namedConditionWord(words[0]) || namedConditionWord(words[1])) {
 		// A `-word` long enough to be a *named* condition is refused by
 		// name in that shell — `[[ p -zz q ]]` and `[[ p -prefix q ]]` are
 		// both `unknown condition: …` there, and `[[ -zz x ]]` prints the
@@ -993,6 +1123,18 @@ func (p *Parser) recordCondGroup() {
 		// runs rather than while it is read. It is a different shape from
 		// the one this list is for and is left to the ordinary token
 		// refusal (#2846, and the run-time half of #965).
+		//
+		// **In the dialect that makes that refusal** the shapes no longer
+		// reach here at all: a named condition with an operand behind it is
+		// a node now, prefix or infix alike — see [Parser.condUnknownBinary]
+		// — so what is left standing here is a group the shell being modeled
+		// does refuse while reading, and it names one of the group's words
+		// like any other. Measured on zsh 5.9.2, 2026-09-25:
+		// `[[ a -zzz ]]` is `parse error: condition expected: a` and
+		// `[[ a -zzz b c ]]` is `condition expected: a`, which is the pair of
+		// sentences this list produces. The exclusion is therefore for the
+		// dialects that have not got the run-time reading, where it is what
+		// it always was (#4437).
 		return
 	}
 	se.CondWords = words

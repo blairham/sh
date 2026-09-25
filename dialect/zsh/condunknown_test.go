@@ -3,7 +3,11 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+)
 
 // A known conditional operator standing with the wrong number of operands is
 // **parsed** here and refused when it runs.
@@ -182,5 +186,117 @@ func TestTheOlderSpellingOfTheExistenceTest(t *testing.T) {
 	}
 	if st != 0 {
 		t.Errorf("status = %d, want 0", st)
+	}
+}
+
+// And a `-word` this shell has no condition for standing **between two
+// operands** is the same reading again, which is the half #4437 took.
+//
+// The two positions are one rule in the shell and were two here: a name in
+// front of its operand was already parsed and refused by name, and the same
+// name written infix was a parse error that cost the rest of the file. That
+// is why this is not a wording defect — real zsh's own `-n` reads a file this
+// parser's static read refused, which is how the gap was found.
+//
+// `-pcre-match` is the row from the wild and the reason the set cannot live in
+// the grammar: a module adds a condition by being loaded, so a parser keyed on
+// a fixed table refuses a name the shell would have looked up and missed.
+//
+// Measured on zsh 5.9.2, 2026-09-25, over `-c` under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C` and from a script file alike.
+func TestAnUnknownInfixConditionIsRefusedWhenTheConditionRuns(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{
+			"the module's own operator", `echo pre; [[ a -pcre-match b ]]; echo post`,
+			"pre\nzsh:1: unknown condition: -pcre-match\n", 2,
+		},
+		{
+			"a name nothing implements", `echo pre; [[ x -zzz y ]]; echo post`,
+			"pre\nzsh:1: unknown condition: -zzz\n", 2,
+		},
+		{
+			"the shortest name that is one", `echo pre; [[ x -zz y ]]; echo post`,
+			"pre\nzsh:1: unknown condition: -zz\n", 2,
+		},
+		// A completion condition is a condition only where it stands in
+		// front of its operands. Written between two of them it is a name
+		// like any other, which is the one row where this parts from the
+		// prefix reading — `[[ -prefix y ]]` is the completion refusal at 1.
+		{
+			"a completion condition written infix", `echo pre; [[ x -prefix y ]]; echo post`,
+			"pre\nzsh:1: unknown condition: -prefix\n", 2,
+		},
+		// Fatal, and out of a negation and a group, as the prefix reading is.
+		{
+			"inside a negation", `echo pre; [[ ! x -zzz y ]]; echo post`,
+			"pre\nzsh:1: unknown condition: -zzz\n", 2,
+		},
+		{
+			"inside a group", `echo pre; [[ ( x -zzz y ) ]]; echo post`,
+			"pre\nzsh:1: unknown condition: -zzz\n", 2,
+		},
+		// **The row that says this is a lookup and not a wording**, the same
+		// one the prefix reading carries: a short-circuit reaches the `]]`
+		// with the operator never resolved and there is nothing to complain
+		// about.
+		{
+			"never reached, never refused", `echo pre; [[ 1 == 1 || x -zzz y ]]; echo st=$?`,
+			"pre\nst=0\n", 0,
+		},
+		// The controls, and each one holds a different thing fixed. A
+		// two-operand operator this shell *has* is arithmetic and answers,
+		// which is what keeps a negative number on the left of a comparison
+		// out of the refusal.
+		{"a comparison this shell has", `echo pre; [[ -1 -lt 2 ]]; echo st=$?`, "pre\nst=0\n", 0},
+		{"a string comparison", `echo pre; [[ a == a ]]; echo st=$?`, "pre\nst=0\n", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+			if st != tc.status {
+				t.Errorf("status = %d, want %d", st, tc.status)
+			}
+		})
+	}
+}
+
+// The other side of the same rule, and the reason it is a *rule* rather than
+// "a `-word` between two words is an operator": three shapes that stay parse
+// refusals, each holding one thing fixed.
+//
+// A name with nothing behind it is not an infix operator at all; a one-operand
+// test this shell **has** keeps its own arity wherever it stands; and a quoted
+// word is no operator, which is what says the reading is of the word as it was
+// written. All three are the group refusal this shell already made and none of
+// them runs a line — measured beside the rows above on zsh 5.9.2, 2026-09-25.
+func TestWhatAnInfixConditionNameIsNot(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a name with no operand behind it", `[[ x -zz ]]`,
+			"parse error: condition expected: x",
+		},
+		{
+			"a one-operand test written infix", `[[ x -z y ]]`,
+			"parse error: condition expected: x",
+		},
+		{
+			"a quoted name", `[[ x "-zzz" y ]]`,
+			`condition expected: "-zzz"`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseZsh(tc.src)
+			if err == nil {
+				t.Fatalf("%s parsed cleanly, want a refusal", tc.src)
+			}
+			if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

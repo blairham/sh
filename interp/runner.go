@@ -372,6 +372,25 @@ type Runner struct {
 	// running until something waits for it by name.
 	PollCommand func(pid int) (w Wait, changed bool, err error)
 
+	// JobEnded, when set, is called the moment a background job finishes, so
+	// that the shell around this one can say so without waiting for the next
+	// prompt. It is how Semantics.FinishedJobNoticeArrivesAtOnce is served,
+	// and it is called only where that axis says yes and there is somebody to
+	// tell — see Runner.NotifiesAsAJobEnds.
+	//
+	// **It carries nothing and renders nothing.** The job table, the job
+	// numbers and the `+`/`-` markers are the shell's goroutine's, and this
+	// is called from the job's own — so a notice built here would be reading
+	// state another goroutine writes. What it says is *look again*, and the
+	// front end answers by calling Runner.FinishedJobNotices where it always
+	// did, on the goroutine that owns them.
+	//
+	// Which means it has to be safe to call from any goroutine, and cheap: a
+	// front end waiting on a descriptor pokes a pipe and returns. Nil is a
+	// shell with nobody to wake, which is every non-interactive route and
+	// every dialect but one.
+	JobEnded func()
+
 	// TakeInterrupt, when set, reports whether the person at the keyboard has
 	// interrupted the shell since it was last asked, and forgets it.
 	//

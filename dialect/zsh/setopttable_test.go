@@ -35,12 +35,18 @@ import "testing"
 // interp.Runner.SendsHangupToJobsAtExit — the switch bash already reaches
 // under `shopt -s huponexit` — so a session that is leaving really does send
 // SIGHUP to the jobs it abandons and really does say how many. Until #4509 it
-// was remembered and nothing sent.
+// was remembered and nothing sent. `kshoptionprint` is the twelfth: it is the
+// shape of both bare listings rather than a behavior, and until #4529 it was
+// recorded while the listings went on writing the deviating names.
+// `notify` is the thirteenth: it moves
+// Semantics.FinishedJobNoticeArrivesAtOnce, which is whether a finished job's
+// notice is written the moment the job ends or held for the next prompt, and
+// until #4524 it was held in both states.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
-		"longlistjobs", "cbases", "hup", "kshoptionprint",
+		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -62,7 +68,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 133; recordedCount != want {
+	if want := 132; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

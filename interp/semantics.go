@@ -21504,6 +21504,63 @@ type Semantics struct {
 	// (TestANoticeWaitsForAPromptThatIsNotAContinuation) (#2058).
 	FinishedJobNoticeNeedsAPrompt Answer
 
+	// FinishedJobNoticeArrivesAtOnce writes that notice the moment the job
+	// ends, rather than holding it for the next prompt. zsh alone by default,
+	// where it is the `NOTIFY` option — on out of the box, and its own manual
+	// puts the question as "report the status of background jobs immediately,
+	// rather than waiting until just before printing a prompt".
+	//
+	// **The noun is the option and not the job**, which is what the grid
+	// below is built to say. Measured 2026-09-25 on a pseudo-terminal with
+	// `TERM=dumb`, `PS1`/`PS2` exported empty and each shell started `-fiV
+	// +Z`, one `sleep 0.4 &` and no signal anywhere:
+	//
+	//	                         notify on        notify off
+	//	nothing else running     at once          at the next prompt
+	//	a foreground command     at once, before  after that command's
+	//	  still running            its output       output
+	//	`wait` for the job       before `wait`    after it returns
+	//	                           returns
+	//
+	// Both halves matter. The left column says the notice does not wait for
+	// the shell to be *idle* — it lands in the middle of `sleep 1.5; print
+	// FGDONE`, ahead of `FGDONE` — so a rule keyed on "at a prompt" is
+	// falsified by a case the option is held fixed across. The right column
+	// is byte-for-byte what this shell did before this axis existed, for all
+	// three rows, which is what says the option was the only variable.
+	//
+	// The rest of the panel says no, and it is measured rather than assumed:
+	// bash 5.3.20 and 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash
+	// 1.37.0 in the pinned alpine digest all write the row after the *next*
+	// command's output. bash has the option under another name — `set -b`,
+	// and with it the same `sleep 0.4 &` is reported at once there too — so
+	// this is the panel's question and not zsh's alone; what differs is which
+	// way the default falls. ksh93's `-b` is accepted and changes nothing
+	// measurable, and dash has no such letter.
+	//
+	// Read by the front end rather than by the runner, and read rather than
+	// `ask`ed, for the reason FinishedJobNoticeNeedsAPrompt gives: *when* a
+	// notice is written is the shell around interp's to decide, and an
+	// unanswered field would put "the shells disagree here" in front of every
+	// background job in every dialect.
+	//
+	// What interp contributes is the *moment*, through Runner.JobEnded: the
+	// goroutine that ends a job says so, and the front end writes what
+	// Runner.FinishedJobNotices then gives it. Nothing is rendered on that
+	// goroutine, because the job table is the shell's.
+	//
+	// The preset says no, which is the answer that claims less and is four of
+	// the five columns.
+	//
+	// unpinned: never reached from the corpus, for the reason the axis above
+	// it is not — no row draws a prompt, and with no prompt there is no
+	// "before the next one" for a notice to be held until. Measured 2026-09-25
+	// across the whole panel. cmd/zsh/jobnotifypty_test.go pins it through a
+	// pseudo-terminal, in both states of the option
+	// (TestNotifyDecidesWhenAFinishedJobIsReported), and
+	// repl/jobnotify_test.go pins the seam it is read at (#4524).
+	FinishedJobNoticeArrivesAtOnce Answer
+
 	// PunctuatedFunctionNameIsRefused stops the script when a function
 	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
 	// define and run it, and dash never parses the definition at all.

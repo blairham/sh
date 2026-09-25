@@ -94,15 +94,12 @@ func TestAStoppedJobKilledIsReportedTerminated(t *testing.T) {
 		t.Fatalf("the job is %q rather than stopped; nothing below grades anything", got)
 	}
 
-	before := screen.Text()
-	jobNoticeType(t, control, screen, "kill -TERM %1")
-	// A second line, and nothing is cleared between the waits, for the
-	// reason #4508's pty test gives: the notice is written before a prompt
-	// rather than the moment the job ends, so reading everything drawn since
-	// the kill keeps the assertion about the words rather than about which
-	// prompt they arrived at.
-	jobNoticeType(t, control, screen, ":")
-	got := screen.Text()[len(before):]
+	// Everything drawn since the kill, waited out until the notice is in it.
+	// `[1]  + ` is the notice and nothing else here. Since #4524 the notice
+	// arrives on its own rather than at the prompt after the next command, so
+	// no second line is typed to fetch it — jobNoticeAfter says why the
+	// reading is a tail and not a seek.
+	got := jobNoticeAfter(t, control, screen, "kill -TERM %1", "[1]  + ")
 	const want = "[1]  + terminated  sleep 300"
 	if !strings.Contains(got, want) {
 		t.Errorf("after the kill the terminal was given\n%s\nwant a row %q",
@@ -148,9 +145,11 @@ func stopAJob(t *testing.T, control *os.File, screen *smoke.Screen) {
 // expansion can produce.
 func jobState(t *testing.T, control *os.File, screen *smoke.Screen) string {
 	t.Helper()
-	before := screen.Text()
-	jobNoticeType(t, control, screen, `print "${q}<$(ps -o stat= -p $p)>${q}"`)
-	got := screen.Text()[len(before):]
+	// Waited out on the closing fence rather than read off a prompt: a job
+	// notice can arrive unprompted between these lines (#4524), and a prompt
+	// drawn under one is a prompt this read would otherwise mistake for the
+	// one its own line produced. See jobNoticeAfter.
+	got := jobNoticeAfter(t, control, screen, `print "${q}<$(ps -o stat= -p $p)>${q}"`, ">QQ")
 	i := strings.Index(got, "QQ<")
 	if i < 0 {
 		t.Fatalf("no state was printed:\n%s", smoke.Readable(smoke.LastLines(got, 10)))

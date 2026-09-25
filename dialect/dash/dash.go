@@ -299,6 +299,11 @@ func Semantics() interp.Semantics {
 	// `-i script.sh` is written between the commands, on a route that draws no
 	// prompt at all.
 	s.FinishedJobNoticeNeedsAPrompt = interp.No
+	// Nor at the moment the job ends: measured 2026-09-25 on a
+	// pseudo-terminal, `sleep 0.4 &` writes nothing at all here — not even
+	// the job's start — and the `Done` row appears only after the next
+	// command's output. `set -b` is not a letter this shell has.
+	s.FinishedJobNoticeArrivesAtOnce = interp.No
 	// And `$!` before any background command is unset here as it is in bash,
 	// in its own words and with its own status: measured, `${!-unset}` takes
 	// its default and `set -u; echo "[$!]"` writes `!: parameter not set` —

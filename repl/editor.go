@@ -314,6 +314,21 @@ type editor struct {
 	woke     func()
 	rerender func(cols int) (drawnPrompt, bool)
 
+	// jobWake is a second descriptor of exactly that shape, and it becomes
+	// readable when a background job has *ended*. jobWoke takes the readiness
+	// back off it and jobNotices writes what there is to say, reporting
+	// whether it said anything. All three nil in a session whose dialect
+	// holds the notice for the next prompt, which is four dialects of five.
+	//
+	// Separate from wake rather than folded into it because the two are
+	// answered differently: a published segment re-renders the prompt in
+	// place, and a finished job puts a line of its own above it. One
+	// descriptor with a flag beside it would be the same thing written less
+	// plainly. See jobnotify.go.
+	jobWake    func() int
+	jobWoke    func()
+	jobNotices func() bool
+
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which
 	// screen row the last draw left the cursor on, counted from the row the

@@ -7591,11 +7591,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 18 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 19 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
-| store-backed, read by the front end | 8 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All eight are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
+| store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 6 | `aliases`, `autocd`, `banghist`, `checkjobs`, `cprecedences` and `hup`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, and a session that is leaving really does send SIGHUP to the jobs it abandons. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
-| **recorded** | 134 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 132 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -7870,7 +7870,31 @@ with `ArithLeadingZeroIsOctal` for that one base. And `$(( [##16] 108 ))` is
 to spell. A probe that looked only at octal would have agreed in both states
 and concluded the option was already implemented.
 
-So 133 of 185 are recorded, the count above is the one produced by counting
+`notify` is the most recent to leave (#4524), and it is the one where the
+bargain cost a **hang** rather than a wrong line. NOTIFY decides *when* a
+finished job's notice is written — the moment the job ends, which is zsh's
+default, or held until the shell is about to draw a prompt, which is what the
+rest of the panel does. This shell remembered the name and behaved as
+`nonotify` in every session, so the notice arrived one command late and the
+two states of the option produced byte-identical output. It is
+`Semantics.FinishedJobNoticeArrivesAtOnce` now.
+
+**The option is what keys it, and the grid is written to say so.** Measured
+2026-09-25 on a pseudo-terminal, `sleep 0.4 &` with no signal anywhere: with
+it on the row lands unprompted, and also lands in the middle of `sleep 1.5;
+print FGDONE`, *ahead* of `FGDONE` — so the rule is not "when the shell is
+idle", which is a reading the one-command case on its own cannot rule out.
+With it off both cases hold the row until after the next command's output.
+Neither half is about what the job was or how it ended, which is the reading
+#4508 took before the option was found.
+
+What it cost is written down in zsh's own `W02jobs.ztst`. Its last chunk
+drives the shell through `zpty`, which echoes nothing, so a `kill`ed job's
+notice is the only line there is to read: with the notice a command late,
+`zpty -r` waits for it for ever and the file hangs rather than failing. The
+chunk runs to the end with the option implemented.
+
+So 132 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -19240,6 +19264,63 @@ the loop that would have printed them.
 The preset says yes, the answer that claims less: a shell that has not
 been asked for a job report does not write one where nobody is at a prompt
 to read it.
+
+
+**`FinishedJobNoticeArrivesAtOnce`** — bash no · dash no · ksh93 no · zsh
+yes · ash no
+
+Writes that notice the moment the job ends, rather than holding it for the
+next prompt. zsh alone, where it is the `NOTIFY` option — on out of the box
+there, and worded in that shell's own manual as "report the status of
+background jobs immediately, rather than waiting until just before printing
+a prompt".
+
+**The option is the noun, not the job.** Measured 2026-09-25 on a
+pseudo-terminal with `TERM=dumb`, `PS1`/`PS2` exported empty and each shell
+started `-fiV +Z`, one `sleep 0.4 &` and no signal anywhere:
+
+| the shell is | notify on | notify off |
+| --- | --- | --- |
+| running nothing else | at once | after the next command's output |
+| running a foreground command | at once, ahead of that command's output | after it |
+| inside `wait` for the job | before `wait` returns | after it returns |
+
+Both columns are load-bearing. The left one's middle row says the rule is
+**not** "when the shell is next idle": the notice lands in the middle of
+`sleep 1.5; print FGDONE`, ahead of `FGDONE`, with the shell busy. The right
+one is byte-for-byte what this shell did for all three rows before #4524,
+which is what says the option was the only variable — the reading #4508 took
+first, that this was about a `KILL`ed job or about a signal, does not survive
+holding the signal fixed.
+
+The rest of the panel says no and it is measured rather than assumed: bash
+5.3.20 and 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 in
+the pinned alpine digest all write the row only after the *next* command's
+output. bash has the same option under another letter — `set -b`, and with it
+the same job is reported at once there too — so this is the panel's question
+rather than zsh's alone; what differs is which way the default falls. ksh93's
+`-b` is accepted and changes nothing measurable, and dash has no such letter.
+
+**Read by the front end**, not by the runner, and read rather than `ask`ed,
+for the reason `FinishedJobNoticeNeedsAPrompt` above gives. What `interp`
+contributes is the *moment*: the goroutine that ends a job calls
+`Runner.JobEnded` and renders nothing at all, because the job table, the job
+numbers and the `+`/`-` markers belong to the shell's own goroutine. The
+front end answers by calling `Runner.FinishedJobNotices` where it always did.
+
+Where the line lands on the screen is measured too. With the line editor off
+— `+Z`, which is how zsh's own suite drives the shell — it is written where
+the cursor is and nothing is redrawn: with `PS1=$'PR1\nzz> '`, real zsh writes
+the notice straight after the prompt, on the prompt's own row. With the editor
+on it takes a row of its own and the prompt and the half-typed line are drawn
+again under it, which is the part a shell gets wrong by doing nothing.
+
+Two rows of the grid are still one command behind here, and both are the ones
+where the shell is *busy* rather than waiting for a line: a foreground command
+and `wait`. #4531 has the reductions.
+
+The preset says no, the answer that claims less and the one four of the five
+columns give.
 
 
 **`WaitReadsOptions`** — bash yes · dash yes · ksh93 yes · zsh no

@@ -425,7 +425,8 @@ func (s Shell) watchedDescriptors() func() []int {
 func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 	watching := e.watch != nil && e.descriptorReady != nil
 	waking := e.wake != nil
-	if !watching && !waking {
+	notifying := e.jobWake != nil
+	if !watching && !waking && !notifying {
 		return prompt
 	}
 	if e.inputPending() {
@@ -452,6 +453,16 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 		if waking {
 			if wake = e.wake(); wake >= 0 {
 				fds = append(fds, wake)
+			}
+		}
+		// And the wake a *finished job* pokes, which goes into the same set
+		// for the same reason and is answered differently — a line of its own
+		// above the prompt rather than the prompt drawn again. Negative once
+		// the session has taken it down. See jobnotify.go.
+		jobs := -1
+		if notifying {
+			if jobs = e.jobWake(); jobs >= 0 {
+				fds = append(fds, jobs)
 			}
 		}
 		if len(fds) == 0 {
@@ -486,6 +497,13 @@ func (e *editor) serveDescriptors(prompt drawnPrompt) drawnPrompt {
 				// knows or cares what.
 				e.woke()
 				prompt = e.reprompt(prompt)
+				continue
+			}
+			if fd == jobs {
+				// A background job has ended, in the one dialect that says so
+				// the moment it happens rather than before the next prompt.
+				e.jobWoke()
+				e.reportJobs(prompt)
 				continue
 			}
 			e.serveDescriptor(fd, prompt)

@@ -107,6 +107,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"InteractiveCommandStringAnnouncesJobs", s.InteractiveCommandStringAnnouncesJobs, interp.Yes},
 		{"NextJobNumberRefillsAHole", s.NextJobNumberRefillsAHole, interp.Yes},
 		{"FinishedJobNoticeNeedsAPrompt", s.FinishedJobNoticeNeedsAPrompt, interp.No},
+		// At the next command boundary and not the moment the job ended:
+		// measured on ksh93u+, `set -b` here changes nothing about it (#4524).
+		{"FinishedJobNoticeArrivesAtOnce", s.FinishedJobNoticeArrivesAtOnce, interp.No},
 		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.No},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.No},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},

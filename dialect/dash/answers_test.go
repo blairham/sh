@@ -103,6 +103,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"InteractiveCommandStringAnnouncesJobs", s.InteractiveCommandStringAnnouncesJobs, interp.No},
 		{"NextJobNumberRefillsAHole", s.NextJobNumberRefillsAHole, interp.Yes},
 		{"FinishedJobNoticeNeedsAPrompt", s.FinishedJobNoticeNeedsAPrompt, interp.No},
+		// Nor the moment the job ended — this shell has no such letter and
+		// writes the row after the next command's output (#4524).
+		{"FinishedJobNoticeArrivesAtOnce", s.FinishedJobNoticeArrivesAtOnce, interp.No},
 		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.Yes},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.Yes},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.Yes},

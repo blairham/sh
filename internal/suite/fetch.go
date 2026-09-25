@@ -79,13 +79,9 @@ func Fetch(ctx context.Context, s Suite, buildDir string, refetch bool) (string,
 	if !refetch && stampMatches(dir, s.SHA256) {
 		return dir, nil
 	}
-	archive, err := download(ctx, s.URL)
+	archive, err := fetchArchive(ctx, s)
 	if err != nil {
-		return "", fmt.Errorf("%w: %s: %v", ErrOffline, s.URL, err)
-	}
-	sum := sha256.Sum256(archive)
-	if got := hex.EncodeToString(sum[:]); got != s.SHA256 {
-		return "", fmt.Errorf("%w: %s: have %s, want %s", ErrDigest, s.URL, got, s.SHA256)
+		return "", err
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return "", err
@@ -102,6 +98,107 @@ func Fetch(ctx context.Context, s Suite, buildDir string, refetch bool) (string,
 func stampMatches(dir, want string) bool {
 	got, err := os.ReadFile(filepath.Join(dir, stampName))
 	return err == nil && strings.TrimSpace(string(got)) == want
+}
+
+// One DNS answer used to decide whether a whole column existed.
+//
+// The bash column measured nothing on the Suites run of 2026-09-24 because
+// `ftp.gnu.org` did not resolve inside the job container — `server
+// misbehaving` from Docker's embedded resolver at 127.0.0.11, which is
+// transient by name. Nothing was killed and nothing came near a memory bound;
+// the step's own cgroup read said `oom_kill 0` against `memory.max = max`.
+// The single request was the whole of the column's availability. #4435.
+//
+// So a fetch is now two axes rather than one call: each source is tried
+// [fetchAttempts] times with a growing pause between, and [Suite.Mirrors]
+// supplies the next source when a whole host is unreachable. The two are
+// deliberately separate — a retry covers a resolver having a bad second, and a
+// mirror covers a host being down for the afternoon, and neither covers the
+// other.
+//
+// The pin is unchanged and is what makes a mirror safe to add at all: every
+// source is graded against [Suite.SHA256] before a byte of it is unpacked, so
+// a mirror is a second route to the *same bytes* and never a second version.
+const fetchAttempts = 3
+
+// fetchBackoff is the pause before the second attempt at a source; it doubles
+// for each one after. A package variable rather than a constant for the reason
+// fetchClient is one — a test shortens it, because a retry path nothing
+// exercises is untested code that only runs on the day it is needed.
+var fetchBackoff = 2 * time.Second
+
+// sources is where this suite's archive may be fetched from, in order: the
+// canonical URL first, then any mirrors.
+func (s Suite) sources() []string {
+	out := make([]string, 0, 1+len(s.Mirrors))
+	if s.URL != "" {
+		out = append(out, s.URL)
+	}
+	return append(out, s.Mirrors...)
+}
+
+// fetchArchive returns the pinned archive from the first source that serves
+// it, or says everything it tried and why each one did not.
+//
+// The digest is checked *here*, inside the loop, rather than once by the
+// caller. That is what keeps a mirror from being able to change the
+// measurement: a source that serves something other than the pin is not used
+// and the next source is tried, and if every source failed the pin the error
+// is [ErrDigest] rather than [ErrOffline] — a wrong archive everywhere is a
+// stale pin, which is a different thing from a network that was not there.
+func fetchArchive(ctx context.Context, s Suite) ([]byte, error) {
+	var (
+		tried      []string
+		mismatched bool
+	)
+	for _, url := range s.sources() {
+		for attempt := 1; attempt <= fetchAttempts; attempt++ {
+			body, err := download(ctx, url)
+			if err == nil {
+				sum := sha256.Sum256(body)
+				if got := hex.EncodeToString(sum[:]); got != s.SHA256 {
+					// Not retried: the same source will serve the same bytes
+					// a second later. Move on to the next one.
+					mismatched = true
+					tried = append(tried, fmt.Sprintf("%s: have %s, want %s", url, got, s.SHA256))
+					break
+				}
+				return body, nil
+			}
+			tried = append(tried, fmt.Sprintf("%s (attempt %d/%d): %v", url, attempt, fetchAttempts, err))
+			if ctx.Err() != nil {
+				// A Ctrl-C is not a flaky mirror. Stop rather than spending
+				// the remaining attempts and every mirror on a canceled run.
+				tried = append(tried, ctx.Err().Error())
+				return nil, fmt.Errorf("%w: %s", ErrOffline, strings.Join(tried, "; "))
+			}
+			if attempt < fetchAttempts {
+				if err := pause(ctx, fetchBackoff<<(attempt-1)); err != nil {
+					tried = append(tried, err.Error())
+					return nil, fmt.Errorf("%w: %s", ErrOffline, strings.Join(tried, "; "))
+				}
+			}
+		}
+	}
+	if len(tried) == 0 {
+		return nil, fmt.Errorf("%w: %s has no source to fetch from", ErrOffline, s.Name)
+	}
+	if mismatched {
+		return nil, fmt.Errorf("%w: %s", ErrDigest, strings.Join(tried, "; "))
+	}
+	return nil, fmt.Errorf("%w: %s", ErrOffline, strings.Join(tried, "; "))
+}
+
+// pause waits, or returns the reason it stopped waiting.
+func pause(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // fetchTimeout bounds the whole request — connect, headers and body — because

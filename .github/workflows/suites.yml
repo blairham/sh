@@ -119,6 +119,24 @@ jobs:
   bash-suite:
     name: bash's own suite (report only)
     runs-on: ubuntu-latest
+    # Report-only, and **still able to show a red X when it measured
+    # nothing**. Those are not in tension and the distinction is #4435's third
+    # remedy.
+    #
+    # `continue-on-error` on a *job* keeps the workflow run green while
+    # letting this job's own check conclude failure. So the column still gates
+    # nothing -- this workflow is off pull requests entirely, is on nobody's
+    # required list, and its own header above says no job here may turn it red
+    # -- and "the suite could not be fetched" stops leaving the same passing
+    # tick as "the suite agreed with us", which is the thing the issue is
+    # about. A warning annotation is not read; a red job beside a commit is.
+    #
+    # The step-level `continue-on-error` further down is a different
+    # mechanism and both are needed. That one keeps a *killed step* from
+    # reddening the job, which is right: a step that died is not a verdict.
+    # This one lets the verdict step, which runs afterwards and knows whether
+    # a table exists, say so.
+    continue-on-error: true
     # The one job in this workflow that runs in a container, and it now
     # answers two questions rather than one: what a signal can reach, and
     # **which bash is graded**. The second is #4106 and is the reason the
@@ -197,6 +215,24 @@ jobs:
     # guessed at here. #4106.
     #
     # It is reversible: the diff is this key and the apt line below.
+    #
+    # # What the network can reach
+    #
+    # That diagnostic then answered, and it answered **network** rather than
+    # memory: `oom_kill 0`, a 2.4 GB peak against a `memory.max` of `max`, and
+    # a fetch that failed with `lookup ftp.gnu.org on 127.0.0.11:53: server
+    # misbehaving` -- Docker's embedded resolver, inside this container.
+    # Nothing was killed. One name resolution was the whole of whether this
+    # column existed. #4435.
+    #
+    # Three things changed for it, and they are separable on purpose because
+    # they cover different outages. `internal/suite` now retries each source
+    # and falls through to a mirror, which covers a resolver having a bad
+    # second and a host being down for an afternoon. The cache step below
+    # covers both being unreachable at once, by making the network a first-run
+    # cost. And the job may now conclude red when it measured nothing, which
+    # covers the case none of the above can: it happening anyway, and nobody
+    # noticing for a fortnight.
     container:
       image: debian:sid-slim@sha256:ec3fa4e0b2987ae47be353f56854191e300261915470e40165b1c906d22a65db
     timeout-minutes: 30
@@ -267,6 +303,39 @@ jobs:
         go-version-file: go.mod
         check-latest: true
         cache: true
+    # The cache key is the pin, asked of the table that states it rather than
+    # written here a second time. A key copied by hand does not fail when it
+    # drifts -- it restores a tree for another version, which the fetch's
+    # digest stamp then quietly refetches over with nothing saying the cache
+    # was useless. `-pin` starts no shell and reaches no network.
+    - name: What the bash column is pinned to
+      id: pin
+      run: go run ./internal/cmd/suitecheck -dialect bash -pin >> "$GITHUB_OUTPUT"
+    # #4435's second remedy: the archive is a fixed artifact for a pinned
+    # version, so the network becomes a first-run cost rather than a per-run
+    # gamble. On the day GNU is unreachable *and* the mirror is too, a
+    # restored cache is the column still existing.
+    #
+    # **A runner-side cache is not a commit, and that is the whole of the
+    # license question.** bash's `tests/` are GPLv3 and this tree is
+    # Apache-2.0 with a NOTICE saying it contains no third-party code; what
+    # that forbids is the suite entering *this repository* -- a file in the
+    # tree, in a commit, in a release artifact. This is a blob in GitHub's
+    # Actions cache, written by the job, scoped to this repository's cache
+    # namespace, evicted on GitHub's own schedule, and unreachable from any
+    # checkout. It is the same category as the gitignored `build/` directory
+    # the fetch already unpacks into, one layer further out. Said here so it
+    # is not re-litigated the next time somebody reads `never committed` and
+    # reaches for the revert.
+    #
+    # Keyed exactly rather than with `restore-keys`: a near-miss restore is a
+    # tree for a different pin, and this column's whole claim is that the
+    # bytes it grades are the ones named. A miss should refetch.
+    - name: Cache bash's fetched suite
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.pin.outputs.path }}
+        key: ${{ steps.pin.outputs.key }}
     - name: Run bash's own tests/ through real bash and through cmd/bash
       # #2298 (49 files that exit 0 under both shells and print different
       # things) and #2299 (14 files that end at a different status) are
@@ -290,6 +359,10 @@ jobs:
       # needs the network to fetch, so a fetch
       # failure must not fail the build either; suitecheck already reports
       # that as a skip rather than a crash, and `|| true` covers the rest.
+      # Since #4435 the fetch is also three attempts per source with a growing
+      # pause and a second source after that, and the step above restores the
+      # unpacked tree from the cache when there is one -- so a skip here now
+      # means several routes to the bytes failed rather than one name lookup.
       # `-timeout 30s` matches what the `suite` target already passes, and it
       # is the difference between a job that reports and a job that is killed.
       # suitecheck defaults to 4 files at once and 90s each; bash ships 83
@@ -338,17 +411,21 @@ jobs:
     # number, and a scraper gets whatever its last successful parse left
     # behind.
     #
-    # This says which happened, in three places a reader or a script can tell
-    # apart: a marker line in the log, a line in the job summary, and a
-    # warning annotation when there is no report. It makes nothing blocking --
-    # the job stays report-only and stays off the required list, because a
-    # count that jitters by a couple of files run to run is not a gate.
+    # This says which happened, in four places a reader or a script can tell
+    # apart: a marker line in the log, a line in the job summary, an
+    # annotation, and -- since #4435 -- the job's own conclusion. It makes
+    # nothing blocking: the job stays report-only, this workflow does not run
+    # on pull requests at all and is on nobody's required list, because a
+    # count that jitters by a couple of files run to run is not a gate. What
+    # changes is only that a run which measured nothing stops looking
+    # identical from outside to one that did, which a warning nobody reads
+    # never achieved.
     - name: Say whether this run produced a report
       if: always()
       # No `-e`, and it is the one step here where that is deliberate: a grep
-      # that matches nothing is an answer rather than an error, and a
-      # report-only job turning red over its own bookkeeping would be a new
-      # version of the confusion this step exists to remove.
+      # that matches nothing is an answer rather than an error, so the step
+      # decides its own exit status at the end rather than tripping over a
+      # command in the middle of working out what to say.
       shell: bash {0}
       run: |
         log="$RUNNER_TEMP/bash-suite.log"
@@ -369,7 +446,7 @@ jobs:
         fi
 
         say "BASH-SUITE: NO REPORT -- this run measured nothing, and is not a count for #2298"
-        echo "::warning title=bash-suite::no report was produced; this run is not a count for #2298"
+        echo "::error title=bash-suite measured nothing::no report was produced, so this run is not a count for #2298. The column is report-only: this is the absence of a measurement and not a defect in this shell. #4435"
         echo "the last lines the step printed:"
         tail -n 5 "$log" 2>/dev/null
 
@@ -390,7 +467,14 @@ jobs:
           fi
         done
         grep -E '^Mem(Total|Available)' /proc/meminfo 2>/dev/null
-        exit 0
+
+        # Red, and only this job. `continue-on-error` on the job above keeps
+        # the workflow run green, so the checks list carries an X against the
+        # column that measured nothing while nothing is gated. Before #4435
+        # this was `exit 0` and the absence was a warning annotation, which is
+        # to say it was invisible: the bash column could be missing for weeks
+        # with every run showing the same tick, and #2298 is counted from it.
+        exit 1
 
   zsh-suite:
     name: zsh's own suite (report only)

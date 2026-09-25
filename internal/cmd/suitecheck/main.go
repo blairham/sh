@@ -68,6 +68,9 @@ func main() {
 		only = flag.String("only", "",
 			"comma-separated file names to run, for working on the harness itself")
 		panel = flag.Bool("panel", false, "print the panel of columns and stop")
+		pin   = flag.Bool("pin", false,
+			"print this column's cache identity and unpack directory as name=value "+
+				"lines, and stop. Starts no shell and reaches no network")
 		cells = flag.Bool("cells", false,
 			"print #2291's leg-2 roll-up — column x area, with the cells closed by "+
 				"measurement — and stop. Starts no shell.")
@@ -89,6 +92,14 @@ func main() {
 
 	if *panel {
 		printPanel()
+		return
+	}
+
+	// Before everything, because it answers from the table alone.
+	if *pin {
+		if code := printPin(*dialect, *buildDir); code != 0 {
+			os.Exit(code)
+		}
 		return
 	}
 
@@ -528,4 +539,29 @@ func printReordered(o out, rep suite.Report) {
 	o.printf("                            its source. An upper bound, because the count cannot\n")
 	o.printf("                            tell that from an order we should get right, and it\n")
 	o.printf("                            corrects neither figure above it\n")
+}
+
+// printPin writes this column's cache identity and unpack directory in the
+// `name=value` shape `$GITHUB_OUTPUT` reads.
+//
+// The CI job caches the fetched suite between runs so that the network is a
+// first-run cost rather than a per-run gamble (#4435), and a cache key is a
+// claim about *which bytes* are in it. Writing that key by hand in the
+// workflow would be a second copy of the pin, free to drift from
+// [suite.Suite.SHA256] — and a stale key does not fail, it silently restores
+// the wrong tree, which the digest stamp would then refetch over with nobody
+// told. So the key is derived here, from the one table that states the pin.
+func printPin(dialect, buildDir string) int {
+	s, ok := suite.Find(dialect)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "suitecheck: no column for dialect %q; -panel lists them\n", dialect)
+		return 2
+	}
+	if s.SHA256 == "" {
+		fmt.Fprintf(os.Stderr, "suitecheck: the %s column has no pinned digest to key a cache on\n", s.Name)
+		return 2
+	}
+	fmt.Printf("key=suite-%s-%s-%s\n", s.Dialect, s.Version, s.SHA256)
+	fmt.Printf("path=%s\n", filepath.ToSlash(s.Dir(buildDir)))
+	return 0
 }

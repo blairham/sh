@@ -167,6 +167,24 @@ type Suite struct {
 	// URL is the release archive. Only gzip is read: the standard library
 	// has gzip and not xz, and this tree generates rather than imports.
 	URL string
+	// Mirrors are further places the *same archive* may be fetched from,
+	// tried in order after URL when URL cannot be reached.
+	//
+	// They are a second route to one set of bytes and never a second
+	// version: every source is graded against SHA256 before anything is
+	// unpacked, so a mirror that has drifted is refused exactly as a typo in
+	// URL would be. That is what makes adding one safe.
+	//
+	// It exists because a single name resolution decided whether a column
+	// existed. #4435: `ftp.gnu.org` did not resolve inside the bash job's
+	// container, so the run produced no report, and the epic that column is
+	// counted from silently went a run without a number.
+	//
+	// A column with none is not a defect — a suite fetched from a tag's
+	// archive on a large forge has no mirror worth naming — but a column
+	// whose canonical host is a single project-run FTP mirror should have
+	// one.
+	Mirrors []string
 	// SHA256 is the archive's digest, lowercase hex. A mismatch stops the
 	// run: an instrument that quietly graded whatever arrived is worse than
 	// one that did not run.
@@ -413,6 +431,16 @@ var Panel = []Suite{
 		Dialect: "bash",
 		Version: "5.3",
 		URL:     "https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz",
+		// kernel.org's GNU mirror, measured 2026-09-25 to serve bytes whose
+		// digest is the pin above, character for character. That check is the
+		// reason it is this mirror and not `ftpmirror.gnu.org`, which the
+		// issue also named: ftpmirror is a redirector, it answers 302 to a
+		// *plaintext* http mirror, and which mirror it picks depends on where
+		// the request came from — so there is no one artifact to verify once
+		// and write down here. The pin would still refuse a bad answer, but a
+		// mirror nobody can check in advance is a mirror that only ever finds
+		// out on the day GNU is down.
+		Mirrors: []string{"https://mirrors.kernel.org/gnu/bash/bash-5.3.tar.gz"},
 		SHA256:  "0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba",
 		Root:    "bash-5.3",
 		// The suite, and the three C programs it calls by name. The

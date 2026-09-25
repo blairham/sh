@@ -73,7 +73,7 @@ func (r *Runner) condWordQualifies(w *syntax.Word) bool {
 	if w == nil || len(w.Spans) == 0 {
 		return false
 	}
-	if !r.dialect().GlobQualifiers || !r.MatchOption(ExtendedPatternOperators) {
+	if !r.lang().GlobQualifiers || !r.MatchOption(ExtendedPatternOperators) {
 		return false
 	}
 	last := w.Spans[len(w.Spans)-1]

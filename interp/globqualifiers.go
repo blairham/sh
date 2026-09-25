@@ -393,7 +393,7 @@ var globPermissionBits = map[byte]fs.FileMode{
 // fieldQualifiers reads the qualifier list a field carries, if the dialect
 // has them at all. ok is false when the expansion has already been failed.
 func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers, has, ok bool) {
-	if !r.dialect().GlobQualifiers {
+	if !r.lang().GlobQualifiers {
 		return field, globQualifiers{}, false, true
 	}
 	pattern, list, found := splitGlobQualifiers(field)

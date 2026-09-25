@@ -6365,7 +6365,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// answering about a word that had already been split (#3772).
 		appendOperand := i > 0 && len(argv) > 0 && appendOperandShaped(w) &&
 			r.declarationCommand(c, argv)
-		if appendOperand && r.dialect().AppendAssign {
+		if appendOperand && r.lang().AppendAssign {
 			if r.unspecified {
 				break
 			}

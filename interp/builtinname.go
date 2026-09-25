@@ -191,7 +191,7 @@ func (r *Runner) scalarMemberStands(name string) bool {
 // about which bytes a member's name may hold. See [syntax.Dialect.DottedName],
 // which is the grammar half this follows.
 func (r *Runner) dottedName(name string) bool {
-	if !r.dialect().DottedName || !strings.Contains(name, ".") {
+	if !r.lang().DottedName || !strings.Contains(name, ".") {
 		return false
 	}
 	// A member of the compound an *element* holds is a name too, and it is

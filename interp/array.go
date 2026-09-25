@@ -2816,7 +2816,7 @@ func splitSubscriptPair(idx string) (lo, hi string, ok bool) {
 // run-time split over the expanded text is what it still gets, and for it
 // that text and the written one are the same thing.
 func (r *Runner) pairsAreSplitWhenWritten() bool {
-	return r.dialect().ArraySubscriptFlags
+	return r.lang().ArraySubscriptFlags
 }
 
 // writtenSubscript is the subscript as the source spelled it, falling back to

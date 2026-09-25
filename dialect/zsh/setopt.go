@@ -1193,19 +1193,26 @@ const zshRecordedStore = ".zsh.setopt"
 // recordedDeviates reports whether one recorded name has been moved off its
 // default.
 func recordedDeviates(r *interp.Runner, base string) bool {
-	names, _ := r.GetArray(zshRecordedStore)
-	for _, n := range names {
-		if n == base {
-			return true
-		}
-	}
-	return false
+	// Asked rather than listed. This is a membership test on a set that
+	// happens to be stored as an array, and reading it with GetArray built
+	// the whole list to answer one question — measured on a real ~/.zshrc,
+	// eleven thousand lists in a startup, because an `emulate -L zsh` at the
+	// top of a zsh function reaches every option that names one. See
+	// interp.Runner.ArrayHolds.
+	return r.ArrayHolds(zshRecordedStore, base)
 }
 
 // setRecordedDeviation records or clears one name's deviation, keeping the
 // store sorted so the array is a function of the set and not of the order the
 // rc file happened to write.
 func setRecordedDeviation(r *interp.Runner, base string, dev bool) {
+	if recordedDeviates(r, base) == dev {
+		// Already where it is being put, so the store as it stands is the
+		// store this would write: the rebuild below would allocate a fresh
+		// slice, sort it and hand back the same set. The same reasoning as
+		// setAxis, on the other half of this dialect's option state.
+		return
+	}
 	names, _ := r.GetArray(zshRecordedStore)
 	out := make([]string, 0, len(names)+1)
 	for _, n := range names {

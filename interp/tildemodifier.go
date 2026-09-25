@@ -806,7 +806,7 @@ func matchTilde(m tildeModifier, pattern, piece, subject string, base int, o pat
 // this matcher cannot answer: report it by name, and stop rather than return
 // an answer that would be a guess.
 func (r *Runner) tildeModifierOpts(o patternOpts, pattern string) patternOpts {
-	if !r.dialect().TildeGroup {
+	if !r.lang().TildeGroup {
 		return o
 	}
 	o.tilde = true

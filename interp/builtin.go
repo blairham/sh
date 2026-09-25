@@ -4016,7 +4016,7 @@ func (r *Runner) operandSubscriptTilde(base, sub string) string {
 // below stops at the first `]` there, which is what leaves `a[1][2]=v` the
 // unbalanced operand every other column refuses (#2491).
 func (r *Runner) operandSubscripts(builtin, operand string) (string, []string, bool) {
-	if !r.dialect().ChainedAssignSubscript || !chainedOperandBuiltin(builtin) {
+	if !r.lang().ChainedAssignSubscript || !chainedOperandBuiltin(builtin) {
 		// `unset` reads a lexed operand's brackets here exactly as its body
 		// does a few lines on. Two readings of one operand is what made the
 		// name check call `unset m[80's]` a plain name and the body call it

@@ -2322,7 +2322,7 @@ func (r *Runner) parseArithStored(s string) (arithNum, error) {
 // where an overflow comes to zero at all.
 func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 	s = strings.TrimSpace(s)
-	if r.dialect().ArithDigitSeparator {
+	if r.lang().ArithDigitSeparator {
 		// The separator is removed and then the ordinary rules apply to what
 		// is left, which is the whole of that rule — see
 		// syntax.Dialect.ArithDigitSeparator. Here rather than only in the
@@ -2333,7 +2333,7 @@ func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 		// needed, rather than two fields that could disagree.
 		s = strings.ReplaceAll(s, "_", "")
 	}
-	if f, ok := hexFloatNumeral(s); ok && r.dialect().ArithHexFloat {
+	if f, ok := hexFloatNumeral(s); ok && r.lang().ArithHexFloat {
 		// `0x1p4` is 16 and `0x1.8` is 1.5 in the one column that reads the
 		// spelling C has for a float written in hexadecimal. The other five
 		// refuse it, each in its own words, which is what makes this an axis
@@ -2345,7 +2345,7 @@ func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 		if err != nil {
 			var ae arithError
 			if errors.As(err, &ae) && ae.pastTheWord {
-				if r.dialect().ArithFloat &&
+				if r.lang().ArithFloat &&
 					r.ask(r.sem().ArithValuesAreCarriedInAFloat, "arithmetic carried in a float rather than the machine word") {
 					// A numeral with an explicit radix is read in the
 					// **unsigned** word first, and only becomes the double
@@ -2402,7 +2402,7 @@ func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 		// by arithmetic. See carriedInADouble.
 		return r.carriedInADouble(float64(n), n), nil
 	}
-	if !r.dialect().ArithFloat {
+	if !r.lang().ArithFloat {
 		// The dialect has no floats, so this is not a number at all. It is
 		// the *grammar* that answers — the parser would not have produced a
 		// float literal here either — which is why this reads the dialect
@@ -2759,7 +2759,7 @@ func (r *Runner) parseNum(s string) (int, error) {
 	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
 		digits, base = s[2:], 16
 		n, err = r.parseRadixDigits(digits, base)
-	case r.dialect().ArithBinaryLiteral &&
+	case r.lang().ArithBinaryLiteral &&
 		(strings.HasPrefix(s, "0b") || strings.HasPrefix(s, "0B")):
 		digits, base = s[2:], 2
 		n, err = r.parseRadixDigits(digits, base)
@@ -3295,7 +3295,7 @@ func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
 	// expanded first never had it run, and `(( "assoc[$key]++" ))` was
 	// refused as an operand where bash increments the element (#4255).
 	dequote := origin == arithTextWritten &&
-		r.dialect().ArithDoubleQuote == syntax.ArithDoubleQuoteRemoved
+		r.lang().ArithDoubleQuote == syntax.ArithDoubleQuoteRemoved
 	if !strings.ContainsAny(text, "$`") {
 		// Nothing to expand, so the parse-time reader has already run the
 		// removal over this text and there is no second round to run.
@@ -3311,7 +3311,7 @@ func (r *Runner) expandArithText(text string, origin arithTextOrigin) string {
 	scan, balanced := syntax.ArithBracketScan{}, true
 	// The depth is counted through quotations wherever the parser's own scan
 	// reads them, so the two readings of the same brackets cannot part.
-	quoted := r.dialect().ArithSubscriptQuoting
+	quoted := r.lang().ArithSubscriptQuoting
 	// The axis is asked at most once and only where a subscript's expansion
 	// really produced a bracket: under either answer `$(( a[$i] ))` is the
 	// same expression, so a dialect that has not chosen has nothing to be

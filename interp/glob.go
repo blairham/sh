@@ -770,11 +770,11 @@ func (r *Runner) describesRatherThanSpells(s string) bool {
 	// `~(N)zzz` were spelled-out names — looked up as the characters they
 	// were written with, found missing, and passed back through as text.
 	// See tildeGlobPattern, which has the rows and the empty-group control.
-	if _, ok := tildeGlobPattern(s, r.dialect().TildeGroup); ok {
+	if _, ok := tildeGlobPattern(s, r.lang().TildeGroup); ok {
 		return true
 	}
-	if hasUnescapedMeta(s, r.dialect().NumericRangePattern,
-		r.dialect().PatternAlternation, r.dialect().ExtendedPattern,
+	if hasUnescapedMeta(s, r.lang().NumericRangePattern,
+		r.lang().PatternAlternation, r.lang().ExtendedPattern,
 		r.MatchOption(ExtendedPatternOperators), r.slashLeavesABracket) {
 		return true
 	}
@@ -782,7 +782,7 @@ func (r *Runner) describesRatherThanSpells(s string) bool {
 	// `a*` and `a?` out of a value to two fields each in a directory where
 	// a bar from the same value stays one field, so this is the bar and not
 	// the value (#2528).
-	return r.dialect().PatternTopLevelAlternation.ReachesPathnameExpansion() &&
+	return r.lang().PatternTopLevelAlternation.ReachesPathnameExpansion() &&
 		hasUnescapedByte(s, '|')
 }
 
@@ -833,7 +833,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// component: `~(N)zz*/x` names nothing and the word goes, whether or not
 	// the letters beside it reach every component. The field still has to be
 	// a pattern for the walk to happen at all, which is the gate below.
-	if tilde, ok := tildePrefixModifier(field, r.dialect().TildeGroup); ok && tilde.null {
+	if tilde, ok := tildePrefixModifier(field, r.lang().TildeGroup); ok && tilde.null {
 		// The same answer the qualifier list already had for zsh's `(N)`,
 		// reached by the other dialect's spelling, so the two cannot come to
 		// disagree about what deleting a word means.

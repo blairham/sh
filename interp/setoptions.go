@@ -787,15 +787,15 @@ func (r *Runner) SetPosixMode(on bool) {
 		badSetLetter = r.sem().BadSetOptionLetterFatalInPosixMode
 		r.posixSavedAssignPrefix = r.sem().AssignmentPrefixPersistsOnSpecialBuiltin
 		assignPrefix = Yes
-		r.posixSavedAliasReserved = r.dialect().AliasesExpandReservedWords
+		r.posixSavedAliasReserved = r.lang().AliasesExpandReservedWords
 		aliasReserved = false
 		// The dialect's own answer on the way in, not the standard's: the
 		// three shells with no POSIX mode do not agree with bash about this
 		// axis and every dialect invoked as `sh` comes through here, so an
 		// asserted reading would move a shell that has nothing to move. The
 		// zero value of the move is what declines it.
-		r.posixSavedQuoteProtects = r.dialect().QuoteProtectsTheClosingBrace
-		quoteProtects = r.dialect().QuoteProtectsTheClosingBraceInPosixMode.
+		r.posixSavedQuoteProtects = r.lang().QuoteProtectsTheClosingBrace
+		quoteProtects = r.lang().QuoteProtectsTheClosingBraceInPosixMode.
 			Policy(r.posixSavedQuoteProtects)
 		redir, unsetRO = Yes, Yes
 		// The tenth, and it takes the standard's own answer like the seven

@@ -257,5 +257,5 @@ func (r *Runner) traceArrayOperandWord(i int, d Diagnostics) (string, bool) {
 // settled which store the value goes to. So the question is put to the grammar
 // that has the construct at all, which is the same place the parser asks it.
 func (r *Runner) emptyListIsACompound() bool {
-	return len(r.dialect().CompoundVariableDeclarators) > 0
+	return len(r.lang().CompoundVariableDeclarators) > 0
 }

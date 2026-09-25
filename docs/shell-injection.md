@@ -96,7 +96,9 @@ Same binary, same kind of policy: `default allow` plus
 | `read x < secret/s.txt` with no policy — **control** | `got=TOPSECRET` |
 
 The second row is the limit, stated as a measurement rather than as a caveat.
-`allow exec /bin/cat` is `allow read /**` spelled less obviously.
+Granting exec of `/bin/cat` is `allow read /**` spelled less obviously,
+which is why the policy grammar makes you write `allow exec-unconfined
+/bin/cat` and refuses the shorter spelling.
 
 The sharpest form of it is the handoff to another interpreter, which is also
 one of GuardFall's own bypasses:

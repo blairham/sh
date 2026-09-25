@@ -64,8 +64,9 @@ import (
 // The boundary is drawn around the interpreter and not around the process
 // tree: a policy refuses what the *shell* opens, stats and runs, and a
 // command the shell was allowed to start makes its own accesses that nothing
-// here sees. `allow exec /bin/cat` is `allow read /**` spelled less
-// obviously. See docs/design/sandboxing.md.
+// here sees. Granting exec of `/bin/cat` is `allow read /**` spelled less
+// obviously, and the policy grammar refuses the short spelling so the file
+// says so: `allow exec-unconfined /bin/cat`. See docs/design/sandboxing.md.
 //
 // A policy is never discovered: no environment variable, no dotfile. One that
 // could be named by the environment could be replaced by anything that can

@@ -265,7 +265,7 @@ func TestARelativePathIsNotAddressable(t *testing.T) {
 // can only succeed for a path the script was going to be allowed to execute.
 func TestAllowingAnExecPermitsFindingIt(t *testing.T) {
 	t.Parallel()
-	p := parse(t, "version 1\nallow exec /usr/bin/git\n")
+	p := parse(t, "version 1\nallow exec-unconfined /usr/bin/git\n")
 	want(t, p, interp.Allow, exec("/usr/bin/git"), stat("/usr/bin/git"))
 	want(t, p, interp.Deny,
 		stat("/usr/bin/curl"),
@@ -279,7 +279,7 @@ func TestAllowingAnExecPermitsFindingIt(t *testing.T) {
 // has already decided the question and stays decided.
 func TestTheExecImplicationNeverBeatsADeny(t *testing.T) {
 	t.Parallel()
-	p := parse(t, "version 1\nallow exec /usr/bin/git\ndeny stat /usr/bin/**\n")
+	p := parse(t, "version 1\nallow exec-unconfined /usr/bin/git\ndeny stat /usr/bin/**\n")
 	want(t, p, interp.Allow, exec("/usr/bin/git"))
 	want(t, p, interp.Deny, stat("/usr/bin/git"))
 	// And the implication reads the decision on the rule it consults, which is
@@ -297,11 +297,13 @@ func TestSignalsAreNamedOnTheirOwn(t *testing.T) {
 	probe := interp.Action{Kind: interp.ActionSignal, PID: -900, Signal: 0}
 	allowed := parse(t, "version 1\nallow signal\n")
 	want(t, allowed, interp.Allow, kill, probe)
-	// `path` is every kind that carries a path and deliberately not this one,
-	// so a policy that meant to permit signals has to say so.
+	// `path` is every kind that carries a *file* path and deliberately not
+	// this one, so a policy that meant to permit signals has to say so. Exec
+	// is left out of it too, for the other reason in Selector.slots (#4409),
+	// and this is where both exclusions are graded together.
 	broad := parse(t, "version 1\nallow path /**\n")
-	want(t, broad, interp.Deny, kill)
-	want(t, broad, interp.Allow, exec("/bin/echo"), open("/x", true), stat("/x"), list("/x"))
+	want(t, broad, interp.Deny, kill, exec("/bin/echo"))
+	want(t, broad, interp.Allow, open("/x", true), stat("/x"), list("/x"))
 	denied := parse(t, "version 1\ndefault allow\ndeny signal\n")
 	want(t, denied, interp.Deny, kill, probe)
 	want(t, denied, interp.Allow, exec("/bin/echo"))
@@ -311,8 +313,8 @@ func TestSignalsAreNamedOnTheirOwn(t *testing.T) {
 	// match, so only `default allow path` shows whether the selector really
 	// leaves signals alone.
 	byDefault := parse(t, "version 1\ndefault deny\ndefault allow path\n")
-	want(t, byDefault, interp.Deny, kill, probe)
-	want(t, byDefault, interp.Allow, exec("/bin/echo"), open("/x", true), list("/x"))
+	want(t, byDefault, interp.Deny, kill, probe, exec("/bin/echo"))
+	want(t, byDefault, interp.Allow, open("/x", true), list("/x"))
 }
 
 // TestAPerKindDefaultOverridesTheBase is the escape hatch the design document
@@ -399,7 +401,7 @@ func TestNewBuildsTheSamePolicyAsAFile(t *testing.T) {
 // knowable from here — so all that is left is to say so.
 func TestAnInterpreterInTheAllowlistEndsThePolicy(t *testing.T) {
 	t.Parallel()
-	p := parse(t, "version 1\nallow exec /bin/sh\ndeny read /etc/**\n")
+	p := parse(t, "version 1\nallow exec-unconfined /bin/sh\ndeny read /etc/**\n")
 	// The policy refuses the shell's own read, and permits starting the
 	// process that will make the same read outside the boundary.
 	want(t, p, interp.Deny, open("/etc/passwd", false))
@@ -496,7 +498,7 @@ func TestAnAllowedExecUnderAnAliasIsAlsoFindable(t *testing.T) {
 		t.Skip("no platform aliases here")
 	}
 	p, err := policy.Parse(strings.NewReader(
-		"version 1\ndefault deny\nallow exec /tmp/bin/**\n"))
+		"version 1\ndefault deny\nallow exec-unconfined /tmp/bin/**\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

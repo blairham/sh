@@ -175,9 +175,9 @@ func TestAPolicyThatNamesThePluginAllowsIt(t *testing.T) {
 	// the plugin path is ours and is what the policy has to name.
 	policy := writePolicy(t,
 		"allow read /**",
-		"allow exec "+path,
-		"allow exec /bin/**",
-		"allow exec /usr/bin/**",
+		"allow exec-unconfined "+path,
+		"allow exec-unconfined /bin/**",
+		"allow exec-unconfined /usr/bin/**",
 	)
 	got := sandboxed(t, "posix", "-policy", policy, "-plugin", path, "-c", "hail world")
 	if got.code != 0 {

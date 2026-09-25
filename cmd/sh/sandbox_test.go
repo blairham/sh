@@ -174,7 +174,8 @@ func TestAnExecAllowlistFindsWhatItPermits(t *testing.T) {
 	// The interpreter behind the shebang is the kernel's business rather than
 	// the gate's, so the allowlist has to name it as well — which is the
 	// footgun the design document names, seen from the useful side.
-	p := writePolicy(t, "default deny", "allow exec "+dir+"/**", "allow exec /bin/sh")
+	p := writePolicy(t, "default deny",
+		"allow exec-unconfined "+dir+"/**", "allow exec-unconfined /bin/sh")
 	got := sandboxed(t, "core", "-policy", p, "-c", "PATH="+dir+"\nhi\necho status=$?\n")
 	if !strings.Contains(got.out, "hello") {
 		t.Errorf("out = %q err = %q, want the allowlisted program to be found and run", got.out, got.errs)

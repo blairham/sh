@@ -177,17 +177,16 @@ emulate zsh
 # defaults, which is why exactly the eleven names a bare `emulate ksh` leaves
 # away from them are the ones marked `on`.
 #
-# `hashcmds` is dropped from the long-form rows here and from nothing else.
-# Its `def` in this shell's table is this shell's own state rather than zsh's,
-# so it is spelled `hashcmds` where the reference writes `nohashcmds` — a
-# standing difference on `set -o` as well, named in dialect/zsh/setopt.go and
-# filed as #4533. Dropping one known row is not a license to drop a row that
-# moves: the other 184 are the reference's own, byte for byte.
-nohashcmdsrow() { grep -Ev '^(no)?hashcmds( |$)'; }
-
+# All 185 rows are compared. #4529 dropped `hashcmds` from this listing by
+# name, because its `def` in this shell's table held this shell's own state
+# rather than zsh's and it came out spelled `hashcmds` where the reference
+# writes `nohashcmds`. #4533 corrected the default and the state behind it
+# together, so the exclusion has gone and the row is graded like the other
+# 184 — which is what says the correction reached this surface too, and not
+# only the four a `-c` shell shows.
 emulate ksh
 printf -- '--- emulate ksh\n'
-setopt | nohashcmdsrow
+setopt
 emulate zsh
 
 # **The option decides the shape; the mode decides the contents.** Both rows

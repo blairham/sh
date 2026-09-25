@@ -683,9 +683,6 @@ func (r *Runner) getoptsRefusalEndsTheBuiltin() bool {
 		"a freeze on OPTARG or OPTIND ending `getopts` rather than only being reported")
 }
 
-// advance moves past the character just read, staying inside the word while
-// there is more of the cluster to come.
-//
 // getoptsErrorEndsTheWord reports whether a refused letter gives up the rest
 // of the word it was in and counts the word on the spot.
 //
@@ -699,6 +696,9 @@ func (r *Runner) getoptsErrorEndsTheWord() bool {
 		"a refused `getopts` letter giving up the rest of its word")
 }
 
+// advance moves past the character just read, staying inside the word while
+// there is more of the cluster to come.
+//
 // The letter that got here consumed no argument, which is what makes this the
 // one place both counting axes are asked: an option that took an argument
 // leaves OPTIND at the first word neither it nor its argument occupies in

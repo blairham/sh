@@ -83,7 +83,9 @@ func TestAnyWordIsAPosixFunctionName(t *testing.T) {
 // function literally called `a*b` would be a plausible wrong answer where a
 // refusal is a visible one. It is the same exception
 // [Dialect.FunctionKeywordNameIsAnyWord] keeps, and quoting takes it away:
-// the quoted rows above include `'a*b'`.
+// the quoted rows above include `'a*b'`. The dialect that generates the name
+// from that match keeps the word rather than refusing the line — see
+// [Dialect.FunctionNameIsFilenameGenerated], which this one has not got.
 func TestABarePatternIsNotAPosixFunctionName(t *testing.T) {
 	t.Parallel()
 	d := anyWordPosixName()
@@ -174,4 +176,101 @@ func TestBothSpellingsTakeTheSameName(t *testing.T) {
 			t.Errorf("%s names %q and %s names %q", tc.keyword, kn, tc.posix, pn)
 		}
 	}
+}
+
+// Dialect.FunctionNameIsFilenameGenerated, both answers, over both spellings.
+//
+// The flag decides whether a name holding a bare pattern character is a word
+// the shell generates when the definition runs or a word the grammar refuses.
+// Every row is written twice for that reason: the point is not what the name
+// comes to — this package never matches anything — but whether there is a
+// definition here at all.
+//
+// The word is kept on the declaration rather than flattened, which is the
+// half a "does it parse" check cannot see: [FuncDecl.Name] would take the
+// literal spelling and define a function called `a*b`, which is the wrong
+// answer the refusal existed to avoid. So every row asserts NameWord.
+func TestAFunctionNameMayBeGeneratedWhenTheDefinitionRuns(t *testing.T) {
+	t.Parallel()
+	gen := Core()
+	gen.FunctionNameIsAnyWord = true
+	gen.FunctionKeywordNameIsAnyWord = true
+	gen.FunctionKeyword = true
+	gen.FunctionNameIsFilenameGenerated = true
+	off := gen
+	off.FunctionNameIsFilenameGenerated = false
+	for _, tc := range []struct{ name, src, written string }{
+		{"a question mark, the name() spelling", `?x() { :; }`, "?x"},
+		{"a question mark, the keyword spelling", `function ?x { :; }`, "?x"},
+		{"a star", `a*b() { :; }`, "a*b"},
+		{"a bracket", `a[b]c() { :; }`, "a[b]c"},
+		{"a star after the keyword", `function a*b { :; }`, "a*b"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := Parse(tc.src, gen)
+			if err != nil {
+				t.Fatalf("with the flag on, parse %q: %v", tc.src, err)
+			}
+			fn := funcDeclOf(t, f)
+			if fn.NameWord == nil {
+				t.Fatalf("%q kept no name word — the literal spelling would "+
+					"define a function called %q, which is the wrong answer", tc.src, fn.Name)
+			}
+			if got := PrintWord(fn.NameWord); got != tc.written {
+				t.Errorf("the name word is %q, want %q", got, tc.written)
+			}
+			// And with the flag off the same text is not a definition at
+			// all, which is what this parser did for every dialect before.
+			if _, err := Parse(tc.src, off); err == nil {
+				t.Errorf("with the flag off, %q parsed — the pattern character "+
+					"takes the definition reading away there", tc.src)
+			}
+		})
+	}
+}
+
+// The rows the flag does **not** reach: quoting is what decides whether a
+// character is a pattern, and it is read per span rather than over the name's
+// text — so a name that comes to `a*b` through quotes is an ordinary name and
+// keeps no word.
+func TestAQuotedPatternIsAnOrdinaryFunctionName(t *testing.T) {
+	t.Parallel()
+	d := Core()
+	d.FunctionNameIsAnyWord = true
+	d.FunctionKeywordNameIsAnyWord = true
+	d.FunctionKeyword = true
+	d.FunctionNameIsFilenameGenerated = true
+	for _, tc := range []struct{ name, src, want string }{
+		{"a quoted pattern", `'a*b'() { :; }`, "a*b"},
+		{"an escaped pattern", `a\*b() { :; }`, "a*b"},
+		{"an escaped pattern after the keyword", `function a\*b { :; }`, "a*b"},
+		{"a name with no pattern in it at all", `ab() { :; }`, "ab"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := Parse(tc.src, d)
+			if err != nil {
+				t.Fatalf("parse %q: %v", tc.src, err)
+			}
+			fn := funcDeclOf(t, f)
+			if fn.NameWord != nil {
+				t.Errorf("%q kept a name word — nothing in it is a live pattern", tc.src)
+			}
+			if fn.Name != tc.want {
+				t.Errorf("the name is %q, want %q", fn.Name, tc.want)
+			}
+		})
+	}
+}
+
+// funcDeclOf digs the declaration out of a one-statement file.
+func funcDeclOf(t *testing.T, f *File) *FuncDecl {
+	t.Helper()
+	if len(f.Stmts) != 1 {
+		t.Fatalf("%d statements, want 1", len(f.Stmts))
+	}
+	fn, ok := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*FuncDecl)
+	if !ok {
+		t.Fatalf("did not parse to a function declaration")
+	}
+	return fn
 }

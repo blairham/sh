@@ -2061,6 +2061,50 @@ type Dialect struct {
 	// test [Dialect.FunctionNameExpands] already makes and this shares it.
 	FunctionNameIsAnyWord bool
 
+	// FunctionNameIsFilenameGenerated makes a definition's name a word the
+	// shell matches against the **filesystem** when the definition runs,
+	// rather than a word this parser refuses for holding a pattern
+	// character.
+	//
+	// It is the one group [Dialect.FunctionNameIsAnyWord] and
+	// [Dialect.FunctionKeywordNameIsAnyWord] both excepted, and both excepted
+	// it the same way: a bare `*`, `?` or `[` in the name took the definition
+	// reading away while reading, on the reasoning that a function literally
+	// called `a*b` is a plausible wrong answer where a refusal is a visible
+	// one. That reasoning holds against *defining* the name and not against
+	// reading it — the shell being modeled reads the line and generates the
+	// name from it — so what it bought was a parse failure where that shell's
+	// own `-n` accepts, which costs the rest of the file rather than the
+	// definition (#4437).
+	//
+	// Measured on zsh 5.9.2, 2026-09-25, from a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`, in a directory holding `ax` and `bx`:
+	//
+	//	?x() { :; }            defines `ax` **and** `bx` — one per match
+	//	function ?x { :; }     the same two, so the spellings agree
+	//	nomatch?zz() { :; }    `no matches found: nomatch?zz`, status 1,
+	//	                       and the line after it does not run
+	//	function a*b { :; }    the same sentence, `a*b` matching nothing here
+	//	'a*b'() { :; }         defines `a*b`, the characters being text
+	//	a\*b() { :; }          the same, and `function a\*b` too
+	//
+	// So the name is a *pattern*: it is generated, it may produce several
+	// names or none, and none is the ordinary unmatched-pattern refusal
+	// rather than a complaint about a definition. Two rows say it happens
+	// when the definition **runs**: inside a branch nothing takes it says
+	// nothing at all, and under `setopt nonomatch` the word is taken
+	// literally and `nomatch?zz` is defined.
+	//
+	// The quoting decides it and is read per span, as it is for the flags
+	// above: a `*` behind a quote or a backslash is ordinary text and names
+	// the function it spells.
+	//
+	// Nothing new is needed to carry it. A name that is not text until the
+	// shell runs already rides on [FuncDecl.NameWord], already expands at the
+	// definition, and already defines one function per field it produces —
+	// which is what a generated name needs, down to the count.
+	FunctionNameIsFilenameGenerated bool
+
 	// FunctionKeywordNameIsAnyBareWord makes the word after the `function`
 	// keyword a name whenever it was written **bare**, whatever its
 	// characters — and leaves a word carrying quoting or an expansion

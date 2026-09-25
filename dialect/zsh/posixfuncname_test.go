@@ -3,7 +3,11 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // The POSIX `name()` form takes any word as a name (#1743).
 //
@@ -86,16 +90,45 @@ func TestAnArrayAssignmentIsNotAPosixDefinition(t *testing.T) {
 	}
 }
 
-// A name whose bare text holds a pattern character is refused rather than
-// defined, because that shell matches such a word against the filesystem.
-func TestABarePatternIsNotAPosixName(t *testing.T) {
+// A name whose bare text holds a pattern character is **read**, and matched
+// against the filesystem when the definition runs.
+//
+// It was refused while reading here, which is where #4437 found it: this
+// shell's own `-n` accepts the line, so a refusal cost the rest of the file
+// rather than the definition. What the match then produces is
+// TestAFunctionNameIsMatchedAgainstTheFilesystem's rows; this is the parse,
+// and the second half of each row is what says the word was kept rather than
+// flattened — a declaration carrying `a*b` as a plain name would define a
+// function nobody asked for at status 0.
+func TestABarePatternIsAGeneratedPosixName(t *testing.T) {
 	for _, src := range []string{
 		`a*b() { :; }`,
 		`a?b() { :; }`,
 		`a[b() { :; }`,
 	} {
-		if _, err := parseZsh(src); err == nil {
-			t.Errorf("%s: parsed, want a refusal", src)
+		f, err := parseZsh(src)
+		if err != nil {
+			t.Errorf("%s: refused, where this shell reads it: %v", src, err)
+			continue
 		}
+		fn, ok := f.Stmts[0].Expr.(*syntax.Pipeline).Cmds[0].(*syntax.FuncDecl)
+		if !ok {
+			t.Errorf("%s: did not parse to a declaration", src)
+			continue
+		}
+		if fn.NameWord == nil {
+			t.Errorf("%s: kept no name word, so the pattern would name the "+
+				"function literally", src)
+		}
+	}
+	// And quoted, the characters are ordinary text and the name is a name.
+	f, err := parseZsh(`'a*b'() { :; }`)
+	if err != nil {
+		t.Fatalf("a quoted pattern: %v", err)
+	}
+	fn := f.Stmts[0].Expr.(*syntax.Pipeline).Cmds[0].(*syntax.FuncDecl)
+	if fn.NameWord != nil || fn.Name != "a*b" {
+		t.Errorf("'a*b'(): name %q, word %v — want the literal name and no word",
+			fn.Name, fn.NameWord != nil)
 	}
 }

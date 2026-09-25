@@ -47,6 +47,23 @@ func EditorStyle() repl.EditorStyle {
 		// line from having the prompt drawn against it (#2477).
 		MarkUnfinishedOutputOption:  "PROMPT_SP",
 		ReturnBeforeThePromptOption: "PROMPT_CR",
+		// And the option the whole editor runs under, which this shell alone
+		// in the panel has: `unsetopt zle` is an interactive shell with no
+		// line editor, and `-o interactive +o zle` — `-fiV +Z` — is how zsh's
+		// own `zpty`-driven test files start the shell they drive.
+		//
+		// Measured 2026-09-25 on zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+		// `-fiV +Z` on a pseudo-terminal with `TERM=dumb` and `PS1=`/`PS2=`
+		// exported, one command and then `exit`:
+		//
+		//	b': &\r\n[1] 6064\r\n[1]  + done       :\r\nexit\r\n'
+		//
+		// Nothing but what the terminal echoed and what the commands printed.
+		// The same session without `+Z` writes ` \r`, `\e[?2004h` and
+		// `\e[?2004l\r` around every line, so it is not that this shell emits
+		// no escapes — it is that with the option off there is no editor to
+		// emit them (#4472).
+		RunsUnderTheOption: "ZLE",
 		// And the ground under the prompt, which is neither option's doing:
 		// measured, this shell writes all four sequences with both options
 		// turned off, and bash writes nothing in any case. The three resets

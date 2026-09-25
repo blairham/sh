@@ -607,7 +607,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	var state *terminalState
 	if onTerminal {
 		var err error
-		state, err = makeRaw(s.inFile())
+		// The discipline is **captured and not changed**. Raw mode is taken by
+		// the first read that wants a line editor, which is every read in four
+		// dialects of five and none at all in a zsh started `+Z`. Taking it
+		// here and handing it straight back is what lost a line the driver had
+		// already written — see terminalFor (#4472).
+		state, err = terminalFor(s.inFile())
 		if err != nil {
 			return 0, err
 		}
@@ -615,17 +620,19 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// otherwise leave the terminal with echo off, which is a broken
 		// terminal and not merely a crash.
 		defer func() { _ = state.restore() }()
-		// Raw mode took the kernel's newline translation with it, so this loop
-		// does it — see crlf. On the copy of the Shell this loop runs on,
+		// Raw mode takes the kernel's newline translation with it, so this
+		// loop does it — see crlf. On the copy of the Shell this loop runs on,
 		// which is what keeps it off the Runner's own streams (those are
 		// written with the terminal in its own discipline, where the kernel is
 		// still translating) and off the shell the caller handed in.
 		//
-		// **Only where a mode was taken.** A pipe never had the kernel's
-		// translation to lose, and measured, bash on one writes plain line
-		// feeds: translating there would put a carriage return in front of
-		// every one of them.
-		s.Out, s.Err = translating(s.Out), translating(s.Err)
+		// **Only where a mode was taken, and only while it is on.** A pipe
+		// never had the kernel's translation to lose, and measured, bash on
+		// one writes plain line feeds: translating there would put a carriage
+		// return in front of every one of them. The same holds within this
+		// session for a read with no editor — the terminal is in its own
+		// discipline there and is doing this itself.
+		s.Out, s.Err = translatingWhile(s.Out, state.isRaw), translatingWhile(s.Err, state.isRaw)
 	}
 	// Registered after that, so the word this writes on the way out is
 	// written through the same translation every other line of this loop is:
@@ -713,12 +720,25 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// prompt for a new command or for the rest of an unfinished one.
 	ed.rerender = s.rerender(&pending)
 	for {
+		// Whether this read has a line editor at all, asked once per read
+		// because the option that decides it is one a person can type — see
+		// EditorStyle.RunsUnderTheOption. Before the mark below as well as
+		// before the read: the mark is something the editor draws, and a
+		// session without one draws none of it.
+		editing := !s.editorIsOff()
+		// And the discipline this read wants, taken here rather than held for
+		// the session: raw where there is an editor to draw the line, the
+		// terminal's own where there is not. Before anything is written,
+		// because what the translation above owes depends on it.
+		s.holdTerminal(state, editing)
 		if pending.Len() == 0 {
 			// The last thing done about the previous command's output, and
 			// done before the prompt hooks rather than after them — measured;
 			// see markUnfinished. A continuation prompt marks nothing: the
 			// newline the terminal echoed already ended the row.
-			ed.markUnfinished()
+			if editing {
+				ed.markUnfinished()
+			}
 			// And the word this session leaves with is this read's to write,
 			// because ^D here is the end of the session.
 			ed.leaving = s.Leaving
@@ -736,13 +756,24 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// there and draws no prompt, so this one does not read a line.
 			return s.status(), nil
 		}
-		line, err := ed.readLine(drawn)
-		// Whether that read wrote the word this session leaves with, which
-		// is the end-of-input key and nothing else. Taken per read rather
-		// than accumulated: a ^D a stopped job held the session through
-		// wrote it and left the session running, and the `exit` typed
-		// afterwards has its own word to write.
-		wroteLeaving = ed.wroteLeaving
+		var line string
+		var err error
+		if editing {
+			line, err = ed.readLine(drawn)
+			// Whether that read wrote the word this session leaves with, which
+			// is the end-of-input key and nothing else. Taken per read rather
+			// than accumulated: a ^D a stopped job held the session through
+			// wrote it and left the session running, and the `exit` typed
+			// afterwards has its own word to write.
+			wroteLeaving = ed.wroteLeaving
+		} else {
+			line, err = s.readWithoutTheEditor(state, ed, drawn)
+			// And a read with no editor in it wrote nothing on its way out,
+			// whatever the read before it did. Said rather than left over:
+			// a ^D held back for a stopped job sets the flag and leaves the
+			// session running, so the value does not belong to the session.
+			wroteLeaving = false
+		}
 		// A seed belongs to the read it was set for and to no later one: the
 		// next prompt after a verified line is an empty one whichever way
 		// this read ended, ^C included. Cleared here rather than on each way
@@ -877,8 +908,15 @@ func (s Shell) inLineDiscipline(state *terminalState, f func()) {
 		f()
 		return
 	}
-	if err := state.restore(); err != nil {
-		s.errf("%v\n", err)
+	// Only where the discipline is actually off. A read with no editor behind
+	// it has already handed the terminal over, and a restore-and-retake around
+	// f there would be this loop taking raw mode for the length of a hook —
+	// which is the state the session is deliberately not in.
+	raw := state.isRaw()
+	if raw {
+		if err := state.restore(); err != nil {
+			s.errf("%v\n", err)
+		}
 	}
 	defer func() {
 		// **Nothing may still be on its way to the terminal when OPOST goes
@@ -908,11 +946,35 @@ func (s Shell) inLineDiscipline(state *terminalState, f func()) {
 		// terminal last saw, because f is precisely the window in which
 		// something else was writing to it — see crlf.forget.
 		s.forgetWhatTheTerminalSaw()
-		if _, err := makeRaw(s.inFile()); err != nil {
-			s.errf("%v\n", err)
+		if raw {
+			if err := state.takeRaw(); err != nil {
+				s.errf("%v\n", err)
+			}
 		}
 	}()
 	f()
+}
+
+// holdTerminal puts the terminal into the discipline the next read wants.
+//
+// One call rather than a restore here and a makeRaw there, because the two
+// directions are the same decision and a session that took only one of them
+// would be a shell whose editor came back on and never got its terminal.
+// Nothing at all for a session with no terminal, and nothing where the mode is
+// already the one asked for.
+func (s Shell) holdTerminal(state *terminalState, raw bool) {
+	if state == nil || state.isRaw() == raw {
+		return
+	}
+	var err error
+	if raw {
+		err = state.takeRaw()
+	} else {
+		err = state.restore()
+	}
+	if err != nil {
+		s.errf("%v\n", err)
+	}
 }
 
 // interrupted reports whether the line that just ran was ended by a ^C, which

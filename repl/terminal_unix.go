@@ -24,18 +24,74 @@ import (
 // wants every one of them off, and the measurement that says `read -k` wants
 // only the line buffering.
 
-// terminalState is what was there before raw mode, kept so it can be put back.
-type terminalState struct{ mode *tty.Mode }
+// terminalState is what was there before raw mode, kept so it can be put back
+// — and whether raw mode is on right now.
+//
+// The second field is what a session with a line editor it can turn *off* made
+// necessary. Raw mode used to be a fact about the whole session: taken once,
+// handed back around each command, taken again. A session whose editor is off
+// wants the opposite — the terminal in its own discipline for the read as well
+// — so the mode moves with the reads, and everything that hands the terminal
+// over has to put back the mode the session is actually in rather than raw.
+type terminalState struct {
+	f    *os.File
+	mode *tty.Mode
+	raw  bool
+}
+
+// terminalFor captures the discipline a session found, and changes nothing.
+//
+// Nothing rather than raw mode, and that is the whole point of it: a line the
+// driver has already written arrives while the discipline is off, is held in
+// the raw queue, and is **not** promoted to the canonical queue when canonical
+// mode comes back — so a session that takes raw mode at startup and hands it
+// back before its first read can lose the line that was already on its way.
+// See [tty.Current] for the measurement. Raw mode is taken by the first read
+// that wants one.
+func terminalFor(f *os.File) (*terminalState, error) {
+	mode, err := tty.Current(f)
+	if err != nil {
+		return nil, err
+	}
+	return &terminalState{f: f, mode: mode}, nil
+}
 
 // makeRaw turns off the line discipline: no echo, no line buffering, no
 // signal characters.
+//
+// It captures the mode it is displacing, so what it hands back is a state of
+// its own. That is what a *command* asking the person to edit a line wants —
+// see lineread.go — where the session's own state is reached through takeRaw
+// below.
 func makeRaw(f *os.File) (*terminalState, error) {
 	mode, err := tty.Raw(f)
 	if err != nil {
 		return nil, err
 	}
-	return &terminalState{mode: mode}, nil
+	return &terminalState{f: f, mode: mode, raw: true}, nil
 }
+
+// takeRaw turns the line discipline off on a state that already knows what was
+// there before, and does nothing where it is off already.
+//
+// The saved mode is **not** replaced. Capturing again would save whatever is
+// there now, which after a restore is the right answer and in raw mode is raw
+// — so a second capture is how a session loses the discipline it is supposed
+// to hand back.
+func (s *terminalState) takeRaw() error {
+	if s == nil || s.raw {
+		return nil
+	}
+	if _, err := tty.Raw(s.f); err != nil {
+		return err
+	}
+	s.raw = true
+	return nil
+}
+
+// isRaw reports whether the line discipline is off right now, which is what
+// the newline translation and every handover ask.
+func (s *terminalState) isRaw() bool { return s != nil && s.raw }
 
 // restore puts the line discipline back.
 //
@@ -46,6 +102,7 @@ func (s *terminalState) restore() error {
 	if s == nil {
 		return nil
 	}
+	s.raw = false
 	return s.mode.Restore()
 }
 

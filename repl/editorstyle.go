@@ -142,6 +142,34 @@ type EditorStyle struct {
 	// also what makes the marking possible.
 	ReturnBeforeThePromptOption string
 
+	// RunsUnderTheOption names the option this dialect's line editor runs
+	// under. With it off the session still reads lines and still runs them —
+	// it is the *editor* that goes away, so the terminal keeps its own line
+	// discipline, echoes the keystrokes itself, and nothing the editor would
+	// have drawn is written.
+	//
+	// Empty is a dialect whose editor is not something a person can turn off,
+	// which is four of the five. The fifth is zsh, where the option is `zle`
+	// and `-o interactive +o zle` is how a test suite drives the shell
+	// through a pseudo-terminal without one — see
+	// interp.Semantics and dialect/zsh's EditorStyle.
+	//
+	// A *name* rather than a bool, for the reason
+	// [Shell.CommentsNeedTheOption] is one: the state moves while the session
+	// runs. Measured 2026-09-25, zsh 5.9.2 on a pseudo-terminal with `-fiV`,
+	// `TERM=dumb` and an empty `PS1`, a line at a time:
+	//
+	//	unsetopt zle   that line is drawn by the editor, and every line
+	//	               after it is plain — no `\e[?2004h`, no redraw
+	//	setopt zle     in a `+Z` shell, the reverse: that line is plain and
+	//	               the next one is drawn
+	//
+	// So it is asked per read and not once at startup. An option this shell
+	// has never heard of is **not** an option that is off — see
+	// [Shell.editorIsOff], which is the same rule and the same reason as
+	// [Shell.commentsAreOff].
+	RunsUnderTheOption string
+
 	// UnfinishedOutputMark is what the marker looks like, written where the
 	// output stopped. zsh draws a bold, inverse `%`; a dialect with no such
 	// option leaves this empty and nothing is drawn.

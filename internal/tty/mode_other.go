@@ -13,6 +13,8 @@ type modeState = struct{}
 
 func setMode(*os.File, bool) (*Mode, error) { return nil, ErrUnsupported }
 
+func currentMode(*os.File) (*Mode, error) { return nil, ErrUnsupported }
+
 func putMode(*os.File, modeState) error { return ErrUnsupported }
 
 func postProcessesOutput(*os.File) bool { return false }

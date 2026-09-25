@@ -27,12 +27,20 @@ import "io"
 type crlf struct {
 	w      io.Writer
 	afterR bool
+	// while is when the translation is owed, and nil is "always". A session
+	// whose line editor can be turned off spends part of its life with the
+	// terminal in its own discipline, and there the kernel is doing this
+	// again — so a stream that translated unconditionally would put the
+	// return in twice. The memory is kept either way: what the terminal last
+	// saw does not depend on which of the two wrote it.
+	while func() bool
 }
 
 func (c *crlf) Write(p []byte) (int, error) {
+	owed := c.while == nil || c.while()
 	out := make([]byte, 0, len(p)+8)
 	for _, b := range p {
-		if b == '\n' && !c.afterR {
+		if b == '\n' && !c.afterR && owed {
 			out = append(out, '\r')
 		}
 		c.afterR = b == '\r'
@@ -72,9 +80,14 @@ func (c *crlf) forget() { c.afterR = false }
 
 // translating wraps a stream in that rule, leaving a nil one nil — a session
 // without an error stream has nothing to translate.
-func translating(w io.Writer) io.Writer {
+func translating(w io.Writer) io.Writer { return translatingWhile(w, nil) }
+
+// translatingWhile is translating with the rule applied only while while
+// answers true. A nil while is "always", which is what a caller with one mode
+// for the whole session gets.
+func translatingWhile(w io.Writer, while func() bool) io.Writer {
 	if w == nil {
 		return nil
 	}
-	return &crlf{w: w}
+	return &crlf{w: w, while: while}
 }

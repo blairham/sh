@@ -8116,12 +8116,35 @@ invocation said. That was #4506: a `zsh -f` that ran `emulate -R zsh` kept
 `norcs` and `nohashdirs`, which is exactly what the emulation had been asked
 to undo, and `C02cond.ztst` stopped on its `-o cond` line for it.
 
-**The set is measured; the value is not.** Real zsh has a default *per
-emulation* — `emulate sh` turns `posixbuiltins` on and `multios` off, where
-this shell puts both back to zsh's default — and 47 of the 81 differ that
-way under `sh`. Only the four axes in `emulations` carry an emulation's own
-value here. That is a separate gap from the partition and does not change
-which names move.
+**The set is one table and the value is a second of the same size.** Real
+zsh has a default *per emulation* — `emulate sh` turns `posixbuiltins` on and
+`multios` off — and `emulationDefaults` in `dialect/zsh/emulateoptions.go`
+carries the 59 canonical names whose default differs from zsh's in at least
+one mode. 44 of them differ under `sh`, 38 of those inside the bare-reset 81.
+This was #2549: every reset name used to land on **zsh's** default, which is
+the wrong value for most of what a bare `emulate sh` writes. It is a separate
+question from the partition and does not change which names move.
+
+**And the same table is what a listing compares against.** A bare `setopt`
+prints the names that deviate from a default, `unsetopt` prints the
+complement, and `set -o` marks every name `on` or `off` against the same
+number — so under an emulation all three are taken against *that mode's*
+defaults rather than zsh's. Both halves of a row move with it: which listing
+a name is in, and which of `promptsubst` and `nopromptsubst` it is spelled
+as. That is measured by holding the state fixed and moving the mode — on zsh
+5.9.2, `promptpercent` reads on and `promptsubst` off under both `emulate
+zsh` and `emulate sh`, and both cross from `unsetopt` into `setopt` and
+invert their spelling — which is also what says the baseline belongs to the
+listings and not to the namespace: `${options[…]}` and `[[ -o … ]]` ask what
+the state *is* and are unmoved. Until #4517 the listings read the table's own
+`def` whatever mode the shell was in, so `emulate sh` printed 40 names and
+`emulate -R sh` printed 44 where real zsh prints 8 and 0.
+
+`emulate ksh` is the one mode whose listing still differs, and in *shape*
+rather than in which names deviate: `ksh_option_print` is on by ksh's default
+and rewrites both listings into 185 `name on|off` rows. This shell records
+that name and does not act on it, so it prints the 11 deviating names instead
+— the same 11 real zsh marks `on`.
 
 **This is a dialect answer and not an axis.** No other shell in the panel
 has `emulate` at all — bash, dash, ksh93 and BusyBox ash each answer

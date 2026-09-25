@@ -59,6 +59,38 @@ func (r *Runner) braceCount(w *syntax.Word) int {
 	return len(r.braceWords(w, false))
 }
 
+// braceRangeShaped reports whether the word holds a matched group whose body
+// is range-shaped and is *not* literal — the one shape braceCount is blind
+// to, since it leaves a range's endpoints unexpanded and a `{1..$n}` counted
+// that way is one word however many the range would make.
+//
+// It answers "could these braces make words", which is what a caller asks
+// before it is worth running anything: it reads the spans and expands
+// nothing, and a false positive costs only the questions the caller was
+// already going to ask about a group. The scan enters every failed group
+// rather than consulting BraceRescanEntersFailedGroup, because a predicate
+// that refused a script over where to resume would be answering a question
+// its caller has not reached yet.
+func (r *Runner) braceRangeShaped(w *syntax.Word) bool {
+	if w == nil {
+		return false
+	}
+	from := cursor{0, 0}
+	for {
+		open, ok := findBraceFrom(w.Spans, from, '{')
+		if !ok {
+			return false
+		}
+		if close, matched := matchBraceAcross(w.Spans, open); matched {
+			body := sliceSpans(w.Spans, next(open), close)
+			if _, literal := literalBody(body); !literal && rangeShaped(body) {
+				return true
+			}
+		}
+		from = next(open)
+	}
+}
+
 // braceWords is the whole of brace expansion, with a switch for whether a
 // range's endpoints may be expanded on the way.
 func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {

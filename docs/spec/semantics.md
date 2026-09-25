@@ -3317,6 +3317,43 @@ process replacement, where a concatenation does.
 the recorded names until #1779 — so `(unsetopt multios; …)` stays inside the
 subshell the way every axis-backed option does.
 
+**The same axis decides whether a target's braces are read at all**, which is
+the third consequence of the one option and was found by a target that made
+one oddly-named file. Measured 2026-09-25, each shell in an empty directory of
+its own — run both in one directory and the reference's files are still there
+when ours runs, so the listing shows four names and the wrong one is easy to
+miss:
+
+|                             | `: > d/{a,b,c}`      | `: > {a,b}`          |
+| --- | --- | --- |
+| zsh 5.9.2                   | `d/a`, `d/b`, `d/c`  | `a` and `b`          |
+| zsh 5.9.2, `unsetopt multios` | one `d/{a,b,c}`    | one `{a,b}`          |
+| bash 5.3.20, bash 3.2.57    | `ambiguous redirect` | `ambiguous redirect` |
+| ksh93u+ 2012-08-01          | one `d/{a,b,c}`      | one `{a,b}`          |
+| dash 0.5.12                 | one `d/{a,b,c}`      | one `{a,b}`          |
+
+The second row is what puts the question on this axis rather than on a field
+of its own. Turning the option off does not leave the braces expanded and the
+names joined — that would give one file called `a b` — it stops the expansion,
+so the target is the one name it is written as. That is the same switch taking
+a third consequence with it, and a second field would be a second place to
+forget one of them when the option moves. ksh93 reaches the same answer from
+the other side, brace-expanding an argument and having no fan at all.
+
+bash is the fourth row and needs no new question: it reads a target as an
+ordinary word, so the names the braces make are several words, and several
+words there is the ambiguity it already reports —
+`RedirectTargetIsAnOrdinaryWord` below.
+
+Two things about *when* the words are built, both measured. The count is
+taken from the source with a range's endpoints left unexpanded, so a shell
+that does not read a target's braces never runs `> {1..$(f)}`'s substitution
+twice: ksh93 runs `f` once and writes `{1..3}`, and so does bash, whose braces
+are read before a substitution is. And the count that decides is read off the
+words rather than off that source count, because `> {1..$(f)}` is three names
+in the shell that expands an endpoint before reading the range and one in the
+shell that does not — only the expansion knows which (#4455).
+
 **A numbered descriptor is fanned too, and half of one shape is not.**
 `exec 3<f 3<g; cat <&3` reads both files in order and `exec 3>a 3>b; echo
 hi >&3` fills both, under the same axis and measured the same way

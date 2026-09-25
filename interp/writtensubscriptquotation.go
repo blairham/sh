@@ -35,7 +35,7 @@ func (r *Runner) stoppedArithSpans(text string, spans []syntax.Span) func(int) (
 		return nil
 	}
 	var scan syntax.ArithBracketScan
-	quoted := r.dialect().ArithSubscriptQuoting
+	quoted := r.lang().ArithSubscriptQuoting
 	var stopped map[int]string
 	for i, s := range spans {
 		start, end := int(s.Pos.Offset), len(text)

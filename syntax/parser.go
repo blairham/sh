@@ -367,7 +367,16 @@ type Parser struct {
 	// written, for the one dialect whose refusal counts them. Rebuilt at
 	// every condPrimary — which is where each group begins — and read by
 	// Parser.recordCondGroup. See Error.CondWords.
-	condWords []string
+	//
+	// The **words**, not their source. This list is built on every `[[ ]]`
+	// that parses and is read only where one does not: recordCondGroup is
+	// reached through a refusal and returns at once when there is no error
+	// to attach to. Printing each operand as it was read therefore rendered
+	// source that nothing ever looked at — measured on a real ~/.zshrc,
+	// 32,768 words printed in one startup and 98,304 allocations under
+	// escapeBare to print them. The printing happens where the list is
+	// used instead.
+	condWords []condWord
 
 	// condStart is where the `[[` now being read stood, for the refusals
 	// raised below the frame that knows it. See Parser.failCondTerm.

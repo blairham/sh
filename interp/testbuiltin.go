@@ -929,7 +929,7 @@ func (p *testParser) unknownOperator() error {
 func (r *Runner) isTestUnary(s string) bool {
 	switch s {
 	case "-v":
-		return r.dialect().ParameterIsSetTest
+		return r.lang().ParameterIsSetTest
 	case "-R":
 		return r.sem().TestHasTheNameReferenceOperator == Yes
 	case "-a":
@@ -988,7 +988,7 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		// that wording is already wrong there for every operator this shell
 		// lacks — `[ -Q x -a -n x ]` says `too many arguments` where the
 		// panel names the `-Q`. Asserting it would pin the defect. #1290.
-		if !r.dialect().ParameterIsSetTest {
+		if !r.lang().ParameterIsSetTest {
 			break
 		}
 		// testParameterIsSet and not parameterIsSet, for the one thing the

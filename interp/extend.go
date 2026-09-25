@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -376,6 +377,41 @@ func (r *Runner) GetVar(name string) (string, bool) { return r.getVar(name) }
 // list written in at 0 reads back short — or empty — under the other answer.
 // The base is this package's to know, and these two ask it.
 func (r *Runner) SetArray(name string, values []string) { r.setArray(name, values) }
+
+// ArrayHolds reports whether an indexed array holds this word, without
+// building the list to find out.
+//
+// GetArray is the general answer and it copies: an array's elements come back
+// as a fresh []string, because an element may hold a compound whose text has
+// to be assembled. A caller asking only whether one word is *in* there pays
+// for a list it then throws away, and a dialect that keeps a set in an array
+// asks exactly that, a name at a time. zsh's is the worked example — the
+// options it records as deviating from their defaults live in an array, and
+// on the maintainer's real ~/.zshrc a startup asked about it some eleven
+// thousand times and built eleven thousand lists.
+//
+// The shortcut is taken only where the two readings cannot differ: a stored
+// array whose subscripts run 0..n-1 with none missing reads back as exactly
+// its elements, in some order, and membership does not care about order. An
+// array with a gap, a produced one, and the pipeline status all go the long
+// way — the sparse reading asks an axis, and an answer that skipped the
+// question would leave that axis looking unreached.
+func (r *Runner) ArrayHolds(name, value string) bool {
+	if n := r.throughNameref(name); n != r.pipeStatusName {
+		if a, ok := r.Arrays[n]; ok {
+			if lo, hi, any := a.bounds(); !any || (lo == 0 && hi == len(a)-1) {
+				for _, elem := range a {
+					if r.elemText(elem) == value {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
+	elems, ok := r.GetArray(name)
+	return ok && slices.Contains(elems, value)
+}
 
 // GetArray is the list an indexed array holds, and whether there is one.
 func (r *Runner) GetArray(name string) ([]string, bool) { return r.arrayElems(name) }

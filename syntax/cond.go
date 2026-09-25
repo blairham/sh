@@ -859,7 +859,7 @@ func (p *Parser) condPrimary() CondExpr {
 	}
 	// The plain form, and the only one whose words are recorded: see
 	// Error.CondWords for why the operator forms are not.
-	p.condWords = append(p.condWords, PrintWord(left))
+	p.condWords = append(p.condWords, condWord{word: left})
 	op := p.condOperator()
 	if op == "" {
 		if p.condNewlineAfterATermsFirstWord() {
@@ -882,13 +882,13 @@ func (p *Parser) condPrimary() CondExpr {
 		// A bare word is a test for non-emptiness.
 		return &CondUnary{Op: "-n", X: left, Start: left.Pos()}
 	}
-	p.condWords = append(p.condWords, op)
+	p.condWords = append(p.condWords, condWord{op: op})
 	right := p.condWord()
 	if right == nil {
 		p.failCondOperand(op, "binary")
 		return nil
 	}
-	p.condWords = append(p.condWords, PrintWord(right))
+	p.condWords = append(p.condWords, condWord{word: right})
 	return &CondBinary{Op: op, X: left, Y: right}
 }
 
@@ -931,6 +931,24 @@ func (p *Parser) condNewlineAfterATermsFirstWord() bool {
 	return true
 }
 
+// condWord is one entry of Parser.condWords: an operand as the parser read
+// it, or an operator, which is already a string. The operand is kept rather
+// than printed because the list is built on every condition and read only on
+// a refusal — see Parser.condWords.
+type condWord struct {
+	word *Word
+	op   string
+}
+
+// text is the source this entry stands for, rendered now that something is
+// going to read it.
+func (c condWord) text() string {
+	if c.word != nil {
+		return PrintWord(c.word)
+	}
+	return c.op
+}
+
 // recordCondGroup writes the words of the condition group onto the failure
 // just recorded: the ones already read, and the ones still standing between
 // here and the group's closer.
@@ -950,7 +968,10 @@ func (p *Parser) recordCondGroup() {
 	if !errors.As(p.err, &se) || se.CondWords != nil {
 		return
 	}
-	words := append([]string(nil), p.condWords...)
+	words := make([]string, 0, len(p.condWords)+2)
+	for _, cw := range p.condWords {
+		words = append(words, cw.text())
+	}
 	saved := p.err
 	p.err = nil
 	for p.err == nil && p.tok.Kind == TokWord && !p.atWord("]]") {

@@ -369,7 +369,7 @@ func sameWordList(a, b []*syntax.ArrayElem) bool {
 // array takes the assoc path above, which is the last row and which already
 // agreed.
 func (r *Runner) literalReadsSubscripts(name string, elems []*syntax.ArrayElem, appendTo bool) bool {
-	if !r.dialect().ArrayLiteralShapeFollowsTheFirstElement {
+	if !r.lang().ArrayLiteralShapeFollowsTheFirstElement {
 		return true
 	}
 	if !r.literalShapeReadsSubscripts(elems) {
@@ -396,7 +396,7 @@ func (r *Runner) literalReadsSubscripts(name string, elems []*syntax.ArrayElem, 
 // whole-array spelling gives. What those three do *not* share is the store
 // half, which is about what an append may turn an indexed array into.
 func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.ArrayElem) bool {
-	if !r.dialect().ArrayLiteralShapeFollowsTheFirstElement {
+	if !r.lang().ArrayLiteralShapeFollowsTheFirstElement {
 		return true
 	}
 	// A nested literal is not a subscripted element, and the dialect that

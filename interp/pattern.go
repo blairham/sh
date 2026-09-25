@@ -249,13 +249,13 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 // character is ordinary already, and an escape would be a difference nothing
 // could observe.
 func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
-	if !strings.Contains(pattern, "|") || !r.dialect().PatternTopLevelAlternation.ReadsATopLevelBar(false) {
+	if !strings.Contains(pattern, "|") || !r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(false) {
 		return pattern
 	}
 	// A dialect that reads a written bar has no provenance rule to arrange,
 	// so there is nothing to escape: ksh93 answers `bc` to `${v#a|ab}` and
 	// to `${v#$L}` alike (#2528).
-	if r.dialect().PatternTopLevelAlternation.ReadsAWrittenBar() {
+	if r.lang().PatternTopLevelAlternation.ReadsAWrittenBar() {
 		return pattern
 	}
 	written := func(i int) bool {
@@ -306,7 +306,7 @@ func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
 // unquoted and at the front of the word, so the first span holds all of it.
 // See tildeKeepsBackslash and #3894.
 func (r *Runner) tildeRegexFlavor(spans []syntax.Span) tildeFlavor {
-	if !r.dialect().TildeGroup || len(spans) == 0 {
+	if !r.lang().TildeGroup || len(spans) == 0 {
 		return tildeGlob
 	}
 	s := spans[0]
@@ -2745,10 +2745,10 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		unknownClass:      r.unknownClassPolicy(pattern),
 		unterminatedClass: r.unterminatedClassPolicy(pattern),
 		chars:             r.patternMatchCountsCharacters(pattern, subjects...),
-		group:             r.dialect().PatternAlternation,
-		topGroup:          r.dialect().PatternTopLevelAlternation.ReadsATopLevelBar(false),
+		group:             r.lang().PatternAlternation,
+		topGroup:          r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(false),
 		quantified:        r.readsQuantifiedGroups(false),
-		numericRange:      r.dialect().NumericRangePattern,
+		numericRange:      r.lang().NumericRangePattern,
 		escapes:           r.sem().PatternEscapeReaches,
 		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
 		classes:           r.patternClasses(pattern),

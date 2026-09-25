@@ -105,7 +105,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		// zsh 5.9.2 and bash 3.2, which have no such spelling to read. The
 		// split is what makes it an axis rather than a property of the form
 		// — see Semantics.CurrentShellSubstitutionReadsAFile.
-		if r.dialect().ReadFileSubstitution && !span.ReplyValue {
+		if r.lang().ReadFileSubstitution && !span.ReplyValue {
 			if rd, ok := readFileSubstitution(f); ok &&
 				r.ask(r.sem().CurrentShellSubstitutionReadsAFile,
 					"`${ <file ;}` being the file's contents rather than the empty string") {
@@ -118,7 +118,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// `$(<file)` is the file, with nothing run. Asked after the parse because
 	// the body is source until it is expanded, and before the subshell
 	// because there is no command here for a subshell to hold.
-	if r.dialect().ReadFileSubstitution {
+	if r.lang().ReadFileSubstitution {
 		if rd, ok := readFileSubstitution(f); ok {
 			return r.readFileSubst(ctx, rd, span)
 		}
@@ -517,6 +517,34 @@ func (r *Runner) bodyDialect(span syntax.Span) syntax.Dialect {
 	}
 	return d
 }
+
+// lang is what language this shell speaks, by pointer and without a copy.
+//
+// The dialect below is 384 bytes and is returned by value, which is right for
+// the handful of callers that hand it to a parser and wrong for the far more
+// numerous ones that read a single axis off it to answer a question about a
+// word. Those are in the inner loops: a startup on a real ~/.zshrc called
+// dialect **630,000 times**, and 280,000 of those were one function —
+// describesRatherThanSpells asks seven questions and, written as seven
+// `r.lang().X` reads, copied the struct seven times to answer them.
+//
+// So a reader takes this and a parser takes dialect. The difference is not
+// cosmetic: this returns the runner's own value, and the two fields dialect
+// *adjusts* — ArithPrecedence and CharacterWidth — are therefore not this
+// function's to answer. TestNothingReadsAnAdjustedAxisOffLang keeps that
+// true, and also keeps anything from writing through the pointer, since a
+// runner with no dialect of its own is handed a value every other such
+// runner is sharing.
+func (r *Runner) lang() *syntax.Dialect {
+	if r.Dialect != nil {
+		return r.Dialect
+	}
+	return &coreLanguage
+}
+
+// coreLanguage is what a runner with no dialect of its own speaks. Built once
+// because syntax.Core builds a map, and never written to — see lang.
+var coreLanguage = syntax.Core()
 
 // dialect is the dialect this runner parses nested input with. It is a method
 // rather than a field so the default is the core rather than the zero value,

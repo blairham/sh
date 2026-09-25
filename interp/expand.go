@@ -2532,8 +2532,8 @@ func hasLiveByteOf(esc, set string) bool {
 // escaping is the only thing that still says where the bracket came from —
 // so a fix in glob could only have been one that lost the literal case.
 func (r *Runner) resultReadsAsPattern(esc string) bool {
-	if hasUnescapedMeta(esc, r.dialect().NumericRangePattern, r.dialect().PatternAlternation,
-		r.dialect().ExtendedPattern, r.MatchOption(ExtendedPatternOperators),
+	if hasUnescapedMeta(esc, r.lang().NumericRangePattern, r.lang().PatternAlternation,
+		r.lang().ExtendedPattern, r.MatchOption(ExtendedPatternOperators),
 		r.slashLeavesABracket) {
 		return true
 	}
@@ -2569,7 +2569,7 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 	// text either way. What it changes is which fields *ask*, and that is
 	// only observable in a core with the axis unset, where asking refuses a
 	// field holding a `|` and nothing else.
-	if (r.dialect().PatternAlternation || r.dialect().ExtendedPattern) && hasUnescapedByte(esc, '|') {
+	if (r.lang().PatternAlternation || r.lang().ExtendedPattern) && hasUnescapedByte(esc, '|') {
 		return true
 	}
 	// Composed with the axis rather than short-circuiting it: a dialect that
@@ -4492,7 +4492,7 @@ func (r *Runner) rangeProtectsSpan(sp syntax.Span) bool {
 	// and the word arrives with them already removed. So it follows the
 	// dialect flag that says the reader honors them at all, which is what
 	// makes `$(( a[']'] ))` and `${s:0:a[']']}` one answer rather than two.
-	return sp.Quoting == syntax.SingleQuoted && r.dialect().ArithSubscriptQuoting
+	return sp.Quoting == syntax.SingleQuoted && r.lang().ArithSubscriptQuoting
 }
 
 // wordOpensASubscript reports whether a word wrote an unquoted `[` and then

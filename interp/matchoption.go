@@ -485,7 +485,7 @@ func (r *Runner) SetMatchOption(o MatchOption, on bool) {
 // switches them can also answer questions about them.
 func (r *Runner) MatchOption(o MatchOption) bool {
 	if o == QuantifiedGroupsEverywhere {
-		return r.dialect().ExtendedPattern
+		return r.lang().ExtendedPattern
 	}
 	return r.matchOptions&(matchOptionSet(1)<<uint(o)) != 0
 }

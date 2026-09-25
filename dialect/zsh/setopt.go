@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 137 of the 185
+//     typing a directory name still does not change directory. 133 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -123,7 +123,16 @@ import (
 // whether `$(( [#16] 108 ))` writes `0x6C` or `16#6C`, and this shell wrote
 // the second in both states of it (#4502).
 //
-// Nothing else about the split moved, and 137 is still most of the table.
+// `kshoptionprint` is the most recent and is the one that was not a
+// *behavior* at all but the shape of a listing: on, both bare listings become
+// 185 `name<pad>on|off` rows, and this shell recorded it and went on writing
+// the deviating names — so `emulate ksh`, which turns it on by ksh's own
+// default, printed 11 lines where the reference prints 185 (#4529).
+//
+// Nothing else about the split moved, and 133 is still most of the table.
+// The prose said 137 for three conversions after the table said otherwise;
+// TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
+// what these two numbers have to match.
 //
 // Recording is worth doing and is not the same as implementing. A real rc
 // file opens with a dozen `setopt` lines about completion, correction and
@@ -170,11 +179,12 @@ type zshOption struct {
 	//
 	// One entry this file inherited still holds this shell's own state here
 	// instead of zsh's — `hashcmds`, measured the other way round in real
-	// zsh — which silences a deviation the listing exists to show. It is left
-	// as it was found; see docs/spec/semantics.md. `interactivecomments` was
-	// corrected in #2516, `emacs` in #1858 and `banghist` in #2542, and none
-	// of those says anything about the one that remains: `hashcmds` has a
-	// real state behind it where the corrected three did not: it is backed by
+	// zsh — which silences a deviation the listing exists to show. It is
+	// #4533 and is left as it was found; see docs/spec/semantics.md.
+	// `interactivecomments` was corrected in #2516, `emacs` in #1858 and
+	// `banghist` in #2542, and none of those says anything about the one
+	// that remains: `hashcmds` has a real state behind it where the
+	// corrected three did not: it is backed by
 	// `hashall`, and no startup letter of this dialect turns that on, so it
 	// reads off and correcting its default alone would print `nohashcmds` as
 	// a deviation where zsh prints nothing — moving a row rather than
@@ -626,7 +636,37 @@ var zshOptions = []zshOption{
 	},
 	recorded("kshautoload", false),
 	recorded("kshglob", false),
-	recorded("kshoptionprint", false),
+	// KSH_OPTION_PRINT: **the shape of the two bare listings**, and nothing
+	// else. On, `setopt` and `unsetopt` each write every option in the table
+	// as `name<pad>on|off` instead of writing the deviating names and the
+	// rest; the two then print the same 185 rows as each other and as
+	// `set -o`, byte for byte. Measured on zsh 5.9.2 under `-f`, 2026-09-25:
+	// `setopt kshoptionprint; setopt` and `… set -o` and `… unsetopt` are
+	// three identical 185-line listings.
+	//
+	// **The state of this one option decides the shape** — that is the noun,
+	// and it is not the emulation. Two cases hold it fixed while the mode
+	// moves and the shape does not: `emulate sh; setopt kshoptionprint;
+	// setopt` is 185 long rows in a mode that is not ksh, and `emulate ksh;
+	// unsetopt kshoptionprint; setopt` is the 12 bare names in a mode that
+	// is. Reading the *mode* would have agreed with reading the option on
+	// every row where nobody touches it, because ksh's default is the only
+	// one that turns it on.
+	//
+	// It composes with [emulationDefault] rather than replacing it: the
+	// shape is this option's and the baseline every row is measured against
+	// is still the mode's, which is why the long form under `emulate sh`
+	// writes `promptpercent on` where the zsh-mode one writes
+	// `nopromptpercent off` for the same unmoved state (#4517, #4529).
+	//
+	// Named for ksh93 and not shaped like it: `set -o` in AT&T ksh 93u+ 2012
+	// opens with a `Current option settings` header, pads to 25 and lists 33
+	// names. What this option produces is zsh's own `set -o` table.
+	//
+	// `storeBacked` because the state lives in the recorded store and
+	// listZshOptions reads it; it was `recorded` until #4529, which is why
+	// `emulate ksh` printed 11 names where the reference prints 185 rows.
+	storeBacked("kshoptionprint", false),
 	recorded("kshtypeset", false),
 	recorded("kshzerosubscript", false),
 	recorded("listambiguous", true),
@@ -1631,6 +1671,17 @@ var setLetterOptions = map[rune]string{
 	'Z': "zle",
 }
 
+// optionListingWidth pads the name column of every listing that writes a
+// state beside a name: `set -o`, where it is the number
+// Diagnostics.OptionListingWidth carries, and the long form `setopt` and
+// `unsetopt` take under `ksh_option_print`. Named once and read in both
+// places so the two cannot drift apart, which is the arrangement
+// dialect/bash's setOptionListingWidth already uses for `shopt -o`.
+//
+// Measured on zsh 5.9.2: the state word starts at column 23 on all 185 rows,
+// and the longest name a listing writes is 21 characters.
+const optionListingWidth = 22
+
 // listedOptions is the `set -o` and `set +o` listing: every option in the
 // table, in the same order and the same spelling a bare `setopt` uses.
 //
@@ -1787,6 +1838,20 @@ func setoptBuiltin(setting bool) interp.Builtin {
 // that moves changes which of `aliasfuncdef` and `noaliasfuncdef` is written
 // and never where the row stands.
 func listZshOptions(r *interp.Runner, setting bool) {
+	if kshOptionPrintOn(r) {
+		// The long shape, which is `set -o`'s and is the same rows: the
+		// direction a bare name means is what `setting` carries, and this
+		// form has no direction, so both builtins write the whole table
+		// here. See the kshoptionprint entry for the measurement.
+		for _, row := range listedOptions(r) {
+			state := "off"
+			if row.On {
+				state = "on"
+			}
+			_, _ = fmt.Fprintf(r.Out(), "%-*s%s\n", optionListingWidth, row.Name, state)
+		}
+		return
+	}
 	mode := currentEmulation(r)
 	for _, o := range zshOptions {
 		base := emulationDefault(o, mode)
@@ -1795,6 +1860,14 @@ func listZshOptions(r *interp.Runner, setting bool) {
 		}
 	}
 }
+
+// kshOptionPrintIndex is where `kshoptionprint` sits in the table, resolved
+// once — the arrangement localOptionsIndex uses, and for the same reason: a
+// name this package holds as a constant is looked up at build time rather
+// than on every listing.
+var kshOptionPrintIndex = zshOptionIndex["kshoptionprint"]
+
+func kshOptionPrintOn(r *interp.Runner) bool { return zshOptions[kshOptionPrintIndex].get(r) }
 
 // spellOption writes the name in the direction asked for: the base for the
 // state a listing calls on, `no` and the base for the other.

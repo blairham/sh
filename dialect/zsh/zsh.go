@@ -4835,7 +4835,7 @@ func Diagnostics() interp.Diagnostics {
 		// bound stopped on: `a=b; b=a` is blamed on `a` here and on `b` in the
 		// two shells above.
 		ArithRecursionBlamesTheWrittenName: true,
-		OptionListingWidth:                 22,
+		OptionListingWidth:                 optionListingWidth,
 		KillListing:                        interp.KillListingSpaceJoined,
 		// The event a refused range names, which is not always the `1` an
 		// empty list used to be the only route to: `fc -l -1` on that same

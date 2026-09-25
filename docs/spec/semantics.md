@@ -7870,7 +7870,7 @@ with `ArithLeadingZeroIsOctal` for that one base. And `$(( [##16] 108 ))` is
 to spell. A probe that looked only at octal would have agreed in both states
 and concluded the option was already implemented.
 
-So 137 of 185 are recorded, the count above is the one produced by counting
+So 133 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -8140,11 +8140,38 @@ the state *is* and are unmoved. Until #4517 the listings read the table's own
 `def` whatever mode the shell was in, so `emulate sh` printed 40 names and
 `emulate -R sh` printed 44 where real zsh prints 8 and 0.
 
-`emulate ksh` is the one mode whose listing still differs, and in *shape*
-rather than in which names deviate: `ksh_option_print` is on by ksh's default
-and rewrites both listings into 185 `name on|off` rows. This shell records
-that name and does not act on it, so it prints the 11 deviating names instead
-— the same 11 real zsh marks `on`.
+**And a second option decides the listing's *shape*, which is a separate
+rule from the baseline and composes with it.** `KSH_OPTION_PRINT` on, a bare
+`setopt` and a bare `unsetopt` stop naming the deviations and their complement
+and each write every option in the table as `name<pad>on|off` — zsh's own
+`set -o` table, at zsh's own width, byte for byte: measured on zsh 5.9.2 under
+`-f`, `setopt kshoptionprint` then `setopt`, `unsetopt` and `set -o` are three
+identical 185-line listings, with the state word at column 23 on all of them.
+`set +o` is untouched and keeps its re-inputtable `set ±o name` lines, and so
+are `${options[…]}` and `[[ -o … ]]`.
+
+**The noun is that option's own state, not the mode.** `emulate ksh` is how a
+script reaches this without naming anything — ksh's is the only default in the
+table that turns the option on — and that coincidence is what makes the wrong
+reading so hard to see: "the shape is ksh's" and "the shape is this option's"
+agree on every row nobody has touched. Exactly two cases part them, and both
+were measured: `emulate sh; setopt kshoptionprint; setopt` is 185 long rows in
+a mode that is not ksh, and `emulate ksh; unsetopt kshoptionprint; setopt` is
+12 bare names in a mode that is. The two rules then compose rather than one
+replacing the other — the shape is the option's and the baseline every row is
+measured against is still the mode's — which is why the long form under
+`emulate sh` writes `promptpercent on` where the zsh-mode one writes
+`nopromptpercent off` for the same unmoved state.
+
+The name is ksh93's and the shape is not: `set -o` in AT&T ksh 93u+ 2012 opens
+with a `Current option settings` header, pads to 25 and lists 33 names. What
+the option produces is zsh's table.
+
+Until #4529 this shell recorded `ksh_option_print` and acted on it nowhere, so
+`emulate ksh` printed the 11 deviating names — the same 11 real zsh marks `on`
+— where the reference prints 185 rows. The **set** was right and the shape was
+not, which is why a probe comparing the set of on-options agreed before and
+after and said nothing.
 
 **This is a dialect answer and not an axis.** No other shell in the panel
 has `emulate` at all — bash, dash, ksh93 and BusyBox ash each answer

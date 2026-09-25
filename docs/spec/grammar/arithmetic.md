@@ -324,12 +324,17 @@ reads one back through the other. `typeset -i16 h=255` and
 `$(( [#16] 255 ))` are `16#FF` in the same shell, and they would not have
 to be if the two renderers were two.
 
-**Recorded and not reproduced**: `setopt c_bases` rewrites the mark for
-bases 8 and 16 — `$(( [#16] 255 ))` becomes `0xFF`, and with
-`octal_zeroes` as well `$(( [#8] 8 ))` becomes `010`. That is an option
-this implementation does not have, and it moves `typeset -i16` in the same
-shell by the same amount, so it belongs to whatever adds the option rather
-than here.
+`setopt c_bases` rewrites the mark for bases 8 and 16 — `$(( [#16] 255 ))`
+becomes `0xFF`, and with `octal_zeroes` as well `$(( [#8] 8 ))` becomes
+`010` — and it moves `typeset -i16` in the same shell by the same amount,
+which is the second reason the two constructs share one renderer.
+Implemented since #4502 as `Semantics.IntegerBaseMarkIsCSpelled`, written
+by zsh's `cbases` entry. **Base eight is the control**: under `c_bases`
+alone it is unmoved, as are base 2 and base 36, because only sixteen has a
+C literal of its own; eight's is a leading zero and is only C's spelling
+in a shell that *reads* one as octal, which is why that half is the axis
+and `ArithLeadingZeroIsOctal` together. `$(( [##16] 255 ))` is `FF` in
+both states — no mark is written, so there is nothing to respell.
 
 ## Operators
 

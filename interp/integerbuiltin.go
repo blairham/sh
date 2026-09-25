@@ -259,9 +259,53 @@ func (r *Runner) baseRendered(v, base int, prefixed bool, group int) (string, bo
 	}
 	mark := ""
 	if prefixed {
-		mark = itoa(base) + "#"
+		m, ok := r.baseMark(base)
+		if !ok {
+			return "", false
+		}
+		mark = m
 	}
 	return sign + mark + groupDigits(string(out), group), true
+}
+
+// baseMark is the text written in front of the digits to say what base they
+// are in — `16#`, or C's own spelling of that base in the dialect that
+// borrows it.
+//
+// Only two bases have a C spelling to borrow. Sixteen's is `0x` and is this
+// axis on its own. Eight's is a leading zero, and it is only C's spelling in a
+// shell that *reads* a leading zero as octal, so it is this axis and
+// ArithLeadingZeroIsOctal together — measured, zsh 5.9.2 writes `8#10` under
+// `C_BASES` alone and `010` under `C_BASES` and `OCTAL_ZEROES` both.
+//
+// A false is the unspecified axis coming back, handled the way baseRendered
+// handles the negative question's.
+func (r *Runner) baseMark(base int) (string, bool) {
+	if base != 16 && base != 8 {
+		// Nothing else in the alphabet has a C literal to be spelled as, so
+		// the question is never put for it.
+		return itoa(base) + "#", true
+	}
+	if !r.ask(r.sem().IntegerBaseMarkIsCSpelled,
+		"an output base written in C's spelling rather than as `base#`") {
+		if r.unspecified {
+			return "", false
+		}
+		return itoa(base) + "#", true
+	}
+	if base == 16 {
+		return "0x", true
+	}
+	if !r.ask(r.sem().ArithLeadingZeroIsOctal,
+		"a leading zero read as octal, which is what makes it base eight's C spelling") {
+		if r.unspecified {
+			return "", false
+		}
+		// C-spelled marks, but a leading zero means nothing to this shell,
+		// so base eight has no spelling here to borrow and keeps `8#`.
+		return "8#", true
+	}
+	return "0", true
 }
 
 // groupDigits puts a `_` every group digits, counted from the right, which is

@@ -7591,11 +7591,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 17 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 18 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 8 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All eight are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 5 | `aliases`, `autocd`, `banghist`, `checkjobs` and `cprecedences`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, and the arithmetic operators really do change the order they bind in |
-| **recorded** | 136 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 135 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -7827,7 +7827,7 @@ reading, because by the time the placement is decided there is a trap to fire.
 A held firing therefore has to be held whether or not a trap is set when it is
 made, and what comes of it is decided at the flush.
 
-`longlistjobs` is the most recent to leave (#4491), and it is the same shape
+`longlistjobs` left in #4491, and it is the same shape
 one surface along. LONG_LIST_JOBS decides whether a job *notice* names the
 job's pid — the long row `jobs -l` writes rather than the short one `jobs`
 writes — this shell had only the short reading, and `setopt longlistjobs` went
@@ -7851,7 +7851,26 @@ that can be asked for anything but No — measured the same day, bash 5.3.20,
 ksh93u+, dash and BusyBox ash 1.37.0 all write a notice with no pid in it and
 have no option that changes that.
 
-So 138 of 185 are recorded, the count above is the one produced by counting
+`cbases` is the most recent to leave (#4502), and it is the same bargain
+failing in the other direction: the name was remembered *and* the behavior
+was already there, so all that was missing was the one reading the other.
+C_BASES writes a value's base mark in C's spelling — `$(( [#16] 108 ))` is
+`0x6C` rather than `16#6C`, and `typeset -i16 a=108` moves with it — and this
+shell wrote `16#6C` in both states of the option while `setopt` reported the
+difference back. It is `Semantics.IntegerBaseMarkIsCSpelled` now.
+
+**Base eight is the control and is what keys the rule.** Under C_BASES alone
+`$(( [#8] 8 ))` is `8#10`, unmoved, as are base two, base thirty-six and
+everything else: only sixteen has a C literal of its own to borrow. Eight has
+one too — a leading zero — but only in a shell that *reads* a leading zero as
+octal, so `010` needs `octal_zeroes` as well and the axis is read together
+with `ArithLeadingZeroIsOctal` for that one base. And `$(( [##16] 108 ))` is
+`6C` in both states, which is the row that says the option is about the
+**mark** rather than about the base: where no mark is written there is nothing
+to spell. A probe that looked only at octal would have agreed in both states
+and concluded the option was already implemented.
+
+So 137 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

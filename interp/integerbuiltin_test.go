@@ -42,6 +42,11 @@ func integerRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) 
 	// that it is a base like any other, so a test not about that axis gets
 	// it answered rather than meeting an unanswered question.
 	sem.IntegerBaseTenIsNoBase = No
+	// The mark in front of a value written in an output base, spelled as
+	// `base#` — the majority reading, and the one every test not about the
+	// C spellings needs answered rather than refused. See
+	// Semantics.IntegerBaseMarkIsCSpelled.
+	sem.IntegerBaseMarkIsCSpelled = No
 	sem.IntegerPlusFormTakesAttributesOff = Yes
 	sem.TypesetBadOptionFatal = No
 	// `export -p` is how these tests observe the export attribute: the

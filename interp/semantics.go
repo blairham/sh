@@ -12136,6 +12136,46 @@ type Semantics struct {
 	// in front of the magnitude. Asked only for a negative value in a base
 	// that renders at all, so nothing else meets it.
 	IntegerBaseNegativeIsTwosComplement Answer
+	// IntegerBaseMarkIsCSpelled writes the mark in front of a rendered value
+	// in C's spelling where C has one, rather than as the base and a `#`.
+	//
+	// One base has a C spelling on its own: sixteen, whose `16#` becomes
+	// `0x`. Eight has one too — a leading zero — but only in a shell that
+	// *reads* a leading zero as octal, so that half is this axis and
+	// ArithLeadingZeroIsOctal together and not this axis alone. Every other
+	// base keeps `base#`, because C has no literal for it to borrow.
+	//
+	// zsh's `C_BASES`, and the only option in the panel that moves it.
+	// Measured on zsh 5.9.2 under `-f`, 2026-09-25, with the option on and
+	// off across both constructs that render a base:
+	//
+	//	$(( [#16] 108 ))     `0x6C`    off `16#6C`
+	//	$(( [#16] -108 ))    `-0x6C`   off `-16#6C`
+	//	$(( [#16] 0 ))       `0x0`     off `16#0`
+	//	typeset -i16 a=108   `0x6C`    off `16#6C`
+	//	$(( [#8] 8 ))        `8#10`    off `8#10`
+	//	$(( [#2] 5 ))        `2#101`   off `2#101`
+	//	$(( [#36] 108 ))     `36#30`   off `36#30`
+	//	$(( [##16] 108 ))    `6C`      off `6C`
+	//
+	// The last row is what says this is about the **mark** and not about the
+	// base: `[##16]` writes no mark at all, so there is nothing for the
+	// spelling to change and the two states agree. And the base-eight row is
+	// the control the reduction in #4502 turns on — it agrees in both
+	// states, which is what separates "C's spellings" from "bases in
+	// general". With `octal_zeroes` as well it does move, to `010`.
+	//
+	// Asked only where a mark is actually written, so `[##16]`, base ten and
+	// a dialect with no output base never meet it.
+	//
+	// One row of real zsh this does not reach, and it is the stored-text
+	// model above rather than this axis: a name declared while the option was
+	// off holds the characters `16#6C`, and turning the option on afterwards
+	// does not rewrite them, where zsh — which keeps the number and renders
+	// at every read — says `0x6C` for it. What is stored here is what every
+	// read sees, which is the reading `${#h}` and a child's environment need,
+	// so the divergence is the price of that and not of this.
+	IntegerBaseMarkIsCSpelled Answer
 	// IntegerBaseTenIsNoBase makes ten the *default* of the integer letter
 	// rather than a base like any other, so that naming it records nothing
 	// and writing the letter with no base at all takes off the base a name

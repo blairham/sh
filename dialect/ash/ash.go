@@ -278,6 +278,9 @@ func Semantics() interp.Semantics {
 	// attribute is left where it was. Its sibling's two lines, for the same
 	// reason — `readonly` and `export` are the only declaration words and
 	// their prefix persists here already (#3437).
+	// unanswered IntegerBaseMarkIsCSpelled: as in dash — no integer
+	// attribute and no arithmetic output specifier, so nothing here ever
+	// writes a base in front of a value for the spelling to reach (#4502).
 	// unanswered PrefixInAWholeTableListing: as in dash — there is no
 	// `typeset` here, `export -p` is the only whole-table declaration
 	// listing, and `export` is a special builtin whose prefix persists, so

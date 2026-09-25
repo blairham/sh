@@ -3597,6 +3597,10 @@ func Semantics() interp.Semantics {
 	s.IntegerBaseDigits = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@_"
 	s.IntegerBaseComesFromTheValueAssigned = interp.No
 	s.IntegerBaseNegativeIsTwosComplement = interp.Yes
+	// `base#` always, and no option here moves it: measured 2026-09-25 on
+	// ksh93u+, `typeset -i16 a=108; print $a` is `16#6c` and this shell has
+	// no `C_BASES` to ask for the other spelling.
+	s.IntegerBaseMarkIsCSpelled = interp.No
 	// The letter always names a base here and ten is what it names when
 	// nothing is written: measured, `typeset -i10 d=255` lists back as
 	// `typeset -i d=255` with no base word, and a later bare `typeset -i a`

@@ -28,12 +28,15 @@ import "testing"
 // fires, and until #4473 both states of it produced the same output.
 // `longlistjobs` is the ninth: it moves Semantics.JobNoticeNamesThePID, which
 // is whether a job notice names the job's pid, and until #4491 it named none
-// in either state.
+// in either state. `cbases` is the tenth: it moves
+// Semantics.IntegerBaseMarkIsCSpelled, which is whether `$(( [#16] 108 ))`
+// writes `0x6C` or `16#6C`, and until #4502 it wrote the second in both
+// states.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
-		"longlistjobs",
+		"longlistjobs", "cbases",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -55,7 +58,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 136; recordedCount != want {
+	if want := 135; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

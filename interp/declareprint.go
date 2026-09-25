@@ -979,15 +979,45 @@ func (r *Runner) listedInDecimal(d declaration) string {
 	if rest, cut := strings.CutPrefix(text, "-"); cut {
 		sign, text = "-", rest
 	}
-	at := strings.IndexByte(text, '#')
-	if at < 0 {
+	digits, ok := digitsAfterTheBaseMark(text, d.base)
+	if !ok {
 		return d.value
 	}
-	v, err := strconv.ParseInt(text[at+1:], d.base, 64)
+	v, err := strconv.ParseInt(digits, d.base, 64)
 	if err != nil {
 		return d.value
 	}
 	return sign + itoa(int(v))
+}
+
+// digitsAfterTheBaseMark takes the mark off a rendered value, whichever of the
+// spellings it was written in.
+//
+// Written to read all of them rather than the one the shell would write now,
+// because the two are not the same question: `typeset -i16 a=108` under
+// `unsetopt c_bases` stores `16#6C`, and a `typeset -p a` after a later
+// `setopt c_bases` still has to decode the text that is there (#4502). See
+// Semantics.IntegerBaseMarkIsCSpelled.
+func digitsAfterTheBaseMark(text string, base int) (string, bool) {
+	if at := strings.IndexByte(text, '#'); at >= 0 {
+		return text[at+1:], true
+	}
+	switch base {
+	case 16:
+		if rest, cut := strings.CutPrefix(text, "0x"); cut {
+			return rest, true
+		}
+		if rest, cut := strings.CutPrefix(text, "0X"); cut {
+			return rest, true
+		}
+	case 8:
+		// A leading zero, which is base eight's C spelling and needs a digit
+		// after it — `00` is zero and `0` on its own is a value with no mark.
+		if len(text) > 1 && text[0] == '0' {
+			return text[1:], true
+		}
+	}
+	return "", false
 }
 
 // clusteredKey spells a subscript in the clustered form: bare when it is

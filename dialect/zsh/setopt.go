@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 138 of the 185
+//     typing a directory name still does not change directory. 137 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -112,13 +112,18 @@ import (
 // byte-identical output while the listings went on reporting the difference
 // back faithfully (#4473).
 //
-// `longlistjobs` is the most recent, and it is
-// [interp.Semantics.JobNoticeNamesThePID]: whether a job notice names the
-// job's pid. Recording it meant `setopt longlistjobs` reported itself on every
-// surface and the notice went on being written without one, which is a
-// disagreement zsh's own `W02jobs.ztst` asks about directly (#4491).
+// `longlistjobs` is [interp.Semantics.JobNoticeNamesThePID]: whether a job
+// notice names the job's pid. Recording it meant `setopt longlistjobs`
+// reported itself on every surface and the notice went on being written
+// without one, which is a disagreement zsh's own `W02jobs.ztst` asks about
+// directly (#4491).
 //
-// Nothing else about the split moved, and 138 is still most of the table.
+// `cbases` is the most recent, and it left for the same reason one step
+// further along: it is [interp.Semantics.IntegerBaseMarkIsCSpelled], which is
+// whether `$(( [#16] 108 ))` writes `0x6C` or `16#6C`, and this shell wrote
+// the second in both states of it (#4502).
+//
+// Nothing else about the split moved, and 137 is still most of the table.
 //
 // Recording is worth doing and is not the same as implementing. A real rc
 // file opens with a dozen `setopt` lines about completion, correction and
@@ -313,7 +318,38 @@ var zshOptions = []zshOption{
 	// `nocasematch` moves all four (#2622).
 	matchBacked("casematch", true, interp.RegexFoldsCase, true),
 	recorded("casepaths", false),
-	recorded("cbases", false),
+	{
+		// C_BASES: whether a value written in an output base carries C's
+		// spelling of that base — `0x6C` — or zsh's own `16#6C`. Off by
+		// default, and implemented rather than recorded since #4502: it was
+		// accepted and remembered and the arithmetic output side never read
+		// it, so `setopt cbases` changed nothing.
+		//
+		// Measured on zsh 5.9.2 under `-f`, 2026-09-25, with the option on
+		// and off: `$(( [#16] 108 ))` is `0x6C` on and `16#6C` off, and it
+		// reaches `typeset -i16 a=108` by the same amount. **Base eight is
+		// the control** — `$(( [#8] 8 ))` is `8#10` in both states, which is
+		// what says the option is about the spellings C has rather than
+		// about bases in general. It moves too once `octal_zeroes` is on as
+		// well, to `010`, and that conjunction is where it lives: see
+		// [interp.Semantics.IntegerBaseMarkIsCSpelled]. `[##16]` writes no
+		// mark at all, so both states agree there.
+		//
+		// Read off the axis rather than off a stored bit, the arrangement
+		// `octalzeroes` and `debugbeforecmd` use — so `(setopt cbases)`
+		// stays in the subshell and `emulate -R` puts it back with the rest
+		// of the vector.
+		base: "cbases", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.IntegerBaseMarkIsCSpelled == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.IntegerBaseMarkIsCSpelled
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("cdablevars", false),
 	recorded("cdsilent", false),
 	recorded("chasedots", false),

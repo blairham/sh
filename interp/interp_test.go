@@ -40,7 +40,13 @@ import (
 // A guard around the whole run rather than a kill in the three tests that were
 // leaking on the day, which is the argument #860 and #890 both landed on:
 // three corrected call sites do not stop the fourth.
+// And it gives the binary a descriptor table its own measurements can be seen
+// in, before any of them run: the placement cases read the numbers the kernel
+// hands out, and a runner that passed down seventy open descriptors failed
+// nine of them at once without the shell having moved (#4459). See
+// restartWithAQuietDescriptorTable, which is a no-op on a quiet machine.
 func TestMain(m *testing.M) {
+	restartWithAQuietDescriptorTable()
 	os.Exit(treeguard.Run(childguard.Wrap(m, childguard.PipeMarker)))
 }
 

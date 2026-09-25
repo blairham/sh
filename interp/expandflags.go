@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsj@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENR"
+const implementedParamFlags = "ULfsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENR"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -458,7 +458,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// are what fixes the *lower* bound — every step below this one has to
 	// see the joined word — and #1705 is the ordering step among them, which
 	// finds one word and leaves it alone.
-	if (strings.ContainsRune(e.Flags, 'j') || ifsSplit || scalarContext ||
+	if (joinFlagWritten(e.Flags) != 0 || ifsSplit || scalarContext ||
 		(letterSplit && !strings.ContainsRune(e.Flags, '@'))) &&
 		!joined && isList && !markJoin {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
@@ -735,11 +735,60 @@ func (r *Runner) flagKeepsFields(e *syntax.ParamExpr) bool {
 	return e.Index != nil && r.atArrayIndex(e)
 }
 
-// flagJoinSep is what joining uses: the `j` argument when one was given, and
-// the first character of IFS — a space by default — when not.
+// joinFlagLetters are the two letters that name a join: `j`, which carries
+// its separator as an argument, and `F`, whose separator is a newline.
+//
+// `F` is the vendor manual's own shorthand for `pj:\n:` and is carried by
+// being read as one, rather than as a second join with a rule list of its
+// own — the whole of the difference is which separator joinFlagWritten hands
+// back. Measured on zsh 5.9.2, 2026-09-25, with `a=(x y z)`:
+//
+//	${(F)a}          x\ny\nz   the shorthand
+//	${(pj:\n:)a}     x\ny\nz   what it is short for
+//	printf '[%s]' ${(F)a}  one field — it joins unquoted too, as `j` does
+//	${(@F)a}         one field, where `"${(@)a}"` is three
+//
+// The last two are the rows that say it is the *same* join: both are `j`'s
+// answer and neither is what a flag that only acted under quoting would give.
+const joinFlagLetters = "jF"
+
+// joinFlagWritten is the join letter this group's separator comes from, or 0
+// where the group named no join at all.
+//
+// The **last** of the two written wins, which is measured rather than
+// assumed — the two letters fill one slot, so a `j` behind an `F` replaces
+// the newline and an `F` behind a `j` replaces the argument. On zsh 5.9.2,
+// 2026-09-25, with `a=(x y z)`:
+//
+//	${(Fj:-:)a}       x-y-z     the `j` behind the `F`
+//	${(j:-:F)a}       x\ny\nz   the `F` behind the `j`
+//	${(Fj:-:F)a}      x\ny\nz   and the last one written either way
+//	${(j:-:Fj:+:)a}   x+y+z
+//
+// A repeated `j` is already last-wins in the parser, which keeps only the
+// final argument; this is the same rule reaching across the two spellings.
+func joinFlagWritten(flags string) rune {
+	i := strings.LastIndexAny(flags, joinFlagLetters)
+	if i < 0 {
+		return 0
+	}
+	return rune(flags[i])
+}
+
+// flagJoinSep is what joining uses: the `j` argument when one was given, a
+// newline for the `F` that is short for one, and the first character of IFS
+// — a space by default — when the group named neither.
+//
+// `F`'s newline is not read through flagArgument: there is no argument to
+// read, the escape the shorthand stands for having been spent on the letter.
+// A `(p)` beside it therefore changes nothing, and neither does `$IFS` —
+// measured, `IFS=-` leaves `"${(F)a}"` joined on newlines.
 func (r *Runner) flagJoinSep(e *syntax.ParamExpr) string {
-	if strings.ContainsRune(e.Flags, 'j') {
+	switch joinFlagWritten(e.Flags) {
+	case 'j':
 		return r.flagArgument(e, 'j', e.JoinSep)
+	case 'F':
+		return "\n"
 	}
 	return r.ifsFirst(r.ifs())
 }

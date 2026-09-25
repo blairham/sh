@@ -2315,6 +2315,7 @@ All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
 | `(s:sep:)` | split at sep | `x=a:b:c; ${(s.:.)x}` | `a`, `b`, `c` |
 | `(0)` | split at NUL | `v=$'a\0b'; ${(@0)v}` | two words `a`, `b` |
 | `(j:sep:)` | join with sep | `a=(x y z); ${(j.,.)a}` | `x,y,z` |
+| `(F)` | join with newlines | `a=(x y z); ${(F)a}` | `x`, newline, `y`, newline, `z` |
 | `(@)` | keep array fields in `"…"` | `a=(x "y z" ""); "${(@)a}"` | 3 fields, empty kept |
 | `(P)` | value is a further name | `y=hello; x=y; ${(P)x}` | `hello` |
 | `(t)` | the *type* of the name | `w=(a b); ${(t)w}` | `array` |
@@ -2572,6 +2573,44 @@ Details, each measured:
   `m=$'a\nb:c'`, `${(@fs.:.)m}` splits at the colon and `${(@s.:.f)m}`
   at the newline; with `n=$'a\nb'`, `${(@f0)n}` is one field and
   `${(@0f)n}` is two. A fixed precedence answers half of that table.
+- **`(F)` is the join with a newline for a separator**, and the vendor
+  manual gives it as a shorthand for `pj:\n:` exactly as `(0)` above is one
+  for `ps:\0:`. It is the same join the `j` argument names and not a second
+  one, which is what the first four rows say — measured on zsh 5.9.2,
+  2026-09-25, with `a=(x y z)` throughout:
+
+  | probe | zsh 5.9.2 | what it pins |
+  | --- | --- | --- |
+  | `"${(F)a}"` | `x`, newline, `y`, newline, `z` | the flag itself |
+  | `${(F)a}` | one field, the same text | it joins unquoted too, as `j` does |
+  | `"${(@F)a}"` | one field | where `"${(@)a}"` is three: the `@` letter does not exempt it |
+  | `${(F)@}` | `a`, newline, `b`, newline, `c`, after `set -- a b c` | the positionals, which is the shape scripts write |
+  | `a=(x '' z); "${(F)a}"` | `x`, newline, newline, `z` | a hole is part of the join |
+  | `a=(); "${(F)a}"` | empty | and an empty array joins nothing |
+  | `v=hello; "${(F)v}"` | `hello` | a scalar has nothing to join |
+  | `IFS=-; "${(F)a}"` | the newlines, unchanged | `$IFS` is what a group with *no* join letter falls back to |
+
+  **The letter written last decides which separator is used**, which is the
+  same rule the split family has above and for the same reason — `j` and `F`
+  fill one slot:
+
+  | probe | zsh 5.9.2 |
+  | --- | --- |
+  | `${(Fj:-:)a}` | `x-y-z` |
+  | `${(j:-:F)a}` | `x`, newline, `y`, newline, `z` |
+  | `${(Fj:-:F)a}` | the newlines again |
+  | `${(j:-:Fj:+:)a}` | `x+y+z` |
+
+  **And the character count under `${#…}` reads that same slot.** With
+  `a=(abc de f)` — six characters of word and two separators — `${(cF)#a}`
+  is 8, which says nothing on its own, a newline being one character exactly
+  like the space `(c)` counts with no join letter at all. The pair that
+  discriminates moves only which letter was written last: `${(cj.--.F)#a}`
+  is 8 and `${(cFj.--.)#a}` is 10.
+
+  `(f)` is the inverse and the pair is how a zsh function turns a list into
+  text and back: `v="${(F)a}"` builds it and `"${(f)v}"` takes it apart.
+
 - **`(l)` and `(r)` lay each word out in a field.** `(l:expr::string1::string2:)`
   pads on the left and `(r:…)` on the right; the arguments after the
   width are optional, and neither, the first, or both may be given.

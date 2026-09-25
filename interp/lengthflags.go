@@ -114,12 +114,29 @@ func (r *Runner) measuredLength(e *syntax.ParamExpr, v string) int {
 // `flagJoinSep` would have got wrong. A `j` argument does replace it:
 // `${(cj.--.)#a}` is 10.
 //
+// An `(F)` replaces it too, and with the same last-one-written rule the join
+// itself has — so the letter is asked for here rather than `j` by name.
+//
+// **`${(cF)#a}` is 8 under either reading and says nothing**: a newline is
+// one character, exactly like the space it replaced, so the obvious probe
+// agrees with itself. The discriminating pair holds the count fixed and moves
+// only which letter was written last. Measured on zsh 5.9.2, 2026-09-25:
+//
+//	${(cj.--.F)#a}   8    the `F` behind the `j` puts the newline back
+//	${(cFj.--.)#a}   10   and the `j` behind the `F` takes it away again
+//
+// The first row is the one a count keyed on `j` by name gets wrong: it would
+// find the `j`, read its two-character argument and answer 10.
+//
 // A `m` beside it measures the words in columns and leaves the separator in
 // characters, which is measured rather than symmetrical.
 func (r *Runner) countCharacters(e *syntax.ParamExpr, words []string) int {
 	sep := " "
-	if strings.ContainsRune(e.Flags, 'j') {
+	switch joinFlagWritten(e.Flags) {
+	case 'j':
 		sep = e.JoinSep
+	case 'F':
+		sep = "\n"
 	}
 	n := 0
 	for _, w := range words {

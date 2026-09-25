@@ -1433,3 +1433,123 @@ func TestTheProtectedNameComesAfterTheSourceAndTheCompleter(t *testing.T) {
 		t.Errorf("complete: output = %q status %d, want %q at 1", out, st, w)
 	}
 }
+
+// `zle -la` is a third listing spelling and not a widening of the other two:
+// bare names, for a widget somebody defined as much as for one of the
+// editor's own. Measured against zsh 5.9 on 2026-09-25, the same script into
+// both binaries — `zle -l` writes `foo (myfn)`, `zle -l -L` writes `zle -N
+// foo myfn`, and `zle -la` writes `foo`.
+//
+// This is #4426's first half. The listing is read back as data: the loop in
+// zsh-autosuggestions is
+//
+//	for widget in ${${(f)"$(builtin zle -la)"}:#${(j:|:)~ignore_widgets}}
+//
+// so an annotated line is a *name* to it, and the plugin bound a widget
+// called `autosuggest-clear (_zsh_autosuggest_widget_clear)` — which zsh has
+// no entry for, and which the plugin's own ignore list cannot match because
+// the pattern it holds is the bare `autosuggest-clear`.
+func TestTheEveryWidgetListingIsBareNames(t *testing.T) {
+	const define = "myfn() { :; }\nzle -N foo myfn\nzle -C cw complete-word myfn\n"
+
+	out, _ := runZsh(t, t.TempDir(), define+"zle -la\n")
+	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
+		if strings.ContainsAny(line, " \t") {
+			t.Errorf("`zle -la` wrote %q, want bare names — a line with a blank in it is a name to the plugin that reads it back", line)
+		}
+	}
+	for _, want := range []string{"foo", "cw"} {
+		if !strings.Contains(out, want+"\n") {
+			t.Errorf("`zle -la` = %q, want the bare %q in it", out, want)
+		}
+	}
+
+	// `-a` takes the listing over from `-L` rather than adding to it, so a
+	// full listing under both is bare names too.
+	out, _ = runZsh(t, t.TempDir(), define+"zle -la -L\n")
+	if !strings.Contains(out, "foo\n") || strings.Contains(out, "zle -N foo") {
+		t.Errorf("`zle -la -L` = %q, want the bare name and no definition", out)
+	}
+
+	// With a *name* it is the question again, and there `-L` still writes the
+	// definition back.
+	out, _ = runZsh(t, t.TempDir(), define+"zle -la -L foo\n")
+	if want := "zle -N foo myfn\n"; out != want {
+		t.Errorf("`zle -la -L foo` = %q, want %q", out, want)
+	}
+
+	// The plain listing is untouched: that is the spelling that annotates.
+	out, _ = runZsh(t, t.TempDir(), define+"zle -l\n")
+	if want := "cw -C complete-word myfn\nfoo (myfn)\n"; out != want {
+		t.Errorf("`zle -l` = %q, want %q", out, want)
+	}
+}
+
+// Every one of the editor's own actions is listed under its dotted spelling
+// as well as its bare one, which is the shape zsh's listing is in: measured,
+// its 386 are 193 names twice over, with no name having only one of the two.
+//
+// This is #4426's second half. The dotted spelling is not a second widget —
+// it is how a wrapper reaches past a rebinding of the bare name, which
+// callWidget already reads — so listing it claims nothing this editor does
+// not already do. What it is *not* is an import of zsh's 386: this shell
+// lists its own actions under both spellings, for the reason the file header
+// gives.
+func TestEveryBuiltinIsListedDottedAndBare(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "zle -la\n")
+	names := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+
+	var bare, dotted int
+	for _, name := range names {
+		if plain, isDotted := strings.CutPrefix(name, "."); isDotted {
+			dotted++
+			if !slices.Contains(names, plain) {
+				t.Errorf("`zle -la` has %q with no bare %q", name, plain)
+			}
+			continue
+		}
+		bare++
+		if !slices.Contains(names, "."+name) {
+			t.Errorf("`zle -la` has %q with no dotted `.%s`", name, name)
+		}
+	}
+	if bare == 0 || bare != dotted {
+		t.Errorf("`zle -la` = %d bare and %d dotted, want a nonzero pair of equal halves", bare, dotted)
+	}
+
+	// And the question answers for the dotted spelling exactly where the
+	// listing has it — `-a` and not the plain listing, which is the shell's
+	// own actions either way.
+	out, _ = runZsh(t, t.TempDir(),
+		"zle -la .end-of-line; echo all=$?\nzle -l .end-of-line; echo plain=$?\n")
+	if want := "all=0\nplain=1\n"; out != want {
+		t.Errorf("output = %q, want %q", out, want)
+	}
+
+	// A widget this editor does not perform gains no dotted spelling either:
+	// the rule is both spellings of what is here, not zsh's whole table.
+	out, _ = runZsh(t, t.TempDir(), "zle -la .menu-select && echo HAS || echo NOPE\n")
+	if want := "NOPE\n"; out != want {
+		t.Errorf("`zle -la .menu-select` = %q, want %q", out, want)
+	}
+}
+
+// The enumeration and the predicate are the same set, which is what had
+// drifted: `accept-line` is callable here, bindable, and rebindable by every
+// plugin that wraps it, and `zle -la` did not have it because the listing
+// walked bindkeyWidgets while the predicate also consulted editorControlKeys.
+// A plugin that enumerates before it wraps therefore never saw the one widget
+// every plugin wraps.
+func TestTheListingHasEveryWidgetTheEditorPerforms(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "zle -la\n")
+	for _, want := range []string{"accept-line", ".accept-line"} {
+		if !strings.Contains(out, want+"\n") {
+			t.Errorf("`zle -la` = %q, want %q among the names", out, want)
+		}
+	}
+	out, _ = runZsh(t, t.TempDir(),
+		"zle -la accept-line; echo all=$?\nzle -la .accept-line; echo dotted=$?\n")
+	if want := "all=0\ndotted=0\n"; out != want {
+		t.Errorf("output = %q, want %q — the listing has it, so the question must answer for it", out, want)
+	}
+}

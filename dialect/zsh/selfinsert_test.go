@@ -19,8 +19,10 @@ import (
 // name in `$widgets` and recolors the line after each one; the name it most
 // needs is the one that runs when a person types.
 //
-// Measured against zsh 5.9.2 with the same rc: `${+widgets[self-insert]}` was
-// 1 there and 0 here, and `${#widgets}` 386 against 43 (#2485).
+// Measured against zsh 5.9.2 with the same rc when this was found:
+// `${+widgets[self-insert]}` was 1 there and 0 here, and `${#widgets}` 386
+// against 43 (#2485). The count here has moved since — #4426 gave every name
+// its dotted spelling — so what the row pins is the name, not the total.
 
 func TestSelfInsertIsAWidgetThisShellNames(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(),

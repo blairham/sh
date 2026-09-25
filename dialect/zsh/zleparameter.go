@@ -53,6 +53,19 @@ import (
 // that pressing a key bound to it does something, so `zle -la` prints this
 // shell's list and so does this.
 //
+// **The same list, read from the same place** — builtinWidgetNames, under both
+// spellings, which is what #4426 made of `zle -la`. This walked bindkeyWidgets
+// on its own before, so it was a second enumeration of a set that has a
+// canonical one, and it was wrong in the same two ways: no `accept-line`,
+// which `${+widgets[accept-line]}` read 0 for against zsh's 1, and no dotted
+// spellings, which zsh has — its 386 are 193 names twice over and
+// `$widgets[.accept-line]` reads `builtin`.
+//
+// A definition still writes over the bare name alone: measured, `zle -N
+// end-of-line f` makes `$widgets[end-of-line]` read `user:f` while
+// `$widgets[.end-of-line]` goes on reading `builtin`, which is the whole point
+// of the dotted spelling and falls out of laying the actions down first.
+//
 // # `$keymaps` is an array, not an association
 //
 // `typeset -p keymaps` writes `typeset -ar keymaps` where `typeset -p widgets`
@@ -121,9 +134,11 @@ const (
 // accept-line myfn` makes `$widgets[accept-line]` read `user:myfn`, since a
 // definition shadows the action it takes the name of.
 func zshWidgetsView(r *interp.Runner) interp.AssocArray {
-	out := make(interp.AssocArray, len(bindkeyWidgets))
-	for name := range bindkeyWidgets {
+	builtins := builtinWidgetNames()
+	out := make(interp.AssocArray, 2*len(builtins))
+	for _, name := range builtins {
 		out[name] = interp.Scalar(zshWidgetBuiltin)
+		out["."+name] = interp.Scalar(zshWidgetBuiltin)
 	}
 	for name, def := range readWidgets(r) {
 		out[name] = interp.Scalar(zshWidgetSpelling(def))

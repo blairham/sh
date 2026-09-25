@@ -149,3 +149,35 @@ func TestTheZleParameterModuleLoads(t *testing.T) {
 		t.Errorf("output = %q status %d, want %q and 0", out, st, want)
 	}
 }
+
+// `$widgets` and `zle -la` are one roster read two ways, which is what the
+// file header claims and what had quietly stopped being true: this walked
+// bindkeyWidgets on its own while the listing walked builtinWidgetNames, so
+// `accept-line` was absent from both in different ways and the dotted
+// spellings from both. Measured against zsh 5.9, `${#widgets}` and the line
+// count of `zle -la` are the same number there too — 386 either way.
+//
+// Pinned as a *set* rather than a count, because a count agrees by accident.
+func TestTheWidgetsParameterIsTheListingRoster(t *testing.T) {
+	got := zleParam(t, "zmodload zsh/zleparameter\n"+
+		`print -rl -- ${(ko)widgets}`+"\n")
+	listed := zleParam(t, "zle -la\n")
+	if got != listed {
+		t.Errorf("${(ko)widgets} = %q, `zle -la` = %q — one roster, two readers", got, listed)
+	}
+	if !strings.Contains(got, "accept-line\n") || !strings.Contains(got, ".accept-line\n") {
+		t.Errorf("${(ko)widgets} = %q, want accept-line under both spellings", got)
+	}
+}
+
+// The dotted spelling is the editor's own action whatever the bare name has
+// been rebound to, which is the whole reason a wrapper writes it. Measured
+// against zsh 5.9: `zle -N end-of-line f` makes `$widgets[end-of-line]` read
+// `user:f` while `$widgets[.end-of-line]` goes on reading `builtin`.
+func TestARedefinitionLeavesTheDottedSpellingAlone(t *testing.T) {
+	got := zleParam(t, "zmodload zsh/zleparameter\nf() { :; }\nzle -N end-of-line f\n"+
+		`print -r -- "[$widgets[end-of-line]] [$widgets[.end-of-line]]"`+"\n")
+	if want := "[user:f] [builtin]\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}

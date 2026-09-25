@@ -10676,6 +10676,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `getopts/silent-mode-reports-through-optarg` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` |
 | `getopts/missing-argument-diverges` | `st=0 o=[?]` **2>** `No arg for -b option` | `st=0 o=[?]` **2>** `<shell>: option requires an argument -- b` | `st=0 o=[?]` **2>** `<shell>: option requires an argument -- b` | `st=0 o=[?]` **2>** `<shell>: option requires an argument -- b` | `st=0 o=[?]` **2>** `<shell>: -b: argument expected` | `st=0 o=[?]` **2>** `<shell>:1: argument expected after -b option` | `st=0 o=[?]` **2>** `No arg for -b option` |
 | `getopts/silent-missing-argument-is-a-colon` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` |
+| `getopts/optind-after-a-refused-letter-in-a-cluster` | `[a 2][? 2][b 2][b 3] end=3` | `[a 1][? 1][b 2][b 3] end=3` | `[a 1][? 1][b 2][b 3] end=3` | `[a 1][? 1][b 2][b 3] end=3` | `[a 1][? 1][b 2][b 3] end=3` | `[a 1][? 1][b 1][b 2] end=3` | `[a 2][? 2][b 2][b 3] end=3` |
+| `getopts/posixbuiltins-ends-the-word-at-a-refused-letter` | `[a 2][? 2][b 2][b 3] end=3` | `[a 1][? 1][b 2][b 3] end=3` | `[a 1][? 1][b 2][b 3] end=3` | `[a 1][? 1][b 2][b 3] end=3` | `[a 1][? 1][b 2][b 3] end=3` | `[a 1][? 2][b 2] end=3` | `[a 2][? 2][b 2][b 3] end=3` |
 | `getopts/double-dash-ends-the-options` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` |
 
 - `getopts/too-few-operands` — the builtin given neither the optstring nor the name to write into, which is the one complaint of its three that carries a location: the two it makes while scanning are written bare in dash and BusyBox ash, and this one is not. Seven answers and six of them are a usage line — bash and ksh93 print theirs with nothing in front of it at all, dash opens with a capital, and dash and BusyBox ash call the slot `var` where bash calls it `name`. zsh writes no usage line, counts the operands instead, and is the one column that reports 1 rather than 2. Ours wrote bash's sentence into all seven and read as a match on the status alone (#2801)
@@ -10781,6 +10783,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `getopts/silent-missing-argument-is-a-colon` — `:` rather than `?` in silent mode, which is what lets a script tell a missing argument from an unknown option without reading a sentence
   ```sh
   set -- -b; getopts ":b:" o; echo "st=$? o=[$o] arg=[$OPTARG]"
+  ```
+- `getopts/optind-after-a-refused-letter-in-a-cluster` — what a letter the spec string does not name costs: the letter, or the rest of the word it was in. Every column here reports four letters — the `b` beside the refused `x` among them — and the three answers they give for OPTIND are the two counting axes and nothing else: bash, bash as `sh`, bash 3.2 and ksh93 count a word at its last letter, dash and BusyBox ash at its first, zsh not until the next call. The row is here for what it pins rather than for a disagreement: Semantics.GetoptsErrorEndsTheWord moves every one of these seven cells, because the fourth letter goes away wherever it is on
+  ```sh
+  set -- -axb -b; while getopts "ab" o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done; echo " end=$OPTIND"
+  ```
+- `getopts/posixbuiltins-ends-the-word-at-a-refused-letter` — the same scan with zsh's own name for the POSIX behavior on, which is the only switch in the panel that moves the axis above: zsh reports three letters here and four in the row above, because the refused `x` ends the word and the `b` after it is never reached. The other six have no `setopt`, whose failure is silenced so the rest of the line still runs, so each of them repeats its own row above unchanged — which is the control against reading the option's effect off a shell that never had one (#4474)
+  ```sh
+  setopt posixbuiltins 2>/dev/null; set -- -axb -b; while getopts "ab" o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done; echo " end=$OPTIND"
   ```
 - `getopts/double-dash-ends-the-options` — `--` ends them and OPTIND points past it, so what follows is an operand however much it looks like an option
   ```sh

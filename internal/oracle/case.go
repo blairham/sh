@@ -3459,6 +3459,16 @@ echo "reached-after st=$?"`,
 		Why:     "`:` rather than `?` in silent mode, which is what lets a script tell a missing argument from an unknown option without reading a sentence",
 	},
 	{
+		ID: "getopts/optind-after-a-refused-letter-in-a-cluster", Category: "getopts",
+		Snippet: `set -- -axb -b; while getopts "ab" o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done; echo " end=$OPTIND"`,
+		Why:     "what a letter the spec string does not name costs: the letter, or the rest of the word it was in. Every column here reports four letters — the `b` beside the refused `x` among them — and the three answers they give for OPTIND are the two counting axes and nothing else: bash, bash as `sh`, bash 3.2 and ksh93 count a word at its last letter, dash and BusyBox ash at its first, zsh not until the next call. The row is here for what it pins rather than for a disagreement: Semantics.GetoptsErrorEndsTheWord moves every one of these seven cells, because the fourth letter goes away wherever it is on",
+	},
+	{
+		ID: "getopts/posixbuiltins-ends-the-word-at-a-refused-letter", Category: "getopts",
+		Snippet: `setopt posixbuiltins 2>/dev/null; set -- -axb -b; while getopts "ab" o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done; echo " end=$OPTIND"`,
+		Why:     "the same scan with zsh's own name for the POSIX behavior on, which is the only switch in the panel that moves the axis above: zsh reports three letters here and four in the row above, because the refused `x` ends the word and the `b` after it is never reached. The other six have no `setopt`, whose failure is silenced so the rest of the line still runs, so each of them repeats its own row above unchanged — which is the control against reading the option's effect off a shell that never had one (#4474)",
+	},
+	{
 		ID: "getopts/double-dash-ends-the-options", Category: "getopts",
 		Snippet: `set -- -a -- -b; while getopts "ab" o; do printf "[%s]" "$o"; done; echo " ind=$OPTIND"`,
 		Why:     "`--` ends them and OPTIND points past it, so what follows is an operand however much it looks like an option",

@@ -285,6 +285,10 @@ func TestSemantics(t *testing.T) {
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.Yes},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
+		// Ahead of the command, which is `DEBUG_BEFORE_CMD` on — zsh's own
+		// default and the one axis here a running script can move, through
+		// `unsetopt DEBUG_BEFORE_CMD` (#4473).
+		{"DebugTrapRunsBeforeTheCommand", s.DebugTrapRunsBeforeTheCommand, interp.Yes},
 		// And once per command, not twice for a call: the nested snippet
 		// `trap "echo D" DEBUG; g(){ echo g; }; f(){ g; }; f` writes three
 		// D lines here where bash writes five (#2437). Measured on zsh 5.9.2,

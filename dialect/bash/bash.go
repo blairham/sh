@@ -2534,6 +2534,12 @@ func Semantics() interp.Semantics {
 	// standing on its own.
 	s.DebugTrapPipelines = interp.DebugTrapPipelinePerSimpleElement
 	s.DebugTrapRunsInSubshells = interp.No
+	// Ahead of the command, with no option to move it: measured 2026-09-25
+	// on bash 5.3 with an action printing `$LINENO` and `$?`, a `trap` on
+	// line 1 and `echo A`, `false`, `echo B` on 2, 3 and 4 — `2`, `A`, `3`,
+	// `4 st=1`, `B`, so every firing stands ahead of its command and the
+	// status the action reads is the previous one's.
+	s.DebugTrapRunsBeforeTheCommand = interp.Yes
 	// The shell that keeps the parent's trap listing across every boundary
 	// but a process substitution — `(trap)`, `$(trap)`, `trap | cat` and
 	// `trap &` all print what the parent had, EXIT trap included, though a

@@ -26,6 +26,7 @@ import (
 // rules are reachable at all.
 func commandTrapSem(s *Semantics) {
 	s.TrapHasDebugCondition = Yes
+	s.DebugTrapRunsBeforeTheCommand = Yes
 	s.TrapHasErrCondition = Yes
 	s.DebugTrapRunsInsideCalls = No
 	s.DebugTrapRunsInSubshells = No

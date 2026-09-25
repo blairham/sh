@@ -370,19 +370,121 @@ func (r *Runner) judgeTheBodyForErr(ctx context.Context) {
 	r.fireErrTrap(ctx)
 }
 
-// runDebugTrap fires the DEBUG trap before a simple command.
+// runDebugTrap fires the DEBUG trap for the command about to run — or holds
+// the firing until that command has run, in the dialect whose option says so.
 //
 // The action sees the previous command's status, which is what r.status
 // still holds at this point, and whatever the action's own commands leave
 // behind is put back — the command about to run must see the same `$?` it
-// would have seen with no trap set.
+// would have seen with no trap set. A held firing sees the command's *own*
+// status instead, because by then that is what the previous command is.
 //
 // The frame here is any call frame, sourced files included, where the ERR
 // trap's is functions only: measured, the dialect that bounds these traps
 // runs no DEBUG for the commands of a dotted file and still judges ERR for
 // a failure inside one.
 func (r *Runner) runDebugTrap(ctx context.Context) {
+	if r.debugTrapHolds() {
+		// The line and the command are what the *action* reads — `$LINENO`,
+		// `$ZSH_DEBUG_CMD`, the `place:line` a tracing handler's stack is
+		// named by — and a command that has run has moved both on. So they
+		// are taken here, where the firing would have happened, and put back
+		// around the body when it does. See Runner.debugAfterScope.
+		r.debugHeld = append(r.debugHeld, debugHeld{line: r.line, running: r.running})
+		return
+	}
 	r.fireDebugTrap(ctx, false)
+}
+
+// debugHeld is one firing put off until the command it would have preceded
+// has finished — see Semantics.DebugTrapRunsBeforeTheCommand.
+type debugHeld struct {
+	line    int
+	running RunningCommand
+}
+
+// debugTrapHolds reports whether this firing goes behind the command rather
+// than ahead of it.
+//
+// Held **whether or not a trap is set right now**, which is the one thing
+// about this that is not symmetrical with firing ahead of the command: the
+// command being held for may be the `trap` that sets the DEBUG trap, and real
+// zsh fires for that command. Measured on 5.9.2 under `-f` with the option
+// off — a `trap` on line 2 writes `2` before the next command's output, where
+// with the option on the same file writes nothing for it. So whether anything
+// comes of a held firing is fireDebugTrap's question at the flush, and by
+// then the command has had its say.
+//
+// The axis is *asked* — as against read — only where a firing would otherwise
+// happen. A dialect that has not answered is one whose DEBUG trap has to be
+// set before the question means anything, and the two columns with no DEBUG
+// condition at all never reach it.
+func (r *Runner) debugTrapHolds() bool {
+	switch r.sem().DebugTrapRunsBeforeTheCommand {
+	case No:
+		return true
+	case Yes:
+		return false
+	}
+	if body := r.debugTrap; body == nil || *body == "" || r.inDebugTrap {
+		return false
+	}
+	r.ask(Unspecified, "the DEBUG trap running ahead of the command rather than behind it")
+	return false
+}
+
+// debugTrapRunsBehindTheCommand is the cheap half of the axis, for the two
+// dispatchers that install a holding slot. Read rather than asked, because it
+// is consulted at every command and a dialect that has not answered is asked
+// at the firing site instead — see debugTrapHolds.
+func (r *Runner) debugTrapRunsBehindTheCommand() bool {
+	return r.sem().DebugTrapRunsBeforeTheCommand == No
+}
+
+// debugAfterScope gives the command about to run a slot of its own to hold a
+// DEBUG firing in, and returns the flush that fires whatever landed there.
+//
+// A slot per command rather than one for the runner, because the firing a
+// compound head held belongs *after* the whole construct: the commands of its
+// body hold and flush their own, nested inside, and the head's is still
+// waiting when they are done. Measured on zsh 5.9.2 with the option off — an
+// `if` on line 3 whose body prints on line 5 writes `3`, the output, `5`, and
+// `3` again, the head's firing last.
+//
+// Installed by the two dispatchers a firing can be held from, the command and
+// the pipeline, and only where a DEBUG trap is set at all, so a shell without
+// one pays nothing.
+func (r *Runner) debugAfterScope(ctx context.Context) func() {
+	held := r.debugHeld
+	r.debugHeld = nil
+	return func() {
+		flush := r.debugHeld
+		r.debugHeld = held
+		if len(flush) == 0 {
+			return
+		}
+		line, running := r.line, r.running
+		for _, h := range flush {
+			r.line, r.running = h.line, h.running
+			r.fireDebugTrap(ctx, false)
+			// A skip refuses the command the firing preceded, and behind the
+			// command there is nothing left for it to refuse. Read and
+			// dropped rather than left standing, because a flag nobody clears
+			// here would go on to stop the *next* command — the hazard
+			// debugTrapSkipped is written around. No column in the panel both
+			// fires behind the command and lets an action's status decide,
+			// so this clears a state that is never set rather than discarding
+			// a measured refusal.
+			r.debugTrapSkipped()
+			if r.ctl != controlNone {
+				// An action that unwound has ended the construct; the
+				// firings after it in this slot do not happen, exactly as
+				// they would not ahead of the command.
+				break
+			}
+		}
+		r.line, r.running = line, running
+	}
 }
 
 // runDebugTrapOnFunctionEntry is the *second* firing one dialect makes for a

@@ -1414,6 +1414,11 @@ func Semantics() interp.Semantics {
 	// pipeline is a subshell here and nothing moves one into this shell, so a
 	// pipeline is judged once by its status and the question is never put.
 	s.TrapHasDebugCondition = interp.No
+	// unanswered DebugTrapRunsBeforeTheCommand: whether a firing stands
+	// ahead of the command or behind it is a question about a trap the line
+	// above says this shell will not set, so nothing here can ever fire one
+	// to put the question to. There is no option naming the placement
+	// either — the sibling of zsh's `DEBUG_BEFORE_CMD` does not exist here.
 	// No DEBUG condition, so no head to fire one at. Not an unanswered
 	// axis — DebugTrapHeads has no unspecified value, because a head
 	// either fires or does not and there is no third thing for a

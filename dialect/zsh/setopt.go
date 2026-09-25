@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 140 of the 185
+//     typing a directory name still does not change directory. 139 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -98,13 +98,21 @@ import (
 // null-command parameters at a name no script can write (#1779). See
 // nullcommand.go.
 //
-// `typesetsilent` is the most recent, and it is the inverse of
+// `typesetsilent` is the inverse of
 // [interp.Semantics.ValuelessDeclarationOfAHeldNameListsIt]: the option on is
 // that axis answering No. It moved because powerlevel10k sets it and then
 // re-declares `local` names inside loops, so remembering-and-ignoring it wrote
 // nine lines to stdout before every prompt (#2033).
 //
-// Nothing else about the split moved, and 140 is still most of the table.
+// `debugbeforecmd` is the most recent, and it is the one that shows what
+// recording costs when the name is wired to something the shell really does.
+// It is [interp.Semantics.DebugTrapRunsBeforeTheCommand] — where the DEBUG
+// trap fires, ahead of each command or behind it — and remembering it meant
+// `setopt debugbeforecmd` and `unsetopt debugbeforecmd` produced
+// byte-identical output while the listings went on reporting the difference
+// back faithfully (#4473).
+//
+// Nothing else about the split moved, and 139 is still most of the table.
 //
 // Recording is worth doing and is not the same as implementing. A real rc
 // file opens with a dozen `setopt` lines about completion, correction and
@@ -342,7 +350,36 @@ var zshOptions = []zshOption{
 	recorded("cshjunkiequotes", false),
 	nullCommandOption("cshnullcmd"),
 	recorded("cshnullglob", false),
-	recorded("debugbeforecmd", true),
+	{
+		// DEBUG_BEFORE_CMD: whether the DEBUG trap runs ahead of each
+		// command or behind it. On by default, and implemented rather than
+		// recorded since #4473 — it was accepted and then ignored, so both
+		// states of the option produced byte-identical output and the
+		// *before* reading was the only one this shell had.
+		//
+		// Measured on zsh 5.9.2 under `-f`, 2026-09-25, an action printing
+		// `$LINENO` over a `trap` on line 2 and `print A` on line 3: `3 A`
+		// with it set, and `2 A 3` with it unset — the firings keep their
+		// lines and their order and only move around the command. A
+		// compound's head goes behind the whole construct, which is the same
+		// rule and not a second: `if` on line 3 with a body on line 5 writes
+		// `3 3 5 C` set, and `3 C 5 3` unset.
+		//
+		// Read off the axis rather than off a stored bit, the arrangement
+		// `globsubst`, `multios` and `shwordsplit` use — so `(unsetopt
+		// debugbeforecmd)` stays in the subshell and `emulate -L` puts it
+		// back with the rest of the vector.
+		base: "debugbeforecmd", def: true,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.DebugTrapRunsBeforeTheCommand != interp.No
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.DebugTrapRunsBeforeTheCommand
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("dvorak", false),
 	// Default off, which is real zsh's: measured 2026-09-11 at a terminal,
 	// `[[ -o emacs ]]` answers 1 in an interactive session that has not

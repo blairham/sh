@@ -117,6 +117,7 @@ func seedStacks(r *Runner) {
 	r.selfPending = append(make([]string, 0, 4), "seed")
 	r.substLevelsOut = append(make([]substLevel, 0, 4), substLevel{})
 	r.trapSnapshot = append(make([]savedTrap, 0, 4), savedTrap{})
+	r.debugHeld = append(make([]debugHeld, 0, 4), debugHeld{})
 	r.trapContexts = append(make([]trapContext, 0, 4), trapContext(0))
 	r.pipeStatus = append(make([]int, 0, 4), 0)
 	r.freezeAfter = append(make([]string, 0, 4), "seed")

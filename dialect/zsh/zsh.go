@@ -3089,6 +3089,13 @@ func Semantics() interp.Semantics {
 	// `cat`.
 	s.DebugTrapPipelines = interp.DebugTrapPipelineOnceForThePipeline
 	s.DebugTrapRunsInSubshells = interp.Yes
+	// Ahead of the command, which is `DEBUG_BEFORE_CMD` on — zsh's own
+	// default, measured 2026-09-25 on 5.9.2 under `-f`. This is the only one
+	// of these axes a script can move: `unsetopt DEBUG_BEFORE_CMD` puts
+	// every firing behind the command it would have preceded, so the entry
+	// in setopt.go writes this axis rather than remembering the request
+	// (#4473). See Semantics.DebugTrapRunsBeforeTheCommand for the grid.
+	s.DebugTrapRunsBeforeTheCommand = interp.Yes
 	// The listing least is kept of: `(trap)` and `$(trap)` show nothing the
 	// parent had — not even an ignored signal, though it stays ignored in
 	// fact and one the subshell sets itself is shown. A pipeline element is

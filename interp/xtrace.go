@@ -399,23 +399,23 @@ func (r *Runner) traceCommand(words []string) {
 		return
 	}
 	d := r.diag()
-	for _, line := range r.traceOperandsBefore(words, d) {
+	for _, line := range r.traceOperandsBefore(words, *d) {
 		// The column that takes a declaration's operands off the command
 		// line writes them ahead of it, one line each. See
 		// interp/xtracedeclaration.go.
-		r.traceLine(line, d)
+		r.traceLine(line, *d)
 	}
-	for _, line := range r.traceArrayOperandsBefore(d) {
+	for _, line := range r.traceArrayOperandsBefore(*d) {
 		// And an operand whose value is a parenthesized list is a question
 		// of its own, because one column moves it and leaves a scalar where
 		// it was written. See interp/xtracearrayoperand.go.
-		r.traceLine(line, d)
+		r.traceLine(line, *d)
 	}
-	tail := []string{r.tracePrefix() + strings.Join(r.traceCommandWords(words, d), " ") + "\n"}
-	for _, line := range r.traceOperandsAfter(words, d) {
+	tail := []string{r.tracePrefix() + strings.Join(r.traceCommandWords(words, *d), " ") + "\n"}
+	for _, line := range r.traceOperandsAfter(words, *d) {
 		// And the column that leaves them where they were writes them again
 		// behind it, for two utilities and no others.
-		tail = append(tail, r.traceLineText(line, d))
+		tail = append(tail, r.traceLineText(line, *d))
 	}
 	if r.holdCommandTrace(tail) {
 		// A compound-variable operand is performed in front of the command
@@ -545,7 +545,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 			// not one, and `b=()` is none at all.
 			continue
 		}
-		if lines, ok := r.traceLiteralAsElementWrites(a, prepared[i], d); ok {
+		if lines, ok := r.traceLiteralAsElementWrites(a, prepared[i], *d); ok {
 			// A literal whose elements name where their values go, in the
 			// column that traces it as the writes it performs rather than as
 			// the literal it was written as. Its own lines, so an assignment
@@ -554,12 +554,12 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 			elementLines = append(elementLines, lines...)
 			continue
 		}
-		words = append(words, r.traceAssign(a, values[i], prepared[i], d))
+		words = append(words, r.traceAssign(a, values[i], prepared[i], *d))
 	}
 	if len(elementLines) > 0 {
 		r.awaitTraceTurn()
 		for _, line := range elementLines {
-			r.traceLine(line, d)
+			r.traceLine(line, *d)
 		}
 		r.releaseTraceTurn()
 	}
@@ -570,7 +570,7 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.traceLine(strings.Join(words, " "), d)
+	r.traceLine(strings.Join(words, " "), *d)
 }
 
 // traceAssign spells one assignment: the target as the script wrote it, and

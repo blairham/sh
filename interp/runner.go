@@ -4617,7 +4617,11 @@ func (r *Runner) lineNow() int {
 // Diagnostics.SubstitutionParseFailureNamesTheConstruct for the one dialect
 // that asks for it and for what it is measured against.
 func (r *Runner) locationPrefixNamed(construct string) string {
-	d := r.diag()
+	// A copy, and the dereference is the whole of why: this one moves the
+	// style below, and diag hands back the runner's own vector rather than a
+	// copy of it. Writing through that pointer would move the style for the
+	// rest of the run. See diag, and TestNothingWritesThroughTheDiagnostics.
+	d := *r.diag()
 	if r.locatedByNameAlone {
 		// One refusal this dialect locates by name alone, and it reaches
 		// here by the route Diagnostics.ParseDiagnostic does not: a body

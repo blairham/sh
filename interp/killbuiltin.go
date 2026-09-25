@@ -1676,10 +1676,10 @@ func (r *Runner) killFailed(err error) int {
 	if bare {
 		say = r.errf
 	}
-	for _, line := range ke.lines(d) {
+	for _, line := range ke.lines(*d) {
 		say("%s\n", line)
 	}
-	if usesTheOptionWording(ke, d) && d.KillIllegalOptionUsage != "" {
+	if usesTheOptionWording(ke, *d) && d.KillIllegalOptionUsage != "" {
 		// Printed once however many complaints came before it, which is what
 		// took it out of the wording: one shell splits a dash-word into its
 		// letters and complains about each, and the block follows the lot.
@@ -1695,5 +1695,5 @@ func (r *Runner) killFailed(err error) int {
 	if (ke.kind == killInvalidSignal || ke.kind == killIllegalOption) && d.KillUnknownSignalHint != "" {
 		r.diagf("%s\n", d.KillUnknownSignalHint)
 	}
-	return ke.status(d)
+	return ke.status(*d)
 }

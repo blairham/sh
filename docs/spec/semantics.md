@@ -20586,6 +20586,41 @@ implements: the modification time against the access time, to the
 nanosecond. The corpus row folds 0 and 1 together for the same reason, so
 it grades presence and cannot move on its own.
 
+The **keyword** is the wider set and has no axis over it: every shell that
+has `[[ ]]` has `[[ -N f ]]`, measured on bash 5.3, bash 3.2, ksh93 and zsh
+5.9.2, and dash has no `[[ ]]` to put it in — so it sits in the core's
+one-operand table beside `-O`, `-G` and `-a`. Only the builtin needs the
+axis, because dash and BusyBox ash have `test` without the operator.
+
+**`TestModifiedSinceReadCountsAnEqualTime`** — bash no · ksh93 no · zsh
+**yes** · dash — · ash —
+
+What `-N` answers when the two times are equal, which is every file a
+script has just written and not read back. The paragraph above declines to
+pin `-N`'s *answer* because observing it is itself a read; this one part of
+it is still measurable, because the times can be **set** rather than
+observed. Measured 2026-09-25 with `touch -t` writing each time
+explicitly — three files, four shells, and the two columns either side are
+the control:
+
+| shell | `atime == mtime` | `mtime > atime` | `atime > mtime` |
+| --- | --- | --- | --- |
+| bash 5.3.20 | false | true | false |
+| bash 3.2.57 | **true** | true | false |
+| ksh93 93u+ 2012-08-01 | false | true | false |
+| zsh 5.9.2 | **true** | true | false |
+
+`[[ -N f ]]` and `[ -N f ]` answer alike in all four, so it is one axis over
+both spellings. The core answers **no** — POSIX has no `-N` to read a tie
+out of, so what is left is the operator's own sentence, *has been modified
+since it was last read*, which is the strict reading and is what three of
+the four columns hold. zsh overrides it; bash 3.2 is the column saying the
+split is not zsh's alone.
+
+It is not a corner: a file a script has just created has equal times, so
+`[[ -N $new ]]` is this axis and nothing else. zsh's own `C02cond.ztst`
+asks exactly that.
+
 **`TestStringOrder`** — bash both · dash both · ash both · ksh93 `>` alone ·
 zsh neither
 

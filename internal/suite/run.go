@@ -59,8 +59,8 @@ type Outcome struct {
 // stdout and stderr are one stream because the suite's own ordering between
 // them is part of what is being compared: a file that prints a diagnostic
 // between two results says something different if the diagnostic moves.
-func runFile(ctx context.Context, shell, dir, name string, env []string, timeout time.Duration) Outcome {
-	cmd := exec.Command(shell, "./"+name)
+func runFile(ctx context.Context, s Suite, shell, dir, name string, env []string, timeout time.Duration) Outcome {
+	cmd := exec.Command(shell, argv(s, name)...)
 	cmd.Dir = dir
 	cmd.Env = env
 	// Left nil on purpose: nil is the empty input, so a file that reads gets
@@ -114,6 +114,30 @@ func runFile(ctx context.Context, shell, dir, name string, env []string, timeout
 	killGroup(cmd.Process)
 	<-done
 	return Outcome{Output: buf.String(), TimedOut: true}
+}
+
+// argv is what the shell under test is asked to run.
+//
+// A suite file is a script in its own dialect and the shell runs it
+// directly — that is bash's column and it is our own. A suite with a
+// [Suite.Driver] is one whose files are data the suite's own harness reads,
+// so the shell runs *the harness* and the file is the harness's argument.
+// The shell under test is still the only shell in the picture either way,
+// which is what makes the second shape a table entry rather than a second
+// instrument.
+//
+// Every path is relative to the run directory, which is the copy of the
+// suite this run was given. The driver especially: `ztst.zsh` recomputes its
+// own source directory from how it was invoked and ignores the environment
+// variable the suite's Makefile sets, so a driver named by an absolute path
+// would send it looking outside the copy.
+func argv(s Suite, name string) []string {
+	if s.Driver == "" {
+		return []string{"./" + name}
+	}
+	out := make([]string, 0, len(s.DriverArgs)+2)
+	out = append(out, s.DriverArgs...)
+	return append(out, "./"+s.Driver, "./"+name)
 }
 
 func finish(err error, out string) Outcome {

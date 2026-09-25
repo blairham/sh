@@ -1,0 +1,516 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+
+name: Suites
+
+# The suite reports, out of the workflow that gates a merge.
+#
+# `ci.yml` says of itself that "one workflow holds everything that gates a
+# merge, so there is one file to read and one check to require", and these
+# three jobs gated nothing: report-only, off pull requests, on nobody's
+# required list. Keeping them there meant the gating file also held the
+# reports, and #4427 was about to make that three of them.
+#
+# So the split is by what a job is *for* rather than by what it costs. What
+# stays in `ci.yml` is what can turn a merge red. What is here is what somebody
+# reads. `Oracle` and `Performance gate` are report-only too and the same
+# sentence reaches them, but they are not suites and moving them is a separate
+# decision with nothing forcing it.
+#
+# **This does not unblock a merge, and it is not the reason to do it.** These
+# jobs were already skipped on a pull request, so nothing has ever waited on
+# them. What it buys is a file whose name says what is in it -- which is where
+# a fourth column goes -- and a `ci.yml` that is only the gate.
+on:
+  # Every merge, which is where drift is attributable to one squash.
+  push:
+    branches: [main]
+  # And nightly, which is where anybody actually reads them. 07:00 UTC, before
+  # the working day here and clear of the merge traffic that would otherwise be
+  # competing for runners.
+  schedule:
+  - cron: '0 7 * * *'
+  # On demand, on any ref. These jobs do not run on a pull request, so **the
+  # job that would exercise a change to one of them does not run on the pull
+  # request that makes it** -- which is the whole reason #3480's bash column
+  # and #3082's containment were each described, measured and then not landed:
+  # the only instrument that could say whether the change worked first ran
+  # after the squash. This is what turns "land it and watch main" into "push
+  # the branch, dispatch it against that branch, read the job".
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed the way `ci.yml` keys a merge, and for the reason it gives there: a
+  # push to main is a *different* change every time and the run it starts is
+  # the only reading that commit will ever get, so there is nothing stale to
+  # supersede. A dispatch is the same case -- two in a row are two samples,
+  # which is how an intermittent report-only job gets measured at all.
+  group: suites-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'workflow_dispatch' && github.run_id || 'nightly' }}
+  cancel-in-progress: false
+
+# Every job here is report-only and none may turn this workflow red. That is a
+# property of what they measure rather than of how much anybody trusts them: a
+# count that moves by a file or two between runs is not a gate, and a column
+# graded against whatever shell a runner has is a delta across one change on
+# one runner and not a number to quote. #2291 names the bar a column has to
+# clear before any of this earns the right to block.
+jobs:
+  suite:
+    name: Our own suite (report only)
+    runs-on: ubuntu-latest
+    # Bounded for the same reason as the gate above: `|| true` turns a red
+    # report into a green job, and it would turn a wedged one into a job that
+    # sits at the default six-hour limit holding a runner. suitecheck carries
+    # its own 30s per-case timeout; this is the outer bound on the whole run.
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Install as much of the panel as this runner can host
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+    - name: What does our own suite say, per dialect?
+      # #2291's bar is `make suite` reporting strict 100% for every built
+      # column, and until this job existed **there was nowhere that number
+      # came from except somebody's laptop**. `suiteguard` runs in the test
+      # job and answers a different question -- whether a file was lost or
+      # shortened -- so a suite that still had every file and had stopped
+      # agreeing with the reference shells would have said nothing at all.
+      #
+      # That gap had a cost. The burndown issues under #2291 (#2298, #2299,
+      # #2345) are measured in per-file counts, so every pass over them meant
+      # a full local sweep, and several agents running one concurrently is
+      # what drove the maintainer's machine to load 8.8 while he was working
+      # on it. The instrument belongs on a runner; that is what this is.
+      #
+      # Report-only, and the reason is the one the oracle job above documents
+      # rather than a hope that it will go green. **This runner is not the
+      # machine the baselines were taken on.** Its bash, zsh, ksh and dash are
+      # Ubuntu's builds, and the suite is graded against whatever shell is
+      # actually present -- so these numbers are this runner's, and they are
+      # not comparable to a figure quoted from macOS. What they are good for
+      # is a **delta across one pull request on one runner**, which is exactly
+      # what a burndown needs and exactly what nobody could get before.
+      #
+      # **The ksh column is the one to read carefully, and the report now says
+      # so on its own.** `apt-get install ksh` here is ksh93u+m 1.0.8, a
+      # community fork twelve years on from the AT&T 93u+ 2012-08-01 build
+      # dialect/ksh is written against; the other two are version skew, this
+      # is a different lineage. Measured on one file: every accepting row
+      # agrees on both builds and the whole gap is 93u+m's rewritten refusals.
+      # Nobody saw it for as long as the job has existed because the report's
+      # version probe printed `Usage: ksh [ options ] [arg ...]` -- the probe
+      # *failing*, dressed as a build string. #3135 fixed the probe and made
+      # every column print the build it is graded against beside the build
+      # that is here, so a discounted column now says WRONG BUILD in its own
+      # header rather than quietly scoring lower.
+      #
+      # It blocks nothing today. It earns the right to block when a column is
+      # at strict 100% here and a regression would be a real one rather than
+      # a platform difference; #2291 names that bar.
+      run: make suite || true
+
+  bash-suite:
+    name: bash's own suite (report only)
+    runs-on: ubuntu-latest
+    # The one job in this workflow that runs in a container, and it now
+    # answers two questions rather than one: what a signal can reach, and
+    # **which bash is graded**. The second is #4106 and is the reason the
+    # image is no longer `ubuntu:24.04`.
+    #
+    # # Which bash is graded
+    #
+    # This column grades `cmd/bash` against the build named in
+    # `suite.Panel`'s bash entry -- `Against: GNU bash 5.3`, because the suite
+    # being run is bash 5.3's own `tests/`. Ubuntu 24.04 ships **5.2.21**, so
+    # every run on it printed a `WRONG BUILD` banner over the figure and an
+    # unquantified share of the `0 / 0` block was a 5.2-to-5.3 difference
+    # scored against us. #2298 closes on that count, so the count has to be
+    # about this shell.
+    #
+    # `debian:sid-slim` carries **GNU bash 5.3.15**, which is what
+    # `AgainstReport: "version 5.3"` asks for, and it is `apt` and glibc, so
+    # the step list below and `setup-go` are untouched. The digest is the one
+    # `images/zsh-5.9.2/Dockerfile` already pins: **one pin for debian sid in
+    # this tree**, not a second one that can drift from it. Pinned by an
+    # *index* digest and never by the tag, for the reason `internal/suite`'s
+    # `Suite.Image` states at length -- sid moves, and a column pinned to a
+    # tag reports a shell that changed with nothing able to tell that from a
+    # shell that behaved differently.
+    #
+    # This is the same move #3480 made for the gated references of `make
+    # suite`, taken by the route this job already has. It cannot take the
+    # other one: `suite.RunContained` drives a container from the host, and
+    # there is no docker client inside a job container.
+    #
+    # The absolute numbers move with the image, and that is the point --
+    # coreutils and libc differ from 24.04's too, but **both shells run in
+    # here on one copy of the files**, which is the cancellation
+    # `RunContained` already argues. What does not cancel is the bash
+    # version, and that is what this removes.
+    #
+    # # What a signal can reach
+    #
+    # This job was cancelled on **31.1% of main runs** (14 of 45, measured
+    # 2026-09-19; 37.5% and 37.3% on the two days before), always the same
+    # shape: `make: *** Terminated`, then `The operation was canceled`, and
+    # usually `The runner has received a shutdown signal` with exit 143. The
+    # kill lands 150-355s in while *green* runs of the same step take 135-290s
+    # -- the windows overlap completely, so there is no wall and no ceiling,
+    # and 60 distinct runners with zero reuse rules out a bad host. Ten
+    # sibling jobs on identically-provisioned runners are 100% green.
+    #
+    # The mechanism is measured and it is not ours to refuse (#3082). A shell
+    # running `kill -- -1` signals every process its uid may signal, and
+    # **GNU bash 5.3, BusyBox ash and our own cmd/bash all do it** -- so it is
+    # POSIX rather than a defect, and it can come from either side of the
+    # grading. `internal/suite/group_unix.go` correctly puts every run in a
+    # process group of its own, and that containment is sound and simply
+    # cannot reach this: a process group does not bound `kill(-1)`. A PID
+    # namespace does. The runner agent is on the host and the step's processes
+    # are in here, so a uid-wide broadcast from a suite file now stops at the
+    # namespace boundary -- which is the same move `internal/cmd/oraclerunner`
+    # and `internal/cmd/suiteinside` already make one layer in, for the same
+    # reason.
+    #
+    # **That worked, and a different kill is left.** Five of the six most
+    # recent completed main runs read 2026-09-21 end the step with `signal:
+    # killed` and `make: *** [Makefile:340: bash-suite] Error 1` 219-294s in,
+    # and then the job carries on to post-job cleanup and goes green. Nothing
+    # is cancelled and the runner agent is alive: `make` survived to print its
+    # own error and the step shell survived to return, so this is **one
+    # process** taking a SIGKILL -- `go run`'s way of saying the program it
+    # started died on a signal -- and not the uid-wide broadcast above, which
+    # would have taken make and the step shell with it. The green run in the
+    # same window ran 371s, past every one of those kills, so it is not a wall
+    # either.
+    #
+    # What kills one process and leaves its parent is the OOM killer, and
+    # nothing in the log says so, so the verdict step below reads the cgroup's
+    # own counters after a run that printed nothing rather than a remedy being
+    # guessed at here. #4106.
+    #
+    # It is reversible: the diff is this key and the apt line below.
+    container:
+      image: debian:sid-slim@sha256:ec3fa4e0b2987ae47be353f56854191e300261915470e40165b1c906d22a65db
+    timeout-minutes: 30
+    steps:
+    # A job container starts from the image and nothing else, so what the
+    # runner's own image would have provided has to be asked for. `make` is
+    # what the target is; git is so checkout clones rather than falling back
+    # to a source tarball; and **gcc is load bearing rather than tidy** --
+    # suite.BuildHelpers compiles the three C programs the suite calls, and
+    # without a compiler suitecheck skips the whole run. Its own comment says
+    # why that matters: a suite without its helpers does not score badly, it
+    # scores zero, because the calls fail under both shells and the two
+    # failures match. That skip is what the second dispatch of this change
+    # came back with -- green, in 21 seconds, having measured nothing.
+    - name: What a bare image does not have
+      # Debian sid is a moving archive, so an `apt-get` here can fail on a day
+      # the index is mid-publish. That must not redden a report-only job: the
+      # run then reaches the verdict step with no table, which is exactly the
+      # thing #4106 made legible, rather than with a red X that reads like a
+      # defect in this shell.
+      continue-on-error: true
+      run: |
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+          make git ca-certificates gcc libc6-dev locales-all
+        # `locales-all` is load bearing for the same reason `gcc` is: what the
+        # suite asks for and a bare image does not have. A suite file changes
+        # locale and then asks the shell a question about multibyte matching;
+        # a `debian:sid-slim` carries only C, POSIX and C.utf8, so the
+        # *reference* answers `setlocale: LC_ALL: cannot change locale`, and
+        # every line of that `.sub` after the warning diverges from a shell
+        # that accepted the name. The column was measuring the image, exactly
+        # as it was when the bash in it was 5.2.21 -- #4106's argument, one
+        # apt package over.
+        #
+        # Measured 2026-09-23, this image at the digest below, one file at a
+        # time with `-jobs 1`: `glob.tests` reads **16** differing lines
+        # without it and **9** with it, while `braces.tests` (1) and
+        # `exp.tests` (3) do not move. The seven are not work anybody here can
+        # do -- a locale that is not generated cannot be changed to -- and on
+        # a laptop, where the locales exist, they were never counted, so the
+        # runner and the laptop disagreed about the same tree.
+        #
+        # `locales-all` rather than `locales` plus a generated list, and that
+        # is deliberate twice over. A list has to be maintained against files
+        # this repository may not read, so the next file to name a locale
+        # would silently measure the image again; and a locale *name* written
+        # here would be a fact read out of another project's suite, which is
+        # the line `internal/suite` draws everywhere else. It costs about eight
+        # seconds in a job that runs for five minutes.
+        #
+        # The absolute counts move with this, and that is the point rather
+        # than a cost: #2298 is counted from this column, and a count that
+        # holds the image's locale set in it is not a count about this shell.
+        # The comment above this job says the same thing about the bash
+        # version.
+        # The container runs as root and the workspace is the runner's uid, so
+        # git calls the checkout a dubious ownership and refuses it. That is
+        # not cosmetic: `go build` stamps VCS status, so it stops with
+        # `error obtaining VCS status: exit status 128` before the harness
+        # starts -- and `|| true` below turns that into a **green job that
+        # measured nothing**, which is exactly the shape a report-only step is
+        # worst at showing. Caught on the first dispatch of this change.
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Run bash's own tests/ through real bash and through cmd/bash
+      # #2298 (49 files that exit 0 under both shells and print different
+      # things) and #2299 (14 files that end at a different status) are
+      # counted from this run, and like the job above they had no home but a
+      # laptop. A silent wrong answer is the thing this repository should find
+      # most uncomfortable -- status 0 is what a script checks -- so the count
+      # deserves to be produced on every change rather than when somebody
+      # remembers.
+      #
+      # The suite is bash's own work and GPLv3. It is **fetched at test time
+      # into the gitignored build directory and never committed**, and
+      # `internal/suite` is built so that what comes back out is a score and
+      # not a quotation: `suite.Result` has no path field and no text field.
+      # Nothing here can print a line of it. That is the same rule the local
+      # target follows, and putting the run on a runner does not relax it.
+      #
+      # Report-only. Since #4106 the reference here is the container's bash
+      # 5.3, which is the build this column names, so the figure is no longer
+      # a fact about the runner's distribution -- what still differs from the
+      # maintainer's machine is the surrounding system, not the shell. It
+      # needs the network to fetch, so a fetch
+      # failure must not fail the build either; suitecheck already reports
+      # that as a skip rather than a crash, and `|| true` covers the rest.
+      # `-timeout 30s` matches what the `suite` target already passes, and it
+      # is the difference between a job that reports and a job that is killed.
+      # suitecheck defaults to 4 files at once and 90s each; bash ships 83
+      # files, so the worst case is 83 x 90 / 4 = ~31 minutes -- past the
+      # timeout below, which is how this job came back Terminated on main
+      # instead of printing a count. At 30s the same arithmetic is ~10
+      # minutes, inside the budget with room for a slow runner.
+      #
+      # A file that needs more than 30s is a file that hung, and the harness
+      # already reports that as `dialect hung` and declines to score it rather
+      # than waiting on it -- so the cap costs no measurement.
+      #
+      # `continue-on-error` rather than only `|| true`, and the distinction is
+      # measured rather than belt-and-braces. The step shell is
+      # `/usr/bin/bash -e {0}`: when the broadcast above reaches the process
+      # group, **that shell dies too and never evaluates the `|| true`** -- so
+      # a step written to be report-only still turned the job red, and no
+      # wording at the step level could have fixed it. `continue-on-error` is
+      # evaluated by the runner agent after the step process is gone, however
+      # it went, which is the only place left that is still alive. The two
+      # halves are one fix: the container is what keeps the agent alive, and
+      # this is what keeps a dead step from reddening a job that reports.
+      #
+      # `|| true` stays for the ordinary case it already covers -- a fetch
+      # that could not reach the network, a non-zero suitecheck.
+      continue-on-error: true
+      # Named rather than defaulted, because the default is not the same in a
+      # container: the runner picked `sh -e {0}` in there against
+      # `/usr/bin/bash -e {0}` outside, and the step shell is the process the
+      # broadcast kills. Holding it to the shell the job has always used keeps
+      # the container the only thing this change moves.
+      shell: bash -e {0}
+      # Teed rather than only printed, so the step after this one can say
+      # whether a table was produced without scraping the job's log back out
+      # of the API. The pipeline's status is tee's, which is why `|| true`
+      # stays: it is covering the fetch failure it always covered, not this.
+      run: make bash-suite ARGS="-timeout 30s" 2>&1 | tee "$RUNNER_TEMP/bash-suite.log" || true
+    # The other half of #4106, and the half that is not about bash at all.
+    #
+    # `continue-on-error: true` above is right and has a cost: the job is
+    # green whether the step printed a table or died 240s in having measured
+    # nothing, and from outside those are **the same green job**. Five of the
+    # six most recent completed main runs read on 2026-09-21 were the second
+    # kind, including the one a naive "latest run on main" query lands on --
+    # so a reader refreshing #2298's count is as likely as not to get no
+    # number, and a scraper gets whatever its last successful parse left
+    # behind.
+    #
+    # This says which happened, in three places a reader or a script can tell
+    # apart: a marker line in the log, a line in the job summary, and a
+    # warning annotation when there is no report. It makes nothing blocking --
+    # the job stays report-only and stays off the required list, because a
+    # count that jitters by a couple of files run to run is not a gate.
+    - name: Say whether this run produced a report
+      if: always()
+      # No `-e`, and it is the one step here where that is deliberate: a grep
+      # that matches nothing is an answer rather than an error, and a
+      # report-only job turning red over its own bookkeeping would be a new
+      # version of the confusion this step exists to remove.
+      shell: bash {0}
+      run: |
+        log="$RUNNER_TEMP/bash-suite.log"
+        say() { echo "$1"; echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+
+        if [ -s "$log" ] && grep -q "^bash's own suite" "$log"; then
+          say "BASH-SUITE: report present"
+          {
+            echo '```'
+            grep -E "^bash's own suite|^  (oracle|static read|strict|line agreement|not scored) +[0-9/]|^ +[0-9]+  0 / 0$" "$log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q 'WRONG BUILD' "$log"; then
+            say "BASH-SUITE: WRONG BUILD -- the oracle is not the build this column names"
+            echo "::warning title=bash-suite::graded against a bash this column does not name; see #4106"
+          fi
+          exit 0
+        fi
+
+        say "BASH-SUITE: NO REPORT -- this run measured nothing, and is not a count for #2298"
+        echo "::warning title=bash-suite::no report was produced; this run is not a count for #2298"
+        echo "the last lines the step printed:"
+        tail -n 5 "$log" 2>/dev/null
+
+        # Whether the run was killed for memory, asked of the kernel instead
+        # of guessed at. The kill that is left after the container fix takes
+        # one process and leaves make and the step shell alive, which is the
+        # OOM killer's shape and nothing in the log confirms it -- so
+        # `oom_kill` in memory.events is the discriminator, and memory.peak
+        # against memory.max says how close a run that did finish came.
+        # Narrowing the run and raising a bound are different remedies and
+        # this is what picks between them; #4106 stops here on purpose rather
+        # than guessing at a number.
+        for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.peak \
+                 /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.events; do
+          if [ -r "$f" ]; then
+            echo "--- $f"
+            cat "$f"
+          fi
+        done
+        grep -E '^Mem(Total|Available)' /proc/meminfo 2>/dev/null
+        exit 0
+
+  zsh-suite:
+    name: zsh's own suite (report only)
+    runs-on: ubuntu-latest
+    # The same pinned image as the bash column above, and deliberately the
+    # same one rather than a second pin. `images/zsh-5.9.2/Dockerfile` already
+    # establishes what this digest carries -- Debian sid packages **zsh
+    # 5.9.2** -- and that is the build `suite.Panel`'s zsh entry names in
+    # `Against`. So this column is graded against the build it names from its
+    # first run, instead of acquiring a WRONG BUILD banner months later the
+    # way the bash column did in #4106.
+    #
+    # Pinned by digest and never by tag, for the reason `internal/suite`'s
+    # `Suite.Image` states at length: sid moves, and a column pinned to a tag
+    # reports a shell that changed with nothing able to tell that from a shell
+    # that behaved differently. One pin for debian sid in this tree.
+    #
+    # If sid's zsh moves off 5.9.2, the banner fires and says so in the report
+    # -- which is the designed behavior and not a breakage to chase. The
+    # suite is the 5.9.2 tag's own `Test/`, so the pin and the panel entry
+    # have to move together or not at all.
+    container:
+      image: debian:sid-slim@sha256:ec3fa4e0b2987ae47be353f56854191e300261915470e40165b1c906d22a65db
+    timeout-minutes: 30
+    steps:
+    # The same list as the bash column plus `zsh`, which the runner's own
+    # image would have had and a job container does not. `gcc` and
+    # `libc6-dev` are here although zsh's suite ships no C helpers for
+    # `suite.BuildHelpers` to compile: the Go build is what wants them, and a
+    # toolchain that cannot link is the "green in twenty seconds, having
+    # measured nothing" shape the bash column's comment above was written
+    # about. Eight seconds is not worth being clever for.
+    - name: What a bare image does not have
+      # Debian sid is a moving archive, so an `apt-get` here can fail on a day
+      # the index is mid-publish. That must not redden a report-only job: the
+      # run then reaches the verdict step with no table, which is exactly the
+      # thing #4106 made legible, rather than with a red X that reads like a
+      # defect in this shell.
+      continue-on-error: true
+      run: |
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+          make git ca-certificates gcc libc6-dev locales-all zsh
+        # `locales-all` for the reason the bash column installs it, and this
+        # suite asks the question more directly than bash's does: it has a
+        # whole file about multibyte behavior that changes locale first. A
+        # bare `debian:sid-slim` carries only C, POSIX and C.utf8, so the
+        # *reference* answers that it cannot change locale and every line
+        # after that diverges from a shell which accepted the name -- the
+        # column measuring the image rather than this shell.
+        #
+        # The container runs as root and the workspace is the runner's uid, so
+        # git calls the checkout a dubious ownership and refuses it. `go build`
+        # stamps VCS status, so that stops the build before the harness starts,
+        # and `|| true` below would turn it into a green job that measured
+        # nothing.
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Run zsh's own Test/ through real zsh and through cmd/zsh
+      # #4427. The column that could not be built for as long as its two
+      # blockers stood: `.ztst` is a format zsh's own `ztst.zsh` adjudicates
+      # rather than one a shell runs, and every zsh release is `.tar.xz` where
+      # the standard library reads gzip. The first is now a `Suite.Driver`
+      # plus a `Suite.ShellAt`, taken out of the suite's own `Test/Makefile.in`
+      # and out of a measurement of what its files actually reach for; the
+      # second went away by fetching the tag's archive, which GitHub serves as
+      # gzip, exactly as the ksh93 entry already does.
+      #
+      # The suite is the Zsh Development Group's work under their own license.
+      # It is fetched at test time and never committed -- it lands under the
+      # gitignored build directory, in a tree named for the distribution so
+      # `make wild` refuses to open it, and **only `Test/` is unpacked**, so
+      # no shell implementation of anybody else's reaches this disk. That last
+      # point is not free and the report says so rather than absorbing it: see
+      # `Suite.DriverVerdict`, and the `of those` line printed under `strict`,
+      # which counts how much of this column's agreement is the two shells
+      # declining the same case.
+      continue-on-error: true
+      shell: bash -e {0}
+      # 30s a file. A file that needs longer is a file that hung, and the
+      # harness reports that as `dialect hung` and declines to score it rather
+      # than waiting on it -- so the cap costs no measurement.
+      run: make zsh-suite ARGS="-timeout 30s" 2>&1 | tee "$RUNNER_TEMP/zsh-suite.log" || true
+    # The other half of #4106's lesson, applied to this column on its first
+    # day rather than after five runs of nobody being able to tell a report
+    # from a job that died having measured nothing. `continue-on-error` above
+    # is right and it costs exactly this: from outside, a run that printed a
+    # table and a run that was killed 240s in are the same green job.
+    - name: Say whether this run produced a report
+      if: always()
+      # No `-e`, and it is deliberate here: a grep that matches nothing is an
+      # answer rather than an error, and a report-only job turning red over
+      # its own bookkeeping would be a new version of the confusion this step
+      # exists to remove.
+      shell: bash {0}
+      run: |
+        log="$RUNNER_TEMP/zsh-suite.log"
+        say() { echo "$1"; echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+
+        if [ -s "$log" ] && grep -q "^zsh's own suite" "$log"; then
+          say "ZSH-SUITE: report present"
+          {
+            echo '```'
+            grep -E "^zsh's own suite|^  (oracle|static read|strict|line agreement|not scored) +[0-9/]|^    of those +[0-9/]" "$log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q 'WRONG BUILD' "$log"; then
+            say "ZSH-SUITE: WRONG BUILD -- the oracle is not the build this column names"
+            echo "::warning title=zsh-suite::graded against a zsh this column does not name; sid has moved off 5.9.2"
+          fi
+          exit 0
+        fi
+
+        say "ZSH-SUITE: NO REPORT -- this run measured nothing"
+        echo "::warning title=zsh-suite::no report was produced"
+        echo "the last lines the step printed:"
+        tail -n 5 "$log" 2>/dev/null
+        exit 0

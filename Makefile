@@ -339,7 +339,7 @@ bash-suite: ## Run bash's own tests/ through real bash and through cmd/bash, and
 	@go build -o $(BINDIR)/shells/bash ./cmd/bash
 	@go run ./internal/cmd/suitecheck -dialect bash -bin $(BINDIR)/shells/bash -build $(BINDIR) $(ARGS)
 
-zsh-suite: ## Run zsh's own Test/ through real zsh and through cmd/zsh (not yet a column; prints why)
+zsh-suite: ## Run zsh's own Test/ through real zsh and through cmd/zsh, and report where they part
 	@mkdir -p $(BINDIR)
 	@mkdir -p $(BINDIR)/shells
 	@go build -o $(BINDIR)/shells/zsh ./cmd/zsh

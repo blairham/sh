@@ -281,6 +281,21 @@ func printReport(w io.Writer, rep suite.Report) {
 	o.printf("  strict          %-9s %5.1f%%   output and status identical, once each shell's own\n",
 		fmt.Sprintf("%d/%d", rep.Strict, rep.Scored), 100*rep.StrictRate())
 	o.printf("                                     path and the run's temp directory are taken out\n")
+	// Printed immediately under strict, because it is a correction to that
+	// number and nowhere else is close enough to be read as one. See
+	// [suite.Suite.DriverVerdict]: a suite that adjudicates its own cases
+	// scores a case neither shell could run as agreement, and every figure
+	// on this page absorbs it silently.
+	if rep.Suite.DriverVerdict {
+		o.printf("    of those      %-9s %5.1f%%   files the reference's own driver called failed, so\n",
+			fmt.Sprintf("%d/%d", rep.StrictOnFailure, rep.Strict),
+			100*rep.StrictOnFailureRate())
+		o.printf("                                     the two shells agree on a refusal and not on a\n")
+		o.printf("                                     result — this fetch unpacks the suite and not\n")
+		o.printf("                                     the distribution, so a file reaching for the\n")
+		o.printf("                                     function library or a built module fails the\n")
+		o.printf("                                     same way under both. Counted, never curated\n")
+	}
 	o.printf("  line agreement  %-9s %5.1f%%   longest common subsequence of the two outputs'\n",
 		"", 100*rep.LineRate())
 	o.printf("                                     lines over the longer side, scored files only\n")

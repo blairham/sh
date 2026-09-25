@@ -147,6 +147,54 @@ printf 'after a move: '
 report
 emulate zsh
 
+# And the *listing* compares against the same defaults the emulation writes,
+# which is the half that used to be taken against zsh's own whatever mode the
+# shell was in (#4517). A bare `setopt` prints the names still away from the
+# current mode's default, so an `emulate -R sh` — which puts every resettable
+# name on sh's default — leaves nothing to print, while a bare `emulate sh`
+# leaves the eight names it does not reset standing where zsh had them.
+#
+# `emulate ksh` is deliberately not here: `ksh_option_print` is on by ksh's
+# default and rewrites this listing into 185 `name on|off` rows, which this
+# shell records and does not act on. That is a gap of its own rather than
+# this one.
+for m in zsh sh csh; do
+  emulate $m
+  printf -- '--- emulate %s\n' "$m"
+  setopt
+  emulate -R $m
+  printf -- '--- emulate -R %s\n' "$m"
+  setopt
+done
+emulate zsh
+
+# The two listings are one rule and its complement, so every name is in
+# exactly one of them and the total does not move with the mode. Printed as a
+# count rather than as 185 lines, because the names themselves are above and
+# what this row adds is that nothing fell out of both.
+for m in zsh sh; do
+  emulate $m
+  printf -- 'emulate %s: %s set, %s unset\n' "$m" "$(setopt | wc -l)" "$(unsetopt | wc -l)"
+done
+emulate zsh
+
+# The state is not the deviation, and the two surfaces part under an
+# emulation. `prompt_percent` is on and `prompt_subst` is off in both columns
+# below — neither is reset by a bare emulation — while sh's defaults for them
+# are the opposite of zsh's, so both cross from one listing to the other and
+# both change the spelling they are written in. A shell that keyed the listing
+# on the state would print the same row twice.
+for m in zsh sh; do
+  emulate $m
+  printf -- 'emulate %s: ' "$m"
+  [[ -o promptpercent ]] && printf 'cond pc=on ' || printf 'cond pc=off '
+  [[ -o promptsubst ]] && printf 'cond ps=on ' || printf 'cond ps=off '
+  printf 'listed: '
+  setopt | grep -E '^(no)?prompt(percent|subst)$' | tr '\n' ' '
+  printf '\n'
+done
+emulate zsh
+
 # `vi` and `emacs` are options *and* keymap selections, and the pair has to be
 # read together. `[[ -o vi ]]` alone says nothing about which keymap the line
 # editor is reading: `bindkey -v` leaves the option off and still edits the vi

@@ -147,9 +147,19 @@ import (
 // naming the canonical option rather than the compat spelling that may have
 // set it — measured, `setopt dotglob; setopt` answers `globdots`.
 //
-// So `setopt` is the list of deviations from zsh's defaults and `unsetopt` is
+// So `setopt` is the list of deviations from the defaults and `unsetopt` is
 // its complement, which is why the first is two lines long and the second is
-// 184 in a shell that has changed nothing.
+// 183 in a shell that has changed nothing.
+//
+// **Whose defaults is the whole of it, and the answer is the mode's rather
+// than zsh's.** Both halves of a listing are keyed on the same number — the
+// state an option would have in a shell emulating what this one is emulating
+// — so an `emulate` moves the baseline under both the membership and the
+// spelling, and moves nothing else. That is [listingBase], and #4517 was
+// this file reading `o.def` in its place: after `emulate sh` this shell
+// printed the 40 names that differ from **zsh's** defaults, which is most of
+// what the emulation had just written, where real zsh prints the 8 still away
+// from **sh's**.
 
 // zshOption is one name in this dialect's option namespace.
 type zshOption struct {
@@ -1624,18 +1634,21 @@ var setLetterOptions = map[rune]string{
 // listedOptions is the `set -o` and `set +o` listing: every option in the
 // table, in the same order and the same spelling a bare `setopt` uses.
 //
-// One printed spelling per option, the one that is off by default — measured,
-// zsh writes `noaliases`, `allexport`, `noalwayslastprompt` in that order and
-// nothing about the twelve borrowed sh and ksh spellings, which it accepts as
-// input and never lists. So a row's state is its *deviation from zsh's
-// default*, exactly as listZshOptions computes it: `noaliases off` in a shell
-// where aliases work, and `autocd on` after `setopt autocd`.
+// One printed spelling per option — the one that is off under the current
+// mode's default, which is [emulationDefault] and not always `o.def`.
+// Measured, zsh writes `noaliases`, `allexport`, `noalwayslastprompt` in that
+// order and nothing about the twelve borrowed sh and ksh spellings, which it
+// accepts as input and never lists. So a row's state is its deviation from
+// that baseline, exactly as listZshOptions computes it: `noaliases off` in a
+// shell where aliases work, and `autocd on` after `setopt autocd`.
 func listedOptions(r *interp.Runner) []interp.ListedOption {
+	mode := currentEmulation(r)
 	rows := make([]interp.ListedOption, 0, len(zshOptions))
 	for _, o := range zshOptions {
+		base := emulationDefault(o, mode)
 		rows = append(rows, interp.ListedOption{
-			Name: spellOption(o.base, !o.def),
-			On:   o.get(r) != o.def,
+			Name: spellOption(o.base, !base),
+			On:   o.get(r) != base,
 		})
 	}
 	return rows
@@ -1767,13 +1780,18 @@ func setoptBuiltin(setting bool) interp.Builtin {
 }
 
 // listZshOptions is the bare command. Every option has one printed spelling —
-// the one that is off by default — and `setopt` prints the spellings that are
-// on where `unsetopt` prints the ones that are off. The table is already in
-// the measured order, which is by canonical name.
+// the one that is off under [emulationDefault] — and `setopt` prints the spellings
+// that are on where `unsetopt` prints the ones that are off. The table is
+// already in the measured order, which is by canonical name, and that order
+// is the *canonical* name's rather than the printed spelling's: a baseline
+// that moves changes which of `aliasfuncdef` and `noaliasfuncdef` is written
+// and never where the row stands.
 func listZshOptions(r *interp.Runner, setting bool) {
+	mode := currentEmulation(r)
 	for _, o := range zshOptions {
-		if o.get(r) != o.def == setting {
-			_, _ = fmt.Fprintf(r.Out(), "%s\n", spellOption(o.base, !o.def))
+		base := emulationDefault(o, mode)
+		if o.get(r) != base == setting {
+			_, _ = fmt.Fprintf(r.Out(), "%s\n", spellOption(o.base, !base))
 		}
 	}
 }

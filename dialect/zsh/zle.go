@@ -67,6 +67,28 @@ import (
 //     and not that one, for the reason bindkey.go gives for the keymaps: a
 //     name in the answer is a claim that pressing a key bound to it does
 //     something, and 386 names where 22 actions exist would be 364 lies.
+//   - **`-a` is a third spelling and it is bare names.** Not a widening of
+//     the other two: measured against zsh 5.9, `zle -la` writes `foo` for a
+//     widget `zle -N foo myfn` defined, where `zle -l` writes `foo (myfn)`
+//     and `zle -l -L` writes `zle -N foo myfn`, and `zle -la -L` with no
+//     names writes the bare name too — `-a` takes the listing over from `-L`
+//     rather than adding to it. Only with *names* does `-L` still write the
+//     definition: `zle -la -L foo` is `zle -N foo myfn`.
+//
+//     **This is #4426 and it is not cosmetic**, because the listing is read
+//     back as data. zsh-autosuggestions binds what it reads —
+//     `for widget in ${${(f)"$(builtin zle -la)"}:#...}` — so an annotated
+//     line became a widget *named* `autosuggest-clear
+//     (_zsh_autosuggest_widget_clear)`, one that zsh has no entry for and
+//     that the plugin's own ignore list could not match.
+//   - **Every built-in is listed under its dotted spelling as well.**
+//     Measured, zsh's 386 are 193 names twice over: `.accept-line` and
+//     `accept-line`, with no name having only one of the two. The dotted
+//     spelling is not a second widget — it is how a wrapper reaches past a
+//     rebinding of the bare name, which is what callWidget already reads —
+//     so listing it claims nothing this editor does not do, and the rule
+//     above about the 364 is untouched: this shell lists *its own* actions
+//     under both spellings, not zsh's.
 //   - **The parameters are `local` to the widget's call**, which
 //     `${(t)BUFFER}` says outright — `scalar-local-special` — and which is
 //     visible from outside as well: `${BUFFER-UNSET}` is `UNSET` in a shell
@@ -703,6 +725,14 @@ func listWidgets(r *interp.Runner, opts zleOpts, names []string) int {
 		return status
 	}
 	for _, name := range listedWidgets(defined, opts.all) {
+		// `-a` is its own spelling and takes the listing over from `-L`:
+		// bare names, for a defined widget as much as for one of the
+		// editor's own. See the header — an annotated line here is a name
+		// to the plugin that reads it back.
+		if opts.all {
+			_, _ = fmt.Fprintln(r.Out(), name)
+			continue
+		}
 		_, _ = fmt.Fprint(r.Out(), widgetListing(defined, name, opts.source))
 	}
 	return 0
@@ -710,6 +740,12 @@ func listWidgets(r *interp.Runner, opts zleOpts, names []string) int {
 
 // widgetExists answers `zle -l name`, and `-a` is what widens the question
 // from the widgets somebody defined to every widget this shell has.
+//
+// Under `-a` the dotted spelling answers too, because the listing has it:
+// measured, `zle -la .accept-line` is status 0 where `zle -l .accept-line` is
+// 1. Asked through builtinWidget rather than through bindkeyWidgets directly,
+// so the question `-a` answers is the same set callWidget will perform and the
+// same set listedWidgets walks.
 func widgetExists(defined map[string]widgetDefinition, name string, all bool) bool {
 	if _, ok := defined[name]; ok {
 		return true
@@ -717,18 +753,54 @@ func widgetExists(defined map[string]widgetDefinition, name string, all bool) bo
 	if !all {
 		return false
 	}
-	_, editors := bindkeyWidgets[name]
-	return editors
+	if builtinWidget(name) {
+		return true
+	}
+	builtin, dotted := strings.CutPrefix(name, ".")
+	return dotted && builtinWidget(builtin)
 }
 
 // listedWidgets is the names a listing walks, sorted by widget name.
+//
+// Under `-a`, each of the editor's own actions twice: bare and dotted, which
+// is the shape zsh's 386 are in. See the header for why the dotted spelling
+// costs nothing that the bare one has not already claimed.
 func listedWidgets(defined map[string]widgetDefinition, all bool) []string {
 	seen := map[string]bool{}
 	for name := range defined {
 		seen[name] = true
 	}
 	if all {
-		for name := range bindkeyWidgets {
+		for _, name := range builtinWidgetNames() {
+			seen[name] = true
+			seen["."+name] = true
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// builtinWidgetNames is every widget the editor performs under its own steam:
+// the names builtinWidget answers `true` for, which is what a listing under
+// `-a` must walk and what `-a`'s question must answer for.
+//
+// Read off the same two tables builtinWidget consults, and in the same order,
+// rather than written out again — the predicate and the enumeration had drifted
+// apart, which is what left `accept-line` callable, bindable and rebindable
+// here while `zle -la` did not have it and `zle -la accept-line` said no. A
+// plugin that enumerates before it wraps therefore never saw the one widget
+// every plugin wraps.
+func builtinWidgetNames() []string {
+	seen := map[string]bool{}
+	for name := range bindkeyWidgets {
+		seen[name] = true
+	}
+	for _, name := range editorControlKeys {
+		if accepts(name) {
 			seen[name] = true
 		}
 	}

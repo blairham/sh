@@ -134,21 +134,49 @@ func Wait(terminal int, fds []int) (ready []int, terminalReady bool, err error) 
 	if !waiting {
 		timeout = &syscall.Timeval{Sec: 0, Usec: 0}
 	}
-	if err := selectSets(highest+1, &set, nil, nil, timeout); err != nil {
+	for {
+		// A fresh copy each turn, for the reason [Ready] makes one: select
+		// rewrites the set it is given, so the one built above is the
+		// question and this is the answer.
+		asked := set
+		err := selectSets(highest+1, &asked, nil, nil, timeout)
 		if errors.Is(err, syscall.EINTR) {
-			// A signal arrived while we waited. Nothing is ready and nothing
-			// is wrong: the caller goes back to reading, which is where it
-			// already handles an interrupted read.
-			return nil, false, nil
+			// **A signal arrived mid-wait, and the question is unanswered.**
+			// It is asked again — the same thing [ReadableNow] and [Ready] do
+			// with theirs, and this was the one of the three that did not.
+			//
+			// Returning "nothing is ready" instead is what it used to do, on
+			// the reasoning that the caller would go back to reading and
+			// handle the interruption there. The caller cannot: repl's
+			// serveDescriptors reads an empty answer as *nothing to serve*
+			// and falls through to a blocking read on the terminal, which
+			// waits for a keystroke and not for the descriptor. So an armed
+			// watcher was abandoned until the next key.
+			//
+			// **The interrupting signal is usually SIGURG**, which is the Go
+			// runtime's own preemption signal and arrives whenever it likes —
+			// so this was not a rare race but roughly one idle prompt in
+			// three. Measured 2026-09-24: of the four signals tried against
+			// this call, SIGURG is the only one that interrupts it; SIGUSR1,
+			// SIGWINCH and SIGCHLD are restarted by the kernel and never
+			// reach here. That is zsh-autosuggestions' async path drawing
+			// nothing much of the time it was asked (#4413).
+			//
+			// A zero timeout is asked again too, and it costs nothing: the
+			// call it repeats does not wait, and a "look once" interrupted
+			// before it looked has not looked yet.
+			continue
 		}
-		return nil, false, err
-	}
-	for _, fd := range watched {
-		if has(&set, fd) {
-			ready = append(ready, fd)
+		if err != nil {
+			return nil, false, err
 		}
+		for _, fd := range watched {
+			if has(&asked, fd) {
+				ready = append(ready, fd)
+			}
+		}
+		return ready, waiting && has(&asked, terminal), nil
 	}
-	return ready, waiting && has(&set, terminal), nil
 }
 
 // The two operations on a descriptor set. Neither is range-checked: every

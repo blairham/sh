@@ -509,5 +509,13 @@ func (e *editor) serveDescriptor(fd int, prompt drawnPrompt) {
 	}
 	e.line = []rune(out.Buffer)
 	e.pos = min(max(out.Cursor, 0), len(e.line))
+	// And what the handler left to be drawn after the line. The same round
+	// trip runShellWidget makes, and it has to be made here too: a descriptor
+	// callback is how an inline suggestion arrives *asynchronously*, so this
+	// is the one path where a postdisplay is the entire point of the call.
+	// Dropping it here drew nothing for zsh-autosuggestions' async path while
+	// its synchronous path — a keystroke's own widget, which comes back
+	// through runShellWidget — was right (#4413).
+	e.postdisplay = out.Postdisplay
 	e.redraw(prompt)
 }

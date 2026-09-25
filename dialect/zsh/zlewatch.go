@@ -319,8 +319,7 @@ func DescriptorReady(r *interp.Runner, ctx context.Context, fd int, in repl.Line
 		// widget table is the whole of the question here.
 		return runWidgetFunction(r, ctx, armed.handler, in, armed.fd)
 	}
-	runPlainHandler(r, ctx, armed.handler, armed.fd)
-	return in, false
+	return runPlainHandler(r, ctx, armed.handler, armed.fd, in)
 }
 
 // runPlainHandler calls a handler that is an ordinary function, with the
@@ -334,18 +333,62 @@ func DescriptorReady(r *interp.Runner, ctx context.Context, fd int, in repl.Line
 // Nothing comes back, because nothing can: whatever the handler printed went
 // where the cursor was and the line was left alone, which is what zsh does and
 // which is why plugins call the redisplay commands themselves.
-func runPlainHandler(r *interp.Runner, ctx context.Context, handler, arg string) {
+func runPlainHandler(
+	r *interp.Runner, ctx context.Context, handler, arg string, in repl.Line,
+) (repl.Line, bool) {
 	if !r.HasFunction(handler) {
 		// A name nothing answers to. Silent and harmless, the way arming one
 		// was: the table is allowed to hold a handler whose function has not
 		// arrived, or has gone.
-		return
+		return in, false
 	}
 	restore := openEditorActive(r)
 	defer restore()
+	// **Held, not published.** The parameters stay shut, which is what keeps
+	// `BUFFER`, `CURSOR` and `$WIDGET` unset inside the handler itself — the
+	// measurement at the top of this file, and the thing that tells a handler
+	// from a widget. What the store holds is invisible to a script: it is one
+	// of the Runner's own names and no word can spell it.
+	//
+	// It is held because `zle some-widget` from inside a handler *is* a
+	// widget, and a widget has the line. Without this the widget is handed an
+	// empty line, writes its `POSTDISPLAY` into a variable nobody reads, and
+	// the editor is told there is nothing to draw — which is
+	// zsh-autosuggestions' whole async path drawing nothing (#4413), while
+	// the same plugin's synchronous path, which reaches the line through a
+	// keystroke's own widget, was right all along.
+	setWidgetLine(r, in)
+	defer clearHeldLine(r)
 	status := r.ExitStatus()
 	_, _ = r.CallFunction(ctx, handler, arg)
 	r.SetExitStatus(status)
+
+	out := widgetLine(r)
+	if asked, _ := r.GetVar(zleAccept); asked == "1" {
+		out.Accept = true
+	}
+	// **Only where a widget actually changed something**, which is what keeps
+	// the measured behavior of a handler that runs no widget: it prints where
+	// the cursor was, nothing is redrawn, and the half-typed line is left
+	// sitting behind whatever it printed. A handler that called a widget which
+	// changed nothing needs no redraw either — the screen already says it.
+	if out == in {
+		return in, false
+	}
+	return out, true
+}
+
+// clearHeldLine drops the line a plain handler was holding, so that nothing
+// about one descriptor's callback is visible to the next thing that looks.
+//
+// The handler's own state — the active flag — is put back by openEditorActive's
+// restore; this is the other half, and it is separate because the two have
+// different lifetimes in the `-w` case, where runWidgetFunction owns both.
+func clearHeldLine(r *interp.Runner) {
+	r.SetVar(zleBuffer, "")
+	r.SetVar(zleCursor, "")
+	r.SetVar(zlePostdisplay, "")
+	r.SetVar(zleAccept, "")
 }
 
 // openEditorActive marks the editor as running for the length of a call, and

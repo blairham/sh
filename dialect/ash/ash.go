@@ -497,6 +497,13 @@ func Semantics() interp.Semantics {
 	s.SetBTurnsOffBraceExpansion = interp.No
 	// Nor the `-h` POSIX names: `set -h` is refused the same way.
 	s.SetHasTheHLetter = interp.No
+	// unanswered CommandTrackingStartsOn: BusyBox ash has no command tracking
+	// option under either name, so there is no default to record — the same
+	// absence dash has, and the line above is this shell refusing the letter
+	// POSIX names it by. It keeps the standard's SetHLetterTracksCommands,
+	// which is the branch Runner.commandTracking takes, so this axis is never
+	// read here either way.
+
 	// `set -E` is taken here and `set -T` is not, which is why those two are
 	// separate fields since #3366 — one answer could only have given this
 	// column both letters or neither. Measured 2026-09-17 in the pinned

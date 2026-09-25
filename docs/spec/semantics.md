@@ -8341,37 +8341,55 @@ alternative would have been a second, gentler refusal for immovable names of
 our own, which would be a second notion of what a refused `set -o` is; there
 are none left to need it.
 
-**A known inaccuracy, inherited rather than introduced.** The table records
-zsh's default for each name, which is what the listings compare against.
-Three entries held this shell's own state there instead — `banghist`,
-`hashcmds` and `interactivecomments` were all measured the other way
-round in real zsh — which silenced three deviations the listing exists to
-show. #1739 moved three of them between kinds and left the defaults
+**A known inaccuracy, inherited rather than introduced — and closed since
+#4533.** The table records zsh's default for each name, which is what the
+listings compare against. Three entries held this shell's own state there
+instead — `banghist`, `hashcmds` and `interactivecomments` were all measured
+the other way round in real zsh — which silenced three deviations the listing
+exists to show. #1739 moved three of them between kinds and left the defaults
 exactly where it found them, because the kind and the default are different
 questions: what a name *does* when asked to move is this section, and what
 its listing compares against is this paragraph. The reason given for leaving
 them was that correcting them would move the same lines of divergence onto
 the bare `setopt` listing rather than remove them, because this shell's state
-genuinely differs from zsh's. It was a trade rather than a fix.
+genuinely differs from zsh's. It was a trade rather than a fix, and the three
+came off it one at a time: `interactivecomments` in #2516, `banghist` in
+#2542, `hashcmds` in #4533. **Every entry now records zsh's default.**
 
-**`interactivecomments` is corrected and `banghist` and `hashcmds` are not**
-(#2516). The three were never one situation, and the *kind* is what tells
-them apart. A `recorded` name has no state behind it to diverge: its reader is the
-recorded default XOR a stored deviation, so a fresh shell reads back whatever
-the table says and deviates from nothing. Correcting such a default adds no
-row to the bare `setopt` listing — measured, that listing is byte-identical
-to zsh's before and after — so for that kind the trade above does not apply
-and the correction is free. `hashcmds` is the one it does apply to: it is
-backed by the substrate's `hashall`, and no startup letter of this dialect
-turns that on, so its default and its state are two facts and not one, and
-correcting the first alone would print `nohashcmds` as a deviation where real
-zsh prints nothing — a row moved rather than removed. The reason used to be
-that nothing was hashed at all; since #2554 something is, and `unsetopt
-hashcmds` really stops it — what is left is the backing state's default in
-this dialect, which is a change of its own.
-`banghist` is the same `recorded` kind as the name corrected here and so is
-correctable the same way, but it has not been measured for its own
-consequences and is left flagged rather than swept in alongside.
+**The three were never one situation, and the *kind* is what told them
+apart** (#2516, #2542, #4533). A `recorded` name has no state behind it to
+diverge: its reader is the recorded default XOR a stored deviation, so a fresh
+shell reads back whatever the table says and deviates from nothing. Correcting
+such a default adds no row to the bare `setopt` listing — measured, that
+listing is byte-identical to zsh's before and after — so for that kind the
+trade above does not apply and the correction is free. That is
+`interactivecomments` (#2516) and `banghist` (#2542).
+
+`hashcmds` was the one the trade did apply to, and it took a change of its
+own. It is backed by the substrate's `hashall`, no startup letter of this
+dialect spells that, and `Runner.commandTracking` had only two sources to read
+— a move by the script, or an `h` among the startup letters — so it fell
+through both to *off*, and correcting `def` alone would have printed
+`nohashcmds` as a deviation where real zsh prints nothing: a row moved rather
+than removed. What closed it was giving the backing state a default of its
+own. `interp.Semantics.CommandTrackingStartsOn` is a dialect saying whether
+command tracking is on before a script's first line **where its startup
+letters do not spell it**; zsh answers Yes, and `def: true` then agrees with
+the state rather than covering for it. bash and ksh93 leave the axis
+unanswered on purpose, because their letters already are that declaration and
+a second one is the disagreement #1951 was — and ksh93 could not answer with a
+constant anyway, since its letters are `hB` for a script and `imBE` at a
+prompt.
+
+**The report was wrong and the hashing never was**, which is why this stood as
+long as it did. Measured on zsh 5.9.2, 2026-09-25, both shells `-f -c`:
+`ls >/dev/null; hash` lists `ls` in both, `setopt hashcmds; ls >/dev/null;
+hash` lists it in both, and `unsetopt hashcmds; ls >/dev/null; hash` is empty
+in both. So the option is neither inert nor mis-wired here — a probe that ran
+a command and read the table back agreed under either default, and only a
+probe that held the hashing fixed and read `[[ -o hashcmds ]]` beside it could
+tell the two apart. Since #2554 the table is real, and `unsetopt hashcmds`
+really stops it.
 
 What the correction cost to leave undone is worth recording, because it is
 what found it. F-Sy-H reads `interactivecomments` to choose a tokenizer; told
@@ -8391,12 +8409,13 @@ selected here either until something selects it, the recorded default is off
 like zsh's, and the name is silent in every listing until a script moves it.
 The spurious `noemacs` row a script got for writing `setopt vi` goes with it.
 
-It is visible in three listings rather than one, because `set -o` and
+It was visible in three listings rather than one, because `set -o` and
 `set +o` write from the same table (#1080) and the printed spelling is
 derived from the recorded default: those two wrote `banghist`, `hashcmds`
 and `nointeractivecomments` where zsh writes `nobanghist`, `nohashcmds` and
-`interactivecomments`. The third row is gone since #2516 and the other two
-remain; the other 183 are byte-identical to zsh 5.9.2's, in the same order.
+`interactivecomments`. All three rows are gone — `interactivecomments` since
+#2516, `banghist` since #2542 and `hashcmds` since #4533 — and all 185 are
+byte-identical to zsh 5.9.2's, in the same order.
 
 Two names are one-way. `noexec` ignores being turned back off in all four
 shells — and with it on, the command that would do so never runs anyway.

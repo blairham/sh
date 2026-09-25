@@ -184,20 +184,22 @@ type zshOption struct {
 	// def is the state a zsh default run has, which is what the listings
 	// compare against.
 	//
-	// One entry this file inherited still holds this shell's own state here
-	// instead of zsh's — `hashcmds`, measured the other way round in real
-	// zsh — which silences a deviation the listing exists to show. It is
-	// #4533 and is left as it was found; see docs/spec/semantics.md.
-	// `interactivecomments` was corrected in #2516, `emacs` in #1858 and
-	// `banghist` in #2542, and none of those says anything about the one
-	// that remains: `hashcmds` has a real state behind it where the
-	// corrected three did not: it is backed by
-	// `hashall`, and no startup letter of this dialect turns that on, so it
-	// reads off and correcting its default alone would print `nohashcmds` as
-	// a deviation where zsh prints nothing — moving a row rather than
-	// removing one. The reason used to be that nothing was hashed at all;
-	// since #2554 something is, and what is left is the backing state's
-	// default in this dialect, which is a change of its own.
+	// **Every entry holds zsh's default and not this shell's**, which was
+	// not true of this field until #4533. `hashcmds` was the last one that
+	// held ours: it is backed by the substrate's `hashall`, no startup letter
+	// of this dialect spells that, and `Runner.commandTracking` had no third
+	// source to fall through to — so it read off in a shell that hashes, and
+	// `def: false` recorded the wrong answer here to keep the listing from
+	// showing the deviation it exists to show.
+	//
+	// Correcting `def` alone would indeed have moved the row rather than
+	// removed it, which is what the note here used to say and is why it stood
+	// for as long as it did. What closed it was the backing state's own
+	// default: `interp.Semantics.CommandTrackingStartsOn` is this dialect
+	// answering Yes, so `hashall` reads on in a fresh shell and `def: true`
+	// then agrees with it. `interactivecomments` was corrected in #2516,
+	// `emacs` in #1858 and `banghist` in #2542; those three had no state
+	// behind them, and this one did, which is the whole of the difference.
 	def bool
 	// recorded marks a name that is remembered and not acted on. It is what
 	// tells the listings and `emulate` that the state lives in the store
@@ -523,7 +525,25 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	setOptBacked("hashcmds", false, "hashall", false),
+	// HASH_CMDS: permission to remember where a command was found. **On by
+	// default**, measured on zsh 5.9.2, 2026-09-25, in `zsh -f -c` across
+	// every surface that names it — `[[ -o hashcmds ]]` is 0,
+	// `${options[hashcmds]}` is `on`, a bare `unsetopt` writes `nohashcmds`,
+	// and `set -o` writes `nohashcmds            off`.
+	//
+	// The state and the hashing are two questions and only the first was ever
+	// wrong here (#4533). Both shells hash in every state of the option, so a
+	// probe that ran a command and read `hash` back agrees under either
+	// default; and the option is not inert either, since `unsetopt hashcmds;
+	// ls >/dev/null; hash` is empty in both. What discriminates is holding
+	// the hashing fixed and reading the report, which parted on all four
+	// surfaces above while `hash` listed the same entry in both shells.
+	//
+	// Backed by `hashall`, whose default in this dialect is
+	// [interp.Semantics.CommandTrackingStartsOn] — so the report and the
+	// switch behind it cannot disagree again, which is what `def: false`
+	// beside a `false` backing state had been papering over.
+	setOptBacked("hashcmds", true, "hashall", false),
 	// `hashdirs` follows **interactive**, the same shape `zle` has and
 	// measured the same way on zsh 5.9.2, 2026-09-12: `zsh -f script` and
 	// `zsh -f -c …` report it off, `zsh -f -i script` reports it on with

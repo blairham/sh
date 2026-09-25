@@ -1527,11 +1527,21 @@ func (r *Runner) commandTracking() bool {
 	if r.tracksCommandsMoved {
 		return r.tracksCommands
 	}
-	// Only where the letter means tracking at all. zsh spells a history
-	// option with `h` and has no startup letters to read anyway, and a
-	// shell whose dialect has not answered the axis has said nothing this
-	// could stand on — see Semantics.SetHLetterTracksCommands.
-	return r.sem().SetHLetterTracksCommands == Yes && r.startsWithOptionLetter('h')
+	// Only where the letter means tracking at all — zsh spells a history
+	// option with `h`. See Semantics.SetHLetterTracksCommands.
+	if r.sem().SetHLetterTracksCommands == Yes {
+		return r.startsWithOptionLetter('h')
+	}
+	// And where it does not, the dialect says so outright, because a shell
+	// with no letter for this still has a default and zsh's is **on**. That
+	// is the third source and the last: a name nobody has moved, in a shell
+	// whose letters do not spell it, reads whatever the dialect declared.
+	// See Semantics.CommandTrackingStartsOn, which is unanswered in the two
+	// shells whose letters already speak — a second declaration there is
+	// what #1951 was — and is what #4533 was here: this line used to be one
+	// expression with the letter test, so zsh fell through it to `false` and
+	// reported command tracking off in a shell that hashes.
+	return r.sem().CommandTrackingStartsOn == Yes
 }
 
 // setCommandTracking is what `set -h`, `set -o hashall` and `set -o trackall`

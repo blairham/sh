@@ -113,10 +113,26 @@ func registerFcHistory(r *interp.Runner) {
 	if !ok {
 		return
 	}
-	// The reader is given nothing: this list is filled by `print -s` and by
-	// `fc -R`, which is what zsh's own script-level list is filled by, and a
-	// front end that recorded into it would be modeling bash's answer.
-	r.SetHistoryStore(fcEntries, nil)
+	// The adder is fcRemember, which is the same route `print -s` takes.
+	//
+	// It was nil until #4408, on the reasoning that this list is a script's
+	// and that a front end recording into it would be modeling bash's
+	// answer. That is true of a *script's* list and false of a session's:
+	// zsh records an interactive line into the same list `print -s` and
+	// `fc -R` fill, and with nothing here `Runner.RecordHistoryEntry`
+	// returned without doing anything — so `fc -l` at this shell's prompt
+	// listed nothing the session had run, the line `fc -s` re-ran was never
+	// recorded, and `$history` viewed an empty table however well it was
+	// written. #4177 is the same finding one list along, and dialect/bash
+	// passes an adder to this seam for the same reason.
+	r.SetHistoryStore(fcEntries, fcRemember)
+	// And which entry is the line a builtin is written on, now that the
+	// reader puts one there. `fc`'s default range ends at the command
+	// *before* itself — measured 2026-09-24 through a pseudo-terminal on zsh
+	// 5.9.2, where `fc -l` typed as the third command lists one and two — so
+	// without this the listing gained its own line the moment the adder was
+	// wired. See interp.Runner.SetHistoryOwnLine.
+	r.SetHistoryOwnLine(fcHasOwnLine, fcDropOwnLine)
 	r.SetHistoryListingLayout("%5d  %s\n", "%s\n")
 	// An entry holding a newline is still one row: this dialect writes the
 	// two characters `\n` where bash writes the newline itself and lets the
@@ -279,11 +295,44 @@ func fcLoadText(r *interp.Runner, text string) {
 	fcTrimToSize(r, fcHistorySize(r))
 }
 
-// fcRemember appends one line to the list. `print -s` is the caller, which is
-// how a script puts something in this shell's history at all.
+// fcRemember appends one line to the list. `print -s` is one caller — how a
+// script puts something in this shell's history at all — and the other is
+// [interp.Runner.RecordHistoryEntry], which is the session's accepted line
+// and `fc`'s own re-run. See registerFcHistory.
 func fcRemember(r *interp.Runner, line string) {
 	r.SetArray(fcHistoryStore, append(fcEntries(r), line))
 	fcTrimToSize(r, fcHistorySize(r))
+}
+
+// fcHasOwnLine reports that the newest entry is the line the builtin now
+// running was typed on.
+//
+// Three conditions and each rules out a state where the newest entry is
+// somebody else's. The **reader** has to be the one filling this list, which
+// is what a prompt says and a script that only ever `fc -R`s does not — see
+// [interp.Runner.SetHistoryListFilledByTheReader]. The editor must not be
+// **running a widget**, because a widget runs between lines: nothing has been
+// accepted, so the newest entry is the *previous* command and dropping it
+// would take a person's last command off the list. And the list has to hold
+// something.
+//
+// The middle one is the same distinction zshHistoryEvents turns on, asked
+// through the same predicate, and it is the reason both are written against
+// editorRunning rather than against a flag set when a line is recorded: a
+// flag set on the way in is never cleared on the way out, and a widget would
+// read it stale.
+func fcHasOwnLine(r *interp.Runner) bool {
+	return r.HistoryListFilledByTheReader() && !editorRunning(r) && len(fcEntries(r)) > 0
+}
+
+// fcDropOwnLine takes that entry back off, which is what `fc -s` does before
+// recording the command it re-ran in its place.
+func fcDropOwnLine(r *interp.Runner) {
+	entries := fcEntries(r)
+	if !fcHasOwnLine(r) {
+		return
+	}
+	r.SetArray(fcHistoryStore, entries[:len(entries)-1])
 }
 
 // The size of the list, and the trim an assignment to it does.

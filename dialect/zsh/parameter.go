@@ -14,13 +14,14 @@ import (
 // associations a script can read.
 //
 // Measured 2026-09-06 against zsh 5.9.2 with a scratch HOME and no startup
-// files. Ten of the module's thirty-three parameters are **implemented**. Five
-// of them are the five a real plugin manager reads, counted in
+// files. Eleven of the module's thirty-three parameters are **implemented**.
+// Five of them are the five a real plugin manager reads, counted in
 // `~/.zi/bin/zi.zsh`: `functions` 46 times, `options` 24, `commands` 3,
-// `builtins` 2 and `aliases` 1; the other five arrived one reader at a time —
+// `builtins` 2 and `aliases` 1; the other six arrived one reader at a time —
 // `funcstack` for the completion system, `galiases` and `saliases` for the
-// two alias namespaces, `parameters` for `${(t)name}`, and `reswords` for a
-// highlighter. The other twenty-three are sorted into two kinds, and which
+// two alias namespaces, `parameters` for `${(t)name}`, `reswords` for a
+// highlighter, and `history` for the autosuggestion drawn at a prompt on
+// every keystroke (#4408). The other twenty-two are sorted into two kinds, and which
 // kind a parameter is in is a statement about this shell rather than about
 // how far along it is:
 //
@@ -33,7 +34,7 @@ import (
 //     is *true*, and it starts reporting by itself the day one of those
 //     letters lands. See zshEmptyParams, whose second column is what each is
 //     waiting on and which the tests hold to it.
-//   - **Fifteen are absent**, and they refuse by name when a script reads
+//   - **Fourteen are absent**, and they refuse by name when a script reads
 //     one — `jobstates: parameter not implemented yet`, at the expansion
 //     that asked. None of them reads as empty, which is the whole reason
 //     the module can load without them; see the note on the module rule in
@@ -100,8 +101,8 @@ import (
 // the function at status 0, exactly as here. Modeling the refusal would have
 // meant reproducing a zsh bug against a state this shell cannot be in.
 
-// registerParameterModule installs all thirty-three: ten as views, eight as
-// empty views, and fifteen as refusals.
+// registerParameterModule installs all thirty-three: eleven as views, eight as
+// empty views, and fourteen as refusals.
 func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("functions", zshFunctionsView)
 	// And the same table read one key at a time, which is what nearly every
@@ -187,6 +188,10 @@ func registerParameterModule(r *interp.Runner) {
 	// parameter.
 	r.SetParameterTypeWord(describeParameter)
 	registerEmptyParameters(r)
+	// The eleventh view, in a file of its own because what it views is the
+	// history list rather than a table this package keeps. See
+	// historyparam.go.
+	registerHistoryParameter(r)
 	registerAbsentParameters(r)
 }
 
@@ -290,7 +295,7 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 	}
 }
 
-// zshAbsentParams are the fifteen this shell has not got at all.
+// zshAbsentParams are the fourteen this shell has not got at all.
 //
 // Every one of them is non-empty, or can be, in a shell that has it: `$modules`
 // is 14 entries in a fresh zsh, `$parameters` 214, `$patchars` 15,
@@ -300,7 +305,10 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 // asked the shell" — and each refuses by name instead. `$reswords` was the
 // sixteenth and left this list for the views above (#2517), which is the
 // route out of it: the table it reports on was already known, and what was
-// missing was the parameter.
+// missing was the parameter. `$history` left it the same way and for the same
+// reason (#4408) — `fc` had kept the list all along — and it is the one that
+// says what the cost of staying on this list is, since a prompt read it on
+// every keystroke and wrote the refusal over the line being typed.
 //
 // What each would cost is surveyed in #1137: some are answerable from a table
 // this shell already keeps and the rest need a seam that does not exist.
@@ -316,7 +324,7 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 // tell "no users looked up yet" from "this shell cannot look one up".
 var zshAbsentParams = []string{
 	"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
-	"functions_source", "functrace", "history", "historywords",
+	"functions_source", "functrace", "historywords",
 	"jobdirs", "jobstates", "jobtexts", "modules",
 	"patchars", "userdirs", "usergroups",
 }
@@ -325,7 +333,7 @@ var zshAbsentParams = []string{
 // this shell has not built them, so they are absent without being frozen.
 //
 // Measured 2026-09-12 against zsh 5.9.2 under `-f`, one `name=(a b c)` per
-// entry from a script file: fourteen of the fifteen above answer `read-only
+// entry from a script file: thirteen of the fourteen above answer `read-only
 // variable: name` at status 1 and end the script, whether or not the module
 // has been loaded. `dirstack` is the one that does not — it is the directory
 // stack and assigning it is how a script sets one, so it takes the array in

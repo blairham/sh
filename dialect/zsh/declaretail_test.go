@@ -478,7 +478,7 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
 	want := "OLDPWD=" + dir + "\nSHLVL=1\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"errnos\nkeymaps\nlanginfo\nparameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
+		"errnos\nhistory\nkeymaps\nlanginfo\nparameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
 		"export OLDPWD=" + dir + "\nexport SHLVL=1\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's
@@ -493,7 +493,7 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +
-		"typeset -ar errnos\ntypeset -ar keymaps\ntypeset -Ar langinfo\n" +
+		"typeset -ar errnos\ntypeset -Ar history\ntypeset -ar keymaps\ntypeset -Ar langinfo\n" +
 		"typeset -Ar parameters\ntypeset -ar reswords\ntypeset -Ar sysparams\n" +
 		"typeset -Ar termcap\n" +
 		"typeset -Ar terminfo\ntypeset -Ar widgets\n" +

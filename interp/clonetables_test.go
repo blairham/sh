@@ -286,6 +286,9 @@ func seedTables(r *Runner) {
 		"seed": func(*Runner, string, string, bool) {},
 	}
 	r.dynamicAssocEmptied = map[string]bool{"seed": true}
+	r.dynamicAssocKeyOrder = map[string]func([]string) []string{
+		"seed": func(keys []string) []string { return keys },
+	}
 	r.dynamicWriters = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.assignmentActions = map[string]func(*Runner, string){"seed": func(*Runner, string) {}}
 	r.unsetActions = map[string]func(*Runner){"seed": func(*Runner) {}}

@@ -281,6 +281,11 @@ func (c *Runner) ownTables(r *Runner) {
 	// through: a subshell that owned the writer while sharing this would
 	// decide by the parent's table which of its own writes clear first.
 	c.dynamicAssocEmptied = maps.Clone(r.dynamicAssocEmptied)
+	// And the key order, which travels with the producer for the same reason
+	// again: a subshell that registered a table of its own while sharing this
+	// would read its own keys in whatever order the parent had stated for a
+	// name that is no longer the same table.
+	c.dynamicAssocKeyOrder = maps.Clone(r.dynamicAssocKeyOrder)
 	// And the array writer travels with DynamicArrays for the same reason
 	// the table above travels with DynamicAssocs.
 	c.dynamicArrayWriters = maps.Clone(r.dynamicArrayWriters)

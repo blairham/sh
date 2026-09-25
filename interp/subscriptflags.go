@@ -524,7 +524,7 @@ func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.Subscr
 	byKey := search == 'i' || search == 'I'
 	every := search == 'I' || search == 'R'
 	found := make([]string, 0, len(a))
-	for _, k := range a.keys() {
+	for _, k := range r.assocKeys(e.Name, a) {
 		subject := a[k].scalar()
 		if byKey {
 			subject = k

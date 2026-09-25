@@ -166,3 +166,45 @@ func TestDebugBeforeCmdIsListedWhenItIsOff(t *testing.T) {
 		t.Errorf("the `setopt` listing is %q; an option turned off is named there by its negation", out)
 	}
 }
+
+// `exit` is the one command the mirror does not cover, and it is measured
+// rather than reasoned.
+//
+// Behind the command, an `exit` written at the script's own level fires
+// nothing — not for itself, and not for the `{ }` or the `if` it stands
+// inside, whose held firings are behind it in the same unwinding. Inside a
+// **function** it does fire, at its own offset, and the unwinding fires once
+// more for each caller's own line as it passes through. A sourced file goes
+// with the script level and not with the call.
+//
+// Measured on zsh 5.9.2, 2026-09-25, `-f`, each shape in a file of its own.
+func TestDebugBeforeCmdDropsTheFiringAnExitWouldHaveHeld(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"at the script's own level",
+			"unsetopt DEBUG_BEFORE_CMD\ntrap 'print \"T@$LINENO\"' DEBUG\n:\n:\nexit 0\n",
+			"T@2\nT@3\nT@4\n",
+		},
+		{
+			// The group's own held firing is behind the `exit`'s, so a
+			// rule that stopped at the command rather than at the
+			// unwinding would still write the head's line here.
+			"inside a group",
+			"unsetopt DEBUG_BEFORE_CMD\ntrap 'print \"T@$LINENO\"' DEBUG\n:\n{\n  :\n  exit 0\n}\n",
+			"T@2\nT@3\nT@5\n",
+		},
+		{
+			"inside a call",
+			"unsetopt DEBUG_BEFORE_CMD\nf() {\n  :\n  :\n  :\n  exit 0\n}\n" +
+				"trap 'print \"T@$LINENO\"' DEBUG\nf\n",
+			"T@8\nT@1\nT@2\nT@3\nT@4\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("got %q status %d, want %q at 0", out, st, c.want)
+			}
+		})
+	}
+}

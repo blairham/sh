@@ -465,6 +465,25 @@ func (r *Runner) debugAfterScope(ctx context.Context) func() {
 		}
 		line, running := r.line, r.running
 		for _, h := range flush {
+			if r.ctl == controlExit && r.inFunc == "" {
+				// The shell is on its way out, and the firing behind the
+				// command that said so does not happen. Measured on zsh
+				// 5.9.2 with the option off, `exit 0` on line 5 of a script
+				// whose lines 3 and 4 each fired: the firings for those two
+				// arrive and nothing follows them — not for the `exit`, and
+				// not for a `{ }` or an `if` it was written inside, whose
+				// own held firings are behind it in this same unwinding.
+				//
+				// A **function** call is the exception and is measured
+				// rather than reasoned: `exit` at offset 2 of a function
+				// fires at offset 2, and a call nested two deep fires once
+				// more for the caller's own line as the unwinding passes
+				// through it. What stops at the script level is the script
+				// level — a sourced file behaves like it and not like a
+				// call, measured the same day, `exit` on line 2 of a dotted
+				// file firing nothing.
+				break
+			}
 			r.line, r.running = h.line, h.running
 			r.fireDebugTrap(ctx, false)
 			// A skip refuses the command the firing preceded, and behind the

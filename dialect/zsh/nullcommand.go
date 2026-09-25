@@ -76,7 +76,6 @@ func applyNullCommandOptions(r *interp.Runner) {
 	case recordedDeviates(r, "shnullcmd"):
 		null, read = shNullCommandParameter, shNullCommandParameter
 	}
-	swapAxes(r, func(s *interp.Semantics) {
-		s.NullCommandVariable, s.ReadNullCommandVariable = null, read
-	})
+	setAxis(r, func(s *interp.Semantics) *string { return &s.NullCommandVariable }, null)
+	setAxis(r, func(s *interp.Semantics) *string { return &s.ReadNullCommandVariable }, read)
 }

@@ -118,9 +118,9 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	// skip and the swap agree and the skip was a special case standing for
 	// nothing. Leaving it in would now mean csh alone kept whatever the
 	// script had set, which is the one reading nothing measures.
-	swapAxes(r, func(s *interp.Semantics) {
-		s.RedirectErrorOnSpecialBuiltinFatal = answer(emulations[mode].redirFatal)
-	})
+	setAxis(r, func(s *interp.Semantics) *interp.Answer {
+		return &s.RedirectErrorOnSpecialBuiltinFatal
+	}, answer(emulations[mode].redirFatal))
 	// The recorded names in one write rather than one write each. The store
 	// holds deviations, so dropping a name from it is that option back at the
 	// table's default — and this emulation's default is not always the

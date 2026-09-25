@@ -522,9 +522,19 @@ func (r *Runner) bodyDialect(span syntax.Span) syntax.Dialect {
 // rather than a field so the default is the core rather than the zero value,
 // which would be posix and would refuse constructs the outer parse accepted.
 func (r *Runner) dialect() syntax.Dialect {
-	d := syntax.Core()
+	// The core is built only when there is nothing to build it for. It is not
+	// a constant -- syntax.Core carries a map of the declaration utilities,
+	// so every call allocates one and fills it -- and this method is called
+	// once per nested parse, which on a real startup is hundreds of thousands
+	// of times. Written as `d := syntax.Core()` with the runner's own dialect
+	// assigned over it, that map was built and thrown away on every one of
+	// them: 156MB of the 494MB a startup allocated, and a runner that is
+	// running always has a dialect, so it was thrown away every time.
+	var d syntax.Dialect
 	if r.Dialect != nil {
 		d = *r.Dialect
+	} else {
+		d = syntax.Core()
 	}
 	if r.arithPrecedenceMoved {
 		// A dialect's run-time option has moved where the arithmetic

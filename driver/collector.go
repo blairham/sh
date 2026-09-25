@@ -32,14 +32,31 @@ import (
 //	GOGC=1600         282ms   111MB
 //	GOGC=off          267ms   155MB
 //
-// 800 is the knee: −7% against 400 for +8MB, where 1600 buys a further 2%
-// for 13MB more and switching the collector off buys 7% for another 57MB.
-//
 // **The knee moves as the shell allocates less, so it is re-measured rather
-// than inherited.** #2066 chose 400 on the evidence then, where 800 cost
-// another 27MB rather than 8: a startup allocated 154MB at that point and
-// allocates ~127MB now, so the same threshold holds a smaller heap and the
-// headroom is cheaper. A constant like this is a measurement, not a decision.
+// than inherited.** #2066 chose 400 on the evidence then; 800 replaced it
+// when a startup's allocation fell from 154MB to ~127MB, because the same
+// threshold holds a smaller heap and the headroom is cheaper. A constant
+// like this is a measurement, not a decision.
+//
+// It has moved again, and for the same reason. With the two per-command
+// copies gone — a discarded [syntax.Core] per nested parse and a 3280-byte
+// semantics vector per option that was already where it was being set — the
+// same startup allocates 228MB where it allocated 494MB, and the threshold
+// that suits that is higher. Measured 2026-09-24 on the same configuration,
+// the settings interleaved so a load spike lands on all of them, median of
+// seven, peak RSS from `/usr/bin/time -l`:
+//
+//	GOGC=800          520ms   190MB
+//	GOGC=1600         473ms   205MB
+//	GOGC=2400         483ms   178MB
+//	GOGC=4000         471ms   185MB
+//	GOGC=8000         465ms   253MB
+//	GOGC=off          458ms   253MB
+//
+// 1600 is the knee: −9% against 800, and everything above it is within the
+// noise of itself until the collector is off altogether, which buys 3% for
+// another 50MB. Paired against 800 — thirty runs, alternating which went
+// first — it is −38ms, faster in 24 of 24.
 //
 // # How it has to be measured, because the obvious way does not work
 //
@@ -78,7 +95,7 @@ import (
 // what the tests run, in their own process, and a front end that retuned the
 // test binary's collector on every call would be doing the thing this comment
 // says not to do.
-const startupGCPercent = 800
+const startupGCPercent = 1600
 
 // tuneCollector raises the collector's threshold for a shell binary, unless
 // the environment has already named one.

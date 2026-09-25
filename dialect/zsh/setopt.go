@@ -400,7 +400,7 @@ var zshOptions = []zshOption{
 			return r.Semantics.GlobExpansionResults == interp.Yes
 		},
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) { s.GlobExpansionResults = answer(on) })
+			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.GlobExpansionResults }, answer(on))
 			return 0
 		},
 	},
@@ -499,6 +499,15 @@ var zshOptions = []zshOption{
 		// state.
 		get: func(r *interp.Runner) bool { return r.Semantics.ArrayBaseIsZero == interp.Yes },
 		set: func(r *interp.Runner, on bool) int {
+			// The five move together and setKshArrays is their only
+			// writer once the shell is running — the dialect's own
+			// Semantics places them once at construction and nothing
+			// else assigns them — so the base answers for all five and
+			// a vector already holding this value has nothing to swap.
+			// See setAxis for why that matters on a real rc.
+			if r.Semantics.ArrayBaseIsZero == answer(on) {
+				return 0
+			}
 			swapAxes(r, func(s *interp.Semantics) { setKshArrays(s, on) })
 			return 0
 		},
@@ -566,7 +575,7 @@ var zshOptions = []zshOption{
 			return r.Semantics.RedirectsUseEveryTarget == interp.Yes
 		},
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) { s.RedirectsUseEveryTarget = answer(on) })
+			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.RedirectsUseEveryTarget }, answer(on))
 			return 0
 		},
 	},
@@ -574,7 +583,7 @@ var zshOptions = []zshOption{
 		base: "nomatch", def: true,
 		get: func(r *interp.Runner) bool { return r.Semantics.GlobNoMatchIsError == interp.Yes },
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) { s.GlobNoMatchIsError = answer(on) })
+			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.GlobNoMatchIsError }, answer(on))
 			return 0
 		},
 	},
@@ -639,7 +648,7 @@ var zshOptions = []zshOption{
 			return r.Semantics.ArithLeadingZeroIsOctal == interp.Yes
 		},
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) { s.ArithLeadingZeroIsOctal = answer(on) })
+			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.ArithLeadingZeroIsOctal }, answer(on))
 			return 0
 		},
 	},
@@ -684,10 +693,10 @@ var zshOptions = []zshOption{
 			return r.Semantics.CommandReachesABuiltin == interp.Yes
 		},
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) {
-				s.CommandReachesABuiltin = answer(on)
-				s.AssignmentPrefixPersistsOnSpecialBuiltin = answer(on)
-			})
+			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.CommandReachesABuiltin }, answer(on))
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.AssignmentPrefixPersistsOnSpecialBuiltin
+			}, answer(on))
 			return 0
 		},
 	},
@@ -766,7 +775,7 @@ var zshOptions = []zshOption{
 		base: "shwordsplit", def: false,
 		get: func(r *interp.Runner) bool { return r.Semantics.SplitParamExpansion == interp.Yes },
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) { s.SplitParamExpansion = answer(on) })
+			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.SplitParamExpansion }, answer(on))
 			return 0
 		},
 	},
@@ -797,9 +806,7 @@ var zshOptions = []zshOption{
 			return r.Semantics.ValuelessDeclarationOfAHeldNameListsIt == interp.No
 		},
 		set: func(r *interp.Runner, on bool) int {
-			swapAxes(r, func(s *interp.Semantics) {
-				s.ValuelessDeclarationOfAHeldNameListsIt = answer(!on)
-			})
+			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.ValuelessDeclarationOfAHeldNameListsIt }, answer(!on))
 			return 0
 		},
 	},
@@ -1227,9 +1234,42 @@ func setRecordedOptions(r *interp.Runner, names []string) {
 // vector by pointer, so the mutation goes on a fresh copy and the swap stays
 // this runner's own — which is also what makes a subshell's `setopt` stay in
 // the subshell.
+//
+// The copy is a real cost and not a notional one: [interp.Semantics] is 962
+// axes and 3280 bytes, and because the fresh copy is what the runner keeps,
+// it is a heap allocation every time. A caller that knows the axis is
+// already where it is being asked to go should not call this at all — see
+// setAxis, which is the guarded form and is what the option table uses.
 func swapAxes(r *interp.Runner, change func(*interp.Semantics)) {
 	s := *r.Semantics
 	change(&s)
+	r.Semantics = &s
+}
+
+// setAxis is swapAxes for the shape nearly every option has: one axis, moved
+// to a value the caller already holds. When the axis is already there it does
+// nothing — no copy, no allocation, and the vector stays shared with whoever
+// else is pointing at it.
+//
+// That case is not an edge. A zsh function idiomatically opens with
+// `emulate -L zsh`, which walks the option table and sets every name this
+// emulation has a default for, whether or not it differs from what the shell
+// already had. Measured on the maintainer's real ~/.zshrc — powerlevel10k and
+// zi, 31 plugins — a single startup made **35,597** swap calls, of which
+// **30,026 changed nothing**: 98MB of the 494MB that startup allocated, spent
+// copying a struct onto an identical one.
+//
+// The axis is named once, as a pointer into whichever copy is being read or
+// written, so the guard and the change cannot drift apart into asking about
+// one field and writing another. Handing over two expressions — a condition
+// and a mutation — is how that drift gets written, and it would be silent:
+// the shell would still be correct, and the copy would come back.
+func setAxis[T comparable](r *interp.Runner, of func(*interp.Semantics) *T, v T) {
+	if *of(r.Semantics) == v {
+		return
+	}
+	s := *r.Semantics
+	*of(&s) = v
 	r.Semantics = &s
 }
 

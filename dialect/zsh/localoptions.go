@@ -62,8 +62,11 @@ func (b optionBits) on(i int) bool { return b[i/64]&(1<<uint(i%64)) != 0 }
 //
 // Nothing here is a live pointer into the runner's option state. The vector
 // is swapped copy-on-write and the store is rebuilt rather than sorted in
-// place — see swapAxes and setRecordedDeviation — so holding either as it
-// stands is holding what it *was*, and neither has to be copied to be saved.
+// place — see swapAxes, setAxis and setRecordedDeviation — so holding either
+// as it stands is holding what it *was*, and neither has to be copied to be
+// saved. setAxis declining to swap at all when an axis is already where it is
+// being put does not weaken that: what it skips is making a copy nobody would
+// be able to tell from the one already held.
 type optionState struct {
 	sem      *interp.Semantics
 	mode     string

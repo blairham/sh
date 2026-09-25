@@ -285,3 +285,35 @@ func TestFuncsourcetraceIsReadonlyAndUnlisted(t *testing.T) {
 		}
 	})
 }
+
+// TestFuncsourcetraceNamesTheFileAnAutoloadedFunctionCameFrom is the `autoload`
+// route, where the frame's unit is swapped underneath it: the call enters a
+// frame for the stub, and the resolution then puts the loaded body in that
+// same frame (#1842). So the file the frame reports has to move with the body,
+// and all of [interp.Frame.File], [interp.Frame.NoFile] and
+// [interp.Frame.FuncLine] move together in Runner.RunFunctionBodyInPlace —
+// not File alone, which is what it used to be.
+//
+// That was a bug found by measuring rather than a tidy-up. With NoFile left
+// standing, the frame still said its file was a stand-in for a shell given no
+// file, so this array answered `zsh` over a path the resolution had just
+// found. The stub here is declared at the top level of the command string,
+// which is exactly the case that sets NoFile — a stub declared in a script
+// file would have hidden it.
+//
+// **Only the file is asserted.** The line is one too high on this route and
+// #4471 owns it: Runner.defineFromText reads a body out of text by wrapping it
+// in a synthetic `name() {` line, so zsh writes `:0` for a whole-file body
+// where this writes `:1`. That is upstream of this walk — the *sourced*
+// reading of the same file agrees with the reference exactly, which is held in
+// TestFuncsourcetraceWritesNoughtForASourcedFile.
+func TestFuncsourcetraceNamesTheFileAnAutoloadedFunctionCameFrom(t *testing.T) {
+	fp := fpathDir(t, map[string]string{
+		"af": `print -r -- "${funcsourcetrace[1]%:*}"`,
+	})
+	src := "fpath=(" + fp + ")\nautoload -Uz af\naf\n"
+	want := filepath.Join(fp, "af") + "\n"
+	if out, st := runZsh(t, t.TempDir(), src); out != want || st != 0 {
+		t.Errorf("funcsourcetrace file = %q (status %d), want %q", out, st, want)
+	}
+}

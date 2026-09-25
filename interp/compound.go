@@ -1623,6 +1623,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// selection reads `$1`, `$@`, `$*` and `$#` out of the frame it names,
 	// and the list of the frame below this one is only knowable here. See
 	// Frame.outerParams.
+	//
 	// The one read of the definition's line, shared by the frame and by the
 	// location below: a second `fn.Pos().Line` here would be two spellings
 	// of one fact, free to disagree the day a route sets one and not the

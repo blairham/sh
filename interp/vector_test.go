@@ -50,6 +50,12 @@ func testSemantics() Semantics {
 	// on the way to something else need an answer rather than a refusal.
 	s.RedirectsUseEveryTarget = No
 
+	// The mark in front of a value written in an output base, spelled as
+	// `base#` — the majority reading, and the one every test not about the
+	// C spellings needs answered rather than refused. See
+	// Semantics.IntegerBaseMarkIsCSpelled.
+	s.IntegerBaseMarkIsCSpelled = No
+
 	// The reach a negative subscript makes past an array's first element, at
 	// the silent reading — no complaint, and no end to count back from where
 	// the name holds nothing. That is what every suite here that counts off

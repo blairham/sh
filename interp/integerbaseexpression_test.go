@@ -25,6 +25,7 @@ func learnsBases(learns Answer) func(*Semantics) {
 	return func(s *Semantics) {
 		s.IntegerBaseComesFromTheValueAssigned = learns
 		s.IntegerBaseDigits = "0123456789abcdefghijklmnopqrstuvwxyz"
+		s.IntegerBaseMarkIsCSpelled = No
 		// A leading zero inside an expression is octal here, which is the
 		// reading the `010` rows are measured under.
 		s.ArithLeadingZeroIsOctal = Yes

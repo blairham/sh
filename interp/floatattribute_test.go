@@ -58,6 +58,7 @@ func withFloatLetter(s *Semantics) {
 	s.DeclareOptionsTakingANumber = "F"
 	s.IntegerAttributeTakesABase = Yes
 	s.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	s.IntegerBaseMarkIsCSpelled = No
 	// An attribute arriving over a name that already holds something reads
 	// what it finds — `typeset -F 3 v=1.5; typeset -i v` is `1` — which is a
 	// question of its own and not this letter's to answer.

@@ -149,6 +149,11 @@ func Semantics() interp.Semantics {
 	// Not at a builtin, though: `v=1; v=9 eval 'env | grep "^v="'` shows the
 	// child nothing, and the attribute this shell already had is left where it
 	// was. Measured 2026-09-16 (#3437).
+	// unanswered IntegerBaseMarkIsCSpelled: there is no integer attribute
+	// here and no arithmetic output specifier either, so no value is ever
+	// written with a base in front of it and there is no mark to spell one
+	// way or the other. The sibling IntegerBase axes are unanswered for the
+	// same absence (#4502).
 	// unanswered PrefixInAWholeTableListing: there is no `typeset` here and
 	// `export -p` is this shell's only whole-table declaration listing, which
 	// a prefix cannot be written in front of usefully — measured 2026-09-18,

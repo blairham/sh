@@ -24,6 +24,7 @@ func runOutputFormat(t *testing.T, src string) (string, int) {
 		d.ArithOutputFormat = true
 	}, func(r *interp.Runner) {
 		r.Semantics.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		r.Semantics.IntegerBaseMarkIsCSpelled = interp.No
 		r.Semantics.IntegerBaseNegativeIsTwosComplement = interp.No
 	})
 }
@@ -113,6 +114,7 @@ func TestTheOutputFormatTeachesAnIntegerNameNothing(t *testing.T) {
 		func(d *syntax.Dialect) { d.ArithOutputFormat = true },
 		func(r *interp.Runner) {
 			r.Semantics.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+			r.Semantics.IntegerBaseMarkIsCSpelled = interp.No
 			r.Semantics.IntegerBaseNegativeIsTwosComplement = interp.No
 			r.Semantics.IntegerAttributeTakesABase = interp.Yes
 			r.Semantics.IntegerBaseComesFromTheValueAssigned = interp.Yes

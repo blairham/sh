@@ -3995,6 +3995,11 @@ func Semantics() interp.Semantics {
 	s.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	s.IntegerBaseComesFromTheValueAssigned = interp.Yes
 	s.IntegerBaseNegativeIsTwosComplement = interp.No
+	// `16#FF` by default, and `0xFF` under `setopt C_BASES` — the one
+	// option in the panel that moves this, so the entry in setopt.go writes
+	// the axis rather than remembering the request (#4502). Off here
+	// because `C_BASES` is off in a shell that has not set it.
+	s.IntegerBaseMarkIsCSpelled = interp.No
 	// Ten is a base like any other here: measured, `typeset -i10 d=255`
 	// lists back as `typeset -i10 d=255`, and a bare `typeset -i a` over a
 	// name declared `-i16` leaves it reading `16#FF`.

@@ -140,6 +140,7 @@ ash   InheritedValueSurvivesADeclaredType
 ash   IntegerAssignmentReadsALeadingZeroAsDecimal
 ash   IntegerAttributeTakesABase
 ash   IntegerBaseComesFromTheValueAssigned
+ash   IntegerBaseMarkIsCSpelled
 ash   IntegerBaseNegativeIsTwosComplement
 ash   IntegerBaseTenIsNoBase
 ash   IntegerPlusFormTakesAttributesOff
@@ -433,6 +434,7 @@ dash  InheritedValueSurvivesADeclaredType
 dash  IntegerAssignmentReadsALeadingZeroAsDecimal
 dash  IntegerAttributeTakesABase
 dash  IntegerBaseComesFromTheValueAssigned
+dash  IntegerBaseMarkIsCSpelled
 dash  IntegerBaseNegativeIsTwosComplement
 dash  IntegerBaseTenIsNoBase
 dash  IntegerPlusFormTakesAttributesOff

@@ -3374,6 +3374,9 @@ func Semantics() interp.Semantics {
 	s.IntegerAttributeTakesABase = interp.No
 	s.IntegerBaseComesFromTheValueAssigned = interp.No
 	s.IntegerBaseNegativeIsTwosComplement = interp.No
+	// Answered beside the two rows above rather than because a script can
+	// reach it: `-i` takes no base here, so there is no mark to spell.
+	s.IntegerBaseMarkIsCSpelled = interp.No
 	// Answered for completeness rather than because a script can reach it:
 	// there is no base to be the absence of, `-i10` being an invalid option
 	// and a bare `10` not a valid identifier.

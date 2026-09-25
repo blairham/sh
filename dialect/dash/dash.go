@@ -1072,6 +1072,13 @@ func Semantics() interp.Semantics {
 	// `kill %1` aims at the job's process group, which a script never has:
 	// the monitor is off, the job leads no group, and the send is ESRCH.
 	s.KillJobSpecAimsAtTheGroup = interp.Yes
+	// A stopped job is left stopped — measured 2026-09-25 through a
+	// pseudo-terminal, `kill -0 %1` and `kill -WINCH %1` on a `kill
+	// -STOP`ped `sleep` both leaving `ps -o stat=` at `T`, against `kill
+	// -CONT %1` at `S` as the control. The axis is reached here only where
+	// the spec is not already refused as a process group it cannot find, so
+	// in practice this shell answers it and never consults it.
+	s.KillJobSpecContinuesAStoppedJob = interp.No
 	// dash 0.5.12 sends it: `kill -0 -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
 	// dash has no array literal, so the question cannot be put.

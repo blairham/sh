@@ -2381,6 +2381,12 @@ func Semantics() interp.Semantics {
 	s.GetoptsRefusedNameStillScans = interp.Yes
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// A stopped job is left stopped: measured 2026-09-25 through a
+	// pseudo-terminal on both builds, `sleep 300 &` then `kill -STOP %1`,
+	// with the process's state read from outside the shell. `kill -0 %1` and
+	// `kill -WINCH %1` both leave `ps -o stat=` reading `T`; `kill -CONT %1`
+	// moves it to `S`, which is the control. Only zsh continues.
+	s.KillJobSpecContinuesAStoppedJob = interp.No
 	// bash 5.3.20 sends it: `kill -0 -- -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
 	// bash 5.3.20 and 3.2.57 both store it: `typeset a=(VAL) 2>/nope/x`

@@ -1243,6 +1243,14 @@ func Semantics() interp.Semantics {
 	s.GetoptsRefusedNameStillScans = interp.Yes
 	// `kill %1` reaches the job's process here, as it does in bash.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// A stopped job is left stopped, which on this kernel is the shape that
+	// loses the signal: measured 2026-09-25 in the pinned alpine image,
+	// `sleep 300 &`, `kill -STOP %1`, then `kill -0 %1` and `kill -WINCH %1`
+	// each leave `/proc/<pid>/stat` reading `T`, and `kill -TERM %1` leaves
+	// it `T` as well with the SIGTERM pending. `kill -CONT %1` is the
+	// control and moves it to `S`, so the reading is this shell's answer
+	// rather than a probe that could not see a continue.
+	s.KillJobSpecContinuesAStoppedJob = interp.No
 	// BusyBox 1.37.0 ash sends it: `kill -0 -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
 	// BusyBox ash has no array literal, so the question cannot be put.

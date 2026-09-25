@@ -2947,6 +2947,18 @@ func Semantics() interp.Semantics {
 	// answered there.
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// This shell continues a stopped job before it sends, which is what
+	// makes the signal land rather than sit pending: measured 2026-09-25
+	// through a pseudo-terminal, `sleep 300 &` then `kill -STOP %1` reads
+	// `TN` from `ps -o stat=`, and `kill -0 %1` — which delivers nothing at
+	// all — reads `SN` afterwards, as does `kill -WINCH %1`. Every other
+	// column leaves both at `T`. The `%` word is what decides: `kill -0
+	// "$!"` on the same job in the same session leaves it `TN`, so the
+	// number is a number here even though this shell knows whose it is. Not
+	// for a signal that stops — STOP, TSTP, TTIN and TTOU all leave it `TN`
+	// — and it makes no difference whether `^Z` or an explicit `kill -STOP`
+	// put it there.
+	s.KillJobSpecContinuesAStoppedJob = interp.Yes
 	// zsh 5.9.2 sends it: `kill -0 -- -1` is 0.
 	s.KillRefusesTheAllProcessesTarget = interp.No
 	// zsh 5.9.2 leaves the name unset.

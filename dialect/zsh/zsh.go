@@ -4240,12 +4240,24 @@ func Diagnostics() interp.Diagnostics {
 		FunctionListingHeader: "%[1]s () %[2]s",
 		JobStarted:            "[%[1]d] %[2]d",
 		// Two spaces before the marker, one after, and a state of its own in
-		// lower case in an 11-wide column. zsh never lists a finished job,
-		// so it needs no word for one.
-		JobLine: "[%[1]d]  %[2]s %-11[3]s%[4]s",
+		// lower case in a column nine wide with two spaces after it. zsh
+		// never lists a finished job, so it needs no word for one.
+		//
+		// Nine-and-two rather than a flat eleven, which is the same for
+		// every word that fits and is not the same for one that does not.
+		// Measured 2026-09-25 on 5.9.2: `hangup` is followed by five
+		// spaces and `interrupt` by two — eleven either way — while
+		// `terminated` is followed by **two**, for twelve, and
+		// `broken pipe` and `segmentation fault` by two as well. A flat
+		// eleven would have written `terminated ` and run
+		// `segmentation fault` straight into the command. Nothing moves for
+		// the words this shell wrote before the signal ones arrived:
+		// `done`, `running`, `suspended`, `continued` and `exit N` are all
+		// nine or fewer (#4508).
+		JobLine: "[%[1]d]  %[2]s %-9[3]s  %[4]s",
 		// `jobs -l`, and `jobs -p` too: the process id after the marker,
-		// with the same 11-wide state column after it.
-		JobLineLong: "[%[1]d]  %[2]s %[3]d %-11[4]s%[5]s",
+		// with the same state column after it.
+		JobLineLong: "[%[1]d]  %[2]s %[3]d %-9[4]s  %[5]s",
 		// The builtin's name is in the location here rather than in the
 		// sentence, which is this shell's rule for every message.
 		// About its table rather than about the function, and the builtin
@@ -4349,10 +4361,17 @@ func Diagnostics() interp.Diagnostics {
 		// letter it names in every other refusal.
 		ExportFunctionOptionRefused: "invalid option(s)",
 		JobRunning:                  "running",
+		SignalDescriptions:          signalDescriptions(),
 		// Only ever seen in a completion notice: zsh's listing never
 		// mentions a job that has ended.
-		JobDone:    "done",
-		JobStopped: "suspended",
+		JobDone: "done",
+		// A job a signal ended is named for the signal rather than called
+		// done, in this shell's own words for it — see signalDescriptions,
+		// which is why the number the second verb offers is not taken:
+		// `[1]  + terminated  sleep 30`, where the host's C library would
+		// have written `Terminated: 15` (#4508).
+		JobSignaled: "%[1]s",
+		JobStopped:  "suspended",
 		// ^Z is a sentence rather than a listing row here, and the shell
 		// names itself in it: `zsh: suspended  sleep 40`, two spaces, no job
 		// number. Under a newline of its own, as bash's is.
@@ -4366,7 +4385,7 @@ func Diagnostics() interp.Diagnostics {
 		// continue to is called continued. So the state is a verb here and
 		// `continued` is JobContinued, beside JobRunning and JobStopped
 		// where a state word belongs (#2838).
-		JobResumedInForeground: "[%[1]d]  %[2]s %-11[4]s%[3]s",
+		JobResumedInForeground: "[%[1]d]  %[2]s %-9[4]s  %[3]s",
 		// `bg` never sees the other state: a job that is already running is
 		// refused below rather than resumed, so the only row this prints is
 		// the continued one. Spelled with the literal word for that reason —

@@ -54,6 +54,21 @@ type Job struct {
 	// with the job to reach the listing.
 	StopSig int
 
+	// EndSig is what *ended* it, and is 0 where the job exited by itself or
+	// has not ended at all.
+	//
+	// Kept for the reason StopSig is, one surface along: one dialect names
+	// the signal in the notice a job gets. zsh writes `terminated`,
+	// `hangup`, `interrupt` and `killed` where the rest of the panel writes
+	// `done`, so the signal has to travel with the job to reach the notice.
+	//
+	// The signal and not the status, because the status cannot answer it. A
+	// dialect that encodes a signal death as 128 plus the number cannot tell
+	// `exit 143` from a SIGTERM, and zsh is one of those — see
+	// Runner.noticeWaitedSignal, which reads a signal back out of a status
+	// and says that it may only because its one dialect encodes with 256.
+	EndSig int
+
 	// Command is what was typed, for a `jobs` listing to show. Empty where
 	// the shell had nothing to record — a job with no process of its own.
 	Command string
@@ -582,10 +597,20 @@ func (j *Job) Wait() int {
 	return j.Status
 }
 
-func (j *Job) finish(status int) {
+func (j *Job) finish(status int) { j.finishKilled(status, 0) }
+
+// finishKilled is finish for a job a signal ended, which is the same ending
+// with one more fact about it — see Job.EndSig.
+//
+// The field is written inside the once and before the close, which is what
+// publishes it: a reader checks Finished before it reads anything else about
+// how the job ended, so the close is the barrier both Status and this are
+// carried across.
+func (j *Job) finishKilled(status int, sig syscall.Signal) {
 	j.settleNoPID()
 	j.once.Do(func() {
 		j.Status = status
+		j.EndSig = int(sig)
 		close(j.done)
 	})
 }
@@ -704,6 +729,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// never started a process — a builtin, a compound command — becomes
 	// ready when it finishes, with a PID of zero.
 	status := internalErrorStatus
+	// And what ended it, where a signal did: the job's own runner is the only
+	// place that saw one, and it is gone by the time anything asks the job.
+	// See Job.EndSig for why the status cannot be asked instead.
+	endSig := syscall.Signal(0)
 	r.spawn(func() {
 		// Errors inside a background job are reported where the job runs;
 		// there is nowhere to return them to.
@@ -715,9 +744,9 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// The job is a subshell, and it is over: its own EXIT trap runs
 		// here, before the status the shell will report for it is read.
 		sub.endSubshell(ctx)
-		status = sub.status
+		status, endSig = sub.status, sub.diedOfSig
 	}, func() {
-		job.finish(status)
+		job.finishKilled(status, endSig)
 		// A child of this shell has ended, which is what a `&` starts
 		// wherever it is backed by a process and wherever it is not. On the
 		// shell's list rather than a subshell's, because this runs on the
@@ -936,7 +965,7 @@ func (r *Runner) waitOutPolledJob(j *Job) {
 			continue
 		}
 		j.Stopped = false
-		j.finish(status)
+		j.finishKilled(status, endingSignal(w))
 		return
 	}
 }
@@ -1660,8 +1689,21 @@ func (r *Runner) reapJobs() {
 		}
 		status, _ := r.waitResult(w)
 		j.Stopped = false
-		j.finish(status)
+		j.finishKilled(status, endingSignal(w))
 	}
+}
+
+// endingSignal is the signal that ended a command, from what the wait saw, and
+// 0 where it exited by itself.
+//
+// A function rather than the field, because a Wait carries Signal for a stop
+// as well and a job that was stopped and then resumed must not be recorded as
+// having *died* of the signal that stopped it.
+func endingSignal(w Wait) syscall.Signal {
+	if !w.Killed {
+		return 0
+	}
+	return w.Signal
 }
 
 // noticeStoppedJob takes into the job what the goroutine waiting on its

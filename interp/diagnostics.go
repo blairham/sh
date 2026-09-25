@@ -2582,6 +2582,31 @@ type Diagnostics struct {
 	//	dash   Done(1)
 	JobExited string
 
+	// JobSignaled replaces JobDone where a *signal* ended the job, rather
+	// than the job exiting by itself. Two verbs: the shell's words for the
+	// signal — see Diagnostics.SignalDescriptions — and its number. Empty
+	// leaves JobDone standing, which is what a dialect that does not name
+	// the signal wants.
+	//
+	// It takes precedence over JobExited, which a signal death would
+	// otherwise reach: a killed job's status is not zero in any dialect
+	// here, so a shell that names both would have to decide, and every
+	// shell that names a signal at all names the signal.
+	//
+	// Measured 2026-09-25 on a pseudo-terminal, `sleep 30 &` and a `kill`
+	// after it. zsh 5.9.2 is the only column this is set for so far:
+	//
+	//	[1]  + terminated  sleep 30
+	//	[1]  + hangup     sleep 30
+	//	[1]  + interrupt  sleep 30
+	//	[1]  + killed     sleep 30
+	//
+	// bash 5.3.20 names it too and words it differently — `[1]+
+	// Terminated: 15  sleep 30`, the host's words with the number after
+	// them, which is what the two verbs are for — and is left unset here
+	// until that row is measured across its own surfaces (#4508).
+	JobSignaled string
+
 	// JobUnknownCommand is printed in the command column of a job whose text
 	// the shell did not keep. No verbs.
 	//

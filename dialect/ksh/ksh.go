@@ -1066,8 +1066,9 @@ func Semantics() interp.Semantics {
 	s.WaitReadsOptions = interp.Yes
 	// Job specs by command text, a second match taken rather than refused.
 	// A `wait` whose spec names nothing says nothing at all and reports 0;
-	// there is no -n, and disown only shields a job from a HUP this engine
-	// never forwards, so the listing keeps it.
+	// there is no -n, and disown only shields a job from a HUP this shell
+	// has no way to ask for — it has no `huponexit` and no `hup` — so the
+	// listing keeps it.
 	s.JobSpecsByName = interp.Yes
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.No

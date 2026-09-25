@@ -12896,8 +12896,14 @@ type Semantics struct {
 	WaitForAJobFailsWhenInterrupted Answer
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
-	// shields the job from the HUP an exiting shell would send — a signal
-	// this engine never forwards — and its `jobs` goes on listing the job.
+	// shields the job from the HUP an exiting shell would send, and its
+	// `jobs` goes on listing the job.
+	//
+	// The shield reaches nothing here, and since #4509 that is a fact about
+	// ksh93 rather than about the engine: an exiting session really does
+	// send that signal now, where Runner.SendsHangupToJobsAtExit is on — and
+	// only bash's `huponexit` and zsh's `hup` can turn it on, neither of
+	// which ksh93 has.
 	DisownRemovesTheJob Answer
 
 	// JobsOptions is the set of letters `jobs` takes, spelled the way

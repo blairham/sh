@@ -30,9 +30,16 @@ func init() {
 //
 // What letting go *means* is the axis: two shells take the job out of the
 // table, so `jobs` no longer lists it, and one only shields it from the HUP
-// an exiting interactive shell would send — a signal this engine never
-// forwards — so its listing keeps the job. dash has no disown at all, and
-// unregisters it. See Semantics.DisownRemovesTheJob.
+// an exiting interactive shell would send, so its listing keeps the job. dash
+// has no disown at all, and unregisters it. See
+// Semantics.DisownRemovesTheJob.
+//
+// The shield is still nothing to do here, and the reason moved rather than
+// went away. This engine does send that HUP since #4509 — see
+// hangUpJobsIfAsked — but only where Runner.SendsHangupToJobsAtExit is on,
+// and the one dialect whose disown *shields* rather than removes is ksh93,
+// which has no option to turn it on with. So the shielding branch is reached
+// only by a shell that was never going to signal anything.
 func biDisown(r *Runner, _ context.Context, args []string) int {
 	// The letters the dialects have — bash's -a, -h, -r — are not
 	// implemented; they ride UnimplementedOptionLetters and are refused by
@@ -79,8 +86,10 @@ func biDisown(r *Runner, _ context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		// Shielded from a HUP this engine never sends: nothing to do, and
-		// saying so would be inventing output.
+		// Shielded from a HUP this shell was not going to send anyway —
+		// the only dialect that takes this branch has no option that turns
+		// the sending on. Nothing to do, and saying so would be inventing
+		// output.
 		return 0
 	}
 	for _, j := range jobs {

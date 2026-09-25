@@ -21,7 +21,7 @@ func gradeFile(t *testing.T, tests, name, ours, reference string) Result {
 	t.Helper()
 	s := Suite{ShellVar: "THIS_SH", TestDir: "tests", Ext: ".tests"}
 	res, _ := grade(context.Background(), s, tests, name, ours, reference,
-		bash.Dialect(), true, Doc{}, Options{Timeout: 2 * time.Second})
+		StaticRead{Dial: bash.Dialect()}, true, Doc{}, Options{Timeout: 2 * time.Second})
 	return res
 }
 

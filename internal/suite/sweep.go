@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/wild"
-	"github.com/blairham/sh/syntax"
 )
 
 // Result is one file's outcome, and it is deliberately impossible to say
@@ -29,11 +28,15 @@ import (
 // Everything here is either a number or our own parser's diagnostic with the
 // per-file words taken out.
 type Result struct {
-	// Parsed says a static read of the whole file, in the dialect's
-	// defaults, succeeded. That is a route the shell itself never takes —
-	// it parses incrementally — so this decides nothing about whether the
-	// file ran or how it scored, and the fields below are filled in either
-	// way.
+	// Parsed says a static read of the whole file, in the column's own
+	// configuration — its dialect, on a script file's route, with the alias
+	// table its prelude installs — succeeded. See [StaticRead], which is
+	// that configuration: read with a bare parser instead, this figure was a
+	// statement about a shell no binary here is (#4433).
+	//
+	// Whole-file is a route the shell itself never takes — it parses
+	// incrementally — so this decides nothing about whether the file ran or
+	// how it scored, and the fields below are filled in either way.
 	Parsed bool
 	// Cause is our own parser's reason for refusing it, with the position
 	// and any word from the file removed. Empty when Parsed.
@@ -386,7 +389,10 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 	}
 	rep.Files = len(files)
 
-	dial, haveDialect := s.Syntax()
+	// Built once, before the runs: the dialect's startup alias table costs a
+	// prelude to install and is the same for every file in the column. See
+	// [StaticRead].
+	read, haveDialect := s.StaticReader()
 	// Asked once, before the runs: the dictionary is a property of the
 	// reference binary and does not change between files.
 	doc := SelfDocumentation(ctx, s, reference)
@@ -400,7 +406,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i], moved[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, dial, haveDialect, doc, opts)
+			results[i], moved[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, read, haveDialect, doc, opts)
 		}()
 	}
 	wg.Wait()
@@ -536,7 +542,7 @@ func plan(s Suite, dir string, opts Options) ([]file, error) {
 // The second return is how the reference disagreed with itself, and it is
 // empty for every column but ours — see [difference], which is where that
 // carve-out is made rather than here.
-func grade(ctx context.Context, s Suite, tests, name, ours, reference string, dial syntax.Dialect, haveDialect bool, doc Doc, opts Options) (Result, string) {
+func grade(ctx context.Context, s Suite, tests, name, ours, reference string, read StaticRead, haveDialect bool, doc Doc, opts Options) (Result, string) {
 	var res Result
 	src, err := os.ReadFile(filepath.Join(tests, name))
 	if err != nil {
@@ -545,7 +551,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, di
 	}
 	if !haveDialect {
 		res.Cause = "no dialect"
-	} else if _, perr := syntax.Parse(string(src), dial); perr != nil {
+	} else if perr := read.Parse(string(src)); perr != nil {
 		// wild.Reason is our lexer's own words about an input with the
 		// per-file detail taken out: the position goes, and so does an
 		// ordinary word, while an operator or a reserved word stays because

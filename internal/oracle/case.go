@@ -5865,6 +5865,11 @@ echo "st=$?"`,
 		Why:     "the other half of the same split, with nothing stopped to list: silence and 0 where the letter exists, a refusal and 2 where it does not. Absence is the answer here rather than a divergence in behavior",
 	},
 	{
+		ID: "jobs/zsh-d-names-the-directory-a-job-started-in", Category: "builtins",
+		Snippet: `cd /; sleep 0.4 & cd /usr; jobs -d; echo "st=$?"; wait`,
+		Why:     "the one listing letter only zsh has, and the row that says so: every other column in the panel refuses `-d` outright — `invalid option` in both bash builds, `unknown option` in ksh93, `Illegal option` in dash, `illegal option` in BusyBox ash — so there is no second reading of the letter for a semantics axis to switch between and the letter set alone is the dialect's answer. The `cd` between starting the job and listing it is the discriminating half: zsh writes `(pwd : /)` and not `(pwd : /usr)`, so the directory belongs to the job rather than to the shell, and a listing that read the shell's own directory would agree with this row on every listing where nothing moved",
+	},
+	{
 		ID: "jobs/an-option-no-shell-has", Category: "builtins",
 		Snippet: `jobs -Q; echo "st=$?"`,
 		Why:     "the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against",

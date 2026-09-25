@@ -118559,6 +118559,57 @@
         "TimedOut": false
       }
     },
+    "jobs/zsh-d-names-the-directory-a-job-started-in": {
+      "ash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: jobs: line 0: illegal option -d",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: jobs: -d: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: jobs: -d: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: jobs: -d: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: jobs: Illegal option -d",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: jobs: -d: unknown option~Usage: jobs [-lnp] [job ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1]  + running    sleep 0.4~(pwd : /)~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "jobspec/kill-a-job-that-is-not-there": {
       "ash": {
         "Stdout": "st=2",

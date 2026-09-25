@@ -100,6 +100,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"InteractiveCommandStringAnnouncesJobs", s.InteractiveCommandStringAnnouncesJobs, interp.Yes},
 		{"NextJobNumberRefillsAHole", s.NextJobNumberRefillsAHole, interp.No},
 		{"FinishedJobNoticeNeedsAPrompt", s.FinishedJobNoticeNeedsAPrompt, interp.Yes},
+		// And when that prompt comes rather than the moment the job ended.
+		// `set -b` is this shell's own spelling of zsh's `NOTIFY` and is not
+		// wired to the axis yet, so what is answered is the default (#4524).
+		{"FinishedJobNoticeArrivesAtOnce", s.FinishedJobNoticeArrivesAtOnce, interp.No},
 		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.Yes},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.No},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},

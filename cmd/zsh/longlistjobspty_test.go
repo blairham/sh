@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,17 +47,9 @@ func TestLongListJobsNamesThePIDInACompletionNotice(t *testing.T) {
 
 	// The option first, so the very next job's notice is the one it decides.
 	jobNoticeType(t, control, screen, "setopt longlistjobs")
-	before := screen.Text()
-	jobNoticeType(t, control, screen, ": &")
-	// The notice arrives before a prompt rather than the moment the job ends,
-	// so the prompt jobNoticeType waited for is the marker that it has been
-	// written — no sleep, and nothing is cleared between waits.
-	long := screen.Text()[len(before):]
-
+	long := jobNoticeAfter(t, control, screen, ": &", "done")
 	jobNoticeType(t, control, screen, "unsetopt longlistjobs")
-	before = screen.Text()
-	jobNoticeType(t, control, screen, ": &")
-	short := screen.Text()[len(before):]
+	short := jobNoticeAfter(t, control, screen, ": &", "done")
 
 	// `[1]  + <digits> done`, the row `jobs -l` writes. The pid is not spelled
 	// out: this shell answers a job with no process of its own with an
@@ -153,5 +146,34 @@ func jobNoticeType(t *testing.T, control *os.File, screen *smoke.Screen, line st
 	}
 	if err := screen.Await(jobNoticeMark, jobNoticeBudget); err != nil {
 		t.Fatalf("no prompt after %q: %v", line, err)
+	}
+}
+
+// jobNoticeAfter types a line and answers with everything drawn since, once
+// the mark has appeared in it.
+//
+// **The tail of a snapshot rather than a Seek**, and the reason is the whole
+// of why this exists. A job notice can be written *before* the prompt that
+// follows the line, which is what the shell does when it has been holding one
+// back, or *after* that prompt and unprompted, which is what `NOTIFY` does
+// (#4524) — and a cursor moved past the prompt has moved past the notice in
+// the first case and not in the second. Polling the tail is the one question
+// that is the same for both, and it stays honest about a notice that never
+// comes: it fails rather than passing on an empty read.
+func jobNoticeAfter(t *testing.T, control *os.File, screen *smoke.Screen, line, mark string) string {
+	t.Helper()
+	before := screen.Text()
+	jobNoticeType(t, control, screen, line)
+	deadline := time.Now().Add(jobNoticeBudget)
+	for {
+		drawn := screen.Text()[len(before):]
+		if strings.Contains(drawn, mark) {
+			return drawn
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatalf("waited %v after %q for %q; drawn since:\n%s",
+				jobNoticeBudget, line, mark, smoke.Readable(smoke.LastLines(drawn, 10)))
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
 }

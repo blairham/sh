@@ -88,6 +88,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"InteractiveCommandStringAnnouncesJobs", s.InteractiveCommandStringAnnouncesJobs, interp.Yes},
 		{"NextJobNumberRefillsAHole", s.NextJobNumberRefillsAHole, interp.Yes},
 		{"FinishedJobNoticeNeedsAPrompt", s.FinishedJobNoticeNeedsAPrompt, interp.No},
+		// `NOTIFY`, on out of the box here and off in the rest of the panel:
+		// the notice is written the moment the job ends. The one axis here a
+		// running script can move, through `unsetopt NOTIFY` (#4524).
+		{"FinishedJobNoticeArrivesAtOnce", s.FinishedJobNoticeArrivesAtOnce, interp.Yes},
 		{"SubshellRunsOnAfterSignalingTheShell", s.SubshellRunsOnAfterSignalingTheShell, interp.Yes},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.Yes},
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},

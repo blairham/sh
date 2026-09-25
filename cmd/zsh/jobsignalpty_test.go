@@ -48,17 +48,13 @@ func TestAKilledJobsNoticeNamesTheSignal(t *testing.T) {
 	} {
 		t.Run(c.kill, func(t *testing.T) {
 			jobNoticeType(t, control, screen, "sleep 30 &")
-			before := screen.Text()
-			jobNoticeType(t, control, screen, c.kill)
-			// A second line, and nothing is cleared between the waits: the
-			// notice is written before a prompt rather than the moment the
-			// job ends, and this shell is a prompt behind zsh about which
-			// prompt that is. Reading everything drawn since the kill is
-			// what makes the assertion about the *words* rather than about
-			// that lag — which is not this change's and is not KILL's
-			// either: an ordinary `sleep 0.2 &` is reported just as late.
-			jobNoticeType(t, control, screen, ":")
-			got := screen.Text()[len(before):]
+			// Everything drawn since the kill, waited out until the notice
+			// is in it. `[1]  + ` is the notice and nothing else: the `&`
+			// announcement is `[1] <pid>`, with no marker. Since #4524 the
+			// notice arrives on its own rather than at the prompt after the
+			// next command, so no second line is typed to fetch it —
+			// jobNoticeAfter says why the reading is a tail and not a seek.
+			got := jobNoticeAfter(t, control, screen, c.kill, "[1]  + ")
 			if !strings.Contains(got, c.want) {
 				t.Errorf("after %q the terminal was given\n%s\nwant a row %q",
 					c.kill, smoke.Readable(smoke.LastLines(got, 10)), c.want)

@@ -40,7 +40,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
-		"longlistjobs", "cbases", "hup",
+		"longlistjobs", "cbases", "hup", "kshoptionprint",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -62,7 +62,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 134; recordedCount != want {
+	if want := 133; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

@@ -154,10 +154,8 @@ emulate zsh
 # name on sh's default — leaves nothing to print, while a bare `emulate sh`
 # leaves the eight names it does not reset standing where zsh had them.
 #
-# `emulate ksh` is deliberately not here: `ksh_option_print` is on by ksh's
-# default and rewrites this listing into 185 `name on|off` rows, which this
-# shell records and does not act on. That is a gap of its own rather than
-# this one.
+# `emulate ksh` is the fourth mode and is below on its own, because it is the
+# one that changes the listing's *shape* rather than its contents.
 for m in zsh sh csh; do
   emulate $m
   printf -- '--- emulate %s\n' "$m"
@@ -167,6 +165,79 @@ for m in zsh sh csh; do
   setopt
 done
 emulate zsh
+
+# `emulate ksh` turns KSH_OPTION_PRINT on by ksh's own default, and while that
+# option is on both bare listings stop naming the deviations and write every
+# option in the table as `name<pad>on|off` — zsh's `set -o` table, at zsh's
+# own width. #4528 left this mode out because this shell recorded the option
+# and printed the old shape, so `emulate ksh` answered with 11 names where the
+# reference writes 185 rows (#4529).
+#
+# The baseline is still the mode's: every row below is measured against ksh's
+# defaults, which is why exactly the eleven names a bare `emulate ksh` leaves
+# away from them are the ones marked `on`.
+#
+# `hashcmds` is dropped from the long-form rows here and from nothing else.
+# Its `def` in this shell's table is this shell's own state rather than zsh's,
+# so it is spelled `hashcmds` where the reference writes `nohashcmds` — a
+# standing difference on `set -o` as well, named in dialect/zsh/setopt.go and
+# filed as #4533. Dropping one known row is not a license to drop a row that
+# moves: the other 184 are the reference's own, byte for byte.
+nohashcmdsrow() { grep -Ev '^(no)?hashcmds( |$)'; }
+
+emulate ksh
+printf -- '--- emulate ksh\n'
+setopt | nohashcmdsrow
+emulate zsh
+
+# **The option decides the shape; the mode decides the contents.** Both rows
+# below hold KSH_OPTION_PRINT fixed and move the mode, and the shape does not
+# move with it — a mode that is not ksh prints the long form while the option
+# is on, and ksh itself prints the short one while it is off. Keyed on the
+# mode instead, a grid would agree on every row nobody touched, because ksh's
+# default is the only one that turns this option on.
+( emulate sh; setopt kshoptionprint
+  printf 'sh + ksh_option_print on:  %s rows, first [%s]\n' \
+    "$(setopt | wc -l | tr -d ' ')" "$(setopt | head -1)" )
+( emulate ksh; unsetopt kshoptionprint
+  printf 'ksh + ksh_option_print off: %s rows\n' "$(setopt | wc -l | tr -d ' ')"
+  setopt )
+
+# And the contents still move with the mode while the shape stands still: the
+# long form under `emulate sh` marks sh's deviations and spells them sh's way,
+# which is the composition of this rule with #4517's rather than either alone.
+( emulate sh; setopt kshoptionprint
+  printf 'sh + ksh_option_print on, deviating: '
+  setopt | grep ' on$' | awk '{print $1}' | tr '\n' ' '
+  printf '\n' )
+
+# The two bare listings and `set -o` are one table under this option — the
+# direction a bare name means is what tells `setopt` and `unsetopt` apart, and
+# this form has no direction. Measured byte-identical in zsh 5.9.2; compared
+# rather than printed three times, since the rows are above.
+( emulate ksh
+  [[ "$(setopt)" == "$(unsetopt)" ]] && printf 'setopt == unsetopt\n' || printf 'setopt != unsetopt\n'
+  [[ "$(setopt)" == "$(set -o)" ]] && printf 'setopt == set -o\n' || printf 'setopt != set -o\n' )
+
+# A strict reset puts every resettable name on ksh's default, so the long form
+# still writes all 185 rows and marks none of them on. The pair with the row
+# above is the control: the shape is the same in both and only the states
+# moved, so a listing that had collapsed to "print what deviates" would answer
+# nothing here and 185 rows there.
+( emulate -R ksh
+  printf 'emulate -R ksh: %s rows, %s on\n' \
+    "$(setopt | wc -l | tr -d ' ')" "$(setopt | grep -c ' on$')" )
+
+# Naming an option prints nothing in either shape, which is what says the long
+# form belongs to the *bare* command.
+( emulate ksh; setopt autocd; printf 'setopt autocd -> %s, printed [%s]\n' "$?" "$(setopt autocd)" )
+
+# `set +o` is not one of the surfaces this option reaches: it writes
+# re-inputtable `set ±o name` lines in both states, and only the row for the
+# option itself moves.
+( emulate zsh; set +o | wc -l | tr -d ' ' )
+( emulate zsh; setopt kshoptionprint; set +o | wc -l | tr -d ' ' )
+( emulate zsh; setopt kshoptionprint; set +o | grep kshoptionprint )
 
 # The two listings are one rule and its complement, so every name is in
 # exactly one of them and the total does not move with the mode. Printed as a

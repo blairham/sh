@@ -64,6 +64,15 @@ type nameAttributes struct {
 	// than `F` — which is a format and not a number. See
 	// interp/floatformat.go.
 	floatExponent bool
+	// floatExact and hasFloatExact are the number behind the rendering the
+	// name is holding, which travels with the attribute for the reason
+	// everything else here does: a local declaration is a fresh binding, and
+	// the outer name goes on holding every digit it was assigned. Measured,
+	// `typeset -E3 f=3.14159265358979; g(){ typeset -F1 f=2.7182818 }; g`
+	// leaves `$(( f ))` at 3.14159265358979 in zsh 5.9.2 — the call neither
+	// took the number nor rounded it. See interp/floatformat.go.
+	floatExact    storedFloat
+	hasFloatExact bool
 	// width and hasWidth are the width attribute, the same shape: absent as
 	// often as present, and the letter travels with the number.
 	width    fieldWidth
@@ -119,6 +128,7 @@ func (r *Runner) captureAttributes(name string) nameAttributes {
 	a.base, a.baseSet = r.integerBase[name]
 	a.precision, a.isFloat = r.floatPrecision[name]
 	a.floatExponent = r.floatExponent[name]
+	a.floatExact, a.hasFloatExact = r.floatExact[name]
 	a.width, a.hasWidth = r.fieldWidth[name]
 	a.nameref, a.isNameref = r.nameref[name]
 	return a
@@ -142,6 +152,7 @@ func (r *Runner) dropNameAttributes(name string) {
 	delete(r.integerBase, name)
 	delete(r.floatPrecision, name)
 	delete(r.floatExponent, name)
+	delete(r.floatExact, name)
 	delete(r.fieldWidth, name)
 	delete(r.lowered, name)
 	delete(r.uppered, name)
@@ -170,6 +181,11 @@ func (r *Runner) restoreAttributes(name string, a nameAttributes) {
 	setInt(&r.integerBase, name, a.base, a.baseSet)
 	setInt(&r.floatPrecision, name, a.precision, a.isFloat)
 	setBool(&r.floatExponent, name, a.floatExponent)
+	if !a.hasFloatExact {
+		delete(r.floatExact, name)
+	} else {
+		r.rememberStoredFloat(name, a.floatExact.text, a.floatExact.value)
+	}
 	if !a.hasWidth {
 		delete(r.fieldWidth, name)
 	} else {

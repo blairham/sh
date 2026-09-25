@@ -154,3 +154,53 @@ func TestOnlyATerminalTakesAMode(t *testing.T) {
 		t.Error("a nil file said it translates newlines")
 	}
 }
+
+// Current captures the discipline and changes nothing.
+//
+// The half of [tty.Raw] without the write, and the half that matters is the
+// one that is not there: a session which does not yet know whether it will run
+// a line editor must not take raw mode speculatively. A line already on its way
+// arrives while the discipline is off, is held in the raw queue, and is not
+// promoted to the canonical queue when canonical mode comes back — so a shell
+// that took raw mode at startup and handed it straight back lost the line its
+// driver had already written, and blocked on a read that would never return
+// (#4472).
+//
+// The kernel is asked directly, for the reason the tests above ask it: a check
+// made through the package that wrote the mode passes whenever the two halves
+// agree, including when both are wrong.
+func TestCurrentReadsTheDisciplineAndChangesNothing(t *testing.T) {
+	control, terminal, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	t.Cleanup(func() { _ = control.Close(); _ = terminal.Close() })
+
+	before := probe(t, terminal.Fd())
+	if before.Lflag&syscall.ICANON == 0 {
+		t.Skip("this pseudo-terminal does not start in canonical mode")
+	}
+	mode, err := tty.Current(terminal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	during := probe(t, terminal.Fd())
+	if during.Lflag&syscall.ICANON == 0 {
+		t.Error("Current turned the line buffering off, so a line already on its way is stranded")
+	}
+	if during.Lflag&syscall.ECHO != before.Lflag&syscall.ECHO {
+		t.Error("Current moved the echo flag, and it is meant to write nothing at all")
+	}
+	// And what it captured is enough to put back what a later raw mode takes,
+	// which is the other half of it being worth having.
+	if _, err := tty.Raw(terminal); err != nil {
+		t.Fatal(err)
+	}
+	if err := mode.Restore(); err != nil {
+		t.Fatal(err)
+	}
+	after := probe(t, terminal.Fd())
+	if after.Lflag&syscall.ICANON == 0 {
+		t.Error("the captured discipline did not restore the line buffering")
+	}
+}

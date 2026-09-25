@@ -51,6 +51,23 @@ type Mode struct {
 // editor can act on rather than as a signal racing a read already in progress.
 func Raw(f *os.File) (*Mode, error) { return setMode(f, true) }
 
+// Current reads a terminal's discipline and changes nothing.
+//
+// The mode a session *found*, captured so it can be put back later — and the
+// call a front end makes when it does not yet know whether it will change
+// anything. [Raw] and [Cbreak] each capture the same thing on their way past;
+// this is the half of that without the write.
+//
+// It exists because taking raw mode speculatively is not free on a terminal
+// somebody else is writing into. A line arriving while the discipline is off
+// is held in the raw queue and is not promoted to the canonical one when
+// canonical mode comes back, so a shell that took raw mode at startup and
+// handed it back before its first read can lose the line that was already on
+// its way — measured 2026-09-25 through `zpty`, where the shell blocked
+// forever on a line its driver had already written. A session that will not
+// run a line editor now never takes the mode at all.
+func Current(f *os.File) (*Mode, error) { return currentMode(f) }
+
 // Cbreak turns off line buffering and leaves the rest — echo included — where
 // it was found.
 //

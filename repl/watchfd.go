@@ -350,7 +350,7 @@ func (l *lazyDiscipline) done() {
 	if !handed {
 		return
 	}
-	if _, err := makeRaw(l.s.inFile()); err != nil {
+	if err := l.state.takeRaw(); err != nil {
 		l.s.errf("%v\n", err)
 	}
 }

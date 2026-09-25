@@ -64,6 +64,18 @@ func setMode(f *os.File, raw bool) (*Mode, error) {
 	return &Mode{f: f, saved: saved}, nil
 }
 
+// currentMode answers Current: the discipline as it stands, with no write.
+func currentMode(f *os.File) (*Mode, error) {
+	if f == nil {
+		return nil, ErrUnsupported
+	}
+	var t syscall.Termios
+	if err := ioctl(f.Fd(), tcGets, &t); err != nil {
+		return nil, err
+	}
+	return &Mode{f: f, saved: t}, nil
+}
+
 // putMode writes a saved discipline back.
 func putMode(f *os.File, saved modeState) error {
 	return ioctl(f.Fd(), tcSets, &saved)

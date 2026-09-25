@@ -1376,6 +1376,13 @@ func Semantics() interp.Semantics {
 	// The other shell with the letter stops there, which is what makes this
 	// an axis rather than a rule.
 	s.OneCommandStopsACommandString = interp.No
+	// unanswered CommandTrackingStartsOn: this shell's startup letters spell
+	// it, and a second declaration beside them is the disagreement #1951 was
+	// — `$-` said `h` while `set -o` said `hashall off` in a shell that had
+	// run nothing. `hB` is what bash 5.3.15 reports at startup and the `h` is
+	// the claim, so Runner.commandTracking reads the letters here and never
+	// reaches this axis. Measured 2026-09-25 on bash 5.3.20: a script's `$-`
+	// is `hB` and `set -o` writes `hashall` on.
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	// And the monitor alone is what `fg` and `bg` need: `set -m` in a script
 	// with no terminal is granted here, and `fg` then runs the job.

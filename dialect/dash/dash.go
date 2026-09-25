@@ -240,6 +240,13 @@ func Semantics() interp.Semantics {
 	s.ReadTakesAMultibyteCharacterWhole = interp.No
 	// The one shell that refuses the -h letter POSIX names.
 	s.SetHasTheHLetter = interp.No
+	// unanswered CommandTrackingStartsOn: there is no command tracking here
+	// to have a default. dash has neither `hashall` nor `trackall` — `set -o
+	// hashall` is `Illegal option -o hashall` at 2 — so the question cannot
+	// be put to this shell. It keeps the standard's SetHLetterTracksCommands,
+	// which is what Runner.commandTracking reads, so the axis is unreachable
+	// here as well as unanswerable.
+
 	// And no keyword option either. Measured 2026-09-16: `set -k` is
 	// `set: Illegal option -k` at 2 and the file ends there, and `set -o
 	// keyword` is refused the same way. The refusal is dash's answer rather

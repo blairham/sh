@@ -755,6 +755,15 @@ func Semantics() interp.Semantics {
 	// And it reaches the command string too, which bash's does not: a two-line
 	// `-c` string that turns the option on writes nothing after it.
 	s.OneCommandStopsACommandString = interp.Yes
+	// unanswered CommandTrackingStartsOn: the letters spell it here too, and
+	// this shell could not answer with a constant even where they did not.
+	// Its startup letters are `hB` for a script and `imBE` at a prompt — the
+	// `h` is gone — and `set -o` follows, reporting `trackall on` for the
+	// script and off at a terminal, measured 2026-09-12. A default written
+	// down once would be wrong for one of those two, which is why
+	// Runner.commandTracking derives it from the letters and never reaches
+	// this axis in this dialect.
+
 	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
 	// name a` keeps the shell in `$0` and makes both operands parameters.
 	// bash and dash let the command string name them instead.

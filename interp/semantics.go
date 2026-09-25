@@ -21282,6 +21282,36 @@ type Semantics struct {
 	// SetFTurnsOffGlobbing: the long names raise no question.
 	SetHLetterTracksCommands Answer
 
+	// CommandTrackingStartsOn is whether command tracking is on before a
+	// script's first line, in a shell whose startup letters do not spell it.
+	//
+	// **Read only where SetHLetterTracksCommands is not Yes**, which is what
+	// keeps this from being a second declaration of something a shell has
+	// already said. Where `set -h` abbreviates command tracking, the startup
+	// letters *are* the claim — `h` among them means the option behind it is
+	// on — and taking a second answer here is exactly the disagreement #1951
+	// was: `$-` said the option was on while `set -o` said it was off, in a
+	// shell that had run nothing. So bash and ksh93 leave this unanswered on
+	// purpose, and ksh93 could not answer it with a constant anyway: its
+	// letters are `hB` for a script and `imBE` at a prompt, so its own
+	// default moves with the invocation.
+	//
+	// zsh is the shell that needs it. It has no startup letters for any of
+	// this — `$-` is `569Xf` in `zsh -f -c`, and its own `-h` is a history
+	// option — and command tracking is nonetheless **on** there before
+	// anything moves it. Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+	// 2026-09-25, `zsh -f -c`: `[[ -o hashcmds ]]` is 0, `${options[hashcmds]}`
+	// is `on`, and `set -o` writes the row as `nohashcmds off` — the spelling
+	// a listing uses for an option that is on by default (#4533).
+	//
+	// dash and BusyBox ash have no such option at all.
+	//
+	// Read rather than asked, for the reason Runner.commandTracking already
+	// carries: it runs in front of every external command and every `hash`,
+	// and refusing there where nobody has answered would refuse every command
+	// a library embedder's Runner tried to start.
+	CommandTrackingStartsOn Answer
+
 	// MonitorNeedsATerminal ties turning `set -m` on to having a terminal.
 	// Measured in shells run with none, which is what a script has: bash
 	// and ksh93 grant the option silently; dash remarks `can't access tty;

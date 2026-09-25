@@ -898,6 +898,25 @@ func Semantics() interp.Semantics {
 	// `set -h` is histignoredups here — a history option — not the command
 	// tracking the letter abbreviates in bash and ksh93.
 	s.SetHLetterTracksCommands = interp.No
+	// And so nothing at this shell's startup spells command tracking, which
+	// leaves its default to be said outright: it is **on**. Measured on zsh
+	// 5.9.2, 2026-09-25, in `zsh -f -c` — `[[ -o hashcmds ]]` is 0,
+	// `${options[hashcmds]}` and `${options[hashall]}` are both `on`, a bare
+	// `unsetopt` names the row `nohashcmds`, and `set -o` writes
+	// `nohashcmds            off`, which is the spelling and the state a
+	// listing gives an option that is on by default.
+	//
+	// **The shell's own default is the noun, not what it does.** Both shells
+	// hash a command they ran, in every state of the option, so a probe that
+	// only ran `ls` and read `hash` back agrees under either reading — which
+	// is why this was reported off for as long as it was. The pair that
+	// discriminates holds the *hashing* fixed and moves the report:
+	// `ls >/dev/null; hash` lists `ls` here and in zsh alike while
+	// `[[ -o hashcmds ]]` parted, so the disagreement was never the hashing
+	// (#4533). The option is not inert either — `unsetopt hashcmds; ls
+	// >/dev/null; hash` is empty in both — so what was wrong was the state a
+	// fresh shell starts in and nothing else.
+	s.CommandTrackingStartsOn = interp.Yes
 	// Job control wants the terminal: with none, `set -m` is refused —
 	// `can't change option: -m`, at 1, fatally like every `set` failure
 	// here. Measured; bash and ksh93 grant the same request silently.

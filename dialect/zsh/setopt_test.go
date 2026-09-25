@@ -261,8 +261,19 @@ func TestSetoptRecordsWhatItDoesNotImplement(t *testing.T) {
 func TestSetoptCompatSpellingsShareTheCanonicalState(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{`setopt dotglob; setopt`, "globdots\nnohashdirs\n"},
-		{`setopt trackall; setopt`, "hashcmds\nnohashdirs\n"},
-		{`setopt hashall; setopt`, "hashcmds\nnohashdirs\n"},
+		// `hashall` and `trackall` are two borrowed spellings of one
+		// canonical entry, and the deviating direction for that entry is
+		// **off**: HASH_CMDS is on before anything moves it (#4533), so it is
+		// `unsetopt` through either spelling that puts `nohashcmds` in the
+		// listing. Measured on zsh 5.9.2, 2026-09-25: `setopt trackall;
+		// setopt` names it not at all, and `unsetopt trackall; setopt` and
+		// `unsetopt hashall; setopt` both name it `nohashcmds`.
+		{`unsetopt trackall; setopt`, "nohashcmds\nnohashdirs\n"},
+		{`unsetopt hashall; setopt`, "nohashcmds\nnohashdirs\n"},
+		// And the other direction through a borrowed spelling leaves the
+		// listing alone, which is what says the two names are one state
+		// rather than two that happen to move together.
+		{`setopt trackall; setopt`, "nohashdirs\n"},
 		{`setopt nolog; setopt`, "nohashdirs\nhistnofunctions\n"},
 		// The canonical name and the compat one are one switch, so setting
 		// through one and clearing through the other leaves nothing behind.

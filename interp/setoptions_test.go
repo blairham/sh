@@ -628,6 +628,72 @@ func TestTheHLetterIsAnAxis(t *testing.T) {
 	}
 }
 
+// TestTheStartingStateOfCommandTrackingIsTheDialectsAndNotAlwaysTheLetters
+// pins which of two declarations answers "is command tracking on before the
+// script's first line", because the two agree almost everywhere and the
+// codebase had been reading the wrong one.
+//
+// **The dialect's declaration is the noun.** The startup letters *are* that
+// declaration where `set -h` spells this option — that is #1951's rule and it
+// stands — and where they do not, the dialect says so outright through
+// Semantics.CommandTrackingStartsOn. Reading the letters alone was right in
+// bash, ksh93, dash and BusyBox ash and wrong in zsh, which has no startup
+// letter for any of this and still starts command tracking on (#4533).
+//
+// The two rows in the middle are the pair that discriminates: they hold the
+// startup letters fixed — there are none in either — and move only which
+// declaration is allowed to answer. A test that varied the letters instead
+// would agree under both readings on every row it could write.
+func TestTheStartingStateOfCommandTrackingIsTheDialectsAndNotAlwaysTheLetters(t *testing.T) {
+	declare := func(sem Semantics) func(*Runner) {
+		return func(r *Runner) {
+			r.Semantics = &sem
+			r.AddSetOptions("hashall")
+		}
+	}
+	base := CoreSemantics()
+	base.SetHasTheHLetter = Yes
+
+	lettersSpellIt := base
+	lettersSpellIt.SetHLetterTracksCommands = Yes
+	lettersSpellIt.CommandTrackingStartsOn = Yes
+
+	lettersDoNot := base
+	lettersDoNot.SetHLetterTracksCommands = No
+
+	declaredOn := lettersDoNot
+	declaredOn.CommandTrackingStartsOn = Yes
+
+	for _, c := range []struct {
+		name string
+		sem  Semantics
+		want string
+	}{
+		// The letters spell it and there is no `h` among them, so the axis is
+		// not consulted at all — a shell that took the axis here would report
+		// tracking on and disagree with its own `$-`, which is #1951.
+		{"the letters spell it, and say nothing", lettersSpellIt, "set +o hashall"},
+		// The letters do not spell it. Now the axis is the only declaration
+		// there is, and both of its states have to reach the listing.
+		{"the letters do not, and the dialect says on", declaredOn, "set -o hashall"},
+		{"the letters do not, and the dialect is silent", lettersDoNot, "set +o hashall"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := run(t, "set +o\n", declare(c.sem))
+			if st != 0 || !strings.Contains(out, c.want) {
+				t.Errorf("out=%q st=%d, want %q in it", out, st, c.want)
+			}
+		})
+	}
+
+	// And a script still has the last word over either declaration, which is
+	// what keeps this a default rather than a fixed state.
+	out, st := run(t, "set +o hashall\nset +o\n", declare(declaredOn))
+	if st != 0 || !strings.Contains(out, "set +o hashall") {
+		t.Errorf("out=%q st=%d, want the script's own move to win", out, st)
+	}
+}
+
 // TestPipefailIsListedWhereDeclared — the option is real everywhere the axis
 // says it exists, and the listings have to say so: `set -o` shows the row and
 // `set +o` writes it back re-inputtable, in both states.

@@ -80,6 +80,7 @@ ash   CaseAttributeFoldsWhenRead
 ash   CaseAttributeReplacesTheNumericAttribute
 ash   ChainedSubscriptReadsANestedValue
 ash   CodePointPastSixBytesIsEncoded
+ash   CommandTrackingStartsOn
 ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
@@ -274,6 +275,7 @@ bash  ArithSubscriptSkippedWhenNameUnset
 bash  BareFloatLetterResetsThePrecision
 bash  BareSubscriptIsASubscript
 bash  ChainedSubscriptReadsANestedValue
+bash  CommandTrackingStartsOn
 bash  DeclareHideInScopeLetter
 bash  DeclareHideValueLetter
 bash  DeclareMappingLetter
@@ -359,6 +361,7 @@ dash  CaseAttributeFoldsWhenRead
 dash  CaseAttributeReplacesTheNumericAttribute
 dash  ChainedSubscriptReadsANestedValue
 dash  CodePointPastSixBytesIsEncoded
+dash  CommandTrackingStartsOn
 dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute
 dash  CompoundPipelineStatusRecord
@@ -582,6 +585,7 @@ ksh   BadNameToPrintfFatal
 ksh   BareElementsInATableLiteralAreEachOneValue
 ksh   BareSubscriptIsASubscript
 ksh   BuiltinReadsOptions
+ksh   CommandTrackingStartsOn
 ksh   CompoundPipelineStatusRecord
 ksh   CoprocEndsInAnArray
 ksh   DeclarationMayShadowAnEnclosingScopesReadonly

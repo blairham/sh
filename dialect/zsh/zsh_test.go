@@ -245,6 +245,10 @@ func TestSemantics(t *testing.T) {
 		// `set -m` wants the terminal this shell ties job control to.
 		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.Yes},
 		{"SetHLetterTracksCommands", s.SetHLetterTracksCommands, interp.No},
+		// And so nothing at startup spells command tracking here, which
+		// leaves the default to be declared outright: on, which is what
+		// `[[ -o hashcmds ]]` answers in a fresh zsh (#4533).
+		{"CommandTrackingStartsOn", s.CommandTrackingStartsOn, interp.Yes},
 		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.Yes},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		// And a `return` at the top of a startup file, which every shell in

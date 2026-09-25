@@ -177,17 +177,16 @@ emulate zsh
 # defaults, which is why exactly the eleven names a bare `emulate ksh` leaves
 # away from them are the ones marked `on`.
 #
-# `hashcmds` is dropped from the long-form rows here and from nothing else.
-# Its `def` in this shell's table is this shell's own state rather than zsh's,
-# so it is spelled `hashcmds` where the reference writes `nohashcmds` — a
-# standing difference on `set -o` as well, named in dialect/zsh/setopt.go and
-# filed as #4533. Dropping one known row is not a license to drop a row that
-# moves: the other 184 are the reference's own, byte for byte.
-nohashcmdsrow() { grep -Ev '^(no)?hashcmds( |$)'; }
-
+# All 185 rows are compared. #4529 dropped `hashcmds` from this listing by
+# name, because its `def` in this shell's table held this shell's own state
+# rather than zsh's and it came out spelled `hashcmds` where the reference
+# writes `nohashcmds`. #4533 corrected the default and the state behind it
+# together, so the exclusion has gone and the row is graded like the other
+# 184 — which is what says the correction reached this surface too, and not
+# only the four a `-c` shell shows.
 emulate ksh
 printf -- '--- emulate ksh\n'
-setopt | nohashcmdsrow
+setopt
 emulate zsh
 
 # **The option decides the shape; the mode decides the contents.** Both rows
@@ -337,3 +336,51 @@ printf 'bindkey -lL on a name nobody has -> %s\n' "$?"
 ( set -n; ! true; ! true ); printf 'noexec bang twice -> %s\n' "$?"
 ( set -n; if ! true; then :; fi ); printf 'noexec bang inside if -> %s\n' "$?"
 ( set -n; false ); printf 'noexec plain command -> %s\n' "$?"
+
+# ---- HASH_CMDS, and the two questions it is easy to run together ----
+#
+# The option is **on** before a script's first line. Every surface that names
+# it is asked separately, because they do not carry each other: the condition
+# and `$options` report the state, a bare `setopt` names only what deviates
+# from the mode's default and a bare `unsetopt` is its complement, and `set -o`
+# writes each name in the direction that is off by default — so an option that
+# is on by default appears there as `nohashcmds`, with `off` beside it, and a
+# shell that had the default backwards writes the same word for the opposite
+# state.
+[[ -o hashcmds ]] && printf 'cond: on\n' || printf 'cond: off\n'
+[[ -o hashall ]] && printf 'compat spelling: on\n' || printf 'compat spelling: off\n'
+zmodload zsh/parameter
+printf 'param: [%s] [%s] [%s]\n' "$options[hashcmds]" "$options[hashall]" "$options[trackall]"
+setopt   | grep -E '^(no)?hashcmds$' || printf 'setopt: does not name it\n'
+unsetopt | grep -E '^(no)?hashcmds$'
+set -o   | grep -E '^(no)?hashcmds '
+
+# **The report is what moves here; the hashing is what does not.** A probe
+# that ran a command and read the table back agrees whatever the option's
+# default is, because this shell hashes a command it ran until something
+# moves the option — so the rows below print the report and the table side by
+# side, and the first two differ from the third in the table rather than only
+# in the word. The third row is also the control that says the option is wired
+# to something: with it off, nothing is remembered.
+mkdir -p hb
+printf '#!/bin/sh\n:\n' > hb/hzz
+chmod +x hb/hzz
+PATH=$PWD/hb:$PATH
+hashrow() {
+  ( eval "$1"
+    [[ -o hashcmds ]] && printf '%s: report on ' "$2" || printf '%s: report off ' "$2"
+    hzz
+    case "$(hash)" in (*hzz=*) printf 'hash found\n';; (*) printf 'hash empty\n';; esac )
+}
+hashrow ':'                 'untouched'
+hashrow 'setopt hashcmds'   'set on'
+hashrow 'unsetopt hashcmds' 'set off'
+
+# And the reset keeps its two halves apart. `hashcmds` is in the strict set
+# and not in the 81 a bare emulation puts back, so a script that turned it off
+# finds it on again after `emulate -R zsh` and still off after `emulate zsh`.
+# The reset writes the table's own default, which is why this pair only passes
+# where that default and the state behind it agree.
+( unsetopt hashcmds; emulate -R zsh; [[ -o hashcmds ]] && printf 'strict reset: on\n' || printf 'strict reset: off\n' )
+( unsetopt hashcmds; emulate zsh;    [[ -o hashcmds ]] && printf 'bare reset: on\n'   || printf 'bare reset: off\n' )
+( emulate -R zsh; [[ -o hashcmds ]] && printf 'strict reset, unmoved: on\n' || printf 'strict reset, unmoved: off\n' )

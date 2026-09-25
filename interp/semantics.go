@@ -18466,6 +18466,83 @@ type Semantics struct {
 	// appears for a stopped job and the table under it does not.
 	HeldExitListsTheJobs Answer
 
+	// HangupAtExitNeedsALoginShell says the session has to be a login shell
+	// as well as interactive before it sends SIGHUP to the jobs it is
+	// leaving behind. Both shells that hang up at all are asked; the two
+	// disagree, which is why this is an axis and not a condition written
+	// into the code.
+	//
+	// bash Yes. Measured 2026-09-23 on bash 5.3.15 through a pseudo-terminal,
+	// with `shopt -s huponexit` and a `sleep` left in the background:
+	// `-l -i` takes the job, `-i` on its own does not, and neither does a
+	// login shell that is not interactive. The rows are on
+	// Runner.SendsHangupToJobsAtExit.
+	//
+	// zsh No. Measured 2026-09-25 against zsh 5.9.2 through a pseudo-terminal
+	// with the shell started `-fiV +Z` — interactive and **not** a login
+	// shell: `setopt no_check_jobs`, `sleep 30 &`, `exit` writes
+	// `zsh: warning: 1 jobs SIGHUPed` and the job is gone half a second
+	// later. `unsetopt hup` in the same session leaves it running, so the
+	// option is still the master and this axis is only about the second
+	// condition.
+	//
+	// Reached only from a shell whose Runner.SendsHangupToJobsAtExit is on,
+	// which is a switch only bash's `huponexit` and zsh's `hup` can move —
+	// so dash, ksh93 and BusyBox ash never reach it and answer it nowhere.
+	// Read rather than `ask`ed for that reason: an unanswered value here is
+	// unreachable rather than a guess, and No is the reading its own name
+	// asks for.
+	HangupAtExitNeedsALoginShell Answer
+
+	// HangupAtExitSkipsStoppedJobs says a job that is stopped is left out of
+	// that send, and so out of the count Diagnostics.JobsHUPedAtExit
+	// reports.
+	//
+	// zsh Yes, and separably so. Measured 2026-09-25 through a
+	// pseudo-terminal: a session holding one running job and one stopped by
+	// `kill -STOP` writes `zsh: warning: **1** jobs SIGHUPed`, and a session
+	// holding two stopped jobs and nothing running writes **nothing at all**.
+	// The state is the only thing that moved between those two, so the rule
+	// is keyed on it. The stopped process is still there afterwards, and
+	// `ps -o stat=` reads `SN` rather than `T` — zsh continued it instead of
+	// hanging it up, which is also why the reading is trustworthy here.
+	//
+	// bash No, and that row is the implementation's own behavior rather than
+	// a measurement, which is stated rather than hidden. **The instrument
+	// cannot separate bash's send from the kernel's**: a process group that
+	// becomes orphaned while it holds a stopped member is sent SIGHUP and
+	// SIGCONT by the system, and an exiting shell orphans its jobs' groups
+	// by definition — so a stopped job of bash's is dead afterwards with
+	// `shopt -s huponexit` and equally dead without it. Measured that way on
+	// 2026-09-25, both rows identical. zsh's row escapes the same rule only
+	// because it continues the job first, which leaves the group with no
+	// stopped member for the system to act on. So No here changes nothing
+	// bash did before this axis existed, and the day somebody finds an
+	// instrument that discriminates, this is the comment to correct.
+	//
+	// Unreachable in dash, ksh93 and BusyBox ash for the reason the axis
+	// above it is, and read the same way.
+	HangupAtExitSkipsStoppedJobs Answer
+
+	// HangupAtExitPrecedesTheExitTrap says the send happens before the EXIT
+	// trap runs rather than after it. The two shells disagree, and the
+	// disagreement is visible to any script that traps both ends.
+	//
+	// bash No. Measured 2026-09-23 with a backgrounded subshell holding a
+	// `HUP` trap and the shell holding an `EXIT` trap: the exit trap's line
+	// arrives first and the child's handler after it.
+	//
+	// zsh Yes. Measured 2026-09-25 through a pseudo-terminal with
+	// `trap 'echo EXIT_TRAP' EXIT` and `sleep 3 &` in an interactive
+	// session: `exit` writes `zsh: warning: 1 jobs SIGHUPed` and *then*
+	// `EXIT_TRAP`. One session, two lines, in that order — so this is read
+	// off which line came first rather than inferred from either shell's
+	// documentation.
+	//
+	// Unreachable in dash, ksh93 and BusyBox ash for the reason the two
+	// axes above it are, and read the same way.
+	HangupAtExitPrecedesTheExitTrap Answer
+
 	// CdpathAnnouncesTheDirectory prints where CDPATH sent a `cd`, when
 	// the winning entry was not a plain dot — four of the five, BusyBox ash
 	// included; zsh alone moves in silence.

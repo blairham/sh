@@ -3102,6 +3102,16 @@ func Semantics() interp.Semantics {
 	s.JobsListsWhatChangedSinceTheLastReport = interp.Yes
 	s.JobsPidsOnlyOption = interp.Yes
 
+	// unanswered HangupAtExitNeedsALoginShell, HangupAtExitSkipsStoppedJobs,
+	// HangupAtExitPrecedesTheExitTrap: all three are about what happens once
+	// a session has been asked to send SIGHUP to the jobs it is leaving, and
+	// this shell has no way to ask. The switch is
+	// interp.Runner.SendsHangupToJobsAtExit, which only bash's `shopt -s
+	// huponexit` and zsh's `setopt hup` move; with it off the three are
+	// never consulted. Measured 2026-09-25 through a pseudo-terminal: a
+	// backgrounded `sleep 30` is still running after the interactive shell
+	// that started it exits, and nothing is said about it.
+
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.No
 

@@ -130,6 +130,9 @@ ash   FloatFormatLetterE
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNamesUnderPlus
 ash   GlobalReplacementAnchors
+ash   HangupAtExitNeedsALoginShell
+ash   HangupAtExitPrecedesTheExitTrap
+ash   HangupAtExitSkipsStoppedJobs
 ash   HeldExitListsTheJobs
 ash   IgnoredNamesFollowTheParameter
 ash   IgnoredNamesMatchTheLastComponent
@@ -424,6 +427,9 @@ dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns
 dash  FunctionNamesUnderPlus
 dash  GlobalReplacementAnchors
+dash  HangupAtExitNeedsALoginShell
+dash  HangupAtExitPrecedesTheExitTrap
+dash  HangupAtExitSkipsStoppedJobs
 dash  HeldExitListsTheJobs
 dash  IgnoredNamesFollowTheParameter
 dash  IgnoredNamesMatchTheLastComponent
@@ -584,6 +590,9 @@ ksh   EchoLastEscapeFlagWins
 ksh   EmptyKeyInATableLiteral
 ksh   EmptySubscriptToAnAssignment
 ksh   ExportContainerLetterNeedsAValue
+ksh   HangupAtExitNeedsALoginShell
+ksh   HangupAtExitPrecedesTheExitTrap
+ksh   HangupAtExitSkipsStoppedJobs
 ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin
 ksh   JobsStateFiltersAccumulate

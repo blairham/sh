@@ -1407,6 +1407,16 @@ func Semantics() interp.Semantics {
 	// below `There are stopped jobs.`, and nothing below it with the option
 	// off.
 	s.HeldExitListsTheJobs = interp.Yes
+	// `shopt -s huponexit` needs a login shell as well as an interactive one
+	// — measured 2026-09-23, `-i` alone leaves the job running — and the
+	// stopped half of the same question cannot be measured on this machine
+	// at all, so No is what this implementation already did rather than a
+	// reading. The signal goes after the EXIT trap, which is measured: the
+	// trap's line arrives before the job's handler sees the hangup. All
+	// three rows are on their axes.
+	s.HangupAtExitNeedsALoginShell = interp.Yes
+	s.HangupAtExitSkipsStoppedJobs = interp.No
+	s.HangupAtExitPrecedesTheExitTrap = interp.No
 	// `autocd` says what it did before doing it: with the option on, a bare
 	// `subdir` writes `cd -- subdir` and then moves. Measured 2026-09-08
 	// through a pseudo-terminal against bash 5.3.15, which is the only route

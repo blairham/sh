@@ -1568,6 +1568,15 @@ func Semantics() interp.Semantics {
 	// `set -m`, `[1]+  Done                       sleep 0.2`. Measured in
 	// the container rather than derived from dash, which is the column next
 	// to it and not evidence about it.
+	// unanswered HangupAtExitNeedsALoginShell, HangupAtExitSkipsStoppedJobs,
+	// HangupAtExitPrecedesTheExitTrap: all three are about what happens once
+	// a session has been asked to send SIGHUP to the jobs it is leaving, and
+	// this shell has no way to ask. The switch is
+	// interp.Runner.SendsHangupToJobsAtExit, which only bash's `shopt -s
+	// huponexit` and zsh's `setopt hup` move; with it off the three are
+	// never consulted. Measured in the pinned alpine image, where BusyBox ash has no such option to set: a backgrounded `sleep 30` is still
+	// running after the interactive shell that started it exits, and nothing
+	// is said about it.
 	s.JobNoticeNamesThePID = interp.No
 	s.JobsOptions = "lp"
 	s.JobsPidsOnlyOption = interp.Yes

@@ -564,6 +564,9 @@ func defineWidget(r *interp.Runner, args []string) int {
 		r.Diagnosef("too many arguments for -N\n")
 		return 1
 	}
+	if protectedName(r, args[0]) {
+		return 1
+	}
 	fn := args[0]
 	if len(args) == 2 {
 		fn = args[1]
@@ -610,6 +613,12 @@ func defineCompletionWidget(r *interp.Runner, args []string) int {
 		r.Diagnosef("invalid widget `%s'\n", args[1])
 		return 1
 	}
+	// After the completer check and not before it: measured, `zle -C
+	// .accept-line notacompleter myfn` complains about the *completer*, so
+	// the protected name is the later of the two answers.
+	if protectedName(r, args[0]) {
+		return 1
+	}
 	// The function does not have to exist yet, the same as `-N` and for the
 	// same reason: measured, `zle -C w complete-word nosuchfn` is status 0
 	// and the definition is stored. The completion loader defines every one
@@ -652,6 +661,13 @@ func aliasWidget(r *interp.Runner, args []string) int {
 		return 1
 	}
 	if def, defined := widgetDefinitionOf(r, args[0]); defined {
+		// The name being copied *to* is checked here and not above it:
+		// measured, `zle -A nosuchw .accept-line` complains that there is no
+		// such widget `nosuchw' rather than that `.accept-line' is
+		// protected, so the source is resolved first.
+		if protectedName(r, args[1]) {
+			return 1
+		}
 		// The whole definition and not only the function: measured, `zle -A`
 		// of a completion widget gives a copy that is itself a completion
 		// widget, `y -C complete-word f`, rather than a plain one.
@@ -767,6 +783,38 @@ func widgetListing(defined map[string]widgetDefinition, name string, source bool
 // Read off editorControlKeys rather than written out again, so the two cannot
 // disagree about what Return is called: bindkey.go is where this shell names
 // the keys the editor reads, and `accept-line` is one of them.
+// builtinWidget reports whether a name is one of the editor's own widgets,
+// which is what a leading `.` may stand for and what `-N`, `-C` and `-A` may
+// not take as a name of their own.
+//
+// The same two tables callWidget consults in its undotted path, asked as one
+// question so that the dotted path and the protected-name check cannot drift
+// apart from it.
+func builtinWidget(name string) bool {
+	if accepts(name) {
+		return true
+	}
+	_, editors := bindkeyWidgets[name]
+	return editors
+}
+
+// protectedName refuses a dotted name that a built-in widget already answers
+// to, and is what keeps the two name sets disjoint so that callWidget can
+// resolve a dotted name by asking one table and then the other.
+//
+// Measured against zsh 5.9 through a pseudo-terminal, each of `zle -N`,
+// `zle -C` and `zle -A` given `.accept-line` or `.clear-screen` writes
+// “widget name `.accept-line' is protected“ and is status 1, while the same
+// letter given `.plainnew` is status 0 and stores an ordinary user widget.
+func protectedName(r *interp.Runner, name string) bool {
+	rest, isDotted := strings.CutPrefix(name, ".")
+	if !isDotted || !builtinWidget(rest) {
+		return false
+	}
+	r.Diagnosef("widget name `%s' is protected\n", name)
+	return true
+}
+
 func accepts(name string) bool {
 	for _, widget := range editorControlKeys {
 		if widget == name && widget == "accept-line" {
@@ -931,7 +979,24 @@ func callWidget(r *interp.Runner, ctx context.Context, name string, args []strin
 	// reaches the thing it wrapped — zsh-autosuggestions writes
 	// `_zsh_autosuggest_orig_accept-line() { zle .accept-line }` — so it is
 	// read here rather than treated as a name nothing answers to.
-	if builtin, isDotted := strings.CutPrefix(name, "."); isDotted {
+	//
+	// **Only when the dotted name is one of the editor's own**, which is the
+	// half this used to be missing. A dot is not a namespace: it is part of
+	// the name, and `zle -A` and `zle -N` will take one so long as it is not
+	// a built-in's — measured against zsh 5.9, `zle -N .notabuiltin myfn` is
+	// status 0 and `${widgets[.notabuiltin]}` reads `user:myfn`, while
+	// `.accept-line` is refused as protected. The two sets are disjoint, so
+	// resolving a dotted name is the built-in table and then the ordinary
+	// one, under the **whole** name.
+	//
+	// Routing every dotted name to the built-in table unconditionally is
+	// #4424: powerlevel10k saves the widget it wraps as
+	// `zle -A clear-screen ._p9k_orig_clear-screen` and reaches the original
+	// with `zle ._p9k_orig_clear-screen`. `_p9k_orig_clear-screen` is not a
+	// built-in, so the call found nothing and returned status 1 without a
+	// word — and `_p9k_widget` reads a failed call as *there was nothing to
+	// call* and carries on. `^L` wrote nothing at all.
+	if builtin, isDotted := strings.CutPrefix(name, "."); isDotted && builtinWidget(builtin) {
 		return callBuiltinWidget(r, ctx, builtin)
 	}
 	def, defined := widgetDefinitionOf(r, name)

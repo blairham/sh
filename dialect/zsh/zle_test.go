@@ -1362,17 +1362,30 @@ zle -N a
 // And the dotted spelling of a name the editor *does* answer to still reaches
 // the editor, past whatever has been defined under the bare name.
 //
-// The pair is the point: the fix above is a fallback and not a reordering, so
-// a widget defined as `clear-screen` must not take `.clear-screen` away from
-// the editor. Without this row, resolving the defined table first would look
-// just as green.
+// The pair is the point: the fallback above must not cost the dot its meaning.
+// The rebinding is what makes the row discriminating — `up-line-or-history` is
+// a defined widget here, so a dotted call that resolved by *stripping the dot*
+// and asking the defined table would run `f` and print `MINE`, which is what a
+// wrapper reaching for the thing it wrapped must never get. Asserted on the
+// action the editor was asked to perform rather than on the line, for the
+// reason TestInvokingABuiltInWidgetReachesTheEditor gives.
+//
+// Ordering the two tables the other way round is *inert* and deliberately has
+// no row: a protected name can never be in the defined table, so the sets are
+// disjoint and either order answers the same. The protection is what buys
+// that, and TestADottedBuiltInNameIsProtected is where it is pinned.
 func TestTheDottedSpellingStillReachesTheEditorPastARebinding(t *testing.T) {
-	out, _ := runZsh(t, t.TempDir(),
-		"f(){ print -r -- MINE }; zle -N clear-screen f; echo st=$?\n"+
-			"print -r -- \"cs=[${widgets[clear-screen]}] dotted=[${widgets[.clear-screen]-UNSET}]\"\n")
-	want := "st=0\ncs=[user:f] dotted=[UNSET]\n"
-	if out != want {
-		t.Errorf("output = %q, want %q", out, want)
+	r, out := zleRunner(t, "f() { print -r -- MINE }\nzle -N up-line-or-history f\n"+
+		"a() { zle .up-line-or-history; print -r -- \"rc=$?\"; }\nzle -N a\n")
+	_, ok, printed, ed := runWidgetWatching(t, r, out, "a", repl.Line{}, &stubEditor{})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "rc=0\n"; printed != want {
+		t.Errorf("output = %q, want %q — the dot reached the rebinding instead of the editor", printed, want)
+	}
+	if want := []repl.Widget{repl.WidgetPreviousHistory}; !slices.Equal(ed.performed, want) {
+		t.Errorf("performed %v, want %v", ed.performed, want)
 	}
 }
 

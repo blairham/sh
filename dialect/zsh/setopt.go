@@ -204,6 +204,19 @@ type zshOption struct {
 	// interp.OptionRefusedAndSaid, and monitorOption for the one name in the
 	// table that is in this state and why it cannot be got out of it.
 	speaksItsOwnRefusal bool
+	// over is the base state a [recordedOver] name deviates *from*, and nil
+	// for every other entry. It is the constructor's own `state` argument,
+	// published on the value because two callers need to tell the two kinds
+	// of recorded name apart and the closure alone cannot say which is which.
+	//
+	// applyEmulation is the caller that made it necessary. The store holds
+	// deviations, so an emulation resets an ordinary `recorded` name by
+	// *dropping* it — which lands the name on `def`. For a name whose base is
+	// not `def` that same drop lands it on the base instead, which is the
+	// invocation's state rather than the emulation's default: `zsh -f` then
+	// `emulate -R zsh` left `rcs` and `hashdirs` off where real zsh turns
+	// both back on (#4506).
+	over func(*interp.Runner) bool
 }
 
 // zshOptions is the table, in listing order (sorted by base).
@@ -1218,7 +1231,7 @@ func recorded(base string, def bool) zshOption {
 // remembered, reported, and acted on by nothing.
 func recordedOver(base string, def bool, state func(*interp.Runner) bool) zshOption {
 	return zshOption{
-		base: base, def: def, recorded: true,
+		base: base, def: def, recorded: true, over: state,
 		get: func(r *interp.Runner) bool { return state(r) != recordedDeviates(r, base) },
 		set: func(r *interp.Runner, on bool) int {
 			setRecordedDeviation(r, base, on != state(r))

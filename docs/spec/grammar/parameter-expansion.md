@@ -5824,14 +5824,23 @@ the *scan*, and `Assign.IndexFlags` carries it exactly as
 
 ### What this implementation carries, and what it refuses by name
 
-`r R i I e n b` are carried, for an ordinary array, for an associative
-array, for the positional parameters and for a scalar.
+`r R i I e n b k K` are carried, for an ordinary array, for an
+associative array, for the positional parameters and for a scalar. `f` is
+carried for a **read**, and is nothing at all anywhere but a string — see
+*A subscript that counts lines* below.
 
-`w f p k K s` are read by the grammar and **refused by name** when the
+`w p s` are read by the grammar and **refused by name** when the
 subscript is reached — `${a[(w)x]}: the (w) subscript flag is not
 implemented` — for the reason the expansion flags are: a subscript flag
 answered wrong returns a plausible element at status 0, which is the one
 failure this repository exists to avoid.
+
+`f` on the **left of an assignment**, and in `unset`, is refused by the
+same rule and with a clause saying which side it was on: `${v[(f)2]}: the
+(f) subscript flag is not implemented where a line of a string is
+written`. That side answers with one subscript and a line is as many
+characters as it is long, so the index of its first character would put
+the value *inside* the line.
 
 #### A search over a scalar
 
@@ -5887,6 +5896,110 @@ character in one grammar and the one element in another
 (`ScalarSubscriptIsACharacter`), but the group that makes these
 characters a search at all is the first grammar's, and it answers that
 question one way — so there is no disagreement here to put an axis on.
+
+#### A subscript that counts lines
+
+`(f)` says what the units of a **string** are rather than how a search
+over them runs, which is what makes it the one letter in the group that
+has something to answer when nothing selects. It is a different construct
+from the expansion flag of the same letter: `${(f)v}` is a list of fields
+and `${v[(f)2]}` is one line. Measured on zsh 5.9.2, 2026-09-25, with
+`v=$'aa\nbb\ncc'`:
+
+| written | zsh 5.9.2 | what it selected |
+| --- | --- | --- |
+| `${v[(f)2]}` | `bb` | the second line |
+| `${v[(f)9]}` | `cc` | past the last **clamps** to the last |
+| `${v[(f)0]}` | `aa` | and below the first clamps to the first |
+| `${v[(f)-1]}` | `cc` | a negative counts back from the last |
+| `${#v[(f)2]}` | `2` | the line comes back, so this is its length |
+| `s=abc; ${s[(f)1]}` | `abc` | a string with no newline is one line |
+
+The clamp is the whole difference from an ordinary subscript, which
+answers nothing outside the value. **A list of values is not lines**, so
+the letter is nothing there: `a=(p q r); ${a[(f)9]}` is empty and
+`${a[(f)2]}` is `q`, the ordinary reading — and a table's subscript is
+still a key, `${m[(f)k1]}` being `${m[k1]}`.
+
+**Which lines a value has is not a split on every newline.** A run of
+newlines separates one line from the next, a run at the front separates
+nothing, and a run at the end leaves exactly one empty line however long
+it is. Measured, reading each value's first two lines and its last:
+
+| value | its lines |
+| --- | --- |
+| `$'\na\nb'` | `a` `b` — a leading newline makes no empty line |
+| `$'\n\na\nb'` | `a` `b` — nor does a run of them |
+| `$'a\n\nb'` | `a` `b` — nor does a run in the middle |
+| `$'a\nb\n'` | `a` `b` `` — a trailing newline makes one |
+| `$'a\nb\n\n'` | `a` `b` `` — and a run of them still makes one |
+| `$'\n'` | `` — which is the whole of what that value has |
+
+That is why `${v[(f)-1]}` is `c` on `$'a\nb\nc'` and empty on
+`$'a\nb\n'`, where a clamp to the last line would have answered `b`.
+
+**A range is the row that does not follow from the rows above**, and it
+was measured in its own right rather than inferred. A `(f)` subscript
+names a **character position**; only a subscript written without a comma
+reads the whole line at it. With `v=$'aaa\nbbb\nccc'`, whose lines begin
+at characters 1, 5 and 9:
+
+| written | zsh 5.9.2 | why |
+| --- | --- | --- |
+| `${v[(f)1,2]}` | `aa` | characters 1 through 2, not lines 1 through 2 |
+| `${v[(f)2,2]}` | *(nothing)* | the start is character 5 and the end is 2 |
+| `${v[(f)2,7]}` | `bbb` | 5 through 7 |
+| `${v[(f)2,-1]}` | `bbb\nccc` | 5 through the last character |
+| `${v[(f)5,-1]}` | `ccc` | a start past the last line clamps to its line |
+| `${v[1,(f)2]}` | `aaa\nbbb` | a group in the *second* end ends at its line |
+| `${v[(f)2,(f)2]}` | `bbb` | so one line can be spelled as a pair |
+
+The trailing empty line is the one place its two positions differ, and it
+is measured rather than derived: on `$'aa\nbb\n'` — six characters, with
+that line beginning at character 7 — `${v[1,(f)3]}` is `aa\nbb`, which
+ends at character 5 where the *previous* line ended. A line with no
+characters in it never moved the end.
+
+**A search beside `(f)`** walks the lines as a search over an array walks
+its elements — a whole-line match, with `(e)`, `(n:expr:)` and `(b:expr:)`
+read as they are there — and substitutes the character position rather
+than the number:
+
+| written | zsh 5.9.2 | why |
+| --- | --- | --- |
+| `${v[(fr)bb]}` | `bb` | the matching line |
+| `${v[(fi)bb]}` | `4` | where that line begins, not `2` |
+| `${v[(fI)*]}` | `7` | the last line's position, not the line count |
+| `${v[(fi)b]}` | `0` | the match is the whole line, so this misses |
+| `${v[(fr)bb,-1]}` | `bb\ncc` | that position read as a range's start |
+
+**There are three misses and not one**, which is the half that would have
+been guessed wrong. A walk that *ran* and matched nothing answers `0` —
+the position no line begins at — where an array's forward search answers
+one past its last element. Only a walk that never ran keeps the array's
+answers. Measured on `$'aa\nbb\ncc\ndd'`:
+
+| written | zsh 5.9.2 | why |
+| --- | --- | --- |
+| `${v[(fi)zz]}` | `0` | a walk that ran and found nothing |
+| `${v[(fib:3:)bb]}` | `0` | including one that began past its match |
+| `${v[(fib:9:)bb]}` | `5` | a start above the lines, forward: 1 + 4 lines |
+| `${v[(fIb:9:)bb]}` | `0` | a start above the lines, backward |
+| `${v[(fib:-9:)bb]}` | `0` | and a start below them, either way |
+| `e=; ${e[(fi)x]}` | `0` | a value with no lines has no position at all |
+
+**The left of an assignment is legal there and is refused here**, by
+name, for the reason the section above gives. What it does is measured so
+that the refusal is a deferral rather than a guess — `v=$'aa\nbb\ncc'`
+throughout:
+
+| written | zsh 5.9.2 | what changed |
+| --- | --- | --- |
+| `v[(f)2]=ZZ` | `aa\nZZ\ncc` | the line replaced, not a character |
+| `v[(f)2]+=XX` | `aa\nbbXX\ncc` | and joined at its end |
+| `v[(f)4]=ZZ` | `aa\nbb\nZZ` | past the last clamps as the read does |
+| `v[(fr)bb]=ZZ` | `aa\nZZ\ncc` | a search names the line it matched |
+| `unset 'v[(f)2]'` | `aa\n\ncc` | the line taken out, separators kept |
 
 #### A search over an associative array
 

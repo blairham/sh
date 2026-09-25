@@ -25,7 +25,10 @@ func subGrammar(d *syntax.Dialect) {
 // expansion's result is not a pattern — the second so that a row showing a
 // substituted value's metacharacters *are* live in a subscript is showing
 // this construct's own rule rather than a dialect's.
-func runSub(t *testing.T, src string) (string, int) {
+// more is applied last, for the rows that need an answer the rest of this
+// file does not — a comma in a subscript being a range, say, which the plain
+// rows below deliberately do not have.
+func runSub(t *testing.T, src string, more ...func(*Semantics)) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, subGrammar, func(r *Runner) {
 		sem := *r.Semantics
@@ -42,6 +45,9 @@ func runSub(t *testing.T, src string) (string, int) {
 		// text — is what a shell reaches by turning its ksh-arrays option
 		// on, and baresubscript_test.go is what asserts it.
 		sem.BareSubscriptIsASubscript = Yes
+		for _, set := range more {
+			set(&sem)
+		}
 		r.Semantics = &sem
 	})
 }
@@ -304,7 +310,6 @@ func TestASubscriptSearchWithoutBraces(t *testing.T) {
 func TestASubscriptFlagThisImplementationDoesNotCarryIsRefusedByName(t *testing.T) {
 	for _, tc := range []struct{ src, names string }{
 		{`printf "[%s]" "${a[(w)beta]}"`, "(w)"},
-		{`printf "[%s]" "${a[(f)beta]}"`, "(f)"},
 		{`printf "[%s]" "${a[(p)beta]}"`, "(p)"},
 		{`printf "[%s]" "${a[(s:,:)beta]}"`, "(s)"},
 		{`printf "[%s]" "${a[(rw)beta]}"`, "(w)"},

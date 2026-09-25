@@ -355,3 +355,35 @@ func TestTheKeyFlagsOverEverySurface(t *testing.T) {
 		})
 	}
 }
+
+// The `(f)` letter in a subscript's group counts a *string* through its lines,
+// which is a different construct from the expansion flag of the same letter:
+// `${(f)v}` is a list of fields and `${v[(f)2]}` is one line.
+//
+// Measured 2026-09-25 on zsh 5.9.2. The other four read every one of these as
+// arithmetic, so the letter is this preset's as much as the group is.
+func TestALineSubscriptIsThisDialects(t *testing.T) {
+	const v = "v=$'aa\\nbb\\ncc'\n"
+	for _, tc := range []struct{ src, want string }{
+		{`printf "[%s]" "${v[(f)2]}"`, `[bb]`},
+		{`printf "[%s]" "${v[(f)9]}"`, `[cc]`},
+		{`printf "[%s]" "${v[(f)-1]}"`, `[cc]`},
+		{`printf "[%s]" "${v[(f)1,2]}"`, `[aa]`},
+		{`printf "[%s]" "${v[(f)2,-1]}"`, "[bb\ncc]"},
+		{`printf "[%s]" "${v[(fr)bb]}"`, `[bb]`},
+		{`printf "[%s]" "${v[(fi)bb]}"`, `[4]`},
+		{`printf "[%s]" "${v[(fi)b]}"`, `[0]`},
+		// A plain string is one line, and a list of values is not lines at
+		// all: `${a[(f)9]}` is empty where a string's clamps to its last.
+		{`s=abc; printf "[%s]" "${s[(f)2]}"`, `[abc]`},
+		{`a=(p q); printf "[%s]" "${a[(f)1]}" "${a[(f)9]}"`, `[p][]`},
+		// The idiom the issue was filed on: the first line of a captured
+		// command's output.
+		{`b=$(printf 'one\ntwo\n'); printf "[%s]" "${b[(f)1]}"`, `[one]`},
+	} {
+		out, st := runZsh(t, t.TempDir(), v+tc.src)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}

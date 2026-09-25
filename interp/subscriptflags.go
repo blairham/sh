@@ -43,7 +43,7 @@ import (
 // the reason implementedParamFlags gives: the only thing worse than refusing
 // a flag is answering it wrong at status 0, and a subscript flag's wrong
 // answer is a plausible element rather than a visible failure.
-const implementedSubscriptFlags = "rRiIenbkK"
+const implementedSubscriptFlags = "rRiIenbkKf"
 
 // searchSubscriptFlags are the six that select. Written in no particular
 // order; only which of them came last matters.
@@ -91,11 +91,21 @@ func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if !ok {
 		return nil, true
 	}
-	if search == 0 {
+	// `(f)` says what the units *are* where every other letter says how a
+	// search over them runs, so it has something to answer with when nothing
+	// selects. See interp/linesubscript.go.
+	lines := subscriptCountsLines(e.IndexFlags)
+	if search == 0 && !lines {
 		// Nothing to select by, so the operand is an ordinary subscript.
 		return nil, false
 	}
 	if a, isAssoc := r.assocFor(e.Name); isAssoc {
+		if search == 0 {
+			// A table has no lines for `(f)` to count — measured,
+			// `${m[(f)k1]}` is `${m[k1]}` — so the group says nothing and
+			// the key reading is left to answer.
+			return nil, false
+		}
 		return r.searchAssoc(e, a, e.IndexFlags, search), true
 	}
 	elems, scalar, held := r.subscriptTarget(e)
@@ -104,6 +114,15 @@ func (r *Runner) flaggedSubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// measured, `${nosucharray[(i)x]}` is empty rather than the
 		// one-past-the-end an *empty* array answers with.
 		return nil, true
+	}
+	if lines && scalar {
+		return r.lineSubscript(e, orderedSearchLetter(search), elems[0])
+	}
+	if search == 0 {
+		// An array counts its elements whatever the group says, so `(f)`
+		// over one is the ordinary reading: measured, `${a[(f)9]}` on three
+		// elements is empty where a string's `${v[(f)9]}` is its last line.
+		return nil, false
 	}
 	return r.searchSubscript(e, orderedSearchLetter(search),
 		subscriptSource{name: e.Name, elems: elems, scalar: scalar})
@@ -170,23 +189,41 @@ func (r *Runner) searchIndex(g *syntax.SubscriptFlags, search byte, src subscrip
 	if src.scalar {
 		return r.scalarSearchIndex(g, search, r.units(src.elems[0]), src.elems[0])
 	}
-	at, found, below := r.searchElements(g, search, src.elems)
+	at, found, miss := r.searchElements(g, search, src.elems)
 	base := r.arrayBase()
 	switch {
 	case found:
 		return base + at
-	case below || search == 'R' || search == 'I':
+	case miss == missBelow || search == 'R' || search == 'I':
 		return base - 1
 	default:
 		return base + len(src.elems)
 	}
 }
 
+// missKind is which of the three ways a search came to nothing, which is the
+// question its caller has to put to answer with an index: a walk that ran and
+// matched nothing is not the same answer as one that never ran, and a start
+// above the values is not the same answer as one below them.
+//
+// One value rather than a pair of booleans because they are exclusive and
+// because a caller reading them separately is how the walk's own miss came to
+// be answered with a start's — see lineSearchAt, which is the reading that
+// needs all three apart.
+type missKind int
+
+const (
+	missNone missKind = iota
+	missWalked
+	missBelow
+	missAbove
+)
+
 // searchElements walks the elements the way the group asks and returns the
 // position of the match it wanted, 0-based, and — where nothing matched —
-// which side of the array the walk began on.
+// how the walk came to nothing.
 //
-// below is the half the two out-of-range starts do not share. A start past
+// missBelow is the half the two out-of-range starts do not share. A start past
 // the *end* leaves each letter its own miss, and a start before the
 // *beginning* gives both forward and backward the backward one: measured
 // 2026-09-12 on zsh 5.9.2 with `a=(p q r p t)`, `${a[(ib:-6:)p]}` is 0 where
@@ -198,7 +235,7 @@ func (r *Runner) searchIndex(g *syntax.SubscriptFlags, search byte, src subscrip
 // A *scalar* does not do this — `s="hello world"; ${s[(ib:-12:)l]}` is 12,
 // the ordinary forward miss — which is why the answer is here rather than in
 // searchStart, where both walks would inherit it.
-func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []string) (at int, found, below bool) {
+func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []string) (at int, found bool, miss missKind) {
 	matches := r.subscriptMatcher(g, false)
 	back := search == 'R' || search == 'I'
 	from, within := r.searchStart(g, len(elems), back)
@@ -206,7 +243,10 @@ func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []s
 		// A start outside the array is not clamped to its end: measured,
 		// with five elements `${a[(Ib:6:)*a]}` is 0 and `${a[(ib:6:)*a]}` is
 		// 6, so neither direction searches at all.
-		return 0, false, from < 0
+		if from < 0 {
+			return 0, false, missBelow
+		}
+		return 0, false, missAbove
 	}
 	want := r.searchNth(g)
 	step := 1
@@ -218,10 +258,10 @@ func (r *Runner) searchElements(g *syntax.SubscriptFlags, search byte, elems []s
 			continue
 		}
 		if want--; want == 0 {
-			return i, true, false
+			return i, true, missNone
 		}
 	}
-	return 0, false, false
+	return 0, false, missWalked
 }
 
 // scalarSearchIndex is searchIndex over a plain string: the character
@@ -731,6 +771,24 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 			return 0, false
 		}
 	}
+	if subscriptCountsLines(g) && r.subscriptTargetIsAString(e) {
+		// `(f)` names a *span* of characters and this side answers with one
+		// subscript, so there is nothing here it can be handed: the line the
+		// group selected is as many characters as it is long, and the index
+		// of its first one would put the value inside it. Measured on zsh
+		// 5.9.2 with `v=$'aa\nbb\ncc'`, and refused by name until the write
+		// carries it rather than answered with a plausible wrong string:
+		//
+		//	v[(f)2]=ZZ     aa\nZZ\ncc   the line replaced, not a character
+		//	v[(f)2]+=XX    aa\nbbXX\ncc and joined at its end
+		//	v[(f)4]=ZZ     aa\nbb\nZZ   past the last clamps as the read does
+		//	unset 'v[(f)2]'  aa\n\ncc   the line taken out, separators kept
+		//
+		// The read side is the whole of this change; see the issue in
+		// docs/spec/grammar/parameter-expansion.md for the write.
+		refuse("f", " where a line of a string is written")
+		return 0, false
+	}
 	search := lastOf(g.Flags, searchSubscriptFlags)
 	if search == 0 {
 		// Nothing to select by, so the operand is an ordinary subscript —
@@ -786,12 +844,12 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 		// too.
 		return r.searchIndex(g, search, subscriptSource{name: a.Name, elems: elems, scalar: true}), true
 	}
-	at, found, below := r.searchElements(g, search, elems)
+	at, found, miss := r.searchElements(g, search, elems)
 	base := r.arrayBase()
 	if found {
 		return base + at, true
 	}
-	if below {
+	if miss == missBelow {
 		// The read side's rule reaches this side unchanged: a walk that
 		// began before the array answers the *backward* miss, and that is
 		// the index no element has. Measured 2026-09-12 on zsh 5.9.2 with
@@ -940,16 +998,22 @@ func (r *Runner) rangeEnd(e *syntax.ParamExpr, end syntax.SubscriptEnd, src subs
 		}
 	}
 	search := lastOf(g.Flags, searchSubscriptFlags)
+	if first && (search == 'i' || search == 'I') {
+		r.diagf("%s\n", Wording(r.diag().SubscriptIsAnIndexAndARange, "invalid subscript"))
+		r.expandErr = true
+		return 0, false
+	}
+	if subscriptCountsLines(g) && src.scalar {
+		// A line names two positions and an end takes the one it is:
+		// measured, `${v[(f)2,(f)2]}` is the second line, so the pair began
+		// where it begins and ended where it ends. See lineRangeEnd.
+		return r.lineRangeEnd(g, end, orderedSearchLetter(search), src.elems[0], first)
+	}
 	if search == 0 {
 		// A group that selects nothing leaves the end read as arithmetic,
 		// which is the rule a group in front of a plain subscript follows
 		// too: measured, `${a[(e)1,(e)2]}` is the first two elements.
 		return r.endSubscriptValue(end.Text)
-	}
-	if first && (search == 'i' || search == 'I') {
-		r.diagf("%s\n", Wording(r.diag().SubscriptIsAnIndexAndARange, "invalid subscript"))
-		r.expandErr = true
-		return 0, false
 	}
 	// And `k` and `K` are the `r` and `R` this end already reads: measured,
 	// `${a[(k)q,3]}` and `${a[1,(k)r]}` are the spans `${a[(r)q,3]}` and

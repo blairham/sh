@@ -1611,6 +1611,12 @@ func Semantics() interp.Semantics {
 	// Where it does speak it speaks at once: the `Done` row above is written
 	// between the commands of a script, on a route that draws no prompt.
 	s.FinishedJobNoticeNeedsAPrompt = interp.No
+	// And it is not written the moment the job ends either. Measured
+	// 2026-09-25 in the pinned alpine digest with a terminal allocated inside
+	// the container, `sleep 0.4 &` and then nothing: this shell says nothing
+	// until `echo AFTER` has run, and writes the row after that command's
+	// output. There is no option here that moves it.
+	s.FinishedJobNoticeArrivesAtOnce = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes

@@ -921,6 +921,17 @@ func Semantics() interp.Semantics {
 	// Written where the job ended rather than where a prompt is drawn, which
 	// the same run says: `-i -c` never draws one and zsh writes the row.
 	s.FinishedJobNoticeNeedsAPrompt = interp.No
+	// And the moment the job ends rather than before the next prompt, which
+	// is `NOTIFY` — on out of the box here and off in the rest of the panel.
+	// Measured 2026-09-25 on a pseudo-terminal: `sleep 0.4 &` writes `[1]
+	// <pid>` and then `[1]  + done       sleep 0.4` about four tenths of a
+	// second later, with nothing typed in between.
+	//
+	// The one axis here a running script can move, through `unsetopt NOTIFY`
+	// — so the entry in setopt.go writes this rather than remembering the
+	// request. Until #4524 it was remembered and ignored, and this shell
+	// behaved as `nonotify` in every session (#4524).
+	s.FinishedJobNoticeArrivesAtOnce = interp.Yes
 	// A job started with `&` reads the shell's own standard input here, where
 	// the other five hand it an empty one — measured 2026-09-07,
 	// `sh -c '/bin/cat & wait; echo ---; /bin/cat' < f` writes the file's line

@@ -681,6 +681,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	signal, stopPublishing := s.publishing()
 	defer stopPublishing()
 
+	// And the wake a *finished job* pokes, open on the same terms and for the
+	// length of the same session. Nothing at all in a session whose dialect
+	// holds the notice until it is about to draw a prompt, which is four
+	// dialects of five. See jobnotify.go.
+	jobSignal, stopNotifying := s.jobNotifying()
+	defer stopNotifying()
+
 	// And the session's own shell functions, reachable as prompt segments for
 	// the length of this session. Here rather than where the theme is built,
 	// because calling a function needs a context and a front end wiring a
@@ -693,6 +700,10 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	ed := s.newEditor(ctx, state)
 	if signal != nil {
 		ed.wake, ed.woke = signal.fd, signal.drain
+	}
+	if jobSignal != nil {
+		ed.jobWake, ed.jobWoke = jobSignal.fd, jobSignal.drain
+		ed.jobNotices = s.reportingFinishedJobs()
 	}
 	ed.history = earlier
 	// And the seam that runs from the shell *to* the editor, which is this

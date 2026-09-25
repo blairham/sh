@@ -3165,6 +3165,12 @@ func Semantics() interp.Semantics {
 	// which the `-i -c` run above is the whole evidence for: there is no prompt
 	// on that route and ksh93 writes it anyway.
 	s.FinishedJobNoticeNeedsAPrompt = interp.No
+	// And at the next command boundary rather than at the moment the job
+	// ends. Measured 2026-09-25 on a pseudo-terminal against ksh93u+
+	// 2012-08-01: `sleep 0.4 &` announces the start and says nothing more
+	// until `echo AFTER` has run. `set -b` is accepted here and changes
+	// nothing about that, which is why the letter is not read as this axis.
+	s.FinishedJobNoticeArrivesAtOnce = interp.No
 	// `$!` before any background command is *unset* here, and `set -u` still
 	// has nothing to say about it — the combination no other column has.
 	// Measured 2026-09-18 from a script file under `env -i`: `${!-unset}`

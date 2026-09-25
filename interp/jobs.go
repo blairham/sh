@@ -747,6 +747,13 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		status, endSig = sub.status, sub.diedOfSig
 	}, func() {
 		job.finishKilled(status, endSig)
+		// And the shell around this one is told, where its dialect reports a
+		// finished job the moment it ends rather than at the next prompt.
+		// Here rather than anywhere the shell's own goroutine runs, because
+		// this is the only place that knows the job has ended *while the
+		// shell is doing something else* — which is the whole of the
+		// difference. See Runner.notifyJobEnded.
+		r.notifyJobEnded()
 		// A child of this shell has ended, which is what a `&` starts
 		// wherever it is backed by a process and wherever it is not. On the
 		// shell's list rather than a subshell's, because this runs on the
@@ -834,6 +841,36 @@ func (r *Runner) announceJob(job *Job) {
 // differently. Read and not asked, for the reason the axis gives.
 func (r *Runner) canAnnounce() bool {
 	return r.JobControl || (r.monitor && r.sem().MonitorAloneAnnouncesAJob == Yes)
+}
+
+// NotifiesAsAJobEnds reports whether this shell says a background job has
+// finished the moment it finishes, rather than holding the notice until it is
+// next about to draw a prompt.
+//
+// For the front end, which is what opens the wake and what writes the line —
+// see Semantics.FinishedJobNoticeArrivesAtOnce and Runner.JobEnded. The same
+// two gates FinishedJobNotices already applies are applied here, so a shell
+// with nobody to tell arms nothing: a notice exists only where there is job
+// control, and no shell in the panel says anything about a background job
+// with the monitor off.
+//
+// Read rather than `ask`ed, for the reason the axis gives.
+func (r *Runner) NotifiesAsAJobEnds() bool {
+	return r.JobControl && r.monitor && r.sem().FinishedJobNoticeArrivesAtOnce == Yes
+}
+
+// notifyJobEnded tells the shell around this one that a job has ended, on the
+// goroutine the job ended on.
+//
+// Guarded here rather than at the call site so that the question is asked
+// once, and so that a front end which wired the hook for a session cannot be
+// woken by a dialect that does not want it — `unsetopt notify` moves the axis
+// under a session that is already running, and this is read each time.
+func (r *Runner) notifyJobEnded() {
+	if r.JobEnded == nil || !r.NotifiesAsAJobEnds() {
+		return
+	}
+	r.JobEnded()
 }
 
 // FinishedJobNotices is what to say about the jobs that have ended since it

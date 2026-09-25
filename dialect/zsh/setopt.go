@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 133 of the 185
+//     typing a directory name still does not change directory. 132 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -118,18 +118,25 @@ import (
 // without one, which is a disagreement zsh's own `W02jobs.ztst` asks about
 // directly (#4491).
 //
-// `cbases` is the most recent, and it left for the same reason one step
-// further along: it is [interp.Semantics.IntegerBaseMarkIsCSpelled], which is
+// `cbases` is [interp.Semantics.IntegerBaseMarkIsCSpelled], which is
 // whether `$(( [#16] 108 ))` writes `0x6C` or `16#6C`, and this shell wrote
 // the second in both states of it (#4502).
 //
-// `kshoptionprint` is the most recent and is the one that was not a
-// *behavior* at all but the shape of a listing: on, both bare listings become
-// 185 `name<pad>on|off` rows, and this shell recorded it and went on writing
-// the deviating names — so `emulate ksh`, which turns it on by ksh's own
-// default, printed 11 lines where the reference prints 185 (#4529).
+// `kshoptionprint` is the one that was not a *behavior* at all but the shape
+// of a listing: on, both bare listings become 185 `name<pad>on|off` rows, and
+// this shell recorded it and went on writing the deviating names — so
+// `emulate ksh`, which turns it on by ksh's own default, printed 11 lines
+// where the reference prints 185 (#4529).
 //
-// Nothing else about the split moved, and 133 is still most of the table.
+// `notify` is the most recent, and it is the one where recording cost a
+// *hang* rather than a wrong line. It is
+// [interp.Semantics.FinishedJobNoticeArrivesAtOnce] — when a finished job's
+// notice is written, the moment the job ends or before the next prompt — and
+// with it remembered this shell behaved as `nonotify` in every session, so
+// the notice arrived one command late and a driver whose only readable line
+// was that notice waited for it for ever (#4524).
+//
+// Nothing else about the split moved, and 132 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -773,11 +780,40 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	// When a job notice is written, and this shell writes it before the next
-	// prompt rather than the moment the job changes state. Recorded because
-	// neither direction moves that: the name is remembered and reported, and
-	// the notice keeps arriving where it arrives.
-	recorded("notify", true),
+	{
+		// NOTIFY: **when** a finished job's notice is written — the moment
+		// the job ends, or held for the next prompt. On by default here and
+		// off in the rest of the panel, and zsh's own manual puts it as
+		// "report the status of background jobs immediately, rather than
+		// waiting until just before printing a prompt".
+		//
+		// Implemented rather than recorded since #4524. It was accepted and
+		// ignored, so this shell behaved as `nonotify` in every session: a
+		// finished job's notice arrived one command late, and the two states
+		// of the option produced byte-identical output.
+		//
+		// The noun is the option and not the job. Measured 2026-09-25 on a
+		// pseudo-terminal against zsh 5.9.2, `sleep 0.4 &` and no signal
+		// anywhere — with it on the row lands with nothing typed, and lands
+		// *inside* a `sleep 1.5; print FGDONE` ahead of `FGDONE`; with it off
+		// both cases hold the row until after the next command's output.
+		// Neither half is about what the job was or how it ended.
+		//
+		// Read off the axis rather than off a stored bit, the arrangement
+		// `globsubst`, `octalzeroes` and `debugbeforecmd` use — so
+		// `(unsetopt notify)` stays in the subshell and `emulate -L` puts it
+		// back with the rest of the vector.
+		base: "notify", def: true,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.FinishedJobNoticeArrivesAtOnce != interp.No
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.FinishedJobNoticeArrivesAtOnce
+			}, answer(on))
+			return 0
+		},
+	},
 	matchBacked("nullglob", false, interp.UnmatchedPatternIsEmpty, false),
 	recorded("numericglobsort", false),
 	{

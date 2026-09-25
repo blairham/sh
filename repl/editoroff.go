@@ -57,7 +57,15 @@ func (s Shell) readWithoutTheEditor(state *terminalState, ed *editor, prompt dra
 	// a command gets, and it is what puts raw mode back and forgets what the
 	// translation thought the terminal last saw — which the echo of the line
 	// this just read has invalidated.
-	s.inLineDiscipline(state, func() { line, err = readCookedLine(ed) })
+	s.inLineDiscipline(state, func() {
+		// A finished job says so before the read blocks, where the dialect
+		// reports one the moment it ends — the same wake the editor's own
+		// loop looks at, looked at from the one other place this session
+		// waits. Nothing at all in the four dialects that hold the notice
+		// for the next prompt. See jobnotify.go.
+		ed.awaitFinishedJobs()
+		line, err = readCookedLine(ed)
+	})
 	if ed.lineStart.seeded {
 		// A command handed a line over — `vared`, or a verified history
 		// expansion — and there is no editing line to draw it on, so it is

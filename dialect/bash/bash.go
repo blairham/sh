@@ -3111,6 +3111,17 @@ func Semantics() interp.Semantics {
 	// the route. 3.2.57 writes the row on both, which is why this is a field:
 	// without it bash would have no single answer to give.
 	s.FinishedJobNoticeNeedsAPrompt = interp.Yes
+	// And when that prompt comes, the row is written *before* it rather than
+	// at the moment the job ended. Measured 2026-09-25 on a pseudo-terminal,
+	// `sleep 0.4 &` and then nothing: 5.3.20 and 3.2.57 both stay silent
+	// until `echo AFTER` has run and put the row after its output.
+	//
+	// It is the default and not the whole of what this shell can do: `set -b`
+	// is bash's own spelling of zsh's `NOTIFY`, and with it the same job is
+	// reported at once — measured the same day on 5.3.20. The letter is not
+	// wired to this axis yet, so what is answered here is where the shell
+	// starts (#4524).
+	s.FinishedJobNoticeArrivesAtOnce = interp.No
 	// `$!` before any background command is *unset*, not set and empty:
 	// measured, `${!-unset}` takes its default and `${!+set}` is empty, and
 	// `set -u; echo "[$!]"` writes `$!: unbound variable` and stops at 127 in

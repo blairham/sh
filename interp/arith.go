@@ -669,7 +669,7 @@ func (r *Runner) reportArithSubscriptUnclosedQuoteTarget(name, sub string) {
 // scalar as the one value it is.
 func (r *Runner) wholeArrayElems(name string) []string {
 	if a, ok := r.assocFor(name); ok {
-		return r.assocValues(a)
+		return r.assocValues(name, a)
 	}
 	if elems, ok := r.arrayElems(name); ok {
 		return elems

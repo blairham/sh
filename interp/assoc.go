@@ -27,6 +27,14 @@ type AssocArray map[string]Element
 // have the feature, and bash's own order moves between versions. A promise
 // nobody makes is not worth imitating, and a deterministic one is worth
 // having.
+//
+// **A reading surface wants [Runner.assocKeys] rather than this**, which is
+// this and then the one thing a *produced* table may say about its own order.
+// One name in the tree does say something — see SetDynamicAssocKeyOrder — and
+// a surface that walked the sorted keys straight would read that one backwards
+// while reading every other table right, which is the shape this tree keeps
+// finding: a helper beside a helper, one of them missing what the other
+// carries.
 func (a AssocArray) keys() []string {
 	out := make([]string, 0, len(a))
 	for k := range a {
@@ -36,12 +44,61 @@ func (a AssocArray) keys() []string {
 	return out
 }
 
+// assocKeys is the keys of the table read under name, in the order that name
+// reads in: sorted, unless it is a produced association that states its own.
+//
+// Named rather than taken from the table because order is a property of the
+// *parameter* and an AssocArray is a Go map, which has none to carry. The
+// producer is the one that knows — `$history`'s keys are event numbers and
+// zsh reads them newest first, where sorting them as strings puts `10` before
+// `9`.
+//
+// The name has to be a produced one for the order to speak, so that a script
+// that unsets the parameter and stores an ordinary table under the same
+// spelling gets the ordinary answer back.
+func (r *Runner) assocKeys(name string, a AssocArray) []string {
+	keys := a.keys()
+	name = r.throughNameref(name)
+	if _, produced := r.DynamicAssocs[name]; !produced {
+		return keys
+	}
+	order, ok := r.dynamicAssocKeyOrder[name]
+	if !ok {
+		return keys
+	}
+	return order(keys)
+}
+
+// SetDynamicAssocKeyOrder states the order a produced association's keys are
+// read in, where sorted is what every other table in this engine answers.
+//
+// One name states one, and it is not a preference. `$history`'s keys are
+// history event numbers and zsh reads them **newest first**, measured
+// 2026-09-24 against zsh 5.9.2 with five entries: `${(k)history}` is `5 4 3 2
+// 1` and `typeset -m history` lists `[5]` down to `[1]`. That order is what
+// `${history[(r)pat]}` means — the subscript takes the *first* match in scan
+// order, which is the most recent command, and it is the whole of what
+// zsh-autosuggestions asks the parameter for. Sorted keys would hand back the
+// oldest match instead, and as strings they would not even be in history
+// order: `"10" < "9"`.
+//
+// So this is a correctness seam and not a tidiness one, and it is deliberately
+// per-name: nothing else in the module has an order anybody can observe, and
+// a rule applied to all of them would be a claim about tables the shells make
+// no promise about.
+func (r *Runner) SetDynamicAssocKeyOrder(name string, order func(keys []string) []string) {
+	if r.dynamicAssocKeyOrder == nil {
+		r.dynamicAssocKeyOrder = map[string]func([]string) []string{}
+	}
+	r.dynamicAssocKeyOrder[name] = order
+}
+
 // assocValues returns the values in key order — the reading `${m[@]}` yields.
 //
 // On the runner rather than on the table, for the reason [Runner.denseElems]
 // is: an element may hold a compound, whose text is the names under it.
-func (r *Runner) assocValues(a AssocArray) []string {
-	keys := a.keys()
+func (r *Runner) assocValues(name string, a AssocArray) []string {
+	keys := r.assocKeys(name, a)
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, r.elemText(a[k]))
@@ -281,7 +338,7 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		// Non-nil even when empty: the array exists, so `${m[@]:-d}` on an
 		// empty one is zero fields rather than the default — the same answer
 		// an empty indexed array gives.
-		values := r.assocValues(a)
+		values := r.assocValues(e.Name, a)
 		if e.Length || e.Indirect {
 			// A count and a list of keys, neither of which reads a value —
 			// the same pair the indexed whole-array branch leaves alone.
@@ -291,7 +348,7 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		// a.values already walks. Measured on ksh93u+ 2012-08-01,
 		// 2026-09-16: `${m[@]}` on a two-key table enters the hook with each
 		// key in turn.
-		return r.disciplinedElements(e.Name, a.keys(), values)
+		return r.disciplinedElements(e.Name, r.assocKeys(e.Name, a), values)
 	}
 	key := r.assocKey(e.Subscript())
 	if r.reportEmptyAssocKeyRead(e, key) {
@@ -579,7 +636,7 @@ func (r *Runner) expandKeyQuoted(w *syntax.Word) string {
 // element whose key is `0` — not the first key there is, because "first" is
 // an order and an associative array has none. Measured: with `m[a]=1` alone,
 // `$m` is empty in the two and `1` in the one.
-func (r *Runner) assocScalar(a AssocArray) (string, bool) {
+func (r *Runner) assocScalar(name string, a AssocArray) (string, bool) {
 	// No early return for an empty table. Which of the two readings a bare
 	// name takes decides set-ness as well as the value, and the two shells
 	// disagree about an empty one in the same direction they disagree about
@@ -594,14 +651,14 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 		return r.elemText(v), true
 	}
 	if r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array") {
-		return strings.Join(r.assocValues(a), " "), true
+		return strings.Join(r.assocValues(name, a), " "), true
 	}
 	if r.ask(r.sem().KeyedTableScalarIsTheFirstValue,
 		"a plain `$m` on a keyed table giving the first value rather than the one keyed `0`") {
 		// Where the table keeps an order, "one element" is the first of
 		// them. An empty table has no first value and is still set, which is
 		// the same answer the no-early-return above protects.
-		vs := r.assocValues(a)
+		vs := r.assocValues(name, a)
 		if len(vs) == 0 {
 			return "", true
 		}

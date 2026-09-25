@@ -895,6 +895,11 @@ type Runner struct {
 	// See SetDynamicAssocEmptiedByReplacement.
 	dynamicAssocEmptied map[string]bool
 
+	// dynamicAssocKeyOrder is the order a produced association's keys are
+	// read in, where sorted is what every other table answers. See
+	// SetDynamicAssocKeyOrder.
+	dynamicAssocKeyOrder map[string]func([]string) []string
+
 	// dynamicWriters is the same for a produced *scalar*, and it exists for
 	// the same reason: a parameter a script both reads and writes cannot have
 	// its writes land in the stored table, because the producer answers ahead
@@ -8323,7 +8328,7 @@ func (r *Runner) exportedCompound(name string) (string, bool) {
 // the order that array or table lists them, and whether it holds one.
 func (r *Runner) compoundValues(name string) ([]string, bool) {
 	if a, ok := r.assocFor(name); ok {
-		return r.assocValues(a), true
+		return r.assocValues(name, a), true
 	}
 	// The *stored* array and not arrayElems, which reads a scalar back as
 	// the array of one it otherwise is — every exported name would have
@@ -10575,7 +10580,7 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 		// The associative table answers alone rather than falling through:
 		// Vars may hold a scalar the name had before it was declared, and no
 		// shell reads that back once the attribute is on.
-		return r.assocScalar(a)
+		return r.assocScalar(name, a)
 	}
 	if v, ok := r.Vars[name]; ok {
 		// Folded here rather than when it was stored, in the shell that

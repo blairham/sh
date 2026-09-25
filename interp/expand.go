@@ -4153,7 +4153,7 @@ func (r *Runner) subscriptsOf(name string, n int) []string {
 		// An associative array's subscripts are its keys — in key order,
 		// because the shells promise no order and sorted is the one this
 		// implementation keeps everywhere.
-		return a.keys()
+		return r.assocKeys(name, a)
 	}
 	if a, ok := r.Arrays[name]; ok {
 		keys := r.arrayKeys(a)

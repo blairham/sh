@@ -692,7 +692,7 @@ func TestTheProducedParametersStayOutOfASetListing(t *testing.T) {
 	}
 }
 
-// **Each of the fifteen refuses by name**, one name at a time.
+// **Each of the fourteen refuses by name**, one name at a time.
 //
 // The eight read routes are graded against `jobstates` alone above, which is
 // right for the routes — they are a property of the expansion and not of the
@@ -997,12 +997,12 @@ func moduleParams() []string {
 func implementedModuleParams() []string {
 	return []string{
 		"aliases", "builtins", "commands", "funcstack", "functions",
-		"galiases", "nameddirs", "options", "parameters", "reswords",
-		"saliases",
+		"galiases", "history", "nameddirs", "options", "parameters",
+		"reswords", "saliases",
 	}
 }
 
-// absentModuleParams is the fifteen this shell has not got, each registered
+// absentModuleParams is the fourteen this shell has not got, each registered
 // with [interp.Runner.SetAbsentParameter] so that reading one is refused at
 // the expansion that asked (#1152).
 //
@@ -1015,11 +1015,14 @@ func implementedModuleParams() []string {
 // It was sixteen. `reswords` left when the reserved-word table was exposed
 // (#2517), which is the shrink the comment on TestEveryAbsentParameterRefusesByName
 // describes happening for real: the fact was already in the shell and the
-// parameter was what was missing.
+// parameter was what was missing. `history` left the same way and for the
+// same reason (#4408) — `fc` had kept the list all along — and it is the one
+// that says what staying here costs, since zsh-autosuggestions reads it on
+// every keystroke and the refusal was written over the line being typed.
 func absentModuleParams() []string {
 	return []string{
 		"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
-		"functions_source", "functrace", "history", "historywords",
+		"functions_source", "functrace", "historywords",
 		"jobdirs", "jobstates", "jobtexts", "modules",
 		"patchars", "userdirs", "usergroups",
 	}

@@ -942,7 +942,7 @@ func (r *Runner) clusteredDeclaration(d declaration) string {
 		var b strings.Builder
 		b.WriteString(head)
 		b.WriteString("=(")
-		for _, k := range d.assoc.keys() {
+		for _, k := range r.assocKeys(d.name, d.assoc) {
 			// Sorted keys are this implementation's choice: the shells
 			// promise no order at all, and a deterministic listing is worth
 			// having. See AssocArray.keys.
@@ -1170,7 +1170,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 			return head + "=( )"
 		}
 		pairs := make([]string, 0, len(d.assoc))
-		for _, k := range d.assoc.keys() {
+		for _, k := range r.assocKeys(d.name, d.assoc) {
 			// Keys never reach `$'...'` in this engine even where its values
 			// do, which is the trap listing's style rather than the alias
 			// one — measured, not assumed.
@@ -1282,7 +1282,7 @@ func (r *Runner) bareAssignmentElements(d declaration) ([]string, bool) {
 	switch {
 	case d.isAssoc:
 		pairs := make([]string, 0, len(d.assoc))
-		for _, k := range d.assoc.keys() {
+		for _, k := range r.assocKeys(d.name, d.assoc) {
 			// Keys quote the way values do here, `$'...'` included.
 			pairs = append(pairs, "["+r.declareQuoted(k, ListedValueAlone)+"]="+r.listedElement(d.assoc[k], ListedValueAlone))
 		}

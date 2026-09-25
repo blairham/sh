@@ -2499,6 +2499,11 @@ func Semantics() interp.Semantics {
 	s.GetoptsRefusedNameStillScans = interp.No
 	// `kill %1` reaches the job's process. dash aims at the group.
 	s.KillJobSpecAimsAtTheGroup = interp.No
+	// A stopped job is left stopped: measured 2026-09-25 through a
+	// pseudo-terminal, `kill -0 %1` and `kill -WINCH %1` on a `kill
+	// -STOP`ped `sleep` both leave `ps -o stat=` reading `T`, where `kill
+	// -CONT %1` moves it to `S`.
+	s.KillJobSpecContinuesAStoppedJob = interp.No
 	// ksh93u+ alone refuses it, and by name: `kill -0 -- -1` is
 	// `kill: -1: permission denied` at 1, where `-$$` is 0 and an
 	// absent group is `no such process`.

@@ -4269,6 +4269,61 @@ type Semantics struct {
 	// has to keep the pid here.
 	KillJobSpecAimsAtTheGroup Answer
 
+	// KillJobSpecContinuesAStoppedJob sends SIGCONT to a **stopped** job
+	// before `kill` sends it what the script asked for, so that the signal
+	// lands instead of sitting pending on a process nothing has continued.
+	//
+	// zsh alone does. Measured 2026-09-25 through a pseudo-terminal on
+	// macOS 25.6 — `TERM=dumb`, `PS1`/`PS2` exported empty, each shell
+	// started interactive — with `sleep 300 &`, `kill -STOP %1`, and the
+	// process's own state read from **outside** the shell by `ps -o stat=`
+	// on the pid rather than from the job table, which is the shell's own
+	// claim about what it did:
+	//
+	//	                     kill -0 %1   kill -WINCH %1   kill -CONT %1
+	//	zsh 5.9.2            SN           SN               SN
+	//	bash 5.3.20          T            T                S
+	//	bash 3.2.57          T            T                S
+	//	ksh93u+              T            T                S
+	//	dash 0.5.12          T            T                S
+	//	BusyBox ash 1.37.0   T            T                S
+	//
+	// The `-CONT` column is the control and it is not decoration: a probe
+	// that only asked the first two would report "no continue anywhere" just
+	// as readily from an instrument that could not see a continue at all.
+	// Every column moves there, so the two columns to its left are a
+	// difference between the shells rather than a blind spot.
+	//
+	// `-0` and `-WINCH` are what discriminate, and the fatal signals cannot.
+	// A Darwin kernel ends a stopped process on a default-fatal signal
+	// without waiting to be continued, so `kill -TERM %1` is `GONE` in every
+	// column on this machine and says nothing about the rule. On Linux the
+	// same row is `T` — measured in the pinned alpine image, BusyBox ash:
+	// the process is still stopped with the SIGTERM pending — which is where
+	// the missing continue is a silent no-op rather than a mis-worded
+	// notice.
+	//
+	// Keyed on **the operand's spelling**, not on what it resolves to: `kill
+	// -0 %1` continues the job in zsh and `kill -0 "$!"` on the same job,
+	// the same second, leaves it `TN`. So a `%` word is the whole of the
+	// question, and a number is a number even where the shell knows perfectly
+	// well whose it is.
+	//
+	// And not for a signal that **stops**: `kill -STOP %1`, `-TSTP`, `-TTIN`
+	// and `-TTOU` all leave the job `TN` in zsh, where every other signal it
+	// was asked with — TERM, HUP, INT, KILL, QUIT, USR1, WINCH, URG, CHLD
+	// and 0 — leaves it `SN` or gone. Continuing a job in order to stop it
+	// is the one shape the rule excludes.
+	//
+	// How the job came to be stopped does not enter into it: a job suspended
+	// by `^Z` at the terminal answers the same three rows as one stopped by
+	// an explicit `kill -STOP`, measured the same day on the same build.
+	//
+	// Asked only where it decides something — a `%` spec naming a job this
+	// shell has recorded as stopped — so every other target takes the same
+	// path in every dialect.
+	KillJobSpecContinuesAStoppedJob Answer
+
 	// KillRefusesTheAllProcessesTarget refuses the pid `-1` — the operand
 	// POSIX defines as every process this one may signal — instead of
 	// handing it to the kernel.

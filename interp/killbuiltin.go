@@ -551,7 +551,7 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) int {
 	sent, failed := 0, 0
 	for _, t := range targets {
-		aims, fromJob, bad := r.killTarget(t)
+		aims, named, fromJob, bad := r.killTarget(t)
 		switch bad {
 		case jobSpecUnanswered:
 			return r.status
@@ -605,6 +605,16 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			// not a list from anywhere else.
 			sent++
 			continue
+		}
+		// A `%` spec naming a job this shell has recorded as stopped, in the
+		// one dialect that continues it first. Before the send, because the
+		// continue is what makes the send land: a stopped process holds a
+		// signal pending until something runs it again, which on Linux is
+		// the whole of this bug. See
+		// Semantics.KillJobSpecContinuesAStoppedJob.
+		r.continueAStoppedJobSpec(named, fromJob, sig)
+		if r.unspecified {
+			return 2
 		}
 		// One operand, however many processes it named: the operand is what
 		// `kill` reports on, so a job whose pipeline has already lost a
@@ -691,11 +701,11 @@ const killTargetNotAPid = jobSpecUnanswered + 1
 // carries whether its number names a process group, because reaching a group
 // is a different call from reaching a process and only one of them is this
 // package's to make.
-func (r *Runner) killTarget(t string) (targets []jobProcess, fromJob bool, bad int) {
+func (r *Runner) killTarget(t string) (targets []jobProcess, named *Job, fromJob bool, bad int) {
 	if !strings.HasPrefix(t, "%") {
 		n, err := strconv.Atoi(t)
 		if err != nil {
-			return nil, false, killTargetNotAPid
+			return nil, nil, false, killTargetNotAPid
 		}
 		if j := r.jobByIdent(n); j != nil {
 			// A number this shell invented for a job that has no process of
@@ -711,16 +721,93 @@ func (r *Runner) killTarget(t string) (targets []jobProcess, fromJob bool, bad i
 			// arrangement of ours, not a `%` word the script wrote, and the
 			// panel aims a number at the process in every column.
 			targets, code := r.jobProcesses(j)
-			return targets, false, code
+			return targets, j, false, code
 		}
-		return []jobProcess{{pid: n}}, false, jobFound
+		return []jobProcess{{pid: n}}, nil, false, jobFound
 	}
 	j, code := r.findJobQuietly(t)
 	if code != jobFound {
-		return nil, true, code
+		return nil, nil, true, code
 	}
 	targets, found := r.jobProcesses(j)
-	return targets, true, found
+	return targets, j, true, found
+}
+
+// continueAStoppedJobSpec sends SIGCONT to a stopped job before `kill` sends
+// it what the script asked for, in the dialect that does that.
+//
+// The point is delivery and not tidiness. A stopped process holds a signal
+// pending until something runs it again, so `kill -STOP %1` followed by
+// `kill -TERM %1` is a silent no-op on Linux: the job goes on being listed as
+// suspended and the SIGTERM never arrives. zsh continues the job and the
+// signal lands; every other column leaves it stopped. See
+// Semantics.KillJobSpecContinuesAStoppedJob for the measured rows and for the
+// two nouns the rule is keyed on.
+//
+// Keyed on the operand's **spelling** and not on what the operand resolves
+// to, which is the noun the reference pins: `kill -0 %1` on a stopped job
+// leaves it `SN` in zsh and `kill -0 "$!"` on that same job, in the same
+// second, leaves it `TN`. So `fromJob` is a parameter rather than something
+// read back off the job — a job is a job whichever word found it, and the
+// word is what decides.
+//
+// Within this engine the only operand that is not a `%` word and still
+// reaches a job is the identity invented for a job with **no process of its
+// own** (see jobident.go), and such a job has nothing to continue, so today
+// the parameter changes no send. It is still the rule rather than a
+// formality: it is what keeps `kill "$!"` from acquiring an opinion about
+// job control the moment one of those jobs gains a process.
+//
+// Not for a stopping signal, which is the one shape that would be
+// self-defeating: `kill -STOP %1` on a job that is already stopped leaves it
+// stopped in the reference too, and so do TSTP, TTIN and TTOU. Asked before
+// the axis is, because a shell that never reaches the axis for those four
+// takes the same path in every dialect and a refusal there would be a
+// diagnostic about a question nobody has.
+//
+// Through signalJob rather than through the gate, for the reason `fg` and
+// `bg` go that way: this is job control the shell is doing on its own, to a
+// job it started and has already passed the exec gate on, and not the signal
+// the script named. The script's own signal is gated a few lines below as it
+// always was. A policy that refused this one would leave a stopped job that
+// nothing could reach and a `kill` that reported success.
+//
+// A failure to continue is dropped. The job is signaled either way — that is
+// the send the script asked for, and it reports its own errors — and a job
+// whose last process went away between the lookup and here is an ESRCH
+// nobody asked about.
+func (r *Runner) continueAStoppedJobSpec(j *Job, fromJob bool, sig syscall.Signal) {
+	if !fromJob || j == nil || !j.Stopped || signalStops(sig) {
+		return
+	}
+	if !r.ask(r.sem().KillJobSpecContinuesAStoppedJob, "`kill` continuing a stopped job named by a `%` spec") {
+		return
+	}
+	if r.signalJob(j, syscall.SIGCONT) != nil {
+		return
+	}
+	// The table says what the job is doing, and it is running now. Without
+	// this a later `jobs` would report `suspended` for a process the shell
+	// has itself continued, which is the reference's answer to neither
+	// half: zsh writes `running` there.
+	j.Stopped = false
+}
+
+// signalStops reports whether the signal's default action is to stop the
+// process rather than to end it, to be caught, or to be ignored.
+//
+// Four of them, and the same four on every platform this builds for. They are
+// the exclusion continueAStoppedJobSpec needs and nothing else reads them, so
+// the list is here rather than as a column on signalEntry: `Fatal` already
+// answers a different question about the same table — whether the default
+// action *ends* the process — and a second boolean beside it would be a field
+// three of its four callers would have to remember not to use.
+func signalStops(sig syscall.Signal) bool {
+	switch sig {
+	case syscall.SIGSTOP, syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU:
+		return true
+	}
+	return false
 }
 
 // allProcesses is the pid POSIX defines as every process the caller may

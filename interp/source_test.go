@@ -106,6 +106,13 @@ func permissive() Semantics {
 	// which is five of the six and is the answer every suite here that
 	// merely writes `x=1 readonly y` already expects.
 	s.DeclarationPromotesThePrefixEntry = No
+	// Whether a `%` spec pointed at a *stopped* job continues it before the
+	// signal goes out. No, which is five of the six columns and is what
+	// every suite here that merely kills a job already expects; the suites
+	// that are *about* the axis set it themselves — see
+	// interp/killstoppedjob_test.go and dialect/killstoppedjob_test.go
+	// (#4526).
+	s.KillJobSpecContinuesAStoppedJob = No
 	s.BuiltinSyntaxErrorFatal = No
 	s.DotMissingFileFatal = No
 	s.DotWithNoOperandIsAnError = Yes

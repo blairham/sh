@@ -861,6 +861,33 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 	return r.globFields(fields), words, plain
 }
 
+// redirectTargetViewsOf is expandRedirectTargetViews over the several words a
+// target's braces made, for the reading that expands them there: `: >
+// d/{a,b,c}` names three files rather than one whose name holds the braces.
+// See Runner.redirectTarget, which is the only caller and which decides
+// whether the braces are this shell's to read at all.
+//
+// Each word is expanded on its own, which is the arithmetic the argument path
+// already has: they share every span but the group, so `> $(f){a,b}` runs `f`
+// once per name exactly as `echo $(f){a,b}` does here. Expanding the target as
+// written first and then expanding each of these would run it once more again,
+// which is why the caller does not.
+//
+// The three views are those words' views laid end to end. The plain view is
+// the one that keeps no names apart, so it is them joined by a space —
+// reached only where a reading wants a single filename out of several, which
+// is not a reading that expands a target's braces in the first place.
+func (r *Runner) redirectTargetViewsOf(made []*syntax.Word) (fields, words []string, plain string) {
+	plains := make([]string, 0, len(made))
+	for _, bw := range made {
+		f, u, p := r.expandRedirectTargetViews(bw)
+		fields = append(fields, f...)
+		words = append(words, u...)
+		plains = append(plains, p)
+	}
+	return fields, words, strings.Join(plains, " ")
+}
+
 // substitutedWordFields expands the word a `-` or `+` substituted, keeping the
 // fields it produces rather than joining them.
 //

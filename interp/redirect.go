@@ -1169,20 +1169,68 @@ func (f closerFunc) Close() error { return f() }
 // own axis rather than a new one. A dialect that does not split a target and
 // does not join several of them is not in the panel, and its answer here is
 // the joined name it always was.
+//
+// **Braces make words here too, and the fan's axis is what decides it.** A
+// target is brace-expanded before any of the above, so `: > d/{a,b,c}` is
+// three names rather than one file whose name holds the braces — which is
+// what this shell wrote until #4455. Measured 2026-09-25 in a fresh directory
+// per shell, `-f` throughout:
+//
+//	                              : > d/{a,b,c}         : > {a,b}
+//	zsh 5.9.2                     d/a, d/b, d/c         a and b
+//	zsh 5.9.2, unsetopt multios   one `d/{a,b,c}`       one `{a,b}`
+//	bash 5.3.20, bash 3.2.57      ambiguous redirect    ambiguous redirect
+//	ksh93u+ 2012-08-01            one `d/{a,b,c}`       one `{a,b}`
+//	dash 0.5.12                   one `d/{a,b,c}`       one `{a,b}`
+//
+// The second row is the one that settles where the question belongs. Turning
+// that shell's option off does not leave the braces expanded and the fan
+// joined — it stops the expansion, so the target is the one name it is
+// written as, and not the `a b` a join of two names would give. That is the
+// same switch taking a third consequence with it, which is exactly the
+// argument [Semantics.RedirectsUseEveryTarget] already makes for being one
+// axis rather than two; a second field here would be a second place to forget
+// it. ksh93 brace-expands an argument and reaches the same answer from the
+// other side, having no fan at all.
+//
+// bash is the fourth row and needs no new question: it reads the target as an
+// ordinary word, so the two names the braces make are two words, and two words
+// there is the ambiguity it already reports.
 func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
-	fields, words, plain := r.expandRedirectTargetViews(rd.Word)
-
-	// Asked only where the readings differ, which is almost never: `> f`
-	// and `> "$e"` are one word under all three, and so is a pattern that
-	// matches nothing. Asking every time would refuse every redirection in
-	// the core over a question that decides nothing.
+	// Whether there is a group that *could* make words, which costs nothing
+	// to ask: both halves read the spans and expand nothing, so neither runs
+	// a substitution that an expansion below would run again. The second
+	// half is what a count with the endpoints left unexpanded cannot see —
+	// `> {1..$n}` is one word to it and three to the shell that reads the
+	// endpoint first.
 	//
-	// Braces count as differing: a target that expands to several words is
-	// several words to the dialect that expands one.
-	same := len(fields) == 1 && fields[0] == plain &&
-		len(words) == 1 && words[0] == plain && r.braceCount(rd.Word) == 1
-	if same {
-		return []string{plain}, false
+	// The word is then expanded once, after the questions rather than
+	// before: expanding the target as written and then expanding each word
+	// the braces made would run `> $(f){a,b}`'s command three times where
+	// the argument path runs it twice.
+	braces := !r.noBraceExpand &&
+		(r.braceCount(rd.Word) > 1 || r.braceRangeShaped(rd.Word))
+
+	var (
+		fields, words []string
+		plain         string
+	)
+	if !braces {
+		fields, words, plain = r.expandRedirectTargetViews(rd.Word)
+
+		// Asked only where the readings differ, which is almost never: `> f`
+		// and `> "$e"` are one word under all three, and so is a pattern that
+		// matches nothing. Asking every time would refuse every redirection in
+		// the core over a question that decides nothing.
+		//
+		// Braces count as differing: a target that expands to several words is
+		// several words to the dialect that expands one — which is why this is
+		// reached only by a word with no group in it.
+		same := len(fields) == 1 && fields[0] == plain &&
+			len(words) == 1 && words[0] == plain
+		if same {
+			return []string{plain}, false
+		}
 	}
 
 	// The wider question first, so that a run with no dialect at all is
@@ -1198,28 +1246,61 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
 		return nil, true
 	}
 
-	if !r.ask(r.sem().RedirectTargetTakesPathnameExpansion,
-		"a redirection target field-split and matched as a pattern") {
-		// POSIX's own sentence, and the narrowest of the three questions
-		// here: the word after a redirection operator is not field-split and
-		// not pathname-expanded, whatever else the shell makes of it. So
-		// `cat < only-*.txt` opens a file by that name and fails even where
-		// one matches, and `e="a b"; > $e` writes a file called `a b`.
-		//
-		// Both views collapse onto the text, which is the one that never
-		// split and never matched. The *count* survives: a target that
-		// expanded to nothing is still nothing, and the reading below turns
-		// that into `ambiguous redirect` in the one column that does — it is
-		// how many words there are that this axis does not answer.
-		//
-		// Reached only where the views already differ, so `> f` and a
-		// pattern that matched nothing ask it nothing. Four columns answer
-		// no outright, and the two that answer yes both move to no in POSIX
-		// mode — see Runner.SetPosixMode (#3207).
-		if r.unspecified {
-			r.redirErr = true
-			return nil, true
+	// POSIX's own sentence, and the narrowest of the three questions
+	// here: the word after a redirection operator is not field-split and
+	// not pathname-expanded, whatever else the shell makes of it. So
+	// `cat < only-*.txt` opens a file by that name and fails even where
+	// one matches, and `e="a b"; > $e` writes a file called `a b`.
+	//
+	// Both views collapse onto the text, which is the one that never
+	// split and never matched. The *count* survives: a target that
+	// expanded to nothing is still nothing, and the reading below turns
+	// that into `ambiguous redirect` in the one column that does — it is
+	// how many words there are that this axis does not answer.
+	//
+	// Reached only where the views already differ, so `> f` and a
+	// pattern that matched nothing ask it nothing. Four columns answer
+	// no outright, and the two that answer yes both move to no in POSIX
+	// mode — see Runner.SetPosixMode (#3207).
+	pathname := r.ask(r.sem().RedirectTargetTakesPathnameExpansion,
+		"a redirection target field-split and matched as a pattern")
+	if !pathname && r.unspecified {
+		r.redirErr = true
+		return nil, true
+	}
+
+	// Whose reading the braces belong to, asked in the order the two
+	// questions above are asked in: the shell that reads a target as an
+	// ordinary word expands them and calls what they make ambiguous, and the
+	// shell that reads a target as a list of names expands them under the
+	// same switch that gives it the list. See this function's own comment for
+	// the row that puts the second question here rather than on a field of
+	// its own.
+	//
+	// The words are built only once both say yes, and how many there are is
+	// read off the words rather than off the count above — `> {1..$(f)}` is
+	// three names in the shell that reads an endpoint before the range and
+	// one in the shell that does not, and only the expansion knows which.
+	braced, fromTheNames := false, false
+	if braces && r.ask(r.sem().BraceExpansion, "brace expansion") &&
+		(ordinary || r.ask(r.sem().RedirectsUseEveryTarget,
+			"a redirection target's braces making several names")) {
+		if made := r.braceExpand(rd.Word); len(made) > 1 {
+			braced = true
+			if !ordinary {
+				fields, words, plain = r.redirectTargetViewsOf(made)
+				fromTheNames = true
+			}
 		}
+	}
+	if braces && !fromTheNames {
+		// Either the braces made no more than the one word, or they made
+		// several and the word is about to be refused for it: both want the
+		// target as written, expanded once.
+		fields, words, plain = r.expandRedirectTargetViews(rd.Word)
+	}
+
+	if !pathname {
 		if len(fields) > 0 {
 			fields = []string{plain}
 		}
@@ -1259,9 +1340,9 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
 		return []string{plain}, false
 	}
 	// bash's reading, and braces make words as surely as splitting does:
-	// `> {a,b}` names two files and so names none.
-	braced := !r.noBraceExpand && r.braceCount(rd.Word) > 1 &&
-		r.ask(r.sem().BraceExpansion, "brace expansion")
+	// `> {a,b}` names two files and so names none. The count is what decides
+	// it, so the words themselves are never built on this side — the
+	// redirection is refused before anything is opened.
 	if !braced && len(fields) == 1 {
 		return fields[:1], false
 	}

@@ -57,8 +57,10 @@ const (
 	// after each one, and the widget it most needs is the one that runs when a
 	// person types — so a shell whose table has no `self-insert` is a shell
 	// where a highlighter loads, binds nothing that matters, and never sees a
-	// keystroke (#2485). Measured: `${#widgets}` is 386 in zsh against 43
-	// here, and `${+widgets[self-insert]}` is 1 against 0.
+	// keystroke (#2485). Measured when that was found: `${#widgets}` was 386
+	// in zsh against 43 here, and `${+widgets[self-insert]}` 1 against 0.
+	// The count here has moved since — #4426 gave every name its dotted
+	// spelling — so it is the missing *name* that is the point, not the gap.
 	//
 	// The editor still performs it. What the name buys is that the key loop
 	// asks, on a printable key, whether the shell has put something in front

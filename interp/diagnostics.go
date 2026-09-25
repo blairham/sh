@@ -2714,6 +2714,32 @@ type Diagnostics struct {
 	// with a word in it.
 	RunningJobsAtExit string
 
+	// JobsHUPedAtExit is what a session says as it leaves, having sent
+	// SIGHUP to the jobs it was abandoning — see
+	// Runner.SendsHangupToJobsAtExit, which is what decides whether it sends
+	// at all. Two verbs: the shell's own name and the number of jobs.
+	//
+	// Empty is silence, and silence is the answer everywhere but zsh — bash
+	// has the capability under `shopt -s huponexit` and still says nothing
+	// about it. Measured 2026-09-25 through a pseudo-terminal, `sleep 30 &`
+	// then `exit`: zsh 5.9.2 writes `zsh: warning: 1 jobs SIGHUPed` and the
+	// job is gone; bash 5.3.20 and bash 3.2.57 say nothing, with
+	// `shopt -s huponexit` as without it; ksh93u+ and dash say nothing and
+	// have no option to say it with.
+	//
+	// `jobs` however many, including one — the sentence does not agree in
+	// number, which is why the wording carries the word rather than the
+	// caller choosing between two of them. It goes to the error stream: an
+	// `exec 2>file` in the session captures it and the terminal never sees
+	// it.
+	//
+	// The count is the jobs that were **signaled**, which is not the same as
+	// the jobs in the table: one running job beside one stopped one is
+	// `1 jobs SIGHUPed` in the reference. See
+	// Semantics.HangupAtExitSkipsStoppedJobs, which is what puts the stopped
+	// one outside the count by putting it outside the send.
+	JobsHUPedAtExit string
+
 	// StoppedJobsAtExitStatus is what the `exit` that was held back reports.
 	// Zero is what zsh answers, which is also the shape of a dialect that
 	// never holds an exit at all; bash answers 1, a builtin that failed.

@@ -30,8 +30,9 @@ wait -n; echo n=$?`)
 	}
 }
 
-// disown shields the job from a HUP this engine never forwards — and the
-// listing keeps it. With nothing held it fails in silence.
+// disown shields the job from a HUP this shell has no way to ask for — it
+// has neither bash's `huponexit` nor zsh's `hup` — and the listing keeps it.
+// With nothing held it fails in silence.
 func TestDisownKeepsTheJob(t *testing.T) {
 	out, _ := runKsh(t, t.TempDir(), `{ exit 0; } &
 disown

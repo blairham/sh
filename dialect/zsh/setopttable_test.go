@@ -31,12 +31,16 @@ import "testing"
 // in either state. `cbases` is the tenth: it moves
 // Semantics.IntegerBaseMarkIsCSpelled, which is whether `$(( [#16] 108 ))`
 // writes `0x6C` or `16#6C`, and until #4502 it wrote the second in both
-// states.
+// states. `hup` is the eleventh: it moves
+// interp.Runner.SendsHangupToJobsAtExit — the switch bash already reaches
+// under `shopt -s huponexit` — so a session that is leaving really does send
+// SIGHUP to the jobs it abandons and really does say how many. Until #4509 it
+// was remembered and nothing sent.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
-		"longlistjobs", "cbases",
+		"longlistjobs", "cbases", "hup",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -58,7 +62,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 135; recordedCount != want {
+	if want := 134; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

@@ -530,7 +530,17 @@ var zshOptions = []zshOption{
 	recorded("histsavenodups", false),
 	recorded("histsubstpattern", false),
 	recorded("histverify", false),
-	recorded("hup", true),
+	// HUP: whether a session that is leaving sends SIGHUP to the jobs it is
+	// about to abandon, and says how many. Not recorded since #4509 — the
+	// name is a real switch now, and it is the one bash already reaches
+	// under `shopt -s huponexit` rather than a second of its own. See
+	// interp.Runner.SendsHangupToJobsAtExit for the switch and the three
+	// HangupAtExit axes for where this shell parts from that one: no login
+	// shell required, stopped jobs left alone, and the whole of it before
+	// the EXIT trap.
+	switchBacked("hup", true,
+		(*interp.Runner).SendsHangupToJobsAtExit,
+		(*interp.Runner).SetSendsHangupToJobsAtExit),
 	// Implemented rather than recorded since #1856: the substrate has a
 	// run-time switch beside its BraceExpansion axis, and this name is that
 	// switch under zsh's spelling — inverted, because zsh names the state

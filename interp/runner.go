@@ -5255,12 +5255,21 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// EXIT trap does.
 	r.ctx = ctx
 	r.runPendingTraps(ctx)
+	// Which side of the EXIT trap the hangup falls on is the dialect's, and
+	// the two shells that hang up at all answer it differently: bash writes
+	// the trap's line and *then* the job's handler sees the signal, and zsh
+	// writes `zsh: warning: N jobs SIGHUPed` and then the trap's line. See
+	// Semantics.HangupAtExitPrecedesTheExitTrap for both measurements, and
+	// note that this is the same call either way — the order is the only
+	// thing that moves.
+	if r.sem().HangupAtExitPrecedesTheExitTrap == Yes {
+		r.hangUpJobsIfAsked()
+	}
 	r.runExitTrap(ctx)
 	r.runExitHook(ctx)
-	// After the EXIT trap, which is measured: with the option on, a login
-	// shell wrote the trap's line and *then* the job's handler saw the
-	// hangup. See Runner.SendsHangupToJobsAtExit.
-	r.hangUpJobsIfAsked()
+	if r.sem().HangupAtExitPrecedesTheExitTrap != Yes {
+		r.hangUpJobsIfAsked()
+	}
 	r.finishHistoryFile()
 	if !r.inSubshell {
 		r.stopSignalsAndRestore()

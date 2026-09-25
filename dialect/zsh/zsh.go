@@ -2136,6 +2136,18 @@ func Semantics() interp.Semantics {
 	// jobs.` and draws the next prompt, with no table under it, whichever way
 	// `checkjobs` and `checkrunningjobs` are set.
 	s.HeldExitListsTheJobs = interp.No
+	// `setopt hup` is on in a fresh zsh and needs no login shell: measured
+	// 2026-09-25 on a pseudo-terminal with the shell started `-fiV +Z`, an
+	// interactive session that is not a login shell hangs its running job up
+	// and writes `zsh: warning: 1 jobs SIGHUPed`. A stopped job is left out
+	// of the send — one running beside one stopped is `1 jobs SIGHUPed`, two
+	// stopped is silence, and the stopped process reads `SN` afterwards
+	// rather than `T`, so this shell continued it rather than hanging it up.
+	// And all of it happens before the EXIT trap: with `trap 'echo
+	// EXIT_TRAP' EXIT` the warning comes first. Each row is on its axis.
+	s.HangupAtExitNeedsALoginShell = interp.No
+	s.HangupAtExitSkipsStoppedJobs = interp.Yes
+	s.HangupAtExitPrecedesTheExitTrap = interp.Yes
 	// CDPATH moves in silence here.
 	s.CdpathAnnouncesTheDirectory = interp.No
 	// And CDPATH is a search beside the ordinary relative lookup, with the
@@ -4386,6 +4398,14 @@ func Diagnostics() interp.Diagnostics {
 		// bash's says 1.
 		StoppedJobsAtExit: "%[1]s: you have suspended jobs.",
 		RunningJobsAtExit: "%[1]s: you have running jobs.",
+		// And what it says once it goes anyway, having sent the signal
+		// `setopt hup` asks for. The shell names itself here too; `jobs`
+		// however many, including one, which is the reference's own wording
+		// and not a plural this rendering chose. Measured 2026-09-25 through
+		// a pseudo-terminal: `setopt no_check_jobs`, `sleep 3 &`, `exit`
+		// writes `zsh: warning: 1 jobs SIGHUPed` on the error stream and the
+		// job is gone. See interp.Runner.SendsHangupToJobsAtExit.
+		JobsHUPedAtExit: "%[1]s: warning: %[2]d jobs SIGHUPed",
 		// The reason first and the name after it, which is zsh's shape and
 		// nobody else's. Lowercased, which LowercaseReason already says.
 		// Same either way — zsh does not distinguish opening from creating.
@@ -5388,6 +5408,15 @@ func Apply(r *interp.Runner) {
 	// shells spell the option `checkjobs`; only the defaults differ, and this
 	// is where this one's is set. See interp.Runner.ChecksRunningJobsAtExit.
 	r.SetChecksRunningJobsAtExit(true)
+	// And the jobs that are still running when the session goes anyway are
+	// sent SIGHUP, which is `setopt hup` and is **on** in a fresh zsh — the
+	// switch the core starts off and bash only reaches through `shopt -s
+	// huponexit`. Independent of `checkjobs` above, which is measured:
+	// `unsetopt checkjobs` leaves at the first `exit` and still hangs the
+	// jobs up and still says so. See interp.Runner.SendsHangupToJobsAtExit
+	// and the three HangupAtExit axes for what this shell does differently
+	// once the switch is on.
+	r.SetSendsHangupToJobsAtExit(true)
 	registerEmulate(r)
 	// This shell's own question about a name, under two names: `whence` and
 	// `where`. Not ksh93's builtin under the same spelling — the stream, the

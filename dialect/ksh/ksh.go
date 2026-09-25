@@ -1066,8 +1066,9 @@ func Semantics() interp.Semantics {
 	s.WaitReadsOptions = interp.Yes
 	// Job specs by command text, a second match taken rather than refused.
 	// A `wait` whose spec names nothing says nothing at all and reports 0;
-	// there is no -n, and disown only shields a job from a HUP this engine
-	// never forwards, so the listing keeps it.
+	// there is no -n, and disown only shields a job from a HUP this shell
+	// has no way to ask for — it has no `huponexit` and no `hup` — so the
+	// listing keeps it.
 	s.JobSpecsByName = interp.Yes
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.No
@@ -3101,6 +3102,16 @@ func Semantics() interp.Semantics {
 	// question and stays unimplemented there.
 	s.JobsListsWhatChangedSinceTheLastReport = interp.Yes
 	s.JobsPidsOnlyOption = interp.Yes
+
+	// unanswered HangupAtExitNeedsALoginShell, HangupAtExitSkipsStoppedJobs,
+	// HangupAtExitPrecedesTheExitTrap: all three are about what happens once
+	// a session has been asked to send SIGHUP to the jobs it is leaving, and
+	// this shell has no way to ask. The switch is
+	// interp.Runner.SendsHangupToJobsAtExit, which only bash's `shopt -s
+	// huponexit` and zsh's `setopt hup` move; with it off the three are
+	// never consulted. Measured 2026-09-25 through a pseudo-terminal: a
+	// backgrounded `sleep 30` is still running after the interactive shell
+	// that started it exits, and nothing is said about it.
 
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.No

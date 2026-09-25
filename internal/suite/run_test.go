@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -54,7 +55,7 @@ func testDir(t *testing.T, files map[string]string) string {
 func TestATimedOutRunIsKilledAsAGroup(t *testing.T) {
 	tests := testDir(t, map[string]string{"hang.tests": "sleep 60 &\nsleep 60\n"})
 	start := time.Now()
-	out := runFile(context.Background(), "/bin/sh", tests, "hang.tests",
+	out := runFile(context.Background(), Suite{}, "/bin/sh", tests, "hang.tests",
 		environ(Suite{}, tests, "/bin/sh"), 500*time.Millisecond)
 	elapsed := time.Since(start)
 	if !out.TimedOut {
@@ -70,7 +71,7 @@ func TestARunThatFinishesCarriesItsStatusAndBothStreams(t *testing.T) {
 	tests := testDir(t, map[string]string{
 		"ok.tests": "echo out\necho err >&2\nexit 3\n",
 	})
-	out := runFile(context.Background(), "/bin/sh", tests, "ok.tests",
+	out := runFile(context.Background(), Suite{}, "/bin/sh", tests, "ok.tests",
 		environ(Suite{}, tests, "/bin/sh"), 10*time.Second)
 	if out.TimedOut {
 		t.Fatal("a file that exits promptly was reported as hung")
@@ -125,5 +126,71 @@ func TestEnvironIsTheSameBothWaysBarTheShell(t *testing.T) {
 	}
 	if differ != 1 {
 		t.Errorf("%d variables differ between the two runs, want exactly the one naming the shell", differ)
+	}
+}
+
+// A suite whose files a shell does not run is invoked through the suite's own
+// driver, and the file becomes the driver's argument.
+//
+// The assertion is on the order as much as on the membership: `+Z -f` are the
+// shell's options and have to precede the script, and the file has to follow
+// it. A vector with the same five strings in another order is a different
+// command and two of the orders are silently wrong rather than refused —
+// `zsh ztst.zsh +Z -f file` hands the driver three arguments and runs no test.
+func TestADriverIsInvokedBeforeTheFileAndAfterTheShellsOptions(t *testing.T) {
+	got := argv(Suite{Driver: "ztst.zsh", DriverArgs: []string{"+Z", "-f"}}, "A01grammar.ztst")
+	want := []string{"+Z", "-f", "./ztst.zsh", "./A01grammar.ztst"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("argv with a driver = %q, want %q", got, want)
+	}
+}
+
+// A column with no driver keeps the vector it has always had. bash's suite and
+// our own are both this shape, so a regression here is a regression in every
+// built column at once.
+func TestWithoutADriverTheShellIsHandedTheFile(t *testing.T) {
+	got := argv(Suite{}, "glob.tests")
+	want := []string{"./glob.tests"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("argv with no driver = %q, want %q", got, want)
+	}
+}
+
+// The shell lands where the suite's files reach for it, and it is the shell of
+// *this* run.
+//
+// The second half is the one worth a test. A link that pointed at one shell
+// for both runs would have the column grading the reference against itself and
+// reporting perfect agreement — the shape this repository has lost most to,
+// and one that looks like success from every direction.
+func TestThePlacedShellIsThisRunsShell(t *testing.T) {
+	run := t.TempDir()
+	s := Suite{ShellAt: "../Src/zsh"}
+	if err := placeShell(s, filepath.Join(run, "t"), "/bin/sh"); err != nil {
+		t.Fatalf("placing the shell: %v", err)
+	}
+	at := filepath.Join(run, "Src", "zsh")
+	got, err := os.Readlink(at)
+	if err != nil {
+		t.Fatalf("reading the link the files would follow: %v", err)
+	}
+	if got != "/bin/sh" {
+		t.Fatalf("the placed shell is %q, want the shell this run was given", got)
+	}
+}
+
+// A column that names no path for its shell has nothing placed, and placing
+// something anyway would put a binary inside a suite that never asked for one.
+func TestWithoutAShellPathNothingIsPlaced(t *testing.T) {
+	run := t.TempDir()
+	if err := placeShell(Suite{}, filepath.Join(run, "t"), "/bin/sh"); err != nil {
+		t.Fatalf("a column with no ShellAt should be a no-op, got %v", err)
+	}
+	entries, err := os.ReadDir(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("placing nothing left %d entries behind", len(entries))
 	}
 }

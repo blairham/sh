@@ -199,6 +199,73 @@ type Suite struct {
 	// itself constantly, and pointing this at one shell for both runs would
 	// grade the reference against itself.
 	ShellVar string
+	// Driver is the suite's own test harness, relative to [Suite.TestDir],
+	// for a suite whose files a shell does not run.
+	//
+	// bash's `.tests` are shell scripts: the shell under test runs one and
+	// what it prints is the evidence. zsh's `.ztst` are not. They are a
+	// sectioned format — input, expected output, expected status — that
+	// zsh's own `ztst.zsh` interprets, and handing one to a shell directly
+	// produces a syntax error rather than a measurement.
+	//
+	// That is the whole of the difference, and it is a field rather than a
+	// second harness: the driver is itself a script in the dialect, so the
+	// shell under test still runs everything, one level further out. A
+	// column with no driver is unaffected — [runFile] keeps the argument
+	// vector it has always built.
+	Driver string
+	// DriverArgs are the options the shell under test is given before the
+	// driver's path.
+	//
+	// zsh needs `+Z -f`: no ZSH_NAME games and no startup files, because a
+	// driver that read the machine's `.zshrc` would be measuring the
+	// machine. Taken from the suite's own `Test/Makefile.in`, which is the
+	// only statement of this that upstream makes.
+	DriverArgs []string
+	// DriverVerdict says the driver states a pass or a fail of its own, in
+	// its exit status, so the report can say how much of this column's
+	// agreement is agreement on a *failure*.
+	//
+	// It exists because this column can produce the one result nobody
+	// interrogates. bash's files print and the harness diffs what they
+	// printed; a `.ztst` file is *adjudicated* by `ztst.zsh`, which prints
+	// its own verdict — so when a case cannot run at all, both shells print
+	// the same refusal and the file scores **strict**. That is an echo
+	// rather than a measurement, and it is invisible in every figure above
+	// it.
+	//
+	// It is not hypothetical here and it is not rare. This fetch unpacks
+	// `Test/` and deliberately nothing else, so the distribution's own
+	// function library and its built modules are absent — which is a
+	// licensing decision, not an oversight, and see the package comment in
+	// fetch.go for why no shell implementation of anybody else's may land on
+	// this disk. The completion files reach for `../Functions` and
+	// `../Completion` through `comptestinit` and fail identically under both
+	// shells; the module files reach for a `Modules/` nobody built.
+	//
+	// So the column prints [Report.StrictOnFailure] beside its strict count,
+	// and a reader can see at once how much of the agreement is two shells
+	// declining the same case. Nothing is excluded on the strength of it —
+	// a guess about which files those are would be a curated list that ages,
+	// where this is counted from the run.
+	DriverVerdict bool
+	// ShellAt is where the shell under test must be placed for the files to
+	// find it, relative to the directory a file is run in. Empty for a suite
+	// whose files reach the shell through [Suite.ShellVar] alone.
+	//
+	// zsh's files do not use `$ZTST_exe` for the shells they start. They
+	// spell it `$ZTST_testdir/../Src/zsh` — a path into the build tree the
+	// suite expects to be sitting in. Without something at that path every
+	// such case fails on `no such file or directory` under *both* shells,
+	// which is the worst shape a harness fault can take: the two runs agree,
+	// so the column reports a healthy number for cases neither shell ran.
+	//
+	// Measured on this branch before the field existed, real zsh against
+	// real zsh: `A01grammar` came back `bad status 127, expected 0 from: -
+	// $ZTST_testdir/../Src/zsh -fc ...`. It is a symlink rather than a copy
+	// so that the binary is not duplicated 65 times per run, and it is made
+	// per run so that each side points at its own shell.
+	ShellAt string
 	// Lookup is where the oracle binary might be, in order. The reference
 	// shell on the machine is the oracle — never the shipped expected
 	// output.
@@ -401,17 +468,47 @@ var Panel = []Suite{
 	{
 		Name:    "zsh",
 		Dialect: "zsh",
-		Version: "5.9",
-		URL:     "https://sourceforge.net/projects/zsh/files/zsh/5.9/zsh-5.9.tar.xz/download",
-		SHA256:  "9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5",
-		Root:    "zsh-5.9",
+		Version: "5.9.2",
+		// Not the release tarball, which is `.tar.xz` in every version zsh
+		// has published and would cost this tree a decompressor it does not
+		// otherwise need. The tag's own archive is gzip, and the ksh93 entry
+		// below already reaches a suite this way, so the fetch's shape is
+		// unchanged and `internal/depsurface` is untouched.
+		URL:     "https://github.com/zsh-users/zsh/archive/refs/tags/zsh-5.9.2.tar.gz",
+		SHA256:  "e10993e2cc3d43b770c6ceeb56919c18f428697b5f4c6833ede8977df10ac8ae",
+		Root:    "zsh-zsh-5.9.2",
 		Include: []string{"Test/"},
 		TestDir: "Test",
 		Ext:     ".ztst",
-		Lookup:  []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
-		NotYet: "the 73 files are .ztst, a format of the suite's own that a shell does not " +
-			"run — so this column needs an invocation model rather than a table row, and " +
-			"the release ships .tar.xz where the standard library reads gzip",
+		// `Test/` and nothing else, which is the same line fetch.go's package
+		// comment draws for bash and is drawn here for the same reason: the
+		// archive carries a whole shell, including a completion system this
+		// tree implements, and none of it may land on this disk. It is not
+		// free — see [Suite.DriverVerdict] for what the absent function
+		// library costs this column and for how the report says so rather
+		// than absorbing it.
+
+		// The invocation model, out of the suite's own `Test/Makefile.in`:
+		//
+		//	ZTST_exe=<shell> <shell> +Z -f <Test>/ztst.zsh <file>.ztst
+		//
+		// `runtests.zsh` is upstream's loop over that line with a summary
+		// printed at the end, and this harness already loops and already
+		// scores, so the driver is `ztst.zsh` directly.
+		Driver:        "ztst.zsh",
+		DriverArgs:    []string{"+Z", "-f"},
+		DriverVerdict: true,
+		ShellAt:       "../Src/zsh",
+		ShellVar:      "ZTST_exe",
+		Lookup:        []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
+		MustReport:    "zsh",
+		// 5.9.2 rather than 5.9, and the distinction is the one #4106 had to
+		// make for bash. It is free here: the suite is the 5.9.2 tag's, and
+		// `images/zsh-5.9.2/Dockerfile` already establishes that Debian sid
+		// packages 5.9.2 — so this column is graded against the build it
+		// names from its first run, rather than acquiring a banner later.
+		Against:       "zsh 5.9.2",
+		AgainstReport: "5.9.2",
 	},
 	{
 		Name:    "ksh93",

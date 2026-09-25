@@ -579,7 +579,9 @@ was a genuine gap for a long time: `main-canary.yml` was deleted in #53
 `ci.yml`, and `Lint` was still blind on `main` until #1640 made it a
 full-tree run. `drift.yml` is a different question again: weekly,
 deliberately non-gating, and watching the oracle *panel* rather than this
-tree.
+tree. `suites.yml` is the third: the suite reports, on every merge
+and nightly, split out of `ci.yml` in #4428 so that the gating workflow holds
+only what can gate.
 
 `go vet` is deliberately not a step of its own: `govet` is one of the
 linters `.golangci.yml` enables, so the lint job already runs it over the
@@ -1539,8 +1541,30 @@ it is the difference between a battery and a decoration.
 
 `make bash-suite` fetches **bash's own `tests/`** and runs every file of it
 through real bash and through `cmd/bash`, comparing output and status.
-`internal/suite` holds it, `internal/cmd/suitecheck` prints the report, and
-`make suite-panel` lists the columns. It is report-only and never a gate.
+`make zsh-suite` does the same with **zsh's own `Test/`**. `internal/suite`
+holds both, `internal/cmd/suitecheck` prints the report, and `make suite-panel`
+lists the columns. They are report-only and never a gate: they live in
+`.github/workflows/suites.yml`, which runs on every merge and nightly, never on
+a pull request, and holds nothing that can turn a build red — `ci.yml` is the
+gate and only the gate (#4428).
+
+**The two columns are not the same shape, and the difference is the one thing
+to hold on to about the zsh one.** A bash `.tests` file is a script: the shell
+runs it and what it prints is the evidence. A zsh `.ztst` file is *data* that
+zsh's own `ztst.zsh` adjudicates, so the shell under test runs the driver and
+the file is the driver's argument — `Suite.Driver`, out of the suite's own
+`Test/Makefile.in` — and the files reach for the shell by the build-tree path
+`$ZTST_testdir/../Src/zsh`, which `Suite.ShellAt` puts there per run.
+
+That adjudication is also the zsh column's trap, and `Suite.DriverVerdict`
+exists for it. **A case neither shell can run scores `strict`**, because both
+print the same refusal and the harness is comparing what they printed. Only
+`Test/` is unpacked — the licensing line every fetched column here draws — so
+the files that reach for the distribution's function library or a built module
+fail identically on both sides and read as agreement. The column therefore
+prints an `of those` line under `strict` counting how much of its own
+agreement is two shells declining the same case. It is counted from the run
+and never a curated list of file names, which would age silently.
 
 It exists because the two corpora we have are both ours. `make conformance`
 grades snippets this project wrote, so it proves that what we thought to ask

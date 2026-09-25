@@ -134,6 +134,10 @@ type Band struct {
 	Common, Longest int64
 }
 
+// StrictOnFailureRate is [Report.StrictOnFailure] over the strict count: the
+// share of this column's agreement that is two shells declining the same case.
+func (r Report) StrictOnFailureRate() float64 { return ratio(r.StrictOnFailure, r.Strict) }
+
 // StrictRate and LineRate are the band's two rates.
 func (b Band) StrictRate() float64 { return ratio(b.Strict, b.Scored) }
 func (b Band) LineRate() float64   { return ratio64(b.Common, b.Longest) }
@@ -199,6 +203,12 @@ type Report struct {
 	// an upper bound on the floor an associative array's hash order puts
 	// under this column, and it corrects nothing.
 	Reordered int64
+
+	// StrictOnFailure is how many of the strict files are files the
+	// reference's own driver reported as *failed* — so the two shells
+	// agree on a refusal rather than on a result. Zero for a column
+	// whose suite states no verdict of its own; see [Suite.DriverVerdict].
+	StrictOnFailure int
 
 	OracleHung    int
 	DialectHung   int
@@ -457,6 +467,13 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			if !res.Strict {
 				statuses[[2]int{res.OurStatus, res.RefStatus}]++
 			}
+			// See [Suite.DriverVerdict]. Counted rather than curated, and
+			// counted only where the driver actually states a verdict:
+			// elsewhere a non-zero status is the file's own result and
+			// says nothing about whether it ran.
+			if s.DriverVerdict && res.Strict && res.RefStatus != 0 {
+				rep.StrictOnFailure++
+			}
 		}
 	}
 	rep.MeanFile = 0
@@ -632,8 +649,39 @@ func runIn(ctx context.Context, s Suite, tests, name, shell string, opts Options
 	if err := copyTree(tests, run); err != nil {
 		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
 	}
-	out := runFile(ctx, shell, run, name, append(environ(s, run, shell), opts.Extra...), opts.timeout())
+	if err := placeShell(s, run, shell); err != nil {
+		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
+	}
+	out := runFile(ctx, s, shell, run, name, append(environ(s, run, shell), opts.Extra...), opts.timeout())
 	return placed{Outcome: out, Dir: run}
+}
+
+// placeShell puts the shell under test where the suite's files look for it,
+// for a suite that names it by a path rather than through [Suite.ShellVar].
+//
+// A symlink rather than a copy: the binary is named once per run instead of
+// once per file, and the link is made inside the run's own temporary
+// directory, so the two runs point at their own shells and neither can see
+// the other's. [Suite.ShellAt] carries the measurement that made this
+// necessary.
+//
+// The shell is resolved to an absolute path first. The link is read from a
+// directory that is not the one the harness was started in, so a relative
+// -bin would resolve against the run directory and dangle — the same fault
+// [Outcome.Failed] records, arriving one level earlier.
+func placeShell(s Suite, run, shell string) error {
+	if s.ShellAt == "" {
+		return nil
+	}
+	at := filepath.Join(run, filepath.FromSlash(s.ShellAt))
+	if err := os.MkdirAll(filepath.Dir(at), 0o700); err != nil {
+		return err
+	}
+	abs, err := filepath.Abs(shell)
+	if err != nil {
+		return err
+	}
+	return os.Symlink(abs, at)
 }
 
 // repeats asks the reference for the same file again.

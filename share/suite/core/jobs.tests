@@ -163,8 +163,25 @@ wait "$a"; printf 'older by pid -> %s\n' "$?"
 # this file has already waited for, and the two listings are not the same
 # text. The status the third job reached is asked of its pid, which is where
 # a status is a number rather than a race.
+#
+# The `jobs` below is the other half of that, and it is what the case was
+# missing: holding the third job open makes its presence a fact, and says
+# nothing about the *absence* of the jobs this file has already finished
+# with. A job that has been waited for has been reaped, but bash keeps its
+# entry — `Done`, and still holding its number — until something lists the
+# table, so whether `%1` is free when the third job starts is a question
+# about what ran earlier in this file rather than about renumbering. bash
+# 5.3 answered this line two ways for that reason (#4430): under load the
+# background job fifty lines up was still `[1] Done`, the fifo job
+# took `[2]`, and `%1` named a job this case has nothing to say about. A
+# `jobs` reports the finished entries and drops them, and every job started
+# above this line has been waited for — so after it the table holds exactly
+# what the shell is still running, and the number the new job takes is a
+# fact. It costs the other four references nothing: none of them was still
+# holding the entry.
 ( exit 7 ) & wait $!
 ( exit 3 ) & c=$!; wait "$c"
+jobs > /dev/null 2>&1
 mkfifo renumber
 { head -n 1 renumber > /dev/null; exit 4; } &
 d=$!

@@ -677,9 +677,10 @@ reject. Force pushes and deletion of `main` are blocked, and commits must
 be signed.
 
 **Head branches are deleted automatically on merge**, so `--delete-branch`
-is belt-and-braces rather than the thing that does the work. Remove the
-sibling worktree when the pull request opens, not when it merges; the
-branch will be gone by then either way.
+is belt-and-braces rather than the thing that does the work — the *remote*
+branch, that is. The local branch and the sibling worktree are still yours
+to clean up, and they stay until the merge lands. See *Done means merged,
+closed, and the worktree gone* below.
 
 Auto-merge is enabled, so a pull request can be queued to land the moment
 its required checks go green.
@@ -2305,7 +2306,75 @@ stopping for.
 This is not a preference about tidiness. Working directly on `main` is how
 a local commit ends up rewritten to recover from a mistake, and how a
 half-finished experiment ends up in the same tree as the fix you meant to
-send. Remove the worktree when the pull request opens, not when it merges.
+send. Keep the worktree until the merge lands, and remove it then — see
+*Done means merged, closed, and the worktree gone* below.
+
+## Done means merged, closed, and the worktree gone
+
+A task is finished when all four of these hold, and not before:
+
+1. the pull request is **squash-merged**,
+2. every **issue it resolves is closed**,
+3. the **worktree is removed** and its local branch deleted, and
+4. **nothing it started is still running**.
+
+Opening the pull request is not the finish line, and neither is a green
+check. Do not move on to the next issue while CI runs on this one: a task
+that stops at PR-open leaves a branch nobody owns, an issue that still
+counts against the board, and a sibling directory indistinguishable from
+live work in an editor's repository list.
+
+Both halves of that cost are specific here. **The release bar is counted
+from labels on open issues**, so an unclosed issue is not a paperwork slip
+— it is a release still blocked. And `main` moves several times an hour on
+this board, so an unmerged branch is not "nearly done": it decays into a
+rebase somebody else has to do.
+
+The last steps of every task, in this order:
+
+    gh pr create ...                        # `Closes #NNNN` in the *body*
+    gh pr merge --squash --delete-branch --auto
+    gh pr view   --json state,mergedAt      # MERGED
+    gh issue view <n> --json state          # CLOSED
+    git fetch -q origin && git show origin/main:<file> | grep <the change>
+    git worktree remove ../sh-<topic>
+    git branch -D <topic>
+
+**Verify rather than assume — running a command is not the same as it
+having worked**, and every step above has a failure that reports success:
+
+- `--auto` *queues* a merge, and a red required check holds that queue
+  indefinitely; `Lint` is a whole-tree run, so somebody else's finding can
+  be what is holding yours.
+- A squash strands any commit pushed after auto-merge fired, which is why
+  the `git show origin/main` line is in the list and not optional. Check
+  the artifact, not the report about it.
+- `Closes #NNNN, #MMMM` closes only the first, and a keyword in the commit
+  message is not a keyword in the body. Read the issue's state; do not
+  infer it from the pull request's.
+- `git branch -d` refuses after a squash merge, because the commits look
+  unmerged by ancestry even when the tree is identical to `main`. `-D` is
+  the one you want — and `git diff main <branch>` is *not* the check, since
+  it is empty only while `main` has not moved. `gh pr list --state merged
+  --json headRefName` is the reliable answer.
+
+**The fourth condition is not boilerplate.** It was added because the first
+three were being met while the machine was being eaten: three probe shells
+left pinned at ~97% CPU each, one orphaned onto `launchd`, having burned
+176 minutes of CPU between them — left behind by a measurement of what real
+zsh does with a loop that has an empty condition *and* an empty body. Real
+zsh spins at 100% on that shape, so the probes worked exactly as designed
+and nobody killed them. Before reporting, check for background shells, for
+anything that loops by design (a probe of a non-terminating construct is
+the sharpest case), for containers left from an `ash` measurement, and for
+any process you backgrounded and stopped watching. `pgrep -f` on what you
+started is the whole of it. Never kill a login shell or another session's
+live run.
+
+**Remove only the worktree you created.** A collision on `git worktree add`
+is a stop-and-report signal, not an invitation to work in the tree you
+found — and `worktree remove` refusing a dirty tree is the safety
+mechanism, not an obstacle to `--force`.
 
 ## Every commit must be signed, and check before you push
 

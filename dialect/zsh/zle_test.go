@@ -1325,3 +1325,111 @@ func TestRedisplayAndPushAreOperationLetters(t *testing.T) {
 		}
 	}
 }
+
+// A dotted name that no built-in answers to is an ordinary widget, and
+// invoking it runs that widget rather than nothing at all.
+//
+// This is #4424, and it is the whole of why `^L` wrote nothing under
+// powerlevel10k. A dot is not a namespace: `zle -A` and `zle -N` take a dotted
+// name so long as it is not a built-in's, and p10k saves the widget it wraps
+// as `zle -A clear-screen ._p9k_orig_clear-screen`, then reaches the original
+// with `zle ._p9k_orig_clear-screen`. Routing every dotted name into the
+// built-in table meant that call found nothing and was status 1 in silence —
+// and `_p9k_widget` reads a failed call as *there was nothing to call*, so the
+// screen was never cleared and nothing said so.
+//
+// The status is the half that matters as much as the output: a wrapper
+// branches on it.
+func TestADottedNameThatIsNotABuiltInIsAnOrdinaryWidget(t *testing.T) {
+	r, out := zleRunner(t, `orig() { BUFFER="$BUFFER-ORIG"; print -r -- "orig ran"; }
+zle -N orig
+zle -A orig ._p9k_orig_clear-screen
+a() { zle ._p9k_orig_clear-screen; print -r -- "rc=$?"; }
+zle -N a
+`)
+	line, ok, printed := runWidget(t, r, out, "a", repl.Line{Buffer: "x", Cursor: 1})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "orig ran\nrc=0\n"; printed != want {
+		t.Errorf("output = %q, want %q — the dotted alias was never called", printed, want)
+	}
+	if got, w := line.Buffer, "x-ORIG"; got != w {
+		t.Errorf("line back = %q, want %q", got, w)
+	}
+}
+
+// And the dotted spelling of a name the editor *does* answer to still reaches
+// the editor, past whatever has been defined under the bare name.
+//
+// The pair is the point: the fallback above must not cost the dot its meaning.
+// The rebinding is what makes the row discriminating — `up-line-or-history` is
+// a defined widget here, so a dotted call that resolved by *stripping the dot*
+// and asking the defined table would run `f` and print `MINE`, which is what a
+// wrapper reaching for the thing it wrapped must never get. Asserted on the
+// action the editor was asked to perform rather than on the line, for the
+// reason TestInvokingABuiltInWidgetReachesTheEditor gives.
+//
+// Ordering the two tables the other way round is *inert* and deliberately has
+// no row: a protected name can never be in the defined table, so the sets are
+// disjoint and either order answers the same. The protection is what buys
+// that, and TestADottedBuiltInNameIsProtected is where it is pinned.
+func TestTheDottedSpellingStillReachesTheEditorPastARebinding(t *testing.T) {
+	r, out := zleRunner(t, "f() { print -r -- MINE }\nzle -N up-line-or-history f\n"+
+		"a() { zle .up-line-or-history; print -r -- \"rc=$?\"; }\nzle -N a\n")
+	_, ok, printed, ed := runWidgetWatching(t, r, out, "a", repl.Line{}, &stubEditor{})
+	if !ok {
+		t.Fatal("the widget did not run")
+	}
+	if want := "rc=0\n"; printed != want {
+		t.Errorf("output = %q, want %q — the dot reached the rebinding instead of the editor", printed, want)
+	}
+	if want := []repl.Widget{repl.WidgetPreviousHistory}; !slices.Equal(ed.performed, want) {
+		t.Errorf("performed %v, want %v", ed.performed, want)
+	}
+}
+
+// A dotted name a built-in already answers to is protected, and each of `-N`,
+// `-C` and `-A` refuses it by that name.
+//
+// Measured against zsh 5.9 through a pseudo-terminal: each letter given
+// `.accept-line` or `.clear-screen` writes “widget name `.accept-line' is
+// protected“ at status 1, and the same letter given a dotted name that is not
+// a built-in's is status 0. That refusal is what keeps the two name sets
+// disjoint, which is what lets a dotted call ask one table and then the other.
+func TestADottedBuiltInNameIsProtected(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+	}{
+		{"define", "f(){:}; zle -N .accept-line f\n"},
+		{"complete", "f(){:}; zle -C .accept-line complete-word f\n"},
+		{"alias", "f(){:}; zle -N w f; zle -A w .accept-line\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			want := "zsh:zle:1: widget name `.accept-line' is protected\n"
+			if out != want || st != 1 {
+				t.Errorf("output = %q status %d, want %q at 1", out, st, want)
+			}
+		})
+	}
+}
+
+// The protected name is the *later* of two answers in `-C` and in `-A`, which
+// is the order zsh gives them in.
+//
+// Measured: `zle -A nosuchw .accept-line` complains that there is no such
+// widget `nosuchw', and `zle -C .accept-line notacompleter f` complains about
+// the completer. A check written before either of those would be right about
+// the name and wrong about which complaint comes out.
+func TestTheProtectedNameComesAfterTheSourceAndTheCompleter(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "zle -A nosuchw .accept-line\n")
+	if w := "zsh:zle:1: no such widget `nosuchw'\n"; out != w || st != 1 {
+		t.Errorf("alias: output = %q status %d, want %q at 1", out, st, w)
+	}
+	out, st = runZsh(t, t.TempDir(), "f(){:}; zle -C .accept-line notacompleter f\n")
+	if w := "zsh:zle:1: invalid widget `notacompleter'\n"; out != w || st != 1 {
+		t.Errorf("complete: output = %q status %d, want %q at 1", out, st, w)
+	}
+}

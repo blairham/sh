@@ -186,6 +186,8 @@ func TestSemantics(t *testing.T) {
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
+		// A notice never names the pid here and no option asks for one.
+		{"JobNoticeNamesThePID", s.JobNoticeNamesThePID, interp.No},
 		// The sole holdout on the pseudo-conditions: ERR, DEBUG and RETURN
 		// are refused as the unknown words they are here.
 		{"TrapHasErrCondition", s.TrapHasErrCondition, interp.No},

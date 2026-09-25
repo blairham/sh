@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 139 of the 185
+//     typing a directory name still does not change directory. 138 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -104,7 +104,7 @@ import (
 // re-declares `local` names inside loops, so remembering-and-ignoring it wrote
 // nine lines to stdout before every prompt (#2033).
 //
-// `debugbeforecmd` is the most recent, and it is the one that shows what
+// `debugbeforecmd` is the one that shows what
 // recording costs when the name is wired to something the shell really does.
 // It is [interp.Semantics.DebugTrapRunsBeforeTheCommand] — where the DEBUG
 // trap fires, ahead of each command or behind it — and remembering it meant
@@ -112,7 +112,13 @@ import (
 // byte-identical output while the listings went on reporting the difference
 // back faithfully (#4473).
 //
-// Nothing else about the split moved, and 139 is still most of the table.
+// `longlistjobs` is the most recent, and it is
+// [interp.Semantics.JobNoticeNamesThePID]: whether a job notice names the
+// job's pid. Recording it meant `setopt longlistjobs` reported itself on every
+// surface and the notice went on being written without one, which is a
+// disagreement zsh's own `W02jobs.ztst` asks about directly (#4491).
+//
+// Nothing else about the split moved, and 138 is still most of the table.
 //
 // Recording is worth doing and is not the same as implementing. A real rc
 // file opens with a dozen `setopt` lines about completion, correction and
@@ -585,7 +591,41 @@ var zshOptions = []zshOption{
 	// never moves it — so the two shells were measured apart rather than one
 	// read off the other (#1727).
 	recordedOver("login", false, func(r *interp.Runner) bool { return r.LoginShell }),
-	recorded("longlistjobs", false),
+	{
+		// LONG_LIST_JOBS: whether a job *notice* names the job's pid — the
+		// long row `jobs -l` writes, rather than the short one `jobs`
+		// writes. Off by default, and implemented rather than recorded since
+		// #4491: it was accepted and then ignored, so both states of it
+		// wrote `[1]  + done       :` where the reference writes the pid in
+		// one of them.
+		//
+		// Measured on zsh 5.9.2 under `-fiV +Z` on a pseudo-terminal,
+		// 2026-09-25. The noun is the notice: with the option on, a job that
+		// ended is `[1]  + 96801 done       :`, one a signal killed is
+		// `[1]  + 97103 terminated  sleep 30`, a ^Z is
+		// `[1]  + 98875 suspended  sleep 5` where the short form is the
+		// sentence `zsh: suspended  sleep 5`, `bg` writes
+		// `[1]  + 258 continued  sleep 5` and `fg` writes
+		// `[1]  + 63526 running    sleep 3`. A `jobs` listing of the very
+		// same suspended job is `[1]  + suspended  sleep 5` in **both**
+		// states, and `jobs -l` is long in both — so the option is keyed on
+		// the surface and not on the job, the state or the letter.
+		//
+		// Read off the axis rather than off a stored bit, the arrangement
+		// `globsubst`, `multios` and `shwordsplit` use — so
+		// `(setopt longlistjobs)` stays in the subshell and `emulate -L`
+		// puts it back with the rest of the vector.
+		base: "longlistjobs", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.JobNoticeNamesThePID == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.JobNoticeNamesThePID
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("magicequalsubst", false),
 	recorded("mailwarning", false),
 	recorded("markdirs", false),

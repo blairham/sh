@@ -470,14 +470,46 @@ func (r *Runner) jobLine(i int, j *Job, showBg bool) string {
 // adds. Every shell in the panel has the letter and every one of them puts
 // the id somewhere different, so the whole row is the dialect's format.
 func (r *Runner) jobLineLong(i int, j *Job, showBg bool) string {
+	return r.jobLineLongAs(i, j, showBg, false)
+}
+
+// jobLineLongAs is that row with the same noticing question jobLineAs takes:
+// `-l` is one way to reach it and Semantics.JobNoticeNamesThePID is the other,
+// and the second of those renders a job that has *ended*, where the one
+// dialect with a separate notice word for it wants that word.
+func (r *Runner) jobLineLongAs(i int, j *Job, showBg, noticing bool) string {
 	dg := r.diag()
 	return Wording(dg.JobLineLong, "[%[1]d]%[2]s %[3]d %-24[4]s%[5]s",
-		i, r.jobMarker(j), j.Ident(), r.jobState(j, false), r.jobCommand(j, showBg))
+		i, r.jobMarker(j), j.Ident(), r.jobState(j, noticing), r.jobCommand(j, showBg))
 }
 
 func (r *Runner) jobLineAs(i int, j *Job, showBg, noticing bool) string {
 	return Wording(r.diag().JobLine, "[%[1]d]%[2]s  %-24[3]s%[4]s",
 		i, r.jobMarker(j), r.jobState(j, noticing), r.jobCommand(j, showBg))
+}
+
+// jobNoticeLine is the row a *notice* is made of — what the shell says about
+// a job on its own initiative, and what `fg` and `bg` say about the job they
+// named.
+//
+// The long row where the dialect names the pid in a notice and the listing's
+// own row where it does not. See Semantics.JobNoticeNamesThePID: one dialect
+// has an option that moves it between one job and the next, so both renderings
+// have to be reachable from one vector rather than chosen when it is built.
+func (r *Runner) jobNoticeLine(i int, j *Job, showBg, noticing bool) string {
+	if r.namesThePIDInANotice() {
+		return r.jobLineLongAs(i, j, showBg, noticing)
+	}
+	return r.jobLineAs(i, j, showBg, noticing)
+}
+
+// namesThePIDInANotice reads the axis rather than asking it, which is the
+// arrangement EndedJobIsListedAsRunningWithoutTheMonitor uses and for the same
+// reason: a dialect that has not answered writes the short form the whole
+// panel writes, and a complaint in the middle of a notice would land where
+// nobody asked a question.
+func (r *Runner) namesThePIDInANotice() bool {
+	return r.sem().JobNoticeNamesThePID == Yes
 }
 
 // jobState is the state column: what a job is doing, worded the dialect's
@@ -701,6 +733,17 @@ func (r *Runner) finishResumed(j *Job) int {
 // dialect that says nothing of its own prints: `fg` names the command alone
 // and `bg` puts the `&` back after it.
 func (r *Runner) resumeNotice(j *Job, wording, fallback, state string) string {
+	if r.namesThePIDInANotice() {
+		// The long row, with the resume's own state word in the column a
+		// listing would have put `running` or `suspended` in. Built from
+		// JobLineLong rather than from a second pair of resume wordings,
+		// because that is what it is: measured, `fg` with the option on
+		// prints `[1]  + 63526 running    sleep 3` and `bg` prints
+		// `[1]  + 258 continued  sleep 5`, which is the `jobs -l` row and
+		// the resume's verb (#4491).
+		return Wording(r.diag().JobLineLong, "[%[1]d]%[2]s %[3]d %-24[4]s%[5]s",
+			r.jobNumber(j), r.jobMarker(j), j.Ident(), state, j.Command)
+	}
 	if wording == "" {
 		return fallback
 	}

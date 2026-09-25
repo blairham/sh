@@ -2993,6 +2993,11 @@ func Semantics() interp.Semantics {
 	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
+	// A notice never names the pid here and there is no option that asks
+	// for one: measured 2026-09-25 on a pseudo-terminal under
+	// `bash --norc --noprofile -i` with `set -m`, a finished `&` job is
+	// `[1]+  Done                       sleep 0.2` and nothing else.
+	s.JobNoticeNamesThePID = interp.No
 
 	// `jobs`' letters. bash has the widest set in the panel: POSIX's `-l`
 	// and `-p`, the state filters `-r` and `-s`, `-n` for what has changed

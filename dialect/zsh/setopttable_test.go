@@ -26,10 +26,14 @@ import "testing"
 // `debugbeforecmd` is the eighth: it moves
 // Semantics.DebugTrapRunsBeforeTheCommand, which is where the DEBUG trap
 // fires, and until #4473 both states of it produced the same output.
+// `longlistjobs` is the ninth: it moves Semantics.JobNoticeNamesThePID, which
+// is whether a job notice names the job's pid, and until #4491 it named none
+// in either state.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
+		"longlistjobs",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -51,7 +55,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 137; recordedCount != want {
+	if want := 136; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

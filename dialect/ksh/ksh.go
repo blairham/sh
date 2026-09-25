@@ -3087,6 +3087,10 @@ func Semantics() interp.Semantics {
 	// monitor the listing goes on saying the job is running — after a
 	// `wait` that reaped it, too.
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.Yes
+	// No pid in a notice, and no option for one: measured 2026-09-25 on a
+	// pseudo-terminal under `ksh -i` with `set -m`, the row is
+	// `[1] +  Done                    sleep 0.2 &`.
+	s.JobNoticeNamesThePID = interp.No
 
 	// `jobs`' letters, as its own usage line gives them: `-lnp`. The state
 	// filters `-r` and `-s` are unknown options here.

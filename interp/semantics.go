@@ -8370,6 +8370,55 @@ type Semantics struct {
 	// the ended rows either way.
 	EndedJobIsListedAsRunningWithoutTheMonitor Answer
 
+	// JobNoticeNamesThePID makes a job *notice* name the job's process id —
+	// the long row `jobs -l` writes, rather than the short one `jobs` writes.
+	//
+	// The noun is the **notice** and not the job and not the listing. A
+	// notice is what the shell says about a job on its own initiative — that
+	// it ended, that it was killed, that it stopped — together with what
+	// `fg` and `bg` say about the job they just named. A `jobs` listing is a
+	// different surface and this does not reach it: the same job, in the
+	// same state, in the same session, is listed short and noticed long.
+	//
+	// No in every shell in the panel by default, and only one of them can be
+	// asked for anything else: zsh's `LONG_LIST_JOBS` is this axis, which is
+	// why it is an axis rather than a wording — the same dialect has to
+	// render both, and a script moves it between one job and the next.
+	//
+	// Measured 2026-09-25 on a pseudo-terminal, `TERM=dumb`, each shell
+	// started interactive with the monitor on and a `&` job left to finish:
+	//
+	//	bash 5.3.20    [1]+  Done                       sleep 0.2
+	//	ksh93u+        [1] +  Done                    sleep 0.2 &
+	//	dash           [1] + Done                       sleep 0.2
+	//	BusyBox 1.37.0 [1]+  Done                       sleep 0.2
+	//	zsh 5.9.2      [1]  + done       sleep 0.2
+	//	zsh, +option   [1]  + 96801 done       sleep 0.2
+	//
+	// And the same day, in one zsh session with the option on, over the four
+	// notices this shell writes: `[1]  + 97103 terminated  sleep 30` for a
+	// job a signal killed, `[1]  + 98875 suspended  sleep 5` for a ^Z — which
+	// is the short `zsh: suspended  sleep 5` with the option off, so the
+	// option replaces that sentence with the row rather than widening it —
+	// `[1]  + 258 continued  sleep 5` for a `bg`, and
+	// `[1]  + 63526 running    sleep 3` for an `fg`. Against all of those,
+	// `jobs` for the very same suspended job writes `[1]  + suspended
+	// sleep 5` in **both** states, and `jobs -l` writes the long row in both:
+	// the flag and the option are different questions about different
+	// surfaces, which is the pair that says what this is keyed on (#4491).
+	//
+	// Read rather than `ask`ed, the arrangement
+	// EndedJobIsListedAsRunningWithoutTheMonitor uses: a dialect that has not
+	// answered writes the short form the whole panel writes, and a complaint
+	// in the middle of a notice would land where nobody asked a question.
+	//
+	// It is one pid and not the job's every process. Real zsh writes a row
+	// per pipeline element here — `[1]  + 97210 done  { :; } | ` and a
+	// continuation line for each of the others — and this shell has one pid
+	// per job to name, which is the same limitation its `[n] pid`
+	// announcement already carries for a pipeline. See Job.Ident.
+	JobNoticeNamesThePID Answer
+
 	// SetReportsEveryBadOption makes `set` report every option word it
 	// cannot use before it gives up, rather than stopping at the first.
 	//

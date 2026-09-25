@@ -1511,6 +1511,9 @@ func Semantics() interp.Semantics {
 	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
+	// No pid in a notice: measured 2026-09-25 on a pseudo-terminal under
+	// `dash -i` with `set -m`, `[1] + Done                       sleep 0.2`.
+	s.JobNoticeNamesThePID = interp.No
 
 	// `jobs`' letters: POSIX's pair and nothing else. `-r`, `-s`, `-n` and
 	// `-x` are all "Illegal option" here, which is why the letter set is a

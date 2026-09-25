@@ -77,9 +77,12 @@ import (
 // Which leaves the rule as one sentence about what a script is told rather
 // than two about kinds of feature: **a module loads when everything it names
 // is either implemented or refuses by name on access, and nothing it names
-// may read as empty when it is absent.** Applied to `zsh/parameter`, five of
-// the thirty-three are implemented, ten are empty and right to be, eighteen
-// refuse — and the module loads. Applied to `zsh/zutil` it is the answer that
+// may read as empty when it is absent.** Applied to `zsh/parameter`, thirteen
+// of the thirty-three are implemented, seven are empty and right to be,
+// thirteen refuse — and the module loads. The split moves as parameters land
+// and the verdict does not, which is the point of stating the rule this way:
+// the gate opened when every absent name gained a call site (#1152) rather
+// than when the last one was implemented. Applied to `zsh/zutil` it is the answer that
 // file already gave.
 //
 // **A math function has a registry too**, and now does — see

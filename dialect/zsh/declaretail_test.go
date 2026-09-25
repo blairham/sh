@@ -458,6 +458,16 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // a bare `readonly` there writes `reswords` as a bare name too, between
 // `parameters` and `sysparams` exactly as here.
 //
+// `functrace` joins for the fourth time on that same argument (#4447), and
+// it is a produced *array* rather than a table — `typeset -ar functrace`.
+// Measured in zsh 5.9.2: `functrace=(a b)` is `read-only variable: functrace`
+// and `${(t)functrace}` is `array-readonly-hide-hideval-special`, so without
+// the attribute an assignment would leave a stored array standing in front of
+// the view. It is not in that shell's own bare `readonly` — nor is any of the
+// names above it — because the module's parameters are autoload stubs there
+// until something materializes them, which is the seam the `ARGC` paragraph
+// above records and not a fact about this name.
+//
 // `OLDPWD` is on both listings because this shell exports it from the first
 // command, which is InheritedOldpwdIgnored's other half: measured 2026-09-12,
 // `env -i zsh -c "export V='a b'; export -p"` writes `export OLDPWD=$PWD`
@@ -478,7 +488,7 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
 	want := "OLDPWD=" + dir + "\nSHLVL=1\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"errnos\nhistory\nkeymaps\nlanginfo\nparameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
+		"errnos\nfunctrace\nhistory\nkeymaps\nlanginfo\nparameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
 		"export OLDPWD=" + dir + "\nexport SHLVL=1\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's
@@ -493,7 +503,8 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +
-		"typeset -ar errnos\ntypeset -Ar history\ntypeset -ar keymaps\ntypeset -Ar langinfo\n" +
+		"typeset -ar errnos\ntypeset -ar functrace\ntypeset -Ar history\n" +
+		"typeset -ar keymaps\ntypeset -Ar langinfo\n" +
 		"typeset -Ar parameters\ntypeset -ar reswords\ntypeset -Ar sysparams\n" +
 		"typeset -Ar termcap\n" +
 		"typeset -Ar terminfo\ntypeset -Ar widgets\n" +

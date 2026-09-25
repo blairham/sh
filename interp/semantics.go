@@ -14286,6 +14286,42 @@ type Semantics struct {
 	// access time.
 	TestHasTheModifiedSinceReadOperator Answer
 
+	// TestModifiedSinceReadCountsAnEqualTime is what `-N` answers for a file
+	// whose two times are the same — which is every file a script has just
+	// written and not read back.
+	//
+	// The axis above pins the operator's presence and says the panel agrees
+	// about the comparison. This is the one part of the comparison it does
+	// not agree about, and it is separable from the "cannot be measured
+	// twice" objection recorded there: the times are *set* rather than
+	// observed, so the case holds still. Measured 2026-09-25 with `touch -t`
+	// writing each time explicitly, three files against the columns that
+	// have the operator — dash and BusyBox ash are the rest of the seven and
+	// have neither it nor a `[[ ]]` to ask it in:
+	//
+	//	                       atime == mtime   mtime > atime   atime > mtime
+	//	bash 5.3.20            false            true            false
+	//	bash 3.2.57            true             true            false
+	//	ksh93 93u+ 2012-08-01  false            true            false
+	//	zsh 5.9.2              true             true            false
+	//
+	// The two columns either side are the control: every shell agrees about
+	// them, so the tie is the whole of the disagreement. `[[ -N f ]]` and
+	// `[ -N f ]` answer alike in every column that has both, so this is one
+	// axis over both spellings rather than one each.
+	//
+	// The core answers No. POSIX has no `-N` at all to read a tie out of, so
+	// what is left is the operator's own sentence — *has been modified since
+	// it was last read* — which is the strict reading, and it is what the
+	// dialect presets for bash and ksh hold anyway: bash's is 5.3 and ksh's
+	// is the only ksh93 a Mac has. zsh is the one that overrides it, and
+	// bash 3.2 is the column saying the split is not zsh's alone.
+	//
+	// It decides the commonest case there is rather than a corner: a file a
+	// script has just created has equal times, so `[[ -N $new ]]` is this
+	// axis and nothing else. zsh's own `C02cond.ztst` asks exactly that.
+	TestModifiedSinceReadCountsAnEqualTime Answer
+
 	// TestStringOrder is which of `<` and `>` `test` compares strings with —
 	// see TestStringOrderPolicy.
 	//
@@ -25872,6 +25908,15 @@ func PosixSemantics() Semantics {
 		TestHasTheFileExistsLetter:          No,
 		TestHasTheShellOptionOperator:       No,
 		TestHasTheModifiedSinceReadOperator: No,
+		// And where `[[ -N ]]` is reached anyway — the keyword's operator
+		// set is the common denominator of the shells that have `[[ ]]`,
+		// which is wider than the builtin's — a file written and not read
+		// since is *not* written since it was read. The strict reading of
+		// the operator's own sentence, and what bash 5.3 and ksh93 hold —
+		// two of the four columns that have the operator at all, against
+		// bash 3.2 and zsh. dash and BusyBox ash are the other two of the
+		// seven and have neither the operator nor the keyword to ask it in.
+		TestModifiedSinceReadCountsAnEqualTime: No,
 		// And POSIX reads the whole operand list: an expression with words
 		// behind it is not an expression, which is what six of the seven
 		// columns answer and what the count above is for.

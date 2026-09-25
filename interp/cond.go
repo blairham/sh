@@ -309,6 +309,16 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// == 1 ]]` is 0 in zsh with the complaint already written.
 		r.diagf("%s\n", Wording(d.UnknownConditionOption, "no such option: %s", s))
 		return false, condStatus{code: d.UnknownConditionOptionStatus}
+	case "-N":
+		// Written since last read — the same question `test -N` asks, the
+		// same answer, and the same helper, exactly as the file tests below
+		// share `fileTest`.
+		//
+		// Ungated here and gated there, which is not an oversight: every
+		// shell that has `[[ ]]` has this operator, while dash and BusyBox
+		// ash have the builtin without it, so the narrower set is the one
+		// that needs an axis. `-a` immediately below is the same shape.
+		return r.modifiedSinceRead(s), nil
 	case "-e", "-a", "-f", "-d", "-s", "-r", "-w", "-x",
 		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h",
 		"-O", "-G":

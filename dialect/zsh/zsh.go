@@ -2581,6 +2581,12 @@ func Semantics() interp.Semantics {
 	// `test -a f` and `test -o errexit` are `too many arguments` here, and
 	// `<` and `>` are `condition expected`.
 	s.TestHasTheModifiedSinceReadOperator = interp.Yes
+	// And a file written and not read since — equal times, which is every
+	// file a script has just created — is `-N` true here, where bash 5.3 and
+	// ksh93 want the write to be strictly the later of the two. Measured
+	// 2026-09-25 with `touch -t` setting both times, so the case holds still;
+	// bash 3.2 is on this side of it too.
+	s.TestModifiedSinceReadCountsAnEqualTime = interp.Yes
 	// `set -p` is the short spelling of `privileged` here too.
 	s.SetHasThePrivilegedLetter = interp.Yes
 	// `-nt` and `-ot` want both files to exist, and `-t x` is a plain

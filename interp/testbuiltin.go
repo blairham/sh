@@ -1245,7 +1245,26 @@ func (r *Runner) modifiedSinceRead(operand string) bool {
 		return false
 	}
 	read, ok := fileAccessTime(info)
-	return ok && info.ModTime().After(read)
+	if !ok {
+		// A platform whose stat this build cannot decompose answers false,
+		// the bargain `-O` and `-G` strike for the third: the question is
+		// "was this written since it was read", and a shell that could not
+		// tell must not say yes.
+		return false
+	}
+	written := info.ModTime()
+	if written.After(read) {
+		return true
+	}
+	if read.After(written) {
+		return false
+	}
+	// The tie, and the only part of the comparison the panel splits on —
+	// asked here rather than in front of the whole function, so a file whose
+	// two times differ never raises the question. See
+	// Semantics.TestModifiedSinceReadCountsAnEqualTime for the measurement.
+	return r.ask(r.sem().TestModifiedSinceReadCountsAnEqualTime,
+		"`-N` on a file written and not read since, whose two times are equal")
 }
 
 // compareStat stats one side of a binary file comparison.

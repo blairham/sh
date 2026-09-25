@@ -261,6 +261,19 @@ var condUnaryOps = map[string]bool{
 	// measurement where this shell said `unknown condition: -a` about an
 	// operator every column has.
 	"-a": true,
+	// Written since last read, and core for the same head count as `-O` and
+	// `-G`: bash 5.3, bash 3.2, ksh93 and zsh 5.9.2 all answer `[[ -N f ]]`,
+	// and dash has no `[[ ]]` to put it in. The `[` builtin is the narrower
+	// set and is gated by an axis instead, because dash and BusyBox ash have
+	// the builtin without the operator — see
+	// interp.Semantics.TestHasTheModifiedSinceReadOperator, which this does
+	// not duplicate.
+	//
+	// Missing here, the word was not an operator at all, and in the one
+	// dialect that resolves a condition when it runs that is fatal:
+	// `[[ -N f ]]` was `unknown condition: -N` at status 2, which takes a
+	// driver's `eval` with it and leaves nothing on either stream (#4498).
+	"-N": true,
 }
 
 // condBinaryWordOps are the two-operand tests spelled as words. These compare

@@ -252,3 +252,101 @@ func TestTerminalTestRequiresANumberIsAnAxis(t *testing.T) {
 		}
 	}
 }
+
+// TestWrittenSinceReadIsAConditionOperatorAsWellAsABuiltinOne — `[[ -N f ]]`
+// is the same question `test -N f` asks, answered by the same code.
+//
+// Two things make it worth its own case. The keyword's operator set is the
+// common denominator of the shells that *have* `[[ ]]`, so `-N` is core
+// there while the builtin's is an axis — dash and BusyBox ash have `test`
+// without the operator and neither has the keyword. And the missing operator
+// was not a wrong answer but a refusal: in a dialect that resolves a
+// condition when it runs, an unknown one is fatal at status 2, which is how
+// a whole file ended with nothing on either stream (#4498).
+//
+// The three files are set with explicit times so nothing depends on how fast
+// the test runs, and `read` is the control: it is the one direction every
+// shell in the panel agrees about, so a run where it answered true would be
+// comparing something other than the times.
+func TestWrittenSinceReadIsAConditionOperatorAsWellAsABuiltinOne(t *testing.T) {
+	dir := writtenSinceReadFiles(t)
+	for _, tc := range []struct {
+		src  string
+		want int
+	}{
+		{`[[ -N written ]]`, 0},
+		{`[[ -N read ]]`, 1},
+		{`[[ -N nosuch ]]`, 1},
+		{`[[ -N "" ]]`, 1},
+		// The same questions through the builtin, which shares the code —
+		// and which needs its own axis on to be asked at all.
+		{`test -N written`, 0},
+		{`test -N read`, 1},
+	} {
+		out, st := fileCondRun(t, dir, tc.src, func(s *Semantics) {
+			s.TestHasTheModifiedSinceReadOperator = Yes
+		})
+		if st != tc.want || out != "" {
+			t.Errorf("%s = %d %q, want a silent %d", tc.src, st, out, tc.want)
+		}
+	}
+}
+
+// TestModifiedSinceReadCountsAnEqualTimeIsAnAxis — a file written and not
+// read back has equal times, and the panel splits on it: zsh 5.9.2 and bash
+// 3.2 answer true, bash 5.3.20 and ksh93 answer false. Measured 2026-09-25
+// with `touch -t` writing each time, so the case holds still where observing
+// it would not.
+//
+// `written` and `read` are the controls, asserted under *both* values: they
+// are the two directions every column agrees about, so an implementation that
+// answered the axis by answering everything would fail here.
+func TestModifiedSinceReadCountsAnEqualTimeIsAnAxis(t *testing.T) {
+	dir := writtenSinceReadFiles(t)
+	for _, a := range []struct {
+		answer Answer
+		tie    int
+	}{{Yes, 0}, {No, 1}} {
+		for _, tc := range []struct {
+			src  string
+			want int
+		}{
+			{`[[ -N equal ]]`, a.tie},
+			{`test -N equal`, a.tie},
+			{`[[ -N written ]]`, 0},
+			{`[[ -N read ]]`, 1},
+		} {
+			out, st := fileCondRun(t, dir, tc.src, func(s *Semantics) {
+				s.TestHasTheModifiedSinceReadOperator = Yes
+				s.TestModifiedSinceReadCountsAnEqualTime = a.answer
+			})
+			if st != tc.want || out != "" {
+				t.Errorf("%s at %v = %d %q, want a silent %d", tc.src, a.answer, st, out, tc.want)
+			}
+		}
+	}
+}
+
+// writtenSinceReadFiles lays out the three shapes `-N` can be asked about:
+// the write later than the read, the read later than the write, and the two
+// equal — which is what a file nothing has read back since it was created
+// holds, and the only one of the three the panel disagrees about.
+func writtenSinceReadFiles(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	early, late := time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour)
+	for name, times := range map[string][2]time.Time{
+		"written": {early, late},
+		"read":    {late, early},
+		"equal":   {late, late},
+	} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, times[0], times[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}

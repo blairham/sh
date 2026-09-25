@@ -3508,7 +3508,7 @@ func (r *Runner) markedSubscriptWord(w *syntax.Word, protects func(syntax.Span) 
 			// 5.3.20, the whole subscript having come out of the value, where
 			// `[[ a[$k] -eq 9 ]]` with `k='x]'` reads the value's bracket as
 			// part of the key (#3303).
-			return text
+			return markArithValueNul(text)
 		}
 		if !protects(sp) {
 			// Text the caller reads as syntax rather than as content, so its
@@ -3516,7 +3516,7 @@ func (r *Runner) markedSubscriptWord(w *syntax.Word, protects func(syntax.Span) 
 			if sp.Kind == syntax.Literal {
 				advance(text)
 			}
-			return text
+			return markArithValueNul(text)
 		}
 		return markArithValue(text)
 	})
@@ -3532,6 +3532,43 @@ func markArithValue(part string) string {
 	var b strings.Builder
 	for i := 0; i < len(part); i++ {
 		if strings.IndexByte(arithValueMarked, part[i]) >= 0 {
+			b.WriteByte(syntax.ArithValueMark)
+		}
+		b.WriteByte(part[i])
+	}
+	return b.String()
+}
+
+// markArithValueNul marks a NUL a value carried, and nothing else.
+//
+// The bytes markArithValue covers are two different kinds of thing, and only
+// one of them is about brackets. A `[`, a `]`, a quote, a `$` and a backtick
+// are marked because the *scanner* would read them as syntax, so a span
+// outside brackets the script wrote has none to be told apart from and is
+// rightly left alone. The mark byte is not one of those: it is marked because
+// the encoding has to be reversible, and syntax.ArithValueMark says so —
+// "a mark in front of a mark is a NUL that was data, so a bare one can only
+// be this". That invariant holds over the whole text or it holds nowhere.
+//
+// It did not. A NUL a value carried arrived bare wherever the depth gate sent
+// the span back unmarked, and unmarkArithValue then took it **and the byte
+// behind it**, so a condition compared `ab` where the value was `a\0b` — and
+// only where there was a byte behind it, which is why a NUL at the very end
+// of a value survived and looked like the encoding working. Measured
+// 2026-09-25: `v=$'a\0b'` has `${#v}` 3 and `[[ $v == ab ]]` held (#4516).
+//
+// Separate from markArithValue rather than a flag on it, because the two
+// answer different questions and a reader deciding which to call is deciding
+// whether brackets are in play — which is exactly the distinction the depth
+// gate above draws.
+func markArithValueNul(part string) string {
+	if strings.IndexByte(part, syntax.ArithValueMark) < 0 {
+		return part
+	}
+	var b strings.Builder
+	b.Grow(len(part) + 1)
+	for i := 0; i < len(part); i++ {
+		if part[i] == syntax.ArithValueMark {
 			b.WriteByte(syntax.ArithValueMark)
 		}
 		b.WriteByte(part[i])

@@ -1174,7 +1174,9 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		// Both names, and then the array's own elements whichever half was
 		// asked for — the value a tie has is one value. The separator
 		// follows where it is not the default, quoted the way a listed value
-		// is: `'#'`, `' '`, `''`, and a bare `-`.
+		// is: `'#'`, `' '`, `''`, and a bare `-`. The NUL is the one byte
+		// that quoting cannot write, and tieSeparatorWord holds why the
+		// empty word is its spelling rather than an escape.
 		head = strings.TrimSuffix(head, " "+d.name) + " " + d.tied.scalar
 		elems, _ := r.arrayElems(d.tied.array)
 		quoted := make([]string, len(elems))
@@ -1183,7 +1185,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		}
 		out := head + " " + d.tied.array + "=( " + strings.Join(quoted, " ") + " )"
 		if d.tied.sep != defaultTieSeparator {
-			out += " " + r.declareQuoted(d.tied.sep, ListedValueAlone)
+			out += " " + r.tieSeparatorWord(d.tied.sep)
 		}
 		return out
 	}

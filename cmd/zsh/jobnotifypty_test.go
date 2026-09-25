@@ -133,3 +133,32 @@ func TestAnUnpromptedNoticeRedrawsTheLineBeingTyped(t *testing.T) {
 		t.Errorf("the redrawn line did not run:\n%s", smoke.Readable(smoke.LastLines(got, 8)))
 	}
 }
+
+// And on the read path the suite actually uses, which is the one the hang was
+// on.
+//
+// `+Z` turns the line editor off: the terminal gathers the line itself and
+// echoes it, so the shell is blocked in a plain read with nothing of its own
+// on the screen. That is a different place from the editor's key loop and it
+// needs the wake looked at separately — see repl/jobnotify.go — and it is the
+// place zsh's own `W02jobs.ztst` drives the shell from, where a notice that
+// waits for the next command means `zpty -r` waits for ever.
+//
+// Nothing is redrawn here, which is measured rather than assumed: on zsh 5.9.2
+// under `-fiV +Z` with `PS1=$'PR1\nzz> '`, the row is written straight after
+// the prompt, on the prompt's own row, and no new prompt follows it.
+func TestAnUnpromptedNoticeReachesASessionWithNoLineEditor(t *testing.T) {
+	control, screen := jobNoticeSessionArgs(t, "zsh", "-i", "+Z")
+	jobNoticeType(t, control, screen, "sleep 0.4 &")
+	if err := screen.Await("[1]  + done       sleep 0.4", jobNoticeBudget); err != nil {
+		t.Errorf("no unprompted notice with the editor off: %v", err)
+	}
+	// And the session still reads the next line, which a wait that swallowed
+	// the keystroke would not.
+	before := screen.Text()
+	jobNoticeType(t, control, screen, "print AFTER")
+	if got := screen.Text()[len(before):]; !strings.Contains(got, "AFTER") {
+		t.Errorf("the line after the notice did not run:\n%s",
+			smoke.Readable(smoke.LastLines(got, 8)))
+	}
+}

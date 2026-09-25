@@ -88,6 +88,15 @@ const jobNoticeBudget = 20 * time.Second
 // cannot see it (#2467).
 func jobNoticeSession(t *testing.T) (*os.File, *smoke.Screen) {
 	t.Helper()
+	return jobNoticeSessionArgs(t, "zsh", "-i")
+}
+
+// jobNoticeSessionArgs is jobNoticeSession with the invocation spelled out,
+// which is how the *editor-less* session is reached: `+Z` turns the line
+// editor off and is how zsh's own `W02jobs.ztst` drives the shell, so the two
+// read paths this package has are both a session away.
+func jobNoticeSessionArgs(t *testing.T, argv ...string) (*os.File, *smoke.Screen) {
+	t.Helper()
 	home := scratchHome(t)
 	control, terminal, err := pty.Open()
 	if errors.Is(err, pty.ErrUnsupported) {
@@ -112,7 +121,7 @@ func jobNoticeSession(t *testing.T) (*os.File, *smoke.Screen) {
 	}
 	screen := smoke.Watch(control)
 	done := make(chan int, 1)
-	go func() { done <- driver.MainArgs(sh, []string{"zsh", "-i"}) }()
+	go func() { done <- driver.MainArgs(sh, argv) }()
 	t.Cleanup(func() {
 		// The shell first, so nothing is left reading a terminal this test is
 		// about to close, and then both ends of it. Twice, because a shell

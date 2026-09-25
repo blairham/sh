@@ -394,3 +394,68 @@ func TestAnEmulationLeavesTheEmulationsOwnDefaults(t *testing.T) {
 		t.Errorf("emulate csh: out %q status %d, want %q", out, st, want)
 	}
 }
+
+// And a name whose base state the *invocation* decided comes back with the
+// rest, which is #4506 — here through the **builtin** rather than through
+// applyEmulation, because the letters are where an emulation is composed and
+// a reset that is right on its own can still be wrong once something scopes
+// it. `-L` scopes it to the function, `-c` restores after the string, and
+// each of those saves and puts back the same store the reset writes to.
+//
+// `hashdirs` is off in a script and on in real zsh's default, so a script
+// shell that emulates strictly is where the two readings part: real zsh turns
+// it on and this shell used to leave it off. Measured on zsh 5.9.2 at
+// `/opt/homebrew/bin/zsh`, 2026-09-25, every row below run as `zsh -f` over a
+// script — with `rcs` reading identically to `hashdirs` in all of them, which
+// this harness cannot ask for because it does not suppress startup files.
+func TestAnEmulationResetsAnInvocationDecidedNameEndToEnd(t *testing.T) {
+	const read = `[[ -o hashdirs ]] && print -r on || print -r off`
+	for _, tc := range []struct{ name, src, want string }{
+		// The reset, in every mode.
+		{"-R zsh", `emulate -R zsh; ` + read, "on\n"},
+		{"-R sh", `emulate -R sh; ` + read, "on\n"},
+		{"-R ksh", `emulate -R ksh; ` + read, "on\n"},
+		{"-R csh", `emulate -R csh; ` + read, "on\n"},
+		// The strict form is what reaches it: the name is in the 95.
+		{"a bare emulation leaves it", `emulate zsh; ` + read, "off\n"},
+		{"and a bare sh leaves it", `emulate sh; ` + read, "off\n"},
+		// The route control: the same answer whether the shell's own kind
+		// put the name there or a `setopt` did.
+		{"a setopt before it makes no difference", `setopt hashdirs; emulate -R zsh; ` + read, "on\n"},
+		{"nor an unsetopt", `unsetopt hashdirs; emulate -R zsh; ` + read, "on\n"},
+		// `-L` scopes the reset to the function and does not narrow it.
+		{
+			"-LR resets inside and restores at the return",
+			`f() { emulate -LR zsh; ` + read + ` }; f; ` + read,
+			"on\noff\n",
+		},
+		{
+			"-L alone leaves it, being a bare emulation",
+			`f() { emulate -L zsh; ` + read + ` }; f; ` + read,
+			"off\noff\n",
+		},
+		{
+			"-R without -L resets and stays reset",
+			`f() { emulate -R zsh; ` + read + ` }; f; ` + read,
+			"on\non\n",
+		},
+		// `-c` runs the string under the emulation and puts everything back.
+		{
+			"-c resets for the string and restores after it",
+			`emulate -R sh -c '` + read + `'; ` + read,
+			"on\noff\n",
+		},
+		// And the listing, which is where it shows without anybody asking:
+		// a bare `setopt` prints deviations, so a name put back at its
+		// default leaves the listing rather than joining it. Real zsh
+		// prints `nohashdirs` before the emulation and nothing after.
+		{"the listing loses the row", `setopt; print -r -- ---; emulate -R zsh; setopt`, "nohashdirs\n---\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if st != 0 || out != tc.want {
+				t.Errorf("out %q status %d, want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}

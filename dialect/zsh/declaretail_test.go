@@ -468,6 +468,16 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // until something materializes them, which is the seam the `ARGC` paragraph
 // above records and not a fact about this name.
 //
+// `funcfiletrace` and `funcsourcetrace` are the fifth and sixth, and they sort
+// above `functrace` rather than beside it — `func` then `f`, `s`, `t`, so the
+// three run `funcfiletrace`, `funcsourcetrace`, `functrace` on both listings.
+// The same three answers were measured for each in zsh 5.9.2 (#4470, #4469):
+// `<name>=(a b)` is `read-only variable: <name>`, `${(t)<name>}` is
+// `array-readonly-hide-hideval-special`, and `typeset -p <name>` writes
+// nothing. Three names rather than one on each listing is also what says the
+// attributes were registered at all — a parameter that answers but is not
+// marked reads the same from a script until something assigns to it.
+//
 // `OLDPWD` is on both listings because this shell exports it from the first
 // command, which is InheritedOldpwdIgnored's other half: measured 2026-09-12,
 // `env -i zsh -c "export V='a b'; export -p"` writes `export OLDPWD=$PWD`
@@ -488,7 +498,8 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
 	want := "OLDPWD=" + dir + "\nSHLVL=1\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"errnos\nfunctrace\nhistory\nkeymaps\nlanginfo\nparameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
+		"errnos\nfuncfiletrace\nfuncsourcetrace\nfunctrace\nhistory\nkeymaps\nlanginfo\n" +
+		"parameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
 		"export OLDPWD=" + dir + "\nexport SHLVL=1\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's
@@ -503,7 +514,8 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +
-		"typeset -ar errnos\ntypeset -ar functrace\ntypeset -Ar history\n" +
+		"typeset -ar errnos\ntypeset -ar funcfiletrace\n" +
+		"typeset -ar funcsourcetrace\ntypeset -ar functrace\ntypeset -Ar history\n" +
 		"typeset -ar keymaps\ntypeset -Ar langinfo\n" +
 		"typeset -Ar parameters\ntypeset -ar reswords\ntypeset -Ar sysparams\n" +
 		"typeset -Ar termcap\n" +

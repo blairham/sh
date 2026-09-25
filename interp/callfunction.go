@@ -112,18 +112,32 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 	saved := r.ctx
 	r.ctx = ctx
 	defer func() { r.ctx = saved }()
+	defLine := int(fn.Pos().Line)
 	savedLine, savedIn := r.funcLine, r.inBuiltin
-	r.funcLine, r.inBuiltin = int(fn.Pos().Line), ""
+	r.funcLine, r.inBuiltin = defLine, ""
 	defer func() { r.funcLine, r.inBuiltin = savedLine, savedIn }()
 	// The frame was pushed for the stub, whose file is wherever the
 	// declaration was read; the body running in it now came out of the file
 	// the resolution found, so the frame says so for as long as it runs.
+	//
+	// All three of the frame's "which unit is this" fields move together, and
+	// not File alone. Frame.NoFile left standing said the frame's file was a
+	// stand-in for a shell that was given no file, which it no longer is the
+	// moment a real one is written beside it — so the dialect that reads
+	// NoFile answered with the shell's own name over a path the resolution
+	// had just found. Frame.FuncLine is the third: it was the *stub's*
+	// declaration line, and r.funcLine one line above is already being moved
+	// to the resolved body's for exactly this reason.
 	if n := len(r.frames); n > 0 {
-		savedFile := r.frames[n-1].File
+		saved := r.frames[n-1]
 		if file := r.functionFile(name); file != "" {
-			r.frames[n-1].File = file
+			r.frames[n-1].File, r.frames[n-1].NoFile = file, false
 		}
-		defer func() { r.frames[n-1].File = savedFile }()
+		r.frames[n-1].FuncLine = defLine
+		defer func() {
+			r.frames[n-1].File, r.frames[n-1].NoFile = saved.File, saved.NoFile
+			r.frames[n-1].FuncLine = saved.FuncLine
+		}()
 	}
 	return true, r.command(ctx, fn.Body)
 }

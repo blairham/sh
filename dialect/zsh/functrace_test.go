@@ -211,29 +211,48 @@ func TestFunctraceLocatesACallInTheScriptItself(t *testing.T) {
 	}
 }
 
-// TestFunctraceAndFuncstackAreTheSameLength is the invariant that makes the
-// pair usable at all: a handler reads `$funcstack[1]` and `$functrace[1]`
-// together, so an array that selected a different set of frames would line
-// one up against the wrong other.
+// TestTheFourStackArraysAreTheSameLength is the invariant that makes the set
+// usable at all: a handler reads `$funcstack[1]` beside `$functrace[1]`,
+// `$funcfiletrace[1]` and `$funcsourcetrace[1]`, so an array that selected a
+// different set of frames would line one up against the wrong other.
+//
+// All four rather than the first two (#4470, #4469), because that is what the
+// shared walk is for — traceEntries picks the frames once and the three
+// callers say only how to *write* an element, so this cannot fail without the
+// selection itself being wrong. Measured equal on zsh 5.9.2 in every shape
+// here.
 //
 // Held as an equality across shapes rather than as a fixed number, so it
 // still means something when the stack gains a kind of frame. The startup
 // row is the one that would have broken it — a frame the *shell* entered is
 // in neither, and a walk that reported a caller for every frame would have
-// made this array one longer than its partner at the top level of an rc file.
-func TestFunctraceAndFuncstackAreTheSameLength(t *testing.T) {
+// made these arrays one longer than `$funcstack` at the top level of an rc
+// file.
+func TestTheFourStackArraysAreTheSameLength(t *testing.T) {
 	dir := t.TempDir()
-	both := `print -r -- "${#funcstack[@]} ${#functrace[@]}"`
+	both := `print -r -- "${#funcstack[@]} ${#functrace[@]} ` +
+		`${#funcfiletrace[@]} ${#funcsourcetrace[@]}"`
+	file := "h(){ " + both + " }\nh\n"
+	if err := os.WriteFile(filepath.Join(dir, "both.zsh"), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name, src, want string
 	}{
-		{name: "top level", src: both, want: "0 0\n"},
-		{name: "one call", src: "f(){ " + both + " }; f", want: "1 1\n"},
-		{name: "two calls", src: "f(){ g; }; g(){ " + both + " }; f", want: "2 2\n"},
+		{name: "top level", src: both, want: "0 0 0 0\n"},
+		{name: "one call", src: "f(){ " + both + " }; f", want: "1 1 1 1\n"},
+		{name: "two calls", src: "f(){ g; }; g(){ " + both + " }; f", want: "2 2 2 2\n"},
 		{
 			name: "a subshell keeps the frames it is under",
 			src:  "f(){ ( g ); }; g(){ " + both + " }; f",
-			want: "2 2\n",
+			want: "2 2 2 2\n",
+		},
+		{
+			// A sourced file is a unit in all four, and it is the shape
+			// where the walk has two kinds of frame to keep in step.
+			name: "a sourced file counts in all four",
+			src:  "w(){ . ./both.zsh; }\nw",
+			want: "3 3 3 3\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

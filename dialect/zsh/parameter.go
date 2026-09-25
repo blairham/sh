@@ -14,16 +14,19 @@ import (
 // associations a script can read.
 //
 // Measured 2026-09-06 against zsh 5.9.2 with a scratch HOME and no startup
-// files. Thirteen of the module's thirty-three parameters are **implemented**.
+// files. Fifteen of the module's thirty-three parameters are **implemented**.
 // Five of them are the five a real plugin manager reads, counted in
 // `~/.zi/bin/zi.zsh`: `functions` 46 times, `options` 24, `commands` 3,
-// `builtins` 2 and `aliases` 1; the other eight arrived one reader at a time —
+// `builtins` 2 and `aliases` 1; the other ten arrived one reader at a time —
 // `funcstack` for the completion system, `galiases` and `saliases` for the
 // two alias namespaces, `nameddirs` for `hash -d`, `parameters` for
 // `${(t)name}`, `reswords` for a highlighter, `history` for the
-// autosuggestion drawn at a prompt on every keystroke (#4408), and
-// `functrace` for a tracing handler saying where it was entered from
-// (#4447). The other twenty are sorted into two kinds, and which
+// autosuggestion drawn at a prompt on every keystroke (#4408), and the three
+// call-stack arrays — `functrace` for a tracing handler saying where it was
+// entered from (#4447), `funcfiletrace` for the same call site as a file and
+// a line (#4470) and `funcsourcetrace` for where each unit was *defined*,
+// which is how a shipped completion finds its own directory (#4469). The
+// other eighteen are sorted into two kinds, and which
 // kind a parameter is in is a statement about this shell rather than about
 // how far along it is:
 //
@@ -36,7 +39,7 @@ import (
 //     is *true*, and it starts reporting by itself the day one of those
 //     letters lands. See zshEmptyParams, whose second column is what each is
 //     waiting on and which the tests hold to it.
-//   - **Thirteen are absent**, and they refuse by name when a script reads
+//   - **Eleven are absent**, and they refuse by name when a script reads
 //     one — `jobstates: parameter not implemented yet`, at the expansion
 //     that asked. None of them reads as empty, which is the whole reason
 //     the module can load without them; see the note on the module rule in
@@ -103,8 +106,8 @@ import (
 // the function at status 0, exactly as here. Modeling the refusal would have
 // meant reproducing a zsh bug against a state this shell cannot be in.
 
-// registerParameterModule installs all thirty-three: thirteen as views, seven
-// as empty views, and thirteen as refusals.
+// registerParameterModule installs all thirty-three: fifteen as views, seven
+// as empty views, and eleven as refusals.
 func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("functions", zshFunctionsView)
 	// And the same table read one key at a time, which is what nearly every
@@ -177,6 +180,26 @@ func registerParameterModule(r *interp.Runner) {
 	// `typeset -p functrace` writes nothing.
 	r.MarkReadonly("functrace")
 	hideModuleParameter(r, "functrace")
+	// And the same call site written as a file and an absolute line, which is
+	// the field `$functrace` declines to give whenever the call was made
+	// inside a function body — see funcfiletraceEntries for what the two say
+	// about one frame and why a handler cannot derive one from the other
+	// (#4470).
+	r.SetDynamicArray("funcfiletrace", funcfiletraceEntries)
+	r.MarkReadonly("funcfiletrace")
+	hideModuleParameter(r, "funcfiletrace")
+	// And the third question about the same frames: where the unit running in
+	// each was *defined*. It is this shell's `${BASH_SOURCE[0]}`, so an absent
+	// one stopped a shipped completion at the moment somebody pressed Tab
+	// (#4469). See funcsourcetraceEntries.
+	r.SetDynamicArray("funcsourcetrace", funcsourcetraceEntries)
+	r.MarkReadonly("funcsourcetrace")
+	hideModuleParameter(r, "funcsourcetrace")
+	// All three carry the readonly-and-hidden pair for the reasons `functrace`
+	// records just above, measured the same way: `funcfiletrace=(a b)` and
+	// `funcsourcetrace=(a b)` are both `read-only variable: <name>` at status
+	// 1, `${(t)…}` is `array-readonly-hide-hideval-special` for each, and
+	// `typeset -p` writes nothing for either.
 	// `$reswords`, which is what a highlighter reads before it can tell a
 	// reserved word from a command — see reswords.go for the measurement and
 	// for why this one is a list rather than a producer over a live table.
@@ -311,7 +334,7 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 	}
 }
 
-// zshAbsentParams are the thirteen this shell has not got at all.
+// zshAbsentParams are the eleven this shell has not got at all.
 //
 // Every one of them is non-empty, or can be, in a shell that has it: `$modules`
 // is 14 entries in a fresh zsh, `$parameters` 214, `$patchars` 15,
@@ -328,7 +351,11 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 //
 // `functrace` was the fourteenth and left by that same route (#4447): the
 // stack it reports on is the one `$funcstack` already walks, so what was
-// missing was the parameter and never the fact.
+// missing was the parameter and never the fact. `funcfiletrace` and
+// `funcsourcetrace` left together behind it (#4470, #4469), being that same
+// walk asked for a different field — which is why they share its frame
+// selection rather than each carrying one, and why the three arrays cannot
+// come to disagree about how many elements there are.
 //
 // What each would cost is surveyed in #1137: some are answerable from a table
 // this shell already keeps and the rest need a seam that does not exist.
@@ -343,8 +370,7 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 // literal, so there is no line to hold an honesty check against and no way to
 // tell "no users looked up yet" from "this shell cannot look one up".
 var zshAbsentParams = []string{
-	"dirstack", "dis_builtins", "funcfiletrace", "funcsourcetrace",
-	"functions_source", "historywords",
+	"dirstack", "dis_builtins", "functions_source", "historywords",
 	"jobdirs", "jobstates", "jobtexts", "modules",
 	"patchars", "userdirs", "usergroups",
 }
@@ -353,7 +379,7 @@ var zshAbsentParams = []string{
 // this shell has not built them, so they are absent without being frozen.
 //
 // Measured 2026-09-12 against zsh 5.9.2 under `-f`, one `name=(a b c)` per
-// entry from a script file: twelve of the thirteen above answer `read-only
+// entry from a script file: ten of the eleven above answer `read-only
 // variable: name` at status 1 and end the script, whether or not the module
 // has been loaded. `dirstack` is the one that does not — it is the directory
 // stack and assigning it is how a script sets one, so it takes the array in

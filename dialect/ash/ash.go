@@ -1560,6 +1560,12 @@ func Semantics() interp.Semantics {
 	s.JobsListFinishedJobs = interp.Yes
 	// Every ended job is listed as ended, monitor or no monitor.
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
+	// No pid in a notice: measured 2026-09-25 inside the pinned alpine
+	// image, BusyBox v1.37.0 on a pseudo-terminal under `/bin/ash -i` with
+	// `set -m`, `[1]+  Done                       sleep 0.2`. Measured in
+	// the container rather than derived from dash, which is the column next
+	// to it and not evidence about it.
+	s.JobNoticeNamesThePID = interp.No
 	s.JobsOptions = "lp"
 	s.JobsPidsOnlyOption = interp.Yes
 	s.JobsShowBackgroundCommand = interp.No

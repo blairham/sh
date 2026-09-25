@@ -174,6 +174,8 @@ func TestSemantics(t *testing.T) {
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
 		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
+		// A notice never names the pid here and no option asks for one.
+		{"JobNoticeNamesThePID", s.JobNoticeNamesThePID, interp.No},
 		// All three pseudo-conditions, RETURN being this shell's alone —
 		// and none of them follows the script into a call or a subshell
 		// it was not set in.

@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -233,5 +234,45 @@ func TestTheSliceOfJobsSurvivesTheTableBeingReaped(t *testing.T) {
 	// at all: it took the job while it was running and wants its status now.
 	if st := taken[0].Wait(); st != 0 {
 		t.Errorf("the job's status is %d, want 0", st)
+	}
+}
+
+// And the finished-job notice reads the same axis, which is the call site the
+// rendering tests in jobnoticepid_test.go cannot reach: a shell that built the
+// long row correctly and went on handing the short one to whoever draws the
+// prompt would pass every one of them.
+//
+// The pid is read off the job before the notice is asked for, because asking
+// forgets it — so the number in the expectation is the one this job actually
+// got rather than one the test invented.
+func TestAFinishedJobsNoticeNamesThePIDWhereTheAxisSaysSo(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		axis  Answer
+		named bool
+	}{
+		{"named where the axis says so", Yes, true},
+		{"and not where it does not", No, false},
+		{"nor where it has not been answered", Unspecified, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var r *Runner
+			notices(t, `true & sleep 0.05`, true, No, Diagnostics{}, &r)
+			sem := *r.Semantics
+			sem.JobNoticeNamesThePID = tc.axis
+			r.Semantics = &sem
+			jobs := r.Jobs()
+			if len(jobs) != 1 {
+				t.Fatalf("%d jobs, want the one that was backgrounded", len(jobs))
+			}
+			pid := strconv.Itoa(jobs[0].Ident())
+			lines := r.FinishedJobNotices()
+			if len(lines) != 1 {
+				t.Fatalf("notices = %v, want the finished job reported once", lines)
+			}
+			if got := strings.Contains(lines[0], pid); got != tc.named {
+				t.Errorf("notice = %q, pid %s present = %v, want %v", lines[0], pid, got, tc.named)
+			}
+		})
 	}
 }

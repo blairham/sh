@@ -844,7 +844,7 @@ func (r *Runner) FinishedJobNotices() []string {
 		// it out of a `jobs` listing: both of them print it here. That is
 		// what makes JobsShowBackgroundCommand a question about the listing
 		// rather than about the text.
-		lines = append(lines, r.jobLineAs(j.num, j, true, true))
+		lines = append(lines, r.jobNoticeLine(j.num, j, true, true))
 	}
 	for i := len(kept); i < len(r.jobs); i++ {
 		r.jobs[i] = nil
@@ -1596,13 +1596,20 @@ func (r *Runner) announceStopped(j *Job) {
 		r.errf("\n")
 	}
 	i := r.jobNumber(j)
-	if w := dg.JobStoppedNotice; w != "" {
+	if w := dg.JobStoppedNotice; w != "" && !r.namesThePIDInANotice() {
 		r.errf("%s\n", Wording(w, "", i, r.jobMarker(j), r.name(), j.Command))
 		return
 	}
 	// Nothing said otherwise, so the notice is the listing's own row, which is
 	// what three of the four print.
-	r.errf("%s\n", r.jobLineAs(i, j, true, false))
+	//
+	// And what the fourth prints once it has been asked to name the pid: the
+	// dialect with a sentence here replaces the sentence rather than widening
+	// it, measured 2026-09-25 — `zsh: suspended  sleep 5` with the option off
+	// and `[1]  + 98875 suspended  sleep 5` with it on (#4491). A sentence
+	// with no job number and no marker has nowhere to put a pid, which is why
+	// the option reaches past the wording rather than growing a twin of it.
+	r.errf("%s\n", r.jobNoticeLine(i, j, true, false))
 }
 
 // reapJobs asks after the jobs nothing is waiting on, and is how a job that

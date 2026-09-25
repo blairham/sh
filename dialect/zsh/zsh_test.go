@@ -276,6 +276,9 @@ func TestSemantics(t *testing.T) {
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
 		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.No},
+		// Off by default and the one column that can be asked for the
+		// other answer, through `setopt longlistjobs` (#4491).
+		{"JobNoticeNamesThePID", s.JobNoticeNamesThePID, interp.No},
 		// ERR and DEBUG but not RETURN, and — alone in the panel — both
 		// follow the script into subshells and command substitutions.
 		{"TrapHasErrCondition", s.TrapHasErrCondition, interp.Yes},

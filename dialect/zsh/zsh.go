@@ -3475,6 +3475,13 @@ func Semantics() interp.Semantics {
 	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
 	s.JobsListFinishedJobs = interp.No
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
+	// Off by default, and the one column in the panel where a script can
+	// turn it on: `setopt LONG_LIST_JOBS` puts the job's pid in every notice
+	// this shell writes, and the entry in setopt.go moves this axis rather
+	// than remembering the request (#4491). Measured 2026-09-25 on 5.9.2
+	// under `-fiV +Z` on a pseudo-terminal: `[1]  + done       :` with the
+	// option off and `[1]  + 96801 done       :` with it on.
+	s.JobNoticeNamesThePID = interp.No
 
 	// `jobs`' letters: POSIX's pair, the state filters, and three of zsh's
 	// own — `-d` adds the directory the job was started in, `-z` and `-Z`

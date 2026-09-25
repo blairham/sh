@@ -5,6 +5,7 @@ package interp_test
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -612,5 +613,40 @@ func TestTheJobTableUnderTheHeldExitSkipsAFinishedJob(t *testing.T) {
 	}
 	if strings.Contains(out, "Done") {
 		t.Errorf("listed the job that had already finished: %q", out)
+	}
+}
+
+// And a dialect asked to name the pid in a notice writes the row instead of
+// its sentence, rather than widening the sentence.
+//
+// Measured 2026-09-25 on zsh 5.9.2 through a pseudo-terminal, `-fiV +Z`: a ^Z
+// is `zsh: suspended  sleep 5` with `longlistjobs` off and
+// `[1]  + 98875 suspended  sleep 5` with it on. A sentence with no job number
+// and no marker has nowhere to put a pid, which is why the axis reaches past
+// the wording (#4491).
+//
+// The wording is left *set* in both halves, because that is the whole
+// question: a shell that only ever wrote the row when no sentence was
+// configured would pass a test that cleared it.
+func TestNamingThePIDReplacesAStoppedNoticesSentence(t *testing.T) {
+	const sentence = "%[3]s: suspended  %[4]s"
+	for _, tc := range []struct {
+		name string
+		axis Answer
+		want *regexp.Regexp
+	}{
+		{"the sentence, where the axis says nothing", No, regexp.MustCompile(`^testsh: suspended  `)},
+		{"and the long row where it does", Yes, regexp.MustCompile(`^\[1\]\+ [0-9]+ Stopped `)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeJobs{waits: []Wait{stopped}}
+			out, _, _ := jobSession(t, f, echoCmd, true, func(s *Semantics, d *Diagnostics) {
+				d.JobStoppedNotice = sentence
+				s.JobNoticeNamesThePID = tc.axis
+			})
+			if !tc.want.MatchString(out) {
+				t.Errorf("notice = %q, want it to begin %s", out, tc.want)
+			}
+		})
 	}
 }

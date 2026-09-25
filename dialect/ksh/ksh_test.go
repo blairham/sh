@@ -193,6 +193,8 @@ func TestSemantics(t *testing.T) {
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"StoppedJobTakesTheCurrentJobMarker", s.StoppedJobTakesTheCurrentJobMarker, interp.No},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
+		// A notice never names the pid here and no option asks for one.
+		{"JobNoticeNamesThePID", s.JobNoticeNamesThePID, interp.No},
 		// ERR and DEBUG but not RETURN. The subshell answers differ on
 		// purpose: a command substitution here captures the DEBUG
 		// handler's output and not the ERR handler's.

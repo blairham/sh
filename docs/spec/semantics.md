@@ -8089,6 +8089,33 @@ localoptions localtraps` on top of the emulation and nothing else, so the
 same 81 go back and the same 104 stand. `-L` and `-R` compose: `emulate -LR
 sh` is the wide reset scoped to the call.
 
+**A reset is keyed on the option's default, never on the route that moved
+it.** Two names in the 95 are off in a `zsh -f` for a reason no script asked
+for — `rcs`, because the invocation said `-f`, and `hashdirs`, because the
+shell is not interactive — and `emulate -R` turns both **on**, in all four
+modes, because on is what a default zsh has. The same emulation turns `rcs`
+on when a *script* put it off with `setopt norcs`, which is the pair that
+says what the rule is keyed on: hold the name fixed, vary how it got where it
+is, and the answer does not move. Measured on zsh 5.9.2 at
+`/opt/homebrew/bin/zsh`, 2026-09-25, every name read one at a time through
+`[[ -o … ]]` before and after the emulation in one shell, with a run that
+emulates nothing as the control.
+
+`login` is the control on the other side and it is why "reset the ones the
+invocation decided" is the wrong reading: it is as invocation-shaped as
+`rcs`, it is in the nine, and a `zsh -f -l` is still a login shell after
+`emulate -R zsh`. The four such names are `hashdirs`, `login`, `rcs` and
+`zle`; the partition above already says which two of them move.
+
+This is a statement about where the reset *lands* rather than about which
+names it reaches, so it does not touch the three lists. Here those names are
+`recordedOver` in `dialect/zsh/setopt.go` — remembered, reported, acted on by
+nothing — and the store behind them holds *deviations*, so an emulation that
+resets a name by dropping its deviation lands it back on whatever the
+invocation said. That was #4506: a `zsh -f` that ran `emulate -R zsh` kept
+`norcs` and `nohashdirs`, which is exactly what the emulation had been asked
+to undo, and `C02cond.ztst` stopped on its `-o cond` line for it.
+
 **The set is measured; the value is not.** Real zsh has a default *per
 emulation* — `emulate sh` turns `posixbuiltins` on and `multios` off, where
 this shell puts both back to zsh's default — and 47 of the 81 differ that

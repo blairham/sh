@@ -113,11 +113,20 @@ linters:
       # to bless.
       #
       # Reading the process's *identity* is not on this list and is not
-      # meant to be. A pid, a uid, a euid are per-process but they are not
-      # state anyone can fight over — two Runners in one program genuinely
-      # share them, nothing a script does can change them, and $$, $UID and
-      # $EUID need them. dialect/bash and dialect/zsh read uid for exactly
-      # that and are correct.
+      # meant to be. A pid, a uid, a euid, a gid, an egid are per-process but
+      # they are not state anyone can fight over — two Runners in one program
+      # genuinely share them, nothing a script does can change them, and $$,
+      # $UID, $EUID and zsh's $GID and $EGID need them. dialect/bash and
+      # dialect/zsh read uid for exactly that and are correct, and dialect/zsh
+      # reads gid for the same reason (#4476).
+      #
+      # *Changing* one is a different question and is not permitted anywhere
+      # under interp/ or dialect/: zsh assigns a real gid when a privileged
+      # shell writes to $EGID, which is a setgid call and so process-wide
+      # state of exactly the kind the entries below forbid. That belongs
+      # behind a hook in driver/, as ReplaceProcess does, and until there is
+      # one this shell sets the parameters and does not take an assignment to
+      # them as an instruction.
       analyze-types: true
       forbid:
       - pattern: ^os\.Getwd$

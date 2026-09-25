@@ -509,6 +509,44 @@ func TestParametersBashProvides(t *testing.T) {
 	}
 }
 
+// TestParametersBashDoesNotProvide is the other half of the row above, and it
+// is a row rather than a silence because the near miss is real: this shell has
+// `$UID` and `$EUID`, and the shell next to it in the panel has two more
+// beside them.
+//
+// Measured 2026-09-25, on a machine whose uid and gid differ
+// (`uid=501 gid=20`), over `--norc --noprofile -c` and `zsh -f -c`:
+//
+//	print "UID=[$UID] EUID=[$EUID] GID=[$GID] EGID=[$EGID]"
+//
+//	bash 5.3.20  UID=[501] EUID=[501] GID=[]   EGID=[]
+//	bash 3.2.57  UID=[501] EUID=[501] GID=[]   EGID=[]
+//	zsh 5.9.2    UID=[501] EUID=[501] GID=[20] EGID=[20]
+//
+// So `$GID` and `$EGID` are zsh's and not this shell's, and `dialect/zsh` sets
+// them on the two lines this dialect's `$UID` and `$EUID` are modeled by
+// (#4476). They are also nothing special here in the second sense: measured,
+// `env GID=999 bash --norc -c 'echo $GID'` writes 999, where the same probe
+// against zsh writes the real gid — so a bash script may use the name for
+// whatever it likes, and this shell must not take it away from one.
+func TestParametersBashDoesNotProvide(t *testing.T) {
+	for _, name := range []string{"GID", "EGID"} {
+		f, err := syntax.Parse(`[ -n "${`+name+`-}" ] && echo have || echo none`, bash.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		rr := &interp.Runner{Name: preset.Name, Stdout: &out, Dialect: presetDialect()}
+		bash.Apply(rr)
+		if _, err := rr.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(out.String()) != "none" {
+			t.Errorf("%s: got %q, want bash not to provide it — the pair belongs to zsh", name, out.String())
+		}
+	}
+}
+
 // TestBothDeclarationNames: bash spells the declaration two ways, and the
 // assignment rule follows the second name as well as the first.
 func TestBothDeclarationNames(t *testing.T) {

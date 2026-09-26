@@ -128,10 +128,13 @@ func TestBadPatternSparesAGlobAndNothingElse(t *testing.T) {
 			off: "OK\n", offSt: 0,
 		},
 		{
-			// An expansion result read as a pattern by `${~…}` reaches the
-			// same gate, through resultReadsAsPattern rather than through
-			// the glob walk. Both sites read the switch, and a fix that
-			// moved only one leaves this row refusing.
+			// An expansion result made live by `${~…}` is the same
+			// question arrived at from the other side, and it is one gate
+			// rather than two: resultReadsAsPattern only decides which axis
+			// gets asked, so the refusal it would have led to is the one in
+			// glob.go. Gating it there as well is behavior-neutral —
+			// measured by mutation, removing that second gate changes no
+			// row — so there is one read site and this row exercises it.
 			name: "an expansion result read as a pattern",
 			src:  `L="[a"; print -r -- ${~L}`,
 			on:   "", onStatus: 1, onErr: "bad pattern: [a",

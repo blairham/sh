@@ -2841,16 +2841,7 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 	// pattern would be right to refuse this field, since there the result
 	// really is a pattern. Only the dialect that answers No to the axis
 	// reaches the escape below.
-	//
-	// The session switch is read here for the same reason it is read in
-	// glob.go: this clause exists only to send the field on to a refusal,
-	// and a session that has withheld the refusal has nothing to send it to.
-	// Measured on zsh 5.9.2, `-f`, 2026-09-26: `L='[a'; print -r -- ${~L}`
-	// is `bad pattern: [a` with `badpattern` on and `[a` at status 0 with it
-	// off — the result is not a pattern there, so it is not globbed and it
-	// is not complained about either.
-	return r.sem().UnterminatedBracket == BracketBadPattern &&
-		r.RefusesABadPatternWhenGlobbing() && hasUnterminatedBracket(esc)
+	return r.sem().UnterminatedBracket == BracketBadPattern && hasUnterminatedBracket(esc)
 }
 
 func containsAnyOf(s, chars string) bool {

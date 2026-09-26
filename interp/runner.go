@@ -3112,6 +3112,16 @@ type Runner struct {
 	// dialect names it, as `shopt -s cdable_vars`. See
 	// BareCdOperandCanNameAVariable in sessionswitches.go.
 	cdOperandCanNameAVariable bool
+	// cdResolvesSymlinks makes a `cd` that named neither `-L` nor `-P`
+	// physical, and a bare `pwd` print the resolved directory. Off with
+	// nothing said; one dialect names it, as `setopt chaselinks`. See
+	// CdResolvesSymlinks in sessionswitches.go.
+	cdResolvesSymlinks bool
+	// cdResolvesDotDot makes a `cd` whose destination holds a `..`
+	// component physical, leaving one without any alone. Off with nothing
+	// said; one dialect names it, as `setopt chasedots`. See
+	// CdResolvesDotDot in sessionswitches.go.
+	cdResolvesDotDot bool
 	// hangUpJobsAtExit sends SIGHUP to the jobs this shell still has when it
 	// ends. Off with nothing said; one dialect names it, as
 	// `shopt -s huponexit`. See SendsHangupToJobsAtExit in

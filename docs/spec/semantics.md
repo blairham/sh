@@ -7503,7 +7503,7 @@ said off and the braces went on expanding, so a script could read the state
 and watch it be false in the same breath. A recorded name is one this shell
 does not do **in either state**, so nothing it says can be contradicted by
 what the shell then does — the request is remembered and the feature is
-absent, which is the same bargain the 127 recorded `setopt` names strike.
+absent, which is the same bargain the 125 recorded `setopt` names strike.
 The bill is real and it is deferred rather than waived: `globstar` on with no
 `**` crossing is a weaker answer than `globstar` implemented, which is why
 each name that is recorded rather than built carries an issue of its own. A
@@ -7676,8 +7676,8 @@ first is unanimous across the table.** Every name is one of five kinds:
 | axis- or matcher-backed | 24 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`, `errreturn`, `autopushd`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **six** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
-| switch-backed | 6 | `aliases`, `autocd`, `banghist`, `checkjobs`, `cprecedences` and `hup`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, and a session that is leaving really does send SIGHUP to the jobs it abandons. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
-| **recorded** | 127 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| switch-backed | 8 | `aliases`, `autocd`, `banghist`, `chasedots`, `chaselinks`, `checkjobs`, `cprecedences` and `hup`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, a session that is leaving really does send SIGHUP to the jobs it abandons, and `cd` really does stop keeping the path a directory was reached by. `chaselinks` and `chasedots` are the pair where the panel's *default* is unanimous and only this shell has a name for moving off it — see below. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
+| **recorded** | 125 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -8103,7 +8103,73 @@ attributes — `${(t)dirstack}` is `array` here and
 `array-hide-hideval-special` there, so `set` prints the values where real zsh
 prints the bare name.
 
-So 127 of 185 are recorded, the count above is the one produced by counting
+
+`chaselinks` and `chasedots` left last, and they are the first two here to
+move a **session switch** rather than an axis. Every column's default is the
+same — `cd` keeps the path a directory was reached by, `pwd` prints it — so
+there is no disagreement for an axis to record; what this shell has is a pair
+of names for moving off that default, which is exactly what
+`interp.Runner.CdResolvesSymlinks` and `interp.Runner.CdResolvesDotDot` are.
+Until #4590 both were recorded and inert, and `B01cd.ztst` stopped on the
+chunk that sets the first one (#4590).
+
+Measured on zsh 5.9.2 (`-f`, 2026-09-26), in a tree holding `t/real/deep`,
+`t/sub/fake -> ../real` and `t/sub/sub/fake -> ../../real` — built outside
+`/tmp`, which is itself a link on macOS and would put a `/private` prefix in
+every row:
+
+| destination | neither | `chasedots` | `chaselinks` | both |
+| --- | --- | --- | --- | --- |
+| `cd sub/fake` | `t/sub/fake` | `t/sub/fake` | `t/real` | `t/real` |
+| `cd sub/fake/..` | `t/sub` | `t` | `t` | `t` |
+| `cd sub/fake` then `cd ..` | `t/sub` | `t` | `t` | `t` |
+| `cd sub/fake/../sub/fake` | `t/sub/sub/fake` | `t/real` | `t/real` | `t/real` |
+| `cd sub/./fake` | `t/sub/fake` | `t/sub/fake` | `t/real` | `t/real` |
+| `cd real/deep/..` | `t/real` | `t/real` | `t/real` | `t/real` |
+
+**The narrower one is keyed on the `..` and not on the link**, and the fourth
+row is what says so: with a link *after* the `..`, resolving only the `..`
+would answer `t/sub/fake` and zsh answers `t/real`, so once a destination
+holds a `..` the whole of it is resolved. The fifth row holds the option on
+and takes the `..` away, and the answer goes back to the logical name; the
+sixth has a `..` and no link, so the two readings coincide and it is the row
+that must not move. A leading `..` with nothing before it to cancel resolves
+too — from `t/sub`, `cd ../sub/fake` is `t/real` with the option on — so it is
+not "a `..` that would cancel something" either.
+
+**`-L` puts one of them down and not the other.** With `chaselinks` on,
+`cd -L sub/fake/../sub/fake` is `t/sub/sub/fake`; with `chasedots` on it is
+`t/real`, and with both on it is `t/real`. The destination is the same in all
+three and only the option moves, so it is the option and not the path that
+decides whether the letter is heard. `-P` resolves under either and under
+neither.
+
+**The wider one is read by two commands, at two moments.** `cd` reads it when
+it moves and writes the answer into `$PWD`; `pwd` reads it when it *prints*.
+Measured the same day: `unsetopt chaselinks; cd sub/fake; setopt chaselinks`
+leaves `$PWD` at `t/sub/fake`, and `pwd` then writes `t/real` while `pwd -L`
+writes `t/sub/fake`. So the option makes a bare `pwd` mean `pwd -P`, read at
+the `pwd`, and nothing has rewritten `$PWD` behind it. The mirror row holds:
+`setopt chaselinks; cd sub/fake; unsetopt chaselinks` leaves `$PWD` resolved
+and turning the option off does not put the logical name back. `chasedots`
+does not reach `pwd` at all.
+
+`$OLDPWD` is whatever `$PWD` held and follows the rows above rather than
+answering separately. Neither option is in the bare emulation's reset set, so
+`emulate sh` and `emulate ksh` leave both off.
+
+**A `..` under a physical resolution is the physical parent, and that is
+unanimous rather than one shell's idea.** Measured 2026-09-26 in the tree
+above, `cd -P sub/fake/..` arrives at `t` in bash 5.3.20, bash 3.2, dash,
+ksh93 and zsh 5.9.2 alike, where canceling `fake` against the `..` first
+lands in `t/sub`. This shell cancelled first in every dialect until #4590,
+because the operand was joined against the working directory with a lexical
+clean *before* the walk that was there to resolve the `..`. One measured
+exception is on the board rather than modeled: ksh93 cancels a **leading**
+`..` against the logical `$PWD` even under `-P`, so `cd sub/fake` then
+`cd -P ..` is `t/sub` there and `t` in the other four.
+
+So 125 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -8537,7 +8603,7 @@ name, so routing it through the table as well would have `setopt err_exit`
 call back into the table it was called from.
 
 Two consequences worth stating. Recording is unchanged: a listing 185 rows
-long still says nothing about whether a name is acted on, and 127 of them are
+long still says nothing about whether a name is acted on, and 125 of them are
 remembered and not acted on — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
 this shell has and will not move answers `can't change option` at 1,
@@ -12021,7 +12087,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 127 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 125 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150, then 145 while the
   table read 132; neither number was ever the count the table produces, and

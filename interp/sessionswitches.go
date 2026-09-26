@@ -378,6 +378,102 @@ func (r *Runner) BareCdOperandCanNameAVariable() bool { return r.cdOperandCanNam
 // capability — `shopt -s cdable_vars` is the only name the panel has for it.
 func (r *Runner) SetBareCdOperandCanNameAVariable(on bool) { r.cdOperandCanNameAVariable = on }
 
+// CdResolvesSymlinks reports whether this shell follows symbolic links with
+// nobody asking it to: a `cd` given neither `-L` nor `-P` arrives at the
+// directory rather than at the name it was reached by, and a bare `pwd`
+// prints the resolved path.
+//
+// Off with nothing said, in all six columns. One shell in the panel can turn
+// it on and calls it `setopt chaselinks`.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`) in a tree
+// holding `t/real/deep`, `t/sub` and a `t/sub/fake` pointing at `../real`,
+// built under `$HOME/.cache` rather than under `/tmp`, which is itself a link
+// on macOS and would put a `/private` prefix in every row:
+//
+//	cd sub/fake          $PWD is t/real          with it; t/sub/fake without
+//	cd sub/fake; cd ..   $PWD is t               with it; t/sub     without
+//	cd -L sub/fake       $PWD is t/sub/fake      with it — the letter wins
+//	cd -P sub/fake       $PWD is t/real          without it — likewise
+//	OLDPWD               whatever $PWD held, so it follows the rows above
+//
+// **Two commands read it and they read it at their own moments**, which is
+// the half an implementation gets wrong by doing the work once in `cd`:
+//
+//   - `cd` reads it when it moves, and what it writes into `$PWD` stands.
+//     Measured, `setopt chaselinks; cd sub/fake; unsetopt chaselinks` leaves
+//     `$PWD` at `t/real` — turning the switch off afterwards does not put the
+//     logical name back.
+//   - `pwd` reads it when it *prints*. Measured, `unsetopt chaselinks; cd
+//     sub/fake; setopt chaselinks` leaves `$PWD` at `t/sub/fake` and `pwd`
+//     writes `t/real` all the same, while `pwd -L` writes `t/sub/fake`. So
+//     the switch makes a bare `pwd` mean `pwd -P`, and it is not `$PWD` being
+//     rewritten behind it.
+//
+// That pair is what pins the noun. The first row holds the state at the
+// `pwd` fixed and moves it at the `cd`; the second holds it at the `cd` and
+// moves it at the `pwd`; and both answers follow the command that is running
+// rather than the form `$PWD` happens to be in.
+//
+// Not an axis, for the reason BareCdOperandCanNameAVariable is not: an axis
+// records a disagreement between shells, and here every column's default is
+// the same. What one of them has is a switch to move it off that default.
+func (r *Runner) CdResolvesSymlinks() bool { return r.cdResolvesSymlinks }
+
+// SetCdResolvesSymlinks moves it, for a dialect naming the capability —
+// `setopt chaselinks` is the only name the panel has for it.
+func (r *Runner) SetCdResolvesSymlinks(on bool) { r.cdResolvesSymlinks = on }
+
+// CdResolvesDotDot reports whether a `..` in a `cd`'s destination is resolved
+// against the directory the shell is physically in, rather than canceling
+// the component written before it.
+//
+// Off with nothing said, in all six columns. One shell in the panel can turn
+// it on and calls it `setopt chasedots`.
+//
+// **What it is keyed on is whether the destination holds a `..` at all**, and
+// when it does the *whole* destination is resolved — not merely the `..`.
+// That is the reading a grid over links alone cannot tell from "the `..` is
+// resolved and the rest is left as written", so it was measured against a
+// tree where the two part. Measured 2026-09-26 on zsh 5.9.2 (`-f`), in the
+// tree above with `t/sub/sub/fake` also pointing at the real directory:
+//
+//	cd sub/fake/../sub/fake   t/real     with it; t/sub/sub/fake without
+//	cd real/../sub/fake       t/real     with it; t/sub/fake      without
+//	cd sub/sub/../fake        t/real     with it; t/sub/fake      without
+//	cd sub; cd ../sub/fake    t/real     with it; t/sub/fake      without
+//	cd sub/fake               t/sub/fake with it — no `..`, nothing happens
+//	cd sub/./fake             t/sub/fake with it — a `.` is not a `..`
+//
+// The first three rows each put a link in the part of the path *after* the
+// `..`, where resolving only the `..` would have left `t/sub/fake`; zsh
+// resolves that tail too. The fourth is a leading `..` with nothing before it
+// to cancel, and it resolves all the same, so it is not "a `..` that would
+// cancel something" either. The last two hold the switch on and take the `..`
+// away, and the answer goes back to the logical name — which is the pair that
+// says the `..` is what it is keyed on and not the link.
+//
+// Read at the `cd` that holds the `..`, like the switch above and not
+// earlier: measured, `setopt chasedots; cd sub/fake; unsetopt chasedots; cd
+// ..` lands at `t/sub` while the same pair the other way round lands at `t`.
+//
+// It does not reach `pwd`. Measured, `setopt chasedots; cd sub/fake` then
+// `pwd`, `pwd -L` and `pwd -P` write `t/sub/fake`, `t/sub/fake` and `t/real`
+// — the same three a shell with neither switch writes.
+//
+// A separate switch from CdResolvesSymlinks rather than a weaker form of it,
+// because the shell that has them has two names, reports them apart, and
+// composes them: with links chased every path is resolved and this one has
+// nothing left to add, and with only this one a destination carrying no `..`
+// keeps the name it was reached by.
+//
+// Not an axis, for CdResolvesSymlinks's reason.
+func (r *Runner) CdResolvesDotDot() bool { return r.cdResolvesDotDot }
+
+// SetCdResolvesDotDot moves it, for a dialect naming the capability —
+// `setopt chasedots` is the only name the panel has for it.
+func (r *Runner) SetCdResolvesDotDot(on bool) { r.cdResolvesDotDot = on }
+
 // SendsHangupToJobsAtExit reports whether this shell sends SIGHUP to the jobs
 // it still has when it ends.
 //

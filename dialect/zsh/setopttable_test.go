@@ -64,12 +64,22 @@ import "testing"
 // moment is the one that decides: the state when `cd` starts, not the state
 // when `cd` finishes — a `chpwd` that turns it off during the `cd` does not
 // take the push back.
+// `chaselinks` and `chasedots` are the seventeenth and eighteenth, and they
+// are the first here to move a *session switch* rather than an axis:
+// interp.Runner.CdResolvesSymlinks and interp.Runner.CdResolvesDotDot. Every
+// column's default is the same — `cd` keeps the path a directory was reached
+// by — so there is no disagreement for an axis to record, and what this shell
+// has is a pair of names for moving off that default. Until #4590 both were
+// remembered and `cd` through a symbolic link published the logical path in
+// either state. The wider of the two is read by **two** commands at two
+// moments: `cd` when it moves, and `pwd` when it prints.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
 		"posixtraps", "rcexpandparam", "errreturn", "autopushd",
+		"chaselinks", "chasedots",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -91,7 +101,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 127; recordedCount != want {
+	if want := 125; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

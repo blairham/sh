@@ -2608,6 +2608,17 @@ type Runner struct {
 	custom map[string]Builtin
 	// jobs are the background commands started by this shell.
 	jobs []*Job
+	// jobsInherited says the table above is the *parent's* and holds nothing
+	// this shell started — which one dialect gives a subshell and the rest
+	// do not. See SubshellJobsKeptUnderTheMonitor for the measurement and
+	// Runner.refuseAJobThisShellDidNotStart for what it costs the verbs that
+	// would act on one.
+	//
+	// It is never true and non-empty at the same time as a job of this
+	// shell's own: addJob drops the inherited rows before taking a slot, so
+	// "inherited" is a property of the whole table and no row has to carry
+	// one.
+	jobsInherited bool
 	// jobOrder is the order jobs became *notable*, oldest first: a job is
 	// appended when it enters the table and again, moved to the end, every
 	// time it stops. It is not the table's order, which is slot order, and

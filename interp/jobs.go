@@ -1090,6 +1090,20 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	if r.jobsInherited {
+		// A subshell holding nothing but its parent's jobs can look at them
+		// and cannot wait for them. Measured 2026-09-25 in a zsh 5.9.2
+		// started `-fm` with two running jobs: `( wait %2 )` says
+		// `can't manipulate jobs in subshell` at 1 where `( jobs %2 )` on
+		// the same line writes the row. Ahead of every operand form,
+		// including `-n`, because the refusal is about the table and not
+		// about which of them was written.
+		for _, a := range args {
+			if strings.HasPrefix(a, "%") {
+				return r.refuseAJobThisShellDidNotStart("wait")
+			}
+		}
+	}
 	if opts.next {
 		if opts.reading == WaitNextJobFirstToSucceed {
 			if len(args) == 0 {
@@ -1109,6 +1123,14 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		// than leaving it alone — measured, and the same rule the narrowed
 		// form follows when it finds nothing to wait for.
 		r.storeWaitedPID(opts, nil)
+		if r.jobsInherited {
+			// And it does not wait for them either, which is the half a
+			// refusal would not have shown: measured, `( wait )` in that
+			// same shell answers 0 at once while both jobs run on. A bare
+			// `wait` is for the jobs this shell started, and it started
+			// none.
+			return 0
+		}
 		for _, j := range r.jobs {
 			_, sig, hit, stopped := r.waitFor(j)
 			if r.unspecified {
@@ -1938,6 +1960,15 @@ func (r *Runner) setLastJob(j *Job) {
 // Which number that is splits the panel, and it splits it only where the
 // table has a *hole* in it — see nextJobNumber.
 func (r *Runner) addJob(job *Job) {
+	if r.jobsInherited {
+		// A subshell that starts a job of its own stops showing the ones it
+		// was only looking at. Measured 2026-09-25 in zsh 5.9.2 under `-fm`
+		// with two running jobs: `( jobs )` writes both rows and
+		// `( /bin/sleep 3 & jobs )` writes the subshell's own row alone. So
+		// the inherited table is what a subshell has *instead of* one, and
+		// not a table it appends to. See Runner.jobsInherited.
+		r.jobs, r.jobOrder, r.jobsInherited = nil, nil, false
+	}
 	job.num = r.nextJobNumber()
 	// Where the job started, recorded here because here is where "the job
 	// entered the table" happens for every route into it. See Job.Dir: the
@@ -2165,9 +2196,15 @@ const reapedJobsKept = 1024
 // have to know it did.
 func (r *Runner) waitableByIdent(pid int) []*Job {
 	var jobs []*Job
-	for _, j := range r.jobs {
-		if j.Ident() == pid {
-			jobs = append(jobs, j)
+	// Not the table, where it is the parent's: measured, `p=$!` outside and
+	// `( wait "$p" )` inside a `-fm` zsh answers `wait: pid N is not a child
+	// of this shell` at 127, which is what a number naming nothing has always
+	// answered here. See Runner.jobsInherited.
+	if !r.jobsInherited {
+		for _, j := range r.jobs {
+			if j.Ident() == pid {
+				jobs = append(jobs, j)
+			}
 		}
 	}
 	if len(jobs) > 0 {

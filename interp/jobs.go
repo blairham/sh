@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -166,6 +167,14 @@ type Job struct {
 	// has said nothing about it yet has nothing to correct.
 	reportedState jobReportState
 
+	// stopExpected says this shell has sent this job a signal whose default
+	// action is to stop it, and has not yet been told that it stopped.
+	//
+	// Written and read only on the shell's own goroutine — `kill` sets it and
+	// the way out of a script reads it — so it needs no synchronization of
+	// its own. It exists because `kill(2)` returns when the signal is *sent*:
+	// the note is owed and has not arrived. See Runner.awaitExpectedStops.
+	stopExpected bool
 	// noticedStop says the shell has already taken that note into the job's
 	// own Stopped and StopSig. Written only on the shell's own goroutine,
 	// which is what keeps `bg` from being undone: a job the script resumed
@@ -2111,6 +2120,14 @@ func (r *Runner) tellOfJobsLeftBehind(atTheExit bool) bool {
 	// nothing, it only takes what the goroutine waiting on the job has
 	// already been told. Before the sentence is chosen *and* before the
 	// hangup that Finish runs next, which reads Stopped too.
+	//
+	// And a stop this shell asked for and has not been told about is waited
+	// for first, which is the other half of the same sentence: `kill -STOP
+	// %1` returns when the signal is *sent*, so where that `kill` is the
+	// script's last command the sweep can arrive before the goroutine
+	// blocked on the process has been scheduled. See
+	// Runner.awaitExpectedStops (#4558).
+	r.awaitExpectedStops()
 	for _, j := range r.jobs {
 		r.noticeStoppedJob(j)
 	}
@@ -2654,4 +2671,89 @@ func (r *Runner) startAndWait(cmd *exec.Cmd, ownGroup bool) error {
 	// `CHLD` condition counts. See Runner.childReaped.
 	r.childReaped()
 	return err
+}
+
+// stopNoticeWindow bounds the wait below.
+//
+// Generous against the thing it is waiting for and short against the thing it
+// is protecting from. What it waits for is a goroutine already woken by the
+// kernel getting a turn, which is microseconds even on a loaded machine; what
+// it protects from is a process that *ignores* the stopping signal, where the
+// note is never coming and this is what the shell pays on its way out. SIGSTOP
+// cannot be ignored, so that case needs a SIGTSTP aimed at a program that has
+// taken the signal for itself.
+const stopNoticeWindow = time.Second
+
+// awaitExpectedStops waits for a stop this shell asked for and has not been
+// told about, so that the way out of a script sees the same state the kernel
+// does.
+//
+// The window this closes is the end of a script and nothing else. A session
+// sweeps the notes between one command and the next, so by the time a prompt
+// asks, a stop from any earlier command has long since landed; a script's last
+// command is followed by no command at all, and `sleep 30 & kill -STOP %1`
+// reached the exit with the job still reading as running — the wrong sentence
+// of the two, and then a hangup the reference does not send (#4558).
+//
+// **Waiting is the only instrument available here.** The obvious fix is to ask
+// the kernel, which is what the reference does — it calls `waitpid` itself as
+// it leaves — and this shell may not: a `&` job already has a goroutine
+// blocked on its process, and two reapers on one child is exactly the race
+// Job.polled exists to prevent. So the shell waits for the reaper it already
+// has rather than becoming a second one.
+//
+// Only where a stop was asked for, which is what keeps this off every other
+// exit: a script that stopped nothing has no job with the flag and does not
+// reach the select at all. One timer for the whole sweep rather than one per
+// job, so the bound is on the exit and not on the table's length.
+//
+// The monitor is the other gate, and it is the pair Runner.stoppedJobEndsAWait
+// reads for the same reason: with it off, the goroutine waiting on the job is
+// in a plain wait that cannot see a stop, so the note is never coming and
+// waiting for it would be waiting for nothing.
+func (r *Runner) awaitExpectedStops() {
+	if !r.monitor {
+		return
+	}
+	var timeout <-chan time.Time
+	for _, j := range r.jobs {
+		if j == nil || j.PID == 0 || !j.stopExpected || j.noticedStop || j.Finished() {
+			continue
+		}
+		if timeout == nil {
+			t := time.NewTimer(stopNoticeWindow)
+			defer t.Stop()
+			timeout = t.C
+		}
+		select {
+		case <-j.stopNote:
+		case <-j.done:
+			// Ended rather than stopped, which is an answer and not a
+			// timeout: there is nothing left to be told about this job.
+		case <-timeout:
+			// The bound is on the whole sweep, so a job that used it up
+			// leaves nothing for the ones behind it either.
+			return
+		}
+	}
+}
+
+// expectingAStop records that a `kill` has just asked a job to stop.
+//
+// By the job where the operand named one — a `%` spec, or the identity this
+// shell invents for a job with no process — and by the process id otherwise,
+// because `kill -STOP "$!"` is the same request spelled with a number and the
+// window it opens is the same window.
+func (r *Runner) expectingAStop(named *Job, aims []jobProcess) {
+	if named != nil {
+		named.stopExpected = true
+		return
+	}
+	for _, aim := range aims {
+		for _, j := range r.jobs {
+			if j != nil && j.PID != 0 && j.PID == aim.pid {
+				j.stopExpected = true
+			}
+		}
+	}
 }

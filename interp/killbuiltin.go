@@ -707,6 +707,14 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			r.killFailed(&killError{kind: killFailureKind(miss), operand: t, errno: miss})
 			continue
 		}
+		if signalStops(sig) {
+			// The job is owed a stop note and has not been given one:
+			// `kill(2)` returns when the signal is sent. Recorded so that a
+			// script leaving immediately afterwards waits for the note
+			// rather than reading the job as still running — see
+			// Runner.awaitExpectedStops (#4558).
+			r.expectingAStop(named, aims)
+		}
 		sent++
 	}
 	if r.stoppedBySignal {

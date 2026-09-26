@@ -52,6 +52,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `split/two-empty-parameters-are-two-fields` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` |
 | `split/empty-parameter-with-nothing-beside-it` | `1[2]` | `1[2]` | `1[2]` | `1[2]` | `1[2]` | `1[2]` | `1[2]` |
 | `split/a-quoted-null-is-not-an-empty-parameter` | `2[][2]` | `2[][2]` | `2[][2]` | `1[2]` | `2[][2]` | `2[][2]` | `2[][2]` |
+| `split/blank-parameter-keeps-its-boundary` | `2[x][2y]` | `2[x][2y]` | `2[x][2y]` | `2[x][2y]` | `2[x][2y]` | `2[x ][2y]` | `2[x][2y]` |
+| `split/blank-parameter-at-the-end` | `2[x2][y]` | `2[x2][y]` | `2[x2][y]` | `2[x2][y]` | `2[x2][y]` | `2[x2][ y]` | `2[x2][y]` |
+| `split/one-blank-parameter-is-two-boundaries` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `1[x y]` | `2[x][y]` |
+| `split/a-blank-parameter-in-the-middle-shows-nothing` | `2[x2][3y]` | `2[x2][3y]` | `2[x2][3y]` | `2[x2][3y]` | `2[x2][3y]` | `3[x2][ ][3y]` | `2[x2][3y]` |
+| `split/blank-parameters-at-each-end` | `3[x][2][y]` | `3[x][2][y]` | `3[x][2][y]` | `3[x][2][y]` | `3[x][2][y]` | `3[x ][2][ y]` | `3[x][2][y]` |
+| `split/a-separator-parameter-under-a-non-whitespace-ifs` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `2[x][y]` | `1[x:y]` | `2[x][y]` |
+| `split/a-blank-parameter-with-nothing-beside-it` | `1[2]` | `1[2]` | `1[2]` | `1[2]` | `1[2]` | `2[ ][2]` | `1[2]` |
 
 - `split/unquoted-param` — the base case: an unquoted parameter expansion is split
   ```sh
@@ -100,6 +107,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `split/a-quoted-null-is-not-an-empty-parameter` — a quoted null carries no text and still leaves a field behind, where an empty parameter's field goes — so this is `2[][2]` against `1[2]` for the same word without the quotes. It is the pair that says the removal is about what *reached* the field rather than about the field being empty
   ```sh
   set -- '' 2; set -- ""$@; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `split/blank-parameter-keeps-its-boundary` — a parameter that is nothing but separators splits away to **no field at all** and still leaves the field boundary behind, so the text written beside the expansion does not join across the gap: `2[x][2y]`. The count is printed with the fields because `[x2y]` and `[x][2y]` are the same characters once the boundary is gone. This is the sibling of `split/empty-parameter-keeps-its-boundary` and not the same case: there the value is empty and there is a field to keep, here it splits to nothing and what is left is the boundary the scalar path records for `v=' '; a${v}b`. The zsh cell is its splitting-off default rather than a disagreement: with `shwordsplit` unset a blank element is a literal and the row is not this question, and under the option zsh answers `2[x][2y]` with the rest
+  ```sh
+  set -- ' ' 2; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `split/blank-parameter-at-the-end` — the other edge, which no other row reaches: the closing delimiter the split absorbed is where the `y` stands, so this is `2[x2][y]`. A reading that recorded only the opening edge answers `1[x2y]` and agrees with the row above it
+  ```sh
+  set -- 2 ' '; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `split/one-blank-parameter-is-two-boundaries` — the row that says a blank parameter is not an empty one. One *empty* parameter is one field and one field takes the text on both sides at once, so `set -- ''; x$@y` is the single word `xy`; one blank parameter is no field and two boundaries, so this is `2[x][y]`. A reading that folded the two together gets every other row of both sets right
+  ```sh
+  set -- ' '; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `split/a-blank-parameter-in-the-middle-shows-nothing` — the discriminating half of the pair with `split/blank-parameters-at-each-end`, and what says the rule is keyed on the **list** rather than on the parameter: the same blank parameter is a boundary at an end and is nothing in the middle, because a parameter in the middle is already a field away from its neighbors. `2[x2][3y]` — a rule stated about the parameter, closing the field wherever a blank one stood, answers this `3[x2][][3y]`
+  ```sh
+  set -- 2 ' ' 3; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `split/blank-parameters-at-each-end` — the other half of that pair: a blank parameter at each end of the list is a boundary at each end, so this is `3[x][2][y]` where the same element between two fields is `2[x2][3y]`. Neither row is discriminating on its own
+  ```sh
+  set -- ' ' 2 ' '; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `split/a-separator-parameter-under-a-non-whitespace-ifs` — the same boundary where the separator is not whitespace, which is the seam with the rule that a null the *splitter* wrote is kept: the leading `:` makes the splitter write the empty field itself and that field absorbs the `x`, while the closing delimiter is absorbed and opens the `y`. `2[x][y]`, not `3[x][][y]` — the boundary is a boundary and never a second field
+  ```sh
+  IFS=:; set -- ':'; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"
+  ```
+- `split/a-blank-parameter-with-nothing-beside-it` — the control, and the reason a grid of expansions reports this clean: with no text beside the expansion there is nothing for the boundary to separate, so `1[2]` is what both readings give
+  ```sh
+  set -- ' ' 2; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"
   ```
 
 ## IFS

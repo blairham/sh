@@ -190,6 +190,12 @@ func TestSemantics(t *testing.T) {
 		// 5.3.20 — `f() { false; echo x; }; f; echo "post=$?"` writes `x`
 		// and `post=0` at 0.
 		{"FailureTakesAnImplicitReturn", s.FailureTakesAnImplicitReturn, interp.No},
+		// The shell that has a directory stack and does not grow it on a
+		// `cd`, which is what makes this the control rather than a vacuous
+		// no: measured 2026-09-26 on bash 5.3.20, `pushd sub` leaves `dirs`
+		// reading two entries and the `cd ..` after it leaves two still.
+		// Neither `shopt` nor `set -o` names an option with `pushd` in it.
+		{"CdPushesTheDirectoryItLeaves", s.CdPushesTheDirectoryItLeaves, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.No},
 		// The one column that fires the trap a *second* time once a
 		// call's frame is entered — five D lines for three commands in

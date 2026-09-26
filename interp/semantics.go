@@ -8316,6 +8316,59 @@ type Semantics struct {
 	// ordinary function call meets.
 	DirectoryChangeHook string
 
+	// CdPushesTheDirectoryItLeaves makes a successful `cd` push the directory
+	// it came from onto the stack `pushd` and `dirs` keep — zsh's
+	// `AUTO_PUSHD`, and no other shell in the panel has the option at all.
+	//
+	// The array it pushes onto is named by
+	// [Semantics.PushedDirectoriesParameter], which is a fact about the
+	// dialect rather than about the option: the stack exists whether or not
+	// `cd` adds to it.
+	//
+	// **The state at the moment `cd` runs is what decides**, not the state
+	// when `cd` finishes. The two can differ because `cd` ends by firing
+	// [Semantics.DirectoryChangeHook], and a hook is a shell function that
+	// can move the option. Measured 2026-09-26 on zsh 5.9.2, from a script,
+	// with the option on and a `chpwd` that turns it off: the directory is
+	// pushed anyway, and the hook can already see it in `$dirstack`. With
+	// the option off and a `chpwd` that turns it on: nothing is pushed. So
+	// the push is decided, and done, before the hook is told anything.
+	//
+	// **On a `cd` that arrived, however it arrived, and only on a `cd`.**
+	// Measured the same day: `cd .` and `cd $PWD` push the directory the
+	// shell is already in, so the push is not conditional on the directory
+	// changing; `cd /no/such/dir` pushes nothing, so it is conditional on
+	// the move succeeding; and `cd -q`, which suppresses the hook, pushes
+	// like any other `cd`, so it is not the hook's doing.
+	//
+	// The last clause is the one with teeth here, because `pushd` and `popd`
+	// are *builtins* in the shell being modeled and are prelude functions
+	// that call `cd` in this one. `pushd /tmp` under `AUTO_PUSHD` pushes one
+	// entry in zsh and not two, and `popd` pops rather than pushing. The
+	// prelude keeps that true by reading the stack into the positional
+	// parameters **before** its `cd` and assigning the whole array
+	// afterwards, so whether `cd` pushed underneath it cannot be seen — see
+	// dialect/zsh/prelude.go, and the tests that hold it.
+	CdPushesTheDirectoryItLeaves Answer
+
+	// PushedDirectoriesParameter names the array holding the directories
+	// this shell has pushed, newest first, and is empty in a dialect whose
+	// `cd` pushes nothing.
+	//
+	// **The current directory is not in it.** zsh's `$dirstack` after one
+	// `cd` under `AUTO_PUSHD` is one entry — the place left — while `dirs`
+	// prints two, because `dirs` puts `$PWD` in front of the array. Measured
+	// 2026-09-26 on zsh 5.9.2, which is also what `$#dirstack` answers: 1,
+	// and not the 2 the issue that asked for this predicted.
+	//
+	// That is the whole of why this is not [Semantics.DirectoryStackParameter]
+	// beside it, which names the array a *numbered tilde* indexes and whose
+	// slot zero **is** the current directory — bash's `DIRSTACK`, a view the
+	// bash prelude builds by putting `$PWD` in front of its own storage. Two
+	// arrays with two contents; conflating them would be off by one in every
+	// row.
+	PushedDirectoriesParameter string
+
 	// ExitHook names the function this shell runs on the way out — zsh's
 	// `zshexit`. Empty is a shell without one, which is four of the five:
 	// measured 2026-09-12, a `zshexit` function defined in bash 5.3.15,

@@ -119,6 +119,10 @@ func TestSemantics(t *testing.T) {
 		// seventeen-line `set -o`. Measured 2026-09-25 — `f() { false; echo
 		// x; }; f; echo "post=$?"` writes `x` and `post=0` at 0.
 		{"FailureTakesAnImplicitReturn", s.FailureTakesAnImplicitReturn, interp.No},
+		// No directory stack at all: measured 2026-09-26, `dirs` is `dirs:
+		// not found` here and `set -o` names no option with `pushd` in it,
+		// while the same grep finds `errexit`.
+		{"CdPushesTheDirectoryItLeaves", s.CdPushesTheDirectoryItLeaves, interp.No},
 		// `test`'s file comparisons — dash has no `[[ ]]` but has these:
 		// both files must exist, and `-t x` is the Illegal number complaint.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.No},

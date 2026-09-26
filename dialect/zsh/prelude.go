@@ -48,8 +48,8 @@ func Prelude() string {
 // `set -- "$@" "$1"; shift` means the same thing in both — which is what
 // keeps the two texts one dialect apart rather than one index apart.
 //
-// Every read of the stack is written `${DIRSTACK[@]+"${DIRSTACK[@]}"}` and
-// not `"${DIRSTACK[@]}"`, because nothing declares the name until the first
+// Every read of the stack is written `${dirstack[@]+"${dirstack[@]}"}` and
+// not `"${dirstack[@]}"`, because nothing declares the name until the first
 // push and this shell reads an *undeclared* name through a subscript as a
 // scalar — Semantics.UnsetNameAtIsOneEmptyField, which real zsh answers yes.
 // Unguarded, the first `pushd` stored an empty entry beside the old
@@ -58,6 +58,26 @@ func Prelude() string {
 // is an array from startup. The guard is the idiom that holds either way,
 // and it is the same text in the bash prelude so the two stay one dialect
 // apart.
+//
+// **`dirstack` is the name a script reads**, and the storage is the
+// parameter rather than a private name with a view over it — which is how
+// the bash prelude next door has to do it, because bash's `$DIRSTACK` puts
+// `$PWD` in slot zero and so cannot be the store. This shell's array holds
+// the pushed entries and not the current directory, so the store and the
+// published parameter are the same thing and there is no second copy to come
+// adrift (#4592). Until then it was spelled `DIRSTACK` here, which is a name
+// real zsh does not have at all, and `$dirstack` refused by name.
+//
+// **Every `cd` below reads the stack into the positional parameters before
+// it moves, and assigns the whole array afterwards.** That is load-bearing
+// and it is not style: under `setopt autopushd` the `cd` these functions
+// call pushes on its own — Semantics.CdPushesTheDirectoryItLeaves — and
+// `pushd /tmp` is one entry in real zsh and not two. Assigning from a
+// snapshot taken before the move makes whatever `cd` did underneath
+// invisible, in both states of the option and without any of these functions
+// having to name it. The two tests that hold it are
+// TestPushdAndPopdAreUnmovedByTheOption and its mutation note; a `cd` added
+// here that reads the stack *after* moving is the way this comes back.
 //
 // Out of scope, and recorded in docs/spec/semantics.md: `pushd old new`, the
 // substitution form, and `-c` in company with a printing letter, which this
@@ -92,14 +112,14 @@ dirs() {
 	if [ $# -gt 0 ]; then
 		# An operand is a new stack here rather than an index into the old
 		# one, which is why this shell has no dirs +N.
-		DIRSTACK=("$@")
+		dirstack=("$@")
 		return 0
 	fi
 	if [ -n "$__clear" ] && [ -z "$__lines" ]; then
-		DIRSTACK=()
+		dirstack=()
 		return 0
 	fi
-	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
+	set -- "$PWD" ${dirstack[@]+"${dirstack[@]}"}
 	__d=
 	for __c in "$@"; do
 		if [ -z "$__long" ]; then
@@ -122,7 +142,7 @@ dirs() {
 }
 __dirs_rotate() {
 	local __spec=$1 __i __new __opts=$2
-	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
+	set -- "$PWD" ${dirstack[@]+"${dirstack[@]}"}
 	case $__spec in
 	+*) __i=${__spec#+} ;;
 	*)  __i=$(( $# - 1 - ${__spec#-} )) ;;
@@ -141,7 +161,7 @@ __dirs_rotate() {
 	__new=$1
 	shift
 	cd ${__opts:+"$__opts"} "$__new" || return 1
-	DIRSTACK=("$@")
+	dirstack=("$@")
 }
 __dirs_cdopts() {
 	# The letters of a leading option word that cd reads, or nothing when
@@ -165,7 +185,7 @@ __dirs_cdopts() {
 	return 0
 }
 pushd() {
-	local __old=$PWD __spec= __DIRS_OPTS=
+	local __old=$PWD __spec= __DIRS_OPTS= __target=
 	while [ $# -gt 0 ]; do
 		case $1 in
 		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
@@ -179,19 +199,23 @@ pushd() {
 		return $?
 	fi
 	if [ $# -eq 0 ]; then
-		if [ ${#DIRSTACK[@]} -eq 0 ]; then
+		if [ ${#dirstack[@]} -eq 0 ]; then
 			# Nothing to exchange with, so this shell goes home and pushes
 			# where it was — where bash refuses and stays put.
 			cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$HOME" || return 1
-			DIRSTACK=("$__old")
+			dirstack=("$__old")
 			return 0
 		fi
-		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "${DIRSTACK[1]}" || return 1
-		DIRSTACK[1]=$__old
+		set -- ${dirstack[@]+"${dirstack[@]}"}
+		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$1" || return 1
+		shift
+		dirstack=("$__old" "$@")
 		return 0
 	fi
-	cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$1" || return 1
-	DIRSTACK=("$__old" ${DIRSTACK[@]+"${DIRSTACK[@]}"})
+	__target=$1
+	set -- ${dirstack[@]+"${dirstack[@]}"}
+	cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$__target" || return 1
+	dirstack=("$__old" "$@")
 }
 popd() {
 	local __spec= __i __k __len __DIRS_OPTS=
@@ -202,11 +226,11 @@ popd() {
 		*) break ;;
 		esac
 	done
-	if [ ${#DIRSTACK[@]} -eq 0 ]; then
+	if [ ${#dirstack[@]} -eq 0 ]; then
 		diagnose "directory stack empty"
 		return 1
 	fi
-	set -- "$PWD" ${DIRSTACK[@]+"${DIRSTACK[@]}"}
+	set -- "$PWD" ${dirstack[@]+"${dirstack[@]}"}
 	__i=0
 	if [ -n "$__spec" ]; then
 		case $__spec in
@@ -221,8 +245,10 @@ popd() {
 	if [ "$__i" -eq 0 ]; then
 		# The entry you are standing in: the shell moves to the next one
 		# down, which is what a bare popd does.
-		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "${DIRSTACK[1]}" || return 1
-		DIRSTACK=("${DIRSTACK[@]:1}")
+		shift
+		cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$1" || return 1
+		shift
+		dirstack=("$@")
 		return 0
 	fi
 	# Any other entry is taken out where it stands and the shell does not
@@ -239,7 +265,7 @@ popd() {
 		__k=$(( __k + 1 ))
 	done
 	shift
-	DIRSTACK=("$@")
+	dirstack=("$@")
 }
 `
 

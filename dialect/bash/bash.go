@@ -2528,6 +2528,14 @@ func Semantics() interp.Semantics {
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd` pushes nothing, in the one other shell that *has* a directory
+	// stack — which is what makes this column the control rather than a
+	// vacuous no. Measured 2026-09-26 on bash 5.3.20: `pushd sub` leaves
+	// `dirs` reading two entries, so the stack works; `cd ..` after it leaves
+	// two entries still, with the top replaced by the new `$PWD`, so the move
+	// added nothing. Neither `shopt` nor `set -o` names an option with
+	// `pushd` in it, and the same greps find `huponexit` and `errexit`.
+	s.CdPushesTheDirectoryItLeaves = interp.No
 	s.PrintfAssignsWithV = interp.Yes
 	s.PrintfRejectsUnknownOption = interp.Yes
 	s.TrapParsesOptions = interp.Yes

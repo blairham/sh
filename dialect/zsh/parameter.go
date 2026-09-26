@@ -334,7 +334,7 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 	}
 }
 
-// zshAbsentParams are the eleven this shell has not got at all.
+// zshAbsentParams are the ten this shell has not got at all.
 //
 // Every one of them is non-empty, or can be, in a shell that has it: `$modules`
 // is 14 entries in a fresh zsh, `$parameters` 214, `$patchars` 15,
@@ -362,37 +362,35 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 // Neither is a distinction a script can see, so it is not one this file makes;
 // both kinds refuse identically until they are implemented.
 //
-// Two of them are worth naming, because each looks like it belongs with the
-// empty ten and does not. `dirstack` would be empty if nothing could push a
-// directory, and `pushd` and `dirs` both work here, so an empty stack is a
-// claim and not an answer. `userdirs` fills as `~user` is expanded, and
+// `dirstack` was the eleventh and left in #4592, by the same route and for
+// the same reason: the stack it reports on is the one `pushd`, `popd` and
+// `dirs` already kept, so what was missing was the parameter. It is the one
+// that could never have been answered with an empty array — an empty stack
+// here would have been a claim and not an answer — and it is also the one
+// that stopped being a *view* on the way out, because real zsh lets a script
+// assign to it. The prelude keeps the array under that name outright, so
+// `$dirstack` and `dirs` cannot come to disagree; see dialect/zsh/prelude.go.
+//
+// One of the ten is worth naming, because it looks like it belongs with the
+// empty ones and does not. `userdirs` fills as `~user` is expanded, and
 // `~root` here does not expand — but it does not *refuse* either, it stays
 // literal, so there is no line to hold an honesty check against and no way to
 // tell "no users looked up yet" from "this shell cannot look one up".
 var zshAbsentParams = []string{
-	"dirstack", "dis_builtins", "functions_source", "historywords",
+	"dis_builtins", "functions_source", "historywords",
 	"jobdirs", "jobstates", "jobtexts", "modules",
 	"patchars", "userdirs", "usergroups",
 }
 
-// zshWritableAbsentParams are the ones a script may assign to even though
-// this shell has not built them, so they are absent without being frozen.
-//
-// Measured 2026-09-12 against zsh 5.9.2 under `-f`, one `name=(a b c)` per
-// entry from a script file: ten of the eleven above answer `read-only
-// variable: name` at status 1 and end the script, whether or not the module
-// has been loaded. `dirstack` is the one that does not — it is the directory
-// stack and assigning it is how a script sets one, so it takes the array in
-// silence at 0.
-//
-// A set rather than a flag on the list, because the list is what a reader
-// checks against the module roster and an exception marked in place would
-// read as a typo.
-var zshWritableAbsentParams = map[string]bool{"dirstack": true}
-
 // registerAbsentParameters makes each of them refuse by name when it is read,
-// and all but one of them refuse an assignment as the read-only names they
-// are.
+// and refuse an assignment as the read-only names they are.
+//
+// "All but one of them" until #4592, which is the exception leaving rather
+// than the rule changing: `dirstack` was the one name here a script could
+// assign to, because in zsh assigning it is how a script sets the directory
+// stack — and a name a script can write is a poor fit for a roster of names
+// the shell has not got. It has the stack now and is no longer on the list,
+// so the freeze has no exception left to carry.
 //
 // The parameter's own call site, which is what a builtin has had all along —
 // see [interp.Runner.SetAbsentParameter]. `zregexparse` is the shape: nothing
@@ -416,9 +414,7 @@ var zshWritableAbsentParams = map[string]bool{"dirstack": true}
 func registerAbsentParameters(r *interp.Runner) {
 	for _, name := range zshAbsentParams {
 		r.SetAbsentParameter(name, "parameter not implemented yet")
-		if !zshWritableAbsentParams[name] {
-			r.MarkReadonly(name)
-		}
+		r.MarkReadonly(name)
 	}
 }
 

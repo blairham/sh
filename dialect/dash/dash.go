@@ -1207,6 +1207,10 @@ func Semantics() interp.Semantics {
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd` pushes nothing, and there is nothing to push onto: measured
+	// 2026-09-26, `dirs` is `dirs: not found` here and `set -o` names no
+	// option with `pushd` in it, while the same grep finds `errexit`.
+	s.CdPushesTheDirectoryItLeaves = interp.No
 	s.PrintfAssignsWithV = interp.No
 	s.PrintfRejectsUnknownOption = interp.Yes
 	// dash has no options here at all, so every letter is refused.

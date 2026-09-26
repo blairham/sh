@@ -1205,6 +1205,12 @@ func Semantics() interp.Semantics {
 	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd` pushes nothing: this shell has no directory stack at all.
+	// Measured 2026-09-26 in the pinned alpine image, BusyBox v1.37.0 — `cd
+	// /t; cd sub; dirs` is `dirs: not found` at 127, and the fourteen-line
+	// `set -o` listing has no name with `pushd` in it. The same grep finds
+	// `errexit` in that listing, so it is a grep that fires.
+	s.CdPushesTheDirectoryItLeaves = interp.No
 	// `umask` prints four digits, and `umask -S` prints the symbolic form.
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.No

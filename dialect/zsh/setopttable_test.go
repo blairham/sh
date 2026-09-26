@@ -56,12 +56,20 @@ import "testing"
 // moment the question is *asked* rather than at the definition: a word in a
 // function defined while the option was off distributes when the function is
 // called with it on, so the read is at expansion and not at parse.
+// `autopushd` is the sixteenth: it moves
+// Semantics.CdPushesTheDirectoryItLeaves, which makes a successful `cd` push
+// the directory it came from onto the stack `dirs` prints, and until #4592 it
+// pushed nothing in either state while `pushd` and `popd` kept a stack beside
+// it. Like `posixtraps` and `rcexpandparam` it is read at a *moment* and the
+// moment is the one that decides: the state when `cd` starts, not the state
+// when `cd` finishes — a `chpwd` that turns it off during the `cd` does not
+// take the push back.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
-		"posixtraps", "rcexpandparam", "errreturn",
+		"posixtraps", "rcexpandparam", "errreturn", "autopushd",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -83,7 +91,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 128; recordedCount != want {
+	if want := 127; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

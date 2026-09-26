@@ -655,7 +655,7 @@ print -r -- "after=${#galiases}"`)
 	}
 }
 
-// emptyModuleParams is the eight of `zsh/parameter` that are empty here and
+// emptyModuleParams is the seven of `zsh/parameter` that are empty here and
 // right to be. Spelled out rather than read from the package, because a test
 // that asked the implementation which parameters it thought were empty would
 // agree with it whatever it said.
@@ -663,7 +663,10 @@ print -r -- "after=${#galiases}"`)
 // It was ten. `galiases` and `saliases` left the list when `alias -g` and
 // `alias -s` arrived (#2081), which is exactly what the alarm below was for:
 // they are produced tables now and TestTheGlobalAndSuffixTablesAreLive is
-// what grades them.
+// what grades them. The prose said eight for as long as the list held seven,
+// which is the count going stale in the one place nothing reads it —
+// TestTheThreeRostersAccountForTheModuleExactlyOnce counts the entries and
+// never the sentence.
 func emptyModuleParams() []string {
 	return []string{
 		"dis_aliases", "dis_functions", "dis_functions_source", "dis_galiases",
@@ -692,7 +695,9 @@ func TestTheProducedParametersStayOutOfASetListing(t *testing.T) {
 	}
 }
 
-// **Each of the fourteen refuses by name**, one name at a time.
+// **Each of the ten refuses by name**, one name at a time. (The sentence said
+// fourteen while the roster held eleven, and now holds ten; the roster is
+// what this loops over, which is the point of reading it from the list.)
 //
 // The eight read routes are graded against `jobstates` alone above, which is
 // right for the routes — they are a property of the expansion and not of the
@@ -987,29 +992,38 @@ func moduleParams() []string {
 	}
 }
 
-// implementedModuleParams is the fifteen that are live views: the five a real
+// implementedModuleParams is the sixteen this shell has: the five a real
 // plugin manager reads and the only five it reads (#1060), `funcstack`, which
 // the completion system touches on its fourth line (#1598), `galiases` and
 // `saliases` for the two alias namespaces `alias -g` and `alias -s` brought
 // (#2081), `parameters` for `${(t)name}` (#1599), and `reswords`, which a
 // highlighter reads before it can tell a reserved word from a command
 // (#2517).
+//
+// Fifteen of them are live views. `dirstack` is the sixteenth and is not one
+// (#4592): real zsh lets a script assign to it and the assignment *is* the
+// new directory stack, so this shell keeps it as an ordinary array that the
+// prelude's `pushd`, `popd` and `dirs` maintain under that name — there is no
+// private store for a view to read. That is also why `zmodloadHasFeature`
+// needs a third arm for it: the runner cannot tell an array the shell
+// maintains from an array a script wrote, so the dialect says which name it
+// is, through Semantics.PushedDirectoriesParameter.
 func implementedModuleParams() []string {
 	return []string{
-		"aliases", "builtins", "commands", "funcfiletrace",
+		"aliases", "builtins", "commands", "dirstack", "funcfiletrace",
 		"funcsourcetrace", "funcstack", "functions", "functrace",
 		"galiases", "history", "nameddirs", "options", "parameters",
 		"reswords", "saliases",
 	}
 }
 
-// absentModuleParams is the eleven this shell has not got, each registered
+// absentModuleParams is the ten this shell has not got, each registered
 // with [interp.Runner.SetAbsentParameter] so that reading one is refused at
 // the expansion that asked (#1152).
 //
 // Every one of them is non-empty, or can be, in a shell that has it — so
 // reading empty would be a claim and not an answer, which is what separates
-// these from the eight above. Some are answerable from a table this shell
+// these from the seven above. Some are answerable from a table this shell
 // already keeps and the rest need a seam that does not exist; #1137 is the
 // survey.
 //
@@ -1025,10 +1039,14 @@ func implementedModuleParams() []string {
 // was stopped rather than left with a blank field. `funcfiletrace` and
 // `funcsourcetrace` left with it (#4470, #4469) — the same walk asked for a
 // different field, sharing its frame selection so the three can never report
-// different lengths.
+// different lengths. `dirstack` left sixth (#4592), and it is the one that
+// could never have been answered with an empty array: `pushd` and `dirs`
+// already kept a stack, so an empty one here would have been a claim and not
+// an answer. It is also the only one that stopped being a *view* on the way
+// out — see implementedModuleParams.
 func absentModuleParams() []string {
 	return []string{
-		"dirstack", "dis_builtins", "functions_source", "historywords",
+		"dis_builtins", "functions_source", "historywords",
 		"jobdirs", "jobstates", "jobtexts", "modules",
 		"patchars", "userdirs", "usergroups",
 	}

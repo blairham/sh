@@ -4155,7 +4155,11 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinLocation:             interp.LocationBracketLineAfterFirst,
 		ScriptBuiltinLocation:       interp.LocationBracketLine,
 		ParseFailureNamesItsOwnLine: true,
-		ReadonlyVariable:            "%s: is read only",
+		// And for a here-document body that line is the one the message is
+		// located at rather than the body's own. See
+		// interp/heredocbodyrefusalline.go (#4715).
+		HeredocBodyRefusalNamesTheLineItIsLocatedAt: true,
+		ReadonlyVariable: "%s: is read only",
 		// A warning rather than an error, in so many words, and the only
 		// member of the panel that says so.
 		UnsetReadonly: "unset: warning: %s: is read only",

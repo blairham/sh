@@ -1070,6 +1070,12 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 			failureBase += r.expansionBodyLine - 1
 		}
 		failure := shiftParseError(raw, failureBase)
+		if at, named := r.heredocBodyRefusalLine(span); named {
+			// One column writes the line *into* its sentence and writes the
+			// line it located the message at rather than the body's own.
+			// See Runner.heredocBodyRefusalLine (#4715).
+			failure = shiftParseError(raw, at-r.diag().ParseFailureLine(raw))
+		}
 		// Placed at the failure's line and followed by the text it was
 		// found in, for the dialects that write one. See substecho.go.
 		putBack := r.substFailureAtItsLine(span, src, failure)

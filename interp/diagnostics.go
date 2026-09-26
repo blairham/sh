@@ -4385,6 +4385,19 @@ type Diagnostics struct {
 	// this is not simply the script location being absent.
 	ParseFailureNamesItsOwnLine bool
 
+	// HeredocBodyRefusalNamesTheLineItIsLocatedAt makes that sentence's line,
+	// for a substitution refused in a **here-document body**, the line the
+	// message is located at rather than the line the body holds the
+	// substitution on.
+	//
+	// Only the dialect above has a line in its wording at all, and only for
+	// a body do the two numbers part: in an ordinary word the body's line
+	// and the command's are the same line. See
+	// interp/heredocbodyrefusalline.go for the ten rows and the two rules
+	// they carry, including the nought this writes where the location is a
+	// speaking builtin's bracket (#4715).
+	HeredocBodyRefusalNamesTheLineItIsLocatedAt bool
+
 	// SubstitutionParseFailureNamesTheConstruct puts `command substitution:`
 	// between the shell's name and the line when the refusal is a
 	// substitution *body's* rather than the script's own.

@@ -39,20 +39,18 @@ repos:
     name: gofumpt
     args: [--hook:error-on-output, go, tool, gofumpt, -l, -d, .]
 
-  # golangci-lint at commit time, run as `go tool` so the version comes from
-  # go.mod's tool block -- the same binary the Lint job uses. The upstream
-  # golangci-lint hooks download one of their own, which is a second pin to
-  # keep in step.
+  # golangci-lint does NOT run here. It runs in CI only, as the `Lint` job,
+  # which grades the whole tree and is the required check -- and the only one
+  # that ever examines `main` (#1302, #1640).
   #
-  # `--new-from-rev HEAD` reports what this commit introduces rather than the
-  # repository's backlog. It filters *output* only: golangci type-checks the
-  # whole module either way, so this buys signal, not seconds. The whole-tree,
-  # enforced run is the Lint job in CI, which is the required check -- and the
-  # only one that ever examines `main` (#1302, #1640).
-  - id: my-cmd-repo
-    alias: golangci-lint
-    name: golangci-lint
-    args: [go, tool, golangci-lint, run, --new-from-rev, HEAD]
+  # The hook that used to sit here ran `go tool golangci-lint run
+  # --new-from-rev HEAD` on every commit. `--new-from-rev` filters *output*
+  # only: golangci type-checks the whole module either way, so it bought signal
+  # rather than seconds, and the cost was real. golangci-lint defaults its
+  # concurrency to NumCPU and takes gigabytes of RSS per run; with several
+  # agents committing in parallel worktrees it drove this machine to load 13+
+  # and made a single commit take ~6 minutes. Removed at the maintainer's
+  # instruction: lint in CI, not on commit.
 
 # US English over prose, which is where most of this repository is.
 # .golangci.yml sets locale: US, but golangci-lint reaches Go files and

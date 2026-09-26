@@ -215,42 +215,64 @@ func TestAContainedTargetFailureLeavesTheRedirectionsStatus(t *testing.T) {
 }
 
 // The axis is not asked for a command this shell runs as a process of its
-// own: where that word was expanded is
-// Semantics.RedirectTargetExpandsInTheCommandsProcess's question, and the
-// answer to it already says whose the failure is. So an external carries on
-// under either answer here.
+// own, under **either** answer to the sibling question.
+//
+// Where that word was expanded is
+// Semantics.RedirectTargetExpandsInTheCommandsProcess's, and the answer to it
+// already says whose the failure is: Yes puts it in the child, and No says
+// the shell expanded it for a command that is still a process of its own,
+// which is what makes dash and BusyBox ash end over an external's target.
+// Neither leaves this axis anything to decide, and a dialect that never
+// answered this one must not be made to refuse over a command it never
+// covers — which is exactly what the `unspecified` row below would catch.
 func TestTheTargetAxisIsNotAskedForACommandOfItsOwn(t *testing.T) {
 	t.Parallel()
-	for _, isRedirs := range []Answer{Yes, No, Unspecified} {
-		sem := permissive()
-		sem.RedirectTargetFailureIsTheRedirections = isRedirs
-		sem.RedirectTargetExpandsInTheCommandsProcess = Yes
-		sem.RedirectErrorOnSpecialBuiltinFatal = Yes
-		sem.FatalErrorStatusIsOne = Yes
-		sem.RedirectTargetIsAnOrdinaryWord = No
-		dg := Diagnostics{ArithOperandExpected: "bad math"}
-		var out bytes.Buffer
-		dir := t.TempDir()
-		r := newTestRunner(t, &Runner{
-			Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg,
-			Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
-		})
-		f, err := syntax.Parse("/bin/echo RAN < $(( } ))\necho after\n", syntax.Core())
-		if err != nil {
-			t.Fatalf("parse: %v", err)
-		}
-		if _, err := r.Run(context.Background(), f); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-		if got := out.String(); !strings.Contains(got, "after") ||
-			strings.Contains(got, "whose failure a redirection target") {
-			t.Errorf("isRedirs=%v: said %q, want the script carrying on with nothing asked", isRedirs, got)
+	for _, inTheCommand := range []Answer{Yes, No} {
+		for _, isRedirs := range []Answer{Yes, No, Unspecified} {
+			sem := permissive()
+			sem.RedirectTargetFailureIsTheRedirections = isRedirs
+			sem.RedirectTargetExpandsInTheCommandsProcess = inTheCommand
+			sem.RedirectErrorOnSpecialBuiltinFatal = Yes
+			sem.FatalErrorStatusIsOne = Yes
+			sem.RedirectTargetIsAnOrdinaryWord = No
+			dg := Diagnostics{ArithOperandExpected: "bad math"}
+			var out bytes.Buffer
+			dir := t.TempDir()
+			r := newTestRunner(t, &Runner{
+				Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg,
+				Dir: dir, Name: "sh", Vars: map[string]string{"PATH": dir},
+			})
+			f, err := syntax.Parse("/bin/echo RAN < $(( } ))\necho after\n", syntax.Core())
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			got := out.String()
+			if strings.Contains(got, "whose failure a redirection target") {
+				t.Errorf("inTheCommand=%v isRedirs=%v: said %q, want this axis never asked",
+					inTheCommand, isRedirs, got)
+			}
+			// And the sibling's answer is what decides the reach, as it did
+			// before this axis existed: the child's failure costs the
+			// command, and the shell's own costs the shell.
+			if carriedOn := strings.Contains(got, "after"); carriedOn != (inTheCommand == Yes) {
+				t.Errorf("inTheCommand=%v isRedirs=%v: said %q, want the sibling axis to decide the reach",
+					inTheCommand, isRedirs, got)
+			}
 		}
 	}
 }
 
-// A dialect that never answered has to say so rather than pick a reading, and
-// the command does not run either way.
+// A dialect that never answered has to say so rather than pick a reading.
+//
+// The command does not run — that much is true of both readings — and
+// **neither reading is acted on**: the give-up is not taken and the failed
+// expansion is not either, so the script is left standing exactly where the
+// refusal found it. Acting on one of them after saying the shells disagree
+// would answer the question anyway, which is the guard the same boundary one
+// construct over already carries.
 func TestAFailedTargetWithNobodyAnswering(t *testing.T) {
 	t.Parallel()
 	out, _ := targetFailRun(t, "echo RAN < $(( } ))\necho after\n",
@@ -260,6 +282,21 @@ func TestAFailedTargetWithNobodyAnswering(t *testing.T) {
 	}
 	if strings.Contains(out, "RAN") {
 		t.Errorf("= %q, want the command left unrun", out)
+	}
+	if !strings.Contains(out, "after") {
+		t.Errorf("= %q, want neither reading acted on — the script left standing", out)
+	}
+	// A **special builtin** is not part of that claim and is the row to read
+	// carefully: it ends the shell here too, and not because a reading was
+	// taken. The command not running is what both readings agree on, and a
+	// failed redirection on a special builtin is fatal wherever it comes
+	// from — see RedirectErrorOnSpecialBuiltinFatal, which is answered Yes
+	// in this vector. So the refusal narrows the shell's fate on every
+	// command but that one.
+	special, _ := targetFailRun(t, ": < $(( } ))\necho after\n",
+		targetFailSemantics{Unspecified, Yes, No, 0})
+	if strings.Contains(special, "after") {
+		t.Errorf("a special builtin = %q, want the redirection failure still fatal there", special)
 	}
 }
 

@@ -3630,14 +3630,47 @@ Measured over a script file with `env -i PATH=/usr/bin:/bin`, against bash
 | --- | --- | --- | --- | --- |
 | `unset u; cat /dev/null > "${u:=made}"` — `u` after | unset | unset | unset | **made** |
 | `set -u; cat /dev/null > "$NOPE"` — script after | alive, 1 | alive, 1 | alive, 1 | **stops, 2** |
-| the same two on `: > …`, `exec 3> …`, a function, a group | kept, stops | kept, stops | kept, stops | kept, stops |
+| the same two on `: > …`, `exec 3> …`, a function, a group | kept, stops | kept, **see below** | kept, stops | kept, stops |
 
-The third row is the line: everything the shell runs itself keeps the write
-and dies of the failure in **every** column, because there is no other
-process for either to land in. So the axis is asked only where the command is
-one the shell runs as a process of its own, and only when the expansion
-actually wrote something or failed — every other redirection is quiet and
-unanimous, and an unanswered dialect must still be able to open a file.
+The third row is the line for the **write**: everything the shell runs itself
+keeps it, in every column, because there is no other process for it to land
+in. So the axis is asked only where the command is one the shell runs as a
+process of its own, and only when the expansion actually wrote something or
+failed — every other redirection is quiet and unanimous, and an unanswered
+dialect must still be able to open a file.
+
+The **failure** is not the same line, and this table used to say it was.
+`kept, stops` was measured on `:` and `exec`, which are special builtins, and
+read as a claim about every command the shell runs itself; ksh93 stops only
+for those two. Re-measured 2026-09-26 over a script file with `env -i
+PATH=/usr/bin:/bin`, `set -u` and a target of `"$NOPE"`, and again with `-c`
+and a target of `$(( 1/0 ))`, `${q?word}` and a two-word expansion:
+
+| `set -u` and `> "$NOPE"` on | bash 5.3.20 | zsh 5.9.2 | ksh93u+ | dash 0.5.12 | ash 1.37.0 |
+| --- | --- | --- | --- | --- | --- |
+| `:` — a special builtin | stops, 1 | stops, 1 | stops, 1 | stops, 2 | stops, 2 |
+| `exec 3> …` | stops, 1 | stops, 1 | stops, 1 | stops, 2 | stops, 2 |
+| `read x` — a regular builtin | stops, 1 | stops, 1 | **alive, 1** | stops, 2 | stops, 2 |
+| a function | stops, 1 | stops, 1 | **alive, 1** | stops, 2 | stops, 2 |
+| a group | stops, 1 | stops, 1 | **alive, 1** | stops, 2 | stops, 2 |
+
+ksh93 grades a target that will not expand as a failed **redirection** rather
+than as a failed expansion, so it draws the grid a file that will not open
+draws — `: < /nonexistent/f` ends that shell and `read x < /nonexistent/f`
+carries it on at 1 — where in bash and zsh a failed open carries on for both
+and `||` catches it. That is `RedirectTargetFailureIsTheRedirections`, asked
+only where the shell runs the command itself, and it is Yes in ksh93 alone.
+
+**The noun is a special builtin, not "a command the shell runs itself".** The
+two readings agree on every row of that table except a regular builtin, a
+function, a group and `command :` — which is why measuring `:` and `exec`
+alone could not tell them apart, and why the row above stood wrong for as long
+as it did (#4689).
+
+It is a third axis rather than a widening of the body's, and that too is
+measured: dash and BusyBox ash carry a failing here-document **body** on at 2
+and at 1, where the same failure in a **target** ends both shells at 2. One
+field cannot say both.
 
 One answer covers both consequences because they are one fact about where the
 word was expanded. It is a **second** axis rather than a widening of the

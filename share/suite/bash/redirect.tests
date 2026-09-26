@@ -53,3 +53,43 @@ exec 16>> dup14
 printf 'appended\n' >&16
 exec 16>&-
 printf 'appended: [%s]\n' "$(cat dup14 | tr '\n' '-')"
+
+# --- a target whose expansion failed is one diagnostic ----------------------
+#
+# `ambiguous redirect` is this shell's alone, and it is a complaint about *how
+# many words* the target came to. A word that could not be computed never got
+# a count, so what a script is told is the failure's own sentence and nothing
+# after it. Every row is a subshell with stdout dropped, because two of the
+# failure kinds end the shell they happen in (#4688).
+#
+# The rows that *do* say it are here beside the rows that do not, since a file
+# asking only the quiet half would pass for a shell that had gone silent.
+
+say() { printf -- '--- %s\n' "$1"; }
+
+say 'a target whose arithmetic failed'
+( : > $(( 1/0 )) ) 2>&1 > /dev/null
+
+say 'a target whose parameter had a word of its own'
+( : > ${qq_zz?bad} ) 2>&1 > /dev/null
+
+say 'a target that is an unset name under -u'
+( set -u; : > $NOPE_ZZ ) 2>&1 > /dev/null
+
+say 'a target that came to no words, with nothing failing'
+( e=; : > $e ) 2>&1 > /dev/null
+
+say 'a target that came to several words, with nothing failing'
+( e="a b"; : > $e ) 2>&1 > /dev/null
+
+say 'several words and a failure on the way to them'
+( e="a b"; : > $e$(( 1/0 )) ) 2>&1 > /dev/null
+
+say 'braces making several words, with nothing failing'
+( : > {x_zz,y_zz} ) 2>&1 > /dev/null
+
+# And the reach beside the wording, on the redirection's own line: the command
+# does not run, the rest of the line goes with the failure, and the next line
+# reads 1.
+say 'the reach'
+( echo RAN > $(( 1/0 )); echo SAME ); echo "after st=$?"

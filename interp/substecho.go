@@ -116,6 +116,14 @@ func (r *Runner) textInForce() (string, int) {
 // body is the substitution's text, read for that addition alone.
 func (r *Runner) substFailureAtItsLine(span syntax.Span, body string, failure error) func() {
 	d := r.diag()
+	if at, ok := r.heredocBodyRefusalLocation(span); ok {
+		// One column places a here-document body's refusal after the
+		// document rather than in it, and places both of its messages
+		// there. See heredocbodyrefusallocation.go (#4714).
+		saved := r.line
+		r.line = at
+		return func() { r.line = saved }
+	}
 	line := d.ParseFailureLine(failure)
 	if span.Backquoted && d.BackquotedSubstitutionFailureAddsItsBodysNewlines &&
 		r.expandingOuterWord != nil && r.expandingOuterWord == r.commandFirstWord {
@@ -146,6 +154,13 @@ func (r *Runner) substFailureAtItsLine(span syntax.Span, body string, failure er
 // same refusal in the body's own.
 func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure error, failureBase int) (string, int) {
 	d := r.diag()
+	if sentence, at, ok := r.heredocBodyRefusalSentence(span); ok {
+		// The dialect's own sentence, in place of the quote and of the
+		// open-context lines the levels would write. A body is lexed the way
+		// a double-quoted string is, so those levels see a quote the program
+		// does not contain — see heredocbodyrefusallocation.go (#4714).
+		return sentence, at
+	}
 	// The sentence about the substitution, where the dialect writes one in
 	// place of the quote. See Diagnostics.SubstitutionParseFailureSentence
 	// for the rows and for the pair one token apart that separates the

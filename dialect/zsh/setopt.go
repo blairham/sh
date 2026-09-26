@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 130 of the 185
+//     typing a directory name still does not change directory. 129 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -169,7 +169,7 @@ import (
 // string built while it was off. The `${^a}` half of the same mechanism is
 // the opposite: that one is state on the node and is settled at the parse.
 //
-// Nothing else about the split moved, and 130 is still most of the table.
+// Nothing else about the split moved, and 129 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.

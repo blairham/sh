@@ -25,7 +25,7 @@ func TestAHoldFollowsTheDirectoryThroughARename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Hold: %v", err)
 	}
-	defer held.Close()
+	defer func() { _ = held.Close() }()
 
 	before, ok := opened.Path(held)
 	if !ok {
@@ -60,7 +60,7 @@ func TestWithinOpensBesideAHoldWhoseNameHasGone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Hold: %v", err)
 	}
-	defer held.Close()
+	defer func() { _ = held.Close() }()
 	if err := os.Rename(was, filepath.Join(base, "e")); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestWithinOpensBesideAHoldWhoseNameHasGone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Within through a held directory: %v", err)
 	}
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 	name, ok := opened.Path(sub)
 	if !ok || filepath.Base(name) != "s" {
 		t.Errorf("Within reached %q (named %v), want the subdirectory under the new name", name, ok)
@@ -95,7 +95,7 @@ func TestWithinReachesTheParentOfAHold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer held.Close()
+	defer func() { _ = held.Close() }()
 	if err := os.Rename(was, filepath.Join(base, "e")); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestWithinReachesTheParentOfAHold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Within(..): %v", err)
 	}
-	defer up.Close()
+	defer func() { _ = up.Close() }()
 	name, ok := opened.Path(up)
 	if !ok {
 		t.Fatal("the parent of a held directory has no name")
@@ -126,7 +126,7 @@ func TestWithinStillOpensADirectoryThatHasBeenRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer held.Close()
+	defer func() { _ = held.Close() }()
 	if err := os.Remove(gone); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestWithinStillOpensADirectoryThatHasBeenRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Within(.) on a removed directory: %v", err)
 	}
-	defer self.Close()
+	defer func() { _ = self.Close() }()
 	if _, err := self.Stat(); err != nil {
 		t.Errorf("the descriptor Within gave back is not a directory: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestAHoldTakesADirectoryThatMayBeEnteredAndNotRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Hold on a traversable directory that cannot be read: %v", err)
 	}
-	held.Close()
+	_ = held.Close()
 }
 
 func sameDirectory(t *testing.T, a, b string) bool {

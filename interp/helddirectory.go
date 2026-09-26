@@ -5,6 +5,7 @@ package interp
 
 import (
 	"os"
+	"path/filepath"
 	"sync/atomic"
 
 	"github.com/blairham/sh/internal/opened"
@@ -167,6 +168,18 @@ func (r *Runner) dirNow() string {
 	if err != nil {
 		return r.workDir()
 	}
+	// **Not through the gate**, which is the one place in this package where
+	// that is the right answer and it is worth saying why. Every stat in
+	// fsgate.go is there because a probe is an oracle: `[ -f /etc/shadow ]`
+	// learns something real about a path *a script chose*. These two ask
+	// about the directory this shell is already in — the one a policy was
+	// asked about at the `cd` that put it here — and the question is only
+	// "am I still called that", whose answer the script cannot read except
+	// through paths that do go through the gate. Putting them through it also
+	// made every relative path in the shell emit a second ActionStat, which
+	// TestEmptyFileOperandAsksTheFilesystemNothing reads as the shell asking
+	// the filesystem something it was not asked to. See the entry for
+	// interp.dirNow in internal/boundary.
 	if named, err := os.Stat(r.Dir); err == nil && os.SameFile(named, here) {
 		return r.Dir
 	}
@@ -212,7 +225,7 @@ func (r *Runner) enteredFromTheDirectoryHeld(operand string) (arrived *os.File, 
 		// link has gone still answers F_GETPATH on Darwin with the name it
 		// had, where Linux's /proc marks it deleted and internal/opened reads
 		// that as nameless. Verifying makes the two platforms agree.
-		if here, err := os.Stat(now); err != nil || !os.SameFile(here, there) {
+		if here, err := r.stat(now); err != nil || !os.SameFile(here, there) {
 			now = ""
 		}
 	} else {
@@ -242,6 +255,18 @@ func (r *Runner) adoptTheDirectoryHeld(dir *os.File, name string) {
 // the axis first would make a Runner with no answer refuse every failing `cd`
 // rather than the one shape the shells part over.
 func (r *Runner) cdFromTheDirectoryHeld(operand, built string) (arrived string, moved, asked bool) {
+	// Through the gate, and before the move rather than after it. This is the
+	// one route into a directory that does not go through `cd`'s own
+	// `enterable` check — it resolves the operand from a descriptor, so a
+	// policy that hid the path the script named would otherwise be walked
+	// straight past by the retry. The place asked about is the one this is
+	// about to reach, which is a different path from the one `enterable`
+	// was given and so a question of its own rather than the same one twice.
+	if r.Gate != nil || r.Events != nil {
+		if r.probeDenied(r.act(Action{Kind: ActionStat, Path: filepath.Join(r.dirNow(), operand)})) {
+			return "", false, false
+		}
+	}
 	dir, name, ok := r.enteredFromTheDirectoryHeld(operand)
 	if !ok {
 		return "", false, false

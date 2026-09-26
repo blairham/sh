@@ -518,3 +518,43 @@ func TestADirectoryRenamedAndThenRemovedKeepsTheNameCdBuilt(t *testing.T) {
 		t.Errorf("`cd .` after a rename and a removal gave %q, want %q", out.String(), want)
 	}
 }
+
+// The retry resolves its operand from a descriptor rather than from a path, so
+// it is the one route into a directory that does not pass `cd`'s own
+// `enterable` check — and a policy that hides a directory must not be walked
+// past by it. The control is the same `cd` with the same rename and a gate
+// that allows, which moves.
+func TestAPolicyThatHidesADirectoryIsNotWalkedPastByTheRetry(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		decision Decision
+		want     string
+	}{
+		{"a gate that hides it", Deny, "1 " + "d"},
+		{"a gate that allows it", Allow, "0 " + "e/s"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := renamedTree(t)
+			sem := PosixSemantics()
+			sem.CdDestinationIsNotThere = CdDestinationNotThereEntersAndTakesTheKernelsName
+			out := &strings.Builder{}
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem, Diagnostics: &Diagnostics{},
+				Dir: filepath.Join(root, "d"), Stdout: out, Stderr: &strings.Builder{},
+				Gate: GateFunc(func(_ context.Context, a Action) Decision {
+					if a.Kind == ActionStat && strings.HasPrefix(a.Path, filepath.Join(root, "e")) {
+						return c.decision
+					}
+					return Allow
+				}),
+			})
+			runPart(t, r, "cd .\n")
+			renameAway(t, root)
+			runPart(t, r, "cd s\necho $? $PWD\n")
+			status, want, _ := strings.Cut(c.want, " ")
+			if got := strings.TrimSpace(out.String()); got != status+" "+filepath.Join(root, want) {
+				t.Errorf("`cd s` gave %q, want %q", got, status+" "+filepath.Join(root, want))
+			}
+		})
+	}
+}

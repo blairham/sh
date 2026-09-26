@@ -157,3 +157,25 @@ printf -- '--- and a failed expansion in an ordinary word is fatal here ---\n'
 
 printf -- '--- the control: a target that expands is opened ---\n'
 ( echo RAN > opened_zz; echo "st=$?"; cat opened_zz ) 2>&1; printf 'after st=%s\n' "$?"
+
+# **Where a `command`-prefixed redirection is applied is a different question
+# from what its failure costs**, and this is the column that separates them.
+# The builtin is reached here — `CommandReachesABuiltin` is Yes — so the word
+# was expanded in this shell and the write comes back, while the row above
+# shows the same `command :` carrying this shell on at 1 where a bare `:` ends
+# it, because the fatality is keyed on a *special* builtin and the word takes
+# the specialness away without taking the process away (#4689, #4701).
+
+printf -- '--- where a command-prefixed target is applied ---\n'
+( unset u_zz; : > "${u_zz:=made_zz}"; printf 'a bare builtin:      u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command : > "${u_zz:=made_zz}"; printf 'command :            u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command echo RAN > "${u_zz:=made_zz}"; printf 'command echo:        u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command -v : > "${u_zz:=made_zz}"; printf 'command -v :         u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( f_zz() { :; }; unset u_zz; command f_zz > "${u_zz:=made_zz}"; printf 'command <function>:  u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command /bin/echo RAN > "${u_zz:=made_zz}"; printf 'command /bin/echo:   u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+
+printf -- '--- and its here-document body, the other half of the redirection ---\n'
+( unset u_zz; command : <<END; printf 'command:  u=[%s]\n' "${u_zz-unset}"
+[${u_zz:=made_zz}]
+END
+) 2>/dev/null

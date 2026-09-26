@@ -3672,6 +3672,63 @@ measured: dash and BusyBox ash carry a failing here-document **body** on at 2
 and at 1, where the same failure in a **target** ends both shells at 2. One
 field cannot say both.
 
+### `command` decides which of those two questions is even asked
+
+The two axes above are asked of different commands — one of a command that
+*is* a process of its own, the other of a command the shell runs itself — so
+before either can be asked, something has to say which kind this is. A
+builtin behind `command` is where the columns part on that, and it is not a
+new axis: it is `Semantics.CommandReachesABuiltin`, which four dialects
+answer Yes and zsh answers No, read where the route is chosen instead of
+being measured again.
+
+Measured 2026-09-26 over a script file under `env -i PATH=/usr/bin:/bin` with
+a scratch HOME, against bash 5.3.20, zsh 5.9.2 under `-f`, ksh93u+ 2012-08-01
+(AT&T's own build), dash 0.5.12 and BusyBox v1.37.0 in the pinned alpine
+image. `unset u`, the redirection on its own line with `echo` beside it, and
+`u` read back on the next:
+
+| `> "${u:=made}"` on | bash | zsh | ksh93 | dash | ash |
+| --- | --- | --- | --- | --- | --- |
+| `:` — a builtin | kept | kept | kept | kept | kept |
+| `command :` | kept | **gone** | kept | kept | kept |
+| `command read x` | kept | **gone** | kept | kept | kept |
+| `command echo RAN` | kept | **gone** | kept | kept | kept |
+| `command -p echo RAN` | kept | **gone** | kept | kept | kept |
+| `command f` — a function | gone | gone | gone | kept | kept |
+| `command /bin/echo RAN` | gone | gone | gone | kept | kept |
+| `command -v :` | kept | kept | kept | kept | kept |
+
+dash and BusyBox ash keep every write because they answer
+`RedirectTargetExpandsInTheCommandsProcess` No, not because their route is
+different; their `command f` row is the control that says so.
+
+**The noun is a builtin behind the word**, and three pairs say so:
+
+- **A function.** `f() { echo RAN; }; command f` is `command not found` at
+  127 in all five columns and takes the external route in all five, because
+  bypassing the function table is what the utility is for everywhere. So the
+  noun is not "an external command" as a category the word creates — that
+  reading would have `command f` split the panel, and it does not.
+- **`command -v` and `command -V`.** They run nothing at all and stay in this
+  shell in every column, zsh included: `command -v : > $(( 1/0 ))` ends that
+  shell exactly as a bare `:` does. So the noun is not the *word* `command`
+  either.
+- **The option that moves it.** `setopt posixbuiltins` in zsh — the option
+  `CommandReachesABuiltin` is the axis for — turns every moved row above back
+  into the bare builtin's, with the word `command` still written. Holding the
+  word fixed and changing only what it reaches moves the answer, which is what
+  says which of the two the rule is keyed on.
+
+And **where the redirection is applied** and **what its failure costs** are
+two questions, not one, even though one fact settles both in zsh. ksh93 is
+the column that separates them: `command : > "${u:=made}"` keeps the write
+there — the builtin is reached, so the word was expanded in this shell — and
+`command : > $(( 1/0 ))` still carries that shell on at 1 where a bare `:`
+ends it, because `RedirectTargetFailureIsTheRedirections` is keyed on a
+*special builtin* and `command` takes the specialness away without taking the
+process away (#4689, #4701).
+
 One answer covers both consequences because they are one fact about where the
 word was expanded. It is a **second** axis rather than a widening of the
 body's, and that is measured rather than tidy: for a *body* dash is the

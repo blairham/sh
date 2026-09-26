@@ -3303,6 +3303,12 @@ func Semantics() interp.Semantics {
 	// the kernel's name reaches `$PWD` at the `cd` and nowhere else. See
 	// Semantics.CdDestinationIsNotThere.
 	s.CdDestinationIsNotThere = interp.CdDestinationNotThereEntersAndTakesTheKernelsName
+	// `cd nosuch/..` is refused, where `cd real/..` is 0 — every component a
+	// `..` cancels is looked at first. That is what takes `cd ..` out of a
+	// directory somebody has renamed into the directory the shell is holding
+	// rather than into whatever has taken the old name. See
+	// Semantics.CdCancelsADotDot (#4627, #4668).
+	s.CdCancelsADotDot = interp.CdDotDotLooksAtEveryCanceledComponent
 	s.PrintfAssignsWithV = interp.Yes
 	s.PrintfRejectsUnknownOption = interp.No
 	// zsh reads no options here: `trap -p` sets a trap whose action is the

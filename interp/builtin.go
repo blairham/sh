@@ -5146,6 +5146,21 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 			}
 		}
 	}
+	// The operand as it stands *before* the join, because the last resort
+	// below resolves it from the directory itself rather than from the name
+	// this shell has for that directory — which is the only form that still
+	// means anything once the name has stopped leading there. An absolute
+	// operand has no such form and needs none: the path `cd` builds for one
+	// is the operand, so there is nothing a second attempt could do
+	// differently.
+	//
+	// Read **before** the two blocks below rather than after them, because
+	// both can make the operand absolute and neither changes what a retry
+	// from the directory would be asked.
+	fromHere := ""
+	if !filepath.IsAbs(dir) {
+		fromHere = dir
+	}
 	if physical {
 		// `-P` is where the directory *is*, rather than the name it was
 		// reached by. Every shell in the panel resolves the whole path and
@@ -5179,18 +5194,56 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		// to see each step of it. See physicalpath.go.
 		if resolved, err := r.physicalPath(uncleanedJoin(old, dir)); err == nil {
 			dir = resolved
+		} else {
+			// **And the path that could not be resolved keeps its `..`.** It
+			// used to fall through to the join below, which cleans, so a
+			// `cd -P nosuch/..` that no shell accepts was canceled into the
+			// directory the shell was already in and answered 0. Measured
+			// 2026-09-26, `cd -P nosuch/..` is a refusal in all six columns —
+			// unanimous, and unanimous *whichever* way the column answers
+			// CdLooksBeforeCancelingADotDot, because under `-P` every one of
+			// them walks the path. dash and BusyBox ash say `can't cd to
+			// nosuch/..` at 2 and the other four say what the kernel said at
+			// 1, which is each dialect's ordinary wording for a `cd` that did
+			// not arrive.
+			//
+			// A symbolic-link cycle still reads as ELOOP through this, since
+			// the stat below is given the same path the walk gave up on.
+			dir = uncleanedJoin(old, dir)
 		}
 	}
-	// The operand as it stands *before* the join, because the last resort
-	// below resolves it from the directory itself rather than from the name
-	// this shell has for that directory — which is the only form that still
-	// means anything once the name has stopped leading there. An absolute
-	// operand has no such form and needs none: the path `cd` builds for one
-	// is the operand, so there is nothing a second attempt could do
-	// differently.
-	fromHere := ""
+	// The `..` question, asked here because here is where the answer changes
+	// what happens: the operand is settled, the path is not yet built, and a
+	// `..` still stands in it. Three readings across six columns, and the
+	// refusal it can produce is *not* a return — see below. See
+	// Semantics.CdCancelsADotDot for the grids.
+	//
+	// Asked only where there *is* a `..`, so an ordinary `cd` puts no
+	// question. The same rule cdFromTheDirectoryHeld follows, and for the
+	// same reason: a question nothing could act on is not a disagreement
+	// between shells.
+	//
+	// Not under `-P`, where the walk above has already been over every
+	// component of the path with the `..` still in it and the panel is
+	// unanimous.
+	canceled := error(nil)
+	if !physical && hasDotDotComponent(dir) {
+		switch r.cdCancelsADotDot() {
+		case CdDotDotLooksAtEveryCanceledComponent:
+			canceled = r.canceledComponentRefused(old, dir, false)
+		case CdDotDotLooksWithinTheOperand:
+			canceled = r.canceledComponentRefused(old, dir, true)
+		default:
+			// The canceling answer, spelled out for the one shape the join
+			// below cannot reach: an absolute operand is already the whole
+			// path, so without this the kernel would be handed its `..` and
+			// would refuse what this column accepts.
+			if filepath.IsAbs(dir) {
+				dir = filepath.Clean(dir)
+			}
+		}
+	}
 	if !filepath.IsAbs(dir) {
-		fromHere = dir
 		dir = filepath.Join(old, dir)
 	}
 	// Through the gate. A denied stat surfaces as the missing-directory
@@ -5204,6 +5257,20 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// now, which is the errno the synthesized one here spelled by hand. See
 	// enterable (#1492).
 	err := r.enterable(dir)
+	if canceled != nil {
+		// The `..` refusal stands over whatever the built path says, because
+		// the built path is the one the `..` was taken out of — `nosuch/..`
+		// cleans to the directory the shell is already in, which is plainly
+		// enterable.
+		//
+		// Set rather than returned, so that the retry below still runs. That
+		// is the whole of #4668: with the shell in `…/d/s` and `d` renamed
+		// out from under it, `cd ..` fails here because `…/d/s` is gone, and
+		// the two columns that look then follow the directory they are
+		// *holding* into `…/e` — which is where the reference goes and is a
+		// different place from the `…/d` a new directory has since taken.
+		err = canceled
+	}
 	// Whether the descriptor this Runner holds is already the directory this
 	// `cd` arrived at, which only the last resort below can make true. It
 	// decides whether the hold is re-taken from the new name on the way out,
@@ -5632,6 +5699,33 @@ func biPwd(r *Runner, _ context.Context, args []string) int {
 	}
 	dir := r.workDir()
 	if physical {
+		// **Which** directory, asked before *where* it is: the one this shell
+		// is holding rather than the name it remembers, for the five columns
+		// that ask the kernel where they are.
+		//
+		// The two are the same string in every ordinary case — dirNow returns
+		// the remembered name whenever that name still leads to the directory
+		// in hand, so a symbolic link is untouched and #4590's whole grid is
+		// unmoved. They part in one place, which is a shell whose directory
+		// has been renamed out from under it. Measured 2026-09-26 with `d`
+		// renamed to `e` while the shell sat in it:
+		//
+		//	zsh 5.9.2   …/e     bash 5.3  …/e     bash 3.2  …/e
+		//	dash        …/e     ash 1.37  …/e     ksh93     …/d
+		//
+		// So it is five to one, and the one is the column that does not ask
+		// the kernel after a `cd` either — the same reading
+		// CdDestinationIsNotThere already records for it in as many words.
+		// Read as the field rather than through cdDestinationIsNotThere,
+		// because that accessor *refuses* an unanswered axis and `pwd -P` must
+		// not: the substrate's zero value and four of the five other columns
+		// want the same answer here, and only the built-name reading declines
+		// to look. A bare `pwd` is not asked at all — all six keep the name
+		// they were reached by (#4667, #4653).
+		if now := r.dirNow(); now != dir &&
+			r.sem().CdDestinationIsNotThere != CdDestinationNotThereEntersAndKeepsTheBuiltName {
+			dir = now
+		}
 		// Where the directory *is*, not the name it was reached by. A path
 		// that cannot be resolved is printed as held, the same answer `cd
 		// -P` gives for one — and through the gate a component at a time,

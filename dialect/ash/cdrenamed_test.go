@@ -71,3 +71,54 @@ func TestARelativePathStillReachesARenamedDirectory(t *testing.T) {
 		t.Errorf("after the rename the shell wrote %q, want rel.txt beside s in the renamed directory", out)
 	}
 }
+
+// `pwd -P` from a renamed directory names where the directory *is* — #4667.
+//
+// Measured 2026-09-26 in the panel's own image,
+// `alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`,
+// BusyBox v1.37.0: with `d` renamed to `e`, `pwd` still writes `…/d` and
+// `pwd -P` writes `…/e`. zsh 5.9.2, bash 5.3, bash 3.2 and dash agree, and
+// ksh93 alone writes `…/d` — the same column that keeps the built name after
+// a `cd`, so no second axis is needed. See
+// interp.Semantics.CdDestinationIsNotThere. The plain `pwd` row is the
+// control: it is what says this is about `-P` rather than about the shell
+// losing its name, and it holds even here, where the `cd` itself is refused.
+func TestPwdPhysicalFollowsARenamedDirectory(t *testing.T) {
+	out, _ := renamedCdRow(t, `p=$(pwd); q=$(pwd -P); echo "pwd=${p##*/} pwdP=${q##*/}"`+"\n")
+	want := "pwd=d pwdP=e\n"
+	if !strings.HasSuffix(out, want) {
+		t.Errorf("after the rename the shell said %q, want it to end %q", out, want)
+	}
+}
+
+// `cd nosuch/..` is 0 here, as it is in dash: the component a `..` cancels is
+// taken out of the path with the `..` and neither is looked at. Measured in
+// the same image, with `cd real/..` at 0 beside it as the control — what the
+// first row says is that the component is *not* looked at, and the second is
+// what every column answers. See interp.Semantics.CdCancelsADotDot (#4627).
+func TestCdAndTheComponentADotDotCancels(t *testing.T) {
+	if got := ash.Semantics().CdCancelsADotDot; got != interp.CdDotDotCanceledUnseen {
+		t.Fatalf("the preset answers %v, want interp.CdDotDotCanceledUnseen", got)
+	}
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "real"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		src  string
+		want int
+	}{
+		{"cd nosuch/..", 0},
+		{"cd real/..", 0},
+	} {
+		out, st, err := preset.Combined(t, dialecttest.Base{
+			Name: "ash", Dir: dir, Env: []string{"PATH=/usr/bin:/bin"},
+		}, tc.src)
+		if err != nil {
+			t.Fatalf("run %q: %v", tc.src, err)
+		}
+		if st != tc.want {
+			t.Errorf("`%s` was %d (%q), want %d", tc.src, st, out, tc.want)
+		}
+	}
+}

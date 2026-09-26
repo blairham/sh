@@ -131,29 +131,53 @@ func TestPhysicalCdTakesADotDotOffWhereThePathIs(t *testing.T) {
 	}
 }
 
-// And an unresolvable path is still left as written rather than refused here,
-// which is the fallback the walk has always had: what to say about a
-// directory that is not there is the failure's to say, from what the
-// operating system said.
+// And an unresolvable path is still handed to the ordinary failure rather
+// than answered here, which is the fallback the walk has always had: what to
+// say about a directory that is not there is the failure's to say, from what
+// the operating system said.
 //
-// The row is `cd -P` over a component that does not exist, where the walk
-// cannot finish and the ordinary join takes over — the shell ends up where
-// the lexical reading puts it, exactly as it did before #4590. It is here as
-// the branch the change must not have closed.
-func TestAPhysicalCdThatCannotResolveFallsBackToTheLexicalPath(t *testing.T) {
+// **The path keeps its `..` on the way there**, which is the half this test
+// used to assert the other way round. It required `cd -P nosuchdir/..` to
+// *arrive*, on the reasoning that an unresolvable path falls through to the
+// ordinary join — and the join cleans, so the `..` canceled a component
+// nobody had looked at and the shell ended up where it already was. Measured
+// 2026-09-26, all six columns refuse that: bash 5.3, bash 3.2, zsh and ksh93
+// at 1 with the kernel's reason, dash and BusyBox ash at 2 with `can't cd
+// to nosuchdir/..`. It is unanimous *whatever* a column answers for
+// Semantics.CdCancelsADotDot, because under `-P` every one of them walks the
+// path with the `..` in place (#4627).
+//
+// The rows below are what the fallback is still for: a path with no `..` in
+// it at all, and a symbolic-link cycle, both of which the walk gives up on
+// and both of which the kernel then explains in the dialect's own words.
+func TestAPhysicalCdThatCannotResolveIsTheOrdinaryFailure(t *testing.T) {
 	root := dotDotTree(t)
-	out, errs := &strings.Builder{}, &strings.Builder{}
-	sem := PosixSemantics()
-	r := newTestRunner(t, &Runner{
-		Semantics: &sem, Diagnostics: &Diagnostics{}, Dir: root,
-		Stdout: out, Stderr: errs,
-	})
-	runCd(t, r, "cd -P nosuchdir/.. && pwd\n")
-	if errs.Len() != 0 {
-		t.Fatalf("stderr = %q", errs.String())
+	if err := os.Symlink("loop", filepath.Join(root, "loop")); err != nil {
+		t.Fatal(err)
 	}
-	if got := strings.TrimSpace(out.String()); got != root {
-		t.Errorf("left %q, want %q", got, root)
+	for _, c := range []struct{ name, src, reason string }{
+		{"a component that is not there", "cd -P nosuchdir", "no such file or directory"},
+		{"a `..` over one", "cd -P nosuchdir/..", "no such file or directory"},
+		{"a link to itself", "cd -P loop", "too many levels of symbolic links"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs := &strings.Builder{}, &strings.Builder{}
+			sem := PosixSemantics()
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem, Diagnostics: &Diagnostics{}, Dir: root,
+				Stdout: out, Stderr: errs,
+			})
+			runCd(t, r, c.src+" && pwd\n")
+			if !strings.Contains(strings.ToLower(errs.String()), c.reason) {
+				t.Errorf("%s said %q, want %q in it", c.src, errs.String(), c.reason)
+			}
+			if got := strings.TrimSpace(out.String()); got != "" {
+				t.Errorf("%s printed %q, want nothing: it did not arrive", c.src, got)
+			}
+			if r.Dir != root {
+				t.Errorf("%s left the shell in %q, want %q", c.src, r.Dir, root)
+			}
+		})
 	}
 }
 

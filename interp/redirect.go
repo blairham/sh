@@ -1424,7 +1424,10 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 		defer func() { r.inBodyReadAtExpansion, r.expansionBodyLine = was, wasLine }()
 	}
 	if !r.redirForOwnProcess {
-		return r.heredocText(rd)
+		// The shell runs this command itself, so the body is expanded here
+		// and a failure in it is this shell's to place. See
+		// heredocbodyfailure.go, which holds the panel for that.
+		return r.expandBodyInThisShell(func() string { return r.heredocText(rd) })
 	}
 	// The redirection belongs to a command this shell runs as a process of
 	// its own, so the body is expanded the way that process would expand it.

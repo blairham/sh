@@ -1898,6 +1898,13 @@ func Semantics() interp.Semantics {
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
+	// A body this shell expanded itself and could not is the *redirection's*
+	// failure, so it draws the grid a file that will not open draws: `: <<END`
+	// with `$(( 1/0 ))` in it ends the shell, and `read x <<END`, a function
+	// and a group carry on at 1 and are caught by `||` — row for row with
+	// `: < /nonexistent/f` and `read x < /nonexistent/f`. Measured 2026-09-26
+	// on ksh93u+ 2012-08-01 (#4684).
+	s.HeredocBodyFailureIsTheRedirections = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
 	// The integer attribute has a reader of its own, and it is not the
 	// arithmetic one: `$((010))` is 8 here and `typeset -i d=010` is 10.

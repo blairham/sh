@@ -205,6 +205,13 @@ func Semantics() interp.Semantics {
 	// `set -u` on an unset name in such a body reports 2 and the script
 	// carries on — which is unanimous and so is not asked.
 	s.HeredocExpandsInTheCommandsProcess = interp.No
+	// And on a command this shell runs itself the body's failure is the
+	// *redirection's*: `: <<END` with `$(( 1/0 ))` in it ends the shell where
+	// `read x <<END`, a function and a group carry on at 2 and are caught by
+	// `||`, which is `: < /nonexistent/f` against `read x < /nonexistent/f`
+	// row for row. Not the ordinary failed-expansion reading, which is fatal
+	// here whatever it is written on. Measured 2026-09-26 on 0.5.12 (#4684).
+	s.HeredocBodyFailureIsTheRedirections = interp.Yes
 	// And the same for a redirection's *target*, where this shell is alone
 	// again and where the split costs more: `cat /dev/null > "${u:=made}"`
 	// leaves `u` set here and unset in the other three, and `> "$NOPE"`

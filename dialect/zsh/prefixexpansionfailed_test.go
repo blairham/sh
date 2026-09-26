@@ -74,14 +74,15 @@ func TestACleanPrefixStillRunsItsCommandHere(t *testing.T) {
 
 // A here-document body that will not expand is **not** the prefix's failure,
 // and a clean prefix in front of the command must not move it. It has a rule
-// of its own — the command is given up and the script carries on — so the
-// answer has to be the same with and without the prefix, as it is in zsh 5.9.2
-// and in every other column.
+// of its own — see Semantics.HeredocBodyFailureIsTheRedirections, which in
+// this column makes it this shell's own failed expansion and so fatal — so
+// the answer has to be the same with and without the prefix, as it is in zsh
+// 5.9.2 and in every other column.
 //
-// This column is where it is visible: a failed redirection on a special
-// builtin is not fatal here, so the dispatch is reached with the flag the
-// body set still on the record, and a door that read it would give the shell
-// up over a prefix that expanded perfectly well.
+// This column is where it is visible: the two constructs set the same flag,
+// and a prefix door that read it would give the shell up over a prefix that
+// expanded perfectly well — or, once the body's own door is in place, would
+// grade the body's failure by the prefix's rule.
 func TestAFailureThatIsNotThePrefixsIsUnmovedByOne(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -93,9 +94,17 @@ func TestAFailureThatIsNotThePrefixsIsUnmovedByOne(t *testing.T) {
 			"a clean prefix must not move a failure that is not its own",
 			bare, bareSt, with, withSt)
 	}
-	// The control: the body really did fail and the command after it really
-	// did run, so the agreement above is not two runs that did nothing.
-	if !strings.Contains(bare, "division by zero") || !strings.Contains(bare, "after") {
-		t.Errorf("= %q, want the failure reported and the next command run", bare)
+	// The control: the body really did fail and really did cost this shell
+	// the rest of the script, so the agreement above is not two runs that
+	// did nothing. Measured 2026-09-26 on zsh 5.9.2 under `-f`, where every
+	// command this shell runs itself ends over such a body (#4684).
+	if !strings.Contains(bare, "division by zero") || strings.Contains(bare, "after") || bareSt != 1 {
+		t.Errorf("= %q at %d, want the failure reported and the shell ended at 1", bare, bareSt)
+	}
+	// And the other half of the pair, which is what says the prefix is not
+	// what stopped it: the same prefix in front of a body that expands runs
+	// the command, with the value in place.
+	if out, st := runZsh(t, dir, "f() { echo \"[$a]\"; }\na=ok f <<END\nok\nEND\n"); out != "[ok]\n" || st != 0 {
+		t.Errorf("= %q (status %d), want [ok] at 0", out, st)
 	}
 }

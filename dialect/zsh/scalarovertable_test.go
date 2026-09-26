@@ -76,6 +76,16 @@ func TestWithoutKshArraysTheSameStoreReplacesTheName(t *testing.T) {
 		{"an empty table appended to", "typeset -A h\nh+=string\ntypeset -p h", "typeset h=string"},
 		{"the append joins nothing", "typeset -A h=(0 pre)\nh+=x\ntypeset -p h", "typeset h=x"},
 		{
+			"and allexport still reaches the name it left behind",
+			"set -a\ntypeset -A h=(one 1)\nh+=string\ntypeset -p h",
+			"export h=string",
+		},
+		{
+			"the plain spelling too",
+			"set -a\ntypeset -A h=(one 1)\nh=string\ntypeset -p h",
+			"export h=string",
+		},
+		{
 			"the suite's own chunk",
 			"typeset -A hash\nhash=(one 1)\nhash+=string\n[[ $hash[@] == string ]]\nprint \"st=$?\"",
 			"st=0",

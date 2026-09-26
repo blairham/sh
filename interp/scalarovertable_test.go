@@ -165,6 +165,25 @@ func TestARefusedScalarStoreOverATableWritesNothing(t *testing.T) {
 	}
 }
 
+// And the **other** field a scalar store over a table asks is stopped the same
+// way when it is the unanswered one: with this axis at No, so that the store
+// is allowed, an unanswered
+// ScalarAssignedOverACompoundReplacesTheName must not go on to join the base
+// key. The append spelling is the route that reaches that field from
+// Runner.assign rather than from Runner.scalarOverCompound, and it is a
+// separate stop from the one above it.
+func TestAnUnansweredReplacingAnswerStopsTheTableAppend(t *testing.T) {
+	sem := scalarOverTableSem(No)
+	sem.ScalarAssignedOverACompoundReplacesTheName = Unspecified
+	out, _ := run(t, `typeset -A m=([k]=v); m+=x; typeset -p m`, withSem(sem))
+	if !strings.Contains(out, "a scalar assigned over an array or a table replacing it") {
+		t.Errorf("got %q, want the axis named", out)
+	}
+	if want := `declare -A m=([k]="v" )`; !strings.Contains(out, want) {
+		t.Errorf("got %q, want the table untouched as %s", out, want)
+	}
+}
+
 // The wording is the dialect's and the name is its one verb, so a dialect that
 // words it differently still says which variable.
 func TestTheRefusalTakesTheDialectsWording(t *testing.T) {
@@ -182,19 +201,34 @@ func TestTheRefusalTakesTheDialectsWording(t *testing.T) {
 // reaches the field from Runner.assign and the plain store from
 // Runner.scalarOverCompound, and a route that skipped the question would store
 // in silence.
+//
+// **And it stops there rather than falling through to the field below**,
+// which is a claim about order and the one the replacing answer is needed to
+// see. With ScalarAssignedOverACompoundReplacesTheName at Yes underneath it, a
+// route that carried on after the unanswered question would take the table
+// away and store the value — `declare -- m="x"` — having just said it did not
+// know whether the store was allowed at all. It would also ask the second
+// question after the first had failed, so the append spelling writes the same
+// complaint twice. Both are asserted below.
 func TestAnUnansweredScalarStoreOverATableSaysSo(t *testing.T) {
 	for _, src := range []string{
 		`typeset -A m=([k]=v); m=x; typeset -p m`,
 		`typeset -A m=([k]=v); m+=x; typeset -p m`,
 	} {
-		out, _ := run(t, src, withSem(scalarOverTableSem(Unspecified)))
-		if !strings.Contains(out, "a scalar store over a name holding a table being refused") {
-			t.Errorf("%s: got %q, want the axis named", src, out)
+		sem := scalarOverTableSem(Unspecified)
+		// Yes underneath, so that a fall-through is visible as the table
+		// being taken away rather than as a key being added to it.
+		sem.ScalarAssignedOverACompoundReplacesTheName = Yes
+		out, _ := run(t, src, withSem(sem))
+		const named = "a scalar store over a name holding a table being refused"
+		if n := strings.Count(out, named); n != 1 {
+			t.Errorf("%s: got %q, want the axis named exactly once, got %d", src, out, n)
 		}
-		// And nothing was stored under it, which is the half a route that
-		// skipped the question would have got wrong in silence.
-		if strings.Contains(out, "x") {
-			t.Errorf("%s: got %q, want no value stored", src, out)
+		// And nothing was stored under it, table and all: the listing is the
+		// instrument, because `$m` would spell `x` under more than one of
+		// these outcomes.
+		if want := `declare -A m=([k]="v" )`; !strings.Contains(out, want) {
+			t.Errorf("%s: got %q, want the table left standing as %s", src, out, want)
 		}
 	}
 }

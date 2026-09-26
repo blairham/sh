@@ -53,6 +53,10 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 		}
 	}
 	words, isList, escaped, ok := r.flaggedWords(e, sp, quoted, escapeSep)
+	// Nothing below this line is a list of a word's fields until the loop at
+	// the end says so, and the marks belong to the call that is reading them.
+	// See interp/emptynullfield.go.
+	r.listNulls = nil
 	if !ok {
 		return nil, true
 	}
@@ -99,7 +103,13 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	// already follows for an IFS split and was measured separately for these
 	// two flags — see splitFlagEdges.
 	edges := !keepEmpty && splitFlagEdges(e, quoted)
+	// A context that keeps no fields joins what comes back, so an empty field
+	// removed here is a *separator* removed rather than a word — which is the
+	// reading splitEachElement already holds for an array's own elements, and
+	// is why `b=('' 2); x=${(o)b}` is ` 2` in zsh 5.9.2 and not `2`.
+	marks := sp != splitNever
 	out := make([]string, 0, len(words))
+	nulls := make([]bool, 0, len(words))
 	for i, w := range words {
 		// Named rather than negated inline: `!(edges && …)` reads as a
 		// double negative at the point it matters most, and the condition
@@ -107,13 +117,27 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 		// it is at an end" — is the whole reason the branch exists.
 		atKeptEdge := edges && (i == 0 || i == len(words)-1)
 		if w == "" && !keepEmpty && !atKeptEdge {
+			if !marks {
+				continue
+			}
+			// Not removed here: it is a field of the word until the word
+			// says otherwise, exactly as an empty element of an unquoted
+			// array is. Measured on zsh 5.9.2 — `v='::b'; x${(s.:.)v}y` is
+			// `[x][by]`, so the first of the two nulls is where the `x`
+			// ends, and `b=('' 2); x${(o)b}y` is `[x][2y]` for the same
+			// reason the unflagged `x${b}y` is. See
+			// interp/emptynullfield.go.
+			out = append(out, "")
+			nulls = append(nulls, true)
 			continue
 		}
 		if quoted || !r.ask(r.globSubstAnswer(s), "globbing the result of an expansion") {
 			w = globEscape(w)
 		}
 		out = append(out, w)
+		nulls = append(nulls, false)
 	}
+	r.listNulls = nulls
 	return r.tildeFlagElements(s, head, out), true
 }
 

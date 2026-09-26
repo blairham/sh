@@ -48,6 +48,10 @@ var sharedStacks = map[string]string{
 	"dialectCompgenAfter": "where each dialect action sits in `compgen -A`'s order, " +
 		"appended to by SetCompgenAction at setup and never again — the order is the " +
 		"dialect's declaration, on the same terms as optionLists",
+	"listNulls": "the marks one unquoted list expansion left for the call reading it, " +
+		"only ever assigned wholesale or set to nil and cleared at the entry to every " +
+		"expandAt — a subshell expanding a word of its own overwrites it before it " +
+		"reads it, and nothing appends to it at all",
 	"restrictedFreezes": "the extra names this dialect's restricted mode freezes, " +
 		"appended to in Apply at setup and never again — Runner.FreezeInRestrictedMode " +
 		"is a dialect's declaration and not anything a script can reach",
@@ -68,6 +72,7 @@ func seedStacks(r *Runner) {
 	r.Env = append(make([]string, 0, 4), "SEED=v")
 	r.restrictedFreezes = append(make([]string, 0, 4), "SEEDNAME")
 	r.Params = append(make([]string, 0, 4), "seed")
+	r.listNulls = append(make([]bool, 0, 4), false)
 	r.procSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.heldProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.frames = append(make([]Frame, 0, 4), Frame{})

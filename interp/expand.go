@@ -173,7 +173,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// — so a subscript's substitutions are held around the pair, here,
 		// and not inside either. See subscriptSubstHold (#3240).
 		release := r.armSubscriptSubsts(s)
-		parts, atList := r.expandAt(s, splitByDialect, head)
+		parts, nulls, atList := r.expandAt(s, splitByDialect, head)
 		var text string
 		var split bool
 		if !atList {
@@ -189,7 +189,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 				// span. See Semantics.EmptyListTakesTheWord.
 				b.listProducedNothing(inAQuotedRunOfItsOwn(w.Spans, i))
 			}
-			r.addSpan(&b, s, parts)
+			r.addSpan(&b, s, parts, nulls)
 			continue
 		}
 		substituted := false
@@ -227,6 +227,12 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 				// Semantics.EmptyListTakesTheWord.
 				b.reached(text != "" || s.Kind != syntax.ParamExp ||
 					inAQuotedRunOfItsOwn(w.Spans, i))
+				// And it is a field whatever it came to, which is the other
+				// half: a quoted null carries no text and still leaves a
+				// word behind, so nothing an empty element does afterwards
+				// can remove it. `""${a[@]}` on `('' 2)` is `[][2]` in
+				// every column.
+				b.keepOpen()
 			}
 			continue
 		}
@@ -272,7 +278,10 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 			b.separate(substituted)
 		}
 		fields, openEnd := r.splitFieldsAskEdge(text, ifs, set)
-		r.addSpan(&b, s, r.tildeFlagElements(s, head, fields))
+		// No marks: what the splitter made of a scalar is an ordinary field,
+		// empty ones included — `IFS=:; v=':b'; $v` is `[][b]` in bash,
+		// ksh93 and dash.
+		r.addSpan(&b, s, r.tildeFlagElements(s, head, fields), nil)
 		if openEnd {
 			b.separate(substituted)
 		}
@@ -297,6 +306,13 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 type wordFields struct {
 	// all is the fields, finished ones first.
 	all []string
+	// keep is, per field, whether anything reached it that is not an empty
+	// element of an unquoted list. A field still empty when the word is
+	// finished and never kept is the null field every shell in the panel
+	// removes; one that a literal, a quoted null or any other expansion
+	// joined is a field whatever it came to. Parallel to all, and see
+	// interp/emptynullfield.go for the measurement.
+	keep []bool
 	// open is where the run of open fields begins. all[:open] is finished.
 	open int
 	// sep is a separator written in the word a `-` or `+` substituted, with
@@ -356,11 +372,25 @@ func (b *wordFields) listProducedNothing(ownQuotedRun bool) {
 	b.sinceNoFields = false
 }
 
-func newWordFields() wordFields { return wordFields{all: []string{""}} }
+func newWordFields() wordFields { return wordFields{all: []string{""}, keep: []bool{false}} }
 
 // head reports whether nothing has been accumulated in front of the next
 // span, which is what the `${~spec}` flag's tilde half asks about.
 func (b *wordFields) head() bool { return len(b.all) == 1 && b.all[0] == "" }
+
+// keepOpen records that something reached every field now open that is not an
+// empty element of an unquoted list, so none of them can be removed for being
+// empty.
+//
+// Only the empty case needs saying: a field holding text is never removed,
+// and a field only ever grows. So this is called where something that carries
+// no text still has to leave a field behind — a quoted null, and a field an
+// expansion produced that the shells do not treat as a null.
+func (b *wordFields) keepOpen() {
+	for i := b.open; i < len(b.all); i++ {
+		b.keep[i] = true
+	}
+}
 
 // text joins literal or unsplit text onto every field still open.
 func (b *wordFields) text(t string) {
@@ -398,6 +428,7 @@ func (b *wordFields) flush() {
 	}
 	b.sep = false
 	b.all = append(b.all, "")
+	b.keep = append(b.keep, false)
 	b.open = len(b.all) - 1
 }
 
@@ -446,31 +477,46 @@ func leadingSeparatorEdge(text, ifs string, ifsSet bool) bool {
 // `RC_EXPAND_PARAM` moves. Keeping the one call to Runner.rcExpandOn here is
 // what stops the option reaching some of the five places fields enter a word
 // and not the others.
-func (r *Runner) addSpan(b *wordFields, s syntax.Span, parts []string) {
+//
+// nulls says which of the parts are the empty *elements* an unquoted list
+// held, which decides nothing here and everything at the end of the word.
+// See interp/emptynullfield.go.
+func (r *Runner) addSpan(b *wordFields, s syntax.Span, parts []string, nulls []bool) {
 	if r.rcExpandOn(s) {
-		b.spread(parts)
+		b.spread(parts, nulls)
 		return
 	}
-	b.lay(parts)
+	b.lay(parts, nulls)
 }
 
 // lay is the ordinary rule: the first field joins whatever is open, the last
 // stays open for whatever follows, and everything between is a word of its
 // own. It is what makes `x$@y` attach its literal text to the first and last
 // fields rather than becoming words of its own.
-func (b *wordFields) lay(parts []string) {
+func (b *wordFields) lay(parts []string, nulls []bool) {
 	if len(parts) == 0 {
 		return
 	}
 	b.flush()
 	b.reached(true)
 	b.text(parts[0])
+	if !nullFieldAt(nulls, 0) {
+		// Whatever was open has had something in it that is not an empty
+		// element, so it is a field even if that something carried no text.
+		// The marked one leaves the fields it joined exactly as it found
+		// them — `""${a[@]}` keeps the quoted null's field and `${a[@]}`
+		// alone has nothing there to keep.
+		b.keepOpen()
+	}
 	if len(parts) == 1 {
 		return
 	}
 	// The first field closed everything that was open, since a new one
 	// started after it.
-	b.all = append(b.all, parts[1:]...)
+	for i, p := range parts[1:] {
+		b.all = append(b.all, p)
+		b.keep = append(b.keep, !nullFieldAt(nulls, i+1))
+	}
 	b.open = len(b.all) - 1
 }
 
@@ -486,19 +532,25 @@ func (b *wordFields) lay(parts []string) {
 // elements, so it is produced no times. Measured, `a=(); x${^a}y` is no word
 // at all where `x${a}y` is the single word `xy` — and a field finished before
 // it still stands, `a=(1 2); b=(); x${a}z${^b}q` being the single word `x1`.
-func (b *wordFields) spread(parts []string) {
+func (b *wordFields) spread(parts []string, nulls []bool) {
 	if len(parts) > 0 {
 		b.flush()
 	}
-	open := b.all[b.open:]
+	open, openKeep := b.all[b.open:], b.keep[b.open:]
 	all := make([]string, 0, b.open+len(open)*len(parts))
+	keep := make([]bool, 0, b.open+len(open)*len(parts))
 	all = append(all, b.all[:b.open]...)
-	for _, f := range open {
-		for _, p := range parts {
+	keep = append(keep, b.keep[:b.open]...)
+	for j, f := range open {
+		for i, p := range parts {
 			all = append(all, f+p)
+			// A copy of the word is made per element, so an empty element's
+			// copy is the word with nothing added — which is the field the
+			// word already was, not a null the list produced.
+			keep = append(keep, openKeep[j] || !nullFieldAt(nulls, i))
 		}
 	}
-	b.all = all
+	b.all, b.keep = all, keep
 	// Guarded rather than unconditional, and the guard is equivalent rather
 	// than load-bearing: with no parts the open run is now empty, so either
 	// there are finished fields — which any cannot change the reading of —
@@ -525,10 +577,45 @@ func (b *wordFields) result() []string {
 	if len(b.all) == 0 {
 		return nil
 	}
-	if len(b.all) == 1 && b.all[0] == "" && !b.any {
+	all := b.withoutNulls()
+	if len(all) == 0 {
 		return nil
 	}
-	return b.all
+	if len(all) == 1 && all[0] == "" && !b.any {
+		return nil
+	}
+	return all
+}
+
+// withoutNulls is the removal every shell in the panel performs last: a field
+// an unquoted list's empty element produced, and that nothing in the word
+// joined anything to, is not a word.
+//
+// Read off the fields rather than performed as they arrive, because what
+// decides it is what reaches the field *afterwards*: `x${a[@]}y` on a list
+// holding one empty element is the one word `xy`, and the same list under
+// `${a[@]}` alone is no word at all. Only the last span in the word knows
+// which.
+func (b *wordFields) withoutNulls() []string {
+	null := func(i int) bool { return b.all[i] == "" && !b.keep[i] }
+	drop := false
+	for i := range b.all {
+		if null(i) {
+			drop = true
+			break
+		}
+	}
+	if !drop {
+		return b.all
+	}
+	out := make([]string, 0, len(b.all))
+	for i, f := range b.all {
+		if null(i) {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // inAQuotedRunOfItsOwn reports whether the span at i is in a pair of quotes
@@ -741,7 +828,7 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) 
 		// Held around the pair rather than inside either half, for the
 		// reason expandOneWordFields gives. See subscriptSubstHold (#3240).
 		release := r.armSubscriptSubsts(s)
-		if parts, ok := r.expandAt(s, splitNever, head); ok {
+		if parts, _, ok := r.expandAt(s, splitNever, head); ok {
 			text = r.joinUnsplitEscaped(s.Param, parts)
 		} else {
 			text, _ = r.expandSpan(s, splitNever, head)
@@ -817,8 +904,13 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 		// a word like any other — `: > "f${a[$(g)]-D}"` ran `g` twice where
 		// the panel runs it once. See subscriptSubstHold (#3240).
 		release := r.armSubscriptSubsts(s)
-		parts, atList := r.expandAt(s, splitAlways, head)
+		parts, nulls, atList := r.expandAt(s, splitAlways, head)
 		if atList {
+			// A redirection target is one name rather than a command line's
+			// words, so the null an empty element makes has nothing to be a
+			// boundary between: the old reading's fields are what both views
+			// are built from.
+			parts = withoutNullFields(parts, nulls)
 			// The plain view is the one that keeps no fields, so it is the
 			// one the separator rule applies to. The fields view below is
 			// untouched: whether the target is read as fields at all is the
@@ -832,11 +924,11 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// survives. It stays add because the lay-in rule has one home,
 			// and the shape this repository keeps finding is the second
 			// copy that did not get the change.
-			r.addSpan(&f, s, parts)
+			r.addSpan(&f, s, parts, nil)
 			// The words view takes the same parts: an array is several words
 			// however the splitting axis is answered, which is the half of
 			// this reading that is not the text view.
-			r.addSpan(&u, s, parts)
+			r.addSpan(&u, s, parts, nil)
 			release()
 			continue
 		}
@@ -846,14 +938,20 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 		// And never splits, whatever the span asked for. That is the whole
 		// of the difference from the fields view below.
 		u.text(text)
-		u.any = u.any || text != "" || s.Quoting != syntax.Unquoted
+		if text != "" || s.Quoting != syntax.Unquoted {
+			u.any = true
+			u.keepOpen()
+		}
 		if !split {
 			f.text(text)
-			f.any = f.any || text != "" || s.Quoting != syntax.Unquoted
+			if text != "" || s.Quoting != syntax.Unquoted {
+				f.any = true
+				f.keepOpen()
+			}
 			continue
 		}
 		ifs, set := r.ifs()
-		r.addSpan(&f, s, r.splitFieldsAsk(text, ifs, set))
+		r.addSpan(&f, s, r.splitFieldsAsk(text, ifs, set), nil)
 	}
 	plain = globUnescape(b.String())
 
@@ -1391,7 +1489,7 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 // head has the same meaning it has for expandSpan, and reaches the elements
 // through tildeFlagElements: only the first of them can be denied a head, the
 // rest are fields of their own.
-func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, bool) {
+func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, []bool, bool) {
 	// The hold belongs to one span and is consumed by the scalar path this
 	// function falls through to. Cleared here so that a span nothing fell
 	// through for cannot leave one behind for a later expansion of the same
@@ -1399,6 +1497,10 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// wrong pass is exactly the silent kind of wrong.
 	r.nestedHeld = nestedHold{}
 	r.sourceHeld, r.subscriptHeld = sourceHold{}, subscriptHold{}
+	// And the marks the unquoted list path leaves for this one, for the same
+	// reason: they belong to the expansion this call is about, and a set left
+	// over from an earlier one would say a field is a null that is not.
+	r.listNulls = nil
 	// No arming here, and it is a measurement rather than an omission: every
 	// one of this function's four callers arms around the *pair* it makes
 	// with expandSpan, because the two are siblings and a hold opened inside
@@ -1412,7 +1514,15 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// followed by three characters. See baresubscript.go.
 	s, tail := r.unreadBareSubscript(s)
 	if parts, ok := r.expandAtList(s, sp, head); ok {
-		parts = r.splitFlagFields(s, sp, parts)
+		nulls := r.listNulls
+		r.listNulls = nil
+		if splitFlagOn(s, sp) {
+			// `${=a[@]}` joins the list and splits the string, so the
+			// elements are gone before the marks could mean anything. The
+			// old reading's fields are what it is handed.
+			parts, nulls = withoutNullFields(parts, nulls), nil
+			parts = r.splitFlagFields(s, sp, parts)
+		}
 		if tail != nil {
 			text, _ := r.bareSubscriptText(tail, sp)
 			// Onto the last field, which is the one still open for whatever
@@ -1420,15 +1530,20 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 			// expansion produced none, since the brackets are text and text
 			// makes a word whether or not anything expanded in front of it.
 			if len(parts) == 0 {
-				parts = []string{text}
+				parts, nulls = []string{text}, nil
 			} else {
 				parts[len(parts)-1] += text
+				if text != "" && len(nulls) == len(parts) {
+					// The brackets are text in the word, so the field they
+					// landed in is no longer a null the shells remove.
+					nulls[len(nulls)-1] = false
+				}
 			}
 		}
-		return parts, true
+		return parts, nulls, true
 	}
 	if !splitFlagOn(s, sp) {
-		return nil, false
+		return nil, nil, false
 	}
 	// A `${=spec}` on one of the scalar shapes. It is answered here rather
 	// than by the word loop because the loop splits an unquoted result only,
@@ -1437,7 +1552,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 	// is exactly the call the loop would have made — so the flag adds the
 	// splitting and nothing else.
 	text, _ := r.expandSpan(s, sp, head)
-	return r.tildeFlagElements(s, head, r.splitFlagFields(s, sp, []string{text})), true
+	return r.tildeFlagElements(s, head, r.splitFlagFields(s, sp, []string{text})), nil, true
 }
 
 // expandAtList answers the expansions that yield a list of fields on their
@@ -1961,7 +2076,8 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 // element with no separator in it is not split either way, and one with no
 // metacharacter is not a pattern either way.
 func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []string {
-	perElement := r.splitEachElement(elems, sp, glob)
+	perElement, nulls := r.splitEachElement(elems, sp, glob)
+	r.listNulls = nulls
 	if !r.listCouldJoinDifferently(elems) {
 		return perElement
 	}
@@ -1976,8 +2092,15 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []st
 		return perElement
 	}
 	ifs, set := r.ifs()
-	joined := r.splitEachElement([]string{strings.Join(elems, r.ifsFirst(ifs, set))}, sp, glob)
-	if slices.Equal(perElement, joined) {
+	// One element and never an empty one: listCouldJoinDifferently has
+	// already refused an IFS with no first character, and a join of two or
+	// more elements on a separator that is something is something. So the
+	// joined reading has no marks of its own, and the comparison below is
+	// between the two readings exactly as they stood before the marks
+	// existed — which is what keeps adding them from moving any dialect's
+	// answer to UnquotedListJoinsOnIFS.
+	joined, _ := r.splitEachElement([]string{strings.Join(elems, r.ifsFirst(ifs, set))}, sp, glob)
+	if slices.Equal(withoutNullFields(perElement, nulls), joined) {
 		// The two readings coincide, which is the common case: under a
 		// whitespace IFS a run of separators is one delimiter and an empty
 		// element leaves nothing behind either way. Asking here would make
@@ -1987,6 +2110,11 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []st
 	}
 	if r.ask(r.sem().UnquotedListJoinsOnIFS,
 		"an unquoted list joining its elements before it is split") {
+		// The join destroyed the elements, so there is nothing left that is
+		// an empty *element* — what the split made of the joined string is
+		// an ordinary field, and `IFS=:; set -- '' c` is `[][c]` in the
+		// column that joins against `[c]` in the three that do not.
+		r.listNulls = nil
 		return joined
 	}
 	return perElement
@@ -2166,10 +2294,17 @@ func (r *Runner) listCouldJoinDifferently(elems []string) bool {
 //
 // The other reading joins them first, and elementFields above is what chooses
 // between the two.
-func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) []string {
+func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) ([]string, []bool) {
 	ifs, set := r.ifs()
 	split := sp.answer(r.sem().SplitParamExpansion)
 	var out []string
+	var nulls []bool
+	keep := func(fields ...string) {
+		out = append(out, fields...)
+		for range fields {
+			nulls = append(nulls, false)
+		}
+	}
 	for _, el := range elems {
 		if el == "" && (r.expandingNestedInner || sp == splitNever) {
 			// Unless the fields are an inner's, where the element is a value
@@ -2193,11 +2328,11 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 			// pair of spellings — it is a version this repository grades
 			// nothing against, and the same build answers `a  b` to `$*`,
 			// so the shell disagrees with itself (#2326).
-			out = append(out, r.escapeResult(el, glob))
+			keep(r.escapeResult(el, glob))
 			continue
 		}
 		if el == "" {
-			// An unquoted empty element is no field *in this reading*, which
+			// An unquoted empty element is no *value* — which
 			// under a whitespace IFS is unanimous and has nothing to do with
 			// splitting: zsh drops it with its splitting turned off exactly
 			// as bash drops it with splitting on.
@@ -2209,6 +2344,14 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 			// field between them survives; zsh, ksh93 and dash do not join,
 			// and here it is. UnquotedListJoinsOnIFS is that question, and
 			// elementFields asks it.
+			//
+			// It is still a **field**, though, and the field is what the
+			// word is built from: the removal belongs to the word and not
+			// to the element, because what decides it is the text written
+			// beside the expansion. Marked here and spent there. See
+			// interp/emptynullfield.go.
+			out = append(out, "")
+			nulls = append(nulls, true)
 			continue
 		}
 		doSplit := false
@@ -2220,12 +2363,17 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) [
 		// boundary on.
 		el = r.escapeResult(el, glob)
 		if doSplit {
-			out = append(out, r.splitFieldsAsk(el, ifs, set)...)
+			// Whatever the splitter makes of a non-empty element is an
+			// ordinary field, empty ones included: `IFS=:; set -- ':b' c`
+			// is `[][b][c]` in bash, ksh93 and dash, so the null a leading
+			// separator writes is kept where the null an empty element
+			// makes is not.
+			keep(r.splitFieldsAsk(el, ifs, set)...)
 			continue
 		}
-		out = append(out, el)
+		keep(el)
 	}
-	return out
+	return out, nulls
 }
 
 // splitPolicy says what the context a span is expanded in does with a result
@@ -8193,7 +8341,7 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	prevInner := r.expandingNestedInner
 	r.expandingNestedInner = true
 	defer func() { r.expandingNestedInner = prevInner }()
-	if parts, ok := r.expandAt(span, sp, true); ok {
+	if parts, _, ok := r.expandAt(span, sp, true); ok {
 		words = parts
 	} else {
 		text, split := r.expandSpan(span, sp, true)

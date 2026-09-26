@@ -1901,6 +1901,15 @@ type Runner struct {
 	// things (#1596).
 	expandingNestedInner bool
 
+	// listNulls is, per field the unquoted list path last produced, whether
+	// that field is one of the empty *elements* the list held rather than
+	// anything the splitter made. It is handed from elementFields to
+	// expandAt, which is its whole lifetime: set at the one place that knows
+	// which fields the elements were, cleared at the entry to the call that
+	// reads it, and never seen by anything in between. See
+	// interp/emptynullfield.go for what the mark is for.
+	listNulls []bool
+
 	// splitWordLiterals arms the literal text of one word for field
 	// splitting: the word a `-` or `+` substitutes is part of an unquoted
 	// expansion's result, so the blanks written in it separate fields. It is

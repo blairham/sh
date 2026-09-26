@@ -564,6 +564,24 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			// a malformed pid.
 			return r.killReport(killNoSuchJob, t)
 		case killTargetNotAPid:
+			if len(targets) > 1 && r.ask(r.sem().KillKeepsGoingPastAnOperandThatIsNotAPid,
+				"`kill a b c` with operands behind one that is not a pid") {
+				// The operands behind this one are still operands, and a
+				// shell that carries on reports on each of them. The status
+				// is left to killStatus below, which is where KillStatus
+				// already turns a count of failures into this dialect's
+				// number — this axis decides only whether the loop runs on.
+				failed++
+				r.killFailed(&killError{kind: killNotAPid, operand: t})
+				continue
+			}
+			if r.unspecified {
+				return r.status
+			}
+			// Asked only where the answer can show, which is a list with
+			// something behind the bad word in it. `kill a` alone is this
+			// complaint and this dialect's status for it in all five
+			// columns, and needs nobody's policy to say so.
 			return r.killReport(killNotAPid, t)
 		}
 		if fromJob && r.aimsAJobSpecAtItsGroup(aims) {

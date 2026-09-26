@@ -1315,6 +1315,13 @@ func Semantics() interp.Semantics {
 	s.ArrayOperandIsStoredPastAFailedOpen = interp.No
 	// BusyBox 1.37.0 ash answers `invalid number '--'` behind both.
 	s.KillTakesEndOfOptionsAfterTheSignal = interp.No
+	// Measured 2026-09-26 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b,
+	// BusyBox v1.37.0: `kill a b c` writes three `invalid number` lines
+	// and reports 3. This shell sides with bash and zsh here and with dash
+	// on almost everything else about `kill`, which is why the answer is
+	// measured rather than derived.
+	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.Yes
 	// A trim on `$@` runs over the whole list once, as it does in dash.
 	s.OperatorDistributesOverTheFieldList = interp.No
 	// And a **non-global** replacement over that joined list ends it at the
@@ -1602,7 +1609,20 @@ func Semantics() interp.Semantics {
 	s.ExecTakesTheLoginLetter = interp.No
 	s.ExecTakesTheEmptyEnvironmentLetter = interp.No
 	s.ExecLoginPrefixesTheGivenName = interp.No
-	s.KillStatus = interp.KillStatusAnyFailure
+	// The count of operands that failed, which is zsh's answer and not
+	// dash's — the one place this shell's `kill` sides with the other half
+	// of the panel. Measured 2026-09-26 in the pinned image, every operand
+	// deliberately unusable: `kill 999999 999998` is 2, `kill a b c` is 3,
+	// `kill a b c d` is 4, and `sleep 20 & kill a $! b` is 2 with the sleep
+	// signaled — so it counts the failures and not the operands. dash
+	// answers 1 to all four.
+	//
+	// It read AnyFailure here, inherited from the dash preset and never
+	// measured. Unreachable until #4648, because the builtin stopped at the
+	// first malformed operand and a single failure is 1 under either
+	// policy; `kill 999999 999998` was the row that showed it, at 1 where
+	// the real shell says 2.
+	s.KillStatus = interp.KillStatusFailureCount
 	s.SubshellJobTable = interp.SubshellJobsCleared
 	// A job started with `&` reads an empty standard input: `ash -c
 	// '/bin/cat & wait; echo ---' < f` writes `---` and nothing else.

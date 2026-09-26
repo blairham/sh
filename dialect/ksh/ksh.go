@@ -2559,6 +2559,10 @@ func Semantics() interp.Semantics {
 	s.ArrayOperandIsStoredPastAFailedOpen = interp.No
 	// ksh93u+ reaches the target behind either spelling.
 	s.KillTakesEndOfOptionsAfterTheSignal = interp.Yes
+	// Measured 2026-09-26 against ksh93u+ 2012-08-01: `kill a b c` writes
+	// one line and stops, where `kill 999999 999998` writes both — so the
+	// stop is the malformed *word* and not a failure of any kind.
+	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.No
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// bash's answer here: OPTIND names the word until its last letter.

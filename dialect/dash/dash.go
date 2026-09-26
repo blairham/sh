@@ -1131,6 +1131,12 @@ func Semantics() interp.Semantics {
 	// -`). It does take it behind `-s 0`; that split is by the form the
 	// signal was written in and is recorded in the spec rather than here.
 	s.KillTakesEndOfOptionsAfterTheSignal = interp.No
+	// Measured 2026-09-26 against dash 0.5.12: `kill a b c` is one
+	// `Illegal number: a` at 2 and nothing else runs, where
+	// `kill 999999 999998` reports both at 1. The two statuses are the
+	// tell: a word that is not a number is an argument fault here, and an
+	// argument fault ends the builtin.
+	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.No
 	// A trim on `$@` runs over the whole list once, not over each field:
 	// `set -- aa ab ba` makes `"${@#a}"` into `a ab ba` here and
 	// `a b ba` in bash, zsh and ksh93.

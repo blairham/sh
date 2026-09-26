@@ -1799,6 +1799,13 @@ func Semantics() interp.Semantics {
 	// only`. A table answers the same way, `typeset -x -A m` (#3881).
 	s.ExportOrReadonlyTakesAReferenceToAnElement = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
+	// The array letter with no name to apply to is not an array at all
+	// here: measured 2026-09-26 on ksh93u+ 2012-08-01, `read -A <<<'a b c'`
+	// leaves `typeset -p REPLY` saying `REPLY='a b c'` — one scalar holding
+	// the line, as a bare `read` leaves — with `${#REPLY[@]}` at 1, and a
+	// pre-set `reply` untouched. `reply` is zsh's parameter and not one this
+	// shell has ever heard of.
+	s.ReadArrayDefault = interp.ReadArrayDefaultIsAPlainRead
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
 	s.ReadTimeoutKeepsWhatArrived = interp.No

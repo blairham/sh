@@ -2396,6 +2396,15 @@ func Semantics() interp.Semantics {
 	// difference.
 	s.ReadonlyDeclaresALocal = interp.Yes
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
+	// `read -A` with no name fills the array `reply`, which is the array
+	// neighbour of the `REPLY` a bare `read` fills and deliberately not the
+	// same parameter: the shell is case-sensitive about which. Measured
+	// 2026-09-26 under `-f`, with the other one pre-set on each row so that
+	// neither reads back what it had a moment earlier — `reply=(x y); read
+	// -A <<<'hello world'` leaves `reply=(hello world)` and never creates
+	// `REPLY`, and `reply=scalar; read <<<'plain'` leaves `reply` alone and
+	// puts the line in `REPLY`.
+	s.ReadArrayDefault = interp.ReadArrayDefaultIsTheArrayReply
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.Yes
 	s.ArithLeadingZeroIsOctal = interp.No

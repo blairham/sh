@@ -1243,6 +1243,12 @@ func Semantics() interp.Semantics {
 	// same line without the letter does, seed and all, and a bare `read -e`
 	// at end of input reports 1 with the name cleared. Refusing them by name
 	// instead cost `read.tests` five lines and two statuses (#4170).
+	// unanswered ReadArrayDefault: the array letter here is the lowercase
+	// `-a`, and its name is the option's own argument rather than an
+	// operand — so a line that names no array is refused by the option
+	// parser and never reaches the question. Measured 2026-09-26 on bash
+	// 5.3.20: `read -a <<<'a b'` is `read: -a: option requires an argument`
+	// at 2, with no `REPLY` afterwards.
 	s.ReadOptions = "rseEa:d:i:n:N:p:t:u:"
 	// `-n` unsets through a name reference. bash 3.2 does not have it —
 	// `unset -n x` is an invalid option there and under `--posix` — so

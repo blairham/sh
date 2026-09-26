@@ -2306,6 +2306,19 @@ type Semantics struct {
 	// timeout is a deadline and needs no answer. See ReadZeroTimeoutStyle
 	// for the measurements.
 	ReadZeroTimeout ReadZeroTimeoutStyle
+	// ReadArrayDefault is what the `-A` spelling of the array letter fills
+	// when the line names no parameter: zsh fills the array `reply`, and
+	// ksh93 drops the letter and reads as a bare `read` does. Asked only
+	// where `-A` was written with no name after it; a name the script wrote
+	// is filled the same way in both. See ReadArrayDefaultStyle for the
+	// measurements, and interp/readarrayname.go for why the letter cannot
+	// decide this the way it decides the rest of the array rules.
+	//
+	// unexhibited ReadArrayDefaultUnspecified: the absence of an answer,
+	// which bash, dash and BusyBox ash hold because none of them can be
+	// asked — bash's `-a` takes the name as the option's own argument and
+	// the other two have no array letter at all.
+	ReadArrayDefault ReadArrayDefaultStyle
 	// ReadPartialCountSucceeds decides `read -n N` when the input ends
 	// after some but fewer than N characters: ksh93 calls the read a
 	// success and bash reports 1, both keeping what arrived. Asked only

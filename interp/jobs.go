@@ -626,12 +626,39 @@ func (j *Job) finish(status int) { j.finishKilled(status, 0) }
 // how the job ended, so the close is the barrier both Status and this are
 // carried across.
 func (j *Job) finishKilled(status int, sig syscall.Signal) {
+	j.finishRecording(status, sig, nil)
+}
+
+// finishRecording is finishKilled with one more thing published across the
+// same barrier: what the shell itself has to record about the ending, done
+// after the status and **before the close**.
+//
+// The close is not only how a reader learns the job ended — it is what
+// releases a `wait` for it, and the shell carries straight on from there. So
+// anything a script can observe about the ending has to be in place already,
+// or the script can get past it first. That is not a narrow window: the `CHLD`
+// arrival a trap counts was recorded after the close, and a `wait` released by
+// the close ran to the end of the script while the goroutine that had closed
+// it was still on its way to the record. See Runner.childReapedByTheShell and
+// Runner.jobReaped.
+//
+// record runs inside the once, so an ending recorded twice is recorded once,
+// which is the same guarantee the status already had — and the report says
+// whether it ran, because a caller that owes the record whatever happens has
+// to know that this call was not the one that finished the job. See
+// Runner.jobReaped.
+func (j *Job) finishRecording(status int, sig syscall.Signal, record func()) (finished bool) {
 	j.settleNoPID()
 	j.once.Do(func() {
+		finished = true
 		j.Status = status
 		j.EndSig = int(sig)
+		if record != nil {
+			record()
+		}
 		close(j.done)
 	})
+	return finished
 }
 
 // background starts a statement without waiting for it.
@@ -769,7 +796,14 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		sub.endSubshell(ctx)
 		status, endSig = sub.status, sub.diedOfSig
 	}, func() {
-		job.finishKilled(status, endSig)
+		// A child of this shell has ended, which is what a `&` starts
+		// wherever it is backed by a process and wherever it is not. On the
+		// shell's list rather than a subshell's, because this runs on the
+		// job's own goroutine — see Runner.childReaped — and recorded inside
+		// the finish rather than after it, because the finish is what
+		// releases a `wait` for this job and the arrival has to be there
+		// before the script gets past that. See Runner.jobReaped.
+		r.jobReaped(job, status, endSig)
 		// And the shell around this one is told, where its dialect reports a
 		// finished job the moment it ends rather than at the next prompt.
 		// Here rather than anywhere the shell's own goroutine runs, because
@@ -777,11 +811,6 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// shell is doing something else* — which is the whole of the
 		// difference. See Runner.notifyJobEnded.
 		r.notifyJobEnded()
-		// A child of this shell has ended, which is what a `&` starts
-		// wherever it is backed by a process and wherever it is not. On the
-		// shell's list rather than a subshell's, because this runs on the
-		// job's own goroutine — see Runner.childReaped.
-		r.childReapedByTheShell()
 		// After the job is finished rather than before it, so nothing can
 		// observe a pipe that has ended while the job that was writing to
 		// it is still marked as running.

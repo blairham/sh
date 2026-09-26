@@ -83,6 +83,32 @@ func TestABackgroundJobIsOneChildTrapArrival(t *testing.T) {
 // holds and it passed against the defect: a single job's arrival lands as the
 // wait is ending anyway, so nothing is left behind to be lost. The count is
 // the discriminator.
+//
+// # The count is this shell's to promise, and for a while it was not keeping it
+//
+// All three cases here flaked on required checks — `status=0 n=2` on ubuntu,
+// `n=0` and a lost `T` on macOS — on diffs with no Go in them at all (#4571).
+//
+// The reading that fits a real shell is that `SIGCHLD` does not queue and the
+// kernel had coalesced two arrivals into one, which would make an exact count
+// something no shell can promise. **That is not what this is.** The kernel's
+// signal is dropped for this condition here and the arrival is raised by the
+// interpreter itself — see Runner.childReaped, which says so and says why —
+// so nothing outside this program gets a vote on the number.
+//
+// What the runs were catching was an ordering inside the shell: a job
+// published itself as finished, which is what releases the `wait`, and only
+// then recorded the child's death. The shell came back from the wait and ran
+// to the end of the script while the goroutine that had released it was still
+// on its way to the record. Widening that gap by two milliseconds reproduced
+// both CI failures byte for byte; closing it — the record now happens inside
+// the finish, before the close — makes all three counts here exact again. See
+// Runner.jobReaped and TestAJobsEndingIsRecordedBeforeTheCloseThatReleasesAWait,
+// which pins the ordering directly rather than by how often it holds.
+//
+// So the number stays. Loosening it to "at least one" would not even have
+// stopped the flake: two of the three failures were an arrival that never
+// arrived at all.
 func TestAWaitIsNotEndedByTheDeathOfAChildItIsWaitingFor(t *testing.T) {
 	const src = "n=0\ntrap 'n=$((n+1))' CHLD\n" +
 		"/bin/sleep 0.1 &\n/bin/sleep 0.2 &\n/bin/sleep 0.3 &\n" +

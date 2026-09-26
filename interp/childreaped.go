@@ -3,6 +3,8 @@
 
 package interp
 
+import "syscall"
+
 // The `CHLD` trap fires once for every child the shell reaps, and this shell
 // has no child for most of what a real one forks.
 //
@@ -116,6 +118,37 @@ func (r *Runner) trapsChildDeath() bool {
 	defer s.mu.Unlock()
 	body, ok := s.traps["CHLD"]
 	return ok && body != ""
+}
+
+// jobReaped finishes a job whose ending is a child's death the shell has to
+// record, with the record made where Job.finishRecording puts it: after the
+// status is published and before the close that releases a `wait`.
+//
+// One helper for all three places a `&` job, a coprocess and a process
+// substitution end, because the ordering is the whole of what they have to get
+// right and a second copy of it is where the next one goes missing. Each of
+// the three had the record *after* the close and each could therefore be
+// waited for and got past before the arrival existed: the three-children case
+// in waitkeepswaiting_test.go counted two.
+//
+// A nil job is a process substitution that was never given one — see
+// Runner.procSubst. There is nothing a `wait` can be blocked on there, so the
+// record is all there is to do.
+func (r *Runner) jobReaped(j *Job, status int, sig syscall.Signal) {
+	if j == nil {
+		r.childReapedByTheShell()
+		return
+	}
+	if j.finishRecording(status, sig, r.childReapedByTheShell) {
+		return
+	}
+	// Something else finished the job first — the shell waiting out a polled
+	// job's process itself is the one way in, see waitOutPolledJob — so the
+	// record did not run inside the finish and the ordering above is not
+	// available. The arrival is still owed: this goroutine is the child
+	// ending, and it was raised unconditionally here before any of the
+	// ordering was, which is the behavior this keeps.
+	r.childReapedByTheShell()
 }
 
 // recordChildDeath puts one arrival on the shared list, to be run between

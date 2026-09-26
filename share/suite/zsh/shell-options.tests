@@ -166,7 +166,7 @@ cd "$base/.."
 # an ordinary character": a shell doing the latter answers `*[a` with the file.
 # Each complaint goes to /dev/null and the row prints the status instead, since
 # the wording is each shell's own expression and the behavior is the question.
-rm -rf bp.tmp; mkdir bp.tmp; cd bp.tmp; : > '[a'; : > xa; : > 'x[a'
+rm -rf bp.tmp; mkdir bp.tmp; cd bp.tmp; : > '[a'; : > xa; : > 'x[a'; : > 'a(b'; : > ab; : > ac
 
 ( unsetopt badpattern; print -rn -- [a )    2> /dev/null; printf '  off [a    %s\n' "$?"
 ( setopt badpattern;   print -rn -- [a )    2> /dev/null; printf '  on  [a    %s\n' "$?"
@@ -213,4 +213,35 @@ printf '  off nullglob zz*   %s\n' "$?"
 ( emulate ksh; [[ -o badpattern ]] || print 'emulate ksh: off' )
 ( unsetopt badpattern; [[ -o badpattern ]] || print 'inner: off' )
 [[ -o badpattern ]] && print 'outer: still on'
+# ---- BAD_PATTERN reaches a group nothing closes ----
+#
+# The rule is keyed on **a pattern that will not compile**, not on an
+# unterminated bracket and not on an unterminated group — so a `(` with no
+# partner is the same question `[a` is, and the two move together. This shell
+# refused the group while *reading the word*, which is a layer the option
+# cannot reach, so both states were wrong (#4645).
+#
+# Nothing below is quoted, for the reason the block above gives. **Each bad
+# word is followed by a `;` inside the subshell**, and that is not a tidiness:
+# an unclosed group runs to the next command operator, so without one it takes
+# the subshell's own `)` and the rest of this file goes with it. A first draft
+# did exactly that, in both shells alike.
+( unsetopt badpattern; print -rn -- a(b; )  2> /dev/null; printf '  off a(b   %s\n' "$?"
+( setopt badpattern;   print -rn -- a(b; )  2> /dev/null; printf '  on  a(b   %s\n' "$?"
+( unsetopt badpattern; print -rn -- (a; )   2> /dev/null; printf '  off (a    %s\n' "$?"
+( unsetopt badpattern; print -rn -- a@(b; ) 2> /dev/null; printf '  off a@(b  %s\n' "$?"
+
+# Handed back whole rather than read with the `(` as an ordinary character:
+# the directory holds `a(b`, and a literal reading would answer `*(b` with it.
+( unsetopt badpattern; print -rn -- *(b; )  2> /dev/null; printf '  off *(b   %s\n' "$?"
+
+# The two controls that hold a parenthesis fixed and move nothing — a group
+# that closes, and one a bracket has made a character of.
+( setopt badpattern;   print -rn -- a(b|c) )  2> /dev/null; printf '  on  grp   %s\n' "$?"
+( setopt badpattern;   print -rn -- a[(]b; )  2> /dev/null; printf '  on  brk   %s\n' "$?"
+
+# And the half that does not move, which is the pair the noun is pinned by:
+# the same text is a glob above and an element filter here.
+( unsetopt badpattern; v='a(b'; print -rn -- ${v:#a(b} ) 2> /dev/null
+printf '  off :# grp %s\n' "$?"
 cd ..; rm -rf bp.tmp

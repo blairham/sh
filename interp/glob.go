@@ -651,6 +651,69 @@ func closesGroup(s string, i int) bool {
 // A `!` or `^` directly after the bracket negates, and a `]` directly after
 // that is a literal member rather than the terminator — so `[]]` is a
 // one-member class and `[]` is not a class at all.
+// hasUnterminatedPatternGroup reports whether a pattern holds a `(` that
+// nothing closes, so the question "will this compile" is asked only of the
+// patterns it applies to — the companion to [hasUnterminatedBracket], and
+// asked at the same three sites.
+//
+// A bracket expression is stepped over, which is the one way this differs
+// from [closesGroup]'s deliberate omission of the same step: there the
+// question is whether the word is a pattern at all and a parenthesis inside
+// brackets is balanced by the one beside it, and here it is whether the
+// pattern compiles, where `a[(]b` holds one parenthesis and nothing to
+// balance it. Measured on zsh 5.9.2 (`-f`, 2026-09-26): `print -r -- a[(]b`
+// writes `a(b` at 0, and reading the bracket's `(` as an opener would refuse
+// it as a bad pattern.
+func hasUnterminatedPatternGroup(p string) bool {
+	for i := 0; i < len(p); i++ {
+		switch p[i] {
+		case '\\':
+			// A backslash protects the parenthesis behind it, which is how a
+			// quoted `"a(b"` and a value's own `(` both stay ordinary
+			// characters: both reach here escaped.
+			i++
+		case '[':
+			i = skipBracket(p, i)
+		case '(':
+			if !closesGroup(p, i) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// badPatternFromAnOpenGroup reports whether this dialect refuses a pattern
+// outright because a group in it never closes.
+//
+// The same answer [Semantics.UnterminatedBracket] gives for a bracket, keyed
+// on the same value, because it is the same rule: **a pattern that will not
+// compile**. The noun is not "an unterminated group" and not "a word with a
+// parenthesis in it" — `a(b|c)` carries two and compiles, `[a` carries none
+// and is refused identically, and both were measured in both option states.
+//
+// Asked only where a lone `(` opens a group, because only there is an
+// unclosed one a group at all. The **quantified** spelling is not asked, and
+// that is measured rather than overlooked: bash 5.3.20 with `extglob` on and
+// ksh93u+ both refuse `a@(b` while *parsing* — `unexpected EOF while looking
+// for matching )` and a syntax error naming the unmatched `(` — so no word
+// reaches an expansion there, and a value carrying one is ordinary text in
+// both (`shopt -s extglob; v='a@(b'; [[ x == $v ]]` is 1, not a refusal).
+// See [Dialect.UnterminatedPatternGroupIsAWord], which is the parsing half.
+//
+// Dropping the PatternAlternation test survives the package, and that is an
+// **equivalent mutant** rather than a gap — recorded here so the next reader
+// does not go looking for the row that would kill it. Only one dialect in the
+// tree answers BracketBadPattern and it is the one with bare groups, so the
+// first test already implies the second today. It is kept for what it says:
+// an unclosed `(` is a group to ask about only where a lone one opens one,
+// and a sixth dialect that called an unterminated bracket a bad pattern
+// without taking bare groups would otherwise be asked the wrong question.
+func (r *Runner) badPatternFromAnOpenGroup(p string) bool {
+	return r.sem().UnterminatedBracket == BracketBadPattern &&
+		r.lang().PatternAlternation && hasUnterminatedPatternGroup(p)
+}
+
 func closesBracket(s string, i int) bool {
 	j := i + 1
 	if j < len(s) && (s[j] == '!' || s[j] == '^') {
@@ -813,13 +876,21 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	if !qok {
 		return nil, false
 	}
-	if r.sem().UnterminatedBracket == BracketBadPattern &&
-		field != "[" && hasUnterminatedBracket(field) {
+	if (r.sem().UnterminatedBracket == BracketBadPattern &&
+		field != "[" && hasUnterminatedBracket(field)) ||
+		r.badPatternFromAnOpenGroup(field) {
 		// zsh rejects an unterminated bracket against the filesystem too,
 		// with one exception it is worth stating because it is what keeps
 		// `[ a = a ]` working: a field that is exactly `[` is left alone.
 		// `a[` is not, so the rule is the whole field rather than where the
 		// bracket sits in it.
+		//
+		// **A group nothing closes is the same question**, and it is here
+		// rather than in the parser for exactly the reason the switch below
+		// exists: a word the lexer refuses never reaches a filename, so
+		// `unsetopt badpattern` could not spare it (#4645). See
+		// badPatternFromAnOpenGroup, and Dialect.UnterminatedPatternGroup-
+		// IsAWord for the half that lets the word through.
 		//
 		// **Unless the session has turned the refusal off**, which is the
 		// one place in the program that can: this is the moment a word on
@@ -835,7 +906,16 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// writes `*[a` rather than the file `x[a` it would have matched had
 		// the `[` become an ordinary character.
 		if r.RefusesABadPatternWhenGlobbing() {
-			r.fatalPattern(field, 1)
+			// The field **unescaped**, which is what the complaint one line
+			// down from here has always done for a miss and what this one
+			// never did. The mark a quote or a backslash leaves behind is
+			// ours and not the script's: measured on zsh 5.9.2 (`-f`,
+			// 2026-09-26), `print -r -- a\[b[c` is `bad pattern: a[b[c`
+			// there and was `bad pattern: a\[b[c` here. Invisible to #4630,
+			// whose rows carry no backslash, and reachable by a second route
+			// now that a group arrives here too — `a(b\)` is the shape that
+			// found it.
+			r.fatalPattern(globUnescape(field), 1)
 		}
 		return nil, false
 	}

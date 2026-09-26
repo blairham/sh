@@ -5170,6 +5170,41 @@ type Dialect struct {
 	// extended pattern — the same text, read by a different rule.
 	PatternAlternation bool
 
+	// UnterminatedPatternGroupIsAWord says that a pattern group the input
+	// runs out of is the word's own text rather than unfinished input. The
+	// `(` stays in the word, the parser is handed a word like any other, and
+	// what refuses it — if anything does — is the *matcher*, where a pattern
+	// that will not compile is refused.
+	//
+	// **The panel splits on it**, which is why it is a flag rather than a
+	// consequence of [Dialect.PatternAlternation]. Measured 2026-09-26 from a
+	// script file, each shell asked for the group spelling it has:
+	//
+	//	zsh 5.9.2      print -r -- a(b      bad pattern: a(b, 1
+	//	                                    and `[a` standing at 0 with
+	//	                                    `unsetopt badpattern`
+	//	bash 5.3.20    echo a@(b (extglob)  unexpected EOF while looking
+	//	                                    for matching `)', 2
+	//	bash 3.2.57    echo a@(b (extglob)  the same, plus `unexpected end
+	//	                                    of file`
+	//	ksh93u+        echo a@(b            syntax error at line 2:
+	//	                                    `(' unmatched, 3
+	//	dash 0.5.12    echo a(b             Syntax error: "(" unexpected, 2
+	//
+	// So the two shells with *quantified* groups read the missing `)` as
+	// input they have not been given yet, and the one with **bare** groups
+	// reads the text as a word and refuses it later, by name. The difference
+	// is visible one layer up: a refusal the lexer raises cannot be reached
+	// by `setopt badpattern`, because the option is read where filenames are
+	// generated and a word that never parsed never gets there (#4645).
+	//
+	// It says nothing about how *much* text the group takes. That is
+	// scanGroupSpans's own rule and the two shells agree about it: `;`, `<`,
+	// `>` and `&` end the word where they stand and whitespace, newlines and
+	// `|` do not, so `print -r -- a(b; print AFTER` is `a(b` and one more
+	// command in zsh 5.9.2 and here alike.
+	UnterminatedPatternGroupIsAWord bool
+
 	// PatternTopLevelAlternation reads a `|` standing outside every group and
 	// bracket as an alternation of the whole pattern — `a|b` matching `a` or
 	// `b` rather than the three characters.

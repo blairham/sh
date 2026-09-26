@@ -2618,9 +2618,11 @@ func (l *Lexer) scanGroupSpans() []Span {
 		}
 	}
 	// Unterminated: the caller reports the word as unfinished, the same as an
-	// unclosed quote.
+	// unclosed quote — unless the grammar says the text is the word's, which
+	// is [Dialect.UnterminatedPatternGroupIsAWord]. There the `(` is pattern
+	// text like any other and what refuses it is the matcher, a layer down.
 	flush()
-	if l.err == nil {
+	if l.err == nil && !l.dialect.UnterminatedPatternGroupIsAWord {
 		l.ranOut("pattern")
 		l.fail(l.pos(), "unterminated pattern group")
 	}

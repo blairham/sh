@@ -163,6 +163,66 @@ is 0 in real zsh and 1 here, where the refusal writes the fatal status the
 five rows above it need. Separating the two would mean a number that only the
 boundaries read, and the shell exits on the rows that matter either way.
 
+### A group nothing closes is the same refusal, and the panel splits on where
+
+An unterminated **bracket** is the row above. An unterminated **group** is the
+same question — a pattern that will not compile — and the two shells that have
+groups answer it in different *layers*, which is `Dialect.Unterminated-
+PatternGroupIsAWord`. Measured 2026-09-26 from a script file, each shell asked
+for the group spelling it has:
+
+| shell | written | answer |
+| --- | --- | --- |
+| zsh 5.9.2 | `print -r -- a(b` | `bad pattern: a(b`, 1 — a **run-time** complaint naming the word |
+| bash 5.3.20, `extglob` | `echo a@(b` | `unexpected EOF while looking for matching ')'`, 2 — while **parsing** |
+| bash 3.2.57, `extglob` | `echo a@(b` | the same, plus `unexpected end of file` |
+| ksh93u+ | `echo a@(b` | ``syntax error: `(' unmatched``, 3 — while parsing |
+| dash 0.5.12 | `echo a(b` | `Syntax error: "(" unexpected`, 2 — it has no groups at all |
+
+So one shell reads the text as a word and refuses it later, and the others
+read the missing `)` as input they have not been given yet. **The layer is
+what matters and not the wording**: `setopt badpattern` is read where
+filenames are generated, so a word the lexer refused can never reach it, and
+this shell's own `unterminated pattern group` was therefore unreachable by the
+option in *both* states (#4645).
+
+**The noun is the compile, not the construct**, which is #4630's rule holding
+one row further out. Measured on zsh 5.9.2, `-f`, in a directory holding
+`a(b`, `ab` and `ac`, each row in both option states:
+
+| written | `badpattern` on | off |
+| --- | --- | --- |
+| `print -r -- a(b` | `bad pattern: a(b`, 1 | `a(b`, 0 |
+| `print -r -- (a` | `bad pattern: (a`, 1 | `(a`, 0 |
+| `print -r -- (a\|b` | `bad pattern: (a\|b`, 1 | `(a\|b`, 0 |
+| `print -r -- *(b` | `bad pattern: *(b`, 1 | `*(b`, 0 |
+| `print -r -- [a` | `bad pattern: [a`, 1 | `[a`, 0 |
+| `print -r -- a(b\|c)` | `ab ac`, 0 | `ab ac`, 0 |
+| `print -r -- a[(]b` | `a(b`, 0 | `a(b`, 0 |
+| `v='a(b'; ${v:#a(b}` | `bad pattern: a(b`, 1 | `bad pattern: a(b`, 1 |
+| `v='a(bZ'; ${v#a(b}` | `bad pattern: a(b`, 1 | `bad pattern: a(b`, 1 |
+
+Three pairs in that table are the ones doing work. `[a` carries **no
+parenthesis at all** and moves identically to `a(b`, so the rule cannot be
+keyed on the group. `a(b|c)` and `a[(]b` each carry one and neither moves, so
+it cannot be keyed on the parenthesis either. And the last two rows hold the
+*text* fixed against the first row and change only the surface: a glob moves
+with the option and a matcher operand does not, which is what says the switch
+is about filename generation. `Runner.RefusesABadPatternWhenGlobbing` has the
+same grid for the bracket.
+
+**The spared word is handed back whole.** `*(b` writes itself rather than the
+file `a(b` it would have matched had the `(` become an ordinary character —
+the same row `*[a` is for the bracket, and the reason neither is modeled as a
+literal reading.
+
+**The word ends where it always did**, and that half did not move: the group
+scan ends the word at an unquoted `;`, `<`, `>` or `&` wherever it stands and
+absorbs blanks, newlines and `|`. So `print -r -- a(b; print AFTER` is one bad
+word and one more command in zsh 5.9.2 and here alike, while a group left open
+with no operator after it takes the rest of the input — the final newline
+included, which is why the reference writes `a(b\n` for a one-line file.
+
 ### A backslash inside a bracket expression
 
 Three readings, and `Semantics.BracketEscape` is the axis. Measured

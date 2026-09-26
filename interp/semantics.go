@@ -3682,10 +3682,11 @@ type Semantics struct {
 	// TrapLocality for the answers and for why it is a form rather than a
 	// flag.
 	//
-	// EXIT is not this question. It is already function-scoped in the one
-	// shell that has both, by a rule of its own that does not ask any
-	// option — see ExitTrapIsFunctionLocal — and measured, the switch this
-	// axis carries changes nothing about it in either direction.
+	// EXIT is not this question. It is function-scoped in the one shell
+	// that has both by a rule of its own, which that shell spells as a
+	// different option — `posixtraps`, see ExitTrapIsFunctionLocal — and
+	// measured, the switch this axis carries changes nothing about it in
+	// either direction.
 	//
 	// unanimous: the four answer alike because zsh's other answer is an
 	// option and not a default. Re-measured 2026-09-12: `trap 'echo OUTER'

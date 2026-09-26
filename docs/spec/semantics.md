@@ -7673,11 +7673,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 19 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 20 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 6 | `aliases`, `autocd`, `banghist`, `checkjobs`, `cprecedences` and `hup`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, and a session that is leaving really does send SIGHUP to the jobs it abandons. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
-| **recorded** | 132 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 131 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -7976,7 +7976,18 @@ notice is the only line there is to read: with the notice a command late,
 `zpty -r` waits for it for ever and the file hangs rather than failing. The
 chunk runs to the end with the option implemented.
 
-So 132 of 185 are recorded, the count above is the one produced by counting
+`posixtraps` left last, and it is the one whose *moment* had to be measured
+before it could be wired: it is `ExitTrapIsFunctionLocal` read backwards — the
+option on is that axis answering No — and the axis was being asked at the
+function's return, where zsh reads the option when the `trap` command runs.
+Measured on zsh 5.9.2 (`-f`, 2026-09-25), a body that sets the trap and then
+turns the option off still defers to the shell's exit, and one that sets it
+with the option off and turns it on still fires at the return; each row holds
+the state at the return fixed at the other's value, so the return cannot be
+what decides. It is reachable without anyone typing `setopt`, because
+`emulate sh` and `emulate ksh` both turn it on (#4547).
+
+So 131 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -11864,7 +11875,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 145 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 131 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150; neither was the count
   the table produces. It is now counted from the constructors, and the test
@@ -18703,6 +18714,40 @@ the body's line, which is its own measured answer (#4173).
 Fires an EXIT trap set inside a function when that function returns,
 rather than when the script ends. zsh alone; a trap set at the top level
 behaves the same everywhere.
+
+**The moment it is read is the `trap` command's**, not the function's
+return and not its entry. zsh spells this axis as `POSIX_TRAPS` — the
+option on is this axis answering `no` — and a function body can move that
+option in the middle of itself, so the two moments are separable and they
+disagree. Measured on zsh 5.9.2 (`-f`, 2026-09-25):
+
+    setopt posixtraps;   f() { trap … EXIT; unsetopt posixtraps }   deferred
+    unsetopt posixtraps; f() { trap … EXIT; setopt posixtraps }     at the return
+    unsetopt posixtraps; f() { setopt posixtraps; trap … EXIT }     deferred
+    setopt posixtraps;   f() { unsetopt posixtraps; trap … EXIT }   at the return
+
+The first pair holds the state at the **return** fixed at the opposite
+value in each row and the second holds the state at the **entry** the same
+way, so neither of those is what decides. The answer is recorded when the
+trap is set — `Runner.exitTrapLocal` — and read back at the return.
+
+**Whether the call *holds* the trap it inherited is a second question with
+a second moment**, and that one is the entry's. A call entered while the
+axis answers `yes` puts the trap it inherited back at its return, over the
+top of one the body set that is not firing here; a call entered while it
+answers `no` never held one, so the body's trap replaces the caller's
+outright — which is what the other four dialects do always. Measured the
+same day with a `TOP-EXIT` trap at the top level: `g() { setopt
+posixtraps; trap 'print G-EXIT' EXIT }` leaves `trap` listing TOP-EXIT
+after the call, and the same body with the `setopt` moved above the call
+leaves G-EXIT listed. Only the state at the entry differs. The inherited
+trap has to exist to come back: with no top-level trap the first shape
+leaves the body's own installed and fires it at the shell's exit.
+
+**Only EXIT moves.** A trap on a real signal set inside a function, and a
+`ZERR` trap, are the shell's to keep in both states of the option — which
+is what keeps this apart from `FunctionLocalTraps`, the axis zsh spells
+`LOCAL_TRAPS`.
 
 **The call's status survives the trap**, and that is not a second axis:
 only one shell fires the trap here, so there is nothing for a second

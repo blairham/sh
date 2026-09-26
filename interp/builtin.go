@@ -7727,6 +7727,7 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 			b := body
 			r.exitTrap = &b
 			r.trapDepth = r.depth
+			r.exitTrapLocal = r.sem().ExitTrapIsFunctionLocal
 		case body == "-":
 			r.trapSignal(tg.name, tg.sig, nil)
 		default:

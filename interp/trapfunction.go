@@ -136,6 +136,7 @@ func (r *Runner) bindTrapFunction(fname string) bool {
 	case cond == "EXIT":
 		r.exitTrap = &action
 		r.trapDepth = r.depth
+		r.exitTrapLocal = r.sem().ExitTrapIsFunctionLocal
 	case r.pseudoTrapSlot(cond) != nil:
 		r.setPseudoTrap(cond, action)
 	default:

@@ -60,7 +60,8 @@ import "github.com/blairham/sh/interp"
 //     fires at that function's return here and the caller's already comes
 //     back, with the option on and with it off alike — a rule of its own,
 //     [interp.Semantics.ExitTrapIsFunctionLocal], and this option changes
-//     nothing about it in either direction.
+//     nothing about it in either direction. The option that *does* change it
+//     is `posixtraps`, which is a third name again (#4547).
 //
 // The store and the moment are the substrate's, because the trap table is:
 // see interp/localtraps.go, where the save hangs on the running call and the

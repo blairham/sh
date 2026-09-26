@@ -42,11 +42,18 @@ import "testing"
 // Semantics.FinishedJobNoticeArrivesAtOnce, which is whether a finished job's
 // notice is written the moment the job ends or held for the next prompt, and
 // until #4524 it was held in both states.
+// `posixtraps` is the fourteenth: it moves
+// Semantics.ExitTrapIsFunctionLocal backwards — the option on is that axis
+// answering No — so an EXIT trap set inside a function fires when the shell
+// exits rather than when the function returns. Until #4547 it fired at the
+// return in both states, including under `emulate sh`, which turns the option
+// on without anyone typing `setopt`.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
+		"posixtraps",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -68,7 +75,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 132; recordedCount != want {
+	if want := 131; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

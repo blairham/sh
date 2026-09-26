@@ -26180,6 +26180,55 @@ assignment, which is handed the bare name and cannot see the letters.
 Pinned by `decl/an-index-array-literal-on-a-table` and
 `decl/an-index-array-literal-replacing-a-table` (#2611).
 
+**`BareElementsInATableLiteralMustPairOff`** — bash no · dash no table to ask about · ksh93 no arity to reach · zsh yes
+
+Given that the bare words *are* read as pairs, what an **odd** number of
+them means. One column refuses the literal and leaves; the other takes
+the last field as a key with nothing under it.
+
+    typeset -A h=(a 1 b)
+      bash 5.3.20  `declare -A h=([b]="" [a]="1" )`, status 0, the next
+                   command run
+      zsh 5.9.2    `bad set of key/value pairs for associative array`,
+                   status 1, and the shell **leaves**
+
+Measured 2026-09-26, panel and machine as `oracle.md`. ksh93 refuses a
+bare element in a table literal before any arity is reached — the row
+above this one — and dash and BusyBox ash have no table to put one in.
+
+**The noun is the field count, and it is counted after expansion**, which
+is the opposite of the row above: that one turns on the *written* shape
+and this one does not. The pair that says so holds the written word count
+fixed at one — with `w=(a 1 b)`, `typeset -A h=($w)` is refused, and with
+`w=(a 1 b 2)` the same line is taken. That is also the case a script
+actually hits, since a literal spelled with an odd number of words is a
+typo and a list handed in from somewhere else is a bug.
+
+Two nouns it is not. Not the **letter on the command**: `typeset -A h;
+h=(a 1 b)` earns the same sentence, `h+=(a 1 b)` earns it, and so does a
+produced table's `aliases=(a 1 b)` — while the same three words over a
+name that is not a table are an ordinary three-element array in every
+column, so the target's kind decides. And not the **key set**:
+`typeset -A h=(a 1 a 2)` is legal everywhere, one element out of two
+pairs, so a check counting keys would refuse a line every column takes.
+The even list and the empty literal are the other two controls.
+
+**The refusal is asked before anything is stored**, which `eval` is what
+makes askable, since the text it was given ends and the file above it
+runs on. With `typeset -A h=(x 9)` in front of it, `eval 'h=(a 1 b)'`
+leaves `x` at `9` — so the table is not emptied first — and a fresh
+`eval 'typeset -A h=(a 1 b)'` lists `typeset -A h=( )`, the declaration
+having taken effect where the assignment did not. Outside `eval` nothing
+after it runs, and from inside a function the function's name goes in
+front of the sentence and the shell still leaves.
+
+`Diagnostics.UnpairedTableLiteralElements` is the wording and
+`Runner.tableLiteralPairsOff` is the check. Pinned by
+`dialect/zsh/tableliteralpairs_test.go`,
+`dialect/bash/tableliteralpairs_test.go`, the axis suite in
+`interp/tableliteralpairs_test.go` and a block of
+`share/suite/zsh/arrays.tests` (#4594).
+
 **A local declaration builds the array cell rather than converting one**,
 and that is core rather than a fourth answer. bash promotes at the top
 level and through `-g` — `b=1; typeset -a b` and

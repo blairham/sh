@@ -157,6 +157,20 @@ func TestAnUnterminatedPatternGroupIsABadPattern(t *testing.T) {
 			off: "a(b\n", offSt: 0,
 		},
 		{
+			// **A value is not a pattern in this dialect**, so the same
+			// three characters arriving from one are ordinary text — and
+			// nothing downstream may refuse them. A lone `(` is not a
+			// metacharacter, so nothing escapes the value on its way out;
+			// without resultReadsAsPattern being told about the group it
+			// goes live, meets the new refusal in glob, and a `${v#a(b}`
+			// reports the operand and then reports the value it handed
+			// back. See #1386, which is the same gap through `[`.
+			name: "a value carrying an unclosed group is text",
+			src:  `v="a(b"; print -r -- $v`,
+			on:   "a(b\n", onStatus: 0,
+			off: "a(b\n", offSt: 0,
+		},
+		{
 			// **The pair that pins the noun.** No parenthesis anywhere and
 			// the same two answers, because both words fail the same
 			// compile. This row is #4630's and is repeated here on purpose:

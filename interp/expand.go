@@ -2863,11 +2863,21 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 	if r.sem().UnterminatedBracket == BracketBadPattern && hasUnterminatedBracket(esc) {
 		return true
 	}
-	// And a group nothing closes, which is the same "will not compile" and
-	// reaches the same refusal one layer down. Measured on zsh 5.9.2 (`-f`,
-	// 2026-09-26): `L='a(b'; print -r -- ${~L}` is `bad pattern: a(b` at 1,
-	// and `a(b` at 0 with `unsetopt badpattern` — the option moves it, which
-	// says the refusal is the *glob*'s and this is only what sends it there.
+	// And a group nothing closes, which is #1386's gap arriving through the
+	// other bracket. A lone `(` is deliberately not a metacharacter —
+	// hasUnescapedMeta asks closesGroup and an unclosed one answers no — so
+	// a value holding `a(b` has nothing here to protect it, goes live, and
+	// meets the refusal glob.go raises for a pattern that will not compile.
+	// Measured on zsh 5.9.2 (`-f`, 2026-09-26): `v='a(b'; print -r -- $v`
+	// writes `a(b` at 0 there, because an expansion result is not a pattern
+	// in that dialect at all.
+	//
+	// This became reachable with #4645 and not before: until the group had a
+	// refusal in glob there was nothing for a live `(` to run into, which is
+	// why the same sentence was needed for `[` one issue earlier and not for
+	// this one. Removing it leaves every row of the grid looking right and
+	// adds a **second** complaint after the first — `${v#a(b}` reports the
+	// operand and then reports the value it handed back.
 	return r.badPatternFromAnOpenGroup(esc)
 }
 

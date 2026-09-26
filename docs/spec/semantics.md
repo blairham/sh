@@ -8469,12 +8469,15 @@ answering separately. Neither option is in the bare emulation's reset set, so
 unanimous rather than one shell's idea.** Measured 2026-09-26 in the tree
 above, `cd -P sub/fake/..` arrives at `t` in bash 5.3.20, bash 3.2, dash,
 ksh93 and zsh 5.9.2 alike, where canceling `fake` against the `..` first
-lands in `t/sub`. This shell cancelled first in every dialect until #4590,
+lands in `t/sub`. This shell canceled first in every dialect until #4590,
 because the operand was joined against the working directory with a lexical
-clean *before* the walk that was there to resolve the `..`. One measured
-exception is on the board rather than modeled: ksh93 cancels a **leading**
-`..` against the logical `$PWD` even under `-P`, so `cd sub/fake` then
-`cd -P ..` is `t/sub` there and `t` in the other four.
+clean *before* the walk that was there to resolve the `..`. A path the walk
+**cannot** resolve keeps its `..` too, which was the other half of the same
+fault: `cd -P nosuch/..` fell through to that join and answered 0 where all
+six refuse (#4627). One measured exception is on the board rather than
+modeled: ksh93 cancels a **leading** `..` against the logical `$PWD` even
+under `-P`, so `cd sub/fake` then `cd -P ..` is `t/sub` there and `t` in the
+other four (#4628).
 
 **A directory can be renamed out from under the shell, and then the shell's
 own name for it leads nowhere.** `cd d; mv ../d ../e` is the whole of the
@@ -8513,12 +8516,65 @@ has been **removed** rather than renamed is where the two moving answers meet:
 the move happens and there is no name to take, so `$PWD` stays as it was and
 the status is 0 in zsh, bash and ksh93 alike.
 
-Two rows are known and not modeled. `pwd -P` from a renamed directory is
-`…/d` here where four of the six say `…/e` (#4667), and `cd ..` out of a
-subdirectory whose parent has been renamed *and* had its name taken by another
-directory lands on the impostor here where zsh follows the directory — the
-reference chdirs the uncleaned `$PWD/..` and this shell cancels the `..`
-lexically before it looks (#4668).
+**`pwd -P` reads the same split, one column of it.** Its column in the table
+above is `…/e` in five of the six and `…/d` in ksh93 — the same column that
+does not ask the kernel where it ended up after a `cd`, which is what
+`CdDestinationNotThereEntersAndKeepsTheBuiltName` already records. So the
+resolution is given the directory the shell is *holding* unless that reading
+is the dialect's, and no second axis is needed; a bare `pwd` is not asked at
+all, since all six keep the name they were reached by (#4667, #4653).
+
+**And whether a `..` is taken out of a path before the shell has looked at
+what it cancels is a third axis**, `Semantics.CdCancelsADotDot`, with three
+readings rather than two. `cd nosuch/..` is the plainest form: it is refused
+by bash 5.3, bash 3.2, zsh and ksh93, and accepted at 0 by dash and BusyBox
+ash, where `cd real/..` in the same tree is 0 in all six. The same split
+covers `cd real/nosuch/..`, `cd nosuch/../real`, `cd ./nosuch/..`,
+`cd afile/../b` where `afile` is an ordinary file — `Not a directory` there
+rather than `No such file or directory`, which is what says the question is
+whether the component is a directory — a dangling symbolic link, and the
+absolute `cd /nosuch/..`. The looking is a **stat** of the component and not a
+walk through it: a directory at mode 000 cancels perfectly well in bash and
+zsh.
+
+ksh93 is the third reading and the table of `..` operands cannot see it,
+because every `..` in it cancels a component of the operand. The case that
+separates them is a `..` that reaches past the operand into the directory the
+shell is already in, which only means anything once that component has stopped
+being there — the shell in `…/d/s`, `d` renamed to `e`, and a *different* `d`
+made at the old name:
+
+| | `cd ..` | `$PWD` after | what `*` lists |
+| --- | --- | --- | --- |
+| zsh 5.9.2 | 0 | `…/e` | `s` |
+| bash 5.3 | 0 | `…/e` | `s` |
+| ksh93 | 0 | `…/d` | `IMPOSTOR` |
+| dash | 0 | `…/d` | `IMPOSTOR` |
+| BusyBox ash 1.37 | 0 | `…/d` | `IMPOSTOR` |
+
+So ksh93 refuses `cd nosuch/..` with bash and zsh and walks into the impostor
+with dash and ash: it looks at a `..` inside the operand and cancels one that
+climbs into `$PWD` unseen. `cd ./..` is the same row with a `.` in front of
+it, so what decides is the component the `..` reaches rather than what the
+operand starts with. Both ksh builds were read — the AT&T 93u+ of 2012 on this
+Mac and ksh93u+m 1.0.10 from Debian sid in a container — and they agree on
+every row above, so this is the shell rather than the fork. Deeper operands in
+the renamed fixture are where the two builds part — `cd nosuch/../..` there is
+1 on the 2012 build and 0 on 1.0.10 — and none of them is modeled.
+
+The two columns that look find `…/d/s` gone, fall through to
+`CdDestinationIsNotThere` and follow the directory they are **holding** into
+`…/e`, which is the whole of #4668: the refusal is set rather than returned so
+that the retry still runs. And `cd -P nosuch/..` is unanimous whatever a
+column answers here, because under `-P` the whole path is walked with its `..`
+in place — this shell answered 0 there in every dialect, having let an
+unresolvable path fall through to the lexical join that the walk existed to
+avoid (#4627).
+
+One measured exception is still on the board rather than modeled: ksh93
+cancels a leading `..` against the logical `$PWD` **under `-P` as well**, so
+`cd sub/fake` then `cd -P ..` is `t/sub` there and `t` in the other four
+(#4628). The axis above reaches the `-L` route only.
 
 `rcquotes` left last and it is the first of these that is not a semantics
 question at all: it decides how a single-quoted *word is read*, so it moves

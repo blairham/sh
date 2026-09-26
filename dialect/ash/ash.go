@@ -1227,6 +1227,10 @@ func Semantics() interp.Semantics {
 	// lands in it. Measured rather than derived from dash — see
 	// Semantics.CdDestinationIsNotThere.
 	s.CdDestinationIsNotThere = interp.CdDestinationNotThereRefuses
+	// `cd nosuch/..` is 0, as it is in dash — measured in the panel's own
+	// image, alpine@sha256:28bd5f…, BusyBox v1.37.0, with `cd real/..` at 0
+	// beside it as the control. See Semantics.CdCancelsADotDot (#4627).
+	s.CdCancelsADotDot = interp.CdDotDotCanceledUnseen
 	// `cd` pushes nothing: this shell has no directory stack at all.
 	// Measured 2026-09-26 in the pinned alpine image, BusyBox v1.37.0 — `cd
 	// /t; cd sub; dirs` is `dirs: not found` at 127, and the fourteen-line

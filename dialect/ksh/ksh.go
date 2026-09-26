@@ -2723,6 +2723,15 @@ func Semantics() interp.Semantics {
 	// disagrees with the other five, which is the same column never asking
 	// the kernel where it is. See Semantics.CdDestinationIsNotThere.
 	s.CdDestinationIsNotThere = interp.CdDestinationNotThereEntersAndKeepsTheBuiltName
+	// `cd nosuch/..` is refused and `cd ..` out of a renamed directory walks
+	// into whatever took the old name: this column looks at a component of
+	// the *operand* and cancels one belonging to `$PWD` unseen, which is
+	// neither of the answers the other four hold. Read on `/bin/ksh` (AT&T
+	// 93u+ of 2012) and on ksh93u+m 1.0.10 in a container, which agree on
+	// those rows; deeper operands in the renamed fixture part between the two
+	// builds and are not modeled. See
+	// Semantics.CdCancelsADotDot (#4627, #4668).
+	s.CdCancelsADotDot = interp.CdDotDotLooksWithinTheOperand
 	// `cd` pushes nothing. Measured 2026-09-26 on ksh93u+ 2012-08-01
 	// (`${.sh.version}` is `Version AJM 93u+ 2012-08-01`): `dirs` is `dirs:
 	// not found`, and `set -o` names no option with `pushd` in it — the same

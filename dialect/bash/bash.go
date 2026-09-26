@@ -2608,6 +2608,12 @@ func Semantics() interp.Semantics {
 	// `…/e/s`. Both builds, same answer, so this is not a version.
 	// See Semantics.CdDestinationIsNotThere for the pair that fixes the noun.
 	s.CdDestinationIsNotThere = interp.CdDestinationNotThereEntersAndTakesTheKernelsName
+	// `cd nosuch/..` is refused here, in 5.3.20 and in 3.2.57 alike: every
+	// component a `..` cancels is looked at first, whether it came from the
+	// operand or from the directory the shell is in. `cd real/..` is 0 in the
+	// same tree, which is the control. See Semantics.CdCancelsADotDot (#4627,
+	// #4668).
+	s.CdCancelsADotDot = interp.CdDotDotLooksAtEveryCanceledComponent
 	// `cd` pushes nothing, in the one other shell that *has* a directory
 	// stack — which is what makes this column the control rather than a
 	// vacuous no. Measured 2026-09-26 on bash 5.3.20: `pushd sub` leaves

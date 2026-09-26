@@ -304,3 +304,76 @@ func (r *Runner) operandCrossesASymlink(base, operand string) bool {
 	}
 	return false
 }
+
+// canceledComponentRefused reports why a `..` in operand may not be taken out
+// of the path without looking: the component it would cancel is not there, or
+// is not a directory.
+//
+// The operand is walked **as written**, because the thing being asked about is
+// exactly what cleaning would remove, and the stack it pops from starts at
+// base — so a `..` that runs past the operand goes on to consume the
+// directory the shell is already in, which is a component like any other and
+// is where the three readings part.
+//
+// withinOperand keeps the looking to the operand's own components and cancels
+// one belonging to base unseen, which is ksh93's reading. See
+// [Semantics.CdCancelsADotDot] for the grids and for where the question is
+// put.
+//
+// A **stat of the component** rather than a walk through it, which is measured
+// rather than convenient: a directory at mode 000 cancels perfectly well in
+// bash and zsh, so neither traverses what it is canceling, and stat needs
+// nothing of the component itself. It follows links, which is the other half —
+// `sub/fake/..` where `fake` points at a directory is accepted by all six, and
+// a *dangling* link is refused by the four that look, which is one reading and
+// not two.
+//
+// A `..` with nothing left to cancel is asked nothing: at the root it is the
+// root in every column, and in a relative path with no base it names no
+// component this could ask about.
+//
+// Through the gate, because a script chose the path and a policy that hides
+// part of the filesystem must be able to answer for a question about it — the
+// same reason the walk above is gated a component at a time.
+func (r *Runner) canceledComponentRefused(base, operand string, withinOperand bool) error {
+	path := uncleanedJoin(base, operand)
+	vol := filepath.VolumeName(path)
+	rest := path[len(vol):]
+	lead := ""
+	if strings.HasPrefix(rest, "/") || (filepath.Separator != '/' && strings.HasPrefix(rest, string(filepath.Separator))) {
+		lead = "/"
+	}
+	// How much of the stack belongs to base, so that a `..` popping below
+	// this mark is one that has reached past the operand.
+	fromBase := 0
+	if !filepath.IsAbs(operand) {
+		fromBase = len(splitPathComponents(base))
+	}
+	var built []string
+	for _, comp := range splitPathComponents(rest) {
+		switch comp {
+		case ".":
+			continue
+		case "..":
+			if len(built) == 0 {
+				continue
+			}
+			if withinOperand && len(built) <= fromBase {
+				built = built[:len(built)-1]
+				continue
+			}
+			canceledPath := vol + lead + strings.Join(built, "/")
+			info, err := r.stat(canceledPath)
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				return &fs.PathError{Op: "chdir", Path: canceledPath, Err: syscall.ENOTDIR}
+			}
+			built = built[:len(built)-1]
+		default:
+			built = append(built, comp)
+		}
+	}
+	return nil
+}

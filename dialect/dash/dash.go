@@ -1273,6 +1273,10 @@ func Semantics() interp.Semantics {
 	// because the kernel is holding its directory — it is only `cd` that
 	// will not look. See Semantics.CdDestinationIsNotThere.
 	s.CdDestinationIsNotThere = interp.CdDestinationNotThereRefuses
+	// `cd nosuch/..` is 0 here and in BusyBox ash, and refused in the other
+	// four: the `..` is canceled against the component in front of it
+	// without either being looked at. See Semantics.CdCancelsADotDot (#4627).
+	s.CdCancelsADotDot = interp.CdDotDotCanceledUnseen
 	// `cd` pushes nothing, and there is nothing to push onto: measured
 	// 2026-09-26, `dirs` is `dirs: not found` here and `set -o` names no
 	// option with `pushd` in it, while the same grep finds `errexit`.

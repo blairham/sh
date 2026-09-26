@@ -5741,6 +5741,101 @@ type Semantics struct {
 	// puts the question.
 	CdDestinationIsNotThere CdDestinationNotTherePolicy
 
+	// CdCancelsADotDot is whether `cd` takes a `..` out of the path it is
+	// building without looking at the component it cancels, and — where it
+	// does look — at which of them.
+	//
+	// `cd nosuch/..` is the plainest form of the question, and it is a
+	// question about a `cd` that *arrives*: every reading lands in the same
+	// directory and they differ only over whether they get there.
+	//
+	// Measured 2026-09-26 in a directory holding `real/deep`, a directory `b`,
+	// an ordinary file `afile` and a `dangling` symbolic link — status only,
+	// since four of the six columns say nothing at all on the rows they
+	// accept:
+	//
+	//	                      bash 5.3  bash 3.2  zsh  ksh93  dash  ash
+	//	cd nosuch/..             1         1       1     1      0    0
+	//	cd real/nosuch/..        1         1       1     1      0    0
+	//	cd nosuch/../real        1         1       1     1      0    0
+	//	cd ./nosuch/..           1         1       1     1      0    0
+	//	cd afile/../b            1         1       1     1      0    0
+	//	cd dangling/../b         1         1       1     1      0    0
+	//	cd /nosuch/..            1         1       1     1      0    0
+	//	cd real/..               0         0       0     0      0    0
+	//	cd ..                    0         0       0     0      0    0
+	//	cd real/deep/../..       0         0       0     0      0    0
+	//
+	// The last three rows are the control and they are the point: an ordinary
+	// `a/../b` where `a` is there is unmoved in every column, so what the rows
+	// above say is that the component is looked at rather than that a `..` is
+	// refused. The `afile` row is what says the question is *is it a
+	// directory* and not *is the name taken* — bash writes `Not a directory`
+	// there and `No such file or directory` for `nosuch` and for a dangling
+	// link. ash was read in the panel's own image, `alpine@sha256:28bd5f…`,
+	// BusyBox v1.37.0.
+	//
+	// **ksh93 is a third reading and not a rounding error, and the table above
+	// cannot see it**, because every `..` in it cancels a component of the
+	// *operand*. The case that separates the two is a `..` that reaches past
+	// the operand and consumes a component of the directory the shell is
+	// already in — which only means anything where that component has stopped
+	// being there. Measured the same day with the shell in `…/d/s`, `d`
+	// renamed to `e`, and a *different* `d` made at the old name with a file
+	// in it:
+	//
+	//	         cd ..   $PWD    what `*` lists
+	//	bash     0       …/e     s
+	//	zsh      0       …/e     s
+	//	ksh93    0       …/d     IMPOSTOR
+	//	dash     0       …/d     IMPOSTOR
+	//	ash      0       …/d     IMPOSTOR
+	//
+	// So ksh93 refuses `cd nosuch/..` with bash and zsh and walks into the
+	// impostor with dash and ash: it looks at a `..` inside the operand and
+	// cancels one that climbs into `$PWD` unseen. `cd ./..` is the same row
+	// with a `.` in front of it, so what decides is the component the `..`
+	// reaches rather than what the operand starts with.
+	//
+	// The ksh93 rows above were read on **both** builds: `/bin/ksh`, AT&T's
+	// 93u+ of 2012 on this Mac, and `ksh93u+m 1.0.10-7` from Debian sid in a
+	// container, which is the maintained lineage. They agree on every row
+	// above, so this is the shell rather than the fork.
+	//
+	// **Deeper operands in the renamed fixture are where the two ksh builds
+	// part, and none of them is modeled.** `cd nosuch/../..` there is 1 on
+	// the 2012 build and 0 on 1.0.10, and `cd real/..` is 1 on both where
+	// this shell answers 0 — that last one for the same reason it did before
+	// this axis existed, since the retry from the held descriptor arrives
+	// whatever the operand was. Those rows are ksh's alone and are left to
+	// #4628, which is about the same column's `-P`.
+	//
+	// **The looking is a stat of the component and not a walk through it.**
+	// Measured the same day with a directory at mode 500 and one at mode 000:
+	// `cd noexec/../b` is 0 in bash and zsh either way, so neither needs to
+	// traverse what it is canceling. ksh93 is stricter — it refuses the mode
+	// 000 row with `Permission denied` — which is a narrower reading of the
+	// same answer and is not modeled here; every row of the tables above is
+	// unaffected by it.
+	//
+	// It is asked only where a `..` is present, so an ordinary `cd` puts no
+	// question, and it is not asked under `-P` at all: there the whole path is
+	// walked with its `..` in place and the panel is unanimous.
+	//
+	// The `/nosuch/..` row is one mechanism and not a second question, and it
+	// is the row this shell used to answer *both* ways: an absolute operand
+	// went to the kernel with its `..` intact and was refused, and a relative
+	// one was cleaned first and accepted — so our dash refused where dash
+	// accepts and our bash accepted where bash refuses, on one construct
+	// (#4627).
+	//
+	// And the second table is the whole of #4668: a shell that looks at the
+	// `$PWD` component finds it gone, falls through to
+	// CdDestinationIsNotThere, and follows the directory it is *holding* into
+	// `…/e`. A shell that cancels first arrives in the impostor, which is
+	// where three of the six mean to be.
+	CdCancelsADotDot CdDotDotCancellationPolicy
+
 	// CdDashPrintsTheDirectory writes the new directory when `cd -` moves.
 	// True in bash, dash and ksh93; zsh alone is silent.
 	CdDashPrintsTheDirectory Answer
@@ -26641,6 +26736,15 @@ const (
 // wrong one for a runtime.
 func PosixSemantics() Semantics {
 	return Semantics{
+		// A `..` is canceled against the component in front of it without
+		// either being looked at. XCU's own algorithm for `cd` builds
+		// `curpath` and then removes each `..` together with the component
+		// before it, with nothing said about whether that component exists —
+		// and the two columns that stay closest to the standard do exactly
+		// that. Answered here for CoreSemantics' reason: the question is put
+		// to every `cd` whose operand holds a `..`.
+		// See Semantics.CdCancelsADotDot.
+		CdCancelsADotDot:    CdDotDotCanceledUnseen,
 		SplitParamExpansion: Yes,
 		// `cd` refuses when the path it built is not there. XCU's own
 		// algorithm builds `curpath` from `$PWD` and the operand and then
@@ -28185,6 +28289,13 @@ func PosixSemantics() Semantics {
 // line rather than one per axis.
 func CoreSemantics() Semantics {
 	return Semantics{
+		// A `..` is canceled unseen, which is what this package did before
+		// the axis existed. Answered here rather than left to refuse because
+		// the question is put to every `cd` whose operand holds a `..` — a
+		// substrate that refused would be refusing `cd ..` — and because two
+		// of the six columns keep this answer. The other four are on the axis
+		// and say so themselves. See Semantics.CdCancelsADotDot.
+		CdCancelsADotDot:         CdDotDotCanceledUnseen,
 		SplitCommandSubstitution: Yes,
 		// `cd` says what the operating system said when the path it built is
 		// not there, and moves nowhere. Answered here rather than left to
@@ -31189,6 +31300,57 @@ func (d CoprocEndDisposal) String() string {
 		return "both ends go"
 	}
 	return "both ends survive"
+}
+
+// CdDotDotCancellationPolicy is whether `cd` looks at the component a `..`
+// cancels, and at which of them — see [Semantics.CdCancelsADotDot] for the
+// measurements.
+type CdDotDotCancellationPolicy int
+
+const (
+	// CdDotDotCancellationUnspecified is no answer.
+	//
+	// It reads as Unseen rather than refusing, which is what the two presets
+	// answer in as many words and for the same reason CdDestinationIsNotThere
+	// is answered there: the question is put to every `cd` whose operand
+	// holds a `..`, so a substrate that refused would be refusing `cd ..`.
+	CdDotDotCancellationUnspecified CdDotDotCancellationPolicy = iota
+	// CdDotDotCanceledUnseen takes the `..` and the component in front of it
+	// out of the path without asking the filesystem about either: dash and
+	// BusyBox ash.
+	CdDotDotCanceledUnseen
+	// CdDotDotLooksAtEveryCanceledComponent requires every component a `..`
+	// cancels to be a directory, whether it came from the operand or from the
+	// directory the shell is already in: bash 5.3, bash 3.2 and zsh.
+	CdDotDotLooksAtEveryCanceledComponent
+	// CdDotDotLooksWithinTheOperand requires a component *of the operand* to
+	// be a directory and cancels one belonging to `$PWD` unseen: ksh93, in
+	// both the 2012 build and the maintained 93u+m.
+	CdDotDotLooksWithinTheOperand
+)
+
+func (p CdDotDotCancellationPolicy) String() string {
+	switch p {
+	case CdDotDotCanceledUnseen:
+		return "canceled unseen"
+	case CdDotDotLooksAtEveryCanceledComponent:
+		return "every canceled component is looked at"
+	case CdDotDotLooksWithinTheOperand:
+		return "a canceled component of the operand is looked at"
+	}
+	return "unspecified"
+}
+
+// cdCancelsADotDot is the axis with its unspecified reading applied.
+//
+// No diagnostic and no refusal: the two presets answer it, so an unanswered
+// value here is a Semantics somebody built by hand, and the answer it gets is
+// the one this package gave before the axis existed.
+func (r *Runner) cdCancelsADotDot() CdDotDotCancellationPolicy {
+	if p := r.sem().CdCancelsADotDot; p != CdDotDotCancellationUnspecified {
+		return p
+	}
+	return CdDotDotCanceledUnseen
 }
 
 // CdDestinationNotTherePolicy is what `cd` does when the path it built is not

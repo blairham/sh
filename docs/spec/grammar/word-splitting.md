@@ -431,8 +431,8 @@ in bash, ksh93 and dash: the null a leading separator writes is kept, where
 the null an empty element makes is not. Only where the list is joined before
 it is split — `Semantics.UnquotedListJoinsOnIFS`, below — is there no element
 left to be empty, and then every null is the splitter's: `IFS=:; set -- ''
-c; $@` is `[][c]` in the column that joins and `[c]` in the three that do
-not.
+c; $@` is `[][c]` in the two columns that join, bash and zsh, and `[c]` in
+ksh93 and dash, which do not.
 
 **The removal is the word's and not the expansion's**, because what decides
 it is what reaches the field afterwards. It therefore happens once, at the
@@ -834,8 +834,9 @@ error in the other three:
 | `SplitParamExpansion` | yes | yes | yes | **no** | unanswered |
 | `SplitCommandSubstitution` | yes | yes | yes | yes | **yes** |
 | `EmptyQuotesAfterASeparatorAreAField` | yes | yes | **no** | unreachable | yes |
-| `UnquotedListJoinsOnIFS` | no | **yes** | no | no | unanswered |
+| `UnquotedListJoinsOnIFS` | no | **yes** | no | **yes** | unanswered |
 | `UnquotedListBoundaryIsIFSWhitespace` | **yes** | no | no | no | unanswered |
+| `TrailingElementWithNoFieldLeavesOne` | no | no | **yes** | no | unanswered |
 
 Two axes rather than one, because the panel shows the two moving
 independently. Naming them for the behavior rather than for zsh is what

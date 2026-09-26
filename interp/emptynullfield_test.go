@@ -40,6 +40,12 @@ func nullFieldRun(t *testing.T, src string, split, join Answer) (string, int) {
 		// So that `$a` and `${a[@]}` are the same question here too.
 		s.ArrayNameWithoutSubscriptIsTheList = Yes
 		s.UnquotedListJoinsOnIFS = join
+		// And the last element's own field, answered the way five of the
+		// six columns answer it: ksh93 alone leaves a field where the last
+		// element produced none, which is a question of its own and pinning
+		// it here is what keeps a row about something else from moving when
+		// that one is answered. See TrailingElementWithNoFieldLeavesOne.
+		s.TrailingElementWithNoFieldLeavesOne = No
 	})
 }
 

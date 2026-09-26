@@ -200,6 +200,7 @@ func TestSemantics(t *testing.T) {
 		{"UnrunSimpleCommandReadsItsWords", s.UnrunSimpleCommandReadsItsWords, interp.Yes},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.Yes},
 		{"UnquotedListBoundaryIsIFSWhitespace", s.UnquotedListBoundaryIsIFSWhitespace, interp.No},
+		{"TrailingElementWithNoFieldLeavesOne", s.TrailingElementWithNoFieldLeavesOne, interp.No},
 		// And the join this shell does perform: an unquoted `@` list
 		// reaching a context that keeps no fields joins on the first
 		// character of IFS, so `IFS=-; a=(x y z); v=${a[@]}` is `x-y-z`

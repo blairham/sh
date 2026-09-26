@@ -140,6 +140,12 @@ func blankEdgeRun(t *testing.T, src string, join, trailing Answer) (string, int)
 		s.ArrayNameWithoutSubscriptIsTheList = Yes
 		s.UnquotedListJoinsOnIFS = join
 		s.TrailingSeparatorEndsAField = trailing
+		// And the last element's own field, answered the way five of the
+		// six columns answer it: ksh93 alone leaves a field where the last
+		// element produced none, which is a question of its own and pinning
+		// it here is what keeps a row about something else from moving when
+		// that one is answered. See TrailingElementWithNoFieldLeavesOne.
+		s.TrailingElementWithNoFieldLeavesOne = No
 	})
 }
 

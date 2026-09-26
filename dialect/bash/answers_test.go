@@ -113,6 +113,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"UnrunNegationInvertsTheStatus", s.UnrunNegationInvertsTheStatus, interp.No},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.Yes},
 		{"UnquotedListBoundaryIsIFSWhitespace", s.UnquotedListBoundaryIsIFSWhitespace, interp.No},
+		{"TrailingElementWithNoFieldLeavesOne", s.TrailingElementWithNoFieldLeavesOne, interp.No},
 		// The other join, and the opposite answer: an unquoted `@` list
 		// reaching a context that keeps no fields is rejoined on a hard
 		// space here — `IFS=-; a=(x y z); v=${a[@]}` is `x y z`, against

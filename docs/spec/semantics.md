@@ -29005,18 +29005,47 @@ modeled: `set -x; a=([2]=c [0]=a)` is `+ a[2]=c` and `+ a[0]=a` in ksh93,
 one line per element, and `typeset -A m=([k]=v)` is `+ m[k]=v` then
 `+ typeset -A m`. See #2866.
 
+**`TrailingElementWithNoFieldLeavesOne`** — bash no · dash no · ksh93 yes · zsh no
+
+Makes the *last* element of an unquoted list leave an empty field behind
+when it produced none of its own — an element whose value is empty, or
+whose value is nothing but separators — provided an element stands in
+front of it. ksh93 alone.
+
+    IFS=:; set -- 2 ''      → ksh93 2 [2][]   bash/dash 1 [2]
+    IFS=:; set -- '' ''     → ksh93 1 []      bash 1 []   dash 0
+    IFS=:; set -- '' '' ''  → ksh93 1 []      bash 2 [][] dash 0
+    set -- '' ''            → ksh93 1 []      everybody else 0
+
+It is not a question about a non-whitespace `IFS`, which the fourth row
+says: the same one field appears with `IFS` left alone, where nothing
+else in this family is reachable. bash reaches the first row by its join
+instead, and the second and third are where the two part — a join gives
+a field per separator and this gives one whatever the count. The second
+noun is the one that gets dropped: a list of a *single* element that
+makes no field leaves none in every column, ksh93 included.
+
 **`TraceShowsItsOwnDisabling`** — bash yes · dash yes · ksh93 no · zsh yes
 
 Prints `set +x` before acting on it. True in dash, bash and zsh; ksh93
 applies the change first, so the command that stops tracing leaves no
 trace of itself.
 
-**`UnquotedListJoinsOnIFS`** — bash yes · dash no · ksh93 no · zsh no
+**`UnquotedListJoinsOnIFS`** — bash yes · dash no · ksh93 no · zsh yes
 
 Makes an unquoted list expansion one string first — the elements joined
 on the *first character* of `IFS` — and splits that, rather than
-splitting each element on its own. bash, bash 3.2 and bash as `sh` join;
-zsh, ksh93 and dash do not.
+splitting each element on its own. bash, bash 3.2, bash as `sh` and zsh
+join; ksh93 and dash do not.
+
+zsh's `yes` was a `no` until #4586, and the measurement behind that was
+taken with `shwordsplit` off — the one state in which zsh splits no list
+at all, so the probe reported what a shell that splits nothing prints.
+With the option on, `IFS=:; set -- x "" y; printf '[%s]' $*` is
+`[x][][y]` there, which is bash's answer. The discriminating rows are a
+list of nothing but empty elements: one is *no* field and two are *two*,
+which splitting each element on its own cannot produce either way. zsh
+and bash then part on `TrailingSeparatorEndsAField` alone.
 
 The two readings agree under a whitespace `IFS`, which is what made the
 difference easy to miss and what keeps a plain `for f in $@` from

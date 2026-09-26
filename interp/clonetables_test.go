@@ -370,6 +370,7 @@ func seedTables(r *Runner) {
 	r.lowered = map[string]bool{"seed": true}
 	r.mathFuncs = map[string]mathFunc{"seed": {}}
 	r.precommands = map[string]PrecommandModifier{"seed": PrecommandNoGlob}
+	r.commandWordModifiers = map[string]bool{"seed": true}
 	r.optionLetterNames = map[rune]string{'Z': "seed"}
 	r.dialectCompgen = map[string]func(*Runner, string) []string{"seed": nil}
 	r.preludeFuncs = map[string]*syntax.FuncDecl{"seed": nil}

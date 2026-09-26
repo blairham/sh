@@ -195,6 +195,50 @@ type Semantics struct {
 	// only where they differ.
 	UnquotedListBoundaryIsIFSWhitespace Answer
 
+	// TrailingElementWithNoFieldLeavesOne makes the *last* element of an
+	// unquoted list leave an empty field behind when it produced none of its
+	// own — an element whose value is empty, or whose value is nothing but
+	// separators — provided an element stands in front of it.
+	//
+	// True in ksh93 alone; false in bash, bash 3.2, bash as `sh`, zsh, dash
+	// and BusyBox ash. Measured 2026-09-26 against /bin/ksh
+	// `Version AJM 93u+ 2012-08-01`, /opt/homebrew/bin/bash 5.3.20,
+	// /bin/dash 0.5.12 and /opt/homebrew/bin/zsh 5.9.2 under `shwordsplit`,
+	// with `w(){ printf '%d |' $#; for x in "$@"; do printf ' [%s]' "$x";
+	// done; }`:
+	//
+	//	written                       ksh93        bash     zsh      dash
+	//	IFS=:; set -- 2 '';   w $@    2 [2] []     1 [2]    2 [2] [] 1 [2]
+	//	IFS=:; set -- '' '';  w $@    1 []         1 []     2 [] []  0
+	//	IFS=:; set -- '' '' ''; w $@  1 []         2 [] []  3 …      0
+	//	IFS=:; set -- '' 2;   w $@    1 [2]        2 [] [2] 2 [] [2] 1 [2]
+	//	IFS=:; set -- b '' c; w $@    2 [b] [c]    3 …      3 …      2 [b] [c]
+	//	set -- 2 ' ';         w $@    2 [2] []     1 [2]    1 [2]    1 [2]
+	//	set -- ' ' ' ';       w $@    1 []         0        0        0
+	//	set -- '' '';         w $@    1 []         0        0        0
+	//	IFS=:; set -- '';     w $@    0            0        0        0
+	//	set -- ' ';           w $@    0            0        0        0
+	//
+	// **It is not a question about a non-whitespace IFS**, which the sixth,
+	// seventh and eighth rows say: the same one field appears with `IFS`
+	// left alone, where nothing else in this family is reachable. bash and
+	// zsh reach the first row by the join and TrailingSeparatorEndsAField
+	// instead — `2:` with a closing separator — and the second and third
+	// rows are where those two part from this one, since a join gives a
+	// field per separator and this gives one whatever the count.
+	//
+	// **The rule is a sentence with two nouns and the second is the one that
+	// gets dropped: the *last* element, and only where something is in front
+	// of it.** The last two rows are what hold it: one element that makes no
+	// field leaves none, so a rule about "an element that makes no field" is
+	// wrong about them and right about everything above.
+	//
+	// Asked only where the two readings differ, which needs a last element
+	// that produced no field at all — an element the splitter wrote a field
+	// for is already one, so `IFS=:; set -- 2 ':'` is `[2] []` in every
+	// column and asks nothing. See Runner.splitEachElement.
+	TrailingElementWithNoFieldLeavesOne Answer
+
 	// UnsplitAtListJoinsOnIFS decides the character an unquoted list spelled
 	// `@` is joined with when it reaches a context that keeps no fields: the
 	// first character of IFS, or a hard space.
@@ -26478,6 +26522,7 @@ func PosixSemantics() Semantics {
 		// the standard's reading is the hard break — and dash and BusyBox
 		// ash, the two columns that target this text, are the departures.
 		UnquotedListBoundaryIsIFSWhitespace: No,
+		TrailingElementWithNoFieldLeavesOne: No,
 		// 2.9.2 gives a pipeline's `!` the logical NOT of the status of the
 		// pipeline it ran, and 2.8.2 makes the shell's own exit status the
 		// one the last command executed reported — or zero where none was.

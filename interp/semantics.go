@@ -2526,6 +2526,43 @@ type Semantics struct {
 	// one mistake, and the second names a file nobody wrote.
 	RedirectTargetExpandsInTheCommandsProcess Answer
 
+	// RedirectTargetOnASubshellExpandsInTheSubshell is the same claim for a
+	// `( … )`, and it is a second axis because it is a second split.
+	//
+	// A real shell forks for parentheses, so the question is the one above —
+	// and the panel does not answer it the same way. Measured 2026-09-26,
+	// `env -i PATH=/usr/bin:/bin` with a scratch HOME, over a script file,
+	// against bash 5.3.20, zsh 5.9.2 under `-f`, ksh93u+ 2012-08-01, dash
+	// 0.5.12 and BusyBox v1.37.0 in the pinned alpine image:
+	//
+	//	`> "${u:=made}"` on …       bash  zsh  ksh93  dash  ash
+	//	cat /dev/null   a command   gone gone   gone  KEPT  KEPT
+	//	( : )           a subshell  gone gone   KEPT  KEPT  KEPT
+	//
+	// ksh93 is the row that makes this an axis of its own: it confines the
+	// write a *command's* target makes and keeps the one a subshell's makes,
+	// so one field cannot say both. What is inside the parentheses is beside
+	// the point — an external command, two commands and an assignment all
+	// answer alike, and `( v=1 )` still confines `v` in ksh93 while keeping
+	// `u`, so what escapes is the redirection's word and not the subshell's
+	// state.
+	//
+	// The failure side follows the same answer, as it does above: yes means
+	// the word was expanded somewhere that is not this shell, so a failure in
+	// it costs the parentheses and the script carries on — `( echo RAN ) >
+	// $(( 1/0 ))` writes one line, is caught by `||`, leaves 1 behind and
+	// runs the rest of its own line in bash and zsh. No hands the failure to
+	// [Semantics.RedirectTargetFailureIsTheRedirections], which is the same
+	// question asked of a command this shell runs itself: ksh93 grades it as
+	// the redirection's and carries on, dash and BusyBox ash grade it as a
+	// failed expansion of their own and end the script at 2.
+	//
+	// Asked only where the parentheses carry a redirection *and* the target
+	// either wrote something or failed, which is the rule the axis above is
+	// asked by: a subshell redirected to a plain name is every other
+	// subshell and the shells agree about it.
+	RedirectTargetOnASubshellExpandsInTheSubshell Answer
+
 	// HeredocBodyFailureIsTheRedirections says whose failure a here-document
 	// body that **will not expand** is, where the command it feeds is one the
 	// shell runs itself.

@@ -117,7 +117,18 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 	// is a copy rather than a forked process, which is honest for everything
 	// the corpus asks and would not be for a background job or a trap; those
 	// are not here yet.
-	return r.withRedirs(ctx, c.Redirs, func() error {
+	//
+	// The copy is taken *inside* the body, so the parentheses' own
+	// redirections are opened out here — which is where they have to be
+	// opened, since a real shell opens them in the child it has already
+	// forked and there is no child here to open them in. What that costs is
+	// the word the redirection is aimed at: this shell expanded it, so a
+	// write in it escaped and a failure in it was this shell's, and `(
+	// echo RAN ) > $(( 1/0 ))` ended the script where three of the five
+	// columns carry on. Naming the owner is how the parentheses get an
+	// answer of their own without a fork — see redirOwnerASubshell and
+	// Semantics.RedirectTargetOnASubshellExpandsInTheSubshell (#4695).
+	return r.withRedirsOwnedBy(ctx, c.Redirs, redirOwnerASubshell, func() error {
 		sub := r.clone()
 		// How far a `break` inside the parentheses can reach is the
 		// subshell's question, asked at the `break` — see

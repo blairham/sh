@@ -1863,6 +1863,10 @@ func Semantics() interp.Semantics {
 	// `u` set.
 	s.HeredocExpandsInTheCommandsProcess = interp.No
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.No
+	// And a subshell's target with it: `( : ) > "${u:=made}"` leaves `u`
+	// set, and `( echo RAN ) > $(( 1/0 ))` ends the script at 2. Measured in
+	// the pinned 1.37.0 image, 2026-09-26 (#4695).
+	s.RedirectTargetOnASubshellExpandsInTheSubshell = interp.No
 	// A *target* this shell expanded itself and could not is this shell's
 	// own failed expansion and ends it at 2, on every command shape, where a
 	// failed *open* leaves `read x < /nonexistent/f` alive at 1. The answer

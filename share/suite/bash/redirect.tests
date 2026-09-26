@@ -93,3 +93,46 @@ say 'braces making several words, with nothing failing'
 # reads 1.
 say 'the reach'
 ( echo RAN > $(( 1/0 )); echo SAME ); echo "after st=$?"
+
+# --- a subshell's failed redirection target ---------------------------------
+#
+# This column reads "already right" on the coarse question — the script is
+# alive on the next line either way — and it was not. `( … )` is a process of
+# its own here, so a target that will not expand costs the parentheses: the
+# rest of the *same line* runs and `||` catches it, where a group with the
+# same target gives up the line and `||` never sees it.
+#
+# So `||` is a column of its own rather than a restatement of the reach, and
+# the marker goes after a `;` on the redirection's own line: one on the next
+# line is printed by both readings (#4695).
+
+sub_zz() { printf -- '--- %s\n' "$1"; }
+
+sub_zz 'a subshell: the rest of its own line runs'
+( ( echo RAN ) > $(( 1/0 )) ; echo SAME ) 2>/dev/null
+printf 'after st=%s\n' "$?"
+
+sub_zz 'a group: the rest of its line is given up'
+( { echo RAN; } > $(( 1/0 )) ; echo SAME ) 2>/dev/null
+printf 'after st=%s\n' "$?"
+
+sub_zz 'a subshell: || catches it'
+( ( echo RAN ) > $(( 1/0 )) || echo CAUGHT ) 2>/dev/null
+
+sub_zz 'a group: || never sees it'
+( { echo RAN; } > $(( 1/0 )) || echo CAUGHT ) 2>/dev/null
+
+sub_zz 'a subshell inside a function: the body carries on'
+g_zz() { ( echo RAN ) > $(( 1/0 )); printf 'in the function\n'; }
+( g_zz ) 2>/dev/null
+printf 'after st=%s\n' "$?"
+
+sub_zz 'the write the target made is confined'
+unset u_zz
+( ( : ) > "${u_zz:=made}" ) 2>/dev/null
+printf 'u=[%s]\n' "${u_zz-unset}"
+
+sub_zz 'while a group keeps it'
+unset u_zz
+{ : ; } > "${u_zz:=made}"
+printf 'u=[%s]\n' "${u_zz-unset}"

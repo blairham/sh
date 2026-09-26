@@ -31,7 +31,7 @@ import (
 // File redirections, descriptor duplication, here-strings and here-document
 // bodies are all here; what the shell cannot express is refused rather than
 // ignored.
-func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound, ownProcess bool) ([]io.Closer, error) {
+func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound bool, owner redirOwner) ([]io.Closer, error) {
 	// Whose process these redirections are for, saved and put back rather
 	// than cleared, so a command reached from inside a here-document body
 	// cannot leave its own answer behind for the next redirection in this
@@ -44,9 +44,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	// goes through clone(), which copies this field by value and cannot
 	// write back. Restoring costs one word and is what keeps that true of a
 	// site that one day does not clone.
-	outerOwn := r.redirForOwnProcess
-	r.redirForOwnProcess = ownProcess
-	defer func() { r.redirForOwnProcess = outerOwn }()
+	outerOwn := r.redirOwner
+	r.redirOwner = owner
+	defer func() { r.redirOwner = outerOwn }()
 	r.redirErr = false
 	// Beside redirErr because it is the same flag's number: a failure with a
 	// status of its own is only ever this command's.
@@ -1445,7 +1445,13 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 		}
 		defer func() { r.inBodyReadAtExpansion, r.expansionBodyLine = was, wasLine }()
 	}
-	if !r.redirForOwnProcess {
+	// Asked of the command's own process and not of a subshell's
+	// parentheses, which leaves today's answer exactly where it was: a
+	// subshell's *body* is expanded in this shell here, where bash, zsh,
+	// dash and BusyBox ash confine it and ksh93 keeps it. That row is its
+	// own measurement and its own defect (#4700), and moving it from the
+	// target's change would be two facts in one commit.
+	if r.redirOwner != redirOwnerTheCommand {
 		// The shell runs this command itself, so the body is expanded here
 		// and a failure in it is this shell's to place. See
 		// heredocbodyfailure.go, which holds the panel for that.

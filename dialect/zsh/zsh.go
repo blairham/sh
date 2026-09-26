@@ -2500,6 +2500,12 @@ func Semantics() interp.Semantics {
 	s.StoreRefusalThroughPrintfLeavesZero = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
+	// And a subshell's, which is where this shell had it wrong: `( : ) >
+	// "${u:=made}"` leaves `u` unset here, and `( echo RAN ) > $(( 1/0 ))`
+	// writes one line, is caught by `||`, leaves 1 behind and runs the rest
+	// of its own line, where a group with the same target ends the shell
+	// (#4695).
+	s.RedirectTargetOnASubshellExpandsInTheSubshell = interp.Yes
 	// A *target* this shell expanded itself and could not is this shell's
 	// own failed expansion rather than a failed redirection, which here is
 	// fatal whatever it was written on — where `: < /nonexistent/f` and

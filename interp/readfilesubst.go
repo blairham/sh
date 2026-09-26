@@ -102,7 +102,7 @@ func (r *Runner) readFileSubst(ctx context.Context, rd *syntax.Redirect, span sy
 	// would have let the previous command's failure travel through a
 	// substitution that succeeded.
 	sub.status = 0
-	closers, err := sub.applyRedirs(ctx, []*syntax.Redirect{rd}, false, false)
+	closers, err := sub.applyRedirs(ctx, []*syntax.Redirect{rd}, false, redirOwnerThisShell)
 	if err == nil && !sub.redirErr && !sub.unspecified {
 		// Before the closers run: the first of them puts the saved streams
 		// back and the rest close the file this is reading.

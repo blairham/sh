@@ -166,7 +166,7 @@ cd "$base/.."
 # an ordinary character": a shell doing the latter answers `*[a` with the file.
 # Each complaint goes to /dev/null and the row prints the status instead, since
 # the wording is each shell's own expression and the behavior is the question.
-bp=$(mktemp -d); cd "$bp"; : > '[a'; : > xa; : > 'x[a'
+rm -rf bp.tmp; mkdir bp.tmp; cd bp.tmp; : > '[a'; : > xa; : > 'x[a'
 
 ( unsetopt badpattern; print -rn -- [a )    2> /dev/null; printf '  off [a    %s\n' "$?"
 ( setopt badpattern;   print -rn -- [a )    2> /dev/null; printf '  on  [a    %s\n' "$?"
@@ -213,4 +213,4 @@ printf '  off nullglob zz*   %s\n' "$?"
 ( emulate ksh; [[ -o badpattern ]] || print 'emulate ksh: off' )
 ( unsetopt badpattern; [[ -o badpattern ]] || print 'inner: off' )
 [[ -o badpattern ]] && print 'outer: still on'
-cd /; rm -rf "$bp"
+cd ..; rm -rf bp.tmp

@@ -186,13 +186,15 @@ func (r *Runner) inheritJobs(kind jobBoundary) {
 	if len(r.jobs) == 0 {
 		return
 	}
-	// Read before the boundary is looked at, because one answer is not about
-	// the boundary at all and covers a `&` body along with the rest. See
-	// SubshellJobsKeptUnderTheMonitor, which measured the unanimity the
-	// early return below rests on and found it was a fact about the shells
-	// whose monitor was off.
-	table := r.subshellJobTable()
-	if table == SubshellJobsKeptUnderTheMonitor {
+	// The field rather than the accessor, and only to ask whether this is the
+	// one answer that has something to say about a `&` body. The accessor
+	// *complains* where the axis is unanswered, and asking it here would
+	// raise that complaint at a boundary the axis has never been consulted
+	// at — which is every background job in a shell that has not chosen. See
+	// SubshellJobsKeptUnderTheMonitor, which measured the unanimity the early
+	// return below rests on and found it was a fact about the shells whose
+	// monitor was off, so the one shell that moves has to be let past it.
+	if r.sem().SubshellJobTable == SubshellJobsKeptUnderTheMonitor {
 		if r.monitor {
 			r.jobsInherited = true
 			return
@@ -204,7 +206,7 @@ func (r *Runner) inheritJobs(kind jobBoundary) {
 		r.jobs, r.jobOrder = nil, nil
 		return
 	}
-	switch table {
+	switch r.subshellJobTable() {
 	case SubshellJobsKept:
 	case SubshellJobsKeptOutsideACompound:
 		if kind == jobBoundaryCompound {

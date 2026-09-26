@@ -120,3 +120,33 @@ func TestASubshellStopsListingThemWhenTheMonitorGoesOff(t *testing.T) {
 			smoke.Readable(smoke.LastLines(beside, 8)))
 	}
 }
+
+// A subshell that ends does not hold its exit for the jobs it can only look
+// at, and does not warn about them.
+//
+// The table a subshell inherits holds nothing it would abandon, so there is
+// nothing to stay for. Measured at a `-fiV +Z` session of zsh 5.9.2 with a
+// running job: `(exit 42)` answers 42 and says nothing at all, where an
+// `exit` typed on the line outside says `you have running jobs.` first.
+//
+// It is here because the inheritance made it reachable. `HoldsExitForJobs`
+// reads the table, and a subshell holding the session's jobs is a shell with
+// jobs as far as that reading goes — so an `(exit N)`, which is how
+// `internal/promptfidelity` pins a status, wrote the session's warning from
+// inside the parentheses.
+func TestASubshellDoesNotHoldItsExitForTheSessionsJobs(t *testing.T) {
+	control, screen := jobNoticeSession(t)
+	jobNoticeType(t, control, screen, "fence="+subshellJobsFence)
+	jobNoticeType(t, control, screen, "/bin/sleep 3 &")
+
+	drawn := jobNoticeAfter(t, control, screen,
+		`(exit 42); print "<${fence}:$?>"`, "<"+subshellJobsFence+":")
+	if !strings.Contains(drawn, "<"+subshellJobsFence+":42>") {
+		t.Errorf("the subshell's status did not come back as 42:\n%s",
+			smoke.Readable(smoke.LastLines(drawn, 8)))
+	}
+	if strings.Contains(drawn, "running jobs") {
+		t.Errorf("the subshell warned about the session's jobs:\n%s",
+			smoke.Readable(smoke.LastLines(drawn, 8)))
+	}
+}

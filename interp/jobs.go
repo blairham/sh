@@ -1846,6 +1846,17 @@ func (r *Runner) HoldsExitForJobs() bool {
 	if !r.JobControl || r.toldOfJobsAtExit {
 		return false
 	}
+	// A table that is entirely the parent's holds nothing this shell would
+	// abandon, so there is nothing to warn about and nothing to stay for.
+	// Measured 2026-09-25 at a `-fiV +Z` session of zsh 5.9.2 with a running
+	// job: `(exit 42)` answers 42 and says nothing, where `exit` on the line
+	// outside says `you have running jobs.` first. Without this line an
+	// `(exit N)` inside a session with jobs wrote that sentence from the
+	// subshell — found by internal/promptfidelity, whose one pinning line
+	// ends in exactly that construct. See Runner.jobsInherited.
+	if r.jobsInherited {
+		return false
+	}
 	stopped, running := false, false
 	for _, j := range r.jobs {
 		switch {

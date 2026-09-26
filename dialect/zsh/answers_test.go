@@ -157,7 +157,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.StatusArgument, interp.StatusArgArithmetic; got != want {
 		t.Errorf("StatusArgument = %v, want %v", got, want)
 	}
-	if got, want := s.SubshellJobTable, interp.SubshellJobsCleared; got != want {
+	if got, want := s.SubshellJobTable, interp.SubshellJobsKeptUnderTheMonitor; got != want {
 		t.Errorf("SubshellJobTable = %v, want %v", got, want)
 	}
 	// `$!` before any background command, which is a form rather than a pair

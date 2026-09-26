@@ -7,7 +7,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -71,17 +70,30 @@ func TestAWidgetReadsTheHistoryTableAtAPrompt(t *testing.T) {
 	widgetType(t, control, screen, "echo AAA")
 	widgetType(t, control, screen, "echo BBB")
 
-	before := screen.Text()
 	if _, err := control.WriteString("\a"); err != nil {
 		t.Fatalf("pressing ^G: %v", err)
 	}
-	if err := screen.Await("WIDGET count=", widgetBudget); err != nil {
-		t.Fatalf("the widget wrote nothing:\n%s", smoke.Readable(smoke.LastLines(screen.Text(), 8)))
-	}
-	drawn := strings.TrimPrefix(screen.Text(), before)
-	want := "WIDGET count=5 newest=echo BBB keys=5 4 3 2 1"
-	if !strings.Contains(drawn, want) {
-		t.Fatalf("the widget's reading is not %q:\n%s", want,
+	// The wait is on the **whole** asserted line rather than on a prefix of
+	// it, and the wait is the assertion rather than a gate in front of one.
+	//
+	// It waited on `WIDGET count=` and then asserted on the whole line until
+	// #4579. That is a wait on a strict prefix of what is read afterwards: a
+	// read that carried only the first half of the row would satisfy it, and
+	// the assertion would then grade a screen the rest of the row had not
+	// reached — "not written" and "not read yet" told apart by luck, which is
+	// the shape #4579 is about one file over. It is not reachable today,
+	// because the widget prints the row in a single write of forty-five bytes
+	// and the reader's buffer is 4096, so nothing splits it; awaiting the
+	// whole row costs nothing and removes the question rather than recording
+	// it as a hazard somebody has to remember.
+	//
+	// Seek moves a cursor, so this is "written since the last wait" rather
+	// than "somewhere on the screen": the line that *defines* the widget
+	// carries the words `WIDGET count=` too, and it was echoed back before
+	// the prompt this session last waited on.
+	const want = "WIDGET count=5 newest=echo BBB keys=5 4 3 2 1"
+	if err := screen.Await(want, widgetBudget); err != nil {
+		t.Fatalf("the widget's reading is not %q: %v\n%s", want, err,
 			smoke.Readable(smoke.LastLines(screen.Text(), 8)))
 	}
 }

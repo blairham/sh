@@ -139,6 +139,18 @@ var frontRows = []struct {
 	// `(not x) and ""` and not the negation of `x -a ""`.
 	{`test ! x -a ""`, 1, ""},
 	{`test ! -Q x y`, 2, "x: unknown operator"},
+
+	// Two negations in front of one word are the one-argument rule twice
+	// over, which is that word's own truth. Every one of these answered
+	// `!: unknown operator` at 2 until #4434's ksh93 triage found the first
+	// of them in core/test.tests — the one row of twenty that was this shell
+	// and not the reference build.
+	{`test ! ! ""`, 1, ""},
+	{`test ! ! x`, 0, ""},
+	{`test ! ! !`, 0, ""},
+	{`test ! ! =`, 0, ""},
+	{`test ! ! \(`, 0, ""},
+	{`test ! ! -n x`, 0, ""},
 }
 
 func TestOneExpressionIsReadOffTheFrontOfTheOperands(t *testing.T) {
@@ -184,5 +196,36 @@ func TestTheWholeListIsReadWithTheAxisTheOtherWay(t *testing.T) {
 	// above, and one more of them agreeing tomorrow is not a regression.
 	if moved < 35 {
 		t.Errorf("%d of %d rows moved with the axis, want at least 35 — the table is not measuring the axis", moved, len(frontRows))
+	}
+}
+
+// TestTheInnerReadingUnderTwoNegationsIsThePlainOneArgumentRule is the row
+// that would have been guessed wrong, and it needs the `-t` axis answered the
+// way the column that has this reader answers it.
+//
+// A lone `-t` under that axis means `-t 1`, so `test ! -t` is 0 where there
+// is no terminal — and a three-word reading built as "negate the two-word
+// answer" would therefore make `test ! ! -t` 1. Measured under AT&T ksh93
+// 93u+ 2012-08-01 on 2026-09-26 it is 0, and so it is under bash 5.3.20,
+// zsh 5.9.2, dash and ksh93u+m 1.0.8: the shortcut is not taken at this
+// depth.
+//
+// The control is in the same function on purpose. Without it this is one
+// more passing row; with it, the pair says the two readings genuinely differ
+// and which one the shell takes.
+func TestTheInnerReadingUnderTwoNegationsIsThePlainOneArgumentRule(t *testing.T) {
+	bareT := func(r *Runner) {
+		frontReader(r)
+		s := *r.Semantics
+		s.BareTerminalTestIsDescriptorOne = Yes
+		r.Semantics = &s
+	}
+	if out, st := run(t, `test ! -t`, bareT); st != 0 || strings.TrimSpace(out) != "" {
+		t.Fatalf("the control moved: `test ! -t` = %d (%q), want 0 and silence — "+
+			"without it the row below cannot tell the two readings apart", st, out)
+	}
+	if out, st := run(t, `test ! ! -t`, bareT); st != 0 || strings.TrimSpace(out) != "" {
+		t.Errorf("`test ! ! -t` = %d (%q), want 0: the inner reading is the plain "+
+			"one-argument rule, not the `-t 1` shortcut negated", st, out)
 	}
 }

@@ -585,6 +585,11 @@ type Cross struct {
 	// second is a filing defect and the first is a typo, and printing `0/0`
 	// for either is the failure #4439 is about.
 	Held int
+	// Refs are the references the tier was checked with, each carrying the
+	// build it turned out to be. A split between reference shells is only
+	// readable beside the builds that produced it — see
+	// [IdentifyReferences].
+	Refs []Reference
 	// Split is the rest, by name. Naming them is the point: an unsplit
 	// report says a case is not core without saying which.
 	Split []CrossSplit
@@ -597,10 +602,51 @@ type Cross struct {
 }
 
 // Reference is a reference shell for the cross-check: a name to print and a
-// binary to run.
+// binary to run, and what build that binary turned out to be.
+//
+// The build is carried here rather than asked for per tier because it is a
+// property of the binary and the cross-check runs over two tiers and five
+// only-here checks: one probe per reference, not one per check.
 type Reference struct {
 	Name string
 	Path string
+	// Build is what the binary said it is, empty when it would not say.
+	Build Build
+	// Label and Why are [Suite.Lineage] over that build: `WRONG BUILD` or
+	// `UNIDENTIFIED` and the sentence beside it, both empty when the binary
+	// is the build its column names.
+	Label, Why string
+}
+
+// IdentifyReferences asks each reference what build it is and records whether
+// that is the build its column names.
+//
+// This is the half of #3480 the cross-check never had. Grading runs bash and
+// zsh inside digest-pinned images and prints a WRONG BUILD banner when a
+// column's reference is not the build the column claims; the cross-check runs
+// whatever binaries the machine has and printed nothing about them at all. So
+// a tier split it reported was unattributable — and that is not hypothetical:
+// #4432 filed three files as mis-tiered from a runner whose bash is 5.2.21
+// and whose ksh93 is the ksh93u+m fork, where two of the three splits are the
+// build and not the file.
+//
+// It cannot be fixed by pinning the way grading was. The cross-check compares
+// the references against *each other*, so they have to be in one place, and
+// no image holds bash 5.3, zsh 5.9.2, AT&T ksh93 93u+ 2012 and dash at once —
+// #3480 records that nobody packages that ksh93 at all. Naming the builds is
+// what is available, and it is enough to make the next split readable.
+func IdentifyReferences(ctx context.Context, refs []Reference) []Reference {
+	out := make([]Reference, len(refs))
+	for i, r := range refs {
+		out[i] = r
+		s, ok := findOursByName(r.Name)
+		if !ok {
+			continue
+		}
+		out[i].Build = s.Identify(ctx, r.Path)
+		out[i].Label, out[i].Why = s.Lineage(out[i].Build)
+	}
+	return out
 }
 
 // CrossCheck runs a tier's files under the reference shells that are supposed
@@ -616,6 +662,7 @@ func CrossCheck(ctx context.Context, root, name string, refs []Reference, opts O
 	for _, r := range refs {
 		cross.Shells = append(cross.Shells, r.Name)
 	}
+	cross.Refs = refs
 	dir := filepath.Join(root, name)
 	names, err := Files(dir, OurExt)
 	if err != nil {
@@ -785,6 +832,9 @@ type Own struct {
 	// Held is how many the tier holds before a -only selection narrowed it.
 	// See [Cross.Held].
 	Held int
+	// Refs are the references the tier was held against, with their builds.
+	// See [Cross.Refs].
+	Refs []Reference
 	// Shared are the rest, by name, with the references that matched.
 	Shared []OwnShare
 	// Unstable is a file a reference would not reproduce, which says nothing
@@ -823,6 +873,7 @@ func OnlyHere(ctx context.Context, root string, s Suite, refs []Reference, opts 
 	if err != nil {
 		return own, err
 	}
+	own.Refs = refs
 	own.Held = len(names)
 	if opts.Only != nil {
 		names = keep(names, opts.Only)

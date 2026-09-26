@@ -138,6 +138,25 @@ command -v /bin/ls; printf 'absolute path -> %s\n' "$?"
 # performing a prefix join rather than a path normalization. A shell that
 # cleaned would write a third thing, which is what this implementation did in
 # every dialect until #2931.
+#
+# **`none of them` is every reference this panel names, and the ksh93 lineage
+# parted over it.** Measured 2026-09-26 on one script under two builds:
+#
+#	command -v ./bin1/tool          93u+ 2012:  <cwd>/./bin1/tool
+#	                                93u+m 1.0.8: <cwd>/bin1/tool
+#	command -v ./bin1/../bin1/tool  93u+ 2012:  <cwd>/./bin1/../bin1/tool
+#	                                93u+m 1.0.8: <cwd>/bin1/tool
+#	command -v /bin/./ls            93u+ 2012:  /bin/./ls
+#	                                93u+m 1.0.8: /bin/ls
+#
+# AT&T 93u+ 2012-08-01 is the build this column is graded against and it joins
+# without normalizing, as bash, zsh and dash echo without resolving; ksh93u+m
+# normalizes. So a cross-check on a machine carrying the fork reports this file
+# as `not core: bash+zsh+dash ≠ ksh93`, which #4432 read as a filing defect. It
+# is the fork, and it is the same fact #3480 keeps this column report-only for.
+# The three rows stay here because they are the guard on #2931 — a shell that
+# cleaned would write a third thing, and a row weakened to accept the cleaning
+# would no longer catch it.
 case $(command -v ./bin1/tool) in
 *"./bin1/tool") printf 'keeps ./bin1/tool whole\n' ;;
 *) printf 'rewrote the operand\n' ;;

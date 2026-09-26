@@ -169,6 +169,30 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// last command a signal killed is a signal death out here too, and
 		// a pipeline substituting the status has to know that.
 		r.status, r.diedOfSig = sub.status, sub.diedOfSig
+		// And a signal that ended the *parentheses themselves* is a child
+		// this shell has to say something about, in the dialect that says
+		// anything about one. It is the same sentence an external command
+		// killed by a signal gets and the same questions decide it — see
+		// Runner.reportKilled, which is where `ReportsACommandKilledBySignal`
+		// and its three neighbors are asked — because a real shell's `( … )`
+		// *is* a child and there is nothing about this shape for a dialect to
+		// answer twice (#4649).
+		//
+		// `diedOfItsOwnSignal` and not `diedOfSig`, and the pair is the whole
+		// of the distinction: a signal that ended something the body *ran* is
+		// already reported in there and carried out here in the status, so
+		// reporting on `diedOfSig` would write `( /bin/sh -c … )` twice for
+		// the one death. Only a body that signaled itself — which is
+		// `$BASHPID` and `$sysparams[pid]`, the two ways a script can name it
+		// (see selfkillbody.go) — reaches this.
+		if sub.diedOfItsOwnSignal() {
+			// The group the body leads is its process id as far as anything
+			// that asked is concerned, and asking is how the script got the
+			// number it signaled — so it is already started and this starts
+			// nothing. See Runner.anchoredGroup.
+			pid, _ := sub.anchoredGroup()
+			r.reportKilled(sub.diedOfSig, pid)
+		}
 		// A fork this shell just waited for, which is where a coprocess that
 		// ended is noticed. See Runner.retireCoproc for the measurements.
 		r.retireCoproc()

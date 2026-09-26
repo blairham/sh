@@ -7,7 +7,9 @@ package bash_test
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -35,6 +37,14 @@ import (
 // SIGTERM alone, and the located form with the pid for everything else. What
 // was missing was the subshell reaching any of them.
 //
+// **The words for the signal are the host's and are not written down here.**
+// They differ by platform in two ways at once — Linux says `Hangup` where a
+// BSD says `Hangup: 1`, and SIGUSR1 is 10 there and 30 here — so what is
+// asserted is the shape those words sit in: which prefix the line carries,
+// where the command starts, and a status computed from the signal's own
+// number. TestTheStateColumnIsNineWideWithTwoSpacesAfterIt is the same
+// arrangement one surface along.
+//
 // SIGQUIT has no row below. It is 131 in the reference and 0 here, because an
 // untrapped SIGQUIT is ignored in a non-interactive shell and a body that
 // signals *itself* is evidently not covered by that — a separate defect from
@@ -42,35 +52,32 @@ import (
 // table above.
 func TestAForegroundSubshellKilledBySignalIsReported(t *testing.T) {
 	for _, tc := range []struct {
-		name, signal, state, status string
-		located                     bool
+		name    string
+		signal  string
+		number  syscall.Signal
+		located bool
 	}{
-		{name: "terminate is bare", signal: "TERM", state: "Terminated: 15", status: "st=143"},
-		{name: "a hangup is located", signal: "HUP", state: "Hangup: 1", status: "st=129", located: true},
-		{name: "a kill is located", signal: "KILL", state: "Killed: 9", status: "st=137", located: true},
+		{name: "terminate is bare", signal: "TERM", number: syscall.SIGTERM},
+		{name: "a hangup is located", signal: "HUP", number: syscall.SIGHUP, located: true},
+		{name: "a kill is located", signal: "KILL", number: syscall.SIGKILL, located: true},
 		{
 			name: "and a user signal is located", signal: "USR1",
-			state: "User defined signal 1: 30", status: "st=158", located: true,
+			number: syscall.SIGUSR1, located: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			src := "( kill -" + tc.signal + " $BASHPID )\necho \"st=$?\"\n"
-			got := runBashAnchored(t, src)
-			// The state column is 27 wide with the command straight after
-			// it, which is the shape TestACommandKilledBySignalIsReported
-			// already pins for an external command — asserted here whole,
-			// because the padding is the part a second writer of this
-			// sentence would get wrong.
-			want := tc.state + strings.Repeat(" ", 27-len(tc.state)) + "( kill -" + tc.signal + " $BASHPID )"
-			if !strings.Contains(got, want) {
-				t.Errorf("got %q, want a notice %q", got, want)
+			command := "( kill -" + tc.signal + " $BASHPID )"
+			got := runBashAnchored(t, command+"\necho \"st=$?\"\n")
+			if want := "st=" + strconv.Itoa(128+int(tc.number)); !strings.Contains(got, want) {
+				t.Errorf("got %q, want %q", got, want)
 			}
-			if !strings.Contains(got, tc.status) {
-				t.Errorf("got %q, want %q", got, tc.status)
-			}
-			located := regexp.MustCompile(`bash: line 1:\s+\d+ ` + regexp.QuoteMeta(tc.state))
-			if located.MatchString(got) != tc.located {
-				t.Errorf("got %q, want the located form: %v", got, tc.located)
+			line := killedNoticeLine(t, got, command)
+			located := regexp.MustCompile(`^bash: line 1:\s+\d+ `)
+			if where := located.FindString(line); (where != "") != tc.located {
+				t.Errorf("the notice is %q, want the located form: %v", line, tc.located)
+			} else if at := strings.Index(line[len(where):], command); at != killedStateColumn {
+				t.Errorf("the notice is %q: the command starts at %d, want %d",
+					line, at, killedStateColumn)
 			}
 		})
 	}
@@ -83,7 +90,24 @@ func TestAForegroundSubshellKilledBySignalIsReported(t *testing.T) {
 // announced it.
 func TestAForegroundSubshellInterruptedIsNotReported(t *testing.T) {
 	got := runBashAnchored(t, "( kill -INT $BASHPID )\necho \"st=$?\"\n")
-	if want := "st=130\n"; got != want {
+	if want := "st=" + strconv.Itoa(128+int(syscall.SIGINT)) + "\n"; got != want {
 		t.Errorf("got %q, want %q and nothing else", got, want)
 	}
+}
+
+// killedStateColumn is how wide the state column of a killed-command notice
+// is: the words for the signal, left-aligned, with the command straight after
+// them and no separator.
+const killedStateColumn = 27
+
+// killedNoticeLine is the one line of the output that is the notice.
+func killedNoticeLine(t *testing.T, got, command string) string {
+	t.Helper()
+	for _, line := range strings.Split(strings.TrimSuffix(got, "\n"), "\n") {
+		if strings.HasSuffix(line, command) && line != command {
+			return line
+		}
+	}
+	t.Fatalf("got %q: no notice naming %q", got, command)
+	return ""
 }

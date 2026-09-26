@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -59,10 +60,15 @@ func TestAnUntrappedSignalAtBashPidEndsOnlyTheBody(t *testing.T) {
   echo sender-ran-on )
 echo "sub=$?"
 echo still-here`)
-	want := "sub=143\nstill-here\n" +
-		"Terminated: 15             ( kill $BASHPID\necho sender-ran-on )\n"
-	if got != want {
-		t.Errorf("output = %q, want %q", got, want)
+	const want = "sub=143\nstill-here\n"
+	if !strings.HasPrefix(got, want) {
+		t.Errorf("output = %q, want it to start %q", got, want)
+	}
+	// The notice's own words are the host's — `Terminated: 15` on a BSD and
+	// `Terminated` on Linux — so what is asserted is that it named this
+	// command and nothing else ran.
+	if !strings.HasSuffix(got, "( kill $BASHPID\necho sender-ran-on )\n") {
+		t.Errorf("output = %q, want the subshell's own text written back", got)
 	}
 }
 

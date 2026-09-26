@@ -791,6 +791,12 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// so it is asked by the front end, late, on the goroutine that owns it.
 	// See notifyJobEnded and Runner.NotifiesAsAJobEnds (#4576).
 	notifyEnded := r.JobEnded
+	// And this shell's own note, for the same reason and read on the same
+	// goroutine: a shell blocked on a foreground command or on a `wait` is
+	// not idle, so the front end's wake reaches nobody. Made here rather
+	// than lazily on the far side, because the far side is the job's
+	// goroutine. See Runner.jobNoticeWake.
+	endedNote := r.ownJobEndedNote()
 	// The job is finished however the goroutine ended, which is what keeps an
 	// interpreter bug on it from costing more than the job. The shell is
 	// blocked on <-job.ready below and `wait` blocks on the same job
@@ -840,6 +846,8 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// on the screen is asked where the looking happens. See
 		// Runner.notifyJobEnded.
 		r.notifyJobEnded(notifyEnded)
+		// And the shell itself, where it is blocked rather than idle.
+		noteJobEnded(endedNote)
 		// After the job is finished rather than before it, so nothing can
 		// observe a pipe that has ended while the job that was writing to
 		// it is still marked as running.
@@ -972,6 +980,58 @@ func (r *Runner) notifyJobEnded(notify func()) {
 	notify()
 }
 
+// ownJobEndedNote is this shell's inward note, made on the shell's own
+// goroutine the first time a job is started.
+func (r *Runner) ownJobEndedNote() chan struct{} {
+	if r.jobEnded == nil {
+		r.jobEnded = make(chan struct{}, 1)
+	}
+	return r.jobEnded
+}
+
+// noteJobEnded pokes it, from the goroutine the job ended on.
+//
+// Dropped where one is already waiting, which is correct rather than merely
+// tolerable: the note says *look again*, and a reader that has not looked yet
+// is going to.
+func noteJobEnded(note chan struct{}) {
+	select {
+	case note <- struct{}{}:
+	default:
+	}
+}
+
+// jobNoticeWake is the channel a blocked shell watches for a finished job, or
+// nil where this shell holds the notice for the next prompt.
+//
+// Nil in four dialects of five and in every non-interactive route, and a nil
+// channel is never ready — so a `wait` in a script selects over exactly what
+// it selected over before this existed, and a foreground command is run
+// through exactly the wait it was run through before.
+//
+// Asked each time round rather than once, for the reason repl's jobWake gives:
+// `unsetopt notify` moves the axis under a session that is already running.
+func (r *Runner) jobNoticeWake() <-chan struct{} {
+	if !r.NotifiesAsAJobEnds() {
+		return nil
+	}
+	return r.jobEnded
+}
+
+// writeFinishedJobNotices says what is owed about the jobs that have ended,
+// on the shell's own goroutine.
+//
+// The same lines the next prompt would have written, written now — which is
+// what a dialect reporting a finished job *at once* means where the shell is
+// busy rather than idle. The front end writes these at a prompt and this
+// writes them where there is no prompt to wait for: the two never both write
+// a line, because FinishedJobNotices forgets what it reports.
+func (r *Runner) writeFinishedJobNotices() {
+	for _, line := range r.FinishedJobNotices() {
+		r.errf("%s\n", line)
+	}
+}
+
 // FinishedJobNotices is what to say about the jobs that have ended since it
 // was last asked, and forgets them.
 //
@@ -1050,6 +1110,11 @@ func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted, s
 		r.noticeStoppedJob(j)
 		return 0, 0, false, true
 	}
+	// The job this wait was for has just ended, and the dialect that reports
+	// a finished job the moment it ends reports this one **before the wait
+	// returns** — measured 2026-09-25 on zsh 5.9.2, `sleep 0.4 & wait; print
+	// WAITED` writes the notice and then `WAITED`.
+	//
 	return j.Status, 0, false, false
 }
 
@@ -1166,6 +1231,22 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	// of the ways rather than the way: a subshell or an external command
 	// delivers the same notice without any wait being written.
 	defer r.retireCoproc()
+	// And the notice a finished job is owed, in the dialect that does not
+	// hold it for the next prompt: measured 2026-09-25 on zsh 5.9.2, `sleep
+	// 0.4 & wait; print WAITED` writes `[1]  + done  sleep 0.4` and *then*
+	// `WAITED`. A deferred call, so it is written before this builtin
+	// returns whichever of the several ways out it takes (#4531).
+	//
+	// Here rather than in Runner.waitFor, which is where the notice is owed
+	// and is the wrong place to pay it: a notice **forgets** the job it
+	// reports, and the walks below hold the job table while they wait. One
+	// of them ranged over the live slice and read the nil that forgetting
+	// leaves behind.
+	defer func() {
+		if r.NotifiesAsAJobEnds() {
+			r.writeFinishedJobNotices()
+		}
+	}()
 	args, opts, code := r.waitOptions(args)
 	if code != 0 {
 		return code
@@ -1211,7 +1292,14 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 			// none.
 			return 0
 		}
-		for _, j := range r.jobs {
+		// A copy of the table, because waiting can now write a finished
+		// job's notice — a *different* job's, ending while this one is
+		// waited out — and a notice forgets what it reports. Ranging over
+		// the live slice read the nils that forgetting leaves behind.
+		for _, j := range slices.Clone(r.jobs) {
+			if j == nil {
+				continue
+			}
 			_, sig, hit, stopped := r.waitFor(j)
 			if r.unspecified {
 				return r.status

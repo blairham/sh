@@ -2876,6 +2876,24 @@ type Runner struct {
 	// of the input — see Runner.lastStatementLine. One diagnostic names it:
 	// see Diagnostics.CoprocessAlreadyRunningNamesTheLastStatementEntered.
 	enteredLine int
+	// jobEnded is poked, from the goroutine a background job ended on, so
+	// that a shell **blocked** on something else can notice.
+	//
+	// It carries nothing and renders nothing, exactly as Runner.JobEnded
+	// does and for the same reason: the job table is the shell goroutine's,
+	// so the far end says only *look again*. It is the inward-facing half of
+	// that pair — JobEnded wakes a front end that is idle with a descriptor
+	// in its hand, and this wakes the shell itself while it is waiting for a
+	// foreground command or for a `wait`. See Runner.jobNoticeWake (#4531).
+	//
+	// Buffered at one and poked without blocking: a second job ending before
+	// the first note is taken is the same news, and the reader asks the job
+	// table rather than reading anything out of the channel.
+	//
+	// A channel value, so Runner.clone shares it rather than copying a
+	// pointer to it — a subshell's jobs are its own, but a note it sends
+	// reaches the shell that is waiting.
+	jobEnded chan struct{}
 	// lastStmtLine is the line of the last statement this shell started,
 	// background jobs included — see where it is written for why that is not
 	// Runner.line. Read only by the two sentences about abandoned jobs.
@@ -8598,7 +8616,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	var w Wait
 	for {
 		var err error
-		w, err = r.WaitForCommand(pid)
+		w, err = r.awaitForegroundCommand(pid)
 		if err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 			r.diagf("%s: %v\n", argv[0], err)
@@ -12108,4 +12126,55 @@ func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
 	}
 	return r.ask(r.sem().ArrayLiteralOperandRetypesAFrozenScalar,
 		"a declaration's array literal replacing a frozen scalar")
+}
+
+// awaitForegroundCommand is Runner.WaitForCommand with a seam in it for a
+// background job that finishes while the foreground command is still running.
+//
+// The dialect that reports a finished job the moment it ends reports it *in
+// the middle of* a foreground command — measured 2026-09-25 on zsh 5.9.2,
+// `sleep 0.3 &` followed by `sleep 1.5; print FGDONE` writes `[1]  + done
+// sleep 0.3` and then `FGDONE`, a second apart. This shell wrote it after
+// `FGDONE`, because the shell is inside the caller's wait and a wait on one
+// pid does not come back for another process (#4531).
+//
+// So the wait is moved off this goroutine and selected over. Three things make
+// that safe rather than merely workable:
+//
+//   - The hook is **captured before the goroutine starts**, so nothing over
+//     there reads a field of this Runner. wait4 on a pid is not tied to the
+//     goroutine that calls it.
+//   - The notice is written **here**, on the shell's own goroutine, which is
+//     the rule Runner.JobEnded states in as many words: the job table, the job
+//     numbers and the `+`/`-` markers belong to this goroutine, and the note
+//     carries nothing.
+//   - This returns only once the wait has answered, so the goroutine never
+//     outlives the call.
+//
+// And it is reached at all only where the axis says the notice arrives at
+// once, which is one dialect of five with an option turned on in a session.
+// Every other route takes the same single call it always took.
+func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
+	note := r.jobNoticeWake()
+	wait := r.WaitForCommand
+	if note == nil {
+		return wait(pid)
+	}
+	type answer struct {
+		w   Wait
+		err error
+	}
+	answered := make(chan answer, 1)
+	go func() {
+		w, err := wait(pid)
+		answered <- answer{w, err}
+	}()
+	for {
+		select {
+		case a := <-answered:
+			return a.w, a.err
+		case <-note:
+			r.writeFinishedJobNotices()
+		}
+	}
 }

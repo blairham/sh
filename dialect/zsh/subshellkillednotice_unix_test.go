@@ -6,6 +6,8 @@
 package zsh_test
 
 import (
+	"strconv"
+	"syscall"
 	"testing"
 )
 
@@ -23,13 +25,19 @@ import (
 // print "st=$?"`: SIGTERM is `st=143` and SIGUSR1 is `st=158`, both with
 // nothing on stderr at all.
 func TestAForegroundSubshellKilledBySignalIsNotReported(t *testing.T) {
-	for _, tc := range []struct{ signal, want string }{
-		{"TERM", "st=143\n"},
-		{"USR1", "st=158\n"},
+	for _, tc := range []struct {
+		signal string
+		number syscall.Signal
+	}{
+		{"TERM", syscall.SIGTERM},
+		{"USR1", syscall.SIGUSR1},
 	} {
 		src := "zmodload zsh/system\n( kill -" + tc.signal + " $sysparams[pid] )\nprint \"st=$?\"\n"
-		if got := runZshAnchored(t, src); got != tc.want {
-			t.Errorf("%s: got %q, want %q and nothing else", tc.signal, got, tc.want)
+		// The number rather than the number written out: SIGUSR1 is 30 on a
+		// BSD and 10 on Linux, and CI runs both.
+		want := "st=" + strconv.Itoa(128+int(tc.number)) + "\n"
+		if got := runZshAnchored(t, src); got != want {
+			t.Errorf("%s: got %q, want %q and nothing else", tc.signal, got, want)
 		}
 	}
 }

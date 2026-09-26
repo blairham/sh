@@ -95,15 +95,12 @@ package interp
 // pattern in a word aimed at a file and a here-document body has no pattern
 // in it to fail on. It was written here first and no probe could make it fire.
 //
-// **A body that will not parse is not a body that will not expand**, and it is
-// the exclusion this door turns on. `: <<END` with `$(echo hi; for)` in it is
-// a substitution whose body is not a program; nothing was expanded, and what
-// becomes of the shell is
-// [Semantics.SubstitutionParseFailureInAHeredocBodyEndsTheShell]'s, measured
-// one construct over. Letting it in here regraded it as a redirection failure
-// and cost ksh93 the status it ends at — 3, the substitution's own, where a
-// failed redirection on a special builtin is 1. Measured 2026-09-26; the rows
-// that are still wrong on that construct are #4687 and not this one.
+// **A body that will not parse is not a body that will not expand**, and it
+// never reaches here: [Runner.expandBodyInThisShell] sends it to
+// heredocbodyparsefailure.go instead. The two read the same axis and part on
+// the **status** — the number a refusal carries is its own, where the number
+// a failed expansion carries is the redirection's, and ksh93 exits 3 against
+// 1 over that one difference (#4687).
 //
 // A plain request to stop is deliberately not among them either. `: <<END`
 // with `$(exit 3)` in its body is a substitution's own exit, it is not an
@@ -111,9 +108,6 @@ package interp
 // request to stop — which is [Runner.giveUpTheCommand]'s rule at the other
 // half of the same construct.
 func (r *Runner) bodyExpansionFailed() bool {
-	if r.abandon == abandonSubstParse && r.ctl == controlExit {
-		return false
-	}
 	return r.pendingFileError() || (r.expandErr && r.ctl == controlNone)
 }
 
@@ -134,6 +128,16 @@ func (r *Runner) bodyExpansionFailed() bool {
 // fire; it is left out rather than kept as a guard nothing can exercise.
 func (r *Runner) expandBodyInThisShell(expand func() string) string {
 	body := expand()
+	if r.bodyParseFailed() {
+		// A different kind with a different answer and a different number.
+		// See heredocbodyparsefailure.go, which holds the panel for it. It
+		// sets redirErr itself, at the boundary both halves of the
+		// construct go through, so there is none of the tail below to
+		// repeat — a second write was here first and a mutant that removed
+		// it survived interp/ and dialect/.
+		r.giveUpABodyThatWillNotParse()
+		return body
+	}
 	if !r.bodyExpansionFailed() {
 		return body
 	}

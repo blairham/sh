@@ -27175,8 +27175,35 @@ and BusyBox ash and is carried on only by ksh93. bash costs the command
 in a here-document body and the script from a target, so an axis asked of
 redirections as a class would take one row and lose the other.
 
+The table above is `cat <<END` — a command the shell runs as a process of
+its own. On a command it runs **itself** — a special builtin, a regular
+builtin, a function, a `{ …; }` group — the three columns answering yes end
+the shell exactly as they do here, and the two answering no then split a
+second time over *whose* failure it is. That is
+`HeredocBodyFailureIsTheRedirections`, the axis a body that will not
+**expand** reads, with the same five answers. Measured 2026-09-26 with
+`; echo SAME` on the redirection's own line, which is what tells giving up
+the line from giving up the command:
+
+| column | `: <<END` | `read x <<END` | a function | a group |
+| --- | --- | --- | --- | --- |
+| bash 5.3.20 | the line, st=1 | the line, st=1 | the line, st=1 | the line, st=1 |
+| zsh 5.9.2 | the shell, 1 | the shell, 1 | the shell, 1 | the shell, 1 |
+| ksh93u+ | the shell, 3 | the command | the command | the command |
+| dash 0.5.12 | the shell, 2 | the shell, 2 | the shell, 2 | the shell, 2 |
+| BusyBox ash | the shell, 2 | the shell, 2 | the shell, 2 | the shell, 2 |
+
+ksh93's one stopping row is `RedirectErrorOnSpecialBuiltinFatal` and not
+this axis, and `command : <<END` is the pair that says so: the same body on
+the same builtin, with the specialness taken away, carries on. bash does
+not move on that pair at all.
+
 The number the two carrying columns leave behind is the next axis's and
-not this one's.
+not this one's — with one exception this construct is the whole of: where
+a rule further on puts the stop back, the number that stands is the
+**refusal's own** and not a failed redirection's. ksh93 ends `: <<END` at
+3 for a body that will not parse and at 1 for a body that will not expand
+or a file that will not open, and BusyBox ash at 2 against 1.
 
 **`SubstitutionParseFailureCarriesTheFatalStatus`** — bash yes · dash no ·
 ksh93 no · zsh no · ash no · POSIX preset no

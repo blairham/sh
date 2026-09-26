@@ -384,38 +384,52 @@ func TestAHeredocBodysFailureIsNotThePrefixs(t *testing.T) {
 	}
 }
 
-// A body that will not **parse** is not a body that will not expand, and this
-// axis must not move it.
+// A body that will not **parse** is not a body that will not expand, and the
+// two are told apart by the **number** they leave.
 //
-// `$(echo hi; for)` is a substitution whose body is not a program: nothing in
-// it was expanded, and what becomes of the shell is
-// SubstitutionParseFailureInAHeredocBodyEndsTheShell's, measured one construct
-// over. Routing it through this door regraded it as a redirection failure and
-// cost ksh93 the status it ends at, so the door excludes it — asserted here as
-// the axis making no difference, which is the shape a later widening would
-// break (#4684).
-func TestABodyThatWillNotParseIsNotThisAxis(t *testing.T) {
+// #4684 kept them apart by excluding the parse failure from this axis
+// altogether, and that was too much: the exclusion also left the refusal's
+// abandonment standing on every command this shell runs itself, which ended
+// the shell in ten rows where the reference carries on (#4687). The two now
+// read the same axis through two doors, and what this guards is the reason
+// there are two: a refusal carries a status of its own and keeps it, where a
+// failed expansion takes the redirection's.
+//
+// 7 is a number no shell has, so a row that takes it took the redirection's
+// and a row that does not took the refusal's.
+func TestABodyThatWillNotParseKeepsItsOwnStatusAndAFailedExpansionDoesNot(t *testing.T) {
 	t.Parallel()
-	const src = ": <<END\n$(echo hi; for)\nEND\necho \"after st=$?\"\n"
-	ends := func(s *Semantics) { s.SubstitutionParseFailureInAHeredocBodyEndsTheShell = Yes }
-	carries := func(s *Semantics) { s.SubstitutionParseFailureInAHeredocBodyEndsTheShell = No }
-	for _, tweak := range []func(*Semantics){ends, carries} {
-		redirs, redirsSt := heredocFailRun(t, src, heredocFailSemantics{Yes, Yes, No, 7}, tweak)
-		own, ownSt := heredocFailRun(t, src, heredocFailSemantics{No, Yes, No, 7}, tweak)
-		if redirs != own || redirsSt != ownSt {
-			t.Errorf("%q at %d under one answer and %q at %d under the other: "+
-				"a body that will not parse must not read this axis", redirs, redirsSt, own, ownSt)
-		}
-		// The control the comparison needs: the parse really did fail, so
-		// the agreement is two runs doing something rather than nothing.
-		if !strings.Contains(redirs, "syntax error") && !strings.Contains(redirs, "unexpected") {
-			t.Errorf("= %q, want the parse failure reported", redirs)
-		}
-		// And the redirection's number was not taken, which is the half the
-		// exclusion is *for*: 7 is the number this door would have written.
-		if strings.Contains(redirs, "st=7") || redirsSt == 7 {
-			t.Errorf("= %q at %d, want the parse failure's own status", redirs, redirsSt)
-		}
+	sem := heredocFailSemantics{Yes, Yes, No, 7}
+	// The column that carries on over a refusal, which is the only one that
+	// can show what number it left: where the shell ends there is nobody to
+	// read it.
+	carries := func(s *Semantics) {
+		s.SubstitutionParseFailureInAHeredocBodyEndsTheShell = No
+		s.SubstitutionParseFailureCarriesTheFatalStatus = No
+	}
+	const parses = "echo RAN <<END\n$(echo hi; for)\nEND\necho \"after st=$?\"\n"
+	const expands = "echo RAN <<END\n$(( } ))\nEND\necho \"after st=$?\"\n"
+	// The failed expansion takes the redirection's 7, which is what this
+	// file's axis is for and what says the probe can produce a positive.
+	if out, _ := heredocFailRun(t, expands, sem); !strings.Contains(out, "after st=7") {
+		t.Errorf("a failed expansion said %q, want the redirection's 7", out)
+	}
+	// And the refusal does not: it keeps the syntax status it already had.
+	out, st := heredocFailRun(t, parses, sem, carries)
+	if strings.Contains(out, "st=7") || st == 7 {
+		t.Errorf("a refusal said %q at %d, want its own status and not the redirection's", out, st)
+	}
+	if !strings.Contains(out, "after st=2") {
+		t.Errorf("a refusal said %q, want the syntax status it already carried", out)
+	}
+	// The control both halves need: each really did fail, and neither ran
+	// its command — two runs that did nothing would agree about 7 as
+	// readily.
+	if strings.Contains(out, "RAN") {
+		t.Errorf("= %q, want the command left unrun", out)
+	}
+	if !strings.Contains(out, "syntax") && !strings.Contains(out, "unexpected") {
+		t.Errorf("= %q, want the refusal reported", out)
 	}
 }
 

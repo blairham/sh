@@ -2756,6 +2756,24 @@ type Runner struct {
 	// not run: a redirect that could not be applied would otherwise send its
 	// output to the terminal, which is the loudest possible wrong answer.
 	redirErr bool
+	// redirFailureStatusOfItsOwn is the number this command's failed
+	// redirection carries when the failure came with one of its own. Zero
+	// where it did not, which is every redirection failure but the one: a
+	// here-document body holding a substitution that would not parse, in a
+	// dialect that took the refusal's stop back and left the refusal's
+	// status behind.
+	//
+	// One writer, Runner.giveUpTheCommand, and one reader, the branch below
+	// where a failed redirection on a **special builtin** ends the shell —
+	// which puts a stop back that the axis had just taken away, and would
+	// otherwise write the generic fatal number over the refusal's. ksh93 is
+	// the column: `: <<END` with such a body ends it at **3** where the same
+	// builtin's unopenable file ends it at 1 and where the same body's
+	// failed *expansion* ends it at 1. See heredocbodyparsefailure.go.
+	//
+	// Cleared with redirErr, in applyRedirs, so it is only ever read by the
+	// command it belongs to.
+	redirFailureStatusOfItsOwn int
 
 	// badDupTarget records that the redirection which failed was `<&word` or
 	// `>&word` naming something that is not a descriptor, rather than an open
@@ -7230,7 +7248,18 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		if r.IsSpecialBuiltinHere(argv[0]) &&
 			r.ask(r.sem().RedirectErrorOnSpecialBuiltinFatal, "a failed redirection on a special builtin ending the script") {
 			stopped := r.ctl == controlExit
+			// Taken before the stop is put back, because putting it back is
+			// what writes over it. See Runner.redirFailureStatusOfItsOwn.
+			ownStatus := r.redirFailureStatusOfItsOwn
 			r.fatalUsageQuiet()
+			if ownStatus != 0 {
+				// The failure arrived with a number of its own — a
+				// substitution body that would not parse — and keeps it:
+				// ksh93 ends the shell at 3 here, which is neither its
+				// fatal status nor a failed redirection's.
+				r.status = ownStatus
+				return nil
+			}
 			// The shell that stops exits with the *redirection's* status,
 			// not the generic fatal one. The two are the same number in
 			// every column but one, which is why this read as

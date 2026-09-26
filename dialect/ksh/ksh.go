@@ -2323,6 +2323,12 @@ func Semantics() interp.Semantics {
 	// measure a preference from.
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
+	// A `return` in an EXIT trap's body names the status the shell leaves
+	// with, which is the one place this column and zsh part from dash and
+	// BusyBox ash: measured 2026-09-26 on ksh93 2012-08-01 over a script
+	// file, `trap 'echo X; return 5' EXIT; false` writes X and exits 5,
+	// where the two POSIX columns exit 1.
+	s.ReturnInTheExitTrapNamesTheStatus = interp.Yes
 	// A subshell that the shell reported an error and gave up on runs no
 	// EXIT trap of its own, with or without `set -e` — a readonly
 	// reassignment, an unset name under `set -u`, a division by zero,

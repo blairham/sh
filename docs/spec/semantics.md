@@ -24939,6 +24939,28 @@ EXIT, and the `stty` failing made the script exit 1 where every shell
 exits 0. A wrong exit status is what a caller branches on, so this is
 the quiet kind of difference.
 
+**`ReturnInTheExitTrapNamesTheStatus`** — bash unpinned · dash no · ksh93 yes · zsh yes
+
+Makes a `return` written in an EXIT trap's body the shell's last word,
+the way an `exit` written there already is: the status it names is what
+the shell — or the subshell — reports, in place of the status it was
+about to report.
+
+    trap 'echo X; return 5' EXIT; false          zsh 5   ksh93 5   dash 1
+    ( trap 'echo X; return 5' EXIT; true ); $?   zsh 5   ksh93 5   dash 0
+
+Measured 2026-09-26 over script files, with BusyBox ash 1.37.0 answering
+as dash does in the digest-pinned image. The `false` in the first row is
+the discriminating half: with the script already at 0 every column
+reports 0 and the probe decides nothing.
+
+The body **ends** at the `return` under either answer, in all four, so
+what the axis moves is the status alone.
+
+bash cannot be asked. It refuses a `return` with nothing to return from
+— `ReturnOutsideAFunctionIsRefused`, which is asked first — so the body
+carries on past the line and never ends on a `return` at all.
+
 **`ReportsACommandKilledBySignal`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Says out loud that a signal ended a command, rather than leaving the

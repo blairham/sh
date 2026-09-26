@@ -5837,13 +5837,34 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	// thing a shell runs, so nothing reads this afterwards.
 	r.inExitTrap = false
 	exitedInTheBody = r.ctl == controlExit
-	if !exitedInTheBody {
-		// The body ran to the end without exiting, so the script keeps the
-		// status it already had.
+	if !exitedInTheBody && !r.returnNamedTheExitStatus() {
+		// The body ran to the end without naming a status, so the script
+		// keeps the one it already had.
 		r.status = before
 	}
 	r.stopTheShell()
 	return exitedInTheBody
+}
+
+// returnNamedTheExitStatus reports whether a `return` the EXIT trap's body
+// ended on is the shell's last word, the way an `exit` written there already
+// is — see Semantics.ReturnInTheExitTrapNamesTheStatus for the panel.
+//
+// Asked only where the body really ended on one, which is what keeps the
+// question off the three columns that never reach it: a body that ran to its
+// end, or that exited, has said nothing about a `return`, and the column that
+// *refuses* a `return` with nothing to return from carries on past the line
+// and ends with no control flow set at all.
+//
+// The status is already the one the `return` named — the builtin wrote it —
+// so there is nothing to compute here. What this decides is whether the
+// status the shell was about to report is put back over it.
+func (r *Runner) returnNamedTheExitStatus() bool {
+	if r.ctl != controlReturn {
+		return false
+	}
+	return r.ask(r.sem().ReturnInTheExitTrapNamesTheStatus,
+		"a `return` in the EXIT trap naming the shell's status")
 }
 
 // runExitHook runs the dialect's exit hook — zsh's `zshexit` — as the shell

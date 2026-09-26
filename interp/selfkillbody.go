@@ -112,11 +112,23 @@ func (r *Runner) signalThisBody(name string, sig syscall.Signal) error {
 	switch {
 	case trapped && body != "":
 		r.selfSignaledBody(key)
-	case !trapped && fatalSignal(name, sig) && r.untrappedSignalIgnored(name):
-		// The default action was taken away from the kernel and nothing put
-		// in its place, so the raise does not happen. Reported as sent,
-		// because the builtin succeeded.
 	case !trapped && fatalSignal(name, sig):
+		// **Without asking whether the shell ignores it untrapped**, which
+		// is the one place this switch parts from sendSignal's and is
+		// measured rather than reasoned. A shell that is not interactive
+		// ignores an untrapped QUIT in three of the panel's columns —
+		// Semantics.QuitIgnoredWhenNotInteractive, and `kill -QUIT $$` is 0
+		// and silent there — and a body a real shell would have *forked*
+		// takes the signal all the same. Measured 2026-09-26 against zsh
+		// 5.9.2 and bash 5.3.20, `( kill -QUIT <own pid> ); echo $?`: 131 in
+		// both, with bash's located notice beside it, where the top level of
+		// the same run is 0 (#4724).
+		//
+		// With `-i` as well as without, which is what makes it unconditional
+		// rather than a second reading of the mode: both references answer
+		// 131 for the body in either mode, so the shell's own disposition —
+		// inherited ignore or decision taken each time — is not what the
+		// body is asking. The fork starts from the default.
 		r.signalDeath(name, sig)
 	default:
 		// An ignored signal, and the ones whose default action suspends or

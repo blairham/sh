@@ -5737,9 +5737,23 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		array, named, letterA = name, true, true
 	}
 	if strings.Contains(opts, "A") {
-		array, named = "REPLY", true
 		if len(args) > 0 {
-			array, args = args[0], args[1:]
+			array, named, args = args[0], true, args[1:]
+		} else {
+			// No name for the letter to apply to, which the two shells with
+			// the `-A` spelling answer differently — so this one question
+			// rides an axis where the rest of the array rules ride the
+			// letter. zsh fills the array `reply`, which is a *different*
+			// parameter from the `REPLY` a bare `read` fills and not merely
+			// the same rule in another case; ksh93 drops the letter and
+			// falls through to the bare read below.
+			name, isArray := r.readArrayDefaultName()
+			if r.unspecified {
+				return r.status
+			}
+			if isArray {
+				array, named = name, true
+			}
 		}
 	}
 

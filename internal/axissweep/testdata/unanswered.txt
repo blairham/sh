@@ -197,6 +197,7 @@ ash   PrintfOutputPrecedesComplaint
 ash   PrintfRefusedOperandKeepsItsLeadingNumber
 ash   PrintfTimeOperandIsADateString
 ash   ProducedParameterListing
+ash   ReadArrayDefault
 ash   ReadExactCountKeepsPartial
 ash   ReadPartialCountSucceeds
 ash   ReadonlyAttributeCanBeRemoved
@@ -269,6 +270,7 @@ ash   WholeArraySubscriptAssigningAnArray
 ash   WholeArraySubscriptThroughAReferenceToATable
 ash   WidthJustificationPrecedence
 ash   WidthLettersExcludeTheIntegerLetter
+bash   ReadArrayDefault
 bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
@@ -303,6 +305,7 @@ bash  SetArrayWithNoValuesUnsetsTheName
 bash  SubscriptedPrefixIsTakenBack
 bash  WidthJustificationPrecedence
 bash  WidthLettersExcludeTheIntegerLetter
+dash   ReadArrayDefault
 dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup

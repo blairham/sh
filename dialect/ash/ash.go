@@ -633,6 +633,9 @@ func Semantics() interp.Semantics {
 	// `illegal option -d` at 2 here and 0 with the text before the `;` in
 	// BusyBox v1.37.0, the answer bash, zsh and ksh93 give too. `-a`, `-e`,
 	// `-i` and `-N` are refused there, and are refused here.
+	// unanswered ReadArrayDefault: there is no array letter here at all —
+	// no `-a`, no `-A` — and no arrays for one to fill, so the question
+	// cannot be put to this shell.
 	s.ReadOptions = "rsd:p:t:n:u:"
 	// `unset` has the two POSIX letters and calls anything else illegal:
 	// `unset -q x` is `illegal option -q`.

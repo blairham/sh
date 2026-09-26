@@ -481,6 +481,9 @@ func Semantics() interp.Semantics {
 	// read takes -r and, alone among its letters, bash's -p prompt — an
 	// argument, printed only to a terminal. The rest of bash's set (-s, the
 	// counts, -d, -t, -u) is refused as unknown here.
+	// unanswered ReadArrayDefault: there is no array letter here at all —
+	// no `-a`, no `-A` — and no arrays for one to fill, so the question
+	// cannot be put to this shell.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
 	// unanswered CodePointPastSixBytesIsEncoded: the question comes after a

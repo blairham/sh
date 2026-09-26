@@ -579,6 +579,12 @@ type Cross struct {
 	// Files is how many core files were asked, Agree how many every
 	// reference answered identically.
 	Files, Agree int
+	// Held is how many the tier holds before a -only selection narrowed it.
+	// A report distinguishes the two zeros with it: a tier that matched
+	// nothing the person selected, and a tier with nothing in it at all. The
+	// second is a filing defect and the first is a typo, and printing `0/0`
+	// for either is the failure #4439 is about.
+	Held int
 	// Split is the rest, by name. Naming them is the point: an unsplit
 	// report says a case is not core without saying which.
 	Split []CrossSplit
@@ -615,6 +621,7 @@ func CrossCheck(ctx context.Context, root, name string, refs []Reference, opts O
 	if err != nil {
 		return cross, err
 	}
+	cross.Held = len(names)
 	if opts.Only != nil {
 		names = keep(names, opts.Only)
 	}
@@ -775,6 +782,9 @@ type Own struct {
 	// Files is how many were asked, Alone how many the column's own
 	// reference answered differently from all of them.
 	Files, Alone int
+	// Held is how many the tier holds before a -only selection narrowed it.
+	// See [Cross.Held].
+	Held int
 	// Shared are the rest, by name, with the references that matched.
 	Shared []OwnShare
 	// Unstable is a file a reference would not reproduce, which says nothing
@@ -813,6 +823,7 @@ func OnlyHere(ctx context.Context, root string, s Suite, refs []Reference, opts 
 	if err != nil {
 		return own, err
 	}
+	own.Held = len(names)
 	if opts.Only != nil {
 		names = keep(names, opts.Only)
 	}

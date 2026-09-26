@@ -66,7 +66,10 @@ func main() {
 		refetch = flag.Bool("refetch", false,
 			"fetch the archive again even if the unpacked tree matches the pin")
 		only = flag.String("only", "",
-			"comma-separated file names to run, for working on the harness itself")
+			"comma-separated file names to run, for working on the harness itself. A "+
+				"base name, not a path, and the extension is part of it — a name that "+
+				"matches no file is refused rather than run, because a sweep of nothing "+
+				"prints the same figures as a file that reached parity")
 		panel = flag.Bool("panel", false, "print the panel of columns and stop")
 		pin   = flag.Bool("pin", false,
 			"print this column's cache identity and unpack directory as name=value "+
@@ -199,6 +202,21 @@ func run(ctx context.Context, dialect, bin, buildDir string, timeout time.Durati
 	case err != nil:
 		fmt.Fprintf(os.Stderr, "suitecheck: %v\n", err)
 		return 1
+	}
+
+	// Straight after the fetch, which is the first moment the file names
+	// exist, and before the helpers are built: a name check costs a directory
+	// read, so a typo is refused before a C compiler is started. A -only that
+	// matches nothing used to run nothing and print a whole healthy report over
+	// the empty set: 0/0 strict, 0 differing lines, `nothing was refused by the
+	// static read`. Every one of those is what a file at parity prints. #4671.
+	if err := suite.CheckOnly(names(only), suite.Selectable(dir, s)); err != nil {
+		fmt.Fprintf(os.Stderr, "suitecheck: %v\n\n", err)
+		fmt.Fprintln(os.Stderr, "  A selector that matches nothing is an error here rather than an empty")
+		fmt.Fprintln(os.Stderr, "  run, for the reason -column already refuses a name it does not have: a")
+		fmt.Fprintln(os.Stderr, "  run over no files prints 0/0 and 0 differing lines, which is exactly")
+		fmt.Fprintln(os.Stderr, "  what a file that reached parity prints.")
+		return 2
 	}
 
 	helpers, err := suite.BuildHelpers(ctx, s, dir)

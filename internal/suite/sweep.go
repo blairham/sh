@@ -383,6 +383,15 @@ func (o Options) jobs() int {
 // instrument never unpacks them.
 func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Options) (Report, error) {
 	rep := Report{Suite: s, Reference: reference, Ours: ours}
+	// Before anything runs, and here rather than in each of the three
+	// programs that call this: the name the graded binary is invoked under is
+	// an input to the shell, and a column graded under the wrong one produces
+	// a figure that looks like every other figure. See [CheckInvocationName]
+	// and #4674 — a second copy of this check in each caller is how one of
+	// them would come to be the route without it.
+	if err := CheckInvocationName(s, ours, reference); err != nil {
+		return rep, err
+	}
 	files, err := plan(s, dir, opts)
 	if err != nil {
 		return rep, err

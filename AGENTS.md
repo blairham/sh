@@ -1550,6 +1550,26 @@ warning is what this already had, in the recorded note that *a binary named
 `bash-base` is partly graded on a build artifact's name*, and it did not stop
 the same fault arriving from the other direction.
 
+**And the name is an input to the shell as well as to the comparison**, which
+is the second half of the same lesson and took another eight months to find.
+The suite's container copied the graded binary in as `/suiteours`; zsh reads
+the **first letter of argv[0]** and enters that shell's emulation, so `s` meant
+the entire zsh column of `make suite` ran under `emulate sh` while `/bin/zsh`
+beside it ran as zsh (#4674). Every part of that harness was right — the image
+pinned by digest, both shells on one copy of the files, one scorer — and the
+column still graded a shell in one mode against a shell in another. The tell
+was a file at `5/38` lines and status 1 where the same binary named `zsh`
+agreed with the reference byte for byte.
+
+**The path a binary lives at and the name it is invoked under are different
+things, and a harness that renames is the one place they part.** That is what
+makes this invisible: nobody reviewing a copy into a container is thinking
+about argv[0]. `suite.CheckInvocationName` now refuses a name that answers any
+of the front end's name-keyed questions — `driver.PosixNamed`,
+`driver.EmulationNamed` — differently from the column's own, and it is asked in
+`suite.Sweep` so that every route through the harness is covered by having been
+written at all.
+
 **The positive control that catches all three shapes is the same one: count
 what actually ran.** A mutation battery should print how many tests executed
 under its `-run` filter before it reports a single survivor — a filter that

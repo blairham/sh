@@ -149,7 +149,11 @@ func TestASweepKeepsAFailedStartOutOfTheNumbers(t *testing.T) {
 	s := Suite{Name: "fake", Dialect: "bash", Ours: true, Ext: ".tests", Dirs: []string{"tests"}}
 	absent := filepath.Join(t.TempDir(), "nosuchshell")
 
-	rep, err := Sweep(context.Background(), s, filepath.Dir(tests), absent, "/bin/sh",
+	// Against bash rather than /bin/sh, which is this column's own reference
+	// and is also what [CheckInvocationName] asks for: `sh` in argv[0] is
+	// POSIX mode and `nosuchshell` is not, so the pair this once had would
+	// have been two shells in two modes if either of them had started (#4674).
+	rep, err := Sweep(context.Background(), s, filepath.Dir(tests), absent, "/bin/bash",
 		Options{Timeout: 5 * time.Second, Jobs: 2})
 	if err != nil {
 		t.Fatal(err)

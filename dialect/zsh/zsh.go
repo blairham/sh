@@ -2828,7 +2828,16 @@ func Semantics() interp.Semantics {
 	s.NullCommandVariable = nullCommandParameter
 	s.ReadNullCommandVariable = readNullCommandParameter
 	s.KillStatus = interp.KillStatusFailureCount
-	s.SubshellJobTable = interp.SubshellJobsCleared
+	// A subshell sees the parent's job table when the parent's monitor is
+	// on, and sees nothing when it is off — which is every script, so this
+	// used to read Cleared and was right about every case a script can
+	// reach. Measured 2026-09-25 against zsh 5.9.2: `zsh -f -c 'sleep 1 &
+	// jobs; (jobs)'` writes the row once, and the same line under `-fm` on a
+	// pseudo-terminal writes it twice. The monitor and not the terminal and
+	// not the prompt: `zsh -fi` with `unsetopt monitor` writes it once
+	// again (#4538). The rows and what the subshell may do with them are on
+	// interp.SubshellJobsKeptUnderTheMonitor.
+	s.SubshellJobTable = interp.SubshellJobsKeptUnderTheMonitor
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfAbsentNumberIsAnEmptyOne = interp.No
 	s.PrintfStarWithoutOperandIsRefused = interp.No
@@ -4911,9 +4920,16 @@ func Diagnostics() interp.Diagnostics {
 		FcBackwardsRange: "history events can't be executed backwards, aborted",
 		// The editor's file left empty, named by the path the person never
 		// saw.
-		FcEmptyEdit:                  "read error on %[1]s",
-		NoJobControl:                 "no job control in this shell.",
-		FdVariableWithoutADescriptor: "parameter %[1]s does not contain a file descriptor",
+		FcEmptyEdit:  "read error on %[1]s",
+		NoJobControl: "no job control in this shell.",
+		// The refusal the verbs that would *act* on a job give in a subshell
+		// holding nothing but the parent's. No verb in the sentence: the
+		// builtin's name is in the location, which is this shell's rule for
+		// every message. Measured 2026-09-25 under `-fm` on a
+		// pseudo-terminal — `<script>:wait:6: can't manipulate jobs in
+		// subshell`, at 1, and `disown` the same (#4538).
+		JobsNotManipulableInASubshell: "can't manipulate jobs in subshell",
+		FdVariableWithoutADescriptor:  "parameter %[1]s does not contain a file descriptor",
 		// `mkdir dir; v=$(<dir)` — the read after a successful open, which
 		// this shell alone words. The name is the word as it expanded, not
 		// the path the working directory made of it (#1778).

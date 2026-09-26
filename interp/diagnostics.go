@@ -6816,6 +6816,33 @@ type Diagnostics struct {
 	// says JobNotUnderJobControl afterwards.
 	NoJobControl string
 
+	// JobsNotManipulableInASubshell is `wait %1` or `disown %1` in a
+	// subshell whose whole job table is the parent's, in the one dialect
+	// that gives a subshell one. One verb: the builtin's name.
+	//
+	// Measured 2026-09-25 in a subshell of a zsh 5.9.2 started `-fm` on a
+	// pseudo-terminal, with two running jobs in the parent:
+	//
+	//	( jobs %2 )     [2]  - running    /bin/sleep 6
+	//	( kill -0 %1 )  0
+	//	( wait %2 )     wait: can't manipulate jobs in subshell, 1
+	//	( disown %1 )   disown: can't manipulate jobs in subshell, 1
+	//
+	// So it is the *acting* verbs and not the lookup: the same spec that
+	// resolves for a listing and for a signal is refused for a wait. `fg`
+	// and `bg` refuse too and say something else — `no job control in this
+	// shell.`, which is NoJobControl above, because a zsh subshell has the
+	// monitor off. That is a wider fact than this field and it is reached
+	// through Runner.canResume rather than here.
+	//
+	// Empty is the answer for every other column, and it is not a gap: no
+	// other dialect hands a subshell the parent's table, so none of them can
+	// be in this state. See Semantics.SubshellJobTable.
+	JobsNotManipulableInASubshell string
+	// JobsNotManipulableInASubshellStatus is what that reports. Zero means
+	// 1, which is the one measured answer.
+	JobsNotManipulableInASubshellStatus int
+
 	// JobStartedWithoutJobControl is `fg` or `bg` on a job that was started
 	// while the monitor was off, in a shell that has since turned it on.
 	//

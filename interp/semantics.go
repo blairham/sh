@@ -6351,8 +6351,8 @@ type Semantics struct {
 	CommandNotFoundStatusIsNotFound Answer
 
 	// SubshellJobTable is what a subshell sees of the jobs its parent
-	// started. Three answers, and neither of the two-way splits it contains
-	// is the same pair:
+	// started. Four answers, and no two of the splits it contains are the
+	// same pair:
 	//
 	//	sleep 1 & jobs -p | cat; echo T    bash, ksh93 → the pid   dash, zsh → nothing
 	//	sleep 1 & (jobs -p); echo T        ksh93 → the pid         bash, dash, zsh → nothing
@@ -6360,6 +6360,19 @@ type Semantics struct {
 	// so no single yes-or-no can hold both rows for bash. See
 	// SubshellJobsKeptOutsideACompound for what bash is doing and for the
 	// part of it that is measured and not modeled.
+	//
+	// **Both rows above are measured with the monitor off**, which is every
+	// script, and one column moves when it is on: see
+	// SubshellJobsKeptUnderTheMonitor, whose whole content is that the first
+	// three answers are policies about the subshell's *shape* and the fourth
+	// is not a policy about the subshell at all.
+	//
+	// unpinned zsh: the fourth answer and the first differ only where the
+	// monitor is on, and no corpus row can have one — every case runs under
+	// `-c` with no controlling terminal, and the dialect that answers this
+	// way refuses `set -m` there. Pinned in interp by
+	// TestASubshellSeesTheParentsJobsOnlyUnderTheMonitor and at a session by
+	// TestASubshellListsTheSessionsJobs.
 	SubshellJobTable SubshellJobTable
 
 	// InteractiveSelectsEmacs turns the `emacs` editing mode on when the

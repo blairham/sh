@@ -3097,10 +3097,12 @@ is the last thing a script does:
     jobs -p | cat; echo T      bash, ksh93 → the pid   dash, zsh → nothing
 
 Two rows and two different pairs, so no yes-or-no holds both. `Semantics.
-SubshellJobTable` is a policy with three values: cleared everywhere (dash,
-zsh), kept everywhere (ksh93), and kept where the subshell was made for a
+SubshellJobTable` is a policy with four values: cleared everywhere (dash,
+ash), kept everywhere (ksh93), kept where the subshell was made for a
 simple command or a substitution while cleared where it was made for a
-compound (bash).
+compound (bash), and — zsh — **kept in every subshell of a shell whose
+monitor is on and cleared in every subshell of a shell whose monitor is
+off**.
 
 The `; echo T` is load-bearing, and leaving it off is how the question
 gets the wrong answer. `(jobs -p)` alone prints the pid in dash, because a
@@ -3122,6 +3124,86 @@ The boundaries, measured one at a time:
 The last row is unanimous and is therefore *not* asked about: a background
 job sees nothing anywhere, and an axis consulted where nothing disagrees is
 an axis that can be answered wrongly.
+
+**Every row of that table is measured with the monitor off**, which is what
+a script has, and one column moves when it is on. That is the subsection
+below, and it is also the reason the "unanimous" row above is a fact about
+the four shells that do not move rather than about the boundary.
+
+### The one column the monitor moves, and the noun it is keyed on
+
+zsh is the fourth value, and the measurement that made it one is a grid of
+two by two rather than a row. The issue it came from (#4538) was filed as a
+fact about an **interactive** shell, and that reading is right in every
+session a person ever has — zsh turns the monitor on for an interactive
+shell and refuses `set -m` without a terminal, so the two nouns agree
+almost everywhere. They are told apart only by holding one fixed and moving
+the other. Measured 2026-09-25 against zsh 5.9.2 on a pseudo-terminal,
+`sleep 3 & (jobs); jobs`:
+
+| interactive | monitor | `(jobs)` | how |
+| --- | --- | --- | --- |
+| no | off | nothing | `zsh -f script` |
+| no | **on** | **the row** | `zsh -fm script` |
+| yes | **off** | **nothing** | `zsh -fi`, then `unsetopt monitor` |
+| yes | on | the row | `zsh -fiV +Z` |
+
+The answer moves with the monitor in both rows where interactivity is held
+fixed, and does not move with interactivity in either row where the monitor
+is. So it is read from the monitor and nothing asks whether there is a
+person at the other end.
+
+It is not keyed on the subshell's **shape** either, which is the candidate
+noun the three values above it are about. With the monitor on, all twelve
+boundaries list the parent's jobs — `( … )`, `$( … )`, a backquoted
+substitution, `<( … )`, a simple command and a group and a loop and a
+function and a nested `( … )` as pipeline elements, a function called in
+`( … )`, and both spellings of a `&` job's own body. With it off, none of
+them do. One switch, twelve rows — including the `&` body the other three
+answers do not even consult the axis for.
+
+And it is zsh's alone. Measured the same day on a pseudo-terminal, `-m`
+moves nothing in the other four columns: bash 5.3.20 and bash 3.2.57 keep
+the table for a substitution and a simple pipeline element and clear it for
+a compound with the option and without, ksh93u+ keeps it everywhere either
+way, dash clears it everywhere either way, and BusyBox ash 1.37.0 in the
+pinned alpine image answers alike both ways.
+
+**Listing and acting are different surfaces, and zsh parts them here.** In a
+subshell of a `-fm` zsh with two running jobs, `jobs`, `jobs -l`, `jobs -p`
+and `jobs %2` all write the parent's rows with their numbers, their `+`/`-`
+markers and their states intact, and `kill -0 %1` succeeds — while
+
+| in the subshell | zsh 5.9.2 |
+| --- | --- |
+| `wait %2` | `can't manipulate jobs in subshell`, 1 |
+| `disown %1` | `can't manipulate jobs in subshell`, 1 |
+| `fg %1`, `bg %1` | `no job control in this shell.`, 1 |
+| `wait` | 0, at once, with the job still running |
+| `wait "$pid"` | `pid N is not a child of this shell`, 127 |
+
+That split matters more here than it does there, and for a reason no
+measurement shows: a real shell forked, so the worst its subshell could do
+to the parent's jobs was nothing. A subshell here is a cloned Runner and the
+job values are the parent's own, so a `wait` or an `fg` that got through
+reaps or resumes the *parent's* job. Measured on a branch that kept the
+table and left those verbs open, `( wait %2 )` and `( fg %1 )` in a shell
+with three running jobs left the parent listing one. `Runner.jobsInherited`
+is what holds the two surfaces apart.
+
+Two further measurements are recorded and **not** modeled, both about a
+subshell that is more than a reader:
+
+- A subshell that starts a job of its own stops showing the inherited rows
+  — which *is* modeled, in `addJob` — but the number its own job takes is
+  not this shell's: with two jobs in the parent, zsh gives the subshell's
+  own job `[2]` where this shell gives it `[1]`.
+- `fg` and `bg` in a zsh subshell refuse for a job the **subshell itself**
+  started, too, because the subshell's monitor is off: `( print
+  ${options[monitor]} )` under `-fm` writes `off` where the same read
+  outside writes `on`, and bash 5.3 and dash both write `on` there. That is
+  a fact about the option rather than about the job table, it is wider than
+  this axis, and it is filed rather than folded in.
 
 Two rows are measured and deliberately not modeled. bash also clears the
 table for a **function** and for **`eval`** used as a pipeline element,

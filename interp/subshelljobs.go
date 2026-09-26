@@ -69,6 +69,62 @@ const (
 	// own than two rows of a table, and the rows are recorded in
 	// docs/spec/semantics.md rather than guessed at.
 	SubshellJobsKeptOutsideACompound
+
+	// SubshellJobsKeptUnderTheMonitor keeps them in every subshell of a
+	// shell whose monitor is on, and clears them in every subshell of a
+	// shell whose monitor is off: zsh.
+	//
+	// **The monitor is the noun, and it is not the same noun as "an
+	// interactive shell".** The bug this value was added for (#4538) was
+	// filed as a fact about an interactive shell, and the two agree almost
+	// everywhere because zsh turns the monitor on for an interactive shell
+	// and refuses `set -m` without a terminal. They are told apart by
+	// holding one fixed and moving the other, which is the only way a rule
+	// keyed on the wrong one of two nouns is ever caught. Measured
+	// 2026-09-25 against zsh 5.9.2 on a pseudo-terminal, `sleep 3 & (jobs);
+	// jobs`:
+	//
+	//	interactive  monitor   `(jobs)`
+	//	no           off       nothing
+	//	no           **on**    **the row**   zsh -fm script
+	//	yes          **off**   **nothing**   zsh -fi, unsetopt monitor
+	//	yes          on        the row
+	//
+	// The answer moves with the monitor in both rows where interactivity is
+	// held fixed, and does not move with interactivity in either row where
+	// the monitor is. So it is read from Runner.monitor and nothing here
+	// asks whether there is a person at the other end.
+	//
+	// And it is not keyed on the subshell's *shape* either, which is the
+	// other candidate noun and the one the three values above are about.
+	// Measured the same day with the monitor on, all twelve boundaries list
+	// the parent's jobs — `( … )`, `$( … )`, a backquoted substitution,
+	// `<( … )`, a simple command and a group and a loop and a function and a
+	// nested `( … )` as pipeline elements, a function called in `( … )`, and
+	// both spellings of a `&` job's own body. With the monitor off, none of
+	// them do. One switch, twelve rows.
+	//
+	// **A `&` body is included**, which is the one place this value parts
+	// from the shape of inheritJobs below: the other three answers clear a
+	// background body's table before the axis is reached, on the measured
+	// grounds that the panel agreed there. It agrees with the monitor off
+	// and not with it on — `sleep 5 & ( jobs ) &` writes the row in zsh 5.9.2
+	// under `-fm` and writes nothing in bash 5.3.20, ksh93u+, dash and
+	// BusyBox ash under `-m`. So the unanimity was a fact about the shells
+	// that do not move, measured in the state where the one that moves has
+	// not moved.
+	//
+	// The jobs are **listed and not manipulable**, which is the same split
+	// the issue's own brief drew: measured in a subshell of a `-fm` zsh,
+	// `jobs`, `jobs -l`, `jobs -p` and `jobs %2` all write the parent's rows
+	// with their numbers, their `+`/`-` markers and their states intact, and
+	// `kill -0 %1` succeeds — while `wait %2` and `disown %1` answer
+	// `can't manipulate jobs in subshell` at 1, `fg` and `bg` answer
+	// `no job control in this shell.` at 1, `wait` alone answers 0 without
+	// waiting for anything, and `wait "$pid"` answers `pid N is not a child
+	// of this shell` at 127. See Runner.jobsInherited, which is what holds
+	// that apart.
+	SubshellJobsKeptUnderTheMonitor
 )
 
 func (t SubshellJobTable) String() string {
@@ -79,6 +135,8 @@ func (t SubshellJobTable) String() string {
 		return "kept"
 	case SubshellJobsKeptOutsideACompound:
 		return "kept outside a compound"
+	case SubshellJobsKeptUnderTheMonitor:
+		return "kept under the monitor"
 	}
 	return "unspecified"
 }
@@ -128,6 +186,22 @@ func (r *Runner) inheritJobs(kind jobBoundary) {
 	if len(r.jobs) == 0 {
 		return
 	}
+	// The field rather than the accessor, and only to ask whether this is the
+	// one answer that has something to say about a `&` body. The accessor
+	// *complains* where the axis is unanswered, and asking it here would
+	// raise that complaint at a boundary the axis has never been consulted
+	// at — which is every background job in a shell that has not chosen. See
+	// SubshellJobsKeptUnderTheMonitor, which measured the unanimity the early
+	// return below rests on and found it was a fact about the shells whose
+	// monitor was off, so the one shell that moves has to be let past it.
+	if r.sem().SubshellJobTable == SubshellJobsKeptUnderTheMonitor {
+		if r.monitor {
+			r.jobsInherited = true
+			return
+		}
+		r.jobs, r.jobOrder = nil, nil
+		return
+	}
 	if kind == jobBoundaryBackground {
 		r.jobs, r.jobOrder = nil, nil
 		return
@@ -169,4 +243,29 @@ func pipelineJobBoundary(cmd syntax.Command) jobBoundary {
 		return jobBoundarySimple
 	}
 	return jobBoundaryCompound
+}
+
+// refuseAJobThisShellDidNotStart is what the verbs that would *act* on a job
+// answer in a subshell holding nothing but its parent's.
+//
+// Listing and acting are different surfaces and they part exactly here. The
+// one dialect that inherits a job table into a subshell does not hand the
+// subshell any power over it — measured 2026-09-25 in a subshell of a zsh
+// 5.9.2 started `-fm`, `wait %2` and `disown %1` both answer
+// `<script>:wait:N: can't manipulate jobs in subshell` at 1 where `jobs %2`
+// on the same line writes the row.
+//
+// It matters here more than it does there, and for a reason no measurement
+// shows: a real shell forked, so the worst its subshell could do to the
+// parent's jobs was nothing. A subshell here is a cloned Runner in the same
+// process and the *Job values are the parent's own, so a `wait` that got
+// through would reap the parent's job out from under it and a `fg` would
+// resume it and wait it out. Measured on a branch that kept the table and
+// left these verbs open: `( wait %2 )` and `( fg %1 )` in a shell with three
+// running jobs left the parent listing one.
+func (r *Runner) refuseAJobThisShellDidNotStart(name string) int {
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.JobsNotManipulableInASubshell,
+		"%[1]s: can't manipulate jobs in subshell", name))
+	return orDefault(d.JobsNotManipulableInASubshellStatus, 1)
 }

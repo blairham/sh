@@ -61,6 +61,13 @@ func biDisown(r *Runner, _ context.Context, args []string) int {
 	if r.unspecified {
 		return r.status
 	}
+	if r.jobsInherited {
+		// Nothing in the table is this shell's to drop. Ahead of the
+		// operand, which is where the one shell that can be in this state
+		// puts it: measured, `( disown %1 )` and `( disown )` in a `-fm`
+		// zsh both say it.
+		return r.refuseAJobThisShellDidNotStart("disown")
+	}
 	var jobs []*Job
 	if len(args) == 0 {
 		// The current job, and with none the complaint is the dialect's —
@@ -947,6 +954,22 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 // prompt and nothing else, so `set -m` in a script granted the monitor and
 // `fg` still refused (#2720).
 func (r *Runner) canResume() bool {
+	if r.jobsInherited {
+		// A subshell holding nothing but the jobs its parent started is not
+		// running a monitor of its own: measured 2026-09-25, `( print
+		// ${options[monitor]} )` in a zsh 5.9.2 started `-fm` writes `off`
+		// where the same read outside the parentheses writes `on`. So `fg`
+		// and `bg` there give the no-job-control refusal, and give it
+		// whichever job was named — `fg: no job control in this shell.` at
+		// 1. See SubshellJobsKeptUnderTheMonitor.
+		//
+		// The measured fact is wider than this line: that shell answers the
+		// same way for a job the *subshell itself* started, which this shell
+		// does not, because the monitor flag a subshell carries is its own
+		// question and not this axis. Recorded in docs/spec/semantics.md and
+		// filed rather than folded in here.
+		return false
+	}
 	if r.sem().MonitorAloneResumesAJob == Yes {
 		return r.monitor
 	}

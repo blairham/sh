@@ -1910,6 +1910,17 @@ type Runner struct {
 	// interp/emptynullfield.go for what the mark is for.
 	listNulls []bool
 
+	// listEdges is the boundary that same split left at either end of the
+	// list, with the same lifetime — the two travel together as a listMarks
+	// out of expandAt. See interp/splitawayedge.go.
+	//
+	// Stored beside listNulls rather than inside one struct with it, which
+	// is not tidiness lost for nothing: TestACloneOwnsEveryStack enumerates
+	// the *slices* declared on Runner, so a slice moved inside a struct
+	// leaves sharedStacks without being noticed — which is the hole that
+	// test's own comment describes `scopes []*scope` falling through.
+	listEdges listEdges
+
 	// splitWordLiterals arms the literal text of one word for field
 	// splitting: the word a `-` or `+` substitutes is part of an unquoted
 	// expansion's result, so the blanks written in it separate fields. It is

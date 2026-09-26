@@ -450,6 +450,65 @@ the caller joins what comes back, so an empty element is a *separator*
 rather than a word. `set -- a '' b; x=$@` is `a  b` — two spaces — in all
 four.
 
+### An element that splits away to *nothing* leaves its boundary too
+
+The section above is an element whose **value** is empty. This one is an
+element whose value is nothing but separators, which splits into **no field
+at all** — a different thing arriving at the same place, and it has no field
+to mark. What it leaves is the boundary, which is what the *scalar* path has
+recorded since a value of blanks was measured: `v=' '; x${v}y` is `[x] [y]`
+in every column that splits.
+
+Measured 2026-09-26 against bash 5.3.20, bash 3.2.57, ksh93u+ 2012, dash
+0.5.12, BusyBox ash 1.37.0 and zsh 5.9.2 under `shwordsplit` — the columns
+that split a list — with the count printed beside the fields, and unanimous
+on every row:
+
+| written | every splitting shell | |
+| --- | --- | --- |
+| `set -- ' ' 2; x$@y` | `2` `[x]` `[2y]` | the blank element closed the `x` |
+| `set -- 2 ' '; x$@y` | `2` `[x2]` `[y]` | and opened the `y` at the far end |
+| `set -- ' '; x$@y` | `2` `[x]` `[y]` | **one** element, and both edges |
+| `set -- '  ' 2; x$@y` | `2` `[x]` `[2y]` | a run of them is one boundary |
+| `set -- ' ' ' ' 2; x$@y` | `2` `[x]` `[2y]` | and so is a run of elements |
+| `set -- ' ' 2 ' '; x$@y` | `3` `[x]` `[2]` `[y]` | |
+| `set -- 2 ' ' 3; x$@y` | `2` `[x2]` `[3y]` | in the middle it shows nothing |
+| `set -- ' a ' 2; x$@y` | `3` `[x]` `[a]` `[2y]` | an element that splits to one |
+| `set -- ' ' 2; $@` | `1` `[2]` | nothing beside it, nothing to keep |
+| `set -- ' ' 2; $@y` | `1` `[2y]` | |
+| `set -- ' ' 2; x$@` | `2` `[x]` `[2]` | |
+| `IFS=:; set -- ':'; x$@y` | `2` `[x]` `[y]` | the non-whitespace spelling |
+| `IFS=; set -- ' ' 2; x$@y` | `2` `[x ]` `[2y]` | nothing splits, so no boundary |
+
+**The rule is keyed on the *list* and not on the element.** Rows six and
+seven are the pair that says so, and they hold the element fixed and move
+it: the same blank element is a boundary at an end of the list and is
+nothing in the middle, because an element in the middle is already a field
+away from its neighbors and has nothing left to separate. So what is
+recorded is the first element's opening edge and the last element's closing
+one, which is exactly the pair the scalar path reads — and a rule stated
+about the element, closing the field wherever a blank element stood, answers
+row seven `[x2] [] [3y]` while agreeing with this one everywhere above it.
+
+**A blank element is not an empty one**, and the two sections part on their
+one-element row: `set -- ''; x$@y` is the single word `xy` and `set -- ' ';
+x$@y` is `[x] [y]`. One empty element is one *field*, and one field takes
+the text on both sides at once; one blank element is no field and two
+boundaries. A reading that folded them together — dropping the blank element
+as though it were empty — gets every other row of both tables right.
+
+**A field the splitter made is still not a field an element made.** The
+boundary is a boundary and never a field, so it adds nothing for the removal
+above to take away: `IFS=:; set -- ':b' c; $@` is `[][b][c]` as before, and
+`IFS=:; set -- ':'; x$@y` is `[x] [y]` rather than `[x] [] [y]` — the
+splitter's null absorbs the `x` and the closing edge opens the `y`.
+
+**It reaches a redirection's target**, which is the same word read two ways
+and so two places the boundary shows: with `set -- ' ' 2` and the target
+`x$@y`, zsh 5.9.2 opens two files, bash 5.3.20 calls it an ambiguous
+redirect — which is what more than one word means there — and ksh93u+ and
+dash write the single file their words view joins to.
+
 ## A separator closes the field beside it, with nothing to show for it
 
 Measured 2026-09-16, script files under `env -i`, one bracketed field per

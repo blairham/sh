@@ -56,7 +56,7 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	// Nothing below this line is a list of a word's fields until the loop at
 	// the end says so, and the marks belong to the call that is reading them.
 	// See interp/emptynullfield.go.
-	r.listNulls = nil
+	r.listNulls, r.listEdges = nil, listEdges{}
 	if !ok {
 		return nil, true
 	}

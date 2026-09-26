@@ -2525,6 +2525,64 @@ type Semantics struct {
 	// and then reporting that `` could not be created is two complaints for
 	// one mistake, and the second names a file nobody wrote.
 	RedirectTargetExpandsInTheCommandsProcess Answer
+
+	// HeredocBodyFailureIsTheRedirections says whose failure a here-document
+	// body that **will not expand** is, where the command it feeds is one the
+	// shell runs itself.
+	//
+	// Yes: the *redirection's*, so it costs what a file that would not open
+	// costs — the command does not run, the status is
+	// Diagnostics.RedirectFailureStatus's, the rest of the line runs, `||`
+	// catches it, and the shell stops only where
+	// RedirectErrorOnSpecialBuiltinFatal says a failed redirection on a
+	// special builtin stops it. ksh93, dash and BusyBox ash.
+	//
+	// No: the *shell's own failed expansion*, so it costs whatever any other
+	// failed expansion costs this shell — FailedExpansionAbandonsTheLine's
+	// line in bash and a fatal error in zsh — whatever command the body was
+	// written on. bash and zsh.
+	//
+	// Measured 2026-09-26 with `-c`, each snippet with the failure on the
+	// redirection's own line, against bash 5.3.20, zsh 5.9.2 under `-f`,
+	// ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox v1.37.0 in the pinned
+	// alpine image. A body of `$(( 1/0 ))`, and `echo "after st=$?"` on the
+	// line after the delimiter:
+	//
+	//	                          bash    zsh    ksh93  dash   ash
+	//	: <<END       special     st=1    stops  stops  stops  stops
+	//	read x <<END  regular     st=1    stops  st=1   st=2   st=1
+	//	f <<END       function    st=1    stops  st=1   st=2   st=1
+	//	{ :; } <<END  group       st=1    stops  st=1   st=2   st=1
+	//
+	// Three separate pairs say which noun that grid is keyed on, and every
+	// one of them is a row that would otherwise be read the wrong way:
+	//
+	//   - **A redirection that could not be opened** is the same grid in
+	//     ksh93, dash and ash — `: < /nonexistent/f` stops all three and
+	//     `read x < /nonexistent/f` carries on in all three — and a *different*
+	//     one in bash and zsh, which carry on for both and catch either with
+	//     `||`. So the three answer Yes and the two answer No.
+	//   - **The same expansion in an ordinary word** is bash's discriminator:
+	//     `echo $(( 1/0 )); echo SAME` writes no `SAME` there, and neither
+	//     does `: <<END; echo SAME` with the failing body — where `: <
+	//     /nonexistent/f; echo SAME` writes it. bash gives the body's failure
+	//     the *line*, which no redirection failure costs it.
+	//   - **A `${q?word}` body** holds the command fixed and moves the failure
+	//     kind. It is fatal in an ordinary word in all five, and in a body it
+	//     follows this axis rather than the kind: contained at 1, 2 and 1 on
+	//     `read`, a function and a group in ksh93, dash and ash, and ending
+	//     the shell on all three in bash and zsh.
+	//
+	// Asked only where a body really did fail. A here-document that expands
+	// is every other here-document, every column runs its command at 0, and a
+	// dialect that never answered this must still be able to feed one.
+	//
+	// Nothing is asked for a command the shell runs as a process of its own:
+	// the body is expanded in that process, the failure is the child's, and
+	// every column carries on — see HeredocExpandsInTheCommandsProcess and
+	// Runner.giveUpTheCommand, which is the boundary this one chooses whether
+	// to reach (#4684).
+	HeredocBodyFailureIsTheRedirections Answer
 	// ForNameWhenTheLoopRuns is what a `for` or `select` does when it is
 	// reached and the word standing where its variable belongs is not a
 	// name. Asked only where the grammar carried the word this far —

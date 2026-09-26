@@ -283,6 +283,7 @@ func (r *Runner) giveUpTheCommand(at redirBoundary) {
 		}
 	case r.pendingFileError():
 		r.takeFileError()
+		r.takeTheRedirectionsStatus()
 	default:
 		return
 	}
@@ -292,6 +293,35 @@ func (r *Runner) giveUpTheCommand(at redirBoundary) {
 	// out", which is exactly what happened.
 	r.redirErr = true
 	r.expandErr, r.badSubscript = false, false
+}
+
+// takeTheRedirectionsStatus puts the number a failed redirection reports here
+// in place of the one the failure itself left behind.
+//
+// At the one branch above that catches a *fatal* error, because that is the
+// only branch a here-document body reaches: a body that reported itself
+// without unwinding has been through fatalQuiet by then, and a body that
+// unwound arrives already fatal. The branch that takes back a give-up of the
+// **line** is the redirection *target*'s alone — `cat < nosuch*` under a
+// `shopt` name that refuses an unmatched pattern — and the one column with
+// that reading measured no redirection status of its own, so a take there
+// would be a line nothing could reach.
+//
+// The two are the same number in every column but one, which is why the
+// give-up above read as the fatal status for so long: bash, ksh93 and zsh are
+// 1 and 1, and dash is 2 and 2. **BusyBox ash is the column that tells them
+// apart** — its fatal errors exit 2 and its failed redirections report 1 —
+// and a here-document body it could not expand reports 1, on `cat <<END` and
+// on `: <<END` alike. Measured 2026-09-26 in the pinned 1.37.0 image (#4684).
+//
+// Only where the dialect recorded a status of its own, which is the same
+// guard Runner.simple's fatal branch keeps: the substrate's zero leaves
+// whatever the failure carried, so bash's `${q?word}` in a body still reports
+// its own 127 and a preset that never measured this does not move.
+func (r *Runner) takeTheRedirectionsStatus() {
+	if st := r.diag().RedirectFailureStatus; st != 0 {
+		r.status = st
+	}
 }
 
 // commandRunsInThisShell reports whether the shell will run this command

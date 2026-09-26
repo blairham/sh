@@ -2500,6 +2500,12 @@ func Semantics() interp.Semantics {
 	s.StoreRefusalThroughPrintfLeavesZero = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
+	// And a body this shell expanded itself and could not is its own failed
+	// expansion, which here is fatal: `: <<END`, `read x <<END`, a function
+	// and a group all end the shell at 1 over a body of `$(( 1/0 ))`, where
+	// a file that will not open on any of them carries on at 1 and is caught
+	// by `||`. Measured 2026-09-26 on 5.9.2 under `-f` (#4684).
+	s.HeredocBodyFailureIsTheRedirections = interp.No
 	s.ArithNameValueRecurses = interp.Yes
 	// And a fixed depth is what stops it: a chain of sixty distinct names
 	// ending in a number is `math recursion limit exceeded`. Measured

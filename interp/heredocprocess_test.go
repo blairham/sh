@@ -247,15 +247,40 @@ func TestWhoseProcessAHereDocumentIsForIsPerRedirectionList(t *testing.T) {
 // failure, and a test that only looked for "division by zero" would pass for
 // either shell.
 func TestAHereDocumentBodyIsAbandonedAtItsFirstFailedExpansion(t *testing.T) {
-	out, st := run(t, ": <<END\n$(( 1/0 )) $(( 2/0 ))\nEND\necho after\n", func(r *Runner) {
-		dg := Diagnostics{DivisionByZero: "division by zero"}
-		r.Diagnostics = &dg
-	})
-	const want = "sh: division by zero\nafter\n"
-	if out != want {
-		t.Errorf("out = %q, want %q: one complaint about one failure", out, want)
-	}
-	if st != 0 {
-		t.Errorf("status = %d, want 0: the command was given up, not the script", st)
+	// Under **both** answers to whose failure a body's is, because stopping
+	// at the first one is not what that axis decides — see
+	// interp/heredocbodyfailure.go. Where the failure is the redirection's
+	// the command is given up and the next line runs; where it is this
+	// shell's own failed expansion the same one complaint ends the shell
+	// here, since nothing answers FailedExpansionAbandonsTheLine (#4684).
+	for _, c := range []struct {
+		name    string
+		isRedir Answer
+		want    string
+		status  int
+	}{
+		{"the redirection's", Yes, "sh: division by zero\nafter\n", 0},
+		{"this shell's own", No, "sh: division by zero\n", 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := run(t, ": <<END\n$(( 1/0 )) $(( 2/0 ))\nEND\necho after\n", func(r *Runner) {
+				dg := Diagnostics{DivisionByZero: "division by zero"}
+				r.Diagnostics = &dg
+				sem := Semantics{
+					HeredocBodyFailureIsTheRedirections: c.isRedir,
+					// Asked of `:` on the way out under the first answer,
+					// and never reached under the second.
+					RedirectErrorOnSpecialBuiltinFatal: No,
+					FatalErrorStatusIsOne:              Yes,
+				}
+				r.Semantics = &sem
+			})
+			if out != c.want {
+				t.Errorf("out = %q, want %q: one complaint about one failure", out, c.want)
+			}
+			if st != c.status {
+				t.Errorf("status = %d, want %d", st, c.status)
+			}
+		})
 	}
 }

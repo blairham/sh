@@ -1515,6 +1515,14 @@ func Semantics() interp.Semantics {
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
+	// A body this shell expanded itself and could not costs what any other
+	// failed expansion costs it, which is the line: `: <<END; echo SAME`
+	// with `$(( 1/0 ))` in the body writes no `SAME` and leaves 1 for the
+	// next line, exactly as `echo $(( 1/0 )); echo SAME` does — and a file
+	// that will not open writes `SAME` there, which is what says this is not
+	// the redirection's failure. `${q?word}` in the same body ends the shell,
+	// as it does in a word. Measured 2026-09-26 on 5.3.20 (#4684).
+	s.HeredocBodyFailureIsTheRedirections = interp.No
 	// A loop variable that is not a name is checked when the loop runs here,
 	// and the loop fails while the script carries on: `for $n in a b` prints
 	// the complaint, the loop reports 1, and `echo "st=$?"` after it runs

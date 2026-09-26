@@ -1863,6 +1863,13 @@ func Semantics() interp.Semantics {
 	// `u` set.
 	s.HeredocExpandsInTheCommandsProcess = interp.No
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.No
+	// A body this shell expanded itself and could not is the *redirection's*
+	// failure, and this is the column that shows it in the status: `: <<END`
+	// with `$(( 1/0 ))` in it ends the shell at **1** where an ordinary
+	// failed expansion exits 2, and `read x <<END`, a function and a group
+	// carry on at 1 — which is RedirectFailureStatus and not the fatal
+	// status. Measured 2026-09-26 in the pinned 1.37.0 image (#4684).
+	s.HeredocBodyFailureIsTheRedirections = interp.Yes
 	// A descriptor number the process cannot hold is not checked before the
 	// open.
 	s.FdNumberBoundedByOpenFileLimit = interp.No

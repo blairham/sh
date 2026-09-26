@@ -132,6 +132,24 @@ func TestTheStandardsOwnNameIsReadToo(t *testing.T) {
 	if err := CheckInvocationName(s, "/tmp/sh/bash", "/bin/bash"); err != nil {
 		t.Errorf("a binary at /tmp/sh/bash was refused on its directory's name: %v", err)
 	}
+	// And the whole of argv[0] rather than its base name, which is the one
+	// input the two questions read differently and so the one that says which
+	// of them is being asked. bash strips a dash from argv[0] *whole* and
+	// then takes the last element, so `-sh` behind a directory is not the
+	// name `sh` to it; zsh takes the last element first and does read the
+	// dash off it. Both halves are measured in driver/emulationname.go.
+	if err := CheckInvocationName(s, "/tmp/-sh", "/bin/bash"); err != nil {
+		t.Errorf("/tmp/-sh was refused for the bash column, which does not read that as "+
+			"the standard's name: %v", err)
+	}
+	z, ok := FindOurs("zsh")
+	if !ok {
+		t.Fatal("no zsh column")
+	}
+	if err := CheckInvocationName(z, "/tmp/-sh", "/bin/zsh"); err == nil {
+		t.Error("/tmp/-sh was accepted for the zsh column, which drops the directory " +
+			"first and then the dash, and so starts sh emulation under it")
+	}
 }
 
 // A column with no shell of ours behind it has no front end to read the name,

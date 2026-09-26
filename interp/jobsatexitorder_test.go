@@ -77,7 +77,7 @@ func TestWhichJobsAtExitSentenceATableWithOneOfEachDraws(t *testing.T) {
 				r.addRunningJob(4243, []string{"sleep", "30"})
 				r.addStoppedJob(4242, []string{"sleep", "30"}, syscall.SIGTSTP)
 			}
-			if got := r.jobsAtExitSentence(); got != tc.want {
+			if got := r.jobsAtExitSentence(r.name()); got != tc.want {
 				t.Errorf("sentence = %q, want %q", got, tc.want)
 			}
 			if strings.Contains(errs.String(), "disagree here") {
@@ -102,7 +102,7 @@ func TestAnUnansweredJobsAtExitOrderSaysNothingElse(t *testing.T) {
 	r.addRunningJob(4243, []string{"sleep", "30"})
 	r.addStoppedJob(4242, []string{"sleep", "30"}, syscall.SIGTSTP)
 
-	if got := r.jobsAtExitSentence(); got != "" {
+	if got := r.jobsAtExitSentence(r.name()); got != "" {
 		t.Errorf("sentence = %q, want nothing beside the refusal", got)
 	}
 	if !strings.Contains(errs.String(), "disagree here") {
@@ -131,7 +131,7 @@ func TestAJobsAtExitSentenceSkipsAKindThisShellIsNotChecking(t *testing.T) {
 	r.addRunningJob(4243, []string{"sleep", "30"})
 	r.addStoppedJob(4242, []string{"sleep", "30"}, syscall.SIGTSTP)
 
-	if got := r.jobsAtExitSentence(); got != "STOPPED" {
+	if got := r.jobsAtExitSentence(r.name()); got != "STOPPED" {
 		t.Errorf("sentence = %q, want STOPPED: the running job is not this shell's to report", got)
 	}
 	if strings.Contains(errs.String(), "disagree here") {

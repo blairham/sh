@@ -7727,6 +7727,21 @@ func biExit(r *Runner, ctx context.Context, args []string) int {
 	if r.HoldsExitForJobs() {
 		return r.diag().StoppedJobsAtExitStatus
 	}
+	// A shell with no prompt cannot hold an exit — there is nowhere to stay
+	// and nobody to ask again — but the sentence is still this `exit`'s to
+	// write rather than the way out's, and the status the `exit` was given is
+	// not the status it leaves with. Measured 2026-09-26, `zsh -fm` over
+	// `sleep 3 & / exit 7 / print AFTER`: the sentence is located on the
+	// `exit`'s own line, the shell leaves with 1, and neither `print AFTER`
+	// nor an `exit 9` in its place runs. See
+	// Diagnostics.HeldExitInAScriptStatus, and note that the status moves
+	// only where a sentence was written: with `setopt no_check_jobs` in front
+	// of it the same script leaves with 7.
+	if !r.JobControl && r.tellOfJobsLeftBehind(true) && r.diag().HeldExitInAScriptStatus != 0 {
+		r.status = r.diag().HeldExitInAScriptStatus
+		r.stopTheShellForExit()
+		return r.status
+	}
 	args, marked := r.numericOperandMarker(args)
 	if !marked {
 		// Unanswered: the shell stops rather than leaving with a status it

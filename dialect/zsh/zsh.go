@@ -4644,6 +4644,12 @@ func Diagnostics() interp.Diagnostics {
 		// have written `Terminated: 15` (#4508).
 		JobSignaled: "%[1]s",
 		JobStopped:  "suspended",
+		// The two jobs-at-exit sentences are located on the script route —
+		// `<script>:3: you have running jobs.` — where a session writes
+		// `zsh:` with no line, and a held `exit N` there leaves with 1
+		// rather than with N. Measured 2026-09-26; see the fields (#4545).
+		JobsAtExitLocatedInAScript: true,
+		HeldExitInAScriptStatus:    1,
 		// And the three stops that are not ^Z carry a word of their own.
 		// Measured 2026-09-26 — see Diagnostics.JobStoppedBySignal for the
 		// table and for why this is keyed on the signal rather than worded

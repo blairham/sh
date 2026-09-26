@@ -1928,7 +1928,7 @@ func (r *Runner) HoldsExitForJobs() bool {
 	if r.jobsInherited {
 		return false
 	}
-	wording := r.jobsAtExitSentence()
+	wording := r.jobsAtExitSentence(r.name())
 	if wording == "" {
 		return false
 	}
@@ -1963,7 +1963,7 @@ func (r *Runner) HoldsExitForJobs() bool {
 //
 // The choice between the two wordings, and the options that gate each, are
 // the measurements [Runner.HoldsExitForJobs] carries.
-func (r *Runner) jobsAtExitSentence() string {
+func (r *Runner) jobsAtExitSentence(name string) string {
 	// The *first* of each kind that this shell would report, because where
 	// the two readings part it is a question about position. A job whose
 	// kind the shell is not checking is passed over rather than counted:
@@ -1987,13 +1987,13 @@ func (r *Runner) jobsAtExitSentence() string {
 		}
 	}
 	stoppedSentence := func() string {
-		return Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", r.name())
+		return Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", name)
 	}
 	switch {
 	case firstStopped < 0 && firstRunning < 0:
 		return ""
 	case firstStopped < 0:
-		return Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
+		return Wording(r.diag().RunningJobsAtExit, "there are running jobs", name)
 	case firstRunning < 0:
 		return stoppedSentence()
 	}
@@ -2006,7 +2006,7 @@ func (r *Runner) jobsAtExitSentence() string {
 	if firstRunning < firstStopped {
 		if r.ask(r.sem().JobsAtExitSentenceFollowsTheTableOrder,
 			"which sentence a table holding a running job in front of a stopped one draws") {
-			return Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
+			return Wording(r.diag().RunningJobsAtExit, "there are running jobs", name)
 		}
 		if r.unspecified {
 			// The refusal is the whole answer. Saying something as well
@@ -2090,12 +2090,12 @@ func (r *Runner) accountsForJobsAtExit() bool {
 // Semantics.HeldExitListsTheJobs, and the one dialect that reaches here
 // answers No — measured at a session and measured again here, where `zsh -fm`
 // writes the sentence with no rows beneath it.
-func (r *Runner) tellOfJobsLeftBehind() {
+func (r *Runner) tellOfJobsLeftBehind(atTheExit bool) bool {
 	if r.inSubshell || r.JobControl || r.jobsInherited || r.toldOfJobsAtExit {
-		return
+		return false
 	}
 	if !r.accountsForJobsAtExit() {
-		return
+		return false
 	}
 	// Take the stop notices first, because on this route nothing else has.
 	// A session sweeps them in reapJobs between one command and the next, so
@@ -2114,12 +2114,55 @@ func (r *Runner) tellOfJobsLeftBehind() {
 	for _, j := range r.jobs {
 		r.noticeStoppedJob(j)
 	}
-	wording := r.jobsAtExitSentence()
+	wording := r.jobsAtExitSentence(r.jobsAtExitName(atTheExit))
 	if wording == "" {
-		return
+		return false
 	}
 	r.toldOfJobsAtExit = true
 	r.errf("%s\n", wording)
+	return true
+}
+
+// jobsAtExitName is the name the two sentences about abandoned jobs carry.
+//
+// The shell's own name at a prompt, and on the script route the script's name
+// with a line after it — which is what the name a script's other diagnostics
+// carry already looks like. See Diagnostics.JobsAtExitLocatedInAScript for the
+// rows, and note that `Runner.name()` was already right on both routes: only
+// the number was missing (#4545).
+//
+// atTheExit says the caller is the `exit` builtin rather than the way out. It
+// is the whole of the arithmetic: an `exit` writes its sentence on its own
+// line, and a shell running off the end of a script is one line past the last
+// one it read.
+func (r *Runner) jobsAtExitName(atTheExit bool) string {
+	if !r.diag().JobsAtExitLocatedInAScript || r.Route != RouteScriptFile {
+		return r.name()
+	}
+	line := r.lastStmtLine
+	if !atTheExit {
+		line++
+	}
+	return r.name() + ":" + strconv.Itoa(line)
+}
+
+// jobsHungUpName is the same name for the hangup warning, which is written
+// after the sentence and is a line further down when an `exit` wrote one.
+//
+// The row that separates the two is `sleep 3 & / setopt no_check_jobs / exit
+// 7`: no sentence, and the warning lands on the `exit`'s own line rather than
+// one past it. So it is the sentence an `exit` wrote that costs the line and
+// not the `exit` itself — and a script that ran off the end writes both at the
+// same number whether or not there was a sentence.
+func (r *Runner) jobsHungUpName() string {
+	if !r.diag().JobsAtExitLocatedInAScript || r.Route != RouteScriptFile {
+		return r.name()
+	}
+	line := r.lastStmtLine
+	if !r.exitRan || r.toldOfJobsAtExit {
+		line++
+	}
+	return r.name() + ":" + strconv.Itoa(line)
 }
 
 // listJobsHeldAtExit prints the job table under the sentence, where the shell

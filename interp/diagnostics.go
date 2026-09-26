@@ -4290,6 +4290,52 @@ type Diagnostics struct {
 	// It is flat: `kill %99 %98` is 2 as well, with one line (#4666).
 	KillNoSuchJobStatus int
 
+	// JobsAtExitLocatedInAScript puts the script's name *and a line number*
+	// in front of the two sentences a leaving shell writes about its jobs,
+	// rather than the name alone. The wordings already take the name as
+	// their first verb, so what this changes is the name they are handed.
+	//
+	// Only on the script route. At a prompt both lines are the shell's name
+	// with no line, which is what this shell wrote on both routes until
+	// #4545.
+	//
+	// Measured 2026-09-26 on a pseudo-terminal, `zsh -fm <script>` against
+	// `/opt/homebrew/bin/zsh` — zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+	// `go version -m` on it says it is not a Go executable. Every row is a
+	// separate two-to-five line script:
+	//
+	//	sleep 3 &                       (2 lines)  :3 and :3
+	//	sleep 3 & / print x             (3 lines)  :4 and :4
+	//	sleep 3 & / setopt no_check_jobs           :4 — the hangup alone
+	//	sleep 3 & / exit 7 / print AFTER           :3 and :4
+	//	sleep 3 & / setopt no_check_jobs / exit 7  :4 — the hangup alone
+	//
+	// So the number is where the shell is: one past the last line where it
+	// runs off the end, and the `exit`'s own line where an `exit` wrote it.
+	// The **hangup moves down one** behind a sentence an `exit` wrote and
+	// not otherwise, which is the fifth row beside the fourth: the held exit
+	// is what costs the line, and the rows that ran off the end write both
+	// at the same number.
+	JobsAtExitLocatedInAScript bool
+
+	// HeldExitInAScriptStatus is what an `exit N` leaves with when it was
+	// the thing that wrote the jobs-at-exit sentence and the shell has no
+	// prompt to stay at. Zero leaves the operand alone, which is what a
+	// dialect that does not move it wants.
+	//
+	// Measured the same day and the same way. `sleep 3 & / exit 7 / print
+	// AFTER` leaves with **1**, not 7, and `AFTER` never runs; `exit 9` in
+	// place of that third line does not run either, so the shell really
+	// stops at the `exit` rather than going back for another line. With
+	// `setopt no_check_jobs` in front of it — so that no sentence is written
+	// — the same script leaves with 7, which is what says the status belongs
+	// to the sentence and not to having jobs.
+	//
+	// Separate from StoppedJobsAtExitStatus, which is the *prompt* route's
+	// and is 0 in this dialect: there the shell stays and the person may
+	// type `exit` again, and here it is leaving.
+	HeldExitInAScriptStatus int
+
 	// FileNotFound is how this dialect spells the reason a file was not
 	// there, when it does not quote the operating system's own text. No
 	// verbs.

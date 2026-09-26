@@ -34,6 +34,62 @@ failed on the others, would both be wrong; this is a dialect axis.
 
 Grammar flag: `ArithFloat` — core: off; `ksh` and `zsh`: on.
 
+### A plain `=` is worth what the target's numeric attribute made of it
+
+An arithmetic assignment's *value* is not the right-hand side. It is the
+number the target's numeric attribute converts that side into, so a float
+assigned to a name carrying `-i` is the truncated integer — and the
+expansion renders **that**, not the float:
+
+| probe (zsh) | value | the name afterwards |
+| --- | --- | --- |
+| `integer i; float f=3.1415`<br>`$(( i = f * 10000 ))` | `31415` | `31415` |
+| the same expression unassigned, `$(( f * 10000 ))` | `31415.` | — |
+| `integer i; $(( i = 2.0 ))` | `2` | `2` |
+| `integer i; $(( i = -1.5 ))` | `-1` | `-1` |
+
+Truncation is toward zero, which only the negatives can say: `-1.5` is `-1`
+and not `-2`. A float the word cannot hold saturates and one that is no
+number at all is zero — the conversion an integer context already makes.
+
+**It is the converted number and not the stored text**, and the two rows that
+say so hold the numeric type fixed while moving only the rendering:
+
+| probe | value | the name afterwards |
+| --- | --- | --- |
+| `typeset -i16 a; $(( a = 108 ))` | `108` | `16#6C` |
+| `typeset -F3 g; $(( g = 3.14159265358979 ))` | `3.14159265358979` | `3.142` |
+
+So a rule stated as "the value is what was stored" produces those renderings
+and is wrong. Moving the *type* is what moves the answer: `integer i` makes
+`$(( i = 1.5 ))` `1`, a `float` name makes it `1.5`, and a name with no
+numeric attribute leaves it `1.5`.
+
+The truth of `(( ))` is that same value, which is the row no rendering rule
+can produce because nothing is printed: `integer i; (( i = 0.5 ))` is
+**false** in zsh, and false in ksh93 beside it.
+
+**Only the plain `=`, and that is where the two shells part.** zsh converts
+what `=` stores and hands a compound assignment its computed value; ksh93
+converts both.
+
+| probe, with `typeset -i n=1` | ksh93 | zsh | `n` afterwards |
+| --- | --- | --- | --- |
+| `$(( n += 0.5 ))` | `1` | **`1.5`** | `1` in both |
+| `$(( n = n + 0.5 ))` | `1` | `1` | `1` in both |
+
+That pair holds the attribute fixed and moves the operator, which is what
+says the rule is keyed on the operator and not on "an assignment". The plain
+form is shared and implemented; the compound divergence is recorded here and
+not modeled (#4606).
+
+bash, dash and BusyBox ash reach none of this: they have no floating point in
+arithmetic at all, so there is never a value for an integer attribute to
+convert.
+
+Implemented at `numericAttribute` in `interp/arith.go`, measured 2026-09-26
+on zsh 5.9.2 and ksh93u+ 2012-08-01.
+
 ## Numeric bases, where the interesting divergence is
 
 | probe | dash | bash | ksh93 | zsh |

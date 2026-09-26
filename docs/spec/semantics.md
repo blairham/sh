@@ -28577,6 +28577,63 @@ the same word, and only expansion differs. It is also silent in the `&>`
 sense — `echo {1..3}` prints something either way, and nothing reports
 that one of them is not what was meant.
 
+**`BraceFanExpandsEachNameOnItsOwn`** — bash yes · dash n/a · ksh93 no · zsh no
+
+Expands the word again for every name the braces made, rather than
+expanding it once and giving every name the same results.
+
+The braces copy the **names**; this axis is whether they copy the
+**work** with them. It decides nothing in a word whose expansions only
+read — `echo {a,b}$v` is `av bv` under both readings — and it is the whole
+of the answer wherever one of them *does* something.
+
+Measured 2026-09-26 under `-c`, `env -i PATH=/usr/bin:/bin` with a
+scratch `HOME`, each case in a directory of its own:
+
+| `i=0; echo {x,y,w}$((i++)); echo "i=$i"` | words | `i` |
+| --- | --- | --- |
+| bash 5.3.20 | `x0 y1 w2` | 3 |
+| bash 3.2.57 | `x0 y1 w2` | 3 |
+| zsh 5.9.2 | `x0 y0 w0` | 1 |
+| ksh93u+ | `x0 y0 w0` | 1 |
+
+| `echo {x,y}$(echo TICK >&2; echo z)` | `TICK` lines | words |
+| --- | --- | --- |
+| bash 5.3.20 | 2 | `xz yz` |
+| bash 3.2.57 | 2 | `xz yz` |
+| zsh 5.9.2 | **1** | `xz yz` |
+| ksh93u+ | **1** | `xz yz` |
+| dash 0.5.12 | 1 | `{x,y}z` |
+| BusyBox ash 1.37.0 | 1 | `{x,y}z` |
+
+The **words agree in every column**, which is why this is counted rather
+than read: a doubled expansion produces the value a single one produces,
+and only the count and the variable it moved say it ran twice. A `Contains`
+check over the output cannot see it at all.
+
+The two columns that answer no reach it from different sides — zsh expands
+the word once and fans what came out, ksh93 brace-expands the *text* its
+expansions produced — and the count is the same either way, which is what
+this axis is about. Where the braces are *found* is
+`BraceOutputRereadAsText`'s question and not this one.
+
+**It is keyed on the fan, and the argument is the control that says so.**
+The doubling was reported as a redirection-target defect — `: > {x,y}$(f)`
+running `f` twice and `: > {x,y}${q?bad}` writing two different sentences —
+and the same word as an ordinary **argument** doubled identically, in the
+zsh and ksh93 columns alike. The neighboring noun is the trap: "a word that
+comes to several words" is not it, because `e='p q'; echo $e$(f)` comes to
+two words with no brace in it and runs `f` once in every column (#4694).
+
+**A failure ends the fan, and that is core rather than this axis.** Every
+shell that expands braces at all stops at the first one, so `echo
+{x,y}$((1/0))` is one diagnostic in bash 5.3.20, bash 3.2.57, zsh 5.9.2 and
+ksh93u+ alike — whichever way each of them answers the axis above. It is in
+the same helper, `Runner.eachBraceName`.
+
+dash and BusyBox ash have no brace expansion, so no word is ever fanned and
+the question cannot be put to them.
+
 **`ReplacementOperandTakesTheEnclosingQuoting`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Reads the replacement half of `${v/pat/repl}` as *content* of the quoting

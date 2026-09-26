@@ -2540,6 +2540,12 @@ func Semantics() interp.Semantics {
 	s.ArithUnsetNameUnderNounsetIsRefused = interp.Yes
 	s.ArithNounsetRefusalIsFatal = interp.No
 	s.BraceExpansion = interp.Yes
+	// The fan copies the names and not the work: `i=0; echo {x,y,w}$((i++))`
+	// is `x0 y0 w0` with `i` left at 1 on zsh 5.9.2, and `echo {x,y}$(echo
+	// TICK >&2; echo z)` writes TICK once for the two names. The words are
+	// the same either way, so the count and the variable are the whole of
+	// the tell — see the panel on the axis (#4694).
+	s.BraceFanExpandsEachNameOnItsOwn = interp.No
 	// What the braces produced goes back into the word the parse cut rather
 	// than being read again as text, so `var=baz; varx=vx; echo $var{x,y}`
 	// is `bazx bazy` and `printf '[%s]' {Z..a}` keeps the backslash it

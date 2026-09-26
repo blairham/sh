@@ -72,9 +72,14 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 			(len(words) > 1 || len(words) == 1 && words[0] != w) &&
 			r.ask(r.sem().BraceExpansion, "brace expansion") {
 			var out []string
-			for _, bw := range words {
+			// Through eachBraceName, which decides once whether the names
+			// share the word's expansions or each repeat them, and stops the
+			// fan at the first failure. The redirection target's road goes
+			// through the same helper: the doubling was in the fan and not
+			// in either caller. See braceFanHold (#4694).
+			r.eachBraceName(words, func(bw *syntax.Word) {
 				out = append(out, r.expandOneWordFields(bw)...)
-			}
+			})
 			return out
 		}
 	}
@@ -1020,12 +1025,12 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 // is not a reading that expands a target's braces in the first place.
 func (r *Runner) redirectTargetViewsOf(made []*syntax.Word) (fields, words []string, plain string) {
 	plains := make([]string, 0, len(made))
-	for _, bw := range made {
+	r.eachBraceName(made, func(bw *syntax.Word) {
 		f, u, p := r.expandRedirectTargetViews(bw)
 		fields = append(fields, f...)
 		words = append(words, u...)
 		plains = append(plains, p)
-	}
+	})
 	return fields, words, strings.Join(plains, " ")
 }
 

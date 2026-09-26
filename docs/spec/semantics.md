@@ -18461,6 +18461,16 @@ writes the same number of firings and only moves each one behind what it
 preceded, the list's behind the whole list and after everything its
 operands flushed.
 
+Where the held firing lands is the one place the two readings are **not** a
+mirror of each other, and it is measured rather than reasoned. Ahead of the
+list the firing names the line the list **starts** on; behind it, it names
+the line of the **last operand that ran**, whatever the operands in between
+did to the line record. A list written over lines 3, 4 and 5 names 5; the
+same list short-circuiting at its first operand names 3; and an operand that
+is a compound names its own head's line and not its body's last, so `print a
+&& {` on line 3 with a body on line 4 names 3 while a group written whole on
+line 4 names 4.
+
 dash and BusyBox ash never reach the question — both refuse `trap … DEBUG`
 outright, `trap: DEBUG: bad trap` and `trap: line 1: DEBUG: invalid signal
 specification`, measured 2026-09-25 beside an EXIT trap in the same run

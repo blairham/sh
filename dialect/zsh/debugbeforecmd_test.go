@@ -208,3 +208,34 @@ func TestDebugBeforeCmdDropsTheFiringAnExitWouldHaveHeld(t *testing.T) {
 		})
 	}
 }
+
+// The command that moves the option **back** is the one command with no
+// firing of its own, and it is the other end of the reduction this file opens
+// with. There, the `trap` that sets the trap fires for itself because the
+// placement is decided once the command has run and by then there is a trap.
+// Here the same lateness takes a firing away: `setopt DEBUG_BEFORE_CMD` is
+// dispatched with the option off, so nothing fires ahead of it, and by the
+// time its held firing would happen the shell fires ahead of commands again,
+// so it does not happen either.
+//
+// The mirror image is the control in the same file and needs no rule:
+// `unsetopt debugbeforecmd` fires **once**, ahead, and is not then fired for
+// a second time behind — which is what says the placement is decided once and
+// not re-decided at both ends.
+//
+// Measured on zsh 5.9.2 under `-f`, 2026-09-25, with the action counting its
+// own firings so that two firings at one line can be told from one.
+func TestTurningDebugBeforeCmdBackOnDropsThatCommandsHeldFiring(t *testing.T) {
+	src := "trap 'n=$((n+1)); print \"T@$LINENO n=$n\"' DEBUG\n" +
+		"unsetopt debugbeforecmd\n" +
+		"print a\n" +
+		"setopt debugbeforecmd\n" +
+		"print c\n" +
+		"trap - DEBUG\n" +
+		"print \"total=$n\"\n"
+	const want = "T@2 n=1\na\nT@3 n=2\nT@5 n=3\nc\nT@6 n=4\ntotal=4\n"
+	out, st := runZsh(t, t.TempDir(), src)
+	if out != want || st != 0 {
+		t.Errorf("got %q status %d, want %q at 0", out, st, want)
+	}
+}

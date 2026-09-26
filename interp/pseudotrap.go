@@ -484,6 +484,25 @@ func (r *Runner) debugAfterScope(ctx context.Context) func() {
 				// file firing nothing.
 				break
 			}
+			if !r.debugTrapRunsBehindTheCommand() {
+				// The command this firing was held for turned the
+				// placement round — `setopt DEBUG_BEFORE_CMD` — and a
+				// firing held behind a command the shell now fires ahead
+				// of does not happen at all. It did not fire ahead either,
+				// because the option was off when that decision was made,
+				// so the command that moves the option back is the one
+				// command with no firing of its own.
+				//
+				// Measured on zsh 5.9.2 under `-f`, 2026-09-25, with the
+				// action counting its own firings: `unsetopt
+				// debugbeforecmd` on line 2, `print a` on 3, `setopt
+				// debugbeforecmd` on 4, `print c` on 5 and `trap - DEBUG`
+				// on 6 writes `2 3 5 6` and four firings in all. The
+				// mirror image is the control and needs nothing here: the
+				// `unsetopt` on line 2 fires **once**, ahead, and is not
+				// then also fired for behind.
+				continue
+			}
 			r.line, r.running = h.line, h.running
 			r.fireDebugTrap(ctx, false)
 			// A skip refuses the command the firing preceded, and behind the

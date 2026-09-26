@@ -469,10 +469,15 @@ func (r *Runner) sublistExpr(ctx context.Context, e syntax.Expr) error {
 	// `ZSH_DEBUG_CMD` reads back at this firing is the whole list's text,
 	// which is the shape a dialect implementing that parameter would have to
 	// record; nothing in this tree has one.
+	before := len(r.debugHeld)
 	line := r.line
 	r.line = r.lineOf(b.Pos())
 	r.runDebugTrap(ctx)
 	r.line = line
+	held := -1
+	if len(r.debugHeld) > before {
+		held = before
+	}
 	if r.debugTrapStopped() {
 		// The refusal is the list's, so it costs every operand — the same
 		// reach the pipeline's single firing has.
@@ -480,17 +485,40 @@ func (r *Runner) sublistExpr(ctx context.Context, e syntax.Expr) error {
 	}
 	// Saved rather than cleared on the way out: a list nested inside one of
 	// these operands comes back through here and would otherwise hand the
-	// enclosing list's remaining operands back their own firings.
-	saved := r.sublistFired
-	r.sublistFired = true
-	defer func() { r.sublistFired = saved }()
-	return r.expr(ctx, e)
+	// enclosing list's remaining operands back their own firings, and take
+	// the enclosing list's own line with it.
+	saved, savedLine := r.sublistFired, r.sublistLine
+	r.sublistFired, r.sublistLine = true, 0
+	defer func() { r.sublistFired, r.sublistLine = saved, savedLine }()
+	err := r.expr(ctx, e)
+	if held >= 0 && held < len(r.debugHeld) && r.sublistLine != 0 {
+		// The **last operand's** own line, which is what a held firing
+		// names once the list has run — the one place the two readings are
+		// not a mirror of each other. Ahead of the list it names the line
+		// the list starts on; behind it, it names the line of the last
+		// operand that ran, whatever the operands in between did to the
+		// line record. Measured on zsh 5.9.2 with `unsetopt
+		// DEBUG_BEFORE_CMD`, 2026-09-25, a list written over three lines:
+		// `print a &&` on 3, `print b &&` on 4 and `print c` on 5 names 5,
+		// and the same list short-circuiting at the `false` on line 3 names
+		// 3. A compound operand names its own head's line and not its
+		// body's last — `print a && {` on line 3 with a body on 4 names 3,
+		// and a group written whole on line 4 names 4.
+		r.debugHeld[held].line = r.sublistLine
+	}
+	return err
 }
 
 // armSublistOperand arms the operand about to run to withhold its own DEBUG
-// firing, where the list it belongs to has already fired for the whole of it.
-func (r *Runner) armSublistOperand() {
+// firing, where the list it belongs to has already fired for the whole of it,
+// and records that operand's own line for a firing the list is holding.
+//
+// Read at the arming rather than at the flush, because the line record has
+// moved on by then: an operand that is a compound leaves it on the body's
+// last command and the firing names the compound's own head.
+func (r *Runner) armSublistOperand(e syntax.Expr) {
 	if r.sublistFired {
 		r.sublistOperand = true
+		r.sublistLine = r.lineOf(e.Pos())
 	}
 }

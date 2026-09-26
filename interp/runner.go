@@ -3499,6 +3499,10 @@ type Runner struct {
 	// reaching the commands inside it. Consumed by Runner.pipeline, exactly
 	// as Runner.elementFired is consumed by the command dispatcher.
 	sublistOperand bool
+	// sublistLine is the line the last operand the list armed begins on,
+	// which is what a firing the list is *holding* names once the list has
+	// run. Zero where nothing has been armed. See Runner.armSublistOperand.
+	sublistLine int
 	// debugHeld are the DEBUG firings this command has put off until it has
 	// finished, for the dialect that fires behind the command rather than
 	// ahead of it — see Semantics.DebugTrapRunsBeforeTheCommand. Held rather
@@ -4303,7 +4307,7 @@ func (r *Runner) clone() *Runner {
 	// either running a statement of its own — a background job, which fires
 	// for its whole list from in there — or an operand whose firing the
 	// original already withheld before the clone was made.
-	c.sublistFired, c.sublistOperand = false, false
+	c.sublistFired, c.sublistOperand, c.sublistLine = false, false, 0
 	// A subshell body is not running inside the frames the copy inherited.
 	c.funcFloor = c.depth
 	// And a subshell is not running inside the loop the copy was cloned from:
@@ -5959,7 +5963,7 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		// Runner.sublistFired. Armed per operand rather than read at the
 		// firing site, because it is consumed by the first pipeline that
 		// sees it and must not reach the commands *inside* that operand.
-		r.armSublistOperand()
+		r.armSublistOperand(x.X)
 		err := r.expr(ctx, x.X)
 		if x.Op == syntax.TokAndAnd {
 			r.andLeftOperand--
@@ -5978,7 +5982,7 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 			// status 1 and does not end the script.
 			return nil
 		}
-		r.armSublistOperand()
+		r.armSublistOperand(x.Y)
 		if err := r.expr(ctx, x.Y); err != nil {
 			return err
 		}

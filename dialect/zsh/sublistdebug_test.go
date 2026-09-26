@@ -90,6 +90,30 @@ func TestASublistFiresTheDebugTrapOnceForTheWholeList(t *testing.T) {
 			want: "T@2\nq\nT@2\nr\ns\nT@3\nT@3\nt\nu\nT@4\nT@5\nT@0\nv\nw\nT@6\nh\nT@6\nT@6\ni\n",
 		},
 		{
+			// Where the held firing lands is the one place the two
+			// readings are **not** a mirror. Ahead of the list it names
+			// the line the list starts on; behind it, it names the line of
+			// the **last operand that ran**, whatever the operands in
+			// between did to the line record. Three operands over three
+			// lines name the third; a list short-circuiting at its first
+			// names the first; and an operand that is a compound names its
+			// own head's line and not its body's last.
+			name: "the line a held firing names",
+			src: "unsetopt debugbeforecmd\n" +
+				"trap 'print \"T@$LINENO\"' DEBUG\n" +
+				"print a &&\n" +
+				"  print b &&\n" +
+				"  print c\n" +
+				"false &&\n" +
+				"  print d\n" +
+				"print e && {\n" +
+				"  print f\n" +
+				"}\n" +
+				"print g &&\n" +
+				"  { print h }\n",
+			want: "T@2\na\nb\nc\nT@5\nT@6\ne\nf\nT@9\nT@8\ng\nh\nT@12\nT@12\n",
+		},
+		{
 			// The count is orthogonal to `DEBUG_BEFORE_CMD`, which is
 			// placement — so with every firing moved behind the command it
 			// would have preceded, the list's single firing stands behind

@@ -991,6 +991,35 @@ func TestTheFrontEndSaysWhenTheProgramWasAnArgument(t *testing.T) {
 	}
 }
 
+// And the same question for a `$( … )` **body that will not parse**, which
+// that dialect answers with a number of its own on the same route.
+//
+// Here rather than in interp for the reason above: the interpreter's half is
+// tested by setting the route directly, and nothing there can see whether the
+// front end sets it right. The plain syntax error is the control that says
+// the number belongs to this refusal and not to a `-c` string that will not
+// parse. See interp.Diagnostics.SubstitutionParseFailureStatusFromCommandString
+// (#4697).
+func TestTheFrontEndSaysSoForARefusedSubstitutionBody(t *testing.T) {
+	sh := shell()
+	sh.Semantics = interp.PosixSemantics()
+	sh.Semantics.SubstitutionParseErrorIsFatal = interp.Yes
+	sh.Semantics.FatalErrorStatusIsOne = interp.Yes
+	sh.Diagnostics.SyntaxErrorStatus = 2
+	sh.Diagnostics.SubstitutionParseFailureStatusFromCommandString = 127
+
+	const src = "echo one\nv=$(echo hi; for)\necho two\n"
+	if _, _, code := runArgs(t, sh, "testsh", "-c", src); code != 127 {
+		t.Errorf("-c gave %d, want 127", code)
+	}
+	if _, _, code := runArgs(t, sh, "testsh", writeScript(t, src)); code != 2 {
+		t.Errorf("a script file gave %d, want the refusal's own 2", code)
+	}
+	if _, _, code := runArgs(t, sh, "testsh", "-c", "if"); code != 2 {
+		t.Errorf("a plain syntax error under -c gave %d, want 2", code)
+	}
+}
+
 // TestAHereDocumentWarningIsSaidOnce covers the front end's half: the parser
 // produces a remark as it reads, and the loop asks after every line, so
 // without a count of what has been shown the first remark would be repeated

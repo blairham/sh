@@ -3277,6 +3277,51 @@ type Diagnostics struct {
 	// this one. See Runner.fatalExpansionQuiet for the rows.
 	ExpansionFailureStatusFromCommandString int
 
+	// SubstitutionParseFailureStatusFromCommandString is that same kind of
+	// answer for a `$( … )` **body that will not parse**: what the shell
+	// exits with when the program came from an argument rather than from a
+	// file or from standard input.
+	//
+	// bash alone, and 127 there. It is a third number for one failure —
+	// bash reports 2 for it from a file and from standard input, and 2 for a
+	// plain syntax error under `-c` — so neither the refusal's own number
+	// nor the route's can stand for it. Zero leaves whatever
+	// Runner.substParseFailureStatus already answered.
+	//
+	// Measured 2026-09-26 under `env -i PATH=/usr/bin:/bin LC_ALL=C`, stdout
+	// and stderr discarded, `$?` taken immediately, against
+	// /opt/homebrew/bin/bash 5.3.20 (`not a Go executable` by `go version
+	// -m`):
+	//
+	//	-c  echo $(echo hi; for)            127
+	//	-c  v=$(echo hi; for)               127
+	//	-c  echo one; echo $(echo hi; for)  127
+	//	-c  ( echo $(for) )                 127
+	//	-c  echo $(for) | cat               127
+	//	-c  f() { echo $(for); }; f         127
+	//	-c  eval "echo \$(for)"             127
+	//	-c  . ./inc.sh, the same body in it 127
+	//	-c  if — a plain syntax error         2
+	//	-c  echo $(cat 10 — input ran out     2
+	//	file    the same three lines          2
+	//	stdin   the same three lines          2
+	//
+	// Four controls, each ruling out a different explanation. `if` under
+	// `-c` is 2, so the 127 is not what a `-c` string that will not parse
+	// costs — it is what *this* refusal costs on that route. The file and
+	// stdin rows are 2, so it is not the refusal's own number either. The
+	// `( … )` row is 127 where a *failed expansion* in the same place is 1,
+	// so this is not
+	// Diagnostics.ExpansionFailureStatusFromCommandString's rule wearing
+	// another hat — the boundary that field turns on does not exist here.
+	// And a body in a **here-document** is 1 on the same route, which is the
+	// row that says this is the number the failure ends the script with
+	// rather than the number it leaves behind wherever it is written; that
+	// one is settled by
+	// Semantics.SubstitutionParseFailureInAHeredocBodyEndsTheShell and is
+	// unmoved.
+	SubstitutionParseFailureStatusFromCommandString int
+
 	// ParamErrorMessage is what `${x?word}` says. Two verbs: the parameter
 	// and the word. The shape is unanimous — `x: word` — and only the
 	// default word below is not.

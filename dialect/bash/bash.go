@@ -3889,7 +3889,12 @@ func Diagnostics() interp.Diagnostics {
 		// messages.
 		BuiltinWriteError: "%[1]s: write error: %[2]s",
 		// Measured: bash reports a failed open at the redirect's own line.
-		RedirectFailureLine:     interp.LineOfRedirect,
+		RedirectFailureLine: interp.LineOfRedirect,
+		// A `$( … )` body that will not parse costs 127 when the program was
+		// a `-c` string, and 2 from a file or from standard input. See
+		// interp.Diagnostics.SubstitutionParseFailureStatusFromCommandString
+		// for the rows and the four controls (#4697).
+		SubstitutionParseFailureStatusFromCommandString: 127,
 		CannotCreate:            "%[1]s: %[2]s",
 		NoclobberRefusal:        "%[1]s: cannot overwrite existing file",
 		NamesTheInputInLocation: true,

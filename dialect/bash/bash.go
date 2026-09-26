@@ -728,6 +728,13 @@ func Semantics() interp.Semantics {
 	// keyed `0`, which is nothing at all where no such key was written.
 	s.KeyedTableScalarIsTheFirstValue = interp.No
 	s.ArrayNameWithoutSubscriptIsTheList = interp.No
+	// No, and there is no way to ask for anything else: this shell has
+	// neither zsh's `${^spec}` flag nor `RC_EXPAND_PARAM`, so a parameter
+	// expansion is always laid into the word it stands in. Measured
+	// 2026-09-25 on bash 5.3.20, `v='p q'; x${v}y` is the two words `xp`
+	// and `qy` rather than `xpy` and `xqy`, and `set -- A B; x$@y` is `xA`
+	// and `By` the same way (#4549).
+	s.ParamExpansionDistributesOverTheWord = interp.No
 	// A keyed literal's bare elements are each one field: `typeset -A m=($k
 	// $v)` with `k='1 2'` is the single key `1 2`, and `typeset -A m=(a *)`
 	// keeps the star. See

@@ -19927,6 +19927,54 @@ type Semantics struct {
 	// then, a slice or one of the element-selecting three.
 	ArrayNameWithoutSubscriptIsTheList Answer
 
+	// ParamExpansionDistributesOverTheWord makes a parameter expansion that
+	// writes no `^` of its own *distributive*: the word it stands in is
+	// produced once per field it produced, with the text around it on each,
+	// rather than once with the fields laid into it. `a=(1 2); x${a}y` is the
+	// two words `x1y x2y` instead of the one word `x1 2y`, so it changes the
+	// **argv word count** and not only the spelling of one argument.
+	//
+	// No in every dialect, and the one axis here that only an *option* moves:
+	// zsh spells it `RC_EXPAND_PARAM`, off by default, and `setopt
+	// rcexpandparam` writes this field. The other four shells have neither
+	// the option nor the `${^spec}` flag, so nothing in them can ask for the
+	// distribution at all.
+	//
+	// It is the **default for the flag and not a second mechanism**: the `^`
+	// characters a spec writes are read first and their parity wins, so
+	// `${^a}` distributes with the option off and `${^^a}` does not with it
+	// on. Only a spec with no `^` consults this axis. See
+	// interp/rcexpandflag.go, which holds the one implementation of the
+	// distribution itself — the flag and the option reach the same `spread`.
+	//
+	// **Its subject is the parameter expansion and not the word's fields**,
+	// which is the measurement that keeps it from being a rule about
+	// splitting. Measured on zsh 5.9.2 under `-f`, 2026-09-25, with two
+	// command substitutions producing two fields each in the same word shape:
+	//
+	//	x$(echo p q)y                      xp qy        both states
+	//	x${(f)"$(printf 'p\nq\n')"}y       xp qy off, xpy xqy on
+	//
+	// Same command, same field count, same prefix and suffix; the only
+	// difference is whether a parameter expansion wraps it, and only the
+	// wrapped one moves. A grid of array references cannot tell that reading
+	// from "any expansion that produced fields" apart, because every row in
+	// it is a parameter expansion.
+	//
+	// Quoting is not a third question, for the reason rcexpandflag.go gives:
+	// the rule runs on the fields the span produced, so `"x${a}y"` is one
+	// word in both states because the quotes already joined them, while
+	// `"x${a[@]}y"` is `x1y x2y` under the option because `[@]` keeps its
+	// fields through quotes. A guard on Quoting answers the first right and
+	// the second wrong.
+	//
+	// An empty array takes the word with it: `a=(); x${a}y` is **no word at
+	// all** under the option, where it is the single word `xy` without it.
+	// That is the one place the distributive rule parts company with the
+	// lay-in rule on a list with nothing in it — the word is produced once
+	// per element and there are no elements.
+	ParamExpansionDistributesOverTheWord Answer
+
 	// UnsetNameAtIsOneEmptyField hands a quoted `"${a[@]}"` written on a name
 	// that holds nothing at all one empty field. zsh alone, where a name
 	// that is not a declared array reads as a scalar and an unset scalar

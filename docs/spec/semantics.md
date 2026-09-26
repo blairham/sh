@@ -7673,7 +7673,7 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 21 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 22 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 6 | `aliases`, `autocd`, `banghist`, `checkjobs`, `cprecedences` and `hup`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, and a session that is leaving really does send SIGHUP to the jobs it abandons. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
@@ -7976,7 +7976,7 @@ notice is the only line there is to read: with the notice a command late,
 `zpty -r` waits for it for ever and the file hangs rather than failing. The
 chunk runs to the end with the option implemented.
 
-`posixtraps` left last, and it is the one whose *moment* had to be measured
+`posixtraps` is the one whose *moment* had to be measured
 before it could be wired: it is `ExitTrapIsFunctionLocal` read backwards — the
 option on is that axis answering No — and the axis was being asked at the
 function's return, where zsh reads the option when the `trap` command runs.
@@ -7987,7 +7987,55 @@ the state at the return fixed at the other's value, so the return cannot be
 what decides. It is reachable without anyone typing `setopt`, because
 `emulate sh` and `emulate ksh` both turn it on (#4547).
 
-So 130 of 185 are recorded, the count above is the one produced by counting
+`rcexpandparam` is the most recent to leave (#4549), and it is the one whose
+recording changed **how many arguments a command received**. RC_EXPAND_PARAM
+makes a parameter expansion that writes no `^` of its own distribute over the
+word it stands in: `a=(1 2); x${a}y` is the two words `x1y x2y` rather than
+the one word `x1 2y`. It is
+`Semantics.ParamExpansionDistributesOverTheWord` now.
+
+It is the cheapest of these conversions and it is worth saying why: the
+distribution was **already built and already reachable**. `${^a}` — the
+per-expansion spelling of the same thing — has worked since #1517, so the
+recorded name sat in front of a working mechanism and did not reach it. The
+change is that a spec with no `^` now takes its default from the axis; the
+`spread` it reaches is the one `${^a}` reached all along, and there is no
+second copy of it.
+
+**The switch and the flag are one mechanism read parity-first, and the two
+diagonal cells say so.** `${^a}` distributes with the option **off**, and
+`${^^a}` does not with it **on** — so the written carets decide outright
+rather than combining with the option, and neither an AND nor an OR describes
+the table. One word holds both readings at once: under the option,
+`x${^^a}z${a}` is `x1`, `2z1`, `2z2`.
+
+**Its moment was measured before it was wired**, which is the lesson the
+paragraph above this one paid for. The option is read **when the word is
+expanded** and not when it is parsed: a function defined while it was off
+distributes when it is called with it on, and one defined while it was on
+does not when it is called with it off — and an `eval` of a string built
+while it was off follows the state at the `eval`. The `${^a}` half of the
+same mechanism is the opposite, and deliberately so: the carets are state on
+the node and are settled at the parse. So "one mechanism" is about which
+answer wins and not about when each half is read.
+
+**Its subject is the parameter expansion and not the fields in the word**,
+which is the discriminating pair rather than a grid. Measured 2026-09-25 on
+zsh 5.9.2 under `-f`, with two command substitutions producing the same two
+fields in the same word shape: `x$(printf 'p q')y` is `xp qy` in **both**
+states, while `x${(f)"$(printf 'p\nq')"}y` is `xp qy` off and `xpy xqy` on.
+Only the one a `${…}` wraps moves. A table of array references cannot tell
+that reading from "any expansion that produced fields", because every row in
+such a table is a parameter expansion — the shape #4485 hit in this same
+code.
+
+Quoting is not a third question: the rule runs on the fields the span
+produced, so `"x${a}y"` is one word in both states and `"x${a[@]}"` moves.
+And an empty list takes the word with it — `a=(); x${a}y` is no word at all
+under the option, where it is the single word `xy` without it.
+
+So %COUNT% of 185 are recorded, the count above is the one produced by counting
+So %COUNT% of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

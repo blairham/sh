@@ -319,6 +319,13 @@ func Semantics() interp.Semantics {
 	// And it answers what an empty `$@` takes with it the way dash does: an
 	// expansion beside it is a field however empty it came out.
 	s.EmptyListTakesTheWord = interp.EmptyListReachNothing
+	// No, measured in the column rather than carried over from dash: run
+	// 2026-09-25 in the digest-pinned image
+	// (alpine@sha256:28bd5fe8b5…, BusyBox v1.37.0, linux/arm64),
+	// `v='p q'; x${v}y` is the two words `xp` and `qy` and `set -- A B;
+	// x$@y` is `xA` and `By`. `echo -e 'a\tb'` writing a real tab is the
+	// control that says the run was this shell and not dash (#4549).
+	s.ParamExpansionDistributesOverTheWord = interp.No
 	// `${#@}` with three parameters is 5 — the width of `a b c` — rather than
 	// the count.
 	s.LengthOfSpecialIsCount = interp.No

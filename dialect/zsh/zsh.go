@@ -1252,6 +1252,15 @@ func Semantics() interp.Semantics {
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
+	// Off in a shell that has not asked for it: `x${a}y` on `a=(1 2)` is
+	// the one word `x1 2y` here, and the two words `x1y x2y` only under
+	// `setopt RC_EXPAND_PARAM`, which is the one option in the panel that
+	// moves this. The setopt.go entry writes the axis rather than
+	// remembering the request (#4549), so `(setopt rcexpandparam)` stays in
+	// the subshell. The per-expansion `${^a}` spelling does not read this
+	// field at all — its parity wins — which is what keeps the flag and the
+	// option one mechanism.
+	s.ParamExpansionDistributesOverTheWord = interp.No
 	// A traced array literal shows what its elements came to: `x="p q";
 	// a=("$x" r)` is `a=( 'p q' r )` here. The unquoted `a=($x)` is
 	// `a=( 'p q' )` — one element, because nothing here splits an unquoted

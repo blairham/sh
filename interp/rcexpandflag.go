@@ -45,8 +45,10 @@ import "github.com/blairham/sh/syntax"
 // So a quoted spelling that keeps its fields distributes over them. A guard
 // on Quoting would answer the first row right and the next five wrong.
 //
-// Nothing about it is a runner option. The state lives on the node, for the
-// reason tildeflag.go gives: the decision is per expansion.
+// The *flag* is not a runner option: its state lives on the node, for the
+// reason tildeflag.go gives — the decision is per expansion. The option
+// behind it is, and it is the default this reads when no `^` was written;
+// see Runner.rcExpandOn and Semantics.ParamExpansionDistributesOverTheWord.
 
 // rcExpandParity is the effective answer the written `^` characters give, and
 // whether they gave one at all.
@@ -64,15 +66,44 @@ func rcExpandParity(s syntax.Span) (Answer, bool) {
 	return No, true
 }
 
-// rcExpandOn reports whether this span's `^` characters ask for the
-// distribution.
+// rcExpandOn reports whether this span distributes over the word it stands
+// in — because its own `^` characters asked for it, or because nothing did
+// and the option behind [Semantics.ParamExpansionDistributesOverTheWord] is
+// on.
 //
-// There is no option behind the `false`: `RC_EXPAND_PARAM` is recorded and
-// inert in this shell, exactly as `GLOB_SUBST` is behind `${~spec}`, so a
-// spec with no `^` is never distributive. The parity is still read in both
-// directions rather than only for "on", because that is what `${^^name}`
-// exists to say and it must keep saying it when the option is honored.
-func rcExpandOn(s syntax.Span) bool {
-	a, ok := rcExpandParity(s)
-	return ok && a == Yes
+// **Parity first, and the option only where no `^` was written.** That is
+// what makes the flag and the option one mechanism rather than two: the
+// option supplies the default the parity overrides, so `${^a}` distributes
+// with `RC_EXPAND_PARAM` off and `${^^a}` does not with it on — measured, and
+// the pair is what says the two are not independent switches to be ANDed or
+// ORed.
+//
+// The axis is asked **only of a parameter expansion**, which is the
+// measurement that keeps this from being a rule about fields in a word.
+// A command substitution produces fields in exactly the same shape and the
+// option does not reach it: `x$(echo p q)y` is `xp qy` in both states, while
+// the same command wrapped in a parameter expansion —
+// `x${(f)"$(printf 'p\nq\n')"}y` — is `xp qy` off and `xpy xqy` on. The
+// guard below is therefore on the span's *kind* and not on how many fields
+// it handed over; rcExpandParity's own `false` already covers every other
+// kind, and the kind is restated here so that a later caller cannot reach
+// the axis through a span that has no `${…}` to have written a `^` in.
+//
+// Read off the axis rather than off a stored bit, so `(setopt rcexpandparam)`
+// stays in the subshell and `emulate -R` puts it back with the rest of the
+// vector.
+//
+// Compared against Yes rather than asked through Runner.ask: every shell in
+// the panel answers No and the disagreement exists only inside the one that
+// has the option, so a core with no dialect chosen has no conflict to be
+// told about — and asking here would refuse on every word holding a
+// parameter expansion, which is most of them.
+func (r *Runner) rcExpandOn(s syntax.Span) bool {
+	if a, ok := rcExpandParity(s); ok {
+		return a == Yes
+	}
+	if s.Kind != syntax.ParamExp || s.Param == nil {
+		return false
+	}
+	return r.sem().ParamExpansionDistributesOverTheWord == Yes
 }

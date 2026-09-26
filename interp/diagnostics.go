@@ -2594,11 +2594,13 @@ type Diagnostics struct {
 	//	kill -TTOU %1   [1]  + suspended (tty output)  sleep 30
 	//
 	// So SIGTSTP — which is what ^Z sends, and the one this shell had
-	// already — is the plain word and the other three are their own, which
-	// is why nothing common looked wrong (#4527).
+	// already — is the plain word, and SIGSTOP, SIGTTIN and SIGTTOU each
+	// have one of their own, which is why nothing common looked wrong
+	// (#4527).
 	//
 	// The other two columns that word a state were measured the same day and
-	// are left as they are. bash 5.3.20 writes `Stopped` for all four, so it
+	// are left as they are. bash 5.3.20 writes `Stopped` for every one of
+	// those signals, so it
 	// has one word and no entries here. dash 0.5.12 has four wordings of its
 	// own — `Suspended: 18`, `Suspended (signal): 17`, `Stopped (tty input):
 	// 21`, `Stopped (tty output): 22`, each carrying the number JobStopped's

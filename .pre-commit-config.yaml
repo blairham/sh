@@ -60,7 +60,7 @@ repos:
   hooks:
   - id: misspell
     args: [-locale, US, -i, "colour,cancelled", -error]
-    files: \.(md|ya?ml)$
+    files: \.(md|ya?ml|go)$
     exclude: ^docs/spec/measurements\.md$
 
 # Secret scanning

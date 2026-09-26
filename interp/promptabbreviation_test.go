@@ -77,6 +77,9 @@ func TestTheShortestDrawnCandidateWins(t *testing.T) {
 		{"nothing over it", "", map[string]string{"jd": "/elsewhere"}, nd + "/a", nd + "/a"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// testrunner:bare — the subject is a table and two parameters
+			// and nothing here touches the filesystem, so a directory of
+			// its own would be a directory nobody opens.
 			r := &Runner{namedDirs: tc.names}
 			if tc.home != "" {
 				r.setVar("HOME", tc.home)
@@ -144,6 +147,9 @@ func TestANamedDirectorysWholeMarkerIsOneUnit(t *testing.T) {
 // Which dialect holds which is measured in the dialect packages — see
 // PromptStyle.CwdIsTheShellsOwnDirectory for the panel.
 func TestAPromptReadsItsDirectoryFromWhereTheStyleSaysItDoes(t *testing.T) {
+	// testrunner:bare — Dir *is* the subject here, so it has to be a string
+	// the test chose rather than one a helper handed over, and nothing in
+	// this test reaches the filesystem.
 	r := &Runner{Dir: "/where/the/shell/is"}
 	r.setVar("PWD", "/what/the/parameter/says")
 	if got := r.promptCwd(PromptStyle{}); got != "/what/the/parameter/says" {

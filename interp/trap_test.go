@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"strings"
@@ -133,6 +134,117 @@ func TestExitTrapIsFunctionLocalIsAnAxis(t *testing.T) {
 		if got, _ := run(t, top, withSem(sem)); got != "in\nend\nT\n" {
 			t.Errorf("top-level trap: got %q", got)
 		}
+	}
+}
+
+// TestExitTrapIsFunctionLocalIsReadWhenTheTrapIsSet pins the *moment*. The
+// axis is a field on a vector a dialect can move at run time — one shell
+// spells it as an option a function body can turn on or off in the middle of
+// itself — so "which side of the answer we are on" and "when we asked" are
+// separable, and they have to be separated, because a reading taken at the
+// return is backwards in both directions.
+//
+// The pair below is what separates them: the same trap, set under one answer
+// and returned under the other, each way round. Whichever moment is being
+// read, exactly one of these two rows fails for a shell reading the wrong
+// one, so neither can pass by accident.
+//
+// `flip` is a builtin the test registers rather than an option of any
+// dialect's, which is what keeps this a statement about the axis.
+func TestExitTrapIsFunctionLocalIsReadWhenTheTrapIsSet(t *testing.T) {
+	flipTo := func(a Answer) func(*Runner) {
+		return func(r *Runner) {
+			r.Register("flip", func(r *Runner, ctx context.Context, args []string) int {
+				s := *r.Semantics
+				s.ExitTrapIsFunctionLocal = a
+				r.Semantics = &s
+				return 0
+			})
+		}
+	}
+	for _, tc := range []struct {
+		name  string
+		start Answer
+		end   Answer
+		want  string
+	}{
+		{
+			// Local when the trap was set and global by the return: it
+			// still fires at the return.
+			"local at the set, global at the return",
+			Yes, No, "enter\nTRAP\nbetween\n",
+		},
+		{
+			// Global when the trap was set and local by the return: it
+			// still waits for the script's end. The state at the return
+			// takes both values on each side of the answer across these
+			// two rows, so it cannot be what decides.
+			"global at the set, local at the return",
+			No, Yes, "enter\nbetween\nTRAP\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := permissive()
+			sem.ExitTrapIsFunctionLocal = tc.start
+			const src = `f() { trap 'echo TRAP' EXIT; echo enter; flip; }; f; echo between`
+			setup := func(r *Runner) {
+				withSem(sem)(r)
+				flipTo(tc.end)(r)
+			}
+			if got, _ := run(t, src, setup); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// And the entry is a third moment, answering a different question: whether
+// the call *holds* the EXIT trap it inherited and puts it back at its return.
+// A shell that holds it and then sets a trap of its own that does not fire
+// here ends the call with the inherited trap standing — so that is the one
+// the script's end runs — where a shell that never held it ends with the
+// body's.
+//
+// The pair holds the answer at the `trap` fixed at No — so nothing fires at
+// the return in either row — and moves only the answer at the entry.
+func TestExitTrapIsFunctionLocalAtTheEntryDecidesWhatComesBack(t *testing.T) {
+	flipToNo := func(r *Runner) {
+		r.Register("flip", func(r *Runner, ctx context.Context, args []string) int {
+			s := *r.Semantics
+			s.ExitTrapIsFunctionLocal = No
+			r.Semantics = &s
+			return 0
+		})
+	}
+	const src = `trap 'echo TOP' EXIT; f() { flip; trap 'echo BODY' EXIT; }; f; echo after`
+	for _, tc := range []struct {
+		name  string
+		entry Answer
+		want  string
+	}{
+		{
+			// Entered holding the trap: TOP comes back over BODY.
+			"holding at the entry",
+			Yes, "after\nTOP\n",
+		},
+		{
+			// Never holding it: BODY replaces TOP outright, which is what
+			// the other four dialects do and must go on doing.
+			"not holding at the entry",
+			No, "after\nBODY\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := permissive()
+			sem.ExitTrapIsFunctionLocal = tc.entry
+			setup := func(r *Runner) {
+				withSem(sem)(r)
+				flipToNo(r)
+			}
+			if got, _ := run(t, src, setup); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

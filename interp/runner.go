@@ -3397,6 +3397,19 @@ type Runner struct {
 	// alone needs: there a trap set inside a function fires when the
 	// function returns rather than when the script ends.
 	trapDepth int
+	// exitTrapLocal is what Semantics.ExitTrapIsFunctionLocal answered at
+	// the moment the trap standing in exitTrap was set, and it is the answer
+	// the return reads rather than asking the axis again there.
+	//
+	// The moment is the measurement. zsh spells the axis `posixtraps` and a
+	// script can move it mid-body, so the two moments are separable and they
+	// disagree: measured on zsh 5.9.2 (`-f`, 2026-09-25), `f() { trap
+	// 'print T' EXIT; unsetopt posixtraps }` under `setopt posixtraps` defers
+	// to the shell's exit, and `f() { trap 'print T' EXIT; setopt posixtraps
+	// }` under `unsetopt posixtraps` fires at the return. Both hold the state
+	// at the *return* fixed at the other one's value, so it is the state when
+	// the `trap` command ran that decides and nothing else.
+	exitTrapLocal Answer
 
 	// errTrap, debugTrap and returnTrap are the pseudo-conditions: not
 	// signals, so nothing about them touches os/signal, and not EXIT, so

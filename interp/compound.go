@@ -1741,8 +1741,16 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		}
 	}
 	// What the EXIT trap was on the way in, so zsh can tell whether this
-	// function set one of its own.
-	outerTrap, outerDepth := r.exitTrap, r.trapDepth
+	// function set one of its own — and the answer the axis gave when that
+	// inherited trap was set, which goes back with it.
+	outerTrap, outerDepth, outerLocal := r.exitTrap, r.trapDepth, r.exitTrapLocal
+	// And whether the scoping was on at the *entry*, which is a second
+	// moment and a second question: it decides whether this call holds the
+	// trap it inherited, where Semantics.ExitTrapIsFunctionLocal read at the
+	// `trap` command decides whether the call's own trap fires here. The two
+	// come apart, and measured on zsh 5.9.2 (`-f`, 2026-09-25) they come
+	// apart in both directions — see the branches at the return.
+	enteredHoldingTheTrap := r.sem().ExitTrapIsFunctionLocal == Yes
 	// And, in the shell where a `function name { … }` call gets a trap table
 	// of its own, the rest of that table — taken and emptied here, put back
 	// as the call unwinds. EXIT goes with it, which is why this is beside
@@ -1750,7 +1758,7 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// back is already on the stack. See localtraps.go.
 	r.takeTheTrapTable(sc)
 	if sc.trapTableWasTaken {
-		r.exitTrap, r.trapDepth = nil, 0
+		r.exitTrap, r.trapDepth, r.exitTrapLocal = nil, 0, Unspecified
 	}
 	// And, in that same shell, the option table — which the same word
 	// scopes and the same word does *not* empty. The body is handed the
@@ -1849,15 +1857,42 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		// now is this call's: it fires here, and the caller's comes back
 		// whether or not there was one to fire.
 		body := r.exitTrap
-		r.exitTrap, r.trapDepth = outerTrap, outerDepth
+		r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
 		if body != nil {
 			exitTrapReturned = r.runFunctionExitTrap(ctx, *body)
 		}
-	} else if r.exitTrap != nil && r.exitTrap != outerTrap && r.trapDepth == r.depth+1 &&
-		r.ask(r.sem().ExitTrapIsFunctionLocal, "an EXIT trap set in a function firing when it returns") {
-		body := *r.exitTrap
-		r.exitTrap, r.trapDepth = outerTrap, outerDepth
-		exitTrapReturned = r.runFunctionExitTrap(ctx, body)
+	} else if r.exitTrap != nil && r.exitTrap != outerTrap && r.trapDepth == r.depth+1 {
+		// The call set an EXIT trap of its own. Whether it fires here is
+		// the answer the axis gave when the `trap` command ran — recorded
+		// then rather than asked now, because one dialect spells the axis
+		// as an option a body can move after setting the trap and the two
+		// moments disagree. See Runner.exitTrapLocal for the pair that
+		// separates them.
+		if r.ask(r.exitTrapLocal, "an EXIT trap set in a function firing when it returns") {
+			body := *r.exitTrap
+			r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
+			exitTrapReturned = r.runFunctionExitTrap(ctx, body)
+		} else if enteredHoldingTheTrap && outerTrap != nil {
+			// It does not fire, and the call was nonetheless entered with
+			// the scoping on — so the trap it inherited was held for it and
+			// comes back now, over the top of the one the body set.
+			//
+			// Measured on zsh 5.9.2 (`-f`, 2026-09-25) with a `print
+			// TOP-EXIT` trap at the top level: `f() { setopt posixtraps;
+			// trap 'print F-EXIT' EXIT }` leaves `trap` listing TOP-EXIT
+			// after the call and writes TOP-EXIT at exit, while the same
+			// body with the `setopt` moved *above* the call leaves F-EXIT
+			// listed and writes F-EXIT. Only the state at the entry differs.
+			//
+			// The inherited trap has to be there to come back: with no
+			// top-level trap the same body leaves its own F-EXIT installed
+			// and fires it at the shell's exit, which is why this is not a
+			// plain restore. And a shell that never holds the trap — the
+			// other four dialects, where the axis is No — never reaches
+			// here, so a function's EXIT trap replaces the caller's there
+			// as it always has.
+			r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
+		}
 	}
 	r.Params, r.inFunc, r.funcLine = saved, savedIn, savedLine
 	r.paramsReplacedBySet = savedReplaced

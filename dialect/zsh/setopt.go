@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 132 of the 185
+//     typing a directory name still does not change directory. 131 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -128,7 +128,7 @@ import (
 // `emulate ksh`, which turns it on by ksh's own default, printed 11 lines
 // where the reference prints 185 (#4529).
 //
-// `notify` is the most recent, and it is the one where recording cost a
+// `notify` is the one where recording cost a
 // *hang* rather than a wrong line. It is
 // [interp.Semantics.FinishedJobNoticeArrivesAtOnce] — when a finished job's
 // notice is written, the moment the job ends or before the next prompt — and
@@ -136,7 +136,15 @@ import (
 // the notice arrived one command late and a driver whose only readable line
 // was that notice waited for it for ever (#4524).
 //
-// Nothing else about the split moved, and 132 is still most of the table.
+// `posixtraps` is the most recent, and it is the one whose *moment* had to be
+// measured before it could be wired. It is
+// [interp.Semantics.ExitTrapIsFunctionLocal] read backwards — the option on
+// is that axis answering No — and the axis was asked at the function's
+// return, where this option is read when the `trap` command runs. The two
+// moments disagree in both directions, so reading it at the return would have
+// been a second wrong answer rather than the missing one (#4547).
+//
+// Nothing else about the split moved, and 131 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -969,7 +977,53 @@ var zshOptions = []zshOption{
 	recorded("posixidentifiers", false),
 	recorded("posixjobs", false),
 	recorded("posixstrings", false),
-	recorded("posixtraps", false),
+	{
+		// POSIX_TRAPS: whether an EXIT trap set inside a function is the
+		// function's, firing at its return, or the shell's, firing when the
+		// shell exits. Off by default here, which is zsh's own answer and
+		// the one nobody else in the panel gives; on is what POSIX says and
+		// what the other four do without being asked.
+		//
+		// It is [interp.Semantics.ExitTrapIsFunctionLocal] read backwards —
+		// the option on is that axis answering No — and it was recorded and
+		// inert until #4547: `setopt posixtraps` succeeded, `[[ -o
+		// posixtraps ]] `agreed, and the trap went on firing at the return
+		// in both states.
+		//
+		// What lifts it above an opt-in curiosity is that nobody has to type
+		// it. `posixtraps` is in emulationAlwaysReset and sh's and ksh's
+		// defaults for it are on, so `emulate sh` — a common opening line in
+		// a zsh function library — asks for POSIX trap timing, and a cleanup
+		// handler that ran before the rest of the script instead of at the
+		// end is an ordering bug rather than a cosmetic one.
+		//
+		// Measured on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`), 2026-09-25,
+		// over `f() { trap 'print EXITTRAP' EXIT; print in-f }; f; print
+		// after-f`: `in-f after-f EXITTRAP` with the option on and `in-f
+		// EXITTRAP after-f` with it off, and `emulate sh` in place of the
+		// `setopt` gives the first.
+		//
+		// Only EXIT. Measured the same day, a USR1 trap set in a function is
+		// still the function's to set and the shell's to keep in both states,
+		// and a ZERR trap set in a function still fires for a failure after
+		// the return in both — so this name moves one condition and not the
+		// idea of a trap being function-scoped, which is `localtraps`.
+		//
+		// Read off the axis rather than off a stored bit, the arrangement
+		// `globsubst`, `multios` and `posixbuiltins` use — so `(setopt
+		// posixtraps)` stays in the subshell and `emulate -L` puts it back
+		// with the rest of the vector.
+		base: "posixtraps", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ExitTrapIsFunctionLocal == interp.No
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ExitTrapIsFunctionLocal
+			}, answer(!on))
+			return 0
+		},
+	},
 	recorded("printeightbit", false),
 	recorded("printexitvalue", false),
 	recorded("privileged", false),

@@ -19,8 +19,10 @@
 # give the status of that command, which is the `kill` itself and is zero.
 #
 # Neither needs `setopt`: this is what zsh does out of the box. POSIX_TRAPS
-# is what turns the first of them off, and is not asked here because the file
-# is about what a script meets when nobody set an option.
+# is what turns the first of them off, and the last section of this file is
+# that option — added with #4547, where it was found recorded and inert, so
+# that both of its states are graded and not only the default one. Everything
+# above that section is still what a script meets when nobody set an option.
 
 # An EXIT trap set in a function, and a line after the call. In zsh the trap
 # has already run by the time that line is reached.
@@ -102,3 +104,50 @@ printf 'a subshell given up on ran no handler, with no option\n'
 ( trap 'printf "TRAP_RAN\n"' EXIT; exit 3 )
 ( trap 'printf "TRAP_RAN\n"' EXIT; cd /nosuchdir_zz; printf 'ran on\n' ) 2> /dev/null
 printf 'and a request to stop, or an ordinary failure, kept it\n'
+
+# POSIX_TRAPS, both ways. With it on, an EXIT trap set in a function is the
+# shell's: it waits for the shell to end, which is what every other shell on
+# the panel does without being asked. Each row is run in a subshell so that
+# the option does not leak into the next, and so that "the shell's exit" is
+# reached before the file has finished.
+( setopt posixtraps
+  ft() { trap 'printf "trap in ft\n"' EXIT; printf 'in ft\n'; }
+  ft
+  printf 'after ft\n' )
+
+# And with it off again, which is the control: the same body, the same order
+# of lines in the file, and the trap back at the return.
+( unsetopt posixtraps
+  fu() { trap 'printf "trap in fu\n"' EXIT; printf 'in fu\n'; }
+  fu
+  printf 'after fu\n' )
+
+# The option is read when the `trap` runs and not when the function returns,
+# so a body that turns it off after setting the trap still defers.
+( setopt posixtraps
+  fs() { trap 'printf "trap in fs\n"' EXIT; printf 'in fs\n'; unsetopt posixtraps; }
+  fs
+  printf 'after fs\n' )
+
+# And the other way round: set with the option off and returned with it on,
+# the trap still fires at the return.
+( unsetopt posixtraps
+  fr() { trap 'printf "trap in fr\n"' EXIT; printf 'in fr\n'; setopt posixtraps; }
+  fr
+  printf 'after fr\n' )
+
+# `emulate sh` turns it on without anyone typing `setopt`, which is how a
+# function library meets this.
+( emulate sh
+  fe() { trap 'printf "trap in fe\n"' EXIT; printf 'in fe\n'; }
+  fe
+  printf 'after fe\n' )
+
+# Only EXIT moves. A signal trap set inside a function is the shell's to keep
+# in both states, so the handler a later signal finds is the inner one.
+( setopt posixtraps
+  trap 'printf "outer usr1\n"' USR1
+  fk() { trap 'printf "inner usr1\n"' USR1; printf 'in fk\n'; }
+  fk
+  kill -s USR1 $$
+  printf 'after fk\n' )

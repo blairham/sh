@@ -76,13 +76,15 @@ type savedTrapState struct {
 //   - the dialect is not scoping traps, which is every shell's default;
 //   - there is no function call to be local to. A trap set at the top level
 //     stays set, and so does one a sourced file sets there;
-//   - the condition is EXIT, which is already scoped to the function in the
-//     shell that has this option, by a rule of its own that asks no option at
-//     all (ExitTrapIsFunctionLocal). Measured both ways: with the option on
-//     and with it off, an EXIT trap set in a function fires at the return and
-//     the caller's comes back either way. Leaving it out is also what keeps
-//     the two mechanisms from racing — the restore below runs before that
-//     one looks at whether this call installed a trap of its own.
+//   - the condition is EXIT, which is scoped to the function in the shell
+//     that has this option by a rule of its own — ExitTrapIsFunctionLocal,
+//     which that shell spells as a *different* option, `posixtraps`.
+//     Measured both ways: with `localtraps` on and with it off, an EXIT trap
+//     set in a function fires at the return and the caller's comes back
+//     either way, so this option is not what decides it. Leaving it out is
+//     also what keeps the two mechanisms from racing — the restore below
+//     runs before that one looks at whether this call installed a trap of
+//     its own.
 func (r *Runner) localizeTrap(name string, sig syscall.Signal) {
 	if r.sem().FunctionLocalTraps != TrapsGoBackAtTheReturn || name == "EXIT" {
 		return

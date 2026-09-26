@@ -135,9 +135,15 @@ func argv(s Suite, name string) []string {
 	if s.Driver == "" {
 		return []string{"./" + name}
 	}
-	out := make([]string, 0, len(s.DriverArgs)+2)
+	out := make([]string, 0, len(s.DriverArgs)+len(s.DriverFlags)+2)
+	// The shell's options, then the driver, then the driver's own options.
+	// Two lists and not one: see [Suite.DriverFlags] for the column that
+	// forced the split and for what a driver's option does in a shell's
+	// argument vector.
 	out = append(out, s.DriverArgs...)
-	return append(out, "./"+s.Driver, "./"+name)
+	out = append(out, "./"+s.Driver)
+	out = append(out, s.DriverFlags...)
+	return append(out, "./"+name)
 }
 
 func finish(err error, out string) Outcome {

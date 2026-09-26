@@ -705,11 +705,11 @@ func crossOne(ctx context.Context, s Suite, dir, name string, refs []Reference, 
 	first := map[string]answer{}
 	var order []string
 	for _, r := range refs {
-		out := runIn(ctx, s, dir, name, r.Path, Options{Timeout: timeout})
+		out := runIn(ctx, s, "", dir, name, r.Path, "", Options{Timeout: timeout})
 		if out.TimedOut {
 			return split, r.Name + ": killed on the timeout"
 		}
-		norm := normalize(out.Output, r.Path, out.Dir)
+		norm := normalize(s, out.Output, r.Path, out.Dir)
 		first[r.Name] = answer{norm, out.Status}
 		key := keyOf(norm, out.Status)
 		if _, seen := groups[key]; !seen {
@@ -722,11 +722,11 @@ func crossOne(ctx context.Context, s Suite, dir, name string, refs []Reference, 
 		// file under every shell to prove a case nobody disputes is four
 		// runs bought for nothing.
 		for _, r := range refs {
-			again := runIn(ctx, s, dir, name, r.Path, Options{Timeout: timeout})
+			again := runIn(ctx, s, "", dir, name, r.Path, "", Options{Timeout: timeout})
 			if again.TimedOut {
 				return split, r.Name + ": the second run was killed on the timeout"
 			}
-			norm := normalize(again.Output, r.Path, again.Dir)
+			norm := normalize(s, again.Output, r.Path, again.Dir)
 			if key := keyOf(norm, again.Status); !contains(groups[key], r.Name) {
 				was := first[r.Name]
 				return split, r.Name + ": " + difference(s, was.out, was.status, norm, again.Status)

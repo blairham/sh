@@ -87,7 +87,7 @@ func TestAgreementCapsAVeryLongOutputAndSaysSo(t *testing.T) {
 // words into <shell> and reported a difference between two identical outputs.
 func TestNormalizeReplacesAPathAndNotAWord(t *testing.T) {
 	const shell = "/opt/homebrew/bin/bash"
-	out := normalize(shell+": line 3: oops\nGNU bashbug reads bash scripts\n", shell, "")
+	out := normalize(Suite{}, shell+": line 3: oops\nGNU bashbug reads bash scripts\n", shell, "")
 	if strings.Contains(out, shell) {
 		t.Error("the shell's own path survived normalization")
 	}
@@ -97,7 +97,7 @@ func TestNormalizeReplacesAPathAndNotAWord(t *testing.T) {
 }
 
 func TestNormalizeRemovesTheDirectoryEachRunWasGiven(t *testing.T) {
-	out := normalize("wrote /tmp/suite123/t/f and /var/folders/ab/cd/T/x\n", "/bin/sh", "/tmp/suite123/t")
+	out := normalize(Suite{}, "wrote /tmp/suite123/t/f and /var/folders/ab/cd/T/x\n", "/bin/sh", "/tmp/suite123/t")
 	if strings.Contains(out, "suite123") || strings.Contains(out, "var/folders") {
 		t.Errorf("a per-run directory survived: %q", out)
 	}

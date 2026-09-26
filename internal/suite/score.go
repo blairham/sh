@@ -60,13 +60,22 @@ var tempPattern = regexp.MustCompile(`(/private)?/(tmp|var/folders)/[^\s:"']*`)
 // is masked and not dropped, and only where the number is one the run chose —
 // see pid.go, where the anchor and the `-1` it deliberately leaves alone are
 // argued.
-func normalize(out, shell, dir string) string {
+func normalize(s Suite, out, shell, dir string) string {
 	out = strings.ReplaceAll(out, shell, "<shell>")
 	if dir != "" {
 		out = strings.ReplaceAll(out, dir, "<dir>")
 	}
 	out = withoutTheRunsPid(out)
-	return tempPattern.ReplaceAllString(out, "<tmp>")
+	out = tempPattern.ReplaceAllString(out, "<tmp>")
+	// Last, and only where a column declares it: what a suite's own driver
+	// writes *about itself*. See [Suite.Noise] — a wall-clock time and a CPU
+	// time are the run's, not the shell's, and a column whose every file
+	// carries one is a column where every file is unstable and nothing is
+	// measured.
+	for _, n := range s.Noise {
+		out = n.Pattern.ReplaceAllString(out, n.With)
+	}
+	return out
 }
 
 // ErrBaseNameDiffers is what a run is refused with when the shell being graded

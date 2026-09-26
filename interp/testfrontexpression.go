@@ -138,6 +138,30 @@ func (r *Runner) frontThreeOperands(form testForm, args []string) (bool, error) 
 	if args[0] == "(" && args[2] == ")" {
 		return args[1] != "", nil
 	}
+	// Two negations in front of one word, which is that word's own truth:
+	// the one-argument rule twice over. It is the *last* thing tried rather
+	// than the first, and two rows above it say why a negation placed
+	// earlier would be wrong — `test ! -a /` is a negated file test and
+	// `test ! = x` is a comparison whose left operand is `!`.
+	//
+	// **The inner reading is the plain one-argument rule and not the lone
+	// `-t` shortcut**, which is the row that would have been guessed wrong.
+	// `test ! -t` is 0 under ksh93 because a lone `-t` there means `-t 1`
+	// and there is no terminal (Semantics.BareTerminalTestIsDescriptorOne),
+	// so negating *that* answer would make `test ! ! -t` 1. It is 0 — the
+	// shortcut is not taken at this depth.
+	//
+	// Measured 2026-09-26 across 21 operand lists under AT&T ksh93
+	// 93u+ 2012-08-01, and these six agree with bash 5.3.20, zsh 5.9.2,
+	// dash and ksh93u+m 1.0.8 as well: `test ! ! ''` is 1, and `test ! ! x`,
+	// `test ! ! !`, `test ! ! -t`, `test ! ! =` and `test ! ! (` are 0. This
+	// shell answered all six `!: unknown operator` at status 2, and it was
+	// the only column that did — the other four read the whole operand list
+	// and were right. Found by the ksh93 triage in #4434, where it is the
+	// one row of twenty that is not the reference build.
+	if args[0] == "!" && args[1] == "!" {
+		return args[2] != "", nil
+	}
 	// Three words are a comparison that had no operator, so the middle word
 	// is the one blamed — unless the first is spelled like a one-letter
 	// operator, in which case the reading it asked for is the one that

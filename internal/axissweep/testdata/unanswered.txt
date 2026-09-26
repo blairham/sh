@@ -212,6 +212,7 @@ ash   RestrictedModeIsLeftByTheLetter
 ash   ScalarAppendedToAnArrayBecomesANewElement
 ash   ScalarAssignedOverACompoundReplacesTheName
 ash   ScalarOverACompoundIsAnInconsistentType
+ash   ScalarStoredOverATableIsRefused
 ash   ScalarUnderATableDeclaration
 ash   ScalarUnderAnArrayDeclaration
 ash   SelectAssumesUnboundedWidth
@@ -520,6 +521,7 @@ dash  RestrictedModeIsLeftByTheLetter
 dash  ScalarAppendedToAnArrayBecomesANewElement
 dash  ScalarAssignedOverACompoundReplacesTheName
 dash  ScalarOverACompoundIsAnInconsistentType
+dash  ScalarStoredOverATableIsRefused
 dash  ScalarUnderATableDeclaration
 dash  ScalarUnderAnArrayDeclaration
 dash  SelectAssumesUnboundedWidth

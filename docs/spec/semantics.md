@@ -26353,6 +26353,69 @@ front of the sentence and the shell still leaves.
 `interp/tableliteralpairs_test.go` and a block of
 `share/suite/zsh/arrays.tests` (#4594).
 
+**`ScalarStoredOverATableIsRefused`** — bash no · dash no table to hold one · ksh93 no · zsh no, and **yes** under `ksharrays`
+
+Whether a scalar store over a name that is already holding a **table** is
+refused outright, ahead of
+`ScalarAssignedOverACompoundReplacesTheName` deciding what it would have
+done. Measured 2026-09-26, panel and machine as `oracle.md`, with
+`typeset -A h=(one 1)` in front of each line:
+
+    h=string / h+=string
+      bash 5.3.20  `declare -A h=([0]="string" [one]="1" )`, status 0,
+                   the next command run — the append joining at that key
+      ksh93u+      `typeset -A h=([0]=string [one]=1)`, the same
+      zsh 5.9.2    `typeset h=string` — the table gone and the name a
+                   plain scalar, status 0
+      zsh, `setopt ksharrays`
+                   `h: attempt to set associative array to scalar`,
+                   status 1, and the shell **leaves**
+
+**The noun is the name holding a table**, and it is the name's *kind*.
+The pair that says so holds the option on and moves only that: an
+ordinary array's `a=string` is taken at the base there, so "a compound
+name" and "a table name" part exactly here. Everywhere else in the panel
+they agree, which is why one field served for both until the option was
+measured — and it is why this could not be a third value on the field
+above, since a single three-valued answer would have to refuse for both
+kinds of compound.
+
+Three nouns it is not. Not the **operator**: `h=string` and `h+=string`
+earn the same sentence, where an array's two spellings are two different
+axes. Not the **declaration**: `unset h` first and the same line is an
+ordinary scalar store, and an empty `typeset -A h` is refused, so it is
+what the name is holding now. And not a **compound store**: `h=()` and
+`h+=(k v)` are taken under the option, so it is a scalar landing on the
+name and not an assignment to it.
+
+**It is asked wherever a scalar is stored**, which is the reach the field
+above has and the reason both live at the store rather than at the
+assignment statement: under the option, `for h in x y`, `read h`,
+`printf -v h x` and `${h::=x}` over a table each earn the sentence and
+end the shell. The location is the *store's* and not the builtin's —
+`<file>:1:` and not `<file>:read:1:` — exactly as this shell's own
+`read-only variable` refusal places itself from inside the same builtins.
+
+**The refusal's reach is the row above's**, measured against it: fatal at
+status 1, `||` does not catch it, an `always` block still runs, `eval`
+and a subshell contain it with the file above running on at 0, a
+function's name goes in front of the sentence, and the **table is left
+standing** — a contained refusal lists every key it had, so nothing is
+written before the complaint.
+
+It is one of the seven axes `ksharrays` moves, and the one where the
+option stops imitating ksh: the append row beside it is a faithful copy
+of what bash and ksh93 do with nothing set, and this one is the opposite
+of what both of them do.
+
+`Diagnostics.ScalarStoredOverATable` is the wording, with the name as its
+one verb, and `Runner.tableRefusesAScalarStore` is the check. Pinned by
+`dialect/zsh/scalarovertable_test.go`, `dialect/zsh/ksharrays_test.go`,
+`dialect/bash/scalarovertable_test.go`,
+`dialect/ksh/scalarovertable_test.go`, the axis suite in
+`interp/scalarovertable_test.go` and a block of
+`share/suite/zsh/arrays.tests` (#4617).
+
 **A local declaration builds the array cell rather than converting one**,
 and that is core rather than a fourth answer. bash promotes at the top
 level and through `-g` — `b=1; typeset -a b` and

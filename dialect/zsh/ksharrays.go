@@ -5,7 +5,7 @@ package zsh
 
 import "github.com/blairham/sh/interp"
 
-// `ksharrays` is one name over six axes, and that is measured rather than
+// `ksharrays` is one name over seven axes, and that is measured rather than
 // tidy. The option is described as moving the base, and what it actually does
 // is make an array read the way the ksh family reads one, which is a
 // different answer to every question this shell asks about a name that holds
@@ -58,14 +58,37 @@ import "github.com/blairham/sh/interp"
 // `setopt localoptions ksharrays` reaches an append inside it and not one
 // after it returns.
 //
-// The four that did not move are as much of the measurement as the six that
+// **The seventh is a refusal**, and it is the one that says the sixth's noun
+// was still a shade too wide. Measured 2026-09-26 on the same binary:
+//
+//	                         ksharrays off     ksharrays on
+//	typeset -A h=(one 1)
+//	h=string                 typeset h=string  h: attempt to set associative
+//	h+=string                typeset h=string    array to scalar, status 1,
+//	                                             and the shell leaves
+//	                                     ScalarStoredOverATableIsRefused
+//
+// A scalar store over a name holding a **table** is refused under the option,
+// where the same line over an ordinary array is taken at the base — which is
+// the sixth row above, and the pair that keeps the two apart. Both spellings
+// ask it, an empty `typeset -A h` asks it, and a subscripted `h[one]=Q` does
+// not: it is the bare name's kind and not the operator. `unset h` first and
+// the store is an ordinary scalar again.
+//
+// It is **not** what the whole ksh family does, which is where it parts from
+// the sixth: bash 5.3.20 and ksh93u+ 2012-08-01 both write the key `0` and
+// keep the table. So the option imitates ksh on where an append lands and
+// refuses outright where ksh stores, and one sentence about "reading an array
+// the way the ksh family reads one" gets this row wrong (#4617).
+//
+// The four that did not move are as much of the measurement as the seven that
 // did. `${a[1,2]}` is still a range and not the arithmetic comma operator;
 // `${a[@]}` and `${a[*]}` are still every element; `${a[-1]}` still counts
 // from the end; and a subscript on a scalar still reaches into its characters,
 // `s=hello; ${s[1]}` being `e` under the option and `h` without it, which is
 // the base moving rather than the construct going away.
 //
-// One function rather than six lines in three places: `setopt ksharrays`,
+// One function rather than seven lines in three places: `setopt ksharrays`,
 // `unsetopt ksharrays` and `emulate` all place the same option, and a group
 // spelled out at each of them is a group that drifts apart at one of them.
 // `emulate sh` and `emulate ksh` are how scripts reach it, and both were
@@ -77,4 +100,5 @@ func setKshArrays(s *interp.Semantics, on bool) {
 	s.ArrayNameWithoutSubscriptIsTheList = answer(!on)
 	s.BareSubscriptIsASubscript = answer(!on)
 	s.ScalarAppendedToAnArrayBecomesANewElement = answer(!on)
+	s.ScalarStoredOverATableIsRefused = answer(on)
 }

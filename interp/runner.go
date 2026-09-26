@@ -11658,11 +11658,40 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			return
 		}
 		if r.assocDeclared(a.Name) && a.Append {
-			// `m+=x` over a declared table joins the element whose key is
-			// `0`. The plain spelling is not here: what a scalar does to a
-			// name already holding a compound is one question for an array
-			// and a table alike, and it is asked at the store instead — see
-			// scalarOverCompound.
+			// `m+=x` over a declared table asks the **same two questions**
+			// `m=x` asks — whether a scalar store over a table is refused at
+			// all, and then whether it replaces the name — rather than the
+			// array append's, which asks where the value joins. Measured
+			// 2026-09-26 on zsh 5.9.2: with `setopt ksharrays` both
+			// spellings earn `h: attempt to set associative array to scalar`
+			// and end the shell, and without it both make the name a plain
+			// scalar. Joining the element whose key is `0` is what the
+			// *writing* answer does with this spelling, and it is the only
+			// part of this that belongs to the operator.
+			if r.tableRefusesAScalarStore(a.Name) {
+				return
+			}
+			if r.scalarStoreReplacesACompound() {
+				// And the replacing answer joins **nothing**: measured,
+				// `typeset -A h=(0 pre); h+=x` is `typeset h=x` and not
+				// `prex`, where a bare `$h` reads `pre`. So this is the plain
+				// store and not the string append below — setVarAs reaches
+				// scalarOverCompound, which takes the table away and leaves
+				// the value the whole of the name, and which is the one place
+				// that deletion is written so that a reference or a namespace
+				// member resolves the same way it does for `m=x`.
+				//
+				// Both fields are asked a second time down there, which costs
+				// nothing: Yes and No have no side effect, and neither can be
+				// the unanswered reading by the time we are here — that
+				// reading returned above and takes the join below.
+				r.setVarAs(a.Name, value, assignedAlone)
+				r.markForAllexport(a.Name)
+				return
+			}
+			if r.unspecified {
+				return
+			}
 			v, ok := r.appendedValue(a.Name, r.AssocArrays[a.Name]["0"].scalar(), value)
 			if !ok {
 				return

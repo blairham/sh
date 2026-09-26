@@ -1815,6 +1815,14 @@ func Semantics() interp.Semantics {
 	// name holding an array read `x`, `y`, `z` rather than the array three
 	// times, and `read a` collapse it.
 	s.ScalarAssignedOverACompoundReplacesTheName = interp.Yes
+	// And with `ksharrays` off nothing refuses the store first, which is what
+	// makes the line above reachable for a table at all: `typeset -A h=(one
+	// 1); h=string` is `typeset h=string` at 0, and so is the `h+=string`
+	// spelling. Under the option both are `h: attempt to set associative
+	// array to scalar` and the shell leaves — see setKshArrays, which is
+	// where the seventh axis moves, and
+	// Semantics.ScalarStoredOverATableIsRefused for the grid (#4617).
+	s.ScalarStoredOverATableIsRefused = interp.No
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	// A local does not inherit the export attribute of the name it shadows.
@@ -4301,6 +4309,15 @@ func Diagnostics() interp.Diagnostics {
 		// `bad [key]=value syntax for associative array` and the script stops.
 		// See interp.Semantics.MixedTableLiteral (#4241).
 		MixedTableLiteralRefusal: "bad [key]=value syntax for associative array",
+		// A scalar store over a name holding a table, in the option state
+		// that refuses one. Measured 2026-09-26 under `setopt ksharrays`,
+		// `typeset -A h=(one 1); h=string` is `h: attempt to set associative
+		// array to scalar` on standard error and the shell leaves at 1; the
+		// `h+=string` spelling earns the same sentence, and from inside a
+		// function the function's name goes in front of it where the file and
+		// line otherwise do. The name is the one verb.
+		// See interp.Semantics.ScalarStoredOverATableIsRefused (#4617).
+		ScalarStoredOverATable: "%s: attempt to set associative array to scalar",
 		// A table literal whose bare elements came to an odd number of
 		// fields, which this shell will not pair off. Measured 2026-09-26,
 		// `typeset -A h=(a 1 b)` is `bad set of key/value pairs for

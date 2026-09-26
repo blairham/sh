@@ -6578,6 +6578,15 @@ type Diagnostics struct {
 	// for what the refusal costs.
 	UnpairedTableLiteralElements string
 
+	// ScalarStoredOverATable is a scalar store — either spelling — over a
+	// name that is holding a table, in the dialect that refuses one instead
+	// of writing the key `0` or replacing the name. One verb, the **name**:
+	// the sentence says which variable and not what was being stored into it.
+	//
+	// See Semantics.ScalarStoredOverATableIsRefused for the rows and for what
+	// the refusal reaches.
+	ScalarStoredOverATable string
+
 	// EmptyKeyInATableLiteralPair is an empty key among a table literal's bare
 	// words — `m=(p 1 "" x)`. One verb, the word as **written**, quotes and all.
 	// See Semantics.EmptyKeyInATableLiteral.

@@ -849,6 +849,17 @@ func (r *Runner) appendScalarToArray(name string, a Array, value string) {
 // Returning false is not "nothing happened" — it is "the scalar store carries
 // on", which is also what the replacing answer wants after it has taken the
 // compound away.
+// scalarStoreReplacesACompound is
+// Semantics.ScalarAssignedOverACompoundReplacesTheName asked, in one place,
+// because two spellings reach it: `a=x` through scalarOverCompound below, and
+// `m+=x` over a table through Runner.assign. Spelling the ask out at both was
+// how the wording of the unanswered complaint would come to differ between
+// two routes to one field.
+func (r *Runner) scalarStoreReplacesACompound() bool {
+	return r.ask(r.sem().ScalarAssignedOverACompoundReplacesTheName,
+		"a scalar assigned over an array or a table replacing it")
+}
+
 func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	if form == assignedAsTheCompoundView {
 		return false
@@ -858,8 +869,16 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	if !isArray && !isTable {
 		return false
 	}
-	if r.ask(r.sem().ScalarAssignedOverACompoundReplacesTheName,
-		"a scalar assigned over an array or a table replacing it") {
+	if isTable && r.tableRefusesAScalarStore(name) {
+		// A column that will not have a scalar over a table at all, where the
+		// same line over an *array* is taken at its base. Ahead of the
+		// question below because the refusing column is the replacing one
+		// with an option set — see Semantics.ScalarStoredOverATableIsRefused.
+		// True is "the write is over": the table is left standing and the
+		// input is given up.
+		return true
+	}
+	if r.scalarStoreReplacesACompound() {
 		delete(r.Arrays, name)
 		delete(r.AssocArrays, name)
 		return false

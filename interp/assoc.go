@@ -954,6 +954,49 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 	}
 }
 
+// tableRefusesAScalarStore reports whether a name holding a table refuses a
+// scalar store outright, and writes the refusal where it does.
+//
+// Asked of the name's *kind* and of nothing else: the same line over an
+// ordinary array is taken at its base in the column that refuses here, which
+// is what makes this a question of its own rather than a third value on
+// Semantics.ScalarAssignedOverACompoundReplacesTheName. See that field's
+// neighbor, Semantics.ScalarStoredOverATableIsRefused, for the grid.
+//
+// Ahead of the replacing question rather than beside it, because the column
+// that refuses is a column that would otherwise have *replaced* — the same
+// line with `unsetopt ksharrays` in front of it makes the name a plain
+// scalar — so the two are asked in order and not chosen between.
+//
+// The refusal ends the input and leaves the table standing, which is the reach
+// tableLiteralPairsOff was measured with and this one re-measured against:
+// `||` does not catch it, an `always` block still runs, `eval` contains it,
+// and a function's name goes in front of the sentence.
+//
+// True is "the store is over", which is also what the unanswered reading
+// needs: ask has said so and stopped the command by then, and there is
+// nothing left to store into.
+//
+// **The location must not name the builtin**, for the reason
+// refuseSubscriptToUnset gives and measured the same way: this is the
+// parameter store speaking and not `read` or `printf`. Under the option,
+// `typeset -A h=(one 1); print x | read h` is `<file>:1: h: attempt to set
+// associative array to scalar` in the reference and not `<file>:read:1:`,
+// and `printf -v h x` is the same — which is exactly where the same shell's
+// own `read-only variable` refusal puts itself from inside a builtin.
+func (r *Runner) tableRefusesAScalarStore(name string) bool {
+	if !r.ask(r.sem().ScalarStoredOverATableIsRefused,
+		"a scalar store over a name holding a table being refused") {
+		return r.unspecified
+	}
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	r.fatal("%s\n", Wording(r.diag().ScalarStoredOverATable,
+		"%s: attempt to set associative array to scalar", name))
+	return true
+}
+
 // tableLiteralPairsOff reports whether a keyed literal's bare elements may be
 // paired off as key, value, key, value — and writes the refusal where they may
 // not.

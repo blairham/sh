@@ -149,6 +149,10 @@ func testSemantics() Semantics {
 	// writes the first element and keeps the array. The suite that is
 	// *about* it sets both answers — see scalarovercompound_test.go.
 	s.ScalarAssignedOverACompoundReplacesTheName = No
+	// And whether the store over a *table* is refused before that question is
+	// reached at all: bash takes it. The suite that is about this one sets
+	// both answers — see scalarovertable_test.go.
+	s.ScalarStoredOverATableIsRefused = No
 	s.ScalarUnderAnArrayDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	s.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	// The two questions a *subscripted* declaration and an exported compound

@@ -345,7 +345,7 @@ zsh-suite: ## Run zsh's own Test/ through real zsh and through cmd/zsh, and repo
 	@go build -o $(BINDIR)/shells/zsh ./cmd/zsh
 	@go run ./internal/cmd/suitecheck -dialect zsh -bin $(BINDIR)/shells/zsh -build $(BINDIR) $(ARGS)
 
-ksh-suite: ## Run ksh93's own tests through real ksh93 and through cmd/ksh (not yet a column; prints why)
+ksh-suite: ## Run ksh93's own tests through real ksh93 and through cmd/ksh
 	@mkdir -p $(BINDIR)
 	@mkdir -p $(BINDIR)/shells
 	@go build -o $(BINDIR)/shells/ksh ./cmd/ksh

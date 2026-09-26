@@ -122,7 +122,7 @@ func TestTheAppliedMaskLeavesEveryRealDifference(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := normalize(c.mine, "<none>", "") == normalize(c.theirs, "<none>", "")
+			got := normalize(Suite{}, c.mine, "<none>", "") == normalize(Suite{}, c.theirs, "<none>", "")
 			if got != c.same {
 				t.Errorf("normalize(%q) == normalize(%q) is %v, want %v",
 					c.mine, c.theirs, got, c.same)

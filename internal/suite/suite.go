@@ -139,6 +139,8 @@
 package suite
 
 import (
+	"regexp"
+
 	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/dialect/dash"
@@ -240,6 +242,71 @@ type Suite struct {
 	// machine. Taken from the suite's own `Test/Makefile.in`, which is the
 	// only statement of this that upstream makes.
 	DriverArgs []string
+	// DriverFlags are options for the **driver**, given after its path,
+	// where DriverArgs above are options for the shell that runs it.
+	//
+	// The two are separate because a driver is a program of its own with a
+	// command line of its own, and folding them into one list would put a
+	// driver's option in a shell's argument vector — where it is either a
+	// shell option nobody has or, worse, a file name. ksh93's `shtests` is
+	// what forced the distinction: `--posix` to it is one of three passes to
+	// run, and to a shell it is a script called `--posix.sh`, which is the
+	// diagnostic the first attempt produced.
+	DriverFlags []string
+	// DriverRunsUnderTheReference says the driver is the reference's own
+	// program and the shell being graded cannot run it.
+	//
+	// **This inverts the usual shape and is not a convenience.** Everywhere
+	// else the shell under test runs everything, driver included, and the
+	// reference is a second whole run of the same argv. ksh93's `shtests`
+	// cannot be read that way: run under our `ksh` it refuses at `trap:
+	// SIG32: bad trap`, then at `getopts: -a: unknown option`, and then
+	// takes `--posix` for a script name — three faults in the harness before
+	// a single assertion is reached, none of them about the questions the
+	// suite asks. The suite's own documentation settles it: shtests "is the
+	// ksh(1) regression test harness for $SHELL", so the graded shell is
+	// named by [Suite.ShellVar] and the harness itself runs under the
+	// reference.
+	//
+	// The hazard this creates is the one [environ] already names, and it is
+	// severe: with the executed binary the same in both runs, a ShellVar
+	// that failed to take effect would grade the reference against itself —
+	// every file identical, every figure perfect, nothing measured. That is
+	// why this column carries a discrimination check of its own rather than
+	// trusting the arrangement. An agreement you have not falsified is an
+	// echo.
+	DriverRunsUnderTheReference bool
+	// Beside are files the driver needs from *outside* the test directory,
+	// placed around the run's private copy.
+	//
+	// A run copies the test directory and nothing else, which is the right
+	// default — a suite file writes, and a copy per run is what keeps two
+	// runs from reading each other's leftovers. ksh93's `shtests` sources
+	// `../SHOPT.sh`, one level above that directory, and without it the
+	// driver stops before a single assertion: `shtests[315]: .:
+	// ../SHOPT.sh: cannot open`.
+	//
+	// **That failure is silent in the worst possible way**, which is why
+	// this is a field and not a shrug. It stops *both* shells at the same
+	// line, so the two runs are byte-identical and the column reports every
+	// file strict and 100% line agreement — measured, before this existed,
+	// with `dash` in the graded slot: `strict 1/1 100.0%`. A column that
+	// scores a foreign shell perfect is measuring nothing at all.
+	Beside []Beside
+	// Noise is what a suite's own driver writes about *itself* rather than
+	// about the shell: a wall-clock time, a CPU time, a run identifier.
+	//
+	// It is applied last in [normalize], after the shell's path and the
+	// run's directory, and only where a column declares it — the other four
+	// columns have none and are untouched.
+	//
+	// This is not leniency. A line that differs between two runs of the
+	// *same* shell is not evidence about either shell, and a column whose
+	// every file carries one is a column where every file comes back
+	// unstable and the report says `0 differing lines` over nothing. ksh93's
+	// `shtests` prints the date before and after each test and a two-line
+	// CPU-time block at the end, and both move run to run.
+	Noise []Noise
 	// DriverVerdict says the driver states a pass or a fail of its own, in
 	// its exit status, so the report can say how much of this column's
 	// agreement is agreement on a *failure*.
@@ -541,17 +608,101 @@ var Panel = []Suite{
 	{
 		Name:    "ksh93",
 		Dialect: "ksh",
-		Version: "1.0.10",
-		URL:     "https://github.com/ksh93/ksh/archive/refs/tags/v1.0.10.tar.gz",
-		SHA256:  "9f4c7a9531cec6941d6a9fd7fb70a4aeda24ea32800f578fd4099083f98b4e8a",
-		Root:    "ksh-1.0.10",
-		Include: []string{"src/cmd/ksh93/tests/"},
+		// 1.0.8 rather than the newest tag, and the reason is the whole of
+		// what used to block this column. The objection recorded here was
+		// that the maintained suite is ksh93u+m's while the only ksh93 on a
+		// Mac is AT&T 93u+ from 2012 — two lineages twelve years apart, so
+		// the run would measure the fork. That is a statement about a
+		// laptop. Debian and Ubuntu package ksh93u+m as `ksh`, and the
+		// runner that prints this panel already has one: the `Our own suite`
+		// job's own reference identifies as `Version AJM 93u+m/1.0.8
+		// 2024-01-01`. Pinning the suite to the **1.0.8 tag** makes the two
+		// sides the same release and not merely the same lineage, which is
+		// stricter than the objection asked for and costs nothing.
+		//
+		// It does not contradict #3480. That issue keeps *our own* ksh93
+		// column report-only because it is graded against AT&T 93u+
+		// 2012-08-01, a build nobody packages, and pinning it to the fork
+		// would measure the fork while looking better. This is the opposite
+		// column: a fetched suite is graded against the shell the suite came
+		// from, so ksh93u+m on both sides is the correct pairing rather than
+		// a substitution. The two columns answer different questions and
+		// hold different references on purpose. #4440.
+		Version: "1.0.8",
+		URL:     "https://github.com/ksh93/ksh/archive/refs/tags/v1.0.8.tar.gz",
+		SHA256:  "b46565045d0eb376d3e6448be6dbc214af454efc405d527f92cb81c244106c8e",
+		Root:    "ksh-1.0.8",
+		// `tests/` and one file beside it. SHOPT.sh is the build's option
+		// list and `shtests` sources it before it will start — measured,
+		// from the refusal `shtests[315]: .: ../SHOPT.sh: cannot open`. It
+		// is a configuration file rather than the shell, so the line
+		// fetch.go draws is unmoved: none of the implementation lands here.
+		Include: []string{"src/cmd/ksh93/tests/", "src/cmd/ksh93/SHOPT.sh"},
+		// And it has to be *placed*, not merely fetched: a run copies the
+		// test directory alone, so a file one level above it is not in the
+		// copy. See [Suite.Beside] for what its absence scores.
+		Beside:  []Beside{{At: "../SHOPT.sh", From: "src/cmd/ksh93/SHOPT.sh"}},
 		TestDir: "src/cmd/ksh93/tests",
 		Ext:     ".sh",
 		Lookup:  []string{"/bin/ksh", "/usr/bin/ksh", "/opt/homebrew/bin/ksh93"},
-		NotYet: "the maintained suite is ksh93u+m's and the only ksh93 on a Mac is AT&T 93u+ " +
-			"from 2012, so the oracle and the suite are different lineages — the run would " +
-			"measure the fork rather than us. It needs a ksh93u+m binary on the machine first",
+		// The invocation model, measured rather than read — the suite is
+		// another project's expression and CLEANROOM.md's red list covers
+		// its files, so every line of this came from running the driver and
+		// reading what it *said*:
+		//
+		//	shtests <file>.sh          $tmp not set; run this from shtests
+		//	./shtests <file>.sh        ../SHOPT.sh: cannot open
+		//	./shtests --posix <file>   the file runs, under $SHELL
+		//
+		// and its own `--man` states the rule the second line implies:
+		// shtests "is the ksh(1) regression test harness for $SHELL or ksh
+		// if SHELL is not defined and exported". So the graded shell is
+		// named by ShellVar and the driver is the harness.
+		Driver: "shtests",
+		// `--posix` alone, which is a narrowing and is stated as one. With
+		// no pass named, shtests runs three: the posix/C locale, the
+		// ast-specific C.UTF-8 locale, and a `shcomp`-compiled pass.
+		// `shcomp` is a second binary that this fetch does not unpack and
+		// this project does not have, so that pass fails under *both*
+		// shells for a reason that is about neither — which is agreement on
+		// an error message, the exact shape [Suite.DriverVerdict] exists to
+		// stop a column absorbing silently. The column measures the posix
+		// pass, and the figure means that.
+		DriverFlags: []string{"--posix"},
+		// The driver is ksh93's own program and our `ksh` cannot read it:
+		// run under ours it refuses at `trap: SIG32: bad trap`, then
+		// `getopts: -a: unknown option`, then takes `--posix` for a script
+		// name. See [Suite.DriverRunsUnderTheReference] for why that makes
+		// this a table entry and for the hazard it carries.
+		DriverRunsUnderTheReference: true,
+		ShellVar:                    "SHELL",
+		// What the driver writes about itself. Both move between two runs of
+		// one shell, so without them every file in this column is unstable
+		// and the column measures nothing — see [Suite.Noise].
+		Noise: []Noise{
+			// `test case begins at 2026-09-26+22:11:43`
+			{regexp.MustCompile(`\d{4}-\d{2}-\d{2}\+\d{2}:\d{2}:\d{2}`), "<time>"},
+			// `main:      0m00.002s    0m00.000s`
+			{regexp.MustCompile(`(?m)^(main|tests):\s+\d+m\d+\.\d+s\s+\d+m\d+\.\d+s$`), "$1: <cpu>"},
+		},
+		// `93u+m` and not `ksh`: this shell's version line is `Version AJM
+		// 93u+m/1.0.8 2024-01-01` and carries its own name nowhere in it, so
+		// the name a `MustReport: "ksh"` would look for is in no ksh93's
+		// output at all. The fragment is the fork's marker instead.
+		//
+		// Recorded rather than enforced on this path, which is worth saying
+		// plainly: [Suite.Believable] is asked by the contained runner and
+		// the fetched columns do not reach it, so this is the same shape the
+		// bash and zsh entries already carry. What *is* enforced here is the
+		// banner below — a Mac's AT&T 93u+ prints six lines of WRONG BUILD
+		// above its figures rather than being refused, which is #4106's
+		// lesson: make the wrong build legible, not absent.
+		MustReport: "93u+m",
+		// The whole release, for #3135's reason: `93u+` is a prefix of
+		// `93u+m/1.0.8`, so a gate built on the shorter fragment reports
+		// all-clear on exactly the build it was written to catch.
+		Against:       "ksh93u+m 1.0.8",
+		AgainstReport: "93u+m/1.0.8",
 	},
 	{
 		Name:    "dash",
@@ -560,6 +711,21 @@ var Panel = []Suite{
 		NotYet: "dash ships no test suite of its own; what it has is the POSIX conformance " +
 			"corpus it borrows, which is not the shell's own questions about itself",
 	},
+}
+
+// Beside is one file a driver needs from outside the test directory: where it
+// goes relative to the run directory, and what it is relative to the suite's
+// unpacked root. See [Suite.Beside].
+type Beside struct {
+	At   string
+	From string
+}
+
+// Noise is one pattern a column's driver writes about itself, and what it is
+// replaced with. See [Suite.Noise].
+type Noise struct {
+	Pattern *regexp.Regexp
+	With    string
 }
 
 // Built is the columns that can run.

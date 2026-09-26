@@ -415,7 +415,7 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i], moved[i] = grade(ctx, s, f.Dir, f.Name, ours, reference, read, haveDialect, doc, opts)
+			results[i], moved[i] = grade(ctx, s, dir, f.Dir, f.Name, ours, reference, read, haveDialect, doc, opts)
 		}()
 	}
 	wg.Wait()
@@ -561,7 +561,7 @@ func plan(s Suite, dir string, opts Options) ([]file, error) {
 // The second return is how the reference disagreed with itself, and it is
 // empty for every column but ours — see [difference], which is where that
 // carve-out is made rather than here.
-func grade(ctx context.Context, s Suite, tests, name, ours, reference string, read StaticRead, haveDialect bool, doc Doc, opts Options) (Result, string) {
+func grade(ctx context.Context, s Suite, root, tests, name, ours, reference string, read StaticRead, haveDialect bool, doc Doc, opts Options) (Result, string) {
 	var res Result
 	src, err := os.ReadFile(filepath.Join(tests, name))
 	if err != nil {
@@ -588,7 +588,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, re
 		res.ReferenceRead = staticParse(ctx, reference, filepath.Join(tests, name), staticTimeout)
 	}
 
-	ref := runIn(ctx, s, tests, name, reference, opts)
+	ref := runIn(ctx, s, root, tests, name, reference, reference, opts)
 	switch {
 	case ref.Failed:
 		res.OracleFailed = true
@@ -597,7 +597,7 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, re
 		res.OracleHung = true
 		return res, ""
 	}
-	own := runIn(ctx, s, tests, name, ours, opts)
+	own := runIn(ctx, s, root, tests, name, ours, reference, opts)
 	switch {
 	case own.Failed:
 		res.DialectFailed = true
@@ -609,12 +609,12 @@ func grade(ctx context.Context, s Suite, tests, name, ours, reference string, re
 
 	res.OurStatus, res.RefStatus = own.Status, ref.Status
 	identical := own.Output == ref.Output && own.Status == ref.Status
-	theirs := normalize(ref.Output, reference, ref.Dir)
-	mine := normalize(own.Output, ours, own.Dir)
+	theirs := normalize(s, ref.Output, reference, ref.Dir)
+	mine := normalize(s, own.Output, ours, own.Dir)
 	agreed := identical || (mine == theirs && own.Status == ref.Status)
 
 	if !agreed || s.mustRepeat() {
-		steady, moved := repeats(ctx, s, tests, name, reference, opts, theirs, ref.Status)
+		steady, moved := repeats(ctx, s, root, tests, name, reference, opts, theirs, ref.Status)
 		if !steady {
 			// The reference does not produce the same run twice, so the two
 			// shells were never going to agree and this file is evidence
@@ -664,7 +664,18 @@ type placed struct {
 // them, and several of them delete what they made only if they got that far.
 // Running twice in one directory would have the second run reading the first
 // one's leftovers, and the fetched tree would stop being what was unpacked.
-func runIn(ctx context.Context, s Suite, tests, name, shell string, opts Options) placed {
+// under is the binary that is actually started: the shell being graded,
+// unless the column's driver is the reference's own program and cannot be
+// read by anything else. See [Suite.DriverRunsUnderTheReference], which is
+// also where the hazard of that arrangement is written down.
+func (s Suite) under(shell, reference string) string {
+	if s.DriverRunsUnderTheReference && reference != "" {
+		return reference
+	}
+	return shell
+}
+
+func runIn(ctx context.Context, s Suite, root, tests, name, shell, reference string, opts Options) placed {
 	dir, err := os.MkdirTemp("", "suite")
 	if err != nil {
 		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}}
@@ -677,7 +688,13 @@ func runIn(ctx context.Context, s Suite, tests, name, shell string, opts Options
 	if err := placeShell(s, run, shell); err != nil {
 		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
 	}
-	out := runFile(ctx, s, shell, run, name, append(environ(s, run, shell), opts.Extra...), opts.timeout())
+	if err := placeBeside(s, root, run); err != nil {
+		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
+	}
+	// The environment always names the shell being *graded* — that is what
+	// makes the two runs differ at all where the driver is the reference's.
+	out := runFile(ctx, s, s.under(shell, reference), run, name,
+		append(environ(s, run, shell), opts.Extra...), opts.timeout())
 	return placed{Outcome: out, Dir: run}
 }
 
@@ -709,19 +726,48 @@ func placeShell(s Suite, run, shell string) error {
 	return os.Symlink(abs, at)
 }
 
+// placeBeside puts the files a driver needs from outside the test directory
+// around the run's copy. See [Suite.Beside].
+//
+// `At` is resolved against the run directory and may climb out of it — that
+// is the point, and it is why the result is checked against the run's parent
+// rather than against the run itself. The parent is the per-run temporary
+// directory this function's caller made, so climbing one level is still
+// inside what this run owns; climbing two is not, and is refused.
+func placeBeside(s Suite, root, run string) error {
+	for _, b := range s.Beside {
+		at := filepath.Join(run, filepath.FromSlash(b.At))
+		owned := filepath.Dir(run)
+		if rel, err := filepath.Rel(owned, at); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("%s: Beside %q climbs out of the run's own directory", s.Name, b.At)
+		}
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(b.From)))
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(at), 0o700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(at, src, 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // repeats asks the reference for the same file again.
 //
 // For a fetched column, only where the two shells differed: that is the one
 // place the answer changes anything. For a suite of ours, every file — see
 // [Suite.mustRepeat].
-func repeats(ctx context.Context, s Suite, tests, name, reference string, opts Options,
+func repeats(ctx context.Context, s Suite, root, tests, name, reference string, opts Options,
 	want string, status int,
 ) (steady bool, moved string) {
-	again := runIn(ctx, s, tests, name, reference, opts)
+	again := runIn(ctx, s, root, tests, name, reference, reference, opts)
 	if again.TimedOut {
 		return false, "the second run of the reference was killed on the timeout"
 	}
-	got := normalize(again.Output, reference, again.Dir)
+	got := normalize(s, again.Output, reference, again.Dir)
 	// Steady up to the two things neither run was asked for. One shell
 	// disagreeing with *itself* about the sequence of an associative array's
 	// keys is not a fact about either shell, and it is what made

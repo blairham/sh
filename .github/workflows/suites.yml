@@ -598,3 +598,92 @@ jobs:
         echo "the last lines the step printed:"
         tail -n 5 "$log" 2>/dev/null
         exit 0
+
+  ksh-suite:
+    name: ksh93's own suite (report only)
+    runs-on: ubuntu-latest
+    # ubuntu 24.04 and not the debian sid image the other two fetched columns
+    # share, because the question this column has to answer is *which ksh93*.
+    # There are two lineages: AT&T's 93u+ 2012-08-01, which is what a Mac has
+    # and which no distribution packages, and ksh93u+m, which is the
+    # maintained fork the suite itself comes from. 24.04 packages ksh93u+m
+    # **1.0.8**, and `suite.Panel`'s ksh93 entry pins the suite to the 1.0.8
+    # tag, so the two sides are the same release rather than merely the same
+    # lineage. #4440.
+    #
+    # Pinned by digest for the reason the sid pin above is: a column pinned to
+    # a tag reports a shell that changed, with nothing able to tell that from
+    # a shell that behaved differently. If 24.04's ksh moves off 1.0.8 the
+    # WRONG BUILD banner fires and the report says so, which is the designed
+    # behavior rather than a breakage to chase -- and `Against` carries the
+    # whole release for #3135's reason, since `93u+` is a prefix of
+    # `93u+m/1.0.8` and a gate built on the shorter fragment clears exactly
+    # the build it was written to catch.
+    container:
+      image: ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+    timeout-minutes: 30
+    steps:
+    - name: What a bare image does not have
+      continue-on-error: true
+      run: |
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+          make git ca-certificates gcc libc6-dev locales-all ksh
+        # The container runs as root and the workspace is the runner's uid, so
+        # git calls the checkout a dubious ownership and refuses it. `go build`
+        # stamps VCS status, so that would stop the build before the harness
+        # starts and the `|| true` below would turn it into a green job that
+        # measured nothing.
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Run ksh93's own tests/ through real ksh93 and through cmd/ksh
+      # #4440. The blocker recorded against this column for as long as it
+      # stood was that "the only ksh93 on a Mac is AT&T 93u+ from 2012, so the
+      # oracle and the suite are different lineages" -- which is a statement
+      # about a laptop. In a container they need not be, and this is that
+      # container.
+      #
+      # The suite is the ksh93u+m contributors' work under their own license.
+      # It is fetched at test time and never committed -- it lands under the
+      # gitignored build directory, and only `src/cmd/ksh93/tests/` plus the
+      # build's `SHOPT.sh` are unpacked, so no shell implementation of
+      # anybody else's reaches this disk.
+      #
+      # `--posix` alone, which `suite.Panel` explains: with no pass named,
+      # `shtests` runs three, and the third needs a `shcomp` binary this fetch
+      # does not unpack. That pass would fail under *both* shells for a reason
+      # about neither, which is agreement on an error message.
+      continue-on-error: true
+      shell: bash -e {0}
+      run: make ksh-suite ARGS="-timeout 30s" 2>&1 | tee "$RUNNER_TEMP/ksh-suite.log" || true
+    - name: Say whether this run produced a report
+      if: always()
+      shell: bash {0}
+      run: |
+        log="$RUNNER_TEMP/ksh-suite.log"
+        say() { echo "$1"; echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+
+        if [ -s "$log" ] && grep -q "^ksh93's own suite" "$log"; then
+          say "KSH-SUITE: report present"
+          {
+            echo '```'
+            grep -E "^ksh93's own suite|^  (oracle|static read|strict|line agreement|not scored) +[0-9/]" "$log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q 'WRONG BUILD' "$log"; then
+            say "KSH-SUITE: WRONG BUILD -- the oracle is not the build this column names"
+            echo "::warning title=ksh-suite::graded against a ksh93 this column does not name; 24.04 has moved off ksh93u+m 1.0.8"
+          fi
+          exit 0
+        fi
+
+        say "KSH-SUITE: NO REPORT -- this run measured nothing"
+        echo "::warning title=ksh-suite::no report was produced"
+        echo "the last lines the step printed:"
+        tail -n 5 "$log" 2>/dev/null
+        exit 0

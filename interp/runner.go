@@ -3167,6 +3167,23 @@ type Runner struct {
 	// `shopt -s huponexit`. See SendsHangupToJobsAtExit in
 	// sessionswitches.go.
 	hangUpJobsAtExit bool
+	// globSortsNumerically reads a run of digits in a match's name as the
+	// number it spells when the matches of a pathname expansion are put in
+	// order. Off with nothing said; one dialect names it, as
+	// `setopt numericglobsort`. See SortsGlobMatchesNumerically in
+	// sessionswitches.go.
+	globSortsNumerically bool
+	// tracesEachSourcedFile writes one trace line as the shell enters a file
+	// it is sourcing. Off with nothing said; one dialect names it, as
+	// `setopt sourcetrace`. See TracesEachSourcedFile in sessionswitches.go.
+	tracesEachSourcedFile bool
+	// evalTextKeepsTheCallersLocation stores the *deviation*: text handed to
+	// `eval` is not a place of its own, so the line and the name the shell
+	// reports through it stay the caller's. Having a location of its own is
+	// what a Runner does with nothing said, so the zero value is the shell
+	// this has always been. One dialect names the switch, as `unsetopt
+	// evallineno`. See EvalTextHasALocationOfItsOwn in sessionswitches.go.
+	evalTextKeepsTheCallersLocation bool
 	// optionLetterNames are the `set` option letters this dialect spells its
 	// own way, mapped to the names in its namespace. Nil where every letter
 	// the shell has is one the panel shares. Installed through

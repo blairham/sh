@@ -565,6 +565,111 @@ func (r *Runner) SendsHangupToJobsAtExit() bool { return r.hangUpJobsAtExit }
 // `shopt -s huponexit` is the only name the panel has for it.
 func (r *Runner) SetSendsHangupToJobsAtExit(on bool) { r.hangUpJobsAtExit = on }
 
+// SortsGlobMatchesNumerically reports whether a run of digits inside a
+// match's name is read as the number it spells when a pathname expansion's
+// matches are put in order, so that `f2` comes before `f10`.
+//
+// Off with nothing said, which is the order every column in the panel gives.
+// One shell has the switch and calls it `setopt numericglobsort`.
+//
+// **It is not bash's `GLOBSORT=numeric` under another name**, and the two
+// must not share a comparator. Measured 2026-09-26 in a directory holding
+// `f1`, `f2` and `f10`:
+//
+//	GLOBSORT=numeric       bash 5.3.20   f1 f10 f2
+//	setopt numericglobsort zsh 5.9.2     f1 f2 f10
+//
+// bash's key compares two names as numbers only where *both whole names* are
+// numbers, so `f2` and `f10` are not numbers at all and the name decides;
+// this one reads the digit run embedded in the name. The two answers differ
+// on exactly that input, which is what says a reuse would have been wrong
+// rather than merely untidy — see globSortNumericLess for bash's and
+// numericSegmentOrder for this one.
+//
+// It reaches filename generation and nothing else: measured, `${(o)a}` over
+// `f10 f2 f1` is `f1 f10 f2` in both states of the option, because the flag
+// that asks for this order at an expansion is `n` and is written there.
+func (r *Runner) SortsGlobMatchesNumerically() bool { return r.globSortsNumerically }
+
+// SetSortsGlobMatchesNumerically moves it, for a dialect naming the
+// capability — `setopt numericglobsort` is the only name the panel has for
+// it.
+func (r *Runner) SetSortsGlobMatchesNumerically(on bool) { r.globSortsNumerically = on }
+
+// TracesEachSourcedFile reports whether this shell writes one trace line as
+// it enters a file it is sourcing.
+//
+// Off with nothing said. One shell in the panel has the switch and calls it
+// `setopt sourcetrace`, and what it writes is the ordinary trace prefix with
+// the literal word `<sourcetrace>` where a traced command's words would go —
+// so it is the prefix writer aimed at an event rather than at a command, and
+// `PS4` decides it exactly as it decides an `xtrace` line's.
+//
+// Measured on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`), 2026-09-26, from a
+// script file in a directory holding `lib.zsh`:
+//
+//	setopt sourcetrace; . ./lib.zsh   +./lib.zsh:1> <sourcetrace>
+//	setopt sourcetrace; source lib.zsh  +lib.zsh:1> <sourcetrace>
+//	PS4='@%N:%i> ' with it on          @./lib.zsh:1> <sourcetrace>
+//	an empty file                      the line is still written
+//	a file that does not exist         nothing but the open's own complaint
+//	`eval 'print hi'`                  nothing
+//	a function call, a subshell        nothing
+//	unsetopt sourcetrace               nothing
+//
+// So the event is a file being **entered**, it is named as the script wrote
+// it, and its line is 1 — which the second row is what says: `source
+// lib.zsh` with no `./` writes the operand back unchanged rather than a path
+// the shell resolved. With `xtrace` on as well the line lands between the
+// `. ./lib.zsh` the caller traced and the first command of the file, which is
+// the moment it is written here (#4550).
+func (r *Runner) TracesEachSourcedFile() bool { return r.tracesEachSourcedFile }
+
+// SetTracesEachSourcedFile moves it, for a dialect naming the capability —
+// `setopt sourcetrace` is the only name the panel has for it.
+func (r *Runner) SetTracesEachSourcedFile(on bool) { r.tracesEachSourcedFile = on }
+
+// EvalTextHasALocationOfItsOwn reports whether text handed to `eval` is a
+// place: its own line numbering, and its own name where the dialect writes
+// one.
+//
+// On with nothing said, which is why the field behind it stores the
+// deviation. Every shell in the panel starts here — what one of them has is
+// a name for turning it off, `unsetopt evallineno`, and that name reaches
+// **both** halves at once rather than the parameter alone. Measured on zsh
+// 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`), 2026-09-26, from a script file whose
+// `eval` is on line 2 and whose text is two lines:
+//
+//	                                       switch on      switch off
+//	eval $'print $LINENO\nprint $LINENO'   1 then 2       2 then 2
+//	a command not found on the text's
+//	  second line                          (eval):2:      <script>:2:
+//
+// The two rows are one fact and not two, and the vendor manual for the option
+// says so in as many words: it names `$LINENO`, the `%i` prompt escape and
+// the `%N` escape that writes `(eval)` in place of the script's name. So a
+// switch that moved only the parameter would leave the shell reporting a
+// location its own `$LINENO` disagreed with.
+//
+// **It is off that is the deviation, and the on state is already right**,
+// which is what keeps this narrow: the first column above is what this shell
+// already did in every dialect (#4551).
+//
+// Not an axis, for RefusesABadPatternWhenGlobbing's reason: the columns do
+// not disagree about a default here — Semantics.EvalTextContinuesTheCallersLines
+// is the axis where they do, and it decides how the text's *own* numbering is
+// anchored rather than whether the text has one.
+func (r *Runner) EvalTextHasALocationOfItsOwn() bool {
+	return !r.evalTextKeepsTheCallersLocation
+}
+
+// SetEvalTextHasALocationOfItsOwn moves it, in the positive direction the
+// getter reads. A dialect whose name for this is the positive — zsh's
+// `evallineno`, which is on — passes the option's own sense straight through.
+func (r *Runner) SetEvalTextHasALocationOfItsOwn(on bool) {
+	r.evalTextKeepsTheCallersLocation = !on
+}
+
 // ErrExitEntersACommandSubstitution reports whether the shell a `$(…)` body
 // runs in holds `set -e` — `shopt inherit_errexit` under its bash name.
 //

@@ -39,9 +39,24 @@ import (
 // `emulate csh` here records the mode and changes nothing.
 // docs/spec/semantics.md records the boundary.
 //
-// `emulate -L`, the function-local form, is `setopt localoptions localtraps`
-// after the emulation and nothing else — measured, and it is two options
-// rather than one. It does **not** narrow or widen the reset: the 81 names a
+// `emulate -L`, the function-local form, is `setopt localoptions localtraps
+// localpatterns` after the emulation and nothing else — measured, and it is
+// three options rather than two. The count in this sentence has been wrong
+// twice: it said one, was corrected to two, and stopped one short, because
+// each correction was taken from a probe that listed what the letter moved
+// rather than from a listing taken *inside* the scope it opens. `f(){ emulate
+// -L zsh; setopt }; f` is that listing, and it prints `localpatterns` between
+// `localoptions` and `localtraps` in the reference (#4530).
+//
+// The third name has nothing to scope in this shell, which is worth saying
+// rather than leaving to be discovered: `localpatterns` restores the pattern
+// disables `disable -p` makes, and `disable` here keeps only the builtins
+// table — see enable.go, where every other table is refused out loud. So what
+// the letter owes today is the option's *state*, which is read by the
+// listings, by `[[ -o localpatterns ]]` and by `$options`; the scope arrives
+// with the table it scopes.
+//
+// It does **not** narrow or widen the reset: the 81 names a
 // bare `emulate sh` puts back are the same 81 `emulate -L sh` puts back, and
 // `-L -R` together are the strict set scoped to the call. So `emulate -L sh`
 // leaves an `xtrace` running where `emulate -LR sh` stops it, which is the
@@ -239,19 +254,19 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 			// localtraps.go are where the rest is, and it is the same
 			// machinery the two `setopt` names reach.
 			//
-			// Two names and not one. Measured on zsh 5.9.2, `emulate -L zsh`
-			// leaves `localoptions`, `localtraps` and `localpatterns` on and
-			// `localloops` off — so the trap the letter scopes is the
-			// trap-side option working, not the option table's rule reaching
-			// further than it does. `localpatterns` is not modeled here and
-			// nothing sets it, which is the one of the three this letter
-			// still does not carry.
+			// Three names and not one, and not two. Measured on zsh 5.9.2
+			// from a listing taken inside the scope — `f(){ emulate -L zsh;
+			// setopt }; f` — `emulate -L zsh` leaves `localoptions`,
+			// `localpatterns` and `localtraps` on and `localloops` off. So
+			// the trap the letter scopes is the trap-side option working,
+			// not the option table's rule reaching further than it does.
 			//
 			// After the emulation rather than before it, because a plain
 			// emulation resets every option to that emulation's default and
 			// both of these default off — which is exactly why a bare
 			// `emulate sh` in a function does *not* localize, measured.
 			setLocalOptions(r, true)
+			setLocalPatterns(r, true)
 			setLocalTraps(r, true)
 		}
 		return e.applyOptions(r)

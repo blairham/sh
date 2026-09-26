@@ -86,6 +86,17 @@ func setLocalOptions(r *interp.Runner, on bool) {
 	_ = zshOptions[localOptionsIndex].set(r, on)
 }
 
+// localPatternsIndex is where `localpatterns` sits, resolved once for the
+// same reason localOptionsIndex is.
+var localPatternsIndex = zshOptionIndex["localpatterns"]
+
+// setLocalPatterns moves `localpatterns`, which `emulate -L` turns on beside
+// the other two — see emulate.go for why it is three names and for what the
+// option does and does not reach here.
+func setLocalPatterns(r *interp.Runner, on bool) {
+	_ = zshOptions[localPatternsIndex].set(r, on)
+}
+
 // saveOptionState takes the table as it stands.
 //
 // The three axis-backed names are read like the rest and put back with the

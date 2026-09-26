@@ -220,7 +220,7 @@ import (
 // operand are refused with the option off exactly as with it on. See
 // interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
 //
-// Nothing else about the split moved, and 121 is still most of the table.
+// Nothing else about the split moved, and 119 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -729,7 +729,23 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("evallineno", true),
+	// EVAL_LINENO: text handed to `eval` is a place of its own, with its own
+	// line numbering and its own name. On by default, and the default is
+	// what every shell in the panel does with nothing said, so this name is
+	// only ever a way *down* from it.
+	//
+	// It was `recorded` until #4551 — accepted, reported back correctly by
+	// `[[ -o evallineno ]]`, `$options[evallineno]` and the listings, and
+	// `$LINENO` went on counting the text from one whatever the state was.
+	// The vendor manual names three surfaces in one sentence — `$LINENO`,
+	// the `%i` prompt escape and the `%N` escape that writes `(eval)` — so
+	// it is one switch rather than a parameter's special case, which is why
+	// it is interp.Runner.EvalTextHasALocationOfItsOwn and not an axis: the
+	// columns agree about the default and only this one has a name for
+	// leaving it.
+	switchBacked("evallineno", true,
+		(*interp.Runner).EvalTextHasALocationOfItsOwn,
+		(*interp.Runner).SetEvalTextHasALocationOfItsOwn),
 	setOptBacked("exec", true, "noexec", true),
 	matchBacked("extendedglob", false, interp.ExtendedPatternOperators, false),
 	recorded("extendedhistory", false),
@@ -1191,7 +1207,18 @@ var zshOptions = []zshOption{
 		},
 	},
 	matchBacked("nullglob", false, interp.UnmatchedPatternIsEmpty, false),
-	recorded("numericglobsort", false),
+	// NUMERIC_GLOB_SORT: a run of digits in a match's name is read as the
+	// number it spells when a pathname expansion is put in order, so `f2`
+	// comes before `f10`. It was `recorded` until #4555.
+	//
+	// It is **not** bash's `GLOBSORT=numeric`, whose comparator this shell
+	// already had: that one compares two names as numbers only where both
+	// whole names are numbers, and the two answers differ on exactly the
+	// `f1 f2 f10` input this option exists for. See
+	// interp.Runner.SortsGlobMatchesNumerically, which carries the pair.
+	switchBacked("numericglobsort", false,
+		(*interp.Runner).SortsGlobMatchesNumerically,
+		(*interp.Runner).SetSortsGlobMatchesNumerically),
 	{
 		// zsh's OCTAL_ZEROES, and the one name in this table that turns the
 		// *rest of the panel's* arithmetic back on. A leading zero is not a
@@ -1606,7 +1633,15 @@ var zshOptions = []zshOption{
 	},
 	singleCommandOption(),
 	recorded("singlelinezle", false),
-	recorded("sourcetrace", false),
+	// SOURCE_TRACE: one trace line as the shell enters each file it sources.
+	// It was `recorded` until #4550, and the prefix it needed was already
+	// built and already byte-identical to the reference's, because `xtrace`
+	// writes with it — so the gap was a trace aimed at no event rather than
+	// a trace this shell could not write. See
+	// interp.Runner.TracesEachSourcedFile for the measured table.
+	switchBacked("sourcetrace", false,
+		(*interp.Runner).TracesEachSourcedFile,
+		(*interp.Runner).SetTracesEachSourcedFile),
 	recorded("sunkeyboardhack", false),
 	recorded("transientrprompt", false),
 	recorded("trapsasync", false),

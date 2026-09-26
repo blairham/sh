@@ -139,7 +139,7 @@ func TestPhysicalCdTakesADotDotOffWhereThePathIs(t *testing.T) {
 // **The path keeps its `..` on the way there**, which is the half this test
 // used to assert the other way round. It required `cd -P nosuchdir/..` to
 // *arrive*, on the reasoning that an unresolvable path falls through to the
-// ordinary join — and the join cleans, so the `..` cancelled a component
+// ordinary join — and the join cleans, so the `..` canceled a component
 // nobody had looked at and the shell ended up where it already was. Measured
 // 2026-09-26, all six columns refuse that: bash 5.3, bash 3.2, zsh and ksh93
 // at 1 with the kernel's reason, dash and BusyBox ash at 2 with `can't cd

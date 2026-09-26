@@ -2962,8 +2962,10 @@ shell permits it.
 
 ### The same deviation, arrived at the same way
 
-`$sysparams[pid]` is this process's at the top level and **empty inside a
-subshell**. In zsh the key exists precisely because `$sysparams[pid]`
+`$sysparams[pid]` is this process's at the top level and, inside a body a
+real shell would have forked, **the group that body leads** — empty where
+no front end supplied a placeholder to lead one with (#2114). In zsh the key
+exists precisely because `$sysparams[pid]`
 differs from `$$` there — a subshell is a fork, `$$` keeps the parent's
 number, and a body reads the key to learn the one thing `$$` will not tell
 it. Here a subshell is a cloned Runner in one process, so answering it made
@@ -2975,6 +2977,51 @@ interactive shell (#2046).
 So the rule generalises past the one key: **where a real shell would name a
 process this one does not have, the honest answer is no answer, and the
 plausible answer is the dangerous one.**
+
+### And the number that answer gives is a shell, so a signal aimed at it is a self-signal
+
+The group a forked body leads is not a decoration on the parameter — it is
+the **identity** that body is known by, and a script spends an identity by
+signaling it:
+
+    ( trap 'print T; exit 19' TERM; kill $sysparams[pid] ); print "sub=$?"
+
+    zsh 5.9.2   → T, 19      bash 5.3.20 (with $BASHPID) → T, 19
+
+Both shells that can reach the shape agree, so there is no axis here. The
+rule is one sentence with one noun in it: **a signal aimed at the pid the
+running shell answers as its own is delivered to that shell's traps**, and
+the noun is the *pid*. Keying it on the process is wrong the moment the
+shell has forked — `os.Getpid()` is the shell only at the top level — and
+keying it on "am I in a subshell" is wrong in the other direction, because
+the pair that separates the two readings holds the context fixed and moves
+only the number:
+
+    ( trap 'print T' TERM; kill $sysparams[pid]; print s )   T — the body dies
+    ( trap 'print T' TERM; kill $$;              print s )   s — the shell dies
+
+Same construct, same signal, same trap. Only the number differs, and both
+references move. Measured 2026-09-26 against zsh 5.9.2 and bash 5.3.20
+(#4596); before it the signal went to the group's **placeholder leader**,
+which is not a shell, has no traps, and dies with nothing noticing — the
+kill reported 0 and the body left with 0.
+
+Three consequences follow from the rule rather than being written beside it,
+and all three are measured the same in both references:
+
+- an **untrapped** fatal one ends the body at 128 + N and the shell around
+  it carries on, so `( kill $sysparams[pid] )` is 143 and the next command
+  runs;
+- the body's **EXIT trap does not run** for it, because this is a death and
+  not an exit — the same answer `ExitTrapRunsOnSignalDeath` gives at the top
+  level;
+- **KILL is still uncatchable**, so a `trap` for it is a listing and the
+  body leaves at 137.
+
+And nothing leaves the process, which is the rule the core already holds for
+`$$` and holds for the same reason. The placeholder is **not** signaled
+either, and that is part of the answer rather than an omission: a body that
+has just been handed its group id may be about to start something in it.
 
 ## The other fatal signal, which is fatal without being a death
 

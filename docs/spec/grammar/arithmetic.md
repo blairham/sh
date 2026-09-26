@@ -150,6 +150,49 @@ refuse the float literal outright and never arrive.
 Implemented at `declareFloatFromArithmetic` in `interp/arith.go`, measured
 2026-09-26 on zsh 5.9.2 and ksh93u+ 2012-08-01 (#4605).
 
+### And `setopt posix_identifiers` turns the declaration off
+
+The axis above is *whether* an arithmetic assignment declares, and zsh has a
+name for answering it no. `POSIX_IDENTIFIERS` — off by default, and turned on
+without anyone typing it by `emulate sh` and `emulate ksh` — leaves an
+ordinary scalar where the declaration would have been. The value stored is
+then the expression's own rendering, which is what every other shell's path
+already writes.
+
+| probe (zsh), on a name that does not exist | default | under `posix_identifiers` |
+| --- | --- | --- |
+| `(( xx = 5 ))` | `typeset -i xx=5` | `typeset xx=5` |
+| `(( xx = 1.5 ))` | `typeset -F xx=1.5000000000` | `typeset xx=1.5` |
+| `(( xx = 1.0/3 ))` | `typeset -F xx=0.3333333333` | `typeset xx=0.33333333333333331` |
+| `(( xx = 1e30 ))` | `typeset -F xx=1000000000000000019884624838656.0000000000` | `typeset xx=1e+30` |
+| `(( xx = [#16] 255 ))` | `typeset -i16 xx=255` | `typeset xx='16#FF'` |
+
+**The name is still created**; only the attribute is withheld. And the option
+reaches only a declaration the assignment would have made, so the rows that
+did not move under #4605 do not move here either: `typeset -i ii; (( ii = 5
+))` is `typeset -i ii=5` in both states, `float ff; (( ff = 1.5 ))` is
+`typeset -E ff=1.500000000e+00` in both, and `(( b[2] = 1.5 ))` writes an
+element in both.
+
+**The noun is the declaration and not the identifier**, which has to be said
+because the option's name points the other way. `xx` is spelled with nothing
+but the characters `POSIX_IDENTIFIERS` permits, so a rule about which
+characters may appear in a name cannot reach it — and every row above uses
+`xx`. zsh's manual calls the arithmetic effect *another* difference, and the
+measurement agrees: `typeset a.b=1` is refused identically in both states. The
+option's two other documented effects — which characters an identifier may
+hold, and whether `$#name` without braces is the length of `$name` — are
+separate behaviors, and the first of them is read when a script is *parsed*
+where this one is read when the assignment **runs**. Measured: a function body
+written with the option off leaves a scalar when it is called with it on, and
+the other direction leaves an integer.
+
+`Semantics.ArithmeticAssignmentDeclaresANumber` read backwards — the option on
+is that axis answering `No` — at `posixidentifiers` in `dialect/zsh/setopt.go`.
+It was recorded and inert until #4664: the `setopt` succeeded, every surface
+that names it reported it back, and the declaration happened in both states.
+Measured 2026-09-26 on zsh 5.9.2.
+
 ## Numeric bases, where the interesting divergence is
 
 | probe | dash | bash | ksh93 | zsh |

@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 122 of the 185
+//     typing a directory name still does not change directory. 121 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -220,7 +220,7 @@ import (
 // operand are refused with the option off exactly as with it on. See
 // interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
 //
-// Nothing else about the split moved, and 122 is still most of the table.
+// Nothing else about the split moved, and 121 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -1279,7 +1279,82 @@ var zshOptions = []zshOption{
 		},
 	},
 	recorded("posixcd", false),
-	recorded("posixidentifiers", false),
+	{
+		// POSIX_IDENTIFIERS: an arithmetic assignment to a name that does
+		// not exist leaves an ordinary scalar rather than declaring a
+		// numeric one. Off by default, and recorded until #4664 — `setopt
+		// posix_identifiers` succeeded, every surface that names it reported
+		// it back, and `(( number = 3 ))` went on leaving `integer` in both
+		// states.
+		//
+		// It is [interp.Semantics.ArithmeticAssignmentDeclaresANumber] read
+		// backwards — the option on is that axis answering No — which is the
+		// same arrangement `posixtraps` uses below.
+		//
+		// **The noun is the declaration and not the identifier**, which
+		// matters because the name is the one thing this option is nominally
+		// about. zsh's own manual calls the arithmetic effect *another*
+		// difference, and the measurement agrees: `xx` holds nothing but the
+		// POSIX identifier characters and the answer still moves with the
+		// option, while `typeset a.b=1` is refused in **either** state. So
+		// it is not "a name the option would disallow cannot be declared" —
+		// that reading predicts no change for `xx` and every row for `xx`
+		// changes. The character rule the name is about is a separate
+		// behavior nothing here reaches, and so is the option's third
+		// documented effect, which is whether `$#name` without braces is the
+		// length of `$name`.
+		//
+		// Measured on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`), 2026-09-26,
+		// on a name that does not exist. The value is stored as the
+		// expression's own rendering, which is what the non-declaring path
+		// already writes — so the option takes the attribute away and the
+		// characters follow:
+		//
+		//	(( xx = 5 ))            typeset -i xx=5       typeset xx=5
+		//	(( xx = 1.5 ))          typeset -F xx=1.5000000000
+		//	                                              typeset xx=1.5
+		//	(( xx = 1.0/3 ))        typeset -F xx=0.3333333333
+		//	                                              typeset xx=0.33333333333333331
+		//	(( xx = [#16] 255 ))    typeset -i16 xx=255   typeset xx='16#FF'
+		//
+		// The name is still **created**; only the attribute is withheld.
+		//
+		// And it reaches only a name the assignment creates, which is the
+		// axis's own half and the pair that keeps this from reading as "the
+		// option switches arithmetic attributes off": `typeset -i ii; ((
+		// ii = 5 ))` is `typeset -i ii=5` in both states, `float ff; (( ff =
+		// 1.5 ))` is `typeset -E ff=1.500000000e+00` in both, and
+		// `(( b[2] = 1.5 ))` writes an element in both.
+		//
+		// Read when the assignment **runs** and not when it is parsed. A
+		// function body written while the option was off leaves a scalar
+		// when it is called with the option on, and the other direction
+		// leaves an integer; an `eval` of a string built in either state
+		// answers to the state at the `eval`. That is worth measuring rather
+		// than assuming, because the option's *identifier* half is explicitly
+		// the other way — the manual says both options must be set before a
+		// script is parsed for the character rule to reach it.
+		//
+		// Nobody has to type it. `posixidentifiers` is in
+		// emulationAlwaysReset and sh's and ksh's defaults for it are on, so
+		// `emulate sh` and `emulate ksh` both leave `(( number = 3 ))` a
+		// scalar and `emulate zsh` leaves it an integer — all three measured.
+		//
+		// Read off the axis rather than off a stored bit, the arrangement
+		// `globsubst`, `posixbuiltins` and `posixtraps` use — so `(setopt
+		// posix_identifiers)` stays in the subshell and `emulate -L` puts it
+		// back with the rest of the vector.
+		base: "posixidentifiers", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ArithmeticAssignmentDeclaresANumber == interp.No
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ArithmeticAssignmentDeclaresANumber
+			}, answer(!on))
+			return 0
+		},
+	},
 	recorded("posixjobs", false),
 	recorded("posixstrings", false),
 	{

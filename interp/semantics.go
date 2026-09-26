@@ -15123,6 +15123,34 @@ type Semantics struct {
 	// holds a pattern" is right on every other row in the grid and wrong on
 	// that pair.
 	//
+	// **A command's assignment prefix is the statement form's road and not
+	// the declaration's**, which is the third shape of the same question and
+	// the pair that rules out the *other* near-miss noun. `a=*.txt cmd`
+	// stores nothing into this shell — `a=kept; a=*.txt printenv a; typeset
+	// -p a` is `typeset a=kept` in either state — and globs its value all
+	// the same, so "an assignment that stores into the shell" is wrong where
+	// "the assignment" is right. The two readings agree on every row a
+	// statement can produce and part exactly here (#4657):
+	//
+	//	a=*.txt cmd        the match, and an array where several matched
+	//	a=one.* cmd        one.only, a scalar
+	//	typeset a=*.txt    the characters
+	//
+	// The consequence is at the child. zsh exports no array — `a=(x y);
+	// export a; printenv a` exits 1 — so a prefix whose pattern matched more
+	// than one name is **absent** from the child's environment rather than
+	// joined into one value, and it shadows whatever the shell was exporting
+	// under that name: `export a=old; a=*.txt printenv a` exits 1 too. A
+	// single match is exported as the scalar it is, and a miss under
+	// `nullglob` as an empty one. A function or a builtin, which fork
+	// nothing, see the entry itself: `typeset -g -a a=( a.txt b.txt c.txt )`.
+	//
+	// The append is not an append there either: `a=x; a+=one.* cmd` hands
+	// the command `one.only` and not `xone.only`, so a match replaces the
+	// name whichever operator was written — while `a=x; a+=plain cmd` is
+	// still `xplain`, which is the control that keeps that from reading as
+	// "the axis breaks append".
+	//
 	// **How many fields the match produced decides the name's kind**, and
 	// the numeric attributes go whichever it is:
 	//

@@ -1735,6 +1735,11 @@ type Runner struct {
 	// pretend to be one.
 	prefixTraceAssigns []*syntax.Assign
 	prefixTraceValues  []string
+	// prefixGlobMatches holds what this command's assignment prefixes
+	// matched, for the one shell that reads a prefix's value as a pattern —
+	// see interp/prefixglob.go. Per-command scratch and not a table, kept
+	// beside the two above and cleared with them, for the same reasons.
+	prefixGlobMatches []prefixGlobMatch
 	// prefixHeldNames are the names the running builtin's own assignment
 	// prefix is holding, and prefixKeptNames those of them a declaration
 	// inside it has taken for the shell rather than for the command — see
@@ -7114,7 +7119,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.redirectForBuiltin = argv[0]
 		}
 	}
-	defer func() { r.prefixTraceAssigns, r.prefixTraceValues = nil, nil }()
+	defer func() {
+		r.prefixTraceAssigns, r.prefixTraceValues, r.prefixGlobMatches = nil, nil, nil
+	}()
 	tracedHere := false
 	if early {
 		// The ordered walk two columns make before they open anything: the
@@ -7828,6 +7835,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// The PATH the prefix supplies, if it supplies one, held so that the
 	// search below is made with it — see reachPrefixedPath.
 	prefixPath, pathFromPrefix := "", false
+	var prefixArrays []string
 	for _, a := range c.Assigns {
 		if a.Operand {
 			// Unreachable as things stand — every name that takes an operand
@@ -7875,6 +7883,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// runs where the trace wrote it.
 		part := r.prefixExpansion(a)
 		value := r.prefixJoined(a, part)
+		if r.prefixGlobbedToAnArray(a) {
+			// The value was read as a pattern and matched more than one
+			// name, so the entry is an **array** — and no child's
+			// environment can carry one. Recorded rather than merely
+			// skipped, because the name has to be taken out of what the
+			// child is given: see withoutPrefixArrayNames.
+			prefixArrays = append(prefixArrays, r.prefixEntryName(a.Name))
+			continue
+		}
 		if prefixIsSubscripted(a) {
 			// A child runs this command, so an element store would be the
 			// child's — and an array reaches no child's environment, so
@@ -7935,7 +7952,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if child != nil {
 		env = child.environ()
 	}
-	env = append(env, prefixEnv...)
+	env = append(withoutPrefixArrayNames(env, prefixArrays), prefixEnv...)
 	if _, stop := r.refusePrefixes(c.Assigns, external, !r.expandErr); stop {
 		return nil
 	}
@@ -7975,6 +7992,13 @@ func (r *Runner) prefixValue(a *syntax.Assign) string {
 // join it to. Split out of prefixValue because a store fires the event the
 // operator names, and `.append` is entered with the appended part alone —
 // see interp/prefixdiscipline.go.
+//
+// **The assignment road and not the word road**, which is the noun the whole
+// of interp/prefixglob.go turns on: a prefix's right-hand side is an
+// assignment's value, so it is not split, not brace-expanded and not matched
+// against the filesystem. This was Runner.expandWord joined with spaces, so
+// `a=*.txt cmd` handed the child `a.txt b.txt c.txt` in every dialect where
+// all five reference shells hand it `*.txt` (#4657).
 func (r *Runner) prefixExpansion(a *syntax.Assign) string {
 	if value, ok := r.prefixTraceValue(a); ok {
 		// Already expanded, to be written by `set -x` before the command
@@ -7985,7 +8009,7 @@ func (r *Runner) prefixExpansion(a *syntax.Assign) string {
 		// expansion through here without the join.
 		return value
 	}
-	return strings.Join(r.expandWord(a.Value), " ")
+	return r.prefixAssignValue(a)
 }
 
 // prefixJoined puts the name's current value in front of an append's, and is
@@ -8000,6 +8024,17 @@ func (r *Runner) prefixExpansion(a *syntax.Assign) string {
 // existed; the prefix form was the second concatenation that did not.
 func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 	if !a.Append {
+		return value
+	}
+	if _, globbed := r.prefixGlobFields(a); globbed {
+		// **The append is not an append** where the value was read as a
+		// pattern and matched. Measured on zsh 5.9.2, 2026-09-26: `setopt
+		// globassign; a=x; a+=one.* printenv a` is `one.only` and not
+		// `xone.only`, and `a=x; a+=*.txt f` shows the body the three names
+		// alone — so a match replaces the name whichever operator was
+		// written, exactly as the statement form's does. The joining `+=`
+		// below is still reached by every value that was not a pattern:
+		// `a=x; a+=plain printenv a` is `xplain` in both states.
 		return value
 	}
 	old, _ := r.getVar(a.Name)

@@ -738,6 +738,20 @@ var zshOptions = []zshOption{
 		// are the controls that keep this from being "the option switches
 		// arithmetic off".
 		//
+		// **A command's assignment prefix goes the statement form's way**,
+		// which is the third shape of the question and the pair that rules
+		// out the other near-miss noun: `a=*.txt cmd` stores nothing into
+		// this shell and globs its value all the same, so the rule is keyed
+		// on the assignment and not on an assignment that stores. Measured
+		// the same day: `a=one.* printenv a` is `one.only` with the option
+		// on and `one.*` with it off, and `a=*.txt printenv a` prints
+		// nothing at all — the entry is an array, this shell exports no
+		// array, and the name is absent from the child's environment even
+		// where the shell was exporting one under it. A function sees
+		// `typeset -g -a a=( a.txt b.txt c.txt )`, the append is not an
+		// append, and the prefix is still taken back afterward. We globbed a
+		// prefix in **both** states, in every dialect (#4657).
+		//
 		// `a=(*.txt)` globs in **either** state, which is the control that
 		// says the option is about assignments rather than about
 		// assignment-shaped syntax — and the suite's own

@@ -383,6 +383,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// still holds is what this file exists to prevent.
 	c.prefixTraceAssigns = slices.Clone(r.prefixTraceAssigns)
 	c.prefixTraceValues = slices.Clone(r.prefixTraceValues)
+	// And what this command's prefixes matched, which is the same reading
+	// and the same reason — TestACloneOwnsEveryStack is the instrument that
+	// says so, and it fails with this line removed.
+	c.prefixGlobMatches = slices.Clone(r.prefixGlobMatches)
 	// And where that command's declaration operands stood, which a clone
 	// inherits for exactly as long as it takes to run a command of its own —
 	// the same reading, and cloned for the same reason.

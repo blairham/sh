@@ -291,10 +291,10 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d Diagnostics) []str
 			// came to rather than as the assignment it was — see the field.
 			plain := *a
 			plain.Append = false
-			words = append(words, r.traceAssign(&plain, r.prefixJoined(a, value), nil, d))
+			words = append(words, r.traceAssign(&plain, r.prefixJoined(a, value), r.prefixGlobTraced(a), d))
 			continue
 		}
-		words = append(words, r.traceAssign(a, value, nil, d))
+		words = append(words, r.traceAssign(a, value, r.prefixGlobTraced(a), d))
 	}
 	return words
 }

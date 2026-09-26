@@ -177,6 +177,22 @@ func (r *Runner) prefixStore(ctx context.Context, a *syntax.Assign, landsOn stri
 		r.withPreparedValue(ctx, &expandedAssign{assign: a, value: value})
 		return
 	}
+	if fields, ok := r.prefixGlobFields(a); ok {
+		// The value was read as a pattern and matched — the one shell that
+		// asks for that, and only where the value was a pattern at all. The
+		// match replaces the name outright, the kind and the numeric
+		// attributes with it, so neither the join below nor the scalar store
+		// is on its road. See interp/prefixglob.go.
+		if !stores {
+			defer r.suppressDiscipline(a.Name, disciplineSet)()
+			defer r.suppressDiscipline(a.Name, disciplineAppend)()
+		}
+		if fresh {
+			r.emptyPrefixEntry(landsOn)
+		}
+		r.storeGlobbedPrefix(a, fields)
+		return
+	}
 	if !stores {
 		defer r.suppressDiscipline(a.Name, disciplineSet)()
 		defer r.suppressDiscipline(a.Name, disciplineAppend)()

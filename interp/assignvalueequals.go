@@ -132,7 +132,11 @@ func (r *Runner) expandEqualsSegments(w *syntax.Word, headSpan, headOff int, hea
 		v := s.Value
 		var b strings.Builder
 		for j := 0; j < len(v); j++ {
-			if v[j] != '=' || !(head && i == headSpan && j == headOff || j > 0 && v[j-1] == ':') {
+			// The two positions, and nowhere else: the value's head where
+			// the caller named one, and straight after an unquoted colon.
+			atHead := head && i == headSpan && j == headOff
+			afterColon := j > 0 && v[j-1] == ':'
+			if v[j] != '=' || !atHead && !afterColon {
 				b.WriteByte(v[j])
 				continue
 			}

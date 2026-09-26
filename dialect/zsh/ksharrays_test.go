@@ -273,8 +273,15 @@ func TestEmulationsCarryTheWholeOption(t *testing.T) {
 }
 
 // An assignment's subscript is not this: it is still read, and against the
-// base the option moved. Measured — the option changes how a *word* reads,
-// not how a name is written to.
+// base the option moved. Measured — the option changes how the *brackets*
+// after a name read, and a subscript that was written is still a subscript
+// wherever it is written.
+//
+// It used to say "the option changes how a word reads, not how a name is
+// written to", which the sixth axis falsified: a *bare* name really is
+// written to differently under the option — see
+// TestKshArraysJoinsAScalarAppendAtTheBase. What this test is about is the
+// subscript, which the option leaves alone on either side of the `=`.
 func TestKshArraysLeavesAnAssignmentSubscriptAlone(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+kshArraysArray+
 		"a[1]=Q\n"+`echo "${a[@]}"`)

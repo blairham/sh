@@ -6,6 +6,8 @@ package zsh_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
 )
 
 // `read -q`, this shell's letter for reading one key and answering whether it
@@ -110,5 +112,39 @@ print -r -- "st=$? [$REPLY]"
 				t.Errorf("got %q, want %q", out, want)
 			}
 		})
+	}
+}
+
+// No letter is in both of `read`'s tables at once.
+//
+// The comments beside those tables have said for two letters now that they
+// "move together", and nothing graded it. They cannot: a letter in
+// `ReadOptions` is accepted by the option reader and never reaches
+// `UnimplementedOptionLetters` at all — see interp.Runner.refuseOption, which
+// is called only for a letter the known set does not hold. So a stale entry
+// left behind is **inert**, and a mutation run is what said so: putting `q`
+// back into the missing-letters string while it stayed in `ReadOptions` broke
+// nothing and no test noticed.
+//
+// Inert is not harmless. It is a sentence in the shipped data saying this
+// shell has not built something it has, and it comes alive the day the letter
+// leaves the accepted set for any reason. Asserting on the two strings
+// directly is the only place the claim can be made, because the behavior they
+// are supposed to agree about is exactly what one of them cannot reach.
+func TestReadsTwoLetterTablesDoNotOverlap(t *testing.T) {
+	accepted := zsh.Semantics().ReadOptions
+	missing := zsh.Diagnostics().UnimplementedOptionLetters["read"]
+	if accepted == "" || missing == "" {
+		t.Fatalf("accepted=%q missing=%q, want both tables to have letters in them",
+			accepted, missing)
+	}
+	for _, letter := range missing {
+		// The accepted set is an optstring, so `:` and `#` in it are shapes
+		// rather than letters — neither is a letter any table names.
+		if strings.ContainsRune(accepted, letter) {
+			t.Errorf("-%c is in ReadOptions %q and in the missing letters %q: "+
+				"accepted wins and the second entry is a refusal that can never be made",
+				letter, accepted, missing)
+		}
 	}
 }

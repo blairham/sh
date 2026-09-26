@@ -2860,7 +2860,15 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 	// pattern would be right to refuse this field, since there the result
 	// really is a pattern. Only the dialect that answers No to the axis
 	// reaches the escape below.
-	return r.sem().UnterminatedBracket == BracketBadPattern && hasUnterminatedBracket(esc)
+	if r.sem().UnterminatedBracket == BracketBadPattern && hasUnterminatedBracket(esc) {
+		return true
+	}
+	// And a group nothing closes, which is the same "will not compile" and
+	// reaches the same refusal one layer down. Measured on zsh 5.9.2 (`-f`,
+	// 2026-09-26): `L='a(b'; print -r -- ${~L}` is `bad pattern: a(b` at 1,
+	// and `a(b` at 0 with `unsetopt badpattern` — the option moves it, which
+	// says the refusal is the *glob*'s and this is only what sends it there.
+	return r.badPatternFromAnOpenGroup(esc)
 }
 
 func containsAnyOf(s, chars string) bool {

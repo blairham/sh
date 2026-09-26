@@ -31258,6 +31258,22 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	if hasUnterminatedBracket(pattern) {
 		o.bracket = r.bracketPolicy()
 	}
+	// A group nothing closes is the same refusal arriving by the other of
+	// the two scans, and it is made here rather than handed to the matcher
+	// because there is nothing for the matcher to do with it: a bracket's
+	// policy has three readings and this one has a single answer. Measured
+	// on zsh 5.9.2 (`-f`, 2026-09-26), `v='a(b'; print -r -- X${v:#a(b}Y` is
+	// `bad pattern: a(b` at 1 **in both option states** — this surface is
+	// not filename generation, so `unsetopt badpattern` does not reach it,
+	// which is the pair that says what the switch in glob.go is keyed on.
+	if r.badPatternFromAnOpenGroup(pattern) {
+		status := badStatus
+		if status == 0 {
+			status = r.fatalStatus()
+		}
+		r.fatalPattern(pattern, status)
+		return false
+	}
 	// The whole-subject question, like matchPattern's: a condition, a `case`
 	// arm and an element filter each ask whether the pattern describes the
 	// string, and none of them is choosing how much of it a match takes.

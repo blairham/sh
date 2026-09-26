@@ -329,6 +329,13 @@ func Dialect() syntax.Dialect {
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
 	// literal `@` followed by a group here rather than an extended pattern.
 	d.PatternAlternation = true
+	// And a group the input runs out of is a *word* here rather than input
+	// still to come: `print -r -- a(b` is `bad pattern: a(b` in zsh 5.9.2 and
+	// the word itself under `unsetopt badpattern`, where bash with `extglob`
+	// and ksh93 both answer their own spelling with an unmatched-parenthesis
+	// parse error. The refusal has to be the matcher's for the option to be
+	// able to withhold it (#4645).
+	d.UnterminatedPatternGroupIsAWord = true
 	// And a `|` outside every group, which is the same alternation one level
 	// out, and only for a bar a value supplied: `L='a|b'; [[ a = ${~L} ]]`.
 	// Measured on zsh 5.9.2 in a condition, in a `case` arm, under `setopt

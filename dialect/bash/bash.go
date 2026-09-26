@@ -1820,7 +1820,7 @@ func Semantics() interp.Semantics {
 	// An arithmetic assignment leaves an ordinary scalar: `(( x = 5 ));
 	// declare -p x` is `declare -- x="5"`, and a later `x=2+3` is the three
 	// characters.
-	s.ArithmeticAssignmentDeclaresAnInteger = interp.No
+	s.ArithmeticAssignmentDeclaresANumber = interp.No
 	// An attribute added to a name that already holds a value waits for the
 	// next assignment: `FOO=bar; typeset -i FOO` still reads `bar`, and
 	// `d=MiXeD; typeset -u d` still reads `MiXeD`. ksh93 and zsh re-read on

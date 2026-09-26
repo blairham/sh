@@ -988,8 +988,12 @@ type arithPlace struct {
 	unclosedQuote bool
 }
 
-// arithAssignmentDeclaresAnInteger reports whether writing this name from
-// inside arithmetic gives it the integer attribute.
+// arithAssignmentDeclaresANumber reports whether writing this name from
+// inside arithmetic gives it a numeric attribute.
+//
+// **Which** attribute is the value's to say and not this function's — see
+// declareFloatFromArithmetic. The axis is only whether the assignment
+// declares at all.
 //
 // Only a name the assignment *creates*, which is the half of the rule the
 // issue's table could not show and a probe on a fresh shell cannot see:
@@ -1005,8 +1009,8 @@ type arithPlace struct {
 // correct answer to fall back on rather than a missing one to complain about.
 // Asking would refuse `for (( i=0; i<3; i++ ))` in a run with no dialect,
 // which is a construct the core has and a question the script never posed.
-func (r *Runner) arithAssignmentDeclaresAnInteger(name string) bool {
-	if r.sem().ArithmeticAssignmentDeclaresAnInteger != Yes {
+func (r *Runner) arithAssignmentDeclaresANumber(name string) bool {
+	if r.sem().ArithmeticAssignmentDeclaresANumber != Yes {
 		return false
 	}
 	_, set := r.getVar(name)
@@ -1063,6 +1067,76 @@ func (r *Runner) declareIntegerFromArithmetic(name string, from syntax.ArithExpr
 		r.integerBase = map[string]int{}
 	}
 	r.integerBase[name] = base
+}
+
+// declareFloatFromArithmetic gives a name the arithmetic just created the
+// float attribute, and stores the number under it.
+//
+// **The value's type decides, not the way the expression was written and not
+// whether the number came out whole.** Those two readings agree on almost
+// every expression anyone writes, and the pair that parts them is the whole
+// of #4605. Measured 2026-09-26 on zsh 5.9.2 `-f`, each row on a name that
+// does not exist, read back through `${(t)xx}` rather than through the
+// attribute's own rendering:
+//
+//	$(( xx = 1 ))         1     integer   typeset -i xx=1
+//	$(( xx = 1.0 ))       1.    float     typeset -F xx=1.0000000000
+//	$(( xx = 3/2 ))       1     integer   typeset -i xx=1
+//	$(( xx = 3.0/2 ))     1.5   float     typeset -F xx=1.5000000000
+//
+// `1.0` is the row that says it is not integrality: the value *is* whole and
+// the name is a float anyway, where `3/2` is whole and an integer. And it is
+// not the spelling either, which takes a second pair, because `1.0` is
+// written with a point and so is `3.0/2`:
+//
+//	float ff=2;   $(( xx = ff ))       2.  float    typeset -F xx=2.0000000000
+//	integer ii=3; $(( xx = ii ))       3   integer  typeset -i xx=3
+//
+// No point is written in either, the two names differ only in their type,
+// and the answer moves with it. The reverse pair says the same from the
+// other side, with `zmodload zsh/mathfunc`: `$(( xx = int(2.0) ))` is
+// `typeset -i xx=2` — a point written, an integer value, an integer name —
+// while `$(( xx = float(3) ))` is `typeset -F xx=3.0000000000`.
+//
+// The `F` letter and not `E`, which is a measurement rather than a default:
+// `float f` on its own lists as `typeset -E f`, and this route lists `-F`.
+// So the two spellings of "a float" part here, and the letter is stated.
+//
+// **No base comes with it.** The integer route learns one from a radix the
+// expression wrote — see declareIntegerFromArithmetic — and this one does
+// not: measured, `(( xx = [#16] 255.9 ))` is `typeset -F xx=255.9000000000`
+// with the `[#16]` reaching only the expansion's own rendering, where
+// `(( xx = [#16] 255 ))` is `typeset -i16 xx=255`.
+//
+// **Nothing is taken off the name first**, and that was measured rather than
+// assumed. Two statements stood here — forgetting a stored number and writing
+// the `F` letter down as *not* `E` — against the worry that a name which had
+// been a float before could leave one of the float tables holding a stale
+// entry under it. Neither changed any answer: removing each on its own leaves
+// `typeset -E3 q=1.5; unset q; (( q = 1.5 ))` at `typeset -F q=1.5000000000`
+// and `typeset -F3 q=1.5; unset q; (( q = 1.0/3 )); typeset -E17 q` at
+// `3.3333333333333331e-01`, both of which agree with zsh 5.9.2. The reason is
+// dropNameAttributes, which `unset` and a shadow's restore both go through
+// and which clears the precision, the letter and the number together — so a
+// name this function is reached for carries none of the three, and the two
+// statements were saying something already true. They are left out rather
+// than kept as a guard: a line that cannot change an answer is a line nothing
+// can check.
+//
+// The number is handed to the ordinary store rather than rendered here,
+// written out in full so the store reads back every digit it was given.
+// attributeFolded is what makes a float name's characters, and it records
+// the number behind them in the same breath — so a second rendering beside
+// it is the shape that drifts, and it would drift *silently*: the digits a
+// rendering drops are invisible until a later letter asks for them.
+// Measured, `(( y6 = 1.0/3 )); typeset -E17 y6` is `3.3333333333333331e-01`
+// in zsh 5.9.2, which `0.3333333333` cannot produce.
+func (r *Runner) declareFloatFromArithmetic(name string, v float64) {
+	if r.floatPrecision == nil {
+		r.floatPrecision = map[string]int{}
+	}
+	r.floatPrecision[name] = 0
+	r.setVar(name, floatWrittenInFull(v))
 }
 
 // radixWritten is the base named by the first radix literal in an expression,
@@ -1185,7 +1259,24 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// empty expression names, so the pair goes to the element path with
 		// everything else and only a target with no brackets at all is here
 		// (#1764).
-		if r.arithAssignmentDeclaresAnInteger(p.name) {
+		if r.arithAssignmentDeclaresANumber(p.name) {
+			if v.floatKind() {
+				// **The value's type decides which attribute**, and a float
+				// value declares a float. See declareFloatFromArithmetic,
+				// which is also why no base is learned here: a float name
+				// carries none.
+				//
+				// floatKind and not the plain float field, which is an
+				// equivalent mutant today and kept this way round for the
+				// reason numericAttribute keeps its branch order: a *wide*
+				// value is an integer carried in the double, and it is made
+				// only where Semantics.ArithValuesAreCarriedInAFloat is yes
+				// — ksh93's axis, and ksh93 declares nothing here. So
+				// nothing a script can write reaches this with one, and when
+				// something does, an integer value wants the integer.
+				r.declareFloatFromArithmetic(p.name, v.asFloat())
+				return nil
+			}
 			// A name the arithmetic itself created carries the base on the
 			// *name* rather than in the characters it holds, which is the
 			// other half of the note above: `x=5; (( x = [#16] 255 ))` leaves
@@ -1485,7 +1576,7 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 // A value rather than a question asked of the Runner, because the answer has
 // to be taken **before** an assignment stores anything and used **after**. An
 // arithmetic assignment to a name that does not exist declares one in zsh —
-// see arithAssignmentDeclaresAnInteger — so asking afterwards finds an
+// see arithAssignmentDeclaresANumber — so asking afterwards finds an
 // attribute the assignment itself created, and a name the assignment created
 // takes its type from the value and converts nothing. Measured 2026-09-26 on
 // zsh 5.9.2, `$(( xx = 1.5 ))` on an unset name is `1.5` and leaves `xx` a

@@ -90,6 +90,66 @@ convert.
 Implemented at `numericAttribute` in `interp/arith.go`, measured 2026-09-26
 on zsh 5.9.2 and ksh93u+ 2012-08-01.
 
+### And what it **declares** takes its type from the value
+
+The rule above is about the *value* an assignment has. Its neighbor is about
+what the assignment leaves behind: an arithmetic assignment to a name that
+does not exist declares one in zsh — the axis
+`Semantics.ArithmeticAssignmentDeclaresANumber`, which zsh alone answers yes
+— and **the value's type says which numeric attribute it gets.** An integer
+value declares `integer`; a float value declares a float, at the `F` letter's
+default precision.
+
+| probe (zsh), on a name that does not exist | `${(t)xx}` | `typeset -p xx` |
+| --- | --- | --- |
+| `(( xx = 5 ))` | `integer` | `typeset -i xx=5` |
+| `(( xx = 1.5 ))` | `float` | `typeset -F xx=1.5000000000` |
+| `(( xx = 1e30 ))` | `float` | `typeset -F xx=1000000000000000019884624838656.0000000000` |
+
+**Two readings agree with that one almost everywhere and both are wrong**, so
+the rows that matter are the ones built to part them. It is not "the number
+did not come out whole" — `1.0` is whole and declares a float where `3/2` is
+whole and declares an integer:
+
+| probe | value | `${(t)xx}` |
+| --- | --- | --- |
+| `(( xx = 1.0 ))` | `1.` | **`float`** |
+| `(( xx = 3/2 ))` | `1` | `integer` |
+| `(( xx = 2.0/2 ))` | `1.` | **`float`** |
+| `(( xx = 3.0/2 ))` | `1.5` | `float` |
+
+And it is not "a point was written", which takes a pair with no point written
+in either — two names differing only in their type:
+
+| probe | `${(t)xx}` |
+| --- | --- |
+| `float ff=2; (( xx = ff ))` | **`float`** |
+| `integer ii=3; (( xx = ii ))` | `integer` |
+
+The same pair from the other side, with `zmodload zsh/mathfunc`, writes a
+point in both: `(( xx = int(2.0) ))` is `typeset -i xx=2` and
+`(( xx = float(3) ))` is `typeset -F xx=3.0000000000`.
+
+The letter is `F` and not `E`, which is a measurement rather than a default —
+`float ee` on its own lists as `typeset -E ee`. **No base comes with a
+float**: the integer route learns one from a radix the expression wrote, and
+this one does not. `(( xx = [#16] 255.9 ))` is `typeset -F xx=255.9000000000`
+where `(( xx = [#16] 255 ))` is `typeset -i16 xx=255`, the `[#16]` reaching
+only the expansion's own rendering in the first.
+
+**The operator is not a second noun here**, which is worth saying because it
+is one for the rule above: `$(( xx += 1.5 ))` on a name that does not exist
+declares a float, exactly as the plain `=` does. Every construct that assigns
+inside arithmetic gives the same answer — `(( ))`, `let` and a C-style `for`
+header alike.
+
+ksh93 reaches all of this and declares nothing: `(( xx = 1.5 ))` there leaves
+a plain scalar `xx=1.5`, because the axis is `No`. bash, dash and BusyBox ash
+refuse the float literal outright and never arrive.
+
+Implemented at `declareFloatFromArithmetic` in `interp/arith.go`, measured
+2026-09-26 on zsh 5.9.2 and ksh93u+ 2012-08-01 (#4605).
+
 ## Numeric bases, where the interesting divergence is
 
 | probe | dash | bash | ksh93 | zsh |

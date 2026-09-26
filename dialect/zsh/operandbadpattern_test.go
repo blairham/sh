@@ -53,8 +53,12 @@ func TestAnOperandThisShellWillNotCompileIsRefused(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), c.src+`; print -r -- AFTER`)
-			if !strings.Contains(out, c.wantErr) {
-				t.Errorf("got %q, want it to report %q", out, c.wantErr)
+			// **Exactly once.** A refusal raised at the compile and then
+			// again from inside the matcher reports the same pattern twice,
+			// which a `Contains` cannot see — and it is the one thing a
+			// caller that ignored the first answer would produce.
+			if n := strings.Count(out, c.wantErr); n != 1 {
+				t.Errorf("reported %q %d times, want once: %q", c.wantErr, n, out)
 			}
 			if strings.Contains(out, "AFTER") {
 				t.Errorf("the script should end over the pattern, got %q", out)

@@ -17850,12 +17850,42 @@ from. This shell has no name references of its own yet, so every name
 reaches the question today; when references arrive the axis stays what it
 is and the reference case joins it as the unanimous half. #932.
 
-**`CdWithoutHomeIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
+**`CdWithoutHomeIsAnError`** — bash yes · dash no · ksh93 yes · zsh no,
+and yes under its own sh, ksh and csh emulations
 
 Makes `cd` with no operand and no HOME a failure. True in bash and
 ksh93; dash and zsh stay where they are and report success, which is the
 quieter answer and the surprising one. The same axis answers `cd -` with
 no OLDPWD.
+
+zsh's own answer moves with its **emulation**, which is the one column where
+this is not a constant. Measured 2026-09-26 on zsh 5.9.2 under `env -u HOME`,
+by two routes that have to agree — the binary copied to a file with each name,
+and `--emulate` on the binary under its own name:
+
+| mode | `cd` with no HOME |
+| --- | --- |
+| `zsh` | nothing, 0 |
+| `sh`, `ksh`, `csh` | `zsh:cd:1: HOME not set`, 1 |
+
+`csh` parts from `zsh` here where it agrees with it on every option name this
+shell models, which is why the mode carries this as a second boolean rather
+than as a reading of the one `RedirectErrorOnSpecialBuiltinFatal` already
+uses. The name is how the mode is usually reached; see `invocation.md` under
+"Called another shell's name".
+
+**What is not modeled is a shell that once *had* a HOME.** Measured in the
+same run, and it is the same answer under every mode: `HOME=/tmp; unset HOME;
+cd` is a silent 0 even under the `sh` name, and so is `unset HOME; cd` in a
+shell that started with one — only a shell that has **never** had a HOME says
+`HOME not set`. So the reference keeps a home of its own beside the parameter,
+initialized once and emptied rather than removed by `unset`; an empty home is
+an empty destination, which is `CdEmptyHomeIsAnError` and already 0 there.
+Ours answers 1 on those rows under the sh-family modes. The second half of the
+same fact is that a zsh-emulation startup **fills in** an absent HOME from the
+password database — `env -u HOME zsh -c 'print $HOME'` writes the entry's home
+and `env -u HOME sh -c …` writes nothing — which is why a plain `zsh -c cd`
+has somewhere to go at all. Neither half is this axis and both are filed.
 
 **`CdEmptyOperandIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
 

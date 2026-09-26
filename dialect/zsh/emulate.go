@@ -91,11 +91,35 @@ func currentEmulation(r *interp.Runner) string {
 // above all read the same under `emulate -R csh` as under `emulate -R zsh`,
 // so the mode that "changes nothing this shell can speak about" is a mode
 // that agrees with zsh rather than a mode to skip.
-var emulations = map[string]struct{ redirFatal bool }{
-	"zsh": {redirFatal: false},
-	"sh":  {redirFatal: true},
-	"ksh": {redirFatal: true},
-	"csh": {redirFatal: false},
+//
+// `cdNowhere` is the second, and it arrived with the *name* (#4640). `cd`
+// with no operand and no `HOME` writes `HOME not set` and exits 1 under
+// `sh`, `ksh` and `csh`, and is a silent 0 under `zsh`. Measured 2026-09-26
+// on zsh 5.9.2, `env -u HOME`, both by copying the reference to a file with
+// each name and through `--emulate` on the reference under its own name —
+// two routes to the same mode agreeing, which is what says the mode carries
+// it rather than the name.
+//
+// csh parts from zsh here where it agreed with it on redirFatal, which is
+// the reason this is a second field rather than a reading of the first: `csh`
+// is not "the mode that changes nothing this shell can speak about" on every
+// axis, and one boolean standing for both would have made it so.
+//
+// What this field does **not** model is a shell that once had a `HOME` and
+// unset it. Measured in the same run: with the reference called `sh` and
+// `HOME` in its environment, `unset HOME; cd` is a silent 0, and so it is
+// after `HOME=/tmp; unset HOME` in a shell that started with none — only a
+// shell that has never had one says `HOME not set`. That is a home the shell
+// remembers rather than an axis of the emulation, it is the same answer under
+// every mode, and it is filed on its own.
+var emulations = map[string]struct {
+	redirFatal bool
+	cdNowhere  bool
+}{
+	"zsh": {redirFatal: false, cdNowhere: false},
+	"sh":  {redirFatal: true, cdNowhere: true},
+	"ksh": {redirFatal: true, cdNowhere: true},
+	"csh": {redirFatal: false, cdNowhere: true},
 }
 
 // applyEmulation switches the axes and puts back the options this form of
@@ -121,6 +145,13 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.RedirectErrorOnSpecialBuiltinFatal
 	}, answer(emulations[mode].redirFatal))
+	// The second axis with no option name over it. `cd` with nowhere to go
+	// is an error in the three sh-family modes and a silent 0 in zsh's own,
+	// which is why a binary called `sh` has to reach it: nothing else in this
+	// shell moves with the name.
+	setAxis(r, func(s *interp.Semantics) *interp.Answer {
+		return &s.CdWithoutHomeIsAnError
+	}, answer(emulations[mode].cdNowhere))
 	// The recorded names in one write rather than one write each. The store
 	// holds deviations, so dropping a name from it is that option back at the
 	// table's default — and this emulation's default is not always the

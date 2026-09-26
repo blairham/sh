@@ -57,6 +57,7 @@ func (sh Shell) session(argv []string, in source) int {
 	in.interactive = true
 	in.login = LoginShell(argv)
 	in.posix = PosixNamed(argv)
+	sh.emulationFromName(argv, &in)
 	// A prompt reads its program from standard input, which is what it is
 	// however it was reached: `sh`, `sh -s` and `sh -i` at a terminal all
 	// show `s` in `$-` across the panel.

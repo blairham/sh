@@ -616,6 +616,7 @@ func MainArgs(sh Shell, argv []string) int {
 	// route above asks the same questions of the same vector for itself.
 	in.login = LoginShell(argv)
 	in.posix = PosixNamed(argv)
+	sh.emulationFromName(argv, &in)
 	return sh.run(in)
 }
 

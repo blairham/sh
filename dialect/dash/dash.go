@@ -220,6 +220,14 @@ func Semantics() interp.Semantics {
 	// positions do not share an answer — a body's failed expansion costs
 	// this shell the command and not the script (#1228).
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.No
+	// A *target* this shell expanded itself and could not is this shell's
+	// own failed expansion and ends it at 2, on every command shape —
+	// including the ones a failed *open* leaves alive, `read x <
+	// /nonexistent/f` among them. The answer parts from
+	// HeredocBodyFailureIsTheRedirections here, which is Yes: a failing
+	// here-document **body** on the same `read` carries this shell on at 2.
+	// Measured 2026-09-26 on dash 0.5.12 (#4689).
+	s.RedirectTargetFailureIsTheRedirections = interp.No
 	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split,
 	// and this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`
 	// here and in zsh, against `x y z` in bash and ksh93. It has no arrays,

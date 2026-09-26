@@ -2500,6 +2500,12 @@ func Semantics() interp.Semantics {
 	s.StoreRefusalThroughPrintfLeavesZero = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
+	// A *target* this shell expanded itself and could not is this shell's
+	// own failed expansion rather than a failed redirection, which here is
+	// fatal whatever it was written on — where `: < /nonexistent/f` and
+	// `read x < /nonexistent/f` both carry on at 1. Measured 2026-09-26 on
+	// zsh 5.9.2 under `-f` (#4689).
+	s.RedirectTargetFailureIsTheRedirections = interp.No
 	// And a body this shell expanded itself and could not is its own failed
 	// expansion, which here is fatal: `: <<END`, `read x <<END`, a function
 	// and a group all end the shell at 1 over a body of `$(( 1/0 ))`, where

@@ -25,15 +25,33 @@ func TestATargetThatCouldNotBeExpandedIsNotOpened(t *testing.T) {
 		{"on a builtin", `set -u; : > "$NOPE_R"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, _ := run(t, tc.src, nil)
-			if !strings.Contains(out, "NOPE_R") {
-				t.Errorf("out = %q, want the unset name reported", out)
-			}
-			if strings.Contains(out, "No such file") || strings.Contains(out, "no such file") {
-				t.Errorf("out = %q, want no second complaint about the empty name", out)
-			}
-			if n := strings.Count(out, "\n"); n != 1 {
-				t.Errorf("out = %q, want exactly one diagnostic", out)
+			// Under **both** answers to whose failure a target's is, because
+			// the count of complaints is not what that axis decides — see
+			// interp/redirtarget.go. Left unanswered the two rows on a
+			// command this shell runs itself would say so, which is a second
+			// line and a different claim (#4689).
+			for _, isRedirs := range []Answer{Yes, No} {
+				out, _ := run(t, tc.src, func(r *Runner) {
+					sem := Semantics{
+						RedirectTargetFailureIsTheRedirections: isRedirs,
+						RedirectErrorOnSpecialBuiltinFatal:     No,
+						FatalErrorStatusIsOne:                  Yes,
+						// The external rows reach the other half of the same
+						// word, which is a question of its own and is not
+						// what this test is about.
+						RedirectTargetExpandsInTheCommandsProcess: Yes,
+					}
+					r.Semantics = &sem
+				})
+				if !strings.Contains(out, "NOPE_R") {
+					t.Errorf("%v: out = %q, want the unset name reported", isRedirs, out)
+				}
+				if strings.Contains(out, "No such file") || strings.Contains(out, "no such file") {
+					t.Errorf("%v: out = %q, want no second complaint about the empty name", isRedirs, out)
+				}
+				if n := strings.Count(out, "\n"); n != 1 {
+					t.Errorf("%v: out = %q, want exactly one diagnostic", isRedirs, out)
+				}
 			}
 		})
 	}

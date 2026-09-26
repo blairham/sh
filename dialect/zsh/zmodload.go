@@ -875,20 +875,25 @@ type zmodloadOpts struct {
 	list     bool // -l: list them, only allowed with -F
 	silent   bool // -s: no complaint about a module that will not load
 	quietIf  bool // -i: no complaint about one already in the state asked for
+	depends  bool // -d: the dependency table rather than the module itself
 }
 
 // zmodloadLetters are the letters implemented here, and
 // zmodloadUnimplemented the ones zsh has and this shell does not — autoloaded
 // builtins and conditions (`-a` with `-b`, `-c`, `-f`, `-p`), module aliases
-// (`-A`, `-R`), the dependency table (`-d`), pattern arguments (`-m`), and
-// `-I` and `-P`. Each is named as missing rather than as unknown, so a script
-// can tell a shell that lacks one from a typo.
+// (`-A`, `-R`), pattern arguments (`-m`), and `-I` and `-P`. Each is named as
+// missing rather than as unknown, so a script can tell a shell that lacks one
+// from a typo.
+//
+// `-d` has left the second set for the first (#4449): the dependency table is
+// a record this builtin can keep whether or not a module can be dlopened, and
+// zmodloadDepends is the whole of it.
 //
 // Anything outside both sets is `bad option: -q` and 1, measured against
 // twenty-two letters zsh does not have.
 const (
-	zmodloadLetters       = "eulLFsi"
-	zmodloadUnimplemented = "aAbcdfImpPR"
+	zmodloadLetters       = "eulLFsid"
+	zmodloadUnimplemented = "aAbcfImpPR"
 )
 
 func registerZmodload(r *interp.Runner) {
@@ -901,6 +906,16 @@ func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		return code
 	}
 	switch {
+	case opts.exists && zmodloadCrowds(opts):
+		// **`-e` is not a letter that composes**, and the set it refuses is
+		// measured rather than "everything else": `-es` is 0 and `-eF` is the
+		// feature query below, while `-eu`, `-eL`, `-ei` and `-ed` are this
+		// one sentence at 1 (#4603). It is asked **before** the `-l` rule
+		// under it, which is what the grid says — `-el` is *`-l is only
+		// allowed with -F`* and `-eli` is this sentence, so `-l` is not one
+		// of the letters `-e` objects to and `-i` is.
+		r.Diagnosef("-e cannot be combined with other options\n")
+		return 1
 	case opts.list && !opts.features:
 		// Measured: `-l` alone is refused rather than treated as a listing.
 		r.Diagnosef("-l is only allowed with -F\n")
@@ -912,18 +927,15 @@ func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		// an unimplemented letter first, so `-u` is the one that gets here.
 		r.Diagnosef("-b, -c, -f, -p and -u cannot be combined with -F\n")
 		return 1
+	case opts.depends:
+		return zmodloadDepends(r, opts, rest)
 	case opts.exists && opts.features:
-		// `-eF` is still the question `-e` asks, and it asks it of the module
-		// alone: measured, `zmodload -eF zsh/zutil b:zstyle` is 0 once the
-		// module is loaded, whether or not `zstyle` is one of the features it
-		// was left showing. So the operands after the module are along for
-		// the ride — and the module itself is required, the way it is for
-		// `-lF` and unlike `-LF`.
+		// The module is required, the way it is for `-lF` and unlike `-LF`.
 		if len(rest) == 0 {
 			r.Diagnosef("-F requires a module name\n")
 			return 1
 		}
-		return zmodloadExists(r, rest[:1])
+		return zmodloadFeatureExists(r, rest[0], rest[1:])
 	case opts.exists:
 		return zmodloadExists(r, rest)
 	case opts.features:
@@ -994,6 +1006,8 @@ func setZmodloadLetter(opts *zmodloadOpts, letter byte) {
 		opts.silent = true
 	case 'i':
 		opts.quietIf = true
+	case 'd':
+		opts.depends = true
 	}
 }
 
@@ -1121,6 +1135,235 @@ func zmodloadExists(r *interp.Runner, modules []string) int {
 		}
 	}
 	return 0
+}
+
+// zmodloadCrowds is the letters `-e` refuses to stand beside, and it is a
+// measured list rather than "any other letter" (#4603).
+//
+// Measured 2026-09-26 on zsh 5.9.2, run `-f`, a letter at a time against
+// `zmodload -e? zsh/main`:
+//
+//	-es   silent, 0            -eu   -e cannot be combined with other options, 1
+//	-eF   the feature query    -eL   the same sentence, 1
+//	-em   silent, 0            -ei   the same sentence, 1
+//	-eA   silent, 0            -ed   the same sentence, 1
+//	-el   -l is only allowed with -F, 1
+//
+// The left column is the control and is what makes this a list: a rule that
+// refused every letter beside `-e` would take `-es` with it, and `-es` is a
+// spelling both shells accept. `-m` and `-A` are letters this shell has not
+// got, so they reach the not-implemented refusal before any of this; they are
+// in the table because they are what says the accepted set is not just `-s`.
+//
+// `-l` is the one that has to be named rather than reasoned about: it is not
+// in this set — `-el` reaches the rule about `-l` — and `-eli` is this
+// sentence, so the check runs in front of that rule and lets `-l` through.
+func zmodloadCrowds(opts zmodloadOpts) bool {
+	return opts.unload || opts.commands || opts.quietIf || opts.depends
+}
+
+// zmodloadFeatureExists is `-Fe`: whether a module's features are in the
+// state the operands name, said with a status and nothing else.
+//
+// Three readings of one operand, and the third is the one that makes this a
+// query rather than a selection (#4599). Measured 2026-09-26 on zsh 5.9.2,
+// run `-f`, with `zsh/zutil` loaded and `-b:zstyle` deselected:
+//
+//	zmodload -Fe zsh/zutil  b:zstyle   0    has the module got this feature
+//	zmodload -Fe zsh/zutil +b:zstyle   1    is it on
+//	zmodload -Fe zsh/zutil -b:zstyle   0    is it off
+//
+// so a **bare** name asks after the feature's existence and a **signed** one
+// asks after its state. That is the opposite of zmodloadSpec's rule, where a
+// bare name means `+` — measured for the selection and true there — and
+// reading the operands with that rule is what made every row of this query
+// agree by accident. This shell answered 0 to all four rows of the issue's
+// table, including for a feature no module has, and row A was right for the
+// wrong reason.
+//
+// The rest is measured the same way:
+//
+//   - A module that is **not loaded** is 1, whatever the operands.
+//   - A module that supports no features at all is 1: `zmodload -Fe zsh/main`
+//     is 1 where `zmodload -e zsh/main` is 0, and a loaded `zsh/complist` —
+//     which supports features and has none — is 0.
+//   - **No operands** is 0 for a loaded module, so the letters alone are
+//     `-e`'s own question.
+//   - Every operand must hold: `+p:EPOCHSECONDS -p:epochtime` is 1 with both
+//     on, and a word that names no feature of the module is 1 whatever its
+//     sign.
+func zmodloadFeatureExists(r *interp.Runner, module string, specs []string) int {
+	if !containsWord(zmodloadLoaded(r), module) || zmodloadFeatureless[module] {
+		return 1
+	}
+	features := zmodloadFeatures[module]
+	on := make(map[string]bool, len(features))
+	for _, f := range zmodloadEnabled(r, module) {
+		on[f] = true
+	}
+	for _, word := range specs {
+		feature, want := zmodloadSpec(word)
+		if !containsWord(features, feature) {
+			return 1
+		}
+		if zmodloadSigned(word) && on[feature] != want {
+			return 1
+		}
+	}
+	return 0
+}
+
+// zmodloadSigned says whether an operand carried a sign, which is the half of
+// a `-Fe` operand zmodloadSpec throws away. See zmodloadFeatureExists for why
+// the distinction only exists on that path: everywhere else a bare name means
+// `+`, measured, and there is nothing for this to tell apart.
+func zmodloadSigned(word string) bool {
+	return strings.HasPrefix(word, "+") || strings.HasPrefix(word, "-")
+}
+
+// zmodloadDependStore is the dependency table `-d` writes: an association
+// from a module's name to the modules it depends on, joined by spaces, under
+// a name no script can reach — the same idiom as zmodloadStore and cloned
+// into a subshell for the same reason.
+const zmodloadDependStore = ".zsh.zmodload.depends"
+
+// zmodloadDepends is `-d`, which is four commands on one letter (#4449).
+//
+// Measured 2026-09-26 on zsh 5.9.2, run `-f`:
+//
+//	zmodload -d M dep…     declare, silently, 0
+//	zmodload -d M          report M's dependencies as `M: dep dep`, 0
+//	zmodload -d            report every module that has any, sorted by name
+//	zmodload -Ld / -dL M   the same as the `zmodload -d M dep…` that made it
+//	zmodload -ud M dep…    take those dependencies away
+//	zmodload -ud M         take all of M's away
+//	zmodload -ud           `what do you want to unload?`, 1
+//
+// The declare-and-report pair is what makes the letter discriminating: a `-d`
+// that only reported would print nothing for a fresh module and agree with a
+// fresh zsh, because a module with no declared dependency prints nothing in
+// either shell.
+//
+// A declaration **adds** rather than replaces — measured, two `-d zsh/zle`
+// commands naming different modules leave both — and it says nothing about
+// whether either name is a module this shell has: `zmodload -d zsh/nosuchmod
+// zsh/alsonot` is 0 and the pair is in the listing afterwards. So this is a
+// table of names and not a claim about what will load.
+//
+// **The table this shell starts with is empty, and zsh's is not.** A fresh
+// zsh reports seven rows — `zsh/zutil: zsh/complete` among them — which are
+// facts about the module set it ships rather than about the dependency
+// machinery, and two of the seven name modules this shell has no part of.
+// Adopting them would put one module's fate in another's hands on the load
+// path below, which is a measurement about *loading* and not the one this
+// issue asked for; it stays out until somebody takes that question on.
+func zmodloadDepends(r *interp.Runner, opts zmodloadOpts, args []string) int {
+	if opts.unload {
+		return zmodloadUndepend(r, args)
+	}
+	switch {
+	case len(args) == 0:
+		for _, m := range zmodloadDependNames(r) {
+			zmodloadDependLine(r, opts, m)
+		}
+		return 0
+	case len(args) == 1:
+		zmodloadDependLine(r, opts, args[0])
+		return 0
+	}
+	module, deps := args[0], args[1:]
+	kept := zmodloadDependencies(r, module)
+	for _, d := range deps {
+		if !containsWord(kept, d) {
+			kept = append(kept, d)
+		}
+	}
+	zmodloadSetDependencies(r, module, kept)
+	return 0
+}
+
+// zmodloadUndepend is `-ud`: a dependency taken back out of the table.
+//
+// A module on its own loses all of them, and a name that was never in the
+// table is removed in silence at 0 — measured, `zmodload -ud zsh/a zsh/nosuch`
+// is 0 with `zsh/a`'s other dependency left standing.
+func zmodloadUndepend(r *interp.Runner, args []string) int {
+	if len(args) == 0 {
+		r.Diagnosef("what do you want to unload?\n")
+		return 1
+	}
+	module, deps := args[0], args[1:]
+	if len(deps) == 0 {
+		zmodloadSetDependencies(r, module, nil)
+		return 0
+	}
+	var kept []string
+	for _, d := range zmodloadDependencies(r, module) {
+		if !containsWord(deps, d) {
+			kept = append(kept, d)
+		}
+	}
+	zmodloadSetDependencies(r, module, kept)
+	return 0
+}
+
+// zmodloadDependLine writes one module's row, in whichever of the two shapes
+// the letters asked for, and writes nothing at all when the module has no
+// dependencies — measured, `zmodload -d zsh/nodeps` and `zmodload -dL
+// zsh/nodeps` are both silence at 0.
+func zmodloadDependLine(r *interp.Runner, opts zmodloadOpts, module string) {
+	deps := zmodloadDependencies(r, module)
+	if len(deps) == 0 {
+		return
+	}
+	if opts.commands {
+		zmodloadPrintf(r, "zmodload -d %s %s\n", module, strings.Join(deps, " "))
+		return
+	}
+	zmodloadPrintf(r, "%s: %s\n", module, strings.Join(deps, " "))
+}
+
+// zmodloadDependencies is what a module has been declared to depend on, in
+// the order the declarations arrived — measured, a second `-d` appends rather
+// than sorting.
+func zmodloadDependencies(r *interp.Runner, module string) []string {
+	table, ok := r.GetAssoc(zmodloadDependStore)
+	if !ok {
+		return nil
+	}
+	return strings.Fields(table[module])
+}
+
+// zmodloadSetDependencies records a module's dependencies, and takes its row
+// out of the table when there are none left — so that the bare listing does
+// not write a name with nothing after it.
+func zmodloadSetDependencies(r *interp.Runner, module string, deps []string) {
+	table, _ := r.GetAssoc(zmodloadDependStore)
+	if table == nil {
+		table = map[string]string{}
+	}
+	if len(deps) == 0 {
+		delete(table, module)
+	} else {
+		table[module] = strings.Join(deps, " ")
+	}
+	r.SetAssoc(zmodloadDependStore, table)
+}
+
+// zmodloadDependNames is every module with a dependency, sorted — which is
+// the order zsh's own listing is in, measured with four modules declared out
+// of alphabetical order.
+func zmodloadDependNames(r *interp.Runner) []string {
+	table, ok := r.GetAssoc(zmodloadDependStore)
+	if !ok {
+		return nil
+	}
+	names := make([]string, 0, len(table))
+	for m := range table {
+		names = append(names, m)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // zmodloadListing is the bare form and `-L`: the loaded modules, as names or

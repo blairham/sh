@@ -700,6 +700,15 @@ func hasUnterminatedPatternGroup(p string) bool {
 // reaches an expansion there, and a value carrying one is ordinary text in
 // both (`shopt -s extglob; v='a@(b'; [[ x == $v ]]` is 1, not a refusal).
 // See [Dialect.UnterminatedPatternGroupIsAWord], which is the parsing half.
+//
+// Dropping the PatternAlternation test survives the package, and that is an
+// **equivalent mutant** rather than a gap — recorded here so the next reader
+// does not go looking for the row that would kill it. Only one dialect in the
+// tree answers BracketBadPattern and it is the one with bare groups, so the
+// first test already implies the second today. It is kept for what it says:
+// an unclosed `(` is a group to ask about only where a lone one opens one,
+// and a sixth dialect that called an unterminated bracket a bad pattern
+// without taking bare groups would otherwise be asked the wrong question.
 func (r *Runner) badPatternFromAnOpenGroup(p string) bool {
 	return r.sem().UnterminatedBracket == BracketBadPattern &&
 		r.lang().PatternAlternation && hasUnterminatedPatternGroup(p)

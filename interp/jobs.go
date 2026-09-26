@@ -764,6 +764,23 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// both read the same stream, and os/exec copies from a caller's io.Reader
 	// on a goroutine of its own.
 	sub.Stdin = r.backgroundStdin()
+	// And the hook the front end wants poking when this job ends, read here
+	// on the shell's own goroutine and carried into the finalizer rather than
+	// read from it.
+	//
+	// The field belongs to the front end and the front end *clears* it when
+	// its session ends — see repl.Shell.jobNotifying — so a job's goroutine
+	// reading it is reading a field another goroutine writes, which is what
+	// it is. `go test -race` says so on cmd/zsh's notify cases; it went
+	// unreported until now only because the read happened to sit before a
+	// mutex the shell took afterwards, and an accident is not an ordering.
+	//
+	// Nothing is lost by carrying it. What the hook does once its session has
+	// gone is the wake's own business, and the wake is built to be poked
+	// after it is closed. The *axis* is still asked at the moment the job
+	// ends, because `unsetopt notify` moves under a running session — see
+	// notifyJobEnded, which is where that question stayed.
+	notifyEnded := r.JobEnded
 	// The job is finished however the goroutine ended, which is what keeps an
 	// interpreter bug on it from costing more than the job. The shell is
 	// blocked on <-job.ready below and `wait` blocks on the same job
@@ -810,7 +827,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// this is the only place that knows the job has ended *while the
 		// shell is doing something else* — which is the whole of the
 		// difference. See Runner.notifyJobEnded.
-		r.notifyJobEnded()
+		r.notifyJobEnded(notifyEnded)
 		// After the job is finished rather than before it, so nothing can
 		// observe a pipe that has ended while the job that was writing to
 		// it is still marked as running.
@@ -918,11 +935,15 @@ func (r *Runner) NotifiesAsAJobEnds() bool {
 // once, and so that a front end which wired the hook for a session cannot be
 // woken by a dialect that does not want it — `unsetopt notify` moves the axis
 // under a session that is already running, and this is read each time.
-func (r *Runner) notifyJobEnded() {
-	if r.JobEnded == nil || !r.NotifiesAsAJobEnds() {
+//
+// The hook itself is *handed in* rather than read off the Runner, because the
+// front end writes that field from its own goroutine when the session ends.
+// See where background takes it.
+func (r *Runner) notifyJobEnded(notify func()) {
+	if notify == nil || !r.NotifiesAsAJobEnds() {
 		return
 	}
-	r.JobEnded()
+	notify()
 }
 
 // FinishedJobNotices is what to say about the jobs that have ended since it

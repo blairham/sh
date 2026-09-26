@@ -63,10 +63,16 @@ func TestWhenAFrozenPrefixIsChecked(t *testing.T) {
 			// division is silent there and is the only complaint under the
 			// other. That is the row that says this is not merely a
 			// reordering of two diagnostics.
+			//
+			// **And the command runs only under the first reading**, which
+			// is the same fact read once more: what the refusal costs here
+			// is nothing (PrefixRefusalCostsTheCommand is No above), and
+			// what a failed *expansion* costs is the command, in every
+			// column. See interp/prefixexpansionfailed.go (#4675).
 			"a value that will not expand",
 			"readonly x=1\nx=$((1/0)) /bin/echo RAN\n",
 			"RAN\n", "testsh: line 2: x: readonly variable\n",
-			"RAN\n", "testsh: line 2: division by zero\n",
+			"", "testsh: line 2: division by zero\n",
 		},
 		{
 			// The same in front of a function, where the prefix is otherwise
@@ -75,7 +81,7 @@ func TestWhenAFrozenPrefixIsChecked(t *testing.T) {
 			"a value that will not expand in front of a function",
 			"f() { echo IN-F; }\nreadonly x=1\nx=$((1/0)) f\n",
 			"IN-F\n", "testsh: line 3: x: readonly variable\n",
-			"IN-F\n", "testsh: line 3: division by zero\n",
+			"", "testsh: line 3: division by zero\n",
 		},
 		{
 			// No expression at all, so the boundary is the redirection's.
@@ -100,11 +106,12 @@ func TestWhenAFrozenPrefixIsChecked(t *testing.T) {
 		{
 			// And a prefix with nothing frozen in it: the axis is never
 			// reached, so a value that will not expand reports its own
-			// failure under both answers.
+			// failure under both answers — and costs the command under both,
+			// since no refusal is involved for the axis to be about.
 			"nothing frozen in the prefix",
 			"y=$((1/0)) /bin/echo RAN\n",
-			"RAN\n", "testsh: line 1: division by zero\n",
-			"RAN\n", "testsh: line 1: division by zero\n",
+			"", "testsh: line 1: division by zero\n",
+			"", "testsh: line 1: division by zero\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

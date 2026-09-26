@@ -7139,6 +7139,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.prefixTraceAssigns, r.prefixTraceValues, r.prefixGlobMatches = nil, nil, nil
 	}()
 	tracedHere := false
+	// What this command knew before any prefix value was expanded, so that a
+	// failure the walk *causes* can be told from one that was already on the
+	// record. Taken again before each of the three routes below, because
+	// between here and them the **redirections** are opened: a here-document
+	// body that will not expand sets the same flag, costs the command rather
+	// than the script, and is not this command's prefix failing. See
+	// interp/prefixexpansionfailed.go.
+	walk := r.beginPrefixWalk(c.Assigns)
 	if early {
 		// The ordered walk two columns make before they open anything: the
 		// refusals and the values in the order the script wrote them, and the
@@ -7146,9 +7154,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// interp/prefixredirorder.go. After the frozen-name check above, so
 		// the column that refuses a prefix before it evaluates anything still
 		// evaluates nothing.
-		tracedHere = r.walkThePrefixBeforeTheRedirections(c.Assigns,
+		tracedHere = r.walkThePrefixBeforeTheRedirections(c.Assigns, walk,
 			tracesPrefix && !prefixFollows && r.tracesEachPrefixEntryOnItsOwnLine())
 		if r.unspecified {
+			return nil
+		}
+		// A value the walk could not expand gives the command up here, in
+		// front of the redirections: measured, `a=$((1/0)) echo RAN
+		// >/nope/x` writes the division alone in bash 5.3.20 and never the
+		// file's complaint — which is what "the prefix is expanded first"
+		// means when the prefix fails. See interp/prefixexpansionfailed.go.
+		if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
 			return nil
 		}
 	}
@@ -7314,6 +7330,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// the two routes answering it differently — a prefix to a function is
 		// otherwise discarded, so its value was never expanded and bash's
 		// answer fell out of a gap rather than a choice (#1219).
+		// Taken again here: the redirections have been opened since the one
+		// above, and what they may have left on the record is not this
+		// prefix's. In front of the frozen-name expansion below rather than
+		// behind it, because that loop expands a prefix's value and so is
+		// part of this walk — a marker taken after it would read a value
+		// that would not expand as something that had already failed.
+		walk = r.beginPrefixWalk(c.Assigns)
 		if !r.prefixCheckedFirst {
 			for _, a := range c.Assigns {
 				if !a.Operand && r.readonly[a.Name] {
@@ -7346,6 +7369,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			return nil
 		}
 		for _, a := range c.Assigns {
+			if r.prefixWalkFailed(walk) {
+				// Nothing behind a value that would not expand is expanded
+				// — see interp/prefixexpansionfailed.go.
+				break
+			}
 			if a.Operand {
 				continue
 			}
@@ -7485,6 +7513,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.takeBackFunctionPrefix(left, scoped)
 			r.line = bodyLine
 		}()
+		// A value that would not expand gives the call up. Behind the
+		// take-back above for the reason the builtin route's is: the entries
+		// the walk did apply before it failed are still the command's and
+		// still transient. See interp/prefixexpansionfailed.go.
+		if r.givesUpForAFailedPrefix(walk, prefixCommand{kind: prefixBeforeFunction}) {
+			return nil
+		}
 		// `$_` belongs to the *call* and not to the body: whatever the last
 		// command inside it was handed, the caller reads what the call was.
 		// Unanimous across bash, ksh93 and zsh, and #3134's first defect.
@@ -7526,7 +7561,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 		var undo []savedVar
 		var held []string
+		// Taken again for the reason the function route's is.
+		walk = r.beginPrefixWalk(c.Assigns)
 		for _, a := range c.Assigns {
+			if r.prefixWalkFailed(walk) {
+				// Nothing behind a value that would not expand is expanded
+				// — see interp/prefixexpansionfailed.go.
+				break
+			}
 			if a.Operand {
 				// An argument to the builtin, not a prefix to it.
 				continue
@@ -7650,6 +7692,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.prefixHeldUndo = outerUndo
 			r.restoreVarsExcept(undo, kept, shadowed)
 		}()
+		// A value that would not expand gives the builtin up. Behind the
+		// take-back above rather than in front of it, so that the entries
+		// the walk did apply before it failed are still put back — a prefix
+		// is transient whether or not the command it stood in front of ever
+		// ran. See interp/prefixexpansionfailed.go.
+		if r.givesUpForAFailedPrefix(walk, kind) {
+			return nil
+		}
 		// The builtin is on the record for the duration, so a dialect that
 		// names it in a diagnostic's location can. Saved and put back rather
 		// than cleared: a builtin can run another one.
@@ -7852,7 +7902,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// search below is made with it — see reachPrefixedPath.
 	prefixPath, pathFromPrefix := "", false
 	var prefixArrays []string
+	// Taken again for the reason the function route's is.
+	walk = r.beginPrefixWalk(c.Assigns)
 	for _, a := range c.Assigns {
+		if r.prefixWalkFailed(walk) {
+			// The entries behind a value that would not expand are not
+			// expanded at all — see interp/prefixexpansionfailed.go, where
+			// the panel is and where the command is given up once the walk
+			// is over.
+			break
+		}
 		if a.Operand {
 			// Unreachable as things stand — every name that takes an operand
 			// assignment is a builtin, so no external command ever gets here
@@ -7961,6 +8020,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 	}
 	held.release(r)
+	// A value that would not expand gives the command up, here rather than
+	// in front of refusePrefixes below: the report there is already withheld
+	// when an expansion failed, because three of the panel name the
+	// expansion and never mention the frozen name. See
+	// interp/prefixexpansionfailed.go.
+	if r.givesUpForAFailedPrefix(walk, external) {
+		return nil
+	}
 	// Read after the stores above rather than before them, so a hook that
 	// wrote some *other* exported name is answered by the environment the
 	// child is given. See Runner.prefixChildForTheDisciplines.

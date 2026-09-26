@@ -131,7 +131,7 @@ func aPrefixIsWritten(assigns []*syntax.Assign) bool {
 // a[1]=v q=1 f`: `+ w=1`, the identifier complaint, `+ q=1`, `+ f`.
 //
 // Reports whether it wrote those lines, so the caller writes the command alone.
-func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, traceEach bool) bool {
+func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, walk prefixWalk, traceEach bool) bool {
 	// Whether a subscripted word in this prefix is refused at all, settled
 	// once for the command the way the pass it replaces settled it. A `false`
 	// here is a prefix with no subscripted word in it as often as it is a
@@ -152,6 +152,13 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, tr
 	defer held.release(r)
 	wrote := false
 	for _, a := range assigns {
+		if r.prefixWalkFailed(walk) {
+			// The walk stops at the first value that would not expand, and
+			// the entries behind it are not expanded at all — unanimous in
+			// the panel, and the caller gives the command up. See
+			// interp/prefixexpansionfailed.go.
+			break
+		}
 		if a.Operand {
 			continue
 		}

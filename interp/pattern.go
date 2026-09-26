@@ -2375,6 +2375,116 @@ func hasUnterminatedBracket(p string) bool {
 	return false
 }
 
+// bracketAfterSubIsABadPattern reports whether this dialect refuses a pattern
+// outright because a bracket in it was left open by a sub-expression.
+//
+// The axis first and the scan second, which is [Runner.badPatternFromAnOpenGroup]'s
+// arrangement and for its reason: the scan costs a walk of the pattern and
+// only one of the three readings has anything to do with it. Asked against
+// the value rather than through [Runner.bracketAfterSubPolicy] so that a
+// dialect which has not answered is told once, by the matcher, about a
+// pattern that really poses the question — and not here about every pattern
+// with a `[` in it.
+func (r *Runner) bracketAfterSubIsABadPattern(p string) bool {
+	return r.sem().UnterminatedBracketAfterASubExpression == BracketBadPattern &&
+		bracketLeftOpenBySubExpression(p, r.readsCollatingElements())
+}
+
+// readsCollatingElements is whether `[.x.]` and `[=x=]` are one element here,
+// read without asking — the scan above needs the answer for a pattern that
+// may hold neither, and Runner.collatingElements reports an unanswered
+// dialect, which is the matcher's to do once.
+func (r *Runner) readsCollatingElements() bool {
+	p := r.sem().CollatingElements
+	return p != NoCollatingElements && p != CollatingElementsUnspecified
+}
+
+// bracketLeftOpenBySubExpression reports whether a pattern holds a bracket a
+// **sub-expression** left open — a `[:name:]`, a `[.x.]` or a `[=x=]` whose
+// own `]` is not the bracket's, so `[[:alpha:]` looks closed and is not.
+//
+// It is the companion to [hasUnterminatedBracket] and it exists because that
+// scan cannot see this shape: `closesBracket` stops at the class's own `]`,
+// which is exactly the byte the matcher steps over. Only a scan that reads
+// the sub-expression knows, and until one existed the verdict could be asked
+// for only from inside the match — so *whether the shell refused depended on
+// the value*, which is not a distinction the reference draws (#4659).
+//
+// collating says whether this dialect reads `[.x.]` and `[=x=]` as one
+// element at all. It is a parameter and not a read of the vector because the
+// answer is the dialect's and this file names no shell — and it matters:
+// measured 2026-09-26 on zsh 5.9.2 (`-f -c`), `v=zzz; ${v#x[[.a.]}` is `zzz`
+// at status 0 there, because a shell with no collating elements closes that
+// bracket at the `]` it can see. The same text in a column that reads one
+// would leave the bracket open.
+//
+// **A sub-expression nothing closes is not this question**: `x[[:alpha}` has
+// no `:]` in it, and what that means is
+// [Semantics.UnterminatedCharacterClass]'s four readings rather than this
+// one. The scan stops and answers false there, which leaves that axis the
+// only thing deciding — measured, the reference refuses it and so do we,
+// by the other road.
+func bracketLeftOpenBySubExpression(p string, collating bool) bool {
+	for i := 0; i < len(p); i++ {
+		if p[i] == '\\' {
+			i++
+			continue
+		}
+		if p[i] != '[' {
+			continue
+		}
+		open, sub, decided := bracketRunsOff(p, i, collating)
+		if decided && open && sub {
+			return true
+		}
+	}
+	return false
+}
+
+// bracketRunsOff walks the bracket expression opened at i the way the matcher
+// walks it, and reports whether it ran off the end, whether a sub-expression
+// was stepped over on the way, and whether the scan reached an answer at all.
+//
+// The third result is what keeps this from speaking for questions that are
+// not its own: a sub-expression nothing closes hands the rest of the pattern
+// to a different axis, so the scan says so rather than guessing.
+func bracketRunsOff(p string, i int, collating bool) (open, sub, decided bool) {
+	j := i + 1
+	if j < len(p) && (p[j] == '!' || p[j] == '^') {
+		j++
+	}
+	if j < len(p) && p[j] == ']' {
+		// The bracket's own spelling rather than its contents — the same
+		// first-member rule closesBracket has.
+		j++
+	}
+	for j < len(p) {
+		switch {
+		case p[j] == '\\':
+			j += 2
+		case p[j] == ']':
+			return false, sub, true
+		case strings.HasPrefix(p[j:], "[:"):
+			end := strings.Index(p[j+2:], ":]")
+			if end < 0 {
+				return false, false, false
+			}
+			sub = true
+			j += 2 + end + 2
+		case collating && j+1 < len(p) && p[j] == '[' && (p[j+1] == '.' || p[j+1] == '='):
+			end := strings.Index(p[j+2:], string(p[j+1])+"]")
+			if end < 0 {
+				return false, false, false
+			}
+			sub = true
+			j += 2 + end + 2
+		default:
+			j++
+		}
+	}
+	return true, sub, true
+}
+
 // inClass answers one character-class name for one unit of a subject.
 //
 // The twelve POSIX names first, since they are the ones every shell answers

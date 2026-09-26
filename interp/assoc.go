@@ -1003,6 +1003,67 @@ func (r *Runner) tableRefusesAScalarStore(name string) bool {
 	return true
 }
 
+// producedTableRefusesAScalarStore reports whether a scalar store over a name
+// holding a **produced** table is refused, and writes the refusal where it is.
+//
+// A produced table — one the shell itself answers for, rather than one a
+// script stored — is not the stored table's row with a different subject, and
+// that is the whole reason this is a function of its own. Measured 2026-09-26
+// on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`, a script file):
+//
+//	                        ksharrays off                ksharrays on
+//	aliases=string          attempt to set slice of      attempt to set
+//	                        associative array            associative array
+//	                                                     to scalar
+//	typeset -A h=(one 1)
+//	h=string                typeset h=string, status 0   the same sentence
+//
+// So with the option **off** a produced table is refused where a stored one is
+// not refused at all, in words no other row uses; with it **on** the two say
+// the same thing. That is why the producer decides here and the option only
+// picks the wording: [Runner.tableRefusesAScalarStore] is the stored table's
+// question and a produced one never reached it, because it is in
+// [Runner.DynamicAssocs] and not in [Runner.AssocArrays].
+//
+// The wording is chosen by asking the stored table's own axis rather than by
+// reading an option, because that axis **is** where the option lands on this
+// vector — see the seventh row of dialect/zsh's setKshArrays. Under it every
+// table is refused and one sentence serves both; with it off only the produced
+// one is, and the sentence names the slice.
+//
+// `aliases`, `functions`, `commands` and `galiases` each answer it the same
+// way, so it is the producer and not one name. The reach is
+// [Runner.tableRefusesAScalarStore]'s, re-measured against it the same day:
+// every route that sets a name — `read`, `printf -v`, `for`, `+=`, `typeset`,
+// an empty value — earns it, `||` does not catch it, an `eval` contains it, a
+// function's name goes in front of the sentence, and an `unset` first makes
+// the store an ordinary scalar again. A **subscripted** store is not this
+// question: `aliases[k]=v` writes an alias.
+//
+// True is "the store is over", which is also what the unanswered reading of
+// the wording axis needs.
+func (r *Runner) producedTableRefusesAScalarStore(name string) bool {
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	if r.ask(r.sem().ScalarStoredOverATableIsRefused,
+		"a scalar store over a name holding a table being refused") {
+		// Every table is refused here, so the produced one earns the sentence
+		// a stored one earns and there is nothing for the producer to add.
+		r.fatal("%s\n", Wording(r.diag().ScalarStoredOverATable,
+			"%s: attempt to set associative array to scalar", name))
+		return true
+	}
+	if r.unspecified {
+		// The axis was unanswered, which ask has already said, and there is
+		// nothing left to store into.
+		return true
+	}
+	r.fatal("%s\n", Wording(r.diag().ScalarStoredOverAProducedTable,
+		"%s: attempt to set slice of associative array", name))
+	return true
+}
+
 // tableLiteralPairsOff reports whether a keyed literal's bare elements may be
 // paired off as key, value, key, value — and writes the refusal where they may
 // not.
@@ -1046,7 +1107,44 @@ func (r *Runner) tableLiteralPairsOff(parsed []literalElem) bool {
 	}
 	r.fatal("%s\n", Wording(r.diag().UnpairedTableLiteralElements,
 		"bad set of key/value pairs for associative array"))
+	if r.unpairedTableLiteralLeavesAForkAtZero() {
+		r.status = 0
+	}
 	return false
+}
+
+// unpairedTableLiteralLeavesAForkAtZero reports whether this one refusal, and
+// no neighbor of it, hands a **forked** copy of the shell 0 where the fatal it
+// just raised would leave 1.
+//
+// It is reproduced rather than explained, on the footing
+// [Runner.tableBecomesAnIndexArray] records the empty-table rule on: it looks
+// like a quirk of the refusing shell rather than a design, and what a
+// measurement can say is which shapes it reaches. Measured 2026-09-26 on zsh
+// 5.9.2 (`-f`, a script file), reading `$?` after the parentheses:
+//
+//	( typeset -A h=(a 1 b) )                 0
+//	v=$(typeset -A h=(a 1 b); print inner)   0
+//	( f )  with f the same refusal           0
+//	typeset -A h=(a 1 b) | cat               ${pipestatus[1]} is 0
+//	the same at the top level of a script    the script exits 1
+//	the same inside a function, top level    the script exits 1
+//
+// **Three controls say it is this refusal and not the parentheses**, and they
+// are neighbors of it rather than distant ones: `( typeset -A h=([a]=1 b) )`,
+// the mixed-literal refusal, `( readonly r=1; r=2 )` and `( print -r -- [a )`
+// each leave **1** in the same position, in the reference and here.
+//
+// **And three more say it is not a status being carried through.** A `false`
+// in front of the parentheses, a `true` in front of them, and a `(exit 3)`
+// inside them ahead of the refusal all leave 0 — so it is zero rather than
+// whatever the copy was holding.
+//
+// [Runner.inSubshell] is the boundary and not `( … )` alone, which is what the
+// substitution and the pipeline rows above are for: every context that forks
+// takes it, and the top level of a script does not.
+func (r *Runner) unpairedTableLiteralLeavesAForkAtZero() bool {
+	return r.inSubshell
 }
 
 // tableLiteralKeyIsThere reports whether an **empty** key a table literal named

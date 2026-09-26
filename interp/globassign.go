@@ -139,3 +139,78 @@ func (r *Runner) storeGlobbedScalarAssign(a *syntax.Assign, fields []string) {
 	r.setVarAs(a.Name, value, assignedAlone)
 	r.markForAllexport(a.Name)
 }
+
+// globbedElementValue is the right-hand side of a store that **names a
+// subscript**, expanded once, with the match where the option asked for one.
+//
+// `GLOB_ASSIGN` reaches a subscripted assignment as well as the statement form
+// #4638 built, and there it is a *splice* rather than a store: measured on zsh
+// 5.9.2 (`-f -c`, 2026-09-26) in a directory holding `a.txt b.txt c.txt
+// one.only`, with the option on throughout,
+//
+//	a=(q w e); a[2]=*.txt    typeset -a a=( q a.txt b.txt c.txt e )
+//	a=(q w e); a[2]=one.*    typeset -a a=( q one.only e )
+//	a=(q w e); a[2]=plain    typeset -a a=( q plain e )
+//
+// So one subscript goes in and three elements come out, and a single match is
+// the road where the splice and a plain store coincide. The controls are the
+// third row and the same first row with the option off, which is `( q '*.txt'
+// e )` in the reference and here.
+//
+// **It is expanded here and nowhere else on the road below**, which is what
+// the second result is for: `zero` is an expansion this function did not
+// perform, so the caller falls back to Runner.assignValue and nothing is
+// expanded twice (#1915). With the option off nothing here runs at all, so no
+// other dialect's ordering moves.
+type globbedValue struct {
+	value  string
+	fields []string
+	// list says the match came to more than one field, which is the splice.
+	list bool
+	// read says this value has been expanded already.
+	read bool
+}
+
+func (r *Runner) globbedElementValue(a *syntax.Assign) globbedValue {
+	if a.Value == nil || !r.scalarAssignmentGlobs() {
+		return globbedValue{}
+	}
+	value, fields, globbed := r.expandScalarAssignValue(a.Value)
+	return globbedValue{value: value, fields: fields, list: globbed && len(fields) > 1, read: true}
+}
+
+// elementValue is that value, or the ordinary expansion where this road did
+// not take one.
+func (r *Runner) elementValue(a *syntax.Assign, g globbedValue) string {
+	if g.read {
+		return g.value
+	}
+	return r.assignValue(a)
+}
+
+// globbedElementIsAList performs the splice where the match is a list, and
+// reports whether it did.
+//
+// A list has no place to go in a name that holds one value per position, and
+// the reference refuses rather than storing anything: measured the same day,
+//
+//	typeset -A h; h=(k v); h[k]=*.txt   h: attempt to set slice of associative
+//	                                    array, status 1
+//	v=abcdef; v[2]=*.txt                v: attempt to assign array value to
+//	                                    non-array, status 1
+//	typeset -A h; h=(k v); h[k]=one.*   [k]=one.only, taken
+//	v=abcdef; v[2]=one.*                aone.onlycdef, taken
+//
+// The last two are what keep the refusal keyed on the **list** rather than on
+// the option or on the pattern: one match is one value and every target can
+// hold it. Both sentences are the ones Runner.spliceTargetIsAnArray already
+// writes for the literal spelling of the same shape — `h[k]=(p q)` and
+// `v[2]=(p q)` — which is why this goes through it rather than wording them
+// again.
+func (r *Runner) globbedElementIsAList(a *syntax.Assign, text string, g globbedValue) bool {
+	if !g.list {
+		return false
+	}
+	r.spliceWordsIntoElement(a, text, func() ([]string, bool) { return g.fields, true })
+	return true
+}

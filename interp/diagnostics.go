@@ -6759,6 +6759,16 @@ type Diagnostics struct {
 	// See Semantics.ScalarStoredOverATableIsRefused for the rows and for what
 	// the refusal reaches.
 	ScalarStoredOverATable string
+	// ScalarStoredOverAProducedTable is the same store over a name the shell
+	// itself answers for — `aliases`, `functions`, `commands` — rather than
+	// one a script stored, in the dialect that refuses it **whatever the
+	// option state**. One verb, the name, exactly as above.
+	//
+	// It is a wording of its own because the refusing column uses a sentence
+	// here that no other row of it uses, and only with the option off: the
+	// produced table is refused where a stored one is taken silently. See
+	// Runner.producedTableRefusesAScalarStore for the grid and the reach.
+	ScalarStoredOverAProducedTable string
 
 	// EmptyKeyInATableLiteralPair is an empty key among a table literal's bare
 	// words — `m=(p 1 "" x)`. One verb, the word as **written**, quotes and all.

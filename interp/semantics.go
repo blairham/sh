@@ -32179,7 +32179,15 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	// `bad pattern: a(b` at 1 **in both option states** — this surface is
 	// not filename generation, so `unsetopt badpattern` does not reach it,
 	// which is the pair that says what the switch in glob.go is keyed on.
-	if r.badPatternFromAnOpenGroup(pattern) {
+	if r.badPatternFromAnOpenGroup(pattern) || r.bracketAfterSubIsABadPattern(pattern) {
+		// A group nothing closes, or a bracket a `[:name:]` left open. The
+		// second is eager for the reason operandPatternOpts gives at
+		// length: asked from inside the match, *the value decides whether
+		// the shell refuses* — the matcher gives up on the first character
+		// that misses, so it never reads the bracket. Measured 2026-09-26
+		// on zsh 5.9.2 (`-f -c`), `case zzz in (x[[:alpha:]))` is `bad
+		// pattern` there and took the `*` arm here, while the same arm
+		// without the `x` was refused by both (#4659).
 		status := badStatus
 		if status == 0 {
 			status = r.fatalStatus()

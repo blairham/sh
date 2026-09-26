@@ -866,6 +866,19 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 	}
 	_, isArray := r.Arrays[name]
 	_, isTable := r.AssocArrays[name]
+	if _, produced := r.DynamicAssocs[name]; produced && !r.removed[name] {
+		// A **produced** table — one a module or the shell itself answers
+		// for, rather than one a script stored — and it is not the stored
+		// table's row with a different subject: see
+		// Runner.producedTableRefusesAScalarStore, where the two wordings
+		// and the two option states are.
+		//
+		// `unset` first and the store is an ordinary scalar again, which is
+		// measured and is the same thing an `unset` does to a *stored* table
+		// two lines down: the refusal is about a name that is holding one
+		// now, so a name the script has taken away is not holding anything.
+		return r.producedTableRefusesAScalarStore(name)
+	}
 	if !isArray && !isTable {
 		return false
 	}

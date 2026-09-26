@@ -1057,7 +1057,17 @@ func (r *Runner) assignAssocElement(a *syntax.Assign) {
 	// `typeset -A m; m[k$x]=v` is `m[k]=v` there. See
 	// Semantics.TraceElementSubscriptIsEvaluated.
 	r.resolvedSubscript(key)
-	value := r.assignValue(a)
+	// The match a pattern on the right came to, where the option asks for
+	// one. A table's key holds a single value, so a match that came to
+	// several has nowhere to go and the reference refuses by name — the same
+	// sentence `m[k]=(p q)` already earns. See Runner.globbedElementIsAList.
+	globbed := r.globbedElementValue(a)
+	if globbed.list {
+		r.fatal("%s\n", Wording(r.diag().SliceOfAnAssociativeArray,
+			"%[1]s: attempt to set slice of associative array", a.Name))
+		return
+	}
+	value := r.elementValue(a, globbed)
 	if a.Append {
 		// `m[k]+=v` joins the element it names, the same operation the
 		// indexed form performs on a subscript — an unset key leaves

@@ -102,9 +102,18 @@ package interp
 // bodyParseFailed reports whether a here-document body held a substitution
 // whose own body is not a program.
 //
-// The exact shape [Runner.bodyExpansionFailed] excludes, read here instead:
-// the two are separate kinds of failure with separate answers, and the one
-// thing they share is the boundary.
+// The same conjunction [Runner.giveUpTheCommand] reads of the same state one
+// file over, deliberately spelled the same way: this door sends a failure to
+// that boundary, so a predicate wider here than there would send it a shape
+// it then declines to grade — and the command would run with a body nobody
+// produced.
+//
+// Defensive rather than load-bearing in its second half, and that is
+// measured: a mutant dropping `r.ctl == controlExit` survives the whole of
+// interp/ and dialect/, because all three writers of abandonSubstParse set
+// controlExit in the same statement and every route that clears controlExit
+// puts abandonRequested back. Kept because being wider than the boundary is
+// the failure mode, not being narrower.
 func (r *Runner) bodyParseFailed() bool {
 	return r.abandon == abandonSubstParse && r.ctl == controlExit
 }

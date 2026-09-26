@@ -270,6 +270,32 @@ func TestAHeredocBodyThatWillNotParseKeepsItsOwnStatus(t *testing.T) {
 	}
 }
 
+// The number a refusal leaves is **that command's** and does not outlive it.
+//
+// A refusal on one command and an ordinary failed open on the next: the
+// second must exit with the redirection's 7 and not with the 5 the first one
+// left, which is what says the number is cleared with the rest of a
+// command's redirection state. Measured 2026-09-26 on ksh93u+ — `echo RAN
+// <<END` with `$(echo hi; for)` leaves 3 and carries on, and `: <
+// /nonexistent/f` on the next line then ends the shell at **1**.
+func TestARefusalsStatusDoesNotOutliveItsCommand(t *testing.T) {
+	t.Parallel()
+	const src = "echo RAN <<END\n$(echo hi; for)\nEND\necho \"mid st=$?\"\n: < /nonexistent/f\necho NEVER\n"
+	out, st := parseFailRun(t, src, parseFailSemantics{Yes, No, Yes, Yes})
+	// The control: the first command really did refuse and really did leave
+	// its own number, so the row below is a number being cleared rather than
+	// one that was never written.
+	if !strings.Contains(out, "mid st=5") {
+		t.Errorf("= %q, want the refusal's own 5 left on the first command", out)
+	}
+	if strings.Contains(out, "NEVER") {
+		t.Errorf("= %q, want the second command's failed open to end the shell", out)
+	}
+	if st != 7 {
+		t.Errorf("status = %d, want the redirection's 7 and not the refusal's 5", st)
+	}
+}
+
 // Flipping the axis must not move a command the shell runs as a process of
 // its own: the external row is the one the five columns settled one construct
 // over, and it is not this question's.

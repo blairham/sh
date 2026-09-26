@@ -130,9 +130,12 @@ func (r *Runner) expandBodyInThisShell(expand func() string) string {
 	body := expand()
 	if r.bodyParseFailed() {
 		// A different kind with a different answer and a different number.
-		// See heredocbodyparsefailure.go, which holds the panel for it.
+		// See heredocbodyparsefailure.go, which holds the panel for it. It
+		// sets redirErr itself, at the boundary both halves of the
+		// construct go through, so there is none of the tail below to
+		// repeat — a second write was here first and a mutant that removed
+		// it survived interp/ and dialect/.
 		r.giveUpABodyThatWillNotParse()
-		r.redirErr = true
 		return body
 	}
 	if !r.bodyExpansionFailed() {

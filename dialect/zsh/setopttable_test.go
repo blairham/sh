@@ -80,13 +80,22 @@ import "testing"
 // `rcexpandparam` above on the one question that separates them — this one is
 // read when the word is **lexed**, so a function body defined while it was on
 // keeps the reading when it is called with the option off.
+// `globassign` is the twenty-first, behind `badpattern`: it moves
+// Semantics.ScalarAssignmentValueIsGlobbed, so the right-hand side of a plain
+// scalar assignment is a pattern and `a=*.txt` stores the names it matched.
+// Until #4638 it was remembered and the six characters were stored in either
+// state. Like `rcexpandparam` and `posixtraps` it is read at the **store**
+// and not at the parse — a function body written while it was off globs when
+// it is called with it on. Its own discriminator is not a state but a
+// *route*: `typeset a=*.txt` keeps the characters with the option on, so the
+// noun the rule is keyed on is the assignment and not the value.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
 		"posixtraps", "rcexpandparam", "errreturn", "autopushd",
-		"chaselinks", "chasedots", "rcquotes", "badpattern",
+		"chaselinks", "chasedots", "rcquotes", "badpattern", "globassign",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -108,7 +117,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 123; recordedCount != want {
+	if want := 122; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

@@ -901,6 +901,12 @@ func Semantics() interp.Semantics {
 	// `v='p q'; x${v}y` is the two words `xp` and `qy` rather than `xpy`
 	// and `xqy`, and `set -- A B; x$@y` is `xA` and `By` (#4549).
 	s.ParamExpansionDistributesOverTheWord = interp.No
+	// A plain assignment's right-hand side is text and not a pattern.
+	// Measured 2026-09-26 on ksh93u+ 2012-08-01 in a directory holding
+	// `a.txt b.txt c.txt`: `a=*.txt; echo "[$a]"` is `[*.txt]`, beside an
+	// `echo *.txt` that prints the three names. Only zsh has a switch for
+	// the other reading (#4638).
+	s.ScalarAssignmentValueIsGlobbed = interp.No
 	// A subscript inside a literal is the text between the brackets, and a
 	// literal written with one declares a keyed array: `typeset -p` answers
 	// `-A` and `${a[2]}` does not find what `[1+1]=c` stored.

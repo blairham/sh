@@ -1261,6 +1261,16 @@ func Semantics() interp.Semantics {
 	// field at all — its parity wins — which is what keeps the flag and the
 	// option one mechanism.
 	s.ParamExpansionDistributesOverTheWord = interp.No
+	// GLOB_ASSIGN is **off**, so a plain assignment's right-hand side is
+	// text: `a=*.txt` stores the six characters here as it does in every
+	// other column. The setopt.go entry writes this axis rather than
+	// remembering the request (#4638), so `(setopt globassign)` stays in the
+	// subshell and `emulate -R` puts it back with the rest of the vector.
+	//
+	// The option is what the *assignment* consults and not what makes a word
+	// a pattern: `a=(*.txt)` globs in either state, because an array
+	// literal's elements are ordinary words.
+	s.ScalarAssignmentValueIsGlobbed = interp.No
 	// A traced array literal shows what its elements came to: `x="p q";
 	// a=("$x" r)` is `a=( 'p q' r )` here. The unquoted `a=($x)` is
 	// `a=( 'p q' )` — one element, because nothing here splits an unquoted

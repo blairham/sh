@@ -742,6 +742,13 @@ func Semantics() interp.Semantics {
 	// and `qy` rather than `xpy` and `xqy`, and `set -- A B; x$@y` is `xA`
 	// and `By` the same way (#4549).
 	s.ParamExpansionDistributesOverTheWord = interp.No
+	// A plain assignment's right-hand side is text and not a pattern, so
+	// `a=*.txt` stores the six characters. Measured 2026-09-26 on bash
+	// 5.3.20 in a directory holding `a.txt b.txt c.txt`: `a=*.txt; echo
+	// "[$a]"` is `[*.txt]` where `echo *.txt` on the next line is the three
+	// names, which is the control that says the directory and the pattern
+	// were both real. Only zsh has a switch for the other reading (#4638).
+	s.ScalarAssignmentValueIsGlobbed = interp.No
 	// A keyed literal's bare elements are each one field: `typeset -A m=($k
 	// $v)` with `k='1 2'` is the single key `1 2`, and `typeset -A m=(a *)`
 	// keeps the star. See

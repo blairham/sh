@@ -615,6 +615,23 @@ func (r *Runner) traceAssign(a *syntax.Assign, value string, e *expandedAssign, 
 			d.TraceArrayLiteral, d, r.traceWordLayout(d)))
 		return b.String()
 	}
+	if e != nil && e.fieldsSet && len(e.fields) > 1 {
+		// A **scalar** assignment whose value matched more than one name,
+		// under the option behind Semantics.ScalarAssignmentValueIsGlobbed.
+		// The name became an array, and the line says what the script did
+		// rather than what it typed: measured on zsh 5.9.2, 2026-09-26,
+		// `setopt globassign xtrace; a=*.txt` writes `a=( a.txt b.txt c.txt
+		// )` — the same element list a written literal gets, from a line
+		// with no parentheses in it. One match writes the value bare and no
+		// match writes `''`, which the ordinary rendering below already
+		// gives.
+		fields := make([]string, 0, len(e.fields))
+		for _, f := range e.fields {
+			fields = append(fields, r.traceQuote(f, d.TraceQuoting, d.TraceMetacharacters))
+		}
+		b.WriteString(wrapArrayLiteral(strings.Join(fields, " "), d.TraceArrayLiteral))
+		return b.String()
+	}
 	if value == "" && d.TraceEmptyAssignmentValueIsBare {
 		// The name, the operator and nothing — one column's answer for an
 		// empty *value*, where the same column writes `''` for an empty

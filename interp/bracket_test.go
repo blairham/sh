@@ -189,3 +189,94 @@ func TestABracketFromAValueIsNotAPatternWhereExpansionsAreNotGlobbed(t *testing.
 		}
 	}
 }
+
+// TestAParameterExpansionsOperandAsksTheBracketAxis is #4646: the surface had
+// no answer of its own and gave one anyway.
+//
+// `${v#pat}` and its family compile their operand as a pattern, and the axis
+// says what text an unterminated bracket is. That was pinned to BracketLiteral
+// on this path, on the reading that every shell reading it serves is literal
+// there — and the table on Semantics.UnterminatedBracketAfterASubExpression,
+// twenty lines above the axis itself, is a prefix trim splitting three ways.
+// So two of the three answers were unreachable here: the literal columns were
+// right by accident, the no-match column stripped a prefix it should not have
+// matched, and the bad-pattern column **reported success with a value it
+// should have refused to compute**.
+//
+// The rule with one noun in it: the axis decides, not the surface. Every row
+// below is the same text `[a` on the same operators, and only the axis moves.
+func TestAParameterExpansionsOperandAsksTheBracketAxis(t *testing.T) {
+	for _, op := range []struct{ name, src, literal, noMatch string }{
+		{"a short prefix trim", `v='[abc'; echo "${v#[a}"`, "bc\n", "[abc\n"},
+		{"a long prefix trim", `v='[abc'; echo "${v##[a}"`, "bc\n", "[abc\n"},
+		{"a short suffix trim", `v='bc[a'; echo "${v%[a}"`, "bc\n", "bc[a\n"},
+		{"a long suffix trim", `v='bc[a'; echo "${v%%[a}"`, "bc\n", "bc[a\n"},
+		{"a substitution", `v='[abc'; echo "${v/[a/x}"`, "xbc\n", "[abc\n"},
+		{"a global substitution", `v='[abc'; echo "${v//[a/x}"`, "xbc\n", "[abc\n"},
+	} {
+		t.Run(op.name, func(t *testing.T) {
+			if got, st := run(t, op.src, withSem(bracketSem(BracketLiteral))); got != op.literal || st != 0 {
+				t.Errorf("literal: got %q status %d, want %q", got, st, op.literal)
+			}
+			if got, st := run(t, op.src, withSem(bracketSem(BracketNoMatch))); got != op.noMatch || st != 0 {
+				t.Errorf("no match: got %q status %d, want %q", got, st, op.noMatch)
+			}
+			out, st := run(t, op.src+`; echo after`, withSem(bracketSem(BracketBadPattern)))
+			if !strings.Contains(out, "bad pattern: [a") {
+				t.Errorf("bad pattern: got %q", out)
+			}
+			if strings.Contains(out, "after") {
+				t.Errorf("bad pattern: the script should stop, got %q", out)
+			}
+			if st != 1 {
+				t.Errorf("bad pattern: status = %d, want 1", st)
+			}
+		})
+	}
+	// The core has no answer and says so — once, however many times the
+	// expansion consults the axis on its way through.
+	out, st := run(t, `v='[abc'; echo "${v#[a}"`, withSem(CoreSemantics()))
+	if st != 2 {
+		t.Errorf("the core should refuse, status %d", st)
+	}
+	if n := strings.Count(out, "unterminated bracket"); n != 1 {
+		t.Errorf("the axis should be resolved once, reported %d times: %q", n, out)
+	}
+}
+
+// TestAnOperandIsCompiledBeforeItIsMatched is the discriminating pair for the
+// same rule, and it is the one a refusal raised from inside the matcher cannot
+// produce.
+//
+// `x[a` is ruled out by its first character, and the span walk skips candidate
+// pieces the pattern's edge literals could not fill — so on this subject the
+// matcher is never asked and a match-time refusal would stay silent. Whether a
+// pattern compiles is not a question about the value, so neither is the
+// refusal.
+func TestAnOperandIsCompiledBeforeItIsMatched(t *testing.T) {
+	sem := bracketSem(BracketBadPattern)
+	for _, src := range []string{
+		`v=zzz; echo "${v#[a}"`,
+		`v=zzz; echo "${v#x[a}"`,
+		`v=zzz; echo "${v%a[x}"`,
+		`v=zzz; echo "${v//x[a/q}"`,
+	} {
+		out, st := run(t, src+`; echo after`, withSem(sem))
+		if !strings.Contains(out, "bad pattern") || strings.Contains(out, "after") || st != 1 {
+			t.Errorf("%s: got %q status %d, want a refusal at 1", src, out, st)
+		}
+	}
+	// Held against a pattern that compiles and misses, which leaves the same
+	// value behind at status 0. Reading the value alone cannot tell the two
+	// apart, which is why every row above reads the status.
+	if got, st := run(t, `v=zzz; echo "${v#q}"`, withSem(sem)); got != "zzz\n" || st != 0 {
+		t.Errorf("a pattern that misses: got %q status %d", got, st)
+	}
+	// And against a bracket that closes, which is a pattern under every
+	// answer the axis has.
+	for _, p := range []BracketPolicy{BracketLiteral, BracketNoMatch, BracketBadPattern} {
+		if got, st := run(t, `v='[abc'; echo "${v#[ab]}"`, withSem(bracketSem(p))); got != "[abc\n" || st != 0 {
+			t.Errorf("%v: a closed bracket: got %q status %d", p, got, st)
+		}
+	}
+}

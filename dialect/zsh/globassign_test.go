@@ -175,6 +175,52 @@ func TestGlobAssignOverTheGridInBothStates(t *testing.T) {
 	}
 }
 
+// **A refused miss takes the name with it.** The refusal ends the script it
+// is written in, so an `eval` is what makes the row observable at all — and
+// what it shows is that the name is *gone* rather than left holding what it
+// held, attribute included.
+//
+// The last two rows are what keys the rule to this road: the same miss with
+// the option **off** stores the characters, and a miss aimed at a different
+// name leaves this one alone. Measured on zsh 5.9.2, 2026-09-26.
+func TestGlobAssignRefusedByAMissTakesTheNameWithIt(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"a scalar the name was holding",
+			"setopt globassign\na=kept\neval 'a=*.nomatch'\nprint \"[${a-UNSET}]\"",
+			"[UNSET]\n",
+		},
+		{
+			"an integer attribute goes too",
+			"setopt globassign\ninteger a=5\neval 'a=*.nomatch'\nprint \"[${a-UNSET}]\"",
+			"[UNSET]\n",
+		},
+		{
+			"an array the name was holding",
+			"setopt globassign\na=(x y)\neval 'a=*.nomatch'\nprint \"[${a-UNSET}]\"",
+			"[UNSET]\n",
+		},
+		{
+			"the option off keeps the characters",
+			"unsetopt globassign\na=kept\neval 'a=*.nomatch'\nprint \"[${a-UNSET}]\"",
+			"[*.nomatch]\n",
+		},
+		{
+			"a miss aimed at another name",
+			"setopt globassign\na=kept\neval 'b=*.nomatch'\nprint \"[${a-UNSET}][${b-UNSET}]\"",
+			"[kept][UNSET]\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := globTree(t)
+			out, _ := runZsh(t, root, c.src+"\n")
+			if !strings.HasSuffix(out, c.want) {
+				t.Errorf("got %q, want it to end %q", out, c.want)
+			}
+		})
+	}
+}
+
 // **The noun is the assignment and not the value.** This is the pair the grid
 // above cannot produce: the same value, the same directory and the same
 // option state, differing only in whether the assignment is a statement of

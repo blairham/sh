@@ -111,9 +111,20 @@ func (r *Runner) expandScalarAssignValue(w *syntax.Word) (string, []string, bool
 // in both states.
 func (r *Runner) storeGlobbedScalarAssign(a *syntax.Assign, fields []string) {
 	if r.expandErr || r.ctl == controlExit || r.unspecified {
-		// A miss the shell refused — `no matches found` — leaves the name
-		// holding whatever it held. Nothing is stored and nothing is said
-		// twice; the refusal is the glob's own.
+		// A miss the shell refused — `no matches found`. **The name is
+		// gone**, not left holding what it held: measured on zsh 5.9.2,
+		// 2026-09-26, `setopt globassign; a=kept; eval 'a=*.nomatch'` leaves
+		// `${a-UNSET}` as `UNSET` and `typeset -p a` as `no such variable`,
+		// and `integer a=5` in front of the same eval loses the `-i` with
+		// the value. An `eval` is what makes the row observable at all,
+		// since the refusal ends the script it is written in.
+		//
+		// Keyed on this road and not on a failed expansion in general: the
+		// same directory and the same miss with the option **off** stores
+		// `*.nomatch`, and `a=kept; eval 'a=${q?bad}'` is a different shape
+		// that never reaches here. So the removal belongs to the glob's
+		// refusal rather than to assignment.
+		r.unsetName(a.Name)
 		return
 	}
 	r.clearTypeAttributes(a.Name)

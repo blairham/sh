@@ -180,7 +180,14 @@ func RunContained(ctx context.Context, s Suite, root, ourPkg string, opts Option
 	// *directory* inside: `docker cp dir ctr:/suiteours` creates the
 	// destination and copies the contents into it, where a file copied to a
 	// path under a directory that does not exist yet is refused.
-	ours := filepath.Join(stage, "ours", s.Dialect)
+	//
+	// The file's name is read off [oursPath] rather than written out again,
+	// because the two are one name: a staging name and a `-bin` name spelled
+	// separately drift, and the drift is silent in the direction that matters
+	// — `-bin` pointing at a path nothing was copied to is a column of `ours
+	// never started`, which is at least loud, while the reverse is a column
+	// graded under a name nobody chose.
+	ours := filepath.Join(stage, "ours", path.Base(oursPath(s)))
 	if err := os.MkdirAll(filepath.Dir(ours), 0o755); err != nil {
 		return Report{}, err
 	}

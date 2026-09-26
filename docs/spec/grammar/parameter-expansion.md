@@ -4992,6 +4992,14 @@ unflagged reading beside it because the two field counts agree),
 `-crosses-two-expansions`, `-doubled-turns-it-off`,
 `-spreads-the-fields-it-was-given` and `-over-no-elements-is-no-word`.
 
+The option has two of its own since #4549:
+`param/the-rc-expand-option-is-the-default-for-an-unflagged-spec`, which puts
+the unflagged spelling and `${^^@}` in one row under `setopt rcexpandparam`
+so that neither an AND nor an OR of the switch and the flag would pass it,
+and `param/the-rc-expand-option-does-not-reach-a-command-substitution`, which
+is the pair that says the subject is the parameter expansion rather than the
+fields.
+
 ### What this implementation does not match
 
 - A redirection target is one target here. zsh's `MULTIOS` opens one file per

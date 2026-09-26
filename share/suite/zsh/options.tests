@@ -438,3 +438,91 @@ setopt | grep -E '^magicequalsubst$'
 unsetopt magicequalsubst
 [[ -o magicequalsubst ]] && printf 'cond: on\n' || printf 'cond: off\n'
 unsetopt | grep -E '^(no)?magicequalsubst$'
+
+# RC_EXPAND_PARAM makes a parameter expansion that writes no `^` of its own
+# distribute over the word it stands in: `a=(1 2); x${a}y` is the two words
+# `x1y x2y` rather than the one word `x1 2y`. What it moves is the **argv word
+# count**, which is why every row prints `$#` in front of the fields — a row
+# comparing only the joined text would pass against a shell that produced one
+# word, and one word is exactly what this shell produced while the name was
+# recorded and inert (#4549).
+#
+# The two states are the point rather than either column alone: the `unsetopt`
+# half is the control, and it agreed with the reference all along.
+rcf() { printf '%d:' "$#"; printf '[%s]' "$@"; printf '\n'; }
+a=(1 2)
+b=(p1 p2)
+e=()
+s=scalar
+for st in unsetopt setopt; do
+  printf -- '--- %s rcexpandparam\n' "$st"
+  ( $st rcexpandparam
+    rcf x${a}y
+    rcf x$a
+    rcf x${a[@]}y
+    rcf x${a[*]}y
+    rcf x${a}
+    rcf ${a}y
+    rcf ${a}z${a}
+    rcf x${a}y${a}z${a}
+    # An operator runs first and the distribution spreads what it left.
+    rcf x${b#p}y
+    # Quoting is not a third question: the rule runs on the fields the span
+    # produced, so the quoted join is one word in both states and the quoted
+    # `[@]` keeps its fields and distributes over them.
+    rcf "x${a}y"
+    rcf "x${a[@]}y"
+    rcf "x${a[*]}y"
+    # An empty list takes the word with it, which is the one place the
+    # distributive rule parts company with the lay-in rule on nothing.
+    rcf x${e}y
+    rcf x${@}y
+    # The no-ops, as controls: a span that came to one field has nothing to
+    # spread however the option is set.
+    rcf x${s}y
+    rcf x${a[1]}y
+    rcf x${#a}y
+    rcf x${(j:-:)a}y
+    # **The subject is the parameter expansion and not the fields in the
+    # word.** These two produce the same two fields from the same command in
+    # the same word shape, and only the one a `${…}` wraps moves — which no
+    # table of array references could have shown, since every row in one is a
+    # parameter expansion.
+    rcf x$(printf 'p q')y
+    rcf x${(f)"$(printf 'p\nq')"}y
+    # The written `^` decides outright and the option is only the default a
+    # spec with none takes. The two diagonal cells are what say so: one caret
+    # distributes while the option is off, and two do not while it is on.
+    rcf x${^a}y
+    rcf x${^^a}y
+    rcf x${^^^a}y
+    # And the parity is per span, so one word can hold both readings — a
+    # combination of the two switches into a single per-word answer cannot
+    # produce this line.
+    rcf x${^^a}z${a}
+    rcf x${a}z${^^a} )
+done
+
+# The state travels on the shell's own vector rather than in a store, so a
+# subshell's change stays in the subshell and the emulation reset puts it
+# back. `rcexpandparam` is in the 81 names a bare `emulate` restores, so both
+# forms of the reset reach it.
+( setopt rcexpandparam; rcf x${a}y )
+rcf x${a}y
+( setopt rcexpandparam; emulate zsh;    rcf x${a}y )
+( setopt rcexpandparam; emulate -R zsh; rcf x${a}y )
+
+# Every surface that names the option is asked separately, because the report
+# and the behavior do not carry each other — reporting it back faithfully is
+# the half that already worked, and moving the state onto the vector would be
+# no gain if these then described a shell that no longer exists.
+( [[ -o rcexpandparam ]] && printf 'cond: on\n' || printf 'cond: off\n' )
+( setopt rcexpandparam;   [[ -o rcexpandparam ]] && printf 'set: on\n' || printf 'set: off\n' )
+( setopt rc_expand_param; [[ -o rcexpandparam ]] && printf 'underscored: on\n' || printf 'underscored: off\n' )
+( setopt rcexpandparam; unsetopt rcexpandparam; [[ -o rcexpandparam ]] && printf 'unset again: on\n' || printf 'unset again: off\n' )
+( setopt norcexpandparam; [[ -o rcexpandparam ]] && printf 'negated: on\n' || printf 'negated: off\n' )
+( set -P; [[ -o rcexpandparam ]] && printf 'letter: on\n' || printf 'letter: off\n' )
+( setopt rcexpandparam; setopt | grep -E '^(no)?rcexpandparam$' )
+( setopt rcexpandparam; set -o | grep -E '^(no)?rcexpandparam ' )
+zmodload zsh/parameter
+( setopt rcexpandparam; printf 'param: [%s]\n' "$options[rcexpandparam]" )

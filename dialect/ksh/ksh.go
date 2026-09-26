@@ -2661,6 +2661,11 @@ func Semantics() interp.Semantics {
 	// DEBUG; echo a | tr a-z A-Z` writes `d D A`, and the upper-case `D`
 	// is the first element's own action written down the pipe.
 	s.DebugTrapPipelines = interp.DebugTrapPipelineInEachElement
+	// Per operand, and the same file measured the same day writes the same
+	// firings here as in the bash columns, `${.sh.command}` naming the
+	// operand each one stands for. Measured on ksh93 AJM 93u+ 2012-08-01
+	// (#4556).
+	s.DebugTrapSublists = interp.DebugTrapSublistPerOperand
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// Ahead of the command, and the same file measured the same day writes
 	// the same five lines here as in the bash columns — `2`, `A`, `3`,

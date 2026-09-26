@@ -1444,6 +1444,14 @@ func Semantics() interp.Semantics {
 	// pipeline is a subshell here and nothing moves one into this shell, so a
 	// pipeline is judged once by its status and the question is never put.
 	s.TrapHasDebugCondition = interp.No
+	// DebugTrapSublists keeps the zero value, and it is measured rather than
+	// taken from dash: in the pinned alpine image — BusyBox v1.37.0 —
+	// `trap 'echo T@$LINENO' DEBUG` answers `trap: line 1: DEBUG: invalid
+	// signal specification` and nothing fires, with an EXIT trap in the same
+	// run as the control that does. So no list firing exists to count. The
+	// type has no unspecified value — a list fires once or per operand and
+	// there is no third thing — so this is a question never put rather than
+	// an unanswered axis (#4556).
 	// unanswered DebugTrapRunsBeforeTheCommand: whether a firing stands
 	// ahead of the command or behind it is a question about a trap the line
 	// above says this shell will not set, so nothing here can ever fire one

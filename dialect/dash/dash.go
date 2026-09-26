@@ -1236,6 +1236,13 @@ func Semantics() interp.Semantics {
 	// bash and zsh.
 	s.CompoundRedirectionFailureIsJudged = interp.Yes
 	s.TrapHasDebugCondition = interp.No
+	// DebugTrapSublists keeps the zero value for the reason the two axes
+	// below do: measured 2026-09-25, `trap 'echo T@$LINENO' DEBUG` here is
+	// `trap: DEBUG: bad trap` and nothing fires, so there is no list firing
+	// to count. The positive control in the same run is an EXIT trap, which
+	// this shell sets and runs. The type has no unspecified value — a list
+	// fires once or per operand and there is no third thing — so this is a
+	// question never put rather than an unanswered axis (#4556).
 	// unanswered DebugTrapRunsBeforeTheCommand: whether a firing stands
 	// ahead of the command or behind it is a question about a trap the line
 	// above says this shell will not set, so nothing here can ever fire one

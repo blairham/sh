@@ -2571,6 +2571,41 @@ type Diagnostics struct {
 	JobStopped string
 	JobDone    string
 
+	// JobStoppedBySignal replaces JobStopped for a job stopped by a
+	// particular signal, keyed on that signal. One verb, as JobStopped has:
+	// the signal's number. A signal with no entry, and a nil map, leave
+	// JobStopped standing for every stop, which is what a dialect with one
+	// word wants.
+	//
+	// **Keyed on the signal rather than worded with it**, because the word
+	// is not the host's name for the signal and not derivable from it: a
+	// shell that words this at all words `SIGSTOP` as *a signal* and
+	// `SIGTTIN` as *tty input*, which is the job-control meaning rather than
+	// the signal's own — so SignalDescriptions cannot supply it and a map is
+	// what holds four answers to one question.
+	//
+	// Measured 2026-09-26 on a pseudo-terminal, `TERM=dumb`, one `sleep 30
+	// &` and a `kill` per row, with a `jobs` after each to show the listing
+	// and the notice agree. zsh 5.9.2 (aarch64-apple-darwin25.4.0):
+	//
+	//	kill -TSTP %1   [1]  + suspended  sleep 30
+	//	kill -STOP %1   [1]  + suspended (signal)  sleep 30
+	//	kill -TTIN %1   [1]  + suspended (tty input)  sleep 30
+	//	kill -TTOU %1   [1]  + suspended (tty output)  sleep 30
+	//
+	// So SIGTSTP — which is what ^Z sends, and the one this shell had
+	// already — is the plain word and the other three are their own, which
+	// is why nothing common looked wrong (#4527).
+	//
+	// The other two columns that word a state were measured the same day and
+	// are left as they are. bash 5.3.20 writes `Stopped` for all four, so it
+	// has one word and no entries here. dash 0.5.12 has four wordings of its
+	// own — `Suspended: 18`, `Suspended (signal): 17`, `Stopped (tty input):
+	// 21`, `Stopped (tty output): 22`, each carrying the number JobStopped's
+	// verb already supplies — and is left until that row is measured across
+	// its own surfaces rather than changed from one probe.
+	JobStoppedBySignal map[syscall.Signal]string
+
 	// JobDoneNotice replaces JobDone when the shell is *reporting* that a job
 	// ended, rather than listing one that has. Empty uses JobDone for both,
 	// which is what the other four dialects want. No verbs.

@@ -970,7 +970,19 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 	// meaning this shell's process group, are for the other members: which
 	// group this shell is in is a job-control question rather than a
 	// signaling one, so neither is treated as aimed here.
-	if sig == 0 || pid != os.Getpid() {
+	if sig == 0 {
+		return r.killProcess(pid, sig)
+	}
+	if pid != os.Getpid() {
+		// Except for the one other number that names a shell rather than
+		// somebody else: the group a forked body leads, which is what this
+		// shell answers when such a body asks which process it is. The
+		// process is the shell only at the top level, and keying the rule on
+		// the process alone sent a subshell's signal to the placeholder that
+		// leads its group (#4596). See selfkillbody.go.
+		if r.aimedAtThisBody(pid) {
+			return r.signalThisBody(name, sig)
+		}
 		return r.killProcess(pid, sig)
 	}
 	s := r.sigs()

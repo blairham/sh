@@ -141,6 +141,22 @@ func TestAPrefixAssignmentGlobsOnlyUnderTheOption(t *testing.T) {
 			"", "array[a.txt|b.txt|c.txt]\n",
 		},
 		{
+			// **A match takes the attribute off whichever kind it produced**,
+			// and a single match is where that shows on its own: the entry
+			// comes back a plain `scalar` and not an `integer` holding a
+			// file name. Measured on zsh 5.9.2, 2026-09-26.
+			"an integer name taking one match", "integer a\na=one.* f",
+			"", "scalar[one.only]\n",
+		},
+		{
+			"a float name taking one match", "float a\na=one.* f",
+			"", "scalar[one.only]\n",
+		},
+		{
+			// And the control that keeps the two rows above from reading as
+			// "the option switches arithmetic off": a value with no pattern
+			// in it still reaches the arithmetic reader with the attribute
+			// intact.
 			"an integer name taking an expression", "integer a\na=2+2 f",
 			"integer[4]\n", "integer[4]\n",
 		},
@@ -161,8 +177,13 @@ func TestAPrefixAssignmentGlobsOnlyUnderTheOption(t *testing.T) {
 					out, st := runZsh(t, root, src)
 					if state.want == "" {
 						// With the option off the pattern reaches the
-						// arithmetic reader, which cannot read it.
-						if st == 0 || !strings.Contains(out, "bad math expression") {
+						// arithmetic reader, which cannot read it. Which
+						// sentence it writes is the pattern's own — measured
+						// on zsh 5.9.2, `*.txt` is `bad math expression:
+						// operand expected` and `one.*` is `bad floating
+						// point constant` — so the row is about the refusal
+						// and not about the wording.
+						if st == 0 || !strings.HasPrefix(out, "zsh:") {
 							t.Errorf("got %q at %d, want the arithmetic refusal", out, st)
 						}
 						return
@@ -233,6 +254,19 @@ func TestAPrefixThatMatchedSeveralNamesReachesNoChildEnvironment(t *testing.T) {
 		{
 			"an empty scalar still reaches it",
 			"setopt nullglob\na=*.nomatch /usr/bin/printenv a", "*.nomatch\n", "\n",
+		},
+		{
+			// **The append is not an append on this road either.** The
+			// external route joins an appending prefix to what the shell
+			// holds — `a=x; a+=plain cmd` is `xplain` in both states — and a
+			// match replaces instead. This is the row that says so where no
+			// function store can: measured on zsh 5.9.2, 2026-09-26.
+			"an append a match replaces",
+			"a=x\na+=one.* /usr/bin/printenv a", "xone.*\n", "one.only\n",
+		},
+		{
+			"an append with no pattern still joins",
+			"a=x\na+=plain /usr/bin/printenv a", "xplain\n", "xplain\n",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

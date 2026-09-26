@@ -203,6 +203,18 @@ func TestAPrefixThatMatchedSeveralNamesReachesNoChildEnvironment(t *testing.T) {
 			"the other prefix still reaches it",
 			`a=*.txt b=one.* /usr/bin/printenv b`, "one.*\n", "one.only\n",
 		},
+		{
+			// **The append is not an append on this road either**, and this
+			// is the row that says so where no function store can: the
+			// external route joins an appending prefix to what the shell
+			// holds, and a match replaces it instead.
+			"an append a match replaces",
+			`a=x; a+=one.* /usr/bin/printenv a`, "xone.*\n", "one.only\n",
+		},
+		{
+			"an append with no pattern still joins",
+			`a=x; a+=plain /usr/bin/printenv a`, "xplain\n", "xplain\n",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			for _, state := range []struct {

@@ -1609,8 +1609,10 @@ func setRecordedOptions(r *interp.Runner, names []string) {
 // this runner's own — which is also what makes a subshell's `setopt` stay in
 // the subshell.
 //
-// The copy is a real cost and not a notional one: [interp.Semantics] is 962
-// axes and 3280 bytes, and because the fresh copy is what the runner keeps,
+// The copy is a real cost and not a notional one: [interp.Semantics] is 976
+// axes and 3296 bytes — counted off the struct on 2026-09-25, where the two
+// numbers here had stood at 962 and 3280 through a dozen axes — and because
+// the fresh copy is what the runner keeps,
 // it is a heap allocation every time. A caller that knows the axis is
 // already where it is being asked to go should not call this at all — see
 // setAxis, which is the guarded form and is what the option table uses.

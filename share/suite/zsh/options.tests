@@ -384,3 +384,57 @@ hashrow 'unsetopt hashcmds' 'set off'
 ( unsetopt hashcmds; emulate -R zsh; [[ -o hashcmds ]] && printf 'strict reset: on\n' || printf 'strict reset: off\n' )
 ( unsetopt hashcmds; emulate zsh;    [[ -o hashcmds ]] && printf 'bare reset: on\n'   || printf 'bare reset: off\n' )
 ( emulate -R zsh; [[ -o hashcmds ]] && printf 'strict reset, unmoved: on\n' || printf 'strict reset, unmoved: off\n' )
+
+# MAGIC_EQUAL_SUBST: the first unquoted `=` in an ordinary argument splits the
+# word, and what follows it takes the tildes an assignment's value takes — so
+# `configure --prefix=~/opt` reaches the program as a path rather than as two
+# characters. Off by default, which is what the last row of each pair is for:
+# a shell that expanded these without being asked would pass the first row of
+# every pair and fail the second.
+#
+# **The first `=` decides, not the shape of what is in front of it and not the
+# last `=`.** Both misreadings agree with this on `a=~` and part from it here:
+# `--opt=~` and `1abc=~` are not names and expand anyway, and `a=b=~` is left
+# alone because the value the first `=` opens is `b=~`, whose tilde heads
+# nothing — while the same word with a colon in front of that tilde moves.
+( setopt magicequalsubst; printf '[%s]\n' a=~ )
+( setopt magicequalsubst; printf '[%s]\n' --opt=~/x )
+( setopt magicequalsubst; printf '[%s]\n' 1abc=~ )
+( setopt magicequalsubst; printf '[%s]\n' a=b=~ )
+( setopt magicequalsubst; printf '[%s]\n' a=b=~:~ )
+( setopt magicequalsubst; printf '[%s]\n' PATH=a:~/b )
+printf '[%s]\n' a=~ --opt=~/x a=b=~:~ PATH=a:~/b
+
+# And it is that one character's **own quoting** that decides, not the word's
+# and not the name's: a quoted name still splits the word, a quoted `=` does
+# not, and a quoted tilde has nothing to expand. The middle rows are the ones
+# a rule reading the head of the word instead would get wrong.
+( setopt magicequalsubst; printf '[%s]\n' 'a-b'=~ )
+( setopt magicequalsubst; printf '[%s]\n' ""a=~ )
+( setopt magicequalsubst; printf '[%s]\n' a'='~ )
+( setopt magicequalsubst; printf '[%s]\n' a='~' )
+( setopt magicequalsubst; printf '[%s]\n' 'a=~' )
+
+# A colon-tilde in front of the `=` moves once the word has qualified and
+# never on its own, which is the pair rather than either row alone.
+( setopt magicequalsubst; printf '[%s]\n' a:~/b=~ )
+( setopt magicequalsubst; printf '[%s]\n' a:~/b=c )
+
+# The assignment statement is a tilde context in every state of the option,
+# and this is the control that says the option widened the *argument* road
+# rather than turning tildes on: all four rows are the same string.
+( setopt magicequalsubst;   v=~; printf '[%s]\n' "$v" )
+( unsetopt magicequalsubst; v=~; printf '[%s]\n' "$v" )
+( setopt magicequalsubst;   typeset w=~; printf '[%s]\n' "$w" )
+( unsetopt magicequalsubst; typeset w=~; printf '[%s]\n' "$w" )
+
+# The state is the shell's own and stays where it was set: a subshell that
+# turns it on leaves the parent where it was, and the listings report it.
+( setopt magicequalsubst )
+printf '[%s]\n' a=~
+setopt magicequalsubst
+[[ -o magicequalsubst ]] && printf 'cond: on\n' || printf 'cond: off\n'
+setopt | grep -E '^magicequalsubst$'
+unsetopt magicequalsubst
+[[ -o magicequalsubst ]] && printf 'cond: on\n' || printf 'cond: off\n'
+unsetopt | grep -E '^(no)?magicequalsubst$'

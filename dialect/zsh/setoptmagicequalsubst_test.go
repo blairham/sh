@@ -96,6 +96,35 @@ func TestMagicEqualSubstExpandsTheValueOfAnyEqualsWord(t *testing.T) {
 	}
 }
 
+// A word **opening** with `=` belongs to the `=cmd` expansion and not to this
+// option, in both states of it. The pair below is what says so, and it is a
+// for-loop word rather than a command argument on purpose: a simple command
+// resolves `=cmd` across its whole argument list before any word is expanded,
+// so the two roads cannot be told apart there. In a `for` list there is no
+// such pass and the order inside the word pipeline is what decides — and this
+// option's road runs *before* `=cmd` in it.
+//
+// Measured on zsh 5.9.2, 2026-09-25: `for i in =~` reports `~ not found` with
+// the option on and with it off, and `for i in =~/x` reports `~/x not found`.
+// The name in the message is the tilde as written, which is the whole of the
+// difference: a build that let the option split a word at a leading `=` hands
+// `=cmd` a home directory and reports *that* as the missing command.
+func TestMagicEqualSubstLeavesAWordThatOpensWithAnEqualsToTheEqualsExpansion(t *testing.T) {
+	for _, tc := range []struct{ name, word, want string }{
+		{"a bare tilde", `=~`, "zsh:2: ~ not found"},
+		{"a path", `=~/x`, "zsh:2: ~/x not found"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, verb := range []string{"setopt", "unsetopt"} {
+				got := magicEqualRun(t, verb+" magicequalsubst\nfor i in "+tc.word+"; do print -r -- \"[$i]\"; done")
+				if got != tc.want {
+					t.Errorf("%s magicequalsubst; for i in %s = %q, want %q", verb, tc.word, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 // The three rows the issue measured as already correct, which is what says
 // this change reached the *argument* road and left the assignment road alone.
 // All three agree with the reference in both states of the option, and they

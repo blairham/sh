@@ -47,3 +47,49 @@ printf 'an unopened descriptor:      %s\n' "$?"
 # The control: a redirection that works leaves the status alone.
 ( printf 'fine\n' > works ) 2>/dev/null
 printf 'a redirection that works:    %s\n' "$?"
+
+# A `( … )`'s here-document body is expanded in the subshell here, so what it
+# writes does not come back — where the same body on a group, a function or a
+# command this shell runs itself leaves the write behind. The last row below is
+# the *other* axis and moves the other way in this column's family, which is
+# what says one field cannot carry both. Measured 2026-09-26 (#4700).
+
+subhd_zz() { printf -- '--- %s\n' "$1"; }
+
+subhd_zz 'a subshell loses what its here-document body wrote'
+n_zz=0
+( cat ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+subhd_zz 'a default assignment in the body is confined too'
+unset u_zz
+( cat ) <<END
+${u_zz:=made}
+END
+printf 'u=[%s]\n' "${u_zz-unset}"
+
+subhd_zz 'while a command of its own is the other axis'
+n_zz=0
+cat <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+subhd_zz 'what the parentheses hold does not decide it'
+n_zz=0
+( : ; cat ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+n_zz=0
+( v_zz=1; cat ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+n_zz=0
+( ( cat ) ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"

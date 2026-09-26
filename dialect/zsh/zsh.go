@@ -2499,6 +2499,12 @@ func Semantics() interp.Semantics {
 	// subscript answers the same way at each.
 	s.StoreRefusalThroughPrintfLeavesZero = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
+	// And a `( … )`'s body with it: `n=0; ( cat ) <<END` with `$(( n+=5 ))`
+	// in it leaves `n` at 0 here, where the same body on a group, a
+	// function, a builtin or a loop leaves 5. A second axis rather than a
+	// reading of the line above because ksh93 answers the two rows the other
+	// way round — see the field's own panel (#4700).
+	s.HeredocBodyOnASubshellExpandsInTheSubshell = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	// And a subshell's, which is where this shell had it wrong: `( : ) >
 	// "${u:=made}"` leaves `u` unset here, and `( echo RAN ) > $(( 1/0 ))`

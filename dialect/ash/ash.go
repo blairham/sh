@@ -1862,6 +1862,14 @@ func Semantics() interp.Semantics {
 	// assign is still there afterwards: `cat /dev/null > "${u:=made}"` leaves
 	// `u` set.
 	s.HeredocExpandsInTheCommandsProcess = interp.No
+	// A `( … )`'s body is the other way round, which is what makes that a
+	// second axis: `n=0; ( cat ) <<END` with `$(( n+=5 ))` in it leaves `n`
+	// at 0 here where `cat <<END` leaves 5. This column and dash are the
+	// pair that says one field cannot carry both rows — and the pair again
+	// against the *target's* subshell axis, which this shell answers No: `(
+	// : ) > "${u:=made}"` keeps the write here while the body's is lost.
+	// Measured in the pinned 1.37.0 image, 2026-09-26 (#4700).
+	s.HeredocBodyOnASubshellExpandsInTheSubshell = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.No
 	// And a subshell's target with it: `( : ) > "${u:=made}"` leaves `u`
 	// set, and `( echo RAN ) > $(( 1/0 ))` ends the script at 2. Measured in

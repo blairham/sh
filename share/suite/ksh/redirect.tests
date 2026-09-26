@@ -179,3 +179,49 @@ printf -- '--- and its here-document body, the other half of the redirection ---
 [${u_zz:=made_zz}]
 END
 ) 2>/dev/null
+
+# A `( … )`'s here-document body is expanded **out here**, so what it writes is
+# still set afterwards — and this is the only column in the panel that says so.
+# The rows below are what say it is the parentheses and not the fork: this
+# shell forks for a pipeline element and for a background command, confines the
+# body in both, and keeps only what the parentheses carry. Measured 2026-09-26
+# on ksh93u+ 2012-08-01, AT&T's build (#4700).
+
+subhd_zz() { printf -- '--- %s\n' "$1"; }
+
+subhd_zz 'a subshell keeps what its here-document body wrote'
+n_zz=0
+( cat ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+subhd_zz 'while a command of its own loses it'
+n_zz=0
+cat <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+subhd_zz 'a pipeline element loses it, so a fork is not what decides'
+n_zz=0
+cat <<END | cat
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+subhd_zz 'and a background command loses it'
+n_zz=0
+cat <<END &
+$(( n_zz += 5 ))
+END
+wait
+printf 'n=[%s]\n' "$n_zz"
+
+subhd_zz 'the body escapes and the subshell own assignment still does not'
+n_zz=0
+unset v_zz
+( v_zz=1; cat ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s] v=[%s]\n' "$n_zz" "${v_zz-unset}"

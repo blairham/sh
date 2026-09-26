@@ -1445,21 +1445,18 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 		}
 		defer func() { r.inBodyReadAtExpansion, r.expansionBodyLine = was, wasLine }()
 	}
-	// Asked of the command's own process and not of a subshell's
-	// parentheses, which leaves today's answer exactly where it was: a
-	// subshell's *body* is expanded in this shell here, where bash, zsh,
-	// dash and BusyBox ash confine it and ksh93 keeps it. That row is its
-	// own measurement and its own defect (#4700), and moving it from the
-	// target's change would be two facts in one commit.
-	if r.redirOwner != redirOwnerTheCommand {
-		// The shell runs this command itself, so the body is expanded here
-		// and a failure in it is this shell's to place. See
-		// heredocbodyfailure.go, which holds the panel for that.
+	if r.redirOwner == redirOwnerThisShell {
+		// The shell runs this command itself and there is no other process
+		// anywhere, so the body is expanded here and a failure in it is this
+		// shell's to place. See heredocbodyfailure.go, which holds the panel
+		// for that.
 		return r.expandBodyInThisShell(func() string { return r.heredocText(rd) })
 	}
 	// The redirection belongs to a command this shell runs as a process of
-	// its own, so the body is expanded the way that process would expand it.
-	// See heredocprocess.go for the measurement that draws the line there.
+	// its own, or to a `( … )` a real shell forks for. Either way there is
+	// another process for the body to have been expanded in, and which axis
+	// says whether it was is the owner's — see heredocprocess.go for the two
+	// measurements and for why they are two.
 	return r.confineToTheProcess(func() string { return r.heredocText(rd) })
 }
 

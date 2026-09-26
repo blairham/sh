@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# Redirection, where this column parts from the others. `share/suite/core`
+# holds what every shell in the panel agrees about; this file holds what is
+# BusyBox ash's own.
+#
+# A `( … )`'s here-document body is expanded in the subshell here, so what it
+# writes does not come back — and a body fed to a command of its own leaves its
+# write behind, which is the opposite of what ksh93 does with the same pair.
+# Those two rows together are why one field cannot carry both positions.
+# Measured 2026-09-26 in the digest-pinned alpine image, BusyBox v1.37.0
+# (#4700).
+
+subhd_zz() { printf -- '--- %s\n' "$1"; }
+
+subhd_zz 'a subshell loses what its here-document body wrote'
+n_zz=0
+( cat ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+subhd_zz 'a default assignment in the body is confined too'
+unset u_zz
+( cat ) <<END
+${u_zz:=made}
+END
+printf 'u=[%s]\n' "${u_zz-unset}"
+
+subhd_zz 'while a command of its own keeps it — the other axis, the other way'
+n_zz=0
+cat <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+subhd_zz 'and a subshell TARGET keeps it too, which is a third answer again'
+unset u_zz
+( : ) > "${u_zz:=made}"
+printf 'u=[%s]\n' "${u_zz-unset}"
+
+subhd_zz 'what the parentheses hold does not decide it'
+n_zz=0
+( : ; cat ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+n_zz=0
+( v_zz=1; cat ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+n_zz=0
+( ( cat ) ) <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"

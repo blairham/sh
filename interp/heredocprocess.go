@@ -167,18 +167,45 @@ func assocEqual(a, b map[string]AssocArray) bool {
 	return true
 }
 
+// bodyExpandedElsewhere asks whichever axis owns this redirection whether the
+// here-document body was expanded somewhere other than this shell.
+//
+// One question, two axes, and the owner picks: a command that becomes a
+// process of its own is [Semantics.HeredocExpandsInTheCommandsProcess], and a
+// `( … )` is [Semantics.HeredocBodyOnASubshellExpandsInTheSubshell]. They are
+// not the same axis because they are not the same split — ksh93 answers yes to
+// the first and no to the second, and dash and BusyBox ash answer no to the
+// first and yes to the second. Neither pair can be folded into the other.
+//
+// The shape [Runner.targetExpandedElsewhere] already has, at the other half of
+// the same construct, and for the same reason (#4700).
+func (r *Runner) bodyExpandedElsewhere() bool {
+	if r.redirOwner == redirOwnerASubshell {
+		return r.ask(r.sem().HeredocBodyOnASubshellExpandsInTheSubshell,
+			"a subshell's here-document body expanding in the subshell")
+	}
+	return r.ask(r.sem().HeredocExpandsInTheCommandsProcess,
+		"a here-document body's side effect reaching the shell that fed it")
+}
+
 // confineToTheProcess expands a here-document body the way the process the
 // redirection is for would, and reports what to do with the result.
 //
 // The wrapper rather than a flag inside the expander, because the expander
 // must not know: the body expands exactly as it always did, and the whole of
 // this is what happens to the writes it left behind.
+//
+// Reached for a `( … )` as well as for a command of its own, because a real
+// shell has forked for both — [Runner.bodyExpandedElsewhere] is where the two
+// part. What follows the ask is the same for both and is the reason this is
+// one function: the failure a body left behind belongs to that other process,
+// so it costs the command and not the line, which is what the panel does for
+// a subshell in every column that has an opinion.
 func (r *Runner) confineToTheProcess(expand func() string) string {
 	before := r.saveExpansionTables()
 	body := expand()
 	if r.wroteSince(before) {
-		if r.ask(r.sem().HeredocExpandsInTheCommandsProcess,
-			"a here-document body's side effect reaching the shell that fed it") {
+		if r.bodyExpandedElsewhere() {
 			r.restoreExpansionTables(before)
 		} else if r.unspecified {
 			// Nobody answered, so there is no telling whose the write is.

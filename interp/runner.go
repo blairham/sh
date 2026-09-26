@@ -3452,6 +3452,23 @@ type Runner struct {
 	// body read at expansion time is not a here-document body.
 	inHeredocBody bool
 
+	// locatedWithoutALine says the location of whatever is reported next has
+	// no line to name, so the dialect writes the name alone.
+	//
+	// One route reaches it: [Diagnostics.LineBeforeRedirect], the dialect
+	// that reports a compound command's failed redirection one line *below*
+	// the redirect's own. On the first line of a file that count is nought,
+	// and nought is not a line — the shell writes `f.sh: ` where a line
+	// below would have been `f.sh: line 1: `. Set and put back by
+	// [Runner.applyRedirs], beside the line it belongs to, and read by
+	// [Runner.locationPrefixNamed].
+	//
+	// A flag rather than a nought in [Runner.line], because a nought there
+	// is already a measured *number* elsewhere: bash writes `bash: line 0: `
+	// for a bad option name at startup, so a rule that left every zero line
+	// out would take that away (see cmd/bash's shopt-invocation rows).
+	locatedWithoutALine bool
+
 	// expansionBodyLine is the file line such a body begins on, or nought
 	// where the body has no line of its own — the older spelling's, which is
 	// numbered by the span the parser already placed in the file.
@@ -4885,6 +4902,12 @@ func (r *Runner) locationPrefixNamed(construct string) string {
 	name, line, inBody := r.locationNameAndLine(r.speaker == "")
 	if construct != "" {
 		name += ": " + construct
+	}
+	if r.locatedWithoutALine && !inBody {
+		// Nothing to count, for the same reason the function rule below
+		// leaves a nought out: the number this dialect would have written
+		// is a line below the first. See Runner.locatedWithoutALine.
+		return d.prefixWithoutLine(name, r.inBuiltin)
 	}
 	if inBody {
 		if line > 0 {

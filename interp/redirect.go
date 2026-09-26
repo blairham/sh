@@ -204,24 +204,38 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	// Restored afterwards, so the command itself is still reported where it
 	// was written: only the opening moves.
 	commandLine := r.line
-	defer func() { r.line = commandLine }()
+	wasUnnumbered := r.locatedWithoutALine
+	defer func() { r.line, r.locatedWithoutALine = commandLine, wasUnnumbered }()
 	for _, rd := range rs {
 		// Every dialect reports a *simple* command at the line it began
 		// on — measured on a command split by backslashes, where the
 		// redirect is two physical lines below its command word and all
 		// four still name the command's. They differ only about a
 		// compound command, so the axis is asked only there.
-		r.line = commandLine
+		r.line, r.locatedWithoutALine = commandLine, false
 		if compound {
 			switch r.diag().RedirectFailureLine {
 			case LineOfRedirect:
 				r.line = r.lineOf(rd.Pos())
 			case LineBeforeRedirect:
-				if n := r.lineOf(rd.Pos()); n > 1 {
-					r.line = n - 1
-				} else {
-					r.line = n
-				}
+				// One below, and **nought is a number this reaches** rather
+				// than a floor to clamp against: the dialect that counts
+				// this way writes no line at all where the count lands
+				// there. Measured 2026-09-26 over a script file, ksh93u+
+				// 2012-08-01, `env -i PATH=/usr/bin:/bin HOME=<scratch>
+				// LC_ALL=C /bin/ksh f.sh` with stdin from /dev/null:
+				//
+				//	{ echo RAN; } <<END on line 1   f.sh:  1/0 : divide by zero
+				//	the same on line 2              f.sh: line 1:  1/0 : divide by zero
+				//	( cat ) < nosuch on line 1      f.sh: nosuch: cannot open …
+				//	the same on line 2              f.sh: line 1: nosuch: cannot open …
+				//
+				// So the body's failure and the open's failure agree, and
+				// clamping to 1 wrote `line 1` for the first of each pair —
+				// a line of the file, and the wrong one. See
+				// Runner.locatedWithoutALine (#4710).
+				r.line = r.lineOf(rd.Pos()) - 1
+				r.locatedWithoutALine = r.line < 1
 			}
 		}
 		fd := 1
@@ -414,7 +428,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// with the word where a number usually stands.
 				r.diagf("%v\n", r.errBadFd(-1, Wording(
 					r.diag().CoprocessDuplicationTargetName, "%[1]s", name), fd))
-				r.status = r.diag().redirectFailureStatus()
+				r.status = r.redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
 			}
@@ -541,7 +555,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// dialect that reports 2 reported 2 for `>nodir/f` and 1 for
 				// `>&3` — the same event, two numbers, and only the first of
 				// them measured.
-				r.status = r.diag().redirectFailureStatus()
+				r.status = r.redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
 			}
@@ -752,7 +766,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				}
 				if err := r.dupFd(fd, "0", "", opened); err != nil {
 					r.diagf("%v\n", err)
-					r.status = r.diag().redirectFailureStatus()
+					r.status = r.redirectFailureStatus()
 					r.redirErr = true
 					return closers, nil
 				}
@@ -777,7 +791,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// that is what this is to the script. A caller that needs to tell
 				// a refusal from a failure has the event, which says which it
 				// was.
-				r.status = r.diag().redirectFailureStatus()
+				r.status = r.redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
 			}
@@ -812,7 +826,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// sees both.
 				action = r.act(Action{Kind: ActionOpen, Path: path, Write: true})
 				if !r.allowed(ctx, action) {
-					r.status = r.diag().redirectFailureStatus()
+					r.status = r.redirectFailureStatus()
 					r.redirErr = true
 					return closers, nil
 				}
@@ -836,7 +850,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// diagnostic say different things. To the script this is the
 				// refusal above, word for word.
 				r.reportRefusal(action)
-				r.status = r.diag().redirectFailureStatus()
+				r.status = r.redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
 			}
@@ -867,13 +881,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 					// One dialect says something shorter for a name that is not
 					// there, and says it the same way in both directions.
 					r.diagf("%s\n", Wording(r.diag().EmptyRedirectTarget, "", name))
-					r.status = r.diag().redirectFailureStatus()
+					r.status = r.redirectFailureStatus()
 					r.redirErr = true
 					return closers, nil
 				}
 				r.diagf("%s\n", Wording(format, fallback,
 					name, r.diag().openReason(err, creating)))
-				r.status = r.diag().redirectFailureStatus()
+				r.status = r.redirectFailureStatus()
 				r.redirErr = true
 				return closers, nil
 			}
@@ -1590,7 +1604,7 @@ func (r *Runner) refuseFdOverLimit(fd int) bool {
 	}
 	r.diagf("%s\n", Wording(r.diag().FdNumberOverLimit, "%[1]d: %[2]s",
 		fd, r.diag().reasonText(reason(syscall.EBADF))))
-	r.status = r.diag().redirectFailureStatus()
+	r.status = r.redirectFailureStatus()
 	return true
 }
 
@@ -1644,7 +1658,7 @@ func (r *Runner) refusePickedFdOverLimit(fd int, target string) bool {
 		target = d.RedirectWithoutATargetName
 	}
 	r.diagf("%s\n", Wording(d.CannotOpen, "%[1]s: %[2]s", target, why))
-	r.status = d.redirectFailureStatus()
+	r.status = r.redirectFailureStatus()
 	return true
 }
 
@@ -1768,7 +1782,7 @@ func (r *Runner) seekRedirect(rd *syntax.Redirect, fd int) bool {
 		// `6: bad file unit number [Bad file descriptor]`.
 		r.diagf("%s\n", Wording(r.diag().SeekDescriptorNotOpen, "%[1]s: %[2]s",
 			itoa(fd), r.diag().reasonText(reason(syscall.EBADF))))
-		r.status = r.diag().redirectFailureStatus()
+		r.status = r.redirectFailureStatus()
 		return false
 	}
 	cur, err := f.Seek(0, io.SeekCurrent)
@@ -1795,7 +1809,7 @@ func (r *Runner) seekRedirect(rd *syntax.Redirect, fd int) bool {
 		// regular file and a negative offset it is `-1: invalid seek
 		// offset`.
 		r.diagf("%s\n", Wording(r.diag().SeekStreamHasNoPosition, "%[1]s: not seekable", itoa(fd)))
-		r.status = r.diag().redirectFailureStatus()
+		r.status = r.redirectFailureStatus()
 		return false
 	}
 	// CUR and EOF stand for the position and the size **inside the
@@ -1830,7 +1844,7 @@ func (r *Runner) seekRedirect(rd *syntax.Redirect, fd int) bool {
 // Diagnostics.SeekStreamHasNoPosition.
 func (r *Runner) refuseSeekOffset(written string) bool {
 	r.diagf("%s\n", Wording(r.diag().SeekOffsetRefused, "%[1]s: invalid seek offset", written))
-	r.status = r.diag().redirectFailureStatus()
+	r.status = r.redirectFailureStatus()
 	return false
 }
 

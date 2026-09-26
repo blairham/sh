@@ -66,9 +66,9 @@ import (
 // each of them **stops offering the letters its preset already decided**.
 // Measured letter by letter against zsh 5.9.2, 2026-09-05:
 //
-//	whence  -v -p -c -a -w -f      and -m -s -x -S
-//	which      -p    -a -w         and -m -s -x -S   (-c -v -f are bad options)
-//	where      -p       -w         and -m -s -x -S   (-a -c -v -f are bad options)
+//	whence  -v -p -c -a -w -f -s -S    and -m -x
+//	which      -p    -a -w    -s -S    and -m -x   (-c -v -f are bad options)
+//	where      -p       -w    -s -S    and -m -x   (-a -c -v -f are bad options)
 //
 // That is the rule and not a coincidence: `-c` is already on in both, so it
 // cannot be asked for; `-a` is already on in `where`; and `-v` and `-f` are
@@ -79,9 +79,9 @@ import (
 //
 // whenceLetters are the letters each name implements.
 const (
-	whenceLetters = "vpcawf"
-	whichLetters  = "paw"
-	whereLetters  = "pw"
+	whenceLetters = "vpcawfsS"
+	whichLetters  = "pawsS"
+	whereLetters  = "pwsS"
 )
 
 // whenceUnimplemented are the letters zsh has that this one does not, kept
@@ -89,10 +89,13 @@ const (
 // tell a shell that lacks something from a typo. All three names take them,
 // and all three refuse them the same way.
 //
-// `-S` joined the list from the same measurement: it is `-s` that resolves
-// every step of a symlink chain rather than the last, and this shell answered
-// `bad option` where zsh takes it.
-const whenceUnimplemented = "msxS"
+// **`-s` and `-S` have left this list** (#4446). They are the two depths of
+// one walk — see whenceLinks — and the argument for refusing `-s`, that it
+// "would be the same as the bare answer for every name that is not a symlink
+// and silently wrong for one that is", was the argument for implementing it:
+// the bare answer is exactly what `-s` writes when there is no link, and the
+// arrow is what it writes when there is.
+const whenceUnimplemented = "mx"
 
 // registerWhence installs all three names.
 //
@@ -114,6 +117,8 @@ type whenceMode struct {
 	all     bool // -a: every resolution rather than the first
 	kind    bool // -w: the bare kind word
 	funcs   bool // -f: a function answers with its body
+	link    bool // -s: where the path ends up
+	chain   bool // -S: every link on the way there
 }
 
 func whenceBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -200,6 +205,10 @@ func setWhenceLetter(m *whenceMode, letter byte) {
 		m.kind = true
 	case 'f':
 		m.funcs = true
+	case 's':
+		m.link = true
+	case 'S':
+		m.chain = true
 	}
 }
 
@@ -324,11 +333,20 @@ func resolvedAnswer(r *interp.Runner, name string, kind interp.NameKind, path st
 		return name + ": " + whenceKindWord(kind)
 	}
 	if m.verbose {
+		// The arrow goes **after** the sentence rather than inside the path
+		// it names, and the difference shows only on a path with a space in
+		// it: measured, `whence -sv sp` is `sp is '/…/w s/sp' -> /bin/ls`, so
+		// the quoting the dialect puts round a path reaches the path and not
+		// the resolution after it. Rendering the whole string first and
+		// handing *that* to the sentence quoted the arrow too.
+		if kind == interp.NameFile {
+			return verboseSentence(r, name, kind, path) + whenceLinkArrow(r, path, m)
+		}
 		return verboseSentence(r, name, kind, path)
 	}
 	switch kind {
 	case interp.NameFile:
-		return path
+		return whenceLinks(r, path, m)
 	case interp.NameFunction:
 		if m.csh || m.funcs {
 			if body, ok := r.FunctionText(name); ok {
@@ -391,6 +409,10 @@ func verboseSentence(r *interp.Runner, name string, kind interp.NameKind, path s
 		// was the same string until the path inside the sentence learned to
 		// be quoted — see Diagnostics.TypeSentencePathQuoting, which
 		// `whence -v 'a b'` answers and this copy did not (#3702).
+		//
+		// The path handed to it is already resolved when `-s` or `-S` asked
+		// for that, measured: `whence -sv myls` is `myls is …/myls -> /bin/ls`,
+		// so the arrow goes *inside* the sentence rather than beside it.
 		return r.TypeExternalSentence(name, path)
 	case interp.NameNotFound:
 	}
@@ -414,4 +436,59 @@ func whenceMissing(r *interp.Runner, name string, m whenceMode) int {
 // difference from ksh93 the corpus records.
 func writeLine(r *interp.Runner, s string) {
 	_, _ = fmt.Fprintf(r.Out(), "%s\n", s)
+}
+
+// whenceLinks is `-s` and `-S`: what the path this shell found actually
+// resolves to, written as an arrow after it.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`), run `-f`, with
+// `myls -> /bin/ls`, a chain `c -> b -> sub/a -> /bin/ls`, and `realecho` a
+// real file, each found on PATH:
+//
+//	           -s                          -S
+//	realecho   …/realecho                  …/realecho
+//	myls       …/myls -> /bin/ls           …/myls -> /bin/ls
+//	c          …/c -> /bin/ls              …/c -> …/b -> …/sub/a -> /bin/ls
+//
+// so the two letters are one walk read to two depths: `-s` names where the
+// path ends up and `-S` names every path on the way. `realecho` is the
+// control and it is load-bearing in both columns — pointed at a command that
+// is a real file the two letters print exactly what the bare form prints, and
+// a shell that had neither letter would agree on that row. The chain is what
+// tells `-s` from `-S`, and the single link is what tells either from nothing.
+//
+// **`-w` is not this question and is answered before this is reached.**
+// Measured — `whence -sw myls` and `whence -Sw myls` are both `myls: command`,
+// the same as `whence -w myls` — so the kind word is never decorated. The
+// other three shapes are: the bare form, `-c` (which is `which` and `where`)
+// and `-v` (which is `type`) each write the arrow, and the `-v` one writes it
+// inside its sentence.
+//
+// **`-S` wins when both are given**, in either order: `whence -sS` and
+// `whence -Ss` both write the full chain.
+//
+// A name that is not a file never reaches here. A builtin, a function, a
+// reserved word and an alias are what they are, and a name PATH does not hold
+// is the ordinary silence at 1 — measured, `whence -s nosuchcmd` says nothing.
+func whenceLinks(r *interp.Runner, path string, m whenceMode) string {
+	return path + whenceLinkArrow(r, path, m)
+}
+
+// whenceLinkArrow is the part of that answer that follows the path — empty
+// when neither letter was given and when nothing on the way is a link.
+//
+// Kept apart from the path so the `-v` sentence can put it outside the
+// quoting that shape wraps a path in. See resolvedAnswer.
+func whenceLinkArrow(r *interp.Runner, path string, m whenceMode) string {
+	if !m.link && !m.chain {
+		return ""
+	}
+	steps := r.SymlinkSteps(path)
+	if len(steps) == 0 {
+		return ""
+	}
+	if m.chain {
+		return " -> " + strings.Join(steps, " -> ")
+	}
+	return " -> " + steps[len(steps)-1]
 }

@@ -550,7 +550,36 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	outerInputUnit := r.inputUnitLine
 	defer func() { r.inputUnitLine = outerInputUnit }()
 	abandoned, stopped := 0, false
+	// The dialect this text is being read with, watched for a replacement.
+	// A builtin on one line can decide what a construct on the next *is* —
+	// the option that moves syntax.Dialect.ExtendedPattern, the one that
+	// moves DoubledQuoteInSingleQuotesIsALiteralQuote, and POSIX mode — and
+	// borrowed text is read a line at a time exactly as the front end reads
+	// a script, so it owes those lines the same answer. The runner says so
+	// by replacing its Dialect rather than writing through it, since a
+	// subshell holds the same pointer, so a changed pointer is the whole
+	// signal. This is driver's run loop, in the other reader of shell input.
+	//
+	// Measured 2026-09-26 from a script file: `. f` over a file holding
+	// `shopt -s extglob` and then `echo @(a|b)` prints the pattern in bash
+	// 5.3.20, and `eval` over the same two lines does too; a zsh file
+	// holding `setopt rcquotes` and then `print -r -- 'a''b'` prints `a'b`.
+	// This reader parsed every line with the dialect it started on, so all
+	// three were refused or read the old way.
+	//
+	// Seeded with what the parser above was built from rather than with nil,
+	// which is where this differs from the front end's loop: there the
+	// program is built before the startup sequence has run and the first
+	// turn has to hand over the runner's dialect, and here the parser was
+	// built from it one statement ago.
+	dialectRead := r.Dialect
 	for !stopped {
+		if r.Dialect != dialectRead && r.Dialect != nil {
+			dialectRead = r.Dialect
+			// Still this text, so still this route: the replacement is a
+			// language and does not carry how the text got here.
+			p.SetDialect(r.dialect().On(s.route()))
+		}
 		f, ok := nextBorrowedLine(p, &whole)
 		if !ok {
 			break

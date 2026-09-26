@@ -48,6 +48,68 @@ dash.
 Quote removal happens at the *end* of expansion, not here. This stage
 records which spans were quoted and leaves the characters in place.
 
+### One shell has a run-time option that puts a quote inside `'…'`
+
+`'…'` protects everything and no escape exists inside it, which is the
+line above and is true of every shell in the panel with nothing said.
+One of them has an option that changes it: with `RC_QUOTES` on, a
+doubled `'` inside the run stands for **one literal quote** and the run
+carries on, so `''''` is one quote character and `'a''b'` is `a'b`.
+
+The reading is one byte of lookahead and nothing else, so what decides
+is the *count* of quotes. Measured on zsh 5.9.2, `-f`, from a script
+file, 2026-09-26, with `print -r`:
+
+| written | option on | option off |
+| --- | --- | --- |
+| `''` | (empty) | (empty) |
+| `''''` | `'` | (empty) |
+| `''''''` | `''` | (empty) |
+| `'a''b'` | `a'b` | `ab` |
+| `'x''''y'` | `x''y` | `xy` |
+| `a''''b` | `a'b` | `ab` |
+| `'''` | `unmatched '` | `unmatched '` |
+| `x'''y` | `unmatched '` | `unmatched '` |
+
+The last two rows are the control that says the option does not make a
+quote *escapable*: an odd number still runs off the end of the input,
+and it is the same refusal in both states.
+
+**Only the plain run.** A `''` inside `$'…'`, inside double quotes and
+inside a here-document body is two ordinary characters in both states.
+Measured the same day, `$'a''b\tc'` is `ab\tc` either way — `$'a'`
+closing at its first quote and `'b\tc'` being an ordinary run, where a
+reading that reached inside the dollar-quote would have given `a'b` and
+a tab. The positive beside that null is `$'p''''q'`, which is `p'q` with
+the option on and `pq` with it off, so the option really was on.
+
+**The moment is the lexing**, which is what makes this a grammar flag
+rather than a semantics axis. A function body is read once at its
+definition and expanded at every call, and it is the definition that
+decides: measured the same day over `f() { print -r -- 'a''b' }`,
+defined with the option on and called with it off is `a'b`, and defined
+with it off and called with it on is `ab`. Each row holds the state at
+the *call* fixed at the other's value, so the call cannot be what
+decides. `eval` answers to the state at the `eval`, because that is when
+its text is read, and an alias body — kept as text — answers to the
+state at its **use**.
+
+That is also why a probe written with `-c` reports no difference and is
+wrong. zsh reads a `-c` string whole, so `setopt rcquotes` and a word
+after it are read together and the word is read the old way; the same
+holds for the two written on one line of a file. `zsh -f -o rcquotes -c`
+on the word alone prints `a'b`, because there the option moved before
+the read.
+
+Grammar flag: `DoubledQuoteInSingleQuotesIsALiteralQuote` — **off in
+every preset**, and the only flag in that struct no preset ever turns
+on. It is reached by `interp.Runner.SetDoubledQuoteInSingleQuotes`,
+which replaces the runner's dialect so that the next text this shell
+reads follows — the arrangement the option that moves `ExtendedPattern`
+already uses. The *writing* side is a separate question and is not this
+flag's: with the option on, zsh's own quoter writes `'p''q'` where it
+otherwise writes `'p'\''q'`.
+
 ### `$"..."` is a plain double-quoted string to half the panel
 
 `$"..."` marks a double-quoted string for locale translation. With no

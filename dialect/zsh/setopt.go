@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 125 of the 185
+//     typing a directory name still does not change directory. 124 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -204,7 +204,14 @@ import (
 // two is read by two commands at two moments, `cd` when it moves and `pwd`
 // when it prints, which is the half a single reading in `cd` gets wrong.
 //
-// Nothing else about the split moved, and 125 is still most of the table.
+// `rcquotes` is the most recent and the first of them that is not a
+// *semantics* question at all: it decides how a single-quoted word is
+// **lexed**, so it moves syntax.Dialect rather than the vector, and the front
+// end reading the option's effect on the next line is the whole behavior. It
+// is switch-backed for that reason, beside `cprecedences`, which is the other
+// name here that moves the parser (#4591).
+//
+// Nothing else about the split moved, and 124 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -1291,7 +1298,53 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("rcquotes", false),
+	{
+		// RC_QUOTES: inside a single-quoted string a doubled `'` is one
+		// literal quote and the string carries on, so `''''` is one quote
+		// character and `'a''b'` is `a'b`. Off by default, which is this
+		// shell's own answer and every other shell in the panel's.
+		//
+		// **A parser question, which is what makes it different from the
+		// other conversions in this campaign.** It is
+		// syntax.Dialect.DoubledQuoteInSingleQuotesIsALiteralQuote, moved
+		// through interp.Runner.SetDoubledQuoteInSingleQuotes, which
+		// replaces the runner's dialect the way `extendedglob` replaces it
+		// for the pattern grammar. The front end watches that pointer and
+		// reads the *rest of the program* the new way, which is the whole of
+		// the behavior: the option decides how a later line is **lexed**.
+		//
+		// So the moment is the reading and not the run, and the two are far
+		// apart. Measured on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`) from
+		// a script file, 2026-09-26, over `f() { print -r -- 'a''b' }`:
+		// defined with the option on and called with it off is `a'b`, and
+		// defined with it off and called with it on is `ab`. Each row holds
+		// the state at the *call* fixed at the other's value, so the call
+		// cannot be what decides.
+		//
+		// It is also why a probe written with `-c` reports no difference and
+		// is wrong. A `-c` string is read whole here — see
+		// Diagnostics.CommandStringParsedWhole — so `setopt rcquotes` and
+		// the word are read together and the word is read the old way;
+		// measured, so is `setopt rcquotes; print -r -- 'a''b'` written on
+		// one line of a file. `zsh -f -o rcquotes -c ...` prints `a'b`,
+		// because there the option moved before the read.
+		//
+		// It was recorded and inert until #4591: `setopt rcquotes`
+		// succeeded, `[[ -o rcquotes ]]` and `$options[rcquotes]` agreed,
+		// and `''''` was an empty word in both states.
+		//
+		// No emulation reaches it. It is in emulationAlwaysReset and has no
+		// entry in the per-emulation defaults, so `emulate sh`, `emulate
+		// ksh` and `emulate zsh` all put it back off — measured the same
+		// day, `[[ -o rcquotes ]]` fails after each of the three and `print
+		// -r -- 'a''b'` on the line after is `ab`.
+		base: "rcquotes", def: false,
+		get: (*interp.Runner).DoubledQuoteInSingleQuotes,
+		set: func(r *interp.Runner, on bool) int {
+			r.SetDoubledQuoteInSingleQuotes(on)
+			return 0
+		},
+	},
 	// Whether this shell reads its startup files, which zsh initializes from
 	// the invocation: `-f` and `--no-rcs` turn it off, and the name is the
 	// only place the fact is published — `setopt` in a `-f` shell prints

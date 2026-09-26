@@ -18332,6 +18332,68 @@ type Semantics struct {
 	// each dialect's own vector table (#2838).
 	MonitorAloneAnnouncesAJob Answer
 
+	// MonitorAloneAccountsForJobsAtExit says a shell with the monitor and
+	// nobody at a prompt still accounts for the jobs it is leaving behind:
+	// it names them, and it says it hung them up.
+	//
+	// The same split MonitorAloneAnnouncesAJob draws, drawn again at the
+	// other end of a job's life, and the panel divides it the same way —
+	// exactly one shell answers yes. What rides on it is the pair of
+	// sentences a session writes as it goes: Diagnostics.RunningJobsAtExit
+	// or StoppedJobsAtExit, gated by Runner.ChecksRunningJobsAtExit and
+	// ChecksStoppedJobsAtExit, and Diagnostics.JobsHUPedAtExit, gated by
+	// Runner.SendsHangupToJobsAtExit. Two mechanisms with two switches, and
+	// this is the one gate in front of both — measured, `no_check_jobs`
+	// removes the first and leaves the second, `no_hup` removes the second
+	// and leaves the first, and the monitor removes both.
+	//
+	// Measured 2026-09-25 on a pseudo-terminal, a script file holding
+	// `sleep 30 &` and nothing that waits, each shell given `-m` and no `-i`:
+	//
+	//	bash 5.3.20   nothing        ksh93u+       nothing
+	//	bash 3.2.57   nothing        dash          nothing
+	//	zsh 5.9.2     you have running jobs. / warning: 1 jobs SIGHUPed
+	//
+	// dash is the one that needs saying twice, because it is not silent in
+	// the neighboring case and that is easy to misread as an answer here: a
+	// *stopped* job at the end of a `dash -m` script is `You have stopped
+	// jobs.`, and a running one is nothing at all. This axis is asked with a
+	// running job and a stopped one alike and dash says nothing on the row
+	// it is asked about; what it does with a stopped job is
+	// StoppedJobsHoldTheExit's business and is not moved here.
+	//
+	// **The monitor is the noun and interactivity is not**, which is the
+	// distinction the axis exists for and the one that is nearly invisible:
+	// a shell turns the monitor on for a session, so the two agree in every
+	// shell anybody sits at. Told apart only by holding one fixed and moving
+	// the other, on zsh 5.9.2, `sleep 3 &` and then an exit:
+	//
+	//	interactive  monitor   written
+	//	no           off       nothing              zsh -f script
+	//	no           **on**    **both sentences**   zsh -fm script
+	//	yes          **off**   **nothing**          zsh -fiV +Z, unsetopt monitor
+	//	yes          on        both sentences       zsh -fiV +Z
+	//
+	// The answer moves with the monitor in both rows where interactivity is
+	// held fixed and does not move with interactivity in either row where
+	// the monitor is. Until #4542 the hangup read Runner.Interactive and the
+	// sentence naming the jobs was never written outside a prompt at all, so
+	// a `-m` script left in silence.
+	//
+	// Read rather than asked, exactly as MonitorAloneAnnouncesAJob is, and
+	// no is what it reads as: silence is what four of the five do, and a
+	// preset that has not chosen had better say nothing than write "the
+	// shells disagree here" as a shell leaves.
+	//
+	// unpinned: never reached from the corpus, and it cannot be, for the
+	// reason MonitorAloneAnnouncesAJob gives — every case runs with no
+	// controlling terminal and the one shell that answers yes will not grant
+	// the monitor without one. Pinned instead by
+	// TestTheMonitorAloneMayAccountForJobsAtExit in interp, which builds that
+	// state directly and moves the axis through all three of its values, and
+	// by each dialect's own vector table.
+	MonitorAloneAccountsForJobsAtExit Answer
+
 	// StoppedJobsHoldTheExit keeps an interactive shell alive when leaving
 	// would abandon a job that is stopped: the shell says so and stays, and
 	// the attempt has to be made a second time.

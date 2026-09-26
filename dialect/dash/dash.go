@@ -282,6 +282,15 @@ func Semantics() interp.Semantics {
 	// script with `set -m` on a pseudo-terminal prints no start notice here,
 	// though it does report the job *ending*. Measured 2026-09-15 (#2838).
 	s.MonitorAloneAnnouncesAJob = interp.No
+	// Measured 2026-09-25 on a pseudo-terminal, `dash -m` over a script
+	// holding `sleep 30 &`: nothing, and the job runs on. Worth stating
+	// rather than derived, because this shell is *not* silent in the
+	// neighboring case — a **stopped** job at the end of the same script is
+	// `You have stopped jobs.` — and reading that as an answer here would
+	// have this shell writing a sentence about a running job it says nothing
+	// about. That one is StoppedJobsHoldTheExit's and is not moved here
+	// (#4542).
+	s.MonitorAloneAccountsForJobsAtExit = interp.No
 	// dash leaves it off with no terminal too, remarking `can't access tty;
 	// job control turned off` — the same sentence its `set -m` refusal uses,
 	// from the same shell, about two different questions.

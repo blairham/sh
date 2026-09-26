@@ -5285,6 +5285,14 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// EXIT trap does.
 	r.ctx = ctx
 	r.runPendingTraps(ctx)
+	// A shell with no prompt accounts for the jobs it is abandoning here,
+	// because there is no `exit` to hold and no second one to leave on. At a
+	// prompt this does nothing: that route has already asked, through the
+	// `exit` builtin and through the end of input. Before the hangup, which
+	// is the order the sentences are written in — measured 2026-09-25,
+	// `zsh -fm` over a script with a running job writes `you have running
+	// jobs.` and then `warning: 1 jobs SIGHUPed` (#4542).
+	r.tellOfJobsLeftBehind()
 	// Which side of the EXIT trap the hangup falls on is the dialect's, and
 	// the two shells that hang up at all answer it differently: bash writes
 	// the trap's line and *then* the job's handler sees the signal, and zsh

@@ -1395,6 +1395,13 @@ func Semantics() interp.Semantics {
 	// file — the one route the shell that does announce can be asked on
 	// (#2838).
 	s.MonitorAloneAnnouncesAJob = interp.No
+	// And it accounts for nothing on the way out either. Measured 2026-09-25
+	// on a pseudo-terminal, `bash -m` over a script holding `sleep 30 &`:
+	// nothing is written and the job runs on, in 5.3.20 and in 3.2.57 alike.
+	// `-i` in place of `-m` is the same silence, and so is `-il`, which is
+	// the pair `huponexit` needs at a prompt — so neither noun reaches this
+	// shell without a prompt (#4542).
+	s.MonitorAloneAccountsForJobsAtExit = interp.No
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.

@@ -190,6 +190,43 @@ func TestAnUnterminatedPatternGroupIsABadPattern(t *testing.T) {
 			off: "a(b\n", offSt: 0,
 		},
 		{
+			// A prefix trim compiles its operand as a pattern too, and
+			// #4646 made that surface refuse one it will not compile — for
+			// a bracket. The same scan answers a group, so the two changes
+			// compose here rather than growing a second gate. It does not
+			// move with the option: `${v#…}` is not filename generation.
+			name: "a prefix trim is refused in both states",
+			src:  `v="a(bZ"; print -r -- ${v#a(b}`,
+			on:   "", onStatus: 1, onErr: "bad pattern: a(b",
+			off: "", offSt: 1, offErrStr: "bad pattern: a(b",
+		},
+		{
+			name: "a suffix trim is refused in both states",
+			src:  `v="Za(b"; print -r -- ${v%a(b}`,
+			on:   "", onStatus: 1, onErr: "bad pattern: a(b",
+			off: "", offSt: 1, offErrStr: "bad pattern: a(b",
+		},
+		{
+			// The refusal is eager, for the reason #4646's is: the question
+			// is asked of the **pattern**, so a subject the pattern could
+			// never have matched is refused just the same. Measured,
+			// `v=zzz; ${v#a(b}` is `bad pattern: a(b` at 1.
+			name: "a trim is refused on a subject it could not match",
+			src:  `v="zzz"; print -r -- ${v#a(b}`,
+			on:   "", onStatus: 1, onErr: "bad pattern: a(b",
+			off: "", offSt: 1, offErrStr: "bad pattern: a(b",
+		},
+		{
+			// **The control the trim rows need**: a pattern arriving from a
+			// value is not a pattern in this dialect, so the same three
+			// characters strip nothing and refuse nothing. Without this row
+			// the gate could have been reading the subject's own text.
+			name: "a trim whose pattern came from a value is text",
+			src:  `v="a(bZ"; p="a(b"; print -r -- ${v#$p}`,
+			on:   "Z\n", onStatus: 0,
+			off: "Z\n", offSt: 0,
+		},
+		{
 			// **And the half that does not move**, which is what says the
 			// switch is about filename generation rather than about the
 			// matcher. An element filter is not a glob, and measured it is

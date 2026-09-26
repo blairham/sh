@@ -77,6 +77,17 @@ package interp
 func (r *Runner) operandPatternOpts(pattern string, bad *bool, subjects ...string) (patternOpts, bool) {
 	o := r.patternOpts(pattern, subjects...)
 	o.bad = bad
+	// A group nothing closes is the same "will not compile" arriving by the
+	// other scan, and it is eager for the identical reason — measured on zsh
+	// 5.9.2 (`-f -c`, 2026-09-26), `v=zzz; ${v#a(b}` is `bad pattern: a(b` at
+	// 1, on a subject the pattern's first literal already rules out. It is
+	// composed here rather than beside the bracket below because it does not
+	// go through the bracket policy: there is one answer, not three. See
+	// badPatternFromAnOpenGroup and #4645.
+	if r.badPatternFromAnOpenGroup(pattern) {
+		r.fatalPattern(pattern, 1)
+		return o, true
+	}
 	if !hasUnterminatedBracket(pattern) {
 		return o, false
 	}

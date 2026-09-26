@@ -103,11 +103,6 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	// already follows for an IFS split and was measured separately for these
 	// two flags — see splitFlagEdges.
 	edges := !keepEmpty && splitFlagEdges(e, quoted)
-	// A context that keeps no fields joins what comes back, so an empty field
-	// removed here is a *separator* removed rather than a word — which is the
-	// reading splitEachElement already holds for an array's own elements, and
-	// is why `b=('' 2); x=${(o)b}` is ` 2` in zsh 5.9.2 and not `2`.
-	marks := sp != splitNever
 	out := make([]string, 0, len(words))
 	nulls := make([]bool, 0, len(words))
 	for i, w := range words {
@@ -117,9 +112,6 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 		// it is at an end" — is the whole reason the branch exists.
 		atKeptEdge := edges && (i == 0 || i == len(words)-1)
 		if w == "" && !keepEmpty && !atKeptEdge {
-			if !marks {
-				continue
-			}
 			// Not removed here: it is a field of the word until the word
 			// says otherwise, exactly as an empty element of an unquoted
 			// array is. Measured on zsh 5.9.2 — `v='::b'; x${(s.:.)v}y` is

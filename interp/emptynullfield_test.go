@@ -5,6 +5,7 @@ package interp_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -188,4 +189,47 @@ func TestAnEmptyElementIsASeparatorWhereNoFieldsAreKept(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A redirection's target is a word like any other, so the boundary an empty
+// element leaves reaches it too — and it reaches *both* of the readings a
+// target has. Measured 2026-09-25 with `a=(” 2)` and the target `x${a[@]}y`:
+// zsh 5.9.2 opens two files, `x` and `2y`; bash 5.3.20 calls it an ambiguous
+// redirect, which is what more than one word means there; and ksh93u+ writes
+// one file called `x 2y`, which is the words view joined. All three are the
+// same boundary, read three ways.
+//
+// Its own test because the target is expanded by a walk of its own — see
+// Runner.expandRedirectTargetViews — and a second walk that did not get the
+// change is the shape this repository keeps finding.
+func TestAnEmptyElementsBoundaryReachesARedirectionsTarget(t *testing.T) {
+	t.Run("each word is a redirection", func(t *testing.T) {
+		dir := t.TempDir()
+		sem := permissive()
+		sem.RedirectTargetIsAnOrdinaryWord = No
+		sem.RedirectTargetTakesPathnameExpansion = Yes
+		sem.RedirectsUseEveryTarget = Yes
+		sem.ArrayScalarIsTheWholeArray = Yes
+		sem.ArrayNameWithoutSubscriptIsTheList = Yes
+		_, st := run(t, `a=('' 2); echo hi >x${a[@]}y`, func(r *Runner) {
+			r.Semantics, r.Dir = &sem, dir
+		})
+		if st != 0 {
+			t.Fatalf("status %d", st)
+		}
+		for _, name := range []string{"x", "2y"} {
+			if got := readFile(t, dir, name); got != "hi\n" {
+				t.Errorf("%s = %q, want the line in both files", name, got)
+			}
+		}
+	})
+
+	// The words view joined, which is the reading that writes one file — and
+	// the name it writes carries the separator the boundary stands for.
+	t.Run("the words are one filename", func(t *testing.T) {
+		out, _ := run(t, `a=('' 2); cat <x${a[@]}y`, severalWords(No))
+		if !strings.Contains(out, "x 2y") {
+			t.Errorf("got %q, want the joined name `x 2y` reported", out)
+		}
+	})
 }

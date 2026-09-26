@@ -906,11 +906,6 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 		release := r.armSubscriptSubsts(s)
 		parts, nulls, atList := r.expandAt(s, splitAlways, head)
 		if atList {
-			// A redirection target is one name rather than a command line's
-			// words, so the null an empty element makes has nothing to be a
-			// boundary between: the old reading's fields are what both views
-			// are built from.
-			parts = withoutNullFields(parts, nulls)
 			// The plain view is the one that keeps no fields, so it is the
 			// one the separator rule applies to. The fields view below is
 			// untouched: whether the target is read as fields at all is the
@@ -924,11 +919,11 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// survives. It stays add because the lay-in rule has one home,
 			// and the shape this repository keeps finding is the second
 			// copy that did not get the change.
-			r.addSpan(&f, s, parts, nil)
+			r.addSpan(&f, s, parts, nulls)
 			// The words view takes the same parts: an array is several words
 			// however the splitting axis is answered, which is the half of
 			// this reading that is not the text view.
-			r.addSpan(&u, s, parts, nil)
+			r.addSpan(&u, s, parts, nulls)
 			release()
 			continue
 		}

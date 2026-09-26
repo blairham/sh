@@ -137,3 +137,54 @@ printf 'even from a list: st=%s n=%s\n' "$?" "${#fromlist2}"
 # is the target's kind that puts the question and not the words.
 plain=(a 1 b)
 printf 'not a table: st=%s n=%s\n' "$?" "${#plain}"
+
+# ---- ksharrays moves where a scalar append lands ----
+
+# The option is named for the base and it moves six things, five of which are
+# readings. This is the sixth and the only one that is a *write*: `a+=word`
+# with no parentheses joins the element at the base instead of growing one
+# past the end, which is what the whole ksh family does with nothing set.
+setopt ksharrays
+a=(first second)
+a+=last
+printf 'append under the option: [%s]\n' "${a[@]}"
+# And a bare name is then that one element, which is how zsh's own tests ask
+# it — two axes in one line, so a change moving one and not the other shows.
+print -l $a
+
+# The three that do not move, each with the option still on. The parenthesised
+# form is the sharpest: same option, same name, same word, and it still adds
+# an element — the parentheses are the whole of what tells them apart.
+b=(first second)
+b+=(last)
+printf 'a literal append: [%s]\n' "${b[@]}"
+c=(first second)
+c[1]+=last
+printf 'a subscripted append: [%s]\n' "${c[@]}"
+s=abc
+s+=last
+printf 'a name holding a scalar: [%s]\n' "$s"
+unsetopt ksharrays
+
+# The control that pins it to the option: the same line without it adds an
+# element, and the same three rows answer exactly as they did above.
+d=(first second)
+d+=last
+printf 'append without the option: [%s]\n' "${d[@]}"
+e=(first second)
+e+=(last)
+printf 'a literal append: [%s]\n' "${e[@]}"
+f=(first second)
+f[2]+=last
+printf 'a subscripted append: [%s]\n' "${f[@]}"
+t=abc
+t+=last
+printf 'a name holding a scalar: [%s]\n' "$t"
+
+# It is answered when the assignment runs and not when the body was read: one
+# function, parsed once, called with the option on either side of it.
+g() { local -a v=(1 2); v+=x; printf 'in the body: [%s]\n' "${v[@]}" }
+g
+setopt ksharrays
+g
+unsetopt ksharrays

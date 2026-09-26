@@ -289,6 +289,13 @@ func Dialect() syntax.Dialect {
 	// alone; see syntax.Dialect.ArithLogicalXor for where each sits and
 	// docs/spec/grammar/arithmetic.md for the ladders.
 	d.ArithLogicalXor = true
+	// `**=`, exponentiation's compound assignment, which is this shell's
+	// alone among the four columns that parse `**` at all. Measured
+	// 2026-09-26 with `n=2; $(( n **= 3 ))`: 8 here, and an arithmetic
+	// syntax error in bash 5.3, ksh93u+ and BusyBox ash 1.37.0 — so it is a
+	// flag of its own rather than something syntax.Dialect.ArithExponent
+	// implies. See syntax.Dialect.ArithExponentAssign (#4663).
+	d.ArithExponentAssign = true
 	// A double quote inside an arithmetic expression is stepped over
 	// wherever a token may begin. Measured 2026-09-10 on zsh 5.9.2: with
 	// `n=5`, `$(( "1" + 1 ))` is 2, `$(( "n" + 1 ))` is 6 and

@@ -706,6 +706,75 @@ Semantics axis: `ArithNegativeExponentIsError` — bash yes, ksh93 and zsh
 no. Unanswered in the core, and unreachable in `posix` and `dash`, where
 the grammar has no `**` to ask about.
 
+### And `**=` is a second question — zsh alone
+
+Having `**` does not bring the compound assignment with it, and **that is
+measured rather than assumed**: every column that parses the operator at
+all was asked, and three of the four columns that have it refuse the
+assignment spelling.
+
+| shell | `n=2; $(( n **= 3 ))` |
+| --- | --- |
+| bash 5.3 | `arithmetic syntax error: operand expected (error token is "= 3 ")` |
+| ksh93u+ | `arithmetic syntax error` |
+| BusyBox ash 1.37.0 | `arithmetic syntax error` |
+| **zsh 5.9.2** | **`8`, and `n` is 8** |
+
+dash is not a fourth row: it has neither. So the grammar flag is the
+operator's own and not `ArithExponent`'s to imply — folding them together
+would hand `**=` to three shells that refuse it.
+
+Where the flag is off the spelling is **not already taken by something
+else**, which is the difference from `^^=` above: `x **= 3` there is `x **`
+with the right operand missing, and the refusal names the `=` that stood
+where one was wanted. That is why the three refusals in the table are all
+about an *operand*, and why the shell that has the operator says something
+different — `$(( 1 **= 2 ))` is `lvalue required` in zsh, blaming the whole
+of `**=` rather than the half a ladder would have left behind.
+
+`**=` inherits `**`'s associativity, which is what makes
+`integer a=2 b=3; $(( a **= b **= 2 ))` come to 512: the right-hand
+assignment is read first, `b` is 9, and `a` is 2⁹. It is an **assignment
+operator and never a rung op**, which is where it parts from `^^=`:
+`$(( 1 || x **= 3 ))` is `lvalue required` where `$(( 1 || x ^^= 1 ))`
+yields the exclusive-or, because that operator stores nothing and so still
+has a value when its left side cannot be a target.
+
+**The exponent is a float operation and the target's attribute is what
+truncates**, which `**=` shows more sharply than any other compound
+spelling because the float can come out of an expression with no point
+written in it:
+
+| probe (zsh) | value | `$n` afterwards |
+| --- | --- | --- |
+| `integer n=2; $(( n **= -1 ))` | `0.5` | `0` |
+| `integer n=4; $(( n **= 0.5 ))` | `2.` | `2` |
+| `float f=2; $(( f **= 3 ))` | `8.` | `8.` |
+
+That is the rule a plain `=` already has — see *A plain `=` is worth what
+the target's numeric attribute made of it* above — and the operator adds
+nothing to it.
+
+**And what it declares on a name that does not exist is the value's type,
+not the operator's**, which is worth a pair of its own because `**` is a
+float operation and could have parted from `=` and `+=` here. It does not:
+
+| probe (zsh), on a name that does not exist | `${(t)w}` |
+| --- | --- |
+| `$(( w **= 2 ))` | `integer` |
+| `$(( w **= 2.0 ))` | **`float`** |
+| `$(( w = 2 ))` | `integer` |
+| `$(( w += 2 ))` | `integer` |
+
+The first two hold the operator fixed and move the value's type; the last
+three hold the value fixed and move the operator across all three
+spellings. So "`**` produces a float, so `**=` declares a float" is refuted
+by the first row and "the operator decides" by the last three. See
+*And what it **declares** takes its type from the value* above.
+
+Grammar flag: `ArithExponentAssign` — `zsh`: on; every other preset and the
+core: off (#4663).
+
 ## The character code operator — zsh only
 
 zsh reads a leading `#` in an expression as a **character code**, and it

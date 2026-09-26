@@ -4323,6 +4323,30 @@ type Dialect struct {
 	// the shells that parse it disagree, and the semantics vector answers.
 	ArithExponent bool
 
+	// ArithExponentAssign enables `**=`, exponentiation's compound
+	// assignment. One shell in the panel has it.
+	//
+	// **It is not [ArithExponent]'s to imply, and that is measured rather
+	// than assumed.** Every column that parses `**` at all was asked, and
+	// three of the four columns that have the operator refuse the
+	// assignment spelling — measured 2026-09-26, `n=2; $(( n **= 3 ))`:
+	//
+	//	bash 5.3      arithmetic syntax error: operand expected
+	//	ksh93u+       arithmetic syntax error
+	//	BusyBox ash   arithmetic syntax error
+	//	zsh 5.9.2     8, and n is 8
+	//
+	// So the operator and its assignment are two questions, and folding them
+	// into one flag would hand `**=` to three shells that refuse it. dash is
+	// not a fourth column here: it has neither.
+	//
+	// The spelling is *not* already taken where the flag is off, which is the
+	// difference from [ArithLogicalXor]: `x **= 3` there is `x ** ` with the
+	// operand missing, so the refusal names `= 3` rather than reading as
+	// something else. What a negative or fractional exponent means is not
+	// this flag's question either; see [ArithExponent].
+	ArithExponentAssign bool
+
 	// ArithLogicalXor enables `^^`, the logical exclusive-or of an arithmetic
 	// expression, and its assignment spelling `^^=`. One shell in the panel
 	// has them and no script that runs under bash can contain one.

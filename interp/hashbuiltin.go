@@ -23,10 +23,11 @@ func init() { builtins["hash"] = biHash }
 // question — three report it at status 1, ksh93 says nothing and reports
 // success.
 //
-// The letters past `-r` are bash's, each one asked for separately, because a
-// letter is either in this dialect's set or in
+// The letters past `-r` are one column's or another's, each one asked for
+// separately, because a letter is either in this dialect's set or in
 // Diagnostics.UnimplementedOptionLetters and one that is in neither reads as
-// "no shell has this" (#2081).
+// "no shell has this" (#2081). Most are bash's; `-d` under the reading that
+// names a directory, `-L` beside it and `-m` are the one other column's.
 func biHash(r *Runner, _ context.Context, args []string) int {
 	if r.hashBuiltinIsRefused() {
 		// Every spelling, including `hash -r` and a bare listing: measured,
@@ -214,8 +215,10 @@ func (r *Runner) hashPathIsADirectory(path string) bool {
 // hashOptionLetters is the set `hash` takes in this dialect, the paired half
 // of Diagnostics.UnimplementedOptionLetters.
 //
-// `r` is in every column and is not asked about. The rest are bash's, and the
-// `p:` says the letter takes an argument — see builtinOptionsArg.
+// `r` is in every column and is not asked about. The rest belong to one
+// column or another — `-l`, `-p` and `-t` are bash's, `-m` is the other
+// column's, and `-d` is a letter both have under two different readings —
+// and the `p:` says the letter takes an argument; see builtinOptionsArg.
 //
 // **Each one is asked for only when the call spells it.** A bare `hash`, a
 // `hash -r` and a `hash name` are unanimous, so they run in a shell that has

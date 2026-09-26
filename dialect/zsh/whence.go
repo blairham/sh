@@ -51,15 +51,20 @@ import (
 // is `bad option: -v`, measured. So it is not a synonym with a flag set, it is
 // a second name whose options are refused.
 //
-// `-m`, `-s` and `-x` are this shell's and are not implemented, and they are
+// `-m` and `-x` are this shell's and are not implemented, and they are
 // refused out loud rather than ignored. `-m` reads the operands as patterns
 // and matches them against every name the shell could run, PATH included —
 // the answer on the measuring machine was sixty-four lines of /usr/bin — and
-// nothing here can walk PATH; `-s` resolves a symlink, which would be the
-// same as the bare answer for every name that is not one and silently wrong
-// for one that is; `-x` sets the tab width of a printed body. The same rule
-// `compgen` follows: an answer that cannot be generated is refused rather
-// than guessed.
+// nothing here can walk PATH; `-x` sets the tab width of a printed body. The
+// same rule `compgen` follows: an answer that cannot be generated is refused
+// rather than guessed.
+//
+// **`-s` was on that list and is not now** (#4446), and the sentence it was
+// refused with is the specification it is implemented to: it "would be the
+// same as the bare answer for every name that is not a symlink and silently
+// wrong for one that is". The first half is what zsh writes, measured, and
+// the second half is the arrow. `-S` is the same walk with every step named.
+// See whenceLinks.
 
 // The three names are one builtin with three option sets, which is what the
 // shell itself does: `which` is `whence -c` and `where` is `whence -ca`, and

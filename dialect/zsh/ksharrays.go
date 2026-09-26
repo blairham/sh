@@ -5,7 +5,7 @@ package zsh
 
 import "github.com/blairham/sh/interp"
 
-// `ksharrays` is one name over seven axes, and that is measured rather than
+// `ksharrays` is one name over eight axes, and that is measured rather than
 // tidy. The option is described as moving the base, and what it actually does
 // is make an array read the way the ksh family reads one, which is a
 // different answer to every question this shell asks about a name that holds
@@ -80,6 +80,42 @@ import "github.com/blairham/sh/interp"
 // keep the table. So the option imitates ksh on where an append lands and
 // refuses outright where ksh stores, and one sentence about "reading an array
 // the way the ksh family reads one" gets this row wrong (#4617).
+
+// **The eighth is the sixth's other spelling**, and it could not be moved
+// until the seventh existed. Measured 2026-09-26 on the same binary, with
+// `a=(first second)`:
+//
+//	                   ksharrays off     ksharrays on
+//	a=word             typeset a=word    typeset -a a=( word second )
+//	                                     ScalarAssignedOverACompoundReplacesTheName
+//
+// A plain scalar store over a name holding an **ordinary array** writes the
+// base element and leaves the rest standing, where without the option the
+// value becomes the whole of the name and the array is gone. `a+=word` is the
+// sixth axis and this is the same row's `=`; a change that moved one and not
+// the other would be invisible to a probe that ran only the append, which is
+// why the test asserts the two beside each other (#4618).
+//
+// **The noun is the bare name holding an ordinary array, taking a plain
+// scalar store**, and four pairs hold it fixed while something else moves.
+// The *shape of the store* is the sharpest, because both of its rows are a
+// bare name on the left under the option and neither moves: `a=()` replaces
+// the array with an empty one and `a+=(last)` grows a third element, as they
+// both do without the option — so it is a **scalar** store and not any store.
+// The *subscript*: `a[0]=word` already reaches the base and needs no axis to
+// do it, so it is the **bare** name. The *name's kind*: a scalar and an unset
+// name are the plain store in both columns, and a table is refused by the
+// seventh axis ahead of this question entirely. And the *spelling*: `typeset
+// a=word` over an array is `inconsistent type for assignment` in both
+// columns, so a **declaration** is a different question — see
+// interp.Semantics.ScalarUnderAnArrayDeclaration.
+//
+// It is what the whole ksh family does with nothing set, like the sixth and
+// unlike the seventh: bash 5.3.20, bash 3.2.57 and ksh93u+ 2012-08-01 all
+// answer `word second` there. And it reaches **every scalar store** rather
+// than only an assignment statement, which is the field's own reach: under
+// the option `for a in x y`, `read a`, `printf -v a x`, `${a::=x}` and
+// `getopts x a` each set the base of the array the name is holding.
 //
 // The four that did not move are as much of the measurement as the seven that
 // did. `${a[1,2]}` is still a range and not the arithmetic comma operator;
@@ -101,4 +137,5 @@ func setKshArrays(s *interp.Semantics, on bool) {
 	s.BareSubscriptIsASubscript = answer(!on)
 	s.ScalarAppendedToAnArrayBecomesANewElement = answer(!on)
 	s.ScalarStoredOverATableIsRefused = answer(on)
+	s.ScalarAssignedOverACompoundReplacesTheName = answer(!on)
 }

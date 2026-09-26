@@ -867,16 +867,16 @@ var zshOptions = []zshOption{
 	storeBacked("interactivecomments", false),
 	{
 		base: "ksharrays", def: false,
-		// Read off the base, which is the axis the name is about; the five
+		// Read off the base, which is the axis the name is about; the seven
 		// that move with it are in ksharrays.go and every one of them
-		// answers the same way, so any of the six would report the same
+		// answers the same way, so any of the eight would report the same
 		// state.
 		get: func(r *interp.Runner) bool { return r.Semantics.ArrayBaseIsZero == interp.Yes },
 		set: func(r *interp.Runner, on bool) int {
-			// The six move together and setKshArrays is their only
+			// The eight move together and setKshArrays is their only
 			// writer once the shell is running — the dialect's own
 			// Semantics places them once at construction and nothing
-			// else assigns them — so the base answers for all six and
+			// else assigns them — so the base answers for all eight and
 			// a vector already holding this value has nothing to swap.
 			// See setAxis for why that matters on a real rc.
 			if r.Semantics.ArrayBaseIsZero == answer(on) {

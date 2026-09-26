@@ -547,3 +547,210 @@ func TestTheEmulationsCarryTheSeventhAxis(t *testing.T) {
 		t.Errorf("unsetopt = %q (status %d), want %q at 0", out, st, want)
 	}
 }
+
+// **The eighth axis**: a plain `a=word` over a name holding an ordinary array
+// writes the base element and leaves the rest standing, where without the
+// option the value becomes the whole of the name and the array is gone
+// (#4618). It is Semantics.ScalarAssignedOverACompoundReplacesTheName, moved
+// by setKshArrays alongside the seven above.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`, a script
+// file), with `a=(first second)`:
+//
+//	             ksharrays off     ksharrays on
+//	a=word       typeset a=word    typeset -a a=( word second )
+//	a+=word      ( first second word )   ( firstword second )
+//
+// **The plain store is asserted beside the append deliberately.** The append
+// half of this same row moved in #4619 and this half did not, so a probe that
+// only ran `a+=word` would have passed against a shell where `a=word` still
+// replaced the name — which is exactly the state this test was written
+// against and watched fail.
+func TestKshArraysWritesTheBaseOverAnArrayForAPlainStore(t *testing.T) {
+	for _, tc := range []struct{ name, src, on, off string }{
+		{
+			"a plain store, the listing",
+			"a=(first second)\na=word\ntypeset -p a",
+			"typeset -a a=( word second )",
+			"typeset a=word",
+		},
+		{
+			"the append beside it",
+			"a=(first second)\na+=word\ntypeset -p a",
+			"typeset -a a=( firstword second )",
+			"typeset -a a=( first second word )",
+		},
+		{
+			"a plain store, the type afterwards",
+			"a=(first second)\na=word\nprint ${(t)a}",
+			"array",
+			"scalar",
+		},
+		{
+			"a plain store leaves the rest standing",
+			"a=(first second third)\na=word\nprint -l ${a[@]}",
+			"word\nsecond\nthird",
+			"word",
+		},
+		{
+			"an empty array grows its base",
+			"a=()\na=word\ntypeset -p a",
+			"typeset -a a=( word )",
+			"typeset a=word",
+		},
+		{
+			"a sparse array keeps its far element",
+			"typeset -a a\na[5]=q\na=word\ntypeset -p a",
+			"typeset -a a=( word '' '' '' '' q )",
+			"typeset a=word",
+		},
+		{
+			"an empty value is a value",
+			"a=(first second)\na=\ntypeset -p a",
+			"typeset -a a=( '' second )",
+			"typeset a=''",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			on, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+tc.src)
+			if st != 0 || strings.TrimSpace(on) != tc.on {
+				t.Errorf("on = %q (status %d), want %q", on, st, tc.on)
+			}
+			off, st := runZsh(t, t.TempDir(), tc.src)
+			if st != 0 || strings.TrimSpace(off) != tc.off {
+				t.Errorf("off = %q (status %d), want %q", off, st, tc.off)
+			}
+		})
+	}
+}
+
+// **The noun is the name holding an ordinary array, taking a plain scalar
+// store**, and these are the pairs that hold one part of it fixed while
+// another moves. A rule written on a wider noun — "the option makes a bare
+// name on the left mean the base", "the option stops an array being
+// replaced" — gets one of these rows wrong, and each of them is measured on
+// the reference with `setopt ksharrays` in front of it.
+//
+// The *shape of the store* is the sharpest pair, because both of its rows are
+// a bare name on the left of an assignment under the option and neither one
+// moves: `a=()` replaces the array with an empty one and `a+=(last)` grows a
+// third element, exactly as they do without the option. So it is a **scalar**
+// store and not any store.
+//
+// The *subscript* says it is the **bare** name: `a[0]=word` already reaches
+// the base and needs no axis to do it. The *name's kind* says it has to be
+// holding an ordinary array: a scalar and an unset name are the plain store
+// in both columns, and a table is refused ahead of this question entirely —
+// see TestKshArraysRefusesAScalarStoreOverATable. And the *spelling* says it
+// is a plain store rather than a **declaration**: `typeset a=word` over an
+// array is `inconsistent type for assignment` in both columns.
+func TestKshArraysMovesOnlyTheBarePlainStoreOverAnArray(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the rule itself", "a=(first second)\na=word\ntypeset -p a", "typeset -a a=( word second )"},
+		{"the base written out", "a=(first second)\na[0]=word\ntypeset -p a", "typeset -a a=( word second )"},
+		{"a subscript past the base", "a=(first second)\na[1]=word\ntypeset -p a", "typeset -a a=( first word )"},
+		{"an empty compound store", "a=(first second)\na=()\ntypeset -p a", "typeset -a a=(  )"},
+		{"a literal append", "a=(first second)\na+=(last)\ntypeset -p a", "typeset -a a=( first second last )"},
+		{"a name holding a scalar", "s=abc\ns=word\ntypeset -p s", "typeset s=word"},
+		{"a name holding nothing", "a=word\ntypeset -p a", "typeset a=word"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+tc.src)
+			if st != 0 || strings.TrimSpace(out) != tc.want {
+				t.Errorf("= %q (status %d), want %q", out, st, tc.want)
+			}
+		})
+	}
+	t.Run("a declaration is a different question", func(t *testing.T) {
+		for _, on := range []string{"setopt ksharrays\n", ""} {
+			out, st := runZsh(t, t.TempDir(), on+"a=(first second)\ntypeset a=word\ntypeset -p a")
+			if st == 0 || !strings.Contains(out, "inconsistent type for assignment") {
+				t.Errorf("typeset over an array (%q) = %q (status %d), want the refusal", on, out, st)
+			}
+		}
+	})
+}
+
+// And the same seven rows with the **option held off**, so that the pairs
+// above are pairs rather than a column: only the first one moves, and the
+// other six answer the same way in both states.
+func TestThePlainStoresThatDoNotMoveAnswerTheSameWithoutTheOption(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the rule itself, unmoved", "a=(first second)\na=word\ntypeset -p a", "typeset a=word"},
+		{"the base written out", "a=(first second)\na[1]=word\ntypeset -p a", "typeset -a a=( word second )"},
+		{"a subscript past the base", "a=(first second)\na[2]=word\ntypeset -p a", "typeset -a a=( first word )"},
+		{"an empty compound store", "a=(first second)\na=()\ntypeset -p a", "typeset -a a=(  )"},
+		{"a literal append", "a=(first second)\na+=(last)\ntypeset -p a", "typeset -a a=( first second last )"},
+		{"a name holding a scalar", "s=abc\ns=word\ntypeset -p s", "typeset s=word"},
+		{"a name holding nothing", "a=word\ntypeset -p a", "typeset a=word"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if st != 0 || strings.TrimSpace(out) != tc.want {
+				t.Errorf("= %q (status %d), want %q", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// **It reaches every scalar store and not only an assignment statement**,
+// which is the field's whole reach and is measured the same way the refusal
+// beside it was: under the option, each of these sets the base of the array
+// the name is holding and leaves the second element where it is, where
+// without the option each of them collapses the name to a scalar.
+func TestKshArraysPlainStoreReachesEveryScalarStore(t *testing.T) {
+	for _, tc := range []struct{ name, src, on, off string }{
+		{"a for loop", "for a in x y; do :; done", "typeset -a a=( y second )", "typeset a=y"},
+		{"read", "read a <<< zz", "typeset -a a=( zz second )", "typeset a=zz"},
+		{"printf -v", "printf -v a xx", "typeset -a a=( xx second )", "typeset a=xx"},
+		{"an assigning expansion", ": ${a::=xx}", "typeset -a a=( xx second )", "typeset a=xx"},
+		{"getopts", "set -- -x\ngetopts x a", "typeset -a a=( x second )", "typeset a=x"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "a=(first second)\n" + tc.src + "\ntypeset -p a"
+			on, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+src)
+			if st != 0 || strings.TrimSpace(on) != tc.on {
+				t.Errorf("on = %q (status %d), want %q", on, st, tc.on)
+			}
+			off, st := runZsh(t, t.TempDir(), src)
+			if st != 0 || strings.TrimSpace(off) != tc.off {
+				t.Errorf("off = %q (status %d), want %q", off, st, tc.off)
+			}
+		})
+	}
+}
+
+// And it is placed by setKshArrays rather than by a line at each caller, which
+// the emulations are what test. `emulate ksh` and `emulate sh` both carry it;
+// `emulate zsh` does not, which is the pair that says it is the **option** and
+// not emulation as such. It is answered **when the store runs**: an array
+// built under the option and assigned over after an `unsetopt` is replaced,
+// and a function's `setopt localoptions ksharrays` reaches a store inside it
+// and not one after it returns.
+func TestTheEmulationsCarryTheEighthAxis(t *testing.T) {
+	const base = "a=(first second)\na=word\ntypeset -p a"
+	for _, em := range []string{"emulate ksh", "emulate sh"} {
+		out, st := runZsh(t, t.TempDir(), em+"\n"+base)
+		if want := "typeset -a a=( word second )"; st != 0 || strings.TrimSpace(out) != want {
+			t.Errorf("%s = %q (status %d), want %q", em, out, st, want)
+		}
+	}
+	out, st := runZsh(t, t.TempDir(), "emulate zsh\n"+base)
+	if want := "typeset a=word"; st != 0 || strings.TrimSpace(out) != want {
+		t.Errorf("emulate zsh = %q (status %d), want %q", out, st, want)
+	}
+	out, st = runZsh(t, t.TempDir(), "setopt ksharrays\na=(first second)\nunsetopt ksharrays\na=word\ntypeset -p a")
+	if want := "typeset a=word"; st != 0 || strings.TrimSpace(out) != want {
+		t.Errorf("unsetopt = %q (status %d), want %q", out, st, want)
+	}
+	out, st = runZsh(t, t.TempDir(),
+		"f() { setopt localoptions ksharrays; a=word; }\na=(first second)\nf\ntypeset -p a")
+	if want := "typeset -a a=( word second )"; st != 0 || strings.TrimSpace(out) != want {
+		t.Errorf("localoptions inside = %q (status %d), want %q", out, st, want)
+	}
+	out, st = runZsh(t, t.TempDir(),
+		"f() { setopt localoptions ksharrays; }\na=(first second)\nf\na=word\ntypeset -p a")
+	if want := "typeset a=word"; st != 0 || strings.TrimSpace(out) != want {
+		t.Errorf("localoptions after = %q (status %d), want %q", out, st, want)
+	}
+}

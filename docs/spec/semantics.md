@@ -7673,7 +7673,7 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 24 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`, `errreturn`, `autopushd`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **six** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 24 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`, `errreturn`, `autopushd`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **eight** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 9 | `aliases`, `autocd`, `banghist`, `chasedots`, `chaselinks`, `checkjobs`, `cprecedences`, `hup` and `rcquotes`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, a session that is leaving really does send SIGHUP to the jobs it abandons, and `cd` really does stop keeping the path a directory was reached by, and a doubled `'` inside a single-quoted run really is one literal quote. `cprecedences` and `rcquotes` are the two that move the **parser** rather than the interpreter, and each reaches the rest of the program through a replaced `syntax.Dialect` — see "a doubled quote inside single quotes" in `docs/spec/grammar/tokenization.md`. `chaselinks` and `chasedots` are the pair where the panel's *default* is unanimous and only this shell has a name for moving off it — see below. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
@@ -10949,14 +10949,15 @@ What was built, all through the extension seam — registered builtins in each
   see "what an emulation resets" below. `-c` runs a string under the
   emulation and restores everything after, and a bare `emulate` names the
   mode. `ksharrays` is one of the
-  axes it switches and is a **group** of six, so an emulation moves the
+  axes it switches and is a **group** of eight, so an emulation moves the
   array base, what a plain `$a` is worth, how many fields it is, what
-  `${#a}` counts, whether an unbraced name's brackets are a subscript, and
-  where a scalar `a+=x` lands, all together — see
+  `${#a}` counts, whether an unbraced name's brackets are a subscript,
+  where a scalar `a+=x` lands, whether a scalar store over a table is
+  refused, and what a plain `a=x` does to an array, all together — see
   `dialect/zsh/ksharrays.go` for the measurement, #1726 for what moving
-  only the first of them cost and #4609 for the sixth, which is the only
-  one of the six that is a **write** rather than a reading and was missed
-  for exactly that reason.
+  only the first of them cost and #4609 for the sixth, which is the first
+  of the three that are **writes** rather than readings and was missed for
+  exactly that reason.
 - **bash `help`** (dialect/bash/help.go): the shell's only self-documenting
   builtin, and the one place in this tree where a builtin is deliberately
   **half** built. A topic in the real shell is a **synopsis** followed by a
@@ -26403,10 +26404,10 @@ function's name goes in front of the sentence, and the **table is left
 standing** — a contained refusal lists every key it had, so nothing is
 written before the complaint.
 
-It is one of the seven axes `ksharrays` moves, and the one where the
-option stops imitating ksh: the append row beside it is a faithful copy
-of what bash and ksh93 do with nothing set, and this one is the opposite
-of what both of them do.
+It is one of the eight axes `ksharrays` moves, and the one where the
+option stops imitating ksh: the append row beside it and the plain-store
+row below are faithful copies of what bash and ksh93 do with nothing set,
+and this one is the opposite of what both of them do.
 
 `Diagnostics.ScalarStoredOverATable` is the wording, with the name as its
 one verb, and `Runner.tableRefusesAScalarStore` is the check. Pinned by
@@ -26415,6 +26416,58 @@ one verb, and `Runner.tableRefusesAScalarStore` is the check. Pinned by
 `dialect/ksh/scalarovertable_test.go`, the axis suite in
 `interp/scalarovertable_test.go` and a block of
 `share/suite/zsh/arrays.tests` (#4617).
+
+**`ScalarAssignedOverACompoundReplacesTheName`** — bash no · dash no compound to replace · ksh93 no · zsh yes, **no under `ksharrays`**
+
+What a plain `a=x` does to a name that is already holding an array or a
+table: the value becomes the whole of the name, or it lands on the
+compound's first element — the array base, the key `0` — and the rest
+stays where it is. Measured 2026-09-09 with `a=(1 2 3); a=x`:
+
+    bash 5.3.15         `declare -a a=([0]="x" [1]="2" [2]="3")`   n=3
+    bash 5.3.15 as sh   the same                                   n=3
+    bash 3.2.57         the same                                   n=3
+    ksh93               `typeset -a a=(x 2 3)`                     n=3
+    zsh 5.9.2           `typeset a=x`, `${(t)a}` reading `scalar`  n=1
+
+**zsh's answer moves at run time**, which is the eighth thing `ksharrays`
+moves and the `=` half of the row whose `+=` half is the sixth. Measured
+2026-09-26 on zsh 5.9.2 with `a=(first second)`: `a=word` is
+`typeset a=word` without the option and `typeset -a a=( word second )`
+with it, which is what bash 5.3.20, bash 3.2.57 and ksh93u+ 2012-08-01
+all answer with nothing set. The two halves are separate axes, so a
+measurement that asks only the append cannot see one of them move
+without the other.
+
+The noun is **the bare name holding an ordinary array, taking a plain
+scalar store**, and four pairs hold that fixed with the option on. The
+*shape of the store* is the sharpest, because both of its rows are a bare
+name on the left and neither moves: `a=()` replaces the array with an
+empty one and `a+=(last)` grows a third element, exactly as without the
+option — so it is a **scalar** store and not any store. `a[0]=word`
+already reaches the base, so it is the **bare** name. A scalar and an
+unset name are the plain store in both columns, and a **table** is
+refused by the axis above ahead of this question entirely — which is why
+that refusal had to exist before this one could move, since flipping this
+field first would have made a table write an invented key `0` where the
+reference refuses. And `typeset a=word` over an array is `inconsistent
+type for assignment` in both columns, so a **declaration** is
+`ScalarUnderAnArrayDeclaration` and not this.
+
+It is asked wherever a scalar is **stored** and not only at an assignment
+statement, which is the whole point of the field: `for a in x y z`,
+`read a`, `select`, `getopts`, `printf -v` and `${a::=x}` all set a name,
+and every one of them was leaving an array standing so the name read back
+as the array on every pass — zsh's own compinit reuses `_i_line` as an
+array and then as a loop variable, and all eight passes of its
+widget-rebinding loop saw the last file it had read. `emulate sh` and
+`emulate ksh` carry the option's answer; `emulate zsh` does not.
+
+`Runner.scalarOverCompound` is the one place it is asked, and
+`Runner.scalarStoreReplacesACompound` is the ask, spelled once because
+two routes reach it. Pinned by
+`array/assigning-a-scalar-over-an-array`, `dialect/zsh/ksharrays_test.go`
+and a block of `share/suite/zsh/arrays.tests` (#1390, #1645, #4618).
 
 **A local declaration builds the array cell rather than converting one**,
 and that is core rather than a fourth answer. bash promotes at the top
@@ -26473,9 +26526,10 @@ either: it adds an element in every shell that has arrays, which is why
 that one has no field. Note that zsh's answer here is **not** its answer
 to `a+=(x)`.
 
-A plain `a=x` over an array is a third question and is open (#1390): bash
-and ksh93 write the first element and leave the rest, zsh replaces the
-array with a scalar.
+A plain `a=x` over an array is a third question, and it is
+`ScalarAssignedOverACompoundReplacesTheName` above: bash and ksh93 write
+the first element and leave the rest, zsh replaces the array with a
+scalar, and zsh's answer moves with this same option (#1390, #4618).
 
 **zsh's answer moves at run time**, which no other column's does: `setopt
 ksharrays` turns it into the family's. Measured 2026-09-26 on zsh 5.9.2

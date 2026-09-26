@@ -12087,6 +12087,16 @@ echo "st=$?"`,
 		Why:     "the word is produced once per element and there are none, so it is produced no times — where the same spelling without the flag leaves the surrounding text behind as one field. The third reading is the half that says it is a fact about the *list* and not about emptiness: a name that was never a list is one empty value, and `x${^u}y` is `xy`",
 	},
 	{
+		ID: "param/the-rc-expand-option-is-the-default-for-an-unflagged-spec", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; set -- 1 2; setopt rcexpandparam; f x${@}y; f x${^^@}y; echo`,
+		Why:     "RC_EXPAND_PARAM is what a spec that wrote no `^` takes its answer from, so under the option the unflagged spelling distributes exactly as `${^@}` does — and the doubled caret beside it still does not, which is the half that says the switch and the flag are one mechanism read parity-first rather than two combined. An OR of the two would lose the second reading and an AND would lose the first, and both field counts are 2 here, so the row is the values or it is nothing. The three-way split is the usual one: bash and dash call the expansion a bad substitution when it is reached and ksh93 refuses it while reading, and all three report the `setopt` as an unknown command first",
+	},
+	{
+		ID: "param/the-rc-expand-option-does-not-reach-a-command-substitution", Category: "parameter expansion",
+		Snippet: `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; setopt rcexpandparam; f x$(printf "p q")y; f x${(f)"$(printf "p\nq")"}y; echo`,
+		Why:     "the option's subject is the *parameter expansion* and not the fields a word has open, and this is the pair that tells those two readings apart — no table of array references can, because every row in one is a parameter expansion. Same command, same two fields, same prefix and suffix: the bare substitution is `[xp][qy]` under the option and the one a `${(f)…}` wraps is `[xpy][xqy]`. An implementation that distributed whatever produced several fields would answer the second for both",
+	},
+	{
 		ID: "param/the-set-test-flag-is-one-dialects", Category: "parameter expansion",
 		Snippet: `v=1; e=; printf "[%s]" ${+v} ${+e} ${+NOPE}; echo`,
 		Why:     "a `+` between the `${` and the parameter asks whether it is set and answers 1 or 0 without ever failing: zsh counts where bash and dash call the whole expansion a bad substitution when it is reached and ksh93 refuses it while reading with the `+` named. The empty-but-set name is in the row because set-ness is not emptiness — an implementation that answered like `${v:+1}` would get two of the three right",

@@ -876,6 +876,11 @@ func Semantics() interp.Semantics {
 	// a field whether or not it produced anything, so `"$e$@"` and `"$@$e"` are
 	// each one empty argument.
 	s.EmptyListTakesTheWord = interp.EmptyListReachNothing
+	// No, and unaskable any other way: no `${^spec}` flag, no
+	// `RC_EXPAND_PARAM` and no arrays to distribute. Measured 2026-09-25 on
+	// /bin/dash, `v='p q'; x${v}y` is the two words `xp` and `qy` rather
+	// than `xpy` and `xqy`, and `set -- A B; x$@y` is `xA` and `By` (#4549).
+	s.ParamExpansionDistributesOverTheWord = interp.No
 	// The value is expanded and the redirection opened before the prefix is
 	// checked, so a failure in either is what gets reported and the frozen
 	// name is never named. Measured 2026-09-12, with ksh93 and zsh against

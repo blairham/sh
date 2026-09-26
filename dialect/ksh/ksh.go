@@ -890,6 +890,11 @@ func Semantics() interp.Semantics {
 	// keyed `0`, which is nothing at all where no such key was written.
 	s.KeyedTableScalarIsTheFirstValue = interp.No
 	s.ArrayNameWithoutSubscriptIsTheList = interp.No
+	// No, with nothing here to ask otherwise — no `${^spec}` flag and no
+	// `RC_EXPAND_PARAM`. Measured 2026-09-25 on ksh93u+ 2012-08-01,
+	// `v='p q'; x${v}y` is the two words `xp` and `qy` rather than `xpy`
+	// and `xqy`, and `set -- A B; x$@y` is `xA` and `By` (#4549).
+	s.ParamExpansionDistributesOverTheWord = interp.No
 	// A subscript inside a literal is the text between the brackets, and a
 	// literal written with one declares a keyed array: `typeset -p` answers
 	// `-A` and `${a[2]}` does not find what `[1+1]=c` stored.

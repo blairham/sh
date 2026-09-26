@@ -61,7 +61,7 @@ import "strings"
 // The *set* is measured here and the *value* each reset name goes back to is
 // measured below — they are two tables of the same size and #2515 built only
 // the first, which is why #2549 existed. What is still not modeled is what
-// most of those values then *do*: 130 of the 185 names are recorded rather
+// most of those values then *do*: 129 of the 185 names are recorded rather
 // than implemented, so an emulation now puts them at the emulation's own
 // state and the state is still read by nothing. The ones with behavior behind
 // them — `multios`, `bareglobqual`, `globsubst`, `typesetsilent`,

@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 130 of the 185
+//     typing a directory name still does not change directory. 129 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -136,15 +136,15 @@ import (
 // the notice arrived one command late and a driver whose only readable line
 // was that notice waited for it for ever (#4524).
 //
-// `posixtraps` is one of the two most recent, and it is the one whose *moment*
-// had to be measured before it could be wired. It is
+// `posixtraps` is one of the three most recent, and it is the one whose
+// *moment* had to be measured before it could be wired. It is
 // [interp.Semantics.ExitTrapIsFunctionLocal] read backwards — the option on
 // is that axis answering No — and the axis was asked at the function's
 // return, where this option is read when the `trap` command runs. The two
 // moments disagree in both directions, so reading it at the return would have
 // been a second wrong answer rather than the missing one (#4547).
 //
-// `magicequalsubst` is the other: the first unquoted `=` in a command
+// `magicequalsubst` is the second: the first unquoted `=` in a command
 // argument splitting the word, so `--prefix=~/opt` reaches the program as a
 // path. It names an expansion this interpreter already performs for an
 // assignment's value, which is what made recording it the wrong bargain
@@ -153,7 +153,23 @@ import (
 // and called while it is on expands, and one defined on and called off does
 // not — see TestMagicEqualSubstIsReadWhenTheWordIsExpanded.
 //
-// Nothing else about the split moved, and 130 is still most of the table.
+// `rcexpandparam` is the third, and it is the one whose recording changed how
+// many arguments a command received. It is
+// [interp.Semantics.ParamExpansionDistributesOverTheWord] — whether `x${a}y`
+// on a two-element array is one word or two — and the distribution it asks
+// for was already built and already reachable, as `${^a}`, so remembering the
+// option meant the machinery sat there and the switch in front of it did
+// nothing (#4549).
+//
+// Its moment was measured before it was wired, for the reason the two above
+// it give: the option is read **when the word is expanded** and not when it
+// is parsed. A function defined while it was off distributes when it is
+// called with it on, and one defined while it was on does not when it is
+// called with it off — four rows, in both directions, plus an `eval` of a
+// string built while it was off. The `${^a}` half of the same mechanism is
+// the opposite: that one is state on the node and is settled at the parse.
+//
+// Nothing else about the split moved, and 129 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -1095,7 +1111,44 @@ var zshOptions = []zshOption{
 	recorded("pushdminus", false),
 	recorded("pushdsilent", false),
 	recorded("pushdtohome", false),
-	recorded("rcexpandparam", false),
+	{
+		// RC_EXPAND_PARAM: whether a parameter expansion that writes no `^`
+		// of its own distributes over the word it stands in. `a=(1 2);
+		// x${a}y` is the two words `x1y x2y` on and the one word `x1 2y`
+		// off, so what it moves is the **argv word count**. Off by default,
+		// and implemented rather than recorded since #4549: it was accepted
+		// and remembered and the word builder never read it.
+		//
+		// The per-expansion spelling — `${^a}`, and `${^^a}` back off — has
+		// worked since #1517, so this option is the *default* that spelling
+		// overrides rather than a second mechanism. Measured on zsh 5.9.2
+		// under `-f`, 2026-09-25, and the pair is the discriminating one:
+		// `x${^a}y` is `x1y x2y` with the option **off**, and `x${^^a}z${a}`
+		// is `x1 2z1 2z2` with it **on** — the doubled caret lays its own
+		// span in while the plain one beside it distributes. One mechanism,
+		// read parity-first; see interp/rcexpandflag.go, which holds the
+		// only implementation of the distribution itself.
+		//
+		// **The subject is the parameter expansion, not the fields.** Same
+		// command, same field count, same word shape: `x$(echo p q)y` is
+		// `xp qy` in both states, while `x${(f)"$(printf 'p\nq\n')"}y` is
+		// `xp qy` off and `xpy xqy` on. Only the one a `${…}` wraps moves.
+		//
+		// Read off the axis rather than off a stored bit, the arrangement
+		// `octalzeroes`, `debugbeforecmd` and `cbases` use — so `(setopt
+		// rcexpandparam)` stays in the subshell and `emulate -R` puts it
+		// back with the rest of the vector.
+		base: "rcexpandparam", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ParamExpansionDistributesOverTheWord == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ParamExpansionDistributesOverTheWord
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("rcquotes", false),
 	// Whether this shell reads its startup files, which zsh initializes from
 	// the invocation: `-f` and `--no-rcs` turn it off, and the name is the

@@ -142691,6 +142691,108 @@
         "TimedOut": false
       }
     },
+    "param/the-rc-expand-option-does-not-reach-a-command-substitution": {
+      "ash": {
+        "Stdout": "2:[xp][qy]",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "2:[xp][qy]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: x${(f)\"$(printf \"p\\nq\")\"}y: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "2:[xp][qy]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: x${(f)\"$(printf \"p\\nq\")\"}y: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "2:[xp][qy]",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: x${(f)\"$(printf \"p\\nq\")\"}y: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "2:[xp][qy]",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "2:[xp][qy]",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: syntax error at line 1: `\"$(printf \"p\\nq\")\"}y' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "2:[xp][qy]2:[xpy][xqy]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/the-rc-expand-option-is-the-default-for-an-unflagged-spec": {
+      "ash": {
+        "Stdout": "2:[x1][2y]",
+        "Stderr": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: syntax error: bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "2:[x1][2y]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: x${^^@}y: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "2:[x1][2y]",
+        "Stderr": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: x${^^@}y: bad substitution",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "2:[x1][2y]",
+        "Stderr": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: x${^^@}y: bad substitution",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "2:[x1][2y]",
+        "Stderr": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `^' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "2:[x1y][x2y]2:[x1][2y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/the-reeval-flag-is-not-a-word-expansion": {
       "ash": {
         "Stdout": "",

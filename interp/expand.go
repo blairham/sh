@@ -189,7 +189,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 				// span. See Semantics.EmptyListTakesTheWord.
 				b.listProducedNothing(inAQuotedRunOfItsOwn(w.Spans, i))
 			}
-			b.add(s, parts)
+			r.addSpan(&b, s, parts)
 			continue
 		}
 		substituted := false
@@ -272,7 +272,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 			b.separate(substituted)
 		}
 		fields, openEnd := r.splitFieldsAskEdge(text, ifs, set)
-		b.add(s, r.tildeFlagElements(s, head, fields))
+		r.addSpan(&b, s, r.tildeFlagElements(s, head, fields))
 		if openEnd {
 			b.separate(substituted)
 		}
@@ -437,10 +437,17 @@ func leadingSeparatorEdge(text, ifs string, ifsSet bool) bool {
 	return whitespace
 }
 
-// add puts the fields one span produced into the word, by whichever of the
-// two rules the span asks for.
-func (b *wordFields) add(s syntax.Span, parts []string) {
-	if rcExpandOn(s) {
+// addSpan puts the fields one span produced into the word, by whichever of
+// the two rules the span asks for.
+//
+// A method on the Runner rather than on the word, because since #4549 the
+// choice is not the span's alone: a spec that wrote no `^` takes the answer
+// from Semantics.ParamExpansionDistributesOverTheWord, which zsh's
+// `RC_EXPAND_PARAM` moves. Keeping the one call to Runner.rcExpandOn here is
+// what stops the option reaching some of the five places fields enter a word
+// and not the others.
+func (r *Runner) addSpan(b *wordFields, s syntax.Span, parts []string) {
+	if r.rcExpandOn(s) {
 		b.spread(parts)
 		return
 	}
@@ -817,7 +824,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// untouched: whether the target is read as fields at all is the
 			// redirection's own axis, and it is asked by the caller.
 			b.WriteString(r.joinUnsplitEscaped(s.Param, parts))
-			// add and not lay, though nothing can tell them apart here
+			// addSpan and not lay, though nothing can tell them apart here
 			// today: a target holding a distributive expansion is not one
 			// field under either rule, so redirectTarget's two readings
 			// already differ and the axis sends the one dialect that has
@@ -825,11 +832,11 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// survives. It stays add because the lay-in rule has one home,
 			// and the shape this repository keeps finding is the second
 			// copy that did not get the change.
-			f.add(s, parts)
+			r.addSpan(&f, s, parts)
 			// The words view takes the same parts: an array is several words
 			// however the splitting axis is answered, which is the half of
 			// this reading that is not the text view.
-			u.add(s, parts)
+			r.addSpan(&u, s, parts)
 			release()
 			continue
 		}
@@ -846,7 +853,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			continue
 		}
 		ifs, set := r.ifs()
-		f.add(s, r.splitFieldsAsk(text, ifs, set))
+		r.addSpan(&f, s, r.splitFieldsAsk(text, ifs, set))
 	}
 	plain = globUnescape(b.String())
 
@@ -3866,7 +3873,7 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 		// answer with counts 1 (#2326). Runner.expandingNestedInner is the
 		// flag both of those set — see countingElements — and it is the
 		// same reason it exempts an empty element from being dropped.
-		if !isArray || (!rcExpandOn(s) && !r.expandingNestedInner) {
+		if !isArray || (!r.rcExpandOn(s) && !r.expandingNestedInner) {
 			return nil, false
 		}
 	case n == 1 && !opReadsTheList(e.Op):

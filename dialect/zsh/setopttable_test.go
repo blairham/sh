@@ -48,12 +48,20 @@ import "testing"
 // exits rather than when the function returns. Until #4547 it fired at the
 // return in both states, including under `emulate sh`, which turns the option
 // on without anyone typing `setopt`.
+// `rcexpandparam` is the fifteenth: it moves
+// Semantics.ParamExpansionDistributesOverTheWord, which is whether `x${a}y`
+// on a two-element array is one word or two, and until #4549 it was one in
+// both states — with the `${^a}` spelling of the same distribution already
+// built and already working beside it. Like `posixtraps` it is read at the
+// moment the question is *asked* rather than at the definition: a word in a
+// function defined while the option was off distributes when the function is
+// called with it on, so the read is at expansion and not at parse.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
-		"posixtraps",
+		"posixtraps", "rcexpandparam",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -75,7 +83,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 130; recordedCount != want {
+	if want := 129; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

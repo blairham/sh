@@ -4896,6 +4896,10 @@ is a step *inside* the flag group:
 ### The count is parity, and it overrides the option
 
 `RC_EXPAND_PARAM` is the option that makes *every* expansion distributive.
+Implemented since #4549 as `Semantics.ParamExpansionDistributesOverTheWord`,
+written by zsh's `rcexpandparam` entry, and it reaches the same `spread` this
+flag reaches — the option is the **default** the parity below overrides, and
+not a second mechanism.
 The written `^` characters do not toggle it — they decide the answer outright,
 on the parity of how many were written, measured under the option both ways
 with `a=(1 2)`:
@@ -4909,7 +4913,34 @@ with `a=(1 2)`:
 | `x${^^^^a}y` | `x1`, `2y` | `x1`, `2y` |
 
 So one `^` is "yes" and two are "no" from either starting point, and only a
-`spec` with no `^` at all consults the option.
+`spec` with no `^` at all consults the option. The two diagonal cells are what
+say the switch and the flag are one mechanism rather than two combined: a
+written `^` distributes with the option off, and a written `^^` does not with
+it on, so neither an AND nor an OR of the two describes the table. The sharpest
+single word holds both readings at once — with the option on, `x${^^a}z${a}` is
+`x1`, `2z1`, `2z2`, the doubled caret laying its own span in while the plain
+span beside it distributes.
+
+**The option's subject is the parameter expansion and not the fields in the
+word.** Measured with two command substitutions producing two fields each in
+the same word shape:
+
+| written | `unsetopt rcexpandparam` | `setopt rcexpandparam` |
+| --- | --- | --- |
+| `x$(printf 'p q')y` | `xp`, `qy` | `xp`, `qy` |
+| `x${(f)"$(printf 'p\nq')"}y` | `xp`, `qy` | `xpy`, `xqy` |
+
+Same command, same field count, same prefix and suffix; only the one a `${…}`
+wraps moves. A table of array references alone cannot tell that reading from
+"any expansion that produced fields", because every row in such a table is a
+parameter expansion.
+
+Quoting is not a third question, for the reason the rows above give: the rule
+runs on the fields the span produced. `"x${a}y"` is the one word `x1 2y` in
+both states because the quotes joined the fields first, while `"x${a[@]}y"` is
+`x1y`, `x2y` under the option because `[@]` keeps its fields through them. And
+an empty list takes the word with it — `a=(); x${a}y` is no word at all under
+the option where it is the single word `xy` without it.
 
 ### Where the `^` may be written
 
@@ -4961,12 +4992,16 @@ unflagged reading beside it because the two field counts agree),
 `-crosses-two-expansions`, `-doubled-turns-it-off`,
 `-spreads-the-fields-it-was-given` and `-over-no-elements-is-no-word`.
 
+The option has two of its own since #4549:
+`param/the-rc-expand-option-is-the-default-for-an-unflagged-spec`, which puts
+the unflagged spelling and `${^^@}` in one row under `setopt rcexpandparam`
+so that neither an AND nor an OR of the switch and the flag would pass it,
+and `param/the-rc-expand-option-does-not-reach-a-command-substitution`, which
+is the pair that says the subject is the parameter expansion rather than the
+fields.
+
 ### What this implementation does not match
 
-- `RC_EXPAND_PARAM` is recorded-and-inert, so `setopt rcexpandparam` does not
-  make an unflagged expansion distributive. `GLOB_SUBST` had the same gap
-  behind `${~spec}` until #1734 and no longer does; the flag is what the wild
-  code writes either way.
 - A redirection target is one target here. zsh's `MULTIOS` opens one file per
   field, so `: > p_${^a}` creates a file per element there; this shell has no
   `MULTIOS`, and the divergence is that option's rather than this flag's.

@@ -4497,6 +4497,20 @@ type Runner struct {
 	// only the innermost is ever asked, and `eval` inside `eval` overwrites
 	// the outer mark with an equal one.
 	evalTextFloor int
+	// evalTextNumbersFromItself says the text that mark stands for starts
+	// its own line one rather than sitting at an offset into the caller's
+	// numbering — Semantics.EvalTextContinuesTheCallersLines, read once
+	// where the offset is settled rather than asked again at every reader.
+	//
+	// It is the half of the question `$LINENO` needs and the floor alone
+	// cannot answer. The floor says the line is in the text; this says
+	// whether the line the *function* around it was written on is a
+	// comparable origin. It is not, for text numbered from itself: the two
+	// numbers are lines of different texts, and subtracting one from the
+	// other took the parameter below nought (#4510).
+	//
+	// Saved and restored beside the floor, for the floor's reasons.
+	evalTextNumbersFromItself bool
 	// borrowed is the stack of text the shell is reading from somewhere
 	// other than the file it was handed: a file `.` read, or the string
 	// `eval` was given, innermost last.
@@ -4902,6 +4916,17 @@ func (r *Runner) builtinIsSpeaking() bool {
 // three cannot disagree.
 func (r *Runner) locationIsInsideEvalText() bool {
 	return r.evalTextFloor > 0 && r.evalTextFloor-1 == len(r.frames)-r.outsideCall
+}
+
+// locationIsInsideEvalTextNumberedFromItself is that question and one more:
+// the line is in the text, *and* the text starts its own line one rather than
+// continuing the caller's. See Runner.evalTextNumbersFromItself.
+//
+// The pair is what a reader wanting an *origin* asks, rather than the floor
+// alone — only a line in the caller's numbering can be measured against a
+// line of the caller's file.
+func (r *Runner) locationIsInsideEvalTextNumberedFromItself() bool {
+	return r.locationIsInsideEvalText() && r.evalTextNumbersFromItself
 }
 
 // locationNameAndLine is the pair a location is written from: the name that

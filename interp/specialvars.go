@@ -125,11 +125,40 @@ func (r *Runner) ensureSpecials() {
 			// itself: measured on zsh 5.9.2, `$LINENO` on the first line of
 			// such a file is 1 and not the offset into the function (#2037).
 			//
+			// And text `eval` is running, where that text is a place of
+			// its own, is the third kind of location and not the second:
+			// its lines are numbered from the text, so the line the
+			// *function* was written on in the outer file is not a
+			// comparable origin and subtracting it takes the answer below
+			// nought. Measured 2026-09-26 on zsh 5.9.2, `-f` over a script
+			// file whose line 3 is `g(){ eval 'echo G=$LINENO'; }`: the
+			// reference reads 1 and this read -2 (#4510).
+			//
+			// The same question the *diagnostic* from such a line already
+			// asks first — locationNameAndLine puts
+			// Diagnostics.LocationNamesTheEvalText ahead of the function
+			// rule, which is why `(eval):2:` was right on the case whose
+			// `$LINENO` was negative. Two readers of one location must not
+			// disagree about which text it is in.
+			//
+			// A frame above the mark ends it, so a function *called* from
+			// evaluated text counts from its own definition as usual:
+			// measured on the same reference, `h(){ eval 'k(){ echo
+			// D=$LINENO; }\nk'; }` reads 0, as it does here.
+			//
+			// Nothing is asked where the dialect keeps the caller's
+			// location for evaluated text — zsh's `unsetopt evallineno`,
+			// which turns the text's own numbering off — because no mark is
+			// set there and the line is the caller's already: the same
+			// script under that option reads 0 in both shells.
+			//
 			// lineNow rather than r.line, for the one construct that has
 			// not advanced it yet: see
 			// Semantics.CaseSubjectKeepsThePreviousLine.
 			at := r.lineNow()
-			if r.locationIsInsideAFunctionBody() && r.funcLine > 0 &&
+			if r.locationIsInsideAFunctionBody() &&
+				!r.locationIsInsideEvalTextNumberedFromItself() &&
+				r.funcLine > 0 &&
 				r.ask(r.sem().LinenoCountsFromTheFunction, "`$LINENO` inside a function counting from it") {
 				return strconv.Itoa(at - r.funcLine)
 			}

@@ -277,10 +277,14 @@ gate — the only one.**
 **There is no `lint` target, and you must never run `golangci-lint`
 yourself.** Not `go tool golangci-lint run`, not wrapped in a script, not
 "just once to check before I commit". It runs in exactly two places, and
-both of them come to you: a **pre-commit hook**, which reports what the
-commit introduces (`--new-from-rev HEAD`), and the **`Lint` job in CI**,
-which grades the whole tree and is the required check. A run you start by
-hand tells you nothing one of those would not tell you first.
+it comes to you: the **`Lint` job in CI**, which grades the whole tree and
+is the required check. A run you start by hand tells you nothing it would
+not tell you first.
+
+**The pre-commit hook that used to run it is gone**, removed at the
+maintainer's instruction on 2026-09-26. Lint is a CI-only step now, so the
+first lint feedback on a change arrives after you push: push early and read
+the `Lint` job rather than trying to pre-empt it locally.
 
 The target was deleted rather than documented-as-discouraged because
 discouragement did not work: the sentence it replaced said "when in doubt
@@ -430,12 +434,12 @@ fault shows only in a real terminal, use the pty harness and say so.
   against gofumpt's 1s.
 - **Linter**: golangci-lint v2, also `go tool`-pinned, config in
   `.golangci.yml` — the same file in every Go repository here. **It is
-  invoked by the pre-commit hook and by CI's `Lint` job, and never by
-  you**; see *Make targets* above for why there is no `lint` target and
-  why you must not start one. The hook runs it as `go tool`, so the pin
-  in `go.mod` is the single source of truth and the hook, `make fmt` and
-  CI cannot drift onto different versions. Two settings in that file matter. `run.concurrency`
-  bounds the footprint, and is the dial to turn if lint is too heavy.
+  invoked by CI's `Lint` job and never by you, and since 2026-09-26 not by
+  a pre-commit hook either**; see *Make targets* above for why there is no
+  `lint` target and why you must not start one. CI runs it as `go tool`, so
+  the pin in `go.mod` is the single source of truth and `make fmt` and CI
+  cannot drift onto different versions. `run.concurrency` in that file
+  bounds the footprint on the runner.
   `run.allow-parallel-runners` clears the `$TMPDIR` file lock that
   otherwise makes the second concurrent run *refuse* — which used to fail
   a commit for a reason unrelated to the commit, since several worktrees
@@ -504,17 +508,19 @@ cannot.
 
 **Local, on every commit.** The hooks in `.pre-commit-config.yaml`:
 hygiene, secrets, license headers, `go mod tidy`, the toolchain-pin
-invariant, the conflict-marker scan, misspell over prose, gofumpt, and
-golangci-lint (`run --new-from-rev HEAD`). It is the only feedback that arrives
-before the code leaves the machine.
+invariant, the conflict-marker scan, misspell over prose, and gofumpt. It
+is the only feedback that arrives before the code leaves the machine.
 
-`--new-from-rev HEAD` scopes the *report* to what this commit introduces,
-so you are not shown the repository's backlog. It does not scope the
-*work*: golangci-lint type-checks the whole module either way, which is the
-cost #1495 measured at ~3GB and 300% CPU. `run.concurrency` in
-`.golangci.yml` is the dial that bounds it, and
-`run.allow-parallel-runners` is what keeps several worktrees committing at
-once from failing each other'"'"'s commits on a file lock.
+**golangci-lint is not among them any more.** It ran here until 2026-09-26
+as `run --new-from-rev HEAD`, which scoped the *report* to what a commit
+introduced but not the *work*: golangci-lint type-checks the whole module
+either way, the cost #1495 measured at ~3GB and 300% CPU. With several
+agents committing in parallel worktrees that took a single commit to ~6
+minutes and drove the machine past load 13. It was removed at the
+maintainer's instruction; lint is a CI-only step now. `run.concurrency` in
+`.golangci.yml` still bounds the footprint on the runner, and
+`run.allow-parallel-runners` no longer has commits to keep off each
+other's file lock.
 
 **The formatter is back, and this file used to be wrong about it twice
 over.** The hook that applied gofumpt and goimports went with golangci-lint

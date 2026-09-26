@@ -10592,6 +10592,62 @@ type Semantics struct {
 	// question, and dash and ash have no tables to put one in.
 	BareElementsInATableLiteralAreEachOneValue Answer
 
+	// BareElementsInATableLiteralMustPairOff refuses a keyed literal whose
+	// bare elements come to an **odd** number of fields, where the other
+	// reading takes the unpaired last field as a key and gives it an empty
+	// value.
+	//
+	// The noun is the **field count**, and it is the count *after* expansion.
+	// Measured 2026-09-26 on zsh 5.9.2 (`-f`, a script file) and bash 5.3.20
+	// (`--norc --noprofile`, a script file):
+	//
+	//	                                      zsh 5.9.2        bash 5.3.20
+	//	typeset -A h=(a 1 b)                  refused, fatal   [b]="" [a]="1"
+	//	typeset -A h=(a)                      refused, fatal   [a]=""
+	//	typeset -A h=(a 1 b 2)    — control   two elements     two elements
+	//	typeset -A h=()           — control   empty table      empty table
+	//	typeset -A h=(a 1 a 2)    — control   one element, 2   one element, 2
+	//
+	// The two controls are what pin it to the arity: the even list and the
+	// empty literal are already right in both columns, and a **repeated key**
+	// is legal in both — the later value wins and the count is one — so a
+	// check written on the key set rather than on the field count would
+	// refuse a line every column takes.
+	//
+	// **The written word count is not the noun**, and the pair that says so
+	// holds it fixed at one: with `words=(a 1 b)`, `typeset -A h=($words)` is
+	// refused in zsh, and with `words=(a 1 b 2)` the same line is taken. One
+	// element is written either way, so the count that decides is the one the
+	// elements came to. That is the case a script actually hits — a literal
+	// spelled with an odd number of words is a typo, a list handed in from
+	// somewhere else is a bug — and it is why this is asked here rather than
+	// over the source.
+	//
+	// **Nor is it the letter on the command.** `typeset -A h; h=(a 1 b)` is
+	// refused in the same words, so the target's *kind* decides and not the
+	// declaration: the same three words assigned to a name that is not a
+	// table — `h=(a 1 b)` with no table attribute — is an ordinary
+	// three-element array in every column. The append spelling `h+=(a 1 b)`
+	// is refused too, and so is a produced table's: `aliases=(a 1 b)` earns
+	// the sentence rather than defining an alias.
+	//
+	// The refusal costs **the whole literal and the input**, and it is asked
+	// before anything is stored, which is two measured things rather than
+	// one. With `typeset -A h=(x 9)` in front of it, `eval "h=(a 1 b)"`
+	// leaves `x` standing at `9` — so the table is not emptied first — and a
+	// fresh `eval "typeset -A h=(a 1 b)"` leaves `h` declared, associative
+	// and empty, which is the declaration taking effect and the assignment
+	// not. Outside `eval` nothing after it runs: the shell exits 1, and
+	// inside a function the function's name goes in front of the sentence and
+	// the shell still leaves. Diagnostics.UnpairedTableLiteralElements is the
+	// wording.
+	//
+	// unanswered in ksh93, dash and ash, for the reason the field above
+	// gives: ksh93 refuses a bare element in a table literal outright — see
+	// BareElementsInATableLiteralEndTheScript — so it never reaches an
+	// arity, and dash and ash have no tables (#4594).
+	BareElementsInATableLiteralMustPairOff Answer
+
 	// MixedTableLiteral is what a table literal mixing `[key]=` heads with bare
 	// words means, and the panel gives it three readings — two here and one that
 	// never reaches this file, because it is refused while the program is read.

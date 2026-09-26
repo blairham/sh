@@ -747,6 +747,12 @@ func Semantics() interp.Semantics {
 	// keeps the star. See
 	// Semantics.BareElementsInATableLiteralAreEachOneValue.
 	s.BareElementsInATableLiteralAreEachOneValue = interp.Yes
+	// And an odd number of them is taken rather than refused: the last field
+	// becomes a key with nothing under it. Measured 2026-09-26 on 5.3.20,
+	// `declare -A h=(a 1 b); declare -p h` is `declare -A h=([b]="" [a]="1" )`
+	// at status 0, with the line after it run. See
+	// Semantics.BareElementsInATableLiteralMustPairOff.
+	s.BareElementsInATableLiteralMustPairOff = interp.No
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
 	// A `[k]+=` element of a replacing keyed literal joins the value the

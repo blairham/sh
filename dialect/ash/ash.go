@@ -875,8 +875,10 @@ func Semantics() interp.Semantics {
 	// unanswered StoreOperandWholeArraySubscriptOverATable: no tables
 	// either, so the keyed half is one further out of reach again.
 	s.StoreOperandTakesASubscript = interp.No
-	// unanswered BareElementsInATableLiteralAreEachOneValue: a keyed literal
-	// needs a table to be written over, and this shell has none.
+	// unanswered BareElementsInATableLiteralAreEachOneValue,
+	// BareElementsInATableLiteralMustPairOff: a keyed literal needs a table
+	// to be written over, and BusyBox has none — the parentheses are a
+	// syntax error before anything could count the words in them.
 	// And `getopts` no more than `read` does: this shell has no arrays
 	// (#3555).
 	s.GetoptsOperandTakesASubscript = interp.No

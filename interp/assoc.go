@@ -816,6 +816,14 @@ func (r *Runner) tableBecomesAnIndexArray(name string, appendTo bool) bool {
 // dialect that reads a subscript as a key stores `a=([k]=v)` here, and it must
 // not expand the elements a second time to do so.
 func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, refuseBare bool) {
+	// Before anything is written, and before the produced-table refusal below
+	// it, because the arity is a property of the literal and not of what is
+	// behind the name: measured, `aliases=(a 1 b)` earns the same sentence a
+	// stored table's does. See tableLiteralPairsOff for what the refusal must
+	// leave standing.
+	if !r.tableLiteralPairsOff(parsed) {
+		return
+	}
 	_, produced := r.DynamicAssocs[name]
 	if produced && !appendTo {
 		if _, writable := r.dynamicAssocWriters[name]; !writable {
@@ -944,6 +952,52 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 		}
 		r.setAssocElem(name, pairs[i], value)
 	}
+}
+
+// tableLiteralPairsOff reports whether a keyed literal's bare elements may be
+// paired off as key, value, key, value — and writes the refusal where they may
+// not.
+//
+// The count is over the **fields the elements came to** rather than over the
+// elements themselves, because one element may come to any number of fields:
+// with `words=(a 1 b)`, `typeset -A m=($words)` is one element and three
+// fields, and it is the three that decides. See
+// Semantics.BareElementsInATableLiteralMustPairOff, where the pair holding the
+// written count fixed at one is.
+//
+// An element carrying a `[key]=` head contributes no field and is not counted:
+// it names where its value goes and has no partner to find. So a literal with
+// no bare element in it — `m=([k]=v)`, and the empty `m=()` — counts zero,
+// which is even, and the axis is not asked at all. Nor is it asked for an even
+// count, since every column pairs one off.
+//
+// Called before the table is emptied and before the first element is stored,
+// which is what the refusing column was measured doing: with `typeset -A
+// h=(x 9)` in front of it, `eval "h=(a 1 b)"` leaves `x` at `9`. The expansion
+// has already happened by then — the elements are `parsed` — which is the same
+// order indexArrayIntoATable is in, and the same order zsh writes a `$(…)`
+// element's side effect before its complaint in.
+func (r *Runner) tableLiteralPairsOff(parsed []literalElem) bool {
+	fields := 0
+	for _, e := range parsed {
+		if e.subscripted {
+			continue
+		}
+		fields += len(e.fields)
+	}
+	if fields%2 == 0 {
+		return true
+	}
+	if !r.ask(r.sem().BareElementsInATableLiteralMustPairOff,
+		"a keyed literal whose bare elements come to an odd number of fields being refused") {
+		// Taken, the last field becoming a key with nothing under it — or
+		// unanswered, in which case ask has said so and stopped the command,
+		// and there is nothing to store into.
+		return !r.unspecified
+	}
+	r.fatal("%s\n", Wording(r.diag().UnpairedTableLiteralElements,
+		"bad set of key/value pairs for associative array"))
+	return false
 }
 
 // tableLiteralKeyIsThere reports whether an **empty** key a table literal named

@@ -49,6 +49,34 @@ import "sync/atomic"
 // The deviation is recorded rather than hidden: a real shell's `$!` is a
 // process that exists and can be found in `ps`, and this one cannot. See
 // docs/spec/semantics.md.
+//
+// # Why it is not a pid, decided rather than outstanding
+//
+// #4480 asked for one, on the ground that a number outside this shell reaches
+// nothing: `kill -0 "$!"` from a sibling process, a pid written to a file, a
+// supervisor reading it. All three are true and none of them is reachable
+// from here.
+//
+// A real shell answers `: &` with a pid because it **forks**, and the fork is
+// the whole of the answer: the child is a copy of the shell, so the builtin
+// runs in a process of its own with nothing to arrange. Go has no such call —
+// only fork-and-exec — so this shell cannot produce a process that is a copy
+// of itself, and a Runner is embedded in other programs besides, where
+// starting a process for `: &` is exactly the thing the core may not do (see
+// the rule in AGENTS.md, and interp/runner.go on `exec` and `kill`).
+//
+// The one thing that *would* give a real number is a placeholder process kept
+// alive for the job's lifetime, and that is worse than the number here rather
+// than better: it exists, so `kill "$!"` reaches it and reports success, and
+// the job it was supposed to name goes on running. A number that reaches
+// nothing fails honestly.
+//
+// The measurement the issue rests on is also not quite right, and it is worth
+// writing down because it reads as an argument for a constant: the value is a
+// counter and not a constant. `: & print $!` three times over answers
+// 1073741825, 1073741826 and 1073741827 — measured 2026-09-26 on cmd/zsh —
+// so two such jobs are distinguishable from each other, which is the property
+// #2650 was about. What is fixed is the *base*, and it is fixed on purpose.
 
 // inventedJobIdentBase is where invented job identities start: above every
 // process id any Unix can issue, for the reason given above.

@@ -4882,6 +4882,124 @@ type Semantics struct {
 	// real shells deliver to all of them.
 	KillKeepsGoingPastAnOperandThatIsNotAPid Answer
 
+	// KillKeepsGoingPastAJobSpecThatNamesNoJob carries on to the operands
+	// behind a `%` spec that names no job, rather than ending the builtin
+	// there.
+	//
+	// The neighbor of KillKeepsGoingPastAnOperandThatIsNotAPid and **not the
+	// same question**, which is what makes it an axis of its own: the two
+	// have different column patterns, and a pattern is what an axis is.
+	// Carrying on past a word that is not a pid is yes in bash, zsh and
+	// BusyBox ash; carrying on past a missing job is yes in bash and zsh and
+	// no in BusyBox ash and dash. Widening the first to cover the second
+	// would have moved the ash row to an answer it does not hold (#4648
+	// declined it for that reason, and #4666 is this half).
+	//
+	// Measured 2026-09-26, with the job number deliberately absent so that
+	// nothing could be delivered. References verified with `go version -m` →
+	// *not a Go executable*: `/opt/homebrew/bin/bash --norc --noprofile`
+	// (5.3.20), `/opt/homebrew/bin/zsh -f` (5.9.2), `/bin/dash` (0.5.12), and
+	// BusyBox v1.37.0 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b.
+	//
+	//	                 kill %99 a          kill a %99
+	//	bash 5.3.20      2 lines, status 1   2 lines, status 1
+	//	zsh 5.9.2        2 lines, status 2   2 lines, status 2
+	//	dash 0.5.12      1 line,  status 2   1 line,  status 2
+	//	BusyBox 1.37.0   1 line,  status 2   1 line,  status 2
+	//
+	// Read off the count of lines and not the status, for the reason the axis
+	// above gives: dash's 1 and BusyBox's 2 are the same behavior differently
+	// scored, and KillStatus already holds the scoring.
+	//
+	// The BusyBox rows are the same either way for a reason of their own and
+	// not because it stops at the spec — it reads the `%` operands *first*,
+	// so `a` is never looked at. See
+	// KillReadsJobSpecsBeforeTheOtherOperands, which is that half.
+	//
+	// unpinned ksh: ksh93u+ 2012-08-01 segfaults on a `%` spec that names no
+	// job — `kill %99` alone is status 139 with no output — so there is no
+	// run of it that reaches this. Measured the same day on `/bin/ksh`.
+	KillKeepsGoingPastAJobSpecThatNamesNoJob Answer
+
+	// KillReadsJobSpecsBeforeTheOtherOperands resolves every `%` operand
+	// before any operand is acted on, so a spec that names no job is reported
+	// and the builtin ends with nothing in front of it having been looked at
+	// and nothing having been delivered.
+	//
+	// An *ordering* rule rather than an answer to "does it carry on", which
+	// is why it is here rather than folded into the axis above: the two are
+	// asked at different moments and BusyBox ash is the only column that
+	// holds this one.
+	//
+	// Measured 2026-09-26 in the pinned image named above, BusyBox v1.37.0:
+	//
+	//	kill a %99                   `%99: no such job` alone, status 2
+	//	kill 999999 %99              the same line alone, status 2
+	//	sleep 30 & kill $! %99       the same line alone, status 2 —
+	//	                             and `jobs` still lists the job Running
+	//
+	// The third row is the one that says the rule is about *delivery* and not
+	// only about diagnostics: the operand in front resolved to a live process
+	// and nothing was sent to it. And `sleep 30 & kill a %1`, where the spec
+	// does name a job, reports `invalid number 'a'` at 1 — so the pre-pass
+	// ends the builtin only when a spec names nothing.
+	//
+	// The other four columns look at the operands in the order they were
+	// written. bash 5.3.20 and zsh 5.9.2 report `a` and then `%99`; dash
+	// 0.5.12 reports `a` and stops. **ksh93 is measured here rather than
+	// unanswered**, which is worth saying because the axis above could not
+	// be: `kill a %99` on /bin/ksh is `a: Arguments must be %job, process
+	// ids, or job pool names` at status 1, and a shell that had read the spec
+	// first would have segfaulted before writing it.
+	KillReadsJobSpecsBeforeTheOtherOperands Answer
+
+	// JobsAtExitSentenceFollowsTheTableOrder chooses between the two
+	// sentences a leaving shell writes about its jobs by reading the **first
+	// unfinished job in the table**, rather than by preferring a stopped one
+	// wherever it sits.
+	//
+	// Measured 2026-09-26 on a pseudo-terminal, two jobs with the order
+	// swapped between the rows, `sleep 30 &` twice and one `kill -STOP`.
+	// References verified with `go version -m` → *not a Go executable*:
+	// `/opt/homebrew/bin/zsh` 5.9.2, `/opt/homebrew/bin/bash` 5.3.20 with
+	// `shopt -s checkjobs`, `/bin/dash` 0.5.12 and `/bin/ksh` 93u+
+	// 2012-08-01 with `set -m`, and BusyBox v1.37.0 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b:
+	//
+	//	                 %1 running, %2 stopped     %1 stopped, %2 running
+	//	zsh 5.9.2        you have running jobs.     you have suspended jobs.
+	//	bash 5.3.20      There are stopped jobs.    There are stopped jobs.
+	//	dash 0.5.12      You have stopped jobs.     You have stopped jobs.
+	//	ksh93u+          You have stopped jobs      You have stopped jobs
+	//	BusyBox 1.37.0   You have stopped jobs.     You have stopped jobs.
+	//
+	// Three jobs confirm zsh rather than only two: `run, stop, run` is
+	// `you have running jobs.` and `stop, run, stop` is `you have suspended
+	// jobs.`
+	//
+	// **It is not the current job**, which is the other candidate noun and
+	// the more plausible one: stopping `%2` makes `%2` current in zsh, and
+	// the first row still says *running*. It is not interactivity either —
+	// the same pair of answers comes out of a `zsh -fm` script.
+	//
+	// The three columns with only a stopped sentence are measured rather
+	// than derived from having one. The row that decides it is the first:
+	// with a running job in front and a stopped one behind, a shell reading
+	// the table would have reached the running job and had nothing to say,
+	// and all three say the stopped sentence instead.
+	//
+	// A job whose kind this shell is **not** checking is passed over rather
+	// than counted, which is measured in the one column that can be asked:
+	// `unsetopt checkrunningjobs` at a zsh session, running job in front,
+	// draws `you have suspended jobs.` So "the first job" means the first
+	// job this shell would have said anything about.
+	//
+	// Asked only where the two readings part, which is narrower than "one of
+	// each": a stopped job in front of a running one draws the stopped
+	// sentence either way, so only a running job in front is a question.
+	JobsAtExitSentenceFollowsTheTableOrder Answer
+
 	// OperatorDistributesOverTheFieldList runs a trim or a replacement over
 	// each field of `$@` rather than over the whole list once.
 	//

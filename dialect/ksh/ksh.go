@@ -2608,6 +2608,21 @@ func Semantics() interp.Semantics {
 	// one line and stops, where `kill 999999 999998` writes both — so the
 	// stop is the malformed *word* and not a failure of any kind.
 	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.No
+	// unanswered KillKeepsGoingPastAJobSpecThatNamesNoJob: ksh93u+
+	// 2012-08-01 segfaults on a `%` spec that names no job — `kill %99` on
+	// /bin/ksh is status 139 with no output at all — so no run of it reaches
+	// the question. Measured 2026-09-26 (#4666).
+	// The operands are read in the order they were written, and the segfault
+	// is what says so: `kill a %99` is the complaint about `a` at status 1,
+	// where a shell that had read the spec first would have crashed before
+	// writing it.
+	s.KillReadsJobSpecsBeforeTheOtherOperands = interp.No
+	// This shell has only the stopped sentence, and that is measured
+	// rather than read off the absence of the other one: with a running
+	// job in *front* of a stopped one it still says it has stopped jobs,
+	// where a shell reading the table would have reached the running job
+	// and had nothing to say. Measured 2026-09-26 on ksh93u+ (#4544).
+	s.JobsAtExitSentenceFollowsTheTableOrder = interp.No
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// bash's answer here: OPTIND names the word until its last letter.

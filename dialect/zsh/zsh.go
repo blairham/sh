@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"syscall"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -3183,6 +3184,17 @@ func Semantics() interp.Semantics {
 	// `illegal pid` lines and reports 3, `kill a b c d` four and 4. The
 	// count is this shell's KillStatus; the four lines are this axis.
 	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.Yes
+	// And past a `%` spec that names no job: `kill %99 a` and `kill a %99`
+	// are both two lines, at status 2 — the count of operands that failed,
+	// which is this shell's rule already. Measured 2026-09-26 (#4666).
+	s.KillKeepsGoingPastAJobSpecThatNamesNoJob = interp.Yes
+	// The operands are read in the order they were written.
+	s.KillReadsJobSpecsBeforeTheOtherOperands = interp.No
+	// The jobs-at-exit sentence is chosen by the first job in the table and
+	// not by preferring a stopped one: with `%1` running and `%2` stopped
+	// this shell says `you have running jobs.`, and the other way about it
+	// says `you have suspended jobs.` Measured 2026-09-26 (#4544).
+	s.JobsAtExitSentenceFollowsTheTableOrder = interp.Yes
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// OPTIND names the word until its last letter has been read.
@@ -4665,6 +4677,22 @@ func Diagnostics() interp.Diagnostics {
 		// have written `Terminated: 15` (#4508).
 		JobSignaled: "%[1]s",
 		JobStopped:  "suspended",
+		// The two jobs-at-exit sentences are located on the script route —
+		// `<script>:3: you have running jobs.` — where a session writes
+		// `zsh:` with no line, and a held `exit N` there leaves with 1
+		// rather than with N. Measured 2026-09-26; see the fields (#4545).
+		JobsAtExitLocatedInAScript: true,
+		HeldExitInAScriptStatus:    1,
+		// And the three stops that are not ^Z carry a word of their own.
+		// Measured 2026-09-26 — see Diagnostics.JobStoppedBySignal for the
+		// table and for why this is keyed on the signal rather than worded
+		// with SignalDescriptions: `(signal)` is not what this shell calls
+		// SIGSTOP anywhere else (#4527).
+		JobStoppedBySignal: map[syscall.Signal]string{
+			syscall.SIGSTOP: "suspended (signal)",
+			syscall.SIGTTIN: "suspended (tty input)",
+			syscall.SIGTTOU: "suspended (tty output)",
+		},
 		// ^Z is a sentence rather than a listing row here, and the shell
 		// names itself in it: `zsh: suspended  sleep 40`, two spaces, no job
 		// number. Under a newline of its own, as bash's is.

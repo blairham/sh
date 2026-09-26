@@ -380,9 +380,18 @@ type Runner struct {
 
 	// JobEnded, when set, is called the moment a background job finishes, so
 	// that the shell around this one can say so without waiting for the next
-	// prompt. It is how Semantics.FinishedJobNoticeArrivesAtOnce is served,
-	// and it is called only where that axis says yes and there is somebody to
-	// tell — see Runner.NotifiesAsAJobEnds.
+	// prompt. It is how Semantics.FinishedJobNoticeArrivesAtOnce is served.
+	//
+	// **It is poked for every background job, and answering it is the front
+	// end's decision.** Whether this dialect announces a finished job at once
+	// is Runner.NotifiesAsAJobEnds, and that has to be asked on the front
+	// end's own goroutine, because the option and the semantics vector it
+	// reads are moved — by `set -m`, by `setopt notify` — while jobs are
+	// running. A front end that holds the notice for the next prompt arms
+	// nothing, and a poke nobody is waiting for is dropped; see
+	// repl/jobnotify.go, which asks the question each time round the wait so
+	// that an option moved at the prompt still lands. Asking it here as well
+	// was #4576.
 	//
 	// **It carries nothing and renders nothing.** The job table, the job
 	// numbers and the `+`/`-` markers are the shell's goroutine's, and this
@@ -2867,6 +2876,28 @@ type Runner struct {
 	// of the input — see Runner.lastStatementLine. One diagnostic names it:
 	// see Diagnostics.CoprocessAlreadyRunningNamesTheLastStatementEntered.
 	enteredLine int
+	// jobEnded is poked, from the goroutine a background job ended on, so
+	// that a shell **blocked** on something else can notice.
+	//
+	// It carries nothing and renders nothing, exactly as Runner.JobEnded
+	// does and for the same reason: the job table is the shell goroutine's,
+	// so the far end says only *look again*. It is the inward-facing half of
+	// that pair — JobEnded wakes a front end that is idle with a descriptor
+	// in its hand, and this wakes the shell itself while it is waiting for a
+	// foreground command or for a `wait`. See Runner.jobNoticeWake (#4531).
+	//
+	// Buffered at one and poked without blocking: a second job ending before
+	// the first note is taken is the same news, and the reader asks the job
+	// table rather than reading anything out of the channel.
+	//
+	// A channel value, so Runner.clone shares it rather than copying a
+	// pointer to it — a subshell's jobs are its own, but a note it sends
+	// reaches the shell that is waiting.
+	jobEnded chan struct{}
+	// lastStmtLine is the line of the last statement this shell started,
+	// background jobs included — see where it is written for why that is not
+	// Runner.line. Read only by the two sentences about abandoned jobs.
+	lastStmtLine int
 	// caseSubjectPrev is that line while a `case` subject is being expanded,
 	// and zero everywhere else. Runner.lineNow is where it is taken up; it
 	// is held here rather than written into line so that a subject reading
@@ -5554,7 +5585,7 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// is the order the sentences are written in — measured 2026-09-25,
 	// `zsh -fm` over a script with a running job writes `you have running
 	// jobs.` and then `warning: 1 jobs SIGHUPed` (#4542).
-	r.tellOfJobsLeftBehind()
+	r.tellOfJobsLeftBehind(false)
 	// Which side of the EXIT trap the hangup falls on is the dialect's, and
 	// the two shells that hang up at all answer it differently: bash writes
 	// the trap's line and *then* the job's handler sees the signal, and zsh
@@ -6005,6 +6036,15 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	// inside an `if` condition, say) leaves nothing behind for the statement
 	// after it.
 	r.unjudged = false
+	// And where this statement is, which is not Runner.line: that is set by
+	// the *command* dispatcher, and a `&` statement never reaches it in this
+	// shell — the clone runs the command and records the line on its own
+	// copy. A script whose last statement is a background job therefore left
+	// `line` at whatever the statement before it had, or at nought. The two
+	// sentences a leaving shell writes about its jobs are located from here
+	// for exactly that reason: `sleep 3 &` as the whole of a script is the
+	// ordinary way to reach them. See Runner.jobsAtExitName.
+	r.lastStmtLine = r.lineOf(st.Pos())
 	// Counted before the handlers run, so the compound this statement may be
 	// can tell afterwards whether its body ran a statement of its own. See
 	// Runner.stmtSerial.
@@ -8660,7 +8700,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	var w Wait
 	for {
 		var err error
-		w, err = r.WaitForCommand(pid)
+		w, err = r.awaitForegroundCommand(pid)
 		if err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 			r.diagf("%s: %v\n", argv[0], err)
@@ -12170,4 +12210,55 @@ func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
 	}
 	return r.ask(r.sem().ArrayLiteralOperandRetypesAFrozenScalar,
 		"a declaration's array literal replacing a frozen scalar")
+}
+
+// awaitForegroundCommand is Runner.WaitForCommand with a seam in it for a
+// background job that finishes while the foreground command is still running.
+//
+// The dialect that reports a finished job the moment it ends reports it *in
+// the middle of* a foreground command — measured 2026-09-25 on zsh 5.9.2,
+// `sleep 0.3 &` followed by `sleep 1.5; print FGDONE` writes `[1]  + done
+// sleep 0.3` and then `FGDONE`, a second apart. This shell wrote it after
+// `FGDONE`, because the shell is inside the caller's wait and a wait on one
+// pid does not come back for another process (#4531).
+//
+// So the wait is moved off this goroutine and selected over. Three things make
+// that safe rather than merely workable:
+//
+//   - The hook is **captured before the goroutine starts**, so nothing over
+//     there reads a field of this Runner. wait4 on a pid is not tied to the
+//     goroutine that calls it.
+//   - The notice is written **here**, on the shell's own goroutine, which is
+//     the rule Runner.JobEnded states in as many words: the job table, the job
+//     numbers and the `+`/`-` markers belong to this goroutine, and the note
+//     carries nothing.
+//   - This returns only once the wait has answered, so the goroutine never
+//     outlives the call.
+//
+// And it is reached at all only where the axis says the notice arrives at
+// once, which is one dialect of five with an option turned on in a session.
+// Every other route takes the same single call it always took.
+func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
+	note := r.jobNoticeWake()
+	wait := r.WaitForCommand
+	if note == nil {
+		return wait(pid)
+	}
+	type answer struct {
+		w   Wait
+		err error
+	}
+	answered := make(chan answer, 1)
+	go func() {
+		w, err := wait(pid)
+		answered <- answer{w, err}
+	}()
+	for {
+		select {
+		case a := <-answered:
+			return a.w, a.err
+		case <-note:
+			r.writeFinishedJobNotices()
+		}
+	}
 }

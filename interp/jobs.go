@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -166,6 +167,14 @@ type Job struct {
 	// has said nothing about it yet has nothing to correct.
 	reportedState jobReportState
 
+	// stopExpected says this shell has sent this job a signal whose default
+	// action is to stop it, and has not yet been told that it stopped.
+	//
+	// Written and read only on the shell's own goroutine — `kill` sets it and
+	// the way out of a script reads it — so it needs no synchronization of
+	// its own. It exists because `kill(2)` returns when the signal is *sent*:
+	// the note is owed and has not arrived. See Runner.awaitExpectedStops.
+	stopExpected bool
 	// noticedStop says the shell has already taken that note into the job's
 	// own Stopped and StopSig. Written only on the shell's own goroutine,
 	// which is what keeps `bg` from being undone: a job the script resumed
@@ -777,10 +786,17 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	//
 	// Nothing is lost by carrying it. What the hook does once its session has
 	// gone is the wake's own business, and the wake is built to be poked
-	// after it is closed. The *axis* is still asked at the moment the job
-	// ends, because `unsetopt notify` moves under a running session — see
-	// notifyJobEnded, which is where that question stayed.
+	// after it is closed. The *axis* is not asked here and is not asked from
+	// the job either: it moves under a running session — `unsetopt notify` —
+	// so it is asked by the front end, late, on the goroutine that owns it.
+	// See notifyJobEnded and Runner.NotifiesAsAJobEnds (#4576).
 	notifyEnded := r.JobEnded
+	// And this shell's own note, for the same reason and read on the same
+	// goroutine: a shell blocked on a foreground command or on a `wait` is
+	// not idle, so the front end's wake reaches nobody. Made here rather
+	// than lazily on the far side, because the far side is the job's
+	// goroutine. See Runner.jobNoticeWake.
+	endedNote := r.ownJobEndedNote()
 	// The job is finished however the goroutine ended, which is what keeps an
 	// interpreter bug on it from costing more than the job. The shell is
 	// blocked on <-job.ready below and `wait` blocks on the same job
@@ -821,13 +837,17 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// releases a `wait` for this job and the arrival has to be there
 		// before the script gets past that. See Runner.jobReaped.
 		r.jobReaped(job, status, endSig)
-		// And the shell around this one is told, where its dialect reports a
-		// finished job the moment it ends rather than at the next prompt.
-		// Here rather than anywhere the shell's own goroutine runs, because
-		// this is the only place that knows the job has ended *while the
-		// shell is doing something else* — which is the whole of the
-		// difference. See Runner.notifyJobEnded.
+		// And the shell around this one is poked, so that a dialect which
+		// reports a finished job the moment it ends can look again. Here
+		// rather than anywhere the shell's own goroutine runs, because this
+		// is the only place that knows the job has ended *while the shell is
+		// doing something else* — which is the whole of the difference. What
+		// it says is "look again" and nothing more; whether anything is said
+		// on the screen is asked where the looking happens. See
+		// Runner.notifyJobEnded.
 		r.notifyJobEnded(notifyEnded)
+		// And the shell itself, where it is blocked rather than idle.
+		noteJobEnded(endedNote)
 		// After the job is finished rather than before it, so nothing can
 		// observe a pipe that has ended while the job that was writing to
 		// it is still marked as running.
@@ -924,6 +944,16 @@ func (r *Runner) canAnnounce() bool {
 // with the monitor off.
 //
 // Read rather than `ask`ed, for the reason the axis gives.
+//
+// **It must be called on the shell's own goroutine**, and it is the *only*
+// place this question is asked. All three of the things it reads belong to
+// that goroutine: `JobControl` is the front end's, `monitor` is moved by
+// `set -m` and `setopt monitor`, and the semantics vector is moved by
+// `setopt notify` — every one of them while background jobs are running.
+// notifyJobEnded used to ask the same question from a *job's* goroutine,
+// which made all three a read of state another goroutine writes with nothing
+// synchronizing the pair (#4576). Deleting that read is the fix; asking twice
+// was what made it possible.
 func (r *Runner) NotifiesAsAJobEnds() bool {
 	return r.JobControl && r.monitor && r.sem().FinishedJobNoticeArrivesAtOnce == Yes
 }
@@ -931,19 +961,75 @@ func (r *Runner) NotifiesAsAJobEnds() bool {
 // notifyJobEnded tells the shell around this one that a job has ended, on the
 // goroutine the job ended on.
 //
-// Guarded here rather than at the call site so that the question is asked
-// once, and so that a front end which wired the hook for a session cannot be
-// woken by a dialect that does not want it — `unsetopt notify` moves the axis
-// under a session that is already running, and this is read each time.
+// **It asks nothing.** A job's goroutine cannot read the shell's options or
+// its semantics vector, so the decision of whether a finished job is announced
+// at once is the front end's, taken on its own goroutine with
+// NotifiesAsAJobEnds — which is where repl already takes it, each time round
+// the wait, so that `unsetopt notify` under a running session still lands.
+// This used to ask as well, and the second copy of the question bought
+// nothing: a front end that never arms a wake is not woken by a poke, because
+// a poke nobody is waiting for is dropped.
 //
 // The hook itself is *handed in* rather than read off the Runner, because the
 // front end writes that field from its own goroutine when the session ends.
 // See where background takes it.
 func (r *Runner) notifyJobEnded(notify func()) {
-	if notify == nil || !r.NotifiesAsAJobEnds() {
+	if notify == nil {
 		return
 	}
 	notify()
+}
+
+// ownJobEndedNote is this shell's inward note, made on the shell's own
+// goroutine the first time a job is started.
+func (r *Runner) ownJobEndedNote() chan struct{} {
+	if r.jobEnded == nil {
+		r.jobEnded = make(chan struct{}, 1)
+	}
+	return r.jobEnded
+}
+
+// noteJobEnded pokes it, from the goroutine the job ended on.
+//
+// Dropped where one is already waiting, which is correct rather than merely
+// tolerable: the note says *look again*, and a reader that has not looked yet
+// is going to.
+func noteJobEnded(note chan struct{}) {
+	select {
+	case note <- struct{}{}:
+	default:
+	}
+}
+
+// jobNoticeWake is the channel a blocked shell watches for a finished job, or
+// nil where this shell holds the notice for the next prompt.
+//
+// Nil in four dialects of five and in every non-interactive route, and a nil
+// channel is never ready — so a `wait` in a script selects over exactly what
+// it selected over before this existed, and a foreground command is run
+// through exactly the wait it was run through before.
+//
+// Asked each time round rather than once, for the reason repl's jobWake gives:
+// `unsetopt notify` moves the axis under a session that is already running.
+func (r *Runner) jobNoticeWake() <-chan struct{} {
+	if !r.NotifiesAsAJobEnds() {
+		return nil
+	}
+	return r.jobEnded
+}
+
+// writeFinishedJobNotices says what is owed about the jobs that have ended,
+// on the shell's own goroutine.
+//
+// The same lines the next prompt would have written, written now — which is
+// what a dialect reporting a finished job *at once* means where the shell is
+// busy rather than idle. The front end writes these at a prompt and this
+// writes them where there is no prompt to wait for: the two never both write
+// a line, because FinishedJobNotices forgets what it reports.
+func (r *Runner) writeFinishedJobNotices() {
+	for _, line := range r.FinishedJobNotices() {
+		r.errf("%s\n", line)
+	}
 }
 
 // FinishedJobNotices is what to say about the jobs that have ended since it
@@ -1024,6 +1110,11 @@ func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted, s
 		r.noticeStoppedJob(j)
 		return 0, 0, false, true
 	}
+	// The job this wait was for has just ended, and the dialect that reports
+	// a finished job the moment it ends reports this one **before the wait
+	// returns** — measured 2026-09-25 on zsh 5.9.2, `sleep 0.4 & wait; print
+	// WAITED` writes the notice and then `WAITED`.
+	//
 	return j.Status, 0, false, false
 }
 
@@ -1140,6 +1231,22 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	// of the ways rather than the way: a subshell or an external command
 	// delivers the same notice without any wait being written.
 	defer r.retireCoproc()
+	// And the notice a finished job is owed, in the dialect that does not
+	// hold it for the next prompt: measured 2026-09-25 on zsh 5.9.2, `sleep
+	// 0.4 & wait; print WAITED` writes `[1]  + done  sleep 0.4` and *then*
+	// `WAITED`. A deferred call, so it is written before this builtin
+	// returns whichever of the several ways out it takes (#4531).
+	//
+	// Here rather than in Runner.waitFor, which is where the notice is owed
+	// and is the wrong place to pay it: a notice **forgets** the job it
+	// reports, and the walks below hold the job table while they wait. One
+	// of them ranged over the live slice and read the nil that forgetting
+	// leaves behind.
+	defer func() {
+		if r.NotifiesAsAJobEnds() {
+			r.writeFinishedJobNotices()
+		}
+	}()
 	args, opts, code := r.waitOptions(args)
 	if code != 0 {
 		return code
@@ -1185,7 +1292,14 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 			// none.
 			return 0
 		}
-		for _, j := range r.jobs {
+		// A copy of the table, because waiting can now write a finished
+		// job's notice — a *different* job's, ending while this one is
+		// waited out — and a notice forgets what it reports. Ranging over
+		// the live slice read the nils that forgetting leaves behind.
+		for _, j := range slices.Clone(r.jobs) {
+			if j == nil {
+				continue
+			}
 			_, sig, hit, stopped := r.waitFor(j)
 			if r.unspecified {
 				return r.status
@@ -1911,7 +2025,7 @@ func (r *Runner) HoldsExitForJobs() bool {
 	if r.jobsInherited {
 		return false
 	}
-	wording := r.jobsAtExitSentence()
+	wording := r.jobsAtExitSentence(r.name())
 	if wording == "" {
 		return false
 	}
@@ -1946,27 +2060,59 @@ func (r *Runner) HoldsExitForJobs() bool {
 //
 // The choice between the two wordings, and the options that gate each, are
 // the measurements [Runner.HoldsExitForJobs] carries.
-func (r *Runner) jobsAtExitSentence() string {
-	stopped, running := false, false
-	for _, j := range r.jobs {
+func (r *Runner) jobsAtExitSentence(name string) string {
+	// The *first* of each kind that this shell would report, because where
+	// the two readings part it is a question about position. A job whose
+	// kind the shell is not checking is passed over rather than counted:
+	// measured 2026-09-26 at a `-fiV +Z` session of zsh 5.9.2 with
+	// `unsetopt checkrunningjobs`, a running job in front of a stopped one
+	// still draws `you have suspended jobs.`, so the running job is skipped
+	// rather than being the first job and answering with silence.
+	firstStopped, firstRunning := -1, -1
+	checksStopped, checksRunning := r.ChecksStoppedJobsAtExit(), r.ChecksRunningJobsAtExit()
+	for i, j := range r.jobs {
 		switch {
 		case j.Finished():
 		case j.Stopped:
-			stopped = true
+			if checksStopped && firstStopped < 0 {
+				firstStopped = i
+			}
 		default:
-			running = true
+			if checksRunning && firstRunning < 0 {
+				firstRunning = i
+			}
 		}
 	}
-	// Stopped first, because that is the order the sentence is chosen in and
-	// not merely the order the fields are declared in: a session with one of
-	// each is told about the stopped one.
-	switch {
-	case stopped && r.ChecksStoppedJobsAtExit():
-		return Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", r.name())
-	case running && r.ChecksRunningJobsAtExit():
-		return Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
+	stoppedSentence := func() string {
+		return Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", name)
 	}
-	return ""
+	switch {
+	case firstStopped < 0 && firstRunning < 0:
+		return ""
+	case firstStopped < 0:
+		return Wording(r.diag().RunningJobsAtExit, "there are running jobs", name)
+	case firstRunning < 0:
+		return stoppedSentence()
+	}
+	// One of each, and now the noun matters. Asked here and nowhere earlier,
+	// because this is the only arrangement the two readings answer
+	// differently — and not even all of it: a stopped job in *front* of a
+	// running one draws the stopped sentence under both readings, so only a
+	// running one in front is a question. See
+	// Semantics.JobsAtExitSentenceFollowsTheTableOrder (#4544).
+	if firstRunning < firstStopped {
+		if r.ask(r.sem().JobsAtExitSentenceFollowsTheTableOrder,
+			"which sentence a table holding a running job in front of a stopped one draws") {
+			return Wording(r.diag().RunningJobsAtExit, "there are running jobs", name)
+		}
+		if r.unspecified {
+			// The refusal is the whole answer. Saying something as well
+			// would be answering the question it has just declined.
+			r.unspecified = false
+			return ""
+		}
+	}
+	return stoppedSentence()
 }
 
 // accountsForJobsAtExit reports whether this shell says anything at all about
@@ -2041,12 +2187,12 @@ func (r *Runner) accountsForJobsAtExit() bool {
 // Semantics.HeldExitListsTheJobs, and the one dialect that reaches here
 // answers No — measured at a session and measured again here, where `zsh -fm`
 // writes the sentence with no rows beneath it.
-func (r *Runner) tellOfJobsLeftBehind() {
+func (r *Runner) tellOfJobsLeftBehind(atTheExit bool) bool {
 	if r.inSubshell || r.JobControl || r.jobsInherited || r.toldOfJobsAtExit {
-		return
+		return false
 	}
 	if !r.accountsForJobsAtExit() {
-		return
+		return false
 	}
 	// Take the stop notices first, because on this route nothing else has.
 	// A session sweeps them in reapJobs between one command and the next, so
@@ -2062,15 +2208,66 @@ func (r *Runner) tellOfJobsLeftBehind() {
 	// nothing, it only takes what the goroutine waiting on the job has
 	// already been told. Before the sentence is chosen *and* before the
 	// hangup that Finish runs next, which reads Stopped too.
+	//
+	// And a stop this shell asked for and has not been told about is waited
+	// for first, which is the other half of the same sentence: `kill -STOP
+	// %1` returns when the signal is *sent*, so where that `kill` is the
+	// script's last command the sweep can arrive before the goroutine
+	// blocked on the process has been scheduled. See
+	// Runner.awaitExpectedStops (#4558).
+	r.awaitExpectedStops()
 	for _, j := range r.jobs {
 		r.noticeStoppedJob(j)
 	}
-	wording := r.jobsAtExitSentence()
+	wording := r.jobsAtExitSentence(r.jobsAtExitName(atTheExit))
 	if wording == "" {
-		return
+		return false
 	}
 	r.toldOfJobsAtExit = true
 	r.errf("%s\n", wording)
+	return true
+}
+
+// jobsAtExitName is the name the two sentences about abandoned jobs carry.
+//
+// The shell's own name at a prompt, and on the script route the script's name
+// with a line after it — which is what the name a script's other diagnostics
+// carry already looks like. See Diagnostics.JobsAtExitLocatedInAScript for the
+// rows, and note that `Runner.name()` was already right on both routes: only
+// the number was missing (#4545).
+//
+// atTheExit says the caller is the `exit` builtin rather than the way out. It
+// is the whole of the arithmetic: an `exit` writes its sentence on its own
+// line, and a shell running off the end of a script is one line past the last
+// one it read.
+func (r *Runner) jobsAtExitName(atTheExit bool) string {
+	if !r.diag().JobsAtExitLocatedInAScript || r.Route != RouteScriptFile {
+		return r.name()
+	}
+	line := r.lastStmtLine
+	if !atTheExit {
+		line++
+	}
+	return r.name() + ":" + strconv.Itoa(line)
+}
+
+// jobsHungUpName is the same name for the hangup warning, which is written
+// after the sentence and is a line further down when an `exit` wrote one.
+//
+// The row that separates the two is `sleep 3 & / setopt no_check_jobs / exit
+// 7`: no sentence, and the warning lands on the `exit`'s own line rather than
+// one past it. So it is the sentence an `exit` wrote that costs the line and
+// not the `exit` itself — and a script that ran off the end writes both at the
+// same number whether or not there was a sentence.
+func (r *Runner) jobsHungUpName() string {
+	if !r.diag().JobsAtExitLocatedInAScript || r.Route != RouteScriptFile {
+		return r.name()
+	}
+	line := r.lastStmtLine
+	if !r.exitRan || r.toldOfJobsAtExit {
+		line++
+	}
+	return r.name() + ":" + strconv.Itoa(line)
 }
 
 // listJobsHeldAtExit prints the job table under the sentence, where the shell
@@ -2562,4 +2759,89 @@ func (r *Runner) startAndWait(cmd *exec.Cmd, ownGroup bool) error {
 	// `CHLD` condition counts. See Runner.childReaped.
 	r.childReaped()
 	return err
+}
+
+// stopNoticeWindow bounds the wait below.
+//
+// Generous against the thing it is waiting for and short against the thing it
+// is protecting from. What it waits for is a goroutine already woken by the
+// kernel getting a turn, which is microseconds even on a loaded machine; what
+// it protects from is a process that *ignores* the stopping signal, where the
+// note is never coming and this is what the shell pays on its way out. SIGSTOP
+// cannot be ignored, so that case needs a SIGTSTP aimed at a program that has
+// taken the signal for itself.
+const stopNoticeWindow = time.Second
+
+// awaitExpectedStops waits for a stop this shell asked for and has not been
+// told about, so that the way out of a script sees the same state the kernel
+// does.
+//
+// The window this closes is the end of a script and nothing else. A session
+// sweeps the notes between one command and the next, so by the time a prompt
+// asks, a stop from any earlier command has long since landed; a script's last
+// command is followed by no command at all, and `sleep 30 & kill -STOP %1`
+// reached the exit with the job still reading as running — the wrong sentence
+// of the two, and then a hangup the reference does not send (#4558).
+//
+// **Waiting is the only instrument available here.** The obvious fix is to ask
+// the kernel, which is what the reference does — it calls `waitpid` itself as
+// it leaves — and this shell may not: a `&` job already has a goroutine
+// blocked on its process, and two reapers on one child is exactly the race
+// Job.polled exists to prevent. So the shell waits for the reaper it already
+// has rather than becoming a second one.
+//
+// Only where a stop was asked for, which is what keeps this off every other
+// exit: a script that stopped nothing has no job with the flag and does not
+// reach the select at all. One timer for the whole sweep rather than one per
+// job, so the bound is on the exit and not on the table's length.
+//
+// The monitor is the other gate, and it is the pair Runner.stoppedJobEndsAWait
+// reads for the same reason: with it off, the goroutine waiting on the job is
+// in a plain wait that cannot see a stop, so the note is never coming and
+// waiting for it would be waiting for nothing.
+func (r *Runner) awaitExpectedStops() {
+	if !r.monitor {
+		return
+	}
+	var timeout <-chan time.Time
+	for _, j := range r.jobs {
+		if j == nil || j.PID == 0 || !j.stopExpected || j.noticedStop || j.Finished() {
+			continue
+		}
+		if timeout == nil {
+			t := time.NewTimer(stopNoticeWindow)
+			defer t.Stop()
+			timeout = t.C
+		}
+		select {
+		case <-j.stopNote:
+		case <-j.done:
+			// Ended rather than stopped, which is an answer and not a
+			// timeout: there is nothing left to be told about this job.
+		case <-timeout:
+			// The bound is on the whole sweep, so a job that used it up
+			// leaves nothing for the ones behind it either.
+			return
+		}
+	}
+}
+
+// expectingAStop records that a `kill` has just asked a job to stop.
+//
+// By the job where the operand named one — a `%` spec, or the identity this
+// shell invents for a job with no process — and by the process id otherwise,
+// because `kill -STOP "$!"` is the same request spelled with a number and the
+// window it opens is the same window.
+func (r *Runner) expectingAStop(named *Job, aims []jobProcess) {
+	if named != nil {
+		named.stopExpected = true
+		return
+	}
+	for _, aim := range aims {
+		for _, j := range r.jobs {
+			if j != nil && j.PID != 0 && j.PID == aim.pid {
+				j.stopExpected = true
+			}
+		}
+	}
 }

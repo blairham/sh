@@ -207,36 +207,24 @@ func TestAScriptRunningTheMonitorAccountsForTheJobsItLeaves(t *testing.T) {
 // other wrong — a shell that never hangs anything up would pass the second,
 // and one that always says `suspended` would pass the first.
 //
-// **Several attempts, and the reason is a race in this engine rather than
-// flakiness in the harness.** The sweep takes what the goroutine waiting on
-// the job has already been told, and `kill -STOP %1` returns when the signal
-// is *sent*; where that `kill` is the script's last command, the shell can
-// reach its exit before that goroutine has been scheduled. Usually it has —
-// this passes first time on an idle machine — and on a loaded CI runner it
-// does not. The reference has no such window, because it calls `waitpid`
-// itself on the way out. That is #4558, and the poll that would close it
-// cannot simply be widened to `&` jobs: two reapers on one child is the race
-// Job.polled exists to prevent.
-//
-// The retry does not weaken what this pins. **Removing the sweep fails every
-// attempt** — mutation-checked, the job reads as running every time and both
-// assertions below fire — so the loop tolerates the window and nothing else.
+// **One attempt, since #4558.** This used to run eight times and take the
+// first that passed, because the sweep took only what the goroutine waiting on
+// the job had already been told and `kill -STOP %1` returns when the signal is
+// *sent* — so where that `kill` is the script's last command, the shell could
+// reach its exit before that goroutine had been scheduled. It usually had, on
+// an idle machine, and on a loaded CI runner it had not. The way out now waits
+// for a stop it asked for and has not been told about, bounded, and only for
+// the jobs it asked to stop; interp's TestAStopTheScriptAskedForIsWaitedForOnTheWayOut
+// is the deterministic form of the same question.
 func TestAJobStoppedByTheLastCommandIsNoticedBeforeTheScriptLeaves(t *testing.T) {
-	const attempts = 8
-	var last string
-	for range attempts {
-		last = monitorExitScript(t, []string{"-fm"},
-			"/bin/sleep 30 &\nprint -r -- "+monitorExitFence+"\nkill -STOP %1\n")
-		if strings.Contains(last, "you have suspended jobs.") && !strings.Contains(last, "SIGHUPed") {
-			return
-		}
+	got := monitorExitScript(t, []string{"-fm"},
+		"/bin/sleep 30 &\nprint -r -- "+monitorExitFence+"\nkill -STOP %1\n")
+	if !strings.Contains(got, "you have suspended jobs.") {
+		t.Errorf("the script did not write the suspended-jobs sentence; it ended with\n%s",
+			smoke.Readable(smoke.LastLines(got, 10)))
 	}
-	if !strings.Contains(last, "you have suspended jobs.") {
-		t.Errorf("in %d attempts the script never wrote the suspended-jobs sentence; the last ended with\n%s",
-			attempts, smoke.Readable(smoke.LastLines(last, 10)))
-	}
-	if strings.Contains(last, "SIGHUPed") {
-		t.Errorf("in %d attempts the script always hung up a job that was stopped:\n%s",
-			attempts, smoke.Readable(smoke.LastLines(last, 10)))
+	if strings.Contains(got, "SIGHUPed") {
+		t.Errorf("the script hung up a job that was stopped:\n%s",
+			smoke.Readable(smoke.LastLines(got, 10)))
 	}
 }

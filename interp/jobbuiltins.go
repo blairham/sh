@@ -573,6 +573,14 @@ func (r *Runner) jobState(j *Job, noticing bool) string {
 	dg := r.diag()
 	switch {
 	case j.Stopped:
+		// The signal that stopped it can have a word of its own — `suspended
+		// (tty input)` beside the plain `suspended` — and where it does not,
+		// the one word below with the number as its verb. See
+		// Diagnostics.JobStoppedBySignal, and note that ^Z reaches the plain
+		// word through SIGTSTP rather than around this (#4527).
+		if w, ok := dg.JobStoppedBySignal[syscall.Signal(j.StopSig)]; ok {
+			return Wording(w, "Stopped", j.StopSig)
+		}
 		// One verb, the signal that stopped it, which only one dialect names.
 		return Wording(dg.JobStopped, "Stopped", j.StopSig)
 	case j.Finished():

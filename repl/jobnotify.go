@@ -107,7 +107,19 @@ type jobWake struct {
 // The pipe is opened here, on the session's own goroutine, so that the poke
 // never has to.
 func (j *jobWake) fd() int {
-	if j == nil || !j.r.NotifiesAsAJobEnds() {
+	if j == nil {
+		return -1
+	}
+	if !j.r.NotifiesAsAJobEnds() {
+		// And a wake this session armed earlier is taken back off the pipe
+		// on the way past. interp pokes for every job that ends and leaves
+		// the question to this call (#4576), so a job that finished while
+		// `unsetopt notify` was in force leaves a byte behind — and a byte
+		// still sitting there when the option comes back on would wake the
+		// editor for a notice the prompt has long since written, which costs
+		// a blank row on the screen. Free where nothing is pending, which is
+		// every session that never armed.
+		j.drain()
 		return -1
 	}
 	j.mu.Lock()

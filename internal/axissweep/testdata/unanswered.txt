@@ -609,6 +609,7 @@ ksh   HangupAtExitPrecedesTheExitTrap
 ksh   HangupAtExitSkipsStoppedJobs
 ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin
+ksh   KillKeepsGoingPastAJobSpecThatNamesNoJob
 ksh   JobsStateFiltersAccumulate
 ksh   LocalDashSavesTheShellOptions
 ksh   LocalListingIsTheRunningCallsOwn

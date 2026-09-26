@@ -2571,6 +2571,43 @@ type Diagnostics struct {
 	JobStopped string
 	JobDone    string
 
+	// JobStoppedBySignal replaces JobStopped for a job stopped by a
+	// particular signal, keyed on that signal. One verb, as JobStopped has:
+	// the signal's number. A signal with no entry, and a nil map, leave
+	// JobStopped standing for every stop, which is what a dialect with one
+	// word wants.
+	//
+	// **Keyed on the signal rather than worded with it**, because the word
+	// is not the host's name for the signal and not derivable from it: a
+	// shell that words this at all words `SIGSTOP` as *a signal* and
+	// `SIGTTIN` as *tty input*, which is the job-control meaning rather than
+	// the signal's own — so SignalDescriptions cannot supply it and a map is
+	// what holds four answers to one question.
+	//
+	// Measured 2026-09-26 on a pseudo-terminal, `TERM=dumb`, one `sleep 30
+	// &` and a `kill` per row, with a `jobs` after each to show the listing
+	// and the notice agree. zsh 5.9.2 (aarch64-apple-darwin25.4.0):
+	//
+	//	kill -TSTP %1   [1]  + suspended  sleep 30
+	//	kill -STOP %1   [1]  + suspended (signal)  sleep 30
+	//	kill -TTIN %1   [1]  + suspended (tty input)  sleep 30
+	//	kill -TTOU %1   [1]  + suspended (tty output)  sleep 30
+	//
+	// So SIGTSTP — which is what ^Z sends, and the one this shell had
+	// already — is the plain word, and SIGSTOP, SIGTTIN and SIGTTOU each
+	// have one of their own, which is why nothing common looked wrong
+	// (#4527).
+	//
+	// The other two columns that word a state were measured the same day and
+	// are left as they are. bash 5.3.20 writes `Stopped` for every one of
+	// those signals, so it
+	// has one word and no entries here. dash 0.5.12 has four wordings of its
+	// own — `Suspended: 18`, `Suspended (signal): 17`, `Stopped (tty input):
+	// 21`, `Stopped (tty output): 22`, each carrying the number JobStopped's
+	// verb already supplies — and is left until that row is measured across
+	// its own surfaces rather than changed from one probe.
+	JobStoppedBySignal map[syscall.Signal]string
+
 	// JobDoneNotice replaces JobDone when the shell is *reporting* that a job
 	// ended, rather than listing one that has. Empty uses JobDone for both,
 	// which is what the other four dialects want. No verbs.
@@ -4287,6 +4324,62 @@ type Diagnostics struct {
 	// is the one dialect for which this is not the same question as the
 	// option status. Zero means the substrate's own, 1.
 	KillArgumentStatus int
+	// KillNoSuchJobStatus is the status for a `%` operand that names no job,
+	// where that is not the same number as KillArgumentStatus. Zero falls
+	// back to that field, which is what four of the five dialects want.
+	//
+	// BusyBox ash alone: measured 2026-09-26 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b,
+	// BusyBox v1.37.0, `kill %99` is status **2** where `kill a` in the same
+	// shell is 1 — and `kill a b` is 3, so the 2 is not a count of anything.
+	// It is flat: `kill %99 %98` is 2 as well, with one line (#4666).
+	KillNoSuchJobStatus int
+
+	// JobsAtExitLocatedInAScript puts the script's name *and a line number*
+	// in front of the two sentences a leaving shell writes about its jobs,
+	// rather than the name alone. The wordings already take the name as
+	// their first verb, so what this changes is the name they are handed.
+	//
+	// Only on the script route. At a prompt both lines are the shell's name
+	// with no line, which is what this shell wrote on both routes until
+	// #4545.
+	//
+	// Measured 2026-09-26 on a pseudo-terminal, `zsh -fm <script>` against
+	// `/opt/homebrew/bin/zsh` — zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+	// `go version -m` on it says it is not a Go executable. Every row is a
+	// separate two-to-five line script:
+	//
+	//	sleep 3 &                       (2 lines)  :3 and :3
+	//	sleep 3 & / print x             (3 lines)  :4 and :4
+	//	sleep 3 & / setopt no_check_jobs           :4 — the hangup alone
+	//	sleep 3 & / exit 7 / print AFTER           :3 and :4
+	//	sleep 3 & / setopt no_check_jobs / exit 7  :4 — the hangup alone
+	//
+	// So the number is where the shell is: one past the last line where it
+	// runs off the end, and the `exit`'s own line where an `exit` wrote it.
+	// The **hangup moves down one** behind a sentence an `exit` wrote and
+	// not otherwise, which is the fifth row beside the fourth: the held exit
+	// is what costs the line, and the rows that ran off the end write both
+	// at the same number.
+	JobsAtExitLocatedInAScript bool
+
+	// HeldExitInAScriptStatus is what an `exit N` leaves with when it was
+	// the thing that wrote the jobs-at-exit sentence and the shell has no
+	// prompt to stay at. Zero leaves the operand alone, which is what a
+	// dialect that does not move it wants.
+	//
+	// Measured the same day and the same way. `sleep 3 & / exit 7 / print
+	// AFTER` leaves with **1**, not 7, and `AFTER` never runs; `exit 9` in
+	// place of that third line does not run either, so the shell really
+	// stops at the `exit` rather than going back for another line. With
+	// `setopt no_check_jobs` in front of it — so that no sentence is written
+	// — the same script leaves with 7, which is what says the status belongs
+	// to the sentence and not to having jobs.
+	//
+	// Separate from StoppedJobsAtExitStatus, which is the *prompt* route's
+	// and is 0 in this dialect: there the shell stays and the person may
+	// type `exit` again, and here it is leaving.
+	HeldExitInAScriptStatus int
 
 	// FileNotFound is how this dialect spells the reason a file was not
 	// there, when it does not quote the operating system's own text. No

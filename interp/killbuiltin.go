@@ -549,6 +549,23 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 // that as an error with the argument rather than a target that failed — so it
 // stops here, where a process that has already exited does not.
 func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) int {
+	// One dialect reads the `%` operands before it acts on any of them, so a
+	// spec that names no job ends the builtin with the operands in front of
+	// it neither reported nor delivered to. Asked here, before the loop,
+	// because that is where the ordering it is about actually lives — and
+	// asked only where it decides something, which is a missing spec with an
+	// operand in front of it: a missing spec that is already first is the
+	// axis below, and a spec that names a job asks nothing at all. See
+	// Semantics.KillReadsJobSpecsBeforeTheOtherOperands.
+	if t, ok := r.jobSpecNamingNoJobBehindAnOperand(targets); ok {
+		if r.ask(r.sem().KillReadsJobSpecsBeforeTheOtherOperands,
+			"`kill a %99` with a job spec that names no job behind another operand") {
+			return r.killReport(killNoSuchJob, t)
+		}
+		if r.unspecified {
+			return r.status
+		}
+	}
 	sent, failed := 0, 0
 	for _, t := range targets {
 		aims, named, fromJob, bad := r.killTarget(t)
@@ -561,7 +578,24 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			return orDefault(r.diag().KillArgumentStatus, 1)
 		case jobMissing:
 			// A `%` spec that resolves to nothing is its own complaint, not
-			// a malformed pid.
+			// a malformed pid — and whether the operands behind it are still
+			// operands is its own question too, with a column pattern the
+			// malformed-word axis below does not share. See
+			// Semantics.KillKeepsGoingPastAJobSpecThatNamesNoJob.
+			if len(targets) > 1 && r.ask(r.sem().KillKeepsGoingPastAJobSpecThatNamesNoJob,
+				"`kill %99 a` with operands behind a job spec that names no job") {
+				// The status is killStatus's below, exactly as it is for the
+				// malformed word: this decides only whether the loop runs on.
+				failed++
+				r.killFailed(&killError{kind: killNoSuchJob, operand: t})
+				continue
+			}
+			if r.unspecified {
+				return r.status
+			}
+			// Asked only where the answer can show. `kill %99` alone is this
+			// complaint and this dialect's status for it in every column that
+			// can be asked, and needs nobody's policy to say so.
 			return r.killReport(killNoSuchJob, t)
 		case killTargetNotAPid:
 			if len(targets) > 1 && r.ask(r.sem().KillKeepsGoingPastAnOperandThatIsNotAPid,
@@ -673,12 +707,50 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			r.killFailed(&killError{kind: killFailureKind(miss), operand: t, errno: miss})
 			continue
 		}
+		if signalStops(sig) {
+			// The job is owed a stop note and has not been given one:
+			// `kill(2)` returns when the signal is sent. Recorded so that a
+			// script leaving immediately afterwards waits for the note
+			// rather than reading the job as still running — see
+			// Runner.awaitExpectedStops (#4558).
+			r.expectingAStop(named, aims)
+		}
 		sent++
 	}
 	if r.stoppedBySignal {
 		return r.status
 	}
 	return r.killStatus(sent, failed)
+}
+
+// jobSpecNamingNoJobBehindAnOperand finds the first `%` operand that names no
+// job and has something written in front of it.
+//
+// The position is half the question. A missing spec that is already the first
+// operand orders nothing — every column reports it first whether it read the
+// specs first or simply read left to right — so only one behind another
+// operand can tell the two readings apart, and asking on the other shape would
+// put a refusal in front of a script whose answer nobody needs.
+//
+// It resolves with findJobQuietly rather than killTarget: the lookup is the
+// whole of what is being asked, and the rest of killTarget starts counting a
+// job's processes.
+func (r *Runner) jobSpecNamingNoJobBehindAnOperand(targets []string) (string, bool) {
+	for i, t := range targets {
+		if !strings.HasPrefix(t, "%") {
+			continue
+		}
+		if _, code := r.findJobQuietly(t); code == jobMissing {
+			// The *first* missing spec is the one such a shell reports, and
+			// it is only interesting here when something stands in front of
+			// it. `kill %99 %98` is the shape that says why the search runs
+			// past position zero rather than starting behind it: the answer
+			// there is `%99`, and a search that skipped the first operand
+			// would have found `%98` and reported the wrong job.
+			return t, i > 0
+		}
+	}
+	return "", false
 }
 
 // killFailureKind is what a send that failed is reported as: a target that is
@@ -1722,6 +1794,11 @@ func (e *killError) status(d Diagnostics) int {
 		return orDefault(d.KillUsageStatus, 2)
 	case killIllegalOption, killMissingSignalArgument:
 		return orDefault(d.KillBadOptionStatus, 1)
+	case killNoSuchJob:
+		// A missing job is its own number in one column and the argument
+		// status everywhere else — see Diagnostics.KillNoSuchJobStatus, where
+		// the measurement that separates them is.
+		return orDefault(d.KillNoSuchJobStatus, orDefault(d.KillArgumentStatus, 1))
 	case killInvalidSignalNumber:
 		// The same split the wording takes, and for the same reason: dash
 		// answers 2 for an illegal option and its argument complaints

@@ -846,11 +846,20 @@ func (r *Runner) pendingTrap() (syscall.Signal, bool) {
 func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, trapped, gaveUp bool) {
 	s := r.signals
 	if s == nil || r.inSubshell {
-		select {
-		case <-done:
-			return 0, false, false
-		case <-giveUp:
-			return 0, false, true
+		for {
+			select {
+			case <-done:
+				return 0, false, false
+			case <-giveUp:
+				return 0, false, true
+			case <-r.jobNoticeWake():
+				// A *different* background job finished while this wait was
+				// blocked, in the dialect that says so the moment it
+				// happens. Written here because here is the shell's own
+				// goroutine — the job table is its, and the note carries
+				// nothing. See Runner.writeFinishedJobNotices (#4531).
+				r.writeFinishedJobNotices()
+			}
 		}
 	}
 	for {
@@ -879,6 +888,10 @@ func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, 
 			default:
 			}
 			return 0, false, true
+		case <-r.jobNoticeWake():
+			// The same seam as in the plain wait above, and asked each time
+			// round so that the option can move under a running session.
+			r.writeFinishedJobNotices()
 		case <-s.wake:
 		case sig := <-s.ch:
 			s.mu.Lock()

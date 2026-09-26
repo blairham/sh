@@ -1222,6 +1222,12 @@ func Semantics() interp.Semantics {
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// dash refuses. Measured 2026-09-26 on /bin/dash: with `d` renamed to
+	// `e`, `cd .` writes `cd: can't cd to .` and exits 2, and so does `cd s`.
+	// Its *children* still run in `e` and its own `pwd -P` still prints `…/e`,
+	// because the kernel is holding its directory — it is only `cd` that
+	// will not look. See Semantics.CdDestinationIsNotThere.
+	s.CdDestinationIsNotThere = interp.CdDestinationNotThereRefuses
 	// `cd` pushes nothing, and there is nothing to push onto: measured
 	// 2026-09-26, `dirs` is `dirs: not found` here and `set -o` names no
 	// option with `pushd` in it, while the same grep finds `errexit`.

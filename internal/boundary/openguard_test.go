@@ -359,6 +359,16 @@ var exempt = map[string]string{
 	"repl.importConfig": "the starship configuration after AllowReadPath, and the file the " +
 		"conversion is written into after AllowModify. 0600, because an imported configuration " +
 		"is the person's own and nothing else needs to read it.",
+	// interp. helddirectory.go asks after the shell's *own* working directory
+	// and nothing else.
+	"interp.dirNow": "the directory this shell is already in, twice: whether the name it " +
+		"remembers still leads to the descriptor it holds, and whether the name the kernel " +
+		"gives that descriptor leads there either. Neither is a path a script chose — a policy " +
+		"was asked about this directory at the `cd` that put the shell in it — and the answer " +
+		"reaches a script only through paths that do go through the gate, which is every " +
+		"relative path this produces. Gated, it put a second ActionStat in front of every one " +
+		"of those, which is the shell asking the filesystem something nobody asked it to. The " +
+		"retry that *moves* is a different question and is gated: see cdFromTheDirectoryHeld.",
 	// The smoke suite is in scope because it holds a Boundary to read a block
 	// store back — and it is the one package here that is not the shell. The
 	// rest of this list explains a path the shell reaches; these two explain

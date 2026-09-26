@@ -5244,6 +5244,48 @@ type Semantics struct {
 	// the two shells that have the form are no longer in the conversation.
 	CdRefusesExtraOperands Answer
 
+	// CdDestinationIsNotThere is what `cd` does when the path it built from
+	// the shell's own name for its directory is not there — which is what a
+	// shell sitting in a directory somebody has since **renamed** is looking
+	// at for every relative operand it is given.
+	//
+	// The noun is **the path `cd` built**, not the shell's directory and not
+	// its inode, and the pair that proves it holds that path's fate fixed
+	// while moving everything else. Measured 2026-09-26 with `d` renamed to
+	// `e` under the shell's feet, so that in both rows `$PWD` still names a
+	// directory and in both rows the shell is in `e`:
+	//
+	//	a new empty `d` is made, then `cd s`     bash and zsh arrive in e/s
+	//	a new `d` *with an s in it*, then `cd s` bash and zsh arrive in d/s
+	//
+	// The second row's shell walks into the impostor, `ls` shows the
+	// impostor's file, and `$PWD` reads `…/d/s`. So neither "the name still
+	// resolves" nor "the inode is still the one we are in" decides — both are
+	// identical across the pair — and the path `cd` built is the only thing
+	// that moved. `cd .` gives the same pair with the same answers.
+	//
+	// Three answers across the panel, all measured the same day on the same
+	// fixture, with `d` renamed to `e` and nothing put back at the old name:
+	//
+	//	zsh 5.9.2   `cd .` is 0 and $PWD becomes …/e   the kernel's name
+	//	bash 5.3    the same                            the kernel's name
+	//	bash 3.2    the same                            the kernel's name
+	//	ksh93       `cd .` is 0 and $PWD stays …/d      the built name
+	//	dash        `cd .` is 2, `can't cd to .`        refuses
+	//	ash 1.37    `cd .` is 2, `can't cd to .`        refuses
+	//
+	// ksh93 is not a third way of failing: it moves, and `cd s` from the
+	// renamed directory lands in the real `s` and calls it `…/d/s`. It simply
+	// never asks the kernel where it ended up, which its own `pwd -P` also
+	// does not — that column prints `…/d` where the other five print `…/e`.
+	//
+	// The refusing answer is the substrate's, and it is what this shell did
+	// before the question existed. See interp/helddirectory.go for how the
+	// other two are reached at all, and biCd for where this is asked: the
+	// path `cd` built has to have failed first, so an ordinary `cd` never
+	// puts the question.
+	CdDestinationIsNotThere CdDestinationNotTherePolicy
+
 	// CdDashPrintsTheDirectory writes the new directory when `cd -` moves.
 	// True in bash, dash and ksh93; zsh alone is silent.
 	CdDashPrintsTheDirectory Answer
@@ -26078,6 +26120,14 @@ const (
 func PosixSemantics() Semantics {
 	return Semantics{
 		SplitParamExpansion: Yes,
+		// `cd` refuses when the path it built is not there. XCU's own
+		// algorithm builds `curpath` from `$PWD` and the operand and then
+		// chdirs to *that*, so a `$PWD` that has stopped leading anywhere is
+		// a `cd` that fails — there is no second attempt in the standard, and
+		// the two columns that stay closest to it do not make one. Answered
+		// here for CoreSemantics' reason: the question is put to every
+		// failing `cd`. See Semantics.CdDestinationIsNotThere.
+		CdDestinationIsNotThere: CdDestinationNotThereRefuses,
 		// 2.6.1's tilde prefix ends "at the first unquoted slash" or at the
 		// end of the word, and a colon is named there only for the *value of
 		// an assignment*. So the standard's reading is the one three of the
@@ -27613,6 +27663,14 @@ func PosixSemantics() Semantics {
 func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,
+		// `cd` says what the operating system said when the path it built is
+		// not there, and moves nowhere. Answered here rather than left to
+		// refuse because the question is put to every failing `cd` — a
+		// substrate that refused would be refusing `cd nosuchdir` — and
+		// because it is what this package did before the axis existed. Two
+		// of the six columns keep it; the other four are on the axis and say
+		// so themselves. See Semantics.CdDestinationIsNotThere.
+		CdDestinationIsNotThere: CdDestinationNotThereRefuses,
 		// A function shadows a special builtin of the same name, which is
 		// unanimous in every column that lets such a function be defined at
 		// all — see Semantics.SpecialBuiltinOutranksAFunction for the panel.
@@ -30608,6 +30666,56 @@ func (d CoprocEndDisposal) String() string {
 		return "both ends go"
 	}
 	return "both ends survive"
+}
+
+// CdDestinationNotTherePolicy is what `cd` does when the path it built is not
+// there — see [Semantics.CdDestinationIsNotThere] for the measurements.
+type CdDestinationNotTherePolicy int
+
+const (
+	// CdDestinationNotThereUnspecified is no answer, and reads as Refuses
+	// after the refusal — the shape ask() has, where an unanswered axis is
+	// reported and then does not move anything.
+	CdDestinationNotThereUnspecified CdDestinationNotTherePolicy = iota
+	// CdDestinationNotThereRefuses says what the operating system said and
+	// moves nowhere: dash, BusyBox ash, and the substrate.
+	CdDestinationNotThereRefuses
+	// CdDestinationNotThereEntersAndTakesTheKernelsName tries the operand
+	// again from the directory the shell is holding, and names where it
+	// arrived by asking the kernel: bash 5.3, bash 3.2 and zsh 5.9.2.
+	CdDestinationNotThereEntersAndTakesTheKernelsName
+	// CdDestinationNotThereEntersAndKeepsTheBuiltName makes the same move and
+	// keeps the name it had already built for it, so `$PWD` goes on naming a
+	// path that leads nowhere: ksh93, whose `pwd -P` does not consult the
+	// kernel either.
+	CdDestinationNotThereEntersAndKeepsTheBuiltName
+)
+
+func (p CdDestinationNotTherePolicy) String() string {
+	switch p {
+	case CdDestinationNotThereRefuses:
+		return "refuses"
+	case CdDestinationNotThereEntersAndTakesTheKernelsName:
+		return "enters and takes the kernel's name"
+	case CdDestinationNotThereEntersAndKeepsTheBuiltName:
+		return "enters and keeps the built name"
+	}
+	return "unspecified"
+}
+
+// cdDestinationIsNotThere resolves the axis, and is reached only from a `cd`
+// whose built path has already failed and whose shell is holding a directory
+// the operand could be tried against — so an ordinary `cd`, and a `cd` in a
+// Runner with no directory of its own, never put the question.
+func (r *Runner) cdDestinationIsNotThere() CdDestinationNotTherePolicy {
+	p := r.sem().CdDestinationIsNotThere
+	if p == CdDestinationNotThereUnspecified {
+		r.diagf("%s\n", r.unanswered(
+			"`cd` to a path that is not there from a directory that has been renamed"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
 }
 
 type ReadTrailingEscapedSeparatorPolicy int

@@ -1384,7 +1384,15 @@ func (r *Runner) atDir(path string) string {
 		return ""
 	}
 	if !filepath.IsAbs(path) && r.Dir != "" {
-		return filepath.Join(r.Dir, path)
+		// Against the directory as it is called *now*: this is the one place a
+		// relative path the script wrote becomes an absolute one for the
+		// operating system, so a shell whose directory has been renamed since
+		// it moved there would otherwise resolve every redirection, every `.`
+		// and every `[[ -f ]]` against a name that leads nowhere. The answer
+		// is r.Dir itself wherever the name still leads to the directory in
+		// hand, which is every ordinary case and every symbolic-link case. See
+		// interp/helddirectory.go.
+		return filepath.Join(r.dirNow(), path)
 	}
 	return path
 }

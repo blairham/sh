@@ -1178,6 +1178,13 @@ func (r *Runner) CleanUp() {
 		_ = os.RemoveAll(r.procSubHome.dir)
 	}
 	r.restoreDispositions()
+	// And the descriptor the shell was keeping on its own directory. A Runner
+	// is a value an embedder makes and drops, so the one place this can be
+	// let go of by hand is here — see interp/helddirectory.go, and
+	// TestSubstitutionsWithBackgroundJobsLeaveNoDescriptorsBehind, which
+	// counts what is open after twenty-five shells have come and gone and
+	// does not wait for a collector.
+	r.dropDirectoryHold()
 }
 
 // cleanUpAtEnd is CleanUp for the two places a shell stops being one.

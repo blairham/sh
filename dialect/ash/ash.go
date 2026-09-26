@@ -1220,6 +1220,13 @@ func Semantics() interp.Semantics {
 	s.CdHasSymlinkFreeOption = interp.No
 	s.CdLastPathOptionWins = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// BusyBox ash refuses, as dash does. Measured 2026-09-26 in the pinned
+	// alpine digest, BusyBox v1.37.0: with `d` renamed to `e`, `cd .` writes
+	// `cd: line 0: can't cd to .: No such file or directory` and exits 2,
+	// while `/bin/pwd` in the same shell prints `…/e` and a relative `touch`
+	// lands in it. Measured rather than derived from dash — see
+	// Semantics.CdDestinationIsNotThere.
+	s.CdDestinationIsNotThere = interp.CdDestinationNotThereRefuses
 	// `cd` pushes nothing: this shell has no directory stack at all.
 	// Measured 2026-09-26 in the pinned alpine image, BusyBox v1.37.0 — `cd
 	// /t; cd sub; dirs` is `dirs: not found` at 127, and the fourteen-line

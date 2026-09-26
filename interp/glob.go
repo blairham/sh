@@ -1122,8 +1122,11 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	}
 
 	// An absolute pattern starts at the root; a relative one at the working
-	// directory, which is the shell's rather than the process's.
-	base := r.workDir()
+	// directory, which is the shell's rather than the process's — and at the
+	// name that directory answers to *now*, since a pattern is read off the
+	// filesystem and the filesystem is where a rename happened. See
+	// interp/helddirectory.go.
+	base := r.dirNow()
 	dirs := []string{base}
 	prefix := ""
 	if parts[0] == "" {

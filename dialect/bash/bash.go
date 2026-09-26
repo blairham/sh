@@ -2558,6 +2558,13 @@ func Semantics() interp.Semantics {
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd .` in a directory that has been renamed out from under the shell
+	// moves, and `$PWD` becomes the new name. Measured 2026-09-26 on
+	// /opt/homebrew/bin/bash (5.3) and /bin/bash (3.2) alike: with `d`
+	// renamed to `e`, `cd .` is 0 and `$PWD` reads `…/e`, and `cd s` lands in
+	// `…/e/s`. Both builds, same answer, so this is not a version.
+	// See Semantics.CdDestinationIsNotThere for the pair that fixes the noun.
+	s.CdDestinationIsNotThere = interp.CdDestinationNotThereEntersAndTakesTheKernelsName
 	// `cd` pushes nothing, in the one other shell that *has* a directory
 	// stack — which is what makes this column the control rather than a
 	// vacuous no. Measured 2026-09-26 on bash 5.3.20: `pushd sub` leaves

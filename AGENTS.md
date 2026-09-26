@@ -186,6 +186,17 @@ over one cwd — which is why the core's `cd` sets `r.Dir` and never calls
 `os.Chdir`, and why `$PWD` is read from `r.Vars` rather than from the
 environment.
 
+**A descriptor is not process state, and that is how a renamed directory is
+followed.** The kernel holds a real shell's working directory as a reference to
+the object, so `mv` on the directory a shell is sitting in moves the shell with
+it and nothing in the shell notices — measured across all six real shells. A
+Runner has no process directory to be moved, so it keeps an open descriptor on
+its own directory and asks that what the directory is called now. That is
+per-Runner state, exactly as the descriptor table an `exec 3>f` builds is, and
+the rule above is unchanged by it: what may not be borrowed is the *process's*
+one answer. See `interp/helddirectory.go` and #4653, where `cd .` after a
+rename refused, `> rel.txt` refused, and every external command came back 126.
+
 `exec` is the sharpest case: replacing the process is exactly right for a
 shell and catastrophic for a library, so `Runner.ReplaceProcess` is a hook
 that `interp` never fills in. `driver` supplies `syscall.Exec`, because a

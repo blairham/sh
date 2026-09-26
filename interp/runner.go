@@ -64,6 +64,12 @@ type Runner struct {
 	// driver does, at construction, because a shell binary is the one place
 	// the process-wide question is the right one to ask.
 	Dir string
+	// held is this Runner's open descriptor on the directory Dir names, and
+	// is how a directory that has been renamed out from under the shell is
+	// still found. Unexported, lazily opened, never shared with a clone
+	// without both sides knowing — see interp/helddirectory.go, which is the
+	// whole of the reasoning.
+	held *heldDirectory
 	// Env is the environment: what commands inherit, and what `$name` falls
 	// back to when no variable answers. Nil means empty, not the process's
 	// own — the Runner never reads os.Environ, for the reason Dir never
@@ -4369,6 +4375,16 @@ func (r *Runner) clone() *Runner {
 	r.streamLocks()
 	c := *r
 	c.inSubshell = true
+	// The hold on the working directory crosses, because a subshell of a real
+	// shell inherits the *directory* and not a name for it: a fork's cwd is
+	// the parent's object, so `mv ../d ../e; (cd .)` works in every shell in
+	// the panel. Both sides now hold one descriptor, so neither may close it
+	// — see heldDirectory.shared, which is read from more than one goroutine
+	// because a pipeline's stages and a process substitution's body run while
+	// the shell that cloned them carries on.
+	if c.held != nil {
+		c.held.shared.Store(true)
+	}
 	// A new execution unit, so a bare `exit` in it reports a status of the
 	// copy's own rather than the one this shell was holding. See
 	// interp/unitstatus.go for the rows and for the columns that do not.
@@ -8206,7 +8222,15 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// body started.
 		ownGroup = false
 	}
-	cmd.Dir = r.Dir
+	// Where this shell is *called now*, not the name it remembers. A child
+	// inherits a working directory the kernel resolves at the moment it
+	// starts, so a shell whose directory has been renamed since it moved
+	// there hands over a path that is no longer anybody's. Every real shell
+	// in the panel carries on regardless, because the kernel holds their
+	// directory for them; this one holds it itself. See
+	// interp/helddirectory.go, and note that the answer is r.Dir unchanged
+	// in every case where nothing has moved.
+	cmd.Dir = r.dirNow()
 	cmd.Env = env
 	// The fields rather than the resolved streams, so that a nil one reaches
 	// os/exec as nil and the child is given /dev/null. That is the same

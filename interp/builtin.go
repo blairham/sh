@@ -5128,7 +5128,16 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 			dir = resolved
 		}
 	}
+	// The operand as it stands *before* the join, because the last resort
+	// below resolves it from the directory itself rather than from the name
+	// this shell has for that directory — which is the only form that still
+	// means anything once the name has stopped leading there. An absolute
+	// operand has no such form and needs none: the path `cd` builds for one
+	// is the operand, so there is nothing a second attempt could do
+	// differently.
+	fromHere := ""
 	if !filepath.IsAbs(dir) {
+		fromHere = dir
 		dir = filepath.Join(old, dir)
 	}
 	// Through the gate. A denied stat surfaces as the missing-directory
@@ -5142,6 +5151,16 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// now, which is the errno the synthesized one here spelled by hand. See
 	// enterable (#1492).
 	err := r.enterable(dir)
+	// Whether the descriptor this Runner holds is already the directory this
+	// `cd` arrived at, which only the last resort below can make true. It
+	// decides whether the hold is re-taken from the new name on the way out,
+	// and the answer must be no in every other case: `cd .` into a *different*
+	// directory that has since taken the old name is a move that changes
+	// nothing about `r.Dir`, and a hold kept because the name matched would
+	// be a hold on the directory the shell just left. Measured — with `d`
+	// renamed to `e` and a new `d` made, `cd .` puts zsh in the new `d` and
+	// `ls` shows the new `d`'s file.
+	heldTheArrival := false
 	if err != nil {
 		// A misspelling is the one failure this can still recover from, and
 		// only where the shell asked for that — see cdCorrected, which
@@ -5153,6 +5172,29 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		if fixed, shown, corrected := r.cdCorrected(named, old, physical); corrected {
 			dir, err = fixed, nil
 			r.printf("%s\n", shown)
+		}
+	}
+	if err != nil {
+		// The last resort, and the one a shell whose directory has been
+		// renamed out from under it needs: try the operand again from the
+		// **directory** rather than from the name. After the spelling
+		// correction rather than before it, because a correction is about an
+		// operand that was mistyped and this is about a directory that moved;
+		// the two cannot both be true of one `cd`, and the correction is the
+		// one that prints.
+		//
+		// Nothing is asked unless the move would actually be possible —
+		// there has to be a hold, and a relative operand for it to resolve —
+		// so `cd nosuchdir` puts no question in any dialect. See
+		// Semantics.CdDestinationIsNotThere for the panel and
+		// interp/helddirectory.go for the hold.
+		if arrived, moved, asked := r.cdFromTheDirectoryHeld(fromHere, dir); asked {
+			if r.unspecified {
+				return 2
+			}
+			if moved {
+				dir, err, heldTheArrival = arrived, nil, true
+			}
 		}
 	}
 	if err != nil {
@@ -5178,6 +5220,20 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// whole process, which is wrong for an embedded interpreter and would be
 	// shared by every Runner in it.
 	r.Dir = dir
+	// The hold on the new directory, taken **here** rather than the next time
+	// something wants it. A hold can only be opened while the name still
+	// leads somewhere, and the whole case it exists for is a rename that
+	// happens afterwards — so a lazy one would be opened for the first time
+	// at exactly the moment it cannot be. Measured: the suite's own chunk
+	// renames the directory from inside a subshell, and the parent runs
+	// nothing else in between. See interp/helddirectory.go.
+	if !heldTheArrival {
+		// Re-taken from the name arrived at rather than kept because the name
+		// did not change: see heldTheArrival above for the row that makes the
+		// difference.
+		r.dropDirectoryHold()
+	}
+	r.holdDirectory()
 	r.setVar("OLDPWD", old)
 	r.setVar("PWD", dir)
 	// The directory just left, pushed for the one shell whose `cd` does

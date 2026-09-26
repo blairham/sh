@@ -289,6 +289,36 @@ type PromptStyle struct {
 	// produces the separator.
 	CwdBaseAtRootIsEmpty bool
 
+	// CwdIsTheShellsOwnDirectory reads the directory codes from the directory
+	// the shell is in rather than from the `PWD` parameter, so a script that
+	// assigns `PWD` moves what the prompt draws in one dialect and not in the
+	// others.
+	//
+	// A real disagreement about identical syntax, measured 2026-09-26 with the
+	// shell moved to a directory and `PWD` then written over:
+	//
+	//	cd <dir>; PWD=/bogus; <the prompt's directory code>
+	//
+	//	bash 5.3.20  \\w  /bogus              the parameter
+	//	zsh 5.9.2    %~   <dir>               the shell's own directory
+	//	BusyBox ash  \\w  <dir>               the shell's own directory
+	//
+	// The control is the same line without the assignment: all three draw
+	// <dir>, so the probe can produce either answer and the row is about the
+	// assignment and nothing else. ash was read in the panel's own image,
+	// `alpine@sha256:28bd5f…`, BusyBox v1.37.0, whose prompt goes to a pipe
+	// (see dialect/ash.PromptStyle); its controls are that `cd` afterwards
+	// *does* move the prompt and that `$PWD` really held `/bogus`.
+	//
+	// ksh93 and dash have no directory code in a prompt at all, so they cannot
+	// reach this and hold the zero value by construction rather than by
+	// measurement.
+	//
+	// Only the *abbreviating* codes are asked. `%d` and `%/` are the whole path
+	// and are read the same way, which is measured too: after the assignment
+	// zsh's `%d` still draws the shell's own directory.
+	CwdIsTheShellsOwnDirectory bool
+
 	// NumericArgument says a run of digits between the escape and the code is
 	// an argument to that code rather than a code of its own.
 	//
@@ -1871,17 +1901,17 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		full, told := r.promptHostName()
 		return full, told
 	case FieldCwd:
-		return countedComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), arg, 0), true
+		return countedComponents(r.abbreviatedDirectory(r.promptCwd(st)), arg, 0), true
 	case FieldCwdFull:
-		return countedComponents(r.promptVar("PWD"), arg, 0), true
+		return countedComponents(r.promptCwd(st), arg, 0), true
 	case FieldCwdBase:
-		return lastPathComponent(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), st), true
+		return lastPathComponent(r.abbreviatedDirectory(r.promptCwd(st)), st), true
 	case FieldCwdBaseFull:
-		return lastPathComponent(r.promptVar("PWD"), st), true
+		return lastPathComponent(r.promptCwd(st), st), true
 	case FieldCwdCounted:
-		return countedComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME")), arg, 1), true
+		return countedComponents(r.abbreviatedDirectory(r.promptCwd(st)), arg, 1), true
 	case FieldCwdCountedFull:
-		return countedComponents(r.promptVar("PWD"), arg, 1), true
+		return countedComponents(r.promptCwd(st), arg, 1), true
 	case FieldPrivilege:
 		// A read of the process's identity, which is the class .golangci.yml
 		// blesses beside `$$` and `$UID`: nothing a script does changes it,
@@ -2030,9 +2060,9 @@ func (r *Runner) promptQuantity(c PromptCondition, n int) (int, bool) {
 		}
 		return 1, true
 	case ConditionCwdComponents:
-		return pathComponents(r.promptVar("PWD")), true
+		return pathComponents(r.promptCwd(r.promptStyle)), true
 	case ConditionCwdComponentsHome:
-		return pathComponents(abbreviateHome(r.promptVar("PWD"), r.promptVar("HOME"))), true
+		return pathComponents(r.abbreviatedDirectory(r.promptCwd(r.promptStyle))), true
 	}
 	if v, ok := promptClockQuantity(c, r.Now()); ok {
 		return v, true
@@ -2185,19 +2215,107 @@ func lastPathComponent(dir string, st PromptStyle) string {
 	return path.Base(dir)
 }
 
-// abbreviateHome writes the home directory as `~`.
-//
-// The home directory exactly, or a path inside it — not any path that merely
-// starts with the same letters, which is why the boundary is checked.
+// abbreviateHome writes the home directory as `~`, and is the whole of the
+// answer in every dialect but one.
 func abbreviateHome(dir, home string) string {
-	if home == "" || dir == "" {
+	return abbreviatedAgainst(dir, home, "~")
+}
+
+// abbreviatedDirectory is how a prompt writes a directory: the home directory
+// as `~`, and — in the one shell that has the table — a *named* directory as
+// `~name`.
+//
+// Measured on zsh 5.9.2, 2026-09-26, with `hash -d` filling the table:
+//
+//	table                       directory   drawn
+//	jd=<nd>                     <nd>        ~jd
+//	jd=<nd>                     <nd>/a/b    ~jd/a/b
+//	(none)                      <nd>/a/b    the path
+//	jd=<nd>, ab=<nd>/a          <nd>/a/b    ~ab/b
+//	xxxxx=<nd>/a, y=<nd>        <nd>/a/b    ~y/a/b
+//	HOME=<nd>, x=<nd>/a         <nd>/a/b    ~x/b
+//	HOME=<nd>, longname=<nd>/a  <nd>/a/b    ~/a/b
+//	HOME=<nd>, ab=<nd>/a        <nd>/a/b    ~/a/b
+//	z1=<nd>, a1=<nd>            <nd>/a      ~a1/a
+//	a1=<nd>, z1=<nd>            <nd>/a      ~a1/a
+//
+// The control is the third row, which is the same lines with the table left
+// empty and draws the path in both shells.
+//
+// So the winner is **the candidate that draws the shortest string**, not the
+// longest matching value: rows five and seven each have a longer match losing
+// to a shorter one because the name it would be written under is longer. Rows
+// eight and nine say what a tie does — `~/a/b` and `~ab/b` are both five
+// characters and the home wins, and two names of equal length go to the
+// alphabetically first one whichever was written first, which is why the
+// names are walked in sorted order.
+//
+// **The lookup is the dialect's and needs no axis, because the table is
+// empty everywhere else by construction**: only `hash -d` fills it and only
+// one dialect has that spelling. The falsifiable half of that claim is that
+// this function is the one the other four reach, and it returns
+// abbreviateHome's answer for an empty table.
+func (r *Runner) abbreviatedDirectory(dir string) string {
+	drawn := abbreviateHome(dir, r.promptVar("HOME"))
+	for _, name := range r.namedDirNames() {
+		against, ok := r.namedDir(name)
+		if !ok {
+			continue
+		}
+		if under := abbreviatedAgainst(dir, against, "~"+name); len(under) < len(drawn) {
+			drawn = under
+		}
+	}
+	return drawn
+}
+
+// promptCwd is the directory a prompt's abbreviating codes are about, read
+// from wherever this dialect reads it — see PromptStyle.CwdIsTheShellsOwnDirectory.
+func (r *Runner) promptCwd(st PromptStyle) string {
+	if st.CwdIsTheShellsOwnDirectory {
+		return r.Dir
+	}
+	return r.promptVar("PWD")
+}
+
+// abbreviatedAgainst writes one directory as `prefix`, or as `prefix` and the
+// rest of the path, and leaves everything else alone.
+//
+// The directory exactly, or a path inside it — not any path that merely starts
+// with the same letters, which is why the boundary is checked.
+//
+// **A value ending in `/` abbreviates nothing at all**, which is the rule and
+// not a guard against the root. Measured 2026-09-26 against zsh 5.9.2 and bash
+// 5.3.20, which agree on every row of it:
+//
+//	HOME       directory     drawn
+//	/          /usr/local    /usr/local
+//	/          /             /
+//	//         /usr          /usr
+//	/usr/      /usr/local    /usr/local
+//	/usr/      /usr          /usr
+//	/usr       /usr/local    ~/local
+//	/usr       /usr          ~
+//
+// The last two rows are the control and they are the point: the helper is
+// right for an ordinary value, so what the first five say is that a trailing
+// separator switches the abbreviation off rather than that abbreviation is
+// wrong. Written as a prefix test alone, every absolute path on the machine
+// has `/` in front of it and `HOME=/` abbreviated all of them — `~usr` for
+// `/usr` (#4539).
+//
+// The same rule reaches a named directory's value, where it is reachable by
+// an ordinary script: `hash -d jd=/` draws `/usr` for `/usr` in zsh, and
+// `hash -d jd=$d/` draws the path untouched.
+func abbreviatedAgainst(dir, against, prefix string) string {
+	if against == "" || dir == "" || strings.HasSuffix(against, "/") {
 		return dir
 	}
-	if dir == home {
-		return "~"
+	if dir == against {
+		return prefix
 	}
-	if strings.HasPrefix(dir, home) && (strings.HasSuffix(home, "/") || dir[len(home)] == '/') {
-		return "~" + dir[len(home):]
+	if strings.HasPrefix(dir, against) && dir[len(against)] == '/' {
+		return prefix + dir[len(against):]
 	}
 	return dir
 }
@@ -2304,9 +2422,10 @@ func leadingComponents(path string, n int) string {
 		return path
 	}
 	parts := strings.Split(rest, "/")
-	if lead == "~" {
-		// The tilde is the first unit, so `%-1~` is the marker on its own and
-		// the segments start at two.
+	if strings.HasPrefix(lead, "~") {
+		// The tilde — with a named directory's name behind it where there is
+		// one — is the first unit, so `%-1~` is the marker on its own and the
+		// segments start at two.
 		if n > len(parts) {
 			return path
 		}
@@ -2326,10 +2445,21 @@ func leadingComponents(path string, n int) string {
 // One reader for both directions of the count, because the marker's two
 // readings are exactly what the two of them share: a `~` is a unit and a `/`
 // is not, and a helper each is how one of them would come to disagree.
+//
+// **A named directory's whole marker is the unit, not the tilde in front of
+// it.** Measured on zsh 5.9.2, 2026-09-26, in `~jd/a/b`: `%3~` is `~jd/a/b`
+// and `%-1~` is `~jd`, which are the same two answers `~/a/b` gives for a home
+// — so `~jd` counts as one thing exactly as `~` does, and the segments start
+// after it. Reading only the tilde made `%-1~` `~` and `%c` at a named root
+// `jd`, neither of which is a directory anybody could type back (#4541).
 func pathLeader(path string) (lead, rest string) {
 	switch {
 	case strings.HasPrefix(path, "~"):
-		return "~", strings.TrimPrefix(path[1:], "/")
+		named := path[1:]
+		if cut := strings.IndexByte(named, '/'); cut >= 0 {
+			return "~" + named[:cut], named[cut+1:]
+		}
+		return "~" + named, ""
 	case strings.HasPrefix(path, "/"):
 		return "/", path[1:]
 	}
@@ -2365,9 +2495,10 @@ func trailingComponents(path string, n int) string {
 		return path
 	}
 	parts := strings.Split(rest, "/")
-	if lead == "~" {
-		// The tilde is a unit of its own, so a path of five segments under a
-		// home is six things and `%6~` is all of it.
+	if strings.HasPrefix(lead, "~") {
+		// The tilde — with a named directory's name behind it where there is
+		// one — is a unit of its own, so a path of five segments under a home
+		// is six things and `%6~` is all of it.
 		if n > len(parts) {
 			return path
 		}

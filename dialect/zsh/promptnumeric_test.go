@@ -67,10 +67,15 @@ func TestACountKeepsThatManyTrailingComponents(t *testing.T) {
 // and the gap is what it was: a positive count is the trailing components and
 // a negative one is the leading ones, both of the same path.
 //
-// `PWD` and `HOME` are assigned rather than taken from the directory the test
-// runs in, so every want below is exact on any machine. What is being asked is
-// the component arithmetic; where the shell gets its working directory from is
-// asked elsewhere.
+// The directory is the one the **shell is in** and `HOME` is assigned, so
+// every want below is exact on any machine. What is being asked is the
+// component arithmetic; where the shell gets its working directory from is
+// asked in promptdirectorysource_test.go.
+//
+// It used to be assigned as `PWD` instead, which is the shape #4540 is about:
+// this shell read the parameter and real zsh reads the directory it is in, so
+// the whole table was pinned through a route the reference does not take. Both
+// spellings drew the same string while they agreed, which is why it stood.
 //
 // Three rows carry the rule that is not "keep the first n":
 //
@@ -115,8 +120,8 @@ func TestANegativeCountKeepsThatManyLeadingComponents(t *testing.T) {
 		{"/tmp/a/b/c", "/nowhere", "%-", ""},
 	} {
 		t.Run(tc.code+" in "+tc.pwd, func(t *testing.T) {
-			src := "PWD=" + tc.pwd + "; HOME=" + tc.home + "; print -rP -- '" + tc.code + "'"
-			out, st := runZsh(t, t.TempDir(), src)
+			src := "HOME=" + tc.home + "; print -rP -- '" + tc.code + "'"
+			out, st := runZsh(t, tc.pwd, src)
 			if out != tc.want+"\n" || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.code, out, st, tc.want+"\n")
 			}
@@ -136,6 +141,9 @@ func TestANegativeCountKeepsThatManyLeadingComponents(t *testing.T) {
 // draws: a single leading component keeps the `/` in front of it, so `%c`
 // there is `/tmp` where `\W` is `tmp`. Sharing the field between the two codes
 // answered every other row correctly, which is why it stood.
+//
+// The directory is the shell's own rather than an assigned `PWD`, for the
+// reason on the test above this one.
 func TestTheBaseDirectoryCodesTakeACount(t *testing.T) {
 	for _, tc := range []struct{ pwd, home, code, want string }{
 		{"/tmp/a/b/c", "/nowhere", "%c", "c"},
@@ -168,8 +176,8 @@ func TestTheBaseDirectoryCodesTakeACount(t *testing.T) {
 		{"/home/me/p/x/y", "/home/me", "%4C", "me/p/x/y"},
 	} {
 		t.Run(tc.code+" in "+tc.pwd, func(t *testing.T) {
-			src := "PWD=" + tc.pwd + "; HOME=" + tc.home + "; print -rP -- '" + tc.code + "'"
-			out, st := runZsh(t, t.TempDir(), src)
+			src := "HOME=" + tc.home + "; print -rP -- '" + tc.code + "'"
+			out, st := runZsh(t, tc.pwd, src)
 			if out != tc.want+"\n" || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.code, out, st, tc.want+"\n")
 			}

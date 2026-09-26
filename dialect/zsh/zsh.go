@@ -3102,6 +3102,10 @@ func Semantics() interp.Semantics {
 	s.ArrayOperandIsStoredPastAFailedOpen = interp.No
 	// zsh 5.9.2 reaches the target behind either spelling.
 	s.KillTakesEndOfOptionsAfterTheSignal = interp.Yes
+	// Measured 2026-09-26 against zsh 5.9.2: `kill a b c` writes three
+	// `illegal pid` lines and reports 3, `kill a b c d` four and 4. The
+	// count is this shell's KillStatus; the four lines are this axis.
+	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.Yes
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// OPTIND names the word until its last letter has been read.

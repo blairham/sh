@@ -19602,6 +19602,39 @@ about rendering a command at all: both of the shells that leave it out
 here *do* print the command of a job they stopped themselves. They kept
 nothing for this kind of job, and the listing is where that shows.
 
+**`KillKeepsGoingPastAnOperandThatIsNotAPid`** — bash yes · dash no ·
+ksh93 no · zsh yes · BusyBox ash yes
+
+Whether the operands behind a word that is not a pid at all are still
+operands, or whether the first one ends the builtin. Measured
+2026-09-26, every operand deliberately unusable so that no row could
+deliver anything:
+
+| shell | `kill a b c` | `kill 999998 999999` |
+| --- | --- | --- |
+| bash 5.3.20 | 3 lines, status 1 | 2 lines, status 1 |
+| zsh 5.9.2 | 3 lines, status 3 | 2 lines, status 2 |
+| ksh93u+ | 1 line, status 1 | 2 lines, status 1 |
+| dash 0.5.12 | 1 line, status 2 | 2 lines, status 1 |
+| BusyBox ash 1.37.0 | 3 lines, status 3 | 2 lines, status 2 |
+
+The second column is the control and it is unanimous: a *well-formed*
+pid that reaches nothing is a send that failed, and every column reports
+both of them. So this axis is keyed on the malformed **word** and not on
+a failure of any kind, which is what `kill 999999 a` shows from the
+other side — ksh93 reports the unreachable pid first and only then stops
+at the word.
+
+The first column has to be read off the **line count** and not the
+status, because bash and ksh93 both answer 1 there for opposite
+reasons: ksh93 stopped, and bash carried on and had no success to
+report. A grid read off the status alone puts bash with the shells that
+stop, which is the wrong answer to the question this axis asks.
+
+A `%` spec naming no job is a third thing again and splits differently —
+bash and zsh carry on past one, dash and BusyBox ash do not, and BusyBox
+ash reports it *before* a bad word written in front of it. Not this axis.
+
 **`KillListAcceptsName`** — bash yes · dash no · ksh93 yes · zsh yes
 
 Lets `kill -l` translate a name into a number, as the reverse of what it
@@ -19612,13 +19645,23 @@ agrees with everyone by arriving there another way and `kill -l INT` is
 an illegal number. One question with two answers rather than a feature
 dash is missing, which is why it is an axis and not a gap.
 
-**`KillStatus`** — bash any success · dash any failure · ksh93 any failure · zsh failure count
+**`KillStatus`** — bash any success · dash any failure · ksh93 any
+failure · zsh failure count · BusyBox ash failure count
 
 Is what `kill` reports when it was given several targets and they did
 not all agree. Three answers, and no two of them are the majority:
 
-    kill -0 $$ 999999    bash → 0   dash, ksh93 → 1   zsh → 1
-    kill 999998 999999   bash → 1   dash, ksh93 → 1   zsh → 2
+    kill -0 $$ 999999    bash → 0   dash, ksh93 → 1   zsh, ash → 1
+    kill 999998 999999   bash → 1   dash, ksh93 → 1   zsh, ash → 2
+
+BusyBox ash is zsh's answer and not dash's, which is the one question
+about `kill` where it leaves the ash family. It held dash's for a while,
+inherited from that preset and never measured — invisible because the
+builtin stopped at the first malformed operand and a single failure is
+1 under either policy. What the count counts is the *operands* that
+failed and not the diagnostics written, and those part on one shape:
+`kill -NOPE a b` is two lines in zsh — the refusal and the listing hint
+— at 1, because the target list was never reached.
 
 bash reports success if it signaled anything at all, and zsh reports the
 number that failed — which is a status carrying a count rather than a

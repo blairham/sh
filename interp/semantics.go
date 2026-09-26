@@ -4493,6 +4493,45 @@ type Semantics struct {
 	// writes.
 	KillTakesEndOfOptionsAfterTheSignal Answer
 
+	// KillKeepsGoingPastAnOperandThatIsNotAPid carries on to the operands
+	// behind a word that is not a pid at all, rather than stopping at the
+	// first one.
+	//
+	// It is about the *malformed* operand and nothing else. A pid that is
+	// well-formed and reaches nothing — `kill 999999` — is a send that
+	// failed rather than a word that could not be read, and every column in
+	// the panel carries on past one of those; a `%` spec naming no job is a
+	// third thing again and splits differently, which is why neither is
+	// asked here. Measured 2026-09-26, each operand deliberately unusable so
+	// that nothing could be delivered:
+	//
+	//	                 kill a b c            kill 999999 999998
+	//	bash 5.3.20      3 lines, status 1     2 lines, status 1
+	//	zsh 5.9.2        3 lines, status 3     2 lines, status 2
+	//	ksh93u+          1 line,  status 1     2 lines, status 1
+	//	dash 0.5.12      1 line,  status 2     2 lines, status 1
+	//	BusyBox 1.37.0   3 lines, status 3     2 lines, status 2
+	//
+	// The second column is the control and it is the same everywhere: every
+	// shell reports both unreachable pids. The first is the split, and it is
+	// read off the *count of lines* rather than the status, because ksh and
+	// bash agree on 1 there for opposite reasons — ksh stopped, bash carried
+	// on and could not report a success.
+	//
+	// The status is a separate question and KillStatus already answers it:
+	// the count of operands that failed in zsh and BusyBox ash, 1 if
+	// anything failed in ksh and dash, 0 if anything succeeded in bash. The
+	// two are easy to confuse because the number of failures and the number
+	// of diagnostics agree on almost every row. They part on
+	// `kill -NOPE a b`, which is two lines in zsh — the refusal and the
+	// listing hint — at status 1, because no operand was ever looked at.
+	//
+	// It matters because a script that signals a list is asking about the
+	// whole list. `kill $pids` with one stale entry in it delivered nothing
+	// to anything behind that entry, silently, in the three dialects whose
+	// real shells deliver to all of them.
+	KillKeepsGoingPastAnOperandThatIsNotAPid Answer
+
 	// OperatorDistributesOverTheFieldList runs a trim or a replacement over
 	// each field of `$@` rather than over the whole list once.
 	//
@@ -26234,6 +26273,10 @@ func PosixSemantics() Semantics {
 		ArrayOperandIsStoredPastAFailedOpen: No,
 		// The standard says the marker ends the options wherever it stands.
 		KillTakesEndOfOptionsAfterTheSignal: Yes,
+		// A utility handed a list of operands reports on the list; three of
+		// the five columns carry on past a word that is not a pid, and the
+		// two that stop say so themselves.
+		KillKeepsGoingPastAnOperandThatIsNotAPid: Yes,
 		// A trim on `$@` runs over each field; dash and BusyBox ash run it
 		// over the whole list once and say so themselves.
 		OperatorDistributesOverTheFieldList: Yes,
@@ -27624,6 +27667,10 @@ func CoreSemantics() Semantics {
 		ArrayOperandIsStoredPastAFailedOpen: No,
 		// The standard says the marker ends the options wherever it stands.
 		KillTakesEndOfOptionsAfterTheSignal: Yes,
+		// A utility handed a list of operands reports on the list; three of
+		// the five columns carry on past a word that is not a pid, and the
+		// two that stop say so themselves.
+		KillKeepsGoingPastAnOperandThatIsNotAPid: Yes,
 		// `kill -n signum` is taken, which is three of the five columns and
 		// what the substrate has always had — dash and BusyBox ash are the
 		// two without it and each says so itself. `-s` with nothing after it

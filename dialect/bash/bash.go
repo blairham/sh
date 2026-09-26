@@ -2456,6 +2456,11 @@ func Semantics() interp.Semantics {
 	s.ArrayOperandIsStoredPastAFailedOpen = interp.Yes
 	// bash 5.3.20 reaches the target behind either spelling.
 	s.KillTakesEndOfOptionsAfterTheSignal = interp.Yes
+	// Measured 2026-09-26 against bash 5.3.20: `kill a b c` writes all
+	// three `not a pid or valid job spec` lines. The status is 1 rather
+	// than 3 because this shell's KillStatus counts a success and not a
+	// failure, which is a separate axis and a separate row.
+	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.Yes
 	// A trim on `$@` runs over each field. dash and BusyBox ash run it
 	// over the joined list once.
 	s.OperatorDistributesOverTheFieldList = interp.Yes

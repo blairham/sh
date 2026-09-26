@@ -51,7 +51,7 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 			Body: empty, Start: c.Start,
 		}, nil)
 	}
-	return r.withRedirs(ctx, c.Redirs, func() error {
+	return r.withRedirsOfABracketedCommand(ctx, c.Redirs, func() error {
 		name := r.anonymousFunctionName()
 		var args []string
 		for _, w := range c.Args {

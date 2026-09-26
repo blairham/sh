@@ -8157,6 +8157,25 @@ type Diagnostics struct {
 	// told nothing does not go looking for a second position.
 	RedirectFailureLine RedirectLine
 
+	// HeredocBodyOnAReservedWordCompoundIsLocatedWhereTheCommandEnds puts a
+	// here-document **body**'s failure at the line the whole command ended
+	// on, for a compound command spelled with a reserved word — `{ … }`,
+	// `while`, `until`, `if`, `for`, `case`, `select`.
+	//
+	// bash alone. Its counter is where the input has got to, and one of
+	// those constructs does not set it back, so a body that failed is
+	// reported past the command rather than at it. zsh writes the command's
+	// line either way, ksh93 writes no line at all on that route and dash
+	// writes the command's, each matching what this shell already did.
+	//
+	// Only the body: a redirection that could not be *opened* is
+	// RedirectFailureLine's question in that column too, and is unmoved. See
+	// interp/heredoccommandend.go for the thirteen shapes, the six controls
+	// that say this is keyed on the **spelling** rather than on "a compound
+	// command", and the five that say the number is the end of the whole
+	// command rather than the delimiter's line (#4690, #4712).
+	HeredocBodyOnAReservedWordCompoundIsLocatedWhereTheCommandEnds bool
+
 	// RedirectFailureStatus is what a command whose redirect could not be
 	// opened reports. Zero means the substrate's own, which is 1.
 	//

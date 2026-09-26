@@ -3895,6 +3895,10 @@ func Diagnostics() interp.Diagnostics {
 		// interp.Diagnostics.SubstitutionParseFailureStatusFromCommandString
 		// for the rows and the four controls (#4697).
 		SubstitutionParseFailureStatusFromCommandString: 127,
+		// A here-document body that failed is reported where the reader had
+		// got to, for a compound spelled with a reserved word. See
+		// interp/heredoccommandend.go (#4690, #4712).
+		HeredocBodyOnAReservedWordCompoundIsLocatedWhereTheCommandEnds: true,
 		CannotCreate:            "%[1]s: %[2]s",
 		NoclobberRefusal:        "%[1]s: cannot overwrite existing file",
 		NamesTheInputInLocation: true,

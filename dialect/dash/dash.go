@@ -1420,6 +1420,10 @@ func Semantics() interp.Semantics {
 	s.NumericOperandDoubleDashEndsOptions = interp.No
 	// The count is taken and the rest of the line is not read.
 	s.ExtraNumericOperand = interp.ExtraNumericOperandIgnored
+	// unanswered ShiftFromTheEndLetter: no `-p`, and no dash word under
+	// `shift` is an option here — `shift -p` is an illegal number, which is
+	// the same complaint this shell makes about `shift -x`. Measured
+	// 2026-09-26 on dash 0.5.13.
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
 	s.WaitReadsOptions = interp.Yes

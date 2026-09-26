@@ -1019,6 +1019,11 @@ func Semantics() interp.Semantics {
 	// and the next line does. Measured 2026-09-16 on 5.3.20 in a script
 	// file; 3.2.57 says the same sentence at status 1.
 	s.ExtraNumericOperand = interp.ExtraNumericOperandGivesUpTheStatement
+	// unanswered ShiftFromTheEndLetter: this shell has no `-p` under
+	// `shift`, and does not read a dash word as an option there at all —
+	// ShiftOptionWords above is the statement of that — so `shift -p 2` is
+	// a *count* it cannot make a number of, and the complaint it already
+	// makes is this shell's own. Measured 2026-09-26 on bash 5.3.
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes

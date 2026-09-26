@@ -2631,6 +2631,11 @@ func Semantics() interp.Semantics {
 	s.StartupPwdName = interp.StartupPwdNameFromTheEnvironmentOrHome
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// `cd` pushes nothing. Measured 2026-09-26 on ksh93u+ 2012-08-01
+	// (`${.sh.version}` is `Version AJM 93u+ 2012-08-01`): `dirs` is `dirs:
+	// not found`, and `set -o` names no option with `pushd` in it — the same
+	// grep finds `errexit` there.
+	s.CdPushesTheDirectoryItLeaves = interp.No
 	s.PrintfAssignsWithV = interp.No
 	s.PrintfRejectsUnknownOption = interp.Yes
 	s.TrapParsesOptions = interp.Yes

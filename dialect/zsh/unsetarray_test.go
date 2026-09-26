@@ -57,7 +57,7 @@ func TestAQuotedAtAsksWhetherTheNameExists(t *testing.T) {
 
 // The directory stack is read through the guarded spelling, and this is the
 // test that says why: nothing declares the stack until the first push, so the
-// plain `"${DIRSTACK[@]}"` took the scalar reading above and stored an empty
+// plain `"${dirstack[@]}"` took the scalar reading above and stored an empty
 // entry beside the old directory. `dirs` then printed a trailing space for it
 // — the whole of the visible damage, and invisible to a count.
 //

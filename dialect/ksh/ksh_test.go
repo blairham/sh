@@ -208,6 +208,10 @@ func TestSemantics(t *testing.T) {
 		// ksh93u+ 2012-08-01 — `f() { false; echo x; }; f; echo "post=$?"`
 		// writes `x` and `post=0` at 0.
 		{"FailureTakesAnImplicitReturn", s.FailureTakesAnImplicitReturn, interp.No},
+		// No directory stack at all: measured 2026-09-26 on ksh93u+
+		// 2012-08-01, `dirs` is `dirs: not found` and `set -o` names no
+		// option with `pushd` in it.
+		{"CdPushesTheDirectoryItLeaves", s.CdPushesTheDirectoryItLeaves, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
 		// Ahead of the command, and no option here moves it.

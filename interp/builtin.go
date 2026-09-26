@@ -5137,6 +5137,13 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	r.Dir = dir
 	r.setVar("OLDPWD", old)
 	r.setVar("PWD", dir)
+	// The directory just left, pushed for the one shell whose `cd` does
+	// that — see Semantics.CdPushesTheDirectoryItLeaves, which is zsh's
+	// `AUTO_PUSHD`. Here and not at the top of the builtin, because every
+	// return above this line is a `cd` that did not arrive and none of them
+	// pushes; and before the hook below, because the hook can already read
+	// the pushed entry.
+	r.pushTheDirectoryLeft(old)
 	if announced {
 		r.printf("%s\n", dir)
 	}
@@ -5166,6 +5173,29 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		r.FireHook(ctx, nil, r.sem().DirectoryChangeHook)
 	}
 	return 0
+}
+
+// pushTheDirectoryLeft prepends a departed directory to the stack, for the
+// dialect whose `cd` does that and at the moment it does it.
+//
+// Reading the axis here rather than at the call site is deliberate: the axis
+// and the parameter name are two halves of one question — a shell that pushes
+// and has nowhere to push to is not a state any dialect can reach — and a
+// caller that tested one of them would be the place the other got forgotten.
+//
+// The array is read and written like any other, so a script that assigned to
+// it is pushing onto what it wrote. That is measured: zsh lets a script set
+// `dirstack` outright and the next `popd` goes where the assignment said.
+func (r *Runner) pushTheDirectoryLeft(left string) {
+	if r.sem().CdPushesTheDirectoryItLeaves != Yes {
+		return
+	}
+	name := r.sem().PushedDirectoriesParameter
+	if name == "" {
+		return
+	}
+	pushed, _ := r.arrayElems(name)
+	r.setArray(name, append([]string{left}, pushed...))
 }
 
 // cdFlags is what `cd`'s option letters left behind, and it is a struct for

@@ -3683,6 +3683,22 @@ func Semantics() interp.Semantics {
 	// suffix is shared by every hook this shell has, wherever it fires.
 	s.HookListSuffix = "_functions"
 	s.DirectoryChangeHook = "chpwd"
+	// Where this shell keeps the directories it has pushed, newest first and
+	// **without the one it is standing in** — `dirs` puts `$PWD` in front of
+	// this array rather than reading it out of it. Measured 2026-09-26 on zsh
+	// 5.9.2 under `-f`: after one `cd` with `AUTO_PUSHD` on, `dirs -v` numbers
+	// two entries and `$#dirstack` is **1**, not the 2 #4592 predicted.
+	//
+	// A plain array and not a produced view: this shell lets a script assign
+	// to it, and the assignment *is* the new stack — `dirstack=(/tmp /usr)`
+	// then `popd` arrives in `/tmp`. So the prelude's `pushd`, `popd` and
+	// `dirs` keep it under this name and there is one stack rather than two.
+	s.PushedDirectoriesParameter = "dirstack"
+	// The default state of `AUTO_PUSHD`, which is off — `setopt autopushd` is
+	// what moves this axis and nothing else does; see dialect/zsh/setopt.go.
+	// Measured 2026-09-26: `unsetopt autopushd; cd sub; print $#dirstack`
+	// writes 0, in the reference and here alike.
+	s.CdPushesTheDirectoryItLeaves = interp.No
 	// The other hook whose site is not the prompt loop: this one fires as the
 	// shell ends, which is where a plugin tears down what it started. #2111.
 	s.ExitHook = "zshexit"

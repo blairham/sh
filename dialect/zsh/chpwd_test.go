@@ -240,7 +240,7 @@ print "st=$?"`)
 }
 
 // `pushd` and `popd` move through `cd` here and in that shell both, so both
-// run it — and `${DIRSTACK}` is asserted beside the marker so that a `pushd`
+// run it — and `${dirstack}` is asserted beside the marker so that a `pushd`
 // which had stopped pushing could not pass as one that fired the hook.
 //
 //	$ zsh -c 'chpwd() { print "H[$PWD][$OLDPWD]" }; pushd /tmp; print --; popd'
@@ -250,9 +250,9 @@ print "st=$?"`)
 func TestPushdAndPopdRunChpwd(t *testing.T) {
 	out, st := runZshPrelude(t, chpwdTree(t), `chpwd() { print "CHPWDMARK[${PWD##*/}]" }
 pushd one
-print "pushed=${#DIRSTACK[@]}"
+print "pushed=${#dirstack[@]}"
 popd
-print "popped=${#DIRSTACK[@]} at=${PWD##*/}"`)
+print "popped=${#dirstack[@]} at=${PWD##*/}"`)
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	if len(lines) != 4 || lines[0] != "CHPWDMARK[one]" || lines[1] != "pushed=1" ||
 		lines[2] == "" || !strings.HasPrefix(lines[2], "CHPWDMARK[") ||

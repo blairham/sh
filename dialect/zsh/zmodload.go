@@ -306,7 +306,20 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 		// can put it back. The same split the builtin arm makes, where
 		// KnownBuiltin goes on saying yes for a name that is not currently
 		// in the lookup (#1841).
-		return r.DynamicParameter(name) || r.ParameterWithdrawn(name)
+		//
+		// The third arm is `dirstack`, and it is the one kind of provided
+		// parameter the runner cannot recognize on its own: it is an
+		// ordinary array that the shell itself maintains — see
+		// dialect/zsh/prelude.go — so nothing about the name's storage tells
+		// it apart from an array a script wrote. Semantics.PushedDirectories-
+		// Parameter is the dialect saying which name that is, which keeps
+		// this the runner's own answer rather than a second roster beside
+		// the one above. Without it, `zmodload zsh/parameter` refused with
+		// `dirstack is not implemented yet` the moment the parameter started
+		// working, which is the gate reading "unregistered" as "missing"
+		// (#4592).
+		return r.DynamicParameter(name) || r.ParameterWithdrawn(name) ||
+			(name != "" && name == r.Semantics.PushedDirectoriesParameter)
 	case "f":
 		return r.KnownMathFunction(name)
 	case "c":

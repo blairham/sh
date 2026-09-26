@@ -38,37 +38,37 @@ func TestTheDirectoryStackReadsTheQuietLetter(t *testing.T) {
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"pushd -q moves and says nothing",
-			"pushd -q one\nprint \"at=${PWD##*/} n=${#DIRSTACK[@]}\"",
+			"pushd -q one\nprint \"at=${PWD##*/} n=${#dirstack[@]}\"",
 			"at=one n=1\n",
 		},
 		{
 			"pushd without it fires the hook",
-			"pushd one\nprint \"at=${PWD##*/} n=${#DIRSTACK[@]}\"",
+			"pushd one\nprint \"at=${PWD##*/} n=${#dirstack[@]}\"",
 			"HOOKMARK\nat=one n=1\n",
 		},
 		{
 			"popd -q moves back and says nothing",
-			"pushd -q one\npopd -q\nprint \"at=${PWD##*/} n=${#DIRSTACK[@]}\"",
+			"pushd -q one\npopd -q\nprint \"at=${PWD##*/} n=${#dirstack[@]}\"",
 			"at=base n=0\n",
 		},
 		{
 			"popd without it fires the hook",
-			"pushd -q one\npopd\nprint \"at=${PWD##*/} n=${#DIRSTACK[@]}\"",
+			"pushd -q one\npopd\nprint \"at=${PWD##*/} n=${#dirstack[@]}\"",
 			"HOOKMARK\nat=base n=0\n",
 		},
 		{
 			"a quiet rotation",
-			"pushd -q one\npushd -q +1\nprint \"at=${PWD##*/} n=${#DIRSTACK[@]}\"",
+			"pushd -q one\npushd -q +1\nprint \"at=${PWD##*/} n=${#dirstack[@]}\"",
 			"at=base n=1\n",
 		},
 		{
 			"the letter bundles with cd's others",
-			"pushd -Pq one\nprint \"at=${PWD##*/} n=${#DIRSTACK[@]}\"",
+			"pushd -Pq one\nprint \"at=${PWD##*/} n=${#dirstack[@]}\"",
 			"at=one n=1\n",
 		},
 		{
 			"and stands in front of the end of the options",
-			"pushd -q -- one\nprint \"at=${PWD##*/} n=${#DIRSTACK[@]}\"",
+			"pushd -q -- one\nprint \"at=${PWD##*/} n=${#dirstack[@]}\"",
 			"at=one n=1\n",
 		},
 	} {

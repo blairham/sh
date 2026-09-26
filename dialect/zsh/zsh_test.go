@@ -298,6 +298,13 @@ func TestSemantics(t *testing.T) {
 		// f` writes `notreached`. See dialect/zsh/errreturn_test.go for the
 		// state the option puts it in.
 		{"FailureTakesAnImplicitReturn", s.FailureTakesAnImplicitReturn, interp.No},
+		// The **default** state of `AUTO_PUSHD`, which is what the vector
+		// carries: `setopt autopushd` is what moves this axis, and a shell
+		// that has not been asked pushes nothing. Measured 2026-09-26 on zsh
+		// 5.9.2 — `unsetopt autopushd; cd sub; print $#dirstack` writes 0.
+		// See dialect/zsh/autopushd_test.go for the state the option puts it
+		// in, and for the moment the axis is read at.
+		{"CdPushesTheDirectoryItLeaves", s.CdPushesTheDirectoryItLeaves, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
 		// Ahead of the command, which is `DEBUG_BEFORE_CMD` on — zsh's own

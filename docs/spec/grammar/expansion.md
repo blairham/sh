@@ -654,8 +654,17 @@ a dialect's prelude, and bash's `$DIRSTACK` is a view over the storage
 that text owns — so the axis is the *name* of the array to read,
 `Semantics.DirectoryStackParameter`, and not a yes/no. Empty is the
 whole of "this shell has no numbered tilde": bash says `DIRSTACK`, and
-the rest of the panel says nothing, zsh included until its own stack is
-measured.
+the rest of the panel says nothing, zsh included.
+
+zsh's stack has been measured since #4592 and the axis is still empty
+there, which is the row that is easy to get wrong. `$dirstack` holds the
+pushed entries **without** the current directory, where a numbered tilde
+counts `$PWD` as slot zero — the same off-by-one bash's `$DIRSTACK` view
+exists to close. Pointing this axis at `dirstack` would answer `~0` with
+the place the shell was last, in every row. The array `cd` pushes onto
+is `Semantics.PushedDirectoriesParameter`, which is a different question
+about a differently shaped list; zsh's numbered tilde needs its own
+measurement and its own issue.
 
 ### `~name`: a user, or a directory the shell was told about
 

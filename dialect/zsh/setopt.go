@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 128 of the 185
+//     typing a directory name still does not change directory. 127 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -180,7 +180,22 @@ import (
 // next door and the option simply did not reach it: a script that set it drew
 // no diagnostic and ran straight past the command it was asking the shell to
 // stop at (#4546).
-// Nothing else about the split moved, and 128 is still most of the table.
+//
+// `autopushd` is the fifth, and it is the one where the moment and the *noun*
+// both had to be asked. It now makes every `cd` a `pushd` —
+// [interp.Semantics.CdPushesTheDirectoryItLeaves] — and the state that
+// decides is the one the option is in **when `cd` runs**, not when it
+// finishes: `cd` ends by calling `chpwd`, and a hook that turns the option
+// off there does not take the push back, while one that turns it on causes
+// none. The noun is the `cd` and not "a directory change", which is the
+// reading that breaks here and nowhere in real zsh: `pushd` and `popd` are
+// builtins there and prelude functions that call `cd` here, so the option
+// would have made `pushd` push twice. The prelude reads the stack into the
+// positional parameters ahead of its own `cd` for that reason. And
+// `$dirstack` came off the absent roster in the same change, because a stack
+// `cd` grows and no parameter to read it from is half a feature (#4592).
+//
+// Nothing else about the split moved, and 127 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -348,7 +363,36 @@ var zshOptions = []zshOption{
 	recorded("autonamedirs", false),
 	recorded("autoparamkeys", true),
 	recorded("autoparamslash", true),
-	recorded("autopushd", false),
+	{
+		// AUTO_PUSHD: every `cd` is a `pushd`, so the directory stack grows as
+		// the shell moves. Off by default, measured on zsh 5.9.2
+		// (aarch64-apple-darwin25.4.0), 2026-09-26, `-f`.
+		//
+		// It was `recorded` until #4592 — accepted, reported back correctly by
+		// `[[ -o autopushd ]]`, `$options[autopushd]` and the `setopt`
+		// listing, its letter `-N` wired, and nothing pushed. `pushd`, `popd`
+		// and `dirs` maintained a stack the whole time, which is what made the
+		// gap a routing one rather than a missing feature.
+		//
+		// **The noun is the `cd`, and the moment is when it runs** — see
+		// [interp.Semantics.CdPushesTheDirectoryItLeaves]. Not "a directory
+		// change", which is the reading that breaks: `pushd` and `popd` are
+		// builtins in the shell being modeled and prelude *functions* that
+		// call `cd` in this one, and `pushd /tmp` under the option pushes one
+		// entry there and not two. And not the state when `cd` finishes: a
+		// `chpwd` that turns the option off during the `cd` does not take the
+		// push back, and one that turns it on does not cause a push.
+		base: "autopushd", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.CdPushesTheDirectoryItLeaves == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.CdPushesTheDirectoryItLeaves
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("autoremoveslash", true),
 	recorded("autoresume", false),
 	recorded("badpattern", true),

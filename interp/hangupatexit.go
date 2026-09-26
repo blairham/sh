@@ -22,6 +22,13 @@ import "syscall"
 //     Semantics.HangupAtExitPrecedesTheExitTrap and is read by Finish rather
 //     than here.
 //
+// Whether there is anybody to account to is Runner.accountsForJobsAtExit,
+// which is a prompt or — in the one dialect that says so — the monitor on its
+// own. It read Runner.Interactive until #4542, and the two agree in every
+// shell a person sits at, because a session turns the monitor on: what that
+// reading missed was a `zsh -fm` script, which hangs its jobs up and says so
+// with no prompt anywhere.
+//
 // One function for both, rather than a second one beside it. A dialect that
 // grew its own copy would be a copy that had to acquire each later fix
 // separately, which is how the first one loses them.
@@ -37,7 +44,7 @@ import "syscall"
 // Not in a subshell: a clone's ending is not the session's, and its jobs are
 // the parent's to account for.
 func (r *Runner) hangUpJobsIfAsked() {
-	if r.inSubshell || !r.hangUpJobsAtExit || !r.Interactive {
+	if r.inSubshell || !r.hangUpJobsAtExit || !r.accountsForJobsAtExit() {
 		return
 	}
 	if r.sem().HangupAtExitNeedsALoginShell == Yes && !r.LoginShell {

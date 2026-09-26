@@ -1857,26 +1857,8 @@ func (r *Runner) HoldsExitForJobs() bool {
 	if r.jobsInherited {
 		return false
 	}
-	stopped, running := false, false
-	for _, j := range r.jobs {
-		switch {
-		case j.Finished():
-		case j.Stopped:
-			stopped = true
-		default:
-			running = true
-		}
-	}
-	// Stopped first, because that is the order the sentence is chosen in and
-	// not merely the order the fields are declared in: a session with one of
-	// each is told about the stopped one.
-	wording := ""
-	switch {
-	case stopped && r.ChecksStoppedJobsAtExit():
-		wording = Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", r.name())
-	case running && r.ChecksRunningJobsAtExit():
-		wording = Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
-	default:
+	wording := r.jobsAtExitSentence()
+	if wording == "" {
 		return false
 	}
 	if !r.ask(r.sem().StoppedJobsHoldTheExit, "an exit held back by a job that would be abandoned") {
@@ -1896,6 +1878,145 @@ func (r *Runner) HoldsExitForJobs() bool {
 	r.errf("%s\n", wording)
 	r.listJobsHeldAtExit()
 	return true
+}
+
+// jobsAtExitSentence is what this shell has to say about the jobs it is about
+// to abandon, or "" where it has nothing to say.
+//
+// Folded out of [Runner.HoldsExitForJobs] rather than written again beside it,
+// because there are now two routes to the same sentence and only one of them
+// can hold: a session asks through the `exit` builtin and through the end of
+// input, and a shell with no prompt accounts for its jobs on the way out (see
+// Runner.tellOfJobsLeftBehind). A second copy would be a copy that has to
+// acquire each later fix separately, which is how the first one loses them.
+//
+// The choice between the two wordings, and the options that gate each, are
+// the measurements [Runner.HoldsExitForJobs] carries.
+func (r *Runner) jobsAtExitSentence() string {
+	stopped, running := false, false
+	for _, j := range r.jobs {
+		switch {
+		case j.Finished():
+		case j.Stopped:
+			stopped = true
+		default:
+			running = true
+		}
+	}
+	// Stopped first, because that is the order the sentence is chosen in and
+	// not merely the order the fields are declared in: a session with one of
+	// each is told about the stopped one.
+	switch {
+	case stopped && r.ChecksStoppedJobsAtExit():
+		return Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", r.name())
+	case running && r.ChecksRunningJobsAtExit():
+		return Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
+	}
+	return ""
+}
+
+// accountsForJobsAtExit reports whether this shell says anything at all about
+// the jobs it is leaving behind — the sentence naming them, and the sentence
+// saying they were hung up.
+//
+// A prompt is that reason in every dialect. One dialect also counts the
+// **monitor** on its own, which is Semantics.MonitorAloneAccountsForJobsAtExit
+// — the same shape [Runner.canAnnounce] has one surface earlier, and divided
+// the same way by the panel.
+//
+// The monitor and not interactivity, which is the whole of #4542: a shell
+// turns the monitor on for a session, so the two agree in every shell a person
+// ever sits at and part only where something moves one while holding the other.
+// Measured 2026-09-25 against zsh 5.9.2 on a pseudo-terminal, `sleep 3 &` and
+// then an exit:
+//
+//	interactive  monitor   written
+//	no           off       nothing              zsh -f script
+//	no           **on**    **both sentences**   zsh -fm script
+//	yes          **off**   **nothing**          zsh -fiV +Z, unsetopt monitor
+//	yes          on        both sentences       zsh -fiV +Z
+//
+// The answer moves with the monitor in both rows where interactivity is held
+// fixed and does not move with interactivity in either row where the monitor
+// is, so the monitor is the noun. Read and not `ask`ed, for the reason the
+// axis gives.
+func (r *Runner) accountsForJobsAtExit() bool {
+	return r.JobControl || (r.monitor && r.sem().MonitorAloneAccountsForJobsAtExit == Yes)
+}
+
+// tellOfJobsLeftBehind writes the sentence about the jobs a shell with **no
+// prompt** is abandoning, on its way out.
+//
+// The same sentence [Runner.HoldsExitForJobs] writes, reached the other way.
+// There it is a *hold*: the shell stays, and the person may type `exit` again.
+// A script has nobody to ask and nowhere to stay, so the identical sentence is
+// an accounting line and nothing waits on it.
+//
+// Not at a prompt — that route has already asked, through `exit` and through
+// the end of input.
+//
+// The subshell guards mirror hangUpJobsIfAsked's and are **belt-and-braces
+// rather than measured**, which is worth saying because the obvious comment
+// here would claim more than the code does. Dropping both `r.inSubshell` and
+// `r.jobsInherited` changes nothing on any route reachable today — a `( … )`
+// and a `( … ) &` in a `-m` script each still write the sentence exactly
+// once, checked by mutation against the built binary — so a clone is stopped
+// somewhere earlier and these are a second lock on a door that is already
+// shut. They are kept because the sibling has them and because the route
+// that would need them is one axis away: this shell reads the monitor as
+// still *on* inside a clone where the reference reads it off.
+//
+// Measured 2026-09-25 against zsh 5.9.2 on a pseudo-terminal, `zsh -fm` over a
+// script holding `sleep 3 &`: the shell writes `you have running jobs.` and
+// then `warning: 1 jobs SIGHUPed`, both on the error stream and both before
+// the EXIT trap, and exits 0. With `-f` in place of `-fm` it writes neither.
+//
+// Two things this shell does not yet do on this route, both measured and both
+// left to #4545 rather than guessed at: the reference **locates** each line as
+// `<script>:N:` where a session names the shell — the name is already right
+// here and only the line is missing — and an explicit `exit N` that is told
+// about a job leaves with 1 rather than with N.
+//
+// And one it does wrong on both routes rather than on this one, which is
+// #4544: with a running job and a stopped one in the table, the sentence is
+// chosen by whichever comes **first**, where jobsAtExitSentence prefers the
+// stopped one wherever it sits. That reading is bash's and is right there;
+// this route inherits it rather than introducing it.
+//
+// The table is not listed under it. Whether a dialect ever lists is
+// Semantics.HeldExitListsTheJobs, and the one dialect that reaches here
+// answers No — measured at a session and measured again here, where `zsh -fm`
+// writes the sentence with no rows beneath it.
+func (r *Runner) tellOfJobsLeftBehind() {
+	if r.inSubshell || r.JobControl || r.jobsInherited || r.toldOfJobsAtExit {
+		return
+	}
+	if !r.accountsForJobsAtExit() {
+		return
+	}
+	// Take the stop notices first, because on this route nothing else has.
+	// A session sweeps them in reapJobs between one command and the next, so
+	// by the time a prompt asks, every job's Stopped is current; a script's
+	// last command is followed by no command at all, and `sleep 30 & kill
+	// -STOP %1` reached here with the job still reading as running. It chose
+	// the wrong sentence of the two and then hung up a job the reference
+	// leaves alone. Measured 2026-09-25, `zsh -fm` over exactly that script:
+	// zsh 5.9.2 writes `you have suspended jobs.` and nothing else.
+	//
+	// The same sweep reapJobs opens with, and for the same reason it is
+	// outside that function's PollCommand guard: this asks the kernel
+	// nothing, it only takes what the goroutine waiting on the job has
+	// already been told. Before the sentence is chosen *and* before the
+	// hangup that Finish runs next, which reads Stopped too.
+	for _, j := range r.jobs {
+		r.noticeStoppedJob(j)
+	}
+	wording := r.jobsAtExitSentence()
+	if wording == "" {
+		return
+	}
+	r.toldOfJobsAtExit = true
+	r.errf("%s\n", wording)
 }
 
 // listJobsHeldAtExit prints the job table under the sentence, where the shell

@@ -3088,6 +3088,13 @@ func Semantics() interp.Semantics {
 	// either. Measured 2026-09-15 on a pseudo-terminal, a script file
 	// (#2838).
 	s.MonitorAloneAnnouncesAJob = interp.No
+	// Measured 2026-09-25 on a pseudo-terminal, `ksh -m` over a script
+	// holding `sleep 30 &`: nothing at all, with a running job and with a
+	// stopped one. This shell is the one whose `-i script.sh` *does* say
+	// `You have stopped jobs`, which is interactivity rather than the
+	// monitor and is StoppedJobsHoldTheExit's route rather than this axis's
+	// (#4542).
+	s.MonitorAloneAccountsForJobsAtExit = interp.No
 	// The panel's lone dissent on the current-job marker: it goes to the
 	// newest job here rather than staying with one that stopped. Measured
 	// 2026-09-12 through a pseudo-terminal, `sleep 40` stopped with ^Z and

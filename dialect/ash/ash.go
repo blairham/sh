@@ -591,6 +591,18 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-15 in the pinned image, a script file on a
 	// pseudo-terminal (#2838).
 	s.MonitorAloneAnnouncesAJob = interp.No
+	// Measured 2026-09-25 in the pinned alpine image — BusyBox v1.37.0 — on
+	// a terminal: `ash -m` over a script holding `sleep 30 &` writes nothing
+	// at all and leaves at 0, and so does the same script with the job
+	// stopped. The control beside it is the same script with a `jobs` in it,
+	// which writes the row and the mark after it, so the silence is this
+	// shell's answer rather than a script that never ran.
+	//
+	// Measured in the container rather than derived from dash, which is the
+	// column next to it and not evidence about it — and the two do part on
+	// the neighboring row, since dash writes `You have stopped jobs.` for a
+	// stopped one (#4542).
+	s.MonitorAloneAccountsForJobsAtExit = interp.No
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
 
 	// ---- builtins ----

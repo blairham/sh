@@ -2158,6 +2158,15 @@ func Semantics() interp.Semantics {
 	// pseudo-terminal, which is the only place this shell has a monitor at
 	// all (#2838).
 	s.MonitorAloneAnnouncesAJob = interp.Yes
+	// And it is the one shell that accounts for its jobs on the way out with
+	// no prompt anywhere. Measured 2026-09-25 against zsh 5.9.2 on a
+	// pseudo-terminal, `zsh -fm` over a script holding `sleep 3 &`: the
+	// error stream gets `you have running jobs.` and then
+	// `warning: 1 jobs SIGHUPed`, both before the EXIT trap, and `zsh -f`
+	// over the same script writes neither. The monitor and not the prompt —
+	// an interactive session with `unsetopt monitor` writes neither too
+	// (#4542).
+	s.MonitorAloneAccountsForJobsAtExit = interp.Yes
 	// A stopped job holds the exit back: the shell says so and stays,
 	// and the next attempt leaves. Measured through a pseudo-terminal for
 	// `exit` and for ^D alike.

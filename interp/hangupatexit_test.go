@@ -55,13 +55,35 @@ func hupJobsShaped(t *testing.T, interactive, login, option bool,
 	shape func(*Semantics, *Diagnostics),
 ) (*fakeJobs, *Runner) {
 	t.Helper()
+	// JobControl follows interactivity, which is how a prompt sets them: one
+	// says the shell is a session and the other says there is somebody to
+	// report a job to, and nothing in this tree sets the second without the
+	// first. It was pinned `true` here while `interactive` varied, which is a
+	// shell no route produces — and the row below that turns interactivity
+	// off was passing on a gate that no longer reads it (#4542). What that
+	// row is *about* is a login shell running a script, and such a shell has
+	// neither flag.
+	return hupJobsAt(t, interactive, interactive, login, option, shape)
+}
+
+// hupJobsAt is the same with the prompt itself a parameter.
+//
+// A shell that is leaving accounts for its jobs where there is a prompt *or*
+// where the dialect counts the monitor on its own, which is
+// Semantics.MonitorAloneAccountsForJobsAtExit — so the state with the monitor
+// running and JobControl off is a real one and has to be buildable here
+// (#4542). Every caller above it wants a prompt and says so once.
+func hupJobsAt(t *testing.T, jobControl, interactive, login, option bool,
+	shape func(*Semantics, *Diagnostics),
+) (*fakeJobs, *Runner) {
+	t.Helper()
 	f := heldJobs()
 	sem := permissive()
 	sem.SignalDeathStatusIsTwoFiftySix = No
 	dg := Diagnostics{}
 	shape(&sem, &dg)
 	r := newTestRunner(t, &Runner{
-		Semantics: &sem, Diagnostics: &dg, Name: "testsh", JobControl: true,
+		Semantics: &sem, Diagnostics: &dg, Name: "testsh", JobControl: jobControl,
 	})
 	r.Interactive, r.LoginShell = interactive, login
 	r.SetSendsHangupToJobsAtExit(option)

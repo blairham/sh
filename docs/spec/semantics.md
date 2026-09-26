@@ -14915,6 +14915,102 @@ never defined.
   answered" is about an operand naming one thing, not about a prefix
   that happens to spell one.
 
+### What a shell says about the jobs it is leaving, and the noun that decides
+
+A shell that is about to end with jobs still in its table may write two
+sentences about them: one naming what it is abandoning, and one saying it
+hung them up. **They are two mechanisms with two switches**, and the shells
+disagree about what makes either of them reachable at all.
+
+The switches are separable and were measured apart. zsh 5.9.2 on a
+pseudo-terminal, a script given `-fm` holding `sleep 3 &`:
+
+| options | written |
+| --- | --- |
+| defaults | `you have running jobs.` then `warning: 1 jobs SIGHUPed` |
+| `no_check_jobs` | the hangup sentence alone |
+| `no_hup` | the running-jobs sentence alone |
+| `no_check_jobs no_hup` | nothing |
+| `no_check_running_jobs` | the hangup sentence alone |
+
+So `CHECK_JOBS` owns the first and `HUP` owns the second, and neither is the
+other's master — `no_check_jobs` removes the **hold**, not the hup. Those two
+are `Runner.ChecksRunningJobsAtExit` (with `ChecksStoppedJobsAtExit` beside
+it) and `Runner.SendsHangupToJobsAtExit`, and the three axes governing what
+the hangup then does are `HangupAtExitNeedsALoginShell`,
+`HangupAtExitSkipsStoppedJobs` and `HangupAtExitPrecedesTheExitTrap`.
+
+**In front of both of them is a single gate, and the noun it is keyed on is
+the monitor.** `Semantics.MonitorAloneAccountsForJobsAtExit`. This is the
+same shape `MonitorAloneAnnouncesAJob` has at the other end of a job's life,
+and the panel divides it the same way — exactly one shell answers yes.
+Measured 2026-09-25 on a pseudo-terminal, a script holding `sleep 30 &` with
+`-m` and no `-i`:
+
+| shell | written as it leaves |
+| --- | --- |
+| bash 5.3.20 | nothing |
+| bash 3.2.57 | nothing |
+| ksh93u+ | nothing |
+| dash | nothing |
+| BusyBox ash 1.37.0 | nothing |
+| zsh 5.9.2 | both sentences |
+
+dash is worth stating rather than deriving, because it is **not** silent on
+the neighboring row: a *stopped* job at the end of the same script is `You
+have stopped jobs.`, and a running one is nothing at all. That one is
+`StoppedJobsHoldTheExit`'s and is not moved by this axis. ash is measured in
+the pinned alpine image rather than derived from dash — the column next to it
+is not evidence about it, and here the two would have parted.
+
+**Interactivity is the noun this is nearly keyed on, and it is the wrong
+one.** A shell turns the monitor on for a session, so the two agree in every
+shell anybody sits at, and they are told apart only by holding one fixed and
+moving the other. zsh 5.9.2, `sleep 3 &` and then an exit:
+
+| interactive | monitor | written | how |
+| --- | --- | --- | --- |
+| no | off | nothing | `zsh -f script` |
+| no | **on** | **both sentences** | `zsh -fm script` |
+| yes | **off** | **nothing** | `zsh -fiV +Z`, then `unsetopt monitor` |
+| yes | on | both sentences | `zsh -fiV +Z` |
+
+The answer moves with the monitor in both rows where interactivity is held
+fixed, and does not move with interactivity in either row where the monitor
+is. Until #4542 the hangup read `Runner.Interactive` and the sentence naming
+the jobs was never written outside a prompt at all, so a `-m` script left in
+silence.
+
+**The two routes to the sentence are not the same act.** At a prompt it is a
+*hold*: the shell says so and stays, and the person may type `exit` again —
+`Runner.HoldsExitForJobs`, reached from the `exit` builtin and from the end
+of input. A script has nobody to ask and nowhere to stay, so the identical
+sentence is an accounting line written on the way out and nothing waits on
+it. One function chooses the wording for both.
+
+**A job stopped by the last command has to be noticed before the sentence is
+chosen.** A session sweeps the stop notices between one command and the next,
+so at a prompt every job's state is current by the time anything asks; a
+script's last command is followed by no command at all. Without a sweep on
+the way out, `sleep 30 & kill -STOP %1` reached the end with the job still
+reading as running, wrote the running-jobs sentence instead of the suspended
+one, and then hung up a job the reference leaves alone.
+
+Two things on this route are measured and **not** yet done, and they are
+#4545 rather than guesses. The reference **locates** each line as
+`<script>:N:` where a session names the shell — the name is already right,
+since `Runner.name` answers with the script's path, and only the line is
+missing. And an explicit `exit N` that is told about a job leaves with **1**
+rather than with N, running nothing after the `exit`; at the end of input the
+sentence moves no status at all.
+
+A third is wrong on **both** routes rather than on this one, and is #4544:
+with a running job and a stopped one in the table, zsh chooses the sentence
+by whichever comes **first**, where this shell prefers the stopped one
+wherever it sits. That reading is bash's — measured, bash says `There are
+stopped jobs.` with the order swapped either way — so the two shells disagree
+and it is an axis rather than a fix.
+
 ### What a prelude presents
 
 **A name the prelude presents is a builtin** (#1117). The four cases

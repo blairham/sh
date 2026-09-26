@@ -96,6 +96,63 @@ func TestMagicEqualSubstExpandsTheValueOfAnyEqualsWord(t *testing.T) {
 	}
 }
 
+// **At which moment is the option read?** The word is parsed once and expanded
+// every time it runs, and for a word inside a function those two moments are
+// not the same — so this has to be measured rather than assumed. #4547 is the
+// reason it is a test of its own: `posixtraps` was wired to an axis read at
+// the wrong moment, and that got half its grid backwards while every row
+// anybody had written still passed.
+//
+// It is the **expansion**. Measured on zsh 5.9.2, 2026-09-25, and the first
+// two rows are the pair that says so: they hold the word and the function
+// identical and swap which of the two moments the option is on for, and the
+// answers part. Reading it at the parse gives exactly the opposite pair, so
+// neither row alone is evidence and both together are.
+//
+// The `localoptions` row's second line is a control: the state really did go
+// back at the return, so the first line is not a shell that never turned the
+// option off.
+func TestMagicEqualSubstIsReadWhenTheWordIsExpanded(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"defined with it off, called with it on",
+			"unsetopt magicequalsubst\nf() { print -r -- a=~ }\nsetopt magicequalsubst\nf",
+			"a=/Users/testhome",
+		},
+		{
+			"defined with it on, called with it off",
+			"setopt magicequalsubst\nf() { print -r -- a=~ }\nunsetopt magicequalsubst\nf",
+			"a=~",
+		},
+		{
+			"turned on inside the function that holds the word",
+			"unsetopt magicequalsubst\nf() { setopt magicequalsubst; print -r -- a=~ }\nf",
+			"a=/Users/testhome",
+		},
+		{
+			"an eval string built while it was off",
+			"unsetopt magicequalsubst\ns='print -r -- a=~'\nsetopt magicequalsubst\neval $s",
+			"a=/Users/testhome",
+		},
+		{
+			"an eval string built while it was on",
+			"setopt magicequalsubst\ns='print -r -- a=~'\nunsetopt magicequalsubst\neval $s",
+			"a=~",
+		},
+		{
+			"through localoptions, and the state really goes back",
+			"unsetopt magicequalsubst\nf() { setopt localoptions magicequalsubst; print -r -- a=~ }\nf\nprint -r -- after: a=~",
+			"a=/Users/testhome\nafter: a=~",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := magicEqualRun(t, tc.src); got != tc.want {
+				t.Errorf("%s\n= %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
 // A word **opening** with `=` belongs to the `=cmd` expansion and not to this
 // option, in both states of it. The pair below is what says so, and it is a
 // for-loop word rather than a command argument on purpose: a simple command

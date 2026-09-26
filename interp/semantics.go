@@ -15536,12 +15536,28 @@ type Semantics struct {
 	// and `a:b=~/m`. `setopt magicequalsubst` in zsh 5.9.2 is the one state
 	// of the one shell that moves them.
 	//
-	// It **subsumes** the axis above rather than composing with it: where
-	// this is Yes every word the assignment shape would have qualified is
-	// qualified already, at the same `=`, so the narrower question is not
-	// asked. Where it is No the word takes the older road unchanged. That
-	// ordering is why a bash script asks this one only for a word the shape
-	// refuses — `cc -DX=~/x`, and not `FOO=~/x`.
+	// It **subsumes** the axis above rather than composing with it: every
+	// word the assignment shape would have qualified carries its `=` in the
+	// first span, unquoted, which is the same `=` this rule finds — so a Yes
+	// here claims the shape's words too, at the identical position, and there
+	// is no word the two would split differently.
+	//
+	// Which is why the *order* they are consulted in is the shape first and
+	// this one second, and not the other way round. The shape is asked of a
+	// word it recognizes; only when that comes back No — or the word is not
+	// the shape at all — is this one reached. So a bash script, whose answer
+	// here is No, reaches it only for a word the shape refuses, `cc -DX=~/x`
+	// and not `FOO=~/x`; and a zsh one, whose shape answer is No, reaches it
+	// for every `=` word with a movable tilde, which is what a Yes here has
+	// to carry on its own. Runner.tildeContextEquals is the whole of it.
+	//
+	// **The moment it is read is the expansion and not the parse**, which is
+	// measured rather than assumed — #4547 wired an option to an axis read at
+	// the wrong moment and had half its grid backwards while every row
+	// anybody had written still passed. A function defined while zsh's option
+	// was off and called while it is on expands; one defined on and called
+	// off does not. See TestMagicEqualSubstIsReadWhenTheWordIsExpanded, where
+	// that pair is the evidence and neither row alone is.
 	//
 	// What follows the `=` is the assignment value's treatment and not a
 	// second rule of its own: the head of the value, every unquoted colon

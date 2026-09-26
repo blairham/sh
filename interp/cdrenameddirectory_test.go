@@ -4,13 +4,32 @@
 package interp_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
+
+// runPart runs a chunk and leaves the shell open, which is what a front end
+// reading a line at a time does — and what these rows need, because the
+// descriptor a shell keeps on its own directory is let go of when the shell
+// ends. A test that ran each line as a whole shell would be putting the
+// directory down between the `cd` and the rename, which is not a shape
+// anything real has.
+func runPart(t *testing.T, r *Runner, src string) {
+	t.Helper()
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RunPart(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // A shell's directory can be renamed out from under it, and what happens next
 // splits into two questions that are easy to run together and are not the same
@@ -94,9 +113,9 @@ func TestARelativePathStillReachesADirectoryThatHasBeenRenamed(t *testing.T) {
 			// rename, which is what a real shell's kernel does for it at the
 			// chdir. A `cd` to where it already is, which is what a script
 			// does when it starts.
-			runCd(t, r, "cd .\n")
+			runPart(t, r, "cd .\n")
 			now := renameAway(t, root)
-			runCd(t, r, c.src+"\n")
+			runPart(t, r, c.src+"\n")
 			if errs.Len() != 0 {
 				t.Fatalf("stderr = %q", errs.String())
 			}
@@ -117,7 +136,7 @@ func TestARelativePathReachesTheDirectoryWhenNothingHasMoved(t *testing.T) {
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: filepath.Join(root, "d"),
 	})
-	runCd(t, r, "cd .\necho hi > rel.txt\n")
+	runPart(t, r, "cd .\necho hi > rel.txt\n")
 	if _, err := os.Stat(filepath.Join(root, "d", "rel.txt")); err != nil {
 		t.Errorf("an ordinary redirection did not write where the shell is: %v", err)
 	}
@@ -139,9 +158,9 @@ func TestAnExternalCommandRunsInADirectoryThatHasBeenRenamed(t *testing.T) {
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: filepath.Join(root, "d"), Stdout: out, Stderr: errs,
 	})
-	runCd(t, r, "cd .\n")
+	runPart(t, r, "cd .\n")
 	now := renameAway(t, root)
-	runCd(t, r, "/bin/pwd\n")
+	runPart(t, r, "/bin/pwd\n")
 	if errs.Len() != 0 {
 		t.Fatalf("stderr = %q", errs.String())
 	}
@@ -190,7 +209,7 @@ func TestWhatDecidesIsThePathCdBuiltAndNotWhereTheShellIs(t *testing.T) {
 				Semantics: &sem, Diagnostics: &Diagnostics{},
 				Dir: filepath.Join(root, "d"), Stdout: out,
 			})
-			runCd(t, r, "cd .\n")
+			runPart(t, r, "cd .\n")
 			renameAway(t, root)
 			back := filepath.Join(root, "d")
 			if c.impostorHoldsS {
@@ -200,7 +219,7 @@ func TestWhatDecidesIsThePathCdBuiltAndNotWhereTheShellIs(t *testing.T) {
 			} else if err := os.Mkdir(back, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			runCd(t, r, "cd s && pwd\n")
+			runPart(t, r, "cd s && pwd\n")
 			want := filepath.Join(root, c.want)
 			if got := strings.TrimSpace(out.String()); got != want {
 				t.Errorf("cd s left %q, want %q", got, want)
@@ -238,9 +257,9 @@ func TestCdFromARenamedDirectoryAnswersTheAxis(t *testing.T) {
 				Semantics: &sem, Diagnostics: &Diagnostics{},
 				Dir: filepath.Join(root, "d"), Stdout: out, Stderr: errs,
 			})
-			runCd(t, r, "cd .\n")
+			runPart(t, r, "cd .\n")
 			renameAway(t, root)
-			runCd(t, r, "cd .\necho $?\necho $PWD\n")
+			runPart(t, r, "cd .\necho $?\necho $PWD\n")
 			lines := strings.Fields(out.String())
 			if len(lines) != 2 {
 				t.Fatalf("output = %q, want a status and a PWD", out.String())
@@ -257,7 +276,7 @@ func TestCdFromARenamedDirectoryAnswersTheAxis(t *testing.T) {
 			// row, measured, and it is what makes this a third answer rather
 			// than a second way of failing.
 			if c.policy == CdDestinationNotThereEntersAndKeepsTheBuiltName {
-				runCd(t, r, "echo hi > moved.txt\n")
+				runPart(t, r, "echo hi > moved.txt\n")
 				if _, err := os.Stat(filepath.Join(root, "e", "moved.txt")); err != nil {
 					t.Errorf("the move did not happen: %v", err)
 				}
@@ -291,12 +310,12 @@ func TestOnlyACdFromARenamedDirectoryPutsTheQuestion(t *testing.T) {
 				Semantics: &sem, Diagnostics: &Diagnostics{},
 				Dir: filepath.Join(root, "d"), Stderr: errs,
 			})
-			runCd(t, r, "cd .\n")
+			runPart(t, r, "cd .\n")
 			errs.Reset()
 			if c.rename {
 				renameAway(t, root)
 			}
-			runCd(t, r, c.src+"\n")
+			runPart(t, r, c.src+"\n")
 			said := strings.Contains(errs.String(), "renamed")
 			if said != c.refuses {
 				t.Errorf("%s said %q, want an unanswered-axis refusal = %v", c.src, errs.String(), c.refuses)
@@ -318,11 +337,11 @@ func TestCdInADirectoryThatHasBeenRemovedKeepsItsName(t *testing.T) {
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: filepath.Join(root, "d", "s"), Stdout: out, Stderr: errs,
 	})
-	runCd(t, r, "cd .\n")
+	runPart(t, r, "cd .\n")
 	if err := os.Remove(filepath.Join(root, "d", "s")); err != nil {
 		t.Fatal(err)
 	}
-	runCd(t, r, "cd .\necho $?\necho $PWD\n")
+	runPart(t, r, "cd .\necho $?\necho $PWD\n")
 	if errs.Len() != 0 {
 		t.Fatalf("stderr = %q", errs.String())
 	}
@@ -345,9 +364,9 @@ func TestACopyMadeBeforeTheRenameStillFindsTheDirectory(t *testing.T) {
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: filepath.Join(root, "d"), Stdout: out, Stderr: errs,
 	})
-	runCd(t, r, "cd .\n")
+	runPart(t, r, "cd .\n")
 	now := renameAway(t, root)
-	runCd(t, r, "(cd . && pwd)\n")
+	runPart(t, r, "(cd . && pwd)\n")
 	if errs.Len() != 0 {
 		t.Fatalf("stderr = %q", errs.String())
 	}
@@ -372,13 +391,13 @@ func TestARelativePathFollowsTheDirectoryAndNotTheNameThatCameBack(t *testing.T)
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: filepath.Join(root, "d"), Stderr: errs,
 	})
-	runCd(t, r, "cd .\n")
+	runPart(t, r, "cd .\n")
 	now := renameAway(t, root)
 	back := filepath.Join(root, "d")
 	if err := os.Mkdir(back, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runCd(t, r, "echo hi > rel.txt\n")
+	runPart(t, r, "echo hi > rel.txt\n")
 	if errs.Len() != 0 {
 		t.Fatalf("stderr = %q", errs.String())
 	}
@@ -403,13 +422,13 @@ func TestCdIntoADirectoryThatTookTheNameBackMovesTheShell(t *testing.T) {
 		Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: filepath.Join(root, "d"), Stdout: out, Stderr: errs,
 	})
-	runCd(t, r, "cd .\n")
+	runPart(t, r, "cd .\n")
 	now := renameAway(t, root)
 	back := filepath.Join(root, "d")
 	if err := os.Mkdir(back, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runCd(t, r, "cd .\necho $PWD\necho hi > rel.txt\n")
+	runPart(t, r, "cd .\necho $PWD\necho hi > rel.txt\n")
 	if errs.Len() != 0 {
 		t.Fatalf("stderr = %q", errs.String())
 	}

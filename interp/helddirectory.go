@@ -83,8 +83,30 @@ func (r *Runner) holdDirectory() *heldDirectory {
 	if r.Dir == "" {
 		return nil
 	}
-	if r.held != nil && r.held.named == r.Dir {
-		return r.held
+	if r.held != nil {
+		if r.held.named == r.Dir {
+			return r.held
+		}
+		// The Runner has moved since this was taken, so it names somewhere
+		// else and must not be read as this directory. Dropped rather than
+		// kept: a copy that has done a `cd` of its own would otherwise answer
+		// every question about where it is with the directory it was cloned
+		// from.
+		r.dropDirectoryHold()
+	}
+	if r.inSubshell {
+		// **A copy never opens one of its own.** It inherits the descriptor
+		// its parent had, which is what a fork inherits and is what makes
+		// `mv ../d ../e; (cd .)` work; what it may not do is open a second
+		// one, because a copy is dropped rather than closed and there is no
+		// one place every kind of copy ends. Seven call sites clone a Runner
+		// and five of them reach endSubshell, which is exactly the shape that
+		// leaks a descriptor per command substitution and is caught two years
+		// later. So the answer here is nil, every caller reads that as "ask
+		// the name", and a subshell that has moved is back to what this shell
+		// did before the hold existed — for the one combination of having
+		// moved *and* being renamed out from under afterwards.
+		return nil
 	}
 	dir, err := opened.Hold(r.Dir)
 	if err != nil {

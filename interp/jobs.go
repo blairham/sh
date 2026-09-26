@@ -777,9 +777,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	//
 	// Nothing is lost by carrying it. What the hook does once its session has
 	// gone is the wake's own business, and the wake is built to be poked
-	// after it is closed. The *axis* is still asked at the moment the job
-	// ends, because `unsetopt notify` moves under a running session — see
-	// notifyJobEnded, which is where that question stayed.
+	// after it is closed. The *axis* is not asked here and is not asked from
+	// the job either: it moves under a running session — `unsetopt notify` —
+	// so it is asked by the front end, late, on the goroutine that owns it.
+	// See notifyJobEnded and Runner.NotifiesAsAJobEnds (#4576).
 	notifyEnded := r.JobEnded
 	// The job is finished however the goroutine ended, which is what keeps an
 	// interpreter bug on it from costing more than the job. The shell is
@@ -821,12 +822,14 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// releases a `wait` for this job and the arrival has to be there
 		// before the script gets past that. See Runner.jobReaped.
 		r.jobReaped(job, status, endSig)
-		// And the shell around this one is told, where its dialect reports a
-		// finished job the moment it ends rather than at the next prompt.
-		// Here rather than anywhere the shell's own goroutine runs, because
-		// this is the only place that knows the job has ended *while the
-		// shell is doing something else* — which is the whole of the
-		// difference. See Runner.notifyJobEnded.
+		// And the shell around this one is poked, so that a dialect which
+		// reports a finished job the moment it ends can look again. Here
+		// rather than anywhere the shell's own goroutine runs, because this
+		// is the only place that knows the job has ended *while the shell is
+		// doing something else* — which is the whole of the difference. What
+		// it says is "look again" and nothing more; whether anything is said
+		// on the screen is asked where the looking happens. See
+		// Runner.notifyJobEnded.
 		r.notifyJobEnded(notifyEnded)
 		// After the job is finished rather than before it, so nothing can
 		// observe a pipe that has ended while the job that was writing to
@@ -924,6 +927,16 @@ func (r *Runner) canAnnounce() bool {
 // with the monitor off.
 //
 // Read rather than `ask`ed, for the reason the axis gives.
+//
+// **It must be called on the shell's own goroutine**, and it is the *only*
+// place this question is asked. All three of the things it reads belong to
+// that goroutine: `JobControl` is the front end's, `monitor` is moved by
+// `set -m` and `setopt monitor`, and the semantics vector is moved by
+// `setopt notify` — every one of them while background jobs are running.
+// notifyJobEnded used to ask the same question from a *job's* goroutine,
+// which made all three a read of state another goroutine writes with nothing
+// synchronizing the pair (#4576). Deleting that read is the fix; asking twice
+// was what made it possible.
 func (r *Runner) NotifiesAsAJobEnds() bool {
 	return r.JobControl && r.monitor && r.sem().FinishedJobNoticeArrivesAtOnce == Yes
 }
@@ -931,16 +944,20 @@ func (r *Runner) NotifiesAsAJobEnds() bool {
 // notifyJobEnded tells the shell around this one that a job has ended, on the
 // goroutine the job ended on.
 //
-// Guarded here rather than at the call site so that the question is asked
-// once, and so that a front end which wired the hook for a session cannot be
-// woken by a dialect that does not want it — `unsetopt notify` moves the axis
-// under a session that is already running, and this is read each time.
+// **It asks nothing.** A job's goroutine cannot read the shell's options or
+// its semantics vector, so the decision of whether a finished job is announced
+// at once is the front end's, taken on its own goroutine with
+// NotifiesAsAJobEnds — which is where repl already takes it, each time round
+// the wait, so that `unsetopt notify` under a running session still lands.
+// This used to ask as well, and the second copy of the question bought
+// nothing: a front end that never arms a wake is not woken by a poke, because
+// a poke nobody is waiting for is dropped.
 //
 // The hook itself is *handed in* rather than read off the Runner, because the
 // front end writes that field from its own goroutine when the session ends.
 // See where background takes it.
 func (r *Runner) notifyJobEnded(notify func()) {
-	if notify == nil || !r.NotifiesAsAJobEnds() {
+	if notify == nil {
 		return
 	}
 	notify()

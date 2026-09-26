@@ -380,9 +380,18 @@ type Runner struct {
 
 	// JobEnded, when set, is called the moment a background job finishes, so
 	// that the shell around this one can say so without waiting for the next
-	// prompt. It is how Semantics.FinishedJobNoticeArrivesAtOnce is served,
-	// and it is called only where that axis says yes and there is somebody to
-	// tell — see Runner.NotifiesAsAJobEnds.
+	// prompt. It is how Semantics.FinishedJobNoticeArrivesAtOnce is served.
+	//
+	// **It is poked for every background job, and answering it is the front
+	// end's decision.** Whether this dialect announces a finished job at once
+	// is Runner.NotifiesAsAJobEnds, and that has to be asked on the front
+	// end's own goroutine, because the option and the semantics vector it
+	// reads are moved — by `set -m`, by `setopt notify` — while jobs are
+	// running. A front end that holds the notice for the next prompt arms
+	// nothing, and a poke nobody is waiting for is dropped; see
+	// repl/jobnotify.go, which asks the question each time round the wait so
+	// that an option moved at the prompt still lands. Asking it here as well
+	// was #4576.
 	//
 	// **It carries nothing and renders nothing.** The job table, the job
 	// numbers and the `+`/`-` markers are the shell's goroutine's, and this

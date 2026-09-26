@@ -106,15 +106,9 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
 		"posixtraps", "rcexpandparam", "errreturn", "autopushd",
 		"chaselinks", "chasedots", "rcquotes", "badpattern", "globassign",
-<<<<<<< HEAD
 		"posixidentifiers", "equals",
 		"sourcetrace", "evallineno", "numericglobsort",
-||||||| parent of bfe946898 (zsh: the two scope lints and posixstrings stop being remembered-only)
-		"posixidentifiers", "sourcetrace", "evallineno", "numericglobsort",
-=======
-		"posixidentifiers", "sourcetrace", "evallineno", "numericglobsort",
-		"warncreateglobal", "warnnestedvar", "posixstrings",
->>>>>>> bfe946898 (zsh: the two scope lints and posixstrings stop being remembered-only)
+		"warncreateglobal", "warnnestedvar", "posixstrings", "shoptionletters",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -136,13 +130,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-<<<<<<< HEAD
-	if want := 117; recordedCount != want {
-||||||| parent of bfe946898 (zsh: the two scope lints and posixstrings stop being remembered-only)
-	if want := 118; recordedCount != want {
-=======
-	if want := 115; recordedCount != want {
->>>>>>> bfe946898 (zsh: the two scope lints and posixstrings stop being remembered-only)
+	if want := 113; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

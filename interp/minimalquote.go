@@ -145,7 +145,13 @@ func quoteMinimal(v string) string {
 }
 
 // quoteExtended is the `q+` style. See the three differences above.
-func quoteExtended(v string) string {
+//
+// doubled is the writer's half of the option that reads a doubled quote
+// inside a single-quoted run as one literal quote — see quoteSingleRun, which
+// is where the two spellings part. The decision above it does not move with
+// it: a value with a quote in it needs quoting under either reading, `'`
+// being in quotableSpecials for that reason already.
+func quoteExtended(v string, doubled bool) string {
 	if v == "" {
 		return "''"
 	}
@@ -160,7 +166,49 @@ func quoteExtended(v string) string {
 			quote = true
 		}
 	}, func(int, string) {})
-	return quoteInRuns(v, func(string, int) bool { return quote })
+	if !quote {
+		// Nothing here has to be quoted, so there is no quote in the value
+		// for the two spellings to differ about and it is written as itself.
+		return quoteInRuns(v, func(string, int) bool { return false })
+	}
+	return quoteSingleRun(v, doubled)
+}
+
+// quoteSingleRun is the single-quoted spelling of a value already found to
+// need quoting, written the way the lexer that will read it back takes a
+// literal quote.
+//
+// Two shapes rather than one escape substituted for another, which is the
+// part a reader coming from the ordinary form should not assume. With the
+// doubled reading off the value is cut at each quote, every non-empty run is
+// wrapped on its own, and each quote is written with a backslash outside any
+// quoting. With it on the *whole* value goes inside one pair and each quote
+// is doubled — the only spelling available there, since a backslash is an
+// ordinary character inside a single-quoted run in every shell that has this
+// option, so nothing can be written outside the quotes at all.
+//
+// Measured on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`), 2026-09-26, with the
+// option off and on over the same values through `${(qq)}`, `${(q+)}` and
+// `typeset -p`, which agree with each other on every row:
+//
+//	value    off         on
+//	p'q      'p'\''q'    'p''q'
+//	'        \'          four quotes
+//	x'       'x'\'       'x' and two more
+//	'x       \''x'       three quotes, x, one quote
+//	a''b     'a'\'\''b'  'a' and four quotes and 'b'
+//	(empty)  two quotes  two quotes
+//	a b      'a b'       'a b'
+//
+// The rows that begin or end with a quote are what say the shapes differ
+// rather than the escape: with the option off there is no wrapping pair
+// around the whole value at all, and the empty run at the end of `x'` is
+// written as nothing rather than as an empty pair.
+func quoteSingleRun(v string, doubled bool) string {
+	if doubled {
+		return singleQuoted(v, "''", false)
+	}
+	return quoteInRuns(v, func(string, int) bool { return true })
 }
 
 // extendedRendered reports whether `q+` writes this byte as an escape rather

@@ -7982,9 +7982,9 @@ first is unanimous across the table.** Every name is one of five kinds:
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
 | axis- or matcher-backed | 27 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `globassign`, `typesetsilent`, `posixbuiltins`, `posixidentifiers`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`, `errreturn`, `autopushd`, `posixstrings`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **eight** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below. `posixstrings` is the one whose axis has **three** values rather than two: `DollarSingleNul` records that a NUL an escape produced ends the span in bash and ksh93, is a byte of it in zsh and is dropped in BusyBox ash, and the option moves between the first two |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
-| store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
+| store-backed, read by the front end | 10 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on; and `shoptionletters`, which re-points the whole single-letter option set at sh's — three letters change meaning, `-f`, `-T` and `-X`, and the two dozen this shell spends on options of its own become `bad option`. That last one is read by the front end twice over: once by the letter reader a running script also uses, and once while the command line is still being read, because a startup-file option is a letter too and there is no runner to ask yet. All ten are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 15 | `aliases`, `autocd`, `badpattern`, `banghist`, `chasedots`, `chaselinks`, `checkjobs`, `cprecedences`, `evallineno`, `hup`, `numericglobsort`, `rcquotes`, `sourcetrace`, `warncreateglobal` and `warnnestedvar`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, a session that is leaving really does send SIGHUP to the jobs it abandons, and `cd` really does stop keeping the path a directory was reached by, and a doubled `'` inside a single-quoted run really is one literal quote. `cprecedences` and `rcquotes` are the two that move the **parser** rather than the interpreter, and each reaches the rest of the program through a replaced `syntax.Dialect` — see "a doubled quote inside single quotes" in `docs/spec/grammar/tokenization.md`. `chaselinks` and `chasedots` are the pair where the panel's *default* is unanimous and only this shell has a name for moving off it — see below. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it. `badpattern` is the one whose territory an axis already covers — `Semantics.UnterminatedBracket`, which the panel splits on — and which is a switch all the same, because the axis governs matching as well as globbing and the name reaches only the second: measured, a `case` arm and a `[[ ]]` operand are refused with it off exactly as with it on. `evallineno` and `sourcetrace` are the pair about where the shell thinks it *is*: the first decides whether text handed to `eval` is a place of its own — its own line numbering and its own name, which the vendor manual names in one sentence as `$LINENO`, `%i` and `%N` — and the second writes one trace line as the shell enters a file it sources, with the prefix writer `xtrace` already uses and the literal word `<sourcetrace>` where a command's words would go. `numericglobsort` is the one whose territory a *parameter* already covered and which still needed a comparator of its own: bash's `GLOBSORT=numeric` reads two names as numbers only where both whole names are numbers, so it leaves `f2` after `f10`, where this one reads the digit run embedded in a name and does not. `warncreateglobal` and `warnnestedvar` are the pair of opt-in **lints**, and the only names here that change nothing a script computes: the assignment behaves the same way in both states and what is added is a sentence on standard error about where it landed — the first for a parameter the assignment created, the second for one it reached in a scope outside the function it was written in, so a body that assigns twice to one name draws one of each |
-| **recorded** | 115 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 114 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -8537,7 +8537,7 @@ what separates it from `posixtraps` (#4591). The full grid, and the rows that
 say the reading reaches the plain run and nothing else, are in
 `docs/spec/grammar/tokenization.md`.
 
-So 115 of 185 are recorded, the count above is the one produced by counting
+So 114 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -8752,9 +8752,32 @@ told not to run, and because its two siblings — `verbose` and `xtrace`, the
 other two of `set -n -v -x` — are both measured as left alone.
 
 **`-L` changes neither set.** The function-local letter is `setopt
-localoptions localtraps` on top of the emulation and nothing else, so the
-same 81 go back and the same 104 stand. `-L` and `-R` compose: `emulate -LR
-sh` is the wide reset scoped to the call.
+localoptions localpatterns localtraps` on top of the emulation and nothing
+else, so the same 81 go back and the same 104 stand. `-L` and `-R` compose:
+`emulate -LR sh` is the wide reset scoped to the call.
+
+Three names and not two, which took two corrections to get right: the count
+was written as one, corrected to two, and stopped one short, because each
+measurement listed what the letter *moved* instead of taking a `setopt`
+listing from **inside** the scope it opens. `f(){ emulate -L zsh; setopt }; f`
+is that listing and it prints `localpatterns` between the other two (#4530).
+The third name has nothing to scope here — it restores the pattern disables
+`disable -p` makes, and this shell's `disable` keeps only the builtins table
+— so what the letter owes today is the option's state, which the listings,
+`[[ -o localpatterns ]]` and `$options` all read.
+
+**A function defined inside `emulate … -c` is sticky.** The emulation is
+entered again whenever that function is later called and left when it
+returns, with the mode and the strictness the *definition* was made under
+rather than anything the call brings. `-R` is not what makes it sticky — the
+plain form marks a function too — and the whole option table goes back at the
+return. The mark is the last definition's in both directions: a function that
+already existed and is redefined by an `emulate … -c` becomes sticky, and one
+that was sticky and is redefined outside stops being. That pair is why the
+mark is taken at the definition through `Runner.AtFunctionDefinition` rather
+than from a difference between the function tables around the `-c` — a
+redefinition adds no name, and a name leaving the sticky set happens where no
+emulation is running at all (#4477). See `dialect/zsh/sticky.go`.
 
 **A reset is keyed on the option's default, never on the route that moved
 it.** Two names in the 95 are off in a `zsh -f` for a reason no script asked
@@ -8971,7 +8994,7 @@ name, so routing it through the table as well would have `setopt err_exit`
 call back into the table it was called from.
 
 Two consequences worth stating. Recording is unchanged: a listing 185 rows
-long still says nothing about whether a name is acted on, and 115 of them are
+long still says nothing about whether a name is acted on, and 114 of them are
 remembered and not acted on — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
 this shell has and will not move answers `can't change option` at 1,
@@ -12456,7 +12479,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 115 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 114 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150, then 145 while the
   table read 132; neither number was ever the count the table produces, and

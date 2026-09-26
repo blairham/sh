@@ -1137,6 +1137,11 @@ func Semantics() interp.Semantics {
 	// /etc/pas*'` still expands the pattern, so the letter is spent on this
 	// here and on globbing everywhere else.
 	s.StartupFileOptions = interp.StartupFileOptions{
+		// The two emulations that re-point this shell's option letters at
+		// sh's, where `-f` is globbing and `-d` is no letter at all. The
+		// long spellings are unaffected and `-l` is login in both sets — see
+		// the field, which carries the measured table (#4518).
+		LettersBorrowedUnderEmulation: "sh ksh",
 		// Both spellings of login-ness, which zsh has like the other three.
 		Login:       "-l --login",
 		SuppressAll: "-f --no-rcs",
@@ -5651,6 +5656,9 @@ func Apply(r *interp.Runner) {
 	// are shell functions whose working parts are these. See computil.go.
 	registerComputil(r)
 	registerLocalOptions(r)
+	// And the sticky emulation, which hangs off the same moment: see
+	// sticky.go for why it is registered after the option table's save.
+	registerStickyEmulation(r)
 	// `**/` crosses directory levels here with no option asked for, and
 	// there is no `setopt` name that turns it off — which is why this is a
 	// state the dialect sets rather than a name registered above. Measured

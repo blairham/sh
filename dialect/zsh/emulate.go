@@ -278,6 +278,13 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	applyEmulation(r, e.mode, e.strict)
 	st := e.applyOptions(r)
 	if eval, ok := r.Builtin("eval"); ok {
+		// Every function the code defines is **sticky**: the emulation is
+		// entered again whenever that function is later called. The mark is
+		// taken at the definition rather than from the set of names this
+		// text left behind, because a redefinition adds no name and a
+		// function redefined *outside* an emulation loses the mark — see
+		// sticky.go, where both rows are measured.
+		defer definingSticky(r, e.mode, e.strict)()
 		st = eval(r, ctx, []string{e.code})
 	}
 	saved.restore(r)

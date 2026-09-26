@@ -3206,6 +3206,11 @@ type Runner struct {
 	// the shell has is one the panel shares. Installed through
 	// SetOptionLetterNames; see extend.go.
 	optionLetterNames map[rune]string
+	// refusedOptionLetters are the letters this shell has no meaning for,
+	// however the shared table would read them. Empty in every dialect but
+	// the one whose letter set can be re-pointed while it runs. Installed
+	// through SetRefusedOptionLetters; see extend.go.
+	refusedOptionLetters string
 	// aroundFunctionCalls is what a dialect saves and restores around every
 	// function call, whatever that call turns out to do. Each entry is
 	// handed the running runner as the body is entered and hands back the
@@ -3223,6 +3228,11 @@ type Runner struct {
 	// pointer would snapshot and restore the shell it was registered in
 	// rather than the one running the call.
 	aroundFunctionCalls []func(*Runner) func()
+	// atFunctionDefinition is what a dialect wants told whenever a function
+	// is defined, whatever route the definition took. Installed through
+	// AtFunctionDefinition; see extend.go, and dialect/zsh's sticky
+	// emulation for the one reader there is.
+	atFunctionDefinition []func(*Runner, string)
 	// lineBase is how far into the script the input being run starts.
 	//
 	// A command substitution's body is parsed on its own, so its positions

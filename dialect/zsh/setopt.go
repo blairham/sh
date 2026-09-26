@@ -1660,7 +1660,10 @@ var zshOptions = []zshOption{
 	// is the measured `can't change option`, 1.
 	shinStdinOption(),
 	nullCommandOption("shnullcmd"),
-	recorded("shoptionletters", false),
+	// SH_OPTION_LETTERS: the single-letter options are read with sh's
+	// meanings rather than this shell's. See shOptionLettersOption, which is
+	// where the two tables are and what was measured about each letter.
+	shOptionLettersOption(),
 	recorded("shortloops", true),
 	recorded("shortrepeat", false),
 	{
@@ -2282,7 +2285,7 @@ func registerSetopt(r *interp.Runner) {
 	// The third face of the same namespace: this shell's `set` gives a
 	// single letter to most of its options, and the letters are its own
 	// rather than the panel's. See setLetterOptions.
-	r.SetOptionLetterNames(setLetterOptions)
+	installOptionLetters(r, false)
 }
 
 // setLetterOptions are this shell's `set` option letters, each mapped to the
@@ -2627,4 +2630,107 @@ func editingOption(base, keymap string) zshOption {
 			return code
 		},
 	}
+}
+
+// shLetterOptions are the `set` option letters this shell reads when
+// `sh_option_letters` is on — the set it borrows from sh and ksh, which is
+// the smaller of the two and is not a relabelling of the other.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) a letter at a
+// time, in **both** routes and against the mode's own baseline: `zsh
+// [--emulate sh] -L script` for the invocation and `zsh -c '[emulate sh;]
+// set -L; setopt'` for the builtin, with the listing taken against the same
+// shell with no letter. The two routes agree on every row, which is what says
+// the table belongs to the letter reader rather than to the front end.
+//
+// Only the rows where the two sets disagree are written here; everything else
+// falls through to the letters the panel shares, exactly as it does under
+// this shell's own table. Three letters move and the rest of the difference
+// is an absence:
+//
+//	letter   this shell's set   sh's set
+//	-f       norcs              noglob
+//	-T       cdablevars         trapsasync
+//	-X       (taken, inert)     markdirs
+//	-d -g -h -k -w -y           bad option
+//	-B -D -E -F -G -H -I -J     bad option
+//	-K -L -M -N -O -P -Q -R     bad option
+//	-S -U -V -W -Y -Z -0…-9     bad option
+//
+// `-i`, `-l`, `-p`, `-r` and `-s` are here because they behave the same in
+// both sets and the *other* table names them: a letter this map leaves out is
+// read by the shared table, which has none of those five, so leaving them out
+// would refuse letters the reference takes. `-s` is the one that is taken and
+// moves nothing, in both sets — measured, `set -- c a b; set -s` leaves the
+// parameters alone under `emulate sh` as it does under zsh.
+var shLetterOptions = map[rune]string{
+	'f': "noglob",
+	'i': "interactive",
+	'l': "login",
+	'p': "privileged",
+	'r': "restricted",
+	's': "",
+	'T': "trapsasync",
+	'X': "markdirs",
+}
+
+// shRefusedLetters are the three letters sh's set does not have that the
+// shared reading would otherwise take.
+//
+// The rest of the absent letters need no entry: nothing outside this dialect
+// has ever heard of `-g`, `-w` or `-Y`, so leaving them out of the map above
+// already refuses them in the right words. These three are the ones the
+// substrate answers for — `-H` outright, `-h` and `-E` through an axis this
+// dialect has never had to answer because its own map reached them first —
+// and an absence there is not a refusal. See
+// interp.Runner.SetRefusedOptionLetters.
+const shRefusedLetters = "hHE"
+
+// installOptionLetters points the letter reader at one of the two sets.
+//
+// Both halves together, which is the whole point of their being a pair: a map
+// swapped without its refusals would leave the three letters above reaching
+// the shared reading, and refusals left behind from the other set would
+// refuse letters this set has.
+func installOptionLetters(r *interp.Runner, sh bool) {
+	if sh {
+		r.SetOptionLetterNames(shLetterOptions)
+		r.SetRefusedOptionLetters(shRefusedLetters)
+		return
+	}
+	r.SetOptionLetterNames(setLetterOptions)
+	r.SetRefusedOptionLetters("")
+}
+
+// shOptionLettersOption is `sh_option_letters`, which is the one name in this
+// table that changes what a *letter* means rather than what an option does.
+//
+// It was `recorded` until #4518, and the cost was on the invocation rather
+// than on `setopt`: `zsh --emulate sh -f` reads `-f` with this shell's
+// meaning and suppresses its startup files where the reference reads sh's and
+// turns globbing off. The emulation had already turned the option on in both
+// shells — that is the control the issue was measured against — so what was
+// missing was a reader and not a state.
+//
+// Store-backed rather than switch-backed on a state of its own, for
+// `checkrunningjobs`' reason: the state has nowhere better to live, and the
+// pair of tables it installs cannot be read back as a bit without asking
+// which map is installed. The store is what `[[ -o ]]`, `$options` and the
+// listings already read, so the report side is unchanged.
+//
+// **Not `recorded`, which is what makes an emulation reach it.** A recorded
+// name is reset by rewriting the store wholesale, and only a name with a
+// `set` of its own is put back through it — so an `emulate sh` would have
+// moved the state and left the letters where they were. That is the same
+// distinction storeBacked draws for every other name in this state, and here
+// it is load-bearing rather than tidy.
+func shOptionLettersOption() zshOption {
+	o := storeBacked("shoptionletters", false)
+	store := o.set
+	o.set = func(r *interp.Runner, on bool) int {
+		code := store(r, on)
+		installOptionLetters(r, on)
+		return code
+	}
+	return o
 }

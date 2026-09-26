@@ -148,6 +148,20 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 // calling: a front end that wants to *say* a hook exists and will not be run —
 // see repl's hooks.go and the honest-refusal rule in AGENTS.md — has to be
 // able to see one without firing it.
+// RunningFunction is the name of the function whose body this shell is
+// running, and the empty string outside one.
+//
+// The innermost, which is the only reading a caller at a function's own
+// boundary can want: it is set as the body is entered and put back as the
+// call unwinds, so a hook installed by AtEveryFunctionCall reads the name of
+// the call it was run for.
+//
+// Exported for a dialect keeping a record *per function* — see dialect/zsh's
+// sticky emulation, which has to know which function it was handed. The call
+// stack answers the same question and allocates a slice to do it, which is
+// the wrong unit for something asked at every call.
+func (r *Runner) RunningFunction() string { return r.inFunc }
+
 func (r *Runner) HasFunction(name string) bool {
 	_, ok := r.funcs[name]
 	return ok

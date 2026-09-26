@@ -25767,6 +25767,54 @@ type SystemStartupFiles struct {
 // escaped by moving the file. The shell that has no escape is the reason the
 // other two are worth carrying.
 type StartupFileOptions struct {
+	// LettersBorrowedUnderEmulation names the emulation modes in which the
+	// **single-letter** spellings of SuppressAll and SuppressSystem stop
+	// being this shell's, whitespace-separated. Empty in every dialect but
+	// the one whose emulations re-point its whole option-letter set at
+	// another shell's.
+	//
+	// It is the front end's half of that re-pointing. The letter set a
+	// *running* shell reads is the dialect's own table — see
+	// Runner.SetOptionLetterNames — but a startup-file option is read before
+	// there is a runner at all, and the two spellings are the same letter:
+	// zsh spends `-f` on "read no startup files" where sh spends it on
+	// "turn globbing off". So the front end has to know, and the fact is
+	// small enough to be a spelling rather than a table.
+	//
+	// Measured 2026-09-26 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`), an empty
+	// HOME, with `--emulate MODE` in front of the letter:
+	//
+	//	              -f                 -d            -l        --no-rcs
+	//	--emulate sh  globbing off       bad option    login     no startup files
+	//	--emulate ksh globbing off       bad option    login     no startup files
+	//	--emulate csh no startup files   no root files login     no startup files
+	//	--emulate zsh no startup files   no root files login     no startup files
+	//
+	// Three things the table says and a narrower field could not. It is the
+	// **letters** and not the options: the long spellings go on meaning what
+	// they meant in every mode. It is **these two** options and not every
+	// one: `-l` is login in both letter sets, so it survives. And it is the
+	// **mode** that decides rather than the option being on, which is why
+	// this is read here from the word the invocation gave rather than from
+	// the runner, which does not exist yet.
+	//
+	// unpinned bash: this shell has no emulation option at all, so there is no
+	// mode word for a row to name and the empty string is the only value that
+	// means anything here.
+	//
+	// unpinned ksh: no emulation option, as bash.
+	//
+	// unpinned dash: no emulation option, as bash.
+	//
+	// unpinned ash: no emulation option, as bash.
+	//
+	// unpinned zsh: reached, and no corpus row can observe it: every case runs
+	// under `-c` with no `--emulate` word in front of it, and the option this
+	// governs is read while the command line is still being parsed. Pinned by
+	// TestShOptionLettersReachTheInvocationsLetters in dialect/zsh, which
+	// drives driver.MainArgs the way the suite rows do.
+	LettersBorrowedUnderEmulation string
+
 	// SuppressAll names the options that suppress every startup file. zsh's
 	// `-f` and `--no-rcs`, and measured they mean *every* one: `zsh -f -l -i`
 	// reads no `.zshenv`, no `.zprofile`, no `.zshrc` and no `.zlogin`.

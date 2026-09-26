@@ -231,7 +231,7 @@ func (r *Runner) quoteListedValueBody(style ListingQuotingStyle, what, v string)
 		case r.valueListsBare(v):
 			return v
 		}
-		return singleQuoted(v, `'\''`, true)
+		return r.singleQuotedWhole(v)
 	case ListingQuoteWhenNeededEscaped:
 		switch {
 		case r.listedNeedsDollar(v):
@@ -247,12 +247,12 @@ func (r *Runner) quoteListedValueBody(style ListingQuotingStyle, what, v string)
 		case r.valueListsBare(v):
 			return v
 		}
-		return singleQuotedInRuns(v)
+		return r.singleQuotedInRuns(v)
 	case ListingQuoteWhenNeededPlain:
 		if r.valueListsBare(v) {
 			return v
 		}
-		return singleQuoted(v, `'\''`, true)
+		return r.singleQuotedWhole(v)
 	case ListingQuoteAlwaysDouble:
 		if r.listedNeedsDollar(v) {
 			return r.dollarQuoted(v)
@@ -511,12 +511,31 @@ func singleQuotedEscaped(v string) string {
 // non-empty run wrapped on its own, and each quote written with a backslash
 // outside any quoting.
 //
-// It is the shape quoteInRuns already writes for the `q` modifiers, asked
-// with the predicate pinned true: this value has already been found to need
-// quoting, so the question those ask of each run separately is settled for
-// all of them at once.
-func singleQuotedInRuns(v string) string {
-	return quoteInRuns(v, func(string, int) bool { return true })
+// It is the shape quoteSingleRun writes for the `q` modifiers, and one
+// function rather than two so that a listing and an expansion flag cannot
+// come to spell one value two ways. The doubled reading is exactly what would
+// have made them: measured, `typeset -p`, `${(qq)}` and `${(q+)}` agree with
+// each other on every row with the option on and with it off alike, and the
+// listing was the half that had been left behind (#4625).
+func (r *Runner) singleQuotedInRuns(v string) string {
+	return quoteSingleRun(v, r.DoubledQuoteInSingleQuotes())
+}
+
+// singleQuotedWhole is the other single-quoting shape a listing writes: one
+// pair around the whole value, with the reopened run at the end dropped where
+// it would wrap nothing.
+//
+// The doubled reading takes the trim with it, which is measured rather than
+// deduced: there is no reopened run to drop, because nothing closes. With
+// `setopt rcquotes` on zsh 5.9.2, 2026-09-26, a table key of `k1'` lists as a
+// quote, `k1`, and three more quotes, and one of `'k2` as three quotes, `k2`
+// and one more — a wrapping pair either side in both, where the ordinary
+// spelling writes `'k1'\'` with no pair at the end.
+func (r *Runner) singleQuotedWhole(v string) string {
+	if r.DoubledQuoteInSingleQuotes() {
+		return singleQuoted(v, "''", false)
+	}
+	return singleQuoted(v, `'\''`, true)
 }
 
 func singleQuoted(v, escape string, trimEmptyTail bool) string {

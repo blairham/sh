@@ -4242,7 +4242,7 @@ func Semantics() interp.Semantics {
 	// Semantics.FunctionLettersThatMarkUndefined, which already named them
 	// for the declaration word, and Diagnostics.MarkingLettersUnderPlus for
 	// the half of `-u` this shell refuses.
-	s.FunctionsOptions = "mMuU"
+	s.FunctionsOptions = "mMuUxs"
 	// `unfunction`'s whole set, and it really is one letter: every other
 	// letter of the alphabet is a bad option there in both cases, the `-f`
 	// this name stands for included.
@@ -5012,7 +5012,12 @@ func Diagnostics() interp.Diagnostics {
 			// -M are implemented, in FunctionsOptions above, and so are
 			// -u and -U: they mark, and with no operands they are the
 			// listing a bare `autoload` writes (#1996).
-			"functions": "ckstxzTW",
+			// `-x` has left this list: it sets the listing's indent and is
+			// implemented, in FunctionsOptions above (#4442). `-s` has left
+			// it too: it is the string form of `-M`, and on a line without
+			// `-M` it is a letter that decides nothing and is taken in
+			// silence, which is what that shell does with it (#4443).
+			"functions": "cktzTW",
 		},
 		// `u` alone, and that is the measurement rather than an omission:
 		// `functions +u` and `typeset +fu` are `invalid option(s)` at 1
@@ -5029,7 +5034,14 @@ func Diagnostics() interp.Diagnostics {
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
 		// read, which is the only state this shell has.
-		ReadNoCoprocess: "read: -p: no coprocess",
+		// `zsh:functions:1: number expected after -x`, and not the
+		// `argument expected: -x` the same builtin says when nothing followed
+		// the letter at all. Measured 2026-09-26 on zsh 5.9.2, both at 1.
+		FunctionsIndentNeedsANumber: "%[1]s: number expected after -%[2]s",
+		// `zsh:functions:1: -Ms: must take a single string argument`, at 1
+		// and with nothing registered. Measured 2026-09-26 on zsh 5.9.2.
+		MathFunctionStringArity: "%s: -Ms: must take a single string argument",
+		ReadNoCoprocess:         "read: -p: no coprocess",
 		// `zsh:read:1: argument expected: -d` — the letter after the
 		// sentence, unlike everyone else, and status 1 like every other
 		// option complaint here.

@@ -72,6 +72,25 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 	if name == "" {
 		name = "functions"
 	}
+	// `-x` is read before everything else here, and it has to be: it takes a
+	// *number*, which may be the rest of its own word or the word after it,
+	// so a scan that has not taken it cannot tell an operand from an
+	// argument. See Runner.functionsIndentLetter.
+	if strings.ContainsRune(r.sem().FunctionsOptions, 'x') {
+		rest, indent, found, code := r.functionsIndentLetter(name, args)
+		if code != 0 {
+			return code
+		}
+		if found {
+			args = rest
+			// The listing's own arrangement for the length of this call:
+			// what `-x` moves is how one level of structure is written, and
+			// the printer already knows where the levels are.
+			saved := r.functionLayout.Indent
+			r.functionLayout.Indent = strings.Repeat(" ", indent)
+			defer func() { r.functionLayout.Indent = saved }()
+		}
+	}
 	// Read before the flags rather than out of them: `-m` is not one of the
 	// declaration's attributes and putting a case for it in
 	// parseDeclareFlags would add a letter to a parser shared with `typeset`,
@@ -91,9 +110,9 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 		// character mapping by it, and that reading takes the ordinary
 		// declaration path so the letters around it can refuse the line —
 		// see interp/declaremapping.go and Semantics.DeclareMappingLetter.
-		switch remove, operands, verdict := mathFunctionLetter(args); verdict {
+		switch remove, stringArg, operands, verdict := mathFunctionLetter(args); verdict {
 		case mathLetterAlone:
-			return r.mathFunctionsBuiltin(name, remove, operands)
+			return r.mathFunctionsBuiltin(name, remove, stringArg, operands)
 		case mathLetterWithMatching:
 			// Measured: the two letters together do nothing at all, quietly.
 			return 0
@@ -193,4 +212,79 @@ func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 		}
 	}
 	return 0
+}
+
+// functionsIndentLetter reads `functions -x num`, which writes each level of
+// the listing's structure as num spaces instead of as the tab the shell adds
+// by default. Zero suppresses the indentation altogether.
+//
+// It is a property of the *listing* and not of the function, so nothing else
+// moves for it: what the letter chooses is what one level is written as.
+//
+// The number is the rest of the letter's own word when anything follows it and
+// the next word when nothing does — and the *whole* rest of the word, which is
+// what the two refusals below separate. Measured 2026-09-26 on zsh 5.9.2,
+// `env -u FPATH` over a script file:
+//
+//	functions -x 2 g     two spaces a level
+//	functions -x2 g      the same, attached
+//	functions -mx 2 g    the same: the letter ends its bundle
+//	functions -x0 g      no indentation at all
+//	functions -x -1 g    the same — below zero is zero, at status 0
+//	functions -xm 2 g    `number expected after -x` — `m` is the argument
+//	functions -x2m g     `number expected after -x` — and so is `2m`
+//	functions -x abc g   `number expected after -x`
+//	functions -x         `argument expected: -x` — nothing followed at all
+//
+// The last two are two different sentences for what looks like one fault, and
+// the difference is whether a word was there to be read: a word that is not a
+// number is the number's own complaint, and no word at all is the option
+// reader's. The `+` sign is taken and means nothing here — `functions +x 2 g`
+// writes the body out, where a bare `functions +` names the function instead.
+//
+// found says whether the letter was written at all, so that a listing with no
+// `-x` keeps the layout it has rather than being handed a rebuilt copy of it.
+func (r *Runner) functionsIndentLetter(name string, args []string) (rest []string, indent int, found bool, code int) {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" || len(a) < 2 || (a[0] != '-' && a[0] != '+') {
+			// The options have ended, so every word left is an operand and
+			// no `x` in one of them is this letter.
+			return append(out, args[i:]...), indent, found, 0
+		}
+		j := strings.IndexByte(a, 'x')
+		if j < 0 {
+			out = append(out, a)
+			continue
+		}
+		number := a[j+1:]
+		if number == "" {
+			if i+1 >= len(args) {
+				return nil, 0, false, r.optionNeedsArgument(name, 'x')
+			}
+			i++
+			number = args[i]
+		}
+		n, ok := atoiSigned(number)
+		if !ok {
+			r.complainAboutOption(name, "%s\n", Wording(r.diag().FunctionsIndentNeedsANumber,
+				"%[1]s: -%[2]s: numeric argument required", r.builtinComplaintName(name), "x"))
+			return nil, 0, false, orDefault(r.diag().BuiltinBadOptionStatus, 2)
+		}
+		if n < 0 {
+			// Measured: below zero is zero rather than a refusal, and the
+			// listing comes out flush.
+			n = 0
+		}
+		if head := a[:j]; len(head) > 1 {
+			// The letters in front of the `x` are options in their own right
+			// and go on to the parser; a word with nothing but a sign left
+			// is dropped, since a bare `-` is an option in this dialect and
+			// a bare `+` would turn the listing into a list of names.
+			out = append(out, head)
+		}
+		indent, found = n, true
+	}
+	return out, indent, found, 0
 }

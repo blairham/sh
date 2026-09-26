@@ -2257,13 +2257,33 @@ func abbreviateHome(dir, home string) string {
 // abbreviateHome's answer for an empty table.
 func (r *Runner) abbreviatedDirectory(dir string) string {
 	drawn := abbreviateHome(dir, r.promptVar("HOME"))
+	// Whether anything has shortened it yet, which decides what a *tie* does
+	// and is the one thing a length comparison alone cannot say. Measured
+	// 2026-09-26 on zsh 5.9.2, with `HOME` somewhere else entirely:
+	//
+	//	hash -d foo=/tmp;    print -D /tmp/x    ~foo/x    both six characters
+	//	hash -d foo=/tmp;    print -D /tmp      ~foo      both four
+	//	hash -d xyzw=/us;    print -D /us/q     /us/q     seven against five
+	//
+	// So a name ties with the *unshortened path* and wins, and loses to it
+	// when it would draw more — which is the same "shortest string" rule the
+	// table above records, with the path itself as the candidate of last
+	// resort rather than as an incumbent that holds a draw. It still loses a
+	// tie to the home and to an earlier name, which are rows eight to ten up
+	// there, so the two comparisons are not one.
+	shortened := drawn != dir
 	for _, name := range r.namedDirNames() {
 		against, ok := r.namedDir(name)
 		if !ok {
 			continue
 		}
-		if under := abbreviatedAgainst(dir, against, "~"+name); len(under) < len(drawn) {
-			drawn = under
+		under := abbreviatedAgainst(dir, against, "~"+name)
+		if under == dir {
+			// This name is no directory of the path at all.
+			continue
+		}
+		if len(under) < len(drawn) || (!shortened && len(under) == len(drawn)) {
+			drawn, shortened = under, true
 		}
 	}
 	return drawn

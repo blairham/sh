@@ -1596,6 +1596,28 @@ type Diagnostics struct {
 	// bad `-t`, so it is a wording of its own rather than ReadBadNumber.
 	ReadBadOptionNumber string
 
+	// FunctionsIndentNeedsANumber is `functions -x` whose argument was a word
+	// and not a number. Two verbs: the builtin's own name, then the letter.
+	//
+	// It is not OptionNeedsArgument, which the same builtin reaches when
+	// nothing followed the letter at all — measured 2026-09-26 on zsh 5.9.2,
+	// `functions -x abc` is `number expected after -x` where `functions -x`
+	// with nothing behind it is `argument expected: -x`, both at 1. One
+	// dialect has the letter, so there is one wording; empty is the default
+	// below, which no shell in the panel says.
+	FunctionsIndentNeedsANumber string
+
+	// MathFunctionStringArity is a `-M -s` registration whose arity is
+	// anything but the one argument the letter names. One verb: the
+	// builtin's own name. Measured 2026-09-26 on zsh 5.9.2 — `functions -Ms
+	// n 0`, `-Ms n 2` and `-Ms n 1 -1` are each `-Ms: must take a single
+	// string argument` at 1 with nothing registered, where `-Ms n 1` and
+	// `-Ms n 1 1` are taken.
+	//
+	// One dialect has the letter, so there is one wording; empty is the
+	// default below.
+	MathFunctionStringArity string
+
 	// CoprocessAlreadyRunning is a second `cmd |&` started while the first
 	// coprocess is still running, in the dialect that spells a coprocess as
 	// an operator. ksh93 says `process already exists` and it is fatal —

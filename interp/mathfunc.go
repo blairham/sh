@@ -127,6 +127,11 @@ type mathFunc struct {
 	// than in shell — see mathnative.go, which is the other way into this
 	// same table. A registration has one or the other and never both.
 	native MathFunction
+	// stringArg is the `-s` registration: the text between the call's
+	// parentheses arrives as **one** argument, unevaluated, instead of the
+	// arguments being evaluated and passed as numbers. See
+	// Runner.mathFuncStringArgument.
+	stringArg bool
 }
 
 // mathFuncUnbounded is the max that means "as many as are written". Spelled
@@ -174,6 +179,11 @@ func (r *Runner) removeMathFunc(name string) {
 // the form that would make it. Measured: registering `aa bb cc dd ee` in that
 // order lists `ee` first, and registering them backwards lists `aa` first, so
 // the order is the table's and not the alphabet's.
+//
+// A string registration is written back with the letters it was made with —
+// `functions -Ms sf 1` — so the line still makes the registration it
+// describes. Measured 2026-09-26 on zsh 5.9.2, in the same listing as the
+// ordinary ones and in the same order.
 func (r *Runner) mathFuncListing() []string {
 	// mathOrder holds exactly the registered names and nothing else, which
 	// is why there is no second check here for a name the table no longer
@@ -184,7 +194,12 @@ func (r *Runner) mathFuncListing() []string {
 	out := make([]string, 0, len(r.mathOrder))
 	for i := len(r.mathOrder) - 1; i >= 0; i-- {
 		name := r.mathOrder[i]
-		out = append(out, "functions -M "+mathFuncSpec(name, r.mathFuncs[name]))
+		fn := r.mathFuncs[name]
+		letters := "-M"
+		if fn.stringArg {
+			letters = "-Ms"
+		}
+		out = append(out, "functions "+letters+" "+mathFuncSpec(name, fn))
 	}
 	return out
 }
@@ -243,6 +258,12 @@ func (r *Runner) evalMathFunc(x *syntax.ArithCall) (arithNum, error) {
 			complete: true,
 		}
 	}
+	if fn.stringArg {
+		// The whole argument text, unevaluated and as one argument — so
+		// there is no count to check and nothing to evaluate. See
+		// mathFuncStringArgument.
+		return r.callMathFunc(fn, x.Name, []string{mathFuncStringArgument(x.Text)})
+	}
 	if len(x.Args) == 0 && fn.min > 0 && r.diag().MathFunctionNoArgumentIsASyntaxError {
 		// A known name with nothing between its parentheses, in the dialect
 		// that reads that as an operand missing rather than as a count. Not
@@ -276,6 +297,19 @@ func (r *Runner) evalMathFunc(x *syntax.ArithCall) (arithNum, error) {
 		}
 		args[i] = r.formatNum(v)
 	}
+	return r.callMathFunc(fn, x.Name, args)
+}
+
+// callMathFunc runs a registration's implementation with the arguments
+// already settled, and answers with what the call is worth.
+//
+// One place for both readings of the operands — the evaluated numbers and the
+// `-s` form's single unevaluated string — because everything past the
+// arguments is the same for the two: the same lookup of the implementation,
+// the same sentence when it is not there, the same name on the frame, and the
+// same answer. Two copies is how the string form would come to miss a fix the
+// other one carries.
+func (r *Runner) callMathFunc(fn mathFunc, name string, args []string) (arithNum, error) {
 	body, ok := r.funcs[fn.impl]
 	if !ok {
 		return intNum(0), arithError{
@@ -288,7 +322,7 @@ func (r *Runner) evalMathFunc(x *syntax.ArithCall) (arithNum, error) {
 	// hand it. The name the call is *known by* rather than the
 	// implementation's goes onto the frame, because that is what `$0`
 	// answers with inside it.
-	if err := runMathFuncBody(r, body, x.Name, args); err != nil {
+	if err := runMathFuncBody(r, body, name, args); err != nil {
 		return intNum(0), err
 	}
 	// Whatever arithmetic evaluated last during the call, which is the
@@ -298,9 +332,45 @@ func (r *Runner) evalMathFunc(x *syntax.ArithCall) (arithNum, error) {
 	return r.lastArith, nil
 }
 
+// mathFuncStringArgument is what a `-s` registration is handed: the text
+// between the call's parentheses, exactly as it was written.
+//
+// Exactly — blanks and commas included. Measured 2026-09-26 on zsh 5.9.2 with
+// an implementation printing `$#` and `$1`:
+//
+//	sf(2+2)          n=1  1=[2+2]          — unevaluated, so not 4
+//	sf(1,2)          n=1  1=[1,2]          — one argument, comma and all
+//	sf()             n=1  1=[]             — still one, and it is empty
+//	sf( a , b c )    n=1  1=[ a , b c ]    — the blanks are kept
+//
+// The first row is the discriminating one: an evaluated argument would be `4`,
+// and an implementation reading `${#1}` can tell the two apart where one
+// reading `$1` numerically cannot.
+//
+// Taken from the call's own source text rather than rebuilt from the tree,
+// which could not reproduce the blanks. The text runs from the first byte of
+// the name through the closing parenthesis, so what is wanted is between the
+// first `(` and the last `)`.
+func mathFuncStringArgument(text string) string {
+	open := strings.IndexByte(text, '(')
+	shut := strings.LastIndexByte(text, ')')
+	if open < 0 || shut < open {
+		return ""
+	}
+	return text[open+1 : shut]
+}
+
 // mathFuncOperands reads the operands of a `functions -M` registration:
 // `name [min [max [impl]]]`. The bool is false when it reported.
-func (r *Runner) mathFuncOperands(builtin string, args []string) (string, mathFunc, bool) {
+//
+// stringArg is the `-s` form, whose arity is not free: the whole argument text
+// is one string, so the registration takes exactly one argument and any other
+// count is refused. Measured 2026-09-26 on zsh 5.9.2 — `functions -Ms n 1` and
+// `functions -Ms n 1 1` are taken at 0, `functions -Ms n 0`, `-Ms n 2` and
+// `-Ms n 1 -1` are each `-Ms: must take a single string argument` at 1 with
+// nothing registered, and the implementation operand is still read, so
+// `functions -Ms n 1 1 other` stands.
+func (r *Runner) mathFuncOperands(builtin string, args []string, stringArg bool) (string, mathFunc, bool) {
 	if len(args) > 4 {
 		r.diagf("%s\n", Wording(r.diag().MathFunctionTooManyOperands, "%s: -M: too many arguments", builtin))
 		return "", mathFunc{}, false
@@ -311,6 +381,24 @@ func (r *Runner) mathFuncOperands(builtin string, args []string) (string, mathFu
 		return "", mathFunc{}, false
 	}
 	fn := mathFunc{min: 0, max: mathFuncUnbounded, impl: name}
+	if stringArg {
+		// The one argument the letter names, whether or not the arity was
+		// written out — which is why a listing of `functions -Ms sf` says
+		// `sf 1` where the ordinary form with no arity says `sf`.
+		fn.stringArg = true
+		fn.min, fn.max = 1, 1
+		for _, operand := range args[1:min(len(args), 3)] {
+			if operand != "1" {
+				r.diagf("%s\n", Wording(r.diag().MathFunctionStringArity,
+					"%s: -Ms: must take a single string argument", builtin))
+				return "", mathFunc{}, false
+			}
+		}
+		if len(args) > 3 {
+			fn.impl = args[3]
+		}
+		return name, fn, true
+	}
 	if len(args) > 1 {
 		n, err := strconv.Atoi(args[1])
 		if err != nil || n < 0 {
@@ -343,7 +431,7 @@ func (r *Runner) mathFuncOperands(builtin string, args []string) (string, mathFu
 // Returned status is the builtin's. Every path here is 0 or 1 and there is no
 // third: a registration succeeds or is refused for one of three reasons, a
 // removal is always 0, and a listing is always 0.
-func (r *Runner) mathFunctionsBuiltin(builtin string, remove bool, args []string) int {
+func (r *Runner) mathFunctionsBuiltin(builtin string, remove, stringArg bool, args []string) int {
 	if remove {
 		for _, name := range args {
 			r.removeMathFunc(name)
@@ -356,7 +444,7 @@ func (r *Runner) mathFunctionsBuiltin(builtin string, remove bool, args []string
 		}
 		return 0
 	}
-	name, fn, ok := r.mathFuncOperands(builtin, args)
+	name, fn, ok := r.mathFuncOperands(builtin, args, stringArg)
 	if !ok {
 		return 1
 	}
@@ -392,7 +480,7 @@ const (
 //
 // A `--` after the options ends them, which is the spelling the plugin manager
 // uses: `functions -M -- zi_scheduler_add 1 1 -zi_scheduler_add_sh`.
-func mathFunctionLetter(args []string) (remove bool, rest []string, verdict mathLetterVerdict) {
+func mathFunctionLetter(args []string) (remove, stringArg bool, rest []string, verdict mathLetterVerdict) {
 	letters, sign := "", byte(0)
 	i := 0
 	for ; i < len(args); i++ {
@@ -410,21 +498,26 @@ func mathFunctionLetter(args []string) (remove bool, rest []string, verdict math
 		}
 	}
 	if sign == 0 {
-		return false, nil, mathLetterAbsent
+		return false, false, nil, mathLetterAbsent
 	}
 	verdict = mathLetterAlone
 	for _, c := range letters {
 		switch c {
 		case 'M':
+		case 's':
+			// The string form, which composes with `-M` in either order and
+			// in either spelling: measured, `-M -s`, `-s -M`, `-Ms` and
+			// `-sM` all register the same thing.
+			stringArg = true
 		case 'm':
 			if verdict == mathLetterAlone {
 				verdict = mathLetterWithMatching
 			}
 		default:
-			return false, nil, mathLetterMixed
+			return false, false, nil, mathLetterMixed
 		}
 	}
-	return sign == '+', args[i:], verdict
+	return sign == '+', stringArg, args[i:], verdict
 }
 
 // mathFuncNameValid is the name a registration will take: an identifier, and

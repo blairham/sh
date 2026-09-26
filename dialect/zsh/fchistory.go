@@ -442,8 +442,17 @@ func fcStartSize(r *interp.Runner) {
 	if value, ok := r.GetVar("HISTSIZE"); ok {
 		start = fcImportedSize(value)
 	}
-	r.SetIntegerParameter("HISTSIZE", 10)
+	// The value first and the attribute after it, so that laying the
+	// parameter down is not itself an *evaluation*. With the attribute
+	// already on, storing thirty goes through the arithmetic evaluator and
+	// becomes the last expression this shell evaluated — which a math
+	// function registered later and evaluating nothing hands back, so
+	// `functions -M nf; $(( nf() ))` answered 30 in a shell that had done
+	// no arithmetic at all, where zsh answers 0 (#4443). The number is the
+	// same either way: what moves is whether the shell's own startup is
+	// visible as a script's last sum.
 	r.SetVar("HISTSIZE", strconv.Itoa(start))
+	r.SetIntegerParameter("HISTSIZE", 10)
 }
 
 // fcImportedSize is a HISTSIZE the shell was **handed**, which is a different

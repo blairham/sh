@@ -73,6 +73,16 @@ func TestTheShortestDrawnCandidateWins(t *testing.T) {
 		{"a name losing to the home", nd, map[string]string{"longname": nd + "/a"}, nd + "/a/b", "~/a/b"},
 		{"a tie goes to the home", nd, map[string]string{"ab": nd + "/a"}, nd + "/a/b", "~/a/b"},
 		{"a tie between names goes to the first by name", "", map[string]string{"z1": nd, "a1": nd}, nd + "/a", "~a1/a"},
+		// A tie with the *path itself* goes the other way from a tie with
+		// the home, which is why the two comparisons are not one. Measured
+		// 2026-09-26 on zsh 5.9.2 with the home somewhere else entirely:
+		// `hash -d foo=/tmp; print -D /tmp/x` is `~foo/x`, six characters
+		// against six, and `print -D /tmp` is `~foo`, four against four.
+		// The third row is the control that keeps this from being "a name
+		// always wins": a name that would draw *more* than the path loses.
+		{"a tie with the path goes to the name", "", map[string]string{"foo": "/tmp"}, "/tmp/x", "~foo/x"},
+		{"the same, at the directory itself", "", map[string]string{"foo": "/tmp"}, "/tmp", "~foo"},
+		{"a name drawing more than the path loses", "", map[string]string{"xyzw": "/us"}, "/us/q", "/us/q"},
 		{"a value ending in a separator is no candidate", "", map[string]string{"jd": "/"}, "/usr", "/usr"},
 		{"nothing over it", "", map[string]string{"jd": "/elsewhere"}, nd + "/a", nd + "/a"},
 	} {

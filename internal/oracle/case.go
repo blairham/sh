@@ -430,6 +430,31 @@ var Corpus = []Case{
 		Snippet: `unset u; set -- $u; echo "n=$#"`,
 		Why:     "unset behaves as empty here, rather than as an error",
 	},
+	{
+		ID: "split/empty-parameter-keeps-its-boundary", Category: "field splitting",
+		Snippet: `set -- '' 2; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "an empty parameter is dropped from the values and leaves the **field boundary** behind, so the text written beside the expansion does not join across the gap: `2[x][2y]`. The count is printed with the fields because `[x2y]` and `[x][2y]` are the same characters once the boundary is gone, and the wrong reading is a plausible argument list at status 0 — `for f in ${files#prefix}` silently glues two entries together",
+	},
+	{
+		ID: "split/one-empty-parameter-takes-both-sides", Category: "field splitting",
+		Snippet: `set -- ''; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the discriminating half of the pair above, and what says the rule is keyed on the *field* rather than on the parameter: one empty parameter is one field, and one field takes the text on both sides of the expansion at once. `1[xy]`, against `2[x][y]` for two of them — a rule that spoke of the parameter, dropping it and closing the field where it stood, answers this one `[x][y]` and agrees everywhere else",
+	},
+	{
+		ID: "split/two-empty-parameters-are-two-fields", Category: "field splitting",
+		Snippet: `set -- '' ''; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the other half of that pair: two empty parameters are two fields, the first takes the `x` and the second takes the `y`, so this is `2[x][y]` where one of them is `1[xy]`. Neither row is discriminating on its own",
+	},
+	{
+		ID: "split/empty-parameter-with-nothing-beside-it", Category: "field splitting",
+		Snippet: `set -- '' 2; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the control, and the reason a grid of expansions reports this clean: with no text beside the expansion there is nothing for the boundary to separate, so the field goes and `1[2]` is what both readings give",
+	},
+	{
+		ID: "split/a-quoted-null-is-not-an-empty-parameter", Category: "field splitting",
+		Snippet: `set -- '' 2; set -- ""$@; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "a quoted null carries no text and still leaves a field behind, where an empty parameter's field goes — so this is `2[][2]` against `1[2]` for the same word without the quotes. It is the pair that says the removal is about what *reached* the field rather than about the field being empty",
+	},
 
 	// --- field splitting: IFS mechanics --------------------------------
 	{

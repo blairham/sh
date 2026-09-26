@@ -31036,3 +31036,109 @@ belongs in `share/suite/ksh/` rather than in the graded corpus. It is not
 in `share/suite/ksh/control.tests` for the reason #3309 gives — the whole
 file is read before any of it runs, so an unparsed `namespace` would cost
 every section of that file rather than its own.
+
+## `ARGV0`: a variable that names the command instead of reaching it
+
+**The rule.** An **exported** `ARGV0` is the name the next command is
+started under: its value becomes the child's `argv[0]`, and the variable
+is taken out of the environment the child is handed. True in zsh alone:
+`Semantics.ExportedArgv0NamesTheCommand`.
+
+**The noun is "exported", and it is not "prefix".** The usual spelling is
+`ARGV0=sh cmd`, which looks like an assignment prefix and invites a rule
+written around one — and such a rule agrees with every row below but two.
+What decides is only whether the name would have reached the child's
+environment at all.
+
+### Measured
+
+zsh 5.9.2 (aarch64-apple-darwin25.4.0), run `-f`, 2026-09-26. The child is
+`zsh -c 'print -r -- $0'`, named by its full path, so anything but the path
+is the variable being read. `go version -m` on the reference says *not a Go
+executable*.
+
+| written | `$0` in the child |
+| --- | --- |
+| `ARGV0=sh cmd` | `sh` |
+| `export ARGV0=sh; cmd` | `sh` |
+| `typeset -x ARGV0=sh; cmd` | `sh` |
+| `ARGV0=sh; export ARGV0; cmd` | `sh` |
+| `setopt allexport; ARGV0=sh; cmd` | `sh` |
+| `env ARGV0=sh zsh -f -c cmd` | `sh` |
+| `ARGV0=sh` on its own line, then `cmd` | the path |
+| `export ARGV0=sh; typeset +x ARGV0; cmd` | the path |
+
+The last two rows are the discriminating pair. Hold "there is a variable
+named `ARGV0`" fixed and vary only whether it is exported: the answer
+moves. The sixth row is the other half — hold "exported" fixed and take
+the prefix away altogether, and the answer does not move. A rule keyed on
+the prefix is right in six cells out of eight and wrong about what decides
+any of them.
+
+**And the name is spent rather than copied.** `ARGV0=x printenv ARGV0`
+exits 1 there, on every row that renames; this shell's own copy survives,
+so `export ARGV0=kk; cmd; print $ARGV0` still writes `kk`. Only the
+child's environment is touched.
+
+**An empty value is still a value**: `ARGV0= cmd` starts the command with
+an empty `argv[0]`, and a value with slashes in it is passed through
+unchanged — nothing reduces it to a basename.
+
+**A builtin and a function are not renamed**, because neither is started:
+`ARGV0=x print $0` writes the shell's own `$0`, and `ARGV0=x f` is an
+ordinary prefix that the function sees as a variable. This falls out of
+where the rule is applied — the one seam where a child's environment is
+assembled — rather than being a case of its own.
+
+### The rest of the panel
+
+bash 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash
+1.37.0 all hand `ARGV0` to the child as an ordinary variable and name the
+child by the word that was typed. zsh's row is the positive control for
+the first four: the same one-line probe, the same child, and only that
+column renames.
+
+The ash row was taken in the pinned alpine image with BusyBox's *own*
+applet naming as the instrument — it chooses which program to be from
+`argv[0]`, so `ARGV0=cat busybox` behaving as `cat` is what a positive
+would look like there. It printed its usage banner instead, while `exec -a
+cat busybox` on the same line ran as `cat`. Without that second line the
+row would be a null from an instrument nobody had seen fire.
+
+### `exec -a`, which is the other way to say it
+
+Both spellings reach the same place, and this shell composes them as:
+the name is the word that was typed, an exported `ARGV0` replaces it, `-a`
+replaces that, and `-l` then goes on whatever is left. So an explicit
+option beats an ambient variable.
+
+**One row of the reference is measured and deliberately not followed.**
+zsh's precedence is *environment < `-a` < this command's own assignment
+prefix*, which is three levels where this has two:
+
+| written | zsh 5.9.2 | here |
+| --- | --- | --- |
+| `export ARGV0=E; exec cmd` | `E` | `E` |
+| `env ARGV0=I zsh -c 'exec -a A cmd'` | `A` | `A` |
+| `export ARGV0=E; exec -a A cmd` | `A` | `A` |
+| `ARGV0=P exec -a A cmd` | **`P`** | `A` |
+
+The fourth row needs `exec` to tell a prefix written on its own line from
+one inherited before the command began, and by the time a builtin runs,
+this shell's prefix is in the variable table and the two are the same
+fact. Modeling it would mean carrying the provenance of a name through the
+prefix machinery for one corner in which both spellings of one idea are
+written on one line. Recorded here so the next reader knows it was seen.
+
+### Where it lives
+
+`interp/argv0env.go`, at the seam where a child's environment is built —
+`Runner.exec` for an ordinary command and `execbuiltin.go` for both of
+`exec`'s roads, the one that really replaces this process and the one that
+stands in for it inside a subshell. Not in `driver`: this is about a
+command the shell *starts*, not about how the shell itself was invoked,
+which is the neighboring question `invocation.md` answers.
+
+The axis is consulted only where an `ARGV0` is actually in the environment
+being handed over, so a core with no dialect chosen refuses the script
+that uses the name rather than every command it starts.

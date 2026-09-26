@@ -156,3 +156,46 @@ zrow 'a script may not'     -c 'setopt interactive'
 zrow 'nor this one'         -c 'setopt shinstdin'
 zrow 'nor the editor'       -c 'setopt zle'
 zrow 'nor one command'      -c 'setopt singlecommand'
+
+# `ARGV0`: the variable that names the command instead of reaching it.
+#
+# zsh alone reads an **exported** `ARGV0` as the `argv[0]` the next command is
+# started under, and spends it there — the child is named and never shown the
+# variable. Everywhere else it is a variable like any other.
+#
+# The noun is "exported" and not "prefix", which is what the last two rows
+# below are for: they hold "there is a variable named ARGV0" fixed and vary
+# only whether it is exported, and the answer moves. Every row above them
+# agrees with a rule written around the assignment prefix, and that rule is
+# wrong about what decides any of them.
+#
+# No row prints `$0` itself unless it was renamed — an unrenamed `$0` is this
+# run's own path, which is not the same string in the two columns being
+# compared. The unrenamed rows ask a yes-or-no question instead.
+
+printf 'a prefix: [%s]\n' "$(ARGV0=chosen "$SUITE_SHELL" -c 'printf %s "$0"')"
+printf 'exported, no prefix: [%s]\n' "$(export ARGV0=chosen; "$SUITE_SHELL" -c 'printf %s "$0"')"
+printf 'exported after the fact: [%s]\n' "$(ARGV0=chosen; export ARGV0; "$SUITE_SHELL" -c 'printf %s "$0"')"
+
+# And it is spent rather than copied: the child is named and the name is gone
+# from its environment.
+ARGV0=chosen "$SUITE_SHELL" -c 'printf "spent: [%s]\n" "${ARGV0-unset}"'
+
+# This shell's own copy survives the command it named, so only the child's
+# environment was touched.
+(export ARGV0=kept; "$SUITE_SHELL" -c ':'; printf 'ours survives: [%s]\n' "$ARGV0")
+
+# The first half of the discriminating pair: a variable of that name, and
+# nothing exports it.
+(ARGV0=chosen
+ "$SUITE_SHELL" -c 'case $0 in chosen) echo "not exported: renamed";; *) echo "not exported: left alone";; esac')
+
+# The second half: exported and then not, which takes the attribute away and
+# leaves the variable in place.
+(export ARGV0=chosen; typeset +x ARGV0
+ "$SUITE_SHELL" -c 'case $0 in chosen) echo "unexported: renamed";; *) echo "unexported: left alone";; esac')
+
+# And every other assignment prefix goes on doing exactly what it did: it
+# reaches the child as a variable and renames nothing.
+(V=1 "$SUITE_SHELL" -c 'printf "ordinary prefix: [%s] " "$V"
+ case $0 in V|1) echo renamed;; *) echo "and it renamed nothing";; esac')

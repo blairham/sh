@@ -22277,6 +22277,30 @@ type Semantics struct {
 	// two shells that have `-l` disagree about it.
 	ExecLoginPrefixesTheGivenName Answer
 
+	// ExportedArgv0NamesTheCommand reads an exported `ARGV0` as the name the
+	// command it starts finds in argv[0], rather than handing it over as one
+	// more variable.
+	//
+	// True in zsh alone. Measured 2026-09-26 with the child asking for `$0`:
+	// `ARGV0=sh cmd` names the child `sh` in zsh 5.9.2, and in bash 5.3.20,
+	// bash 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 the
+	// child is named by the word that was typed and finds `ARGV0` in its
+	// environment. The ash row was taken with BusyBox's own applet naming as
+	// the instrument — it picks which program to be from argv[0], so
+	// `ARGV0=cat busybox` running as `cat` is what a positive looks like, and
+	// it printed its usage instead while `exec -a cat busybox` on the same
+	// line ran as `cat`.
+	//
+	// **Exported is the whole of it, and a prefix is only one way to be
+	// exported** — see Runner.namedByTheEnvironment, which carries the grid
+	// and the discriminating pair. The name is *consumed*: the child is named
+	// and never shown the variable.
+	//
+	// Asked only where an `ARGV0` is actually in the environment being handed
+	// over, so an unanswered core refuses the script that uses the name rather
+	// than every command it starts.
+	ExportedArgv0NamesTheCommand Answer
+
 	// DotFallsBackToCurrentDirectory looks in the current directory for a
 	// `.` operand with no slash in it, after PATH has missed.
 	//
@@ -26881,6 +26905,10 @@ func PosixSemantics() Semantics {
 		ExecFailureRunsExitTrap:            Yes,
 		ExecFailureOnAPathnameRunsExitTrap: Yes,
 		ExecTakesOptions:                   No,
+		// And the standard has no variable that names the command it is put in
+		// front of: `ARGV0` is zsh's alone, and everywhere else it is a variable
+		// like any other and reaches the child as one.
+		ExportedArgv0NamesTheCommand: No,
 		// The standard says an empty element is the current directory and
 		// makes no exception for the whole variable being empty, so the
 		// preset follows the text and the majority together.

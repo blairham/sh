@@ -1183,3 +1183,14 @@ func TestTheKindLetterIsNotAmongTypesLetters(t *testing.T) {
 		t.Errorf("TypeOptions = %q, want no kind letter: this shell refuses it", got)
 	}
 }
+
+// TestExportedArgv0NamesTheCommand: zsh alone reads `ARGV0` as the name a
+// command is started under; everywhere else it is a variable like any other
+// and reaches the child as one. The standard's preset answers no, which is
+// what the other four inherit — see TestTheStandardHasNoNameForTheCommand in
+// interp, which is the control for this row.
+func TestExportedArgv0NamesTheCommand(t *testing.T) {
+	if got, want := zsh.Semantics().ExportedArgv0NamesTheCommand, interp.Yes; got != want {
+		t.Errorf("ExportedArgv0NamesTheCommand = %v, want %v", got, want)
+	}
+}

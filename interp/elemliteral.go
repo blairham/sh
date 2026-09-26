@@ -89,7 +89,7 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 	}
 
 	elems, _ := r.arrayElemsOfTheName(a.Name)
-	pos, within := r.elemPos(r.Arrays[a.Name], idx)
+	pos, within := r.elemPos(r.arrayForWrite(a.Name), idx)
 	if !within {
 		if idx < 0 && r.ask(r.sem().NegativeSubscriptPastTheStartInserts,
 			"a negative subscript past the first element placing one in front of it") {
@@ -141,7 +141,7 @@ func (r *Runner) spliceTargetIsAnArray(a *syntax.Assign) bool {
 			"%[1]s: attempt to set slice of associative array", name))
 		return false
 	}
-	if _, isArray := r.Arrays[name]; isArray {
+	if _, isArray := r.arrayElemsOfTheName(name); isArray {
 		return true
 	}
 	if a.Operand && r.declaredEmpty[name] {
@@ -189,10 +189,25 @@ func (r *Runner) literalWords(name string, elems []*syntax.ArrayElem) ([]string,
 // Not arrayElems, which answers a plain scalar as a one-element array — that
 // is right for `${x[0]}` and wrong here, where a scalar has already been
 // refused and an unset name must start empty rather than as one empty string.
+//
+// **Produced as well as stored**, which is the half it was missing. A name
+// whose elements come from a producer has nothing in the array table, so
+// asking the table alone said such a name was not an array at all — and since
+// this is the reading every caller here uses to decide *whether* a name is
+// one, that answer arrived as `attempt to assign array value to non-array`,
+// the sentence a scalar gets. One dialect produces its positional parameters
+// under a name, so `argv[2]=(p q)` was refused where `a[2]=(p q)` spliced, and
+// `shift argv` and `argv[@]+=x` reached nothing for the same reason (#4614).
+//
+// The second value is the answer to "is this an array", so it must stay
+// distinguishable from an array holding no elements: a producer reporting
+// nothing is still a producer, and `true` is the honest answer for it.
 func (r *Runner) arrayElemsOfTheName(name string) ([]string, bool) {
-	a, ok := r.Arrays[name]
-	if !ok {
-		return nil, false
+	if a, stored := r.Arrays[name]; stored {
+		return r.readArray(a), true
 	}
-	return r.readArray(a), true
+	if produce, produced := r.DynamicArrays[name]; produced {
+		return produce(r), true
+	}
+	return nil, false
 }

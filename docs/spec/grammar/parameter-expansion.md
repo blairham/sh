@@ -1836,6 +1836,42 @@ would have to be kept in step with `$@` at every one of the dozen places
 the parameters move. See interp.SetDynamicArrayWriter, whose whole
 contract is that a write to a produced name must have somewhere to go.
 
+An array **literal** through a subscript splices the parameters, exactly
+as it splices a named array — the length changes by the literal's count
+less the span's. Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+2026-09-26, under `-f`, with `set -- x y z` in front of each row:
+
+    argv[2]=(p q)       x p q z     n=4   one parameter becomes two
+    argv[2]=(p)         x p z       n=3   and one becomes one
+    argv[2]=()          x z         n=2   and one becomes none
+    argv[2,3]=(p q r)   x p q r     n=4   a span, replaced whole
+    argv[2,3]=X         x X         n=2   the same span carrying one word
+    argv[2]+=(p q)      x y p q z   n=5   `+=` keeps the parameter
+    argv[5]=(p q)       x y z '' p q  n=6  past the end pads, then places
+    argv[-1]=(p q)      x y p q     n=4   a negative counts back from the last
+    argv[-4]=(p)        p x y z     n=4   past the first goes in front of all
+    argv[0]=(p q)       argv: assignment to invalid subscript range
+
+`$0` is not one of the parameters, so subscript zero is below the first
+and is refused in the sentence `a[0]=(p q)` gets on a named array — not
+`attempt to assign array value to non-array`, which says the wrong thing
+about the name. Under `KSH_ARRAYS` every row moves by one subscript and
+nothing else about it changes, negative subscripts included, because the
+base is asked where a script wrote the number.
+
+That is not a rule about the parameters. It is a rule about a **produced
+array**: the question every one of these routes asks is whether the name
+holds an array, and a produced name has nothing in the array table to say
+so. Asking the table alone made `argv[2]=(p q)` the sentence a scalar
+gets, `argv[2,3]=X` a splice of *characters* of the joined parameters,
+`shift argv` a no-op and `argv[@]+=Z` a replacement — four constructs,
+one answer, and the positional parameters are simply the one produced
+array this dialect also lets a script assign an element of (#4614).
+
+It is not a corner of the suite either: zsh's own `ztst.zsh` normalizes
+`tail -1` into `tail -n 1` with `argv[$argi]=(-n ${argv[$argi][2,-1]})`,
+so every `tail` its tests run depended on it.
+
 ### How many fields a subscripted expansion makes
 
 Quoting, measured on zsh with `a=(x y z)` and `set -- a b c`:

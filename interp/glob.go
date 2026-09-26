@@ -849,6 +849,26 @@ func (r *Runner) describesRatherThanSpells(s string) bool {
 		hasUnescapedByte(s, '|')
 }
 
+// givingUpAlready reports whether what is running is already on its way out,
+// which is how one refusal stays one sentence where a word is expanded more
+// than once.
+//
+// A redirection target is read in more than one view — see
+// [Runner.expandRedirectTargetViews], which globs the words view and then the
+// fields view — so every pattern in one reaches [Runner.glob] twice, and the
+// second pass arrives to find the first pass's unwinding. The miss has been
+// asking this since it was found writing `no matches found` twice; the
+// refusal was not, so `: > [a` wrote `bad pattern: [a` twice where zsh 5.9.2
+// writes it once (#4647, #4670).
+//
+// Both names are needed and that is measured rather than tidy: naming only
+// controlExit covers the shell that stops the script and not the one that
+// gives up the statement, which is the state the second pass of an abandoning
+// statement is in.
+func (r *Runner) givingUpAlready() bool {
+	return r.ctl == controlExit || r.ctl == controlAbandon
+}
+
 func (r *Runner) glob(field string) ([]string, bool) {
 	if r.noglob || r.globSuspended {
 		// `set -f`, or a context that reads a word as text. Only the
@@ -905,7 +925,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// a few lines up. Not BracketLiteral: with the switch off real zsh
 		// writes `*[a` rather than the file `x[a` it would have matched had
 		// the `[` become an ordinary character.
-		if r.RefusesABadPatternWhenGlobbing() {
+		if r.RefusesABadPatternWhenGlobbing() && !r.givingUpAlready() {
 			// The field **unescaped**, which is what the complaint one line
 			// down from here has always done for a miss and what this one
 			// never did. The mark a quote or a backslash leaves behind is
@@ -971,7 +991,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	// is `f1` where the name alone is no pattern at all, so the qualifiers
 	// are what sent it to the filesystem.
 	defer func() {
-		if r.ctl == controlExit || r.ctl == controlAbandon {
+		if r.givingUpAlready() {
 			// The pattern was rejected while it was being read, or something
 			// before it gave up, and either way what is running is already
 			// on its way out. Reporting a miss on top of that says the

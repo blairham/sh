@@ -31,8 +31,17 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 	if v, ok := r.heldSubscriptSubst(r.expandingWord, span.Pos); ok {
 		return v
 	}
+	// And the same for the names one brace fan made, in the columns that run
+	// a fanned word's expansions once rather than once per name. Held here
+	// for the reason above: an argument and a redirection target fan by
+	// different roads and arrive at the same expander. See braceFanHold
+	// (#4694).
+	if v, ok := r.heldBraceFanWork(span.Pos); ok {
+		return v
+	}
 	v := r.runCommandSubst(ctx, span)
 	r.holdSubscriptSubst(r.expandingWord, span.Pos, v)
+	r.holdBraceFanWork(span.Pos, v)
 	return v
 }
 
@@ -40,6 +49,12 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 // body, every time it is called.
 func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	src := span.Value
+	// The program in here is a parse of its own, so a hold keyed by where a
+	// span sits would answer the wrong span for it — and the body runs
+	// commands, which fan braces of their own. Put down for the body and
+	// picked up afterwards, so the value this call produces is still held
+	// for the other names of the fan outside. See braceFanHold.
+	defer r.suspendBraceFan()()
 	// An assignment with no command name reports what the substitutions in
 	// it reported, and reports success when there are none. Those are two
 	// different facts and neither can be read off the status afterwards —

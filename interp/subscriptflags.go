@@ -1171,9 +1171,18 @@ func (r *Runner) subscriptArith(w *syntax.Word, s syntax.Span) (string, bool) {
 	if v, ok := r.heldSubscriptSubst(w, s.Pos); ok {
 		return v, true
 	}
+	// And through the brace fan's hold beside it, which is the same fact one
+	// scope out: `i=0; echo {x,y,w}$((i++))` moves `i` once per name or once
+	// for the word, and the columns split on which. Only a successful
+	// evaluation is held, as above — a failed one has said so and the word
+	// is abandoned. See braceFanHold (#4694).
+	if v, ok := r.heldBraceFanWork(s.Pos); ok {
+		return v, true
+	}
 	v, ok := r.arithSpanValue(s)
 	if ok {
 		r.holdSubscriptSubst(w, s.Pos, v)
+		r.holdBraceFanWork(s.Pos, v)
 	}
 	return v, ok
 }

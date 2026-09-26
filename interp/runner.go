@@ -1958,6 +1958,10 @@ type Runner struct {
 	// subscriptSubstHold, which is why a subscript's `$( … )` runs once
 	// rather than once per road to it.
 	subscriptSubsts subscriptSubstHold
+	// braceFan is the work one word's expansions did, kept for the other
+	// names its braces made — see braceFanHold, which is why `{a,b}$(f)`
+	// runs `f` once in the columns that say so rather than once per name.
+	braceFan braceFanHold
 	// unspecified records that a script depended on an axis no dialect had
 	// answered, so a caller can tell that from an ordinary failure.
 	unspecified bool

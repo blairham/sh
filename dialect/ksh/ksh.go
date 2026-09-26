@@ -1943,6 +1943,12 @@ func Semantics() interp.Semantics {
 	// reading of `${!x}` (#2821).
 	s.OperatorAfterTheSubscriptListingIsBad = interp.Yes
 	s.BraceExpansion = interp.Yes
+	// Once for the word, however many names come out of it: `i=0; echo
+	// {x,y,w}$((i++))` is `x0 y0 w0` with `i` left at 1 on ksh93u+ 2012, and
+	// `echo {x,y}$(echo TICK >&2; echo z)` writes TICK once. This shell
+	// reaches that from the other side from zsh — it brace-expands the text
+	// the expansions produced — and the count it leaves is the same (#4694).
+	s.BraceFanExpandsEachNameOnItsOwn = interp.No
 	// It agrees with zsh and not with bash about what the braces produced:
 	// it goes back into the word rather than being read again as text, so
 	// `var=baz; varx=vx; echo $var{x,y}` is `bazx bazy`.

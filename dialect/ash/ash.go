@@ -2225,6 +2225,12 @@ func Semantics() interp.Semantics {
 	// unanswered BuiltinReadsOptions: BusyBox ash has no `builtin` for a
 	// dash-word to reach (#3217).
 	//
+	// unanswered BraceFanExpandsEachNameOnItsOwn: this shell has no brace
+	// expansion either, so no word is ever fanned and no name repeats or
+	// shares another's work. Measured 2026-09-26 in the pinned image
+	// (alpine@sha256:28bd5f…, BusyBox v1.37.0): `echo {x,y}$(echo TICK >&2;
+	// echo z)` writes TICK once and prints the one word `{x,y}z`.
+	//
 	// unanswered BraceOutputRereadAsText: this shell has no brace expansion
 	// either, so nothing is ever produced for the word to read again.
 	//

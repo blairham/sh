@@ -1594,6 +1594,12 @@ func Semantics() interp.Semantics {
 	// which is the indirection failing on the text it was handed (#2821).
 	s.OperatorAfterTheSubscriptListingIsBad = interp.No
 	s.BraceExpansion = interp.Yes
+	// And every name the braces make expands the word again: `i=0; echo
+	// {x,y,w}$((i++))` is `x0 y1 w2` with `i` left at 3 in bash 5.3.20 and
+	// 3.2.57 alike, and `echo {x,y}$(echo TICK >&2; echo z)` writes TICK
+	// twice for the two names it comes to. zsh and ksh93 run the word's
+	// expansions once and hand every name the same results (#4694).
+	s.BraceFanExpandsEachNameOnItsOwn = interp.Yes
 	// And what the braces produced comes back to the word as shell *text*,
 	// which is this shell alone: `var=baz; varx=vx; echo $var{x,y}` is
 	// `vx vy` where ksh93 and zsh answer `bazx bazy`, and the backslash

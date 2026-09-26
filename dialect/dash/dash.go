@@ -1106,6 +1106,12 @@ func Semantics() interp.Semantics {
 	// And counts it against the width: `printf '%#05x' 7` is `0x007`,
 	// five characters, on dash 0.5.12.
 	s.PrintfZeroFillCountsTheAlternatePrefix = interp.Yes
+	// unanswered BraceFanExpandsEachNameOnItsOwn: dash has no brace
+	// expansion, so no word is ever fanned into names and there is nothing
+	// for a second name to repeat or to share. `echo {x,y}$(echo TICK >&2;
+	// echo z)` writes TICK once on dash 0.5.12 and prints the one word
+	// `{x,y}z` — once because there is one name, not because a fan shared.
+	//
 	// unanswered BraceOutputRereadAsText: dash has no brace expansion, so
 	// nothing is ever produced for the word to read again — `echo $var{x,y}`
 	// is the one word it was written as.

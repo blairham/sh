@@ -3281,6 +3281,58 @@ type Semantics struct {
 	// silent in the `&>` sense — `echo {1..3}` prints something either way,
 	// and nothing reports that one of them is not what was meant.
 	BraceExpansion Answer
+	// BraceFanExpandsEachNameOnItsOwn expands the word again for every name
+	// the braces made, rather than expanding it once and giving every name
+	// the same results.
+	//
+	// The braces copy the **names**; this axis is whether they copy the
+	// **work** with them. It decides nothing in a word whose expansions only
+	// read — `echo {a,b}$v` is `av bv` under both readings — and it is the
+	// whole of the answer wherever one of them *does* something: a command
+	// substitution runs once per name or once, and an arithmetic one moves a
+	// variable once per name or once.
+	//
+	// Measured 2026-09-26 under `-c`, `env -i PATH=/usr/bin:/bin` with a
+	// scratch HOME, each case in a directory of its own:
+	//
+	//	i=0; echo {x,y,w}$((i++)); echo "i=$i"
+	//	bash 5.3.20   x0 y1 w2   i=3
+	//	bash 3.2.57   x0 y1 w2   i=3
+	//	zsh 5.9.2     x0 y0 w0   i=1
+	//	ksh93u+       x0 y0 w0   i=1
+	//
+	//	echo {x,y}$(echo TICK >&2; echo z)   TICK lines   words
+	//	bash 5.3.20                                   2   xz yz
+	//	bash 3.2.57                                   2   xz yz
+	//	zsh 5.9.2                                     1   xz yz
+	//	ksh93u+                                       1   xz yz
+	//
+	// The words agree in every column, which is why this is **counted**
+	// rather than read: the value a doubled expansion produces is the value
+	// a single one produces, and only the count and the variable it moved
+	// say it ran twice.
+	//
+	// The two columns that answer no reach it from different sides — zsh
+	// expands the word once and fans what came out, ksh93 brace-expands the
+	// *text* the expansions produced — and the count is the same either way,
+	// which is what this axis is about. Where the braces are *found* is
+	// [Semantics.BraceOutputRereadAsText]'s question and not this one.
+	//
+	// It is a property of the **fan** and not of where the word stands: the
+	// same doubling was in a redirection target and in an ordinary argument,
+	// and the argument is the control that says so (#4694).
+	//
+	// Asked only where it decides something. A fan of one name, and a fan
+	// whose word held nothing for the names to share, answer alike under both
+	// readings — and what a word held is watched rather than guessed: the
+	// first name is expanded, and the question is put only once something has
+	// actually been kept. See Runner.eachBraceName.
+	//
+	// A *failure* is not this axis. Every shell that expands braces at all
+	// stops the fan at the first one, so `echo {x,y}$((1/0))` is one
+	// diagnostic in bash 5.3.20, bash 3.2.57, zsh 5.9.2 and ksh93u+ alike;
+	// that is core, and it is in the same helper.
+	BraceFanExpandsEachNameOnItsOwn Answer
 	// BraceOutputRereadAsText hands what the braces produced back to the
 	// rest of word expansion as ordinary shell **text** rather than as spans
 	// substituted into the word the parse cut. It is the same answer

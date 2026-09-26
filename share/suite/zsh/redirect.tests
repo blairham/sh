@@ -125,3 +125,49 @@ setopt multios
 printf 'writing to a closed descriptor: %s\n' "$?"
 ( cat <&- ) 2>/dev/null
 printf 'reading one:                    %s\n' "$?"
+
+# --- a brace fan copies the names, not the work ------------------------------
+#
+# A target whose braces make several names is one word expanded once, and the
+# names share what it produced. It is here rather than beside the option above
+# because it is the same switch: with MULTIOS off the braces are not expanded
+# at all and the target is the one literal name it was written as.
+#
+# The counts are taken through a **file** rather than off the stream, because
+# the two readings produce the same names and differ only in how many times the
+# word's own expansions ran — so what has to be counted is the runs, and
+# nothing about the wording of anything is being asked here.
+rm -f ticks bxz byz
+: > {bx,by}$(printf 'tick\n' >> ticks; printf 'z\n')
+printf 'target names: %s\n' "$(echo b?z)"
+printf 'target runs:  %s\n' "$(wc -l < ticks | tr -d ' ')"
+
+# The same word as an ordinary argument, which is the control that says this
+# belongs to the braces and not to the redirection: one run there too.
+rm -f ticks
+set -- {ax,ay}$(printf 'tick\n' >> ticks; printf 'z\n')
+printf 'argument names: %s %s\n' "$1" "$2"
+printf 'argument runs:  %s\n' "$(wc -l < ticks | tr -d ' ')"
+
+# And the side effect, which is the half a count cannot be argued with: the
+# variable an arithmetic substitution moves is moved once for the word, so
+# every name carries the value the first one got.
+i=0
+set -- {ax,ay,aw}$((i++))
+printf 'the values:   %s %s %s\n' "$1" "$2" "$3"
+printf 'i afterwards: %s\n' "$i"
+
+# A failure in the word ends the fan, so a word that cannot be computed is one
+# diagnostic and not one per name. Counted from a file for the same reason.
+( : > {x,y}$(( 1/0 )) ) 2> zz
+printf 'a failed fan: %s line\n' "$(wc -l < zz | tr -d ' ')"
+
+# With MULTIOS off the braces are not expanded here at all, so there is one
+# name and the word runs once because of that rather than because of sharing.
+rm -f ticks
+( unsetopt multios; : > {cx,cy}$(printf 'tick\n' >> ticks; printf 'z\n') )
+if [ -f '{cx,cy}z' ]; then
+	printf 'without multios: one literal name, runs=%s\n' "$(wc -l < ticks | tr -d ' ')"
+else
+	printf 'without multios: the braces were expanded after all\n'
+fi

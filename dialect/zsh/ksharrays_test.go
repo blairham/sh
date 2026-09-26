@@ -483,3 +483,67 @@ func TestEmulationsCarryTheScalarAppend(t *testing.T) {
 		t.Errorf("emulate zsh = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// The **seventh** axis, and the one the sixth's noun was still too wide for:
+// under the option a scalar store over a name holding a **table** is refused
+// outright, where the same store over an ordinary array is taken at the base.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`, a script
+// file) with `typeset -A h=(one 1)`:
+//
+//	             ksharrays off       ksharrays on
+//	h=string     typeset h=string    h: attempt to set associative array
+//	h+=string    typeset h=string      to scalar, status 1, shell leaves
+//
+// The **array beside it** is the whole reason this is its own field, and it
+// is asserted here rather than only in scalarovertable_test.go so that a
+// change moving one and not the other is visible in the file that owns the
+// option: under the same option `a=(first second); a+=last` is
+// `firstlast second` at 0, the sixth axis above, and not a refusal.
+//
+// It is also where the option stops imitating ksh. The sixth was a faithful
+// copy — bash and ksh93 both join at the base with nothing set — and this one
+// is not: both of those store the key `0` and keep the table, measured the
+// same day. See dialect/ksh/scalarovertable_test.go (#4617).
+func TestKshArraysRefusesAScalarStoreOverATable(t *testing.T) {
+	const refusal = "h: attempt to set associative array to scalar"
+	for _, tc := range []struct{ name, src, off string }{
+		{"a plain assignment", "typeset -A h=(one 1)\nh=string\ntypeset -p h", "typeset h=string"},
+		{"an append", "typeset -A h=(one 1)\nh+=string\ntypeset -p h", "typeset h=string"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			on, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+tc.src)
+			if !strings.Contains(on, refusal) || st != 1 {
+				t.Errorf("on = %q (status %d), want the refusal at 1", on, st)
+			}
+			off, st := runZsh(t, t.TempDir(), tc.src)
+			if strings.TrimSpace(off) != tc.off || st != 0 {
+				t.Errorf("off = %q (status %d), want %q at 0", off, st, tc.off)
+			}
+		})
+	}
+	t.Run("an array under the same option is not refused", func(t *testing.T) {
+		out, st := runZsh(t, t.TempDir(), "setopt ksharrays\na=(first second)\na+=last\ntypeset -p a")
+		if want := "typeset -a a=( firstlast second )"; strings.TrimSpace(out) != want || st != 0 {
+			t.Errorf("= %q (status %d), want %q at 0", out, st, want)
+		}
+	})
+}
+
+// And it is placed by setKshArrays rather than by a line at each of the three
+// callers, which the emulations are what test: `emulate ksh` and `emulate sh`
+// both carry the refusal, and an `unsetopt` gives it back.
+func TestTheEmulationsCarryTheSeventhAxis(t *testing.T) {
+	const refusal = "h: attempt to set associative array to scalar"
+	for _, em := range []string{"emulate ksh", "emulate sh"} {
+		out, st := runZsh(t, t.TempDir(), em+"\ntypeset -A h=(one 1)\nh=string\nprint after")
+		if !strings.Contains(out, refusal) || strings.Contains(out, "after") || st != 1 {
+			t.Errorf("%s = %q (status %d), want the refusal at 1", em, out, st)
+		}
+	}
+	out, st := runZsh(t, t.TempDir(),
+		"setopt ksharrays\nunsetopt ksharrays\ntypeset -A h=(one 1)\nh=string\ntypeset -p h")
+	if want := "typeset h=string"; strings.TrimSpace(out) != want || st != 0 {
+		t.Errorf("unsetopt = %q (status %d), want %q at 0", out, st, want)
+	}
+}

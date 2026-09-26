@@ -1540,6 +1540,10 @@ func Semantics() interp.Semantics {
 	// to be written over, and this shell has none — measured 2026-09-26,
 	// `typeset -A h=(a 1 b)` is `Syntax error: "(" unexpected`, so the
 	// parentheses never become a literal at all.
+	// unanswered ScalarStoredOverATableIsRefused: the same absence reached
+	// from the other side — `h=string` is an ordinary scalar store here
+	// because nothing can have made `h` a table first, so there is no name
+	// of that kind for a store to be refused over.
 	// And `getopts` no more than `read` does: this shell has no arrays
 	// (#3555).
 	s.GetoptsOperandTakesASubscript = interp.No

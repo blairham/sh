@@ -188,3 +188,59 @@ g
 setopt ksharrays
 g
 unsetopt ksharrays
+
+# ---- a scalar stored over a table, with and without the option ----
+
+# With `ksharrays` off, a scalar store over a name holding a table replaces the
+# name: the table is gone and the value is the whole of it. Both spellings, and
+# the append joins nothing — `h=(0 pre); h+=x` is `x` and not `prex`, where a
+# bare `$h` reads `pre`.
+typeset -A m1=(one 1)
+m1=string
+printf 'plain, option off: [%s] n=%s\n' "$m1" "${#m1}"
+typeset -A m2=(one 1)
+m2+=string
+printf 'append, option off: [%s] n=%s\n' "$m2" "${#m2}"
+typeset -A m3=(0 pre)
+m3+=x
+printf 'append over the base key: [%s]\n' "$m3"
+
+# Under the option the same stores are refused outright, and the refusal ends
+# the shell — so every row here is inside `eval`, whose text is what ends
+# instead, which is also how the table can be read afterwards. bash and ksh93
+# store the key `0` and keep the table, so this is the option's own answer and
+# not the ksh family's.
+setopt ksharrays
+typeset -A m4=(one 1)
+eval 'm4=string' 2>&1
+printf 'plain, option on: st=%s n=%s one=%s\n' "$?" "${#m4[@]}" "${m4[one]}"
+eval 'm4+=string' 2>&1
+printf 'append, option on: st=%s n=%s one=%s\n' "$?" "${#m4[@]}" "${m4[one]}"
+
+# An empty table is still a table, and a subscript still reaches its element.
+typeset -A m5
+eval 'm5=string' 2>&1
+printf 'an empty table: st=%s n=%s\n' "$?" "${#m5[@]}"
+typeset -A m6=(one 1)
+m6[one]=Q
+printf 'a subscript: st=%s one=%s\n' "$?" "${m6[one]}"
+
+# The pair that says it is the name's **kind**: an ordinary array under the
+# same option is taken, at its base, and a name no longer holding a table is an
+# ordinary scalar store.
+arr=(first second)
+arr+=last
+printf 'an array under the option: st=%s [%s]\n' "$?" "${arr[0]}"
+typeset -A m7=(one 1)
+unset m7
+m7=string
+printf 'no longer a table: st=%s [%s]\n' "$?" "$m7"
+
+# And a compound store is not a scalar one, either spelling.
+typeset -A m8=(one 1)
+m8=()
+printf 'an emptying store: st=%s n=%s\n' "$?" "${#m8[@]}"
+typeset -A m9=(one 1)
+m9+=(two 2)
+printf 'a literal append: st=%s n=%s\n' "$?" "${#m9[@]}"
+unsetopt ksharrays

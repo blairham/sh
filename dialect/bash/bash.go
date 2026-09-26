@@ -1858,6 +1858,12 @@ func Semantics() interp.Semantics {
 	// `([0]="x" [k]="v" )`. Both hold in 5.3.15, in the same binary under
 	// argv[0] of `sh`, and in 3.2.57.
 	s.ScalarAssignedOverACompoundReplacesTheName = interp.No
+	// Nothing refuses the store ahead of that: a table takes it. Measured
+	// 2026-09-26 on 5.3.20, `declare -A h=([one]=1); h=string; declare -p h`
+	// is `declare -A h=([0]="string" [one]="1" )` at 0 with the line after it
+	// run, and `h+=string` joins at that same key. See
+	// Semantics.ScalarStoredOverATableIsRefused.
+	s.ScalarStoredOverATableIsRefused = interp.No
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes

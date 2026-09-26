@@ -882,6 +882,9 @@ func Semantics() interp.Semantics {
 	// BareElementsInATableLiteralMustPairOff: a keyed literal needs a table
 	// to be written over, and BusyBox has none — the parentheses are a
 	// syntax error before anything could count the words in them.
+	// unanswered ScalarStoredOverATableIsRefused: the same absence from the
+	// other side — `h=string` is an ordinary scalar store, because no line of
+	// this shell can have made `h` a table for it to be refused over.
 	// And `getopts` no more than `read` does: this shell has no arrays
 	// (#3555).
 	s.GetoptsOperandTakesASubscript = interp.No

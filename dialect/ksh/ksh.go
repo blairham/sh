@@ -1695,6 +1695,13 @@ func Semantics() interp.Semantics {
 	// written and the array kept, and `m=x` over a table is
 	// `typeset -A m=([0]=x [k]=v)`.
 	s.ScalarAssignedOverACompoundReplacesTheName = interp.No
+	// And nothing refuses the store ahead of that. Measured 2026-09-26 on
+	// ksh93u+ 2012-08-01, `typeset -A h=([one]=1); h=string; typeset -p h` is
+	// `typeset -A h=([0]=string [one]=1)` at 0 with the line after it run,
+	// and `h+=string` answers the same — which is the row `ksharrays` was
+	// found to be a faithful copy of on the append beside this one. See
+	// Semantics.ScalarStoredOverATableIsRefused.
+	s.ScalarStoredOverATableIsRefused = interp.No
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.Yes
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.

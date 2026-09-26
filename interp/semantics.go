@@ -10306,13 +10306,24 @@ type Semantics struct {
 	// merely hidden. dash has no arrays and refuses the parenthesis, which is
 	// the absence rather than a sixth answer.
 	//
-	// A **table** answers the same way in every column, so it is this one
-	// field and not two: `typeset -A m; m=([k]=v); m=x` is
+	// A **table** answers this the same way an array does in every column,
+	// so it is this one field and not two: `typeset -A m; m=([k]=v); m=x` is
 	// `declare -A m=([0]="x" [k]="v" )` in bash and `typeset -A m=([0]=x
-	// [k]=v)` in ksh93, and `typeset m=x` in zsh. Where the two kinds of
-	// compound part is a *declaration* adding an attribute, which is
-	// ScalarUnderAnArrayDeclaration against ScalarUnderATableDeclaration;
-	// nothing parts them here.
+	// [k]=v)` in ksh93, and `typeset m=x` in zsh.
+	//
+	// **What parts the two kinds of compound is whether the store is taken at
+	// all**, which is a question ahead of this one rather than a second
+	// answer to it: under `setopt ksharrays`, zsh refuses a scalar store over
+	// a *table* outright and writes the base of an *array*. This field is
+	// asked only once that refusal has not fired — see
+	// ScalarStoredOverATableIsRefused, which is where that measurement is and
+	// why it could not be a third value here. This comment used to say a
+	// table answers the same way in every column full stop, and the option is
+	// what falsified it (#4617).
+	//
+	// The other place the two kinds part is a *declaration* adding an
+	// attribute, which is ScalarUnderAnArrayDeclaration against
+	// ScalarUnderATableDeclaration.
 	//
 	// The element written is the compound's *first* — the array base, and the
 	// key `0` — whether or not there is anything there already:
@@ -10331,6 +10342,68 @@ type Semantics struct {
 	// Not asked for the store that keeps `$a` answering for an array `a` —
 	// see assignedAsTheCompoundView, which is that write and no other.
 	ScalarAssignedOverACompoundReplacesTheName Answer
+
+	// ScalarStoredOverATableIsRefused ends the input rather than storing a
+	// scalar over a name that is holding a **table**, where the other reading
+	// goes on to ScalarAssignedOverACompoundReplacesTheName and either writes
+	// the key `0` or makes the value the whole of the name.
+	//
+	// **The noun is the name holding a table**, and it is the name's *kind*
+	// rather than the spelling, the operator or the declaration. Measured
+	// 2026-09-26 on zsh 5.9.2 (`-f`, a script file), every row with
+	// `setopt ksharrays` in front of it:
+	//
+	//	typeset -A h=(one 1); h=string    h: attempt to set associative
+	//	                                  array to scalar, status 1, and the
+	//	                                  shell leaves
+	//	typeset -A h=(one 1); h+=string   the same sentence
+	//	typeset -A h; h=string            the same, so an *empty* table is a
+	//	                                  table
+	//	typeset -a a=(x y); a=string      `( string y )` at 0 — an ordinary
+	//	                                  array is not refused
+	//	typeset -A h=(one 1); h[one]=Q    `( [one]=Q )` at 0 — a subscript
+	//	                                  reaches its element
+	//	typeset -A h=(one 1); unset h;
+	//	  h=string                        `typeset h=string` at 0 — the name
+	//	                                  has to be holding one now
+	//	typeset -A h=(one 1); h=()        `typeset -A h=( )` at 0 — a
+	//	                                  compound store is not a scalar one
+	//
+	// The fourth row is the one that makes this its own field. "A compound
+	// name" and "a table name" agree everywhere else, and they part exactly
+	// here: under the option an array takes the write at its base and a table
+	// refuses. A third value on ScalarAssignedOverACompoundReplacesTheName
+	// would have to refuse for both.
+	//
+	// **It is asked wherever a scalar is stored**, not only at an assignment
+	// statement, which is the same reach the field above has and was measured
+	// the same way: under the option, `for h in x y`, `read h`, `printf -v h
+	// x` and `${h::=x}` over a table each earn the sentence and end the
+	// shell. Runner.scalarOverCompound is the one place, and the append
+	// spelling reaches it from Runner.assign.
+	//
+	// **The refusal's reach is the odd-pair refusal's** — see
+	// BareElementsInATableLiteralMustPairOff, measured against it row for
+	// row. It is fatal to the shell at status 1; `||` does **not** catch it;
+	// an `always` block still runs; a function's name goes in front of the
+	// sentence in place of the file and line; `eval` contains it, the text it
+	// was given ending and the file above it running on at 0; and **the table
+	// is left standing** — after a contained one, `typeset -p h` still lists
+	// every key it had. A subshell contains it the same way `eval` does.
+	// Diagnostics.ScalarStoredOverATable is the wording, and it names the
+	// variable.
+	//
+	// **Answered when the store runs**, like every axis here: a function's
+	// `setopt localoptions ksharrays` reaches a store inside it and not one
+	// after it returns, and `emulate ksh` and `emulate sh` both carry it.
+	//
+	// No in bash 5.3.20 and ksh93u+ 2012-08-01, which write the key `0` and
+	// keep the table — `declare -A h=([one]=1); h=string` is
+	// `declare -A h=([0]="string" [one]="1" )` there, and `h+=string` joins
+	// at that key. No in zsh with the option off, where the name becomes a
+	// plain scalar. unanswered in dash and BusyBox ash, which have no tables
+	// to hold a value that could be refused (#4617).
+	ScalarStoredOverATableIsRefused Answer
 	// CompoundAttribute is what an attribute a declaration has just added
 	// makes of a compound value the name is already holding — see
 	// CompoundAttributePolicy, where the three answers are.

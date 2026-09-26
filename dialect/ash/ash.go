@@ -1329,6 +1329,15 @@ func Semantics() interp.Semantics {
 	// on almost everything else about `kill`, which is why the answer is
 	// measured rather than derived.
 	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.Yes
+	// A `%` spec that names no job is the other way about, which is why the
+	// two are separate axes: `kill %99 a` is one line at status 2, and the
+	// `a` behind it is never reported. Measured 2026-09-26 (#4666).
+	s.KillKeepsGoingPastAJobSpecThatNamesNoJob = interp.No
+	// And the `%` operands are read before the others, so `kill a %99` is
+	// the job's complaint alone — `a` is not reached either. Measured the
+	// same day, and `sleep 30 & kill $! %99` leaves that job still Running,
+	// so nothing is delivered before the specs have been read.
+	s.KillReadsJobSpecsBeforeTheOtherOperands = interp.Yes
 	// A trim on `$@` runs over the whole list once, as it does in dash.
 	s.OperatorDistributesOverTheFieldList = interp.No
 	// And a **non-global** replacement over that joined list ends it at the
@@ -2825,6 +2834,11 @@ func Diagnostics() interp.Diagnostics {
 		// 2026-09-16: `kill -s 99 $$`, `kill -l nope` and `kill notapid`
 		// are all 1 in BusyBox 1.37.0.
 		KillArgumentStatus: 1,
+		// A `%` spec that names no job is 2 rather than 1, and flat rather
+		// than a count: `kill %99` is 2 where `kill a` is 1 and `kill a b`
+		// is 3, and `kill %99 %98` is 2 with one line. Measured 2026-09-26
+		// (#4666).
+		KillNoSuchJobStatus: 2,
 		// `%2d) NAME`, one per line, no `SIG` — none of the other four
 		// shapes. Measured 2026-09-18 against BusyBox v1.37.0 in the pinned
 		// Alpine image with `cmd/ash` cross-compiled and run in the same

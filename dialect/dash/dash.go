@@ -1170,6 +1170,12 @@ func Semantics() interp.Semantics {
 	// tell: a word that is not a number is an argument fault here, and an
 	// argument fault ends the builtin.
 	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.No
+	// Nor past a `%` spec that names no job: `kill %99 a` is one line at
+	// status 2. Measured 2026-09-26 (#4666).
+	s.KillKeepsGoingPastAJobSpecThatNamesNoJob = interp.No
+	// The operands are read in the order they were written: `kill a %99` is
+	// the complaint about `a` and nothing about the job.
+	s.KillReadsJobSpecsBeforeTheOtherOperands = interp.No
 	// A trim on `$@` runs over the whole list once, not over each field:
 	// `set -- aa ab ba` makes `"${@#a}"` into `a ab ba` here and
 	// `a b ba` in bash, zsh and ksh93.

@@ -4838,6 +4838,78 @@ type Semantics struct {
 	// real shells deliver to all of them.
 	KillKeepsGoingPastAnOperandThatIsNotAPid Answer
 
+	// KillKeepsGoingPastAJobSpecThatNamesNoJob carries on to the operands
+	// behind a `%` spec that names no job, rather than ending the builtin
+	// there.
+	//
+	// The neighbor of KillKeepsGoingPastAnOperandThatIsNotAPid and **not the
+	// same question**, which is what makes it an axis of its own: the two
+	// have different column patterns, and a pattern is what an axis is.
+	// Carrying on past a word that is not a pid is yes in bash, zsh and
+	// BusyBox ash; carrying on past a missing job is yes in bash and zsh and
+	// no in BusyBox ash and dash. Widening the first to cover the second
+	// would have moved the ash row to an answer it does not hold (#4648
+	// declined it for that reason, and #4666 is this half).
+	//
+	// Measured 2026-09-26, with the job number deliberately absent so that
+	// nothing could be delivered. References verified with `go version -m` →
+	// *not a Go executable*: `/opt/homebrew/bin/bash --norc --noprofile`
+	// (5.3.20), `/opt/homebrew/bin/zsh -f` (5.9.2), `/bin/dash` (0.5.12), and
+	// BusyBox v1.37.0 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b.
+	//
+	//	                 kill %99 a          kill a %99
+	//	bash 5.3.20      2 lines, status 1   2 lines, status 1
+	//	zsh 5.9.2        2 lines, status 2   2 lines, status 2
+	//	dash 0.5.12      1 line,  status 2   1 line,  status 2
+	//	BusyBox 1.37.0   1 line,  status 2   1 line,  status 2
+	//
+	// Read off the count of lines and not the status, for the reason the axis
+	// above gives: dash's 1 and BusyBox's 2 are the same behavior differently
+	// scored, and KillStatus already holds the scoring.
+	//
+	// The BusyBox rows are the same either way for a reason of their own and
+	// not because it stops at the spec — it reads the `%` operands *first*,
+	// so `a` is never looked at. See
+	// KillReadsJobSpecsBeforeTheOtherOperands, which is that half.
+	//
+	// unpinned ksh: ksh93u+ 2012-08-01 segfaults on a `%` spec that names no
+	// job — `kill %99` alone is status 139 with no output — so there is no
+	// run of it that reaches this. Measured the same day on `/bin/ksh`.
+	KillKeepsGoingPastAJobSpecThatNamesNoJob Answer
+
+	// KillReadsJobSpecsBeforeTheOtherOperands resolves every `%` operand
+	// before any operand is acted on, so a spec that names no job is reported
+	// and the builtin ends with nothing in front of it having been looked at
+	// and nothing having been delivered.
+	//
+	// An *ordering* rule rather than an answer to "does it carry on", which
+	// is why it is here rather than folded into the axis above: the two are
+	// asked at different moments and BusyBox ash is the only column that
+	// holds this one.
+	//
+	// Measured 2026-09-26 in the pinned image named above, BusyBox v1.37.0:
+	//
+	//	kill a %99                   `%99: no such job` alone, status 2
+	//	kill 999999 %99              the same line alone, status 2
+	//	sleep 30 & kill $! %99       the same line alone, status 2 —
+	//	                             and `jobs` still lists the job Running
+	//
+	// The third row is the one that says the rule is about *delivery* and not
+	// only about diagnostics: the operand in front resolved to a live process
+	// and nothing was sent to it. And `sleep 30 & kill a %1`, where the spec
+	// does name a job, reports `invalid number 'a'` at 1 — so the pre-pass
+	// ends the builtin only when a spec names nothing.
+	//
+	// The other four columns look at the operands in the order they were
+	// written. bash 5.3.20 and zsh 5.9.2 report `a` and then `%99`; dash
+	// 0.5.12 reports `a` and stops. **ksh93 is measured here rather than
+	// unanswered**, which is worth saying because the axis above could not
+	// be: `kill a %99` on /bin/ksh is `a: Arguments must be %job, process
+	// ids, or job pool names` at status 1, and a shell that had read the spec
+	// first would have segfaulted before writing it.
+	KillReadsJobSpecsBeforeTheOtherOperands Answer
+
 	// OperatorDistributesOverTheFieldList runs a trim or a replacement over
 	// each field of `$@` rather than over the whole list once.
 	//

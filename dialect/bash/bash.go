@@ -2495,6 +2495,11 @@ func Semantics() interp.Semantics {
 	// than 3 because this shell's KillStatus counts a success and not a
 	// failure, which is a separate axis and a separate row.
 	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.Yes
+	// And past a `%` spec that names no job: `kill %99 a` and `kill a %99`
+	// are both two lines at status 1. Measured 2026-09-26 (#4666).
+	s.KillKeepsGoingPastAJobSpecThatNamesNoJob = interp.Yes
+	// The operands are read in the order they were written.
+	s.KillReadsJobSpecsBeforeTheOtherOperands = interp.No
 	// A trim on `$@` runs over each field. dash and BusyBox ash run it
 	// over the joined list once.
 	s.OperatorDistributesOverTheFieldList = interp.Yes

@@ -3151,6 +3151,12 @@ func Semantics() interp.Semantics {
 	// `illegal pid` lines and reports 3, `kill a b c d` four and 4. The
 	// count is this shell's KillStatus; the four lines are this axis.
 	s.KillKeepsGoingPastAnOperandThatIsNotAPid = interp.Yes
+	// And past a `%` spec that names no job: `kill %99 a` and `kill a %99`
+	// are both two lines, at status 2 — the count of operands that failed,
+	// which is this shell's rule already. Measured 2026-09-26 (#4666).
+	s.KillKeepsGoingPastAJobSpecThatNamesNoJob = interp.Yes
+	// The operands are read in the order they were written.
+	s.KillReadsJobSpecsBeforeTheOtherOperands = interp.No
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// OPTIND names the word until its last letter has been read.

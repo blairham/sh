@@ -4277,6 +4277,16 @@ type Diagnostics struct {
 	// is the one dialect for which this is not the same question as the
 	// option status. Zero means the substrate's own, 1.
 	KillArgumentStatus int
+	// KillNoSuchJobStatus is the status for a `%` operand that names no job,
+	// where that is not the same number as KillArgumentStatus. Zero falls
+	// back to that field, which is what four of the five dialects want.
+	//
+	// BusyBox ash alone: measured 2026-09-26 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b,
+	// BusyBox v1.37.0, `kill %99` is status **2** where `kill a` in the same
+	// shell is 1 — and `kill a b` is 3, so the 2 is not a count of anything.
+	// It is flat: `kill %99 %98` is 2 as well, with one line (#4666).
+	KillNoSuchJobStatus int
 
 	// FileNotFound is how this dialect spells the reason a file was not
 	// there, when it does not quote the operating system's own text. No

@@ -2503,6 +2503,64 @@ type Semantics struct {
 	// about it, so an unanswered dialect must still be able to run one.
 	HeredocExpandsInTheCommandsProcess Answer
 
+	// HeredocBodyOnASubshellExpandsInTheSubshell is the same claim for a
+	// `( … )`, and it is a second axis because it is a second split.
+	//
+	// A real shell forks for parentheses, so the question is the one above —
+	// and the panel does not answer it the same way. Measured 2026-09-26,
+	// `env -i PATH=/usr/bin:/bin` with a scratch HOME, over a script file,
+	// against bash 5.3.20, zsh 5.9.2 under `-f`, ksh93u+ 2012-08-01, dash
+	// 0.5.12 and BusyBox v1.37.0 in the digest-pinned alpine image. A body
+	// of `$(( n+=5 ))` with `n=0` before it, and `echo "n=[$n]"` after:
+	//
+	//	`<<END` on …                bash  zsh  ksh93  dash  ash
+	//	cat           a command     gone gone   gone  KEPT  KEPT
+	//	( cat )       a subshell    gone gone   KEPT  gone  gone
+	//
+	// **dash and BusyBox ash are on opposite sides of the two rows**, and so
+	// is ksh93: one field cannot say both, which is the same reason
+	// HeredocExpandsInTheCommandsProcess and
+	// RedirectTargetExpandsInTheCommandsProcess are two fields (#1228).
+	//
+	// It is not the *target's* subshell axis either, and the same two columns
+	// say so: `( : ) > "${u:=made}"` keeps the write in ksh93, dash and
+	// BusyBox ash — see RedirectTargetOnASubshellExpandsInTheSubshell, whose
+	// split is bash and zsh against ksh93, dash and BusyBox ash. dash
+	// confines a subshell's body and keeps a subshell's target (#4700).
+	//
+	// # The noun is the parentheses, and not what is in them
+	//
+	// Held fixed against five different bodies on the same day, every column
+	// answers alike: `( cat )`, `( : ; cat )`, `( v=1; cat )`, `( /bin/cat )`
+	// and `( ( cat ) )` all lose the write in bash, zsh, dash and ash and all
+	// keep it in ksh93. So what decides is the `( … )` and not whether the
+	// parentheses hold an external command, an assignment or a subshell of
+	// their own.
+	//
+	// And it is not "wherever a real shell has forked by now", which is the
+	// reading ksh93 falsifies: that column confines a body fed to a command
+	// of its own, to a pipeline element and to a background command, and
+	// keeps the one fed to `( … )`. The fork is not what it is keyed on.
+	//
+	// # What is not asked
+	//
+	// **Whether the body is expanded at all.** It is, exactly once, in every
+	// column — counted as whole `^TICK$` lines from a body of `$(echo TICK
+	// >&2; echo z)`, and one line in all five even where the parentheses hold
+	// a `:` that never reads a byte of it. A redirection the shell never
+	// reaches — `false && ( cat ) <<END` — expands nothing anywhere, also in
+	// all five. Only *where the write lands* splits the panel.
+	//
+	// **A quoted delimiter.** `( cat ) <<'END'` expands nothing, so there is
+	// no write to place and every column agrees; `<<-END` is a `<<` body in
+	// all five. Both are controls rather than rows.
+	//
+	// Asked only when the body actually wrote something or would not expand,
+	// which is the rule the axis above is asked by: a subshell fed an
+	// ordinary here-document is every other subshell and the shells agree
+	// about it, so an unanswered dialect must still be able to run one.
+	HeredocBodyOnASubshellExpandsInTheSubshell Answer
+
 	// RedirectTargetExpandsInTheCommandsProcess is the same claim for a
 	// redirection's *target*: `> "${u:=made}"` on a command the shell runs
 	// as a process of its own leaves `u` unset afterwards, and `> "$NOPE"`

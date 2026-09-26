@@ -205,6 +205,14 @@ func Semantics() interp.Semantics {
 	// `set -u` on an unset name in such a body reports 2 and the script
 	// carries on — which is unanimous and so is not asked.
 	s.HeredocExpandsInTheCommandsProcess = interp.No
+	// A `( … )`'s body is the other way round, which is what makes that a
+	// second axis: `n=0; ( cat ) <<END` with `$(( n+=5 ))` in it leaves `n`
+	// at 0 here where `cat <<END` leaves 5. This column and BusyBox ash are
+	// the pair that says one field cannot carry both rows — and the pair
+	// again against the *target's* subshell axis, which this shell answers
+	// No: `( : ) > "${u:=made}"` keeps the write here while the body's is
+	// lost. Measured 2026-09-26 on 0.5.12 (#4700).
+	s.HeredocBodyOnASubshellExpandsInTheSubshell = interp.Yes
 	// And on a command this shell runs itself the body's failure is the
 	// *redirection's*: `: <<END` with `$(( 1/0 ))` in it ends the shell where
 	// `read x <<END`, a function and a group carry on at 2 and are caught by

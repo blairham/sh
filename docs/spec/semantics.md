@@ -3807,11 +3807,77 @@ zsh, which contains the failure; this shell unwraps `command` to the builtin
 for every dialect and ends the shell. Measured 2026-09-26; it is not this axis
 and not the parentheses, and it is #4701.
 
-**The body of a subshell's here-document is the other open half.** `( cat )
-<<END` with `$(( n+=5 ))` in it leaves `n` at 0 in bash, zsh, dash and BusyBox
-ash and at 5 in ksh93, where this shell keeps it in all five. That splits
-four-to-one against the target's three-to-two, so it is a field of its own
-rather than a row of this one, and it is #4700.
+**The body of a subshell's here-document is the other half**, and it is the
+section below.
+
+### A subshell's here-document body is a fourth position
+
+The same question again, at the other half of the construct — and it splits
+the panel a third way. Measured 2026-09-26 over a script file with `env -i
+PATH=/usr/bin:/bin` and a scratch HOME, against `/opt/homebrew/bin/bash`
+5.3.20, `/opt/homebrew/bin/zsh -f` 5.9.2, `/bin/ksh` 93u+ 2012-08-01 (AT&T's
+build, not ksh93u+m), `/bin/dash` 0.5.12 and BusyBox v1.37.0 in the pinned
+alpine image. `n=0` before, a body of `$(( n+=5 ))`, `echo "n=[$n]"` after:
+
+| `… <<END` — `n` after | bash | zsh | ksh93 | dash | ash |
+| --- | --- | --- | --- | --- | --- |
+| `cat` — a command of its own | 0 | 0 | 0 | **5** | **5** |
+| `( cat )` — a subshell | 0 | 0 | **5** | 0 | 0 |
+| `{ cat; }` — a group | 5 | 5 | 5 | 5 | 5 |
+| `f` — a function | 5 | 5 | 5 | 5 | 5 |
+| `read x` — a builtin | 5 | 5 | 5 | 5 | 5 |
+| `while read x; do :; done` — a loop | 5 | 5 | 5 | 5 | 5 |
+| `cat <<END \| cat` — a pipeline element | 0 | 0 | 0 | 0 | 0 |
+| `cat <<END &` — a background command | 0 | 0 | 0 | 0 | 0 |
+| `( cat ) <<END &` — both | 0 | 0 | 0 | 0 | 0 |
+
+**Three columns change sides between the first two rows**, which is what makes
+this an axis of its own rather than a second reading of
+`HeredocExpandsInTheCommandsProcess`: ksh93 confines a command's body and
+keeps a subshell's, and dash and BusyBox ash do the reverse. That is
+**`HeredocBodyOnASubshellExpandsInTheSubshell`** — bash yes · zsh yes ·
+ksh93 **no** · dash yes · ash yes.
+
+It is not the subshell *target's* axis either, and dash and ash say so twice
+over: `( : ) > "${u:=made}"` keeps the write in those two columns while the
+same subshell's **body** loses it. Four positions, three splits, and no two of
+them are the same set of columns.
+
+**The noun is the parentheses, and the fork is not it.** ksh93 forks for a
+pipeline element and for a background command and confines both, and keeps
+only what a `( … )` carries — so "wherever a real shell has forked by now" is
+refuted by that column's own rows. Holding the parentheses fixed and varying
+what they hold changes nothing anywhere: `( cat )`, `( : ; cat )`,
+`( v=1; cat )`, `( cat; cat )` and `( ( cat ) )` all answer alike in all five,
+and `( v=1; cat ) <<END` in ksh93 keeps `n` and still confines `v` — so what
+escapes is the redirection's body and not the subshell's state.
+
+**Whether the body is expanded at all is not the question, and every column
+agrees about it.** Counting whole `^TICK$` lines from a body of `$(echo TICK
+>&2; echo z)`: exactly one in all five, even where the parentheses hold a `:`
+that reads none of it, and **zero** in all five where the shell never reaches
+the redirection at all — `false && ( cat ) <<END`. Only *where the write
+lands* splits the panel. A quoted delimiter is the control on the other side:
+`( cat ) <<'END'` expands nothing, so there is no write to place and no column
+moves, and `<<-END` is a `<<` body in all five.
+
+**The failure half is unanimous here and is deliberately not asked.** A body
+of `$(( 1/0 ))`, with `; echo SAME` on the redirection's own line so that
+giving up the command, giving up the line and ending the shell are told apart:
+`SAME` is written and `|| echo CAUGHT` fires in all five, whichever side of
+the axis the column is on. The **group** is what keeps that from reading as a
+boundary that swallows everything — there the same body gives up the line in
+bash and ends the script in zsh, which is
+`HeredocBodyFailureIsTheRedirections` and not this axis.
+
+This shell expanded a subshell's body in the parent, for the reason it
+expanded a subshell's target there: the state is copied *inside* the body, so
+the parentheses' redirections are opened out here. Four of the five columns
+were wrong on the write, and bash and zsh were wrong on the failure's reach as
+well — `( echo RAN ) <<END ; echo SAME` with a failing body gave up the line
+in bash and ended the script in zsh, where both carry on to the end of the
+line. The group, function, builtin, loop, pipeline-element and background rows
+did not move (#4700).
 
 ## A command that is only redirections
 

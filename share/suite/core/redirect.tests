@@ -299,3 +299,64 @@ cat <<-STRIP
 # Two here-documents on one command line are deliberately absent: bash, ksh93
 # and dash feed the command only the last, and zsh's MULTIOS feeds it both, so
 # it is share/suite/zsh/redirect.tests.
+
+# A `( … )`'s here-document body: the rows every shell in the panel agrees
+# about. Where the body's *write* lands is not one of them — it splits four to
+# one and lives in each dialect's own file — but everything around it is
+# common, and each of these is a reading the split row would otherwise be
+# confused with. Measured 2026-09-26 across bash 5.3.20, zsh 5.9.2, ksh93u+
+# 2012-08-01, dash 0.5.12 and BusyBox v1.37.0 (#4700).
+
+hd_zz() { printf -- '--- %s\n' "$1"; }
+
+hd_zz 'a group keeps what its here-document body wrote'
+n_zz=0
+{ cat; } <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+hd_zz 'a function keeps it too'
+f_zz() { cat; }
+n_zz=0
+f_zz <<END
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+hd_zz 'a quoted delimiter on a subshell is literal, so there is no write'
+n_zz=0
+( cat ) <<'END'
+$(( n_zz += 5 ))
+END
+printf 'n=[%s]\n' "$n_zz"
+
+# Counted as whole lines, because the body's own text reaches the command too
+# — and counted at all because "confined" and "never expanded" produce the
+# same `n` and are not the same fact.
+hd_zz 'a subshell body is expanded once even where nothing reads it'
+( ( : ) <<END
+$(printf 'TICK\n' >&2; printf 'z\n')
+END
+) 2>&1 | grep -c '^TICK$'
+
+hd_zz 'a redirection the shell never reaches expands nothing'
+( false && ( cat ) <<END
+$(printf 'TICK\n' >&2; printf 'z\n')
+END
+) 2>&1 | grep -c '^TICK$'
+
+# The marker is after a `;` on the redirection's own line: one on the next
+# line is printed by every reading there is.
+hd_zz 'a failing subshell body costs the parentheses: the rest of the line runs'
+( ( echo RAN ) <<END ; echo SAME
+$(( 1/0 ))
+END
+) 2>/dev/null
+printf 'after st=%s\n' "$?"
+
+hd_zz 'and || catches it'
+( ( echo RAN ) <<END || echo CAUGHT
+$(( 1/0 ))
+END
+) 2>/dev/null

@@ -1897,6 +1897,15 @@ func Semantics() interp.Semantics {
 	s.AliasInvalidNameFatal = interp.Yes
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
+	// A `( … )`'s body is **not**, and this is the column that makes it a
+	// second axis rather than a second reading of the line above. `n=0; (
+	// cat ) <<END` with `$(( n+=5 ))` in it leaves `n` at 5 here and at 0 in
+	// the other four — while `cat <<END` loses the write here and keeps it
+	// in dash and BusyBox ash. Not "wherever the fork has happened by now"
+	// either: this shell confines the same body on a pipeline element and on
+	// a background command, and keeps only the one the parentheses carry
+	// (#4700).
+	s.HeredocBodyOnASubshellExpandsInTheSubshell = interp.No
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
 	// A subshell's is not, and this is the column that makes that a second
 	// axis: `( : ) > "${u:=made}"` leaves `u` **set** here where the same

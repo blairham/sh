@@ -3175,6 +3175,13 @@ func Semantics() interp.Semantics {
 	// `echo A | { cat; }` writes one for the pipeline and one for the
 	// `cat`.
 	s.DebugTrapPipelines = interp.DebugTrapPipelineOnceForThePipeline
+	// And once for a whole `&&`/`||` list, which is the same reading one
+	// layer further out: measured 2026-09-25 on 5.9.2 under `-f`, `print x
+	// && print y` writes one firing where bash and ksh93 write two, and
+	// `$ZSH_DEBUG_CMD` at it reads the whole list back rather than the first
+	// operand (#4556). An operand that is a compound fires no head of its
+	// own either; what is inside one fires as usual.
+	s.DebugTrapSublists = interp.DebugTrapSublistOnceForTheList
 	s.DebugTrapRunsInSubshells = interp.Yes
 	// Ahead of the command, which is `DEBUG_BEFORE_CMD` on — zsh's own
 	// default, measured 2026-09-25 on 5.9.2 under `-f`. This is the only one

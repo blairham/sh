@@ -273,7 +273,9 @@ func (r *Runner) coprocStmt(ctx context.Context, st *syntax.Stmt) error {
 		return nil
 	}
 	if _, err := r.startCoproc(ctx, st.Text, func(sub *Runner) error {
-		return sub.expr(ctx, st.Expr)
+		// A whole statement, so it fires for its own `&&`/`||` list — see
+		// Semantics.DebugTrapSublists and the same call in interp/jobs.go.
+		return sub.sublistExpr(ctx, st.Expr)
 	}); err != nil {
 		return err
 	}

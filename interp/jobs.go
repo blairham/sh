@@ -755,7 +755,11 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	r.spawn(func() {
 		// Errors inside a background job are reported where the job runs;
 		// there is nowhere to return them to.
-		if err := sub.expr(ctx, st.Expr); err != nil {
+		// Through sublistExpr, because this is a whole statement and an
+		// `&&`/`||` list fires for itself in the shell that runs it —
+		// measured, `print h && print i &` writes one firing in the column
+		// that fires once for a list. See Semantics.DebugTrapSublists.
+		if err := sub.sublistExpr(ctx, st.Expr); err != nil {
 			sub.diagf("%v\n", err)
 			status = 1
 			return

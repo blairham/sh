@@ -18452,6 +18452,81 @@ into a subshell, which is exactly bash's answer below.
 
 dash and BusyBox ash have no DEBUG condition and never reach the question.
 
+**`DebugTrapSublists`** — bash per-operand · ksh93 per-operand · zsh once-for-the-list · dash and ash never asked
+
+How an **`&&`/`||` list** fires the DEBUG trap, which is the layer outside
+`DebugTrapPipelines` and the last one a statement has. This shell gave a
+list no rule of its own, so every column fired once per operand — right in
+four of them and wrong in the one that fires once for the whole list
+(#4556). The cost was that `print x && print y` wrote two firings under a
+reference that writes one, and every count in zsh's own `C05debug.ztst`
+was over by the number of operators on the line.
+
+Measured 2026-09-25 from script files, one list per line, with `trap
+'print "T@$LINENO"' DEBUG` under zsh 5.9.2 `-f`, `trap 'echo "T@$LINENO"'
+DEBUG` under bash 5.3.20 `--noprofile --norc`, and the same under ksh93
+AJM 93u+ 2012-08-01. bash and ksh93 were **byte-identical** over the whole
+file:
+
+| line | bash 5.3.20 | ksh93 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `print x && print y` | 2 | 2 | 1 |
+| `false \|\| print z` | 2 | 2 | 1 |
+| `print w && print v && print u` | 3 | 3 | 1 |
+| `print h && print i &` | 2 | 2 | 1 |
+| `! print f && print g` | 2 | 2 | 1 |
+
+What the single firing **reports** is the whole list and not its first
+operand: for a list whose second operand is a group, zsh's `ZSH_DEBUG_CMD`
+at it reads back the source of the whole list — `print q && { print r;
+print s }`, laid back out over four lines — where each of the bash columns'
+firings names the one operand it was made for in `$BASH_COMMAND` and
+ksh93's in `${.sh.command}`.
+
+The noun is the **sublist**, and a count alone cannot say so, because
+every row above writes one list per line and "once per line" agrees with
+"once per list" on all of them. The pair that decides holds the list fixed
+and moves the line, and then the line fixed and moves the list: `print c
+&&` with `print d` on the next line writes **one** firing, at the first of
+them, and `print a; print b` on one line writes **two**. So it is neither
+the line nor the statement's text.
+
+Two consequences the count does not carry, both measured:
+
+- An operand that is a **compound** fires no head of its own. `print t &&
+  if true; then print u; fi` writes one firing for the list and then the
+  `if`'s condition and body firing as they always do, where the same `if`
+  standing alone writes a head first. The list's firing stands in for the
+  head exactly as the pipeline's single firing stands in for an element's.
+- Commands **inside** an operand are commands in their own right. `print q
+  && { print r && print s }` writes two firings — the list's and the
+  nested list's — and a function called from an operand fires its body's
+  lists at their own offsets.
+
+The reading is **orthogonal** to `DebugTrapRunsBeforeTheCommand`, which is
+placement and not count: with `unsetopt DEBUG_BEFORE_CMD` the same file
+writes the same number of firings and only moves each one behind what it
+preceded, the list's behind the whole list and after everything its
+operands flushed.
+
+Where the held firing lands is the one place the two readings are **not** a
+mirror of each other, and it is measured rather than reasoned. Ahead of the
+list the firing names the line the list **starts** on; behind it, it names
+the line of the **last operand that ran**, whatever the operands in between
+did to the line record. A list written over lines 3, 4 and 5 names 5; the
+same list short-circuiting at its first operand names 3; and an operand that
+is a compound names its own head's line and not its body's last, so `print a
+&& {` on line 3 with a body on line 4 names 3 while a group written whole on
+line 4 names 4.
+
+dash and BusyBox ash never reach the question — both refuse `trap … DEBUG`
+outright, `trap: DEBUG: bad trap` and `trap: line 1: DEBUG: invalid signal
+specification`, measured 2026-09-25 beside an EXIT trap in the same run
+that did fire. They hold the per-operand value because the type has no
+unspecified member, for the reason `DebugTrapPipeline` has none: a list
+fires once or once per operand and there is no third thing for a shell to
+mean.
+
 **`DebugTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 yes · zsh yes
 
 Fires the DEBUG trap inside a subshell or a command substitution. ksh93

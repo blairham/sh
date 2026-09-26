@@ -2570,6 +2570,13 @@ func Semantics() interp.Semantics {
 	// not a simple command fires nothing, whatever head it would fire for
 	// standing on its own.
 	s.DebugTrapPipelines = interp.DebugTrapPipelinePerSimpleElement
+	// An `&&`/`||` list has no rule of its own here: each operand fires
+	// whatever it would standing alone. Measured 2026-09-25 on 5.3.20 run
+	// `--noprofile --norc` — `echo x && echo y` writes two firings, `echo w
+	// && echo v && echo u` three, and each names its own operand in
+	// `$BASH_COMMAND` (#4556). Written rather than left to the zero value,
+	// because it is a measurement and the shells disagree.
+	s.DebugTrapSublists = interp.DebugTrapSublistPerOperand
 	s.DebugTrapRunsInSubshells = interp.No
 	// Ahead of the command, with no option to move it: measured 2026-09-25
 	// on bash 5.3 with an action printing `$LINENO` and `$?`, a `trap` on

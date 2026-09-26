@@ -306,7 +306,10 @@ func (r *Runner) lockReader(in io.Reader) io.Reader {
 // timing, when non-nil, collects each element's wall time and external CPU
 // for a `time` clause whose layout reports per element. One slot per element,
 // already sized by the caller, so the goroutines write disjoint slots.
-func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pipelineTiming) error {
+// quiet says the pipeline is an operand of an `&&`/`||` list that has
+// already fired for the whole list, so neither the pipeline nor its elements
+// fire anything of their own — see Semantics.DebugTrapSublists.
+func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pipelineTiming, quiet bool) error {
 	r.pipeLast = pipelineLast{}
 	n := len(p.Cmds)
 	readers := make([]*os.File, n)
@@ -365,7 +368,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	// than the pipe, what it assigns is what every element then sees, and an
 	// action that stops the script stops it before anything has run. See
 	// Semantics.DebugTrapPipelines for the panel.
-	skip, fired := r.debugPipeline(ctx, p)
+	skip, fired := r.debugPipeline(ctx, p, quiet)
 	if r.ctl != controlNone {
 		// An `exit` or a `return` written in the action. The pipes opened
 		// above are closed here rather than left to element goroutines

@@ -3488,6 +3488,21 @@ type Runner struct {
 	inErrTrap    bool
 	inDebugTrap  bool
 	inReturnTrap bool
+	// sublistFired says the `&&`/`||` list now running has already made the
+	// one DEBUG firing that stands for the whole of it, so its operands make
+	// none — see Semantics.DebugTrapSublists. It is the list's own state and
+	// not the shell's: a list nested inside an operand saves it, sets it for
+	// itself, and puts back what it found.
+	sublistFired bool
+	// sublistOperand arms the next pipeline reached to withhold its firing,
+	// which is what carries sublistFired across to one operand without
+	// reaching the commands inside it. Consumed by Runner.pipeline, exactly
+	// as Runner.elementFired is consumed by the command dispatcher.
+	sublistOperand bool
+	// sublistLine is the line the last operand the list armed begins on,
+	// which is what a firing the list is *holding* names once the list has
+	// run. Zero where nothing has been armed. See Runner.armSublistOperand.
+	sublistLine int
 	// debugHeld are the DEBUG firings this command has put off until it has
 	// finished, for the dialect that fires behind the command rather than
 	// ahead of it — see Semantics.DebugTrapRunsBeforeTheCommand. Held rather
@@ -4288,6 +4303,11 @@ func (r *Runner) clone() *Runner {
 	// on a goroutine must neither fire it nor append into the array it sits
 	// in. See Runner.debugAfterScope.
 	c.debugHeld = nil
+	// And a list's firing belongs to the shell running the list. A copy is
+	// either running a statement of its own — a background job, which fires
+	// for its whole list from in there — or an operand whose firing the
+	// original already withheld before the clone was made.
+	c.sublistFired, c.sublistOperand, c.sublistLine = false, false, 0
 	// A subshell body is not running inside the frames the copy inherited.
 	c.funcFloor = c.depth
 	// And a subshell is not running inside the loop the copy was cloned from:
@@ -5767,7 +5787,7 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	if st.Background {
 		return r.background(ctx, st)
 	}
-	if err := r.expr(ctx, st.Expr); err != nil {
+	if err := r.sublistExpr(ctx, st.Expr); err != nil {
 		return err
 	}
 	// This unit has now run a command, which is what an operand-less `exit`
@@ -5938,6 +5958,12 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		if x.Op == syntax.TokAndAnd {
 			r.andLeftOperand++
 		}
+		// The list's own DEBUG firing has already been made for the whole
+		// of it, so each operand is armed to make none — see
+		// Runner.sublistFired. Armed per operand rather than read at the
+		// firing site, because it is consumed by the first pipeline that
+		// sees it and must not reach the commands *inside* that operand.
+		r.armSublistOperand(x.X)
 		err := r.expr(ctx, x.X)
 		if x.Op == syntax.TokAndAnd {
 			r.andLeftOperand--
@@ -5956,6 +5982,7 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 			// status 1 and does not end the script.
 			return nil
 		}
+		r.armSublistOperand(x.Y)
 		if err := r.expr(ctx, x.Y); err != nil {
 			return err
 		}
@@ -5972,6 +5999,13 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 }
 
 func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
+	// An operand of an `&&`/`||` list whose firing was made once for the
+	// whole list makes none of its own — not the pipeline's, and not the
+	// head or the simple command's firing one element would otherwise make.
+	// Read and dropped here, so nothing nested inside this pipeline inherits
+	// it. See Runner.sublistFired.
+	quiet := r.sublistOperand
+	r.sublistOperand = false
 	// The pipeline's own DEBUG firing is held here rather than in an
 	// element's slot: what it precedes is the whole statement, so a
 	// dialect that fires behind the command fires behind the last element
@@ -6021,17 +6055,21 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 			saved := r.elemCPU
 			r.elemCPU = &timing.elems[0].cpu
 			start := time.Now()
+			r.elementFired = r.elementFired || quiet
 			err := r.command(ctx, p.Cmds[0])
 			timing.elems[0].wall = time.Since(start)
 			r.elemCPU = saved
 			if err != nil {
 				return err
 			}
-		} else if err := r.command(ctx, p.Cmds[0]); err != nil {
-			return err
+		} else {
+			r.elementFired = r.elementFired || quiet
+			if err := r.command(ctx, p.Cmds[0]); err != nil {
+				return err
+			}
 		}
 		r.recordSingleStatus(p)
-	} else if err := r.runPipeline(ctx, p, timing); err != nil {
+	} else if err := r.runPipeline(ctx, p, timing, quiet); err != nil {
 		return err
 	}
 	if p.Negated && r.negationInverts() {

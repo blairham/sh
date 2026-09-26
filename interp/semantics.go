@@ -22624,6 +22624,45 @@ type Semantics struct {
 	// `false` itself after. The command's own status is put back either way.
 	DebugTrapRunsBeforeTheCommand Answer
 
+	// DebugTrapSublists is whether an `&&`/`||` list fires the DEBUG trap
+	// once for the whole list or once per operand. The layer outside
+	// DebugTrapPipelines, and the last one a statement has.
+	//
+	// Measured 2026-09-25 from script files, one list per line. bash 5.3.20
+	// (`--noprofile --norc`, `$BASH_COMMAND`) and ksh93 AJM 93u+ 2012-08-01
+	// (`${.sh.command}`) were byte-identical over the file and fire per
+	// operand; zsh 5.9.2 (`-f`, `$ZSH_DEBUG_CMD`) fires once:
+	//
+	//	line                          bash   ksh93   zsh
+	//	print x && print y            2      2       1
+	//	false || print z              2      2       1
+	//	print w && print v && print u 3      3       1
+	//	print h && print i &          2      2       1
+	//	! print f && print g          2      2       1
+	//
+	// The single firing reports the **whole list** and not its first
+	// operand: zsh's `ZSH_DEBUG_CMD` there reads back `print q && {\n\tprint
+	// r\n\tprint s\n}` for a list whose second operand is a group, where
+	// each of the bash columns' firings names one operand.
+	//
+	// The noun is the **sublist**, which is the pair that holds it fixed
+	// rather than a wide grid over operators: `print a; print b` on one line
+	// writes two firings there and `print c &&` with `print d` on the next
+	// line writes one, so it is neither the line nor the statement's text
+	// that decides.
+	//
+	// An operand that is a compound fires no head of its own — the list's
+	// firing stands in for it, the way DebugTrapPipelineOnceForThePipeline
+	// stands in for an element's — and commands nested *inside* an operand
+	// fire as they always do. dash and BusyBox ash refuse `trap … DEBUG` and
+	// never reach the question; see DebugTrapSublistPerOperand for why that
+	// is the value they hold rather than an unanswered axis.
+	//
+	// Orthogonal to DebugTrapRunsBeforeTheCommand, which is placement and
+	// not count: `unsetopt DEBUG_BEFORE_CMD` leaves the number of firings
+	// alone and moves each one behind what it preceded.
+	DebugTrapSublists DebugTrapSublist
+
 	// A subshell starts with the parent's handled traps back at their
 	// defaults and only an ignored signal still ignored — POSIX, and
 	// unanimous in the working state. What `trap` *lists* in the child is

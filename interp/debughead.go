@@ -285,7 +285,15 @@ func (d DebugTrapPipeline) String() string {
 // shell and zsh's is withheld, and either way a dialect that carries the trap
 // into a subshell would otherwise fire it twice. It is false for the reading
 // that fires nothing here.
-func (r *Runner) debugPipeline(ctx context.Context, p *syntax.Pipeline) (skip []bool, quiet bool) {
+//
+// armed says an `&&`/`||` list has already made the one firing that stands
+// for this pipeline, so there is none to make here — and the elements are
+// quiet all the same, because what the list's firing stood in for is the
+// pipeline's whole statement. See Semantics.DebugTrapSublists.
+func (r *Runner) debugPipeline(ctx context.Context, p *syntax.Pipeline, armed bool) (skip []bool, quiet bool) {
+	if armed {
+		return nil, true
+	}
 	switch r.sem().DebugTrapPipelines {
 	case DebugTrapPipelineOnceForThePipeline:
 		// One firing for the whole statement. Nothing is recorded as the
@@ -335,4 +343,182 @@ func (r *Runner) debugPipeline(ctx context.Context, p *syntax.Pipeline) (skip []
 		return skip, true
 	}
 	return nil, false
+}
+
+// And where an `&&`/`||` list fires it, which is the layer outside the
+// pipeline and the last one a statement has.
+//
+// Measured 2026-09-25 from script files, one construct per line, with
+// `trap 'print "T@$LINENO <$ZSH_DEBUG_CMD>"' DEBUG` under zsh 5.9.2 `-f`,
+// `trap 'echo "T@$LINENO <$BASH_COMMAND>"' DEBUG` under bash 5.3.20
+// `--noprofile --norc`, and `${.sh.command}` under ksh93 AJM 93u+ 2012-08-01:
+//
+//	line                       bash 5.3.20   ksh93   zsh 5.9.2
+//	echo x && echo y           2 firings     2       1
+//	false || echo z            2             2       1
+//	echo w && echo v && echo u 3             3       1
+//	echo q && { echo r; echo s } 3           3       1 + one per inner command
+//	if echo p && echo o; …     3             3       1 head + 1 cond + 1 body
+//
+// bash and ksh93 were byte-identical over that file, naming the operand each
+// firing stood for. zsh writes one firing whose `$ZSH_DEBUG_CMD` is the
+// **whole sublist** read back — `print q && {\n\tprint r\n\tprint s\n}` for
+// the fourth row — so the firing stands for the list and not for its first
+// operand.
+//
+// The noun is the **sublist** and not the line, which is the pair that holds
+// it fixed: `print a; print b` on one line writes **two** firings, and `print
+// c &&` with `print d` on the next line writes **one**. A grid that varied
+// only the operator would have agreed with either reading.
+//
+// Two consequences the count alone does not carry, both measured:
+//
+//   - An operand that is a **compound** fires no head of its own. `print t &&
+//     if true; then print u; fi` writes one firing for the list, then the
+//     `if`'s condition and body fire as they always do — where the same `if`
+//     standing alone writes a head first. So the sublist's firing stands in
+//     for the head as well as for the operands, exactly as
+//     [DebugTrapPipelineOnceForThePipeline] stands in for an element's.
+//   - Commands **inside** an operand are commands in their own right. `print
+//     q && { print r && print s }` writes two firings, the list's and the
+//     nested list's, and a function called from an operand fires its body's
+//     lists at their own offsets.
+//
+// dash and BusyBox ash never reach the question: both refuse `trap … DEBUG`
+// outright — `trap: DEBUG: bad trap` from dash, `trap: line 1: DEBUG: invalid
+// signal specification` from BusyBox v1.37.0 in the pinned alpine image, both
+// measured 2026-09-25 beside an EXIT trap that fired, so the instrument that
+// reported the refusal was one that can fire.
+//
+// The reading is orthogonal to [Semantics.DebugTrapRunsBeforeTheCommand],
+// which is placement rather than count: with `unsetopt DEBUG_BEFORE_CMD` the
+// same file writes the same **number** of firings and only moves each one
+// behind what it preceded. Measured the same day — `print x && print y` on
+// line 3 writes one firing there in both states of the option.
+
+// DebugTrapSublist is how an `&&`/`||` list fires the DEBUG trap.
+type DebugTrapSublist int
+
+const (
+	// DebugTrapSublistPerOperand gives a list no rule of its own: each
+	// operand fires whatever it would have fired standing alone, so a
+	// three-operand list of simple commands writes three firings and a list
+	// whose operand is a compound writes that compound's head. bash 5.3,
+	// that build invoked as `sh`, bash 3.2 and ksh93 — and the zero value,
+	// because it is the absence of a list rule rather than a reading of one.
+	//
+	// It is also what dash and BusyBox ash hold, which is not a measurement
+	// of those shells: neither has a DEBUG condition to fire, so neither is
+	// ever asked. There is no Unspecified here for the same reason
+	// [DebugTrapPipeline] has none — a list either fires once or fires per
+	// operand, and there is no third thing for a shell to mean.
+	DebugTrapSublistPerOperand DebugTrapSublist = iota
+	// DebugTrapSublistOnceForTheList fires once, for the list as a
+	// statement, before any operand runs — and no operand fires anything of
+	// its own, neither a simple command's firing nor a pipeline's nor a
+	// compound's head. Commands nested *inside* an operand are commands in
+	// their own right and fire as usual. zsh.
+	DebugTrapSublistOnceForTheList
+)
+
+func (d DebugTrapSublist) String() string {
+	if d == DebugTrapSublistOnceForTheList {
+		return "DebugTrapSublistOnceForTheList"
+	}
+	return "DebugTrapSublistPerOperand"
+}
+
+// sublistExpr runs a statement's whole expression, firing the DEBUG trap once
+// for it first in the dialect that reads an `&&`/`||` list that way.
+//
+// The entry point is separate from [Runner.expr] rather than a flag inside
+// it, because "the outermost operator of this statement" is the whole of the
+// question and the tree already says it: expr recurses on its own operands,
+// so a nested list reached through a group, a subshell or a function body
+// comes back through here and fires its own. A flag would have had to be
+// unset at every door a body is entered by.
+//
+// A list of one pipeline is not fired for here. Its firing is the pipeline's
+// or the command's, which is where it already happens and where the panel
+// puts it — see debugPipeline and Runner.simple.
+func (r *Runner) sublistExpr(ctx context.Context, e syntax.Expr) error {
+	b, chain := e.(*syntax.BinaryExpr)
+	if !chain || r.sem().DebugTrapSublists != DebugTrapSublistOnceForTheList {
+		return r.expr(ctx, e)
+	}
+	// The firing stands behind the whole list in the dialect state that
+	// fires behind the command rather than ahead of it, so it needs a
+	// holding slot of its own — outside every operand's, which is what puts
+	// it after everything they flushed. Measured on zsh 5.9.2 with `unsetopt
+	// DEBUG_BEFORE_CMD`: `print q && { print r; print s }` writes the two
+	// inner firings behind their own commands and the list's last of all.
+	// Installed only where a firing is actually made here, so a statement
+	// that is not a list pays no closure for it.
+	if r.debugTrapRunsBehindTheCommand() {
+		defer r.debugAfterScope(ctx)()
+	}
+	// At the list's own line, which is where the reference puts it: `print c
+	// &&` on line 3 with `print d` on line 4 names 3. Taken here because the
+	// firing stands ahead of every operand, so nothing has moved the line
+	// record onto one yet — the record still sits on whatever ran before the
+	// statement. Put back afterwards, because the first operand's dispatch
+	// sets it for itself.
+	//
+	// Nothing is recorded as the running command: the record holds a
+	// syntax.Command and a list is not one. What the reference's own
+	// `ZSH_DEBUG_CMD` reads back at this firing is the whole list's text,
+	// which is the shape a dialect implementing that parameter would have to
+	// record; nothing in this tree has one.
+	before := len(r.debugHeld)
+	line := r.line
+	r.line = r.lineOf(b.Pos())
+	r.runDebugTrap(ctx)
+	r.line = line
+	held := -1
+	if len(r.debugHeld) > before {
+		held = before
+	}
+	if r.debugTrapStopped() {
+		// The refusal is the list's, so it costs every operand — the same
+		// reach the pipeline's single firing has.
+		return nil
+	}
+	// Saved rather than cleared on the way out: a list nested inside one of
+	// these operands comes back through here and would otherwise hand the
+	// enclosing list's remaining operands back their own firings, and take
+	// the enclosing list's own line with it.
+	saved, savedLine := r.sublistFired, r.sublistLine
+	r.sublistFired, r.sublistLine = true, 0
+	defer func() { r.sublistFired, r.sublistLine = saved, savedLine }()
+	err := r.expr(ctx, e)
+	if held >= 0 && held < len(r.debugHeld) && r.sublistLine != 0 {
+		// The **last operand's** own line, which is what a held firing
+		// names once the list has run — the one place the two readings are
+		// not a mirror of each other. Ahead of the list it names the line
+		// the list starts on; behind it, it names the line of the last
+		// operand that ran, whatever the operands in between did to the
+		// line record. Measured on zsh 5.9.2 with `unsetopt
+		// DEBUG_BEFORE_CMD`, 2026-09-25, a list written over three lines:
+		// `print a &&` on 3, `print b &&` on 4 and `print c` on 5 names 5,
+		// and the same list short-circuiting at the `false` on line 3 names
+		// 3. A compound operand names its own head's line and not its
+		// body's last — `print a && {` on line 3 with a body on 4 names 3,
+		// and a group written whole on line 4 names 4.
+		r.debugHeld[held].line = r.sublistLine
+	}
+	return err
+}
+
+// armSublistOperand arms the operand about to run to withhold its own DEBUG
+// firing, where the list it belongs to has already fired for the whole of it,
+// and records that operand's own line for a firing the list is holding.
+//
+// Read at the arming rather than at the flush, because the line record has
+// moved on by then: an operand that is a compound leaves it on the body's
+// last command and the firing names the compound's own head.
+func (r *Runner) armSublistOperand(e syntax.Expr) {
+	if r.sublistFired {
+		r.sublistOperand = true
+		r.sublistLine = r.lineOf(e.Pos())
+	}
 }

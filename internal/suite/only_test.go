@@ -4,11 +4,13 @@
 package suite
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // tierTree writes a suite-shaped directory: a tier per key, the named files
@@ -185,5 +187,59 @@ func TestASweepOfZeroFilesIsAnErrorRatherThanAReport(t *testing.T) {
 
 	if _, err := plan(s, root, Options{Only: map[string]bool{"nosuch.tests": true}}); err == nil {
 		t.Error("a plan over zero files was returned as a plan rather than as an error")
+	}
+}
+
+// TestIdentifyReferencesLabelsAReferenceAgainstItsOwnColumn.
+//
+// The cross-check compares the reference shells with each other and, until
+// #4432, said nothing at all about which builds they were. Grading has had
+// that since #3480 — a WRONG BUILD banner over a column whose reference is
+// not the build the column claims — and a split between references is only
+// readable beside the same fact.
+//
+// A binary that will not say what it is has to come back UNIDENTIFIED rather
+// than blank, because blank is what a reference that is exactly right looks
+// like.
+func TestIdentifyReferencesLabelsAReferenceAgainstItsOwnColumn(t *testing.T) {
+	silent := "/usr/bin/false"
+	if _, err := os.Stat(silent); err != nil {
+		t.Skip("no /usr/bin/false here")
+	}
+	got := IdentifyReferences(context.Background(), []Reference{
+		{Name: "bash", Path: silent},
+		{Name: "not-a-column", Path: silent},
+	})
+	if got[0].Label != "UNIDENTIFIED" {
+		t.Errorf("a reference that would not say what it is came back %q, want UNIDENTIFIED", got[0].Label)
+	}
+	if got[0].Why == "" {
+		t.Error("UNIDENTIFIED carries no sentence, so the report has nothing to print")
+	}
+	if got[1].Label != "" || got[1].Build.Known {
+		t.Errorf("a name that is no column of ours was labeled anyway: %+v", got[1])
+	}
+}
+
+// TestACrossCheckCarriesTheReferencesItUsed. The printer cannot name a build
+// the check did not record, so the two halves are tested where they are: this
+// one is the wiring, and the report's own test is the rendering.
+func TestACrossCheckCarriesTheReferencesItUsed(t *testing.T) {
+	root := tierTree(t, map[string][]string{"core": {"lookup.tests"}})
+	refs := []Reference{{Name: "bash", Path: "/usr/bin/false"}, {Name: "dash", Path: "/usr/bin/false"}}
+	cross, err := CrossCheck(context.Background(), root, "core", refs, Options{
+		Timeout: 5 * time.Second,
+		Only:    map[string]bool{"lookup.tests": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cross.Refs) != 2 {
+		t.Fatalf("the cross-check recorded %d references, want 2", len(cross.Refs))
+	}
+	for i, want := range []string{"bash", "dash"} {
+		if cross.Refs[i].Name != want {
+			t.Errorf("reference %d is %q, want %q", i, cross.Refs[i].Name, want)
+		}
 	}
 }

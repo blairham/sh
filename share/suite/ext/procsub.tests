@@ -65,14 +65,27 @@ printf ']\n'
 # business — so the digits are replaced before anything is compared. What
 # survives is the shape, which is the part a script can depend on: it is a
 # name for a descriptor, not a file in a temporary directory, which is why
-# nothing has to clean it up. The directory in front of the number is the
-# shell's business too, and the columns disagree about it: zsh names
-# /proc/self/fd where that directory is there and every other column here
-# names /dev/fd, which is why this file is the one place the two rows below
-# can fail in a gated column while the two after them pass.
+# nothing has to clean it up.
+#
+# The directory in front of the number is **the operating system's business
+# and not the dialect's**, and the two spellings are folded together here for
+# that reason rather than to make a row pass. Measured 2026-09-26, one file
+# under four references on two machines: on macOS all three columns name
+# /dev/fd; in a Debian-family container zsh 5.9 names /proc/self/fd while bash
+# 5.2.21 and ksh93u+m still name /dev/fd. So it is neither a property of zsh
+# nor a property of this tier — the same zsh writes both, depending on whether
+# /proc is there — and no tier here can hold it. ext/ claims that bash, zsh
+# and ksh93 write the same bytes; zsh/ would claim that only zsh writes this,
+# and on macOS that is false in the other direction. A fact conditioned on the
+# kernel belongs in neither, so what is asked is the shape both spellings
+# share. #4432.
+#
+# Folded by name and not by wildcard, deliberately: a shell that answered with
+# a path to a temporary file, or with anything but these two spellings of a
+# descriptor, still fails the row.
 
-printf 'the reading form: [%s]\n' "$(printf '%s' <(true) | sed 's/[0-9][0-9]*/N/g')"
-printf 'the writing form: [%s]\n' "$(printf '%s' >(true) | sed 's/[0-9][0-9]*/N/g')"
+printf 'the reading form: [%s]\n' "$(printf '%s' <(true) | sed 's#^/proc/self/fd/#/dev/fd/#; s#[0-9][0-9]*$#N#')"
+printf 'the writing form: [%s]\n' "$(printf '%s' >(true) | sed 's#^/proc/self/fd/#/dev/fd/#; s#[0-9][0-9]*$#N#')"
 
 # And the descriptor behind the name is open in the direction the operator
 # named, which is the whole of what `>(…)` can be asked without waiting for a

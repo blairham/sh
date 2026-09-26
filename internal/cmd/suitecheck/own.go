@@ -208,6 +208,12 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 		fmt.Println()
 		return code
 	}
+	// Once, here, rather than inside each check: the build is a property of
+	// the binary and there are two cross-checks and five only-here checks
+	// below. See suite.IdentifyReferences for why naming the builds is the
+	// part of #3480 the cross-check can have.
+	refs = suite.IdentifyReferences(ctx, refs)
+
 	fmt.Println("  A tier is a claim, not filing. core/ is what a script may assume in any of")
 	fmt.Println("  these shells. A cross-check runs a tier through the references alone and")
 	fmt.Println("  asks whether they agree, which is the half no fetched suite can have:")
@@ -563,6 +569,7 @@ func printCross(cross suite.Cross) {
 	fmt.Printf("  %s/ agreement  %d/%d   the reference shells themselves wrote the same bytes\n",
 		cross.Tier, cross.Agree, cross.Files)
 	fmt.Printf("                  across %s\n", strings.Join(cross.Shells, ", "))
+	printCrossRefs(cross.Refs)
 	for _, split := range cross.Split {
 		var groups []string
 		for _, g := range split.Groups {
@@ -599,6 +606,7 @@ func printOwn(own suite.Own) {
 	fmt.Printf("  %s/ only-here  %d/%d   %s answered differently from every other reference\n",
 		own.Tier, own.Alone, own.Files, own.Shell)
 	fmt.Printf("                  held against %s\n", strings.Join(own.Others, ", "))
+	printCrossRefs(own.Refs)
 	for _, share := range own.Shared {
 		fmt.Printf("    %-28s not only %s: %s wrote the same bytes\n",
 			share.Name, own.Shell, strings.Join(share.With, ", "))
@@ -622,6 +630,31 @@ func emptyTier(held int) string {
 		return "this tier holds no files at all, which is a filing defect rather than a result"
 	}
 	return fmt.Sprintf("none of this tier's %d files matched the selection", held)
+}
+
+// printCrossRefs names the build behind every reference a tier check used,
+// and says so loudly where one is not the build its column claims.
+//
+// Printed on every run and not only on a split, because the line a reader
+// needs is the one *above* the finding: a split named without the builds
+// behind it reads as a statement about the files, and on a machine whose bash
+// is a release behind it is a statement about bash. #4432 filed three files
+// as mis-tiered from exactly that report — measured afterwards, two of the
+// three splits are the build. See suite.IdentifyReferences.
+func printCrossRefs(refs []suite.Reference) {
+	if len(refs) == 0 {
+		return
+	}
+	for _, r := range refs {
+		build := "would not say what build it is"
+		if r.Build.Known {
+			build = r.Build.Version
+		}
+		fmt.Printf("                    %-8s %s — %s\n", r.Name, r.Path, build)
+		if r.Label != "" {
+			fmt.Printf("                    %s\n", wrap(r.Label+" — "+r.Why, "                      "))
+		}
+	}
 }
 
 // printMoved is which reference moved and what it wrote the second time.

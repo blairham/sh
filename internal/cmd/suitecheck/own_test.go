@@ -157,3 +157,71 @@ func TestAnOnlyHereCheckOverZeroFilesSaysSo(t *testing.T) {
 		}
 	}
 }
+
+// TestTheTierChecksNameTheBuildBehindEveryReference is #4432's instrument
+// half.
+//
+// That issue filed three files as mis-tiered from a report that named the
+// shells and not their builds. Re-measured, two of the three splits are the
+// build: bash 5.2.21 cannot parse a here-document in an alias body and bash
+// 5.3 can, and ksh93u+m normalizes a `command -v` operand where AT&T 93u+
+// 2012 does not. Neither fact is about the file, and the report said nothing
+// that would have let a reader tell.
+func TestTheTierChecksNameTheBuildBehindEveryReference(t *testing.T) {
+	refs := []suite.Reference{
+		{
+			Name: "bash", Path: "/usr/bin/bash", Build: suite.Build{Version: "GNU bash, version 5.2.21(1)-release", Known: true},
+			Label: "WRONG BUILD", Why: "this column is graded against GNU bash 5.3 and the shell here is 5.2.21.",
+		},
+		{Name: "dash", Path: "/bin/dash", Build: suite.Build{Version: "dash 0.5.12", Known: true}},
+		{Name: "ksh93", Path: "/bin/ksh"},
+	}
+	out := capture(t, func() {
+		printCross(suite.Cross{
+			Tier: "core", Shells: []string{"bash", "dash", "ksh93"}, Files: 32, Held: 32, Agree: 31,
+			Refs:  refs,
+			Split: []suite.CrossSplit{{Name: "aliases.tests", Groups: [][]string{{"bash"}, {"dash", "ksh93"}}}},
+		})
+	})
+	for _, want := range []string{
+		"/usr/bin/bash — GNU bash, version 5.2.21(1)-release",
+		"WRONG BUILD",
+		"graded against GNU bash 5.3",
+		"/bin/dash — dash 0.5.12",
+		"would not say what build it is",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the cross-check does not say %q:\n%s", want, out)
+		}
+	}
+
+	// And the same for the tier check that runs the other way round, since a
+	// dialect tier's claim is held against the very same binaries.
+	only := capture(t, func() {
+		printOwn(suite.Own{
+			Tier: "ksh", Shell: "ksh93", Others: []string{"bash", "dash"},
+			Files: 12, Held: 12, Alone: 12, Refs: refs,
+		})
+	})
+	if !strings.Contains(only, "WRONG BUILD") || !strings.Contains(only, "GNU bash, version 5.2.21") {
+		t.Errorf("the only-here check does not name the builds it was held against:\n%s", only)
+	}
+
+	// A run whose references are all the builds their columns claim prints
+	// the builds and no banner — the line that means something has to be the
+	// one that is usually absent.
+	clean := capture(t, func() {
+		printCross(suite.Cross{
+			Tier: "ext", Shells: []string{"bash", "ksh93"}, Files: 20, Held: 20, Agree: 20,
+			Refs: []suite.Reference{
+				{Name: "bash", Path: "/usr/local/bin/bash", Build: suite.Build{Version: "GNU bash, version 5.3.20(1)-release", Known: true}},
+			},
+		})
+	})
+	if strings.Contains(clean, "WRONG BUILD") || strings.Contains(clean, "UNIDENTIFIED") {
+		t.Errorf("a clean run printed a banner:\n%s", clean)
+	}
+	if !strings.Contains(clean, "5.3.20") {
+		t.Errorf("a clean run does not name the build it used:\n%s", clean)
+	}
+}

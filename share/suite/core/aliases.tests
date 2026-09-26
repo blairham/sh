@@ -188,6 +188,22 @@ eval 'ev'
 # Reading it from the input after the alias word instead ran `in alias` and
 # `EOF` as commands. Every value here ends in a newline: without one, the seam
 # between the value and the input is where the four shells part.
+#
+# **These rows are common ground across the builds this panel names, and they
+# are not common ground across every bash anyone runs.** Measured 2026-09-26,
+# the same snippet under three builds of one shell: bash 5.3.20 runs it; bash
+# 5.2.21 and bash 3.2.57 both refuse it with `syntax error near unexpected
+# token` and a warning that the here-document was delimited by end-of-file.
+# zsh, ksh93 and dash run it in every environment tried. So the construct is
+# something bash *gained*, and a cross-check on a machine whose bash is a
+# release behind reports this file as `not core: bash ≠ zsh+ksh93+dash` — which
+# is what #4432 saw and read as a filing defect.
+#
+# It is not one, and the fix it proposed would have been wrong twice: the rows
+# would move into bash/, where the only-here check asks that *only* bash
+# answers this way, and against bash 5.3 the other three answer it identically.
+# The report now names the build behind every reference for this reason, so a
+# split of this shape reads as the shell it is about.
 alias hd1='cat <<EOF
 in alias
 EOF

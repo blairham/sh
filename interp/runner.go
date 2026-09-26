@@ -3535,6 +3535,31 @@ type Runner struct {
 	// what keeps zsh's two E lines for `(false)`.
 	errTrapFired bool
 
+	// errTookTheFailure says an ERR trap was in force where the failure the
+	// status now reports was judged, so the failure has been handed to a
+	// handler and an enclosing level is not to take it again.
+	//
+	// Only [Semantics.FailureTakesAnImplicitReturn] reads it, and what it
+	// buys is the difference between one implicit return and a whole stack
+	// of them. Measured on zsh 5.9.2, 2026-09-25, with
+	// `h(){ false; }; g(){ h; print g; }; f(){ g; print f; }; f; print top`:
+	// with no ERR trap the shell writes nothing and leaves 1, because every
+	// level in turn judges a failing statement and returns; with
+	// `trap 'print E' ERR` ahead of it the shell writes `E`, `g`, `f` and
+	// `top` and leaves 0, because `h` returned and nothing above it did.
+	//
+	// Set wherever an ERR trap is *installed* rather than only where one
+	// ran, which is a distinction with a case behind it: `trap "" ERR` has
+	// no body to run and still stops the propagation after one return,
+	// measured the same day. Runner.errTrapFired cannot carry this for that
+	// reason — it records a firing, and an ignored trap never fires.
+	//
+	// Cleared at the head of every statement, beside errTrapFired and for
+	// the same reason: the enclosing statement clears it before its body
+	// runs, so what the body sets is still there when the statement is
+	// judged.
+	errTookTheFailure bool
+
 	// unjudged marks the statement that has just finished as one `set -e`
 	// and the ERR trap do not judge, whatever it left in the status.
 	//
@@ -3695,6 +3720,25 @@ type Runner struct {
 	// unanimous across the panel, and the part of `set -e` most
 	// implementations get wrong.
 	tested int
+	// callTested is what Runner.tested was when the call now running was
+	// made, which is the floor the same counter is read against for
+	// [Semantics.FailureTakesAnImplicitReturn].
+	//
+	// `set -e` and the ERR trap inherit a tested context all the way down —
+	// a function called from an `if` condition has the exemption inside its
+	// body too, which is the paragraph on Runner.tested. zsh's `ERR_RETURN`
+	// does not, measured 2026-09-25 on zsh 5.9.2: `f(){ false; print x; };
+	// if f; then print t; else print e; fi` writes `x` and `t` under
+	// `setopt errexit` and writes `e` alone under `setopt errreturn`. So the
+	// implicit return asks whether a tested context was opened *since the
+	// call*, which is `tested == callTested`, and the plain exemption asks
+	// whether one is open at all.
+	//
+	// A call is the only boundary that moves it. A subshell, a sourced file
+	// and a command substitution all keep the caller's floor, measured the
+	// same day: `if ( false; print s ); then` writes `s`, and so does
+	// `if source f; then` over a file whose first line fails.
+	callTested int
 	// noclobber is `set -C`: a plain `>` will not truncate an existing file.
 	noclobber bool
 	// noglob is `set -f`: pathname expansion does not happen. Only pathname
@@ -5766,6 +5810,10 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	// at the head of a statement, so that a compound clears it before its
 	// body runs and still sees the body's firing when it is judged itself.
 	r.errTrapFired = false
+	// And which handler, if any, has taken it — see
+	// Runner.errTookTheFailure, whose clear belongs at the same place and
+	// for the same reason.
+	r.errTookTheFailure = false
 	// And the mark the statement before it may have left — see
 	// Runner.unjudged. Cleared here rather than where it is read, so a
 	// construct that sets it and is then not judged at all (a `time` clause
@@ -5909,25 +5957,78 @@ func lastIsNegated(e syntax.Expr) bool {
 // measured and unanimous among the shells that have the condition. When both
 // apply, the trap runs first and the script then stops, in that order.
 func (r *Runner) checkErrExit(ctx context.Context) {
-	if r.tested != 0 || r.status == 0 || r.ctl != controlNone || r.unjudged {
+	if r.status == 0 || r.ctl != controlNone || r.unjudged {
 		return
 	}
-	if r.arithZeroLeft && (r.errexit || r.errTrapIsSet()) &&
+	// The implicit return is asked first because it is the one judgement a
+	// tested context does not exempt all the way down: its exemption is
+	// reset at every call, so a function called from an `if` condition
+	// still takes it inside its own body. See Runner.callTested, and
+	// Semantics.FailureTakesAnImplicitReturn for what was measured.
+	implicitReturn := r.takesAnImplicitReturn()
+	if r.tested != 0 && !implicitReturn {
+		return
+	}
+	if r.arithZeroLeft && (r.errexit || implicitReturn || r.errTrapIsSet()) &&
 		!r.ask(r.sem().ArithCommandZeroIsAFailure, "an `(( ))` whose value is zero being a failure `set -e` and ERR see") {
 		return
 	}
 	pipefailOnly := r.pipefailRaised
-	// Once per failure, not once per level that reports it. `set -e` is
-	// deliberately outside this guard: it judges the statement it is given
-	// and a failure inside a compound has already ended the script before
-	// the compound is reached, so nothing here changes what it stops for.
-	if !r.errTrapFired {
-		r.runErrTrap(ctx)
+	// Whether a handler has already taken this failure, read *before* the
+	// trap below can take it here. See Runner.errTookTheFailure.
+	taken := r.errTookTheFailure
+	// The ERR trap keeps the plain exemption, so a tested context that only
+	// the implicit return reached fires nothing and marks nothing.
+	if r.tested == 0 {
+		// Once per failure, not once per level that reports it. `set -e` is
+		// deliberately outside this guard: it judges the statement it is
+		// given and a failure inside a compound has already ended the script
+		// before the compound is reached, so nothing here changes what it
+		// stops for.
+		if !r.errTrapFired {
+			r.runErrTrap(ctx)
+		}
+		// Installed rather than fired, which is the `trap "" ERR` row on
+		// Runner.errTookTheFailure.
+		if r.errTrap != nil {
+			r.errTookTheFailure = true
+		}
+		if r.ctl != controlNone {
+			// The trap's own action already ended the script — its `exit`
+			// wins, and judging the statement again would overwrite the
+			// status that action chose.
+			return
+		}
 	}
-	if !r.errexit || r.ctl != controlNone {
-		// Either nothing more to do, or the trap's own action already ended
-		// the script — its `exit` wins, and judging the statement again
-		// would overwrite the status that action chose.
+	if !r.errexit || r.tested != 0 {
+		// `set -e` declined, so the implicit return is what is left. It is
+		// asked second because **`set -e` outranks it where a shell has both
+		// on**: measured 2026-09-25, `f() { setopt localoptions errexit
+		// errreturn; false; print x }; f; print "post st=$?"` ends the shell
+		// at 1 in zsh 5.9.2 and writes nothing, where the return alone would
+		// have left the function and written `post st=1` at 0. The same
+		// holds whichever of the two is the global and whichever is the
+		// local, so it is the pair and not the order the script set them in.
+		if implicitReturn && !taken {
+			// A pipefail-only failure is one the implicit return sees
+			// wherever `set -e` does, which is the same question and not a
+			// second one: zsh is the only shell with the option and answers
+			// Yes to both. Measured the same day — `setopt errreturn
+			// pipefail; f(){ false | true; print x; }; f` writes nothing and
+			// leaves 1.
+			if pipefailOnly &&
+				!r.ask(r.sem().ErrexitSeesPipefailFailure, "an implicit `return` for a failure only pipefail saw") {
+				return
+			}
+			// Exactly what the `return` builtin sets, and nothing else:
+			// where the transfer lands, what an `always` half makes of it
+			// and whether the script ends are all already `return`'s own,
+			// and answering any of them a second time here is how the two
+			// spellings drift. See biReturn, and
+			// Runner.transferEndsTheShell for the `always` half.
+			r.returnSeenStatus = r.status
+			r.ctl = controlReturn
+		}
 		return
 	}
 	// Asked only here, where the answer decides something. A pipeline whose
@@ -5946,6 +6047,18 @@ func (r *Runner) checkErrExit(ctx context.Context) {
 	// error the shell reported would let a boundary that gives up one file
 	// catch a `set -e` the shell has already decided to end over.
 	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonRequested, true
+}
+
+// takesAnImplicitReturn reports whether the failure in hand is one
+// [Semantics.FailureTakesAnImplicitReturn] turns into a `return`.
+//
+// The axis is read directly rather than through ask, because it is off in
+// every dialect until an option turns it on: a shell that has never heard of
+// `ERR_RETURN` would otherwise refuse, by name, at every failing command it
+// ran. Unspecified is therefore the same answer as No here, which is the one
+// place in this file that is true.
+func (r *Runner) takesAnImplicitReturn() bool {
+	return r.sem().FailureTakesAnImplicitReturn == Yes && r.tested == r.callTested
 }
 
 func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {

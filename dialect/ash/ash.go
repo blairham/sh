@@ -1907,6 +1907,13 @@ func Semantics() interp.Semantics {
 	// where a plain `set -e; false | true` reaches the echo. ksh93 is the
 	// column that runs on (#2272).
 	s.ErrexitSeesPipefailFailure = interp.Yes
+	// No implicit `return` for a failure: BusyBox ash has no option naming
+	// it and does not do it unasked. Measured 2026-09-25 in the pinned
+	// alpine image, BusyBox v1.37.0 — `f() { false; echo x; }; f; echo
+	// "post=$?"; echo done` writes `x`, `post=0` and `done` at 0, and the
+	// only names `set -o` has with `err` in them are `errexit` and
+	// `errtrace`.
+	s.FailureTakesAnImplicitReturn = interp.No
 	// `time` changes nothing about the judging here: measured 2026-09-18 in
 	// the pinned image, `set -e; time false; printf survived` stops and
 	// `trap 'printf E' ERR; time false` writes E.

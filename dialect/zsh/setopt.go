@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 129 of the 185
+//     typing a directory name still does not change directory. 128 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -169,7 +169,18 @@ import (
 // string built while it was off. The `${^a}` half of the same mechanism is
 // the opposite: that one is state on the node and is settled at the parse.
 //
-// Nothing else about the split moved, and 129 is still most of the table.
+//
+// `errreturn` is the fourth, and its moment was asked in the same breath as
+// the three above it: it now takes an implicit `return` at a command that
+// failed —
+// [interp.Semantics.FailureTakesAnImplicitReturn] — and the deciding moment
+// is when the failing statement is *judged*, neither the definition of the
+// body nor the entry to the call. It is the function-scoped sibling of
+// `errexit`, which was substrate-backed here all along, so the machinery was
+// next door and the option simply did not reach it: a script that set it drew
+// no diagnostic and ran straight past the command it was asking the shell to
+// stop at (#4546).
+// Nothing else about the split moved, and 128 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -507,7 +518,35 @@ var zshOptions = []zshOption{
 	editingOption("emacs", "emacs"),
 	recorded("equals", true),
 	setOptBacked("errexit", false, "errexit", false),
-	recorded("errreturn", false),
+	{
+		// ERR_RETURN: a failing command executes an implicit `return` where
+		// `ERR_EXIT` would execute an `exit`. Off by default, measured on
+		// zsh 5.9.2 (aarch64-apple-darwin25.4.0), 2026-09-25, `-f`.
+		//
+		// It was `recorded` until #4546 — accepted, reported back correctly
+		// by `[[ -o errreturn ]]`, `$options[errreturn]` and the `setopt`
+		// listing, and acted on by nothing. That is the shape that reads as
+		// working from every surface but the one the option is for: a script
+		// that sets it gets no diagnostic and runs straight past the command
+		// that failed.
+		//
+		// **The noun is `return` and not "the enclosing function"** — see
+		// [interp.Semantics.FailureTakesAnImplicitReturn], which holds the
+		// measured table. The manual's own example is a function, and three
+		// of the rows that decide the rule are not: the top level of a
+		// script, a subshell and a sourced file each end the way a written
+		// `return` ends them.
+		base: "errreturn", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.FailureTakesAnImplicitReturn == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.FailureTakesAnImplicitReturn
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("evallineno", true),
 	setOptBacked("exec", true, "noexec", true),
 	matchBacked("extendedglob", false, interp.ExtendedPatternOperators, false),

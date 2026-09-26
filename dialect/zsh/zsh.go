@@ -2674,6 +2674,14 @@ func Semantics() interp.Semantics {
 	// the signal, the same as anywhere else.
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
+	// The default state of `ERR_RETURN`, which is off — the shell that has
+	// the option is still the shell that does not do it unasked. Measured
+	// 2026-09-25 on zsh 5.9.2: `unsetopt errreturn; f() { false; print
+	// notreached }; f; print "after f: status=$?"` writes `notreached` and
+	// `after f: status=0` at 0, in the reference and here alike. `setopt
+	// errreturn` moves this axis and nothing else does; see
+	// dialect/zsh/setopt.go.
+	s.FailureTakesAnImplicitReturn = interp.No
 	// `time` changes nothing about the judging here either: `set -e; time
 	// false` stops and the ERR trap fires, over every shape measured.
 	s.TimedCommandIsJudged = interp.Yes

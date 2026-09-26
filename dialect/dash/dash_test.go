@@ -114,6 +114,11 @@ func TestSemantics(t *testing.T) {
 		want interp.Answer
 	}{
 		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.Yes},
+		// No implicit `return` for a failure, and no option naming one —
+		// `errexit` is the only name with `err` in it in this shell's
+		// seventeen-line `set -o`. Measured 2026-09-25 — `f() { false; echo
+		// x; }; f; echo "post=$?"` writes `x` and `post=0` at 0.
+		{"FailureTakesAnImplicitReturn", s.FailureTakesAnImplicitReturn, interp.No},
 		// `test`'s file comparisons — dash has no `[[ ]]` but has these:
 		// both files must exist, and `-t x` is the Illegal number complaint.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.No},

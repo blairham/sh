@@ -185,7 +185,8 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		// that stands in its place is not one deeper than it was. See
 		// Semantics.ShellLevelExec — the fallback below is a child and keeps
 		// the count, which is measured and not an omission.
-		err := r.ReplaceProcess(path, r.execArgv(argv, flags), r.replacementEnviron(flags), r.replacementFiles())
+		name, env := r.namedByTheEnvironment(argv[0], r.replacementEnviron(flags))
+		err := r.ReplaceProcess(path, r.execArgv(argv, flags, name), env, r.replacementFiles())
 		releaseMask()
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.
@@ -221,13 +222,16 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 	}
 
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
+	// The name the command finds in argv[0]: `-a` where it was given, an
+	// exported `ARGV0` where the dialect reads one, and otherwise the word
+	// that was typed. os/exec puts the resolved path there, which is the one
+	// thing it should never be. The environment comes back with the name
+	// spent, so the two are read together.
+	name, env := r.namedByTheEnvironment(argv[0], r.execEnviron(flags))
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
-	// The name the command finds in argv[0]: `-a` where it was given, and
-	// otherwise the word that was typed. os/exec puts the resolved path
-	// there, which is the one thing it should never be.
-	cmd.Args[0] = r.execArgv(argv, flags)[0]
+	cmd.Args[0] = r.execArgv(argv, flags, name)[0]
 	cmd.Dir = r.Dir
-	cmd.Env = r.execEnviron(flags)
+	cmd.Env = env
 	cmd.Stdin = r.childStdin()
 	cmd.Stdout = childOut(r.stdout())
 	cmd.Stderr = childOut(r.stderr())
@@ -519,8 +523,15 @@ type execFlags struct {
 //
 // The prefix goes on the word as written, path and all, which is what the
 // reference shells do: `exec -l /bin/sh` hands over `-/bin/sh`.
-func (r *Runner) execArgv(argv []string, flags execFlags) []string {
-	name := argv[0]
+//
+// base is the name before either letter is read: the word that was typed,
+// unless an exported `ARGV0` asked for another one in the dialect that reads
+// it. `-a` overrides it, which is the composition rather than a third rule —
+// an explicit option beats an ambient variable, and `-l` then goes on
+// whichever of the two is left. See interp/argv0env.go for the variable, and
+// docs/spec/invocation.md for the one row of real zsh this does not follow.
+func (r *Runner) execArgv(argv []string, flags execFlags, base string) []string {
+	name := base
 	switch {
 	case flags.argv0 != "" && flags.login:
 		if r.ask(r.sem().ExecLoginPrefixesTheGivenName, "`exec -l -a name`") {

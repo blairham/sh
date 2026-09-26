@@ -8084,13 +8084,21 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
 
-	cmd := exec.CommandContext(ctx, path, argv[1:]...)
 	// A command names itself from argv[0], and what it should find there is
 	// the word that was typed rather than the path PATH resolved to. os/exec
 	// sets both from the one argument, so the two have to be pulled apart
 	// again: `basename --bad` complains as `basename` in every shell in the
 	// panel and complained as `/usr/bin/basename` here.
-	cmd.Args[0] = argv[0]
+	//
+	// Unless the script asked for another name, which one dialect lets it do
+	// by exporting one — see interp/argv0env.go. The environment is taken
+	// back here rather than at cmd.Env below because the name is *spent*
+	// there: what named the child must not also reach it, and the doors
+	// below that fall back to running the file another way are handed the
+	// same environment this one is.
+	name, env := r.namedByTheEnvironment(argv[0], env)
+	cmd := exec.CommandContext(ctx, path, argv[1:]...)
+	cmd.Args[0] = name
 	ownGroup := (r.bg != nil && r.monitor) ||
 		(r.bg == nil && r.monitor && r.Terminal && r.WaitForCommand != nil)
 	if ownGroup {

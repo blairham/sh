@@ -2657,6 +2657,11 @@ func Semantics() interp.Semantics {
 	s.ExecTakesTheLoginLetter = interp.Yes
 	s.ExecTakesTheEmptyEnvironmentLetter = interp.Yes
 	s.ExecLoginPrefixesTheGivenName = interp.No
+	// And the name a command is started under can be asked for by an exported
+	// `ARGV0`, which no other column reads: the variable is spent on argv[0]
+	// and the child never sees it. `exec -a` is the other spelling and wins
+	// where both are written.
+	s.ExportedArgv0NamesTheCommand = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
 	// Of the operators past the three-word rules this shell has only `-N`:
 	// `test -a f` and `test -o errexit` are `too many arguments` here, and

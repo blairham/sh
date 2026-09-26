@@ -82,3 +82,70 @@ set +x
 exec 2>&3
 cat xt.err
 printf 'and the append did not outlive the command [%s]\n' "$v"
+
+# ---- CHASE_LINKS and CHASE_DOTS ----
+#
+# Two names for not keeping the path a directory was reached by, and no other
+# shell in the panel has either. `chaselinks` resolves every `cd`; `chasedots`
+# resolves one whose destination holds a `..`, and then it resolves the whole
+# destination rather than only the `..` — which the third row is what says, a
+# link sitting *after* the `..` where a narrower reading would have left it
+# alone.
+#
+# The fixture is made here rather than assumed, and the names are printed
+# relative to it, so what a row compares is the shape and never a path. `cd
+# -P .` first, because a temporary directory is commonly reached through a
+# link and every row below would otherwise be measuring the machine.
+
+rm -rf chase.tmp
+mkdir -p chase.tmp/real/deep chase.tmp/sub/sub
+ln -s ../real chase.tmp/sub/fake
+ln -s ../../real chase.tmp/sub/sub/fake
+cd chase.tmp
+cd -P .
+base=$PWD
+where() { print -r -- "${PWD#$base}"; }
+
+( unsetopt chaselinks chasedots; cd sub/fake;              printf 'neither    '; where )
+( setopt chasedots;              cd sub/fake;              printf 'dots       '; where )
+( setopt chaselinks;             cd sub/fake;              printf 'links      '; where )
+( setopt chaselinks chasedots;   cd sub/fake;              printf 'both       '; where )
+
+( unsetopt chaselinks chasedots; cd sub/fake/..;           printf 'dotdot  n  '; where )
+( setopt chasedots;              cd sub/fake/..;           printf 'dotdot  d  '; where )
+( setopt chaselinks;             cd sub/fake/..;           printf 'dotdot  l  '; where )
+
+( unsetopt chaselinks chasedots; cd sub/fake/../sub/fake;  printf 'tail    n  '; where )
+( setopt chasedots;              cd sub/fake/../sub/fake;  printf 'tail    d  '; where )
+
+# A `.` is not a `..`, which holds the option on and takes the `..` away.
+( setopt chasedots;              cd sub/./fake;            printf 'dotonly d  '; where )
+# And a `..` with no link on the way is the row that must not move.
+( setopt chasedots;              cd real/deep/..;          printf 'nolink  d  '; where )
+
+# `-L` puts `chaselinks` down and leaves `chasedots` standing. Same
+# destination in all three; only the option moves.
+( setopt chaselinks;           cd -L sub/fake/../sub/fake; printf '-L links   '; where )
+( setopt chasedots;            cd -L sub/fake/../sub/fake; printf '-L dots    '; where )
+( setopt chaselinks chasedots; cd -L sub/fake/../sub/fake; printf '-L both    '; where )
+( setopt chaselinks;           cd -P sub/fake;             printf '-P links   '; where )
+
+# `cd` reads the wider one when it moves and `pwd` reads it when it *prints*,
+# which the second block is what says: $PWD still holds the logical name and a
+# bare `pwd` writes the resolved one all the same.
+three() { p=$(pwd); l=$(pwd -L); c=$(pwd -P)
+  printf '%s PWD%s pwd%s -L%s -P%s\n' "$1" "${PWD#$base}" "${p#$base}" "${l#$base}" "${c#$base}" }
+( setopt chaselinks; cd sub/fake; unsetopt chaselinks; three 'on-then-off' )
+( unsetopt chaselinks; cd sub/fake; setopt chaselinks; three 'off-then-on' )
+( setopt chasedots;  cd sub/fake;                      three 'dots-only  ' )
+( unsetopt chaselinks chasedots; cd sub/fake;          three 'neither    ' )
+
+# Both report themselves, apart, and a subshell keeps its change to itself.
+setopt chaselinks
+[[ -o chaselinks ]] && print 'chaselinks: on'
+[[ -o chasedots ]]  || print 'chasedots: off'
+print -r -- "options: ${options[chaselinks]} ${options[chasedots]}"
+unsetopt chaselinks
+( setopt chasedots; [[ -o chasedots ]] && print 'inner: on' )
+[[ -o chasedots ]] || print 'outer: still off'
+cd "$base/.."

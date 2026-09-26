@@ -130,6 +130,42 @@ func splitPathComponents(path string) []string {
 	})
 }
 
+// uncleanedJoin puts operand under base **without** canceling a `..` against
+// the component before it, which is the one thing filepath.Join would do that
+// a physical resolution must not have done for it.
+//
+// The whole difference is one component. `filepath.Join("/t", "sub/fake/..")`
+// is `/t/sub`, and by the time a walk sees that the `..` it was meant to
+// resolve is gone — where the five reference shells all arrive at `/t`, the
+// physical parent of whatever `fake` points at. So the walk is handed the
+// path as written and takes the `..` off what it has resolved instead.
+//
+// An absolute operand is already the whole path and a Runner with no
+// directory has nothing to join against; both come back untouched, which is
+// what physicalPath then declines rather than guessing at.
+func uncleanedJoin(base, operand string) string {
+	if base == "" || filepath.IsAbs(operand) {
+		return operand
+	}
+	return base + string(filepath.Separator) + operand
+}
+
+// hasDotDotComponent reports whether path holds a `..` as a component of its
+// own, which is what one session switch is keyed on — see
+// Runner.CdResolvesDotDot.
+//
+// A component and not a substring: `..` decides, `...` and `a..b` do not.
+// Measured on the shell that has the switch, `cd sub/./fake` keeps the
+// logical name with it on, so a `.` is not this question either.
+func hasDotDotComponent(path string) bool {
+	for _, comp := range splitPathComponents(path) {
+		if comp == ".." {
+			return true
+		}
+	}
+	return false
+}
+
 // physicalPrefix resolves as much of path as exists and leaves the rest
 // alone, which is what a *modifier* wants where `cd -P` wants an error.
 //

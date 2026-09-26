@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 127 of the 185
+//     typing a directory name still does not change directory. 125 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -195,7 +195,16 @@ import (
 // `$dirstack` came off the absent roster in the same change, because a stack
 // `cd` grows and no parameter to read it from is half a feature (#4592).
 //
-// Nothing else about the split moved, and 127 is still most of the table.
+// `chaselinks` and `chasedots` are the most recent, and they are the first
+// pair here to move a **session switch** rather than an axis: every column's
+// default is the same — `cd` keeps the path a directory was reached by — so
+// there is no disagreement for an axis to record, only a name for moving off
+// the default. See interp.Runner.CdResolvesSymlinks and
+// interp.Runner.CdResolvesDotDot, and #4590 for the grid. The wider of the
+// two is read by two commands at two moments, `cd` when it moves and `pwd`
+// when it prints, which is the half a single reading in `cd` gets wrong.
+//
+// Nothing else about the split moved, and 125 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -482,8 +491,58 @@ var zshOptions = []zshOption{
 	},
 	recorded("cdablevars", false),
 	recorded("cdsilent", false),
-	recorded("chasedots", false),
-	recorded("chaselinks", false),
+	{
+		// CHASE_DOTS: a `..` in a `cd`'s destination is resolved against
+		// the directory the shell is physically in, rather than canceling
+		// the component written before it. Off by default.
+		//
+		// It is interp.Runner.CdResolvesDotDot — a session switch and not an
+		// axis, because every column's *default* is the same and what this
+		// shell has is a name for moving off it. See the accessor for the
+		// measured grid and for the pair that says the switch is keyed on
+		// the `..` rather than on the link.
+		//
+		// Recorded and inert until #4590: `setopt chasedots` succeeded,
+		// `[[ -o chasedots ]]` and the `setopt` listing agreed, and
+		// `cd sub/fake/..` went on canceling `fake` lexically in both
+		// states.
+		//
+		// The sibling below is the wider one and this is not a weaker form
+		// of it: measured, with only this on a destination carrying no `..`
+		// keeps the name it was reached by, and with only that one on every
+		// path resolves whether it holds a `..` or not.
+		base: "chasedots", def: false,
+		get: (*interp.Runner).CdResolvesDotDot,
+		set: func(r *interp.Runner, on bool) int {
+			r.SetCdResolvesDotDot(on)
+			return 0
+		},
+	},
+	{
+		// CHASE_LINKS: `cd` arrives at the directory rather than at the name
+		// it was reached by, and a bare `pwd` prints the resolved path. Off
+		// by default. `-w` is its letter and `physical` its compat spelling,
+		// both already in this file.
+		//
+		// It is interp.Runner.CdResolvesSymlinks, a session switch for the
+		// reason above. Recorded and inert until #4590, which is what
+		// `B01cd.ztst` stopped on: `cd sub/fake` kept the logical path with
+		// the option on, and so did `pwd`.
+		//
+		// **Two commands read it, each at its own moment**, and doing the
+		// work once in `cd` gets half the grid wrong. Measured on zsh 5.9.2
+		// (`-f`, 2026-09-26): with the option off across a link and turned
+		// on afterwards, `$PWD` still holds the logical name while `pwd`
+		// writes the resolved one — so `pwd` is reading the option when it
+		// prints, not reading a `$PWD` somebody rewrote. See
+		// interp.Runner.CdResolvesSymlinks for the pair that pins it.
+		base: "chaselinks", def: false,
+		get: (*interp.Runner).CdResolvesSymlinks,
+		set: func(r *interp.Runner, on bool) int {
+			r.SetCdResolvesSymlinks(on)
+			return 0
+		},
+	},
 	// The two names zsh checks its job table with, and they are one question
 	// asked twice: `checkjobs` is the master and `checkrunningjobs` narrows
 	// what the master looks at. Measured through a pseudo-terminal against

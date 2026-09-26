@@ -4844,8 +4844,10 @@ func (r *Runner) cdOptions(args []string) (rest []string, opts cdFlags, code int
 			switch a[i] {
 			case 'L':
 				opts.physical, sawLogical = false, true
+				opts.sawPathLetter = true
 			case 'P':
 				opts.physical, sawPhysical = true, true
+				opts.sawPathLetter = true
 			case 'q':
 				// zsh's quiet `cd`, and the letter that stops a plugin
 				// manager dead: the loader wraps every move in an anonymous
@@ -4956,6 +4958,33 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	if stop {
 		return code
 	}
+	// The two session switches, read *here* rather than at the option loop:
+	// one of them is keyed on the destination, and the destination is not
+	// known there.
+	//
+	// **`-L` puts one of them down and not the other**, which is measured
+	// and is the asymmetry a single `if the letters were written` gets
+	// wrong. On zsh 5.9.2 (`-f`, 2026-09-26), in a tree where `sub/fake`
+	// and `sub/sub/fake` both point at `real`:
+	//
+	//	chaselinks, cd -L sub/fake/../sub/fake   sub/sub/fake — logical
+	//	chasedots,  cd -L sub/fake/../sub/fake   real         — physical
+	//	both,       cd -L sub/fake/../sub/fake   real         — physical
+	//	chasedots,  cd -L sub/fake               sub/fake     — no `..`
+	//
+	// The first three hold the destination fixed and move only which switch
+	// is on, so it is the switch and not the path that decides whether the
+	// letter is heard; the fourth takes the `..` away and the third switch
+	// row goes quiet, which is what says the second one is keyed on the
+	// `..`. `-P` resolves under either, as it does under neither.
+	//
+	// See Runner.CdResolvesSymlinks and Runner.CdResolvesDotDot for the
+	// rest of the grids, and for the pair that says each is read at the
+	// command running now rather than once and for all.
+	if !opts.physical {
+		physical = (!opts.sawPathLetter && r.cdResolvesSymlinks) ||
+			(r.cdResolvesDotDot && hasDotDotComponent(dir))
+	}
 	// A rewrite of the current directory announces where it went in one of
 	// the two shells that have the form, the way `cd -` does in three of the
 	// four. Recorded here and printed after the move, because a rewrite that
@@ -5064,29 +5093,43 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 			}
 		}
 	}
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(old, dir)
-	}
 	if physical {
 		// `-P` is where the directory *is*, rather than the name it was
 		// reached by. Every shell in the panel resolves the whole path and
 		// reports the resolved one from `pwd` afterwards, so this replaces
 		// the name rather than only checking it.
 		//
+		// **Before the join, and the join it is before does not cancel a
+		// `..`.** filepath.Join cleans, so resolving after it is resolving a
+		// path a `..` has already been taken out of — and a `..` is the one
+		// component whose physical answer and whose lexical answer differ.
+		// Measured 2026-09-26 in a directory holding `real` and a `sub/fake`
+		// pointing at it, `cd -P sub/fake/..` arrives at the directory
+		// holding both in bash 5.3, bash 3.2, dash, ksh93 and zsh 5.9.2
+		// alike — unanimous — where cleaning first cancels `fake` against
+		// the `..` and lands in `sub`. The walk in physicalpath.go takes a
+		// `..` off what it has *resolved*, which is exactly the rule those
+		// five agree on, so it has to be given the path with the `..` still
+		// in it.
+		//
 		// A path that cannot be resolved is left as written: what to say
 		// about a directory that is not there is the question below, and it
 		// answers with what the operating system said rather than with
-		// anything this step could add. A symlink cycle arrives here that
-		// way and reads as ELOOP from the stat, which is what the panel
-		// says a cycle is — under `-P` and under `-L` alike, since the
-		// chdir hits it either way.
+		// anything this step could add. That is what the join below is still
+		// here for — an unresolvable path falls through to it exactly as it
+		// did. A symlink cycle arrives here that way and reads as ELOOP from
+		// the stat, which is what the panel says a cycle is — under `-P` and
+		// under `-L` alike, since the chdir hits it either way.
 		//
 		// Through the gate, one component at a time: resolving is a walk
 		// over the filesystem and a script chose the path, so a policy has
 		// to see each step of it. See physicalpath.go.
-		if resolved, err := r.physicalPath(dir); err == nil {
+		if resolved, err := r.physicalPath(uncleanedJoin(old, dir)); err == nil {
 			dir = resolved
 		}
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(old, dir)
 	}
 	// Through the gate. A denied stat surfaces as the missing-directory
 	// error below, so `cd` into a path the policy hides fails the way `cd`
@@ -5214,6 +5257,15 @@ type cdFlags struct {
 	// symlinkFree refuses an operand that crosses a symbolic link — zsh's
 	// `-s`. See Semantics.CdHasSymlinkFreeOption.
 	symlinkFree bool
+
+	// sawPathLetter records that one of `-L` and `-P` was written, which is
+	// a different fact from which of them won: `physical` is false both for
+	// an explicit `-L` and for a `cd` that named neither, and the session
+	// switches below only reach the second. Measured, `setopt chaselinks;
+	// cd -L link` keeps the logical name — the letter wins over the switch —
+	// so the two cases have to be told apart here. See
+	// Runner.CdResolvesSymlinks.
+	sawPathLetter bool
 }
 
 // searchCdpath walks CDPATH for a relative operand that does not lead with
@@ -5457,6 +5509,17 @@ func biPwd(r *Runner, _ context.Context, args []string) int {
 	physical := false
 	for _, o := range opts {
 		physical = o == 'P'
+	}
+	if len(opts) == 0 {
+		// Neither letter, so the session switch decides — and it is read
+		// *here*, when `pwd` prints, rather than having been baked into
+		// $PWD by whatever `cd` got us here. Measured 2026-09-26 on zsh
+		// 5.9.2: with the switch off through a link and turned on
+		// afterwards, $PWD still holds the logical name and `pwd` writes
+		// the resolved one all the same, while `pwd -L` writes the logical
+		// one — so the switch makes a bare `pwd` mean `pwd -P` and does not
+		// rewrite $PWD behind it. See Runner.CdResolvesSymlinks.
+		physical = r.cdResolvesSymlinks
 	}
 	dir := r.workDir()
 	if physical {

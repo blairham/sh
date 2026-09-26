@@ -179,7 +179,7 @@ func TestTheTwoSpellingsAreBothFillableByName(t *testing.T) {
 	}
 }
 
-// The neighbouring rule, which is the discriminating contrast: a bare `read`
+// The neighboring rule, which is the discriminating contrast: a bare `read`
 // with no name fills the **scalar** `REPLY` and never the array, under the
 // same dialect whose `-A` fills `reply`. One is `REPLY` and the other is
 // `reply`, and the shell is case-sensitive about which.
@@ -222,7 +222,7 @@ func TestAnUnansweredArrayDefaultDoesNotFallIntoTheBareRead(t *testing.T) {
 	}, func(r *interp.Runner) {
 		sem := interp.CoreSemantics()
 		sem.ReadOptions = "rA"
-		// The other answer to the neighbouring rule: a bare `read` with no
+		// The other answer to the neighboring rule: a bare `read` with no
 		// operand is an error here rather than a fill of REPLY, which is
 		// what makes the second sentence visible at all.
 		sem.ReadRequiresAVariableName = interp.Yes

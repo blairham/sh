@@ -28,7 +28,7 @@ import (
 //	                    says no such variable, so it is not created either
 //	ksh93u+ 2012-08-01  REPLY='hello world', one scalar; reply left as (k1 k2)
 //
-// zsh's is the array neighbour of the `REPLY` a bare `read` fills. ksh93's is
+// zsh's is the array neighbor of the `REPLY` a bare `read` fills. ksh93's is
 // not a second default name: the letter with no name to apply to contributes
 // nothing there, and `reply` is a parameter ksh93 has never heard of.
 func TestEachDialectFillsItsOwnArrayReadDefault(t *testing.T) {

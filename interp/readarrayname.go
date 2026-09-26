@@ -14,7 +14,7 @@ package interp
 //	read -A <<<'a b c'          ksh93u+ 2012  REPLY='a b c', reply untouched
 //	read -a  <<<'a b c'         bash 5.3.20   `-a: option requires an argument`
 //
-// The zsh reading is the neighbour of the bare-read rule and is deliberately
+// The zsh reading is the neighbor of the bare-read rule and is deliberately
 // *not* the same parameter: a bare `read` fills the scalar `REPLY` and
 // `read -A` fills the array `reply`, and the shell is case-sensitive about
 // which. Both were measured with the other pre-set, so neither row is reading

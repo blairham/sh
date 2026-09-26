@@ -1875,10 +1875,43 @@ func Semantics() interp.Semantics {
 	// local's value.
 	s.LocalInheritsTheExportAttribute = interp.No
 	s.SplitParamExpansion = interp.No
-	// An unquoted list is its elements, never their join: `IFS=:; a=(x y);
-	// printf "[%s]" ${a[*]}` is `[x][y]` here, and with `shwordsplit` on,
-	// `a=("x y" z)` is `[x][y][z]` — neither of which a join can produce.
-	s.UnquotedListJoinsOnIFS = interp.No
+	// An unquoted list is joined on IFS before it is split, as in bash.
+	//
+	// **This was `No`, and the measurement behind that was taken in the one
+	// state where the question cannot be asked.** `setopt shwordsplit` is
+	// what makes this shell split a list at all; without it an unquoted list
+	// is one word per element with the empty ones elided, so
+	// `IFS=:; set -- x "" y; printf "[%s]" $*` is `[x][y]` — which was read
+	// as "no join" and is what a shell that splits *nothing* prints. With
+	// the option on the same line is `[x][][y]`, which is bash's answer and
+	// the one a join produces (#4586).
+	//
+	// The other two rows the `No` rested on say nothing either. `IFS=:;
+	// a=(x y); printf "[%s]" ${a[*]}` is `[x][y]`, and a join on `:` gives
+	// `x:y`, which splits back to exactly that; and `a=("x y" z)` under
+	// `shwordsplit` was recorded as `[x][y][z]` and is `[x y][z]` — `IFS` is
+	// a colon there, so the space in the element was never a separator.
+	//
+	// **The discriminating pair is a list of empty elements**, measured
+	// 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+	// /opt/homebrew/bin/zsh under `-f` with `setopt shwordsplit`, with
+	// `w(){ printf '%d |' $#; for x in "$@"; do printf ' [%s]' "$x"; done; }`:
+	//
+	//	IFS=:; set -- '';       w $@   0 |
+	//	IFS=:; set -- '' '';    w $@   2 | [] []
+	//	IFS=:; set -- '' '' ''; w $@   3 | [] [] []
+	//
+	// One empty element is *no* field and two are *two*, which is what a
+	// join gives — nothing to split, then `:` and `::`. Splitting each
+	// element on its own answers those 0, 1 and 1 whichever way the empty
+	// element's field is treated: keep it and the first row is 1, remove it
+	// and the second is 0.
+	//
+	// It is the same join bash has, and the two columns then part on
+	// TrailingSeparatorEndsAField alone — which is answered `Yes` here and
+	// `No` there, and is the whole of the difference between
+	// `IFS=:; set -- 2 ''; w $@` being `2 | [2] []` and `1 | [2]`.
+	s.UnquotedListJoinsOnIFS = interp.Yes
 	// And the boundary between two elements is a field break, as in ksh93
 	// and unlike dash and BusyBox ash. Measured 2026-09-26 on zsh 5.9.2
 	// under `shwordsplit`, which is where this shell splits a list at all:
@@ -6104,6 +6137,15 @@ func Apply(r *interp.Runner) {
 	// `builtin noglob echo a[b]c` and `exec noglob echo a[b]c` both print
 	// the three characters, measured. They keep their own builtins and do
 	// their own work.
+	// The words behind which the next written word still names the command,
+	// which is a different list from the precommand scan's: `command` stops
+	// that scan and is an ordinary builtin here, and the word behind it is
+	// still a command name. Measured 2026-09-26 under `setopt
+	// magicequalsubst` — `command --opt=~`, `noglob --opt=~` and `builtin
+	// --opt=~` all report the word with its tilde as written. See
+	// interp/equalscontextposition.go.
+	r.SetCommandWordModifier("command")
+	r.SetCommandWordModifier("nocorrect")
 	r.SetPrecommand("noglob", interp.PrecommandNoGlob)
 	r.SetPrecommand("builtin", interp.PrecommandTransparent)
 	r.SetPrecommand("exec", interp.PrecommandTransparent)

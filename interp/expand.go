@@ -124,13 +124,20 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	// Before anything reads the spans, because the run may divide them
 	// differently from the parse. See wordForRun.
 	w = r.wordForRun(w)
+	// The position the caller armed, spent here so that nothing expanded
+	// inside this word inherits it. See interp/equalscontextposition.go.
+	outside, restorePosition := r.spendTheEqualsContextPosition()
+	defer restorePosition()
 	r.expandTilde(w)
 	// And the tildes a word that merely *looks* like an assignment gets in
 	// one column. Beside expandTilde because it is the other half of the same
 	// question — where in a word a `~` is eligible at all — and after it,
 	// since a word the tilde opens has already been answered. See
 	// interp/assignmentshapedword.go.
-	r.expandAssignmentShapedWord(w)
+	if !outside {
+		r.expandAssignmentShapedWord(w)
+		r.wordEquals(w)
+	}
 	r.expandEquals(w)
 
 	// Fields are built up span by span. A span joins onto the field before it
@@ -1454,6 +1461,7 @@ func (r *Runner) expandAssignValue(w *syntax.Word) string {
 	// every column — so the assignment road names its own set.
 	r.expandTildeIn(w, tildeEndsAtASlashOrColon)
 	r.expandColonTildes(w)
+	r.assignValueEquals(w)
 	return r.wordTextUnsplit(w, nil, false, true)
 }
 
@@ -1473,6 +1481,7 @@ func (r *Runner) expandAssignValueMarked(w *syntax.Word) string {
 	}
 	r.expandTildeIn(w, tildeEndsAtASlashOrColon)
 	r.expandColonTildes(w)
+	r.assignValueEquals(w)
 	return r.wordTextUnsplit(w, nil, true, true)
 }
 
@@ -6323,6 +6332,16 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 	// interp/listboundary.go, which is the only caller that passes a mask.
 	isBoundary := func(i int) bool { return boundary != nil && boundary[i] }
 	isMark := func(i int) bool { return marks != nil && marks[i] && !isBoundary(i) }
+	// A backslash the *value* held is written as a mark of its own rather
+	// than as itself, so the byte standing at its position is not the byte
+	// the splitter has to test. valueBackslashSeparator is what reads it, and
+	// it answers 0 everywhere else. See interp/valuebackslashseparator.go.
+	valueBS := func(i int) int {
+		if isBoundary(i) || isMark(i) || (literal != nil && literal[i]) {
+			return 0
+		}
+		return valueBackslashSeparator(s, i, ifs)
+	}
 	isWS := func(i int) bool {
 		if isBoundary(i) {
 			return true
@@ -6342,6 +6361,9 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 		if isMark(i) || (literal != nil && literal[i]) {
 			return false
 		}
+		if valueBS(i) > 0 {
+			return true
+		}
 		if widths != nil {
 			return widths[i] > 0
 		}
@@ -6351,6 +6373,9 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 	// single-byte reading moves one; a character's is the whole character,
 	// which is the half separatorWidths exists to supply.
 	sepWidth := func(i int) int {
+		if w := valueBS(i); w > 0 {
+			return w
+		}
 		if widths != nil && widths[i] > 0 {
 			return widths[i]
 		}
@@ -6842,7 +6867,18 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 	if !r.ask(r.sem().EqualsExpansion, "`=cmd` expanding to a path") {
 		return
 	}
-	name := s.Value[1:]
+	path, ok := r.equalsPath(s.Value[1:])
+	if !ok {
+		return
+	}
+	s.Value = path
+}
+
+// equalsPath is the lookup behind `=cmd`, in the one place both roads reach
+// it: the word road above and the assignment value's, which is
+// interp/assignvalueequals.go. A second copy of the failure wording is how
+// the two would come to report a missing command differently.
+func (r *Runner) equalsPath(name string) (string, bool) {
 	// The script's PATH, like every other lookup here.
 	path, err := r.lookPath(name)
 	if err != nil {
@@ -6850,9 +6886,9 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 		// which is what any failed expansion does here.
 		r.diagf("%s\n", Wording(r.diag().EqualsNotFound, "%s not found", name))
 		r.expandErr = true
-		return
+		return "", false
 	}
-	s.Value = path
+	return path, true
 }
 
 // expandTilde expands the tilde prefix at the head of an ordinary word, whose

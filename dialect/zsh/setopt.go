@@ -669,7 +669,36 @@ var zshOptions = []zshOption{
 	// shell's state where zsh's differed — and the only one of the four the
 	// state behind it could be corrected for (#1858).
 	editingOption("emacs", "emacs"),
-	recorded("equals", true),
+	{
+		// EQUALS: `=cmd` at the head of an unquoted word becomes the path
+		// the command resolves to, and at the head of an assignment's value
+		// and after each of its colons as well. On by default, which is
+		// zsh's.
+		//
+		// It was `recorded` until #4566 — accepted, reported back by
+		// `[[ -o equals ]]` and acted on by nothing, so `unsetopt equals;
+		// print -r -- =ls` wrote the path. That reads as a working control
+		// rather than as a gap, which is what it was being used as: the
+		// issue's "the option really does switch it off" was measured on an
+		// assignment value, where this shell expanded nothing in *either*
+		// state of the option and the two agreed for the wrong reason.
+		//
+		// [interp.Semantics.EqualsExpansion] holds the panel. Measured on
+		// zsh 5.9.2 (aarch64-apple-darwin25.4.0) under `-f`, 2026-09-26:
+		// with the option off `=ls`, `v==ls` and, under MAGIC_EQUAL_SUBST,
+		// `a==ls` all keep their characters, and turning it back on restores
+		// all three.
+		base: "equals", def: true,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.EqualsExpansion == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.EqualsExpansion
+			}, answer(on))
+			return 0
+		},
+	},
 	setOptBacked("errexit", false, "errexit", false),
 	{
 		// ERR_RETURN: a failing command executes an implicit `return` where

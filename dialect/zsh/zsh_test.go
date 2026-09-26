@@ -198,7 +198,7 @@ func TestSemantics(t *testing.T) {
 		// -n -c 'echo =nosuchcmd'` writes `nosuchcmd not found` and exits 1
 		// where the other six columns are silent at 0 (#3823).
 		{"UnrunSimpleCommandReadsItsWords", s.UnrunSimpleCommandReadsItsWords, interp.Yes},
-		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
+		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.Yes},
 		{"UnquotedListBoundaryIsIFSWhitespace", s.UnquotedListBoundaryIsIFSWhitespace, interp.No},
 		// And the join this shell does perform: an unquoted `@` list
 		// reaching a context that keeps no fields joins on the first

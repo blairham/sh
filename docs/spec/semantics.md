@@ -7810,7 +7810,7 @@ said off and the braces went on expanding, so a script could read the state
 and watch it be false in the same breath. A recorded name is one this shell
 does not do **in either state**, so nothing it says can be contradicted by
 what the shell then does — the request is remembered and the feature is
-absent, which is the same bargain the 121 recorded `setopt` names strike.
+absent, which is the same bargain the 120 recorded `setopt` names strike.
 The bill is real and it is deferred rather than waived: `globstar` on with no
 `**` crossing is a weaker answer than `globstar` implemented, which is why
 each name that is recorded rather than built carries an issue of its own. A

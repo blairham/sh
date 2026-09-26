@@ -131,6 +131,15 @@ func (r *Runner) expandEqualsSegments(w *syntax.Word, headSpan, headOff int, hea
 		last := i == len(w.Spans)-1
 		v := s.Value
 		var b strings.Builder
+		// **The span is written back only where something moved.** A word
+		// is a node of the parse tree and two elements of a pipeline expand
+		// the *same* node concurrently, so a write that merely restores the
+		// bytes it read is still a write and the race detector is right
+		// about it — measured on a Linux runner, `interp.expandEqualsSegments`
+		// against `interp.tildeOpensTheWord` reading the same span. The
+		// helper this is shaped after, expandColonTildes, is safe because it
+		// refuses a span with no `:~` in it before it builds anything.
+		moved := false
 		for j := 0; j < len(v); j++ {
 			// The two positions, and nowhere else: the value's head where
 			// the caller named one, and straight after an unquoted colon.
@@ -164,7 +173,10 @@ func (r *Runner) expandEqualsSegments(w *syntax.Word, headSpan, headOff int, hea
 			}
 			b.WriteString(path)
 			j = k - 1
+			moved = true
 		}
-		s.Value = b.String()
+		if moved {
+			s.Value = b.String()
+		}
 	}
 }

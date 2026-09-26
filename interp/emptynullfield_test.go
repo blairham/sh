@@ -154,6 +154,13 @@ func TestASplitterNullIsNotAnElementNull(t *testing.T) {
 		// reaches an element's — it is a field either way, so the text joins
 		// it rather than opening one of its own.
 		{"text in front of a splitter null", `IFS=:; set -- ':b' c`, `x${@}y`, Yes, No, `3[x][b][cy]`},
+		// And a plain scalar, which reaches the splitter by a path of its
+		// own rather than through the list: the null a leading separator
+		// writes there is kept for the same reason, and a stage that marked
+		// the splitter's fields would take it away.
+		{"a scalar's leading separator", `IFS=:; v=':b'`, `${v}`, Yes, No, `2[][b]`},
+		{"a scalar's interior separators", `IFS=:; v='a::b'`, `${v}`, Yes, No, `3[a][][b]`},
+		{"text in front of a scalar's null", `IFS=:; v=':b'`, `x${v}y`, Yes, No, `2[x][by]`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st := nullFieldRun(t, c.setup+"\n"+wordFieldProbe(c.word), c.split, c.join)

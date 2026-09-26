@@ -3047,9 +3047,18 @@ type Semantics struct {
 	// Silent and arithmetically wrong, the way its two neighbors are:
 	// `let "n=010"` is a plausible number, eight where the shell says ten.
 	LetReadsALeadingZeroAsDecimal Answer
-	// ArithmeticAssignmentDeclaresAnInteger gives a name assigned inside an
-	// arithmetic context the integer attribute, which outlives the
+	// ArithmeticAssignmentDeclaresANumber gives a name assigned inside an
+	// arithmetic context a numeric attribute, which outlives the
 	// expression. zsh alone.
+	//
+	// **Which** attribute is the value's to say and not this axis's: an
+	// integer value declares an integer and a float value declares a float,
+	// which is one shell's rule rather than a question the panel disagrees
+	// about — see declareFloatFromArithmetic in interp/arith.go and
+	// docs/spec/grammar/arithmetic.md. The axis is only whether the
+	// assignment declares at all. It was named for the integer alone until
+	// #4605, which is exactly the reading it invited: a float value declared
+	// an integer and threw its digits away.
 	//
 	// Measured 2026-09-12 against `typeset -p`, with bash as the control:
 	//
@@ -3068,8 +3077,12 @@ type Semantics struct {
 	//
 	// Every construct that assigns inside arithmetic is the same answer —
 	// `(( ))`, `let` and a C-style `for` header alike — so it is asked where
-	// the assignment operator is applied rather than at each of them.
-	ArithmeticAssignmentDeclaresAnInteger Answer
+	// the assignment operator is applied rather than at each of them. The
+	// compound operators too, which is worth saying because the operator
+	// *is* a second noun for the neighboring rule about an assignment's
+	// value: measured, `$(( xx += 1.5 ))` on a name that does not exist
+	// declares a float exactly as the plain `=` does.
+	ArithmeticAssignmentDeclaresANumber Answer
 	// IndirectionYieldsName makes `${!x}` the *name* rather than the value it
 	// names: with `x=y`, ksh93 gives `x` and bash gives the value of `y`.
 	//
@@ -26163,8 +26176,8 @@ func PosixSemantics() Semantics {
 		ArithStoredValueReadsALeadingZeroAsDecimal: No,
 		// One reader for `let` too: the standard has no `let` and no integer
 		// attribute, so the preset keeps the arithmetic it does describe.
-		LetReadsALeadingZeroAsDecimal:         No,
-		ArithmeticAssignmentDeclaresAnInteger: No,
+		LetReadsALeadingZeroAsDecimal:       No,
+		ArithmeticAssignmentDeclaresANumber: No,
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.

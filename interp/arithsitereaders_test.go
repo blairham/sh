@@ -71,13 +71,16 @@ func TestAWordComparisonOperandReadsALeadingZeroLikeAStoredValue(t *testing.T) {
 	}
 }
 
-// ArithmeticAssignmentDeclaresAnInteger, and the half of it a fresh-shell
+// ArithmeticAssignmentDeclaresANumber, and the half of it a fresh-shell
 // probe cannot see: it is a *declaration* the arithmetic makes, so it reaches
 // only a name that was not there before.
-func TestAnArithmeticAssignmentDeclaresAnIntegerOnlyWhenItCreatesTheName(t *testing.T) {
+//
+// **Whether** it declares, which is the axis. *Which* attribute it declares
+// is the value's to say, and is the test at the foot of this file.
+func TestAnArithmeticAssignmentDeclaresANumberOnlyWhenItCreatesTheName(t *testing.T) {
 	declaring := func(a Answer) Semantics {
 		s := testSemantics()
-		s.ArithmeticAssignmentDeclaresAnInteger = a
+		s.ArithmeticAssignmentDeclaresANumber = a
 		s.IntegerBaseComesFromTheValueAssigned = Yes
 		return s
 	}
@@ -106,7 +109,7 @@ func TestAnArithmeticAssignmentDeclaresAnIntegerOnlyWhenItCreatesTheName(t *test
 // which is where the base is visible rather than only listed.
 func TestAnArithmeticDeclarationTakesItsBaseFromTheExpression(t *testing.T) {
 	sem := testSemantics()
-	sem.ArithmeticAssignmentDeclaresAnInteger = Yes
+	sem.ArithmeticAssignmentDeclaresANumber = Yes
 	sem.IntegerBaseComesFromTheValueAssigned = Yes
 	sem.ArithNameValueRecurses = Yes
 	// The alphabet a base is spelled in, which is what makes a learned base
@@ -124,6 +127,56 @@ func TestAnArithmeticDeclarationTakesItsBaseFromTheExpression(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if out, st := run(t, c.src, withSem(sem)); strings.TrimSpace(out) != c.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, c.want)
+			}
+		})
+	}
+}
+
+// And **the value's type is what decides which numeric attribute** a name the
+// arithmetic creates gets: an integer value declares an integer, a float
+// value declares a float.
+//
+// Asserted through what a *later* plain assignment reads back, the way the
+// two tests above are, which is the one route that can tell the three states
+// apart without a listing: an integer name evaluates `2+3` and writes `5`, a
+// float name evaluates it and writes the number in its places, and a name
+// with no attribute holds the three characters.
+//
+// The rows are built to part the two readings that agree with this one almost
+// everywhere. `1.0` and `2.0/2` are whole *float* values, so "the number did
+// not come out whole" makes them integers and they are not; `f` and `i` below
+// are read with no point written anywhere, so "a point was written" makes
+// them both integers and only one is.
+func TestAnArithmeticDeclarationTakesItsTypeFromTheValue(t *testing.T) {
+	sem := testSemantics()
+	sem.ArithmeticAssignmentDeclaresANumber = Yes
+	for _, c := range []struct{ name, src, want string }{
+		{"an integer value", `(( x = 5 )); x=2+3; echo "[$x]"`, "[5]"},
+		{"a float value", `(( x = 1.5 )); x=2+3; echo "[$x]"`, "[5.0000000000]"},
+		// The first discriminating pair: both values are whole, and only the
+		// type moves.
+		{"a whole float value", `(( x = 1.0 )); x=2+3; echo "[$x]"`, "[5.0000000000]"},
+		{"a whole integer value", `(( x = 3/2 )); x=2+3; echo "[$x]"`, "[5]"},
+		{"a whole quotient of floats", `(( x = 2.0/2 )); x=2+3; echo "[$x]"`, "[5.0000000000]"},
+		// The second: no point is written in either, and the answer still
+		// moves with the type the value came from.
+		{"a float reached through a name", `f=1.5; (( x = f )); x=2+3; echo "[$x]"`, "[5.0000000000]"},
+		{"an integer through the same route", `i=3; (( x = i )); x=2+3; echo "[$x]"`, "[5]"},
+		// Every construct that assigns inside arithmetic, and the compound
+		// operator — which is a second noun for the *value* of an assignment
+		// and not for what it declares. See numericAttribute.
+		{"a let word", `let "x = 1.5"; x=2+3; echo "[$x]"`, "[5.0000000000]"},
+		{"a for header", `for (( x = 0.5; x < 1; x++ )); do :; done; x=2+3; echo "[$x]"`, "[5.0000000000]"},
+		{"a compound operator", `(( x += 1.5 )); x=2+3; echo "[$x]"`, "[5.0000000000]"},
+		{"a step, whose value is an integer", `(( x++ )); x=2+3; echo "[$x]"`, "[5]"},
+		// And the declaration still reaches only a name it creates.
+		{"one that already exists", `x=3; (( x = 1.5 )); x=2+3; echo "[$x]"`, "[2+3]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runGrammar(t, c.src,
+				func(d *syntax.Dialect) { d.ArithFloat = true }, withSem(sem))
+			if strings.TrimSpace(out) != c.want || st != 0 {
 				t.Errorf("got %q (status %d), want %q at 0", out, st, c.want)
 			}
 		})

@@ -1918,7 +1918,7 @@ func Semantics() interp.Semantics {
 	// its word in decimal, so `let "x=1+010"` is 11 where the same text
 	// stored in a name is 9 and written as a literal is 9.
 	s.LetReadsALeadingZeroAsDecimal = interp.Yes
-	s.ArithmeticAssignmentDeclaresAnInteger = interp.No
+	s.ArithmeticAssignmentDeclaresANumber = interp.No
 	s.IndirectionYieldsName = interp.Yes
 	// And an operator after `${!name[@]}` is a bad substitution here rather
 	// than either reading: measured 2026-09-14, `${!w[@]#H}`, `${!w[@]:1:2}`,

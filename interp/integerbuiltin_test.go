@@ -776,7 +776,7 @@ func TestAnArithmeticAssignmentLearnsTheLeadingZerosBase(t *testing.T) {
 			out, errs, st := integerRun(t, tc.src, func(s *Semantics) {
 				s.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 				s.IntegerBaseComesFromTheValueAssigned = Yes
-				s.ArithmeticAssignmentDeclaresAnInteger = Yes
+				s.ArithmeticAssignmentDeclaresANumber = Yes
 				s.ArithLeadingZeroIsOctal = tc.octal
 			}, Diagnostics{})
 			if out != tc.want || st != 0 || errs != "" {

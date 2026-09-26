@@ -70,7 +70,7 @@ type listEdges struct {
 // listMarks is everything the unquoted list path leaves beside its fields:
 // the per-field marks #4560 added and the per-list edges above.
 //
-// One record rather than two travelling in parallel. They are set in the same
+// One record rather than two traveling in parallel. They are set in the same
 // place, cleared in the same place and read in the same place, and a second
 // channel carrying half of them is how the next stage comes to get one and
 // not the other. The Runner holds the two halves as separate fields for a

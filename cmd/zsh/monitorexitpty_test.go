@@ -64,7 +64,7 @@ func monitorExitScript(t *testing.T, args []string, body string) string {
 	t.Helper()
 	home := scratchHome(t)
 	path := filepath.Join(home, "job.zsh")
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(monitorExitTrap+body), 0o600); err != nil {
 		t.Fatalf("writing the script: %v", err)
 	}
 	control, terminal, err := pty.Open()
@@ -100,20 +100,58 @@ func monitorExitScript(t *testing.T, args []string, body string) string {
 	}
 	// The shell's run returns when its last write is issued rather than when
 	// the terminal has been read, so the screen is given a moment to catch
-	// up. The same race hupatexitpty_test.go waits out against its EXIT
-	// trap; there is no trap here to wait on, because a trap would change
-	// what is being measured — the hangup falls on the near side of one.
-	if err := screen.Await(monitorExitFence, monitorExitBudget); err != nil {
-		t.Fatalf("the script never reached its last line: %v\n%s",
+	// up — and the thing waited on has to be written *after* everything
+	// asserted on, or the wait orders nothing. This waited on the script's
+	// own last line until #4577, which is written before the shell has said
+	// anything about its jobs at all: the fence proved the script had
+	// finished and proved nothing about the output the assertions read, and
+	// a required CI check duly failed with the first sentence on the screen
+	// and the second not yet read.
+	//
+	// The EXIT trap is the marker instead, as it is in hupatexitpty_test.go,
+	// and for the reason recorded there:
+	// Semantics.HangupAtExitPrecedesTheExitTrap, so both sentences fall on
+	// the near side of it. Re-measured 2026-09-26 against
+	// `/opt/homebrew/bin/zsh` — zsh 5.9.2 (aarch64-apple-darwin25.4.0) — on a
+	// pseudo-terminal, with a `trap` line added to each of the three scripts
+	// below, the trap changes neither row and its line comes last every time:
+	//
+	//	-fm, backgrounded sleep   [1] <pid> / <fence> /
+	//	                          <script>: you have running jobs. /
+	//	                          <script>: warning: 1 jobs SIGHUPed / <end>
+	//	-f, the same script       <fence> / <end>
+	//	-fm, then `kill -STOP %1` [1] <pid> / <fence> /
+	//	                          <script>: you have suspended jobs. / <end>
+	//
+	// That last property is what the monitor-off row needs and could not get
+	// from any sentence: it asserts an **absence**, and an absence has
+	// nothing of its own to wait for, so it wants a mark the shell writes
+	// after the point where the sentence would have been.
+	if err := screen.Await(monitorExitEnd, monitorExitBudget); err != nil {
+		t.Fatalf("the shell never finished writing: %v\n%s",
 			err, smoke.Readable(screen.Text()))
 	}
 	return screen.Text()
 }
 
 // monitorExitFence is written by the script's own last line, so a row that
-// read the screen early is a failure rather than a silent negative. Not text
-// any of these scripts could echo back: nothing types at this shell.
+// fell over early is a failure rather than a silent negative. Not text any of
+// these scripts could echo back: nothing types at this shell.
+//
+// It is a check and no longer a fence, whatever its name still says: the two
+// are different questions — "did the script get to the end" against "has the
+// shell finished writing" — and #4577 is what asking the first one twice
+// cost.
 const monitorExitFence = "MX-FENCE-4542"
+
+// monitorExitEnd is the last thing written on any of these runs, because the
+// EXIT trap that writes it is the last thing the shell runs that can reach
+// the terminal. It is what every row waits on.
+const monitorExitEnd = "MX-END-4577"
+
+// monitorExitTrap goes on the front of every script here, so that no row can
+// be written that waits on the wrong line.
+const monitorExitTrap = "trap 'print -r -- " + monitorExitEnd + "' EXIT\n"
 
 // The two sentences, with the monitor on and with it off, in one test because
 // one row alone is not a measurement: a shell that said this always would

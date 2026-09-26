@@ -635,3 +635,74 @@ print -r -- "st=$?"`)
 		t.Errorf("the plugin's line = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// **`-i` beside `-u` means idempotent, and it is the only letter that does.**
+// Measured against zsh 5.9.2, 2026-09-26 (#4588). The three rows here hold
+// the *operation* fixed — an unload of a module that is not loaded — and move
+// only the letters, which is what says the rule is keyed on `-i` rather than
+// on the condition: `-s`, this builtin's other quieting letter, leaves the
+// complaint and the 1 exactly where a bare `-u` leaves them.
+//
+// The bare `-u` row is the discriminating half and must stay. A fix that
+// silenced the unload itself would pass a test asking only about `-ui`, and
+// would make `zmodload -u zsh/zpty` in a script that expected the module to
+// be there look like a success.
+func TestZmodloadDashIMakesAnUnloadIdempotent(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -u zsh/mathfunc 2>&1
+print -r -- "u=$?"
+zmodload -us zsh/mathfunc 2>&1
+print -r -- "us=$?"
+zmodload -ui zsh/mathfunc 2>&1
+print -r -- "ui=$?"
+zmodload -ui zsh/nosuchmodule 2>&1
+print -r -- "unreal=$?"
+zmodload -ui zsh/mathfunc zsh/nosuchmodule 2>&1
+print -r -- "both=$?"`)
+	want := "zsh:zmodload:1: no such module zsh/mathfunc\nu=1\n" +
+		"zsh:zmodload:3: no such module zsh/mathfunc\nus=1\n" +
+		"ui=0\nunreal=0\nboth=0\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -ui = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-i` does not mean *do nothing*: on a module that **is** loaded, `-ui`
+// unloads it exactly as `-u` does, which is the control for the rows above.
+// Without it, a shell that read `-i` as "skip the unload" would be quiet and
+// 0 on every row of that test and wrong about the one thing the command was
+// for.
+func TestZmodloadDashUIStillUnloadsAModuleThatIsLoaded(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
+print -r -- "load=$?"
+zmodload -e zsh/zutil
+print -r -- "before=$?"
+zmodload -ui zsh/zutil 2>&1
+print -r -- "unload=$?"
+zmodload -e zsh/zutil
+print -r -- "after=$?"`)
+	want := "load=0\nbefore=0\nunload=0\nafter=1\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -ui on a loaded module = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// **`-i` is not "ignore errors".** The same letter, on the operations either
+// side of the unload, changes nothing at all: a module this shell will not
+// load still refuses by name, and `-lF` on a module that is not loaded yet
+// still refuses. Measured in the same session as the rows above, and this is
+// the half that holds the *letter* fixed while the operation moves — without
+// it, "`-i` quiets zmodload" fits every row of the test above.
+func TestZmodloadDashIIsNotAGeneralQuieting(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -i zsh/nosuchmodule 2>&1
+print -r -- "load=$?"
+zmodload -liF zsh/zutil 2>&1
+print -r -- "list=$?"
+zmodload -Fi zsh/zutil +b:nosuchbuiltin 2>&1
+print -r -- "feature=$?"`)
+	want := "zsh:1: failed to load module `zsh/nosuchmodule': not implemented yet\nload=1\n" +
+		"zsh:zmodload:3: module `zsh/zutil' is not yet loaded\nlist=1\n" +
+		"zsh:5: module `zsh/zutil' has no such feature: `b:nosuchbuiltin'\nfeature=1\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -i elsewhere = %q (status %d), want %q", out, st, want)
+	}
+}

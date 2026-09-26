@@ -11148,6 +11148,33 @@ What was built, all through the extension seam — registered builtins in each
   features is `does not support features`, its own sentence and not the `is
   not yet loaded` an absent one gets.
 
+  **`-i` beside `-u` means idempotent, and it is the only letter that
+  does** — measured 2026-09-26 against zsh 5.9.2. `zmodload -ui MOD` on a
+  module that is not loaded is silent and **0**, where the bare `-u` is
+  `no such module MOD` and 1. The letter is not a general "ignore errors",
+  and the grid says so from both sides. Hold the *operation* fixed and move
+  the letters: `-u` complains, `-us` complains with the same sentence and
+  the same 1 — so `-s`, this builtin's other quieting letter, does nothing
+  here — and only `-ui` is quiet. Hold the *letter* fixed and move the
+  operation: `-i` on a module that fails to load still names it and is 1,
+  `-Fi` on a feature the module does not have still refuses, and `-liF` on
+  a module that is not loaded yet still refuses. What `-i` suppresses is
+  exactly the complaint that the module is already in the state asked for,
+  and on the unload path that is "not loaded". The status is per command
+  rather than per module: `zmodload -ui a b` with neither loaded is 0.
+
+  Both halves are load-bearing. A reading that silenced the unload itself
+  would fit every `-ui` row and would make `zmodload -u MOD` in a script
+  that expected the module to be there look like a success; a reading that
+  made `-i` quiet the builtin generally would fit every `-u` row and is
+  contradicted by the three rows above it.
+
+  **`-e` combined with some other letters is refused outright**, and this
+  shell does not do it yet (#4603): `-eu`, `-eL` and `-ei` are
+  `-e cannot be combined with other options` and 1 in the reference, where
+  this shell answers the `-e` question and returns its status. `-es` is
+  accepted by both.
+
   Where the two locations part: `bad option: -q` carries the builtin's name
   — `zsh:zmodload:1:` — and a load failure does not, `zsh:1:`. Measured, and
   it is one command writing both, so `interp.Runner.DiagnoseAsTheShellf`

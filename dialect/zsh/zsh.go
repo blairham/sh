@@ -4314,6 +4314,10 @@ func Semantics() interp.Semantics {
 	// `set -A name value …` assigns an array through a name a variable
 	// holds, which is this shell's spelling and ksh93's alike.
 	s.SetArrayLetter = interp.Yes
+	// `shift -p` shifts off the end of the list rather than off its front.
+	// The one letter `shift` takes in this shell, measured a letter at a
+	// time against zsh 5.9.2 (#4600).
+	s.ShiftFromTheEndLetter = interp.Yes
 	// The name ends the options here: `set -A ff -x -y` stores the two dash
 	// words as elements and `set -A dd -- 1 2` stores three, the `--` among
 	// them. ksh93 keeps parsing and answers both the other way.

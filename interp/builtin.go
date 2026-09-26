@@ -4151,6 +4151,16 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 	// ksh93 reads `shift -- -1` as a count below zero where it refuses a
 	// bare `-1` as an option it does not have.
 	marked := false
+	// `shift -p` takes the count off the end of the list rather than off
+	// its front. Read before the marker, because a `--` past it still ends
+	// the options: measured, `shift -p -- 2` shifts two off the end where
+	// `shift -- -p 2` reads `-p` as the count it evaluates to (zero) and
+	// `2` as a name. See Semantics.ShiftFromTheEndLetter.
+	fromEnd := false
+	for r.shiftFromTheEndLetter() && len(args) > 0 && shiftIsFromTheEndWord(args[0]) {
+		fromEnd = true
+		args = args[1:]
+	}
 	if len(args) > 0 && args[0] == "--" {
 		// The end-of-options marker, and only the first one: what follows is
 		// the count however it is spelled, so `shift -- -1` is a negative
@@ -4231,13 +4241,42 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 		// Named arrays replace the positional parameters outright rather
 		// than shifting them too: measured, `set -- P Q; a=(1 2 3); shift a`
 		// leaves `$@` as `P Q`.
-		return r.shiftArrays(names, n, operand)
+		return r.shiftArrays(names, n, fromEnd, operand)
 	}
 	if n > len(r.Params) {
 		return r.shiftOutOfRange(r.shiftTooManyWording(operand), n, operand)
 	}
+	if fromEnd {
+		r.Params = r.Params[:len(r.Params)-n]
+		return 0
+	}
 	r.Params = r.Params[n:]
 	return 0
+}
+
+// shiftIsFromTheEndWord reports whether a word is a bundle of the one option
+// letter `shift` has in the dialect that has any.
+//
+// A bundle rather than the bare word, because the letters behind a single `-`
+// are options in their own right: measured, `shift -pp 2` is the same shift
+// as `shift -p 2`, and a word holding any other letter is not an option at
+// all — it is the count, which the arithmetic reading then has to make sense
+// of.
+func shiftIsFromTheEndWord(word string) bool {
+	if len(word) < 2 || word[0] != '-' {
+		return false
+	}
+	for i := 1; i < len(word); i++ {
+		if word[i] != 'p' {
+			return false
+		}
+	}
+	return true
+}
+
+// shiftFromTheEndLetter reports whether this dialect spells `shift -p`.
+func (r *Runner) shiftFromTheEndLetter() bool {
+	return r.sem().ShiftFromTheEndLetter == Yes
 }
 
 // shiftNamed reports whether a word names an array, which is what makes it an
@@ -4258,14 +4297,14 @@ func (r *Runner) shiftNamed(word string) bool {
 	return ok
 }
 
-// shiftArrays is the named form: each name's array loses its first n
-// elements.
+// shiftArrays is the named form: each name's array loses n elements, from
+// its front or — under `shift -p` — from its end.
 //
 // A name that is not an array is left alone and not complained about, and a
 // count past the end of one array does not stop the others — so the status is
 // carried rather than returned. That is only sound where past-the-end is
 // survivable, which ShiftNamesAreArrays says it may only be answered in.
-func (r *Runner) shiftArrays(names []string, n int, operand string) int {
+func (r *Runner) shiftArrays(names []string, n int, fromEnd bool, operand string) int {
 	status := 0
 	for _, name := range names {
 		elems, ok := r.arrayElemsOfTheName(name)
@@ -4274,6 +4313,10 @@ func (r *Runner) shiftArrays(names []string, n int, operand string) int {
 		}
 		if n > len(elems) {
 			status = r.shiftOutOfRange(r.shiftTooManyWording(operand), n, operand)
+			continue
+		}
+		if fromEnd {
+			r.setArray(name, elems[:len(elems)-n])
 			continue
 		}
 		r.setArray(name, elems[n:])

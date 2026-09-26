@@ -14676,6 +14676,37 @@ type Semantics struct {
 	// status 1 with `b` shifted. That carrying-on is why this may only be
 	// answered where ShiftPastEndFatal is No, which is zsh.
 	ShiftNamesAreArrays Answer
+
+	// ShiftFromTheEndLetter is `shift -p`, which takes the count off the
+	// **end** of the list rather than off the front. Only zsh has it:
+	// measured 2026-09-26 by asking zsh 5.9.2 for every letter of the
+	// alphabet under `shift`, `-p` is the one it takes and all fifty-one
+	// others are `bad option`.
+	//
+	// **Read rather than asked**, for SetArrayLetter's reason: where the
+	// answer is not yes the word is somebody else's bad option and that
+	// shell's own refusal already stands, so asking here would replace a
+	// correct answer with a complaint about a missing dialect. Three
+	// columns reach the refusal through ShiftOptionWords and bash reads the
+	// word as a count it cannot make a number of; both are right and
+	// neither is this axis.
+	//
+	// It changes the *direction* and nothing else. The count is still read
+	// the same way, operands behind it are still array names
+	// (ShiftNamesAreArrays), and a count above the list's length is still
+	// the same out-of-range complaint at the same status — measured, `set --
+	// a b c; shift -p 5` is `shift count must be <= $#` at 1 with `$#` left
+	// at 3, exactly as the front form answers it.
+	//
+	// unexhibited No: nobody writes it, for the reason above — the axis is
+	// read (`== Yes`), so a preset without the letter records no fact its
+	// own refusal does not already carry.
+	//
+	// unpinned bash, dash, ksh, ash: none of them has the letter, so no row
+	// of the corpus can put the question to them — the word is refused
+	// before a direction is chosen. Pinned in dialect/zsh by
+	// TestShiftFromTheEnd.
+	ShiftFromTheEndLetter Answer
 	// ShiftNegativeIsOutOfRange reads a negative count as a number that is
 	// out of range rather than as a word that is not a number. bash, ksh93
 	// and zsh do, at status 1 and in three different wordings

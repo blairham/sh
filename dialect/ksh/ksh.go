@@ -1093,6 +1093,10 @@ func Semantics() interp.Semantics {
 	s.NumericOperandDoubleDashEndsOptions = interp.Yes
 	// The count is taken and the rest of the line is not read.
 	s.ExtraNumericOperand = interp.ExtraNumericOperandIgnored
+	// unanswered ShiftFromTheEndLetter: this shell reads every dash word
+	// under `shift` as an option and has no `-p` among them, so the letter
+	// is refused as an unknown option before any direction is chosen, in
+	// this shell's own words. Measured 2026-09-26 on ksh93u+ 2012-08-01.
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.Yes
 	s.WaitReadsOptions = interp.Yes

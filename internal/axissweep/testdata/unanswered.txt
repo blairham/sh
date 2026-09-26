@@ -226,6 +226,7 @@ ash   SetArrayBadNameLeavesZero
 ash   SetArrayLetter
 ash   SetArrayOptionsContinuePastTheName
 ash   SetArrayWithNoValuesUnsetsTheName
+ash   ShiftFromTheEndLetter
 ash   StoppedJobTakesTheCurrentJobMarker
 ash   StoreOperandWholeArraySubscript
 ash   StoreOperandWholeArraySubscriptOverATable
@@ -272,7 +273,7 @@ ash   WholeArraySubscriptAssigningAnArray
 ash   WholeArraySubscriptThroughAReferenceToATable
 ash   WidthJustificationPrecedence
 ash   WidthLettersExcludeTheIntegerLetter
-bash   ReadArrayDefault
+
 bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
 bash  ArithIntegerOperatorRefusesFloat
@@ -300,14 +301,16 @@ bash  NumericTypeLettersAreExclusive
 bash  PrintfFloatOperandIsEvaluatedTwice
 bash  PrintfOutputPrecedesComplaint
 bash  PrintfRefusedOperandKeepsItsLeadingNumber
+bash  ReadArrayDefault
 bash  SetArrayBadNameLeavesZero
 bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
+bash  ShiftFromTheEndLetter
 bash  SubscriptedPrefixIsTakenBack
 bash  WidthJustificationPrecedence
 bash  WidthLettersExcludeTheIntegerLetter
-dash   ReadArrayDefault
+
 dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
@@ -502,6 +505,7 @@ dash  PrintfRefusedOperandKeepsItsLeadingNumber
 dash  PrintfReportsAMissingHexDigit
 dash  ProducedParameterListing
 dash  QuitResetRestoresTheDefault
+dash  ReadArrayDefault
 dash  ReadCountJudgesTheNamesAfterTheFirst
 dash  ReadExactCountKeepsPartial
 dash  ReadPartialCountSucceeds
@@ -537,6 +541,7 @@ dash  SetArrayLetter
 dash  SetArrayOptionsContinuePastTheName
 dash  SetArrayWithNoValuesUnsetsTheName
 dash  ShellLevelExec
+dash  ShiftFromTheEndLetter
 dash  StoreOperandWholeArraySubscript
 dash  StoreOperandWholeArraySubscriptOverATable
 dash  StoreRefusalOfADeclaredElementLeavesZero
@@ -587,6 +592,7 @@ dash  WholeArraySubscriptThroughAReferenceToATable
 dash  WidthJustificationPrecedence
 dash  WidthLettersExcludeTheIntegerLetter
 dash  WritingSubstitutionIsWaitedForAtTheCommand
+
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
@@ -609,8 +615,8 @@ ksh   HangupAtExitPrecedesTheExitTrap
 ksh   HangupAtExitSkipsStoppedJobs
 ksh   HeldExitListsTheJobs
 ksh   InteractiveStartupFileWhenLogin
-ksh   KillKeepsGoingPastAJobSpecThatNamesNoJob
 ksh   JobsStateFiltersAccumulate
+ksh   KillKeepsGoingPastAJobSpecThatNamesNoJob
 ksh   LocalDashSavesTheShellOptions
 ksh   LocalListingIsTheRunningCallsOwn
 ksh   LocalOutsideAFunctionIsFatal
@@ -624,12 +630,14 @@ ksh   ReadonlyRecordsTheCompoundAttribute
 ksh   ReadonlyReferenceLetter
 ksh   SelectAssumesUnboundedWidth
 ksh   SetValidatesOptionLettersFirst
+ksh   ShiftFromTheEndLetter
 ksh   TestAndArithmeticUpdatePipelineStatus
 ksh   TransformLetterCheckedOnlyWhenValued
 ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage
 ksh   UmaskPermissionCopyBesideLetters
 ksh   UnsetEndsTheProducedPipelineStatus
+
 zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
 zsh   ArrayLetterOverAnUnaimedReferenceDropsIt

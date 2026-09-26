@@ -1264,6 +1264,10 @@ func Semantics() interp.Semantics {
 	s.NumericOperandDoubleDashEndsOptions = interp.No
 	// The count is taken and the rest of the line is not read.
 	s.ExtraNumericOperand = interp.ExtraNumericOperandIgnored
+	// unanswered ShiftFromTheEndLetter: the same absence as dash's, and
+	// reached the same way — BusyBox has no `-p` under `shift` and reads
+	// the word as the count. Measured 2026-09-26 in the pinned alpine
+	// image, BusyBox v1.37.0.
 	s.ShiftNamesAreArrays = interp.No
 	s.ShiftNegativeIsOutOfRange = interp.No
 	s.ShiftCountIsArithmetic = interp.No

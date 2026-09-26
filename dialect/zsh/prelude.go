@@ -14,11 +14,34 @@ import (
 // `./zsh` are the same shell reached by two roads — see the same file under
 // dialect/bash for what went wrong when they were not.
 func Prelude() string {
-	return identity + nullCommands +
+	return identity + nullCommands + startupAliases +
 		"WORDCHARS='" + wordCharacters + "'\n" +
 		historyCharactersParameter + "='" + historyCharacters + "'\n" +
 		functions
 }
+
+// startupAliases are the two aliases this shell has before it reads anything.
+//
+// They are the shell's own rather than a startup file's — measured 2026-09-26
+// on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f` with `env -u FPATH`,
+// where a bare `alias` lists exactly these two and `unalias run-help` is
+// silent at 0. Without them the listing is empty and `unalias` refuses a name
+// the shell is supposed to have, which is the whole cost of the suite's
+// `Z03run-help.ztst` (#4597).
+//
+// Shell rather than Go for the reason every alias is: a script redefines them,
+// unsets them and lists them, so the alias table has to be the one it writes
+// to and not a second set consulted behind it.
+//
+// `run-help` is an alias here and a *function* in a full installation, where
+// the function library defines one and this alias is what stands in for it.
+// What is modeled is the `-f` shell's table, which is the thing a script
+// without that library meets — so the alias is right at this level and a
+// function arriving later replaces it exactly as it does there.
+const startupAliases = `
+alias run-help=man
+alias which-command=whence
+`
 
 // The directory stack, as shell. The same machinery the bash dialect's
 // prelude carries, with the measured differences kept: this engine's `pushd`

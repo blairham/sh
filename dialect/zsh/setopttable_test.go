@@ -89,6 +89,16 @@ import "testing"
 // it is called with it on. Its own discriminator is not a state but a
 // *route*: `typeset a=*.txt` keeps the characters with the option on, so the
 // noun the rule is keyed on is the assignment and not the value.
+// `posixidentifiers` is the twenty-second: it moves
+// Semantics.ArithmeticAssignmentDeclaresANumber backwards — the option on is
+// that axis answering No — so `(( number = 3 ))` on a name that does not
+// exist leaves an ordinary scalar instead of declaring `integer`. Until #4664
+// it declared in both states. Like `posixtraps` it is reached without anyone
+// typing it, `emulate sh` and `emulate ksh` both turning it on. And like
+// `globassign` its trap is the noun: the option is nominally about which
+// characters may appear in an identifier, and this effect is **not** a
+// consequence of that — `xx` is a POSIX identifier in either state and its
+// answer moves anyway, while `typeset a.b=1` is refused in either state.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
@@ -96,6 +106,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
 		"posixtraps", "rcexpandparam", "errreturn", "autopushd",
 		"chaselinks", "chasedots", "rcquotes", "badpattern", "globassign",
+		"posixidentifiers",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -117,7 +128,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 122; recordedCount != want {
+	if want := 121; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

@@ -177,6 +177,31 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		// not. See Runner.substFailureRoute.
 		sub.inBodyReadAtExpansion = true
 	}
+	// A body with nothing in it reports success, however the shell holding it
+	// was doing. The clone carries the caller's status in so that `$?` inside
+	// the body reads the command before the substitution — measured, `false;
+	// echo $(echo $?)` writes 1 in every column — and with no command in
+	// there to overwrite it, that borrowed status was what came back out.
+	//
+	// Measured 2026-09-26 from a script file, the whole panel — bash 5.3.20,
+	// bash 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12, zsh 5.9.2 and BusyBox ash
+	// 1.37.0 — unanimous on all four rows, where this answered 1 for the
+	// first three:
+	//
+	//	false; X=$( )          0    nothing but spaces
+	//	false; X=$(\n)         0    nothing but a newline
+	//	false; X=`# comment`   0    nothing but a comment
+	//	false; echo $(echo $?) 1    the body still reads the caller's status
+	//
+	// Not a rule of the assignment's: `false; ``` is 0 in the panel too, and
+	// that is a word rather than a right-hand side. It is the substitution
+	// that reports the success, which is why it is set here — and why it had
+	// to be, since the empty-command rule one layer up in Runner.simple now
+	// carries a word's substitution out to the command (#4589). Without this
+	// the panel's 0 for that line would have become the 1 standing in `$?`.
+	if len(f.Stmts) == 0 {
+		sub.status = 0
+	}
 	sub.Stdout = &out
 	// The same group a subshell gets, and the same lifetime: the expansion
 	// does not finish until the body has. See Runner.anchorForkedBody.
@@ -250,9 +275,9 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, base int
 	defer func() { r.inSubstBody = savedInBody }()
 	// The body is a command list of its own, and the fields that say what
 	// *this* command's assignments did are the running command's rather than
-	// the shell's. Saved across the body for that reason: an assignment
-	// inside one clears Runner.substRan on its way in — see the assignment
-	// branch of Runner.cmd — so
+	// the shell's. Saved across the body for that reason: every simple
+	// command clears Runner.substRan on its way in — see the top of
+	// Runner.simple — so
 	//
 	//	readonly q=1; a=${ q=2; }; echo $?
 	//

@@ -7673,7 +7673,7 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 24 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`, `errreturn`, `autopushd`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 24 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`, `errreturn`, `autopushd`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **six** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 6 | `aliases`, `autocd`, `banghist`, `checkjobs`, `cprecedences` and `hup`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, and a session that is leaving really does send SIGHUP to the jobs it abandons. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
@@ -10866,11 +10866,14 @@ What was built, all through the extension seam — registered builtins in each
   see "what an emulation resets" below. `-c` runs a string under the
   emulation and restores everything after, and a bare `emulate` names the
   mode. `ksharrays` is one of the
-  axes it switches and is a **group** of five, so an emulation moves the
+  axes it switches and is a **group** of six, so an emulation moves the
   array base, what a plain `$a` is worth, how many fields it is, what
-  `${#a}` counts and whether an unbraced name's brackets are a subscript,
-  all together — see `dialect/zsh/ksharrays.go` for the measurement and
-  #1726 for what moving only the first of them cost.
+  `${#a}` counts, whether an unbraced name's brackets are a subscript, and
+  where a scalar `a+=x` lands, all together — see
+  `dialect/zsh/ksharrays.go` for the measurement, #1726 for what moving
+  only the first of them cost and #4609 for the sixth, which is the only
+  one of the six that is a **write** rather than a reading and was missed
+  for exactly that reason.
 - **bash `help`** (dialect/bash/help.go): the shell's only self-documenting
   builtin, and the one place in this tree where a builtin is deliberately
   **half** built. A topic in the real shell is a **synopsis** followed by a
@@ -26296,7 +26299,7 @@ Pinned by `declare/an-array-declaration-over-a-name-holding-a-scalar`,
 `declare/a-table-declaration-over-a-scalar-then-appended` and
 `declare/a-local-array-declaration-over-a-local-scalar`.
 
-**`ScalarAppendedToAnArrayBecomesANewElement`** — bash no · dash unspecified · ksh93 no · zsh yes
+**`ScalarAppendedToAnArrayBecomesANewElement`** — bash no · dash unspecified · ksh93 no · zsh yes, **no under `ksharrays`**
 
 Where `a+=x` puts the value when the name is holding an **array**: joined
 onto the first element, or added after the last.
@@ -26328,10 +26331,34 @@ A plain `a=x` over an array is a third question and is open (#1390): bash
 and ksh93 write the first element and leave the rest, zsh replaces the
 array with a scalar.
 
+**zsh's answer moves at run time**, which no other column's does: `setopt
+ksharrays` turns it into the family's. Measured 2026-09-26 on zsh 5.9.2
+with `a=(first second)`, `a+=last` is `( first second last )` without the
+option and `( firstlast second )` with it, which is what bash 5.3.20,
+bash 3.2.57 and ksh93u+ 2012-08-01 all answer with nothing set. It is the
+sixth thing that option moves and the only one of the six that is a
+**write** rather than a reading, which is why it was missed while the
+five readings were right (#4609).
+
+The noun is **the scalar append over a name holding an array**, and three
+pairs hold part of that fixed while the rest moves — all with the option
+on. `a+=(last)` still adds an element, so it is not `+=` that moved and
+the parentheses are the whole of what tells them apart; `a[1]+=last`
+reaches the element it names, so it is the **bare** name; and `s=abc;
+s+=last` is the ordinary string append, so the name has to be holding an
+array. It is answered **when the assignment runs**: one body parsed once
+and called on either side of a `setopt` gives `1 2 x` and then `1x 2`, an
+array built before the option is set joins all the same, and one built
+under the option grows an element once the option has gone. `emulate sh`
+and `emulate ksh` carry it as they carry the five readings, which is how
+a script reaches it without anybody typing `setopt`.
+
 Pinned by `array/appending-a-scalar-to-an-array` and the five rows beside
-it. This implementation deleted the array and left a plain string — `1x`
-under bash's reading and `1 2x` under zsh's, the scalar *view* of the
-whole array with the value stuck on the end — at status 0 (#1571).
+it, by `dialect/zsh/ksharrays_test.go` for the option's half and by a
+block of `share/suite/zsh/arrays.tests`. This implementation deleted the
+array and left a plain string — `1x` under bash's reading and `1 2x`
+under zsh's, the scalar *view* of the whole array with the value stuck on
+the end — at status 0 (#1571).
 
 **`CompoundElementsGoThroughTheAttribute`** — bash yes · dash unspecified · ksh93 yes · zsh no
 

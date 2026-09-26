@@ -926,6 +926,12 @@ Four join the **first element** and leave the rest standing; zsh adds a
 here is *not* its answer to `a+=(x)` above, which every shell agrees
 about. dash has no arrays.
 
+zsh's column moves under `setopt ksharrays`, alone in the panel: with the
+option on, `a=(first second); a+=last` is `( firstlast second )`, the
+family's answer. `a+=(last)` under the same option still adds an element,
+which is what says the parentheses and not the option are what tell the
+two appends apart. See `docs/spec/semantics.md` (#4609).
+
 The join is at the *base* rather than at the lowest subscript standing,
 which the sparse row is what shows: an element grows at 0 where there was
 none and `q` does not move — so it is `a[0]+=x` and not "append to the

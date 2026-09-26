@@ -288,3 +288,191 @@ func TestKshArraysLeavesAnAssignmentSubscriptAlone(t *testing.T) {
 		t.Errorf("arithmetic = %q (status %d), want 2", out, st)
 	}
 }
+
+// The sixth axis, and the one that is a **write** rather than a read: a
+// scalar `+=` over a name holding an array joins the element at the base
+// instead of growing one past the end (#4609).
+//
+// Measured 2026-09-26 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`, a script
+// file) with `a=(first second)`:
+//
+//	                   ksharrays off        ksharrays on
+//	a+=last            ( first second last) ( firstlast second )
+//	print -l $a        three lines          `firstlast`, one line
+//
+// The second row is the shape `A06assign.ztst` asks it in, and it is two
+// axes at once: the append lands on element 0 and a bare `$a` is then that
+// one element. It is here beside the first so that a change moving one and
+// not the other is visible.
+//
+// This is what the whole ksh family does with nothing set — measured the same
+// day, bash 5.3.20, bash 3.2.57 and ksh93u+ 2012-08-01 all answer
+// `firstlast second` — which is what makes it this option's business.
+func TestKshArraysJoinsAScalarAppendAtTheBase(t *testing.T) {
+	for _, tc := range []struct{ name, src, on, off string }{
+		{
+			"the listing",
+			"a=(first second)\na+=last\ntypeset -p a",
+			"typeset -a a=( firstlast second )",
+			"typeset -a a=( first second last )",
+		},
+		{
+			"the bare name after it",
+			"a=(first second)\na+=last\nprint -l $a",
+			"firstlast",
+			"first\nsecond\nlast",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			on, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+tc.src)
+			if st != 0 || strings.TrimSpace(on) != tc.on {
+				t.Errorf("on = %q (status %d), want %q", on, st, tc.on)
+			}
+			off, st := runZsh(t, t.TempDir(), tc.src)
+			if st != 0 || strings.TrimSpace(off) != tc.off {
+				t.Errorf("off = %q (status %d), want %q", off, st, tc.off)
+			}
+		})
+	}
+}
+
+// **The noun is the scalar append over a name holding an array**, and these
+// are the three pairs that hold one part of that fixed while another moves.
+// Each one is a line this shell takes, and a rule written on a wider noun —
+// "the option changes what `+=` does", "the option changes what a bare name
+// means on the left" — gets one of them wrong.
+//
+// Measured the same day, every row with `setopt ksharrays` in front of it:
+//
+//	a+=last      over `a=(first second)`   firstlast second   the rule
+//	a+=(last)    over the same             first second last  the parentheses
+//	a[1]+=last   over the same             first secondlast   the subscript
+//	s+=last      over `s=abc`              abclast            the kind
+//
+// The parenthesised form is the sharpest of them, because it is the one that
+// *looks* like the append: same option, same name, same word, and the option
+// does not reach it. The subscripted row says it is the **bare** name that
+// moved and not every append, and the scalar row says the name has to be
+// holding an array — `a+=last` over a name nothing declared is the ordinary
+// string append under the option exactly as it is without it.
+func TestKshArraysMovesOnlyTheBareScalarAppendOverAnArray(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the rule itself", "a=(first second)\na+=last\ntypeset -p a", "typeset -a a=( firstlast second )"},
+		{"a literal append", "a=(first second)\na+=(last)\ntypeset -p a", "typeset -a a=( first second last )"},
+		{"a subscripted append", "a=(first second)\na[1]+=last\ntypeset -p a", "typeset -a a=( first secondlast )"},
+		{"the base written out", "a=(first second)\na[0]+=last\ntypeset -p a", "typeset -a a=( firstlast second )"},
+		{"a name holding a scalar", "s=abc\ns+=last\ntypeset -p s", "typeset s=abclast"},
+		{"a name holding nothing", "a+=last\ntypeset -p a", "typeset a=last"},
+		{"an empty array", "a=()\na+=last\ntypeset -p a", "typeset -a a=( last )"},
+		{"a one-element array", "a=(only)\na+=last\ntypeset -p a", "typeset -a a=( onlylast )"},
+		{"the value is one value", "a=(1 2)\na+=\"p q\"\ntypeset -p a", "typeset -a a=( '1p q' 2 )"},
+		{"an empty value joins nothing", "a=(1 2)\na+=\ntypeset -p a", "typeset -a a=( 1 2 )"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+tc.src)
+			if st != 0 || strings.TrimSpace(out) != tc.want {
+				t.Errorf("= %q (status %d), want %q", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the three that hold the *option* fixed at off, so that the pairs above
+// are pairs rather than a column: the literal append, the subscripted one and
+// the two scalars answer the same way without the option, and only the bare
+// append moves.
+func TestTheAppendsThatDoNotMoveAnswerTheSameWithoutTheOption(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a literal append", "a=(first second)\na+=(last)\ntypeset -p a", "typeset -a a=( first second last )"},
+		{"a subscripted append", "a=(first second)\na[2]+=last\ntypeset -p a", "typeset -a a=( first secondlast )"},
+		{"a name holding a scalar", "s=abc\ns+=last\ntypeset -p s", "typeset s=abclast"},
+		{"a name holding nothing", "a+=last\ntypeset -p a", "typeset a=last"},
+		{"an empty array", "a=()\na+=last\ntypeset -p a", "typeset -a a=( last )"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if st != 0 || strings.TrimSpace(out) != tc.want {
+				t.Errorf("= %q (status %d), want %q", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// **It is answered when the assignment runs**, which is the moment the five
+// reading axes are answered at too, and the one an implementation is most
+// likely to get wrong by deciding it somewhere tidier.
+//
+// Four probes, each holding the written line fixed and moving only when the
+// option is on. Measured the same day:
+//
+//	f() { a=(1 2); a+=x }; f; setopt ksharrays; f   `1 2 x` then `1x 2`
+//	a=(1 2); setopt ksharrays; a+=x                 `1x 2`, built before
+//	setopt ksharrays; a=(1 2); unsetopt ksharrays; a+=x   `1 2 x`
+//
+// The first says it is not decided when the body is **parsed**; the second
+// says it is not decided when the **array** is built; the third says it is
+// not remembered on the array either, since one built under the option grows
+// an element once the option has gone.
+func TestKshArraysAnswersTheAppendWhenTheAssignmentRuns(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		"f() { a=(1 2); a+=x; typeset -p a }\nf\nsetopt ksharrays\nf")
+	if want := "typeset -g -a a=( 1 2 x )\ntypeset -g -a a=( 1x 2 )"; st != 0 || strings.TrimSpace(out) != want {
+		t.Errorf("one body called twice = %q (status %d), want %q", out, st, want)
+	}
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the array was built before the option",
+			"a=(1 2)\nsetopt ksharrays\na+=x\ntypeset -p a",
+			"typeset -a a=( 1x 2 )",
+		},
+		{
+			"the array was built under the option and appended to after it",
+			"setopt ksharrays\na=(1 2)\nunsetopt ksharrays\na+=x\ntypeset -p a",
+			"typeset -a a=( 1 2 x )",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if st != 0 || strings.TrimSpace(out) != tc.want {
+				t.Errorf("= %q (status %d), want %q", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A function's `setopt localoptions ksharrays` reaches an append inside it
+// and not one after it returns, which is the same claim from the scoping
+// side — and the shape a real script reaches this in, since a function that
+// wants ksh arrays says so locally.
+func TestKshArraysAppendFollowsLocalOptions(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		"a=(1 2)\nf() { setopt localoptions ksharrays; a+=x; }\nf\ntypeset -p a")
+	if want := "typeset -a a=( 1x 2 )"; st != 0 || strings.TrimSpace(out) != want {
+		t.Errorf("inside = %q (status %d), want %q", out, st, want)
+	}
+	out, st = runZsh(t, t.TempDir(),
+		"a=(1 2)\nf() { setopt localoptions ksharrays; }\nf\na+=x\ntypeset -p a")
+	if want := "typeset -a a=( 1 2 x )"; st != 0 || strings.TrimSpace(out) != want {
+		t.Errorf("after the return = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And the emulations carry the append the way they carry the five reading
+// axes: `emulate sh` and `emulate ksh` are how scripts reach the option
+// without anybody typing `setopt`, and `emulate zsh` puts it back.
+func TestEmulationsCarryTheScalarAppend(t *testing.T) {
+	for _, mode := range []string{"sh", "ksh"} {
+		t.Run(mode, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(),
+				"emulate "+mode+"\na=(first second)\na+=last\ntypeset -p a")
+			if want := "typeset -a a=( firstlast second )"; st != 0 || strings.TrimSpace(out) != want {
+				t.Errorf("= %q (status %d), want %q", out, st, want)
+			}
+		})
+	}
+	out, st := runZsh(t, t.TempDir(),
+		"emulate sh\nemulate zsh\na=(first second)\na+=last\ntypeset -p a")
+	if want := "typeset -a a=( first second last )"; st != 0 || strings.TrimSpace(out) != want {
+		t.Errorf("emulate zsh = %q (status %d), want %q", out, st, want)
+	}
+}

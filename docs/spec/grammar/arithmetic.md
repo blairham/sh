@@ -710,7 +710,8 @@ the grammar has no `**` to ask about.
 
 Having `**` does not bring the compound assignment with it, and **that is
 measured rather than assumed**: every column that parses the operator at
-all was asked, and three of the four refuse the assignment spelling.
+all was asked, and three of the four columns that have it refuse the
+assignment spelling.
 
 | shell | `n=2; $(( n **= 3 ))` |
 | --- | --- |

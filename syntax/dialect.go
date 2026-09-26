@@ -4328,8 +4328,8 @@ type Dialect struct {
 	//
 	// **It is not [ArithExponent]'s to imply, and that is measured rather
 	// than assumed.** Every column that parses `**` at all was asked, and
-	// three of the four refuse the assignment spelling — measured
-	// 2026-09-26, `n=2; $(( n **= 3 ))`:
+	// three of the four columns that have the operator refuse the
+	// assignment spelling — measured 2026-09-26, `n=2; $(( n **= 3 ))`:
 	//
 	//	bash 5.3      arithmetic syntax error: operand expected
 	//	ksh93u+       arithmetic syntax error

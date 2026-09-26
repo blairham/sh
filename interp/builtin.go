@@ -5786,6 +5786,17 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		return 1
 	}
 
+	// -q is the same read with a verdict on the end: one key from the same
+	// terminal, and whether it was a yes. It rides the letter rather than an
+	// axis because the other four shells in the panel have no `-q` at all —
+	// measured, each refuses it — and it composes with -k rather than
+	// replacing it, so the count is settled here and the judging happens
+	// where the characters land. See readQueryInto.
+	query := strings.Contains(opts, "q")
+	if query && !readsKeys {
+		readsKeys, keys = true, 1
+	}
+
 	// The array: bash's -a names it in the option's argument and ignores
 	// any operands after it; ksh93 and zsh spell it -A and take the name as
 	// the first operand, clearing the names that follow. The letters
@@ -5921,6 +5932,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// The read that never returns, which is the one a coprocess makes
 		// by construction.
 		r.settleBackgroundJobBeforeABlockingRead(in)
+	}
+	if query {
+		return r.readQueryInto(next, keys, args)
 	}
 	if readsKeys {
 		return r.readKeysInto(next, keys, args)

@@ -1456,11 +1456,112 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 		// touched, which also means a frozen name is no refusal here.
 		return v, nil
 	}
+	// The numeric type the target carries, read **before** the store because
+	// a store can create one: see numericAttribute.
+	was := r.numericAttributeOf(place.name)
 	// The side effect that outlives the expression.
 	if err := r.writePlace(place, v, x.Value); err != nil {
 		return intNum(0), err
 	}
+	if x.Op == "=" {
+		// And the value of the assignment is the number that type makes of
+		// it. Applied **after** the store and not to the value the store is
+		// handed: the store renders a number and reads the characters back
+		// through the name's own attribute, so handing it one already
+		// converted is a second trip through the text. Measured, `integer h;
+		// (( h = -1e30 ))` stores the word's least value in zsh 5.9.2 —
+		// converting first writes `-9223372036854775808`, which the integer
+		// attribute reads as a unary minus over a literal too wide for the
+		// word and truncates to `-922337203685477580`, with the same
+		// complaint real zsh makes about that literal written out.
+		v = was.converts(v)
+	}
 	return v, nil
+}
+
+// numericAttribute is the numeric type a name carries: `-i`, one of the float
+// letters, or neither.
+//
+// A value rather than a question asked of the Runner, because the answer has
+// to be taken **before** an assignment stores anything and used **after**. An
+// arithmetic assignment to a name that does not exist declares one in zsh —
+// see arithAssignmentDeclaresAnInteger — so asking afterwards finds an
+// attribute the assignment itself created, and a name the assignment created
+// takes its type from the value and converts nothing. Measured 2026-09-26 on
+// zsh 5.9.2, `$(( xx = 1.5 ))` on an unset name is `1.5` and leaves `xx` a
+// float; asking after the store makes it `1`.
+type numericAttribute struct {
+	isFloat   bool
+	isInteger bool
+}
+
+// numericAttributeOf reads the numeric type a name carries right now.
+func (r *Runner) numericAttributeOf(name string) numericAttribute {
+	_, isFloat := r.floatPrecision[name]
+	return numericAttribute{isFloat: isFloat, isInteger: r.integer[name]}
+}
+
+// converts is the number this numeric type makes of a value written into it by
+// a plain `=`: the truncated integer under `-i`, the float under `-E` or `-F`,
+// and the value untouched where the name carries neither.
+//
+// **It is the value of the assignment expression and not only what is
+// stored**, which is the whole of #4595: `integer i; float f=3.1415` makes
+// `$(( i = f * 10000 ))` the five characters `31415` where the same expression
+// without the assignment is `31415.`, trailing point and all. We stored the
+// truncated integer correctly and handed the untruncated float back, so the
+// expansion rendered a float the parameter never held.
+//
+// **The value is the converted *number* and not the *text* that was stored**,
+// and that is the discriminating half. A store renders the number in the
+// name's own places — `16#6C` under `-i16`, `3.142` under `-F3` — and the
+// assignment's value is neither of those. Measured 2026-09-26 on zsh 5.9.2
+// (aarch64-apple-darwin25.4.0) `-f`, and on ksh93u+ 2012-08-01, which answers
+// the same:
+//
+//	typeset -i16 a   $(( a = 108 ))                108      $a  16#6C
+//	typeset -F3 g    $(( g = 3.14159265358979 ))   3.14159265358979   $g  3.142
+//
+// So reading the stored text back would be a different rule that agrees with
+// this one only on a name with no rendering of its own. The two rows above
+// hold the *type* fixed and move the rendering, and the answer does not move;
+// moving the type moves it — `integer i` makes `$(( i = 1.5 ))` 1 and a name
+// with no attribute leaves it 1.5.
+//
+// **Only the plain `=`.** zsh converts what `=` stores and hands a compound
+// assignment its computed value: measured in the same run, `integer b=1` makes
+// `$(( b += 0.5 ))` 1.5 while `$(( b = b + 0.5 ))` is 1, with `b` at 1 either
+// way. That pair holds the attribute fixed and moves the operator, which is
+// what says the rule is keyed on the operator and not on "an assignment".
+// ksh93 converts both — `$(( n += 0.5 ))` on a `typeset -i n=1` is 1 there —
+// and that divergence is recorded and not modeled here; it is a shell's answer
+// to a question this rule does not ask. Nothing in this repository asks it
+// yet, so it is an issue rather than an axis (#4606).
+//
+// The conversion is asInt and asFloat rather than a rule written out again
+// here, because it is the one the store already makes: `attributeFolded`
+// evaluates an integer name's text through the same `evalArith`, so a second
+// truncation beside it is the shape that drifts. Float ahead of integer for
+// that function's reason too — the two attributes cannot both stand, because
+// applyAttributes takes one off as the other arrives, and reaching the float
+// first is what makes that a statement rather than a hope. **Swapping the two
+// branches is an equivalent mutant today**, and is kept this way round rather
+// than reordered: nothing a script can write gives a name both, so the order
+// is unobservable until something does, and then this is the order that is
+// right. `typeset -iE 3 a=1.5` is `typeset -i3 a=1` here — one letter, not
+// half of each.
+//
+// The name is the target's, subscripted or not: measured, `typeset -i b` makes
+// `$(( b[2] = 1.5 ))` 1 in zsh and in ksh93 alike, so the attribute belongs to
+// the name and reaches every element of it.
+func (a numericAttribute) converts(v arithNum) arithNum {
+	if a.isFloat {
+		return floatNum(v.asFloat())
+	}
+	if a.isInteger {
+		return intNum(v.asInt())
+	}
+	return v
 }
 
 // evalDecidedOperand runs the operand of `&&` or `||` whose value can no

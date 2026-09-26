@@ -61,6 +61,10 @@ func TestTheLineEditorIsOffWhenTheOptionIs(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// Everything the terminal was given, read once the session has
+			// finished writing — zleOffSession waits on the EXIT trap's
+			// word, which is why the absence rows below are assertions
+			// rather than a race the reader usually wins (#4579).
 			screen := zleOffSession(t, tc.argv)
 			drawn := screen.Text()
 			// The command ran, which is the half that keeps the other half
@@ -94,6 +98,49 @@ const zleOffMark = "zoff> "
 // that the echo of the line cannot be mistaken for the answer to it.
 const zleOffAnswer = "zle-42-ok"
 
+// zleOffEnd is written by an EXIT trap the startup file below sets, and is the
+// last thing either session here writes. It is what both of them read the
+// screen against.
+//
+// The shell's run returns when its last write is **issued** and not when the
+// terminal has been read, so a row that reads `screen.Text()` straight after
+// `<-done` reads whatever the reader goroutine happened to have reached. That
+// is not a slow instrument, it is an unsynchronized one: with the reader
+// wrapped so that it sleeps for one read after the read carrying the echo of
+// the typed line, the editorless row below failed **three runs in three** and
+// reported a line the shell had written and the reader had not yet appended
+// (#4579). The same wrapper leaves the row above green, which is what says it
+// discriminates rather than merely delaying everything.
+//
+// The mark is the trap's and not any sentence of the session's for the reason
+// #4577 arrived at one file over: what is waited on has to be written *after*
+// everything asserted on, or the wait orders nothing. The escape rows here
+// assert **absences**, and an absence has nothing of its own to wait for —
+// an early read turns it into a silent pass rather than a failure.
+//
+// Re-measured 2026-09-26 against `/opt/homebrew/bin/zsh` — zsh 5.9.2
+// (aarch64-apple-darwin25.4.0) — on a pseudo-terminal with `TERM=dumb` and
+// this file's own two-row `PS1`, each of the two sessions run twice, once
+// with the `trap` line in the startup file and once without. The bytes are
+// identical up to the trap's own line, which comes last both times:
+//
+//	-i +Z, no trap    …zoff> echo zle-$((6 * 7))-ok\r\nzle-42-ok\r\n…zoff> exit\r\n
+//	-i +Z, with trap  the same, then ZOFF-END-4579\r\n
+//	-i, no trap       …zoff> \e[?2004hecho zle-$((6 * 7))-ok\e[?2004l\r\r\nzle-42-ok\r\n…
+//	                  zoff> \e[?2004hexit\e[?2004l\r\r\n
+//	-i, with trap     the same, then ZOFF-END-4579\r\n
+//
+// So the trap changes neither row, and its word falls after the editor's last
+// escape — which is the property the absence rows need and no sentence of
+// these sessions could give them. It is not text either session types, so a
+// wait on it cannot be satisfied by the terminal's echo of the input.
+const zleOffEnd = "ZOFF-END-4579"
+
+// zleOffRC is the startup file both sessions in this file are given, so that
+// no row here can be written that waits on the wrong line.
+const zleOffRC = "PS1=$'ZOFFROW\\n" + zleOffMark + "'\n" +
+	"trap 'print -r -- " + zleOffEnd + "' EXIT\n"
+
 // zleOffBudget turns a hang into a failure.
 const zleOffBudget = 20 * time.Second
 
@@ -120,7 +167,7 @@ func zleOffSession(t *testing.T, argv []string) *smoke.Screen {
 	if err := pty.SetSize(terminal, 24, 100); err != nil {
 		t.Fatalf("sizing the terminal: %v", err)
 	}
-	writeHomeFile(t, home, ".zshrc", "PS1=$'ZOFFROW\\n"+zleOffMark+"'\n")
+	writeHomeFile(t, home, ".zshrc", zleOffRC)
 
 	sh := scratchShell(t)
 	sh.Stdin, sh.Stdout, sh.Stderr = terminal, terminal, terminal
@@ -152,6 +199,13 @@ func zleOffSession(t *testing.T, argv []string) *smoke.Screen {
 	case <-done:
 	case <-time.After(zleOffBudget):
 		t.Fatalf("the shell did not exit:\n%s", smoke.Readable(smoke.LastLines(screen.Text(), 8)))
+	}
+	// And then on the screen rather than on the process, which is a different
+	// event: the run above returns when the shell's last write is issued and
+	// this returns when the terminal has been read. See zleOffEnd.
+	if err := screen.Await(zleOffEnd, zleOffBudget); err != nil {
+		t.Fatalf("the shell never finished writing: %v\n%s",
+			err, smoke.Readable(smoke.LastLines(screen.Text(), 8)))
 	}
 	return screen
 }
@@ -195,7 +249,7 @@ func TestALineWrittenBeforeTheFirstPromptReachesAnEditorlessSession(t *testing.T
 	if err := pty.SetSize(terminal, 24, 100); err != nil {
 		t.Fatalf("sizing the terminal: %v", err)
 	}
-	writeHomeFile(t, home, ".zshrc", "PS1=$'ZOFFROW\\n"+zleOffMark+"'\n")
+	writeHomeFile(t, home, ".zshrc", zleOffRC)
 
 	sh := scratchShell(t)
 	sh.Stdin, sh.Stdout, sh.Stderr = terminal, terminal, terminal
@@ -223,6 +277,14 @@ func TestALineWrittenBeforeTheFirstPromptReachesAnEditorlessSession(t *testing.T
 	case <-time.After(zleOffBudget):
 		t.Fatalf("the session never read the line it was written:\n%s",
 			smoke.Readable(smoke.LastLines(screen.Text(), 8)))
+	}
+	// The shell has stopped running; the screen has not necessarily been read.
+	// Waiting on the EXIT trap's word is what makes the reading below about
+	// the line rather than about the reader — see zleOffEnd, and #4579 for
+	// what it cost while this was `<-done` alone.
+	if err := screen.Await(zleOffEnd, zleOffBudget); err != nil {
+		t.Fatalf("the shell never finished writing: %v\n%s",
+			err, smoke.Readable(smoke.LastLines(screen.Text(), 8)))
 	}
 	if drawn := screen.Text(); !strings.Contains(drawn, zleOffAnswer) {
 		t.Fatalf("the line was lost:\n%s", smoke.Readable(smoke.LastLines(drawn, 8)))

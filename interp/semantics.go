@@ -2655,7 +2655,15 @@ type Semantics struct {
 	//	read x < …       regular     st=1   stops  st=1   stops  stops
 	//	f < …            function    st=1   stops  st=1   stops  stops
 	//	{ :; } < …       group       st=1   stops  st=1   stops  stops
-	//	command : < …    command     st=1   stops  st=1   stops  stops
+	//	command : < …    command     st=1   ——     st=1   stops  stops
+	//
+	// The zsh cell of the last row is a dash and not a value, and it used to
+	// read `stops`, which is nobody's answer. `command` names an external
+	// program alone there — CommandReachesABuiltin — so `command :` is a
+	// process of its own and this axis is never asked of it: measured, it
+	// carries on at 1 and `||` catches it, which is
+	// RedirectTargetExpandsInTheCommandsProcess's answer rather than this
+	// one's (#4701).
 	//
 	// Only ksh93 splits that grid by the command, and the split is a special
 	// builtin against everything else — not "a command the shell runs
@@ -15001,6 +15009,25 @@ type Semantics struct {
 	// zsh it is 127 and the option is never set — so a line written to work
 	// under either shell's name silently does nothing there. Recorded as
 	// `cmd/command-in-front-of-a-builtin`.
+	//
+	// **And it decides whose process the redirections are opened in**, which
+	// is the second reader and is not a second axis: a word that names an
+	// external program is a process of its own, so `command : > "${u:=made}"`
+	// loses the write in zsh and keeps it in the other four, and `command : >
+	// $(( 1/0 ))` carries the line on at 1 there and is caught by `||` where a
+	// bare `:` ends that shell. The route follows the answer: turn
+	// `posixbuiltins` on and every one of those rows becomes the bare
+	// builtin's, measured on zsh 5.9.2 2026-09-26. See
+	// Runner.commandBuiltinRunsInThisShell, which reads this rather than
+	// measuring it again, exactly as Runner.subscriptedPrefixReachesAChild
+	// does one question along (#4701).
+	//
+	// The noun there is **a builtin behind the word**, not "an external
+	// command": `command f` on a *function* is `command not found` at 127 in
+	// all five columns and takes the external route in all five, because
+	// bypassing the function table is what the utility is for everywhere. It
+	// is not "the word `command`" either — `command -v` and `command -V` run
+	// nothing at all and stay in this shell in every column, zsh included.
 	CommandReachesABuiltin Answer
 
 	// FatalErrorEndsAtTheCommandWord puts a **boundary** at the `command`,

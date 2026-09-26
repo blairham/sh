@@ -344,11 +344,15 @@ func (r *Runner) takeTheRedirectionsStatus() {
 // write in bash, ksh93 and zsh exactly as a bare `cat` does. Functions are
 // not consulted past it, because bypassing them is what `command` is for.
 //
-// `command echo` is the one shape in this file the panel splits on and this
-// does not ask about: bash and ksh93 leave the write behind, zsh confines it.
-// The write escaping is what this shell already did, so the two-to-one is the
-// answer it keeps; a field for it would be a question about `command` rather
-// than about here-documents, and no measurement here makes it one.
+// **What it reaches is not the same word in every column**, and that is
+// Semantics.CommandReachesABuiltin rather than a question of this file's own
+// — see commandBuiltinRunsInThisShell, which reads it. The comment here used
+// to say that `command echo` was "the one shape in this file the panel splits
+// on and this does not ask about", and kept the write-escaping answer for
+// every column on a two-to-one. The split is not about here-documents: in
+// zsh the word asks for an external program and nothing else, so `command
+// echo`, `command :` and `command read` are all a process of their own there
+// and none of them is one anywhere else (#4701).
 func (r *Runner) commandRunsInThisShell(argv []string) bool {
 	if len(argv) == 0 {
 		// Assignments and redirections with no command name. There is no
@@ -379,6 +383,43 @@ func (r *Runner) commandRunsInThisShell(argv []string) bool {
 // is a refusal or a command named `-q` is an axis, and either way the answer
 // to *this* question is the same, because neither a refusal nor a name
 // beginning with a dash is a builtin.
+//
+// **A builtin behind the word is where the columns part**, and the noun is a
+// builtin rather than "a command this shell runs itself": a *function* behind
+// it — `f() { echo RAN; }; command f` — is `command not found` at 127 in all
+// five, and takes the external route in all five, because bypassing the
+// function table is what the utility is for everywhere. `command :`, `command
+// echo` and `command read` are the rows that move: four columns run the
+// builtin here and zsh asks for an external program alone, which is
+// Semantics.CommandReachesABuiltin, read here rather than measured again —
+// exactly as Runner.subscriptedPrefixReachesAChild reads it one question
+// along.
+//
+// Measured 2026-09-26 over a script file under `env -i PATH=/usr/bin:/bin`
+// with a scratch HOME, `unset u` and a target of `"${u:=made}"` read back on
+// the next line, against /opt/homebrew/bin/zsh 5.9.2 under `-f`,
+// /opt/homebrew/bin/bash 5.3.20, /bin/ksh ksh93u+ 2012-08-01 (AT&T's own
+// build), /bin/dash 0.5.12 and BusyBox v1.37.0 in the pinned alpine image:
+//
+//	                        bash   zsh    ksh93  dash  ash
+//	: > T        builtin    KEPT   KEPT   KEPT   KEPT  KEPT
+//	command :               KEPT   GONE   KEPT   KEPT  KEPT
+//	command read x          KEPT   GONE   KEPT   KEPT  KEPT
+//	command echo RAN        KEPT   GONE   KEPT   KEPT  KEPT
+//	command -p echo RAN     KEPT   GONE   KEPT   KEPT  KEPT
+//	command f    function   GONE   GONE   GONE   KEPT  KEPT
+//	command /bin/echo RAN   GONE   GONE   GONE   KEPT  KEPT
+//	command -v :            KEPT   KEPT   KEPT   KEPT  KEPT
+//
+// dash and BusyBox ash keep every write because they answer
+// RedirectTargetExpandsInTheCommandsProcess No, not because the route is
+// different there — their `command f` row is the control that says so.
+//
+// The axis is read rather than asked, and the report for a dialect that
+// never answered it belongs where the command actually runs — see
+// Runner.runWithoutFunctions, which asks it at the same condition. Reporting
+// here too would diagnose the same unanswered axis twice for one command,
+// and would diagnose it for a `command :` carrying no redirection at all.
 func (r *Runner) commandBuiltinRunsInThisShell(args []string) bool {
 	for len(args) > 0 {
 		a := args[0]
@@ -404,5 +445,13 @@ func (r *Runner) commandBuiltinRunsInThisShell(args []string) bool {
 		return true
 	}
 	_, isBuiltin := r.lookupBuiltin(args[0])
-	return isBuiltin || r.reservedBuiltin(args[0])
+	if !isBuiltin && !r.reservedBuiltin(args[0]) {
+		// Not a builtin under any reading, so there is nothing for the
+		// columns to disagree about: an external command everywhere, and a
+		// name that is neither is a failed lookup that still took the
+		// external route — measured, `command f` on a function loses the
+		// write in bash, zsh and ksh93 alike.
+		return false
+	}
+	return r.sem().CommandReachesABuiltin != No
 }

@@ -136,3 +136,35 @@ sub_zz 'while a group keeps it'
 unset u_zz
 { : ; } > "${u_zz:=made}"
 printf 'u=[%s]\n' "${u_zz-unset}"
+
+# `command` reaches a **builtin** here, so the redirections written on it are
+# this shell's exactly as the bare builtin's are. The axis is
+# `CommandReachesABuiltin`, Yes here and No in zsh alone, and this section is
+# the column that does not move (#4701).
+#
+# The last two rows are the control that says the noun is a builtin behind the
+# word rather than "an external command": a function and a program behind it
+# are a process here too, because bypassing the function table is what the
+# utility is for in every column.
+
+printf -- '--- where a command-prefixed target is applied ---\n'
+( unset u_zz; : > "${u_zz:=made_zz}"; printf 'a bare builtin:      u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command : > "${u_zz:=made_zz}"; printf 'command :            u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command echo RAN > "${u_zz:=made_zz}"; printf 'command echo:        u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command -p echo RAN > "${u_zz:=made_zz}"; printf 'command -p echo:     u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command -v : > "${u_zz:=made_zz}"; printf 'command -v :         u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( f_zz() { :; }; unset u_zz; command f_zz > "${u_zz:=made_zz}"; printf 'command <function>:  u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command /bin/echo RAN > "${u_zz:=made_zz}"; printf 'command /bin/echo:   u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+
+printf -- '--- and its here-document body, the other half of the redirection ---\n'
+( unset u_zz; command : <<END; printf 'command:  u=[%s]\n' "${u_zz-unset}"
+[${u_zz:=made_zz}]
+END
+) 2>/dev/null
+( unset u_zz; : <<END; printf 'bare:     u=[%s]\n' "${u_zz-unset}"
+[${u_zz:=made_zz}]
+END
+) 2>/dev/null
+
+printf -- '--- a command-prefixed target that expands is still opened ---\n'
+( command echo RAN < /dev/null; printf 'st=%s\n' "$?" ) 2>/dev/null

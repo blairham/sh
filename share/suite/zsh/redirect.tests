@@ -222,3 +222,48 @@ sub_zz 'while a group keeps it'
 unset u_zz
 { : ; } > "${u_zz:=made}"
 printf 'u=[%s]\n' "${u_zz-unset}"
+
+# `command` names an **external** command here, so the redirections written on
+# it are a process's and not this shell's: the target and the here-document
+# body are expanded there, the write does not come back, and a failure in
+# either costs the command instead of the shell. The axis is
+# `CommandReachesABuiltin` — zsh alone answers it No — and this is the
+# consequence it had never been read for (#4701).
+#
+# Each row is a subshell because the bare-builtin rows end the shell they
+# happen in, and stderr is dropped because the reach, the status and the write
+# are what this section is about.
+
+printf -- '--- where the target is applied ---\n'
+( unset u_zz; : > "${u_zz:=made_zz}"; printf 'a bare builtin:      u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command : > "${u_zz:=made_zz}"; printf 'command :            u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command echo RAN > "${u_zz:=made_zz}"; printf 'command echo:        u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+
+# The two controls that say the noun is a builtin behind the word. The
+# reporting letter runs nothing at all and stays in this shell in every
+# column; a program behind the word is a process in every column.
+( unset u_zz; command -v : > "${u_zz:=made_zz}"; printf 'command -v :         u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+( unset u_zz; command /bin/echo RAN > "${u_zz:=made_zz}"; printf 'command /bin/echo:   u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+
+# And the option the axis is named for, which moves every row above with the
+# word `command` still written.
+( setopt posixbuiltins; unset u_zz; command : > "${u_zz:=made_zz}"; printf 'posixbuiltins:       u=[%s]\n' "${u_zz-unset}" ) 2>/dev/null
+
+printf -- '--- what a failing target costs ---\n'
+( command : > $(( 1/0 )); printf 'SAME st=%s\n' "$?" ) 2>/dev/null; printf 'after st=%s\n' "$?"
+( : > $(( 1/0 )); printf 'SAME st=%s\n' "$?" ) 2>/dev/null; printf 'after st=%s\n' "$?"
+( command : > $(( 1/0 )) || printf 'CAUGHT\n' ) 2>/dev/null; printf 'after st=%s\n' "$?"
+( : > $(( 1/0 )) || printf 'CAUGHT\n' ) 2>/dev/null; printf 'after st=%s\n' "$?"
+
+printf -- '--- the here-document body, the other half of the same redirection ---\n'
+( unset u_zz; command : <<END; printf 'command:  u=[%s]\n' "${u_zz-unset}"
+[${u_zz:=made_zz}]
+END
+) 2>/dev/null
+( unset u_zz; : <<END; printf 'bare:     u=[%s]\n' "${u_zz-unset}"
+[${u_zz:=made_zz}]
+END
+) 2>/dev/null
+
+printf -- '--- the positive row: a target that expands is still opened ---\n'
+( command /bin/echo RAN < /dev/null; printf 'st=%s\n' "$?" ) 2>/dev/null

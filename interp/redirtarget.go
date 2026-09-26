@@ -197,7 +197,7 @@ func (r *Runner) targetExpandedElsewhere() bool {
 //	read x < …       regular     st=1   stops  st=1   stops  stops
 //	f < …            function    st=1   stops  st=1   stops  stops
 //	{ :; } < …       group       st=1   stops  st=1   stops  stops
-//	command : < …    command     st=1   stops  st=1   stops  stops
+//	command : < …    command     st=1   ——     st=1   stops  stops
 //
 // ksh93 alone grades it as the **redirection's** failure, which is why the
 // only row it stops on is the one POSIX makes fatal for a failed redirection
@@ -208,6 +208,14 @@ func (r *Runner) targetExpandedElsewhere() bool {
 // the other three, whatever it was written on. See
 // [Semantics.RedirectTargetFailureIsTheRedirections] for the pairs that tell
 // the two readings apart.
+//
+// The zsh cell of the `command :` row is not a value of this axis and used to
+// read `stops`, which is nobody's answer: `command` there asks for an
+// external program alone, so that command is a process of its own and never
+// reaches this function — measured, it carries on at 1 and `||` catches it,
+// which is the external route's answer and not this one's. See
+// [Semantics.CommandReachesABuiltin] and Runner.commandBuiltinRunsInThisShell
+// (#4701).
 //
 // It is a field of its own rather than a second reading of
 // [Semantics.HeredocBodyFailureIsTheRedirections] because dash and BusyBox

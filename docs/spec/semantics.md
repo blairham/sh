@@ -24913,6 +24913,36 @@ Doing bash's expansion and then quietly taking the first field is the
 answer no shell gives, and it is the one this had: `> $e` wrote to `a`,
 and `> $e` with a pattern truncated whichever file happened to match.
 
+**The refusal is about the count, so a target whose expansion *failed* is
+not refused for it.** That is core rather than an axis — the other five
+columns never write the sentence at all, and the one that does writes it
+once. Measured 2026-09-26 under `-c`, counting **occurrences** on standard
+error rather than asking whether the text is in there, which is the whole
+of the distinction: a `Contains` check reads one diagnostic and two alike.
+
+| `: > …`                     | stderr lines | `ambiguous redirect` |
+| --- | --- | --- |
+| `$(( 1/0 ))`                | 1 | 0 |
+| `${q?bad}`                  | 1 | 0 |
+| `$NOPE` under `set -u`      | 1 | 0 |
+| `$e` with `e=`              | 1 | 1 |
+| `$e` with `e="a b"`         | 1 | 1 |
+| `$e$(( 1/0 ))`, `e="a b"`   | 1 | 0 |
+
+bash 5.3.20 and bash 3.2.57 agree row for row, which was asked rather than
+assumed: this is a wording-and-count question and the two versions have
+split on one elsewhere. zsh 5.9.2, ksh93u+, dash 0.5.12 and BusyBox ash
+1.37.0 write one line and no ambiguity on every row.
+
+The last three rows are the pair that names the noun, and the reason it is
+worth stating: **the failure decides, not the count**. Hold the count fixed
+at each of its two wrong values and move only whether the expansion failed,
+and the answer moves — so a rule keyed on "no words" loses row four, and one
+keyed on "the wrong number of words" loses row six. This shell wrote the
+failure's own sentence and then a second line naming the word nobody could
+compute, on every operator that takes a target and every command kind
+(#4688).
+
 **`RedirectTargetTakesPathnameExpansion`** — bash yes · dash no · ksh93
 no · zsh yes
 

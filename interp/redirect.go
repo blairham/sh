@@ -1348,6 +1348,25 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
 	}
 	// Anything but exactly one word, which includes none: an empty variable
 	// is as ambiguous as two filenames, because neither says where to write.
+	//
+	// **Unless the expansion failed**, which is the one way to reach no words
+	// without ever having had a count. This complaint is about *how many*
+	// words the target came to, and a word that could not be computed came to
+	// none of them — so the failure's own sentence is the whole of what the
+	// script is told, and the redirection is refused without a second line.
+	// See redirtarget.go, which states the invariant this was breaking: a
+	// target whose expansion failed is one diagnostic, in every column.
+	//
+	// Keyed on the **failure** and not on the count, and the pair that says
+	// so holds the count fixed at each of its two wrong values: `e=; : > $e`
+	// is no words with nothing failed and is ambiguous, and `e="a b"; : >
+	// $e$(( 1/0 ))` is the several-word shape with a failure in it and is
+	// not. Measured 2026-09-26 on bash 5.3.20 and 3.2.57, which are the only
+	// two columns that reach here at all (#4688).
+	if r.targetExpansionFailed() {
+		r.redirErr = true
+		return nil, true
+	}
 	r.diagf("%s\n", Wording(r.diag().AmbiguousRedirect, "%[1]s: ambiguous redirect", rd.Text))
 	r.redirErr = true
 	r.status = 1

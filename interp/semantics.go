@@ -5685,9 +5685,12 @@ type Semantics struct {
 	// same shell answered at two moments.
 	//
 	// Asked only where `HOME` is absent **and** this Runner has a
-	// Runner.UserHomeDir to ask, so an ordinary shell never puts the question
-	// and a library embedded in a program with no business reading a password
-	// file is not made to answer one. See interp/shellhome.go (#4654).
+	// Runner.UserHomeDir to ask, so an ordinary shell never reaches it and a
+	// library embedded in a program with no business reading a password file
+	// is left alone. Read as the field rather than through ask, because a
+	// startup seed has no line of script in front of it to refuse: an
+	// unanswered value is No, which is what both presets say in as many words
+	// and what four of the six columns hold. See interp/shellhome.go (#4654).
 	StartupFillsAnAbsentHome Answer
 
 	// CdRemembersAHomeThatWasUnset makes `cd` with no operand treat a `HOME`
@@ -5731,10 +5734,12 @@ type Semantics struct {
 	// **Row four is the one this shell still answers wrong, and not because
 	// of this axis.** `typeset HOME` gives the name an empty value here where
 	// the reference leaves it declared and valueless, so the `unset` after it
-	// finds something to remove. The falsifier is that the name does not
-	// matter: `typeset X; print -r -- "${X+set}"` is `set` here and nothing
-	// in zsh 5.9.2 for every name, so it is `typeset` with no value that
-	// differs and the home is only where it was noticed.
+	// finds something to remove. Two things say the home is only where it was
+	// noticed: the name does not matter, and the *mode* does. Measured the
+	// same day, `typeset X; printf %s "${X+set}"` is `set` here under every
+	// emulation, and in zsh 5.9.2 it is `set` under `emulate zsh` and nothing
+	// at all under `emulate sh` and `emulate ksh` — so what differs is a
+	// declaration with no value, keyed on the emulation, and it is #4753.
 	//
 	// dash and BusyBox ash cannot answer it, which the dash column above is
 	// the whole of: CdWithoutHomeIsAnError is No there, so a `cd` with no

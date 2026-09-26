@@ -63,7 +63,14 @@ func (r *Runner) SeedHomeDirectory() {
 	if r.UserHomeDir == nil {
 		return
 	}
-	if !r.ask(r.sem().StartupFillsAnAbsentHome, "a shell filling in an absent `HOME` at startup") {
+	// Read as the field rather than through ask, and the difference matters
+	// here: ask *refuses* an unanswered axis, and a refusal needs a command
+	// to fail. This is a startup seed — there is no line of script in front
+	// of it, the status it would set is one nothing has read yet, and the
+	// sentence would arrive before the shell had run anything. So an
+	// unanswered value is No, which is what both presets say in as many words
+	// and what four of the six columns hold.
+	if r.sem().StartupFillsAnAbsentHome != Yes {
 		return
 	}
 	if home, ok := r.UserHomeDir(""); ok && home != "" {

@@ -18305,18 +18305,65 @@ than as a reading of the one `RedirectErrorOnSpecialBuiltinFatal` already
 uses. The name is how the mode is usually reached; see `invocation.md` under
 "Called another shell's name".
 
-**What is not modeled is a shell that once *had* a HOME.** Measured in the
-same run, and it is the same answer under every mode: `HOME=/tmp; unset HOME;
-cd` is a silent 0 even under the `sh` name, and so is `unset HOME; cd` in a
-shell that started with one — only a shell that has **never** had a HOME says
-`HOME not set`. So the reference keeps a home of its own beside the parameter,
-initialized once and emptied rather than removed by `unset`; an empty home is
-an empty destination, which is `CdEmptyHomeIsAnError` and already 0 there.
-Ours answers 1 on those rows under the sh-family modes. The second half of the
-same fact is that a zsh-emulation startup **fills in** an absent HOME from the
-password database — `env -u HOME zsh -c 'print $HOME'` writes the entry's home
-and `env -u HOME sh -c …` writes nothing — which is why a plain `zsh -c cd`
-has somewhere to go at all. Neither half is this axis and both are filed.
+**The shell holds a home of its own, and that is two more axes rather than a
+reading of this one** (#4654).
+
+`StartupFillsAnAbsentHome` is the first, and it belongs to the **mode** beside
+the field above: a shell started with no HOME at all seeds one from the
+password entry of the user the process runs as under `zsh` and seeds nothing
+under `sh`, `ksh` or `csh`. `env -u HOME <as zsh> -c 'print -r -- $HOME'`
+writes the entry and the same line under the name `sh` writes nothing, with
+`--emulate` agreeing on both. It is what makes the three sh-family rows of the
+table above reachable at all — under `zsh` there is no shell without a HOME for
+that field to answer about — so the two move together. bash is the control from
+the other side: `env -i bash -c 'echo "[$HOME]"'` is empty and a written `~` is
+a path all the same, which is a password entry read at the *tilde* rather than
+at startup and is `TildeWithNoHome`'s question. zsh's value for that axis is
+what it is because of this one: with the home seeded, the only way a zsh has no
+HOME is a script that removed it, and there a written `~` is the empty string.
+
+Where the seed happens is the whole of why the **front end** does it. An
+emulation taken from `argv[0]` is applied after the dialect's prelude has run,
+so a seed inside the interpreter's own per-chunk setup fires on the prelude,
+under the preset's answer, and a binary called `sh` fills in a home its mode
+says it does not. `interp.Runner.SeedHomeDirectory` is called from `driver`
+right after the emulation and before anything a person wrote.
+
+`CdRemembersAHomeThatWasUnset` is the second, and it is the *dialect*'s rather
+than the mode's — the same answer under every emulation. Measured under
+`env -u HOME`, with the reference called `sh` so that its own name does not
+seed one:
+
+| | zsh | bash 5.3 | bash 3.2 | ksh93 | dash |
+| --- | --- | --- | --- | --- | --- |
+| `cd` | 1 | 1 | 1 | 1 | 0 |
+| `HOME=/tmp; unset HOME; cd` | **0** | 1 | 1 | 1 | 0 |
+| `HOME=; unset HOME; cd` | **0** | 1 | 1 | 1 | 0 |
+| `typeset HOME; unset HOME; cd` | 1 | 1 | 1 | 1 | 0 |
+| `f(){ HOME=/tmp; }; f; unset HOME; cd` | **0** | 1 | 1 | 1 | 0 |
+| `(HOME=/tmp); cd` | 1 | 1 | 1 | 1 | 0 |
+
+The first row is the control: every column that can refuse refuses a `cd` in a
+shell that has never had a home, so what the rows under it say is that one
+column remembers having had one. It remembers **that** it had one and not
+which — the second row goes nowhere rather than to `/tmp` — so what survives
+the removal is a home that has been *emptied*, and an empty home is an empty
+destination, which is `CdEmptyHomeIsAnError` and already 0 there. An inherited
+HOME counts too: `env HOME=/tmp <as sh> -c 'unset HOME; cd'` is 0 in that
+column and 1 in bash and ksh93.
+
+Rows four and six narrow the reading to a **value** being removed: a
+declaration is not an assignment and a subshell's assignment does not reach the
+parent, which is what a flag written at the `unset` gets right without the
+assignment path having to notice anything. Row four is the one this shell still
+answers wrong and not because of this axis — `typeset X` gives the name an
+empty value here under every emulation, where the reference does that under
+`emulate zsh` alone; the name does not matter and the mode does, and it is
+#4753.
+
+dash and BusyBox ash cannot answer the second axis, which their column above is
+the whole of: `CdWithoutHomeIsAnError` is No there, so a `cd` with no home at
+all is already a silent 0 and both readings produce the same row on every line.
 
 **`CdEmptyOperandIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
 

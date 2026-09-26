@@ -82,24 +82,36 @@ func TestAShellSeedsAHomeTheEnvironmentDidNotGiveIt(t *testing.T) {
 			t.Errorf("HOME = %q, want the one the shell was handed", got)
 		}
 	})
-	t.Run("no database, no question", func(t *testing.T) {
-		// The axis is left unanswered, which would be a refusal if it were
-		// read — so a shell with nowhere to ask must not read it. That is
-		// what keeps a library embedded in a program with no business
-		// reading a password file from being made to answer one.
+	t.Run("an unanswered axis seeds nothing and says nothing", func(t *testing.T) {
+		// A startup seed has no line of script in front of it, so refusing
+		// it would write a sentence before the shell had run anything and
+		// set a status nothing has read. An unanswered value is No here.
 		sem := PosixSemantics()
 		sem.StartupFillsAnAbsentHome = Answer(0)
 		errs := &strings.Builder{}
 		r := newTestRunner(t, &Runner{
 			Semantics: &sem, Diagnostics: &Diagnostics{}, Stderr: errs,
 			Env: []string{"PATH=/usr/bin:/bin"},
+			UserHomeDir: func(string) (string, bool) {
+				return "/the/password/entry", true
+			},
 		})
 		r.SeedHomeDirectory()
 		if errs.Len() != 0 {
-			t.Errorf("a shell with no password database said %q", errs)
+			t.Errorf("an unanswered axis said %q at a startup with no script in front of it", errs)
 		}
-		if _, ok := r.GetVar("HOME"); ok {
-			t.Error("HOME was seeded from nothing")
+		if got, ok := r.GetVar("HOME"); ok {
+			t.Errorf("HOME = %q, want nothing", got)
+		}
+	})
+	t.Run("no database, no seed", func(t *testing.T) {
+		// A library embedded in a program with no business reading a
+		// password file has nothing to ask, whatever its dialect says.
+		r, _ := homeRunner(t, func(s *Semantics) { s.StartupFillsAnAbsentHome = Yes })
+		r.UserHomeDir = nil
+		r.SeedHomeDirectory()
+		if got, ok := r.GetVar("HOME"); ok {
+			t.Errorf("HOME = %q, want nothing", got)
 		}
 	})
 }

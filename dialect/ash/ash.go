@@ -2571,6 +2571,10 @@ func Diagnostics() interp.Diagnostics {
 		FileNotFound:          "no such file",
 		DirectoryNotFound:     "nonexistent directory",
 		RedirectFailureStatus: 1,
+		// And 2 — the fatal number — on a `( … )`'s own redirection. See
+		// interp.Diagnostics.SubshellRedirectFailureStatus for the nine
+		// rows and the four controls beside them (#4716).
+		SubshellRedirectFailureStatus: 2,
 
 		// A word after `<&` or `>&` that names no descriptor, and this shell
 		// has two sentences for it rather than one — the same split bash and

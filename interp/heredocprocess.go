@@ -352,6 +352,15 @@ func (r *Runner) giveUpTheCommand(at redirBoundary) {
 // whatever the failure carried, so bash's `${q?word}` in a body still reports
 // its own 127 and a preset that never measured this does not move.
 func (r *Runner) takeTheRedirectionsStatus() {
+	if st := r.diag().SubshellRedirectFailureStatus; st != 0 && r.redirOwner == redirOwnerASubshell {
+		// And the one column that answers a `( … )`'s own redirection with
+		// a different number answers it the same way here: a body it could
+		// not expand on `( cat ) <<END` leaves 2 where the same body on
+		// `cat <<END` leaves 1. See
+		// Diagnostics.SubshellRedirectFailureStatus (#4716).
+		r.status = st
+		return
+	}
 	if st := r.diag().RedirectFailureStatus; st != 0 {
 		r.status = st
 	}

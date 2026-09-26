@@ -8120,6 +8120,39 @@ type Diagnostics struct {
 	// is what makes this a different question from FatalErrorStatusIsOne.
 	RedirectFailureStatus int
 
+	// SubshellRedirectFailureStatus is that same number for a redirection
+	// written on a `( … )` of its own, where one column answers differently.
+	// Zero means RedirectFailureStatus's answer, which is four of the five.
+	//
+	// BusyBox ash is the column, and it is the column worth measuring this
+	// on for the reason it was worth measuring #4684 on: it numbers a fatal
+	// error and a failed redirection apart — 2 and 1 — where bash, zsh and
+	// ksh93 report 1 for both and dash reports 2 for both. On a subshell's
+	// own redirection it leaves **2**, the fatal number, and it does so for
+	// a failed open and a failed expansion alike. Measured 2026-09-26,
+	// BusyBox v1.37.0 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b,
+	// `env -i PATH=/usr/bin:/bin HOME=<scratch> LC_ALL=C` over a script file
+	// with stdin from /dev/null, the status taken on the same line:
+	//
+	//	cat < nosuch                1   a command of its own
+	//	{ cat; } < nosuch           1   a group
+	//	while … done < nosuch       1   a loop
+	//	( cat < nosuch )            1   the redirection is the inner command's
+	//	( cat ) < nosuch            2   the subshell's own
+	//	( : ) < nosuch              2   and not about what is inside it
+	//	( cat ) > /nosuch/dir/f     2   a failed create, the same
+	//	( cat ) <<END $(( 1/0 ))    2   a body that will not expand
+	//	( cat ) <<END ${x?bad}      2   whatever the expansion failed on
+	//
+	// The four rows above the split are the controls that say the noun is
+	// the **subshell's own** redirection: a redirection inside the
+	// parentheses is the inner command's and reports 1, and a group with
+	// the identical redirection reports 1 too. The script carries on in
+	// every row, and `( cat ) < nosuch | cat` leaves the pipeline's 0, so
+	// this is the number left behind and not a reach.
+	SubshellRedirectFailureStatus int
+
 	// BuiltinWriteError is a builtin whose output write failed — into a
 	// descriptor closed with `>&-`, most plainly. Two verbs, positional:
 	// %[1]s is the builtin's name and %[2]s the reason.
@@ -10552,6 +10585,21 @@ func (d Diagnostics) redirectFailureStatus() int {
 		return 1
 	}
 	return d.RedirectFailureStatus
+}
+
+// redirectFailureStatus is the number a failed redirection leaves behind on
+// the command it was written on, which one column answers differently for a
+// `( … )`. See Diagnostics.SubshellRedirectFailureStatus.
+//
+// On the runner rather than on the vector because the owner is what decides,
+// and the owner is a fact about the command being run rather than about the
+// dialect — Runner.redirOwner is already what a here-document body's
+// expansion is placed by.
+func (r *Runner) redirectFailureStatus() int {
+	if st := r.diag().SubshellRedirectFailureStatus; st != 0 && r.redirOwner == redirOwnerASubshell {
+		return st
+	}
+	return r.diag().redirectFailureStatus()
 }
 
 // timeDecimals is TimeDecimals with the substrate's own answer for zero.

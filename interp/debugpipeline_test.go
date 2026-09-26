@@ -298,3 +298,64 @@ func TestAnActionThatUnwindsStopsThePipelineBeforeItStarts(t *testing.T) {
 			errs, code)
 	}
 }
+
+// Where the firing is *located*, which the counts above cannot see: the
+// reading that fires once fired at whatever line the record held, and a
+// pipeline is not a command, so nothing had moved that record onto it. The
+// body therefore read the **previous statement's** line — measured 2026-09-25
+// against the reference this reading was taken from, `print a` on line 2 and
+// `print b | cat` on line 3 reading `T@2 T@3` there and `T@2 T@2` here
+// (#4557).
+//
+// Two blank lines sit in front of the pipeline so that "the previous
+// statement's line" and "one less than the pipeline's" are different numbers:
+// a pipeline written directly under its neighbor cannot tell an off-by-one
+// from a record that never moved, which is how this read as a plausible
+// rounding for as long as it did.
+//
+// Both readings that fire for the pipeline are here. The per-element one
+// already located its firings and is the control: a fix that moved the line
+// for the whole axis rather than for the reading that was wrong would be
+// invisible in the first row alone.
+func TestAPipelinesDebugFiringIsLocatedAtThePipeline(t *testing.T) {
+	const src = "trap 'echo T@$LINENO >&2' DEBUG\n:\n\n\n: | :\n:\n"
+	for _, c := range []struct {
+		how  DebugTrapPipeline
+		want string
+	}{
+		// The `:` on line 2, the pipeline on line 5, the `:` on line 6.
+		{DebugTrapPipelineOnceForThePipeline, "T@2\nT@5\nT@6\n"},
+		// And once per element, both elements at the pipeline's own line.
+		{DebugTrapPipelinePerSimpleElement, "T@2\nT@5\nT@5\nT@6\n"},
+	} {
+		_, errs, _ := trapRun(t, src, firingLineSem(c.how), Diagnostics{})
+		if errs != c.want {
+			t.Errorf("%v: stderr %q, want %q", c.how, errs, c.want)
+		}
+	}
+}
+
+// firingLineSem is pipeSem with the body-line reading that makes the firing
+// line readable: a body that names where it fired reports that line and
+// nothing of its own, so what the action prints is the location under test
+// rather than a line of the action. Which of the three readings a dialect
+// holds is its own axis — see Semantics.CommandTrapBodyLine — and the
+// question here is what number the firing carries into whichever of them.
+func firingLineSem(how DebugTrapPipeline) func(*Semantics) {
+	base := pipeSem(how, No, No)
+	return func(s *Semantics) {
+		base(s)
+		s.CommandTrapBodyLine = TrapBodyLineWhereItFired
+	}
+}
+
+// And the row that says it is the pipeline's line rather than *any* earlier
+// line: with the pipeline as the first statement after the `trap`, a record
+// that never moved reads the `trap`'s own line.
+func TestAPipelineFirstInTheScriptIsNotLocatedAtTheTrap(t *testing.T) {
+	const src = "trap 'echo T@$LINENO >&2' DEBUG\n: | :\n"
+	_, errs, _ := trapRun(t, src, firingLineSem(DebugTrapPipelineOnceForThePipeline), Diagnostics{})
+	if want := "T@2\n"; errs != want {
+		t.Errorf("stderr %q, want %q", errs, want)
+	}
+}

@@ -3444,6 +3444,21 @@ type Runner struct {
 	// linePin overrides the line a node reports, for the dialect that names
 	// where a trap fired rather than where in its body a failure was.
 	linePin int
+	// linePinEndsAtACall says that pin is a fact about one body's *text*
+	// rather than about everything that text sets going, so a function
+	// called from it counts from its own lines again.
+	//
+	// Two things set a pin and they are pinning different amounts. A trap
+	// body is a body of its own whose lines are reported as the firing
+	// line, and a function it calls is a body of its own in turn: measured
+	// 2026-09-26 on zsh 5.9.2 under `-f`, `myfunc(){\n print F $LINENO\n}`
+	// with `trap 'myfunc' DEBUG` reads `F 1` at every firing, and the same
+	// function's `command not found` is located `myfunc:1:` (#4478). Text
+	// `eval` is running under a dialect that says it is *not a place* pins
+	// the other amount: the caller's location stands for everything under
+	// it, and a function called from that text reports the `eval`'s own
+	// line — measured the same day with `unsetopt evallineno`.
+	linePinEndsAtACall bool
 
 	// locatedByNameAlone drops the line from the one message it is set
 	// around, for a refusal the dialect locates by the shell's name and

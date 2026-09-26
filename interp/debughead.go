@@ -296,11 +296,30 @@ func (r *Runner) debugPipeline(ctx context.Context, p *syntax.Pipeline, armed bo
 	}
 	switch r.sem().DebugTrapPipelines {
 	case DebugTrapPipelineOnceForThePipeline:
-		// One firing for the whole statement. Nothing is recorded as the
-		// running command: the record holds a syntax.Command and a pipeline
-		// is not one, and the only parameter in the panel that would read it
-		// here is a parameter this tree does not have.
+		// One firing for the whole statement, **at the statement's own
+		// line**. A pipeline is not a command, so nothing dispatched it and
+		// nothing moved the line record onto it: the firing read whatever
+		// ran before the pipeline, so `$LINENO` in the body named the
+		// previous statement — and named the `trap` line itself where the
+		// pipeline was the first statement after it. Measured 2026-09-25
+		// against zsh 5.9.2 `-f` over a script file, `print a` on line 2 and
+		// `print b | cat` on line 3: `T@2 T@3` there against `T@2 T@2` here,
+		// and with two blank lines between them `T@2 T@5` against `T@2 T@2`,
+		// which is what says it was the previous statement's line and not an
+		// off-by-one (#4557).
+		//
+		// Put back afterwards for the reason the per-element branch below
+		// puts it back: the elements set their own lines as they are
+		// dispatched, and a firing is not a statement having run.
+		//
+		// Nothing is recorded as the running command: the record holds a
+		// syntax.Command and a pipeline is not one, and the only parameter
+		// in the panel that would read it here is a parameter this tree does
+		// not have.
+		saved := r.line
+		r.line = r.pipelineLine(p)
 		r.runDebugTrap(ctx)
+		r.line = saved
 		if r.debugTrapSkipped() {
 			// The refusal is the pipeline's, so it costs every element.
 			skip = make([]bool, len(p.Cmds))
@@ -426,6 +445,21 @@ func (d DebugTrapSublist) String() string {
 		return "DebugTrapSublistOnceForTheList"
 	}
 	return "DebugTrapSublistPerOperand"
+}
+
+// pipelineLine is the line a pipeline counts as being written on: where the
+// statement starts, read the way its first element would be read, so a
+// dialect that locates a command at its first word's end locates the
+// statement there too.
+//
+// A negated pipeline starts at the `!`, which is what Pipeline.Pos already
+// says and what a statement's location means — the negation is part of the
+// statement rather than something in front of it.
+func (r *Runner) pipelineLine(p *syntax.Pipeline) int {
+	if !p.Negated && len(p.Cmds) > 0 {
+		return r.commandLine(p.Cmds[0])
+	}
+	return r.lineOf(p.Pos())
 }
 
 // sublistExpr runs a statement's whole expression, firing the DEBUG trap once

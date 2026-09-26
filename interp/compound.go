@@ -1725,6 +1725,19 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// above carries the same line, for the dialect that reports it per frame
 	// rather than only for the one running.
 	r.funcLine = defLine
+	// And a line pinned by the *text* the call was written in does not reach
+	// the body, whose lines are its own: a trap body reports the line it
+	// fired on, and a function it calls reports its own. See
+	// Runner.linePinEndsAtACall (#4478).
+	if r.linePinEndsAtACall {
+		savedPin := r.linePin
+		r.linePin, r.linePinEndsAtACall = 0, false
+		defer func() { r.linePin, r.linePinEndsAtACall = savedPin, true }()
+	}
+	// And a line pinned by the *text* the call was written in does not reach
+	// the body, whose lines are its own: a trap body reports the line it
+	// fired on, and a function it calls reports its own. See
+	// Runner.linePinEndsAtACall (#4478).
 	// And the body's lines are the body's, whatever offset the *caller* was
 	// running under. A command substitution and — in two dialects — `eval`
 	// run their text at an offset into the script (Runner.lineBase), and it

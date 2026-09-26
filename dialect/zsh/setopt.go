@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 131 of the 185
+//     typing a directory name still does not change directory. 130 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -136,15 +136,24 @@ import (
 // the notice arrived one command late and a driver whose only readable line
 // was that notice waited for it for ever (#4524).
 //
-// `posixtraps` is the most recent, and it is the one whose *moment* had to be
-// measured before it could be wired. It is
+// `posixtraps` is one of the two most recent, and it is the one whose *moment*
+// had to be measured before it could be wired. It is
 // [interp.Semantics.ExitTrapIsFunctionLocal] read backwards — the option on
 // is that axis answering No — and the axis was asked at the function's
 // return, where this option is read when the `trap` command runs. The two
 // moments disagree in both directions, so reading it at the return would have
 // been a second wrong answer rather than the missing one (#4547).
 //
-// Nothing else about the split moved, and 131 is still most of the table.
+// `magicequalsubst` is the other: the first unquoted `=` in a command
+// argument splitting the word, so `--prefix=~/opt` reaches the program as a
+// path. It names an expansion this interpreter already performs for an
+// assignment's value, which is what made recording it the wrong bargain
+// (#4548). Its moment was measured the same way #4547's was and it is the
+// **expansion**, not the parse: a function defined while the option was off
+// and called while it is on expands, and one defined on and called off does
+// not — see TestMagicEqualSubstIsReadWhenTheWordIsExpanded.
+//
+// Nothing else about the split moved, and 130 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -770,7 +779,46 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("magicequalsubst", false),
+	{
+		// MAGIC_EQUAL_SUBST: **the first unquoted `=` in a word**, and not
+		// the shape of what stands in front of it. On, every argument of the
+		// form `something=value` gets the tilde treatment an assignment's
+		// value already gets, so `configure --prefix=~/opt` reaches the
+		// program as a path. Off — which is zsh's default and this one's —
+		// the two characters go through as written.
+		//
+		// The noun is that one `=`, and the two obvious misreadings agree
+		// with it nearly everywhere. It is not "a word shaped like an
+		// assignment": `--opt=~` and `1abc=~` expand under the option and
+		// neither is a name. And it is not the *last* `=`: `a=b=~` is left
+		// alone, because the split is at offset 1 and the `~` then opens
+		// neither the value nor one of its colon segments, while `a=b=~:~`
+		// moves only the second tilde. Measured on zsh 5.9.2
+		// (aarch64-apple-darwin25.4.0) under `-f`, 2026-09-25, with
+		// `HOME=/Users/testhome`.
+		//
+		// What the value gets is the assignment's own treatment and not a
+		// copy of it — head, colons, `~+`, `~-`, `~user`, `=cmd` — which is
+		// why this is one axis on the word pipeline rather than a second
+		// expansion. Over 24 written values the command word and the
+		// assignment statement come to the same string in the reference on
+		// every row.
+		//
+		// [interp.Semantics.TheFirstUnquotedEqualsInAWordOpensATildeContext]
+		// holds the panel, the quoting rows and the three roads that are
+		// written down rather than answered. It was `recorded` until #4548,
+		// which is why `print -r -- a=~` under the option wrote a tilde.
+		base: "magicequalsubst", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.TheFirstUnquotedEqualsInAWordOpensATildeContext == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.TheFirstUnquotedEqualsInAWordOpensATildeContext
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("mailwarning", false),
 	recorded("markdirs", false),
 	recorded("menucomplete", false),
@@ -1561,8 +1609,10 @@ func setRecordedOptions(r *interp.Runner, names []string) {
 // this runner's own — which is also what makes a subshell's `setopt` stay in
 // the subshell.
 //
-// The copy is a real cost and not a notional one: [interp.Semantics] is 962
-// axes and 3280 bytes, and because the fresh copy is what the runner keeps,
+// The copy is a real cost and not a notional one: [interp.Semantics] is 976
+// axes and 3296 bytes — counted off the struct on 2026-09-25, where the two
+// numbers here had stood at 962 and 3280 through a dozen axes — and because
+// the fresh copy is what the runner keeps,
 // it is a heap allocation every time. A caller that knows the axis is
 // already where it is being asked to go should not call this at all — see
 // setAxis, which is the guarded form and is what the option table uses.

@@ -474,6 +474,63 @@ func (r *Runner) CdResolvesDotDot() bool { return r.cdResolvesDotDot }
 // `setopt chasedots` is the only name the panel has for it.
 func (r *Runner) SetCdResolvesDotDot(on bool) { r.cdResolvesDotDot = on }
 
+// RefusesABadPatternWhenGlobbing reports whether a word this dialect will not
+// compile as a pattern is an error when the shell is generating filenames,
+// rather than an ordinary word the shell hands on unchanged.
+//
+// On with nothing said, which is why the field behind it stores the
+// deviation. It can only ever be turned *down*: a dialect whose
+// Semantics.UnterminatedBracket is not BracketBadPattern never reaches a
+// refusal to withhold, so turning this off there changes nothing. One shell
+// in the panel has the switch and calls it `unsetopt badpattern`.
+//
+// **It governs filename generation and nothing else**, which is the half of
+// the grid an implementation that moved Semantics.UnterminatedBracket instead
+// would get backwards. Measured 2026-09-26 on zsh 5.9.2
+// (`/opt/homebrew/bin/zsh`, `-f`), every row run in **both** states, in a
+// directory holding the three files `[a`, `xa` and `x[a`:
+//
+//	                      switch on              switch off
+//	print [a              bad pattern: [a, 1     [a, 0
+//	print a[b             bad pattern: a[b, 1    a[b, 0
+//	print *[a             bad pattern: *[a, 1    *[a, 0
+//	case [a in ([a)       bad pattern: [a        bad pattern: [a
+//	[[ '[a' == [a ]]      bad pattern: [a, 2     bad pattern: [a, 2
+//	v='[abc'; ${v#[a}     bad pattern: [a, 1     bad pattern: [a, 1
+//	v='[a';   ${v:#[a}    bad pattern: [a, 1     bad pattern: [a, 1
+//
+// So a `case` arm, a `[[ ]]` operand and a parameter expansion's pattern are
+// refused whatever the switch says, and only the word on its way to the
+// filesystem is spared. That is the pair the rule is pinned by: the *same*
+// text, `[a`, moves in the first row and does not move in the fourth.
+//
+// **Spared means handed back whole, not read with the `[` as a literal**, and
+// the third row above is what says so. With the switch off, `*[a` prints
+// itself — it does not match the file `x[a`, which a pattern whose `[` had
+// become an ordinary character would. No filename generation happens at all,
+// so NOMATCH has nothing to complain about and NULL_GLOB has nothing to
+// remove: measured, `unsetopt badpattern` with either of those set still
+// writes `[a` at status 0.
+//
+// It is per **word** and not per command. Measured, `print -r -- x* [a` with
+// the switch off writes `x[a xa [a` — the first word globbed and the second
+// was left alone.
+//
+// Not an axis, for CdResolvesSymlinks's reason: the columns do not disagree
+// about a default here. What one of them has is a name for turning its own
+// refusal off, and `emulate sh` and `emulate ksh` reach it with nobody typing
+// `setopt` — measured, both leave `[a` standing at status 0.
+func (r *Runner) RefusesABadPatternWhenGlobbing() bool {
+	return !r.badPatternGlobIsTheWordItself
+}
+
+// SetRefusesABadPatternWhenGlobbing moves it, in the positive direction the
+// getter reads. A dialect whose name for this is the refusal — zsh's
+// `badpattern`, which is on — passes the option's own sense straight through.
+func (r *Runner) SetRefusesABadPatternWhenGlobbing(on bool) {
+	r.badPatternGlobIsTheWordItself = !on
+}
+
 // SendsHangupToJobsAtExit reports whether this shell sends SIGHUP to the jobs
 // it still has when it ends.
 //

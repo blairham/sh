@@ -149,3 +149,68 @@ unsetopt chaselinks
 ( setopt chasedots; [[ -o chasedots ]] && print 'inner: on' )
 [[ -o chasedots ]] || print 'outer: still off'
 cd "$base/.."
+
+# ---- BAD_PATTERN: only filename generation reads it ----
+#
+# The option decides whether a word this shell will not compile as a pattern
+# is an error or is left alone, and it decides that for **filename generation
+# and nothing else**. Every row is asked in both states, because with the
+# option on the two shells already agree — which is why the name read as
+# implemented for as long as it did (#4630).
+#
+# **Nothing below is quoted**, which is the whole of whether these rows ask
+# anything: a quoted `*[a` is a literal in either state, so a first draft of
+# this block reported every row at status 0 and was testing nothing at all.
+#
+# The fixture carries `x[a` so that "left alone" is separable from "the `[` is
+# an ordinary character": a shell doing the latter answers `*[a` with the file.
+# Each complaint goes to /dev/null and the row prints the status instead, since
+# the wording is each shell's own expression and the behavior is the question.
+rm -rf bp.tmp; mkdir bp.tmp; cd bp.tmp; : > '[a'; : > xa; : > 'x[a'
+
+( unsetopt badpattern; print -rn -- [a )    2> /dev/null; printf '  off [a    %s\n' "$?"
+( setopt badpattern;   print -rn -- [a )    2> /dev/null; printf '  on  [a    %s\n' "$?"
+( unsetopt badpattern; print -rn -- *[a )   2> /dev/null; printf '  off *[a   %s\n' "$?"
+( setopt badpattern;   print -rn -- *[a )   2> /dev/null; printf '  on  *[a   %s\n' "$?"
+( unsetopt badpattern; print -rn -- a[b )   2> /dev/null; printf '  off a[b   %s\n' "$?"
+( unsetopt badpattern; print -rn -- [! )    2> /dev/null; printf '  off [!    %s\n' "$?"
+
+# A field that is exactly `[` is not this question in either state, and a
+# pattern that compiles is not either — the two rows that hold a bracket fixed
+# and say the option is not keyed on "a word with a bracket in it".
+( unsetopt badpattern; print -rn -- [ )     2> /dev/null; printf '  off [     %s\n' "$?"
+( setopt badpattern;   print -rn -- [ )     2> /dev/null; printf '  on  [     %s\n' "$?"
+( setopt badpattern;   print -rn -- x* )    2> /dev/null; printf '  on  x*    %s\n' "$?"
+
+# Per word and not per command: the good one globs, the bad one stands.
+( unsetopt badpattern; print -rn -- x* [a ) 2> /dev/null; printf '  off two   %s\n' "$?"
+
+# And the half that does **not** move. A `case` arm, a `[[ ]]` operand and an
+# element filter are refused with the option off exactly as with it on, which
+# is the pair that pins the noun: the text is `[a` here and in the first row.
+# The `case` prints nothing in either state, and printing nothing is the
+# assertion — its status is a separate disagreement and not this one's.
+( unsetopt badpattern; case '[a' in ([a) print M;; (*) print O;; esac ) 2> /dev/null
+print -r -- '  off case  (nothing above this line)'
+( unsetopt badpattern; [[ '[a' == [a ]] )   2> /dev/null; printf '  off dbl   %s\n' "$?"
+( unsetopt badpattern; v='[a'; print -rn -- ${v:#[a} ) 2> /dev/null
+printf '  off :#    %s\n' "$?"
+
+# NOMATCH and NULL_GLOB decide what an unmatched glob does, and a word this
+# option spared was never a glob — so neither reaches it. The third row is the
+# positive control: the same `nullglob` still deletes a well-formed miss.
+( unsetopt badpattern; setopt nullglob;  print -rn -- [a )      2> /dev/null
+printf '  off nullglob [a    %s\n' "$?"
+( unsetopt badpattern; setopt nonomatch; print -rn -- [a )      2> /dev/null
+printf '  off nonomatch [a   %s\n' "$?"
+( unsetopt badpattern; setopt nullglob;  print -rn -- zz* END ) 2> /dev/null
+printf '  off nullglob zz*   %s\n' "$?"
+
+# It reports itself, an emulation reaches it with nobody typing `setopt`, and
+# a subshell keeps its change to itself.
+[[ -o badpattern ]] && print 'badpattern: on by default'
+( emulate sh;  [[ -o badpattern ]] || print 'emulate sh: off' )
+( emulate ksh; [[ -o badpattern ]] || print 'emulate ksh: off' )
+( unsetopt badpattern; [[ -o badpattern ]] || print 'inner: off' )
+[[ -o badpattern ]] && print 'outer: still on'
+cd ..; rm -rf bp.tmp

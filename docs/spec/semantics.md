@@ -7503,7 +7503,7 @@ said off and the braces went on expanding, so a script could read the state
 and watch it be false in the same breath. A recorded name is one this shell
 does not do **in either state**, so nothing it says can be contradicted by
 what the shell then does — the request is remembered and the feature is
-absent, which is the same bargain the 124 recorded `setopt` names strike.
+absent, which is the same bargain the 123 recorded `setopt` names strike.
 The bill is real and it is deferred rather than waived: `globstar` on with no
 `**` crossing is a weaker answer than `globstar` implemented, which is why
 each name that is recorded rather than built carries an issue of its own. A
@@ -7676,8 +7676,8 @@ first is unanimous across the table.** Every name is one of five kinds:
 | axis- or matcher-backed | 24 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`, `errreturn`, `autopushd`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **six** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
-| switch-backed | 9 | `aliases`, `autocd`, `banghist`, `chasedots`, `chaselinks`, `checkjobs`, `cprecedences`, `hup` and `rcquotes`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, a session that is leaving really does send SIGHUP to the jobs it abandons, and `cd` really does stop keeping the path a directory was reached by, and a doubled `'` inside a single-quoted run really is one literal quote. `cprecedences` and `rcquotes` are the two that move the **parser** rather than the interpreter, and each reaches the rest of the program through a replaced `syntax.Dialect` — see "a doubled quote inside single quotes" in `docs/spec/grammar/tokenization.md`. `chaselinks` and `chasedots` are the pair where the panel's *default* is unanimous and only this shell has a name for moving off it — see below. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
-| **recorded** | 124 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| switch-backed | 10 | `aliases`, `autocd`, `badpattern`, `banghist`, `chasedots`, `chaselinks`, `checkjobs`, `cprecedences`, `hup` and `rcquotes`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, a session that is leaving really does send SIGHUP to the jobs it abandons, and `cd` really does stop keeping the path a directory was reached by, and a doubled `'` inside a single-quoted run really is one literal quote. `cprecedences` and `rcquotes` are the two that move the **parser** rather than the interpreter, and each reaches the rest of the program through a replaced `syntax.Dialect` — see "a doubled quote inside single quotes" in `docs/spec/grammar/tokenization.md`. `chaselinks` and `chasedots` are the pair where the panel's *default* is unanimous and only this shell has a name for moving off it — see below. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it. `badpattern` is the one whose territory an axis already covers — `Semantics.UnterminatedBracket`, which the panel splits on — and which is a switch all the same, because the axis governs matching as well as globbing and the name reaches only the second: measured, a `case` arm and a `[[ ]]` operand are refused with it off exactly as with it on |
+| **recorded** | 123 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -8186,7 +8186,7 @@ what separates it from `posixtraps` (#4591). The full grid, and the rows that
 say the reading reaches the plain run and nothing else, are in
 `docs/spec/grammar/tokenization.md`.
 
-So 124 of 185 are recorded, the count above is the one produced by counting
+So 123 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -8620,7 +8620,7 @@ name, so routing it through the table as well would have `setopt err_exit`
 call back into the table it was called from.
 
 Two consequences worth stating. Recording is unchanged: a listing 185 rows
-long still says nothing about whether a name is acted on, and 124 of them are
+long still says nothing about whether a name is acted on, and 123 of them are
 remembered and not acted on — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
 this shell has and will not move answers `can't change option` at 1,
@@ -12104,7 +12104,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 124 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 123 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150, then 145 while the
   table read 132; neither number was ever the count the table produces, and

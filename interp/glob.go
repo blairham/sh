@@ -820,7 +820,23 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// `[ a = a ]` working: a field that is exactly `[` is left alone.
 		// `a[` is not, so the rule is the whole field rather than where the
 		// bracket sits in it.
-		r.fatalPattern(field, 1)
+		//
+		// **Unless the session has turned the refusal off**, which is the
+		// one place in the program that can: this is the moment a word on
+		// its way to the filesystem meets a pattern that will not compile,
+		// and Runner.RefusesABadPatternWhenGlobbing is read here rather than
+		// in the matcher because a `case` arm and a `[[ ]]` operand are
+		// refused whatever the switch says — measured, and the whole of what
+		// distinguishes this switch from the axis above it.
+		//
+		// Withholding the refusal hands the field back **unchanged** and
+		// generates nothing, which is the same `nil, false` `set -f` returns
+		// a few lines up. Not BracketLiteral: with the switch off real zsh
+		// writes `*[a` rather than the file `x[a` it would have matched had
+		// the `[` become an ordinary character.
+		if r.RefusesABadPatternWhenGlobbing() {
+			r.fatalPattern(field, 1)
+		}
 		return nil, false
 	}
 	// `N` in the `~(…)` group this dialect writes in front of a pattern.

@@ -3122,6 +3122,13 @@ type Runner struct {
 	// said; one dialect names it, as `setopt chasedots`. See
 	// CdResolvesDotDot in sessionswitches.go.
 	cdResolvesDotDot bool
+	// badPatternGlobIsTheWordItself stores the *deviation*: a field whose
+	// pattern this dialect will not compile is handed back unchanged rather
+	// than refused, and only when generating filenames. Refusing is what a
+	// Runner does with nothing said, so the zero value is the shell this has
+	// always been. One dialect names the switch, as `unsetopt badpattern`.
+	// See RefusesABadPatternWhenGlobbing in sessionswitches.go.
+	badPatternGlobIsTheWordItself bool
 	// hangUpJobsAtExit sends SIGHUP to the jobs this shell still has when it
 	// ends. Off with nothing said; one dialect names it, as
 	// `shopt -s huponexit`. See SendsHangupToJobsAtExit in

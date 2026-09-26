@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 124 of the 185
+//     typing a directory name still does not change directory. 123 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -211,7 +211,16 @@ import (
 // is switch-backed for that reason, beside `cprecedences`, which is the other
 // name here that moves the parser (#4591).
 //
-// Nothing else about the split moved, and 124 is still most of the table.
+// `badpattern` is the most recent and is a session switch for a third
+// reason, which is worth keeping separate from those two: there **is** an
+// axis for the question it touches — interp.Semantics.UnterminatedBracket,
+// which the panel genuinely splits on — and moving it would have been wrong
+// all the same, because the axis governs matching as well as globbing and
+// this name reaches only the second. Measured, a `case` arm and a `[[ ]]`
+// operand are refused with the option off exactly as with it on. See
+// interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
+//
+// Nothing else about the split moved, and 123 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -411,7 +420,41 @@ var zshOptions = []zshOption{
 	},
 	recorded("autoremoveslash", true),
 	recorded("autoresume", false),
-	recorded("badpattern", true),
+	{
+		// BAD_PATTERN: a word this shell will not compile as a pattern is
+		// an error when filenames are being generated. On by default.
+		//
+		// It is interp.Runner.RefusesABadPatternWhenGlobbing, a session
+		// switch rather than a move of interp.Semantics.UnterminatedBracket
+		// — and that is the whole of the question here. Recorded and inert
+		// until #4630, which is what `E01options.ztst` stopped on once #4633
+		// carried it past `BARE_GLOB_QUAL`'s neighbor: `unsetopt badpattern;
+		// print [a` wrote `bad pattern: [a` where the reference writes `[a`.
+		//
+		// **Only filename generation reads it.** Moving the axis instead
+		// would have spared a `case` arm, a `[[ ]]` operand and a parameter
+		// expansion's pattern as well, and measured on zsh 5.9.2 (`-f`,
+		// 2026-09-26) all three are refused with the option off exactly as
+		// they are with it on. The discriminating pair holds the *text*
+		// fixed and moves the surface: `print [a` writes `[a` and
+		// `case '[a' in ([a)` still reports `bad pattern: [a`.
+		//
+		// The other trap is which noun the option is keyed on. It is **a
+		// pattern that will not compile**, not "a word with a bracket in
+		// it": `[` alone and `[]` both carry a bracket and neither moves
+		// between the states — `[` is a plain word in both and `[]` is `no
+		// matches found` in both — while `a(b`, which has no bracket at all,
+		// moves with them.
+		//
+		// `emulate sh` and `emulate ksh` reach it with nobody typing
+		// `setopt`; see emulateoptions.go, where it was already listed.
+		base: "badpattern", def: true,
+		get: (*interp.Runner).RefusesABadPatternWhenGlobbing,
+		set: func(r *interp.Runner, on bool) int {
+			r.SetRefusesABadPatternWhenGlobbing(on)
+			return 0
+		},
+	},
 	// On in a fresh zsh, measured 2026-09-13 across all four surfaces it
 	// shows on: `[[ -o banghist ]]`, `[[ -o histexpand ]]`, the `unsetopt`
 	// listing and `${options[banghist]}`. parameter.go has needed it to be on

@@ -169,7 +169,7 @@ import (
 // string built while it was off. The `${^a}` half of the same mechanism is
 // the opposite: that one is state on the node and is settled at the parse.
 //
-// Nothing else about the split moved, and %COUNT% is still most of the table.
+// Nothing else about the split moved, and 130 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.

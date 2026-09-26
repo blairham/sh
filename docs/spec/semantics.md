@@ -8035,7 +8035,6 @@ And an empty list takes the word with it — `a=(); x${a}y` is no word at all
 under the option, where it is the single word `xy` without it.
 
 So %COUNT% of 185 are recorded, the count above is the one produced by counting
-So %COUNT% of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it

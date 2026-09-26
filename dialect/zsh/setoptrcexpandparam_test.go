@@ -267,3 +267,79 @@ func TestRcExpandParamReportsItsState(t *testing.T) {
 		})
 	}
 }
+
+// **The option is read when the word is expanded, not when it is parsed**,
+// and the moment was measured before it was wired rather than after — which
+// is the lesson #4547 paid for in this same conversion pattern, where the
+// axis was being asked at the function's return and the option is read when
+// the `trap` command runs.
+//
+// The two moments come apart here in both directions, so neither column on
+// its own could settle it: a body parsed while the option was off distributes
+// when it is called with it on, and a body parsed while it was on does not
+// when it is called with it off. Each row holds the state at the *definition*
+// fixed at the other's value, so the definition cannot be what decides.
+//
+// The `${^a}` half of the same mechanism is the opposite and deliberately so:
+// the carets are state on the node and are settled at the parse. "One
+// mechanism" is a claim about which answer wins, not about when each half is
+// read — the last two rows hold a written caret fixed and move the option
+// under it, and neither budges.
+//
+// Measured on zsh 5.9.2, 2026-09-25, `-f`.
+func TestRcExpandParamIsReadWhenTheWordIsExpandedAndNotWhenItIsParsed(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"a body parsed with it off, called with it on",
+			"unsetopt rcexpandparam\ng(){ f x${a}y; }\n(setopt rcexpandparam; g)\n",
+			"2:[x1y][x2y]\n",
+		},
+		{
+			"the same body, called with it off",
+			"unsetopt rcexpandparam\ng(){ f x${a}y; }\n(unsetopt rcexpandparam; g)\n",
+			"2:[x1][2y]\n",
+		},
+		{
+			"a body parsed with it on, called with it off",
+			"setopt rcexpandparam\nh(){ f x${a}y; }\n(unsetopt rcexpandparam; h)\n",
+			"2:[x1][2y]\n",
+		},
+		{
+			"the same body, called with it on",
+			"setopt rcexpandparam\nh(){ f x${a}y; }\n(setopt rcexpandparam; h)\n",
+			"2:[x1y][x2y]\n",
+		},
+		{
+			"an eval of a string built with it off",
+			"unsetopt rcexpandparam\ns='f x${a}y'\n(setopt rcexpandparam; eval \"$s\")\n",
+			"2:[x1y][x2y]\n",
+		},
+		{
+			"the same string, evalled with it off",
+			"unsetopt rcexpandparam\ns='f x${a}y'\n(unsetopt rcexpandparam; eval \"$s\")\n",
+			"2:[x1][2y]\n",
+		},
+		{
+			"a body that turns it on itself, parsed with it off",
+			"unsetopt rcexpandparam\nk(){ setopt localoptions rcexpandparam; f x${a}y; }\n(unsetopt rcexpandparam; k)\n",
+			"2:[x1y][x2y]\n",
+		},
+		{
+			"a written caret is settled at the parse and moves for neither",
+			"unsetopt rcexpandparam\nc(){ f x${^a}y; }\n(setopt rcexpandparam; c)\n(unsetopt rcexpandparam; c)\n",
+			"2:[x1y][x2y]\n2:[x1y][x2y]\n",
+		},
+		{
+			"and a doubled caret likewise",
+			"setopt rcexpandparam\nd(){ f x${^^a}y; }\n(setopt rcexpandparam; d)\n(unsetopt rcexpandparam; d)\n",
+			"2:[x1][2y]\n2:[x1][2y]\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := answersRun(t, rcWords+"a=(1 2)\n"+c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("got %q status %d, want %q at 0", out, st, c.want)
+			}
+		})
+	}
+}

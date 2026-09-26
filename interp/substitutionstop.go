@@ -183,6 +183,30 @@ func (r *Runner) holdScriptStop() func() {
 // asking there would move it. Two callers say yes — text `.` or `eval`
 // borrowed, and a here-document body the shell carried on from — which are
 // the same question asked at opposite ends.
+// substParseFailureStatusEndingTheScript is that number for the failure that
+// **ends the script**, which one column answers by the route the program came
+// from as well as by the refusal.
+//
+// The route is a third answer rather than a second: bash exits 127 for a
+// `$( … )` body that will not parse when the program was a `-c` string, 2
+// when the identical text came from a file or from standard input, and 2 for
+// a plain syntax error on the `-c` route — so neither the refusal's own
+// number nor the route's stands for it. See
+// Diagnostics.SubstitutionParseFailureStatusFromCommandString for the twelve
+// rows and the four controls (#4697).
+//
+// Asked here and not in substParseFailureStatus itself, because the other
+// caller is the here-document body carrying the line on — a shell that has
+// not stopped, whose number is the one it leaves behind and is 1 on the same
+// route.
+func (r *Runner) substParseFailureStatusEndingTheScript(offTheScriptsLine bool) int {
+	if n := r.diag().SubstitutionParseFailureStatusFromCommandString; n != 0 &&
+		r.Route == RouteCommandString {
+		return n
+	}
+	return r.substParseFailureStatus(offTheScriptsLine)
+}
+
 func (r *Runner) substParseFailureStatus(offTheScriptsLine bool) int {
 	if offTheScriptsLine &&
 		r.ask(r.sem().SubstitutionParseFailureCarriesTheFatalStatus,

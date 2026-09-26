@@ -1132,7 +1132,7 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 		// column that moves and for what says the failing text is not the
 		// script's own line.
 		_, offTheScriptsLine := r.borrowedAtLocation()
-		status := r.substParseFailureStatus(offTheScriptsLine)
+		status := r.substParseFailureStatusEndingTheScript(offTheScriptsLine)
 		if r.inSubshell && r.substParseErrorEscapesASubshell() {
 			r.recordScriptStop(status)
 		}

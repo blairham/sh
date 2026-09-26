@@ -560,8 +560,11 @@ type Runner struct {
 	// until it overwrites it: a `( … )` inside a `<(…)` whose own body never
 	// asked still names the substitution's group, which contains it.
 	bodyAnchor *procAnchor
-	// substRan records that a command substitution reported a status during
-	// the expansion just performed — see simple().
+	// substRan records that a command substitution reported a status while
+	// the command now running was being expanded — its words and then its
+	// assignments alike, which is why it is cleared at the top of simple()
+	// and not beside either of them. A command that runs nothing answers
+	// with the last of those; see the len(argv) == 0 block there.
 	substRan bool
 	// expanded carries the right-hand side an assignment's caller has
 	// already expanded, so assign() does not expand the same word a second
@@ -6507,6 +6510,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	r.unspecified, r.expandErr, r.badSubscript, r.assignFailed = false, false, false, false
 	r.lettersRefusedTheOperand = false
 	r.arithNounsetNamedTheParameter = false
+	// Here rather than beside the assignments, which is where it used to be
+	// cleared and is the whole of #4589. A command that runs nothing reports
+	// what its *last* command substitution reported, and the substitutions in
+	// its words run before the ones in its assignments — so a clear placed
+	// after the words had already expanded threw away every substitution but
+	// an assignment's, and `$(exit 3)` on a line of its own reported 0.
+	// See the len(argv) == 0 block below for the rule and its measurement.
+	r.substRan = false
 	// Whatever this command's process substitutions opened is closed when the
 	// command is done, whether it turned out to be a builtin, a function or
 	// something on PATH.
@@ -6861,7 +6872,46 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		//
 		// So: run them with the previous status still in place, and decide
 		// afterwards from whether a substitution reported anything.
-		r.substRan = false
+		//
+		// **And the words count too, not only the assignments** — the same
+		// rule reached from the other side, and #4589. A command whose words
+		// all expanded away has run nothing either, and it reports the status
+		// of the last command substitution it performed, wherever in the
+		// command that substitution stood. Runner.substRan is cleared at the
+		// top of this function for that reason: by the time control gets
+		// here the words have already expanded, and a clear on this line
+		// discarded every substitution but an assignment's.
+		//
+		// The noun is **the last substitution the command ran**, not the
+		// last one it was written with, and those two part company in the
+		// ordinary way: the words expand before the assignments do. Measured
+		// 2026-09-26 from a script file across the whole panel — bash 5.3.20,
+		// bash 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12, zsh 5.9.2 and
+		// BusyBox ash 1.37.0 — which agree on every row:
+		//
+		//	false; $(exit 3)                 3  the one substitution
+		//	false; $(exit 3) $(exit 0)       0  the last one, and it is zero
+		//	false; $(exit 0) $(exit 3)       3  the last one, and it is not
+		//	false; $(exit 3)$(exit 4)        4  one word, still the last one
+		//	false; $(exit 3) $(echo)         0  it decides having said nothing
+		//	false; e=; $e                    0  no substitution, so success
+		//	false; e=; $(exit 3) $e          3  an empty word does not reset it
+		//	false; X=$(exit 2) $(exit 3)     2  the assignment expands last
+		//	false; X=$(exit 0) $(exit 3)     0  …so its zero wins over the word
+		//	false; X=$(exit 2) Y=$(exit 4)   4  and the last assignment wins
+		//	set -e; $(exit 3); echo after    3, and `after` is not printed
+		//
+		// Written as `false;` above so that a 0 cannot be the previous
+		// command's status left in place, which is the only way to tell this
+		// rule from doing nothing at all: our answer used to be 0 either way
+		// and the two zero rows looked correct for that reason alone.
+		//
+		// The one row the panel splits on has a **redirection** in it, and
+		// that is a different question with a home of its own: `$(exit 3)
+		// >f` runs zsh's null command and reports what *that* did, where the
+		// five columns with no such hook report the substitution's 3. See
+		// Runner.nullCommand, which takes the command off this path before
+		// it ever gets here.
 		// And whether a `.set` or `.append` discipline ran, whose status the
 		// assignment answers with — see the block below and
 		// Runner.disciplineStatus. Cleared here rather than by the store, so

@@ -3197,6 +3197,12 @@ func Semantics() interp.Semantics {
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.No
+	// The same as bash, and it is the chunk `B01cd.ztst` ends on. Measured
+	// 2026-09-26 on zsh 5.9.2 (`-f`): with `d` renamed to `e`, `cd .` is 0
+	// and `$PWD` becomes `…/e` while a bare `pwd` goes on printing `…/d` —
+	// the kernel's name reaches `$PWD` at the `cd` and nowhere else. See
+	// Semantics.CdDestinationIsNotThere.
+	s.CdDestinationIsNotThere = interp.CdDestinationNotThereEntersAndTakesTheKernelsName
 	s.PrintfAssignsWithV = interp.Yes
 	s.PrintfRejectsUnknownOption = interp.No
 	// zsh reads no options here: `trap -p` sets a trap whose action is the

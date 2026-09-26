@@ -2655,6 +2655,14 @@ func Semantics() interp.Semantics {
 	s.StartupPwdName = interp.StartupPwdNameFromTheEnvironmentOrHome
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	// ksh93 moves and then keeps the name it had already built. Measured
+	// 2026-09-26 on /bin/ksh (AT&T 93u+): with `d` renamed to `e`, `cd .` is
+	// 0 and `$PWD` stays `…/d`, `cd s` is 0 and `$PWD` reads `…/d/s` — and
+	// `ls` in there shows the real subdirectory's file, so the move is real
+	// and only the name is stale. Its own `pwd -P` agrees with it and
+	// disagrees with the other five, which is the same column never asking
+	// the kernel where it is. See Semantics.CdDestinationIsNotThere.
+	s.CdDestinationIsNotThere = interp.CdDestinationNotThereEntersAndKeepsTheBuiltName
 	// `cd` pushes nothing. Measured 2026-09-26 on ksh93u+ 2012-08-01
 	// (`${.sh.version}` is `Version AJM 93u+ 2012-08-01`): `dirs` is `dirs:
 	// not found`, and `set -o` names no option with `pushd` in it — the same

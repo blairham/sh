@@ -8248,6 +8248,50 @@ exception is on the board rather than modeled: ksh93 cancels a **leading**
 `..` against the logical `$PWD` even under `-P`, so `cd sub/fake` then
 `cd -P ..` is `t/sub` there and `t` in the other four.
 
+**A directory can be renamed out from under the shell, and then the shell's
+own name for it leads nowhere.** `cd d; mv ../d ../e` is the whole of the
+case. Measured 2026-09-26 with `d` renamed to `e` while the shell sat in it:
+
+| | `cd .` | `$PWD` after | a child's cwd | `pwd` | `pwd -P` |
+| --- | --- | --- | --- | --- | --- |
+| zsh 5.9.2 | 0 | `…/e` | `…/e` | `…/d` | `…/e` |
+| bash 5.3 | 0 | `…/e` | `…/e` | `…/d` | `…/e` |
+| bash 3.2 | 0 | `…/e` | `…/e` | `…/d` | `…/e` |
+| ksh93 | 0 | `…/d` | `…/e` | `…/d` | `…/d` |
+| dash | 2, `can't cd to .` | `…/d` | `…/e` | `…/d` | `…/e` |
+| BusyBox ash 1.37 | 2, `can't cd to .` | `…/d` | `…/e` | `…/d` | `…/e` |
+
+Two different things are in that table. **The child's column is unanimous** —
+every one of the six carries on running commands, opening relative
+redirections and sourcing relative files in the renamed directory — and that
+is not any shell's decision: a process's working directory is a reference to
+the object, so the kernel moves them along with the rename and nothing in the
+shell has to notice. This shell has no process working directory to be moved,
+by the rule in AGENTS.md, so it holds an open descriptor on its own directory
+instead and asks *that* what the directory is called now. `interp.Runner.held`
+and `interp/helddirectory.go` are the whole of it, and the rule is unchanged:
+a descriptor is per-Runner state exactly as an `exec 3>f` descriptor is, where
+`os.Chdir` is the process's and would be shared by every Runner in the program.
+
+**`cd` is the part that splits**, three ways, and it is
+`Semantics.CdDestinationIsNotThere`. The noun is **the path `cd` built**, and
+the pair that fixes it holds that path's fate still while moving everything
+else: with `d` renamed to `e` and a *different* `d` then created, `cd s` lands
+in `…/e/s` when the new `d` is empty and in `…/d/s` — the impostor, whose file
+`ls` then lists — when the new `d` has an `s` of its own. `$PWD` resolves in
+both and the shell is in `e` in both, so neither "the name still resolves" nor
+"the inode is still the one we are in" can tell them apart. A directory that
+has been **removed** rather than renamed is where the two moving answers meet:
+the move happens and there is no name to take, so `$PWD` stays as it was and
+the status is 0 in zsh, bash and ksh93 alike.
+
+Two rows are known and not modeled. `pwd -P` from a renamed directory is
+`…/d` here where four of the six say `…/e` (#4667), and `cd ..` out of a
+subdirectory whose parent has been renamed *and* had its name taken by another
+directory lands on the impostor here where zsh follows the directory — the
+reference chdirs the uncleaned `$PWD/..` and this shell cancels the `..`
+lexically before it looks (#4668).
+
 `rcquotes` left last and it is the first of these that is not a semantics
 question at all: it decides how a single-quoted *word is read*, so it moves
 `syntax.Dialect.DoubledQuoteInSingleQuotesIsALiteralQuote` rather than an axis

@@ -230,7 +230,11 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 	name, env := r.namedByTheEnvironment(argv[0], r.execEnviron(flags))
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
 	cmd.Args[0] = r.execArgv(argv, flags, name)[0]
-	cmd.Dir = r.Dir
+	// Standing in for a process replacement means standing where the process
+	// is, which is the directory itself rather than the name this shell has
+	// for it. The same reading as an ordinary external command — see
+	// interp/helddirectory.go.
+	cmd.Dir = r.dirNow()
 	cmd.Env = env
 	cmd.Stdin = r.childStdin()
 	cmd.Stdout = childOut(r.stdout())

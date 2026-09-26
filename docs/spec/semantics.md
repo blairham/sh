@@ -4017,6 +4017,38 @@ named answers — the non-binary shape this section describes rather than
 another bool, and the subject of the section below on what writing it
 showed.
 
+**A `case` arm is not the only surface that asks it, and believing it was
+cost two of the three answers.** A parameter expansion compiles its operand
+as a pattern too, and the panel splits over that exactly as it splits over
+the `case`. Measured 2026-09-26 with `w='[abc'; printf '%s\n' "${w#[a}"`:
+
+    bash 5.3   bc                    the `[a` taken as two characters
+    ksh93      bc                    the same
+    dash       [abc                  a class that can never match
+    zsh 5.9.2  bad pattern: [a, 1    not a pattern at all
+
+The same three answers, one row further from where anybody looks — and this
+implementation pinned the axis to the literal reading there, with a comment
+saying every shell that path serves is literal. Two columns were therefore
+right by accident, dash stripped a prefix it should not have matched, and
+zsh **reported success with a value it should have refused to compute**.
+The axis decides; the surface has no answer of its own to give (#4646).
+
+**It is asked of the pattern and not of a match.** `v=zzz; ${v#x[a}` is
+`bad pattern: x[a` in zsh although the pattern's first character already
+rules the subject out, so whether the shell refuses is not a question about
+the value. An implementation that raises the refusal from inside the
+matcher cannot produce that row — and the matcher is not always reached at
+all, since the span walk skips a candidate piece the pattern's edge
+literals could not fill.
+
+One shape is still answered from inside the match, and it is the one no
+scan of the pattern text sees: a bracket a `[:name:]` left open. `[[:alpha:]`
+looks closed to a scan that stops at the class's own `]`, so only the
+matcher knows, and the refusal there still depends on the value. #4659
+holds the measurements, which are the same on every surface that compiles a
+pattern.
+
 ### A class name the shell has not got
 
 A *closed* `[:name:]` whose name the shell does not recognize is a second

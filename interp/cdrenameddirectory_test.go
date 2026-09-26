@@ -442,3 +442,79 @@ func TestCdIntoADirectoryThatTookTheNameBackMovesTheShell(t *testing.T) {
 		t.Error("the shell is still writing into the directory it left")
 	}
 }
+
+// A copy does not open a hold of its own, and this is what says so: a shell
+// that moves inside parentheses, over and over, must not be putting a
+// descriptor down each time.
+//
+// The leak it guards against is a quiet one. Five of the seven places that
+// clone a Runner reach endSubshell and two do not, so there is no one line
+// where a copy ends — which is why a copy inherits the descriptor its parent
+// has and opens none. A copy that has moved is back to resolving by name,
+// which is what this package did before the hold existed.
+func TestASubshellThatMovesLeavesNoDescriptorBehind(t *testing.T) {
+	const rounds = 40
+	before, err := openDescriptors()
+	if err != nil {
+		t.Skipf("this platform does not list its open descriptors: %v", err)
+	}
+	root := renamedTree(t)
+	sem := PosixSemantics()
+	errs := &strings.Builder{}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{},
+		Dir: filepath.Join(root, "d"), Stderr: errs,
+	})
+	for range rounds {
+		runPart(t, r, "(cd s; cd ..)\n")
+	}
+	if errs.Len() != 0 {
+		t.Fatalf("stderr = %q", errs.String())
+	}
+	// Counted straight rather than waited for: a descriptor a collector would
+	// eventually take back is still a descriptor this shell is holding, and a
+	// wait loop allocates enough to hide exactly that.
+	after, err := openDescriptors()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after > before+descriptorSlack {
+		t.Errorf("%d descriptors open after %d subshells that moved, %d before — "+
+			"a hold nothing let go of", after, rounds, before)
+	}
+}
+
+// A directory that has been renamed and *then* removed is where the kernel
+// remembers a name for something that no longer has one: Darwin answers
+// F_GETPATH for a removed directory with the name it had, which here is the
+// name it was renamed to and not the name `cd` built. Taking that answer
+// unverified would leave `$PWD` holding `…/e` for a directory called nothing
+// at all.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (`-f`): `cd d; mv ../d ../e; rmdir ../e;
+// cd .` is status 0 with `$PWD` still `…/d`. This is the row that separates
+// the verification from the removed-directory row above it, where the stale
+// name and the built name happen to be the same string.
+func TestADirectoryRenamedAndThenRemovedKeepsTheNameCdBuilt(t *testing.T) {
+	root := renamedTree(t)
+	sem := PosixSemantics()
+	sem.CdDestinationIsNotThere = CdDestinationNotThereEntersAndTakesTheKernelsName
+	out, errs := &strings.Builder{}, &strings.Builder{}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{},
+		Dir: filepath.Join(root, "d"), Stdout: out, Stderr: errs,
+	})
+	runPart(t, r, "cd .\n")
+	now := renameAway(t, root)
+	if err := os.RemoveAll(now); err != nil {
+		t.Fatal(err)
+	}
+	runPart(t, r, "cd .\necho $?\necho $PWD\n")
+	if errs.Len() != 0 {
+		t.Fatalf("stderr = %q", errs.String())
+	}
+	want := "0\n" + filepath.Join(root, "d") + "\n"
+	if out.String() != want {
+		t.Errorf("`cd .` after a rename and a removal gave %q, want %q", out.String(), want)
+	}
+}

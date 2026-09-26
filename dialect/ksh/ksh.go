@@ -2718,6 +2718,12 @@ func Semantics() interp.Semantics {
 	// `TMPDIR`, which is reached through a symbolic link.
 	s.StartupPwdName = interp.StartupPwdNameFromTheEnvironmentOrHome
 	s.CdWithoutHomeIsAnError = interp.Yes
+	// Nothing is seeded at startup, and a `HOME` that has been removed is an
+	// absent one: measured 2026-09-26, `env -u HOME ksh -c 'HOME=/tmp; unset
+	// HOME; cd'` is 1 here and 0 in zsh. See
+	// Semantics.StartupFillsAnAbsentHome and CdRemembersAHomeThatWasUnset.
+	s.StartupFillsAnAbsentHome = interp.No
+	s.CdRemembersAHomeThatWasUnset = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
 	// ksh93 moves and then keeps the name it had already built. Measured
 	// 2026-09-26 on /bin/ksh (AT&T 93u+): with `d` renamed to `e`, `cd .` is

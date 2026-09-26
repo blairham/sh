@@ -5660,6 +5660,92 @@ type Semantics struct {
 	// both at 1 and both staying put.
 	CdEmptyOperandIsAnError Answer
 
+	// StartupFillsAnAbsentHome seeds `HOME` from the password entry of the
+	// user the process runs as, where the environment handed the shell none.
+	//
+	// Measured 2026-09-26 on zsh 5.9.2 (`-f`), with the binary copied to a
+	// file called `sh` so that nothing but the invocation name differs:
+	//
+	//	env -u HOME <as zsh> -c 'print -r -- $HOME'   the password entry
+	//	env -u HOME <as sh>  -c 'print -r -- $HOME'   nothing
+	//	env -u HOME <as ksh> -c 'print -r -- $HOME'   nothing
+	//
+	// **It is the mode and not the word**: `--emulate sh` under the name
+	// `zsh` answers as the second row does and `--emulate zsh` under the name
+	// `sh` answers as the first, so a dialect binary named `sh` reaches this
+	// through the emulation's own vector rather than through its name. bash
+	// is the control from the other side — `env -i bash -c 'echo "[$HOME]"'`
+	// is empty and a written `~` is a path all the same, which is a password
+	// entry read at the *tilde* rather than at startup and is
+	// TildeWithNoHome's question instead.
+	//
+	// zsh's value for that axis is what it is *because* of this one: with the
+	// home seeded, the only way a zsh has no `HOME` is a script that removed
+	// it, and there a written `~` is the empty string. The two rows are the
+	// same shell answered at two moments.
+	//
+	// Asked only where `HOME` is absent **and** this Runner has a
+	// Runner.UserHomeDir to ask, so an ordinary shell never puts the question
+	// and a library embedded in a program with no business reading a password
+	// file is not made to answer one. See interp/shellhome.go (#4654).
+	StartupFillsAnAbsentHome Answer
+
+	// CdRemembersAHomeThatWasUnset makes `cd` with no operand treat a `HOME`
+	// that has been removed as an *empty* home rather than an absent one, so
+	// it goes nowhere and reports success where a shell that never had one
+	// says `HOME not set`.
+	//
+	// The discriminating pair is the same binary, the same absent `HOME`, and
+	// nothing between them but an assignment. Measured 2026-09-26, the shell
+	// started under `env -u HOME` so that neither row inherits one:
+	//
+	//	                                        zsh  bash 5.3  bash 3.2  ksh93  dash
+	//	cd                                      1    1         1         1      0
+	//	HOME=/tmp; unset HOME; cd               0    1         1         1      0
+	//	HOME=;     unset HOME; cd               0    1         1         1      0
+	//	typeset HOME; unset HOME; cd            1    1         1         1      0
+	//	f(){ HOME=/tmp; }; f; unset HOME; cd    0    1         1         1      0
+	//	(HOME=/tmp); cd                         1    1         1         1      0
+	//
+	// The zsh column is the binary copied to a file called `sh`, because a
+	// zsh under its own name seeds `HOME` at startup — the axis above — and
+	// then every row here is 0 for the wrong reason. `ksh` as a name answers
+	// the same as `sh`.
+	//
+	// The first row is the control: every column that can refuse does refuse
+	// a `cd` in a shell that has never had a home, so what the rows under it
+	// say is that one column remembers having had one. It remembers **that**
+	// it had one and not which — `HOME=/tmp; unset HOME; cd` goes nowhere
+	// rather than to `/tmp` — so what survives the removal is a home that has
+	// been emptied, which is the silent 0 an inherited `HOME=` already gives
+	// through CdEmptyHomeIsAnError. An inherited `HOME` counts too:
+	// `env HOME=/tmp <as sh> -c 'unset HOME; cd'` is 0 in that column and 1
+	// in bash and ksh93.
+	//
+	// Rows four and six are what narrow the reading to a *value* being
+	// removed. A declaration is not an assignment, and an assignment inside a
+	// subshell does not reach the parent — which is what a flag set at the
+	// `unset` gets right without the assignment path having to notice
+	// anything.
+	//
+	// **Row four is the one this shell still answers wrong, and not because
+	// of this axis.** `typeset HOME` gives the name an empty value here where
+	// the reference leaves it declared and valueless, so the `unset` after it
+	// finds something to remove. The falsifier is that the name does not
+	// matter: `typeset X; print -r -- "${X+set}"` is `set` here and nothing
+	// in zsh 5.9.2 for every name, so it is `typeset` with no value that
+	// differs and the home is only where it was noticed.
+	//
+	// dash and BusyBox ash cannot answer it, which the dash column above is
+	// the whole of: CdWithoutHomeIsAnError is No there, so a `cd` with no
+	// home at all is already a silent 0 and both readings produce the same
+	// row on every line of the table. They hold No with that stated rather
+	// than measured, since there is nothing there to measure.
+	//
+	// Asked only where `HOME` is absent and this shell has had one, so an
+	// ordinary `cd` puts no question. See interp/shellhome.go (#4654).
+	CdRemembersAHomeThatWasUnset Answer
+
 	// CdEmptyHomeIsAnError refuses `cd` with HOME set to the empty string,
 	// rather than going where the shell already is. True in ksh93 alone.
 	//
@@ -26830,8 +26916,16 @@ func PosixSemantics() Semantics {
 		// that. Answered here for CoreSemantics' reason: the question is put
 		// to every `cd` whose operand holds a `..`.
 		// See Semantics.CdCancelsADotDot.
-		CdCancelsADotDot:    CdDotDotCanceledUnseen,
-		SplitParamExpansion: Yes,
+		CdCancelsADotDot: CdDotDotCanceledUnseen,
+		// Nothing is seeded, and a `HOME` that has been removed is an absent
+		// one. Answered here rather than left to refuse because each question
+		// is put wherever a shell has no `HOME`, which `env -i` is, and
+		// because both are what this package did before the axes existed.
+		// See Semantics.StartupFillsAnAbsentHome and
+		// Semantics.CdRemembersAHomeThatWasUnset.
+		StartupFillsAnAbsentHome:     No,
+		CdRemembersAHomeThatWasUnset: No,
+		SplitParamExpansion:          Yes,
 		// `cd` refuses when the path it built is not there. XCU's own
 		// algorithm builds `curpath` from `$PWD` and the operand and then
 		// chdirs to *that*, so a `$PWD` that has stopped leading anywhere is
@@ -28387,8 +28481,16 @@ func CoreSemantics() Semantics {
 		// substrate that refused would be refusing `cd ..` — and because two
 		// of the six columns keep this answer. The other four are on the axis
 		// and say so themselves. See Semantics.CdCancelsADotDot.
-		CdCancelsADotDot:         CdDotDotCanceledUnseen,
-		SplitCommandSubstitution: Yes,
+		CdCancelsADotDot: CdDotDotCanceledUnseen,
+		// Nothing is seeded at startup and a removed `HOME` is an absent one,
+		// answered here for the reason above: the questions are put wherever
+		// a shell has no `HOME`, and these are what this package did before
+		// the axes existed. Four of the six columns keep both answers.
+		// See Semantics.StartupFillsAnAbsentHome and
+		// Semantics.CdRemembersAHomeThatWasUnset.
+		StartupFillsAnAbsentHome:     No,
+		CdRemembersAHomeThatWasUnset: No,
+		SplitCommandSubstitution:     Yes,
 		// `cd` says what the operating system said when the path it built is
 		// not there, and moves nowhere. Answered here rather than left to
 		// refuse because the question is put to every failing `cd` — a

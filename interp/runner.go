@@ -1820,6 +1820,11 @@ type Runner struct {
 	inATrapAction     bool
 	trapActionOwnBody bool
 	trapEntryStatus   int
+
+	// homeWasSet says this shell has had a home directory, which is what
+	// lets `cd` tell "there is no home" from "the home has been removed".
+	// See interp/shellhome.go and Semantics.CdRemembersAHomeThatWasUnset.
+	homeWasSet bool
 	// expandingWord is the word being expanded and expandingSpan which of
 	// its spans, so a diagnostic about an expansion can name the text around
 	// it: two dialects blame the word rather than the `${…}`, and by the

@@ -126,15 +126,30 @@ func currentEmulation(r *interp.Runner) string {
 // after `HOME=/tmp; unset HOME` in a shell that started with none — only a
 // shell that has never had one says `HOME not set`. That is a home the shell
 // remembers rather than an axis of the emulation, it is the same answer under
-// every mode, and it is filed on its own.
+// every mode, and it is Semantics.CdRemembersAHomeThatWasUnset on the preset.
+//
+// `fillsHome` is the third, and it is the half of #4654 that *is* the mode.
+// A shell whose environment has no `HOME` at all seeds one from the password
+// entry of the user the process runs as under `zsh` and seeds nothing under
+// `sh`, `ksh` or `csh`. Measured 2026-09-26 the same two ways — the reference
+// copied to a file with each name, and `--emulate` on the reference under its
+// own name — with `env -u HOME <shell> -c 'print -r -- $HOME'` writing the
+// password entry in one and nothing in the other three.
+//
+// It is also why the three sh-family rows of `cdNowhere` are reachable at all:
+// under `zsh` there is no shell without a `HOME` for that field to answer
+// about, because this one has already filled it in. The two fields are one
+// shell read at two moments and they have to move together, which is what a
+// second boolean here says and a reading of the first could not.
 var emulations = map[string]struct {
 	redirFatal bool
 	cdNowhere  bool
+	fillsHome  bool
 }{
-	"zsh": {redirFatal: false, cdNowhere: false},
-	"sh":  {redirFatal: true, cdNowhere: true},
-	"ksh": {redirFatal: true, cdNowhere: true},
-	"csh": {redirFatal: false, cdNowhere: true},
+	"zsh": {redirFatal: false, cdNowhere: false, fillsHome: true},
+	"sh":  {redirFatal: true, cdNowhere: true, fillsHome: false},
+	"ksh": {redirFatal: true, cdNowhere: true, fillsHome: false},
+	"csh": {redirFatal: false, cdNowhere: true, fillsHome: false},
 }
 
 // applyEmulation switches the axes and puts back the options this form of
@@ -167,6 +182,13 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.CdWithoutHomeIsAnError
 	}, answer(emulations[mode].cdNowhere))
+	// The third, and the one that has to be in place before the shell reads
+	// its `HOME` for the first time: a startup that seeds one is a startup,
+	// and an emulation taken from argv[0] is applied before anything runs.
+	// See interp/shellhome.go.
+	setAxis(r, func(s *interp.Semantics) *interp.Answer {
+		return &s.StartupFillsAnAbsentHome
+	}, answer(emulations[mode].fillsHome))
 	// The recorded names in one write rather than one write each. The store
 	// holds deviations, so dropping a name from it is that option back at the
 	// table's default — and this emulation's default is not always the

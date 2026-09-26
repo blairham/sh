@@ -2605,6 +2605,15 @@ func Semantics() interp.Semantics {
 	// is named by what the kernel reports, in 5.3 and 3.2 alike.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.Yes
+	// `env -i bash -c 'echo "[$HOME]"'` is empty, so nothing is seeded — and
+	// a written `~` is a path all the same, which is the password entry read
+	// at the tilde rather than at startup and is TildeWithNoHome's question.
+	// Measured 2026-09-26 in 5.3.20 and 3.2.57 alike.
+	s.StartupFillsAnAbsentHome = interp.No
+	// And a `HOME` that has been removed is an absent one: `HOME=/tmp; unset
+	// HOME; cd` is `cd: HOME not set` at 1 in both builds, exactly as a shell
+	// that never had one answers. See Semantics.CdRemembersAHomeThatWasUnset.
+	s.CdRemembersAHomeThatWasUnset = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
 	// `cd .` in a directory that has been renamed out from under the shell
 	// moves, and `$PWD` becomes the new name. Measured 2026-09-26 on

@@ -1266,6 +1266,15 @@ func Semantics() interp.Semantics {
 	// shell in the panel.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.No
+	// Nothing is seeded at startup; measured 2026-09-26, `env -u HOME` leaves
+	// `$HOME` empty here. See Semantics.StartupFillsAnAbsentHome.
+	s.StartupFillsAnAbsentHome = interp.No
+	// And whether a removed `HOME` is remembered cannot be measured in this
+	// column, because the line above it means a `cd` with no home at all is
+	// already a silent 0: both readings answer every row of that axis's table
+	// identically here. No is what this package did before the question
+	// existed. See Semantics.CdRemembersAHomeThatWasUnset.
+	s.CdRemembersAHomeThatWasUnset = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
 	// dash refuses. Measured 2026-09-26 on /bin/dash: with `d` renamed to
 	// `e`, `cd .` writes `cd: can't cd to .` and exits 2, and so does `cd s`.

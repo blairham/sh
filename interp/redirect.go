@@ -48,6 +48,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	r.redirForOwnProcess = ownProcess
 	defer func() { r.redirForOwnProcess = outerOwn }()
 	r.redirErr = false
+	// Beside redirErr because it is the same flag's number: a failure with a
+	// status of its own is only ever this command's.
+	r.redirFailureStatusOfItsOwn = 0
 	r.badDupTarget = false
 	r.redirFds = nil
 	// Cleared for every command, including one with no redirections at all,

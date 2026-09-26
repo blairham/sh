@@ -280,6 +280,12 @@ func (r *Runner) giveUpTheCommand(at redirBoundary) {
 			// syntax status the refusal already set where it does not.
 			r.ctl, r.abandon = controlNone, abandonRequested
 			r.status = r.substParseFailureStatus(true)
+			// And the number stays the refusal's if a rule further on puts
+			// the stop back: a failed redirection on a **special builtin**
+			// ends the shell in three columns, and the one of them that
+			// reaches this line exits with 3 rather than with the 1 that
+			// rule writes. See Runner.redirFailureStatusOfItsOwn.
+			r.redirFailureStatusOfItsOwn = r.status
 		}
 	case r.pendingFileError():
 		r.takeFileError()

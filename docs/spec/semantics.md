@@ -18430,10 +18430,11 @@ file:
 | `! print f && print g` | 2 | 2 | 1 |
 
 What the single firing **reports** is the whole list and not its first
-operand: zsh's `ZSH_DEBUG_CMD` at it reads back the source of the whole list — `print q && { print r; print s }`
-laid back out over four lines — for a list whose second operand is a group, where each of the bash
-columns' firings names the one operand it was made for in `$BASH_COMMAND`
-and ksh93's in `${.sh.command}`.
+operand: for a list whose second operand is a group, zsh's `ZSH_DEBUG_CMD`
+at it reads back the source of the whole list — `print q && { print r;
+print s }`, laid back out over four lines — where each of the bash columns'
+firings names the one operand it was made for in `$BASH_COMMAND` and
+ksh93's in `${.sh.command}`.
 
 The noun is the **sublist**, and a count alone cannot say so, because
 every row above writes one list per line and "once per line" agrees with

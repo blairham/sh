@@ -184,3 +184,41 @@ func TestTheSystemStartupLetterIsRefusedInTheBorrowedSet(t *testing.T) {
 		t.Errorf("ran %q, want the refusal to have stopped the shell", out.String())
 	}
 }
+
+// The letter set goes back with the option table, which the loop that puts
+// the table back cannot do on its own: the option keeps its state in the
+// recorded store, so the wholesale write reaches it and the loop then finds
+// the name where it is being put and calls nothing.
+//
+// Measured on zsh 5.9.2, 2026-09-26: after `emulate sh -c ':'` and after a
+// function whose body ran `emulate -L sh`, `set -f` is this shell's `-f`
+// again. Each row reads the state *inside* as well as after, so a row cannot
+// pass on a shell that never borrowed the letters at all.
+func TestTheBorrowedLetterSetGoesBackWithTheOptionTable(t *testing.T) {
+	const read = "if [[ -o glob ]]; then printf 'glob=on '; else printf 'glob=off '; fi\n" +
+		"if [[ -o rcs ]]; then print rcs=on; else print rcs=off; fi"
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"after an emulate -c",
+			"emulate sh -c ':'\nset -f\n" + read,
+			"glob=on rcs=off\n",
+		},
+		{
+			"after a function that localized one",
+			"f() { emulate -L sh }\nf\nset -f\n" + read,
+			"glob=on rcs=off\n",
+		},
+		{
+			"and inside that function the letters really are borrowed",
+			"f() { emulate -L sh; set -f; " + read + " }\nf",
+			"glob=off rcs=on\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if st != 0 || out != tc.want {
+				t.Errorf("out %q status %d, want %q", out, st, tc.want)
+			}
+		})
+	}
+}

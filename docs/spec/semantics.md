@@ -3684,6 +3684,78 @@ failed. The empty string the failure left behind was opened, so one mistake
 produced two diagnostics and the second named a file nobody wrote. That much
 is core, and it holds whoever runs the command (#1228).
 
+### A subshell's target is a third position
+
+`( … )` is a process of its own, so the same question can be put to the word
+its redirection is aimed at — and **the panel does not answer it the way it
+answers the same question of a command**. Measured 2026-09-26 over a script
+file with `env -i PATH=/usr/bin:/bin` and a scratch HOME, against
+`/opt/homebrew/bin/bash` 5.3.20, `/opt/homebrew/bin/zsh -f` 5.9.2, `/bin/ksh`
+93u+ 2012-08-01 (AT&T's build), `/bin/dash` 0.5.12 and BusyBox v1.37.0 in the
+pinned alpine image:
+
+| `unset u; … > "${u:=made}"` — `u` after | bash | zsh | ksh93 | dash | ash |
+| --- | --- | --- | --- | --- | --- |
+| `cat /dev/null` — a command of its own | unset | unset | unset | made | made |
+| `( : )` — a subshell | unset | unset | **made** | made | made |
+
+ksh93 is the row that makes this an axis of its own rather than a second
+reading of `RedirectTargetExpandsInTheCommandsProcess`: it confines the write
+a command's target makes and keeps the one a subshell's makes, so one field
+cannot say both. That is
+**`RedirectTargetOnASubshellExpandsInTheSubshell`** — bash yes · zsh yes ·
+ksh93 no · dash no · ash no.
+
+What is inside the parentheses is beside the point: an external command, two
+commands and an assignment all answer alike, and `( v=1 ) > "${u:=made}"`
+leaves `v` unset and `u` set in ksh93 — so what escapes is the redirection's
+word and not the subshell's state.
+
+The failure side follows the same answer, and it is the half this shell had
+wrong. A target of `$(( 1/0 ))`, with the marker after a `;` on the
+redirection's **own line** so that giving up the line and ending the shell are
+told apart:
+
+| `… > $(( 1/0 )) ; echo SAME` | bash | zsh | ksh93 | dash | ash |
+| --- | --- | --- | --- | --- | --- |
+| `( echo RAN )` — a subshell | SAME, `\|\|` catches | SAME, `\|\|` catches | SAME, `\|\|` catches | stops, 2 | stops, 2 |
+| `{ echo RAN; }` — a group | line given up, 1 | **stops, 1** | SAME, `\|\|` catches | stops, 2 | stops, 2 |
+
+The group row is the control: it is fatal in zsh either way, so the difference
+is the parentheses and not a general fatality. Yes means the word was expanded
+somewhere that is not this shell, so the failure costs the parentheses; no
+hands it to `RedirectTargetFailureIsTheRedirections`, which is why ksh93
+carries the row without the write going with it and why dash and BusyBox ash
+end the script.
+
+**The noun is the parentheses, not "a child".** A group in a pipeline, a
+background group and a group inside `$( … )` are all children of this shell
+without being a `( … )`, and all three contain the failure in every column —
+they are contained by the pipeline, the job and the substitution, not by this
+axis. A rule keyed on "a child" would be right about those rows by accident
+and wrong about ksh93's, which is the row the two readings part on.
+
+This shell ran a subshell's redirections in the parent because the state is
+copied *inside* the body rather than around it, so the word was expanded here,
+the write escaped and the failure was the shell's: `( echo RAN ) > $(( 1/0 ))`
+ended the script in zsh, and gave up the line in bash where bash carries on to
+the end of it. Both moved; the group, builtin, function and loop rows did not
+(#4695).
+
+**`command` is a separate question and is still open here.** In zsh — without
+`POSIX_BUILTINS` — `command :` is `command not found: :` at 127, so `command`
+names an **external** command there where bash, ksh93, dash and BusyBox ash
+reach the builtin. That makes `command : > $(( 1/0 ))` a command of its own in
+zsh, which contains the failure; this shell unwraps `command` to the builtin
+for every dialect and ends the shell. Measured 2026-09-26; it is not this axis
+and not the parentheses, and it is #4701.
+
+**The body of a subshell's here-document is the other open half.** `( cat )
+<<END` with `$(( n+=5 ))` in it leaves `n` at 0 in bash, zsh, dash and BusyBox
+ash and at 5 in ksh93, where this shell keeps it in all five. That splits
+four-to-one against the target's three-to-two, so it is a field of its own
+rather than a row of this one, and it is #4700.
+
 ## A command that is only redirections
 
 A command with no command word, no assignment prefix and at least one

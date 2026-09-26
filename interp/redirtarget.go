@@ -54,6 +54,41 @@ import "github.com/blairham/sh/syntax"
 // No such file or directory`, a complaint about a file nobody wrote. That is
 // core, and it holds whoever runs the command.
 
+// redirOwner says whose process a command's redirections are being opened in.
+//
+// Three values rather than two, because the two consequences this file is
+// about — where a write in the target lands, and what a failure in it costs —
+// are answered for a **subshell** by a different column split than for a
+// command. `> "${u:=made}"`, measured 2026-09-26:
+//
+//	                            bash  zsh  ksh93  dash  ash
+//	cat /dev/null > …  a command gone gone  gone  KEPT  KEPT
+//	( : ) > …          a subshell gone gone  KEPT  KEPT  KEPT
+//
+// ksh93 is the row a boolean cannot carry, so the parentheses are an owner of
+// their own with an axis of their own (#4695).
+type redirOwner uint8
+
+const (
+	// redirOwnerThisShell is a command this shell runs itself: a builtin, a
+	// function, a group, a loop. There is no other process, so the write
+	// stays where it landed and what is left is whose failure it is — see
+	// Runner.targetFailureInThisShell.
+	redirOwnerThisShell redirOwner = iota
+
+	// redirOwnerTheCommand is a command that becomes a process of its own,
+	// which is what [Semantics.RedirectTargetExpandsInTheCommandsProcess]
+	// and [Semantics.HeredocExpandsInTheCommandsProcess] are asked of.
+	redirOwnerTheCommand
+
+	// redirOwnerASubshell is a `( … )`. A real shell forks for it, so the
+	// question is the same question — and the panel does not give it the
+	// same answer, which is why it is a value here rather than the one
+	// above. See
+	// [Semantics.RedirectTargetOnASubshellExpandsInTheSubshell].
+	redirOwnerASubshell
+)
+
 // redirectTargetForItsProcess is redirectTarget with the question of whose
 // process expanded the word answered.
 //
@@ -68,7 +103,7 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, boo
 	// has nowhere to put the write back from. Saving anyway would clone the
 	// whole variable table on every redirection in every script, for a
 	// question that is decided before it is asked.
-	watching := r.redirForOwnProcess && wordCanWrite(rd.Word)
+	watching := r.redirOwner != redirOwnerThisShell && wordCanWrite(rd.Word)
 	var before expansionTables
 	if watching {
 		before = r.saveExpansionTables()
@@ -77,9 +112,8 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, boo
 	wrote := watching && r.wroteSince(before)
 	failed := r.targetExpansionFailed()
 	inTheCommand := false
-	if r.redirForOwnProcess && (wrote || failed) {
-		inTheCommand = r.ask(r.sem().RedirectTargetExpandsInTheCommandsProcess,
-			"a redirection target's expansion reaching the shell that ran the command")
+	if r.redirOwner != redirOwnerThisShell && (wrote || failed) {
+		inTheCommand = r.targetExpandedElsewhere()
 		if !inTheCommand && r.unspecified {
 			// Nobody answered, so there is no telling whose the write is or
 			// whose the failure is. The command does not run: acting on
@@ -101,10 +135,12 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, boo
 			// boundary is a second place for it to be subtly different.
 			r.giveUpTheCommand(redirTargetBoundary)
 		}
-	case failed && !r.redirForOwnProcess:
-		// There is no other process: the shell runs this command itself, so
-		// the word was certainly expanded here and what is left is whose
-		// failure that is. See targetFailureInThisShell.
+	case failed && r.redirOwner != redirOwnerTheCommand:
+		// The word was expanded here — because the shell runs this command
+		// itself and there is no other process, or because the column
+		// expands a subshell's target out here even though a real shell has
+		// forked — so what is left is whose failure that is. See
+		// targetFailureInThisShell.
 		r.targetFailureInThisShell()
 	case failed && r.ctl == controlNone:
 		// The command is a process of its own and this column expands its
@@ -124,6 +160,24 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, boo
 		r.redirErr = true
 	}
 	return names, bad || failed
+}
+
+// targetExpandedElsewhere asks whichever axis owns this redirection whether
+// the target's word was expanded somewhere other than this shell.
+//
+// One question, two axes, and the owner picks: a command that becomes a
+// process of its own is
+// [Semantics.RedirectTargetExpandsInTheCommandsProcess], and a `( … )` is
+// [Semantics.RedirectTargetOnASubshellExpandsInTheSubshell]. They are not the
+// same axis because they are not the same split — ksh93 answers yes to the
+// first and no to the second.
+func (r *Runner) targetExpandedElsewhere() bool {
+	if r.redirOwner == redirOwnerASubshell {
+		return r.ask(r.sem().RedirectTargetOnASubshellExpandsInTheSubshell,
+			"a subshell's redirection target expanding in the subshell")
+	}
+	return r.ask(r.sem().RedirectTargetExpandsInTheCommandsProcess,
+		"a redirection target's expansion reaching the shell that ran the command")
 }
 
 // targetFailureInThisShell settles what a redirection **target** that would

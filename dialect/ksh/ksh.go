@@ -1898,6 +1898,15 @@ func Semantics() interp.Semantics {
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
+	// A subshell's is not, and this is the column that makes that a second
+	// axis: `( : ) > "${u:=made}"` leaves `u` **set** here where the same
+	// target on `cat /dev/null` loses it, so the word a `( … )` is aimed at
+	// is expanded out here. What contains the *failure* is this shell's own
+	// rule about whose it is, which carries the row without the write going
+	// with it. Measured 2026-09-26 with an external command, two commands
+	// and an assignment inside the parentheses, all alike, and `( v=1 )`
+	// still confining `v` (#4695).
+	s.RedirectTargetOnASubshellExpandsInTheSubshell = interp.No
 	// A body this shell expanded itself and could not is the *redirection's*
 	// failure, so it draws the grid a file that will not open draws: `: <<END`
 	// with `$(( 1/0 ))` in it ends the shell, and `read x <<END`, a function

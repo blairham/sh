@@ -3256,12 +3256,12 @@ type Runner struct {
 	// there. See Runner.setFdVar and Runner.refuseNamerefAim.
 	fdVarSpeaker string
 
-	// redirForOwnProcess says the redirections being opened belong to a
-	// command this shell will run as a process of its own, which is where a
-	// real shell has already forked and so where a here-document body's
-	// expansion happens somewhere the shell cannot see. Owned by
-	// applyRedirs, which saves and restores it. See heredocprocess.go.
-	redirForOwnProcess bool
+	// redirOwner says whose process the redirections being opened belong
+	// to, which is where a real shell has already forked and so where a
+	// here-document body's or a target's expansion happens somewhere the
+	// shell cannot see. Owned by applyRedirs, which saves and restores it.
+	// See heredocprocess.go and redirtarget.go.
+	redirOwner redirOwner
 
 	// canceledChunk records that the chunk that just finished stopped
 	// because the caller canceled it, which releaseCancellation has already
@@ -4487,7 +4487,16 @@ func (r *Runner) clone() *Runner {
 // withRedirs applies a compound command's redirections around its body. Every
 // compound node carries its own list because a redirection on one applies to
 // everything inside it.
+//
+// A compound command runs in this shell, so this is redirOwnerThisShell. The
+// one exception is a `( … )`, which a real shell forks for — see
+// Runner.withRedirsOwnedBy, which subshell() calls instead.
 func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body func() error) error {
+	return r.withRedirsOwnedBy(ctx, rs, redirOwnerThisShell, body)
+}
+
+// withRedirsOwnedBy is withRedirs with the owner named.
+func (r *Runner) withRedirsOwnedBy(ctx context.Context, rs []*syntax.Redirect, owner redirOwner, body func() error) error {
 	// A redirection is a word, and a word can be `<(cmd)`. So this is the
 	// second road into an expansion that opens a pipe, and it has the same
 	// rule and the same removal as the first — see scopeProcSubs, which is
@@ -4497,7 +4506,7 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 	// A compound command's body runs in this shell, so its here-documents
 	// expand here — measured, `while read x; do :; done <<END` with a body
 	// of `$(( n++ ))` leaves the increment behind in all four shells.
-	closers, err := r.applyRedirs(ctx, rs, true, false)
+	closers, err := r.applyRedirs(ctx, rs, true, owner)
 	defer func() {
 		for _, c := range closers {
 			_ = c.Close()
@@ -7045,7 +7054,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 
 			// Assignments and a redirection with no command name. There is
 			// no other process for a here-document body to expand in.
-			closers, err := r.applyRedirs(ctx, c.Redirs, false, false)
+			closers, err := r.applyRedirs(ctx, c.Redirs, false, redirOwnerThisShell)
 			for _, cl := range closers {
 				_ = cl.Close()
 			}
@@ -7205,7 +7214,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 
 	// And whether the command is one this shell runs itself, which decides
 	// where a here-document body is expanded — see heredocprocess.go.
-	closers, err := r.applyRedirs(ctx, c.Redirs, false, !r.commandRunsInThisShell(argv))
+	owner := redirOwnerThisShell
+	if !r.commandRunsInThisShell(argv) {
+		owner = redirOwnerTheCommand
+	}
+	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
 	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	// Read here rather than in the defer: a builtin that runs a program of its
 	// own — `eval`, `.` — applies redirections of its own on the way, and this

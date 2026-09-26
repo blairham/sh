@@ -171,3 +171,54 @@ if [ -f '{cx,cy}z' ]; then
 else
 	printf 'without multios: the braces were expanded after all\n'
 fi
+
+# --- a subshell's failed redirection target ---------------------------------
+#
+# `( … )` is a process of its own, so a redirection target that will not
+# expand costs the parentheses and not the script: the rest of the *same line*
+# runs, `||` catches it, and 1 is left behind. A group with the same target
+# ends this shell, which is the control — the difference is the parentheses
+# and not a general fatality.
+#
+# Every row puts its marker after a `;` on the redirection's own line, because
+# a marker on the *next* line is printed by a give-up that costs the line as
+# well as by one that costs only the command, and cannot tell them apart. The
+# rows that end the shell are wrapped in parentheses of their own so the file
+# carries on; that wrapper is itself the fact under test one level out, which
+# is why the two readings still part (#4695).
+
+sub_zz() { printf -- '--- %s\n' "$1"; }
+
+sub_zz 'a subshell: the rest of its own line runs'
+( ( echo RAN ) > $(( 1/0 )) ; echo SAME ) 2>/dev/null
+printf 'after st=%s\n' "$?"
+
+sub_zz 'a group: the shell it is in ends'
+( { echo RAN; } > $(( 1/0 )) ; echo SAME ) 2>/dev/null
+printf 'after st=%s\n' "$?"
+
+sub_zz 'a subshell: || catches it'
+( ( echo RAN ) > $(( 1/0 )) || echo CAUGHT ) 2>/dev/null
+
+sub_zz 'a group: || never sees it'
+( { echo RAN; } > $(( 1/0 )) || echo CAUGHT ) 2>/dev/null
+
+sub_zz 'a subshell inside a function: the body carries on'
+g_zz() { ( echo RAN ) > $(( 1/0 )); printf 'in the function\n'; }
+( g_zz ) 2>/dev/null
+printf 'after st=%s\n' "$?"
+
+sub_zz 'the write the target made is confined'
+unset u_zz
+( ( : ) > "${u_zz:=made}" ) 2>/dev/null
+printf 'u=[%s]\n' "${u_zz-unset}"
+
+sub_zz 'and a command of its own confines it too'
+unset u_zz
+( cat /dev/null > "${u_zz:=made}" ) 2>/dev/null
+printf 'u=[%s]\n' "${u_zz-unset}"
+
+sub_zz 'while a group keeps it'
+unset u_zz
+{ : ; } > "${u_zz:=made}"
+printf 'u=[%s]\n' "${u_zz-unset}"

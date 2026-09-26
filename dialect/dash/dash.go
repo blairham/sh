@@ -220,6 +220,10 @@ func Semantics() interp.Semantics {
 	// positions do not share an answer — a body's failed expansion costs
 	// this shell the command and not the script (#1228).
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.No
+	// And a subshell's target is this shell's word too, by the same
+	// measurement: `( : ) > "${u:=made}"` leaves `u` set, and `( echo RAN )
+	// > $(( 1/0 ))` ends the script at 2 exactly as a group does (#4695).
+	s.RedirectTargetOnASubshellExpandsInTheSubshell = interp.No
 	// A *target* this shell expanded itself and could not is this shell's
 	// own failed expansion and ends it at 2, on every command shape —
 	// including the ones a failed *open* leaves alive, `read x <

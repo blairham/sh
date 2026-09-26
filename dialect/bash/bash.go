@@ -1515,6 +1515,12 @@ func Semantics() interp.Semantics {
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
+	// And a subshell's target is expanded in the subshell too: `( : ) >
+	// "${u:=made}"` leaves `u` unset here, and `( echo RAN ) > $(( 1/0 ))`
+	// writes one line, is caught by `||` and leaves 1 behind with the rest
+	// of its own line still running — where the same target on a group, a
+	// function or a builtin takes the rest of the line with it (#4695).
+	s.RedirectTargetOnASubshellExpandsInTheSubshell = interp.Yes
 	// A *target* this shell expanded itself and could not is not a failed
 	// redirection here, it is this shell's own failed expansion: `: < $((
 	// 1/0 )); echo SAME` writes no `SAME` and `|| echo CAUGHT` does not

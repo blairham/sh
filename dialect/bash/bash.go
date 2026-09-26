@@ -1515,6 +1515,14 @@ func Semantics() interp.Semantics {
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.Yes
+	// A *target* this shell expanded itself and could not is not a failed
+	// redirection here, it is this shell's own failed expansion: `: < $((
+	// 1/0 )); echo SAME` writes no `SAME` and `|| echo CAUGHT` does not
+	// fire, where `: < /nonexistent/f` gives both. So it takes the line
+	// FailedExpansionAbandonsTheLine gives any other failed expansion, and
+	// `${q?word}` in a target ends the shell exactly as it does in a word.
+	// Measured 2026-09-26 on bash 5.3.20 (#4689).
+	s.RedirectTargetFailureIsTheRedirections = interp.No
 	// A body this shell expanded itself and could not costs what any other
 	// failed expansion costs it, which is the line: `: <<END; echo SAME`
 	// with `$(( 1/0 ))` in the body writes no `SAME` and leaves 1 for the

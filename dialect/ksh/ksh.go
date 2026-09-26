@@ -1905,6 +1905,14 @@ func Semantics() interp.Semantics {
 	// `: < /nonexistent/f` and `read x < /nonexistent/f`. Measured 2026-09-26
 	// on ksh93u+ 2012-08-01 (#4684).
 	s.HeredocBodyFailureIsTheRedirections = interp.Yes
+	// And so is a *target* this shell expanded itself and could not: `: <
+	// $(( 1/0 ))` ends the shell, and `read x < …`, a function, a group and
+	// `command : < …` all carry on at 1 and are caught by `||` — row for row
+	// with `: < /nonexistent/f` and `read x < /nonexistent/f`. The only
+	// column that splits this grid by the command, and the noun is a special
+	// builtin rather than "a command the shell runs itself". Measured
+	// 2026-09-26 on ksh93u+ 2012-08-01 (#4689).
+	s.RedirectTargetFailureIsTheRedirections = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
 	// The integer attribute has a reader of its own, and it is not the
 	// arithmetic one: `$((010))` is 8 here and `typeset -i d=010` is 10.

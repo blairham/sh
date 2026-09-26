@@ -101,12 +101,18 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, boo
 			// boundary is a second place for it to be subtly different.
 			r.giveUpTheCommand(redirTargetBoundary)
 		}
+	case failed && !r.redirForOwnProcess:
+		// There is no other process: the shell runs this command itself, so
+		// the word was certainly expanded here and what is left is whose
+		// failure that is. See targetFailureInThisShell.
+		r.targetFailureInThisShell()
 	case failed && r.ctl == controlNone:
-		// The expansion happened here, so the failure is this shell's and
-		// costs whatever a failed expansion costs it — which is the same
-		// door a failed *argument* goes through, axis and all. Reached when
-		// the failure reported itself without unwinding; one that has
-		// already unwound is carrying its status and is left alone.
+		// The command is a process of its own and this column expands its
+		// target here anyway, so the failure is this shell's and costs
+		// whatever a failed expansion costs it — the same door a failed
+		// *argument* goes through, axis and all. Reached when the failure
+		// reported itself without unwinding; one that has already unwound is
+		// carrying its status and is left alone.
 		r.failedExpansion()
 	}
 	if failed {
@@ -118,6 +124,69 @@ func (r *Runner) redirectTargetForItsProcess(rd *syntax.Redirect) ([]string, boo
 		r.redirErr = true
 	}
 	return names, bad || failed
+}
+
+// targetFailureInThisShell settles what a redirection **target** that would
+// not expand costs, on a command this shell runs itself.
+//
+// The panel splits over whose failure it is, and the split is not the one
+// [Semantics.RedirectTargetExpandsInTheCommandsProcess] makes: that axis is
+// about a command which *is* a process of its own, and here there is no other
+// process for the word to have been expanded in. Measured 2026-09-26 with
+// `-c`, the failing redirection on its own line and `echo "after st=$?"` on
+// the next, against bash 5.3.20, zsh 5.9.2 under `-f`, ksh93u+ 2012-08-01,
+// dash 0.5.12 and BusyBox v1.37.0 in the pinned alpine image. A target of
+// `$(( 1/0 ))`:
+//
+//	                            bash   zsh    ksh93  dash   ash
+//	: < $((1/0))     special     st=1   stops  stops  stops  stops
+//	read x < …       regular     st=1   stops  st=1   stops  stops
+//	f < …            function    st=1   stops  st=1   stops  stops
+//	{ :; } < …       group       st=1   stops  st=1   stops  stops
+//	command : < …    command     st=1   stops  st=1   stops  stops
+//
+// ksh93 alone grades it as the **redirection's** failure, which is why the
+// only row it stops on is the one POSIX makes fatal for a failed redirection
+// — and the noun is a *special builtin*, not "a command the shell runs
+// itself": the function, the group and `command :` are all commands it runs
+// itself and all three carry on at 1. The other four grade it as **this
+// shell's own failed expansion**, which is bash's line and a fatal error in
+// the other three, whatever it was written on. See
+// [Semantics.RedirectTargetFailureIsTheRedirections] for the pairs that tell
+// the two readings apart.
+//
+// It is a field of its own rather than a second reading of
+// [Semantics.HeredocBodyFailureIsTheRedirections] because dash and BusyBox
+// ash answer the two differently: `read x <<END` with `$(( 1/0 ))` in the
+// body carries on at 2 and at 1 there, where `read x < $(( 1/0 ))` ends both
+// shells at 2 (#4689).
+//
+// The caller has already established the failure, so the two readings are the
+// whole of this: the give-up boundary the external half of the same
+// redirection already uses — a second abandonment boundary is a second place
+// for it to be subtly different — or the door a failed *word* goes through.
+// The command does not run either way, which the caller sets.
+func (r *Runner) targetFailureInThisShell() {
+	if r.ask(r.sem().RedirectTargetFailureIsTheRedirections,
+		"whose failure a redirection target that will not expand is") {
+		// The redirection's, and that boundary is where the status a failed
+		// redirection carries is taken — which is the whole of what
+		// separates this from a fatal error in the columns that number the
+		// two differently.
+		r.giveUpTheCommand(redirTargetBoundary)
+		return
+	}
+	if !r.unspecified && r.ctl == controlNone {
+		// This shell's own failed expansion, axis and all. Reached only
+		// where the failure reported itself without unwinding; one that has
+		// already unwound is carrying its status and its reach and is left
+		// exactly alone, which is what makes `${q?word}` in a target end the
+		// shell in these columns as it does in an ordinary word.
+		r.failedExpansion()
+	}
+	// Nobody answered leaves both readings alone: the command does not run,
+	// which the caller sets, and acting on either reading after saying the
+	// shells disagree would answer the question anyway.
 }
 
 // targetExpansionFailed reports whether expanding the target left an error

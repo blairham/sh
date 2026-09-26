@@ -101,3 +101,59 @@ printf -- '--- >#((expr)) moves a write position ---\n'
   exec 4>&-
   printf 'after writing at 3: [%s]\n' "$(cat overwritten)"
 )
+
+# --- a target whose expansion failed is a failed redirection ----------------
+#
+# This shell is the only one of the six that grades a redirection **target**
+# it could not expand as a failed *redirection* rather than as a failed
+# expansion. The difference is visible three ways at once, so each row below
+# prints all three: whether the shell is still running, the status the failure
+# left, and whether `||` catches it.
+#
+# The noun is **a special builtin**, not "a command this shell runs itself" —
+# a function, a group and `command :` are all commands it runs itself and all
+# three carry on. Those three rows are the ones that pick the noun, and a file
+# asking only about `:` and an external could not tell the two readings apart.
+#
+# Each row is a subshell, because the special-builtin row ends the shell it
+# happens in and should cost its own section rather than the file's. The pair
+# at the end is the discriminator: a redirection that could not be **opened**
+# draws this same grid here, which is what says the grading is the
+# redirection's (#4689).
+
+printf -- '--- a special builtin ---\n'
+( : > $(( 1/0 )); echo SAME ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- a regular builtin ---\n'
+( echo RAN > $(( 1/0 )); echo "st=$?" ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- a function ---\n'
+( f_zz() { echo RAN; }; f_zz > $(( 1/0 )); echo "st=$?" ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- a group ---\n'
+( { echo RAN; } > $(( 1/0 )); echo "st=$?" ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- command over a special builtin ---\n'
+( command : > $(( 1/0 )); echo "st=$?" ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- || catches the contained one ---\n'
+( echo RAN > $(( 1/0 )) || echo CAUGHT ) 2>&1
+
+printf -- '--- and not the fatal one ---\n'
+( : > $(( 1/0 )) || echo CAUGHT ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- the failure kind does not move the grid ---\n'
+( : > ${qq_zz?bad}; echo SAME ) 2>&1; printf 'after st=%s\n' "$?"
+( echo RAN > ${qq_zz?bad}; echo "st=$?" ) 2>&1; printf 'after st=%s\n' "$?"
+( set -u; : > $NOPE_ZZ; echo SAME ) 2>&1; printf 'after st=%s\n' "$?"
+( set -u; echo RAN > $NOPE_ZZ; echo "st=$?" ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- the pair: a target that could not be opened draws it too ---\n'
+( : > /nonexistent_zz/f; echo SAME ) 2>&1; printf 'after st=%s\n' "$?"
+( echo RAN > /nonexistent_zz/f; echo "st=$?" ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- and a failed expansion in an ordinary word is fatal here ---\n'
+( echo $(( 1/0 )); echo SAME ) 2>&1; printf 'after st=%s\n' "$?"
+
+printf -- '--- the control: a target that expands is opened ---\n'
+( echo RAN > opened_zz; echo "st=$?"; cat opened_zz ) 2>&1; printf 'after st=%s\n' "$?"

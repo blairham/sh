@@ -2583,6 +2583,86 @@ type Semantics struct {
 	// Runner.giveUpTheCommand, which is the boundary this one chooses whether
 	// to reach (#4684).
 	HeredocBodyFailureIsTheRedirections Answer
+
+	// RedirectTargetFailureIsTheRedirections says whose failure a redirection
+	// **target** that will not expand is, where the command it belongs to is
+	// one the shell runs itself.
+	//
+	// The other half of RedirectTargetExpandsInTheCommandsProcess. That one
+	// is asked of a command that *is* a process of its own and answers where
+	// the word was expanded; this one is asked where there is no other
+	// process to have expanded it, so the word was certainly expanded here
+	// and what is left to settle is what the failure costs.
+	//
+	// Yes: the *redirection's*, so it costs what a file that will not open
+	// costs — the command does not run, the status is
+	// Diagnostics.RedirectFailureStatus's, the rest of the line runs, `||`
+	// catches it, and the shell stops only where
+	// RedirectErrorOnSpecialBuiltinFatal says a failed redirection on a
+	// special builtin stops it. ksh93 alone.
+	//
+	// No: the *shell's own failed expansion*, so it costs whatever any other
+	// failed expansion costs this shell — FailedExpansionAbandonsTheLine's
+	// line in bash and a fatal error in zsh, dash and BusyBox ash — whatever
+	// command the target was written on. The other four.
+	//
+	// Measured 2026-09-26 with `-c`, the failing redirection on its own line
+	// and `echo "after st=$?"` on the next, against bash 5.3.20
+	// (/opt/homebrew/bin/bash), zsh 5.9.2 under `-f` (/opt/homebrew/bin/zsh),
+	// ksh93u+ 2012-08-01 (/bin/ksh — AT&T's own 2012 build, a different
+	// lineage from ksh93u+m), dash 0.5.12 (/bin/dash) and BusyBox v1.37.0 in
+	// the pinned alpine image. A target of `$(( 1/0 ))`:
+	//
+	//	                            bash   zsh    ksh93  dash   ash
+	//	: < $((1/0))     special     st=1   stops  stops  stops  stops
+	//	read x < …       regular     st=1   stops  st=1   stops  stops
+	//	f < …            function    st=1   stops  st=1   stops  stops
+	//	{ :; } < …       group       st=1   stops  st=1   stops  stops
+	//	command : < …    command     st=1   stops  st=1   stops  stops
+	//
+	// Only ksh93 splits that grid by the command, and the split is a special
+	// builtin against everything else — not "a command the shell runs
+	// itself", which those two readings agree about on every row but the
+	// **function**, the **group** and `command :`, all three of which carry
+	// on there.
+	//
+	// Three pairs say which noun it is, and a fourth says why it is not the
+	// body's axis:
+	//
+	//   - **A redirection that could not be opened** draws the ksh93 column
+	//     row for row: `: < /nonexistent/f` ends that shell at 1 and `read x
+	//     < /nonexistent/f` carries on at 1. In bash and zsh it draws a
+	//     *different* grid — both carry on for both commands — so those two
+	//     are not grading a failed target as a failed redirection.
+	//   - **The same expansion in an ordinary word** is bash's discriminator:
+	//     `echo $(( 1/0 )); echo SAME` writes no `SAME`, and neither does `:
+	//     < $(( 1/0 )); echo SAME`, where `: < /nonexistent/f; echo SAME`
+	//     writes it — and `|| echo CAUGHT` fires for the unopenable file and
+	//     not for the failing target. bash gives the target's failure the
+	//     *line*, which no redirection failure costs it.
+	//   - **The failure kind is not the noun.** `${q?word}`, a multi-word
+	//     expansion and an unset name under `set -u` draw the same column in
+	//     ksh93 as `$(( 1/0 ))` does — special fatal, everything else at 1
+	//     and catchable — where in bash the kinds part company, `$((1/0))`
+	//     taking the line and `${q?word}` ending the shell, which is bash's
+	//     own reading of each in an ordinary word.
+	//   - **A here-document body** is the pair that makes this a field of its
+	//     own rather than a second reading of
+	//     HeredocBodyFailureIsTheRedirections. In dash and BusyBox ash `read
+	//     x <<END` with `$(( 1/0 ))` in the body carries on at 2 and at 1,
+	//     where `read x < $(( 1/0 ))` ends both shells at 2 — those two
+	//     columns answer Yes there and No here, so one field cannot say both
+	//     (#4689).
+	//
+	// Asked only where a target really did fail to expand. A target that
+	// expands to a name is every other redirection, every column opens it,
+	// and a dialect that never answered this must still be able to.
+	//
+	// Nothing is asked for a command the shell runs as a process of its own:
+	// where that word was expanded is
+	// RedirectTargetExpandsInTheCommandsProcess's question, and the answer to
+	// it already decides whose the failure is.
+	RedirectTargetFailureIsTheRedirections Answer
 	// ForNameWhenTheLoopRuns is what a `for` or `select` does when it is
 	// reached and the word standing where its variable belongs is not a
 	// name. Asked only where the grammar carried the word this far —

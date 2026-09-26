@@ -1863,6 +1863,14 @@ func Semantics() interp.Semantics {
 	// `u` set.
 	s.HeredocExpandsInTheCommandsProcess = interp.No
 	s.RedirectTargetExpandsInTheCommandsProcess = interp.No
+	// A *target* this shell expanded itself and could not is this shell's
+	// own failed expansion and ends it at 2, on every command shape, where a
+	// failed *open* leaves `read x < /nonexistent/f` alive at 1. The answer
+	// parts from HeredocBodyFailureIsTheRedirections here, which is Yes: a
+	// failing here-document **body** on the same `read` carries this shell
+	// on at 1. Measured 2026-09-26 on BusyBox v1.37.0 in the pinned alpine
+	// image (#4689).
+	s.RedirectTargetFailureIsTheRedirections = interp.No
 	// A body this shell expanded itself and could not is the *redirection's*
 	// failure, and this is the column that shows it in the status: `: <<END`
 	// with `$(( 1/0 ))` in it ends the shell at **1** where an ordinary

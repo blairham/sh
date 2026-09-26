@@ -102,6 +102,10 @@ func PromptStyle() interp.PromptStyle {
 		TrailingEscapeIsDropped: true,
 		Privilege:               "$",
 		CwdBaseAtRootIsEmpty:    true,
+		// Read in the same image as the table above: with `PWD` written over,
+		// `\\w` still draws the directory the applet is in. See
+		// interp.PromptStyle.CwdIsTheShellsOwnDirectory (#4540).
+		CwdIsTheShellsOwnDirectory: true,
 		// The defaults a script reads out of the parameters, and the ones it
 		// draws. `\w \$ ` is this applet's own; PS2 and PS4 are dash's.
 		Default:                            `\w \$ `,

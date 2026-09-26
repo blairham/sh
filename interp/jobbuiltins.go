@@ -309,14 +309,17 @@ func (r *Runner) printJobs(jobs []*Job, form jobsForm, wanted jobState, explicit
 // jobDirectoryLine is the line `jobs -d` adds under a job's row.
 //
 // The directory is written the way a prompt writes one — the home directory
-// as `~` — and that shortening is read at *print* time rather than recorded
-// with the job: measured 2026-09-25 on zsh 5.9.2, a job started under the
-// home directory and then listed after `HOME` was assigned somewhere else is
-// named by its full path, so what is stored is the path and what is decided
-// here is how to spell it. abbreviateHome is the prompt's own, shared rather
-// than written twice.
+// as `~`, and a directory `hash -d` has named as `~name` — and that shortening
+// is read at *print* time rather than recorded with the job: measured
+// 2026-09-25 on zsh 5.9.2, a job started under the home directory and then
+// listed after `HOME` was assigned somewhere else is named by its full path,
+// so what is stored is the path and what is decided here is how to spell it.
+// Runner.abbreviatedDirectory is the prompt's own, shared rather than written
+// twice — which is what made `hash -d jd=<d>; cd <d>/a; sleep 1 & jobs -d`
+// write `(pwd : ~jd/a)` here as soon as `%~` did, with the same line writing
+// `(pwd : ~/…)` when the table is empty as its own control (#4541).
 func (r *Runner) jobDirectoryLine(j *Job) string {
-	dir := abbreviateHome(j.Dir, r.promptVar("HOME"))
+	dir := r.abbreviatedDirectory(j.Dir)
 	return Wording(r.diag().JobDirectoryLine, "(pwd : %[1]s)", dir)
 }
 

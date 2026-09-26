@@ -46,6 +46,10 @@ func PromptStyle() interp.PromptStyle {
 		// A count in front of a code — `%2~` is the last two components. See
 		// interp.PromptStyle.NumericArgument and #1592.
 		NumericArgument: true,
+		// `cd <d>; PWD=/bogus; print -rP %~` draws <d> here and `/bogus` in
+		// bash — the shell's own directory rather than the parameter. See
+		// interp.PromptStyle.CwdIsTheShellsOwnDirectory (#4540).
+		CwdIsTheShellsOwnDirectory: true,
 		Codes: map[rune]interp.PromptField{
 			'n': interp.FieldUser,
 			'm': interp.FieldHost,

@@ -7141,7 +7141,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	tracedHere := false
 	// What this command knew before any prefix value was expanded, so that a
 	// failure the walk *causes* can be told from one that was already on the
-	// record. See interp/prefixexpansionfailed.go.
+	// record. Taken again before each of the three routes below, because
+	// between here and them the **redirections** are opened: a here-document
+	// body that will not expand sets the same flag, costs the command rather
+	// than the script, and is not this command's prefix failing. See
+	// interp/prefixexpansionfailed.go.
 	walk := r.beginPrefixWalk(c.Assigns)
 	if early {
 		// The ordered walk two columns make before they open anything: the
@@ -7326,6 +7330,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// the two routes answering it differently — a prefix to a function is
 		// otherwise discarded, so its value was never expanded and bash's
 		// answer fell out of a gap rather than a choice (#1219).
+		// Taken again here: the redirections have been opened since the one
+		// above, and what they may have left on the record is not this
+		// prefix's. In front of the frozen-name expansion below rather than
+		// behind it, because that loop expands a prefix's value and so is
+		// part of this walk — a marker taken after it would read a value
+		// that would not expand as something that had already failed.
+		walk = r.beginPrefixWalk(c.Assigns)
 		if !r.prefixCheckedFirst {
 			for _, a := range c.Assigns {
 				if !a.Operand && r.readonly[a.Name] {
@@ -7550,6 +7561,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 		var undo []savedVar
 		var held []string
+		// Taken again for the reason the function route's is.
+		walk = r.beginPrefixWalk(c.Assigns)
 		for _, a := range c.Assigns {
 			if r.prefixWalkFailed(walk) {
 				// Nothing behind a value that would not expand is expanded
@@ -7889,6 +7902,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// search below is made with it — see reachPrefixedPath.
 	prefixPath, pathFromPrefix := "", false
 	var prefixArrays []string
+	// Taken again for the reason the function route's is.
+	walk = r.beginPrefixWalk(c.Assigns)
 	for _, a := range c.Assigns {
 		if r.prefixWalkFailed(walk) {
 			// The entries behind a value that would not expand are not

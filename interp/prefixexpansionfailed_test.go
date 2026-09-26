@@ -20,10 +20,21 @@ import (
 // sentence from anything the command would have printed.
 func prefixFailRun(t *testing.T, src string, fatality PrefixRefusalFatalityPolicy, abandons Answer) (string, int) {
 	t.Helper()
+	return prefixFailRunOrder(t, src, fatality, abandons, PrefixExpandedBeforeRedirectionsNever)
+}
+
+// prefixFailRunOrder is the same with the *order* axis named too, for the rows
+// that have to reach the ordered walk two columns make before they open a
+// redirection — see interp/prefixredirorder.go. A suite that only ever ran
+// under the other answer would leave that walk's stop untested, which is
+// exactly what a mutation battery found.
+func prefixFailRunOrder(t *testing.T, src string, fatality PrefixRefusalFatalityPolicy, abandons Answer, order PrefixRedirectionOrder) (string, int) {
+	t.Helper()
 	sem := permissive()
 	sem.PrefixRefusalFatality = fatality
 	sem.FailedExpansionAbandonsTheLine = abandons
 	sem.FatalErrorStatusIsOne = Yes
+	sem.PrefixExpandedBeforeTheRedirections = order
 	dg := Diagnostics{ArithOperandExpected: "bad math"}
 	var out bytes.Buffer
 	dir := t.TempDir()
@@ -212,21 +223,106 @@ func TestOnlyACommandsOwnGiveUpIsCatchable(t *testing.T) {
 // whether or not the entry ran.
 func TestTheEntriesBehindAFailedPrefixAreNotExpanded(t *testing.T) {
 	t.Parallel()
-	for _, src := range []string{
-		`a=$(( } )) b=$(echo SIDE >&2) echo RAN`,
-		`a=$(( } )) b=$(echo SIDE >&2) /bin/echo RAN`,
-		`f() { :; }; a=$(( } )) b=$(echo SIDE >&2) f`,
+	// Both answers to the order axis, because they walk the prefix in
+	// different places: one column works through every value before it opens
+	// a redirection and the other expands per entry at the dispatch. A suite
+	// run under one of them leaves the other's walk untested.
+	for _, order := range []PrefixRedirectionOrder{
+		PrefixExpandedBeforeRedirectionsNever,
+		PrefixExpandedBeforeRedirectionsAlways,
 	} {
-		out, _ := prefixFailRun(t, src+"\n", PrefixRefusalAlwaysFatal, No)
-		if strings.Contains(out, "SIDE") {
-			t.Errorf("%s: said %q, want the entry behind the failure left unexpanded", src, out)
+		for _, src := range []string{
+			`a=$(( } )) b=$(echo SIDE >&2) echo RAN`,
+			`a=$(( } )) b=$(echo SIDE >&2) /bin/echo RAN`,
+			`f() { :; }; a=$(( } )) b=$(echo SIDE >&2) f`,
+		} {
+			out, _ := prefixFailRunOrder(t, src+"\n", PrefixRefusalAlwaysFatal, No, order)
+			if strings.Contains(out, "SIDE") {
+				t.Errorf("%s [%v]: said %q, want the entry behind the failure left unexpanded",
+					src, order, out)
+			}
+		}
+		// The control the rows above need: with nothing in front of it the
+		// same entry does run, so the absence above is the give-up and not
+		// the probe. Under both answers, because a control that cannot fire
+		// vouches for nothing.
+		out, _ := prefixFailRunOrder(t, "b=$(echo SIDE >&2) echo RAN\n", PrefixRefusalAlwaysFatal, No, order)
+		if !strings.Contains(out, "SIDE") || !strings.Contains(out, "RAN") {
+			t.Errorf("[%v]: said %q, want the entry expanded and the command run", order, out)
 		}
 	}
-	// The control the row above needs: with nothing in front of it the same
-	// entry does run, so the absence above is the give-up and not the probe.
-	out, _ := prefixFailRun(t, "b=$(echo SIDE >&2) echo RAN\n", PrefixRefusalAlwaysFatal, No)
-	if !strings.Contains(out, "SIDE") || !strings.Contains(out, "RAN") {
-		t.Errorf("said %q, want the entry expanded and the command run", out)
+}
+
+// A failure that is **not the prefix's** is not the prefix's, and the way to
+// say so is that a prefix in front of the command changes nothing about it.
+//
+// A here-document body that will not expand sets the same flag this door
+// reads, and it has a rule of its own — the command is given up and the script
+// carries on — measured one construct over in interp/heredocprocess.go. It
+// arrives after the redirections are opened, which is after the walk above
+// began, so the marker is taken again at each route rather than once for the
+// command. Without that, `a=ok : <<END` answered differently from the same
+// here-document with no prefix on it, which no shell in the panel does.
+func TestAFailureBeforeThePrefixIsNotThePrefixs(t *testing.T) {
+	t.Parallel()
+	const body = " : <<END\n$(( } ))\nEND\necho \"after st=$?\"\n"
+	// `:` is a special builtin, and the column that reaches this door with a
+	// here-document behind it is the one where a failed redirection on a
+	// special builtin is **not** fatal — the others have already given the
+	// command up a screen earlier and never reach the dispatch. Setting it
+	// here is what makes the row discriminating: with the axis at Yes the
+	// mutation this test is for survives, because nothing gets that far.
+	run := func(src string, fatality PrefixRefusalFatalityPolicy, abandons Answer) (string, int) {
+		t.Helper()
+		sem := permissive()
+		sem.PrefixRefusalFatality = fatality
+		sem.FailedExpansionAbandonsTheLine = abandons
+		sem.FatalErrorStatusIsOne = Yes
+		sem.RedirectErrorOnSpecialBuiltinFatal = No
+		var out bytes.Buffer
+		dir := t.TempDir()
+		r := newTestRunner(t, &Runner{
+			Stdout: &out, Stderr: &out, Semantics: &sem,
+			Diagnostics: &Diagnostics{ArithOperandExpected: "bad math"},
+			Dir:         dir, Name: "sh", Vars: map[string]string{"PATH": dir},
+		})
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		st, rerr := r.Run(context.Background(), f)
+		if rerr != nil {
+			t.Fatalf("run %q: %v", src, rerr)
+		}
+		return out.String(), st
+	}
+	moved := false
+	for _, fatality := range []PrefixRefusalFatalityPolicy{
+		PrefixRefusalNeverFatal,
+		PrefixRefusalAlwaysFatal,
+		PrefixRefusalFatalOnASpecialBuiltinOrFunction,
+		PrefixRefusalFatalOnACommandThisShellRuns,
+	} {
+		for _, abandons := range []Answer{Yes, No} {
+			bare, bareSt := run(body, fatality, abandons)
+			with, withSt := run("a=ok"+body, fatality, abandons)
+			if bare != with || bareSt != withSt {
+				t.Errorf("[%v/%v] %q at %d with no prefix, %q at %d with one: "+
+					"a clean prefix must not move a failure that is not its own",
+					fatality, abandons, bare, bareSt, with, withSt)
+			}
+			if strings.Contains(bare, "bad math") && strings.Contains(bare, "after") {
+				moved = true
+			}
+		}
+	}
+	// The control the rows above need: the here-document really did fail and
+	// the command really did carry on, so the agreement is two shells doing
+	// something rather than two shells doing nothing. A row where neither
+	// side reached the failure would agree just as readily.
+	if !moved {
+		t.Error("no row reported the failure and still ran the next command: " +
+			"the probe never reached the case it is about")
 	}
 }
 

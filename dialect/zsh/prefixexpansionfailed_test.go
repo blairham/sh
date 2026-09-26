@@ -71,3 +71,31 @@ func TestACleanPrefixStillRunsItsCommandHere(t *testing.T) {
 		t.Errorf("= %q (status %d), want [ok] at 0", out, st)
 	}
 }
+
+// A here-document body that will not expand is **not** the prefix's failure,
+// and a clean prefix in front of the command must not move it. It has a rule
+// of its own — the command is given up and the script carries on — so the
+// answer has to be the same with and without the prefix, as it is in zsh 5.9.2
+// and in every other column.
+//
+// This column is where it is visible: a failed redirection on a special
+// builtin is not fatal here, so the dispatch is reached with the flag the
+// body set still on the record, and a door that read it would give the shell
+// up over a prefix that expanded perfectly well.
+func TestAFailureThatIsNotThePrefixsIsUnmovedByOne(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const body = " : <<END\n$((1/0))\nEND\necho \"after st=$?\"\n"
+	bare, bareSt := runZsh(t, dir, body)
+	with, withSt := runZsh(t, dir, "a=ok"+body)
+	if bare != with || bareSt != withSt {
+		t.Errorf("%q at %d with no prefix, %q at %d with one: "+
+			"a clean prefix must not move a failure that is not its own",
+			bare, bareSt, with, withSt)
+	}
+	// The control: the body really did fail and the command after it really
+	// did run, so the agreement above is not two runs that did nothing.
+	if !strings.Contains(bare, "division by zero") || !strings.Contains(bare, "after") {
+		t.Errorf("= %q, want the failure reported and the next command run", bare)
+	}
+}

@@ -36,6 +36,31 @@ func TestAPrefixThatWouldNotExpandGivesUpTheLine(t *testing.T) {
 	}
 }
 
+// Nothing behind the entry that failed is expanded, which is this column's
+// half of a rule the whole panel keeps — and it is worth a row here because
+// this shell works through the *whole* prefix before it opens a redirection,
+// so the walk that has to stop is a different one from the other columns'.
+// The side effect is written where it can be seen: `b=$(echo SIDE)` proves
+// nothing, since a substitution's output is captured either way.
+func TestTheEntryBehindAFailedPrefixIsNotExpanded(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, src := range []string{
+		`a=$((1/0)) b=$(echo SIDE >&2) echo RAN`,
+		`a=$((1/0)) b=$(echo SIDE >&2) /bin/echo RAN`,
+		`f() { :; }; a=$((1/0)) b=$(echo SIDE >&2) f`,
+	} {
+		if out, _ := runBash(t, dir, src+"\n"); strings.Contains(out, "SIDE") {
+			t.Errorf("%s = %q, want the entry behind the failure left unexpanded", src, out)
+		}
+	}
+	// The control: with nothing failing in front of it the same entry runs,
+	// so the absence above is the give-up rather than the probe.
+	if out, _ := runBash(t, dir, "b=$(echo SIDE >&2) echo RAN\n"); !strings.Contains(out, "SIDE") {
+		t.Errorf("= %q, want the entry expanded when nothing failed in front of it", out)
+	}
+}
+
 // And a prefix to a **frozen name** is the other failure and gets the other
 // answer here: this shell reports it and runs the command anyway. The pair is
 // what says the rule above is keyed on the expansion rather than on the prefix

@@ -1452,6 +1452,25 @@ func (r *Runner) expandAssignValue(w *syntax.Word) string {
 	return r.wordTextUnsplit(w, nil, false, true)
 }
 
+// expandAssignValueMarked is the same one word, the same one pass, with the
+// glob marks left **in** — expandAssignValue's road, read the way
+// wordTextGlobMarked reads an ordinary word.
+//
+// The one caller is the assignment that goes on to match against the
+// filesystem, under the option behind
+// [Semantics.ScalarAssignmentValueIsGlobbed]. It needs the marked form for
+// the reason expandWordEscaped gives: an unmarked field has lost the
+// difference between an asterisk a script wrote and one a parameter held, so
+// `a='*.txt'` and `v='*.txt'; a=$v` would match where neither of them does.
+func (r *Runner) expandAssignValueMarked(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	r.expandTildeIn(w, tildeEndsAtASlashOrColon)
+	r.expandColonTildes(w)
+	return r.wordTextUnsplit(w, nil, true, true)
+}
+
 // expandColonTildes expands the tildes only an assignment has: one after each
 // unquoted colon, which is what makes `PATH=~/bin:~/sbin` and `M=a:~/b` work.
 // Unanimous across the panel.

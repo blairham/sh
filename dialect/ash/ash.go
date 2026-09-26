@@ -337,6 +337,13 @@ func Semantics() interp.Semantics {
 	// x$@y` is `xA` and `By`. `echo -e 'a\tb'` writing a real tab is the
 	// control that says the run was this shell and not dash (#4549).
 	s.ParamExpansionDistributesOverTheWord = interp.No
+	// A plain assignment's right-hand side is text and not a pattern.
+	// Measured 2026-09-26 inside the pinned alpine digest, BusyBox v1.37.0,
+	// rather than carried over from dash: `a=*.txt; echo "[$a]"` is
+	// `[*.txt]` in a directory holding `a.txt b.txt c.txt`, beside an `echo
+	// *.txt` that prints the three names. Only zsh has a switch for the
+	// other reading (#4638).
+	s.ScalarAssignmentValueIsGlobbed = interp.No
 	// `${#@}` with three parameters is 5 — the width of `a b c` — rather than
 	// the count.
 	s.LengthOfSpecialIsCount = interp.No

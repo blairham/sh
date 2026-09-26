@@ -15044,6 +15044,71 @@ type Semantics struct {
 	// standard error. bash alone does it.
 	SelectEofPrintsNewline Answer
 
+	// ScalarAssignmentValueIsGlobbed makes the right-hand side of a **plain
+	// scalar assignment** a pattern: `a=*.txt` stores the names it matched
+	// rather than the six characters, and the name becomes an array where
+	// more than one name matched. zsh spells it `GLOB_ASSIGN`, off by
+	// default, and it is the second axis here that only an option moves —
+	// the other four shells have no spelling for the request at all.
+	//
+	// **The noun is the assignment and not the value.** That is the whole of
+	// what makes this an axis rather than a rule about words, and it is the
+	// discriminator a grid of patterns cannot see: `a=*.txt` globs under the
+	// option and `typeset a=*.txt` does not, with the same value, the same
+	// directory and the same option state. Measured on zsh 5.9.2 under `-f`,
+	// 2026-09-26, in a directory holding `a.txt b.txt c.txt one.only plain`
+	// and a `dir`:
+	//
+	//	a=*.txt            typeset -a a=( a.txt b.txt c.txt )
+	//	typeset a=*.txt    typeset a='*.txt'
+	//	declare a=*.txt    typeset a='*.txt'
+	//	export a=*.txt     export a='*.txt'
+	//	local a=*.txt      typeset a='*.txt'   (inside a function)
+	//	readonly a=*.txt   typeset -r a='*.txt'
+	//
+	// So a declaration utility's operand keeps the characters, and the
+	// statement form does not. A rule written on "an assignment whose value
+	// holds a pattern" is right on every other row in the grid and wrong on
+	// that pair.
+	//
+	// **How many fields the match produced decides the name's kind**, and
+	// the numeric attributes go whichever it is:
+	//
+	//	a=one.*                      typeset a=one.only
+	//	a=*.txt                      typeset -a a=( a.txt b.txt c.txt )
+	//	integer a; a=one.*           typeset a=one.only
+	//	integer a; a=*.txt           typeset -a a=( a.txt b.txt c.txt )
+	//	integer a; a=2+2             typeset -i a=4
+	//	integer a; a=plain           typeset -i a=0
+	//
+	// The last two are the controls that keep this from being "the option
+	// switches arithmetic off": a value with no pattern in it still reaches
+	// the arithmetic reader and the attribute survives.
+	//
+	// **A miss is the ordinary miss**, decided by the same two options every
+	// other pattern's is: with zsh's default `NOMATCH` the shell reports `no
+	// matches found` and the assignment never happens, under `nullglob` the
+	// name is left an empty scalar, and under `unsetopt nomatch` the
+	// characters stand as written. Nothing about the assignment is special
+	// there, which is why no second axis records it.
+	//
+	// **What makes the word a pattern is not this axis.** A written
+	// metacharacter counts, a quoted one does not, and one a *value* carries
+	// counts only where it was asked to — so `a='*.txt'` and `v='*.txt';
+	// a=$v` keep their characters under the option, while `a=${~v}` and the
+	// same `a=$v` under `setopt globsubst` match. This axis is the gate on
+	// the assignment; [Semantics.GlobExpansionResults] and the `${~…}` flag
+	// are the gate on the value, and both must be open.
+	//
+	// It is read at the **store** and not at the parse: a function body
+	// written while the option was off globs when it is called with the
+	// option on, and an `eval` of a string built while it was off globs too.
+	//
+	// Asked only where the value the word came to is a pattern at all, so an
+	// assignment with no metacharacter in it never puts the question — which
+	// is what keeps `x=1` off the axis in a shell that has not answered it.
+	ScalarAssignmentValueIsGlobbed Answer
+
 	// AssignmentUpdatesPipelineStatus counts a bare assignment as a command
 	// for the pipeline-status record. bash says yes, so `false | true; x=1`
 	// replaces the two elements with one holding 0; zsh says no and leaves

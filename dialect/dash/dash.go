@@ -893,6 +893,12 @@ func Semantics() interp.Semantics {
 	// /bin/dash, `v='p q'; x${v}y` is the two words `xp` and `qy` rather
 	// than `xpy` and `xqy`, and `set -- A B; x$@y` is `xA` and `By` (#4549).
 	s.ParamExpansionDistributesOverTheWord = interp.No
+	// A plain assignment's right-hand side is text and not a pattern.
+	// Measured 2026-09-26 on /bin/dash in a directory holding `a.txt b.txt
+	// c.txt`: `a=*.txt; echo "[$a]"` is `[*.txt]`, beside an `echo *.txt`
+	// that prints the three names. Only zsh has a switch for the other
+	// reading (#4638).
+	s.ScalarAssignmentValueIsGlobbed = interp.No
 	// The value is expanded and the redirection opened before the prefix is
 	// checked, so a failure in either is what gets reported and the frozen
 	// name is never named. Measured 2026-09-12, with ksh93 and zsh against

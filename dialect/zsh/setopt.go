@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 123 of the 185
+//     typing a directory name still does not change directory. 122 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -220,7 +220,7 @@ import (
 // operand are refused with the option off exactly as with it on. See
 // interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
 //
-// Nothing else about the split moved, and 123 is still most of the table.
+// Nothing else about the split moved, and 122 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -714,7 +714,56 @@ var zshOptions = []zshOption{
 	setOptBacked("glob", true, "noglob", true),
 	recorded("globalexport", true),
 	recorded("globalrcs", true),
-	recorded("globassign", false),
+	{
+		// GLOB_ASSIGN: the right-hand side of a **plain scalar assignment**
+		// is a pattern, so `a=*.txt` stores the names it matched and the
+		// name becomes an array where more than one matched. Off by
+		// default, and recorded until #4638 — `setopt globassign` was
+		// accepted, reported back by every surface that names it, and
+		// nothing read it.
+		//
+		// **The noun is the assignment and not the value**, which is the
+		// pair a grid of patterns cannot see. Measured on zsh 5.9.2 under
+		// `-f`, 2026-09-26, in a directory holding `a.txt b.txt c.txt
+		// one.only plain` and a `dir`: `a=*.txt` is `typeset -a a=( a.txt
+		// b.txt c.txt )` and `typeset a=*.txt` is `typeset a='*.txt'` —
+		// same value, same directory, same option — and `declare`,
+		// `export`, `local` and `readonly` keep the characters too.
+		//
+		// How many names matched decides the kind, and the numeric
+		// attributes go whichever it is: `a=one.*` is `typeset a=one.only`,
+		// `integer a; a=*.txt` is `typeset -a a=( a.txt b.txt c.txt )` with
+		// no `-i` left, while `integer a; a=2+2` is still `typeset -i a=4`
+		// and `integer a; a=plain` is still `typeset -i a=0`. Those last two
+		// are the controls that keep this from being "the option switches
+		// arithmetic off".
+		//
+		// `a=(*.txt)` globs in **either** state, which is the control that
+		// says the option is about assignments rather than about
+		// assignment-shaped syntax — and the suite's own
+		// *GLOB_ASSIGN doesn't monkey with type if not scalar assignment*
+		// chunk is that row with a table's attribute on it.
+		//
+		// Read at the **store** and not at the parse: a function body
+		// written while the option was off globs when it is called with the
+		// option on, and an `eval` of a string built while it was off globs
+		// too. Both measured.
+		//
+		// Read off the axis rather than off a stored bit, the arrangement
+		// `globsubst`, `rcexpandparam` and `octalzeroes` use — so `(setopt
+		// globassign)` stays in the subshell and `emulate -R` puts it back
+		// with the rest of the vector.
+		base: "globassign", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ScalarAssignmentValueIsGlobbed == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ScalarAssignmentValueIsGlobbed
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("globcomplete", false),
 	matchBacked("globdots", false, interp.PatternsMatchHidden, false),
 	recorded("globstarshort", false),

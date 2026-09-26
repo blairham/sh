@@ -11228,8 +11228,14 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 	values := make([]string, len(assigns))
 	prepared := make([]*expandedAssign, len(assigns))
 	for i, a := range assigns {
-		values[i] = r.expandAssignValue(a.Value)
+		// Both readings, in one expansion. The fields are nil for every
+		// assignment but the one shape the option reaches — see
+		// Runner.expandScalarAssignValue — and they travel with the value so
+		// that the store below matches nothing a second time.
+		value, fields, globbed := r.expandScalarAssignValue(a.Value)
+		values[i] = value
 		prepared[i] = r.prepareTracedAssign(a, values[i])
+		prepared[i].fields, prepared[i].fieldsSet = fields, globbed
 		// The subscript is the one thing a trace can show that only the
 		// *store* knows, because resolving it here as well would resolve it
 		// twice — `a[i++]=v` steps `i` once in the column that prints the
@@ -11314,6 +11320,20 @@ type expandedAssign struct {
 	// assignment — so the route is recorded rather than inferred from the list
 	// being there. See literalElem.operand.
 	elemsAreOperands bool
+
+	// fields is the match a plain scalar assignment's right-hand side made
+	// against the filesystem, under the option behind
+	// [Semantics.ScalarAssignmentValueIsGlobbed]. Held beside the value for
+	// the reason the value is held at all: the traced route expands the word
+	// before the store runs, and matching a second time down there would run
+	// the substitutions in it twice (#1915).
+	//
+	// fieldsSet rather than a nil check, because no fields at all is a real
+	// answer — `setopt globassign nullglob; a=*.nomatch` leaves the name an
+	// empty scalar — and it is not the same answer as "this assignment never
+	// globbed".
+	fields    []string
+	fieldsSet bool
 
 	// subscript is what the store resolved this assignment's subscript to,
 	// for the dialect whose trace prints that rather than the text: the
@@ -11662,7 +11682,16 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		}
 		r.setArrayElem(a.Name, idx, subject, r.assignValue(a))
 	default:
-		value := r.assignValue(a)
+		value, fields, globbed := r.scalarAssignValue(a)
+		if globbed {
+			// The right-hand side was a pattern and this shell asked for it
+			// to be one. A match replaces the name outright — the kind, the
+			// value and the numeric attributes together — so none of the
+			// scalar machinery below is on its road. See
+			// interp/globassign.go.
+			r.storeGlobbedScalarAssign(a, fields)
+			return
+		}
 		if r.compoundAssignedFromAName(a.Name, value, a.Append) {
 			// A bare *name* on the right of an assignment whose target is
 			// already a compound copies that variable rather than storing

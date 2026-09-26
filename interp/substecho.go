@@ -191,7 +191,7 @@ func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure er
 	if !d.EchoesTheOffendingLine && !d.SubstitutionParseFailureQuotesTheWord {
 		return "", 0
 	}
-	text, textBase := r.textInForce()
+	text, textBase := r.substFailureText(span)
 	start := failureBase + 1 - textBase
 	lines := substTextLines(span, body, text, start)
 	if lines == nil {
@@ -215,6 +215,41 @@ func (r *Runner) substFailureEcho(span syntax.Span, body string, raw, failure er
 		at = max(n, 1)
 	}
 	return echo, at
+}
+
+// substFailureText is the program the refusal is quoted against, and the line
+// offset it is numbered at.
+//
+// A **here-document body** is a program of its own — the shell reads it at
+// expansion time, from its own text, with its own numbering — so it is the
+// text here rather than the script holding the redirection. The two are the
+// same lines while the here-document is written in the script, which is why
+// indexing the script worked for as long as it did; they part as soon as the
+// body is inside something else the shell read. Measured 2026-09-26 over a
+// script file, `env -i PATH=/usr/bin:/bin HOME=<scratch> LC_ALL=C
+// /opt/homebrew/bin/bash d1.sh` with stdin from /dev/null, lines 1 to 4
+// holding `v=$(cat <<END`, `$(echo hi; for)`, `END` and `)`:
+//
+//	bash 5.3.20  d1.sh: command substitution: line 5: syntax error near …
+//	             d1.sh: command substitution: line 5: `echo hi; for)'
+//	before       the first of those and nothing else
+//
+// The same body on a command of its own writes both lines in both shells,
+// which is the control that says the second line is produced in general and
+// the `$( … )` is where it went missing. Counted as whole lines on standard
+// error rather than with Contains: 2 against 1 (#4713).
+//
+// The older spelling is excluded for the reason it is excluded at every other
+// site that reads Runner.expansionBodyLine: its body is read with the
+// script's line.
+func (r *Runner) substFailureText(span syntax.Span) (string, int) {
+	if !span.Backquoted && r.expansionBodyLine > 0 && r.heredocBodyText != "" {
+		// Numbered from the body's first line, which is where every other
+		// reading of this body already counts from — see
+		// Runner.expansionBodyLine and the shift subst.go gives the refusal.
+		return r.heredocBodyText, r.lineBase + r.expansionBodyLine - 1
+	}
+	return r.textInForce()
 }
 
 // substTextLines is the program's text split into lines, or nil where the text

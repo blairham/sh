@@ -3469,6 +3469,26 @@ type Runner struct {
 	// out would take that away (see cmd/bash's shopt-invocation rows).
 	locatedWithoutALine bool
 
+	// heredocBodyText is that body's own text, for the second message a
+	// refused substitution in it is followed by.
+	//
+	// The body is a program the shell reads on its own, and the line that
+	// message quotes is a line of *that* program. Indexing the script for it
+	// works only while the here-document is written in the script — inside a
+	// `$( … )` the body's lines are lines of that substitution's body, and a
+	// quote taken from the file lands past the end of it. Measured
+	// 2026-09-26 over a script file, bash 5.3.20, lines 1 to 4 holding
+	// `v=$(cat <<END`, `$(echo hi; for)`, `END` and `)`:
+	//
+	//	bash 5.3.20  d1.sh: command substitution: line 5: syntax error …
+	//	             d1.sh: command substitution: line 5: `echo hi; for)'
+	//	before       the first line alone
+	//
+	// Empty where there is no body, and set and put back by
+	// Runner.heredocBody beside Runner.expansionBodyLine, which is where the
+	// text is numbered from. Read by Runner.substFailureEcho (#4713).
+	heredocBodyText string
+
 	// expansionBodyLine is the file line such a body begins on, or nought
 	// where the body has no line of its own — the older spelling's, which is
 	// numbered by the span the parser already placed in the file.

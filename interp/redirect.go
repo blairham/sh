@@ -1456,6 +1456,18 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 		// Runner.substParseErrorEscapesASubshell.
 		wasHeredoc := r.inHeredocBody
 		r.inHeredocBody = true
+		// And the body's own text, which is the program a refusal inside it
+		// is quoted against. Kept rather than indexed out of the script,
+		// because the body's lines are the script's lines only while the
+		// here-document is written *in* the script: inside a `$( … )` they
+		// are lines of that body, and a quote taken from the file landed
+		// past the end of it and wrote nothing at all. See
+		// Runner.heredocBodyText (#4713).
+		wasText := r.heredocBodyText
+		r.heredocBodyText = ""
+		if rd.Heredoc != nil {
+			r.heredocBodyText = rd.Heredoc.Literal()
+		}
 		if rd.Heredoc != nil && rd.Heredoc.Start.Line > 0 {
 			// And where the body sits in the file. The body is lexed again
 			// from its own text — see Runner.rawSpans — so everything in it
@@ -1469,7 +1481,7 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 		}
 		defer func() {
 			r.inBodyReadAtExpansion, r.expansionBodyLine = was, wasLine
-			r.inHeredocBody = wasHeredoc
+			r.inHeredocBody, r.heredocBodyText = wasHeredoc, wasText
 		}()
 	}
 	if r.redirOwner == redirOwnerThisShell {

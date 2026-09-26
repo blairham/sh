@@ -4996,7 +4996,7 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	// ways is exactly how that fix would come undone in the branch nobody
 	// looks at.
 	repl := r.replacementWord(e)
-	out := value
+	var out string
 	if !reportsAMatch(o) {
 		with := r.replacementFor(repl)
 		// The **first** match writes the record, measured: `v=hello;

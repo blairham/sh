@@ -4465,6 +4465,15 @@ func Diagnostics() interp.Diagnostics {
 		// line otherwise do. The name is the one verb.
 		// See interp.Semantics.ScalarStoredOverATableIsRefused (#4617).
 		ScalarStoredOverATable: "%s: attempt to set associative array to scalar",
+		// And the same store over a table this shell **produces** rather than
+		// one a script stored, which is a sentence of its own and is written
+		// with `ksharrays` *off* — where a stored table is not refused at all.
+		// Measured 2026-09-26, `aliases=string` is `aliases: attempt to set
+		// slice of associative array` and the shell leaves at 1; `functions`,
+		// `commands` and `galiases` each answer the same way, and under the
+		// option all four take the sentence above instead. See
+		// interp.Runner.producedTableRefusesAScalarStore (#4639).
+		ScalarStoredOverAProducedTable: "%s: attempt to set slice of associative array",
 		// A table literal whose bare elements came to an odd number of
 		// fields, which this shell will not pair off. Measured 2026-09-26,
 		// `typeset -A h=(a 1 b)` is `bad set of key/value pairs for

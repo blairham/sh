@@ -2324,7 +2324,15 @@ func Semantics() interp.Semantics {
 	// variables untouched. zsh's -t may also stand alone as a poll; that
 	// spelling is not modeled, so here it reads the word after it as its
 	// seconds.
-	s.ReadOptions = "rsnpAd:t:u:k#"
+	//
+	// `-q` reads one key from the same terminal `-k` reads and answers
+	// whether it was a yes — 0 for `y` or `Y`, 1 for anything else, with the
+	// name left holding the normalized `y` or `n` rather than the key. It is
+	// zsh's letter alone: measured 2026-09-26, bash 5.3.20 and 3.2.57 call it
+	// `invalid option`, ksh93u+ `unknown option` and dash `Illegal option`,
+	// all at 2, so nothing here needs an axis. interp/readkeys.go carries the
+	// rest of what was measured.
+	s.ReadOptions = "rsnpAd:t:u:k#q"
 	// `unset -m` reads its operands as patterns, which is this shell's
 	// alone; `-n` is not here, and that is measured rather than an
 	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
@@ -4733,8 +4741,8 @@ func Diagnostics() interp.Diagnostics {
 			// rest, so a script asking for one is told it is missing here
 			// rather than told zsh has not got it.
 			"hash": "dfmvL",
-			// read's letters about a terminal or the line editor — -q's one
-			// keystroke, -e/-E echoing, -z and the zle pair -c/-l. The -p
+			// read's letters about a terminal or the line editor —
+			// -e/-E echoing, -z and the zle pair -c/-l. The -p
 			// coprocess is implemented as its measured refusal — see
 			// ReadNoCoprocess. zsh's read also says nothing at all about a
 			// dead -u descriptor and reports 1, which is why no
@@ -4743,11 +4751,13 @@ func Diagnostics() interp.Diagnostics {
 			// `-k` has left this list and joined ReadOptions above, spelled
 			// `k#` — a number, optional — which is the one letter in the
 			// panel with that shape. It reads characters from the terminal;
-			// interp/readkeys.go carries what was measured. The two tables
-			// move together on purpose: a letter in the accepted set and
-			// still named here is refused as missing while it works, and a
-			// letter in neither is `bad option` for something zsh has.
-			"read": "qeEzcl",
+			// interp/readkeys.go carries what was measured. `-q` has left it
+			// the same way and for the same reason: it is that read with a
+			// yes-or-no verdict on the end, and the two letters compose. The
+			// two tables move together on purpose: a letter in the accepted
+			// set and still named here is refused as missing while it works,
+			// and a letter in neither is `bad option` for something zsh has.
+			"read": "eEzcl",
 			// typeset's letters this engine does not hold: the float
 			// format (-E), the key read (-k) and tracing (-t).
 			// `-H`, `-U`, `-T`, `-h` and `-m` have left this list — they are

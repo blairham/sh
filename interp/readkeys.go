@@ -293,3 +293,96 @@ func keyTimedSource(f *os.File, timeout time.Duration, bounded bool) (next func(
 
 // timeNow is time.Now, named so the deadline has one source.
 func timeNow() time.Time { return time.Now() }
+
+// `read -q`: one key from the terminal, and whether it was a yes.
+//
+// The letter is zsh's alone. Measured 2026-09-26 against zsh 5.9.2 under
+// `-f`, and against bash 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01 and dash:
+// every one of the other four refuses `-q` outright — `invalid option`,
+// `unknown option`, `Illegal option` — so this rides the letter and needs no
+// axis, unlike the `-A` spelling two shells share and disagree over (#4593).
+//
+// It is `read -k` with a verdict on the end, and the source is settled the
+// same way: **the terminal, not the stream**. `read -q <<<y` from a script is
+// `not interactive and can't open terminal` at 1 with the name untouched, and
+// `-u` is the one thing that redirects it — which is how zsh's own
+// `B04read.ztst` asks the question, `read -q -u0 <<<$char`. Driven through a
+// pseudo-terminal the read returns on a single byte with no newline after it,
+// which is the whole point of the flag: `read -q "?Delete? " && rm ...` acts
+// on one keystroke.
+//
+// Three things beyond the status:
+//
+//   - **The name is set to the normalized answer and not to the key.** `Y`
+//     leaves `y`, `X` and a newline leave `n`. The name is the first operand
+//     or `REPLY`, and only the first: `a=A0 b=B0; read -q a b` over `y`
+//     leaves `a=y` and `b` as it was.
+//   - **The verdict is on the text that was read, not on its first
+//     character.** With no `-k` that is one character and the two readings
+//     agree, which is why the pair that parts them is worth keeping: over
+//     `yy`, `read -q -k1 -u0` is `y` at 0 and `read -q -k2 -u0` is `n` at 1 —
+//     the first character is `y` in both. `read -q -k3 -u0 <<<yyy` is `n`
+//     too.
+//   - **A short read is neither answer.** It is status **2**, with the name
+//     set to `n`. `read -q -u0 </dev/null` answers 2, and so does `read -q
+//     -k3 -u0 <<<y`, where the here-string holds the two characters `y` and
+//     a newline and three were asked for. `read -q -k0 -u0 <<<y` is 2 as
+//     well, nothing having been read. 2 is otherwise this builtin's status
+//     for an option it will not take, so it is a number worth asserting on
+//     rather than assuming: the ordinary no is 1.
+//
+// A character is whatever the locale calls one, as `-k`'s count is: over
+// `éZ` the read takes both bytes of the accented letter and the next read
+// begins at `Z`.
+
+// readQueryAnswer is the verdict `read -q` reaches, given the text that was
+// read and whether all of it arrived.
+//
+// Split out so the rule can be stated once: the *text* decides, and only the
+// exact spellings `y` and `Y` are a yes.
+func readQueryAnswer(text string, whole bool) (reply string, status int) {
+	if !whole {
+		return "n", 2
+	}
+	if text == "y" || text == "Y" {
+		return "y", 0
+	}
+	return "n", 1
+}
+
+// readQueryInto is the whole of `read -q` once the source is settled.
+//
+// It reads through the same counter `read -k` uses — the letters compose, and
+// `-q -k2` reads two characters before judging them — and then stores the
+// verdict rather than the keys.
+func (r *Runner) readQueryInto(next func() (byte, int), count int, args []string) int {
+	locale, asked := false, false
+	text, whole := readKeysFrom(next, count, func() bool {
+		if !asked {
+			locale, asked = r.countsTheLocalesCharacters(), true
+		}
+		return locale
+	})
+	if r.unspecified {
+		return 2
+	}
+	name := "REPLY"
+	if len(args) > 0 {
+		name = args[0]
+	}
+	if !r.isReadName(name) {
+		if r.unspecified {
+			return 2
+		}
+		return r.badReadName(name)
+	}
+	reply, status := readQueryAnswer(text, whole)
+	// Assigned before the status is decided, as every other spelling of this
+	// builtin assigns: the name holds `n` even where the read failed, which
+	// is measured — `REPLY=seed; read -q -u0 </dev/null` leaves `n`, not the
+	// seed.
+	if st, refused := r.storeThroughOperand(name, reply); refused {
+		return st
+	}
+	return status
+}

@@ -25649,6 +25649,42 @@ type EmulationOption struct {
 	// no such rule wants; zsh has the rule and it is measured.
 	OutOfOrder string
 
+	// NameInitials is the emulation a *name* starts the shell in, as
+	// `letter=mode` pairs separated by spaces — zsh's `s=sh b=sh k=ksh
+	// c=csh`. Empty means the shell's name says nothing about its
+	// emulation, which is every other column.
+	//
+	// The letter is the **first** one of argv[0]'s basename, after a leading
+	// dash and then any letter in NameDropsInitial have been removed. It is
+	// the first letter and not the word: measured 2026-09-26 on zsh 5.9.2 by
+	// copying the binary under each name, `sx`, `shell`, `shx` and `s` all
+	// report `emulate` → `sh`, and so do `b` and `bash`, while `xsh` and
+	// `mysh` report `zsh`. So neither "the basename is `sh`" nor "the
+	// basename begins with `sh`" is the rule — `b` holds against the first
+	// and `xsh` against the second.
+	//
+	// A string rather than a map for the reason Spellings is one: a map
+	// reached from Semantics makes the whole vector uncomparable.
+	//
+	// This is **not** PosixNamed, which is the core's and reads the exact
+	// word `sh` in every dialect. The two questions differ in both
+	// directions — a zsh called `bash` emulates sh and is not in POSIX mode,
+	// and a *bash* called `sh` is in POSIX mode and emulates nothing — and
+	// they even read the word differently: measured in the same run, `/d/-sh`
+	// is sh emulation in zsh and is not `sh` to bash, because zsh takes the
+	// basename before stripping the dash and bash strips the dash first.
+	NameInitials string
+
+	// NameDropsInitial is the letters removed from the front of the basename
+	// before NameInitials is read, after a leading dash — zsh's `r`, the
+	// restricted-shell prefix. One letter and not any number: measured,
+	// `rsh` is sh emulation and `rr` is zsh, so exactly one is taken.
+	//
+	// Stripping it is the emulation question alone. The same letter turns on
+	// a *restricted* shell, which this shell does not have at all; that is a
+	// separate absence and not a reason to read the name differently.
+	NameDropsInitial string
+
 	// Status is what the shell exits under either refusal — 1 in the one
 	// column that has the option, where this front end's own usage status
 	// for a refused word is 2.

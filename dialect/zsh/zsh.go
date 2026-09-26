@@ -1165,12 +1165,24 @@ func Semantics() interp.Semantics {
 	// must precede other options`. The mode itself is never judged here: an
 	// unknown one is the builtin's silence, which is the same answer `emulate
 	// fish` gives at a prompt.
+	//
+	// And the *name*, which asks the same question without an option word:
+	// the first letter of argv[0]'s basename picks the mode this shell starts
+	// in. Measured 2026-09-26 on 5.9.2 by copying the binary under each name
+	// — `s`, `sx`, `shell`, `shx`, `b`, `bash` and `bsh` all report `sh`, `k`
+	// and `ksh` report `ksh`, `c` and `csh` report `csh`, and `xsh`, `mysh`,
+	// `ash`, `dash`, `fish` and `SH` report `zsh`. A leading dash is stripped
+	// first, so the login spelling `-sh` is the name too, and then one
+	// leading `r`: `rsh` is sh emulation, `rzsh` and `rr` are not. The rows
+	// are in interp.EmulationOption.NameInitials.
 	s.EmulationOption = interp.EmulationOption{
-		Spellings:       "--emulate",
-		Builtin:         "emulate",
-		MissingArgument: "%s: argument required",
-		OutOfOrder:      "%s: must precede other options",
-		Status:          1,
+		Spellings:        "--emulate",
+		Builtin:          "emulate",
+		MissingArgument:  "%s: argument required",
+		OutOfOrder:       "%s: must precede other options",
+		Status:           1,
+		NameInitials:     "s=sh b=sh k=ksh c=csh",
+		NameDropsInitial: "r",
 	}
 	// `-b` ends the option reading at the end of the word it is written in,
 	// so every word after that one is an operand — which is why `zsh -b -c

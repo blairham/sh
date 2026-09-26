@@ -2084,7 +2084,10 @@ mean `sh`, `k` means `ksh`, `c` means `csh`, and anything else is zsh — so
 `dash`, `fish`, `xsh` and `mysh` are not, and `rsh` is while `rzsh` is not. The
 front end reads `sh` and nothing else: it is the word both shells agree on, it
 is the only one anything is really invoked by, and taking zsh's extras would
-put a shell called `bash` into POSIX mode.
+put a shell called `bash` into POSIX mode. That decision is about the *mode*,
+which is the core's and which every dialect enters; zsh's own emulation is a
+second question read off the same word, and the dialect answers it with all of
+its own letters. See "Called another shell's name" below.
 
 **One dash and not any number.** `-/bin/sh` is the name and `--sh` is not,
 which is what makes the strip a login convention rather than general
@@ -2167,6 +2170,135 @@ The question to ask of each is whether every shell's POSIX mode moves it the
 same way — and, for the shells that have no POSIX mode of their own, whether
 they already hold the answer the knob would write under every name they answer
 to. Where either half fails, the value comes from the dialect.
+
+## Called another shell's name: the name starts an *emulation*
+
+**The rule.** One column reads its own name a second time, for a second
+question, and answers it with the first **letter**: a zsh whose `argv[0]`
+begins with `s` or `b` starts in `sh` emulation, `k` starts it in `ksh`, `c`
+in `csh`, and anything else is zsh. The letter is read from the **basename**,
+after one leading `-` and then one leading `r`.
+
+**This is not the POSIX mode above, and the two are deliberately different.**
+The mode is the core's: every dialect enters it, it is keyed on the exact word
+`sh`, and the paragraph above says why taking one shell's extras there would
+be wrong — it would put a shell called `bash` into POSIX mode. An emulation is
+one shell's own, so the letters come from that shell's vector and the front
+end knows nothing about what a mode means: it reads a name, gets a word back,
+and hands the word to the builtin that already implements `--emulate`. The two
+questions part in both directions. A zsh called `bash` emulates `sh` and is
+**not** in POSIX mode; a *bash* called `sh` is in POSIX mode and emulates
+nothing.
+
+### Measured
+
+zsh 5.9.2 (aarch64-apple-darwin25.4.0) on macOS 25.6 — measured 2026-09-26 by
+copying `/opt/homebrew/bin/zsh` to a file under each name and running it with
+`-f` under `env -u HOME`. `go version -m` on the reference says *not a Go
+executable*, which is what says the two columns are two programs. bash 5.3.20
+was run the same way as the control, since it is the other shell that reads
+its name.
+
+| `argv[0]` | zsh: `emulate` | zsh: `cd` with no `HOME` | bash: `set -o posix` |
+| --- | --- | --- | --- |
+| `zsh` / `bash` | `zsh` | silent, 0 | `off` |
+| `sh` | `sh` | `zsh:cd:1: HOME not set`, 1 | `on` |
+| `-sh`, `/usr/bin/sh`, `./sh` | `sh` | 1 | `on` |
+| `shell`, `shx`, `sx`, `s` | `sh` | 1 | `off` |
+| `b`, `bash`, `bsh` | `sh` | 1 | `off` |
+| `k`, `ksh` | `ksh` | 1 | `off` |
+| `c`, `csh` | `csh` | 1 | `off` |
+| `xsh`, `mysh`, `ash`, `dash`, `fish` | `zsh` | 0 | `off` |
+| `SH` | `zsh` | 0 | `off` |
+| `rsh`, `rs`, `rksh` | `sh`, `sh`, `ksh` | 1 | `off` |
+| `rzsh`, `rr`, `r` | `zsh` | 0 | `off` |
+| `./d/-sh` | `sh` | 1 | **`off`** |
+| `-x/sh` | `sh` | 1 | `on` |
+
+**The rule is keyed on the first letter and on nothing else.** Two rows hold
+that noun fixed while everything around it moves, and they are the only two
+that matter: `b` enters `sh` emulation with no `s` in the word at all, and
+`xsh` does not enter it while containing `sh`. So neither "the basename is
+`sh`" nor "the basename begins with `sh`" is the rule, and both of them agree
+with the real one on every name anybody would actually invoke a shell by —
+which is exactly how a wide grid of plausible names confirms the wrong one.
+`SH` is the third row of the same kind: the letter is read case-sensitively.
+
+**A symlink and a copy answer alike**, which is the control on the
+instrument: `./ln/sh` pointing at the reference reports `sh` and exits 1 on
+`cd` just as a copied `./sh` does, so what is read is `argv[0]` and not the
+file.
+
+**The two shells do not even read the *word* the same way**, and the `./d/-sh`
+row is where that shows. zsh takes the basename first and then strips the
+dash, so `-sh` at the end of a path is the name; bash strips the dash from the
+whole of `argv[0]` and then takes the basename, so it is not. They agree on
+`-x/sh`, which is why one reading looked as though it would do for both.
+`driver.PosixNamed` keeps bash's order and `driver.EmulationNamed` keeps
+zsh's.
+
+**One leading `r` is dropped**, and exactly one: `rsh` is `sh` emulation and
+`rr` is zsh. That letter also makes the reference a *restricted* shell — `rsh`
+and `rzsh` both report `restricted` on — which this shell does not have at
+all. The absence is a separate one and is not a reason to read the name
+differently.
+
+### What the name moves
+
+The whole emulation, not one axis. Measured in the same run with `-f`:
+
+| option | `zsh` | `sh` | `ksh` | `csh` |
+| --- | --- | --- | --- | --- |
+| `shwordsplit` | off | on | on | off |
+| `ksharrays` | off | on | on | off |
+| `nomatch` | on | off | off | on |
+| `posixbuiltins` | off | on | on | off |
+| `shoptionletters` | off | on | on | off |
+| `globsubst` | off | on | on | **on** |
+
+`v="a b"; set -- $v; echo $#` writes `2` under `sh` and `ksh` and `1` under
+`zsh` and `csh`, which is the same fact from the other side. `csh` is not
+"the mode that changes nothing": it moves `globsubst` where it agrees with
+zsh on the other five.
+
+And one axis with no option name over it, which is the chunk `B01cd.ztst`
+stops on: **`cd` with no operand and no `HOME` is an error under `sh`, `ksh`
+and `csh` and a silent 0 under `zsh`**. Two routes into the same mode agree —
+the name, and `--emulate` on a binary under its own name — which is what says
+the mode carries it rather than the name. See `semantics.md` under
+`CdWithoutHomeIsAnError`, which also records the part of that row this shell
+does **not** model.
+
+### Where in startup it happens
+
+Where `--emulate` happens, and for the same measured reason: an emulation
+resets the option table to its mode's defaults, so an emulation applied after
+the invocation's own options would undo what the command line asked for.
+Measured — with the reference copied to `sh`, `+o shwordsplit` turns off the
+splitting the name brought, so the options are read after the name.
+
+**And `--emulate` wins over the name, outright.** Measured in both
+directions: the reference called `sh` with `--emulate zsh` reports `zsh` and
+answers `cd` at 0, and under its own name with `--emulate sh` it reports `sh`
+and answers 1. Outright is the load-bearing word — `--emulate fish`, a mode no
+shell knows and that the builtin passes over in silence, still leaves a binary
+called `sh` reporting `zsh`. So writing the option is what puts the name
+aside, and the name is not a fallback for a word that meant nothing.
+
+### Where it lives
+
+`driver.EmulationNamed`, beside `PosixNamed` and `LoginShell` — three
+questions read off one word, asked in the same two places, since the prompt
+route never reaches where the script routes read them. The letters are
+`interp.EmulationOption.NameInitials` and the dropped prefix is
+`NameDropsInitial`, both on the value that already carries `--emulate`: it is
+the same question asked without an option word, and a dialect that answers one
+and not the other would read a name it could not apply. A dialect naming no
+letters is never asked, which is every other column.
+
+Applying it is the dialect's, through the same `Shell.applyEmulation` the
+option goes through. The front end never judges the mode: an unknown one is
+the builtin's silence, exactly as it is on the option's route.
 
 ## `+c`: the sign of the option letter
 

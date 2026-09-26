@@ -73,6 +73,25 @@ func runOwn(ctx context.Context, root string, bins binSet, timeout time.Duration
 			return 1
 		}
 	}
+	// The same refusal for the other selector, and for the same reason. A
+	// -only naming a file no column has used to print a full column report
+	// over zero files, ending in `every case agreed` — a clean bill of
+	// health for a shell that was never asked anything. The name that does
+	// it is one keystroke away: `-only bash/shell-options.tests` is a path
+	// where a base name is wanted, and it matches nothing. #4439.
+	//
+	// Held against the union over the columns this run will cover, not
+	// against each column in turn: a file under bash/ is legitimately absent
+	// from the dash column, so a per-column refusal would reject a selection
+	// that is exactly right.
+	if err := suite.CheckOnly(names(only), suite.Selectable(root, scopedColumns(columns)...)); err != nil {
+		fmt.Fprintf(os.Stderr, "suitecheck: %v\n\n", err)
+		fmt.Fprintln(os.Stderr, "  A selector that matches nothing is an error here rather than an empty")
+		fmt.Fprintln(os.Stderr, "  run, for the reason -column above already refuses a name it does not")
+		fmt.Fprintln(os.Stderr, "  have: a run over no files prints 0/0 and ends in `every case agreed`,")
+		fmt.Fprintln(os.Stderr, "  which is indistinguishable at a glance from a fix that landed.")
+		return 1
+	}
 	if len(columns) > 0 {
 		fmt.Printf("  SCOPED to %s. The other columns were not run, so nothing here is the\n",
 			strings.Join(sortedSet(columns), ", "))
@@ -294,6 +313,22 @@ func columnNames() []string {
 	return out
 }
 
+// scopedColumns is the columns a run will cover, which is every native
+// column unless -column narrowed it.
+func scopedColumns(columns map[string]bool) []suite.Suite {
+	all := suite.OurColumns()
+	if len(columns) == 0 {
+		return all
+	}
+	var out []suite.Suite
+	for _, s := range all {
+		if columns[s.Name] {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func isColumn(name string) bool {
 	for _, s := range suite.OurColumns() {
 		if s.Name == name {
@@ -320,6 +355,16 @@ func sortedSet(set map[string]bool) []string {
 func printOwnColumn(rep suite.Report) {
 	s := rep.Suite
 	fmt.Printf("%s — %d files (%s)\n", s.Name, rep.Files, strings.Join(s.Dirs, "/, ")+"/")
+	if rep.Files == 0 {
+		// Never the numbers, and never `every case agreed` below them. Over
+		// zero files every rate is 0/0 and the closing line is the one a
+		// column at parity prints, so the true statement — that nothing was
+		// measured — is the only thing worth printing. #4439.
+		fmt.Println("  NOTHING RAN — no file matched, so there is no figure here. A rate over")
+		fmt.Println("  zero files is 0/0 and reads as a column that was asked and agreed.")
+		fmt.Println()
+		return
+	}
 	fmt.Printf("  reference  %s — %s\n", rep.Reference, rep.ReferenceVersion)
 	// Immediately under the reference line, because it is a statement about
 	// that line and because a caveat printed after the numbers is one a
@@ -506,6 +551,15 @@ func printCross(cross suite.Cross) {
 	if len(cross.Shells) < 2 {
 		return
 	}
+	if cross.Files == 0 {
+		// A selection can legitimately name a file this tier does not have —
+		// `-only shell-options.tests` is a bash/ file, and core/ never sees
+		// it. What must not happen is `core/ agreement 0/0` under it, which
+		// is the tier's strongest claim printed over nothing. #4439.
+		fmt.Printf("  %s/ agreement  NOT ASKED — %s\n", cross.Tier, emptyTier(cross.Held))
+		fmt.Println()
+		return
+	}
 	fmt.Printf("  %s/ agreement  %d/%d   the reference shells themselves wrote the same bytes\n",
 		cross.Tier, cross.Agree, cross.Files)
 	fmt.Printf("                  across %s\n", strings.Join(cross.Shells, ", "))
@@ -526,7 +580,20 @@ func printCross(cross suite.Cross) {
 
 // printOwn is one dialect tier's claim, measured.
 func printOwn(own suite.Own) {
-	if own.Files == 0 || len(own.Others) == 0 {
+	if len(own.Others) == 0 {
+		return
+	}
+	if own.Files == 0 {
+		if own.Held == 0 {
+			// The tier was never reached: no reference of this column's own
+			// on this machine, which printOwnOmission says in full. Silent
+			// here rather than a second, vaguer copy of that sentence.
+			return
+		}
+		// Said rather than skipped, for printCross's reason one tier over: a
+		// check that prints nothing at all is read as a check that passed.
+		fmt.Printf("  %s/ only-here  NOT ASKED — %s\n", own.Tier, emptyTier(own.Held))
+		fmt.Println()
 		return
 	}
 	fmt.Printf("  %s/ only-here  %d/%d   %s answered differently from every other reference\n",
@@ -542,6 +609,19 @@ func printOwn(own suite.Own) {
 		printMoved(own.Moved[name])
 	}
 	fmt.Println()
+}
+
+// emptyTier is why a tier check ran over no files: a selection that named
+// none of them, or a tier with nothing in it.
+//
+// The two are opposite findings — a typo at the keyboard and a directory that
+// should not be empty — and the whole point of printing either is that `0/0`
+// says neither.
+func emptyTier(held int) string {
+	if held == 0 {
+		return "this tier holds no files at all, which is a filing defect rather than a result"
+	}
+	return fmt.Sprintf("none of this tier's %d files matched the selection", held)
 }
 
 // printMoved is which reference moved and what it wrote the second time.

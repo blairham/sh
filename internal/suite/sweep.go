@@ -543,6 +543,16 @@ func plan(s Suite, dir string, opts Options) ([]file, error) {
 			files = append(files, file{Dir: tests, Name: n, Tier: d})
 		}
 	}
+	if len(files) == 0 {
+		// The backstop under [CheckOnly], which refuses a selection that
+		// matches nothing before a shell is started and with a name in the
+		// message. This one has no name to give — it is here so that no
+		// route into this package can produce a report over the empty set,
+		// whatever a caller forgot to check. A sweep of nothing prints 0/0
+		// strict and 0 differing lines, and both are what a column that
+		// reached parity prints. #4439, #4671.
+		return nil, fmt.Errorf("%s: no files to run under %s", s.Name, dir)
+	}
 	return files, nil
 }
 

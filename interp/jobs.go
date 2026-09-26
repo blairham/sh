@@ -626,12 +626,39 @@ func (j *Job) finish(status int) { j.finishKilled(status, 0) }
 // how the job ended, so the close is the barrier both Status and this are
 // carried across.
 func (j *Job) finishKilled(status int, sig syscall.Signal) {
+	j.finishRecording(status, sig, nil)
+}
+
+// finishRecording is finishKilled with one more thing published across the
+// same barrier: what the shell itself has to record about the ending, done
+// after the status and **before the close**.
+//
+// The close is not only how a reader learns the job ended — it is what
+// releases a `wait` for it, and the shell carries straight on from there. So
+// anything a script can observe about the ending has to be in place already,
+// or the script can get past it first. That is not a narrow window: the `CHLD`
+// arrival a trap counts was recorded after the close, and a `wait` released by
+// the close ran to the end of the script while the goroutine that had closed
+// it was still on its way to the record. See Runner.childReapedByTheShell and
+// Runner.jobReaped.
+//
+// record runs inside the once, so an ending recorded twice is recorded once,
+// which is the same guarantee the status already had — and the report says
+// whether it ran, because a caller that owes the record whatever happens has
+// to know that this call was not the one that finished the job. See
+// Runner.jobReaped.
+func (j *Job) finishRecording(status int, sig syscall.Signal, record func()) (finished bool) {
 	j.settleNoPID()
 	j.once.Do(func() {
+		finished = true
 		j.Status = status
 		j.EndSig = int(sig)
+		if record != nil {
+			record()
+		}
 		close(j.done)
 	})
+	return finished
 }
 
 // background starts a statement without waiting for it.
@@ -737,6 +764,23 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// both read the same stream, and os/exec copies from a caller's io.Reader
 	// on a goroutine of its own.
 	sub.Stdin = r.backgroundStdin()
+	// And the hook the front end wants poking when this job ends, read here
+	// on the shell's own goroutine and carried into the finalizer rather than
+	// read from it.
+	//
+	// The field belongs to the front end and the front end *clears* it when
+	// its session ends — see repl.Shell.jobNotifying — so a job's goroutine
+	// reading it is reading a field another goroutine writes, which is what
+	// it is. `go test -race` says so on cmd/zsh's notify cases; it went
+	// unreported until now only because the read happened to sit before a
+	// mutex the shell took afterwards, and an accident is not an ordering.
+	//
+	// Nothing is lost by carrying it. What the hook does once its session has
+	// gone is the wake's own business, and the wake is built to be poked
+	// after it is closed. The *axis* is still asked at the moment the job
+	// ends, because `unsetopt notify` moves under a running session — see
+	// notifyJobEnded, which is where that question stayed.
+	notifyEnded := r.JobEnded
 	// The job is finished however the goroutine ended, which is what keeps an
 	// interpreter bug on it from costing more than the job. The shell is
 	// blocked on <-job.ready below and `wait` blocks on the same job
@@ -769,19 +813,21 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		sub.endSubshell(ctx)
 		status, endSig = sub.status, sub.diedOfSig
 	}, func() {
-		job.finishKilled(status, endSig)
+		// A child of this shell has ended, which is what a `&` starts
+		// wherever it is backed by a process and wherever it is not. On the
+		// shell's list rather than a subshell's, because this runs on the
+		// job's own goroutine — see Runner.childReaped — and recorded inside
+		// the finish rather than after it, because the finish is what
+		// releases a `wait` for this job and the arrival has to be there
+		// before the script gets past that. See Runner.jobReaped.
+		r.jobReaped(job, status, endSig)
 		// And the shell around this one is told, where its dialect reports a
 		// finished job the moment it ends rather than at the next prompt.
 		// Here rather than anywhere the shell's own goroutine runs, because
 		// this is the only place that knows the job has ended *while the
 		// shell is doing something else* — which is the whole of the
 		// difference. See Runner.notifyJobEnded.
-		r.notifyJobEnded()
-		// A child of this shell has ended, which is what a `&` starts
-		// wherever it is backed by a process and wherever it is not. On the
-		// shell's list rather than a subshell's, because this runs on the
-		// job's own goroutine — see Runner.childReaped.
-		r.childReapedByTheShell()
+		r.notifyJobEnded(notifyEnded)
 		// After the job is finished rather than before it, so nothing can
 		// observe a pipe that has ended while the job that was writing to
 		// it is still marked as running.
@@ -889,11 +935,15 @@ func (r *Runner) NotifiesAsAJobEnds() bool {
 // once, and so that a front end which wired the hook for a session cannot be
 // woken by a dialect that does not want it — `unsetopt notify` moves the axis
 // under a session that is already running, and this is read each time.
-func (r *Runner) notifyJobEnded() {
-	if r.JobEnded == nil || !r.NotifiesAsAJobEnds() {
+//
+// The hook itself is *handed in* rather than read off the Runner, because the
+// front end writes that field from its own goroutine when the session ends.
+// See where background takes it.
+func (r *Runner) notifyJobEnded(notify func()) {
+	if notify == nil || !r.NotifiesAsAJobEnds() {
 		return
 	}
-	r.JobEnded()
+	notify()
 }
 
 // FinishedJobNotices is what to say about the jobs that have ended since it

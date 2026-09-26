@@ -290,6 +290,13 @@ func TestSemantics(t *testing.T) {
 		{"TrapHasReturnCondition", s.TrapHasReturnCondition, interp.No},
 		{"ErrTrapRunsInsideFunctions", s.ErrTrapRunsInsideFunctions, interp.Yes},
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.Yes},
+		// The **default** state of `ERR_RETURN`, which is what the vector
+		// carries: `setopt errreturn` is what moves this axis, and a shell
+		// that has not been asked does not do it. Measured 2026-09-25 on
+		// zsh 5.9.2 — `unsetopt errreturn; f() { false; print notreached };
+		// f` writes `notreached`. See dialect/zsh/errreturn_test.go for the
+		// state the option puts it in.
+		{"FailureTakesAnImplicitReturn", s.FailureTakesAnImplicitReturn, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
 		// Ahead of the command, which is `DEBUG_BEFORE_CMD` on — zsh's own

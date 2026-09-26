@@ -22242,6 +22242,46 @@ type Semantics struct {
 	// stops all three, and this is only about the failure the option adds.
 	ErrexitSeesPipefailFailure Answer
 
+	// FailureTakesAnImplicitReturn makes a failing command execute a `return`
+	// where `set -e` would execute an `exit`. zsh's `ERR_RETURN`, and this
+	// axis is that option rather than a standing difference between shells:
+	// every column answers No, because no other shell in the panel has an
+	// option naming the behavior and none of them does it unasked.
+	//
+	// **The noun is `return` and not "the enclosing function"**, which is
+	// what decides every row that is not the obvious one. Measured on zsh
+	// 5.9.2 (aarch64-apple-darwin25.4.0) with `-f`, each snippet a file of
+	// its own, 2026-09-25: the implicit transfer lands exactly where a
+	// written `return` lands, so at the top level of a script it ends the
+	// script — `setopt errreturn; print start; false; print x` writes `start`
+	// and leaves 1, byte for byte what `print start; return 1; print x`
+	// writes with no option at all — inside a subshell it ends the subshell
+	// and the script goes on, and inside a sourced file it ends the file. A
+	// rule written as "the function returns" agrees with this one in the
+	// worked example of the manual and disagrees on those three.
+	//
+	// It is judged per level and not unwound: the caller of a function that
+	// took the implicit return sees a failing statement and takes one of its
+	// own, so `g(){ false; }; f(){ g; print f; }; f; print top` writes
+	// nothing and leaves 1 — and the option is consulted at each level, so
+	// the same shape with `setopt localoptions errreturn` in `g` alone writes
+	// `f` and `top` and leaves 0.
+	//
+	// Two things hold it back, and each is measured rather than reasoned:
+	//
+	//   - A tested context exempts it, and **the exemption is reset at every
+	//     call** — where `set -e` and the ERR trap inherit theirs all the way
+	//     down. `f(){ false; print x; }; if f; then` runs `print x` under
+	//     `setopt errexit` and does not under `setopt errreturn`, in the same
+	//     shell on the same line. See Runner.callTested.
+	//   - A failure an ERR trap has already taken is not taken again by an
+	//     enclosing level. With a trap set, exactly one level returns and the
+	//     caller runs on; with none, every level in turn does. See
+	//     Runner.errTookTheFailure, and note that a trap *installed* takes the
+	//     failure even with nothing to run — `trap "" ERR` stops the
+	//     propagation as a trap with a body does.
+	FailureTakesAnImplicitReturn Answer
+
 	// TimedCommandIsJudged lets `set -e` and the ERR trap judge what a `time`
 	// clause timed. ksh93 alone says no, and there the timing is a context in
 	// which nothing is judged at all — not the timed command, not the

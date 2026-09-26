@@ -7503,7 +7503,7 @@ said off and the braces went on expanding, so a script could read the state
 and watch it be false in the same breath. A recorded name is one this shell
 does not do **in either state**, so nothing it says can be contradicted by
 what the shell then does — the request is remembered and the feature is
-absent, which is the same bargain the 129 recorded `setopt` names strike.
+absent, which is the same bargain the 128 recorded `setopt` names strike.
 The bill is real and it is deferred rather than waived: `globstar` on with no
 `**` crossing is a weaker answer than `globstar` implemented, which is why
 each name that is recorded rather than built carries an issue of its own. A
@@ -7673,11 +7673,11 @@ first is unanimous across the table.** Every name is one of five kinds:
 | kind | how many | what `setopt NAME` does |
 | --- | --- | --- |
 | substrate-backed | 15 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e`, and `setopt vi` **is** `set -o vi`. `ignorebraces` is the inverted one: it is `set +o braceexpand`, zsh naming the state that *stops* the expansion where the substrate names the expansion |
-| axis- or matcher-backed | 22 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
+| axis- or matcher-backed | 23 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`, `localtraps`, `multios`, `globsubst`, `typesetsilent`, `posixbuiltins`, `octalzeroes`, `debugbeforecmd`, `longlistjobs`, `cbases`, `notify`, `posixtraps`, `magicequalsubst`, `rcexpandparam`, `errreturn`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`, `casematch`, `extendedglob`, `bareglobqual`). `ksharrays` is one name over **five** axes — see below; `casematch` is the one whose *spelling* bash shares and whose meaning it does not — see below |
 | fixed | 4 | refuses to move **to a running script**, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted, and **all four are taken on the command line that started the shell** — `singlecommand` since #1730 and the other three since #3154, where the route rather than the name is what decides. Two of them move state there (`interactive` adds `i` and `Z` to `$-`, `shinstdin` adds `s`) and `zle` is granted with nothing following unless the shell is already interactive |
 | store-backed, read by the front end | 9 | `histignorespace`, read by the line editor before it records a line; `interactivecomments`, read by the same editor before it *parses* one; `promptsp` and `promptcr`, read by it before it draws a prompt; `autolist`, read by it on every completion key, which decides whether an ambiguous one lists at once or waits for a second key; `checkrunningjobs`, read by `checkjobs` when it recomputes what the exit is held for; `kshoptionprint`, read by `setopt`, `unsetopt` and `set -o` before any of them writes a row, which is the shape of the listing rather than a behavior (#4529); and `cshnullcmd` and `shnullcmd`, read together when either moves so that the first can win while it is on. All nine are kept where a recorded name is kept, because the substrate has no `set -o` name for any of them |
 | switch-backed | 6 | `aliases`, `autocd`, `banghist`, `checkjobs`, `cprecedences` and `hup`: each moves a capability the substrate holds under no `set -o` name of its own — alias expansion really does stop, a bare directory name really is read as a `cd`, `!!` really is rewritten into the previous command, a job still running really does hold the exit, the arithmetic operators really do change the order they bind in, and a session that is leaving really does send SIGHUP to the jobs it abandons. `hup` is the one whose capability bash reaches too, under `shopt -s huponexit`, and the two shells differ in three measured ways once it is on — see `Semantics.HangupAtExitNeedsALoginShell` and the two axes beside it |
-| **recorded** | 129 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+| **recorded** | 128 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
 
 **Two names moved out of "recorded" when the history knobs were built**
 (#571). `histignorespace` is the fifth row above: its state has nowhere
@@ -8034,7 +8034,42 @@ produced, so `"x${a}y"` is one word in both states and `"x${a[@]}"` moves.
 And an empty list takes the word with it — `a=(); x${a}y` is no word at all
 under the option, where it is the single word `xy` without it.
 
-So 129 of 185 are recorded, the count above is the one produced by counting
+
+`errreturn` left the same way in #4546, and it is the sharpest case of the
+three above it because the behavior was already there. `ERR_RETURN` is the
+function-scoped sibling of `ERR_EXIT`: `Semantics.FailureTakesAnImplicitReturn`
+makes a failing command execute an implicit `return` where `set -e` executes
+an `exit`, and `errexit` had been substrate-backed in this table from the
+start. So the option named a switch next door to one that worked, reported
+itself correctly through `[[ -o ]]`, `$options` and both listings, and did
+nothing.
+
+**The noun is `return` and not "the enclosing function"**, which is what
+decides the rows the manual's own example does not reach. Measured on zsh
+5.9.2, 2026-09-25: the implicit transfer lands exactly where a written
+`return` lands, so at the top level of a script it ends the script, in a
+subshell it ends the subshell and the script goes on, and in a sourced file it
+ends the file. Two further rules were measured with it, and each is a case
+where a rule borrowed from `set -e` gives the wrong answer:
+
+- **A tested context exempts it only as far as the call it was opened in.**
+  `f() { false; print inner }; if f; then print then; else print else; fi`
+  writes `inner` and `then` under `setopt errexit` and writes `else` alone
+  under `setopt errreturn` — same shell, same line. A call is the only
+  boundary that moves it: a subshell, a sourced file and a command
+  substitution all keep the caller's exemption.
+- **A failure an ERR trap has taken is not taken again by an enclosing
+  level.** Over a three-deep call, `setopt errreturn` with no trap writes
+  nothing and leaves 1, because every level in turn judges a failing statement
+  and returns; with `trap 'print "[E]"' ERR` ahead of it exactly one level
+  returns and the two above it run on. A trap *installed* takes the failure
+  even with nothing to run, so `trap "" ERR` stops the propagation as a trap
+  with a body does.
+
+And `set -e` outranks it where a shell has both on, whichever of the two was
+set globally and whichever in the function.
+
+So 128 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -8468,7 +8503,7 @@ name, so routing it through the table as well would have `setopt err_exit`
 call back into the table it was called from.
 
 Two consequences worth stating. Recording is unchanged: a listing 185 rows
-long still says nothing about whether a name is acted on, and 151 of them are
+long still says nothing about whether a name is acted on, and 128 of them are
 remembered and not acted on — the table is longer in the listing because zsh
 lists that many, not because more of it is implemented. And a `set -o` name
 this shell has and will not move answers `can't change option` at 1,
@@ -11922,7 +11957,7 @@ than missing:
   the chain rather than the last; `-x` sets the tab width of a printed body.
   Each is refused as not implemented rather than as unknown, the same
   distinction `compgen` draws between an action a shell lacks and a typo.
-- zsh `setopt` names of the **recorded** kind: 129 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 128 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150, then 145 while the
   table read 132; neither number was ever the count the table produces, and

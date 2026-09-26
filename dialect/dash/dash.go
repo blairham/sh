@@ -1231,6 +1231,14 @@ func Semantics() interp.Semantics {
 	// absence from the other side — the axis is an extra firing of a trap
 	// this shell does not have, and its `set -e` half is already the ordinary
 	// pipeline judging.
+	// No implicit `return` for a failure. Measured 2026-09-25 on dash:
+	// `f() { false; echo x; }; f; echo "post=$?"; echo done` writes `x`,
+	// `post=0` and `done` at 0, and `errexit` is the one name in this
+	// shell's seventeen-line `set -o` listing with `err` in it. Answerable
+	// rather than absent, unlike the three entries below it: the question is
+	// what a failing command does to the call around it, and every shell
+	// runs failing commands inside functions.
+	s.FailureTakesAnImplicitReturn = interp.No
 	// unanswered TimedCommandIsJudged: there is no `time` keyword here.
 	// Measured 2026-09-18, `set -e; time false; echo survived` reaches the
 	// *external* `/usr/bin/time` and the script stops on its status, which is

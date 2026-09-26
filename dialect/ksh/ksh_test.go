@@ -203,6 +203,11 @@ func TestSemantics(t *testing.T) {
 		{"TrapHasReturnCondition", s.TrapHasReturnCondition, interp.No},
 		{"ErrTrapRunsInsideFunctions", s.ErrTrapRunsInsideFunctions, interp.Yes},
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.No},
+		// No implicit `return` for a failure, and `errexit` is the one name
+		// in this shell's `set -o` with `err` in it. Measured 2026-09-25 on
+		// ksh93u+ 2012-08-01 — `f() { false; echo x; }; f; echo "post=$?"`
+		// writes `x` and `post=0` at 0.
+		{"FailureTakesAnImplicitReturn", s.FailureTakesAnImplicitReturn, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
 		// Ahead of the command, and no option here moves it.

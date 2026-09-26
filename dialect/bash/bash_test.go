@@ -184,6 +184,12 @@ func TestSemantics(t *testing.T) {
 		{"TrapHasReturnCondition", s.TrapHasReturnCondition, interp.Yes},
 		{"ErrTrapRunsInsideFunctions", s.ErrTrapRunsInsideFunctions, interp.No},
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.No},
+		// No implicit `return` for a failure, and no option asking for one:
+		// `set -o` here names `errexit` and `errtrace`, and `shopt` adds
+		// `gnu_errfmt` and `inherit_errexit`. Measured 2026-09-25 on bash
+		// 5.3.20 — `f() { false; echo x; }; f; echo "post=$?"` writes `x`
+		// and `post=0` at 0.
+		{"FailureTakesAnImplicitReturn", s.FailureTakesAnImplicitReturn, interp.No},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.No},
 		// The one column that fires the trap a *second* time once a
 		// call's frame is entered — five D lines for three commands in

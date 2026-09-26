@@ -1664,6 +1664,13 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	savedFloor := r.callLoopFloor
 	r.callLoopFloor = r.loopDepth
 	defer func() { r.callLoopFloor = savedFloor }()
+	// And where the tested contexts were, which is the same shape one axis
+	// down: `set -e` and the ERR trap inherit a caller's exemption and the
+	// implicit return of Semantics.FailureTakesAnImplicitReturn does not.
+	// See Runner.callTested for the pair of snippets that part.
+	savedCallTested := r.callTested
+	r.callTested = r.tested
+	defer func() { r.callTested = savedCallTested }()
 	// A function the dialect's prelude defined is the shell speaking rather
 	// than the script, so what it reports is named after it and located where
 	// it was called. The outermost such call owns both: a prelude helper it

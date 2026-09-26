@@ -61,7 +61,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
-		"posixtraps", "rcexpandparam",
+		"posixtraps", "rcexpandparam", "errreturn",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -83,7 +83,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 129; recordedCount != want {
+	if want := 128; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

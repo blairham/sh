@@ -2032,6 +2032,14 @@ func Semantics() interp.Semantics {
 	// the signal, the same as anywhere else.
 	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
+	// No implicit `return` for a failure, and no option that asks for one.
+	// Measured 2026-09-25 on bash 5.3.20: `f() { false; echo x; }; f; echo
+	// "post=$?"; echo done` writes `x`, `post=0` and `done` at 0; `set -o`
+	// names `errexit` and `errtrace` and nothing else with `err` in it, and
+	// `shopt` adds `gnu_errfmt` and `inherit_errexit`, neither of which is
+	// this. The function-scoped half of `set -e` here is `set -E`, which
+	// carries the ERR *trap* into a body rather than returning from one.
+	s.FailureTakesAnImplicitReturn = interp.No
 	// `time` changes nothing about the judging here: measured 2026-09-18,
 	// `set -e; time false; echo survived` stops and `trap 'printf E' ERR;
 	// time false` writes E, for a simple command, a pipeline, a group, a

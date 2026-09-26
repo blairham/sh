@@ -2210,6 +2210,12 @@ func Semantics() interp.Semantics {
 	// and 271.
 	s.PipefailSubstitutesTheBareSignal = interp.Yes
 	s.ErrexitSeesPipefailFailure = interp.No
+	// No implicit `return` for a failure. Measured 2026-09-25 on ksh93u+
+	// 2012-08-01 (`${.sh.version}` is `Version AJM 93u+ 2012-08-01`): `f() {
+	// false; echo x; }; f; echo "post=$?"; echo done` writes `x`, `post=0`
+	// and `done` at 0, and `errexit` is the one name in `set -o` with `err`
+	// in it — this shell has no `errreturn` under any spelling.
+	s.FailureTakesAnImplicitReturn = interp.No
 	// `time` times its command in a context where neither `set -e` nor the
 	// ERR trap judges anything — not the timed command, not what it calls,
 	// and not the clause. Measured 2026-09-18: `set -e; time { false; echo

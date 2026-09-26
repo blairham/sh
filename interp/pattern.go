@@ -2725,10 +2725,17 @@ func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 
 // patternOpts resolves the dialect's pattern answers for one pattern.
 //
-// The bracket axis is deliberately not resolved here: this is the path used by
-// parameter expansion and by globbing, where an unterminated bracket is
-// literal in every shell measured. Only `case` and `[[ ]]` ask it, through
-// matchPatternR.
+// The bracket axis is deliberately not resolved here, and the reason is not
+// the one this said for a long time. It said an unterminated bracket is
+// literal in every shell this path serves, which is false and was disproved
+// by a table twenty lines above Semantics.UnterminatedBracket itself: the
+// panel splits three ways over `${w#[}`. What is true is narrower — the
+// **callers** differ over which moment resolves it. `case` and `[[ ]]` ask it
+// through matchPatternR, a parameter expansion's operand through
+// operandPatternOpts, and pathname expansion refuses the whole field before
+// it ever gets here, with the one exception that keeps `[ a = a ]` working.
+// So the axis is resolved by whoever knows which of those this is, and the
+// literal here is what is left when nobody asked (#4646).
 //
 // subjects are the strings this pattern is about to be matched against, and
 // they are wanted for one reason: whether a unit is a character is a question

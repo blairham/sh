@@ -4926,8 +4926,20 @@ func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
 	// A literal pattern records here where the same literal in a condition
 	// does not, which is measured and is why the record is turned on without
 	// asking whether the pattern is one — see interp/patternrecord.go.
-	o := r.recordingPatternOpts(r.patternOpts(pattern, value), pattern)
-	out, m := trim(value, pattern, e.Op, o, r.armOrder(), searchingFlag(e))
+	var bad bool
+	o, refused := r.operandPatternOpts(pattern, &bad, value)
+	if refused {
+		// The value stands where the shell gave up over the pattern. Nothing
+		// reads it — fatalPattern has already set the control flow — and
+		// handing back a trimmed text instead would be publishing a span the
+		// shell refused to take.
+		return value
+	}
+	out, m := trim(value, pattern, e.Op, r.recordingPatternOpts(o, pattern),
+		r.armOrder(), searchingFlag(e))
+	if r.metABadExpansionPattern(bad, pattern) {
+		return value
+	}
 	r.publishMatch(m)
 	r.recordPatternMatch(m)
 	return out
@@ -4972,13 +4984,19 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	if pattern == "" && e.Anchor != 0 && !r.anchoredEmptyPatternFires() {
 		return value
 	}
-	o := r.recordingPatternOpts(r.replacementPatternOpts(pattern, value), pattern)
+	var bad bool
+	o, refused := r.replacementPattern(pattern, &bad, value)
+	if refused {
+		return value
+	}
+	o = r.recordingPatternOpts(o, pattern)
 	// One spelling of "read the replacement", used by both branches. It is
 	// `replacementOf` and not `joinWord` because a replacement is **text**
 	// and not a pattern (#1337), and having the two branches read it two
 	// ways is exactly how that fix would come undone in the branch nobody
 	// looks at.
 	repl := r.replacementWord(e)
+	var out string
 	if !reportsAMatch(o) {
 		with := r.replacementFor(repl)
 		// The **first** match writes the record, measured: `v=hello;
@@ -4986,7 +5004,7 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 		// replacement is still read once, which is why this branch and not
 		// the reporting one below is where a recorded match lands.
 		first := true
-		return replace(value, pattern, e, o, r.armOrder(), r.emptyMatchDeclined,
+		out = replace(value, pattern, e, o, r.armOrder(), r.emptyMatchDeclined,
 			func(m matchReport, matched string) string {
 				if first {
 					r.recordPatternMatch(m)
@@ -4994,11 +5012,19 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 				}
 				return with(matched)
 			})
+	} else {
+		out = replace(value, pattern, e, o, r.armOrder(), r.emptyMatchDeclined, func(m matchReport, matched string) string {
+			r.publishMatch(m)
+			return r.replacementFor(repl)(matched)
+		})
 	}
-	return replace(value, pattern, e, o, r.armOrder(), r.emptyMatchDeclined, func(m matchReport, matched string) string {
-		r.publishMatch(m)
-		return r.replacementFor(repl)(matched)
-	})
+	// Asked after the walk because only the matcher reads a bracket a
+	// `[:name:]` left open — see metABadExpansionPattern. The value stands
+	// where the pattern was refused.
+	if r.metABadExpansionPattern(bad, pattern) {
+		return value
+	}
+	return out
 }
 
 // readAnchor decides whether the `#` or `%` the parser took off the front of
@@ -5086,7 +5112,7 @@ func (r *Runner) emptyPatternFires(value string) bool {
 	return false
 }
 
-// replacementPatternOpts is patternOpts for the pattern of a **span
+// replacementPattern is operandPatternOpts for the pattern of a **span
 // replacement** — `${v/pat/rep}`, its global and anchored spellings, and the
 // deleting form with no replacement.
 //
@@ -5120,11 +5146,11 @@ func (r *Runner) emptyPatternFires(value string) bool {
 // arrives here. Measured 2026-09-13 — `setopt nocasematch; v=ABC;
 // ${v//b/X}` is `ABC` in real zsh (#2622). The shared spelling is why that
 // belongs in a comment rather than in a reader's memory.
-func (r *Runner) replacementPatternOpts(pattern string, subjects ...string) patternOpts {
-	o := r.patternOpts(pattern, subjects...)
+func (r *Runner) replacementPattern(pattern string, bad *bool, subjects ...string) (patternOpts, bool) {
+	o, refused := r.operandPatternOpts(pattern, bad, subjects...)
 	o.fold = r.MatchOption(MatchFoldsCase)
 	o.foldWide = o.fold && r.caseFoldReachesBeyondASCII(append([]string{pattern}, subjects...)...)
-	return o
+	return o, refused
 }
 
 // reportsAMatch is whether a pattern fills `$MATCH` or `$match` when it

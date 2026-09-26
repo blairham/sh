@@ -143,8 +143,18 @@ func reportsAnElementOperator(op syntax.ParamOp) bool {
 // **one** span: `(M)` and `(B)` written together must report the same match,
 // and two calls could not promise that under a searching trim.
 func (r *Runner) trimReport(value, pattern string, e *syntax.ParamExpr, want string) string {
-	lo, hi, m, ok := trimSpan(value, pattern, e.Op, r.patternOpts(pattern, value),
-		r.armOrder(), searchingFlag(e))
+	// The same refusal the unprojected trim gives, at the same surface: a
+	// projection of a span the shell would not compute is not a smaller
+	// answer, it is the same wrong one wearing a flag.
+	var bad bool
+	o, refused := r.operandPatternOpts(pattern, &bad, value)
+	if refused {
+		return ""
+	}
+	lo, hi, m, ok := trimSpan(value, pattern, e.Op, o, r.armOrder(), searchingFlag(e))
+	if r.metABadExpansionPattern(bad, pattern) {
+		return ""
+	}
 	if !ok {
 		// No match is an empty span at the front, which is the reading the
 		// measurements above give: `1`, `1`, `0`, the whole value and

@@ -394,6 +394,62 @@ decides nothing is a refusal a script cannot act on.
 An unquoted expansion of an empty value vanishes. Quoting it produces one
 empty field. All four shells agree.
 
+### An empty *element* of a list leaves its field boundary behind
+
+The rows above are a scalar, where there is one field and it goes. A list —
+`$@`, `$*`, `${a[@]}`, a bare array name — has one field per element, and an
+element that is empty is a field like any other: it is removed only when
+nothing in the word joined any text to it. Measured 2026-09-25 against zsh
+5.9.2, bash 5.3.20, ksh93u+ 2012 and dash 0.5.12, with the count printed
+beside the fields:
+
+| written | every shell | |
+| --- | --- | --- |
+| `set -- '' 2; x$@y` | `2` `[x]` `[2y]` | the empty element closed the `x` |
+| `set -- 1 ''; x$@y` | `2` `[x1]` `[y]` | and opened the `y` at the other end |
+| `set -- '' ''; x$@y` | `2` `[x]` `[y]` | one at each end, two fields |
+| `set -- ''; x$@y` | `1` `[xy]` | **one** element takes both sides |
+| `set -- '' 2 ''; x$@y` | `3` `[x]` `[2]` `[y]` | |
+| `set -- '' '' 2; x$@y` | `2` `[x]` `[2y]` | an interior one shows nothing |
+| `set -- '' 2; $@` | `1` `[2]` | nothing beside it, nothing to keep |
+| `set -- '' 2; $@y` | `1` `[2y]` | |
+| `set -- '' 2; x$@` | `2` `[x]` `[2]` | |
+| `set -- '' 2; ""$@` | `2` `[]` `[2]` | a quoted null is not an empty element |
+
+**The rule is keyed on the field and not on the element.** Rows four and
+three are the pair that says so: one empty element is one field, and one
+field takes the text on *both* sides of the expansion at once, where two
+empty elements are two fields and the second is where the `y` goes. A rule
+stated about the element — "a dropped empty element at an edge closes the
+field there" — answers row four `[x][y]` and agrees with this one
+everywhere else, including on every row that has no text beside the
+expansion, which is most of them.
+
+**A field the *splitter* made is not a field an element made**, and the two
+part under a non-whitespace `IFS`. `IFS=:; set -- ':b' c; $@` is `[][b][c]`
+in bash, ksh93 and dash: the null a leading separator writes is kept, where
+the null an empty element makes is not. Only where the list is joined before
+it is split — `Semantics.UnquotedListJoinsOnIFS`, below — is there no element
+left to be empty, and then every null is the splitter's: `IFS=:; set -- ''
+c; $@` is `[][c]` in the column that joins and `[c]` in the three that do
+not.
+
+**The removal is the word's and not the expansion's**, because what decides
+it is what reaches the field afterwards. It therefore happens once, at the
+end of the word, and reaches every route that builds one: a flag group's
+result in the one grammar that has them — `x${(o)a}y` and `x${(s.:.)v}y`
+alike — the distribution `${^spec}` and `RC_EXPAND_PARAM` ask for, where the
+word is produced once per element and an empty element's copy is the word
+with nothing added to it, and a redirection's target, which is a word with
+two readings and so two places the boundary shows: zsh opens two files where
+`a=('' 2); >x${a[@]}y` names them, bash calls more than one word an ambiguous
+redirect, and ksh93 writes the single file `x 2y` its words view joins to.
+
+A context that keeps no fields is the exception, and it is not one: there
+the caller joins what comes back, so an empty element is a *separator*
+rather than a word. `set -- a '' b; x=$@` is `a  b` — two spaces — in all
+four.
+
 ## A separator closes the field beside it, with nothing to show for it
 
 Measured 2026-09-16, script files under `env -i`, one bracketed field per

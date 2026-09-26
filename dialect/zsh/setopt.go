@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 114 of the 185
+//     typing a directory name still does not change directory. 113 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -220,7 +220,7 @@ import (
 // operand are refused with the option off exactly as with it on. See
 // interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
 //
-// Nothing else about the split moved, and 114 is still most of the table.
+// Nothing else about the split moved, and 113 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.

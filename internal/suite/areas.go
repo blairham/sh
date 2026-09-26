@@ -105,7 +105,10 @@ var Areas = []Area{
 	{"arithmetic evaluation", 2305, []string{"arith"}},
 	{"pattern matching and globbing", 2306, []string{"globbing", "patterns"}},
 	{"command and process substitution", 2307, []string{"cmdsub", "procsub"}},
-	{"redirection operators and file descriptors", 2308, []string{"redirect", "heredoc", "herestring"}},
+	{
+		"redirection operators and file descriptors", 2308,
+		[]string{"redirect", "heredoc", "heredoc-parse-position", "herestring"},
+	},
 	{"the special builtins", 2309, []string{"builtins-special"}},
 	{"the regular builtins", 2310, []string{"builtins", "builtins-common"}},
 	{"printf", 2311, []string{"printf"}},

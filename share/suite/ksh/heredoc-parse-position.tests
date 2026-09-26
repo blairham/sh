@@ -1,0 +1,99 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# A here-document body holding a substitution that will not parse, by the
+# position the redirection's command is written in (#4709).
+#
+# The column that reaches the same place from the other side. ksh93 answers
+# **No** to both axes — a failure in an ordinary word does not escape a
+# subshell here, and one in a here-document body does not end the shell — so
+# every position below carries the script on whichever axis is read. That is
+# what makes this the control for bash's file: it says the rows there are the
+# body being graded and not the positions having stopped being subshells.
+#
+# The number is the refusal's own 3 rather than a fatal error's 1, which is
+# Semantics.SubstitutionParseFailureCarriesTheFatalStatus answering No here.
+# A pipeline reports its last element, so the rows whose failing command is
+# not last read 0.
+#
+# The last block is the row that must still end the script: the same
+# substitution in an ordinary word at the **top level**, where every column
+# agrees and no axis is asked.
+#
+# The refusals themselves go to a file and are counted rather than compared.
+# Where a refusal inside a here-document **body** is located is a question of
+# its own and this column has not answered it yet — ksh93 names the line the
+# redirection is written on and reports `line 0` for one of these shapes —
+# so a file comparing the wording would be graded on that rather than on the
+# reach and the status, which are what these rows are about.
+#
+# Measured 2026-09-26 against /bin/ksh, `Version AJM 93u+ 2012-08-01` — AT&T's
+# own build, not ksh2020 and not mksh.
+
+exec 2>diag_zz
+
+pos_zz() { printf -- '--- %s\n' "$1"; }
+f_zz() { cat; }
+
+pos_zz 'a command of its own'
+cat <<END ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'the first element of a pipeline'
+cat <<END | cat ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'the last element, whose status the pipeline reports'
+: | cat <<END ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a background command'
+cat <<END &
+$(echo hi; for)
+END
+wait
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a command inside a subshell'
+( cat <<END
+$(echo hi; for)
+END
+) ; printf 'same line st=%s\n' "$?"
+
+pos_zz 'a builtin on a pipeline element, where the specialness is gone'
+: <<END | cat ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a function on a pipeline element'
+f_zz <<END | cat ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'and the same substitution in a word on a pipeline element carries on too'
+v_zz=$(echo hi; for) | cat ; printf 'same line st=%s\n' "$?"
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a quoted delimiter is the control: nothing is expanded and nothing refused'
+cat <<'END' | cat
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+# Every row above refused exactly once, which is what says the reaches
+# recorded there are a give-up being graded rather than a body nothing
+# refused.
+printf 'refusals: %s\n' "$(grep -c 'syntax error' diag_zz)"
+
+# The row that must still end the script, and the last thing in this file.
+pos_zz 'the same substitution in a word at the top level ends it'
+v_zz=$(echo hi; for)
+printf 'never reached st=%s\n' "$?"

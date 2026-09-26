@@ -3432,6 +3432,26 @@ type Runner struct {
 	// what this tells apart. See Runner.substFailureRoute.
 	inBodyReadAtExpansion bool
 
+	// inHeredocBody says the text the shell is expanding is a
+	// here-document body in particular, which is a narrower thing than the
+	// field above: that one is true of a backquoted substitution's body too,
+	// and the two are graded by different axes when what is in them will not
+	// parse. Read by Runner.substParseErrorEscapesASubshell, and set and put
+	// back by Runner.heredocBody, which is also where a here-**string** is
+	// excluded — its word is read with the script's line.
+	//
+	// A field of its own although a mutant reading inBodyReadAtExpansion in
+	// its place survives interp/ and dialect/, and the survival is measured
+	// rather than assumed: at the one site that reads this the two are the
+	// same answer today, because a backquoted body's *own* refusal is raised
+	// on the shell that holds the word — before Runner.subst makes the copy
+	// that carries the wider flag — and a `$( … )` nested inside one is
+	// caught by Semantics.SubstitutionParseErrorIsFatal further up. Kept
+	// because the narrow question is the one being asked: the day the wider
+	// field reaches this site it brings a backquoted body with it, and a
+	// body read at expansion time is not a here-document body.
+	inHeredocBody bool
+
 	// expansionBodyLine is the file line such a body begins on, or nought
 	// where the body has no line of its own — the older spelling's, which is
 	// numbered by the span the parser already placed in the file.

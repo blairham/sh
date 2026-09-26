@@ -861,7 +861,7 @@ type zmodloadOpts struct {
 	features bool // -F: act on features rather than on the module
 	list     bool // -l: list them, only allowed with -F
 	silent   bool // -s: no complaint about a module that will not load
-	quietIf  bool // -i: no complaint about one already loaded
+	quietIf  bool // -i: no complaint about one already in the state asked for
 }
 
 // zmodloadLetters are the letters implemented here, and
@@ -916,7 +916,7 @@ func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	case opts.features:
 		return zmodloadFeatureCommand(r, opts, rest)
 	case opts.unload:
-		return zmodloadUnload(r, rest)
+		return zmodloadUnload(r, opts, rest)
 	case len(rest) == 0:
 		return zmodloadListing(r, opts.commands)
 	case opts.commands:
@@ -991,6 +991,9 @@ func setZmodloadLetter(opts *zmodloadOpts, letter byte) {
 // A module already loaded is loaded again without a word, measured — and `-i`
 // is therefore about a complaint this shell does not make rather than about
 // the status, which is why the letter is accepted and changes nothing here.
+// It is not inert everywhere: on the unload path the same letter is what
+// makes an unload idempotent, and zmodloadUnload has the grid that separates
+// "the letter `-i`" from "any quieting letter" from "the unload itself".
 // It is not *without work*, which is what a first reading had: a whole load
 // puts back every feature `-F` had switched off, so it is the one command
 // that widens a narrowed module. See zmodloadWiden.
@@ -1044,12 +1047,37 @@ func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) int {
 // It is *undo the load* and not *take the module's builtins away* — see
 // zmodloadRelease, where the four modules that decide the difference are
 // measured. Parameters are not touched at all, also measured there.
-func zmodloadUnload(r *interp.Runner, modules []string) int {
+//
+// **`-i` beside it means idempotent, and it is the one letter that does**
+// (#4588). The letter is not "ignore errors": measured on zsh 5.9.2,
+// 2026-09-26, `-i` changes nothing about a module that fails to load, a
+// feature a module does not have, or `-lF` on a module that is not loaded yet
+// — each still complains, with the same sentence and the same 1. What it
+// changes is exactly the complaint that the module is *already in the state
+// asked for*, and on the unload path that is "not loaded":
+//
+//	zmodload -u  zsh/zpty     no such module zsh/zpty, status 1
+//	zmodload -us zsh/zpty     no such module zsh/zpty, status 1
+//	zmodload -ui zsh/zpty     silent, status 0
+//
+// The first two rows are the control and they are what says this is keyed on
+// the **letter** rather than on the condition: `-s` is the other quieting
+// letter this builtin has and it does nothing here. The rows above, keyed the
+// other way — `-i` held fixed while the operation moves — are what says it is
+// not keyed on the letter alone. Both halves are needed, because a rule that
+// silenced `-u` on its own would make a bare unload of a module nobody loaded
+// look like a success, and every row of the grid says it is not.
+//
+// It is quiet **and** 0, not one or the other, and the status is per command
+// rather than per module: `zmodload -ui a b` with neither loaded is 0.
+func zmodloadUnload(r *interp.Runner, opts zmodloadOpts, modules []string) int {
 	status := 0
 	for _, m := range modules {
 		if !containsWord(zmodloadLoaded(r), m) {
-			r.Diagnosef("no such module %s\n", m)
-			status = 1
+			if !opts.quietIf {
+				r.Diagnosef("no such module %s\n", m)
+				status = 1
+			}
 			continue
 		}
 		zmodloadSetLoaded(r, m, false)

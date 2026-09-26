@@ -1847,10 +1847,13 @@ less the span's. Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0),
     argv[2,3]=(p q r)   x p q r     n=4   a span, replaced whole
     argv[2,3]=X         x X         n=2   the same span carrying one word
     argv[2]+=(p q)      x y p q z   n=5   `+=` keeps the parameter
-    argv[5]=(p q)       x y z '' p q  n=6  past the end pads, then places
+    argv[5]=(p q)       x y z ␣ p q n=6   past the end pads, then places
     argv[-1]=(p q)      x y p q     n=4   a negative counts back from the last
     argv[-4]=(p)        p x y z     n=4   past the first goes in front of all
     argv[0]=(p q)       argv: assignment to invalid subscript range
+
+`␣` is the empty parameter the padding made, and it is a parameter like
+any other: `$#` counts it and `$4` reads it as the empty string.
 
 `$0` is not one of the parameters, so subscript zero is below the first
 and is refused in the sentence `a[0]=(p q)` gets on a named array — not

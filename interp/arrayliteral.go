@@ -454,6 +454,14 @@ func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.ArrayElem) bool {
 // flag is read rather than re-derived, so there is one answer to "was it the
 // subscript" and not two.
 func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
+	if !r.scopeWarningsAreOff() {
+		// The array half of the two opt-in scope lints, and it is here rather
+		// than at the store because the store is shared with every element
+		// write and with the scalar view it keeps in step. Before the
+		// elements are read, so the question is about the state the
+		// assignment found. See interp/scopewarnings.go.
+		r.warnAboutTheScope(r.throughNameref(name), scopeWarningArray)
+	}
 	parsed, ok := r.literalElems(elems, r.literalReadsSubscripts(name, elems, appendTo),
 		r.bareLiteralElementIsOneValue(name, elems, false))
 	if !ok {

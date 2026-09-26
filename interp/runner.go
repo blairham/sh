@@ -3167,6 +3167,23 @@ type Runner struct {
 	// `shopt -s huponexit`. See SendsHangupToJobsAtExit in
 	// sessionswitches.go.
 	hangUpJobsAtExit bool
+	// warnsGlobalCreatedInAFunction writes a sentence when an assignment
+	// inside a function creates a parameter nothing else had. Off with
+	// nothing said; one dialect names it, as `setopt warncreateglobal`. See
+	// WarnsAboutAGlobalCreatedInAFunction in sessionswitches.go.
+	warnsGlobalCreatedInAFunction bool
+	// warnsEnclosingScopeSet writes a sentence when an assignment inside a
+	// function reaches a parameter that belongs to a scope outside it. Off
+	// with nothing said; one dialect names it, as `setopt warnnestedvar`.
+	// See WarnsAboutAnEnclosingScopeSet in sessionswitches.go.
+	warnsEnclosingScopeSet bool
+	// writingADeclarationsOperand marks the one route a declaration utility's
+	// `name=( … )` operand takes into the assignment machinery, which is the
+	// only thing that can tell it from the bare spelling: the array store is
+	// shared and carries no assignForm of its own. Read by the scope
+	// warnings, which a declaration is exempt from — see
+	// interp/scopewarnings.go.
+	writingADeclarationsOperand bool
 	// globSortsNumerically reads a run of digits in a match's name as the
 	// number it spells when the matches of a pathname expansion are put in
 	// order. Off with nothing said; one dialect names it, as
@@ -10858,6 +10875,16 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.refuseReadonly(name, form) {
 		return
 	}
+	if !r.scopeWarningsAreOff() && !form.declaresRatherThanAssigns() &&
+		form != assignedAsTheCompoundView {
+		// The two opt-in scope lints, before the store rather than after it:
+		// both questions are about the state this assignment found. The
+		// compound view is exempt because it is not a script's assignment at
+		// all — it is the store that keeps `$a` answering for an array a,
+		// whose own write has already been through here. See
+		// interp/scopewarnings.go.
+		r.warnAboutTheScope(name, scopeWarningScalar)
+	}
 	// A `.set` discipline sees the value on its way in and may replace it —
 	// `function s.set { .sh.value="<${.sh.value}>"; }; s=first` stores
 	// `<first>`. Here rather than at the assignment statement because every
@@ -11346,6 +11373,13 @@ func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
 	auto := r.heldTrace.auto
 	r.heldTrace.auto = false
 	defer func() { r.heldTrace.auto = auto }()
+	// And the mark the scope warnings read: everything below is a
+	// *declaration's* operand, which the shared array store cannot tell from
+	// a bare `a=( … )` on its own. Restored rather than cleared, because a
+	// command substitution in one of these values runs a whole shell.
+	declaring := r.writingADeclarationsOperand
+	r.writingADeclarationsOperand = true
+	defer func() { r.writingADeclarationsOperand = declaring }()
 	for _, a := range c.Assigns {
 		if !a.Operand {
 			continue

@@ -1426,7 +1426,47 @@ var zshOptions = []zshOption{
 		},
 	},
 	recorded("posixjobs", false),
-	recorded("posixstrings", false),
+	{
+		// POSIX_STRINGS: a `$'…'` string **ends at its first NUL**, so
+		// `a$'b\0c'd` is the three characters `abd`. Off by default here and
+		// on in the sh and ksh emulations — see emulateoptions.go, which held
+		// that row throughout.
+		//
+		// It was `recorded` until #4624, and what it names is an axis this
+		// shell already carries rather than a new reading: the panel gives
+		// [interp.Semantics.DollarSingleNul] three answers — the NUL ends the
+		// span in bash and ksh93, is a byte of it in zsh, and is dropped in
+		// BusyBox ash — and the option is zsh's name for moving between the
+		// first two. So this is the third shape of a name in this table that
+		// points at a field the vector holds, beside `shwordsplit`, `nomatch`
+		// and `ksharrays`.
+		//
+		// **The truncation is the span's and not the word's**, which is what
+		// the axis already says and what the option's own measurement
+		// confirms: `a$'b\0c'$'d\0e'f` is `abdf`, each string cut at its own
+		// NUL, with everything written outside them kept.
+		//
+		// The moment is the **expansion** and not the parse, measured before
+		// this was wired: a `setopt posixstrings` and the word on one line
+		// already truncate, and a function defined while the option was off
+		// truncates when it is called with the option on. That is the moment
+		// expandDollarSingle asks the axis at, so the option needed no
+		// arrangement of its own.
+		base: "posixstrings", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.DollarSingleNul == interp.DollarSingleNulEndsTheSpan
+		},
+		set: func(r *interp.Runner, on bool) int {
+			v := interp.DollarSingleNulIsAByte
+			if on {
+				v = interp.DollarSingleNulEndsTheSpan
+			}
+			setAxis(r, func(s *interp.Semantics) *interp.DollarSingleNulPolicy {
+				return &s.DollarSingleNul
+			}, v)
+			return 0
+		},
+	},
 	{
 		// POSIX_TRAPS: whether an EXIT trap set inside a function is the
 		// function's, firing at its return, or the shell's, firing when the
@@ -1674,8 +1714,24 @@ var zshOptions = []zshOption{
 	setOptBacked("unset", true, "nounset", true),
 	setOptBacked("verbose", false, "verbose", false),
 	editingOption("vi", "viins"),
-	recorded("warncreateglobal", false),
-	recorded("warnnestedvar", false),
+	// WARN_CREATE_GLOBAL: an assignment inside a function that creates a
+	// parameter nothing else had draws a sentence on standard error. It was
+	// `recorded` until #4553, and the scoping the lint has to observe was
+	// already built and already right — `local` and `typeset -g` behave
+	// correctly in both states — so what was missing was a reader rather
+	// than a mechanism. See interp.Runner.WarnsAboutAGlobalCreatedInAFunction.
+	switchBacked("warncreateglobal", false,
+		(*interp.Runner).WarnsAboutAGlobalCreatedInAFunction,
+		(*interp.Runner).SetWarnsAboutAGlobalCreatedInAFunction),
+	// WARN_NESTED_VAR: the sibling lint, for an assignment that reaches a
+	// parameter belonging to a scope *outside* the function it was written
+	// in. Recorded until #4554, and one question with the other: the name
+	// being created is warncreateglobal's subject and the name already
+	// existing outside this call is this one's, so a body assigning twice to
+	// one name draws one of each with both options on.
+	switchBacked("warnnestedvar", false,
+		(*interp.Runner).WarnsAboutAnEnclosingScopeSet,
+		(*interp.Runner).SetWarnsAboutAnEnclosingScopeSet),
 	setOptBacked("xtrace", false, "xtrace", false),
 	zleOption(),
 }

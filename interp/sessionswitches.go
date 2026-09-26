@@ -565,6 +565,44 @@ func (r *Runner) SendsHangupToJobsAtExit() bool { return r.hangUpJobsAtExit }
 // `shopt -s huponexit` is the only name the panel has for it.
 func (r *Runner) SetSendsHangupToJobsAtExit(on bool) { r.hangUpJobsAtExit = on }
 
+// WarnsAboutAGlobalCreatedInAFunction reports whether this shell writes a
+// sentence when an assignment inside a function creates a parameter nothing
+// else had — the opt-in lint a script author sets to catch a forgotten
+// `local`.
+//
+// Off with nothing said. One shell in the panel has it and calls it
+// `setopt warncreateglobal`. Nothing a script computes moves with it: the
+// assignment creates the same global in both states, and what is added is a
+// line on standard error. The sentence is Diagnostics.GlobalCreatedInAFunction,
+// so a dialect with no wording stays silent however this stands.
+//
+// See interp/scopewarnings.go for the measured table, including the two rows
+// that are measured and deliberately not modeled.
+func (r *Runner) WarnsAboutAGlobalCreatedInAFunction() bool {
+	return r.warnsGlobalCreatedInAFunction
+}
+
+// SetWarnsAboutAGlobalCreatedInAFunction moves it, for a dialect naming the
+// capability — `setopt warncreateglobal` is the only name the panel has for
+// it.
+func (r *Runner) SetWarnsAboutAGlobalCreatedInAFunction(on bool) {
+	r.warnsGlobalCreatedInAFunction = on
+}
+
+// WarnsAboutAnEnclosingScopeSet reports whether this shell writes a sentence
+// when an assignment inside a function reaches a parameter that belongs to a
+// scope outside it — a calling function's `local`, or the global scope.
+//
+// Off with nothing said, and the sibling of the switch above: the name being
+// *created* is that one's subject and the name already existing outside this
+// call is this one's, so a body that assigns twice to one name draws one of
+// each. One shell in the panel has it and calls it `setopt warnnestedvar`.
+func (r *Runner) WarnsAboutAnEnclosingScopeSet() bool { return r.warnsEnclosingScopeSet }
+
+// SetWarnsAboutAnEnclosingScopeSet moves it, for a dialect naming the
+// capability — `setopt warnnestedvar` is the only name the panel has for it.
+func (r *Runner) SetWarnsAboutAnEnclosingScopeSet(on bool) { r.warnsEnclosingScopeSet = on }
+
 // SortsGlobMatchesNumerically reports whether a run of digits inside a
 // match's name is read as the number it spells when a pathname expansion's
 // matches are put in order, so that `f2` comes before `f10`.

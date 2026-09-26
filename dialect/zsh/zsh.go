@@ -5323,10 +5323,22 @@ func Diagnostics() interp.Diagnostics {
 		ShiftTooMany: "shift count must be <= $#",
 		// A sentence of its own for the other end, naming neither the count
 		// nor the word.
-		ShiftNegativeCount:   "argument to shift must be non-negative",
-		StdinLocation:        interp.LocationNameOnly,
-		StdinBuiltinLocation: interp.LocationBuiltinNameOnly,
-		CannotExecute:        "%[2]s: %[1]s",
+		ShiftNegativeCount: "argument to shift must be non-negative",
+		// The two opt-in scope lints, whose switches the option table turns
+		// on — `setopt warncreateglobal` and `setopt warnnestedvar`. Both
+		// name the function twice, once in the location this dialect writes
+		// in front of a diagnostic raised inside a body and once in the
+		// sentence itself, which is the reference's own shape. Measured on
+		// zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f`, 2026-09-26:
+		// `f() { gv=1 }; f` is `f: scalar parameter gv created globally in
+		// function f` and `outer() { local lv=1; inner }; inner() { lv=2 }`
+		// is `inner: scalar parameter lv set in enclosing scope in function
+		// inner`.
+		GlobalCreatedInAFunction:     "%[1]s parameter %[2]s created globally in function %[3]s",
+		EnclosingScopeSetInAFunction: "%[1]s parameter %[2]s set in enclosing scope in function %[3]s",
+		StdinLocation:                interp.LocationNameOnly,
+		StdinBuiltinLocation:         interp.LocationBuiltinNameOnly,
+		CannotExecute:                "%[2]s: %[1]s",
 		// A `#!` line naming an interpreter that is not there, which this
 		// shell reads the file to find out about — and words the other way
 		// round from bash, with the complaint before the name it could not

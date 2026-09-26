@@ -526,10 +526,39 @@ var assignOps = []string{"<<=", ">>=", "*=", "/=", "%=", "+=", "-=", "&=", "^=",
 // assignment spelling in front of `^=`, so the longer operator wins.
 var assignOpsWithXor = append([]string{"^^="}, assignOps...)
 
+// assignOpsWithPow and assignOpsWithXorAndPow are those two with `**=`, which
+// is [Dialect.ArithExponentAssign]'s and one shell's.
+//
+// It sits in front of `*=` for the same reason `^^=` sits in front of `^=`,
+// and in neither case is the order what does the work: a prefix read of `*=`
+// against `**=` fails on the second character either way. The order is where
+// a reader looks for the answer, so the longer spelling is written first and
+// the claim is not made for it.
+//
+// **`**=` is an assignment operator and never a rung op**, which is where it
+// parts from `^^=` — that one is both, because it stores nothing and so still
+// has a value where its left side cannot be a target. Measured 2026-09-26 on
+// zsh 5.9.2, `x=2; $(( 1 || x **= 3 ))` is `lvalue required` where
+// `$(( 1 || x ^^= 1 ))` is 0. So this list is the whole of the addition and
+// no ladder gains a rung.
+var (
+	assignOpsWithPow       = withPowAssign(assignOps)
+	assignOpsWithXorAndPow = withPowAssign(assignOpsWithXor)
+)
+
+func withPowAssign(base []string) []string {
+	return append([]string{"**="}, base...)
+}
+
 // assignOps is the compound-assignment spellings this dialect has.
 func (a *arithParser) assignOps() []string {
-	if a.dial.ArithLogicalXor {
+	switch {
+	case a.dial.ArithLogicalXor && a.dial.ArithExponentAssign:
+		return assignOpsWithXorAndPow
+	case a.dial.ArithLogicalXor:
 		return assignOpsWithXor
+	case a.dial.ArithExponentAssign:
+		return assignOpsWithPow
 	}
 	return assignOps
 }
@@ -1239,6 +1268,19 @@ func (a *arithParser) power(level int) ArithExpr {
 	}
 	a.space()
 	at := a.off
+	// `**=` is an assignment and not this operator with an `=` behind it, so
+	// the ladder leaves it alone and the assignment's own refusal names the
+	// whole operator. Every other compound spelling is held back from its
+	// rung by arithParser.longerOperator, which this rung does not consult —
+	// it has one operator and no candidate list to choose from.
+	//
+	// The refusal that follows is the one real zsh makes: measured
+	// 2026-09-26 on 5.9.2, `$(( 1 **= 2 ))` and `$(( 1 + x **= 3 ))` are both
+	// `lvalue required`, where taking the `**` here reports a missing operand
+	// instead. See arithParser.assignedToNonPlace.
+	if a.dial.ArithExponentAssign && a.has("**=") {
+		return x
+	}
 	if !a.dial.ArithExponent || !a.take("**") {
 		return x
 	}

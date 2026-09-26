@@ -180,6 +180,17 @@ func Semantics() interp.Semantics {
 	// nested subshell running a command named `1+1`, since this shell has no
 	// arithmetic command either (#3364).
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// The boundary between two elements of an unquoted list is itself a
+	// delimiter of the splitting rule, counting as IFS whitespace — this
+	// shell and dash against the other four. **Measured in the container and
+	// never derived from dash**: BusyBox 1.37.0 in the pinned alpine digest,
+	// 2026-09-26, over a 63-row grid, where it answers every row as dash does
+	// — `IFS=:; set -- b ':'; w x$@y` is `[xb] [y]` and
+	// `IFS=:; set -- ':' ':'; w x$@y` is `[x] [] [y]`. The agreement is the
+	// measurement rather than the assumption; the one row of that grid the
+	// two ever parted on was a probe written with `$'\n'`, which this shell
+	// has and dash has not (#4580).
+	s.UnquotedListBoundaryIsIFSWhitespace = interp.Yes
 	// This shell is built with process substitution, so the axis is ash's to
 	// answer after all. The reading it was left unanswered on — that
 	// `echo >(:)` is the two characters as written — was never true of

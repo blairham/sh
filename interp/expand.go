@@ -286,10 +286,10 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// that does write a closing field is zsh's, and there the split says
 		// so rather than this line having to know it: see
 		// TrailingSeparatorEndsAField and splitFieldsAskEdge.
-		if leadingSeparatorEdge(text, ifs, set) {
+		if leadingSeparatorEdge(text, nil, ifs, set) {
 			b.separate(substituted)
 		}
-		fields, openEnd := r.splitFieldsAskEdge(text, ifs, set)
+		fields, openEnd := r.splitFieldsAskEdge(text, nil, ifs, set)
 		// No marks: what the splitter made of a scalar is an ordinary field,
 		// empty ones included — `IFS=:; v=':b'; $v` is `[][b]` in bash,
 		// ksh93 and dash.
@@ -458,7 +458,17 @@ func (b *wordFields) flush() {
 // the splitter absorbs the whole delimiter, whitespace or not, so the
 // boundary is the split's own answer rather than a reading of the text. See
 // splitFieldsOpenEnd.
-func leadingSeparatorEdge(text, ifs string, ifsSet bool) bool {
+//
+// boundary is the list-boundary mask and is nil everywhere but the one
+// dialect reading that has boundaries at all. It is read here rather than
+// tested beside the call because the opening *run* is what decides, and a
+// caller that only asked "does it start with a boundary" answers
+// `IFS=:; set -- "" ':' b; x$@y` three fields where dash and BusyBox ash give
+// two: the boundary opens the run, the separator behind it has already
+// written the empty field that joins the `x`, and recording a boundary as
+// well is the field twice — which is this function's whole subject. See
+// interp/listboundary.go.
+func leadingSeparatorEdge(text string, boundary []bool, ifs string, ifsSet bool) bool {
 	if text == "" || ifsSet && ifs == "" {
 		return false
 	}
@@ -468,6 +478,10 @@ func leadingSeparatorEdge(text, ifs string, ifsSet bool) bool {
 	// field, so it is not a boundary to record here.
 	whitespace := false
 	for i := 0; i < len(text); i++ {
+		if boundary != nil && boundary[i] {
+			whitespace = true
+			continue
+		}
 		c := text[i]
 		if strings.IndexByte(ifs, c) < 0 {
 			break
@@ -2118,6 +2132,16 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []string {
 	perElement, marks := r.splitEachElement(elems, sp, glob)
 	r.listNulls, r.listEdges = marks.nulls, marks.edges
+	// The third reading of the same word, and it is asked in front of the
+	// join because it is about the same gap: the boundary the join replaces
+	// with a written separator is the boundary this one makes a delimiter.
+	// A dialect answering yes here has no join left to make — its elements
+	// went into one string already — so the two are alternatives rather than
+	// stages. See interp/listboundary.go.
+	if across, acrossMarks, ok := r.listBoundaryFields(elems, perElement, marks, sp, glob); ok {
+		r.listNulls, r.listEdges = acrossMarks.nulls, acrossMarks.edges
+		return across
+	}
 	if !r.listCouldJoinDifferently(elems) {
 		return perElement
 	}
@@ -2415,9 +2439,9 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) (
 			// neighbors. This is the pair the scalar path reads, read here
 			// — see interp/splitawayedge.go.
 			if i == 0 {
-				marks.edges.lead = leadingSeparatorEdge(el, ifs, set)
+				marks.edges.lead = leadingSeparatorEdge(el, nil, ifs, set)
 			}
-			fields, openEnd := r.splitFieldsAskEdge(el, ifs, set)
+			fields, openEnd := r.splitFieldsAskEdge(el, nil, ifs, set)
 			if i == len(elems)-1 {
 				marks.edges.openEnd = openEnd
 			}
@@ -6070,7 +6094,7 @@ func splitFieldsLiteral(s string, literal []bool, ifs, space string, ifsSet bool
 func splitFieldsEdges(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
 	chars func() (string, bool),
 ) []string {
-	fields, _, _ := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped, chars)
+	fields, _, _ := splitFieldsAt(s, literal, nil, ifs, space, ifsSet, keepEdges, escaped, chars)
 	return fields
 }
 
@@ -6082,10 +6106,10 @@ func splitFieldsEdges(s string, literal []bool, ifs, space string, ifsSet, keepE
 // splitter, for the reason splitFieldsAt's offsets are reported from here:
 // which bytes are a delimiter is a rule with a mask, an escape form and a
 // run in it, and a copy of that rule is a second place for it to drift.
-func splitFieldsOpenEnd(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
+func splitFieldsOpenEnd(s string, literal, boundary []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
 	chars func() (string, bool),
 ) ([]string, bool) {
-	fields, _, openEnd := splitFieldsAt(s, literal, ifs, space, ifsSet, keepEdges, escaped, chars)
+	fields, _, openEnd := splitFieldsAt(s, literal, boundary, ifs, space, ifsSet, keepEdges, escaped, chars)
 	return fields, openEnd
 }
 
@@ -6200,7 +6224,7 @@ func dataByteAt(s string, i int, marks []bool) (byte, int) {
 // only thing that makes the difference recoverable. It is reported from the
 // one splitter rather than recomputed beside it, because a second walk of the
 // same rule is a second place for it to drift.
-func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
+func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet, keepEdges, escaped bool,
 	chars func() (string, bool),
 ) ([]string, []int, bool) {
 	if ifsSet && ifs == "" {
@@ -6225,8 +6249,16 @@ func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdge
 	if escaped {
 		marks = escapedMarks(s)
 	}
-	isMark := func(i int) bool { return marks != nil && marks[i] }
+	// A list boundary is neither data nor an escape mark, whatever byte
+	// stands in for it: it is a delimiter the *word* put there, and the one
+	// question about it is whether this dialect made it one. See
+	// interp/listboundary.go, which is the only caller that passes a mask.
+	isBoundary := func(i int) bool { return boundary != nil && boundary[i] }
+	isMark := func(i int) bool { return marks != nil && marks[i] && !isBoundary(i) }
 	isWS := func(i int) bool {
+		if isBoundary(i) {
+			return true
+		}
 		c := s[i]
 		return !isMark(i) && (literal == nil || !literal[i]) &&
 			strings.IndexByte(ifs, c) >= 0 && isIFSWhitespace(c, space)
@@ -6236,6 +6268,9 @@ func splitFieldsAt(s string, literal []bool, ifs, space string, ifsSet, keepEdge
 	// IFS of ASCII — see separatorWidths.
 	widths := separatorWidths(s, ifs, marks, chars)
 	isSep := func(i int) bool {
+		if isBoundary(i) {
+			return true
+		}
 		if isMark(i) || (literal != nil && literal[i]) {
 			return false
 		}

@@ -142,6 +142,59 @@ type Semantics struct {
 	// in every shell measured. Both are core.
 	UnquotedListJoinsOnIFS Answer
 
+	// UnquotedListBoundaryIsIFSWhitespace makes the boundary between two
+	// adjacent elements of an unquoted list a delimiter of the ordinary
+	// splitting rule — one that counts as IFS **whitespace** — rather than a
+	// field break the split cannot see past. A separator written at the edge
+	// of an element beside it then joins that one delimiter instead of
+	// writing a field of its own.
+	//
+	// True in dash and BusyBox ash; false in bash, bash 3.2, bash as `sh`,
+	// ksh93 and zsh. Measured 2026-09-26 against /opt/homebrew/bin/bash
+	// 5.3.20, /bin/bash 3.2.57, /bin/ksh 93u+ 2012-08-01, /bin/dash 0.5.12,
+	// /opt/homebrew/bin/zsh 5.9.2 under `shwordsplit`, and BusyBox 1.37.0 in
+	// the alpine digest internal/oracle.Panel pins, with
+	// `w(){ printf '%d |' $#; for x in "$@"; do printf ' [%s]' "$x"; done; }`:
+	//
+	//	written, under IFS=:        bash   ksh93  zsh    dash, ash
+	//	set -- b ':';    w x$@y     3      3      3      2  [xb] [y]
+	//	set -- b ':' c;  w x$@y     4      3      4      2  [xb] [cy]
+	//	set -- a ':' b ':'; w x$@y  6      5      6      3  [xa] [b] [y]
+	//	set -- 'b:' ':c'; w x$@y    4      3      4      3  [xb] [] [cy]
+	//	set -- ':' ':'; w x$@y      4      3      4      3  [x] [] [y]
+	//	set -- a b;      w x$@y     2      2      2      2  [xa] [by]
+	//
+	// **The rule is a sentence with one noun in it: the *boundary* is IFS
+	// whitespace.** Read the word as its text with a blank standing between
+	// adjacent elements and split it with the ordinary rule — a run of IFS
+	// whitespace, at most one non-whitespace separator, a run of IFS
+	// whitespace — and every row above falls out.
+	//
+	// Three other readings answer row one the same way and part on the rows
+	// below it, which is what makes those rows the ones to keep:
+	//
+	//   - The **element**-keyed reading, that a separator at the edge of an
+	//     element merges into the boundary beside it, answers `set -- ':' ':'`
+	//     two fields and `set -- 'b:' ':c'` two. Both are three: the first
+	//     separator and the boundary are one delimiter, and the second
+	//     separator starts another.
+	//   - The boundary as an ordinary IFS **separator** rather than
+	//     whitespace answers row one three fields, two separators in a row
+	//     making an empty field between them.
+	//   - The join UnquotedListJoinsOnIFS describes answers row one three
+	//     fields too, for the same reason with the separator written rather
+	//     than implied. That axis is the third reading and this is the
+	//     fourth; ksh93's and zsh's is the boundary as a hard break, which
+	//     differ from each other only by TrailingSeparatorEndsAField.
+	//
+	// Asked only at the disagreement. Under a whitespace IFS a boundary and
+	// a run of blanks are the same delimiter either way, so nothing in this
+	// is reachable by a script that leaves IFS alone; with IFS set and empty
+	// nothing splits at all and the elements are fields whatever this says.
+	// See Runner.listBoundaryFields, which computes both readings and asks
+	// only where they differ.
+	UnquotedListBoundaryIsIFSWhitespace Answer
+
 	// UnsplitAtListJoinsOnIFS decides the character an unquoted list spelled
 	// `@` is joined with when it reaches a context that keeps no fields: the
 	// first character of IFS, or a hard space.
@@ -25647,6 +25700,12 @@ func PosixSemantics() Semantics {
 		// the shell in the panel that targets this text. bash's join is the
 		// departure from it.
 		UnquotedListJoinsOnIFS: No,
+		// 2.5.2 has an unquoted `@` "initially producing one field for each
+		// positional parameter that is set", and 2.6.5 splits those fields.
+		// A field per parameter is a boundary the split cannot see past, so
+		// the standard's reading is the hard break — and dash and BusyBox
+		// ash, the two columns that target this text, are the departures.
+		UnquotedListBoundaryIsIFSWhitespace: No,
 		// 2.9.2 gives a pipeline's `!` the logical NOT of the status of the
 		// pipeline it ran, and 2.8.2 makes the shell's own exit status the
 		// one the last command executed reported — or zero where none was.

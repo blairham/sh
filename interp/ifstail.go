@@ -29,7 +29,7 @@ func (r *Runner) splitFieldsAsking(s string, literal []bool, ifs string, ifsSet,
 // expansion result is carried as; see splitFieldsAt on why that has to be
 // said rather than detected.
 func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
-	fields, _ := r.splitFieldsAskEdge(s, ifs, ifsSet)
+	fields, _ := r.splitFieldsAskEdge(s, nil, ifs, ifsSet)
 	return fields
 }
 
@@ -44,8 +44,10 @@ func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
 // boundary it marked is still to be recorded. Asking the axis a second time
 // beside the split would both double the question and let the two answers
 // disagree.
-func (r *Runner) splitFieldsAskEdge(s, ifs string, ifsSet bool) (fields []string, openEnd bool) {
-	out, openEnd := splitFieldsOpenEnd(s, nil, ifs, r.ifsSpace(ifs), ifsSet, false, true, r.countsTheLocalesWideUnits)
+// boundary is the list-boundary mask, and nil for every caller but the one
+// dialect reading that has boundaries at all — see interp/listboundary.go.
+func (r *Runner) splitFieldsAskEdge(s string, boundary []bool, ifs string, ifsSet bool) (fields []string, openEnd bool) {
+	out, openEnd := splitFieldsOpenEnd(s, nil, boundary, ifs, r.ifsSpace(ifs), ifsSet, false, true, r.countsTheLocalesWideUnits)
 	fields = r.trailingSeparatorField(out, s, nil, ifs, ifsSet, false)
 	return fields, openEnd && len(fields) == len(out)
 }

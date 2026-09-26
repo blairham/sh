@@ -652,6 +652,12 @@ func Semantics() interp.Semantics {
 	// join: `IFS=:; set -- "x:" y; printf "[%s]" $@` is `[x][y]` here and
 	// `[x][][y]` in bash, which joins to `x::y` first.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// The boundary between two elements is a field break the split cannot
+	// see past, so a separator written beside it writes a field of its own.
+	// Measured 2026-09-26 on ksh93u+ 2012-08-01: `IFS=:; set -- b ':';
+	// w x$@y` is `[xb] [] [y]` here against `[xb] [y]` in dash and BusyBox
+	// ash.
+	s.UnquotedListBoundaryIsIFSWhitespace = interp.No
 	// And a quoted empty word written behind a separator in the word a `-`
 	// or `+` substitutes is not a field here: `set -- a b; v=x; printf
 	// "[%s]" ${v:+"$@" ""}` is `[a][b]`, where bash 5.3.20, dash and BusyBox

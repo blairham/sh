@@ -1257,7 +1257,9 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// library, not the script — and the line offset the text it was read
 	// from was running at, which its body goes on being numbered from when
 	// it is called later. See funcOrigin.
-	r.recordFunctionOrigin(c.Name, r.currentFile(), r.lineBase, r.runText)
+	r.recordFunctionOrigin(c.Name, funcOrigin{
+		file: r.currentFile(), lineBase: r.lineBase, text: r.runText,
+	})
 	// And whatever a dialect wants told about a definition, which is a
 	// different question from where it came from: one shell marks every
 	// function defined inside an emulation so that the emulation is
@@ -1668,7 +1670,12 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// location below: a second `fn.Pos().Line` here would be two spellings
 	// of one fact, free to disagree the day a route sets one and not the
 	// other.
-	defLine := int(fn.Pos().Line)
+	//
+	// Less whatever a definition seam put in front of the body before
+	// parsing it, so that the line named is the line the *file* has: see
+	// funcOrigin.wrapperLines, and the offset below, which moves with it.
+	origin := r.funcOrigins[fn.Name]
+	defLine := origin.definitionLine(int(fn.Pos().Line))
 	r.pushFrame(Frame{
 		File: r.functionFile(fn.Name), Name: name, Keyword: fn.Keyword,
 		FuncLine: defLine, outerParams: saved,
@@ -1757,11 +1764,11 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// `eval`'s text from one there was no offset in force to record, so the
 	// origin holds nothing and this is the zero it always was.
 	savedBase, savedText := r.lineBase, r.runText
-	r.lineBase = r.funcOrigins[fn.Name].lineBase
+	r.lineBase = origin.bodyLineBase()
 	// And the text the body was read from, on the same terms: a function
 	// defined in a sourced file quotes that file however it is called. See
 	// runningText.
-	r.runText = r.funcOrigins[fn.Name].text
+	r.runText = origin.text
 	defer func() { r.lineBase, r.runText = savedBase, savedText }()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and

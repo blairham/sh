@@ -801,7 +801,7 @@ func (r *Runner) DefineFunctionExpandingAliases(name, body string) bool {
 //
 // aliases is the parser's hook, and nil expands nothing.
 func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool {
-	p := syntax.NewParser(name+"() {\n"+body+"\n}\n", r.dialect())
+	p := syntax.NewParser(definitionWrapper(name)+body+"\n}\n", r.dialect())
 	if aliases != nil {
 		// All three kinds together, because the file is read by the same
 		// rules a script is: measured, a function file read by `autoload`
@@ -855,11 +855,28 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 	// And no text: the seam's text is a definition this builtin built, which
 	// no diagnostic quotes, and saying so would give every such function a
 	// record — see funcOrigin.text.
-	r.recordFunctionOrigin(name, r.currentFile(), 0, runningText{})
+	r.recordFunctionOrigin(name, funcOrigin{
+		file: r.currentFile(), wrapperLines: wrapperLines(name),
+	})
 	// The same notice the script's own definition route gives — see
 	// AtFunctionDefinition, and functionDefined for why every route has to.
 	r.functionDefined(name)
 	return true
+}
+
+// definitionWrapper is the declaration the seam above puts in front of a body
+// it was handed, and wrapperLines is how many lines of it the parser will
+// count.
+//
+// Two functions over one string rather than a literal in each place, because
+// the wrapper and the correction for it are the same fact: a wrapper that
+// grew a line while the correction stayed at one would put every autoloaded
+// function's definition line back where #4471 found it, silently. See
+// funcOrigin.wrapperLines.
+func definitionWrapper(name string) string { return name + "() {\n" }
+
+func wrapperLines(name string) int {
+	return strings.Count(definitionWrapper(name), "\n")
 }
 
 // SetFunctionFile says which file a function was defined in, for a builtin
@@ -873,7 +890,9 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 // It writes the file half of the origin and leaves the line half where the
 // definition put it — see funcOrigin.
 func (r *Runner) SetFunctionFile(name, file string) {
-	r.recordFunctionOrigin(name, file, r.funcOrigins[name].lineBase, r.funcOrigins[name].text)
+	o := r.funcOrigins[name]
+	o.file = file
+	r.recordFunctionOrigin(name, o)
 }
 
 // FunctionText is a function's definition written back the way this shell

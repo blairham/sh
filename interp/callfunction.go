@@ -112,10 +112,20 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 	saved := r.ctx
 	r.ctx = ctx
 	defer func() { r.ctx = saved }()
-	defLine := int(fn.Pos().Line)
-	savedLine, savedIn := r.funcLine, r.inBuiltin
+	// Less the seam's wrapper, and with the body's own offset moved by the
+	// same amount, so that the two readings the wrapper used to cancel
+	// itself between stay where they were while every absolute one lands on
+	// the file's line. This is the route that reaches it: the body running
+	// here came out of a file the resolution read, which is text handed to a
+	// definition seam. See funcOrigin.wrapperLines (#4471).
+	origin := r.funcOrigins[name]
+	defLine := origin.definitionLine(int(fn.Pos().Line))
+	savedLine, savedIn, savedBase := r.funcLine, r.inBuiltin, r.lineBase
 	r.funcLine, r.inBuiltin = defLine, ""
-	defer func() { r.funcLine, r.inBuiltin = savedLine, savedIn }()
+	r.lineBase = origin.bodyLineBase()
+	defer func() {
+		r.funcLine, r.inBuiltin, r.lineBase = savedLine, savedIn, savedBase
+	}()
 	// The frame was pushed for the stub, whose file is wherever the
 	// declaration was read; the body running in it now came out of the file
 	// the resolution found, so the frame says so for as long as it runs.

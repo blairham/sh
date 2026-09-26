@@ -31948,7 +31948,32 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 // so an `eval` around a bad pattern abandoned the whole script and everything
 // after the first one was lost (#3398).
 func (r *Runner) fatalPattern(pattern string, status int) {
-	r.diagf("%s\n", Wording(r.diag().BadPattern, "bad pattern: %s", pattern))
+	// The word is **rendered** and not written through, which is the same
+	// rule and the same function a refused construct's quoted text already
+	// goes through: a tab in a diagnostic moves the caret and an escape
+	// character starts a sequence, so a shell that wrote the byte would let
+	// the script's own text repaint the screen it is being complained about
+	// on. See [Diagnostics.NearTextEscapesControlCharacters] for the rows,
+	// and escapeControlBytes for the rendering.
+	//
+	// Unconditional rather than keyed on a dialect, because the only value
+	// of [Semantics.UnterminatedBracket] that reaches this sentence is the
+	// one dialect that renders — a gate here would be a switch with one
+	// position. Measured 2026-09-26 on zsh 5.9.2 (`-f`, from a script file,
+	// `print -r -- x[a$'<byte>'b`), one byte at a time, and the two routes
+	// agree row for row: 0x09 and 0x0a are `\t` and `\n`, 0x00-0x1f
+	// otherwise is caret notation, 0x7f is `^?`, and 0x80-0x9f is `\M-`
+	// followed by that same rule over the low seven bits.
+	//
+	// The high half above 0x9f is where the two locales part, and that is a
+	// question about the *locale* rather than about this sentence: under
+	// `LC_ALL=C` zsh writes 0xa0, 0xc1 and 0xe9 through as bytes — which is
+	// what escapeControlBytes does and what that field records — and in a
+	// UTF-8 locale it writes `\M- `, `\M-A` and `\M-i` for the same three.
+	// Measured the same day on both routes, so it moves them together or
+	// neither; the near-text field's own rows were measured under `LC_ALL=C`
+	// and this follows them.
+	r.diagf("%s\n", Wording(r.diag().BadPattern, "bad pattern: %s", escapeControlBytes(pattern)))
 	r.status = status
 	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
 }

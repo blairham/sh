@@ -206,3 +206,36 @@ func TestAnUnansweredArrayDefaultIsRefused(t *testing.T) {
 		t.Errorf("said %q, want the question named", out)
 	}
 }
+
+// And the refusal ends the builtin there rather than carrying on into the
+// bare read behind it.
+//
+// The two are the same status and are told apart by what is *said*: a shell
+// that fell through would reach the bare-read rule with no operands, and in a
+// dialect that wants a name for that it would print a second sentence about
+// an argument count — a complaint about the line the script wrote, over a
+// question the substrate has already said it cannot answer.
+func TestAnUnansweredArrayDefaultDoesNotFallIntoTheBareRead(t *testing.T) {
+	out, st := runGrammar(t, `read -A`, func(d *syntax.Dialect) {
+		d.ArraySubscript = true
+		d.ArrayLiteral = true
+	}, func(r *interp.Runner) {
+		sem := interp.CoreSemantics()
+		sem.ReadOptions = "rA"
+		// The other answer to the neighbouring rule: a bare `read` with no
+		// operand is an error here rather than a fill of REPLY, which is
+		// what makes the second sentence visible at all.
+		sem.ReadRequiresAVariableName = interp.Yes
+		sem.ReadArrayDefault = interp.ReadArrayDefaultUnspecified
+		r.Semantics = &sem
+	})
+	if st != 2 {
+		t.Errorf("status = %d, want the refusal's 2", st)
+	}
+	if strings.Contains(out, "arg count") {
+		t.Errorf("said %q, want only the unanswered axis, not the bare read behind it", out)
+	}
+	if !strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("said %q, want a refusal naming the disagreement", out)
+	}
+}

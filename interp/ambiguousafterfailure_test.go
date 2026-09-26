@@ -51,6 +51,14 @@ func ambiguousTargets(dir string) func(*Runner) {
 		sem.BraceExpansion = Yes
 		sem.FailedExpansionAbandonsTheLine = Yes
 		sem.FatalErrorStatusIsOne = Yes
+		// Whose failure a target that will not expand is, answered so that
+		// this vector is a whole shell rather than one with a hole in it:
+		// these rows are about the *diagnostic* and its reach, and an
+		// unanswered axis would put a refusal of its own in front of both.
+		// No is the reading that goes with the line above it — this shell's
+		// own failed expansion, which is what gives up the line. See
+		// interp/redirtarget.go (#4689).
+		sem.RedirectTargetFailureIsTheRedirections = No
 		dg := Diagnostics{AmbiguousRedirect: "%[1]s: ambiguous redirect"}
 		r.Semantics, r.Diagnostics, r.Dir = &sem, &dg, dir
 	}

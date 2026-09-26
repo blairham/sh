@@ -73,13 +73,20 @@ import "testing"
 // remembered and `cd` through a symbolic link published the logical path in
 // either state. The wider of the two is read by **two** commands at two
 // moments: `cd` when it moves, and `pwd` when it prints.
+// `rcquotes` is the nineteenth and the first that is not a semantics question
+// at all: it moves syntax.Dialect.DoubledQuoteInSingleQuotesIsALiteralQuote,
+// so a doubled `'` inside a single-quoted string is one literal quote, and
+// until #4591 `””` was an empty word in both states. It is the mirror of
+// `rcexpandparam` above on the one question that separates them — this one is
+// read when the word is **lexed**, so a function body defined while it was on
+// keeps the reading when it is called with the option off.
 func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 	for _, base := range []string{
 		"histignorespace", "histignoredups", "promptsp", "promptcr",
 		"interactivecomments", "banghist", "autolist", "debugbeforecmd",
 		"longlistjobs", "cbases", "hup", "kshoptionprint", "notify",
 		"posixtraps", "rcexpandparam", "errreturn", "autopushd",
-		"chaselinks", "chasedots",
+		"chaselinks", "chasedots", "rcquotes",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -101,7 +108,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 125; recordedCount != want {
+	if want := 124; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

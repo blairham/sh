@@ -3308,6 +3308,13 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 
 // scanSingle reads '...'. Single quotes protect everything, and no escape
 // exists inside them — a backslash is an ordinary character.
+//
+// One dialect flag reaches in here and it is the only thing that can put a
+// quote *in* the value: with
+// [Dialect.DoubledQuoteInSingleQuotesIsALiteralQuote] on, a `'` whose next
+// byte is also `'` consumes both and leaves one literal quote, and the run
+// carries on. See the flag for the measured grid and for why nothing but a
+// run-time option turns it on.
 func (l *Lexer) scanSingle() (Span, bool) {
 	open := l.pos()
 	l.advance() // '
@@ -3325,6 +3332,15 @@ func (l *Lexer) scanSingle() (Span, bool) {
 			return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
 		}
 		if l.peek() == '\'' {
+			if l.dialect.DoubledQuoteInSingleQuotesIsALiteralQuote && l.peekAt(1) == '\'' {
+				// A doubled quote is one quote and the run continues.
+				// peekAt is 0 past the end, so the last quote of the input
+				// closes the run rather than pairing with nothing.
+				l.advance()
+				l.advance()
+				b.WriteByte('\'')
+				continue
+			}
 			l.advance()
 			return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
 		}

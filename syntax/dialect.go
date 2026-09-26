@@ -2534,6 +2534,48 @@ type Dialect struct {
 	// interpreted. Absent from dash.
 	DollarSingleQuote bool
 
+	// DoubledQuoteInSingleQuotesIsALiteralQuote makes a doubled `'` inside a
+	// single-quoted string stand for one literal quote, with the string
+	// carrying on: `''''` is one quote character and `'a''b'` is `a'b`.
+	// Without it those are an empty word and the two empty runs either side
+	// of `ab`, which is what every shell in the panel reads by default.
+	//
+	// **No preset turns this on.** It is the one grammar flag in this struct
+	// that only a *run-time option* reaches — one dialect spells the option
+	// `RC_QUOTES` — so the value a dialect ships is off and a script asks
+	// for the reading a line at a time. See
+	// [interp.Runner.SetDoubledQuoteInSingleQuotes], which replaces the
+	// runner's dialect the way the option that moves [ExtendedPattern] does.
+	//
+	// The reading is one byte of lookahead and nothing else: inside the run,
+	// a `'` whose next byte is also `'` consumes both and leaves one quote,
+	// and any other `'` closes the run as usual. So the count of quotes
+	// decides — measured on zsh 5.9.2 (`/opt/homebrew/bin/zsh`, `-f`) from a
+	// script file, 2026-09-26, with `print -r`:
+	//
+	//	written      on        off
+	//	''           (empty)   (empty)
+	//	''''         '         (empty)
+	//	''''''       ''        (empty)
+	//	'a''b'       a'b       ab
+	//	'x''''y'     x''y      xy
+	//	a''''b       a'b       ab
+	//	'''          unmatched unmatched
+	//	x'''y        unmatched unmatched
+	//
+	// The last two rows are the control that says this is not "a quote is
+	// escapable anywhere": an odd number of quotes runs off the end of the
+	// input in both states, and the failure is the same one.
+	//
+	// **Only the plain run.** A `''` inside `$'…'`, inside double quotes and
+	// inside a here-document body is two ordinary characters in both states.
+	// Measured the same day: `$'a''b	c'` is `ab	c` either way, which is
+	// `$'a'` closing at the first quote and `'b	c'` being an ordinary run —
+	// where a reading that reached inside `$'…'` would have given `a'b` and a
+	// tab. The row that says the option really was on in that run is
+	// `$'p''''q'`, which is `p'q` on and `pq` off.
+	DoubledQuoteInSingleQuotesIsALiteralQuote bool
+
 	// DollarDoubleQuote enables `$"..."`, the locale-translatable string.
 	// With no message catalog — the only condition the panel can measure —
 	// bash and ksh93 strip the `$` and read a plain double-quoted string,

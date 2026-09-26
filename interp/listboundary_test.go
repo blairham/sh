@@ -225,3 +225,89 @@ func TestTheBoundaryRefusesWhereTheReadingsDiffer(t *testing.T) {
 		t.Errorf("x${@}y = %q (status %d), want it to open with %q", out, st, want)
 	}
 }
+
+// The guard has two halves and the second is reachable only through a third
+// axis, so it is graded here rather than left to a mutation nobody kills.
+//
+// A separator at the **front** of an element is what merges with the boundary
+// in the rows above. A separator at its **back** is absorbed by the split
+// either way while a trailing separator is absorbed — and opens a field of its
+// own where TrailingSeparatorEndsAField says it does, which is where the two
+// readings part again: `IFS=:; set -- 'b:' c; x${@}y` is three fields taken
+// element by element, the field the tail opened standing between them, and two
+// with the boundary as the delimiter that absorbed the separator.
+//
+// No column in the panel holds both answers — the shell that opens a field for
+// a trailing separator is zsh, and it reads the boundary as a break — so what
+// this asserts is that the **question is put**, not what the answer is. A
+// guard that looked only at the front of an element answers here without
+// asking, which is an axis decided by omission.
+func TestTheBoundaryIsAskedWhereATrailingSeparatorOpensAField(t *testing.T) {
+	src := "IFS=:; set -- 'b:' c\n" + wordFieldProbe(`x${@}y`)
+	out, _ := axisRun(t, src, func(s *Semantics) {
+		s.SplitParamExpansion = Yes
+		s.GlobExpansionResults = No
+		s.ArrayScalarIsTheWholeArray = Yes
+		s.ArrayNameWithoutSubscriptIsTheList = Yes
+		s.UnquotedListJoinsOnIFS = No
+		s.TrailingSeparatorEndsAField = Yes
+	})
+	const want = "sh: the boundary between two elements of an unquoted list being an " +
+		"IFS delimiter: the shells disagree here and no dialect was chosen\n"
+	if !strings.HasPrefix(out, want) {
+		t.Errorf("x${@}y = %q, want it to open with %q", out, want)
+	}
+}
+
+// With the splitting stage off there is no delimiter rule for a boundary to be
+// part of, so the elements are one field each whatever this axis says — which
+// is why the splitting question stands in front of it. The answer here is
+// pinned at **yes** for this axis and **no** for the splitting, a combination
+// no column holds, because what it grades is the order the two are asked in:
+// reaching the boundary reading without the splitting answer splits a list
+// the dialect said not to split.
+func TestTheBoundaryIsNotReachedWithTheSplittingOff(t *testing.T) {
+	for _, c := range []struct{ name, setup, word, want string }{
+		{"a separator element", `IFS=:; set -- b ':'`, `x${@}y`, `2[xb][:y]`},
+		{"a separator in the middle", `IFS=:; set -- b ':' c`, `x${@}y`, `3[xb][:][cy]`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			src := c.setup + "\n" + wordFieldProbe(c.word)
+			out, st := axisRun(t, src, func(s *Semantics) {
+				s.SplitParamExpansion = No
+				s.GlobExpansionResults = No
+				s.ArrayScalarIsTheWholeArray = Yes
+				s.ArrayNameWithoutSubscriptIsTheList = Yes
+				s.UnquotedListJoinsOnIFS = No
+				s.TrailingSeparatorEndsAField = No
+				s.UnquotedListBoundaryIsIFSWhitespace = Yes
+			})
+			if out != c.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", c.word, out, st, c.want)
+			}
+		})
+	}
+}
+
+// The elements are escaped on the way into the joined string, before the split
+// and not after, which is how the per-element reading does it and for the same
+// reason: what the escape adds is backslashes, and no IFS puts a field
+// boundary on one. A value's own backslash is marked whatever the globbing
+// answer is, so it survives the split and the word restores it — and a `*`
+// that the dialect says is not a pattern is escaped whole and stays the
+// character it was.
+func TestTheBoundaryReadingEscapesEachElement(t *testing.T) {
+	for _, c := range []struct{ name, setup, word, want string }{
+		{"a value's backslash", `IFS=:; set -- 'a\b' ':'`, `x${@}y`, `2[xa\b][y]`},
+		{"a metacharacter", `IFS=:; set -- '*' ':'`, `x${@}y`, `2[x*][y]`},
+		{"a bracket", `IFS=:; set -- '[a]' ':'`, `x${@}y`, `2[x[a]][y]`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			src := c.setup + "\n" + wordFieldProbe(c.word)
+			out, st := listBoundaryRun(t, src, Yes)
+			if out != c.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q at 0", c.word, out, st, c.want)
+			}
+		})
+	}
+}

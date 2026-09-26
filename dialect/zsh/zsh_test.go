@@ -199,6 +199,7 @@ func TestSemantics(t *testing.T) {
 		// where the other six columns are silent at 0 (#3823).
 		{"UnrunSimpleCommandReadsItsWords", s.UnrunSimpleCommandReadsItsWords, interp.Yes},
 		{"UnquotedListJoinsOnIFS", s.UnquotedListJoinsOnIFS, interp.No},
+		{"UnquotedListBoundaryIsIFSWhitespace", s.UnquotedListBoundaryIsIFSWhitespace, interp.No},
 		// And the join this shell does perform: an unquoted `@` list
 		// reaching a context that keeps no fields joins on the first
 		// character of IFS, so `IFS=-; a=(x y z); v=${a[@]}` is `x-y-z`

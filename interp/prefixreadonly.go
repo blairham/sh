@@ -256,15 +256,8 @@ func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip, giveUpTheLine 
 		}
 		return false, true, true, ""
 	}
-	switch r.sem().PrefixRefusalFatality {
-	case PrefixRefusalNeverFatal:
-	case PrefixRefusalAlwaysFatal:
-		return true, true, false, ""
-	case PrefixRefusalFatalOnASpecialBuiltinOrFunction:
-		fatal = p.kind == prefixBeforeSpecialBuiltin || p.kind == prefixBeforeFunction
-	case PrefixRefusalFatalOnACommandThisShellRuns:
-		fatal = !p.throughCommand && p.kind != prefixBeforeExternal
-	default:
+	fatal, answered := r.prefixFatalityForTheCommand(p)
+	if !answered {
 		return false, true, false, "what a refused assignment prefix costs"
 	}
 	if fatal {
@@ -277,6 +270,36 @@ func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip, giveUpTheLine 
 		return false, false, false, ""
 	}
 	return false, true, false, "a refused assignment prefix costing the command it stood in front of"
+}
+
+// prefixFatalityForTheCommand reads Semantics.PrefixRefusalFatality against
+// the command the prefix stood in front of: whether a prefix that **did not
+// take** ends the shell, and whether the axis was answered at all.
+//
+// Split out of prefixRefusalCost because a prefix that would not *expand* asks
+// this half and not the other one. The cost half — whether the command still
+// runs — is only a question for a refusal: a value that could not be computed
+// costs the command in every column, so nothing there is asked. See
+// interp/prefixexpansionfailed.go, which holds that measurement.
+//
+// The POSIX-mode sharpening stays with prefixRefusalCost rather than moving in
+// here, because it is the mode's answer to *both* halves at once and only one
+// column has it. What that mode does to a failed expansion is the ordinary
+// failed-expansion question — bash under `set -o posix` ends the shell for
+// `echo $((1/0))` and `x=$((1/0))` exactly as it does for a prefix — so it
+// belongs to FailedExpansionAbandonsTheLine's site and not to this one.
+func (r *Runner) prefixFatalityForTheCommand(p prefixCommand) (fatal, answered bool) {
+	switch r.sem().PrefixRefusalFatality {
+	case PrefixRefusalNeverFatal:
+		return false, true
+	case PrefixRefusalAlwaysFatal:
+		return true, true
+	case PrefixRefusalFatalOnASpecialBuiltinOrFunction:
+		return p.kind == prefixBeforeSpecialBuiltin || p.kind == prefixBeforeFunction, true
+	case PrefixRefusalFatalOnACommandThisShellRuns:
+		return !p.throughCommand && p.kind != prefixBeforeExternal, true
+	}
+	return false, false
 }
 
 // refusePrefixes reports a command's assignment prefixes to frozen names and

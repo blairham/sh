@@ -878,7 +878,8 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	}
 	if (r.sem().UnterminatedBracket == BracketBadPattern &&
 		field != "[" && hasUnterminatedBracket(field)) ||
-		r.badPatternFromAnOpenGroup(field) {
+		r.badPatternFromAnOpenGroup(field) ||
+		r.bracketAfterSubIsABadPattern(field) {
 		// zsh rejects an unterminated bracket against the filesystem too,
 		// with one exception it is worth stating because it is what keeps
 		// `[ a = a ]` working: a field that is exactly `[` is left alone.
@@ -891,6 +892,13 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// `unsetopt badpattern` could not spare it (#4645). See
 		// badPatternFromAnOpenGroup, and Dialect.UnterminatedPatternGroup-
 		// IsAWord for the half that lets the word through.
+		//
+		// **And a bracket a `[:name:]` left open is the third**, reached
+		// here for the reason the other two are: `closesBracket` stops at
+		// the class's own `]`, so the walk read `x[[:alpha:]` as a pattern
+		// that compiled and answered `no matches found` where the reference
+		// says `bad pattern`. Measured 2026-09-26 on zsh 5.9.2 (`-f -c`).
+		// See bracketAfterSubIsABadPattern and #4659.
 		//
 		// **Unless the session has turned the refusal off**, which is the
 		// one place in the program that can: this is the moment a word on

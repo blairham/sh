@@ -88,6 +88,16 @@ func (r *Runner) operandPatternOpts(pattern string, bad *bool, subjects ...strin
 		r.fatalPattern(pattern, 1)
 		return o, true
 	}
+	// And a bracket a `[:name:]` left open, which is the third scan and the
+	// one that used to be asked only from inside the match — so the *value*
+	// decided whether the shell refused. Measured 2026-09-26 on zsh 5.9.2
+	// (`-f -c`): `v=zzz; ${v#[[:alpha:]}` was refused here and
+	// `v=zzz; ${v#x[[:alpha:]}` was not, where the reference refuses both.
+	// See bracketLeftOpenBySubExpression and #4659.
+	if r.bracketAfterSubIsABadPattern(pattern) {
+		r.fatalPattern(pattern, 1)
+		return o, true
+	}
 	if !hasUnterminatedBracket(pattern) {
 		return o, false
 	}

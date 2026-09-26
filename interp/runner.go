@@ -12004,6 +12004,17 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// boundary refusals take it — an expression that will not evaluate is
 		// quoted back expanded in every column (#1373).
 		subject := subscriptSubject(a.IndexText, text)
+		// The match a pattern on the right came to, in the shell that reads
+		// an assignment's value as one — read after the subscript and before
+		// the span, so the order the two are expanded in does not move, and
+		// not read at all where the option is off. See interp/globassign.go.
+		globbed := r.globbedElementValue(a)
+		if r.globbedElementIsAList(a, text, globbed) {
+			// Several names where the element holds one, so the match takes
+			// the element's place and pushes the rest along — or the target
+			// has no room for a list and is refused by name.
+			return
+		}
 		// A range on the left names a span of elements rather than one, and
 		// the value is the single word that replaces the whole span:
 		// `a=(1 2 3); a[2,3]=x` is `[1][x]`. Ahead of the single-subscript
@@ -12017,7 +12028,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		case outcome == spanResolved && r.spanReplacesElements(a.Name):
 			elems, _ := r.arrayElemsOfTheName(a.Name)
 			r.spliceElementSpan(a.Name, subject, elems, from, to,
-				[]string{r.assignValue(a)})
+				[]string{r.elementValue(a, globbed)})
 			return
 		case outcome == spanResolved && r.subscriptSplicesCharacters(a.Name):
 			// The name is holding a string, so the pair names a span of its
@@ -12032,7 +12043,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 				return
 			}
 			r.spliceCharacterSpan(a.Name, from, to,
-				r.assignValue(a), false)
+				r.elementValue(a, globbed), false)
 			return
 		}
 		// Told what the source spelled, because that is what decides whether
@@ -12054,10 +12065,10 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says
 			// which of the two `+=` means.
-			r.appendArrayElem(a.Name, idx, subject, r.assignValue(a))
+			r.appendArrayElem(a.Name, idx, subject, r.elementValue(a, globbed))
 			return
 		}
-		r.setArrayElem(a.Name, idx, subject, r.assignValue(a))
+		r.setArrayElem(a.Name, idx, subject, r.elementValue(a, globbed))
 	default:
 		value, fields, globbed := r.scalarAssignValue(a)
 		if globbed {

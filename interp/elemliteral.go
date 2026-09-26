@@ -52,10 +52,35 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 // distinction a scalar `a[0]+=Q` already draws against `a+=(Q)` — the
 // subscript is what says which of the two the operator means.
 func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
+	r.spliceWordsIntoElement(a, r.joinWord(a.Index), func() ([]string, bool) {
+		return r.literalWords(a.Name, a.Elems)
+	})
+}
+
+// spliceWordsIntoElement is that splice with the words handed in, because two
+// constructs reach it and only one of them is a literal.
+//
+// The second is a **pattern on the right of a subscripted assignment** in the
+// shell that reads one — `setopt globassign; a=(q w e); a[2]=*.txt` is five
+// elements there, the match taking the element's place and pushing the rest
+// along. That is the same operation with the same ends, the same padding, the
+// same append rule and the same two refusals, so it is the same function
+// rather than a second one that would come to disagree with it. See
+// Runner.globbedElementIsAList.
+//
+// The words are a function rather than a slice because they are built *after*
+// the target has been refused and after the subscript has been read, in both
+// branches below, and building them early would run a literal's own
+// expansions on a line the shell is about to give up.
+//
+// The subscript arrives **expanded**, and that is not tidiness: the caller on
+// the pattern road has already read it, and joining the word a second time
+// here runs its substitutions a second time — `a[$(f)]=*.txt` ran `f` twice
+// (#1915 again, one construct over).
+func (r *Runner) spliceWordsIntoElement(a *syntax.Assign, text string, build func() ([]string, bool)) {
 	if !r.spliceTargetIsAnArray(a) {
 		return
 	}
-	text := r.joinWord(a.Index)
 	// The subscript as written is what a boundary refusal quotes back, and it
 	// is not the text the arithmetic reads — see subscriptSubject (#1373).
 	subject := subscriptSubject(a.IndexText, text)
@@ -67,7 +92,7 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 		// A *range* of elements rather than one: the words replace the whole
 		// span, so `a=(1 2 3); a[2,3]=(x y)` is three elements and not four.
 		// See spliceElementSpan for what each end is measured to do.
-		words, ok := r.literalWords(a.Name, a.Elems)
+		words, ok := build()
 		if !ok {
 			return
 		}
@@ -83,7 +108,7 @@ func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
 		r.fatal("%s\n", r.subscriptFailure(text, err))
 		return
 	}
-	words, ok := r.literalWords(a.Name, a.Elems)
+	words, ok := build()
 	if !ok {
 		return
 	}

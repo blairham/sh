@@ -3157,6 +3157,11 @@ func Semantics() interp.Semantics {
 	s.KillKeepsGoingPastAJobSpecThatNamesNoJob = interp.Yes
 	// The operands are read in the order they were written.
 	s.KillReadsJobSpecsBeforeTheOtherOperands = interp.No
+	// The jobs-at-exit sentence is chosen by the first job in the table and
+	// not by preferring a stopped one: with `%1` running and `%2` stopped
+	// this shell says `you have running jobs.`, and the other way about it
+	// says `you have suspended jobs.` Measured 2026-09-26 (#4544).
+	s.JobsAtExitSentenceFollowsTheTableOrder = interp.Yes
 	// A trim on `$@` runs over each field, as it does in bash.
 	s.OperatorDistributesOverTheFieldList = interp.Yes
 	// OPTIND names the word until its last letter has been read.

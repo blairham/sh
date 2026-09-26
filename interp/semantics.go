@@ -4910,6 +4910,52 @@ type Semantics struct {
 	// first would have segfaulted before writing it.
 	KillReadsJobSpecsBeforeTheOtherOperands Answer
 
+	// JobsAtExitSentenceFollowsTheTableOrder chooses between the two
+	// sentences a leaving shell writes about its jobs by reading the **first
+	// unfinished job in the table**, rather than by preferring a stopped one
+	// wherever it sits.
+	//
+	// Measured 2026-09-26 on a pseudo-terminal, two jobs with the order
+	// swapped between the rows, `sleep 30 &` twice and one `kill -STOP`.
+	// References verified with `go version -m` → *not a Go executable*:
+	// `/opt/homebrew/bin/zsh` 5.9.2, `/opt/homebrew/bin/bash` 5.3.20 with
+	// `shopt -s checkjobs`, `/bin/dash` 0.5.12 and `/bin/ksh` 93u+
+	// 2012-08-01 with `set -m`, and BusyBox v1.37.0 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b:
+	//
+	//	                 %1 running, %2 stopped     %1 stopped, %2 running
+	//	zsh 5.9.2        you have running jobs.     you have suspended jobs.
+	//	bash 5.3.20      There are stopped jobs.    There are stopped jobs.
+	//	dash 0.5.12      You have stopped jobs.     You have stopped jobs.
+	//	ksh93u+          You have stopped jobs      You have stopped jobs
+	//	BusyBox 1.37.0   You have stopped jobs.     You have stopped jobs.
+	//
+	// Three jobs confirm zsh rather than only two: `run, stop, run` is
+	// `you have running jobs.` and `stop, run, stop` is `you have suspended
+	// jobs.`
+	//
+	// **It is not the current job**, which is the other candidate noun and
+	// the more plausible one: stopping `%2` makes `%2` current in zsh, and
+	// the first row still says *running*. It is not interactivity either —
+	// the same pair of answers comes out of a `zsh -fm` script.
+	//
+	// The three columns with only a stopped sentence are measured rather
+	// than derived from having one. The row that decides it is the first:
+	// with a running job in front and a stopped one behind, a shell reading
+	// the table would have reached the running job and had nothing to say,
+	// and all three say the stopped sentence instead.
+	//
+	// A job whose kind this shell is **not** checking is passed over rather
+	// than counted, which is measured in the one column that can be asked:
+	// `unsetopt checkrunningjobs` at a zsh session, running job in front,
+	// draws `you have suspended jobs.` So "the first job" means the first
+	// job this shell would have said anything about.
+	//
+	// Asked only where the two readings part, which is narrower than "one of
+	// each": a stopped job in front of a running one draws the stopped
+	// sentence either way, so only a running job in front is a question.
+	JobsAtExitSentenceFollowsTheTableOrder Answer
+
 	// OperatorDistributesOverTheFieldList runs a trim or a replacement over
 	// each field of `$@` rather than over the whole list once.
 	//

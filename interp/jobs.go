@@ -1964,26 +1964,58 @@ func (r *Runner) HoldsExitForJobs() bool {
 // The choice between the two wordings, and the options that gate each, are
 // the measurements [Runner.HoldsExitForJobs] carries.
 func (r *Runner) jobsAtExitSentence() string {
-	stopped, running := false, false
-	for _, j := range r.jobs {
+	// The *first* of each kind that this shell would report, because where
+	// the two readings part it is a question about position. A job whose
+	// kind the shell is not checking is passed over rather than counted:
+	// measured 2026-09-26 at a `-fiV +Z` session of zsh 5.9.2 with
+	// `unsetopt checkrunningjobs`, a running job in front of a stopped one
+	// still draws `you have suspended jobs.`, so the running job is skipped
+	// rather than being the first job and answering with silence.
+	firstStopped, firstRunning := -1, -1
+	checksStopped, checksRunning := r.ChecksStoppedJobsAtExit(), r.ChecksRunningJobsAtExit()
+	for i, j := range r.jobs {
 		switch {
 		case j.Finished():
 		case j.Stopped:
-			stopped = true
+			if checksStopped && firstStopped < 0 {
+				firstStopped = i
+			}
 		default:
-			running = true
+			if checksRunning && firstRunning < 0 {
+				firstRunning = i
+			}
 		}
 	}
-	// Stopped first, because that is the order the sentence is chosen in and
-	// not merely the order the fields are declared in: a session with one of
-	// each is told about the stopped one.
-	switch {
-	case stopped && r.ChecksStoppedJobsAtExit():
+	stoppedSentence := func() string {
 		return Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", r.name())
-	case running && r.ChecksRunningJobsAtExit():
-		return Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
 	}
-	return ""
+	switch {
+	case firstStopped < 0 && firstRunning < 0:
+		return ""
+	case firstStopped < 0:
+		return Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
+	case firstRunning < 0:
+		return stoppedSentence()
+	}
+	// One of each, and now the noun matters. Asked here and nowhere earlier,
+	// because this is the only arrangement the two readings answer
+	// differently — and not even all of it: a stopped job in *front* of a
+	// running one draws the stopped sentence under both readings, so only a
+	// running one in front is a question. See
+	// Semantics.JobsAtExitSentenceFollowsTheTableOrder (#4544).
+	if firstRunning < firstStopped {
+		if r.ask(r.sem().JobsAtExitSentenceFollowsTheTableOrder,
+			"which sentence a table holding a running job in front of a stopped one draws") {
+			return Wording(r.diag().RunningJobsAtExit, "there are running jobs", r.name())
+		}
+		if r.unspecified {
+			// The refusal is the whole answer. Saying something as well
+			// would be answering the question it has just declined.
+			r.unspecified = false
+			return ""
+		}
+	}
+	return stoppedSentence()
 }
 
 // accountsForJobsAtExit reports whether this shell says anything at all about

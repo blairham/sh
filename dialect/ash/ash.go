@@ -1338,6 +1338,12 @@ func Semantics() interp.Semantics {
 	// same day, and `sleep 30 & kill $! %99` leaves that job still Running,
 	// so nothing is delivered before the specs have been read.
 	s.KillReadsJobSpecsBeforeTheOtherOperands = interp.Yes
+	// This shell has only the stopped sentence, and that is measured
+	// rather than read off the absence of the other one: with a running
+	// job in *front* of a stopped one it still says it has stopped jobs,
+	// where a shell reading the table would have reached the running job
+	// and had nothing to say. Measured 2026-09-26 on BusyBox v1.37.0 (#4544).
+	s.JobsAtExitSentenceFollowsTheTableOrder = interp.No
 	// A trim on `$@` runs over the whole list once, as it does in dash.
 	s.OperatorDistributesOverTheFieldList = interp.No
 	// And a **non-global** replacement over that joined list ends it at the

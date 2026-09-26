@@ -42,12 +42,26 @@ echo "sub=$?"`)
 
 // And an untrapped one ends the body at 128+15, leaving the shell around it to
 // carry on — the same answer zsh gives, measured in both.
+//
+// The notice on the end is #4649's: a foreground subshell a signal ended is a
+// child this shell has to say something about, and the bare SIGTERM form is
+// what this dialect says. The helper hands back standard output with standard
+// error appended, so the order here is the concatenation's and not the
+// shell's — at a terminal the notice comes first, as it does in the reference.
+//
+// The command is written back by this project's printer and the reference
+// writes it back by its own, so the two part on a body spanning lines:
+// bash 5.3.20 renders this one as `( kill $BASHPID; echo sender-ran-on )` and
+// keeps the newlines in a body holding a `for` or an `if`. That is a
+// deparsing difference rather than a job-control one — see #4725.
 func TestAnUntrappedSignalAtBashPidEndsOnlyTheBody(t *testing.T) {
 	got := runBashAnchored(t, `( kill $BASHPID
   echo sender-ran-on )
 echo "sub=$?"
 echo still-here`)
-	if want := "sub=143\nstill-here\n"; got != want {
+	want := "sub=143\nstill-here\n" +
+		"Terminated: 15             ( kill $BASHPID\necho sender-ran-on )\n"
+	if got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }

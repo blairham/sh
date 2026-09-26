@@ -124,13 +124,20 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	// Before anything reads the spans, because the run may divide them
 	// differently from the parse. See wordForRun.
 	w = r.wordForRun(w)
+	// The position the caller armed, spent here so that nothing expanded
+	// inside this word inherits it. See interp/equalscontextposition.go.
+	outside, restorePosition := r.spendTheEqualsContextPosition()
+	defer restorePosition()
 	r.expandTilde(w)
 	// And the tildes a word that merely *looks* like an assignment gets in
 	// one column. Beside expandTilde because it is the other half of the same
 	// question — where in a word a `~` is eligible at all — and after it,
 	// since a word the tilde opens has already been answered. See
 	// interp/assignmentshapedword.go.
-	r.expandAssignmentShapedWord(w)
+	if !outside {
+		r.expandAssignmentShapedWord(w)
+		r.wordEquals(w)
+	}
 	r.expandEquals(w)
 
 	// Fields are built up span by span. A span joins onto the field before it
@@ -200,13 +207,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 			// that split away to nothing still closes the field in front
 			// of the expansion and opens the one behind it. See
 			// interp/splitawayedge.go.
-			if marks.edges.lead {
-				b.separate(false)
-			}
-			r.addSpan(&b, s, parts, marks)
-			if marks.edges.openEnd {
-				b.separate(false)
-			}
+			r.addSpan(&b, s, parts, marks, false)
 			continue
 		}
 		substituted := false
@@ -291,17 +292,15 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// that does write a closing field is zsh's, and there the split says
 		// so rather than this line having to know it: see
 		// TrailingSeparatorEndsAField and splitFieldsAskEdge.
-		if leadingSeparatorEdge(text, nil, ifs, set) {
-			b.separate(substituted)
-		}
+		lead := leadingSeparatorEdge(text, nil, ifs, set)
 		fields, openEnd := r.splitFieldsAskEdge(text, nil, ifs, set)
 		// No marks: what the splitter made of a scalar is an ordinary field,
 		// empty ones included — `IFS=:; v=':b'; $v` is `[][b]` in bash,
-		// ksh93 and dash.
-		r.addSpan(&b, s, r.tildeFlagElements(s, head, fields), listMarks{})
-		if openEnd {
-			b.separate(substituted)
-		}
+		// ksh93 and dash. The **edges** travel with them, because the
+		// distributive rule makes a field of each one where the lay-in rule
+		// makes a boundary. See interp/spreadedges.go.
+		r.addSpan(&b, s, r.tildeFlagElements(s, head, fields),
+			listMarks{edges: listEdges{lead: lead, openEnd: openEnd}}, substituted)
 	}
 
 	return r.wordResult(&b)
@@ -514,12 +513,24 @@ func leadingSeparatorEdge(text string, boundary []bool, ifs string, ifsSet bool)
 // word. See interp/emptynullfield.go. The edges beside them are the word
 // loop's to apply, because they are boundaries around the span rather than
 // anything to lay in — see interp/splitawayedge.go.
-func (r *Runner) addSpan(b *wordFields, s syntax.Span, parts []string, marks listMarks) {
+func (r *Runner) addSpan(b *wordFields, s syntax.Span, parts []string, marks listMarks, written bool) {
 	if r.rcExpandOn(s) {
-		b.spread(parts, marks.nulls)
+		// The edges are fields of their own under this rule and boundaries
+		// under the other — see interp/spreadedges.go.
+		b.spread(spreadEdges(parts, marks))
 		return
 	}
+	// The edges of what the split left: a boundary at either end with
+	// nothing to show for itself, so a value or an element that split away
+	// to nothing still closes the field in front of the expansion and opens
+	// the one behind it. See interp/splitawayedge.go.
+	if marks.edges.lead {
+		b.separate(written)
+	}
 	b.lay(parts, marks.nulls)
+	if marks.edges.openEnd {
+		b.separate(written)
+	}
 }
 
 // lay is the ordinary rule: the first field joins whatever is open, the last
@@ -957,19 +968,11 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			// two files in zsh 5.9.2 and is an ambiguous redirect in bash
 			// 5.3.20, which is one boundary read two ways. See
 			// interp/splitawayedge.go.
-			if marks.edges.lead {
-				f.separate(false)
-				u.separate(false)
-			}
-			r.addSpan(&f, s, parts, marks)
+			r.addSpan(&f, s, parts, marks, false)
 			// The words view takes the same parts: an array is several words
 			// however the splitting axis is answered, which is the half of
 			// this reading that is not the text view.
-			r.addSpan(&u, s, parts, marks)
-			if marks.edges.openEnd {
-				f.separate(false)
-				u.separate(false)
-			}
+			r.addSpan(&u, s, parts, marks, false)
 			release()
 			continue
 		}
@@ -992,7 +995,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 			continue
 		}
 		ifs, set := r.ifs()
-		r.addSpan(&f, s, r.splitFieldsAsk(text, ifs, set), listMarks{})
+		r.addSpan(&f, s, r.splitFieldsAsk(text, ifs, set), listMarks{}, false)
 	}
 	plain = globUnescape(b.String())
 
@@ -1454,6 +1457,7 @@ func (r *Runner) expandAssignValue(w *syntax.Word) string {
 	// every column — so the assignment road names its own set.
 	r.expandTildeIn(w, tildeEndsAtASlashOrColon)
 	r.expandColonTildes(w)
+	r.assignValueEquals(w)
 	return r.wordTextUnsplit(w, nil, false, true)
 }
 
@@ -1473,6 +1477,7 @@ func (r *Runner) expandAssignValueMarked(w *syntax.Word) string {
 	}
 	r.expandTildeIn(w, tildeEndsAtASlashOrColon)
 	r.expandColonTildes(w)
+	r.assignValueEquals(w)
 	return r.wordTextUnsplit(w, nil, true, true)
 }
 
@@ -2013,15 +2018,17 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// spelling's, and it is the same answer `[@]` asks — measured,
 			// an unquoted `[*]` and an unquoted `[@]` are the same fields
 			// in every shell in the panel. So this hands the elements to
-			// the list path instead of joining them here: bash joins them
-			// there and zsh, ksh93 and dash do not.
+			// the list path instead of joining them here: bash and zsh
+			// join them there and ksh93 and dash do not.
 			//
 			// The join here was unconditional, which is bash's answer
-			// given to all four. zsh does not join an unquoted `[*]` at
-			// all — `a=("x y" z); printf "[%s]" ${a[*]}` is `[x y][z]`
-			// there, which no arrangement of the splitting answer reaches,
-			// since the element boundary the join destroys cannot be put
-			// back by any later stage.
+			// given to all four. `a=("x y" z); printf "[%s]" ${a[*]}` is
+			// `[x y][z]` in zsh, which no arrangement of the *join* alone
+			// reaches — but that row is measured with `shwordsplit` off,
+			// where nothing is split at all, and with the option on the
+			// same line is `[x][y][z]`. So it says the splitting answer
+			// stands in front of the join, which is what elementFields
+			// does, and nothing about the join itself (#4586).
 			//
 			// It also picks up the two stages `[@]` already asks about:
 			// this path never glob-escaped, so `a=("zz*" other)` matched
@@ -2201,7 +2208,8 @@ func (r *Runner) elementFields(elems []string, sp splitPolicy, glob Answer) []st
 		// The join destroyed the elements, so there is nothing left that is
 		// an empty *element* — what the split made of the joined string is
 		// an ordinary field, and `IFS=:; set -- '' c` is `[][c]` in the
-		// column that joins against `[c]` in the three that do not.
+		// two columns that join — bash, and zsh once its splitting is on —
+		// against `[c]` in ksh93 and dash, which do not.
 		//
 		// The edges are the joined string's, though, and not nothing: the
 		// split still ran, and `IFS=:; set -- 'b:' ''; x$@y` is
@@ -2432,11 +2440,11 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) (
 			//
 			// Under a non-whitespace IFS it is not unanimous, and the
 			// disagreement is not about the element at all — it is about
-			// whether the list was joined before it got here. bash joins, so
-			// the empty element is a separator meeting a separator and the
-			// field between them survives; zsh, ksh93 and dash do not join,
-			// and here it is. UnquotedListJoinsOnIFS is that question, and
-			// elementFields asks it.
+			// whether the list was joined before it got here. bash and zsh
+			// join, so the empty element is a separator meeting a separator
+			// and the field between them survives; ksh93 and dash do not
+			// join, and here it is. UnquotedListJoinsOnIFS is that
+			// question, and elementFields asks it.
 			//
 			// It is still a **field**, though, and the field is what the
 			// word is built from: the removal belongs to the word and not
@@ -2444,7 +2452,11 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) (
 			// beside the expansion. Marked here and spent there. See
 			// interp/emptynullfield.go.
 			out = append(out, "")
-			marks.nulls = append(marks.nulls, true)
+			// A null the word removes, unless this is the last element of a
+			// list with something in front of it and the dialect keeps the
+			// field such an element leaves. See
+			// interp/trailingelementfield.go.
+			marks.nulls = append(marks.nulls, !r.trailingElementLeavesAField(elems, i))
 			continue
 		}
 		doSplit := false
@@ -2468,6 +2480,15 @@ func (r *Runner) splitEachElement(elems []string, sp splitPolicy, glob Answer) (
 			fields, openEnd := r.splitFieldsAskEdge(el, nil, ifs, set)
 			if i == len(elems)-1 {
 				marks.edges.openEnd = openEnd
+			}
+			if len(fields) == 0 && r.trailingElementLeavesAField(elems, i) {
+				// An element that split away to nothing, in the position
+				// and the dialect where the boundary it left is a field of
+				// its own rather than an open end. See
+				// interp/trailingelementfield.go.
+				marks.edges.openEnd = false
+				keep("")
+				continue
 			}
 			// Whatever the splitter makes of a non-empty element is an
 			// ordinary field, empty ones included: `IFS=:; set -- ':b' c`
@@ -6323,6 +6344,16 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 	// interp/listboundary.go, which is the only caller that passes a mask.
 	isBoundary := func(i int) bool { return boundary != nil && boundary[i] }
 	isMark := func(i int) bool { return marks != nil && marks[i] && !isBoundary(i) }
+	// A backslash the *value* held is written as a mark of its own rather
+	// than as itself, so the byte standing at its position is not the byte
+	// the splitter has to test. valueBackslashSeparator is what reads it, and
+	// it answers 0 everywhere else. See interp/valuebackslashseparator.go.
+	valueBS := func(i int) int {
+		if isBoundary(i) || isMark(i) || (literal != nil && literal[i]) {
+			return 0
+		}
+		return valueBackslashSeparator(s, i, ifs)
+	}
 	isWS := func(i int) bool {
 		if isBoundary(i) {
 			return true
@@ -6342,6 +6373,9 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 		if isMark(i) || (literal != nil && literal[i]) {
 			return false
 		}
+		if valueBS(i) > 0 {
+			return true
+		}
 		if widths != nil {
 			return widths[i] > 0
 		}
@@ -6351,6 +6385,9 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 	// single-byte reading moves one; a character's is the whole character,
 	// which is the half separatorWidths exists to supply.
 	sepWidth := func(i int) int {
+		if w := valueBS(i); w > 0 {
+			return w
+		}
 		if widths != nil && widths[i] > 0 {
 			return widths[i]
 		}
@@ -6842,7 +6879,18 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 	if !r.ask(r.sem().EqualsExpansion, "`=cmd` expanding to a path") {
 		return
 	}
-	name := s.Value[1:]
+	path, ok := r.equalsPath(s.Value[1:])
+	if !ok {
+		return
+	}
+	s.Value = path
+}
+
+// equalsPath is the lookup behind `=cmd`, in the one place both roads reach
+// it: the word road above and the assignment value's, which is
+// interp/assignvalueequals.go. A second copy of the failure wording is how
+// the two would come to report a missing command differently.
+func (r *Runner) equalsPath(name string) (string, bool) {
 	// The script's PATH, like every other lookup here.
 	path, err := r.lookPath(name)
 	if err != nil {
@@ -6850,9 +6898,9 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 		// which is what any failed expansion does here.
 		r.diagf("%s\n", Wording(r.diag().EqualsNotFound, "%s not found", name))
 		r.expandErr = true
-		return
+		return "", false
 	}
-	s.Value = path
+	return path, true
 }
 
 // expandTilde expands the tilde prefix at the head of an ordinary word, whose

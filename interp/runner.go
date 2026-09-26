@@ -3978,6 +3978,14 @@ type Runner struct {
 	// are read before its words are matched against the filesystem. A
 	// dialect adds its own and the core has none — see precommand.go.
 	precommands map[string]PrecommandModifier
+	// commandWordModifiers names the words behind which the *next* written
+	// word is still the one naming the command. A dialect adds its own and
+	// the core has none — see interp/equalscontextposition.go.
+	commandWordModifiers map[string]bool
+	// outsideTheEqualsContext is armed by the caller of a word that stands
+	// where an assignment's value's tildes do not reach, and is spent by the
+	// word pipeline. See interp/equalscontextposition.go.
+	outsideTheEqualsContext bool
 	// pipeStatus is what the last pipeline's elements reported, and
 	// pipeStatusName is what the dialect calls it. The record is only kept
 	// when a dialect has named it, because nothing else can read it.
@@ -6824,9 +6832,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			continue
 		}
 		operandStart := len(argv)
+		// The word naming the command is not a tilde context, whatever its
+		// shape — measured, and decided by where the word is written rather
+		// than by what the words in front of it came to. See
+		// interp/equalscontextposition.go.
+		restorePosition := func() {}
+		if r.namesTheCommand(c.Args, i) {
+			restorePosition = r.outsideTheEqualsContextWord()
+		}
 		// expandWord split in two, so the match can be decided between the
 		// halves rather than before the word is read.
 		fields := r.expandWordEscaped(w)
+		// Put down before the next word rather than at the end of the
+		// command: only the word this armed it for stands in that position.
+		restorePosition()
 		// Over fields and not over words: one word can produce several and
 		// the front of that list is what carries the modifier —
 		// `c=(noglob echo); $c a[b]c` prints the three characters.

@@ -204,7 +204,10 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 			})
 			continue
 		}
-		out = append(out, literalElem{fields: r.expandWord(w), written: written})
+		// An element of an array literal is not a tilde context however it
+		// is shaped, in the column with the narrow rule and in the column
+		// with the wider one alike. See interp/equalscontextposition.go.
+		out = append(out, literalElem{fields: r.expandLiteralElement(w), written: written})
 	}
 	return out, !r.failedHeading()
 }
@@ -987,4 +990,12 @@ func (r *Runner) arrayToAppendTo(name string) (Array, bool) {
 		return r.arrayForWrite(name), true
 	}
 	return nil, false
+}
+
+// expandLiteralElement is expandWord for one bare element of an array
+// literal, in the position that is not an assignment's value however the
+// element is shaped. See interp/equalscontextposition.go.
+func (r *Runner) expandLiteralElement(w *syntax.Word) []string {
+	defer r.outsideTheEqualsContextWord()()
+	return r.expandWord(w)
 }

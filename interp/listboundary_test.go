@@ -28,6 +28,10 @@ func listBoundaryRun(t *testing.T, src string, boundary Answer) (string, int) {
 		s.ArrayNameWithoutSubscriptIsTheList = Yes
 		s.UnquotedListJoinsOnIFS = No
 		s.TrailingSeparatorEndsAField = No
+		// And the last element's own field, at the answer five of the six
+		// columns give — see TrailingElementWithNoFieldLeavesOne, which is
+		// ksh93's alone and is not this question.
+		s.TrailingElementWithNoFieldLeavesOne = No
 		s.UnquotedListBoundaryIsIFSWhitespace = boundary
 	})
 }

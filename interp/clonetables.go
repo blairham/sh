@@ -150,6 +150,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.globalLetterHere = maps.Clone(r.globalLetterHere)
 	c.declaring = maps.Clone(r.declaring)
 	c.precommands = maps.Clone(r.precommands)
+	c.commandWordModifiers = maps.Clone(r.commandWordModifiers)
 	c.conditionAnswers = maps.Clone(r.conditionAnswers)
 
 	// The option table, on the same terms: `(setopt …)` is the subshell's.

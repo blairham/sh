@@ -39,6 +39,12 @@ func joinRun(t *testing.T, src string, join Answer) (string, int) {
 		// see TrailingSeparatorEndsAField — and pinning it here is what keeps
 		// a row about the *join* from moving when that one is answered.
 		s.TrailingSeparatorEndsAField = No
+		// And the last element's own field, answered the way five of the
+		// six columns answer it: ksh93 alone leaves a field where the last
+		// element produced none, which is a question of its own and pinning
+		// it here is what keeps a row about something else from moving when
+		// that one is answered. See TrailingElementWithNoFieldLeavesOne.
+		s.TrailingElementWithNoFieldLeavesOne = No
 	})
 }
 
@@ -154,6 +160,13 @@ func TestNothingToJoinWithNeverAsksTheJoin(t *testing.T) {
 	} {
 		out, st := axisRun(t, src, func(s *Semantics) {
 			s.GlobExpansionResults = Yes
+			// The last element's own field is a question these rows can
+			// genuinely reach — `IFS=""; set -- x ""` is `[x] []` in ksh93
+			// and `[x]` in bash, dash and zsh, measured — so it is answered
+			// here rather than left for the assertion below to catch. It is
+			// not the join and it is not the splitting; see
+			// TrailingElementWithNoFieldLeavesOne.
+			s.TrailingElementWithNoFieldLeavesOne = No
 		})
 		if strings.Contains(out, "no dialect was chosen") {
 			t.Errorf("%s: asked an axis where it cannot change anything: %q", src, out)

@@ -92,6 +92,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// `IFS=:; set -- b ":"; printf "[%s]" $@` is `[b]` here where bash,
 		// ksh93 and zsh write an empty field beside it (#4580).
 		{"UnquotedListBoundaryIsIFSWhitespace", s.UnquotedListBoundaryIsIFSWhitespace, interp.Yes},
+		{"TrailingElementWithNoFieldLeavesOne", s.TrailingElementWithNoFieldLeavesOne, interp.No},
 		// POSIX makes an unquoted `$@` behave as `$*` where nothing is
 		// split, and this shell complies: `IFS=-; set -- x y z; v=${@}` is
 		// `x-y-z` here and in zsh, against `x y z` in bash and ksh93.

@@ -658,6 +658,12 @@ func Semantics() interp.Semantics {
 	// w x$@y` is `[xb] [] [y]` here against `[xb] [y]` in dash and BusyBox
 	// ash.
 	s.UnquotedListBoundaryIsIFSWhitespace = interp.No
+	// And the last element of an unquoted list leaves a field behind when it
+	// produced none, which is this column alone: `IFS=:; set -- 2 ''; w $@`
+	// is `[2] []` here and `[2]` in dash, and `set -- '' ''` is one field
+	// here where bash reaches the same answer through its join. See
+	// Semantics.TrailingElementWithNoFieldLeavesOne for the grid.
+	s.TrailingElementWithNoFieldLeavesOne = interp.Yes
 	// And a quoted empty word written behind a separator in the word a `-`
 	// or `+` substitutes is not a field here: `set -- a b; v=x; printf
 	// "[%s]" ${v:+"$@" ""}` is `[a][b]`, where bash 5.3.20, dash and BusyBox

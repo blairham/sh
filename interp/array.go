@@ -1908,8 +1908,17 @@ func (r *Runner) storeThroughPositional(name, value string) bool {
 // and the caller's next question, subscriptSplicesCharacters, is what sends
 // it to spliceCharacterSpan. The two together are one boundary asked from
 // both sides, and neither is a default.
+//
+// Asked through arrayElemsOfTheName rather than of the array table, because a
+// *produced* array has nothing in the table and would have come out a plain
+// string here — its scalar view — so `argv[2,3]=x` spliced characters of the
+// joined parameters into a stray stored name instead of replacing the span.
+// The two spellings of a range assignment differ only in how many words they
+// carry (see spliceElementSpan), so answering this question one way for
+// `argv[2,3]=(x y)` and the other for `argv[2,3]=x` is the drift that rule
+// exists to prevent (#4614).
 func (r *Runner) spanReplacesElements(name string) bool {
-	if _, isArray := r.Arrays[name]; isArray {
+	if _, isArray := r.arrayElemsOfTheName(name); isArray {
 		return true
 	}
 	if r.assocDeclared(name) {

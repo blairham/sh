@@ -1528,9 +1528,17 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, [
 				parts, nulls = []string{text}, nil
 			} else {
 				parts[len(parts)-1] += text
-				if text != "" && len(nulls) == len(parts) {
+				if len(nulls) == len(parts) {
 					// The brackets are text in the word, so the field they
 					// landed in is no longer a null the shells remove.
+					//
+					// No dialect reaches this with a marked field, and a
+					// mutant striking the line out survives on purpose: a
+					// bare name is the list only in the grammar where the
+					// brackets after it are a *subscript*, so the tail and
+					// the marks have no shape in common. It stays because
+					// the two are decided in different files and a later
+					// grammar that put them together would lose a word.
 					nulls[len(nulls)-1] = false
 				}
 			}

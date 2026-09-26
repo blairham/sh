@@ -232,4 +232,41 @@ func TestAnEmptyElementsBoundaryReachesARedirectionsTarget(t *testing.T) {
 			t.Errorf("got %q, want the joined name `x 2y` reported", out)
 		}
 	})
+
+	// And the removal reaches the target as well as the boundary: with
+	// nothing written in front of the expansion the empty element leaves a
+	// null that goes, so the target is the one name `2w` rather than that
+	// name and an empty one beside it. Measured — zsh 5.9.2 and bash 5.3.20
+	// both write `2w` and nothing else.
+	//
+	// Both views, because a target has two readings and they are two walks:
+	// the words view fans out to each name, and the fields view calls more
+	// than one of them ambiguous, so a null left standing is a failure in
+	// one and a wrong filename in the other.
+	for _, tc := range []struct {
+		name     string
+		ordinary Answer
+	}{
+		{"the words view", No},
+		{"the fields view", Yes},
+	} {
+		t.Run("a null target is removed, "+tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			sem := permissive()
+			sem.RedirectTargetIsAnOrdinaryWord = tc.ordinary
+			sem.RedirectTargetTakesPathnameExpansion = Yes
+			sem.RedirectsUseEveryTarget = Yes
+			sem.ArrayScalarIsTheWholeArray = Yes
+			sem.ArrayNameWithoutSubscriptIsTheList = Yes
+			out, st := run(t, `a=('' 2); echo hi >${a[@]}w`, func(r *Runner) {
+				r.Semantics, r.Dir = &sem, dir
+			})
+			if st != 0 {
+				t.Fatalf("status %d, out %q, want a clean run", st, out)
+			}
+			if got := readFile(t, dir, "2w"); got != "hi\n" {
+				t.Errorf("2w = %q, want the line", got)
+			}
+		})
+	}
 }

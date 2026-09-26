@@ -1,0 +1,100 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# The boundary between two elements of an unquoted list, which dash reads as a
+# delimiter of the ordinary splitting rule where bash, ksh93 and zsh read it as
+# a field break the split cannot see past.
+#
+# `IFS=:; set -- b ':'; x$@y` is two words here and three in the other three
+# references, the separator beside the boundary joining that one delimiter
+# rather than writing a field of its own. BusyBox ash is dash's company in this
+# and is not one of the references this file is graded against; core/ is the
+# wrong home for the same reason a joined list is, so this is dash's file and
+# the claim is dash's answer.
+#
+# Every row prints the field **count** beside the fields, because the two
+# readings put the same characters in a different number of words: `[xb][y]`
+# and `[xb][][y]` differ by one empty field and by nothing else, and a word
+# whose boundary was lost reads back as the text that went in. The wrong
+# answer is a plausible argument list at status 0.
+
+w() { printf '%d' $#; printf '[%s]' "$@"; printf '\n'; }
+
+# --- the boundary joins a separator written beside it -------------------------
+
+IFS=:
+set -- b ':';        printf 'a separator at the end:        '; w x$@y
+set -- b ':' c;      printf 'one in the middle:             '; w x$@y
+set -- a ':' b ':';  printf 'two of them:                   '; w x$@y
+set -- b ':b';       printf 'an element opening with one:   '; w x$@y
+set -- 'a b' ':';    printf 'a blank inside an element:     '; w x$@y
+set -- b ':';        printf 'nothing beside the expansion:  '; w $@
+set -- 2 ':';        printf 'text in front only:            '; w x$@
+set -- a ':';        printf 'text behind only:              '; w $@y
+set -- b ':';        printf 'the star spelling:             '; w x$*y
+
+# --- one delimiter still takes at most one non-whitespace separator -----------
+#
+# The rows that say the rule is keyed on the boundary and not on the element:
+# where two separators stand on either side of a boundary the second starts a
+# delimiter of its own, so the empty field between them stands. A rule about
+# the element — a separator at an element's edge merging into the boundary
+# beside it — answers both of these two fields.
+
+set -- ':' ':';      printf 'two separator elements:        '; w x$@y
+set -- 'b:' ':c';    printf 'a separator each side:         '; w x$@y
+set -- ':' ':' ':';  printf 'three separator elements:      '; w x$@y
+set -- b '::';       printf 'two separators in one element: '; w x$@y
+set -- a ':' ':' b;  printf 'adjacent separator elements:   '; w x$@y
+
+# --- and it is a delimiter with nothing beside it -----------------------------
+#
+# The half the rows above cannot show. The pair holds the characters fixed and
+# moves the boundary: the same `b::` is two fields written as two elements and
+# three written as one, because a written separator is a delimiter of its own
+# where a boundary is whitespace.
+
+set -- a b;          printf 'a boundary on its own:         '; w x$@y
+set -- ab;           printf 'the same characters, one:      '; w x$@y
+set -- b ':';        printf 'a boundary beside a separator: '; w x$@y
+set -- 'b::';        printf 'the same characters, no gap:   '; w x$@y
+
+# --- an empty element beside the boundary -------------------------------------
+#
+# An empty element makes no field under this reading and a removable null under
+# the other, and the word is the same either way — until it stands beside a
+# separator element, where the opening run decides: a separator inside that run
+# has already written the empty field that joins the text in front, and
+# recording an edge as well would be that field twice.
+
+set -- b '' c;       printf 'an empty element alone:        '; w x$@y
+set -- '' ':' b;     printf 'an empty then a separator:     '; w x$@y
+set -- '' 'b:';      printf 'an empty then a word:          '; w x$@y
+set -- b ':' '';     printf 'a separator then an empty:     '; w x$@y
+set -- b ':' '' c;   printf 'a separator, an empty, a word: '; w x$@y
+
+# --- the controls -------------------------------------------------------------
+#
+# A null the *splitter* wrote is a field and is kept; the boundary is a
+# boundary and never a field. An IFS set to nothing splits nothing at all, and
+# quoting keeps one field per element. None of these can move whatever the
+# boundary does.
+
+set -- ':b' c;       printf 'a leading separator:           '; w $@
+set -- b ':';        printf 'quoted:                        '; w "x$@y"
+set -- b ':';        printf 'the quoted star:               '; w "x$*y"
+IFS=
+set -- b ':';        printf 'an IFS set to nothing:         '; w x$@y
+
+# --- and under a whitespace IFS the readings coincide -------------------------
+#
+# Which is why none of this is reachable by a script that leaves IFS alone.
+
+unset IFS
+set -- b ' ';        printf 'a blank element:               '; w x$@y
+set -- b ' ' c;      printf 'a blank in the middle:         '; w x$@y
+set -- a ' ' b ' ';  printf 'two blank elements:            '; w x$@y
+
+IFS=' :'
+set -- b ':';        printf 'both kinds in IFS:             '; w x$@y
+set -- b ' ';        printf 'both kinds, a blank element:   '; w x$@y

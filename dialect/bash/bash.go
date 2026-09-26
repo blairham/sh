@@ -357,6 +357,13 @@ func Semantics() interp.Semantics {
 	// trailing separator makes no field — so this one answer is what the
 	// panel's two shapes of disagreement both come from.
 	s.UnquotedListJoinsOnIFS = interp.Yes
+	// And with the elements joined there is no boundary left to be a
+	// delimiter, which is the other reading of the same gap. Measured
+	// 2026-09-26 on bash 5.3.20 and 3.2.57 alike, and exhibited rather than
+	// implied by the join: `IFS=:; set -- 'a b' ':'; w x$@y` is
+	// `[xa b] [] [y]` here, a row where the join and the field-break reading
+	// agree and only this axis could move it.
+	s.UnquotedListBoundaryIsIFSWhitespace = interp.No
 	// A here-document whose delimiter never arrived gains the newline its
 	// last line never had: `printf 'cat <<X\nbody'` writes five bytes here
 	// and four in dash, ksh93 and zsh. Both bash builds measured agree

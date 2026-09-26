@@ -490,6 +490,36 @@ var Corpus = []Case{
 		Snippet: `set -- ' ' 2; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`,
 		Why:     "the control, and the reason a grid of expansions reports this clean: with no text beside the expansion there is nothing for the boundary to separate, so `1[2]` is what both readings give",
 	},
+	{
+		ID: "split/list-boundary-joins-a-separator-beside-it", Category: "field splitting",
+		Snippet: `IFS=:; set -- b ':'; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the boundary between two elements of an unquoted list is itself a delimiter of the splitting rule in dash and BusyBox ash, counting as IFS *whitespace*, so the separator written beside it joins that one delimiter: `2[xb][y]` there against `3[xb][][y]` in bash, ksh93 and zsh under `shwordsplit`, where the boundary is a field break the split cannot see past. The axis is `UnquotedListBoundaryIsIFSWhitespace`. The zsh cell is that shell's splitting-off default and is not this question",
+	},
+	{
+		ID: "split/list-boundary-takes-only-one-separator", Category: "field splitting",
+		Snippet: `IFS=:; set -- ':' ':'; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the row that says the rule is keyed on the **boundary** and not on the element: one delimiter is a run of whitespace, at most one non-whitespace separator and another run, so the boundary joins the first `:` and the second starts a delimiter of its own. `3[x][][y]` in dash, BusyBox ash and ksh93 alike — a rule stated about the element, that a separator at an element's edge merges into the boundary beside it, answers this `2[x][y]` and agrees with the measured one on `split/list-boundary-joins-a-separator-beside-it`. bash's `4` is its join, which writes a separator where the boundary stood; the zsh cell is that shell's splitting-off default and is not this question",
+	},
+	{
+		ID: "split/a-separator-each-side-of-a-list-boundary", Category: "field splitting",
+		Snippet: `IFS=:; set -- 'b:' ':c'; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the other half of that pair, with the two separators written inside the elements rather than standing alone: `3[xb][][cy]` in dash, BusyBox ash and ksh93 alike, the empty field between the two delimiters. bash's `4` is its join again. The element-keyed reading answers `2[xb][cy]` here too, so neither row is discriminating on its own",
+	},
+	{
+		ID: "split/a-list-boundary-with-no-separator-beside-it", Category: "field splitting",
+		Snippet: `IFS=:; set -- a b; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the half the rows above cannot show: with no separator anywhere near it the boundary still cuts, which is what makes it a delimiter rather than something that only appears beside one. `2[xa][by]` in all seven columns, against `1[xaby]` for the single element `ab` — the one row here that zsh answers with the rest, since no separator is in play",
+	},
+	{
+		ID: "split/a-separator-written-where-a-list-boundary-stood", Category: "field splitting",
+		Snippet: `IFS=:; set -- 'b::'; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the noun held fixed: the same characters `b`, `:`, `:` reach the word as one element, so the middle one is a separator somebody wrote rather than a boundary. Two written separators are two delimiters and this is `3[xb][][y]` in every splitting column, bash included — there is no boundary left for its join to disagree about — where the boundary spelling `set -- b ':'` is `2[xb][y]` in the two that read a boundary as whitespace. The zsh cell is that shell's splitting-off default and is not this question",
+	},
+	{
+		ID: "split/a-list-boundary-under-a-whitespace-ifs", Category: "field splitting",
+		Snippet: `set -- b ' '; set -- x$@y; printf "%d" "$#"; printf "[%s]" "$@"`,
+		Why:     "the control, and the reason none of this is reachable by a script that leaves `IFS` alone: under a whitespace `IFS` a boundary and a run of blanks are the same delimiter whichever reading a shell has, so `2[xb][y]` is unanimous across the six splitting columns. zsh with its splitting off keeps the blank element as a literal and is not this question",
+	},
 
 	// --- field splitting: IFS mechanics --------------------------------
 	{

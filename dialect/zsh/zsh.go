@@ -1827,6 +1827,11 @@ func Semantics() interp.Semantics {
 	// printf "[%s]" ${a[*]}` is `[x][y]` here, and with `shwordsplit` on,
 	// `a=("x y" z)` is `[x][y][z]` — neither of which a join can produce.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// And the boundary between two elements is a field break, as in ksh93
+	// and unlike dash and BusyBox ash. Measured 2026-09-26 on zsh 5.9.2
+	// under `shwordsplit`, which is where this shell splits a list at all:
+	// `IFS=:; set -- b ':'; w x$@y` is `[xb] [] [y]`.
+	s.UnquotedListBoundaryIsIFSWhitespace = interp.No
 	// A subscript is not a quoting context here — it is taken exactly as
 	// written, with substitutions performed and every other character kept.
 	// So `m["k"]=W` stores under the three characters `"k"` and `${m[k]}`

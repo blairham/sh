@@ -710,6 +710,76 @@ element. And the splitting answer stands in front of the join: with
 splitting off there is nothing to undo it, and zsh gives one field per
 element rather than one field.
 
+### The boundary between two elements is a delimiter in two of the columns
+
+The table above is three columns of one question — whether the list is
+joined — and it hides a second one, because dash's column there is also
+BusyBox ash's and the two of them read the **gap between two elements**
+differently from everybody else. In dash 0.5.12 and BusyBox ash 1.37.0
+that gap is itself a delimiter of the ordinary splitting rule, counting
+as IFS *whitespace*, so a separator written beside it joins that one
+delimiter rather than writing a field of its own.
+
+Measured 2026-09-26 against `/opt/homebrew/bin/bash` 5.3.20,
+`/bin/bash` 3.2.57, `/bin/ksh` 93u+ 2012-08-01, `/bin/dash` 0.5.12,
+`/opt/homebrew/bin/zsh` 5.9.2 under `shwordsplit` and BusyBox 1.37.0 in
+the alpine digest `internal/oracle.Panel` pins, with the count printed
+beside the fields — `IFS=:` throughout, and the word `x$@y`:
+
+| parameters | bash | ksh93 | zsh + `shwordsplit` | dash, ash |
+| --- | --- | --- | --- | --- |
+| `b ':'` | `3 [xb][][y]` | `3 [xb][][y]` | `3 [xb][][y]` | `2 [xb][y]` |
+| `b ':' c` | `4 [xb][][][cy]` | `3 [xb][][cy]` | `4 [xb][][][cy]` | `2 [xb][cy]` |
+| `a ':' b ':'` | `6` | `5 [xa][][b][][y]` | `6` | `3 [xa][b][y]` |
+| `'b:' ':c'` | `4` | `3 [xb][][cy]` | `4` | `3 [xb][][cy]` |
+| `':' ':'` | `4` | `3 [x][][y]` | `4` | `3 [x][][y]` |
+| `a b` | `2 [xa][by]` | `2 [xa][by]` | `2 [xa][by]` | `2 [xa][by]` |
+
+**The rule is a sentence with one noun in it: the *boundary* is IFS
+whitespace.** Read the word as its text with a blank standing between
+adjacent elements and split it with the ordinary rule — a run of IFS
+whitespace, at most one non-whitespace separator, a run of IFS
+whitespace — and every dash and ash row falls out of it.
+
+Three other readings answer the first row the same way and part on the
+rows below, which is what makes those rows the ones to keep:
+
+- The **element**-keyed reading, that a separator at the edge of an
+  element merges into the boundary beside it, answers rows four and five
+  two fields. Both are three: one delimiter takes at most one
+  non-whitespace separator, so the second starts another and the empty
+  field between them stands.
+- The boundary as an ordinary IFS **separator** rather than whitespace
+  answers row one three fields, two separators in a row making an empty
+  field between them.
+- The **join** above answers row one three fields too, for that reason
+  with the separator written rather than implied.
+
+And the last row is the half the others cannot show: a boundary with no
+separator anywhere near it still cuts, which is what makes it a
+delimiter rather than something that only appears beside one. The pair
+that says so holds the characters fixed and moves the boundary —
+`set -- a b` is two fields where `set -- ab` is one, and `set -- b ':'`
+is two where `set -- 'b::'` is three.
+
+**Under a whitespace `IFS` all the readings coincide**, because a
+boundary and a run of blanks are the same delimiter either way — so
+nothing in this is visible to a script that leaves `IFS` alone. With
+`IFS` set and empty nothing splits at all and the elements are one field
+each in every column.
+
+This is not the **empty element** of the two sections above. An empty
+element makes no field under this reading and a removable null under the
+other, and the word is the same either way: `IFS=:; set -- b '' c; x$@y`
+is `[xb] [cy]` in both. Where they meet is an empty element standing
+*beside* a separator element, and there only this question moves the
+word: `IFS=:; set -- b ':' '' c; x$@y` is `[xb] [cy]` in dash and ash and
+`[xb] [] [cy]` in ksh93.
+
+The axis is `UnquotedListBoundaryIsIFSWhitespace`, and it is asked only
+where the two readings give different fields — which needs two elements
+at least and a character of `IFS` at the edge of one of them.
+
 ## `"$@"` and `"$*"`
 
 Special parameters, and the only place where quoting produces *more* than
@@ -764,6 +834,8 @@ error in the other three:
 | `SplitParamExpansion` | yes | yes | yes | **no** | unanswered |
 | `SplitCommandSubstitution` | yes | yes | yes | yes | **yes** |
 | `EmptyQuotesAfterASeparatorAreAField` | yes | yes | **no** | unreachable | yes |
+| `UnquotedListJoinsOnIFS` | no | **yes** | no | no | unanswered |
+| `UnquotedListBoundaryIsIFSWhitespace` | **yes** | no | no | no | unanswered |
 
 Two axes rather than one, because the panel shows the two moving
 independently. Naming them for the behavior rather than for zsh is what

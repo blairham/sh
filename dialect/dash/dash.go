@@ -184,6 +184,15 @@ func Semantics() interp.Semantics {
 	// disappears under: `IFS=:; set -- x "" y` is two fields here and three
 	// in bash.
 	s.UnquotedListJoinsOnIFS = interp.No
+	// And the boundary between two of those elements is itself a delimiter
+	// of the splitting rule, counting as IFS whitespace — this shell and
+	// BusyBox ash against the other four. Measured 2026-09-26 on dash
+	// 0.5.12: `IFS=:; set -- b ':'; w x$@y` is `[xb] [y]` where bash, ksh93
+	// and zsh write a field between the boundary and the separator, and
+	// `IFS=:; set -- ':' ':'; w x$@y` is `[x] [] [y]` — the row that says
+	// the boundary is whitespace rather than the element's separator being
+	// swallowed (#4580).
+	s.UnquotedListBoundaryIsIFSWhitespace = interp.Yes
 	// `${1:=abc}` is `1: bad variable name` and ends the script at 2 — a
 	// positional is no more assignable through an expansion here than `@`
 	// is (#1541).

@@ -34,6 +34,13 @@ func tailRun(t *testing.T, src string, tail interp.Answer) (string, int) {
 		s.SplitParamExpansion = interp.Yes
 		s.GlobExpansionResults = interp.Yes
 		s.UnquotedListJoinsOnIFS = interp.No
+		// The other reading of the gap between two elements, pinned at the
+		// answer five of the six columns give so that the list rows below
+		// stay about this axis. Where the boundary is a delimiter of its own
+		// the separator at the end of an element is interior to the split
+		// and the tail rule never reaches it — a different question about the
+		// same word. See Semantics.UnquotedListBoundaryIsIFSWhitespace.
+		s.UnquotedListBoundaryIsIFSWhitespace = interp.No
 		s.TrailingSeparatorEndsAField = tail
 	})
 }

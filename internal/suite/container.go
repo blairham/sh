@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -64,11 +65,33 @@ import (
 
 // Paths inside the image. The root is the one directory every image has, and
 // the names are ours rather than anything the image ships.
+//
+// oursDir is a **directory** rather than the binary's own path, and that is
+// the whole of #4674. The graded binary used to be copied in as `/suiteours`,
+// and the name a shell is invoked under is an input to the shell: zsh reads
+// the first letter of argv[0] and enters that shell's emulation, so `s` put
+// every containerized run of `cmd/zsh` into `emulate sh` while the reference
+// beside it ran as zsh. The whole column was a shell in one mode graded
+// against a shell in another — `zsh/arith.tests` took C's precedences for its
+// first five rows and then refused `$(( 08 + 1 ))`, at 5/38 lines and status
+// 1, with nothing in the report able to say why.
+//
+// The path a binary lives at and the name it is invoked under are different
+// things, and a harness that renames is the one place they part. So the
+// directory carries the harness's name and the file carries the column's, the
+// same trade the Makefile already makes for the `-own-bin` binaries under
+// build/own/<dialect>. See [CheckInvocationName], which refuses the state
+// rather than leaving the next one to be found by its figures.
 const (
 	insidePath = "/suiteinside"
-	oursPath   = "/suiteours"
+	oursDir    = "/suiteours"
 	suitePath  = "/suite"
 )
+
+// oursPath is where the graded binary lands inside the image: under oursDir,
+// named for the column's dialect, so the word the shell finds in argv[0] is
+// the one it is being graded as.
+func oursPath(s Suite) string { return path.Join(oursDir, s.Dialect) }
 
 // Contained says this column's reference shell is reached inside an image
 // rather than as a binary on the machine running the harness.
@@ -153,7 +176,14 @@ func RunContained(ctx context.Context, s Suite, root, ourPkg string, opts Option
 	if err := oracle.BuildForContainer(ctx, "./internal/cmd/suiteinside", inside); err != nil {
 		return Report{}, err
 	}
-	ours := filepath.Join(stage, "ours")
+	// Staged under a directory of its own so that the copy below can put the
+	// *directory* inside: `docker cp dir ctr:/suiteours` creates the
+	// destination and copies the contents into it, where a file copied to a
+	// path under a directory that does not exist yet is refused.
+	ours := filepath.Join(stage, "ours", s.Dialect)
+	if err := os.MkdirAll(filepath.Dir(ours), 0o755); err != nil {
+		return Report{}, err
+	}
 	if err := oracle.BuildForContainer(ctx, ourPkg, ours); err != nil {
 		return Report{}, err
 	}
@@ -164,7 +194,7 @@ func RunContained(ctx context.Context, s Suite, root, ourPkg string, opts Option
 	}
 	defer removeContained(cli, id)
 
-	for _, put := range [][2]string{{inside, insidePath}, {ours, oursPath}, {root, suitePath}} {
+	for _, put := range [][2]string{{inside, insidePath}, {filepath.Dir(ours), oursDir}, {root, suitePath}} {
 		if err := copyInto(ctx, cli, id, put[0], put[1]); err != nil {
 			return Report{}, err
 		}
@@ -210,7 +240,7 @@ func createContained(ctx context.Context, cli, ref string, s Suite, opts Options
 		insidePath,
 		"-dialect", s.Dialect,
 		"-root", suitePath,
-		"-bin", oursPath,
+		"-bin", oursPath(s),
 		"-timeout", opts.timeout().String(),
 		"-jobs", strconv.Itoa(opts.jobs()),
 	}

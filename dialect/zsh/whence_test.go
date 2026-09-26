@@ -165,8 +165,12 @@ func TestWhenceRefusesAnUnknownLetter(t *testing.T) {
 
 // A letter this shell has and this build does not is refused as missing
 // rather than as unknown, so a script can tell the two apart.
+//
+// `-s` has left this list, with `-S` beside it: both are implemented since
+// #4446 and the rows are in whencelinks_test.go. `-m` and `-x` are what is
+// left, which is what keeps the two wordings distinguishable.
 func TestWhenceRefusesTheLettersItDoesNotImplement(t *testing.T) {
-	for _, letter := range []string{"-m", "-s", "-x"} {
+	for _, letter := range []string{"-m", "-x"} {
 		out, st := runZsh(t, t.TempDir(), "whence "+letter+" echo\n")
 		if !strings.Contains(out, "not implemented") {
 			t.Errorf("%s gave %q, want it refused as missing", letter, out)
@@ -286,7 +290,10 @@ func TestWhichIsWhenceWithC(t *testing.T) {
 		// from a letter that is not a letter. The `:3:` is the setup's two
 		// lines above the command, which is the location the diagnostic
 		// carries and part of what is asserted.
-		{"-S is missing, not unknown", "which -S echo", "zsh:which:3: -S is not implemented yet", 1},
+		//
+		// `-S` was this row until #4446 implemented it; `-m` is a letter zsh
+		// still has and this shell still has not.
+		{"-m is missing, not unknown", "which -m echo", "zsh:which:3: -m is not implemented yet", 1},
 		{"-z is unknown", "which -z echo", "zsh:which:3: bad option: -z", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -310,7 +317,7 @@ func TestWhereKeepsTheLettersItsPresetLeft(t *testing.T) {
 		{"-w is the bare kind, over every resolution", "where -w echo", "echo: builtin", 0},
 		{"-a is not on offer", "where -a echo", "zsh:where:1: bad option: -a", 1},
 		{"-c is not on offer", "where -c echo", "zsh:where:1: bad option: -c", 1},
-		{"-S is missing, not unknown", "where -S echo", "zsh:where:1: -S is not implemented yet", 1},
+		{"-m is missing, not unknown", "where -m echo", "zsh:where:1: -m is not implemented yet", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st := runZsh(t, dir, c.src+"\n")

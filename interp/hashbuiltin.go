@@ -23,10 +23,11 @@ func init() { builtins["hash"] = biHash }
 // question — three report it at status 1, ksh93 says nothing and reports
 // success.
 //
-// The letters past `-r` are bash's, each one asked for separately, because a
-// letter is either in this dialect's set or in
+// The letters past `-r` are one column's or another's, each one asked for
+// separately, because a letter is either in this dialect's set or in
 // Diagnostics.UnimplementedOptionLetters and one that is in neither reads as
-// "no shell has this" (#2081).
+// "no shell has this" (#2081). Most are bash's; `-d` under the reading that
+// names a directory, `-L` beside it and `-m` are the one other column's.
 func biHash(r *Runner, _ context.Context, args []string) int {
 	if r.hashBuiltinIsRefused() {
 		// Every spelling, including `hash -r` and a bare listing: measured,
@@ -103,7 +104,7 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 	case strings.ContainsRune(opts, 'd'):
 		if r.ask(r.sem().HashDefinesANamedDirectory, "`hash -d` naming a directory") {
 			return r.hashNamedDirs(args, strings.ContainsRune(opts, 'L'),
-				strings.ContainsRune(opts, 'r'))
+				strings.ContainsRune(opts, 'r'), strings.ContainsRune(opts, 'm'))
 		}
 		if r.unspecified {
 			return r.status
@@ -118,12 +119,34 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 		// `hash -r name` is both, in order: measured, the table comes back
 		// holding that one name at zero hits.
 	}
+	if strings.ContainsRune(opts, 'm') {
+		// Before the bare listing, because the two part on an empty operand
+		// list: `hash` writes the whole table and `hash -m` writes nothing.
+		// See Semantics.HashReadsOperandsAsPatterns.
+		return r.hashMatchingListing(args)
+	}
 	if len(args) == 0 {
 		r.printCommandHash(strings.ContainsRune(opts, 'l'))
 		return 0
 	}
 	status := 0
 	for _, name := range args {
+		// `name=value` is an entry written straight into the table in the one
+		// dialect that reads it that way, and a name to look up in the rest.
+		// Asked only when the operand holds an `=`, and ahead of the slash
+		// question below, because the slash in `foo=/bin/ls` is in the value
+		// and the shell that passes a slashed operand over is not the shell
+		// that reads the `=`. See Semantics.HashDefinesAnEntryFromAnAssignment.
+		if entry, path, assigned := strings.Cut(name, "="); assigned {
+			if r.ask(r.sem().HashDefinesAnEntryFromAnAssignment,
+				"`hash name=value` writing the command table") {
+				r.putHashedCommand(entry, path, 0)
+				continue
+			}
+			if r.unspecified {
+				return r.status
+			}
+		}
 		// An operand written with a slash is not a name PATH could hold, and
 		// what a shell does with one is its own question — asked only when
 		// the operand really has a slash, because everything else here is
@@ -192,8 +215,10 @@ func (r *Runner) hashPathIsADirectory(path string) bool {
 // hashOptionLetters is the set `hash` takes in this dialect, the paired half
 // of Diagnostics.UnimplementedOptionLetters.
 //
-// `r` is in every column and is not asked about. The rest are bash's, and the
-// `p:` says the letter takes an argument — see builtinOptionsArg.
+// `r` is in every column and is not asked about. The rest belong to one
+// column or another — `-l`, `-p` and `-t` are bash's, `-m` is the other
+// column's, and `-d` is a letter both have under two different readings —
+// and the `p:` says the letter takes an argument; see builtinOptionsArg.
 //
 // **Each one is asked for only when the call spells it.** A bare `hash`, a
 // `hash -r` and a `hash name` are unanimous, so they run in a shell that has
@@ -213,6 +238,7 @@ func (r *Runner) hashOptionLetters(args []string) string {
 		{"p:", r.sem().HashTakesAPathToRemember, "`hash -p`"},
 		{"d", r.hashLetterD(), "`hash -d`"},
 		{"t", r.sem().HashReportsThePath, "`hash -t`"},
+		{"m", r.sem().HashReadsOperandsAsPatterns, "`hash -m`"},
 	} {
 		if !hashLetterSpelled(args, o.spelling[0]) {
 			continue
@@ -357,15 +383,7 @@ func (r *Runner) printCommandHash(asCommands bool) {
 		r.printf("hits\tcommand\n")
 	}
 	for _, name := range names {
-		e := r.cmdHash[name]
-		switch r.diag().HashListing {
-		case HashListingHitsAndPath:
-			r.printf("%4d\t%s\n", e.hits, e.path)
-		case HashListingNameEqualsPath:
-			r.printf("%s=%s\n", name, e.path)
-		default:
-			r.printf("%s\n", e.path)
-		}
+		r.printHashEntry(name)
 	}
 }
 
@@ -405,7 +423,21 @@ func (r *Runner) hashLetterD() Answer {
 //
 // `-r` with an operand is `too many arguments` there, and the table is left
 // alone — so the clearing and the defining are not two things one call may do.
-func (r *Runner) hashNamedDirs(args []string, asCommands, clear bool) int {
+func (r *Runner) hashNamedDirs(args []string, asCommands, clear, patterns bool) int {
+	if patterns {
+		// The operands are patterns and the command is a listing, whatever
+		// they look like: measured, `hash -dm foo=/tmp` adds nothing and
+		// `hash -dm` with no operand writes nothing rather than the table.
+		for _, pattern := range args {
+			o := r.patternOpts(pattern)
+			for _, name := range r.namedDirNames() {
+				if matchPattern(pattern, name, o) {
+					r.printNamedDir(name, asCommands)
+				}
+			}
+		}
+		return 0
+	}
 	if clear {
 		if len(args) > 0 {
 			r.builtinUsageLine("hash")
@@ -416,11 +448,7 @@ func (r *Runner) hashNamedDirs(args []string, asCommands, clear bool) int {
 	}
 	if len(args) == 0 {
 		for _, name := range r.namedDirNames() {
-			if asCommands {
-				r.printf("hash -d %s=%s\n", name, namedDirValue(r.namedDirs[name]))
-				continue
-			}
-			r.printf("%s=%s\n", name, namedDirValue(r.namedDirs[name]))
+			r.printNamedDir(name, asCommands)
 		}
 		return 0
 	}
@@ -447,4 +475,62 @@ func (r *Runner) hashNamedDirs(args []string, asCommands, clear bool) int {
 		r.putNamedDir(name, dir)
 	}
 	return status
+}
+
+// printNamedDir writes one named-directory entry, in whichever of the two
+// shapes the letters asked for. One function rather than the same two lines
+// in each of the listings, so the bare form, `-L` and `-m` cannot drift.
+func (r *Runner) printNamedDir(name string, asCommands bool) {
+	if asCommands {
+		r.printf("hash -d %s=%s\n", name, namedDirValue(r.namedDirs[name]))
+		return
+	}
+	r.printf("%s=%s\n", name, namedDirValue(r.namedDirs[name]))
+}
+
+// hashMatchingListing is `hash -m`: the command table narrowed to the entries
+// a pattern reaches.
+//
+// Per pattern and sorted within each, which is measured — `hash -m 'f*' 'b*'`
+// over three entries writes the `f` one first and the two `b` ones after it,
+// where the bare listing writes all three in one sorted run. The same shape
+// `typeset -m` and `functions -m` write, and for the same reason: the operand
+// list is the order the answer is in.
+//
+// A pattern that matches nothing contributes nothing and the status is 0,
+// which is what separates this from a name that resolves to nothing: a
+// pattern is a question about the table rather than about a command.
+//
+// A pattern this engine cannot read is silently no match, where zsh writes
+// `bad pattern : [` at 1. That is not this letter's gap — `typeset -m '['`
+// and `functions -m '['` answer the same way here, and the wording belongs to
+// all three at once.
+func (r *Runner) hashMatchingListing(patterns []string) int {
+	for _, pattern := range patterns {
+		o := r.patternOpts(pattern)
+		for _, name := range r.hashedCommandNames() {
+			if r.unspecified {
+				return r.status
+			}
+			if matchPattern(pattern, name, o) {
+				r.printHashEntry(name)
+			}
+		}
+	}
+	return 0
+}
+
+// printHashEntry writes one command-table entry in the dialect's own shape,
+// which the bare listing and `-m` share. The hits-and-path shape's header is
+// the listing's and not the entry's, so it is not written here.
+func (r *Runner) printHashEntry(name string) {
+	e := r.cmdHash[name]
+	switch r.diag().HashListing {
+	case HashListingHitsAndPath:
+		r.printf("%4d\t%s\n", e.hits, e.path)
+	case HashListingNameEqualsPath:
+		r.printf("%s=%s\n", name, e.path)
+	default:
+		r.printf("%s\n", e.path)
+	}
 }

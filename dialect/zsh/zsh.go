@@ -2118,6 +2118,12 @@ func Semantics() interp.Semantics {
 	// passed over in silence here, it is searched for the only way this
 	// shell searches and reported when the search cannot have it (#4064).
 	s.HashIgnoresAnOperandWithASlash = interp.No
+	// `hash name=value` writes the command table here, where the rest of the
+	// panel reads the whole word as a name to look up (#4456), and `hash -m`
+	// reads the operands as patterns over either table (#4445). Both are
+	// letters and shapes only this shell has; see the axes for the columns.
+	s.HashDefinesAnEntryFromAnAssignment = interp.Yes
+	s.HashReadsOperandsAsPatterns = interp.Yes
 	// `hash -d` here is not bash's "forget one name": it is the table of
 	// **named directories** that `~name` reads back, written as an
 	// assignment. `hash -d a=/tmp; print -r -- ~a` is `/tmp`, `hash -d`
@@ -4906,13 +4912,18 @@ func Diagnostics() interp.Diagnostics {
 			//     already zsh's answer.
 			// zsh's hash past `-r`: `-d` is the *named directory* table
 			// rather than a forgetting, `-f` hashes every command on PATH
-			// at once, `-m` reads the operands as patterns, `-v` reports
-			// each entry as it is made and `-L` lists the table as `hash`
-			// commands. Measured 2026-09-13 by asking zsh 5.9.2 for every
-			// letter of the alphabet: it takes these six and refuses the
-			// rest, so a script asking for one is told it is missing here
-			// rather than told zsh has not got it.
-			"hash": "dfmvL",
+			// at once, `-v` reports each entry as it is made and `-L` lists
+			// the table as `hash` commands. Measured 2026-09-13 by asking zsh
+			// 5.9.2 for every letter of the alphabet: it takes these six and
+			// refuses the rest, so a script asking for one is told it is
+			// missing here rather than told zsh has not got it.
+			//
+			// **`-m` has left this list** (#4445): it reads the operands as
+			// patterns over either table and is implemented, in
+			// Semantics.HashReadsOperandsAsPatterns. A letter in the accepted
+			// set and still named here is refused as missing while it works,
+			// which is why the two tables move together.
+			"hash": "dfvL",
 			// read's letters about a terminal or the line editor —
 			// -e/-E echoing, -z and the zle pair -c/-l. The -p
 			// coprocess is implemented as its measured refusal — see

@@ -18511,6 +18511,61 @@ type Semantics struct {
 	// and that says `not found` about every other name it cannot resolve.
 	HashIgnoresAnOperandWithASlash Answer
 
+	// HashDefinesAnEntryFromAnAssignment reads `hash name=value` as an entry
+	// written straight into the command hash table, so `name` runs `value`
+	// with no PATH search and need not be the base name of the file it points
+	// at.
+	//
+	// zsh alone. Measured 2026-09-26, `env -i PATH=/usr/bin:/bin`, one probe
+	// at a time, with `hash foo=/bin/ls; foo` and `hash ls=/bin/ls; hash`:
+	//
+	//	zsh 5.9.2     the listing runs, `foo` is a directory listing at 0
+	//	bash 5.3.20   `hash: foo=/bin/ls: not found` is not reached — the
+	//	              slash rule passes the word over — and `hash foo=bar`,
+	//	              which has no slash, is `hash: foo=bar: not found` at 1
+	//	ksh93u+       silent at 0 and nothing in the table, which is its
+	//	              HashReportsAMissingName answer about a word it could
+	//	              not resolve
+	//
+	// so the word is a *name* everywhere else and a definition in one shell,
+	// which is a conflict and not an addition. The other two columns take the
+	// POSIX reading, where `hash` remembers what a search found and has no
+	// syntax for writing the table by hand; a No there leaves each of them
+	// answering exactly as it does today.
+	//
+	// **Asked only when the operand holds an `=`**, so a `hash ls` — which
+	// every column agrees about — runs without consulting a vector. The value
+	// is taken as written and neither half is checked: measured, `hash
+	// foo=bar` remembers `bar`, `hash a/b=c` remembers a name with a slash in
+	// it, and `hash foo=` remembers an empty one.
+	//
+	// It is asked ahead of HashIgnoresAnOperandWithASlash, because the slash
+	// that matters in `foo=/bin/ls` is in the *value* and the shell that
+	// passes a slashed operand over is not the shell that reads the `=`.
+	HashDefinesAnEntryFromAnAssignment Answer
+
+	// HashReadsOperandsAsPatterns makes `hash -m` read each operand as a
+	// pattern and reach a set of entries rather than one, in both of the
+	// tables the builtin keeps — the command table, and the named-directory
+	// table under `-d`.
+	//
+	// zsh alone, and it is the only column with the letter at all: measured
+	// 2026-09-26 against zsh 5.9.2 by asking for every letter of the
+	// alphabet, `hash` there takes `-d`, `-f`, `-m`, `-r`, `-v` and `-L` and
+	// refuses the rest, where bash's letters are `-l`, `-p`, `-d`, `-t` and
+	// `-r` and `-m` is a bad option in every other column.
+	//
+	// **It is a listing and never a definition.** Measured: `hash -m
+	// foo=/bin/ls` is silence at 0 with nothing added — the word is a pattern
+	// that matches no name — and `hash -m` with no operand at all writes
+	// nothing rather than the whole table, which is where it parts from the
+	// bare listing.
+	//
+	// Asked only when the call spells `-m`, so the letter's absence costs the
+	// columns that have not got it nothing: a No leaves `hash -m` as the
+	// `bad option` it already is.
+	HashReadsOperandsAsPatterns Answer
+
 	// CommandHashIsTrusted runs the path the command hash holds without
 	// asking whether it is still there.
 	//
@@ -27713,6 +27768,12 @@ func PosixSemantics() Semantics {
 		// for at all; the three dialects closest to that reading — dash,
 		// BusyBox ash and bash — pass it over without a word.
 		HashIgnoresAnOperandWithASlash: Yes,
+		// POSIX's `hash` remembers what a search found and has no syntax for
+		// writing the table by hand, nor a pattern letter to read it back
+		// with; both are one shell's extensions and are off here for the
+		// reason every extension is.
+		HashDefinesAnEntryFromAnAssignment: No,
+		HashReadsOperandsAsPatterns:        No,
 		// POSIX says a shell "shall remember" the location and says nothing
 		// about re-checking it; the majority of the panel looks again, and
 		// the one that does not overrides. The letters past `-r` are bash's

@@ -239,15 +239,20 @@ print -r -- "lF-absent=$?"`)
 // The letters zsh has and this shell has not are named as missing; the ones
 // zsh does not have at all are `bad option`. A script can tell the two apart,
 // which is the whole point of keeping the first wording.
+//
+// `-d` used to be the middle row and has left the list: it is implemented
+// since #4449, so the row would have gone on asserting a refusal the builtin
+// no longer makes. `-A` is a letter zsh still has and this shell still has
+// not — module aliases — and it is the same pair of wordings.
 func TestZmodloadTellsAMissingLetterFromAnUnknownOne(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload -a zsh/x mybuiltin 2>&1
 print -r -- "a=$?"
-zmodload -d zsh/main 2>&1
-print -r -- "d=$?"
+zmodload -A zsh/main 2>&1
+print -r -- "A=$?"
 zmodload -X zsh/main 2>&1
 print -r -- "X=$?"`)
 	want := "zsh:zmodload:1: -a is not implemented yet\na=1\n" +
-		"zsh:zmodload:3: -d is not implemented yet\nd=1\n" +
+		"zsh:zmodload:3: -A is not implemented yet\nA=1\n" +
 		"zsh:zmodload:5: bad option: -X\nX=1\n"
 	if out != want || st != 0 {
 		t.Errorf("the refused letters = %q (status %d), want %q", out, st, want)
@@ -704,5 +709,222 @@ print -r -- "feature=$?"`)
 		"zsh:5: module `zsh/zutil' has no such feature: `b:nosuchbuiltin'\nfeature=1\n"
 	if out != want || st != 0 {
 		t.Errorf("zmodload -i elsewhere = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-Fe` asks whether a module's features are in the state the operands name,
+// and the three readings of an operand are what make it a query (#4599).
+//
+// Measured 2026-09-26 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`), run `-f`. The
+// four rows are the issue's own table, and rows C and D are the positive
+// control for the probe: an instrument that could not tell the signs apart
+// would still have to move on a feature name no module has.
+func TestZmodloadFeatureExistsReadsTheSignAndTheName(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/datetime
+zmodload -Fe zsh/datetime +p:EPOCHSECONDS
+print -r -- "A=$?"
+zmodload -Fe zsh/datetime -p:EPOCHSECONDS
+print -r -- "B=$?"
+zmodload -Fe zsh/datetime +p:NOSUCH
+print -r -- "C=$?"
+zmodload -Fe zsh/datetime -p:NOSUCH
+print -r -- "D=$?"`)
+	want := "A=0\nB=1\nC=1\nD=1\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -Fe = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A **bare** operand asks after the feature's existence rather than after its
+// state, which is the reading zmodloadSpec does not have and the one that
+// makes the query disagree with the selection.
+//
+// A mutant that reads a bare name as `+` answers 1 on the first row and fails
+// here; one that answers 0 unconditionally fails the row above and the two
+// rows below.
+func TestZmodloadFeatureExistsReadsABareOperandAsExistence(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
+zmodload -F zsh/zutil -b:zstyle
+zmodload -Fe zsh/zutil b:zstyle
+print -r -- "bare=$?"
+zmodload -Fe zsh/zutil +b:zstyle
+print -r -- "plus=$?"
+zmodload -Fe zsh/zutil -b:zstyle
+print -r -- "minus=$?"`)
+	want := "bare=0\nplus=1\nminus=0\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -Fe on a deselected feature = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// What the query answers about the module rather than about a feature: an
+// unloaded module is 1 whatever is asked, a module supporting no features at
+// all is 1 where the plain `-e` about the same name is 0, and the letters with
+// no operands are `-e`'s own question.
+func TestZmodloadFeatureExistsAnswersForTheModuleFirst(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -Fe zsh/datetime +p:EPOCHSECONDS
+print -r -- "unloaded=$?"
+zmodload zsh/datetime
+zmodload -Fe zsh/datetime
+print -r -- "nospecs=$?"
+zmodload -e zsh/main
+print -r -- "e-main=$?"
+zmodload -Fe zsh/main
+print -r -- "Fe-main=$?"
+zmodload zsh/complist
+zmodload -Fe zsh/complist
+print -r -- "complist=$?"`)
+	want := "unloaded=1\nnospecs=0\ne-main=0\nFe-main=1\ncomplist=0\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -Fe about the module = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// Every operand must hold, and one that names no feature of the module is 1
+// whichever sign it carries.
+func TestZmodloadFeatureExistsRequiresEveryOperand(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/datetime
+zmodload -Fe zsh/datetime +p:EPOCHSECONDS +p:epochtime
+print -r -- "both=$?"
+zmodload -Fe zsh/datetime +p:EPOCHSECONDS -p:epochtime
+print -r -- "mixed=$?"
+zmodload -Fe zsh/datetime b:nosuchfeat
+print -r -- "badname=$?"`)
+	want := "both=0\nmixed=1\nbadname=1\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -Fe over several operands = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-e` refuses to stand beside four of this shell's letters and accepts two,
+// and the accepted pair is what keeps the rule from being "any other letter"
+// (#4603). A mutant that refuses `-es` as well fails on the second row.
+func TestZmodloadDashEIsRefusedBesideTheLettersItCannotJoin(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -e zsh/main 2>&1
+print -r -- "e=$?"
+zmodload -es zsh/main 2>&1
+print -r -- "es=$?"
+zmodload -eu zsh/main 2>&1
+print -r -- "eu=$?"
+zmodload -eL zsh/main 2>&1
+print -r -- "eL=$?"
+zmodload -ei zsh/main 2>&1
+print -r -- "ei=$?"
+zmodload -ed zsh/main 2>&1
+print -r -- "ed=$?"`)
+	const refusal = "-e cannot be combined with other options"
+	want := "e=0\nes=0\n" +
+		"zsh:zmodload:5: " + refusal + "\neu=1\n" +
+		"zsh:zmodload:7: " + refusal + "\neL=1\n" +
+		"zsh:zmodload:9: " + refusal + "\nei=1\n" +
+		"zsh:zmodload:11: " + refusal + "\ned=1\n"
+	if out != want || st != 0 {
+		t.Errorf("the -e combinations = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-l` is not one of the letters `-e` objects to, and the order of the two
+// rules is what says so: `-el` reaches the rule about `-l`, and `-eli` — the
+// same pair with a letter `-e` does object to — reaches the combination
+// refusal in front of it.
+func TestZmodloadDashEDoesNotObjectToTheListingLetter(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -el zsh/main 2>&1
+print -r -- "el=$?"
+zmodload -eli zsh/main 2>&1
+print -r -- "eli=$?"`)
+	want := "zsh:zmodload:1: -l is only allowed with -F\nel=1\n" +
+		"zsh:zmodload:3: -e cannot be combined with other options\neli=1\n"
+	if out != want || st != 0 {
+		t.Errorf("-el beside -eli = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-d` declares and reports on one letter, and the pair in that order is what
+// makes the case discriminating (#4449): a `-d` that only listed would print
+// nothing here and agree with a fresh zsh, because a module with no declared
+// dependency prints nothing in either shell.
+func TestZmodloadDashDDeclaresAndReportsADependency(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/zle zsh/parameter
+print -r -- "declare=$?"
+zmodload -d zsh/zle
+print -r -- "report=$?"
+zmodload -d zsh/datetime
+print -r -- "none=$?"`)
+	want := "declare=0\nzsh/zle: zsh/parameter\nreport=0\nnone=0\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -d = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A second declaration adds rather than replaces, the bare listing is sorted
+// by module name whatever order the declarations arrived in, and `-L` writes
+// the rows back as the commands that would make them.
+func TestZmodloadDashDListsEveryModuleThatHasOne(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/zle zsh/parameter
+zmodload -d zsh/zle zsh/datetime
+zmodload -d zsh/computil zsh/complete
+zmodload -d
+print -r -- "list=$?"
+zmodload -Ld
+print -r -- "commands=$?"
+zmodload -dL zsh/zle
+print -r -- "one=$?"`)
+	want := "zsh/computil: zsh/complete\nzsh/zle: zsh/parameter zsh/datetime\nlist=0\n" +
+		"zmodload -d zsh/computil zsh/complete\nzmodload -d zsh/zle zsh/parameter zsh/datetime\ncommands=0\n" +
+		"zmodload -d zsh/zle zsh/parameter zsh/datetime\none=0\n"
+	if out != want || st != 0 {
+		t.Errorf("the dependency listing = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A declaration is a table of names and says nothing about what will load:
+// two names this shell has no part of go in and come back out, at 0.
+func TestZmodloadDashDRecordsNamesItCannotLoad(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/nosuchmod zsh/alsonot
+print -r -- "declare=$?"
+zmodload -d zsh/nosuchmod
+print -r -- "report=$?"
+zmodload zsh/nosuchmod 2>&1
+print -r -- "load=$?"`)
+	want := "declare=0\nzsh/nosuchmod: zsh/alsonot\nreport=0\n" +
+		"zsh:5: failed to load module `zsh/nosuchmod': not implemented yet\nload=1\n"
+	if out != want || st != 0 {
+		t.Errorf("a dependency on a module this shell has not got = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// `-ud` takes a dependency back out. A module on its own loses all of them, a
+// name that was never there is removed in silence, and the letters with no
+// operand at all are the question zsh asks back.
+func TestZmodloadDashUDTakesADependencyBackOut(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/a zsh/b zsh/c
+zmodload -ud zsh/a zsh/b
+print -r -- "one=$?"
+zmodload -d zsh/a
+zmodload -ud zsh/a zsh/nosuch
+print -r -- "absent=$?"
+zmodload -d zsh/a
+zmodload -ud zsh/a
+print -r -- "all=$?"
+zmodload -d
+print -r -- "empty=$?"
+zmodload -ud 2>&1
+print -r -- "bare=$?"`)
+	want := "one=0\nzsh/a: zsh/c\nabsent=0\nzsh/a: zsh/c\nall=0\nempty=0\n" +
+		"zsh:zmodload:12: what do you want to unload?\nbare=1\n"
+	if out != want || st != 0 {
+		t.Errorf("zmodload -ud = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The dependency table is the runner's own, so a subshell gets a copy — the
+// same property the module listing and the feature selection have.
+func TestZmodloadDependenciesInASubshellLeaveTheParentAlone(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/a zsh/b
+(zmodload -d zsh/a zsh/c; zmodload -d zsh/a)
+zmodload -d zsh/a`)
+	want := "zsh/a: zsh/b zsh/c\nzsh/a: zsh/b\n"
+	if out != want || st != 0 {
+		t.Errorf("the dependency table in a subshell = %q (status %d), want %q", out, st, want)
 	}
 }

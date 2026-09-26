@@ -1814,13 +1814,21 @@ func Semantics() interp.Semantics {
 	// A table goes the same way. This is what makes `for a in x y z` over a
 	// name holding an array read `x`, `y`, `z` rather than the array three
 	// times, and `read a` collapse it.
+	//
+	// This one is the option's, too: under `setopt ksharrays` the same line
+	// writes the array's base and leaves the rest standing — `a=(first
+	// second); a=word` is `typeset -a a=( word second )`, which is what bash
+	// and ksh93 do with nothing set. It is the eighth axis setKshArrays
+	// moves, and it could not move before the line below existed, since a
+	// *table* under the option refuses the store rather than taking its key
+	// `0` (#4618).
 	s.ScalarAssignedOverACompoundReplacesTheName = interp.Yes
 	// And with `ksharrays` off nothing refuses the store first, which is what
 	// makes the line above reachable for a table at all: `typeset -A h=(one
 	// 1); h=string` is `typeset h=string` at 0, and so is the `h+=string`
 	// spelling. Under the option both are `h: attempt to set associative
 	// array to scalar` and the shell leaves — see setKshArrays, which is
-	// where the seventh axis moves, and
+	// where the seventh axis moves — and
 	// Semantics.ScalarStoredOverATableIsRefused for the grid (#4617).
 	s.ScalarStoredOverATableIsRefused = interp.No
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No

@@ -10306,6 +10306,16 @@ type Semantics struct {
 	// merely hidden. dash has no arrays and refuses the parenthesis, which is
 	// the absence rather than a sixth answer.
 	//
+	// **zsh's own answer moves with `setopt ksharrays`**, measured
+	// 2026-09-26 on zsh 5.9.2: under the option `a=(first second); a=word`
+	// is `typeset -a a=( word second )`, which is the ksh family's answer
+	// and No here. It is a *scalar* store the option reaches and not any
+	// store — `a=()` still replaces the array and `a+=(last)` still grows an
+	// element — and not a *declaration* either, `typeset a=word` over an
+	// array being `inconsistent type for assignment` in both states. The
+	// append spelling of the same row is ScalarAppendedToAnArrayBecomesANewElement,
+	// which moves with the same option (#4618).
+	//
 	// A **table** answers this the same way an array does in every column,
 	// so it is this one field and not two: `typeset -A m; m=([k]=v); m=x` is
 	// `declare -A m=([0]="x" [k]="v" )` in bash and `typeset -A m=([0]=x

@@ -244,3 +244,63 @@ typeset -A m9=(one 1)
 m9+=(two 2)
 printf 'a literal append: st=%s n=%s\n' "$?" "${#m9[@]}"
 unsetopt ksharrays
+
+# ---- ksharrays moves where a plain scalar store lands, too ----
+
+# The append above is one spelling of the row and `p=word` is the other, and
+# the two are written beside each other here deliberately: they are separate
+# axes, so a change that moved one and left the other reads as passing to a
+# block that only asks the append. Under the option a plain store writes the
+# base and the rest of the array stands, where without it the value becomes
+# the whole of the name and the array is gone.
+setopt ksharrays
+p=(first second)
+p=word
+printf 'a plain store under the option: [%s]\n' "${p[@]}"
+printf 'and it is still an array: %s\n' "${(t)p}"
+p2=(first second)
+p2+=word
+printf 'the append beside it: [%s]\n' "${p2[@]}"
+
+# The three that do not move, each with the option still on. The emptying
+# store is the sharpest: same option, same name, a bare name on the left, and
+# it still replaces the array outright — so it is a *scalar* store the option
+# reaches and not any store.
+p3=(first second)
+p3=()
+printf 'an emptying store: n=%s\n' "${#p3[@]}"
+p4=(first second)
+p4[0]=word
+printf 'the base written out: [%s]\n' "${p4[@]}"
+p5=abc
+p5=word
+printf 'a name holding a scalar: [%s]\n' "$p5"
+unsetopt ksharrays
+
+# The control that pins it to the option: the same first line without it
+# leaves a scalar, and the other three answer exactly as they did above.
+q=(first second)
+q=word
+printf 'a plain store without the option: [%s]\n' "$q"
+printf 'and the array is gone: %s\n' "${(t)q}"
+q3=(first second)
+q3=()
+printf 'an emptying store: n=%s\n' "${#q3[@]}"
+q4=(first second)
+q4[1]=word
+printf 'the base written out: [%s]\n' "${q4[@]}"
+q5=abc
+q5=word
+printf 'a name holding a scalar: [%s]\n' "$q5"
+
+# It reaches every scalar store and not only an assignment statement, which is
+# what the field is for: a loop variable over a name holding an array sets the
+# base under the option and collapses the name without it.
+setopt ksharrays
+r=(first second)
+for r in x y; do :; done
+printf 'a loop variable under the option: [%s]\n' "${r[@]}"
+unsetopt ksharrays
+r2=(first second)
+for r2 in x y; do :; done
+printf 'a loop variable without it: [%s] %s\n' "$r2" "${(t)r2}"

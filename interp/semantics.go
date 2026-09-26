@@ -15508,6 +15508,78 @@ type Semantics struct {
 	// here so that it is a known answer rather than an unnoticed one (#4213).
 	AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode Answer
 
+	// TheFirstUnquotedEqualsInAWordOpensATildeContext widens that rule until
+	// the shape stops mattering: **the first unquoted `=` in the word**, at
+	// any position but the word's first, splits it, and everything after that
+	// `=` gets the tilde treatment an assignment's value gets. So
+	// `--prefix=~/x` reaches the command as a path, and so do `1abc=~`,
+	// `f.g=~` and `a:b=~`.
+	//
+	// The sentence has one noun in it — *the first unquoted `=`* — and it is
+	// not "a word shaped like an assignment" and not "the last `=`". Two
+	// cases hold the noun still and move everything else. `a=b=~` is left
+	// alone, because the first `=` is at offset 1 and the `~` is neither at
+	// the head of the value it opens nor straight after one of its colons;
+	// reading the *last* `=` would have expanded it. And `a=b=~:~` expands
+	// only the second tilde, through the same split. A third pair holds the
+	// `=` in place and moves its quoting: `a=~` expands and `a'='~` does not,
+	// while `"a"=~` does — so it is that one character's quoting and not the
+	// word's or the name's.
+	//
+	// No column answers this from its startup state. It is zsh's
+	// MAGIC_EQUAL_SUBST, off in a default zsh and switched at runtime, which
+	// is why the answer is read at the word. Measured 2026-09-25 with `echo
+	// --opt=~/m` under `env -i PATH=/usr/bin:/bin HOME=/usr/xyz`: bash 5.3.20,
+	// bash 3.2.57, bash 5.3.20 as `sh`, ksh93u+ 2012-08-01, dash, BusyBox ash
+	// 1.37.0 in the digest-pinned alpine image, and zsh 5.9.2 all write the
+	// two characters as given, and so do `1abc=~/m`, `f.g=~/m`, `FOO=a=~/m`
+	// and `a:b=~/m`. `setopt magicequalsubst` in zsh 5.9.2 is the one state
+	// of the one shell that moves them.
+	//
+	// It **subsumes** the axis above rather than composing with it: where
+	// this is Yes every word the assignment shape would have qualified is
+	// qualified already, at the same `=`, so the narrower question is not
+	// asked. Where it is No the word takes the older road unchanged. That
+	// ordering is why a bash script asks this one only for a word the shape
+	// refuses — `cc -DX=~/x`, and not `FOO=~/x`.
+	//
+	// What follows the `=` is the assignment value's treatment and not a
+	// second rule of its own: the head of the value, every unquoted colon
+	// inside it, `~+` and `~-`, and `~user`, all through the helpers
+	// [Runner.tildeHead] and [Runner.expandColonTildes] that
+	// Runner.expandAssignValue uses. Measured over 24 values in zsh 5.9.2 —
+	// `~`, `~/x`, `x~`, `'~'`, `\~`, `$HOME`, `~+`, `~-`, `~:~`, `a:~/b`,
+	// `:~`, `~:b`, `a:~:b`, `~~`, `b=~`, `b=~:~`, `~root`, `~:` among them —
+	// the command word and the assignment statement come to the same string
+	// on every row.
+	//
+	// **The colons it opens are the whole word's and not the value's.** With
+	// the option on, `a:~/b=~` expands both tildes and `a:~/b=c` expands
+	// neither: a colon-tilde in front of the `=` moves once the word has
+	// qualified, and a word that never qualifies keeps every character.
+	// Measured, and it falls out of expandColonTildes walking the word.
+	//
+	// **Two roads are written down rather than answered**, both reached only
+	// while a shell has this Yes. Measured on zsh 5.9.2, 2026-09-25, against
+	// this shell: a command *word* — `--opt=~` standing where the command
+	// name goes, with or without `command` in front of it — and an array
+	// literal's element, `x=(a=~)`, keep the tilde in the reference and are
+	// expanded here, because the word pipeline this answer lives in is what
+	// both of them walk. Separating them needs the word's *position* threaded
+	// through the expansion, a piece of state this pipeline does not carry;
+	// they are written here so that they are known answers rather than
+	// unnoticed ones, in the shape #4213 left for the row above.
+	//
+	// The other roads were measured too and they agree, which is what makes
+	// the two above a short list rather than a guess. Expanded in both: a
+	// command's arguments, a `for` list, a `select` list, a function call's
+	// arguments, a `${x:-…}` default, and each word brace expansion produces.
+	// Left alone in both: a `case` subject, a `[[ ]]` operand, a here-string
+	// and a redirection target — the target for a reason of its own, in that
+	// Runner.expandRedirectTargetViews is a second walk that never reaches
+	// this at all.
+	TheFirstUnquotedEqualsInAWordOpensATildeContext Answer
+
 	// SubscriptIsAQuotingContext runs an associative array's subscript
 	// through quote removal, so the key is the text *inside* its quotes and
 	// escapes. True in bash and ksh93; false in zsh, where the subscript is
@@ -26658,6 +26730,11 @@ func PosixSemantics() Semantics {
 		// BusyBox ash, zsh and bash under the `sh` name all do. bash outside
 		// POSIX mode is the one column that overrides it.
 		AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode: No,
+		// And the shape is as far as it goes: no column widens the rule to
+		// every word with an unquoted `=` in it, so `cc -DX=~/x` keeps the
+		// two characters everywhere. zsh's MAGIC_EQUAL_SUBST is the one
+		// switch that moves it and it is off in a default zsh.
+		TheFirstUnquotedEqualsInAWordOpensATildeContext: No,
 		// And a descriptor the shell has nothing open at is not a terminal,
 		// however the number was spelled: no narrowing, and no value that
 		// answers true on its own.
@@ -26965,6 +27042,12 @@ func CoreSemantics() Semantics {
 		// reason above it — the shape is ordinary enough that a refusal would
 		// be the substrate refusing `cc -DX=1`.
 		AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode: No,
+		// And no column widens that to every word carrying an unquoted `=`:
+		// `--opt=~/x`, `1abc=~/x` and `f.g=~/x` are the characters as
+		// written in all seven columns, and zsh's MAGIC_EQUAL_SUBST is the
+		// one runtime switch that moves them. Answered here for the reason
+		// above it.
+		TheFirstUnquotedEqualsInAWordOpensATildeContext: No,
 		// A clustered `-abc` leaves OPTIND naming the word until its last
 		// letter has been read, which is what four of the six columns do and
 		// what a script shifting by `OPTIND-1` between calls needs. dash and

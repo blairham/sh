@@ -3139,7 +3139,7 @@ func (r *Runner) octalLeadingZero() bool {
 // It exits 0 when the expression is non-zero, which is the reverse of the
 // usual convention and is unanimous across the panel.
 func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
-	return r.withRedirs(ctx, c.Redirs, func() error {
+	return r.withRedirsOfABracketedCommand(ctx, c.Redirs, func() error {
 		r.unspecified = false
 		// The expression's text is read again here, so what a substitution
 		// in it reports is placed from the construct's line rather than from

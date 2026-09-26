@@ -203,9 +203,17 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	//
 	// Restored afterwards, so the command itself is still reported where it
 	// was written: only the opening moves.
+	// The command's spelling, consumed here so that nothing inside its body
+	// inherits it. See Runner.bracketedCompoundRedirs.
+	bracketed := r.bracketedCompoundRedirs
+	r.bracketedCompoundRedirs = false
 	commandLine := r.line
 	wasUnnumbered := r.locatedWithoutALine
-	defer func() { r.line, r.locatedWithoutALine = commandLine, wasUnnumbered }()
+	wasShift := r.heredocBodyLineShift
+	defer func() {
+		r.line, r.locatedWithoutALine = commandLine, wasUnnumbered
+		r.heredocBodyLineShift = wasShift
+	}()
 	for _, rd := range rs {
 		// Every dialect reports a *simple* command at the line it began
 		// on — measured on a command split by backslashes, where the
@@ -236,6 +244,21 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// Runner.locatedWithoutALine (#4710).
 				r.line = r.lineOf(rd.Pos()) - 1
 				r.locatedWithoutALine = r.line < 1
+			}
+		}
+		// And how far past that the **body** of a here-document on this
+		// command is reported, which one column answers with where the
+		// reader had got to rather than with where the command began. Only
+		// the body moves: a redirection that could not be *opened* is
+		// reported at the line above in that column too. Taken as a
+		// distance rather than as a line so that the body's own numbering
+		// moves with it, and a refusal inside the body and a failure of the
+		// body itself cannot disagree. See heredoccommandend.go (#4690,
+		// #4712).
+		r.heredocBodyLineShift = 0
+		if r.heredocBodyOnAReservedWordCompound(compound, bracketed, owner) {
+			if end := r.reservedWordCompoundEndLine(rs); end > r.line {
+				r.heredocBodyLineShift = end - r.line
 			}
 		}
 		fd := 1
@@ -1468,6 +1491,14 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 		if rd.Heredoc != nil {
 			r.heredocBodyText = rd.Heredoc.Literal()
 		}
+		// How far the reader had got when the command was complete, where
+		// one column reports a body's failure there rather than at the line
+		// the command began on. Nought everywhere else, and nought for every
+		// command that spelling rule does not move. See
+		// heredoccommandend.go.
+		wasShiftLine := r.line
+		r.line += r.heredocBodyLineShift
+		defer func() { r.line = wasShiftLine }()
 		if rd.Heredoc != nil && rd.Heredoc.Start.Line > 0 {
 			// And where the body sits in the file. The body is lexed again
 			// from its own text — see Runner.rawSpans — so everything in it
@@ -1477,7 +1508,7 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 			// bash 5.3.20: `command substitution: line 4:` for the line the
 			// body holds it on, and line 4 again for a two-line body's second
 			// line, which is the file's numbering throughout.
-			r.expansionBodyLine = int(rd.Heredoc.Start.Line)
+			r.expansionBodyLine = int(rd.Heredoc.Start.Line) + r.heredocBodyLineShift
 		}
 		defer func() {
 			r.inBodyReadAtExpansion, r.expansionBodyLine = was, wasLine

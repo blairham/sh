@@ -30,7 +30,7 @@ func (c condStatus) Error() string { return "condition option status" }
 
 // testClause evaluates `[[ … ]]`. It exits 0 when the condition holds.
 func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
-	return r.withRedirs(ctx, c.Redirs, func() error {
+	return r.withRedirsOfABracketedCommand(ctx, c.Redirs, func() error {
 		// The trace is opened here and closed on the way out, because the
 		// shell that writes one line for the whole condition cannot write it
 		// until the condition is over — and the shell that writes a line per

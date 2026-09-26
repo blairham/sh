@@ -3489,6 +3489,28 @@ type Runner struct {
 	// text is numbered from. Read by Runner.substFailureEcho (#4713).
 	heredocBodyText string
 
+	// bracketedCompoundRedirs says the redirections about to be applied
+	// belong to a compound command spelled with **brackets** rather than
+	// with a reserved word — `[[ … ]]`, `(( … ))` or an anonymous function.
+	//
+	// The redirection code is handed a list and an owner and never the
+	// command, and one column locates a here-document body's failure by
+	// which of the two spellings it is. Set by
+	// [Runner.withRedirsOfABracketedCommand] and **consumed** at the door by
+	// [Runner.applyRedirs] rather than restored, so that a command written
+	// inside one of those bodies does not inherit it: an anonymous function
+	// has a body, and a group in it is spelled with a reserved word. A
+	// `( … )` is the fourth bracketed spelling and says so already, through
+	// redirOwnerASubshell.
+	bracketedCompoundRedirs bool
+
+	// heredocBodyLineShift is how far past the line the command began on a
+	// here-document **body** of that command is reported, which is nought
+	// in four columns and in the fifth for every command but one spelling.
+	// Set per redirection by [Runner.applyRedirs] and applied by
+	// [Runner.heredocBody]; see heredoccommandend.go for the grid.
+	heredocBodyLineShift int
+
 	// expansionBodyLine is the file line such a body begins on, or nought
 	// where the body has no line of its own — the older spelling's, which is
 	// numbered by the span the parser already placed in the file.

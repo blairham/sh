@@ -196,3 +196,48 @@ func TestATieKeepsTheOrderItWasWrittenIn(t *testing.T) {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
 	}
 }
+
+// Two digit runs of equal value consume nothing, so the byte at the position
+// the walk is standing on decides — which is the rule the numeric sort had
+// wrong until #4555, and the rows here are the ones that can tell the two
+// readings apart.
+//
+// A walk that stepped past an equal pair and carried on would answer `f1a`
+// before `f01z`, because `a` is before `z`; the reference answers `f01z`,
+// which is the plain byte order of the two names. Measured on zsh 5.9.2
+// (`/opt/homebrew/bin/zsh`, `-f`) under LC_ALL=C, 2026-09-26.
+func TestANumericTieDoesNotConsumeTheRun(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"what follows an equal run does not decide it",
+			`a=(f01z f1a); printf "[%s]" "${(@n)a}"`, "[f01z][f1a]",
+		},
+		{
+			"nor where the shorter name would have won",
+			`a=(h1x h01y); printf "[%s]" "${(@n)a}"`, "[h01y][h1x]",
+		},
+		{
+			"three spellings of one",
+			`a=(g1 g01 g001); printf "[%s]" "${(@n)a}"`, "[g001][g01][g1]",
+		},
+		{
+			"and the walk goes on where the runs are equal as text",
+			`a=(a9b1 a10b0 a9b100); printf "[%s]" "${(@n)a}"`, "[a9b1][a9b100][a10b0]",
+		},
+		{
+			"a signed pair ties the same way",
+			`a=(-01x -1y -10 -9 -1); printf "[%s]" "${(@-)a}"`, "[-10][-9][-01x][-1][-1y]",
+		},
+		{
+			"and a fold leaves the tie to the order it was written in",
+			`a=(F01z f1a F1A f01Z); printf "[%s]" "${(@oni)a}"`, "[F01z][f01Z][f1a][F1A]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, ordering, nil)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}

@@ -856,6 +856,9 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 	// no diagnostic quotes, and saying so would give every such function a
 	// record — see funcOrigin.text.
 	r.recordFunctionOrigin(name, r.currentFile(), 0, runningText{})
+	// The same notice the script's own definition route gives — see
+	// AtFunctionDefinition, and functionDefined for why every route has to.
+	r.functionDefined(name)
 	return true
 }
 
@@ -1771,6 +1774,32 @@ func (r *Runner) SetShellOptionNamespace(move func(r *Runner, name string, on bo
 // Only one letter is in that state and the entry says which.
 func (r *Runner) SetOptionLetterNames(names map[rune]string) {
 	r.optionLetterNames = names
+}
+
+// SetRefusedOptionLetters declares the letters this shell has no meaning for,
+// whatever the shared reading would make of them.
+//
+// The paired half of SetOptionLetterNames, and it exists because the two
+// halves of "which letters does this shell have" cannot both be a map: a
+// letter the dialect names is answered by the map, and a letter it does *not*
+// name falls through to the letters the panel shares — which is right for a
+// shell with one letter set and wrong for a shell that can be told to use
+// another.
+//
+// One shell in the panel can. Its `sh_option_letters` re-points the whole set
+// at sh's, and the sh set is the smaller of the two: measured 2026-09-26 on
+// zsh 5.9.2, `set -h`, `set -H` and `set -E` are `bad option` there while the
+// same three move an option under the shell's own letters. Left out of the
+// map they would reach the shared reading and be taken — `-H` outright, since
+// that letter's axis is answered, and `-h` and `-E` as an axis nobody
+// answered, which is a different refusal with a different status. So the
+// absence has to be stated rather than inferred.
+//
+// Replaced wholesale rather than added to, the way the map is, because a
+// dialect that swaps its letter set swaps both halves at once and a letter
+// left behind from the other set is exactly the bug this pair is for.
+func (r *Runner) SetRefusedOptionLetters(letters string) {
+	r.refusedOptionLetters = letters
 }
 
 // DialectOption reads one option name through this shell's own option

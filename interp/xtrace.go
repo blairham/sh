@@ -1001,6 +1001,36 @@ func (r *Runner) traceLineText(line string, d Diagnostics) string {
 // `unset PS4` does — three draw nothing at all and ksh93 keeps `+ ` — needs
 // that default to be a *parameter* this shell seeds as well, and is measured
 // and deliberately not modeled; see docs/spec/invocation.md.
+// sourceTraceWord is what stands where a traced command's words would go on
+// the line a sourced file's entry writes. A literal, because the event is not
+// a command and there is nothing of the script to render there.
+const sourceTraceWord = "<sourcetrace>"
+
+// traceSourcedFile writes the one line Runner.TracesEachSourcedFile promises,
+// at the moment the shell has entered the file and before anything in it has
+// run.
+//
+// The line is set to the file's first rather than left at the caller's,
+// because the prefix *is* a location in the dialect that has this switch —
+// the name comes off the borrowed stack this caller has already pushed, and
+// the number has to be the file's own 1. Restored immediately, so nothing
+// after this sees a line the file has not reached.
+//
+// Independent of `xtrace`: the two options are separate names for separate
+// events, and measured, either one traces with the other off.
+func (r *Runner) traceSourcedFile() {
+	if !r.tracesEachSourcedFile {
+		return
+	}
+	was := r.line
+	r.line = 1 + r.lineBase + r.lineOrigin
+	prefix := r.tracePrefix()
+	r.line = was
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	r.tracef("%s%s\n", prefix, sourceTraceWord)
+}
+
 func (r *Runner) tracePrefix() string {
 	if v, ok := r.getVar("PS4"); ok {
 		return r.tracePrefixDepth(r.renderTracePrefix(v))

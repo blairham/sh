@@ -63,3 +63,36 @@ func (r *Runner) recordFunctionOrigin(name, file string, lineBase int, text runn
 func (r *Runner) functionFile(name string) string {
 	return r.funcOrigins[name].file
 }
+
+// AtFunctionDefinition installs an observer this shell runs whenever a
+// function is defined, with the name that was just given a body.
+//
+// Beside AtEveryFunctionCall and for the same kind of reason: the *moment* is
+// the core's and what to do with it is the dialect's. One shell in the panel
+// marks every function defined inside an `emulate … -c` so that the emulation
+// is re-entered each time that function is later called, and the mark can
+// only be taken at the definition — a name written into the table and a name
+// redefined outside the emulation are the same event to this hook and
+// opposite answers to the dialect reading it.
+//
+// It is told about **every** definition and not only the ones a dialect would
+// mark, which is what makes taking a mark *off* possible: measured on zsh
+// 5.9.2, a function made sticky by `emulate -R sh -c` and then redefined at
+// the top level stops being sticky, and a hook that only fired inside an
+// emulation could not have seen that happen.
+//
+// The runner is a parameter rather than something the closure caught, for
+// AtEveryFunctionCall's reason: a subshell is a clone, so an observer writing
+// through a captured pointer would mark the shell it was registered in.
+func (r *Runner) AtFunctionDefinition(f func(r *Runner, name string)) {
+	r.atFunctionDefinition = append(r.atFunctionDefinition, f)
+}
+
+// functionDefined tells the observers. Called from the definition routes and
+// nowhere else — a route that skipped it would leave a mark standing over a
+// body it is not about.
+func (r *Runner) functionDefined(name string) {
+	for _, f := range r.atFunctionDefinition {
+		f(r, name)
+	}
+}

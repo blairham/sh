@@ -363,10 +363,22 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// that line. It is the same lineBase a command substitution's body runs
 	// under, and for the same reason, so nothing downstream has to know which
 	// kind of borrowed text it is inside.
+	//
+	// Unless the shell has been told this text is not a place at all, which
+	// is the one switch over the whole question — see
+	// Runner.EvalTextHasALocationOfItsOwn. Then the line stays pinned at the
+	// `eval`'s own and the text is never pushed onto the borrowed stack, so
+	// a diagnostic raised inside it names the script rather than the text.
+	keepsCallersLocation := s.eval && !r.EvalTextHasALocationOfItsOwn()
+	if keepsCallersLocation {
+		outerPin := r.linePin
+		r.linePin = r.lineNow()
+		defer func() { r.linePin = outerPin }()
+	}
 	outerBase := r.lineBase
 	r.lineBase = 0
 	defer func() { r.lineBase = outerBase }()
-	if s.eval && r.line != 1+r.lineOrigin {
+	if s.eval && !keepsCallersLocation && r.line != 1+r.lineOrigin {
 		// Asked at the disagreement and nowhere else: on the route's *first*
 		// line the two readings are the same offset — nothing — so an `eval`
 		// there has nothing to disagree about, and that is the shape most
@@ -396,16 +408,27 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	defer func() { r.runText = outerText }()
 	// What this text is called, for a run-time diagnostic raised inside it:
 	// the value that knows is here and the diagnostic is written far away.
-	r.borrowed = append(r.borrowed, borrowedText{sourced: s, callerLine: r.line})
-	defer func() { r.borrowed = r.borrowed[:len(r.borrowed)-1] }()
-	if !s.eval {
+	//
+	// Skipped whole for text that is not a place of its own, since the name
+	// and the line move together — the manual for the one option that turns
+	// this off names `$LINENO`, `%i` and `%N` in one sentence.
+	if !keepsCallersLocation {
+		r.borrowed = append(r.borrowed, borrowedText{sourced: s, callerLine: r.line})
+		defer func() { r.borrowed = r.borrowed[:len(r.borrowed)-1] }()
+	}
+	switch {
+	case keepsCallersLocation:
+		// Neither of the two below: the text is the caller's place, so it
+		// gains neither a file's prompt wording nor an `eval`'s own name.
+	case !s.eval:
 		// Inside a *file*, which stops a prompt's wording from reaching the
 		// diagnostics of the lines in it: a sourced file is a file however
 		// it was reached, and the shell that names one keeps its name and
 		// its line at a prompt. See Runner.diag and Runner.AtPrompt (#2024).
 		r.borrowedFiles++
 		defer func() { r.borrowedFiles-- }()
-	} else {
+		r.traceSourcedFile()
+	default:
 		// And text handed to `eval` is a place of its own to one dialect,
 		// which names it rather than the file or the function around it.
 		// The mark is the frame count, so anything the text calls stands

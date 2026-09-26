@@ -671,6 +671,12 @@ func (r *Runner) assocScalar(name string, a AssocArray) (string, bool) {
 // assignAssocLiteral is `m=([k]=v …)` on a declared name — and `m+=(…)`,
 // which keeps the elements already there where `=` starts over.
 func (r *Runner) assignAssocLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
+	if !r.scopeWarningsAreOff() {
+		// The keyed half of the array literal's scope lint, beside
+		// assignArrayLiteral's: a table is an `array parameter` to the
+		// sentence, measured. See interp/scopewarnings.go.
+		r.warnAboutTheScope(r.throughNameref(name), scopeWarningArray)
+	}
 	// Before the elements are expanded, because one reading refuses the shape
 	// and a refusal must not run what the literal holds: measured, zsh writes
 	// its sentence without the `$(…)` in a later element having run.

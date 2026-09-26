@@ -7468,6 +7468,32 @@ type Diagnostics struct {
 	// ShiftBadNumber says so. ShiftNegativeIsOutOfRange is what decides
 	// which of the two is reached.
 	ShiftNegativeCount string
+	// GlobalCreatedInAFunction is the sentence an opt-in lint writes when an
+	// assignment inside a function creates a parameter nothing else had —
+	// see Runner.WarnsAboutAGlobalCreatedInAFunction, which is what decides
+	// whether a dialect holding the wording writes it.
+	//
+	// Three verbs, in this order: %[1]s the word for what the name holds,
+	// `scalar` or `array`; %[2]s the parameter's name; %[3]s the name of the
+	// function the assignment was written in. The function's name twice over
+	// is what the reference writes — the location in front of the sentence
+	// is the function too — and a format is free to ignore any of the three.
+	//
+	// Empty means the dialect has no such sentence, which is four of the
+	// five: zsh alone has the lint, as `setopt warncreateglobal`.
+	GlobalCreatedInAFunction string
+	// EnclosingScopeSetInAFunction is the sibling sentence, for an
+	// assignment that reaches a parameter belonging to a scope *outside* the
+	// function it was written in — a calling function's `local`, or the
+	// global scope. See Runner.WarnsAboutAnEnclosingScopeSet.
+	//
+	// The same three verbs in the same order, because the two lints are one
+	// question asked of two states of the same name and a reader comparing
+	// the sentences should not have to compare their formats as well.
+	//
+	// Empty means the dialect has no such sentence. zsh alone has it, as
+	// `setopt warnnestedvar`.
+	EnclosingScopeSetInAFunction string
 	// ArithFloatDigits is how many significant digits a float is written to.
 	// ksh93 shows 15 and zsh 17, which is why `0.1+0.2` is 0.3 in one and
 	// 0.30000000000000004 in the other from the same arithmetic. Zero means

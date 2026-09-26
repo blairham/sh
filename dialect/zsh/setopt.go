@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 121 of the 185
+//     typing a directory name still does not change directory. 113 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -220,7 +220,7 @@ import (
 // operand are refused with the option off exactly as with it on. See
 // interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
 //
-// Nothing else about the split moved, and 121 is still most of the table.
+// Nothing else about the split moved, and 113 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -729,7 +729,23 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("evallineno", true),
+	// EVAL_LINENO: text handed to `eval` is a place of its own, with its own
+	// line numbering and its own name. On by default, and the default is
+	// what every shell in the panel does with nothing said, so this name is
+	// only ever a way *down* from it.
+	//
+	// It was `recorded` until #4551 — accepted, reported back correctly by
+	// `[[ -o evallineno ]]`, `$options[evallineno]` and the listings, and
+	// `$LINENO` went on counting the text from one whatever the state was.
+	// The vendor manual names three surfaces in one sentence — `$LINENO`,
+	// the `%i` prompt escape and the `%N` escape that writes `(eval)` — so
+	// it is one switch rather than a parameter's special case, which is why
+	// it is interp.Runner.EvalTextHasALocationOfItsOwn and not an axis: the
+	// columns agree about the default and only this one has a name for
+	// leaving it.
+	switchBacked("evallineno", true,
+		(*interp.Runner).EvalTextHasALocationOfItsOwn,
+		(*interp.Runner).SetEvalTextHasALocationOfItsOwn),
 	setOptBacked("exec", true, "noexec", true),
 	matchBacked("extendedglob", false, interp.ExtendedPatternOperators, false),
 	recorded("extendedhistory", false),
@@ -1191,7 +1207,18 @@ var zshOptions = []zshOption{
 		},
 	},
 	matchBacked("nullglob", false, interp.UnmatchedPatternIsEmpty, false),
-	recorded("numericglobsort", false),
+	// NUMERIC_GLOB_SORT: a run of digits in a match's name is read as the
+	// number it spells when a pathname expansion is put in order, so `f2`
+	// comes before `f10`. It was `recorded` until #4555.
+	//
+	// It is **not** bash's `GLOBSORT=numeric`, whose comparator this shell
+	// already had: that one compares two names as numbers only where both
+	// whole names are numbers, and the two answers differ on exactly the
+	// `f1 f2 f10` input this option exists for. See
+	// interp.Runner.SortsGlobMatchesNumerically, which carries the pair.
+	switchBacked("numericglobsort", false,
+		(*interp.Runner).SortsGlobMatchesNumerically,
+		(*interp.Runner).SetSortsGlobMatchesNumerically),
 	{
 		// zsh's OCTAL_ZEROES, and the one name in this table that turns the
 		// *rest of the panel's* arithmetic back on. A leading zero is not a
@@ -1399,7 +1426,47 @@ var zshOptions = []zshOption{
 		},
 	},
 	recorded("posixjobs", false),
-	recorded("posixstrings", false),
+	{
+		// POSIX_STRINGS: a `$'…'` string **ends at its first NUL**, so
+		// `a$'b\0c'd` is the three characters `abd`. Off by default here and
+		// on in the sh and ksh emulations — see emulateoptions.go, which held
+		// that row throughout.
+		//
+		// It was `recorded` until #4624, and what it names is an axis this
+		// shell already carries rather than a new reading: the panel gives
+		// [interp.Semantics.DollarSingleNul] three answers — the NUL ends the
+		// span in bash and ksh93, is a byte of it in zsh, and is dropped in
+		// BusyBox ash — and the option is zsh's name for moving between the
+		// first two. So this is the third shape of a name in this table that
+		// points at a field the vector holds, beside `shwordsplit`, `nomatch`
+		// and `ksharrays`.
+		//
+		// **The truncation is the span's and not the word's**, which is what
+		// the axis already says and what the option's own measurement
+		// confirms: `a$'b\0c'$'d\0e'f` is `abdf`, each string cut at its own
+		// NUL, with everything written outside them kept.
+		//
+		// The moment is the **expansion** and not the parse, measured before
+		// this was wired: a `setopt posixstrings` and the word on one line
+		// already truncate, and a function defined while the option was off
+		// truncates when it is called with the option on. That is the moment
+		// expandDollarSingle asks the axis at, so the option needed no
+		// arrangement of its own.
+		base: "posixstrings", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.DollarSingleNul == interp.DollarSingleNulEndsTheSpan
+		},
+		set: func(r *interp.Runner, on bool) int {
+			v := interp.DollarSingleNulIsAByte
+			if on {
+				v = interp.DollarSingleNulEndsTheSpan
+			}
+			setAxis(r, func(s *interp.Semantics) *interp.DollarSingleNulPolicy {
+				return &s.DollarSingleNul
+			}, v)
+			return 0
+		},
+	},
 	{
 		// POSIX_TRAPS: whether an EXIT trap set inside a function is the
 		// function's, firing at its return, or the shell's, firing when the
@@ -1593,7 +1660,10 @@ var zshOptions = []zshOption{
 	// is the measured `can't change option`, 1.
 	shinStdinOption(),
 	nullCommandOption("shnullcmd"),
-	recorded("shoptionletters", false),
+	// SH_OPTION_LETTERS: the single-letter options are read with sh's
+	// meanings rather than this shell's. See shOptionLettersOption, which is
+	// where the two tables are and what was measured about each letter.
+	shOptionLettersOption(),
 	recorded("shortloops", true),
 	recorded("shortrepeat", false),
 	{
@@ -1606,7 +1676,15 @@ var zshOptions = []zshOption{
 	},
 	singleCommandOption(),
 	recorded("singlelinezle", false),
-	recorded("sourcetrace", false),
+	// SOURCE_TRACE: one trace line as the shell enters each file it sources.
+	// It was `recorded` until #4550, and the prefix it needed was already
+	// built and already byte-identical to the reference's, because `xtrace`
+	// writes with it — so the gap was a trace aimed at no event rather than
+	// a trace this shell could not write. See
+	// interp.Runner.TracesEachSourcedFile for the measured table.
+	switchBacked("sourcetrace", false,
+		(*interp.Runner).TracesEachSourcedFile,
+		(*interp.Runner).SetTracesEachSourcedFile),
 	recorded("sunkeyboardhack", false),
 	recorded("transientrprompt", false),
 	recorded("trapsasync", false),
@@ -1639,8 +1717,24 @@ var zshOptions = []zshOption{
 	setOptBacked("unset", true, "nounset", true),
 	setOptBacked("verbose", false, "verbose", false),
 	editingOption("vi", "viins"),
-	recorded("warncreateglobal", false),
-	recorded("warnnestedvar", false),
+	// WARN_CREATE_GLOBAL: an assignment inside a function that creates a
+	// parameter nothing else had draws a sentence on standard error. It was
+	// `recorded` until #4553, and the scoping the lint has to observe was
+	// already built and already right — `local` and `typeset -g` behave
+	// correctly in both states — so what was missing was a reader rather
+	// than a mechanism. See interp.Runner.WarnsAboutAGlobalCreatedInAFunction.
+	switchBacked("warncreateglobal", false,
+		(*interp.Runner).WarnsAboutAGlobalCreatedInAFunction,
+		(*interp.Runner).SetWarnsAboutAGlobalCreatedInAFunction),
+	// WARN_NESTED_VAR: the sibling lint, for an assignment that reaches a
+	// parameter belonging to a scope *outside* the function it was written
+	// in. Recorded until #4554, and one question with the other: the name
+	// being created is warncreateglobal's subject and the name already
+	// existing outside this call is this one's, so a body assigning twice to
+	// one name draws one of each with both options on.
+	switchBacked("warnnestedvar", false,
+		(*interp.Runner).WarnsAboutAnEnclosingScopeSet,
+		(*interp.Runner).SetWarnsAboutAnEnclosingScopeSet),
 	setOptBacked("xtrace", false, "xtrace", false),
 	zleOption(),
 }
@@ -2191,7 +2285,7 @@ func registerSetopt(r *interp.Runner) {
 	// The third face of the same namespace: this shell's `set` gives a
 	// single letter to most of its options, and the letters are its own
 	// rather than the panel's. See setLetterOptions.
-	r.SetOptionLetterNames(setLetterOptions)
+	installOptionLetters(r, false)
 }
 
 // setLetterOptions are this shell's `set` option letters, each mapped to the
@@ -2536,4 +2630,107 @@ func editingOption(base, keymap string) zshOption {
 			return code
 		},
 	}
+}
+
+// shLetterOptions are the `set` option letters this shell reads when
+// `sh_option_letters` is on — the set it borrows from sh and ksh, which is
+// the smaller of the two and is not a relabelling of the other.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) a letter at a
+// time, in **both** routes and against the mode's own baseline: `zsh
+// [--emulate sh] -L script` for the invocation and `zsh -c '[emulate sh;]
+// set -L; setopt'` for the builtin, with the listing taken against the same
+// shell with no letter. The two routes agree on every row, which is what says
+// the table belongs to the letter reader rather than to the front end.
+//
+// Only the rows where the two sets disagree are written here; everything else
+// falls through to the letters the panel shares, exactly as it does under
+// this shell's own table. Three letters move and the rest of the difference
+// is an absence:
+//
+//	letter   this shell's set   sh's set
+//	-f       norcs              noglob
+//	-T       cdablevars         trapsasync
+//	-X       (taken, inert)     markdirs
+//	-d -g -h -k -w -y           bad option
+//	-B -D -E -F -G -H -I -J     bad option
+//	-K -L -M -N -O -P -Q -R     bad option
+//	-S -U -V -W -Y -Z -0…-9     bad option
+//
+// `-i`, `-l`, `-p`, `-r` and `-s` are here because they behave the same in
+// both sets and the *other* table names them: a letter this map leaves out is
+// read by the shared table, which has none of those five, so leaving them out
+// would refuse letters the reference takes. `-s` is the one that is taken and
+// moves nothing, in both sets — measured, `set -- c a b; set -s` leaves the
+// parameters alone under `emulate sh` as it does under zsh.
+var shLetterOptions = map[rune]string{
+	'f': "noglob",
+	'i': "interactive",
+	'l': "login",
+	'p': "privileged",
+	'r': "restricted",
+	's': "",
+	'T': "trapsasync",
+	'X': "markdirs",
+}
+
+// shRefusedLetters are the three letters sh's set does not have that the
+// shared reading would otherwise take.
+//
+// The rest of the absent letters need no entry: nothing outside this dialect
+// has ever heard of `-g`, `-w` or `-Y`, so leaving them out of the map above
+// already refuses them in the right words. These three are the ones the
+// substrate answers for — `-H` outright, `-h` and `-E` through an axis this
+// dialect has never had to answer because its own map reached them first —
+// and an absence there is not a refusal. See
+// interp.Runner.SetRefusedOptionLetters.
+const shRefusedLetters = "hHE"
+
+// installOptionLetters points the letter reader at one of the two sets.
+//
+// Both halves together, which is the whole point of their being a pair: a map
+// swapped without its refusals would leave the three letters above reaching
+// the shared reading, and refusals left behind from the other set would
+// refuse letters this set has.
+func installOptionLetters(r *interp.Runner, sh bool) {
+	if sh {
+		r.SetOptionLetterNames(shLetterOptions)
+		r.SetRefusedOptionLetters(shRefusedLetters)
+		return
+	}
+	r.SetOptionLetterNames(setLetterOptions)
+	r.SetRefusedOptionLetters("")
+}
+
+// shOptionLettersOption is `sh_option_letters`, which is the one name in this
+// table that changes what a *letter* means rather than what an option does.
+//
+// It was `recorded` until #4518, and the cost was on the invocation rather
+// than on `setopt`: `zsh --emulate sh -f` reads `-f` with this shell's
+// meaning and suppresses its startup files where the reference reads sh's and
+// turns globbing off. The emulation had already turned the option on in both
+// shells — that is the control the issue was measured against — so what was
+// missing was a reader and not a state.
+//
+// Store-backed rather than switch-backed on a state of its own, for
+// `checkrunningjobs`' reason: the state has nowhere better to live, and the
+// pair of tables it installs cannot be read back as a bit without asking
+// which map is installed. The store is what `[[ -o ]]`, `$options` and the
+// listings already read, so the report side is unchanged.
+//
+// **Not `recorded`, which is what makes an emulation reach it.** A recorded
+// name is reset by rewriting the store wholesale, and only a name with a
+// `set` of its own is put back through it — so an `emulate sh` would have
+// moved the state and left the letters where they were. That is the same
+// distinction storeBacked draws for every other name in this state, and here
+// it is load-bearing rather than tidy.
+func shOptionLettersOption() zshOption {
+	o := storeBacked("shoptionletters", false)
+	store := o.set
+	o.set = func(r *interp.Runner, on bool) int {
+		code := store(r, on)
+		installOptionLetters(r, on)
+		return code
+	}
+	return o
 }

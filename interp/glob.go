@@ -1261,7 +1261,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 				next = r.appendDescendants(next, dir, seeHidden, onward)
 			}
 			if !unsorted {
-				sortMatches(next)
+				r.sortMatches(next)
 			}
 		} else if !r.describesRatherThanSpells(part) {
 			// A component that **spells a name out** rather than describing
@@ -1359,7 +1359,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			return missed()
 		}
 		if !unsorted {
-			sortMatches(next)
+			r.sortMatches(next)
 		}
 		dirs = next
 		listed = next
@@ -1548,7 +1548,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	if ordered {
 		r.sortMatchesBy(out, paths, order)
 	} else {
-		sortMatches(out)
+		r.sortMatches(out)
 	}
 	if len(out) == 0 {
 		// Everything matched was the starting point itself — `**` over an
@@ -1841,7 +1841,24 @@ func collapseStarStarRun(parts []string) []string {
 // Which order that is — and why it is a decision rather than the absence of
 // one — is shellOrder in interp/order.go, and it is there rather than here
 // because a pathname expansion is not the only surface that asks.
-func sortMatches(names []string) { slices.SortFunc(names, shellOrder) }
+//
+// A method since #4555, because one shell in the panel has a switch that
+// moves the order: see Runner.SortsGlobMatchesNumerically. The three callers
+// are the two per-component sorts and the sort of the finished list, and all
+// three sort whole paths, so one comparator over the whole word answers them
+// together.
+func (r *Runner) sortMatches(names []string) {
+	slices.SortFunc(names, r.globMatchOrder())
+}
+
+// globMatchOrder is the comparator this shell puts a glob's matches in order
+// with, which is shellOrder unless a switch has been thrown.
+func (r *Runner) globMatchOrder() func(a, b string) int {
+	if r.globSortsNumerically {
+		return numericSegmentOrder
+	}
+	return shellOrder
+}
 
 // matchIn lists the entries of dir matching one pattern component. seeHidden
 // lifts the leading-period rule, which is the run-time option's doing and not

@@ -536,7 +536,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
-			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing)
+			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing, r.DoubledQuoteInSingleQuotes())
 		}
 	}
 	// And after the quoting, which is the order `${(Vq)}` measures: a tab
@@ -1588,17 +1588,27 @@ func (r *Runner) promptUnitName() string {
 // with `y=""` is nothing in the shell being modeled, and `(qq)`, `(qqq)`,
 // `(qqqq)`, `(q-)` and `(q+)` all write their own empty wrapper for the same
 // expansion.
-func quoteFlagged(v string, count int, mod byte, nothing bool) string {
+//
+// doubled is the writer's half of the option that reads a doubled quote
+// inside a single-quoted run as one literal quote. It reaches the two styles
+// that *choose single quotes* and no others — measured, `${(q)}`, `${(qqq)}`,
+// `${(qqqq)}` and `${(q-)}` are byte-identical in both states of it, the
+// first and last writing an embedded quote with a backslash outside any
+// quoting and the middle two not being single-quoted spellings at all.
+func quoteFlagged(v string, count int, mod byte, nothing, doubled bool) string {
 	switch mod {
 	case '-':
 		return quoteMinimal(v)
 	case '+':
-		return quoteExtended(v)
+		return quoteExtended(v, doubled)
 	}
 	switch count {
 	case 1:
 		return quoteWithBackslashes(v, nothing)
 	case 2:
+		if doubled {
+			return singleQuoted(v, "''", false)
+		}
 		return "'" + strings.ReplaceAll(v, "'", `'\''`) + "'"
 	case 3:
 		var b strings.Builder

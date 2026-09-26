@@ -1138,6 +1138,11 @@ func Semantics() interp.Semantics {
 	// /etc/pas*'` still expands the pattern, so the letter is spent on this
 	// here and on globbing everywhere else.
 	s.StartupFileOptions = interp.StartupFileOptions{
+		// The two emulations that re-point this shell's option letters at
+		// sh's, where `-f` is globbing and `-d` is no letter at all. The
+		// long spellings are unaffected and `-l` is login in both sets — see
+		// the field, which carries the measured table (#4518).
+		LettersBorrowedUnderEmulation: "sh ksh",
 		// Both spellings of login-ness, which zsh has like the other three.
 		Login:       "-l --login",
 		SuppressAll: "-f --no-rcs",
@@ -5351,10 +5356,22 @@ func Diagnostics() interp.Diagnostics {
 		ShiftTooMany: "shift count must be <= $#",
 		// A sentence of its own for the other end, naming neither the count
 		// nor the word.
-		ShiftNegativeCount:   "argument to shift must be non-negative",
-		StdinLocation:        interp.LocationNameOnly,
-		StdinBuiltinLocation: interp.LocationBuiltinNameOnly,
-		CannotExecute:        "%[2]s: %[1]s",
+		ShiftNegativeCount: "argument to shift must be non-negative",
+		// The two opt-in scope lints, whose switches the option table turns
+		// on — `setopt warncreateglobal` and `setopt warnnestedvar`. Both
+		// name the function twice, once in the location this dialect writes
+		// in front of a diagnostic raised inside a body and once in the
+		// sentence itself, which is the reference's own shape. Measured on
+		// zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f`, 2026-09-26:
+		// `f() { gv=1 }; f` is `f: scalar parameter gv created globally in
+		// function f` and `outer() { local lv=1; inner }; inner() { lv=2 }`
+		// is `inner: scalar parameter lv set in enclosing scope in function
+		// inner`.
+		GlobalCreatedInAFunction:     "%[1]s parameter %[2]s created globally in function %[3]s",
+		EnclosingScopeSetInAFunction: "%[1]s parameter %[2]s set in enclosing scope in function %[3]s",
+		StdinLocation:                interp.LocationNameOnly,
+		StdinBuiltinLocation:         interp.LocationBuiltinNameOnly,
+		CannotExecute:                "%[2]s: %[1]s",
 		// A `#!` line naming an interpreter that is not there, which this
 		// shell reads the file to find out about — and words the other way
 		// round from bash, with the complaint before the name it could not
@@ -5667,6 +5684,9 @@ func Apply(r *interp.Runner) {
 	// are shell functions whose working parts are these. See computil.go.
 	registerComputil(r)
 	registerLocalOptions(r)
+	// And the sticky emulation, which hangs off the same moment: see
+	// sticky.go for why it is registered after the option table's save.
+	registerStickyEmulation(r)
 	// `**/` crosses directory levels here with no option asked for, and
 	// there is no `setopt` name that turns it off — which is why this is a
 	// state the dialect sets rather than a name registered above. Measured

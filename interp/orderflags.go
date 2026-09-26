@@ -137,13 +137,17 @@ func compareWords(a, b string, fold, numeric, signed bool) int {
 		}
 		return shellOrder(a, b)
 	}
-	if c := compareNatural(a, b, fold, signed); c != 0 {
-		return c
-	}
-	// Numerically equal and not the same text: `(001 1 01)` comes back
-	// `001 01 1`, which is this shell's order and not the order they were
-	// written in, so the tie is broken rather than left to the stable sort.
-	return shellOrder(a, b)
+	// No tie-break beside it, and that is measured rather than left out.
+	// `(001 1 01)` comes back `001 01 1` — this shell's order and not the
+	// order they were written in — and compareNatural is what answers that,
+	// since two runs of equal value consume nothing and the byte at the
+	// position decides. A `shellOrder` behind it therefore could only ever
+	// fire on words the comparison above had already called equal, which is
+	// where the fold is: measured 2026-09-26 on zsh 5.9.2, `${(oni)}` over
+	// `F01z f1a F1A f01Z` is `F01z f01Z f1a F1A`, so a pair that differs only
+	// in case keeps the order it was written in. That tie-break was here and
+	// answered `F1A f1a` (#4555).
+	return compareNatural(a, b, fold, signed)
 }
 
 // compareNatural compares two words with each run of digits read as a number.
@@ -152,45 +156,44 @@ func compareWords(a, b string, fold, numeric, signed bool) int {
 // word, so a word is a sequence of digit and non-digit runs and the two are
 // compared differently.
 //
+// **A run that ties consumes nothing**, and that is the part this had wrong
+// until #4555. The walk used to step *past* two runs of equal value and carry
+// on from whatever followed them, which reads as the obvious thing to do and
+// is not what the reference does: measured on zsh 5.9.2
+// (`/opt/homebrew/bin/zsh`, `-f`), 2026-09-26, `${(on)}` over `f01z f1a`
+// answers `f01z f1a` where skipping the runs answers `f1a f01z`, because
+// `01` and `1` are equal as numbers and `a` is before `z`. Falling straight
+// through to the byte at the position the walk is standing on gives the
+// reference's answer on that pair and on `h01y h1x`, `f01 f1`, `g001 g01 g1`
+// and `0 00 000` alike.
+//
+// One consequence is worth naming, because it is what makes the rule easy to
+// state: the two walks never diverge, so there is one index rather than two.
+// Digits decide only where they *differ* as numbers; everything else is
+// shellOrder's answer one character at a time.
+//
 // signed is the `-` flag: a `-` standing in front of a digit run, in *both*
 // words at the same point, is that run's sign, and the comparison of the two
 // runs is inverted. In one word only it is no sign at all and falls through
 // to the character comparison — which is what keeps `-1` ahead of `-y`, and
 // what makes the flag invisible outside a pair of negatives, every digit
-// sorting above the `-` at 0x2d anyway.
+// sorting above the `-` at 0x2d anyway. Measured in the same run: `${(on-)}`
+// over `-10 -9 -01x -1 -1y -0 0 1` is that sequence, which the tie rule above
+// is what puts `-01x` ahead of `-1` in.
 func compareNatural(a, b string, fold, signed bool) int {
-	i, j := 0, 0
-	for i < len(a) && j < len(b) {
-		if signed && a[i] == '-' && b[j] == '-' &&
-			i+1 < len(a) && j+1 < len(b) && isDigit(a[i+1]) && isDigit(b[j+1]) {
-			i++
-			j++
-			ai, bj := i, j
-			for i < len(a) && isDigit(a[i]) {
-				i++
-			}
-			for j < len(b) && isDigit(b[j]) {
-				j++
-			}
-			if c := compareDigitRuns(a[ai:i], b[bj:j]); c != 0 {
+	for i := 0; i < len(a) && i < len(b); i++ {
+		switch {
+		case signed && a[i] == '-' && b[i] == '-' &&
+			i+1 < len(a) && i+1 < len(b) && isDigit(a[i+1]) && isDigit(b[i+1]):
+			if c := compareDigitRuns(leadingDigits(a[i+1:]), leadingDigits(b[i+1:])); c != 0 {
 				return -c
 			}
-			continue
-		}
-		if isDigit(a[i]) && isDigit(b[j]) {
-			ai, bj := i, j
-			for i < len(a) && isDigit(a[i]) {
-				i++
-			}
-			for j < len(b) && isDigit(b[j]) {
-				j++
-			}
-			if c := compareDigitRuns(a[ai:i], b[bj:j]); c != 0 {
+		case isDigit(a[i]) && isDigit(b[i]):
+			if c := compareDigitRuns(leadingDigits(a[i:]), leadingDigits(b[i:])); c != 0 {
 				return c
 			}
-			continue
 		}
-		x, y := a[i], b[j]
+		x, y := a[i], b[i]
 		if fold {
 			x, y = lowerByte(x), lowerByte(y)
 		}
@@ -200,16 +203,23 @@ func compareNatural(a, b string, fold, signed bool) int {
 			}
 			return 1
 		}
-		i++
-		j++
 	}
 	switch {
-	case i < len(a):
+	case len(a) > len(b):
 		return 1
-	case j < len(b):
+	case len(a) < len(b):
 		return -1
 	}
 	return 0
+}
+
+// leadingDigits is the maximal run of digits at the front of s.
+func leadingDigits(s string) string {
+	i := 0
+	for i < len(s) && isDigit(s[i]) {
+		i++
+	}
+	return s[:i]
 }
 
 // compareDigitRuns compares two runs of digits as numbers, without converting

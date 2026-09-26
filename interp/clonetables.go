@@ -449,6 +449,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.reaped = slices.Clone(r.reaped)
 	c.procSubJobs = slices.Clone(r.procSubJobs)
 	c.aroundFunctionCalls = slices.Clone(r.aroundFunctionCalls)
+	c.atFunctionDefinition = slices.Clone(r.atFunctionDefinition)
 	c.freezeAfter = slices.Clone(r.freezeAfter)
 
 	// traps, inheritedIgnored and selfPending are deliberately not here.

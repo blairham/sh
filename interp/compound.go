@@ -1258,6 +1258,11 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// from was running at, which its body goes on being numbered from when
 	// it is called later. See funcOrigin.
 	r.recordFunctionOrigin(c.Name, r.currentFile(), r.lineBase, r.runText)
+	// And whatever a dialect wants told about a definition, which is a
+	// different question from where it came from: one shell marks every
+	// function defined inside an emulation so that the emulation is
+	// re-entered whenever it is later called. See AtFunctionDefinition.
+	r.functionDefined(c.Name)
 	// And, in the dialect that reads a function name as a condition, the
 	// definition *is* the trap — see trapfunction.go. After the tables
 	// above, because binding it looks the function up by name.

@@ -86,6 +86,22 @@ func setLocalOptions(r *interp.Runner, on bool) {
 	_ = zshOptions[localOptionsIndex].set(r, on)
 }
 
+// shOptionLettersIndex is where `shoptionletters` sits, resolved once for the
+// same reason localOptionsIndex is. Read by restore above, which has to ask
+// the option what state it was put back into rather than what it was doing.
+var shOptionLettersIndex = zshOptionIndex["shoptionletters"]
+
+// localPatternsIndex is where `localpatterns` sits, resolved once for the
+// same reason localOptionsIndex is.
+var localPatternsIndex = zshOptionIndex["localpatterns"]
+
+// setLocalPatterns moves `localpatterns`, which `emulate -L` turns on beside
+// the other two — see emulate.go for why it is three names and for what the
+// option does and does not reach here.
+func setLocalPatterns(r *interp.Runner, on bool) {
+	_ = zshOptions[localPatternsIndex].set(r, on)
+}
+
 // saveOptionState takes the table as it stands.
 //
 // The three axis-backed names are read like the rest and put back with the
@@ -129,6 +145,17 @@ func (s optionState) restore(r *interp.Runner) {
 		}
 	}
 	r.SetVar(emulationMode, s.mode)
+	// And the letter set, which is a *table* rather than a bit and so is not
+	// put back by the loop above. `shoptionletters` keeps its state in the
+	// recorded store, which the wholesale write two lines up has already put
+	// back — so the loop reads the name where it is being put, calls nothing,
+	// and the tables the option installs stay as the body left them.
+	//
+	// Measured before this was here: `emulate sh -c ':'; set -f` turned
+	// globbing off afterwards, where the reference reads `-f` as `norcs`
+	// again, and a function whose body ran `emulate -L sh` left sh's letters
+	// standing in its caller (#4518).
+	installOptionLetters(r, zshOptions[shOptionLettersIndex].get(r))
 }
 
 // restoreIfLocal is what a function return does with the table its own entry

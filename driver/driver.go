@@ -1358,14 +1358,39 @@ type invocation struct {
 // Separate from startupOption because that one has a side effect and this
 // question is asked in a switch's condition. The two read the same four lists,
 // which is why neither takes an opinion about what a spelling means.
-func (sh Shell) namesStartupOption(spelling string) bool {
+func (sh Shell) namesStartupOption(spelling string, borrowed bool) bool {
 	o := sh.Semantics.StartupFileOptions
 	return spelt(o.Login, spelling) ||
-		spelt(o.SuppressAll, spelling) ||
-		spelt(o.SuppressSystem, spelling) ||
+		sh.speltHere(o.SuppressAll, spelling, borrowed) ||
+		sh.speltHere(o.SuppressSystem, spelling, borrowed) ||
 		spelt(o.SuppressLogin, spelling) ||
 		spelt(o.SuppressInteractive, spelling) ||
 		spelt(o.NameInteractive, spelling)
+}
+
+// lettersAreBorrowed reports whether the emulation this invocation named
+// re-points the shell's option letters at another shell's, so that the
+// one-letter spellings of the two suppression options are not this shell's
+// any more. See StartupFileOptions.LettersBorrowedUnderEmulation.
+//
+// The mode word is read rather than the option it turns on, because there is
+// no runner yet to ask: the letters are judged as the command line is read,
+// and the dialect's own table is installed on a shell that does not exist at
+// that point. The order is what makes it possible at all — this shell refuses
+// an `--emulate` that another option word came before.
+func (sh Shell) lettersAreBorrowed(inv *invocation) bool {
+	return inv.emulating &&
+		spelt(sh.Semantics.StartupFileOptions.LettersBorrowedUnderEmulation, inv.emulation)
+}
+
+// speltHere is spelt with the borrowed-letter rule applied: a one-letter
+// spelling is not this shell's while another shell's letter set is in force,
+// and a long spelling always is.
+func (sh Shell) speltHere(list, spelling string, borrowed bool) bool {
+	if borrowed && len(spelling) == 2 && spelling[0] == '-' {
+		return false
+	}
+	return spelt(list, spelling)
 }
 
 // spelt reports whether a whitespace-separated list of option spellings holds
@@ -1387,12 +1412,13 @@ func spelt(list, spelling string) bool {
 // be skipped, which is measured and is what those two do.
 func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
 	o := sh.Semantics.StartupFileOptions
+	borrowed := sh.lettersAreBorrowed(inv)
 	switch {
 	case spelt(o.Login, spelling):
 		inv.startup.login = true
-	case spelt(o.SuppressAll, spelling):
+	case sh.speltHere(o.SuppressAll, spelling, borrowed):
 		inv.startup.none = true
-	case spelt(o.SuppressSystem, spelling):
+	case sh.speltHere(o.SuppressSystem, spelling, borrowed):
 		inv.startup.noSystem = true
 	case spelt(o.SuppressLogin, spelling):
 		inv.startup.noLogin = true
@@ -1775,7 +1801,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			inv.stringCatalog = true
 		case ch == 's' && on:
 			inv.fromStdin = true
-		case on && sh.namesStartupOption("-"+string(ch)):
+		case on && sh.namesStartupOption("-"+string(ch), sh.lettersAreBorrowed(inv)):
 			// A startup-file option written as one letter, which bundles
 			// like any other: `zsh -if` is `-i` and `-f`. Only the minus
 			// spelling — no shell in the panel gives `+f` a meaning, and a

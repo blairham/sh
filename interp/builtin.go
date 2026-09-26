@@ -1486,6 +1486,16 @@ var setLetterNames = map[rune]string{
 // would be worse than refusing the whole line.
 func (r *Runner) setLetters(letters string, on bool) bool {
 	for _, opt := range letters {
+		if strings.ContainsRune(r.refusedOptionLetters, opt) {
+			// A letter this shell has no meaning for *at all*, whatever the
+			// shared reading below would make of it — see
+			// Runner.SetRefusedOptionLetters. Ahead of every table, because
+			// the whole of what it says is that none of them applies.
+			if !r.badSetOptionLetter(opt, on) {
+				return false
+			}
+			continue
+		}
 		if name, ok := r.optionLetterNames[opt]; ok {
 			// A letter this shell spells its own way, which is asked first
 			// because the letters that need a dialect table are exactly the

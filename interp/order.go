@@ -87,3 +87,23 @@ func shellOrder(a, b string) int { return strings.Compare(a, b) }
 func shellOrderFolded(a, b string) int {
 	return shellOrder(strings.ToLower(a), strings.ToLower(b))
 }
+
+// numericSegmentOrder is shellOrder with each run of digits read as the
+// number it spells, which one shell in the panel asks for when it generates
+// filenames — see Runner.SortsGlobMatchesNumerically.
+//
+// The same comparator the `n` flag of a parameter expansion reaches, and one
+// implementation rather than two: the two surfaces were measured against each
+// other before this was written and the reference answers them identically,
+// including on the pair that decides the rule. Measured on zsh 5.9.2
+// (`/opt/homebrew/bin/zsh`, `-f`), 2026-09-26, over a directory holding the
+// same nine names as the array:
+//
+//	setopt numericglobsort; print -r -- *   f01z f1a f010 f10 g001 g01 g1 h01y h1x
+//	print -r -- ${(on)a}                    f01z f1a f010 f10 g001 g01 g1 h01y h1x
+//
+// A second comparator beside compareNatural would have been a second place
+// for the rule to be wrong in, which is what happened to the first draft of
+// this: it was written out again here and got the `f01z` row right while the
+// flag next door went on getting it wrong.
+func numericSegmentOrder(a, b string) int { return compareNatural(a, b, false, false) }

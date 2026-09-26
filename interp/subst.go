@@ -1119,6 +1119,12 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 		// Asked only from inside one, which is where the columns differ: at
 		// the top level there is nothing to escape and every column already
 		// agrees, so a script without subshells never reaches the axis.
+		//
+		// **Which** axis is Runner.substParseErrorEscapesASubshell's to
+		// pick, because a here-document body is graded by the axis that
+		// already settles how far a refusal in one reaches, and that is not
+		// this split: bash ends the script from a word in a pipeline element
+		// and carries the line on from a body in the same place (#4709).
 		// The number the refusal leaves behind. Read before the stop is
 		// recorded, so the box a subshell's failure travels in and the
 		// status this shell reports are the same number rather than two
@@ -1127,9 +1133,7 @@ func (r *Runner) readSubstBody(span syntax.Span) (*syntax.File, int, int, bool) 
 		// script's own line.
 		_, offTheScriptsLine := r.borrowedAtLocation()
 		status := r.substParseFailureStatus(offTheScriptsLine)
-		if r.inSubshell &&
-			r.ask(r.sem().SubstitutionParseErrorEscapesASubshell,
-				"a substitution body that does not parse ending the script from inside a subshell") {
+		if r.inSubshell && r.substParseErrorEscapesASubshell() {
 			r.recordScriptStop(status)
 		}
 		r.status = status

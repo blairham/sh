@@ -31,6 +31,20 @@ import "sync/atomic"
 // and it is taken at the one sequence point every command already passes
 // through.
 //
+// # And a here-document body is graded by its own axis, in every position
+//
+// The box is how far a failure reaches, and **where the substitution was
+// written** decides which axis says. A `$( … )` in an ordinary word is
+// Semantics.SubstitutionParseErrorEscapesASubshell's; the same `$( … )` in a
+// **here-document body** is
+// Semantics.SubstitutionParseFailureInAHeredocBodyEndsTheShell's, which is
+// the axis that already settles how far that failure reaches on a command of
+// its own. Reading the subshell axis for a body meant one failure graded by
+// two rules, and bash — which answers Yes to the first and No to the second —
+// ended the script from a here-document body on a pipeline element, a
+// background command, a `( … )` and a `$( … )` where it carries the line on
+// (#4709). See Runner.substParseErrorEscapesASubshell.
+//
 // # What it is not
 //
 // It is not `exit`. `( exit 3 ); echo after` prints `after` in every column,
@@ -45,6 +59,37 @@ type scriptStop struct {
 	// hi; for) | cat` is 2 in bash 5.3.20, 1 in zsh 5.9.2 and 2 in dash, and
 	// `cat` succeeded in every one of them.
 	status atomic.Int64
+}
+
+// substParseErrorEscapesASubshell asks whichever axis owns this failure
+// whether it ends the script from inside a subshell.
+//
+// One question, two axes, and where the substitution was written picks — the
+// shape [Runner.bodyExpandedElsewhere] already has one construct over, and
+// for the same reason: the two are not the same split. bash answers Yes to
+// the word's axis and No to the body's, and ksh93 answers No to both, so
+// neither can stand in for the other.
+//
+// The body's axis is **read** rather than asked, because
+// [Runner.giveUpTheCommand] asks it at heredocBodyBoundary — the boundary
+// every such body goes through on its way to costing the command — and a
+// second ask would report one failure's unanswered axis twice. The same
+// choice [Runner.commandBuiltinRunsInThisShell] makes one question along.
+//
+// The pair that says the noun is the **body** and not the position: hold the
+// position fixed at a pipeline element and move the substitution. Measured
+// 2026-09-26 over a script file, `v=$(echo hi; for) | cat` ends bash 5.3.20's
+// script at 2, and `cat <<END | cat` with the same substitution in its body
+// runs the rest of the line and leaves the script at 0. Hold the *body* fixed
+// instead and move it through seven positions — an external command, each of
+// the three places in a pipeline, `&`, `( … )` and `$( … )` — and bash does
+// not end the script at any of them.
+func (r *Runner) substParseErrorEscapesASubshell() bool {
+	if r.inHeredocBody {
+		return r.sem().SubstitutionParseFailureInAHeredocBodyEndsTheShell == Yes
+	}
+	return r.ask(r.sem().SubstitutionParseErrorEscapesASubshell,
+		"a substitution body that does not parse ending the script from inside a subshell")
 }
 
 // recordScriptStop notes that a substitution's parse failure has ended the

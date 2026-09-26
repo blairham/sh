@@ -1,0 +1,103 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# A here-document body holding a substitution that will not parse, by the
+# position the redirection's command is written in (#4709).
+#
+# This is the column the question is decided in. bash answers **Yes** to
+# whether such a failure in an ordinary word escapes a subshell and ends the
+# script, and **No** to whether one in a here-document body ends the shell —
+# so the two axes disagree, and every position where the command is also a
+# subshell is a row that says which of them is read. All of them read the
+# body's.
+#
+# The give-up costs the command in every row: `cat` never runs, and the
+# refusal is reported once. What the rows differ on is only how far the stop
+# then reaches, which is why each prints the status on the redirection's *own
+# line* — a marker on the line after the delimiter is printed by a give-up
+# that costs the line as well as by one that costs only the command, and
+# cannot tell them apart.
+#
+# The last block is the pair that says the noun is the **body**: the same
+# substitution, the same pipeline element, written in an ordinary word
+# instead. It ends the script here, so it is last.
+#
+# Measured 2026-09-26 against /opt/homebrew/bin/bash 5.3.20.
+
+pos_zz() { printf -- '--- %s\n' "$1"; }
+f_zz() { cat; }
+
+pos_zz 'a command of its own, which is the row that was already right'
+cat <<END ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'the first element of a pipeline'
+cat <<END | cat ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a middle element'
+: | cat <<END | cat ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'the last element, whose status the pipeline reports'
+: | cat <<END ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a background command'
+cat <<END &
+$(echo hi; for)
+END
+wait
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a command inside a subshell'
+( cat <<END
+$(echo hi; for)
+END
+) ; printf 'same line st=%s\n' "$?"
+
+pos_zz 'a pipeline inside a subshell'
+( cat <<END | cat
+$(echo hi; for)
+END
+) ; printf 'same line st=%s\n' "$?"
+
+pos_zz 'a builtin on a pipeline element, which this shell runs itself'
+: <<END | cat ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a function on a pipeline element'
+f_zz <<END | cat ; printf 'same line st=%s\n' "$?"
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'what a pipeline reports is not caught by || here, because cat succeeded'
+cat <<END | cat || printf 'CAUGHT\n'
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'a quoted delimiter is the control: nothing is expanded and nothing refused'
+cat <<'END' | cat
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+# The discriminating pair, and the last thing in this file: the same failing
+# substitution on the same pipeline element, in an ordinary word rather than
+# in a here-document body. That one is the *word's* axis and ends the script,
+# which is what says the rows above are the body being graded by its own.
+pos_zz 'the same substitution in a word on a pipeline element ends the script'
+v_zz=$(echo hi; for) | cat
+printf 'never reached st=%s\n' "$?"

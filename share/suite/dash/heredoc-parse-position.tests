@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# A here-document body holding a substitution that will not parse, on a
+# command that is also a subshell (#4709).
+#
+# This column answers **Yes** to whether such a failure in a here-document
+# body ends the shell, so the position decides nothing here and the script
+# ends wherever the body is written. That is what makes it the other side of
+# the pair: bash carries the same line on from a pipeline element, and the two
+# readings are told apart by the columns rather than by the shapes.
+#
+# The discriminating case is last, because it ends the script: anything after
+# it would never be reached. The controls come first, and they are what say
+# the ending is the refusal's doing rather than the shape's — a body that
+# *parses* on the same pipeline element runs its command and carries on, and
+# a quoted delimiter leaves the same bytes literal.
+#
+# Measured 2026-09-26 against dash 0.5.12 (/bin/dash).
+
+pos_zz() { printf -- '--- %s\n' "$1"; }
+
+pos_zz 'the controls first: a body that parses, on a pipeline element'
+cat <<END | cat
+a body with $(echo nothing) wrong in it
+END
+printf 'after st=%s\n' "$?"
+
+pos_zz 'and a quoted delimiter, which leaves the same bytes literal'
+cat <<'END' | cat
+$(echo hi; for)
+END
+printf 'after st=%s\n' "$?"
+
+# The discriminating case, and the last thing in this file: the script ends
+# here at 2 and neither line below is reached.
+pos_zz 'a body that will not parse, on a pipeline element'
+printf 'start\n'
+cat <<END | cat
+$(echo hi; for)
+END
+printf 'never reached st=%s\n' "$?"

@@ -1432,6 +1432,16 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 		// Runner.substFailureRoute.
 		was, wasLine := r.inBodyReadAtExpansion, r.expansionBodyLine
 		r.inBodyReadAtExpansion, r.expansionBodyLine = true, 0
+		// And that it is a here-document body rather than the other text
+		// that field covers, which is a second question asked of the same
+		// two lines of the same file: a substitution in a body that will
+		// not parse is graded by the here-document's own axis wherever it
+		// is written, and the same substitution in a *backquoted* body is
+		// not. The here-string above is excluded from both for the same
+		// reason — its word is read with the script's line. See
+		// Runner.substParseErrorEscapesASubshell.
+		wasHeredoc := r.inHeredocBody
+		r.inHeredocBody = true
 		if rd.Heredoc != nil && rd.Heredoc.Start.Line > 0 {
 			// And where the body sits in the file. The body is lexed again
 			// from its own text — see Runner.rawSpans — so everything in it
@@ -1443,7 +1453,10 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 			// line, which is the file's numbering throughout.
 			r.expansionBodyLine = int(rd.Heredoc.Start.Line)
 		}
-		defer func() { r.inBodyReadAtExpansion, r.expansionBodyLine = was, wasLine }()
+		defer func() {
+			r.inBodyReadAtExpansion, r.expansionBodyLine = was, wasLine
+			r.inHeredocBody = wasHeredoc
+		}()
 	}
 	if r.redirOwner == redirOwnerThisShell {
 		// The shell runs this command itself and there is no other process

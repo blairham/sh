@@ -2571,6 +2571,13 @@ func Semantics() interp.Semantics {
 	// would have kept it. See
 	// Semantics.BareElementsInATableLiteralAreEachOneValue.
 	s.BareElementsInATableLiteralAreEachOneValue = interp.No
+	// And they must pair off: an odd number of fields is refused rather than
+	// leaving the last one a key with nothing under it. Measured 2026-09-26,
+	// `typeset -A h=(a 1 b)` is `bad set of key/value pairs for associative
+	// array`, the shell exits 1 and nothing after it runs, where the even
+	// `typeset -A h=(a 1 b 2)` and the repeated-key `typeset -A h=(a 1 a 2)`
+	// are both taken. See Semantics.BareElementsInATableLiteralMustPairOff.
+	s.BareElementsInATableLiteralMustPairOff = interp.Yes
 	s.ArrayLiteralSubscriptIsAKey = interp.No
 	// A `[k]+=` element joins what the literal has built, not the table it
 	// replaced: `typeset -A m; m[k]=v; m=([k]+=x)` is `x`.
@@ -4269,6 +4276,13 @@ func Diagnostics() interp.Diagnostics {
 		// `bad [key]=value syntax for associative array` and the script stops.
 		// See interp.Semantics.MixedTableLiteral (#4241).
 		MixedTableLiteralRefusal: "bad [key]=value syntax for associative array",
+		// A table literal whose bare elements came to an odd number of
+		// fields, which this shell will not pair off. Measured 2026-09-26,
+		// `typeset -A h=(a 1 b)` is `bad set of key/value pairs for
+		// associative array` on standard error and the shell leaves at 1; from
+		// inside a function the function's name is what goes in front of it.
+		// See interp.Semantics.BareElementsInATableLiteralMustPairOff (#4594).
+		UnpairedTableLiteralElements: "bad set of key/value pairs for associative array",
 		// The four loops this shell has, and the builtin's name is stripped
 		// back out of the front of it because this dialect puts it in the
 		// location: `zsh:break:1: not in while, …`.

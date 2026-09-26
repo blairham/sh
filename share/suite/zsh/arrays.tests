@@ -100,3 +100,40 @@ h=(p q r)
 unset 'h[1]'
 printf 'count after removing one: %s\n' "${#h[@]}"
 printf 'the slot is still there: [%s][%s][%s]\n' "$h[1]" "$h[2]" "$h[3]"
+
+# ---- a table literal's words have to pair off ----
+
+# A flat list assigned to a table is read as key, value, key, value, so an odd
+# number of words has one with no partner. zsh refuses it; bash takes the last
+# word as a key with nothing under it. The refusal ends the shell, so every row
+# here is inside `eval`, whose text is what ends instead — which is also how
+# the table can be read afterwards.
+typeset -A pairs=(x 9)
+eval 'pairs=(a 1 b)' 2>&1
+printf 'odd: st=%s n=%s x=%s a=%s\n' "$?" "${#pairs}" "${pairs[x]}" "${pairs[a]-ABSENT}"
+
+# The controls, each of which is taken. The repeated key is the one a check
+# written on the key set rather than on the word count would refuse: two pairs
+# make one element, and the later value wins.
+typeset -A even=(a 1 b 2)
+printf 'even: st=%s n=%s\n' "$?" "${#even}"
+typeset -A blank=()
+printf 'empty: st=%s n=%s\n' "$?" "${#blank}"
+typeset -A dup=(a 1 a 2)
+printf 'repeated key: st=%s n=%s a=%s\n' "$?" "${#dup}" "${dup[a]}"
+
+# And the count is over what the words came to, not over how many were
+# written: one element either way, and only what it expands to moves the
+# answer. This is the shape a script hits — a list handed in from somewhere
+# else rather than typed out.
+w=(a 1 b)
+eval 'typeset -A fromlist=($w)' 2>&1
+printf 'odd from a list: st=%s\n' "$?"
+w=(a 1 b 2)
+typeset -A fromlist2=($w)
+printf 'even from a list: st=%s n=%s\n' "$?" "${#fromlist2}"
+
+# The same words over a name that is not a table are an ordinary array, so it
+# is the target's kind that puts the question and not the words.
+plain=(a 1 b)
+printf 'not a table: st=%s n=%s\n' "$?" "${#plain}"

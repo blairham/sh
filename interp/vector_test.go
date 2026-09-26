@@ -26,12 +26,12 @@ import (
 // axis rather than guessing, so a suite that runs whole scripts needs the gaps
 // filled before it can run at all.
 //
-// The thirty-two below are the ones these tests reach, and each is here
+// The thirty-three below are the ones these tests reach, and each is here
 // because removing it turns a test red — the set was reduced field by field
 // against the suite until nothing more could come out. That is what makes this
 // a statement about the substrate's tests rather than a copy of a shell: 183
 // axes separate bash's preset from the standard's, and the substrate's tests
-// depend on 32.
+// depend on 33.
 //
 // Where an answer had to be chosen, it is the one the assertions were written
 // against, which came from bash. A test that is *about* an axis still sets it
@@ -131,6 +131,13 @@ func testSemantics() Semantics {
 	// answer and the floor here as everywhere else in this function. The
 	// suite that is *about* it sets both sides — see tableliteralvalue_test.go.
 	s.BareElementsInATableLiteralAreEachOneValue = Yes
+	// And an odd number of those fields is taken rather than refused, which is
+	// bash's answer and the floor here as everywhere else in this function.
+	// It is reached by the suite above without being its subject: `m=($k $v)`
+	// with `k='1 2'` comes to five fields under the other reading of that
+	// axis, and five is odd. The suite that is *about* this one sets both
+	// sides — see tableliteralpairs_test.go.
+	s.BareElementsInATableLiteralMustPairOff = No
 	s.NegativeSubscriptPastTheStartInserts = No
 	// `a+=x` over a name holding an array, and the two array letters given to
 	// a name holding a scalar. bash's answers, which is the floor these

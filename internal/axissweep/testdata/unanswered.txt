@@ -60,6 +60,7 @@ ash   BadSubscriptToADeclaration
 ash   BadSubscriptToAnOutputOperand
 ash   BadSubscriptToUnset
 ash   BareElementsInATableLiteralAreEachOneValue
+ash   BareElementsInATableLiteralMustPairOff
 ash   BareFloatLetterResetsThePrecision
 ash   BareSubscriptIsASubscript
 ash   BareTypesetListing
@@ -340,6 +341,7 @@ dash  BadSubscriptToADeclaration
 dash  BadSubscriptToAnOutputOperand
 dash  BadSubscriptToUnset
 dash  BareElementsInATableLiteralAreEachOneValue
+dash  BareElementsInATableLiteralMustPairOff
 dash  BareFloatLetterResetsThePrecision
 dash  BareReadTakesTheLineWhole
 dash  BareSubscriptIsASubscript
@@ -583,6 +585,7 @@ ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
 ksh   BadNameToPrintfFatal
 ksh   BareElementsInATableLiteralAreEachOneValue
+ksh   BareElementsInATableLiteralMustPairOff
 ksh   BareSubscriptIsASubscript
 ksh   BuiltinReadsOptions
 ksh   CommandTrackingStartsOn

@@ -6569,6 +6569,14 @@ type Diagnostics struct {
 	// it whichever way round it was written. No verbs: the sentence names
 	// neither the name nor the element there.
 	MixedTableLiteralRefusal string
+	// UnpairedTableLiteralElements is a keyed literal whose bare elements came
+	// to an odd number of fields, in the dialect that will not take the last
+	// one as a key with nothing under it. No verbs: the sentence names neither
+	// the name nor the word that was left over.
+	//
+	// See Semantics.BareElementsInATableLiteralMustPairOff for the rows and
+	// for what the refusal costs.
+	UnpairedTableLiteralElements string
 
 	// EmptyKeyInATableLiteralPair is an empty key among a table literal's bare
 	// words — `m=(p 1 "" x)`. One verb, the word as **written**, quotes and all.

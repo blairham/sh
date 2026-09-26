@@ -5253,6 +5253,12 @@ func Diagnostics() interp.Diagnostics {
 		// at expansion time is given — see the field.
 		SubstitutionParseFailureQuotesTheWord: true,
 		SubstitutionParseFailureSentence:      "parse error in command substitution",
+		// A here-document body's refusal stands after the document and is
+		// followed by the bare sentence rather than by the word's quote or
+		// by an open context the body never held. See
+		// interp/heredocbodyrefusallocation.go (#4714).
+		HeredocBodyRefusalIsLocatedAfterTheDelimiter: true,
+		HeredocBodyRefusalSentence:                   "parse error",
 		// The word again, the same as for `$(` — and for `$[` too, which
 		// this shell has and refuses the same way.
 		UnmatchedArithSubst: "parse error near `%[3]s'",

@@ -4398,6 +4398,28 @@ type Diagnostics struct {
 	// speaking builtin's bracket (#4715).
 	HeredocBodyRefusalNamesTheLineItIsLocatedAt bool
 
+	// HeredocBodyRefusalIsLocatedAfterTheDelimiter places a substitution
+	// refused in a here-document body at the line *after* the document
+	// rather than at the line the body holds it on, for both of the messages
+	// the dialect writes about it.
+	//
+	// zsh alone, and the line is the delimiter's plus one where a line
+	// follows it in the program — the same "the reader took the newline"
+	// rule its second message already follows everywhere else. See
+	// interp/heredocbodyrefusallocation.go for the seven rows and for the
+	// one with no final newline, which is what says the `+1` is that rule
+	// and not a constant (#4714).
+	HeredocBodyRefusalIsLocatedAfterTheDelimiter bool
+
+	// HeredocBodyRefusalSentence is what that dialect writes under the
+	// refusal, in place of the quote one dialect echoes and the
+	// open-context lines another writes per level. No verbs.
+	//
+	// Empty for the four columns that write nothing there. Read only where
+	// the field above applies, which is what keeps a here-**string** and the
+	// older substitution spelling on the ordinary route.
+	HeredocBodyRefusalSentence string
+
 	// SubstitutionParseFailureNamesTheConstruct puts `command substitution:`
 	// between the shell's name and the line when the refusal is a
 	// substitution *body's* rather than the script's own.

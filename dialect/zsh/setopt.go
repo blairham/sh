@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 113 of the 185
+//     typing a directory name still does not change directory. 112 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -220,7 +220,7 @@ import (
 // operand are refused with the option off exactly as with it on. See
 // interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
 //
-// Nothing else about the split moved, and 113 is still most of the table.
+// Nothing else about the split moved, and 112 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -1667,11 +1667,58 @@ var zshOptions = []zshOption{
 	recorded("rmstarwait", false),
 	recorded("sharehistory", false),
 	recorded("shfileexpansion", false),
-	// sh-style globbing narrows the pattern language to the standard's. This
-	// shell does not narrow it, which is the state, and zsh's default is the
-	// same, so the listings do not move. The prompt theme this machine loads
-	// reads the name at its third line.
-	recorded("shglob", false),
+	{
+		// SH_GLOB: sh-style globbing narrows the pattern language to the
+		// standard's, and **it reaches the grammar** — the option decides how
+		// a later line is *lexed*, so it replaces the runner's dialect the way
+		// `rcquotes` and `extendedglob` do and the front end reads the rest of
+		// the program the new way.
+		//
+		// What it reaches here is one reading: a `case` arm's **parenthesized**
+		// pattern list, which this shell reads as one word — blanks and
+		// newlines inside it are characters of a pattern and an alternative may
+		// be written as nothing. With the option on it is read the standard's
+		// way and all three are refused.
+		//
+		// Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+		// `/opt/homebrew/bin/zsh`, `-f`, from a script file under `set -n`,
+		// 2026-09-27, with the option moved on the line before the case:
+		//
+		//	                                       off      on
+		//	case "a b" in (a b) echo m;; esac      parses   refused
+		//	case a in (a<newline>|b) …             parses   refused
+		//	case "" in ( ) echo em;; esac          parses   refused
+		//	case x; in a) :;; esac                 parses   parses
+		//
+		// **The fourth row is the control and it is the reason this option is
+		// keyed where it is.** A `;` in the header is the neighboring
+		// zsh-alone reading and it does not move, so this is not "the header
+		// is read the standard's way": syntax.Dialect.CaseHeaderSpansSeparators
+		// stays where it is. A group of fields moved together on a measurement
+		// that never varied the thing they were keyed on is the shape this
+		// tree has been caught by before.
+		//
+		// **The emulations reach it through this option and not through the
+		// mode**, which is the measurement rather than a convenience. The same
+		// three rows are refused under `emulate zsh` with `setopt shglob` on
+		// the line before, and accepted under `emulate sh` with `unsetopt
+		// shglob` there — so the mode and the option part, and the option is
+		// the one that decides. The mode still moves every row of the corpus,
+		// because `shglob` is in emulationAlwaysReset and emulationDefaults has
+		// it on under `sh` and `ksh` and off under `csh` (#4820).
+		//
+		// **What it does not reach yet** is the rest of the option: a bare
+		// `(a|b)` pattern group, and what a `(` means inside a word, both of
+		// which this option also decides in the reference. Those are rows of
+		// #4814 and each is measured where it lands. It was recorded and inert
+		// until this, exactly as `rcquotes` was until #4591.
+		base: "shglob", def: false,
+		get: func(r *interp.Runner) bool { return !r.CasePatternListReadAsOneWord() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetCasePatternListReadAsOneWord(!on)
+			return 0
+		},
+	},
 	// Three of the four that refuse to move — `interactive` is the fourth,
 	// above — and all of them are about being interactive, which is the whole
 	// of what real zsh refuses in a `-c` run on a pipe. Every one is off here

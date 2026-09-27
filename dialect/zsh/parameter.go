@@ -116,12 +116,15 @@ func registerParameterModule(r *interp.Runner) {
 	// read of it is. See zshFunctionValue.
 	r.SetDynamicAssocElement("functions", zshFunctionValue)
 	r.SetDynamicAssocWriter("functions", writeZshFunction)
+	hideModuleParameter(r, "functions")
 	r.SetDynamicAssoc("options", zshOptionsView)
 	r.SetDynamicAssocElement("options", zshOptionValue)
 	r.SetDynamicAssocWriter("options", writeZshOption)
+	hideModuleParameter(r, "options")
 	r.SetDynamicAssoc("commands", zshCommandsView)
 	r.SetDynamicAssocElement("commands", zshCommandValue)
 	r.SetDynamicAssocWriter("commands", writeZshCommand)
+	hideModuleParameter(r, "commands")
 	r.SetDynamicAssoc("builtins", zshBuiltinsView)
 	// Readonly rather than given a writer, which is zsh's own answer:
 	// `builtins[x]=y` is `read-only variable: builtins` there. A produced
@@ -143,6 +146,7 @@ func registerParameterModule(r *interp.Runner) {
 	// with a literal naming the same key cannot tell emptying from merging.
 	// See interp.Runner.SetDynamicAssocEmptiedByReplacement for the table.
 	r.SetDynamicAssocEmptiedByReplacement("aliases")
+	hideModuleParameter(r, "aliases")
 	// And the named directories, which is the same shape over a table this
 	// shell owns rather than over the aliases: `hash -d a=/tmp` takes
 	// `${#nameddirs}` from 0 to 1 and `nameddirs[x]=/tmp` defines one, both
@@ -150,6 +154,7 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("nameddirs", zshNamedDirsView)
 	r.SetDynamicAssocWriter("nameddirs", writeZshNamedDir)
 	r.SetDynamicAssocEmptiedByReplacement("nameddirs")
+	hideModuleParameter(r, "nameddirs")
 	// The other two kinds, each with its own parameter, which is how this
 	// shell says they are three namespaces rather than one table with flags:
 	// `alias -g G=x; alias r=y; alias -s t=z` leaves `${(k)aliases}` naming
@@ -158,9 +163,11 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("galiases", zshGlobalAliasesView)
 	r.SetDynamicAssocWriter("galiases", writeZshGlobalAlias)
 	r.SetDynamicAssocEmptiedByReplacement("galiases")
+	hideModuleParameter(r, "galiases")
 	r.SetDynamicAssoc("saliases", zshSuffixAliasesView)
 	r.SetDynamicAssocWriter("saliases", writeZshSuffixAlias)
 	r.SetDynamicAssocEmptiedByReplacement("saliases")
+	hideModuleParameter(r, "saliases")
 	// `$ERRNO`, which is this shell's own parameter rather than one the
 	// `zsh/system` module brings: measured, `ERRNO=13; cat /no/such; echo
 	// $ERRNO` answers with the number the *call* left and not the 13, in a
@@ -168,6 +175,14 @@ func registerParameterModule(r *interp.Runner) {
 	r.SetDynamic("ERRNO", zshErrnoValue)
 	r.SetDynamicWriter("ERRNO", writeZshErrno)
 	r.SetDynamicArray("funcstack", funcstackNames)
+	// Readonly and hidden, the pair every other produced view here carries and
+	// for the same two reasons — and the one view that was left without it.
+	// Measured 2026-09-27 on zsh 5.9.2 under `-f`: `${(t)funcstack}` is
+	// `array-readonly-hide-hideval-special`, `funcstack=(a b)` is `read-only
+	// variable: funcstack` and so is `unset funcstack`, and `typeset -p
+	// funcstack` writes nothing at all. This shell took all three (#4812).
+	r.MarkReadonly("funcstack")
+	hideModuleParameter(r, "funcstack")
 	// And the same stack said the other way round: where each of those units
 	// was entered from. It is the parameter a `DEBUG` trap or a tracing
 	// function reads to say where it was called from, so an absent one did
@@ -311,6 +326,10 @@ func registerEmptyParameters(r *interp.Runner) {
 			continue
 		}
 		r.SetDynamicAssocWriter(p.name, refuseEmptyParameterWrite(p.name, p.waitsFor))
+		// Empty is not a reason to describe the name differently: the four
+		// that reach here read `association-hide-hideval-special` in zsh 5.9.2
+		// exactly as the tables that have something in them do.
+		hideModuleParameter(r, p.name)
 	}
 }
 

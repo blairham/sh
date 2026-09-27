@@ -1141,7 +1141,7 @@ done`)
 		"parameters:myarr agree [array]\n" +
 		"parameters:myassoc agree [association]\n" +
 		"parameters:myint agree [integer]\n" +
-		"parameters:options agree [association-special]\n" +
+		"parameters:options agree [association-hide-hideval-special]\n" +
 		// `reswords` was chosen here as a parameter the shell refused by
 		// name, and it is a produced readonly array since #2517 — which is
 		// what the row now reads, and which still covers the case it was

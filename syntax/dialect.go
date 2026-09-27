@@ -2564,10 +2564,27 @@ type Dialect struct {
 	// parenthesis is looked for, and what follows the substitution is never
 	// reached.
 	//
-	// It goes with [SubstitutionBodyRead], and only a dialect that reads the
-	// body *with its line* can answer it yes — a shell that reads the body
-	// when it runs has already parsed the rest of the line by then, and
-	// measurably reports what it found there instead.
+	// It goes beside [SubstitutionBodyRead] and is **not** the same question,
+	// which this said the opposite of until 2026-09-27: "only a dialect that
+	// reads the body with its line can answer it yes". zsh reads a body when
+	// it runs and answers this yes — `echo b; v=$(&&); echo a` writes no `b`
+	// there, and `echo b; v=$(if); echo a` writes one, so the same shell both
+	// settles a read on a refused body and defers a body it could close.
+	// Measured 2026-09-27 on zsh 5.9.2, `-f` over a script file under
+	// `set -n` and run; see dialect/zsh for the whole table.
+	//
+	// So a dialect that reads the body when it runs still stops looking for
+	// the closer here, and the commands written before the substitution on
+	// the same line never run. The two answers were tangled because every
+	// dialect that had said yes also read the body with its line.
+	//
+	// **A body the read merely ran out of is not this**, and the carve-outs in
+	// [Lexer.bodyRefusalSettlesTheRead] are where that is drawn. The one that
+	// is still wider than the panel is the refusal at the **closer itself**,
+	// which is deferred here and is deferred in the reference only for
+	// `if`, `while` and `until` — and only while that shell's short-loop
+	// option is on. Measured 2026-09-27 over nineteen bodies: `for`, `case`,
+	// `{` and `echo |` are refused with the line there and taken here.
 	//
 	// Measured 2026-09-22, `echo before; : $(case x in esac|in) foo;; esac)`
 	// as one `-c` string. The `esac` after the header closes the `case`, so

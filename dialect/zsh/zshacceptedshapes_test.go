@@ -118,17 +118,37 @@ func TestTheNeighborsThatStayRefused(t *testing.T) {
 // discriminating half of #3898's first cause: zsh takes a substitution body
 // ending on `&&` or `||` and refuses one ending on `|` or on a stray `;;`.
 //
-// These two need a **run** rather than a parse, and that is the trap the issue
-// warned about from the other side: a substitution's body is not read until the
-// word is expanded, so the outer text parses either way and a static check
-// passes against the bug. Measured 2026-09-20: both are a parse error at
-// status 1 in zsh 5.9.2, and both were here before this change and after it.
+// **Which route the refusal arrives on moved**, and the row it moved for is
+// the `;;`. This used to say both "need a **run** rather than a parse …
+// the outer text parses either way", which was a statement about this shell
+// rather than about zsh: measured 2026-09-27 on zsh 5.9.2 under `set -n`,
+// both are refused at the **parse** there, and a body refused at a token now
+// settles the read here too — see
+// syntax.Dialect.SubstitutionBodyRefusalEndsTheRead.
+//
+// The `|` row is the one still on the older route, because its body's read
+// stops at the closing parenthesis itself and that is carved out of the rule
+// — see syntax.Lexer.bodyRefusalSettlesTheRead, where the carve-out and what
+// it is still wider than are written down.
+//
+// So the rows assert the refusal and say which route each takes, rather than
+// asserting the route for both: what #3898 is about is that neither shape is
+// **accepted**, and a row that stopped refusing would fail either way.
 func TestASubstitutionBodyStillRefusesTheOtherOperators(t *testing.T) {
-	for _, c := range []struct{ name, src string }{
-		{"a pipeline never takes it", `v=$(echo x |); print -r -- "[$v]"`},
-		{"nor does a case terminator", `v=$(echo x ;;); print -r -- "[$v]"`},
+	for _, c := range []struct {
+		name, src string
+		atParse   bool
+	}{
+		{"a pipeline never takes it", `v=$(echo x |); print -r -- "[$v]"`, false},
+		{"nor does a case terminator", `v=$(echo x ;;); print -r -- "[$v]"`, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			if _, err := parseZsh(c.src); (err != nil) != c.atParse {
+				t.Fatalf("%q: refused at the parse = %v, want %v (%v)", c.src, err != nil, c.atParse, err)
+			}
+			if c.atParse {
+				return
+			}
 			if _, st := runZsh(t, t.TempDir(), c.src); st == 0 {
 				t.Errorf("%q ran at 0, want the refusal zsh gives", c.src)
 			}

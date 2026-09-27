@@ -343,6 +343,34 @@ func Dialect() syntax.Dialect {
 	// parse error. The refusal has to be the matcher's for the option to be
 	// able to withhold it (#4645).
 	d.UnterminatedPatternGroupIsAWord = true
+	// And a `$( … )` body the grammar refuses **at a token** settles the read:
+	// no closing parenthesis is looked for, so the commands written before the
+	// substitution on the same line never run.
+	//
+	// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+	// `/opt/homebrew/bin/zsh`, `-f` over a script file holding
+	// `echo b; v=$(X); echo a`, under `set -n` and run:
+	//
+	//	X          refused with the line   `b` written first
+	//	&&         yes                     no
+	//	;;         yes                     no
+	//	fi         yes                     no
+	//	done       yes                     no
+	//	esac       yes                     no
+	//	echo hi    no                      yes — nothing is wrong with it
+	//
+	// This shell wrote `b` for all six: the body was read when the
+	// substitution was expanded, which is after the commands in front of it
+	// on that line have run. The wording and the status were already this
+	// shell's — both complaints, at both lines — so what was wrong was only
+	// **when** the refusal was charged.
+	//
+	// It is not [syntax.Dialect.SubstitutionBodyRead] moving with it. That
+	// answers when the body is *parsed*, and a body with nothing wrong in it
+	// is still parsed here when it runs: `$(if)` writes `b` and then fails at
+	// the substitution in the reference, which is the zsh column the corpus
+	// records for `subst/a-body-that-will-not-parse-stops-the-line`.
+	d.SubstitutionBodyRefusalEndsTheRead = true
 	// And a *regular expression's* group is the same construct: a `;`, `<`,
 	// `>` or `&` inside `(…)` stops the group here where the four shells with
 	// `=~` all keep it. Measured 2026-09-27 on zsh 5.9.2 under `set -n` —

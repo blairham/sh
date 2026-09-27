@@ -119,7 +119,6 @@ func describeParameter(a interp.ParameterAttributes) string {
 		word string
 	}{
 		{a.Local, "local"},
-		{a.Tied, "tied"},
 		{a.Justified == interp.LeftJustified, "left"},
 		{a.Justified == interp.RightJustified && !a.ZeroFilled, "right_blanks"},
 		// Not `RightJustified &&`, which is the pair that says the fill is a
@@ -130,6 +129,34 @@ func describeParameter(a interp.ParameterAttributes) string {
 		{a.Lower, "lower"},
 		{a.Upper, "upper"},
 		{a.Readonly, "readonly"},
+		// **After the freeze and after the width and case words, and before
+		// everything below it** — not straight after `local`, which is where
+		// it used to stand (#4856). The position is a measurement and not a
+		// reading of the letter table: measured 2026-09-27 on zsh 5.9.2 from
+		// a script file under `env -i PATH=/usr/bin:/bin`, over a script tie
+		// — `typeset -T TT tt` — so that `special` is out of the way, and
+		// again over `path` and `PATH` with it in:
+		//
+		//	typeset -l tt    array-lower-tied          was array-tied-lower
+		//	typeset -u tt    array-upper-tied          was array-tied-upper
+		//	typeset -r tt    array-readonly-tied       was array-tied-readonly
+		//	typeset -L5 tt   array-left-tied           was array-tied-left
+		//	typeset -R5 tt   array-right_blanks-tied   was array-tied-right_…
+		//	typeset -Z5 tt   array-right_zeros-tied    was array-tied-right_…
+		//	typeset -x tt    array-tied-export         unchanged
+		//	typeset -U tt    array-tied-unique         unchanged
+		//	typeset -h tt    array-tied-hide           unchanged
+		//	typeset -H tt    array-tied-hideval        unchanged
+		//	typeset -ar path array-readonly-tied-special
+		//	typeset -Z5 PATH scalar-right_zeros-tied-export-special
+		//
+		// The four unchanged rows are what makes this one word moved rather
+		// than a different list: with nothing that outranks it present the
+		// two shells already agreed, so the words below `tied` were in the
+		// right place all along. `local` stays in front of it — measured,
+		// `f() { typeset -T AA aa; typeset -r aa; ${(t)aa} }` is
+		// `array-local-readonly-tied`.
+		{a.Tied, "tied"},
 		{a.Exported, "export"},
 		{a.Unique, "unique"},
 		{a.Hidden, "hide"},

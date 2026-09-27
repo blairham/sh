@@ -31,6 +31,37 @@ func TestTheTypeFlagWordsWhatANameIs(t *testing.T) {
 		{"local", `f() { local l=1; print -r -- ${(t)l}; }; f`, "scalar-local\n"},
 		{"local before readonly", `f() { typeset -ir l=1; print -r -- ${(t)l}; }; f`, "integer-local-readonly\n"},
 		{"a tied pair", `typeset -T TV tv; print -r -- ${(t)TV} ${(t)tv}`, "scalar-tied array-tied\n"},
+		// Where `tied` stands among the rest, which is **after** the freeze
+		// and after the case and width words and **before** everything
+		// below them (#4856). Measured 2026-09-27 on zsh 5.9.2 over a script
+		// tie, so that `special` is out of the way and the row is about the
+		// order alone.
+		{"readonly before tied", `typeset -T TA ta; typeset -r ta; print -r -- ${(t)ta}`, "array-readonly-tied\n"},
+		{"upper before tied", `typeset -T TB tb; typeset -u tb; print -r -- ${(t)tb}`, "array-upper-tied\n"},
+		{"lower before tied", `typeset -T TC tc; typeset -l tc; print -r -- ${(t)tc}`, "array-lower-tied\n"},
+		{"a width before tied", `typeset -T TD td; typeset -Z5 td; print -r -- ${(t)td}`, "array-right_zeros-tied\n"},
+		{
+			"a width and the freeze, both in front of it",
+			`typeset -T TE te; typeset -rL5 te; print -r -- ${(t)te}`,
+			"array-left-readonly-tied\n",
+		},
+		// And the four that were already right, which is what says one word
+		// moved rather than the list being rewritten: with nothing that
+		// outranks `tied` present the two shells agreed all along.
+		{"tied before export", `typeset -T TF tf; typeset -x tf; print -r -- ${(t)tf}`, "array-tied-export\n"},
+		{"tied before unique", `typeset -T TG tg; typeset -U tg; print -r -- ${(t)tg}`, "array-tied-unique\n"},
+		{"tied before hide", `typeset -T TH th; typeset -h th; print -r -- ${(t)th}`, "array-tied-hide\n"},
+		{"tied before hideval", `typeset -T TI ti; typeset -H ti; print -r -- ${(t)ti}`, "array-tied-hideval\n"},
+		// `local` keeps its place in front of it, which is the row that
+		// stops the move going one word too far.
+		{
+			"local before readonly before tied",
+			`f() { typeset -T TJ tj; typeset -r tj; print -r -- ${(t)tj}; }; f`,
+			"array-local-readonly-tied\n",
+		},
+		// And the shell's own tied names, where `special` is on the end.
+		{"a frozen shell array", `typeset -ar path; print -r -- ${(t)path}`, "array-readonly-tied-special\n"},
+		{"and one with a word on either side of it", `typeset -rU path; print -r -- ${(t)path}`, "array-readonly-tied-unique-special\n"},
 		// The two hiding letters are two attributes with two words, which
 		// is the whole of #2042: a parameter given only `-H` is `hideval`
 		// and not `hide`, so the four rows are the two letters alone, the

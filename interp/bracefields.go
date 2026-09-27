@@ -324,18 +324,28 @@ func (r *Runner) braceRangeReads() func(syntax.Span) bool {
 // this road the expansions have already run.
 //
 // The second reading goes through the **same** splitter the other road uses,
-// which is what keeps three measured facts from being written a second time:
-// a produced `{` takes the whole word with it, a produced `}` is data rather
-// than a delimiter, and what a produced alternative leaves is neither split
-// nor matched. See Runner.braceBodyAlternatives.
+// which is what keeps two measured facts from being written a second time: a
+// produced `}` is data rather than a delimiter, and what a produced
+// alternative leaves is neither split nor matched. See
+// Runner.braceBodyAlternatives.
+//
+// The third of those facts — that a produced `{` takes the whole word — is
+// **not** asked here, and that is the difference between this road and the
+// one that resolves a body. There, a `$e` is still an unexpanded span when
+// the group is matched, so the scan cannot see the `{` it will produce and
+// producedBraceAbandonsTheGroup is what stands in for the depth nobody could
+// count. Here every run is already text, so the depth **is** counted — see
+// matchBraceAcrossRead — and a group whose body holds an unbalanced produced
+// `{` never matches in the first place. Asking as well would refuse the one
+// shape where it *is* balanced, which ksh93u+ expands: `e='{'; f {a,${e}b}c}`
+// is `[a] [{b}c]` there, the written `}` closing the produced `{` inside a
+// group the written `}` behind it closes. Measured 2026-09-27, in a
+// directory of its own with a field counter.
 func (r *Runner) fieldAlternatives(w *syntax.Word, open, close cursor) ([][]syntax.Span, bool, bool) {
 	body := sliceSpansRead(w.Spans, next(open), close, r.braceScanReads())
 	if r.sem().BraceBodyReadAfterExpansion == Yes {
-		resolved, abandoned := resolvedFieldBody(body)
-		if abandoned {
-			return nil, false, true
-		}
-		return r.braceBodyAlternatives(w, open, resolved)
+		resolved, deep := resolvedFieldBody(body)
+		return r.braceBodyAlternatives(w, open, resolved, deep)
 	}
 	if alts, ok := alternativesInBody(body); ok {
 		return alts, true, false
@@ -354,23 +364,40 @@ func (r *Runner) fieldAlternatives(w *syntax.Word, open, close cursor) ([][]synt
 // spans, which is the same round trip the other road makes — what goes into
 // the splitter is the text a script would see, and what comes out is data.
 //
-// The second result is a produced `{`, which takes the whole word: `e='{';
-// echo {c,d$e}{a,b}` is the single field `{c,d{}{a,b}` in ksh93u+, where a
-// produced `}` in the same place leaves `a b} c`.
-func resolvedFieldBody(body []syntax.Span) ([]syntax.Span, bool) {
+// A produced `{` in the body is left to producedBraceSpans as an ordinary
+// inert character: on this road the group only matched because the depth
+// counted that `{` and something eligible closed it, so there is nothing
+// here for producedBraceAbandonsTheGroup to catch that the match has not
+// already caught. See fieldAlternatives.
+func resolvedFieldBody(body []syntax.Span) ([]syntax.Span, []bool) {
 	out := make([]syntax.Span, 0, len(body))
+	var deep []bool
+	mark := func(s syntax.Span, produced bool) {
+		out = append(out, s)
+		if deep != nil {
+			deep = append(deep, produced)
+		} else if produced {
+			deep = make([]bool, len(out)-1, len(body)+4)
+			deep = append(deep, true)
+		}
+	}
 	for _, s := range body {
 		if !bodyProducedRun(s) {
-			out = append(out, s)
+			mark(s, false)
 			continue
 		}
-		text := globUnescape(s.Value)
-		if producedBraceAbandonsTheGroup(text) {
-			return nil, true
+		for _, p := range producedBraceSpans(globUnescape(s.Value), s.Pos) {
+			// The comma spans producedBraceSpans cuts out are the group's
+			// syntax and are read as such; what is left between them is a
+			// run of data whose braces still nest. See
+			// alternativesInBodyRead.
+			mark(p, p.Quoting != syntax.Unquoted && strings.ContainsAny(p.Value, "{}"))
 		}
-		out = append(out, producedBraceSpans(text, s.Pos)...)
 	}
-	return out, false
+	for len(deep) > 0 && len(deep) < len(out) {
+		deep = append(deep, false)
+	}
+	return out, deep
 }
 
 // joinFieldSpans is the word brace expansion produced, back as one field.
@@ -520,18 +547,33 @@ func (r *Runner) braceScanReads() func(syntax.Span) bool {
 // braceOrProducedRun is braceable widened by the runs an expansion produced.
 func braceOrProducedRun(s syntax.Span) bool { return braceable(s) || producedRun(s) }
 
-// braceClassOf is the set a brace may be **closed** by: its own provenance.
+// braceClassOf is the set a `{` may be **closed** by, and it is not symmetric.
 //
-// A written `{` is closed by a written `}` and a produced one by a produced
-// one, and nothing pairs across: `e='}'; echo {a,b$e` is `{a,b}` in ksh93u+
-// where `e='{}'; echo $e{a,b}` is `{}a {}b`. Where produced text is not read
-// at all the two sets are the same set and this decides nothing.
+// A `}` the script **wrote** closes either kind. A `}` an expansion
+// **produced** closes only a produced `{`. Measured on ksh93u+ 2026-09-27,
+// with a field counter and each case in a directory of its own:
+//
+//	e='}'; f {a,b$e            1 | [{a,b}]   a produced `}` closes nothing
+//	                                         the script wrote
+//	e='{'; f ${e}a,b}          2 | [a] [b]   a written one closes what an
+//	                                         expansion opened
+//	e='{'; c='}'; f ${e}a,b${c}  2 | [a] [b] and so does a produced one,
+//	                                         behind a produced opener
+//	e='{'; f $e{a,b}           1 | [{{a,b}]  depth is still counted, so an
+//	                                         opener with two `{` in front of
+//	                                         one `}` stays unmatched
+//
+// The second row is what #4797's rule did not have. Stated as "a brace pairs
+// only with one of its own provenance" it is right about the first row and
+// too strong about the second, and the shape that tells them apart is which
+// side of the pair the value supplied: the written text of a script closes
+// what it can see, and a value closes only what a value opened.
+//
+// Where produced text is not read at all the two sets are the same set and
+// this decides nothing.
 func braceClassOf(opener syntax.Span, scan func(syntax.Span) bool) func(syntax.Span) bool {
 	if braceable(opener) {
 		return braceable
-	}
-	if scan(opener) {
-		return producedRun
 	}
 	return scan
 }

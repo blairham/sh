@@ -110,7 +110,7 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 		if !ok {
 			return []*syntax.Word{w}
 		}
-		close, matched := matchBraceAcrossRead(w.Spans, open, braceClassOf(w.Spans[open.span], scan))
+		close, matched := matchBraceAcrossRead(w.Spans, open, scan, braceClassOf(w.Spans[open.span], scan))
 		if matched {
 			alts, ok, abandoned := r.alternativesAcross(w, open, close, endpoints)
 			if abandoned {
@@ -244,22 +244,41 @@ func findBraceFromRead(spans []syntax.Span, from cursor, c byte, read func(synta
 
 // matchBraceAcross finds the brace closing the one at open.
 func matchBraceAcross(spans []syntax.Span, open cursor) (cursor, bool) {
-	return matchBraceAcrossRead(spans, open, braceable)
+	return matchBraceAcrossRead(spans, open, braceable, braceable)
 }
 
-// matchBraceAcrossRead is matchBraceAcross over a named set of spans, which
-// is how a brace comes to pair only with one of its **own** provenance: on
-// the road that reads the braces a value holds, a written `{` is closed by a
-// written `}` and a produced one by a produced one, and the spans the other
-// class stands in are stepped over rather than counted. Measured 2026-09-27
-// on ksh93u+: `e='}'; echo {a,b$e` is `{a,b}` and `e='{}'; echo $e{a,b}` is
-// `{}a {}b`.
-func matchBraceAcrossRead(spans []syntax.Span, open cursor, read func(syntax.Span) bool) (cursor, bool) {
+// matchBraceAcrossRead is matchBraceAcross over two named sets of spans, and
+// they are two because the question a `{` settles is not the question a `}`
+// settles.
+//
+// scan is where a brace of **either** kind is seen at all: every `{` in one
+// of those spans counts toward the depth, whatever produced it. closes is
+// the narrower set a `}` may **pair** from — see braceClassOf — and a `}`
+// outside it is stepped over without touching the depth, as if it were an
+// ordinary character.
+//
+// The asymmetry is measured rather than designed, on ksh93u+ 2026-09-27,
+// each case in a directory of its own with a field counter:
+//
+//	e='{'; f {a,${e}b}        1 | [{a,{b}]     a produced `{` deepens a
+//	                                           written group, so the written
+//	                                           `}` closes the produced one
+//	e='}'; f {a,b${e}c}       2 | [a] [b}c]    a produced `}` does not close
+//	                                           a written group, and does not
+//	                                           spend its depth either — the
+//	                                           written `}` behind it closes
+//	e='{'; f {a,${e}b}c}      2 | [a] [{b}c]   both at once
+//
+// A scan that counted the second row's `}` would have closed the group at it
+// and answered `[a] [b]`, and one that ignored the first row's `{` would
+// have answered `[a] [{b]`; neither is what the shell does.
+func matchBraceAcrossRead(spans []syntax.Span, open cursor, scan, closes func(syntax.Span) bool) (cursor, bool) {
 	depth := 0
 	for i := open.span; i < len(spans); i++ {
-		if !read(spans[i]) {
+		if !scan(spans[i]) {
 			continue
 		}
+		mayClose := closes(spans[i])
 		start := 0
 		if i == open.span {
 			start = open.off
@@ -272,6 +291,9 @@ func matchBraceAcrossRead(spans []syntax.Span, open cursor, read func(syntax.Spa
 			case '{':
 				depth++
 			case '}':
+				if !mayClose {
+					continue
+				}
 				depth--
 				if depth == 0 {
 					return cursor{i, j}, true
@@ -345,7 +367,7 @@ func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoint
 // produced stands as spans of its own. One walk for both, so the depth rule,
 // the escape rule and what counts as a comma cannot drift apart.
 func alternativesInBody(body []syntax.Span) ([][]syntax.Span, bool) {
-	return alternativesInBodyRead(body, braceable)
+	return alternativesInBodyRead(body, braceable, nil, false)
 }
 
 // alternativesInBodyRead is alternativesInBody over a named set of spans.
@@ -355,25 +377,55 @@ func alternativesInBody(body []syntax.Span) ([][]syntax.Span, bool) {
 // them in the fields the word came to it is wider by exactly the runs an
 // expansion produced, in the column that reads a produced comma. See
 // interp/bracefields.go.
-func alternativesInBodyRead(body []syntax.Span, read func(syntax.Span) bool) ([][]syntax.Span, bool) {
+//
+// deep marks, by index, the spans that are **not** syntax and whose braces
+// still count toward the depth: a run of text an expansion produced, which
+// supplies no comma and still nests. deepCloses says whether a `}` in one of
+// those runs closes as well as a `{` in one opens, which is the group's own
+// opener asked one level down — a produced `}` pairs only behind a produced
+// `{`, exactly as it does in matchBraceAcrossRead.
+//
+// Measured on ksh93u+ 2026-09-27, each case in a directory of its own with a
+// field counter:
+//
+//	e='{{'; f ${e}a,b}}              1 | [{{a,b}}]        the produced `{`
+//	                                                      deepens the body
+//	e=}; f {a,b$e,c}                 3 | [a] [b}] [c]     a produced `}` in a
+//	                                                      written group does
+//	                                                      not shallow it
+//	e='{'; g='{}'; f ${e}a,${g}b,c}  3 | [a] [{}b] [c]    behind a produced
+//	                                                      `{`, it does
+//
+// A walk that counted neither answers `[{a] [b}]` to the first; one that
+// counted the second row's `}` answers `[a] [b},c]`; one that ignored the
+// third's answers `[a] [{}b,c]`. nil and false where nothing in the body is
+// in that state, which is every body with no expansion behind it. A backslash
+// in such a run is data and not an escape, exactly as the comma cut that made
+// it treats one.
+func alternativesInBodyRead(body []syntax.Span, read func(syntax.Span) bool, deep []bool, deepCloses bool) ([][]syntax.Span, bool) {
 	var out [][]syntax.Span
 	depth := 0
 	from := cursor{0, 0}
 	for i, s := range body {
-		if !read(s) {
+		syntaxHere := read(s)
+		if !syntaxHere && (deep == nil || !deep[i]) {
 			continue
 		}
 		v := s.Value
 		for j := 0; j < len(v); j++ {
 			switch v[j] {
 			case '\\':
-				j++
+				if syntaxHere {
+					j++
+				}
 			case '{':
 				depth++
 			case '}':
-				depth--
+				if syntaxHere || deepCloses {
+					depth--
+				}
 			case ',':
-				if depth == 0 {
+				if syntaxHere && depth == 0 {
 					out = append(out, sliceSpansRead(body, from, cursor{i, j}, read))
 					from = cursor{i, j + 1}
 				}

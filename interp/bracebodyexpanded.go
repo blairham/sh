@@ -72,12 +72,12 @@ func (r *Runner) alternativesAfterExpansion(w *syntax.Word, open, close cursor, 
 			r.askBrace(answer, braceBodyAxis)
 			return nil, false, false
 		}
-		return r.braceBodyAlternatives(w, open, resolved)
+		return r.braceBodyAlternatives(w, open, resolved, nil)
 	}
 	if outcome == braceBodyAbandoned {
 		return nil, false, true
 	}
-	return r.braceBodyAlternatives(w, open, resolved)
+	return r.braceBodyAlternatives(w, open, resolved, nil)
 }
 
 // braceBodyAxis is the axis's name where a refusal has to say it.
@@ -101,8 +101,12 @@ func bodyHoldsAnExpansion(body []syntax.Span) bool {
 
 // braceBodyAlternatives splits a resolved body, or says what the group comes
 // to where it holds no alternative at all.
-func (r *Runner) braceBodyAlternatives(w *syntax.Word, open cursor, resolved []syntax.Span) ([][]syntax.Span, bool, bool) {
-	if alts, ok := alternativesInBody(resolved); ok {
+func (r *Runner) braceBodyAlternatives(w *syntax.Word, open cursor, resolved []syntax.Span, deep []bool) ([][]syntax.Span, bool, bool) {
+	// A produced `}` in the body closes what a produced `{` in it opened,
+	// and closes nothing in a group the script wrote — the opener's own
+	// pairing rule, one level down. See alternativesInBodyRead.
+	if alts, ok := alternativesInBodyRead(resolved, braceable, deep,
+		!braceable(w.Spans[open.span])); ok {
 		return alts, true, false
 	}
 	// No comma anywhere in the resolved body, written or produced, so the

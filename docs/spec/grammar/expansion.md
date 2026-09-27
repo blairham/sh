@@ -175,23 +175,35 @@ and the road below is what makes it askable: a field's runs say which of its
 bytes the script wrote, so a brace in one an expansion produced can be found
 without anything being expanded twice.
 
-What it took beyond that is a rule about which braces **pair**. A brace
-closes only one of its own provenance, measured 2026-09-27 on ksh93u+:
+What it took beyond that is a rule about which braces **pair**, and it is not
+symmetric. Measured 2026-09-27 on ksh93u+:
 
 | probe | ksh93 | bash 5.3 / 3.2 / zsh |
 | --- | --- | --- |
 | `e='{a,b}'; echo $e` | `a b` | `{a,b}` |
 | `e='{a,'; g='b}'; echo $e$g` | `a b` | `{a,b}` |
 | `e='}'; echo {a,b$e` | `{a,b}` | `{a,b}` |
+| `e='{'; echo ${e}a,b}` | `a b` | `{a,b}` |
 | `e='{'; echo $e{a,b}` | `{{a,b}` | `{a {b` |
 | `e='{}'; echo $e{a,b}` | `{}a {}b` | `{}a {}b` |
+| `e='{'; echo {a,${e}b}` | `{a,{b}` | `{a,{b}` |
+| `e='}'; echo {a,b${e}c}` | `a b}c` | `a b}c` |
 | `e='{'; echo {c,d$e}{a,b}` | `{c,d{}{a,b}` | `ca cb d{a d{b` |
 
-A produced `}` does not close a written `{`, while two produced ones pair —
-so the empty produced group in row five fails and the written group behind it
-is still a list, where a produced `{` with nothing of its own to close it is
-an unmatched brace and takes the word. Row six is a produced `{` inside a
-*written* group's body, which is the rule the body reading already carries.
+A `}` an expansion **produced** closes only what an expansion opened — row
+three, and rows one, two and six on the other side of it. A `}` the script
+**wrote** closes either kind, which is row four; the short form of this rule
+used to say a brace pairs only with one of its own provenance, and row four
+is what it was too strong about.
+
+**Depth is counted over every unquoted brace whatever produced it**, and the
+last four rows are what say so. Row five is one `}` against two `{`, so the
+group stays open and takes the word. Row seven is the same arithmetic with the
+inner `{` produced and the outer group written — the written `}` closes the
+produced `{` and the written `{` is left open. Row eight is the mirror: a `}`
+the pairing rule will not take spends no depth either, so the written `}`
+behind it is still the closer and the body is `a,b}c`. Row nine is a produced
+`{` inside a *written* group's body, unbalanced, so the group never matches.
 
 **Quoting is where the two questions part.** The result of a quoted expansion
 is not a brace anywhere — `e='{a,b}'; echo "$e"` and `set -- '{a,b}'; echo

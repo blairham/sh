@@ -74,9 +74,26 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 		// See interp/bracefields.go.
 		return r.expandFieldsThenBraces(w)
 	}
-	if !hasBrace && r.braceScanMayReadProducedText(w) {
+	if r.braceScanMayReadProducedText(w) && !holdsPidBrace(w.Spans) {
 		// A word whose braces the script never wrote, in the column that
 		// reads the ones a value holds: `e='{a,b}'; echo $e` is `a b` there.
+		//
+		// And a word that *does* hold one the script wrote, where what it
+		// wrote could not expand on its own. braceFieldsFirst declines those
+		// — `braceGroupCouldExpand` is what keeps `echo {a}` and `echo x{}y`
+		// from asking anybody anything — and declining them here as well left
+		// the word on the road where an expansion is still an unexpanded
+		// span, so a brace it was about to produce could not be seen at all:
+		// `e='{'; f ${e}a,{}b,c}` is `[a] [{}b] [c]` in ksh93u+ and was the
+		// one field `{a,{}b,c}` here, the failed `{}` the script wrote
+		// hiding the `{` the value supplied. Nothing is asked by coming
+		// here: this branch is reached only by a vector that has already
+		// answered BraceScanReadsProducedText, and the refusal surface
+		// braceGroupCouldExpand guards belongs to the vectors that have not.
+		//
+		// `$${a,b}` still stays behind, for braceFieldsFirst's reason: its
+		// outer pair is a note on the span rather than text, and a field
+		// rebuilt from bytes has nowhere to keep it.
 		return r.expandFieldsThenBraces(w)
 	}
 	if hasBrace {

@@ -56,9 +56,10 @@ func TestBracesAnExpansionProduced(t *testing.T) {
 		{"a produced range", `e='{1..3}'; f $e`, `3 | [1] [2] [3]`, `1 | [{1..3}]`},
 		{"a produced empty alternative", `e='{a,}'; f $e`, `2 | [a] []`, `1 | [{a,}]`},
 
-		// The pairing rows. A brace closes only one of its own provenance,
-		// which is what these three hold apart — and each fails a different
-		// way under a rule that let them pair across.
+		// The pairing rows: a produced `}` closes only what an expansion
+		// opened, and depth is counted over every unquoted brace. What a
+		// **written** `}` closes is the other half, and it has a table of
+		// its own — see TestWhichClosingBraceClosesAProducedOne.
 		{
 			"a produced closing brace closes nothing", `e='}'; f {a,b$e`,
 			`1 | [{a,b}]`, `1 | [{a,b}]`,

@@ -4277,6 +4277,17 @@ type Runner struct {
 	// and a later `-F` writes them. See interp/floatformat.go, where the
 	// measurements and the one place the record is dropped are.
 	floatExact map[string]storedFloat
+	// arrivingFloat is the number an arithmetic store is about to hand the
+	// ordinary store as characters, for the one call it takes to get there.
+	//
+	// One slot and not an entry in floatExact, because the two say different
+	// things: floatExact describes the characters the name **is holding**,
+	// and this describes the characters it is **being given**. Keyed on both
+	// the name and the text and cleared as soon as the store has run, so
+	// that an ordinary assignment of the same characters is read as
+	// characters — `typeset -F1 f=3.14159265358979; f=3.1` really is three
+	// tenths. See interp/floatformat.go and #4662.
+	arrivingFloat *arrivingFloat
 	// fieldWidth is the width attribute a name carries — `typeset -L 5 s`
 	// and its two neighbors. Presence is the attribute, the way it is for
 	// floatPrecision; see fieldwidth.go, which holds the measurements and
@@ -10326,9 +10337,17 @@ func (r *Runner) attributeFolded(name, value string) (string, bool) {
 		// cannot both stand, so applyAttributes takes one off when the other
 		// arrives and only one of these can run. Reaching this first is what
 		// makes that a statement rather than a hope.
-		v, ok := r.floatValue(value)
+		v, ok := r.arrivingFloatValue(name, value)
 		if !ok {
-			return "", false
+			// The characters are all there is, so they are read as an
+			// expression. The branch above is for an arithmetic store, which
+			// hands over a rendering of a number it is still holding — and
+			// that is what carries an infinity, whose rendering is a *name*
+			// rather than a numeral and so is not an expression every
+			// dialect reads back (#4662).
+			if v, ok = r.floatValue(value); !ok {
+				return "", false
+			}
 		}
 		// The rendered text is what is *stored*, exactly as an integer
 		// name's base is: `${#x}` counts the five characters of `1.500`, a

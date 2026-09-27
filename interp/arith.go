@@ -1136,7 +1136,15 @@ func (r *Runner) declareFloatFromArithmetic(name string, v float64) {
 		r.floatPrecision = map[string]int{}
 	}
 	r.floatPrecision[name] = 0
-	r.setVar(name, floatWrittenInFull(v))
+	text := floatWrittenInFull(v)
+	// The number travels with the text, because the store reads the
+	// characters back as an expression and not every number has a spelling
+	// this arithmetic reads: `Inf` is a literal in one of the two shells
+	// with floats and nothing at all in the other, so the round trip is
+	// where an infinity is lost. See Runner.floatArrivesAsANumber and #4662.
+	done := r.floatArrivesAsANumber(name, text, v)
+	r.setVar(name, text)
+	done()
 }
 
 // radixWritten is the base named by the first radix literal in an expression,
@@ -1287,6 +1295,15 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 			r.setVar(p.name, r.formatNum(v))
 			r.declareIntegerFromArithmetic(p.name, from)
 			r.rerenderInTheNewBase(p.name)
+			return nil
+		}
+		if _, float := r.floatPrecision[p.name]; float && v.float {
+			// The same reason declareFloatFromArithmetic sends one: the
+			// store renders the number and reads the characters back, and an
+			// infinity or a NaN has no numeral for it to read (#4662).
+			done := r.floatArrivesAsANumber(p.name, text, v.asFloat())
+			r.setVar(p.name, text)
+			done()
 			return nil
 		}
 		r.setVar(p.name, text)
@@ -2851,13 +2868,8 @@ func (r *Runner) formatNum(n arithNum) string {
 	}
 	// An infinity and a NaN are named rather than formatted, and each shell
 	// names them its own way.
-	switch {
-	case math.IsInf(n.f, 1):
-		return Wording(r.diag().ArithInfinity, "+Inf")
-	case math.IsInf(n.f, -1):
-		return "-" + Wording(r.diag().ArithInfinity, "Inf")
-	case math.IsNaN(n.f):
-		return Wording(r.diag().ArithNotANumber, "NaN")
+	if text, named := r.floatIsNamedRatherThanWritten(n.f); named {
+		return text
 	}
 	digits := r.diag().ArithFloatDigits
 	if digits == 0 {

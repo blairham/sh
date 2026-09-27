@@ -263,3 +263,38 @@ func TestAChangeOfFloatLetterKeepsTheNumber(t *testing.T) {
 		})
 	}
 }
+
+// An infinity and a NaN in a float name, which are the two values whose
+// rendering is a **name** rather than a numeral.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`.
+// The `1.0/3` row is the control and it carries the finding: an ordinary
+// float is unaffected, so this was never "the float store is wrong" but "the
+// two values that are not numbers are dropped" — the store renders a number
+// and reads the characters back, and those two have no numeral to read.
+//
+// The listing is the one place the spelling parts: `print $g` writes `Inf`,
+// which is what `${#g}` counts and what a child is told, while `typeset -p g`
+// writes `inf` (#4662).
+func TestAFloatNameHoldsAnInfinityAndANaN(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{"a NaN", `float f; (( f = 0.0/0.0 )); typeset -p f`, "typeset -E f=nan\n"},
+		{"an infinity", `float g; (( g = 1.0/0.0 )); typeset -p g`, "typeset -E g=inf\n"},
+		{"a negative infinity", `float g; (( g = -1.0/0.0 )); typeset -p g`, "typeset -E g=-inf\n"},
+		{"under the F letter", `typeset -F3 g; (( g = 1.0/0.0 )); typeset -p g`, "typeset -F g=inf\n"},
+		{"read as a parameter", `float g; (( g = 1.0/0.0 )); print -- "$g" "${#g}"`, "Inf 3\n"},
+		{"read as a number", `float g; (( g = 1.0/0.0 )); print -- "$(( g ))" "$(( g + 1 ))"`, "Inf Inf\n"},
+		{"carried into another name", `float g; (( g = 1.0/0.0 )); (( g2 = g )); print -- "$g2"`, "Inf\n"},
+		{"a declaration's own value", `float g=1.0/0.0; typeset -p g`, "typeset -E g=inf\n"},
+		// The control.
+		{"an ordinary float", `float h; (( h = 1.0/3 )); typeset -p h`, "typeset -E h=3.333333333e-01\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

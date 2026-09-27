@@ -75,6 +75,14 @@ func TestAChangeOfFloatLetterRereadsTheRendering(t *testing.T) {
 			"3.14159265358979\n",
 		},
 		{
+			// The same rule where the number arrived through arithmetic
+			// rather than through the declaration's own value, which is a
+			// different door into the same store.
+			"a number stored by arithmetic, then a letter change",
+			`typeset -F3 g; (( g = 1.0/3 )); typeset -E10 g; print -- $g`,
+			"0.333\n",
+		},
+		{
 			"the arithmetic value under a narrow rendering",
 			`typeset -E3 f=` + x + `; print -- $(( f ))`,
 			x + "\n",

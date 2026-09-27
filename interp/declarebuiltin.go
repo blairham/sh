@@ -5034,6 +5034,14 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 		// The other reading falls through to attributeFolded below, which
 		// reads the characters the name is holding — so a `-F1` rendering of
 		// `3.1` really is three tenths once the `E` letter arrives.
+		//
+		// The record goes first, and it has to: attributeFolded reads the
+		// number behind a rendering where it has one, which is what carries
+		// an infinity through a store (#4662), and here that is exactly the
+		// number this reading says is gone. Leaving it behind made
+		// `typeset -F3 g; (( g = 1.0/3 )); typeset -E17 g` write every digit
+		// where this shell writes `0.333`.
+		r.forgetStoredFloat(name)
 	}
 	if folded, ok := r.attributeFolded(name, v); ok {
 		r.Vars[name] = folded

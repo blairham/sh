@@ -480,6 +480,42 @@ answer for five kinds of nine, which is how this was first filed.
   complaint there, because the check happens before the `2>&1` is in
   force, and wrote nothing at all here.
 
+- **`FrozenPrefixIsCheckedBeforeItsValue`** — the name against **its own
+  value**, which is a different question from the name against the
+  redirections and partitions the panel differently.
+
+  Measured 2026-09-26 from a script file under `env -i
+  PATH=/usr/bin:/bin` with a scratch HOME, `readonly r=1` on the line
+  before and `echo "st=$?"` on the line after:
+
+  | `r=$((1/0)) echo RAN` | |
+  | --- | --- |
+  | bash 5.3.20 | `r: readonly variable`, `RAN`, 0 |
+  | ksh93u+ 2012-08-01 | `1/0: divide by zero`, no `RAN`, 1 |
+  | dash 0.5.12 | `arithmetic expression: division by zero` |
+  | zsh 5.9.2 | `division by zero` |
+  | BusyBox ash 1.37.0 | `divide by zero` |
+
+  So four columns evaluate the value and report *its* failure, never
+  mentioning the frozen name, and one reports the name and never
+  evaluates anything. The same split shows with a value that merely has a
+  side effect — `r=$(echo R >&2) echo RAN` writes `R` in the four and
+  nothing in bash — so it is an ordering fact rather than a fact about
+  failures.
+
+  **BusyBox ash is what makes it a second field.** It answers
+  `FrozenPrefixCheckedFirst` above, with bash, and it still evaluates the
+  value: the name is checked ahead of the *redirections* and behind its
+  own *value*. One answer cannot serve both, and serving both is how four
+  dialects came to write the frozen name where the reference writes the
+  expansion (#4685).
+
+  The external route always had it, because it expands every value on its
+  way to building the child's environment and meets the refusal
+  afterwards; the builtin and function routes skipped a frozen name's
+  value before anything expanded it, so bash's answer fell out of a gap on
+  two routes and out of a choice on the third.
+
 The kind is read once, at the dispatch, by resolving the command word the
 way the dispatch itself resolves it — a function shadows a builtin and a
 builtin shadows an external — so the axes cannot disagree with what runs.

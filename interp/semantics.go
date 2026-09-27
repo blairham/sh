@@ -6783,6 +6783,140 @@ type Semantics struct {
 	// which is the same default the bare `%T` writes.
 	PrintfTimeOperandIsADateString Answer
 
+	// PrintfCountConversion gives `printf` the `%n` directive: it writes
+	// nothing of its own and stores, into the parameter its operand names,
+	// the number of bytes the format has produced so far in this pass.
+	//
+	// Measured 2026-09-26 under `LC_ALL=C` from a script file, `env -u
+	// FPATH`, the output sent to /dev/null so that the count is read back
+	// from the parameter rather than from what was written:
+	//
+	//	printf '%.10e%n\n' 1 count   bash 5.3.20   count is 16
+	//	                             bash 3.2.57   count is 16
+	//	                             zsh 5.9.2     count is 16
+	//	                             ksh93u+       count is 16
+	//	                             dash 0.5.13   %n: invalid directive, 1
+	//	                             BusyBox ash   %n: invalid format, 1
+	//
+	// Sixteen is ten digits of precision, the point, the leading digit and
+	// `e+00`, which is what makes it a number worth checking rather than a
+	// coincidence: an implementation that stored the operand count or the
+	// format's own length would answer something else.
+	//
+	// Three facts about the count are unanimous in the three columns that
+	// have it, so none of them is an axis. It is **bytes** and not
+	// characters — `printf 'αβ%n' m` leaves 4. It is the *pass* and not the
+	// builtin — `printf '%s%n' a n1 b n2 c n3` leaves 1 in each of the
+	// three, where a running total would leave 1, 2, 3. And a width or a
+	// precision on the directive is read and then ignored, with nothing laid
+	// out: `printf 'xy%5n' w` and `printf 'xy%.3n' w` both leave 2.
+	//
+	// An operand that is *absent* is not an error anywhere: `printf 'abc%n'`
+	// is silent and reports 0 in all three. An operand that is present and
+	// empty is a different thing, and the columns part on it — see
+	// PrintfCountEmptyNameIsIgnored.
+	//
+	// Asked only where an `n` is actually written as a conversion character,
+	// so a dialect without the directive is never questioned about `%d`.
+	PrintfCountConversion Answer
+
+	// PrintfCountAttribute is whether a `%n` gives the parameter it stores
+	// into the integer attribute, and to which parameters.
+	//
+	// Three readings and not a bool, because the panel splits three ways.
+	// Measured 2026-09-26, reading the answer back with `typeset -p`:
+	//
+	//	q=plain; printf 'abc%n' q      bash 5.3.20  q=3      ksh93u+  -i q=3
+	//	                               zsh 5.9.2    q=3
+	//	printf 'abcd%n' n              bash 5.3.20  n=4      ksh93u+  -i n=4
+	//	                               zsh 5.9.2    -i n=4
+	//
+	// The first row is the discriminator and the second on its own would
+	// have missed it: a name the script has already made is where zsh and
+	// ksh93 part, and a name that is new to the shell is where they agree.
+	// `q=` is enough to make one, so it is the parameter's existence and not
+	// its value that decides.
+	//
+	// The attribute is not a listing's ornament. It changes what a later
+	// plain assignment means: after the runs above, `q=2+2` leaves `2+2` in
+	// bash and zsh and `4` in ksh93, and `n=1+1` leaves `1+1` in bash and
+	// `2` in the other two.
+	//
+	// See PrintfCountAttributePolicy for the values.
+	PrintfCountAttribute PrintfCountAttributePolicy
+
+	// PrintfCountOperandTakesASubscript lets a `%n` store into an element,
+	// rather than requiring the operand to be a plain name.
+	//
+	// **Its own axis and not StoreOperandTakesASubscript**, for the reason
+	// GetoptsOperandTakesASubscript is its own: bash has arrays, fills
+	// `printf -v 'a[0]'` and `read 'a[0]'` alike, and still refuses
+	// `printf 'abcd%n' 'arr[2]'` as a name. So the general field is Yes
+	// there and would answer this route wrongly.
+	//
+	// Measured 2026-09-26, `arr=(x y z); printf 'abcd%n' 'arr[2]'`:
+	//
+	//	zsh 5.9.2     the element becomes 4, status 0
+	//	bash 5.3.20   printf: `arr[2]': not a valid identifier, status 1
+	//	ksh93u+       printf: arr[2]: cannot be an array, status 1
+	//
+	// The control is the plain name in the same shells, which all three
+	// fill, so it is the brackets that are refused and not the store.
+	PrintfCountOperandTakesASubscript Answer
+
+	// PrintfCountEmptyNameIsIgnored takes an operand that is present and
+	// empty as nothing to store rather than as a name that is not one.
+	//
+	// The *absent* operand is unanimous — `printf 'abc%n'` writes `abc`,
+	// says nothing and reports 0 in all three columns — and this is the
+	// question the empty one asks instead. Measured 2026-09-26,
+	// `printf 'ab%ncd' ''`:
+	//
+	//	bash 5.3.20   abcd, nothing said, status 0
+	//	ksh93u+       ab, `printf: : invalid variable name`, status 1
+	//	zsh 5.9.2     abcd, `not an identifier: `, and the script ends
+	//
+	// So bash cannot tell the empty operand from the absent one and the
+	// other two can. Asked only where a `%n` was reached with an operand
+	// present and empty, which is the one shape that separates the columns.
+	PrintfCountEmptyNameIsIgnored Answer
+
+	// PrintfCountBadNameStopsThePass gives up on the rest of the format when
+	// a `%n`'s operand is not a name, rather than writing it out.
+	//
+	// Measured 2026-09-26, `printf 'abc%nXYZ' '1bad'` with the output
+	// captured and the complaint discarded:
+	//
+	//	bash 5.3.20   abc,     status 1
+	//	ksh93u+       abc,     status 1
+	//	zsh 5.9.2     abcXYZ,  and the script ends afterwards
+	//
+	// The zsh row is not the refusal being ignored: a second `%n` later in
+	// the same format still stores, measured through an EXIT trap —
+	// `printf 'abc%nX%n' 1bad good` leaves `good` at 4 — so the pass runs to
+	// its end and the shell dies once the builtin has returned. See
+	// BadNameToPrintfFatal for that half.
+	//
+	// **Two fields and not one**, because the same column answers this and
+	// PrintfCountFrozenNameStopsThePass differently: bash stops for a word
+	// that cannot be a name and carries on past a name it may not write.
+	PrintfCountBadNameStopsThePass Answer
+
+	// PrintfCountFrozenNameStopsThePass gives up on the rest of the format
+	// when a `%n`'s operand names a parameter the script has frozen.
+	//
+	// Measured 2026-09-26, `typeset -r ro=1; printf 'ab%ncd' ro`:
+	//
+	//	bash 5.3.20   abcd, `ro: readonly variable`,       status 0
+	//	ksh93u+       ab,   `printf: ro: is read only`,    status 1
+	//	zsh 5.9.2     abcd, `read-only variable: ro`,      and the script ends
+	//
+	// bash reports the freeze and then behaves as though nothing had gone
+	// wrong — the format is finished and the status is the format's — which
+	// is the cell that parts this from PrintfCountBadNameStopsThePass, where
+	// the same shell stops at 1.
+	PrintfCountFrozenNameStopsThePass Answer
+
 	// PrintfQuote is how `%q` quotes, which is three answers and an absence
 	// rather than a switch — see PrintfQuoteStyle.
 	PrintfQuote PrintfQuoteStyle
@@ -24982,7 +25116,17 @@ type Semantics struct {
 	//	dash, ash     no `-v`
 	//
 	// So the two columns that have the option both refuse, and they part on
-	// the cost alone. bash's status is `printf`'s own 2 rather than the 1 it
+	// the cost alone.
+	//
+	// **The option is no longer the only route.** `%n` names an output
+	// parameter too, and it is judged through this same gate, which is what
+	// gave ksh93 an answer where the table above had none: measured
+	// 2026-09-26, `printf 'abc%n' '1bad'; echo after` writes `printf: 1bad:
+	// invalid variable name` at 1 and then `after`, so No. zsh answers the
+	// two routes alike — `not an identifier: 1bad`, and the script ends —
+	// and bash carries on past both, which is what says this is the
+	// builtin's question rather than the option's. The *status* is not
+	// shared: see Diagnostics.PrintfCountBadNameStatus. bash's status is `printf`'s own 2 rather than the 1 it
 	// gives `read` — Diagnostics.BuiltinBadNameStatusFor already holds that
 	// row, measured for the empty subscript in #3513 — which is the second
 	// reason the two builtins are not one field.
@@ -29606,6 +29750,53 @@ func (r *Runner) floatHalf() PrintfFloatHalfPolicy {
 	if p == PrintfFloatHalfUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			r.unanswered("printf: a floating conversion's exact half")))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// PrintfCountAttributePolicy is which parameters a `%n` gives the integer
+// attribute to.
+//
+// Three readings and not a bool, because the panel really does split three
+// ways. See [Semantics.PrintfCountAttribute] for the measurements.
+type PrintfCountAttributePolicy uint8
+
+const (
+	// PrintfCountAttributeUnspecified is no answer, and is refused like any
+	// other.
+	PrintfCountAttributeUnspecified PrintfCountAttributePolicy = iota
+	// PrintfCountLeavesTheAttribute stores a plain value, whatever the name
+	// was before: bash.
+	PrintfCountLeavesTheAttribute
+	// PrintfCountIntegerOnANewName gives the attribute to a name the shell
+	// did not already have, and leaves an existing parameter as it found it:
+	// zsh.
+	PrintfCountIntegerOnANewName
+	// PrintfCountIntegerAlways gives it to the name either way: ksh93.
+	PrintfCountIntegerAlways
+)
+
+func (p PrintfCountAttributePolicy) String() string {
+	switch p {
+	case PrintfCountLeavesTheAttribute:
+		return "left alone"
+	case PrintfCountIntegerOnANewName:
+		return "integer on a new name"
+	case PrintfCountIntegerAlways:
+		return "integer always"
+	}
+	return "unspecified"
+}
+
+// countAttribute resolves the axis, and only where a `%n` has a name it may
+// really store through — so a refused operand never raises it.
+func (r *Runner) countAttribute() PrintfCountAttributePolicy {
+	p := r.sem().PrintfCountAttribute
+	if p == PrintfCountAttributeUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			r.unanswered("printf: what `%n` leaves on the name it stores through")))
 		r.status = 2
 		r.unspecified = true
 	}

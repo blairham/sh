@@ -2473,6 +2473,27 @@ func Semantics() interp.Semantics {
 	// `0x1.8p+0`, and `printf '%a' 0.1` is `0x1.99999999999ap-4` — twelve
 	// digits, the thirteenth rounded away rather than padded.
 	s.PrintfC99FloatConversions = interp.Yes
+	// `%n`, and the count is this pass's bytes: `printf '%.10e%n\n' 1
+	// count` leaves 16 in ksh93u+, measured 2026-09-26.
+	s.PrintfCountConversion = interp.Yes
+	// And the name becomes an integer either way: `typeset -i n=4` for a
+	// new one and `typeset -i q=3` for a parameter the script had already
+	// made, which is the cell that parts this from the column that only
+	// types a new name.
+	s.PrintfCountAttribute = interp.PrintfCountIntegerAlways
+	// The operand is a plain name and a subscripted one is a sentence of its
+	// own: `arr=(x y z); printf 'abcd%n' 'arr[2]'` is `printf: arr[2]:
+	// cannot be an array` at 1. See Diagnostics.PrintfCountNameIsAnArray.
+	s.PrintfCountOperandTakesASubscript = interp.No
+	// An operand that is present and empty is refused rather than ignored:
+	// `printf 'ab%ncd' ''` writes `ab`, says `printf: : invalid variable
+	// name` and reports 1.
+	s.PrintfCountEmptyNameIsIgnored = interp.No
+	// Both refusals give up the rest of the format at 1: `printf 'abc%nXYZ'
+	// '1bad'` writes `abc`, and `typeset -r ro=1; printf 'ab%ncd' ro` writes
+	// `ab` and says `printf: ro: is read only`.
+	s.PrintfCountBadNameStopsThePass = interp.Yes
+	s.PrintfCountFrozenNameStopsThePass = interp.Yes
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.Yes
 	// And a `%a`'s zero fill goes in front of the `0x` here, where the two
 	// columns that share this shell's alternate-prefix arithmetic put it
@@ -2901,10 +2922,14 @@ func Semantics() interp.Semantics {
 	s.BadNameToDeclarationFatal = interp.Yes
 	s.BadNameToUnsetFatal = interp.No
 	// And not to `read`, which is not a special builtin in any shell.
-	// unanswered BadNameToPrintfFatal: this shell's `printf` has no `-v` —
-	// measured 2026-09-17, `printf -v '1x' %s Q` is `printf: -v: unknown
-	// option` and a usage line at 2 — so it never reaches an operand to
-	// judge.
+	// And not to `printf`, which has no `-v` here — measured 2026-09-17,
+	// `printf -v '1x' %s Q` is `printf: -v: unknown option` and a usage line
+	// at 2 — but does have a `%n`, whose operand is judged the same way:
+	// measured 2026-09-26, `printf 'abc%n' '1bad'; echo "after"` writes
+	// `printf: 1bad: invalid variable name` at 1 and then `after`, so the
+	// refusal costs the script nothing beyond its own status. This was
+	// unanswered until `%n` landed and gave the question a route.
+	s.BadNameToPrintfFatal = interp.No
 	s.BadNameToReadFatal = interp.No
 	// And `getopts`: measured 2026-09-18, `echo A; getopts x 1bad -x; echo
 	// "B st=$?"` writes all three lines here, so the refusal costs the
@@ -4469,6 +4494,7 @@ func Diagnostics() interp.Diagnostics {
 		// after it, and only the status says anything went wrong.
 		PrintfBadDateOperand:      "printf: warning: invalid argument of type T",
 		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
+		PrintfCountNameIsAnArray:  "printf: %[1]s: cannot be an array",
 		PrintfArithOperandFailure: "printf: %[1]s",
 		// And a second line after it, naming the conversion character
 		// rather than the operand — with the status split that comes with
@@ -4850,6 +4876,13 @@ func Diagnostics() interp.Diagnostics {
 			// on the same line is `<file>[N]: unset: 1bad: invalid variable
 			// name`. See BuiltinBadNameNamesTheShellAlone (#3555).
 			"getopts": "%[2]s: invalid variable name",
+			// `printf` reaches this only through `%n`, whose operand is
+			// the one name this shell's `printf` takes: measured
+			// 2026-09-26, `printf 'abc%n' '1bad'` is `printf: 1bad:
+			// invalid variable name` at 1, and there is no `-v` here for
+			// the entry to be about. A subscripted operand is a sentence
+			// of its own — see PrintfCountNameIsAnArray.
+			"printf": "%[1]s: %[2]s: invalid variable name",
 			// `typeset ':'` and `typeset 1x`, both `invalid variable name`
 			// and both fatal. `integer` reaches this entry rather than one of
 			// its own, because this shell's `integer 1x` calls itself

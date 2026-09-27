@@ -1191,6 +1191,22 @@ func Semantics() interp.Semantics {
 	// None of C99's three: `printf '%F' 1.5` is `%F]: invalid format` at 1
 	// in BusyBox ash 1.37.
 	s.PrintfC99FloatConversions = interp.No
+	// No `%n` either: `printf '%.10e%n\n' 1 count` is `%n: invalid format`
+	// at 1 in BusyBox ash 1.37.0, measured 2026-09-26 in the digest-pinned
+	// alpine image.
+	s.PrintfCountConversion = interp.No
+	// unanswered PrintfCountAttribute: no `%n` to reach a name with, and no
+	// integer attribute in this shell to leave on one.
+	// unanswered PrintfCountOperandTakesASubscript: the directive is refused
+	// before an operand is looked at, and this shell has no subscripts to
+	// take in any case.
+	// unanswered PrintfCountEmptyNameIsIgnored: no `%n` to hand an empty
+	// operand to.
+	// unanswered PrintfCountBadNameStopsThePass: the refusal here is of the
+	// directive rather than of a name, so nothing reaches the question of
+	// what a bad name costs.
+	// unanswered PrintfCountFrozenNameStopsThePass: and nothing reaches a
+	// freeze either.
 	// unanswered PrintfHexFloatZeroFillPrecedesThePrefix: and so no fill to
 	// place in it either.
 	// unanswered PrintfHexFloatDefaultIsTwelveDigits: there is no `%a` here

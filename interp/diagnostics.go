@@ -1114,6 +1114,27 @@ type Diagnostics struct {
 	PrintfMissingVerb string
 	// PrintfMissingVerbStatus is what that reports. Zero means 1.
 	PrintfMissingVerbStatus int
+	// PrintfCountBadNameStatus is what a `%n` whose operand is not a name
+	// reports, where that is not the number the builtin's other bad names
+	// carry in BuiltinBadNameStatusFor.
+	//
+	// One column has one: bash answers 2 for `printf -v '1x' %s Q`, which is
+	// `printf`'s usage number, and 1 for `printf 'abc%n' '1bad'`, which is
+	// an ordinary runtime failure. Measured 2026-09-26 under `LC_ALL=C` from
+	// a script file. zsh and ksh93 answer 1 to both and leave this zero,
+	// which means the builtin's own.
+	PrintfCountBadNameStatus int
+	// PrintfCountNameIsAnArray is what a `%n` whose operand carries a
+	// subscript is refused with, where the dialect words that differently
+	// from a word that could never be a name at all. One verb: the operand
+	// as written.
+	//
+	// One column: ksh93u+ says `printf: arr[2]: cannot be an array` where
+	// its ordinary bad-name sentence is `printf: 1bad: invalid variable
+	// name`. bash says `` printf: `arr[2]': not a valid identifier `` to
+	// both and leaves this empty; zsh takes the element and never reaches a
+	// refusal at all — see Semantics.PrintfCountOperandTakesASubscript.
+	PrintfCountNameIsAnArray string
 	// PrintfDirectiveDropsLengthModifiers writes the directive back without
 	// the length modifiers it carried, in the two complaints above.
 	//

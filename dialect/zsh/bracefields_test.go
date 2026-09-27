@@ -43,6 +43,9 @@ func TestTheBracesAreFoundInTheFieldsHere(t *testing.T) {
 
 		// A produced brace, comma or run of them is data here.
 		{"a produced group", `e='{a,b}'; f $e`, "1 | [{a,b}]\n"},
+		{"a produced group beside written text", `e='{a,b}'; f x$e`, "1 | [x{a,b}]\n"},
+		{"a produced opening brace", `e='{'; f $e{a,b}`, "2 | [{a] [{b]\n"},
+		{"and a produced pair", `e='{}'; f $e{a,b}`, "2 | [{}a] [{}b]\n"},
 		{"a produced comma", `e=a,b; f {$e}`, "1 | [{a,b}]\n"},
 		{"produced braces in a list's elements", `a=("x{p" "q}y"); f ${a[@]}`, "2 | [x{p] [q}y]\n"},
 		{"a quoted group beside a list", `set -- 1 2; f "x{p,q}"$@y`, "2 | [x{p,q}1] [2y]\n"},

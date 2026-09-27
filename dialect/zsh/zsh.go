@@ -2708,6 +2708,10 @@ func Semantics() interp.Semantics {
 	// and `e='a b,c'; f {$e}` is `{a` and `b,c}` — the splitter reaches
 	// inside the group. ksh93 is the one column that stops.
 	s.BraceStopsFieldSplitting = interp.No
+	// A produced brace is data here: `e='{a,b}'; echo $e` is `{a,b}`,
+	// `e='{'; echo $e{a,b}` is `{a {b` and `a=("x{p" "q}y"); echo ${a[@]}`
+	// is the two words it was. ksh93 is the one column that reads them.
+	s.BraceScanReadsProducedText = interp.No
 	// Pads like bash — `{01..3}` is `01 02 03` — but a negative step
 	// reverses the walk the endpoints chose: `{3..1..-1}` is `1 2 3` and
 	// `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards rather than the

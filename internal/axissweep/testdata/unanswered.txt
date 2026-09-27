@@ -79,6 +79,7 @@ ash   BraceRangeStepSignHonored
 ash   BraceRangeThatCannotBeCounted
 ash   BraceRangeZeroStepCountsAsOne
 ash   BraceRescanEntersFailedGroup
+ash   BraceScanReadsProducedText
 ash   BraceStopsFieldSplitting
 ash   BuiltinReadsOptions
 ash   CaseAttributeFoldsWhenRead
@@ -387,6 +388,7 @@ dash  BraceRangeStepSignHonored
 dash  BraceRangeThatCannotBeCounted
 dash  BraceRangeZeroStepCountsAsOne
 dash  BraceRescanEntersFailedGroup
+dash  BraceScanReadsProducedText
 dash  BraceStopsFieldSplitting
 dash  BuiltinReadsOptions
 dash  CaseAttributeFoldsWhenRead

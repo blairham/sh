@@ -169,11 +169,36 @@ alternative that came to nothing *is* that quoted null.
 Whether produced text **outside** a group is scanned for braces at all is
 the same question one level out and stays outside this one: `e='{a,b}';
 echo $e` is `a b` in ksh93 and `{a,b}` in bash 5.3, bash 3.2 and zsh, and
-reading a body does not answer it. It is #4797, and what it needs beyond
-the section below is a rule about which braces *pair*: measured 2026-09-27,
-a produced `}` does not close a written `{` — `e='}'; echo {a,b$e` is
-`{a,b}` — while two produced braces do, `e='{}'; echo $e{a,b}` being
-`{}a {}b`.
+reading a body does not answer it, because there is no written group for a
+produced comma to be the body of. `BraceScanReadsProducedText` is that axis,
+and the road below is what makes it askable: a field's runs say which of its
+bytes the script wrote, so a brace in one an expansion produced can be found
+without anything being expanded twice.
+
+What it took beyond that is a rule about which braces **pair**. A brace
+closes only one of its own provenance, measured 2026-09-27 on ksh93u+:
+
+| probe | ksh93 | bash 5.3 / 3.2 / zsh |
+| --- | --- | --- |
+| `e='{a,b}'; echo $e` | `a b` | `{a,b}` |
+| `e='{a,'; g='b}'; echo $e$g` | `a b` | `{a,b}` |
+| `e='}'; echo {a,b$e` | `{a,b}` | `{a,b}` |
+| `e='{'; echo $e{a,b}` | `{{a,b}` | `{a {b` |
+| `e='{}'; echo $e{a,b}` | `{}a {}b` | `{}a {}b` |
+| `e='{'; echo {c,d$e}{a,b}` | `{c,d{}{a,b}` | `ca cb d{a d{b` |
+
+A produced `}` does not close a written `{`, while two produced ones pair —
+so the empty produced group in row five fails and the written group behind it
+is still a list, where a produced `{` with nothing of its own to close it is
+an unmatched brace and takes the word. Row six is a produced `{` inside a
+*written* group's body, which is the rule the body reading already carries.
+
+**Quoting is where the two questions part.** The result of a quoted expansion
+is not a brace anywhere — `e='{a,b}'; echo "$e"` and `set -- '{a,b}'; echo
+"$@"` are one word in every column — and yet a group the script wrote still
+reads the commas in it: `e=a,b; echo {"$e"}` is `a b` in ksh93. So a field's
+runs carry four classes rather than two: written, written-and-quoted,
+produced, and produced-by-a-quoted-expansion.
 
 ### Where the braces are found, on the output side
 

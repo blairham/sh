@@ -2117,6 +2117,13 @@ func Semantics() interp.Semantics {
 	// the brace still splits. It is the same rule that lets a group's body
 	// through the splitter, so `e='a b,c'; echo {$e}` is `a b` and `c`.
 	s.BraceStopsFieldSplitting = interp.Yes
+	// The one shell that reads brace syntax in the text an expansion
+	// produced: `e='{a,b}'; echo $e` is `a b` and `echo x$e` is `xa xb`,
+	// where the other three answer the word as written. A brace pairs only
+	// with one of its own provenance, so `e='}'; echo {a,b$e` is `{a,b}`
+	// and `e='{'; echo $e{a,b}` is `{{a,b}` — an unmatched produced brace
+	// takes the word, which is this column's rescan answer (#4797).
+	s.BraceScanReadsProducedText = interp.Yes
 	// The one shell that strips a range endpoint's zeros — `{01..3}` is
 	// `1 2 3` — and takes a written step's sign at its word, so `{10..1..3}`
 	// is `10` alone and `{1..10..-3}` is `1`. A negative step that agrees

@@ -2618,23 +2618,44 @@ func Semantics() interp.Semantics {
 	// this shell's letters. Measured 2026-09-12, `unset -n x` is
 	// `unset: bad option: -n` at 1 and `x` keeps its value (#932).
 	s.UnsetOptions = "vfm"
-	// `readonly` here is `typeset -r` under another name, so it takes far
-	// more than these six: measured 2026-09-12, `-i`, `-x`, `-g`, `-l` and
-	// `-u` are all taken at status 0 as well, and only `-n` and `-r` are
-	// refused. The set stops at the letters this builtin does something
-	// with, because a letter accepted and then ignored hands a script a
-	// success it did not earn — see Semantics.ReadonlyOptions. `-t` joined
-	// it in #3101, when the trace attribute became something this builtin
-	// records: measured 2026-09-18, `readonly -t R=1` lists as `typeset -rt
-	// R=1` here. Making `readonly` read DeclareOptions is the honest fix for
-	// the rest and has its own measurements to make.
+	// `readonly` here is `typeset -r` under another name, and since #4853 it
+	// is that in the code as well — see ReadonlyWord just below. So the set is DeclareOptions less the three letters the word has
+	// already spent or never had, and every letter in it reaches the
+	// attribute `typeset` gives it rather than being accepted and ignored.
+	//
+	// Measured 2026-09-27 a letter at a time, one run per cell, from a script
+	// file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME,
+	// asking zsh 5.9.2 for all fifty-two letters under each word:
+	//
+	//	readonly takes  a f g h i l p t u x A E F H L R T U Z
+	//	typeset takes   those, plus k m r z
+	//
+	// `r` is the letter this word *is*, so `readonly -r vv` and `readonly +r
+	// vv` are each `bad option` there; `m` and `z` are `typeset`'s alone; and
+	// `k` is in neither set here, since this shell has not built it — it sits
+	// in UnimplementedOptionLetters under `typeset` and is a plain bad option
+	// under this name, which is what zsh answers too.
+	//
+	// The old set was `paAft`, five letters, chosen on the rule that a letter
+	// accepted and then ignored hands a script a success it did not earn.
+	// That rule is why the set could not be widened while this builtin had an
+	// operand loop of its own; it is not a reason to keep it narrow now that
+	// the loop is the declaration's (#4853).
 	//
 	// unanswered ReadonlyReferenceLetter: `readonly -n` is refused here, so
 	// the letter never reaches the axis. Measured 2026-09-18 under
 	// `env -i PATH=/usr/bin:/bin LC_ALL=C`: `readonly -n zz` is
 	// `readonly: bad option: -n` at 1. ReadonlyOptions has no `n`, which is
 	// what keeps the question off this column rather than answered wrongly.
-	s.ReadonlyOptions = "paAft"
+	s.ReadonlyOptions = "aAEfFgHhiLlpRtuUTxZ"
+	// And the word is the declaration itself, not a freeze that happens to
+	// spell a few of the same letters. Measured in the same run: every shape
+	// the two words share answers alike, the complaint name apart —
+	// `readonly -p v`, `readonly -f b`, a bare `readonly`, `readonly +`,
+	// `readonly "a[1]"`, `readonly -L 5 v=ab`, `readonly -T TT tt` and
+	// `f(){ readonly -h v=1 }` are byte-identical to their `typeset -r`
+	// spellings. See Semantics.ReadonlyWord.
+	s.ReadonlyWord = interp.ReadonlyWordIsTheDeclaration
 	// And it is `typeset -r` in the other half too: a `readonly` written
 	// inside a function declares a **local**, where every other shell in
 	// the panel freezes the name the shell already has. Measured

@@ -7599,7 +7599,7 @@ func (r *Runner) readonlyRecordsTheCompound() bool {
 }
 
 // biReadonly marks variables immutable.
-func biReadonly(r *Runner, _ context.Context, args []string) int {
+func biReadonly(r *Runner, ctx context.Context, args []string) int {
 	if code, answered := r.namesUnderAPlus(args,
 		func(d declaration) bool { return d.readonly }); answered {
 		return code
@@ -7611,6 +7611,12 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	letters := r.sem().ReadonlyOptions
 	if letters == "" {
 		letters = "p"
+	}
+	// Where the dialect reads this word as its declaration builtin under a
+	// second name, that is the whole of it and the loop below is not reached
+	// — see interp/readonlydeclaration.go.
+	if code, answered := r.readonlyAsTheDeclaration(ctx, args, letters); answered {
+		return code
 	}
 	args, opts, code := r.builtinOptions("readonly", args, letters)
 	if code != 0 {

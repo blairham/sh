@@ -714,6 +714,14 @@ type patternOpts struct {
 	// answer, because the lexer has to have let the `(` into the word
 	// before anything here can see it.
 	tilde bool
+	// tildeFold is the same construct read where it *stands* rather than at
+	// the front, for the letters that are an option for the rest of the
+	// branch. Separate from tilde because that one is cleared the moment a
+	// prefix group has been read — so that a flavor falling back to this
+	// matcher cannot loop on its own group — and a second group further
+	// along the pattern still has to be found: `~(i)z~(-i)A` is two of them.
+	// See interp/tildemidpattern.go.
+	tildeFold bool
 	// whole says the caller is asking whether the pattern matches a whole
 	// subject, rather than choosing how much of one a match takes.
 	//
@@ -1370,6 +1378,25 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 				if lo, hi, after, isClosure := closureBounds(rest, &o); isClosure {
 					return matchRepeat(item, pp, lo, hi, after, pp+len(p)-len(after), s, at, o)
 				}
+			}
+		}
+		// A ksh `~(…)` group is read where it stands, and before splitGroup
+		// for the reason a `(#i)` is read before it: the scan would
+		// otherwise take the group's own parentheses for an alternation.
+		// Only the sense signs and `i` are honored here — see
+		// splitTildeFoldGroup for the rows, and for why a flavor letter is
+		// left as the text it already was.
+		//
+		// Outside the `o.extended` block above because the two dialects that
+		// have a mid-pattern option group are not the same dialect: `(#i)`
+		// is one shell's and behind that shell's option, and this is the
+		// other's and behind the grammar flag that let the `(` into the word.
+		if o.tildeFold {
+			if fold, on, ok := splitTildeFoldGroup(p); ok {
+				_, rest, _ := splitTildeModifier(p)
+				o = tildeFoldHere(o, fold, on)
+				pp, p = pp+len(p)-len(rest), rest
+				continue
 			}
 		}
 		if body, quant, rest, ok := splitGroup(p, pp, &o); ok {

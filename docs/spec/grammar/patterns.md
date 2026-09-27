@@ -2461,6 +2461,49 @@ so `~(E)abc` is a pattern that reads and does not match. So this is
 `syntax.Dialect.TildeGroup`, a grammar flag one dialect holds, and not an axis:
 nobody else has a reading of the construct to disagree about.
 
+### And it is read where it stands, not only at the head
+
+The `i` letter is an option for the **rest of the branch**, the way zsh's
+`(#i)` is, so a group carrying one is honored wherever it stands. Measured on
+ksh93u+ 2012-08-01, 2026-09-27, in a directory holding `za`, `zb` and `zab` —
+there is deliberately no `zA`, because a case-insensitive filesystem holds one
+file for the two spellings and the rows would compare a pattern against a name
+that is not there:
+
+| probe | ksh93 |
+| --- | --- |
+| `[[ za == zA ]]` *(control)* | no |
+| `[[ za == ~(i)zA ]]` *(control)* | yes |
+| `[[ za == z~(i)A ]]` | yes |
+| `[[ za == @(z~(i)A) ]]` | yes — inside a group |
+| `[[ za == *~(i)A ]]` | yes — behind a star |
+| `[[ zab == z~(i)A~(i)B ]]` | yes — twice over |
+| `[[ za == ~(i)z~(-i)A ]]` | **no** — and `-i` turns it off again |
+| `f z~(i)A` | `[za]` — and pathname expansion reaches it |
+
+The two controls are what make the rest readable: the first says the probe can
+see a pattern *not* fold and the second that it can see one fold. The
+second-to-last row is the one that says the group applies **from where it
+stands** rather than to the whole pattern — a reading that took any `i`
+anywhere would fold the `A` and match.
+
+Two things are not the same question and are measured apart.
+
+**A group that asks for nothing still makes a field a pattern in the middle
+and does not at the head.** `f z~()b` is `[zb]` and `f ~()zb` is `~()zb`, with
+`zb` in the directory both times, and `f z~(+)b` and `f z~(-)b` go the way the
+first does. The test is whether the walk will **consume** the group, not
+whether the group changes anything: a pattern with a piece taken out of it is
+not the name the field was written as.
+
+**A flavor letter is a different matcher and not a flag**, so `~(E)` mid-word
+is not the same change as `~(i)` mid-word — honoring one means matching a glob
+prefix against part of the subject and an expression against the rest. ksh93u+
+does read one there; this shell does not, which is #4883, and the row that
+says so is `f z~(E).`: `.` is an ordinary character in a glob and any one
+character in an expression, so consuming the group and ignoring its letter
+would be a plausible wrong answer rather than a fix.
+
 ### And the group turns what follows it into the flavor's text
 
 Reading the group was not the whole of the lexical rule, and the half that

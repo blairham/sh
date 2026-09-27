@@ -873,6 +873,12 @@ func (r *Runner) describesRatherThanSpells(s string) bool {
 	if _, ok := tildeGlobPattern(s, r.lang().TildeGroup); ok {
 		return true
 	}
+	// And one standing further along the piece, for the letter that is an
+	// option for the rest of the branch rather than a whole-field question.
+	// See interp/tildemidpattern.go.
+	if r.lang().TildeGroup && holdsTildeFoldGroup(s) {
+		return true
+	}
 	if hasUnescapedMeta(s, r.lang().NumericRangePattern,
 		r.lang().PatternAlternation, r.lang().ExtendedPattern,
 		r.MatchOption(ExtendedPatternOperators), r.slashLeavesABracket,

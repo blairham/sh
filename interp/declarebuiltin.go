@@ -72,10 +72,18 @@ type declareFlags struct {
 	widthConflicted bool
 	width           int
 	widthNamed      bool
-	readonly        bool
-	export          bool
-	assoc           bool
-	array           bool
+	// justificationWidth and justificationNamed are the last number an `L`
+	// or an `R` carried, which is a second pair rather than a reuse of the
+	// one above because the column that combines the fill with a
+	// justification takes the *justification's* number and not the last one
+	// written — `typeset -L5 -Z3` is `typeset -L5 -Z5` there. See
+	// Runner.declaredWidthNumber.
+	justificationWidth int
+	justificationNamed bool
+	readonly           bool
+	export             bool
+	assoc              bool
+	array              bool
 	// compoundVar is `-C`, ksh93's compound-variable letter: a fourth kind
 	// beside the scalar and the two arrays. Its own field rather than a
 	// third value of a container enum because it is not a container — the
@@ -3055,13 +3063,13 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 				zeroFill: f.widthZeroFill,
 				width:    r.fieldWidth[name].width,
 			}
-			if f.widthNamed {
+			if n, named := r.declaredWidthNumber(f); named {
 				// A number written down replaces whatever the name had,
 				// including a width it had learned: measured, `typeset -L 3
 				// f=abcd; typeset -R 4 f` lists as `typeset -R4 f=abcd`. A
 				// written zero names no width and leaves the learning to
 				// the value, which is the branch widthLearned takes.
-				w.width = f.width
+				w.width = n
 			}
 			r.fieldWidth[name] = w
 			// The three letters and the float one are not exclusive in the
@@ -3817,6 +3825,7 @@ func withoutListingLetters(f declareFlags) declareFlags {
 	f.float, f.precision, f.precisionNamed = false, 0, false
 	f.widthLetter, f.widthZeroFill, f.widthConflicted = 0, false, false
 	f.width, f.widthNamed = 0, false
+	f.justificationWidth, f.justificationNamed = 0, false
 	f.readonly, f.readonlyOff = false, false
 	f.export, f.assoc, f.array = false, false, false
 	f.lower, f.upper, f.capital = false, false, false

@@ -1128,13 +1128,23 @@ func wholeArraySubscriptAsAKey(k string) bool {
 // `typeset -i16 -r v=255` and `typeset -rL 3 a=abcd` as `typeset -L3 -r
 // a=abcd`; this engine wrote `typeset -i16r v=255` (#1461).
 //
-// at is one past the last digit, and zero means no letter carried a number —
-// which is every listing in every other dialect and nearly every one in this.
-func numberedLetterEndsTheWord(flags string, at int) string {
-	if at <= 0 || at >= len(flags) {
-		return flags
+// at holds, per numbered letter, one past its last digit; an empty slice
+// means no letter carried a number — which is every listing in every other
+// dialect and nearly every one in this.
+//
+// A slice rather than one position because a declaration can write **two**
+// numbered letters: the column that combines the zero fill with a left
+// justification writes the width onto both, so `typeset -iL5 -Z5 v=7` and
+// `typeset -L5 -Z5 -u v=ab` each break twice. Measured on zsh 5.9.2,
+// 2026-09-27 (#4798).
+func numberedLetterEndsTheWord(flags string, at []int) string {
+	for i := len(at) - 1; i >= 0; i-- {
+		if at[i] <= 0 || at[i] >= len(flags) {
+			continue
+		}
+		flags = flags[:at[i]] + " -" + flags[at[i]:]
 	}
-	return flags[:at] + " -" + flags[at:]
+	return flags
 }
 
 // exportSpelledDeclaration is DeclareListingExportSpelled — see the constant.
@@ -1155,21 +1165,27 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	// `typeset -L4 -l d=ABCD`. A name carries one of the three, so their
 	// order among themselves decides nothing.
 	flags := d.letters("naAiEFLRZlurtxUT")
-	numbered := 0
+	var numbered []int
 	if d.base != 0 {
 		// The base rides on the letter here — `typeset -i16 h=255` — where
 		// the other listed form writes it as a word of its own. Measured in
 		// the one shell with this arrangement.
 		flags = strings.Replace(flags, "i", "i"+itoa(d.base), 1)
-		numbered = strings.Index(flags, "i") + 1 + len(itoa(d.base))
+		numbered = append(numbered, strings.Index(flags, "i")+1+len(itoa(d.base)))
 	}
 	if d.hasWidth && d.width.width != 0 {
 		// The same arrangement, and the number is always written: a width
 		// learned from the first value is written back exactly as one the
 		// letter named — `typeset -L f=xy` lists as `typeset -L2 f=xy`.
-		l := string(d.width.letter)
-		flags = strings.Replace(flags, l, l+itoa(d.width.width), 1)
-		numbered = strings.Index(flags, l) + 1 + len(itoa(d.width.width))
+		//
+		// Both letters where the name carries the pair, each with the same
+		// width and each ending its own word: `typeset -L5 -Z5 v=7`. See
+		// declaration.widthLetters, which is what put the second one in the
+		// cluster (#4798).
+		for _, l := range d.widthLetters() {
+			flags = strings.Replace(flags, l, l+itoa(d.width.width), 1)
+			numbered = append(numbered, strings.Index(flags, l)+1+len(itoa(d.width.width)))
+		}
 	}
 	// Where the declaration would *land* is part of this form, because the
 	// form's promise is that the text recreates the state it describes.
@@ -1606,6 +1622,26 @@ func bareAssignmentHead(flags []string, name string) string {
 // `-rc`, `-tc`, `-ic` for each letter on its own.
 func (d declaration) flagLetters() string { return d.letters("aAinrtxluc") }
 
+// widthLetters is which of the three width letters this name's cluster
+// carries, in the order they are written back.
+//
+// One letter for every name in every column but one: the column that combines
+// the zero fill with a justification carries the justification **and** the
+// fill, and the listing gives each of them the same number — `typeset -L5
+// -Z5`. Read off the recorded attribute rather than off what the declaration
+// wrote, because a second declaration can add the fill to a name that already
+// had the justification.
+func (d declaration) widthLetters() []string {
+	if !d.hasWidth {
+		return nil
+	}
+	out := []string{string(d.width.letter)}
+	if d.width.zeroFill && d.width.letter != 'Z' {
+		out = append(out, "Z")
+	}
+	return out
+}
+
 // letters spells the attributes present in the given order.
 func (d declaration) letters(order string) string {
 	var b strings.Builder
@@ -1623,7 +1659,13 @@ func (d declaration) letters(order string) string {
 		case 'E':
 			on = d.float && d.floatExponent
 		case 'L', 'R', 'Z':
-			on = d.hasWidth && d.width.letter == byte(c)
+			on = d.hasWidth && (d.width.letter == byte(c) ||
+				// The fill beside a justification is a second letter in this
+				// cluster, which is the one place a name carries two of the
+				// three: `typeset -L5 -Z5 v=7` on zsh 5.9.2. The other listed
+				// form writes the pair from d.width.zeroFill directly and does
+				// not come through here.
+				(c == 'Z' && d.width.zeroFill && d.width.letter != 'Z'))
 		case 'r':
 			on = d.readonly
 		case 'x':

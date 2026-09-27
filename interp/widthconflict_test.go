@@ -20,7 +20,7 @@ func widthPairRun(t *testing.T, src string, p WidthJustificationPrecedencePolicy
 		s.DeclareOptions = "aAFgiLprRuxZ"
 		s.DeclareOptionsTakingANumber = "FiLRZ"
 		s.TypesetLocalNeedsKeywordFunction = No
-		s.DeclareZeroFillLetter = DeclareZeroFillLetterIsAJustificationOfItsOwn
+		s.DeclareZeroFillLetter = DeclareZeroFillLetterCombinesWithTheLeftJustification
 		// A width letter may stand beside the integer one, which is what the
 		// scope row below is written against: the pair the other answer
 		// refuses outright is not this question.

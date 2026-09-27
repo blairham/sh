@@ -4347,14 +4347,24 @@ func Semantics() interp.Semantics {
 	// into on its own: `typeset -iF 3 a=1.5` is `typeset -i3 a=1` and
 	// `-Fi 3` is `typeset -F a=1.500`.
 	s.NumericTypeLetterPrecedence = interp.NumericLetterFirstWrittenWins
-	// `Z` is a **justification of its own** here and the third member of an
-	// exclusive set with `L` and `R`, where ksh93 reads it as a fill riding
-	// on one of the other two. Measured 2026-09-18 on zsh 5.9.2: `typeset
-	// -ZL 5 q=7` lists as `typeset -Z5 q=7` and is `00007`, and `typeset -LZ
-	// 5 r=7` as `typeset -L5 r=7` and is `7    ` — one letter written back
-	// for a pair, and the value the surviving letter's. See
-	// interp/fieldwidth.go for ksh93's pair of letters (#2859).
-	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterIsAJustificationOfItsOwn
+	// `Z` is exclusive with `R` here and a **combination** with `L`: the two
+	// stand together, the listing writes both and `${(t)}` names both, where
+	// ksh93 reads the letter as a fill riding on whichever justification it
+	// has. Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+	// `-f` from a script file under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	typeset -L5 -Z5 v=7      typeset -L5 -Z5  scalar-left-right_zeros
+	//	typeset -Z5 -L5 v=7      typeset -L5 -Z5  scalar-left-right_zeros
+	//	typeset -L5 -Z5 v=00700  the value is `700  ` — the zeros come off
+	//	typeset -Z5 v=7          typeset -Z5      scalar-right_zeros
+	//
+	// This used to read `a justification of its own`, and every row it was
+	// measured on is a one-word spelling with a **detached** number — the
+	// second letter is never read there at all, so those rows are produced
+	// identically by both readings and were never evidence about `Z`. They
+	// still agree and are the controls. See interp/fieldwidth.go, where the
+	// rest of the table is (#2859, #4798).
+	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterCombinesWithTheLeftJustification
 	// And where a declaration writes two of them, the name ends up with
 	// **neither** — silently, at 0, with the value unpadded. Measured
 	// 2026-09-27: `typeset -L5 -R5 v=7` and `typeset -Z5 -R5 v=7` both list

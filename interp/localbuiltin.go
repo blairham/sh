@@ -569,6 +569,7 @@ func (f declareFlags) onlyAConflictedWidth() bool {
 	}
 	rest := f
 	rest.widthConflicted, rest.width, rest.widthNamed = false, 0, false
+	rest.justificationWidth, rest.justificationNamed = 0, false
 	rest.letters, rest.letterSigns = "", ""
 	// And the record that *some* minus letter was written, which is the `-m`
 	// listing's question and not this one: the letters that set it are the

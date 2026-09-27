@@ -26515,7 +26515,7 @@ ranking column — see `NumericTypeLettersAreExclusive`, which is **that
 pair alone** and not every float letter. `typeset -iF 3 a=1.5` is taken
 there, which is what narrowed it (#2419).
 
-**`DeclareZeroFillLetter`** — bash unspecified · dash unspecified · ksh93 a fill riding on the justification · zsh a justification of its own
+**`DeclareZeroFillLetter`** — bash unspecified · dash unspecified · ksh93 a fill riding on the justification · zsh a combination with the left justification
 
 What the `Z` letter of a declaration **is**. Two shells spell the three
 width letters `-L`, `-R` and `-Z`, agree on every value one of them alone
@@ -26535,9 +26535,46 @@ Rows three and five are the discriminating ones and neither is a listing
 detail. In ksh93 the letter is a **fill**, which needs a justification
 under it and takes `R` where none is written — so `-LZ` is `L` *and* the
 fill, and the fill has no left-hand pad to lay down: it spends itself the
-other way and the value's leading zeros come off. In zsh the letter is a
-justification of its own, exclusive with the other two, so `-LZ` is `L`
-alone and `0012` keeps its zeros.
+other way and the value's leading zeros come off. In zsh the second letter
+of that word is never read at all, because the detached `5` ends the word
+and the rest of it is discarded — see `DeclareNumberDetachedOnlyAtTheWordEnd`
+— so `-LZ` is `L` alone there and `0012` keeps its zeros.
+
+**Every row above is that one-word spelling, and the two-word spelling is
+a different answer.** Measured 2026-09-27 on zsh 5.9.2
+(aarch64-apple-darwin25.4.0), `-f` from a script file under `env -i
+PATH=/usr/bin:/bin`, each row read back three ways:
+
+    written                  listing          ${(t)}                    value
+    typeset -L5 -Z5 v=7      typeset -L5 -Z5  scalar-left-right_zeros   7····
+    typeset -Z5 -L5 v=7      typeset -L5 -Z5  scalar-left-right_zeros   7····
+    typeset -L -Z v=7        typeset -L1 -Z1  scalar-left-right_zeros   7
+    typeset -L5 -Z5 v=00700  typeset -L5 -Z5  scalar-left-right_zeros   700··
+    typeset -Z5 v=7          typeset -Z5      scalar-right_zeros        00007
+    typeset -R5 -Z5 v=7      typeset v=7      scalar                    7
+
+So where both letters are really read the pair **stands together** in zsh
+as well: the listing writes both, `${(t)}` names both, and the value is
+left-justified with its leading zeros off — the same value ksh93's
+left-hand ride produces. What parts the two columns is `R`, which ksh93
+takes beside the fill and zsh answers with no width attribute at all, and
+the listing's shape.
+
+The width is the **justification's** in zsh, whichever order the letters
+were written and whichever of them carried a number — `typeset -L5 -Z3` and
+`typeset -Z3 -L5` are both `typeset -L5 -Z5`, `typeset -L -Z5` is the same,
+and `typeset -Z5 -Z3` with no justification at all is `typeset -Z3`. ksh93
+takes the **first number written** whichever letter carried it: `typeset
+-L5 -Z3` is `typeset -Z 5 -L 5` and `typeset -Z3 -L5` is `typeset -Z 3 -L
+3`. This shell takes the last number there, which is a row of its own and
+not this axis.
+
+The axis used to read `a justification of its own` for zsh — the letter
+exclusive with `L` as well as with `R` — and every row it was measured on
+is a one-word spelling with a detached number, where the second letter is
+never read. Those rows are produced identically by both readings, so they
+were never evidence about `Z`; they still agree and are now the controls
+(#4798).
 
 Which zeros come off was measured a value at a time under `-LZ` at width
 six: `0012` is `12`, `00ab` is `ab`, `0.5` is `.5`, `0` and `000` are
@@ -26553,7 +26590,7 @@ The two bashes have none of the three letters and answer each with an
 invalid option and a usage line; dash and BusyBox ash have no `typeset`
 at all (#2859).
 
-**`WidthJustificationPrecedence`** — bash unspecified · dash unspecified · ksh93 the last letter written · zsh the first letter written
+**`WidthJustificationPrecedence`** — bash unspecified · dash unspecified · ksh93 the last letter written · zsh no width at all where the letters conflict
 
 Which of `L` and `R` a declaration writing both ends up with. The same
 shape `NumericTypeLetterPrecedence` records for the numeric letters, and

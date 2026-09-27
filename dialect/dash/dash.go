@@ -1168,6 +1168,11 @@ func Semantics() interp.Semantics {
 	// nothing is ever produced for the word to read again — `echo $var{x,y}`
 	// is the one word it was written as.
 	//
+	// unanswered BraceBodyReadAfterExpansion: dash has no brace expansion,
+	// so there is no group whose body could be read early or late —
+	// `e=a,b; echo {$e}` is the one word `{a,b}` because the braces are
+	// never syntax here, which is a different fact from either reading.
+	//
 	// unanswered BraceRescanEntersFailedGroup: dash has no brace expansion,
 	// so there is no scan to resume. `@{x}{a,b}@` is the one word it was
 	// written as, and the question of how far past a group that did not

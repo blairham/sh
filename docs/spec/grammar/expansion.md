@@ -97,6 +97,64 @@ Apart from a range's endpoints it is purely textual: it does not consult
 the filesystem and never fails. An unmatched or malformed brace is left
 alone.
 
+### Where the braces are found, on the input side
+
+The ordering above is a fact about a *range*'s endpoints. One column reads
+the whole of a group's **body** the same way, so a comma an expansion
+produced separates alternatives. Measured 2026-09-26 and 2026-09-27 against
+ksh93u+ 2012-08-01, bash 5.3.20, bash 3.2.57 and zsh 5.9.2, each case under
+`-c` in a directory of its own holding `aa`, `ab` and `zz`:
+
+| probe | bash / bash 3.2 / zsh | ksh93 |
+| --- | --- | --- |
+| `e=a,b; echo {$e}` | `{a,b}` | `a b` |
+| `e=a,b; echo {x,$e}` | `x a,b` | `x a b` |
+| `e=1..3; echo {$e}` | `{1..3}` | `1 2 3` |
+| `e=,; echo {a${e}b}` | `{a,b}` | `a b` |
+| `e=a,b; echo pre{$e}post` | `pre{a,b}post` | `preapost prebpost` |
+
+`BraceBodyReadAfterExpansion` is that axis, and it is the brace question
+asked on the **input** side — not what a group's product re-enters the word
+as, which is the next section, but whether a produced comma is brace syntax
+at all. Four things pin the reading down, and each is narrower than "the
+produced text is re-read as shell text":
+
+- **The delimiters are the written ones.** Quoting the *word* hides them —
+  `echo "{$e}"` is `{a,b}` — while quoting the *expansion* does not hide
+  the comma it produced, `echo {"$e"}` being `a b`; and a produced `}`
+  closes no group, so `e="}"; echo {a,b$e` is `{a,b}`.
+- **What a produced alternative leaves is inert**: neither split, nor
+  matched, nor expanded again. `e='a b,c'` is the two fields `a b` and `c`,
+  `e='a*,z'` is `a* z` where the written `{a*,z}` is `aa ab z`, and
+  `x=BOOM; e='$x,b'` is `$x b`.
+- **Inert per character, not per alternative.** With `e=a`,
+  `echo {p,$e*}` is `p aa ab` because the `*` is written; with `e='*'`,
+  `echo {p,a$e}` is `p a*` because it is not.
+- **A produced `{` leaves the whole word as written**, and it is the
+  character rather than the balance: `e='}'` in `{a,b$e,c}` gives
+  `a b} c`, while `e='{'`, `e='{z}'`, `e='{z,y}'` and `e='}x{'` all give
+  the word back unexpanded. The scan does not carry on past it either —
+  `e='{'; echo {c,d$e}{a,b}` is the single field `{c,d{}{a,b}`.
+
+Two neighboring questions are deliberately outside it. Whether an **empty
+alternative** is a field — `echo {a,}` is `a` and an empty word in ksh93,
+`a` alone in bash and zsh — is a disagreement about a *written* group and
+is unmodeled, so a produced empty is dropped exactly as a written one is.
+And whether produced text **outside** a group is scanned for braces at all
+is the same question one level out: `e='{a,b}'; echo $e` is `a b` in ksh93
+and `{a,b}` in bash 5.3, bash 3.2 and zsh, and reading a body does not
+answer it.
+
+An expansion in the body that yields **fields of its own** is not this
+reading's: `set -- 1 2; echo {$@}` is the two words `{1` and `2}` in ksh93 and
+zsh alike, the group's braces having landed in different words. A body's
+expansions are otherwise unsplit, which is what makes `e='a b,c'; echo {$e}`
+two fields rather than three.
+
+A redirection target does not take this reading, which is the gate
+`BraceRangeEndpointsExpanded` already stands behind: `e=x,y; : > {a,$e}`
+writes one file called `{a,x,y}`.
+
 ### Ranges beyond `{1..3}`
 
 Numbers are not the whole of it. Each row below is a corpus case under

@@ -2051,6 +2051,14 @@ func Semantics() interp.Semantics {
 	// list is outside the failed group, still gives `{a{b,c}}d {a{b,c}}e`.
 	// An unclosed `{` has no close to step over and ends the scan.
 	s.BraceRescanEntersFailedGroup = interp.No
+	// The one shell that reads a group's *body* after the expansions in it,
+	// so a produced comma is a list separator: `e=a,b; echo {$e}` is `a b`,
+	// `echo {x,$e}` is `x a b` and `e=1..3; echo {$e}` is `1 2 3`, where
+	// bash 5.3, bash 3.2 and zsh all leave the word as written. What a
+	// produced alternative leaves is inert — `e="a*,z"` is `a* z` where the
+	// written `{a*,z}` matches — and a produced `{` leaves the whole word
+	// alone.
+	s.BraceBodyReadAfterExpansion = interp.Yes
 	// The one shell that strips a range endpoint's zeros — `{01..3}` is
 	// `1 2 3` — and takes a written step's sign at its word, so `{10..1..3}`
 	// is `10` alone and `{1..10..-3}` is `1`. A negative step that agrees

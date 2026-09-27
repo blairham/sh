@@ -111,7 +111,15 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 		}
 		close, matched := matchBraceAcross(w.Spans, open)
 		if matched {
-			if alts, ok := r.alternativesAcross(w, open, close, endpoints); ok {
+			alts, ok, abandoned := r.alternativesAcross(w, open, close, endpoints)
+			if abandoned {
+				// The group was read after its expansions ran and what they
+				// produced holds a brace of its own, which is the one thing
+				// that reading will not carry. Nothing further in the word
+				// is read either: see producedBraceAbandonsTheGroup.
+				return []*syntax.Word{w}
+			}
+			if ok {
 				return r.braceProduct(w, open, close, alts, endpoints)
 			}
 		}
@@ -257,10 +265,23 @@ func matchBraceAcross(spans []syntax.Span, open cursor) (cursor, bool) {
 
 // alternativesAcross splits the body between open and close on top-level
 // commas, returning each alternative as its own span list.
-func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoints bool) ([][]syntax.Span, bool) {
+//
+// The third result is the one outcome that is neither "these are the
+// alternatives" nor "this group is not a list": a group whose body was read
+// *after* its expansions ran, and whose produced text holds a brace. See
+// Runner.alternativesAfterExpansion.
+func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoints bool) ([][]syntax.Span, bool, bool) {
 	spans := w.Spans
+	if !spans[open.span].PidBrace {
+		// Asked before the range, because a produced comma beats a produced
+		// range exactly as a written one beats a written range, and the body
+		// is expanded once for both readings rather than once for each.
+		if alts, ok, abandoned := r.alternativesAfterExpansion(w, open, close, endpoints); ok || abandoned {
+			return alts, ok, abandoned
+		}
+	}
 	if alts, ok := r.rangeAcross(w, open, close, endpoints); ok {
-		return alts, true
+		return alts, true, false
 	}
 	if spans[open.span].PidBrace {
 		// The outer pair of a `{ … }` run written immediately after `$$` is
@@ -283,24 +304,30 @@ func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoint
 		// the `{a,b}` nested inside `$${x{…}y}` both still expand — the note
 		// is on the outer pair and on nothing else. See
 		// [syntax.Span.PidBrace].
-		return nil, false
+		return nil, false, false
 	}
+	alts, ok := alternativesInBody(sliceSpans(spans, next(open), close))
+	return alts, ok, false
+}
+
+// alternativesInBody splits a group's body on its top-level commas, returning
+// each alternative as its own span list.
+//
+// It reads the body rather than the word it was cut from, because the body is
+// not always the spans the parse cut: the reading that runs a group's
+// expansions first hands this the *resolved* body, where what an expansion
+// produced stands as spans of its own. One walk for both, so the depth rule,
+// the escape rule and what counts as a comma cannot drift apart.
+func alternativesInBody(body []syntax.Span) ([][]syntax.Span, bool) {
 	var out [][]syntax.Span
 	depth := 0
-	from := next(open)
-	for i := open.span; i <= close.span; i++ {
-		if !braceable(spans[i]) {
+	from := cursor{0, 0}
+	for i, s := range body {
+		if !braceable(s) {
 			continue
 		}
-		v := spans[i].Value
-		start, end := 0, len(v)
-		if i == open.span {
-			start = open.off + 1
-		}
-		if i == close.span {
-			end = close.off
-		}
-		for j := start; j < end; j++ {
+		v := s.Value
+		for j := 0; j < len(v); j++ {
 			switch v[j] {
 			case '\\':
 				j++
@@ -310,7 +337,7 @@ func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoint
 				depth--
 			case ',':
 				if depth == 0 {
-					out = append(out, sliceSpans(spans, from, cursor{i, j}))
+					out = append(out, sliceSpans(body, from, cursor{i, j}))
 					from = cursor{i, j + 1}
 				}
 			}
@@ -320,7 +347,7 @@ func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoint
 		// `{a}` is not a brace expression and is left alone.
 		return nil, false
 	}
-	return append(out, sliceSpans(spans, from, close)), true
+	return append(out, sliceSpans(body, from, cursor{len(body), 0})), true
 }
 
 // rangeAcross expands `{n..m}`, either from the literal text between the

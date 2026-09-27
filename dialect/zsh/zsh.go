@@ -2673,6 +2673,10 @@ func Semantics() interp.Semantics {
 	// expand: one byte past its open brace, so `{a{b,c}}` is `{ab} {ac}`
 	// and `@{x}{a,b}@` is two words.
 	s.BraceRescanEntersFailedGroup = interp.Yes
+	// And agrees with bash on where the braces are found, which is the
+	// word as written: `e=a,b; echo {$e}` is `{a,b}` here too, even though
+	// a range's endpoints are read after their expansions below.
+	s.BraceBodyReadAfterExpansion = interp.No
 	// Pads like bash — `{01..3}` is `01 02 03` — but a negative step
 	// reverses the walk the endpoints chose: `{3..1..-1}` is `1 2 3` and
 	// `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards rather than the

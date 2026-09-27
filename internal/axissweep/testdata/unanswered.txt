@@ -65,6 +65,7 @@ ash   BareFloatLetterResetsThePrecision
 ash   BareSubscriptIsASubscript
 ash   BareTypesetListing
 ash   BlankArithSubscriptIsTheEmptyExpression
+ash   BraceBodyReadAfterExpansion
 ash   BraceCharRangeSpansAnyCharacter
 ash   BraceFanExpandsEachNameOnItsOwn
 ash   BraceOutputRereadAsText
@@ -366,6 +367,7 @@ dash  BareReadTakesTheLineWhole
 dash  BareSubscriptIsASubscript
 dash  BareTypesetListing
 dash  BlankArithSubscriptIsTheEmptyExpression
+dash  BraceBodyReadAfterExpansion
 dash  BraceCharRangeSpansAnyCharacter
 dash  BraceFanExpandsEachNameOnItsOwn
 dash  BraceOutputRereadAsText

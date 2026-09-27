@@ -2336,6 +2336,11 @@ func Semantics() interp.Semantics {
 	// unanswered BraceOutputRereadAsText: this shell has no brace expansion
 	// either, so nothing is ever produced for the word to read again.
 	//
+	// unanswered BraceBodyReadAfterExpansion: this shell has no brace
+	// expansion either, so no group's body is ever read as a list —
+	// `e=a,b; echo {$e}` is the one word `{a,b}` because the braces are
+	// never syntax here.
+	//
 	// unanswered BraceRescanEntersFailedGroup: this shell has no brace
 	// expansion either, so nothing ever resumes a scan — `@{x}{a,b}@` is
 	// one word, and the nine `BraceRange…` and `BraceCharRange…` axes are

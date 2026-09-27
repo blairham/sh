@@ -9764,6 +9764,24 @@ type scope struct {
 	// after the shadow describes the fresh binding and no longer the outer
 	// one that governed it. See hideinscope.go.
 	hiddenShadow map[string]bool
+	// tieMirrorOnly are the names this scope saved **only** because the other
+	// half of one of the shell's own ties was declared: `local PATH` displaces
+	// `path` with it, because the tie is a property of the name and a local of
+	// one half has to be a local of the pair.
+	//
+	// The entry exists so the *word* can tell that shadow from a declaration
+	// of the name itself. They are the same displacement and they describe
+	// differently — measured, `f(){ typeset PATH; print ${(t)path} }` is
+	// `array-tied-special` in the reference, with no `local` in it, where
+	// `f(){ typeset path; … }` is `array-local-tied-special`. The fact was
+	// already written down in tielocal.go's own table and nothing had asked
+	// the word about it (#4875).
+	//
+	// Cleared by [Runner.shadow] whenever the name is declared directly,
+	// outside its freshness check and for the reason `privateShadowTaken` is
+	// outside it: a second declaration naming this name is a declaration of
+	// it, whatever displaced the cell first.
+	tieMirrorOnly map[string]bool
 	// suspendedProducers is what a hidden shadow took out of the produced
 	// tables, so that the name reads and writes as an ordinary parameter for
 	// as long as the shadow stands and is the shell's own again on return.

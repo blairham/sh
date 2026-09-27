@@ -75,16 +75,36 @@ func TestReadonlyTakesTheTieLetter(t *testing.T) {
 // so its operands land in the declaration's order under every scope — not
 // only inside a function, which is the only place the *scope* rule reaches.
 //
-// The two spellings on one line are the test: either order is defensible on
-// its own and only their disagreement is a defect. With the freeze's order,
-// `readonly` stored the array and then tied the name, which empties it, while
-// `typeset -r` kept both elements.
+// The two spellings run in separate shells because either one ends its own,
+// and running them is the test: whatever a frozen tie does with a literal on
+// its array half, the two words have to do the same thing. With the freeze's
+// order, `readonly` stored the array and then tied the name, which empties
+// it, while `typeset -r` kept both elements.
+//
+// What they now both do is refuse it, which is the reference's answer and
+// #4874's: the value a tie declaration carries is the scalar's, so a literal
+// on the array half is an ordinary assignment arriving after the freeze. This
+// test was written when they agreed on the wrong answer, and it is kept
+// pointed at the pair rather than at the answer, because the pair is what it
+// is for.
 func TestReadonlyAndTypesetTieAnArrayLiteralAlike(t *testing.T) {
-	out, st := answersRun(t, `readonly -T AA aa=(a b); print "ro ${#aa} [$AA]"
-typeset -rT BB bb=(a b); print "ts ${#bb} [$BB]"`)
-	want := "ro 2 [a:b]\nts 2 [a:b]\n"
-	if out != want || st != 0 {
-		t.Errorf("the two spellings = %q status %d, want %q", out, st, want)
+	ro, roSt := answersRun(t, `readonly -T AA aa=(a b); print "reached ${#aa}"`)
+	ts, tsSt := answersRun(t, `typeset -rT BB bb=(a b); print "reached ${#bb}"`)
+	for _, tc := range []struct {
+		word, out, name string
+		st              int
+	}{
+		{"readonly", ro, "aa", roSt},
+		{"typeset -r", ts, "bb", tsSt},
+	} {
+		if !strings.Contains(tc.out, "read-only variable: "+tc.name) {
+			t.Errorf("`%s -T` with an array literal = %q, want the freeze to refuse it",
+				tc.word, tc.out)
+		}
+		if strings.Contains(tc.out, "reached") || tc.st == 0 {
+			t.Errorf("`%s -T` with an array literal = %q status %d, want the script ended",
+				tc.word, tc.out, tc.st)
+		}
 	}
 }
 

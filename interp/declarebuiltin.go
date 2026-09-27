@@ -2872,6 +2872,18 @@ func (r *Runner) localCell(name string) bool {
 // why this stands beside localCell rather than widening it: localCell is what
 // a *declaration* asks, and a declaration lands in the innermost scope.
 func (r *Runner) localInAnyScope(name string) bool {
+	return r.localInAnyScopeSkippingTieMirrors(name, false)
+}
+
+// localInAnyScopeSkippingTieMirrors is the walk both readings of that
+// question share, with the one entry they disagree about as a parameter.
+//
+// One function and not two, because the walk has a rule in it — the step past
+// an enclosing `private` — that is measured, easy to get wrong, and would be
+// the next thing to be fixed in one copy and not the other. The flag is
+// therefore the whole of the difference, and it is read in exactly one place
+// below. See Runner.localDescribesTheBinding for what the true side is for.
+func (r *Runner) localInAnyScopeSkippingTieMirrors(name string, skipTieMirrors bool) bool {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
 		sc := r.scopes[i]
 		if sn, sealed := sc.privateSealed[name]; sealed {
@@ -2892,6 +2904,16 @@ func (r *Runner) localInAnyScope(name string) bool {
 			continue
 		}
 		if _, saved := sc.saved[name]; saved {
+			if skipTieMirrors && sc.tieMirrorOnly[name] {
+				// This scope displaced the name only because the other half
+				// of one of the shell's own ties was declared, which is not
+				// a local declaration of *this* name. The walk goes on
+				// outward rather than stopping: a caller that really did
+				// declare it is still the binding's local, measured —
+				// `f(){ typeset path; g }; g(){ typeset PATH; print
+				// ${(t)path} }` is `array-local-tied-special`.
+				continue
+			}
 			return true
 		}
 	}
@@ -4270,6 +4292,29 @@ func (r *Runner) markReadonly(name string) {
 		r.freezeAfter = append(r.freezeAfter, name)
 		return
 	}
+	r.freezeWithoutDeferring(name)
+}
+
+// freezeWithoutDeferring is markReadonly for a name whose operand is **not**
+// this declaration's own value, so the deferral markReadonly makes would be
+// excusing an assignment the attribute is meant to refuse.
+//
+// The array half of a tie is the caller. `typeset -rT TT tt=(a b)` looks like
+// one command carrying a value, and in the shell being modeled it is not:
+// the value a tie declaration carries is the **scalar's**, and a literal on
+// the array half is an ordinary assignment arriving after the freeze.
+// Measured 2026-09-27 on zsh 5.9.2 under `-f` from a script file:
+//
+//	typeset -rT TT tt=(a b)   tt: read-only variable, 1, nothing after it
+//	typeset -rT TT=x:y tt     n=2, TT is x:y — the scalar's value is taken
+//	typeset -T  TT tt=(a b)   n=2, TT is a:b — with no freeze it is stored
+//
+// The second and third rows are the controls, and they are what keep this
+// from being "a tie refuses a value": the same literal on the same half is
+// taken when the line has no `-r`, and the scalar half's value is taken when
+// it has (#4874).
+func (r *Runner) freezeWithoutDeferring(name string) {
+	r.keepThePrefixEntry(name)
 	if r.readonly == nil {
 		r.readonly = map[string]bool{}
 	}
@@ -5546,6 +5591,12 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		// after both lines. See interp/privatescope.go.
 		r.privateShadowTaken(sc, name)
 	}
+	// A declaration naming this name directly, which is what says the cell is
+	// this call's own rather than a tie partner's. Outside the freshness
+	// check below for the reason the private mark above is: the mirror may
+	// have displaced the cell already, and a later `typeset path` on its own
+	// line is still a local declaration of `path`. See scope.tieMirrorOnly.
+	delete(sc.tieMirrorOnly, name)
 	if _, seen := sc.saved[name]; !seen {
 		fresh = true
 		// A live assignment prefix is holding this name, so the value the

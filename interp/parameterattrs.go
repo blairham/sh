@@ -150,8 +150,11 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		// Every scope and not the innermost: the word describes the binding a
 		// read reaches, and a caller's local is that binding for every frame
 		// under it. See Runner.localInAnyScope, which also records why a
-		// listing is deliberately left answering something else.
-		Local: r.localInAnyScope(name) || r.localMarked[name],
+		// listing is deliberately left answering something else, and
+		// Runner.localDescribesTheBinding, which is that walk with the one
+		// entry this question reads differently — a name displaced only
+		// because the other half of the shell's own tie was declared.
+		Local: r.localDescribesTheBinding(name) || r.localMarked[name],
 		// isExported rather than the table, because the table is a
 		// tri-state and a name the *environment* supplied is spoken for by
 		// neither entry: reading it directly reported `$PATH` as an ordinary

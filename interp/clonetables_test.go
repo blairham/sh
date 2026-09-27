@@ -106,6 +106,7 @@ func seedStacks(r *Runner) {
 		savedReadonly:       map[string]bool{"seed": true},
 		savedHideInScope:    map[string]bool{"seed": true},
 		hiddenShadow:        map[string]bool{"seed": true},
+		tieMirrorOnly:       map[string]bool{"seed": true},
 		private:             map[string]bool{"seed": true},
 		privateSealed:       map[string]sealedName{"seed": {}},
 		privateShielded:     append(make([]string, 0, 4), "seed"),

@@ -82,10 +82,21 @@ func (r *Runner) shadowTiedHalf(name string) {
 	if name == t.array {
 		other = t.scalar
 	}
-	if _, seen := r.scopes[len(r.scopes)-1].saved[other]; seen {
+	sc := r.scopes[len(r.scopes)-1]
+	if _, seen := sc.saved[other]; seen {
 		return
 	}
 	r.shadow(other)
+	// And recorded as the partner's shadow rather than a declaration of it.
+	// The displacement is the same either way — that is the rule this
+	// function exists for — and what a type query *says* about the two is
+	// not: the half a declaration named is `local` and the half dragged
+	// along with it is not. After the shadow, because shadow clears this
+	// mark for the name it is given. See scope.tieMirrorOnly (#4875).
+	if sc.tieMirrorOnly == nil {
+		sc.tieMirrorOnly = map[string]bool{}
+	}
+	sc.tieMirrorOnly[other] = true
 }
 
 // tieDetached reports whether a tie is out of effect right now, which is the
@@ -150,4 +161,37 @@ func (r *Runner) declaredEmptyTieArray(name string) bool {
 	}
 	r.setArray(name, nil)
 	return true
+}
+
+// localDescribesTheBinding is [Runner.localInAnyScope] asked for the *word* a
+// type query writes, which is the same walk with one entry read differently.
+//
+// The innermost scope that displaced the name is the one that answers, and a
+// displacement taken on the *partner's* behalf is not a local declaration of
+// this name. Measured 2026-09-27 on zsh 5.9.2 under `-f` from a script file:
+//
+//	f(){ typeset PATH; print ${(t)path} }   array-tied-special
+//	f(){ typeset path; print ${(t)path} }   array-local-tied-special
+//	f(){ typeset PATH; print ${(t)PATH} }   scalar-local-tied-special
+//	f(){ print ${(t)path} }                 array-tied-special
+//
+// Rows two and three are the controls and they are what make this a statement
+// about the mirror rather than about ties: the half a declaration *named*
+// carries the word in both shells, and so does an undeclared half with
+// nothing standing over it.
+//
+// A mirror does not stop the walk, it is simply not a claim: an enclosing
+// call that really declared the name is still the binding's local, and that
+// is measured rather than chosen — `f(){ typeset path; g }; g(){ typeset
+// PATH; print ${(t)path} }` is `array-local-tied-special`, where the same
+// pair with nothing declared in `f` is `array-tied-special`.
+//
+// It shares localInAnyScope's walk rather than copying it. That walk carries
+// the measured step past an enclosing `private`, and two copies of it is how
+// one of them stops being fixed. What the *value* side asks is the other
+// reading of the same walk, and it has to stay the other reading: the mirror
+// really did displace the cell, so telling that side otherwise would leave a
+// binding nobody restores.
+func (r *Runner) localDescribesTheBinding(name string) bool {
+	return r.localInAnyScopeSkippingTieMirrors(name, true)
 }

@@ -354,6 +354,15 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	if _, already := r.tieOf(scalar); !already {
 		r.dropNameAttributes(scalar)
 		r.dropNameAttributes(array)
+		// **The hide-in-scope letter goes with them**, and it is not in that
+		// list: `dropNameAttributes` is the shadow's list, and a shadow
+		// deliberately keeps the letter — see localattributes.go. A tie is
+		// not a shadow. Measured 2026-09-27 on zsh 5.9.2 under `-f` from a
+		// script file, `typeset -h TT; typeset -T TT tt` is `scalar-tied`
+		// and `array-tied` there with no `hide` on either half, where this
+		// shell kept the one the first line wrote (#4876).
+		r.dropHideInScope(scalar)
+		r.dropHideInScope(array)
 	}
 	// The attributes go to the halves they belong to. `-U` and the rest go
 	// to both — measured, `typeset -TU A a` lists as `export -UT` and
@@ -365,6 +374,19 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	arrayFlags := f
 	arrayFlags.export = false
 	r.applyAttributes(array, arrayFlags)
+	// And the hide-in-scope letter, which is a step of its own everywhere it
+	// is applied — see Runner.setHideInScope for why it cannot ride in
+	// applyAttributes. It reaches **both** halves, which is measured and is
+	// not what the letter written on a line of its own does: 2026-09-27 on
+	// zsh 5.9.2, `typeset -hT TT tt` is `scalar-tied-hide` and
+	// `array-tied-hide`, where `typeset -T TT tt; typeset -h TT` leaves the
+	// array half plain. So the two spellings are not one command and the
+	// difference is the tie line carrying the letter to the pair (#4876).
+	//
+	// Behind the shadow above and ahead of the value below, which is where
+	// every other caller puts it and for the same two reasons.
+	r.setHideInScope(scalar, f)
+	r.setHideInScope(array, f)
 	// The depth a *script* tie was made at, which is what tells a nested
 	// function's `local` of one half from the declaration's own shadow above.
 	// A `-g` tie is the global one whatever it was written inside.
@@ -379,7 +401,11 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	defer func() {
 		if f.readonly && !f.readonlyOff {
 			r.markReadonly(scalar)
-			r.markReadonly(array)
+			// The **array** half's freeze is not deferred, because an array
+			// literal written on that half is not this declaration's own
+			// value — the value a tie carries is the scalar's. See
+			// Runner.freezeWithoutDeferring for the three rows (#4874).
+			r.freezeWithoutDeferring(array)
 		}
 	}()
 	if hasValue {

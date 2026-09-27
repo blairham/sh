@@ -149,7 +149,10 @@ func (r *Runner) setListedTable(d declaration, quote func(string) string) string
 		b.WriteString(")")
 		return b.String()
 	case DeclareListingExportSpelled:
-		return "( " + strings.Join(r.quotedTablePairs(d, r.clusteredKey), " ") + " )"
+		// The dialect's own key spelling and not the clustered one — see
+		// listedTableKey, and #4732, where a bare `set` double-quoted a key
+		// that `typeset -p` on the same table wrote in single-quoted runs.
+		return "( " + strings.Join(r.quotedTablePairs(d, r.listedTableKey), " ") + " )"
 	default:
 		return "(" + strings.Join(r.quotedTablePairs(d, quote), " ") + ")"
 	}

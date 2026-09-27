@@ -886,7 +886,7 @@ func (r *Runner) listedDeclarationValue(d declaration) string {
 		if len(d.assoc) == 0 {
 			return "( )"
 		}
-		return "( " + strings.Join(r.quotedTablePairs(d, r.clusteredKey), " ") + " )"
+		return "( " + strings.Join(r.quotedTablePairs(d, r.listedTableKey), " ") + " )"
 	case d.isArr:
 		return "( " + strings.Join(r.quotedArrayElems(d), " ") + " )"
 	case d.base != 0:
@@ -1033,7 +1033,12 @@ func digitsAfterTheBaseMark(text string, base int) (string, bool) {
 // quoted both of the bare ones (#2298).
 func (r *Runner) clusteredKey(k string) string {
 	switch {
-	case hasControl(k):
+	case r.listedNeedsDollar(k):
+		// listedNeedsDollar rather than hasControl, so that a byte which is
+		// not part of a character reaches the form too: measured 2026-09-26
+		// on bash 5.3.20, `declare -A m; m[$'k\xc3']=1; declare -p m` writes
+		// `[$'k\303']` where this shell wrote the raw byte. Same fact as
+		// #4521 and the same question, asked of a key.
 		return r.dollarQuoted(k)
 	case wholeArraySubscriptAsAKey(k):
 		return doubleQuoted(k)
@@ -1041,6 +1046,38 @@ func (r *Runner) clusteredKey(k string) string {
 		return k
 	}
 	return doubleQuoted(k)
+}
+
+// declarationTableKey spells an association's subscript the way the *export
+// spelled* listing does — bare when it is plain and in single-quoted runs
+// otherwise, never reaching `$'...'`, which is the trap listing's style
+// rather than the alias one. Measured, not assumed.
+func (r *Runner) declarationTableKey(k string) string {
+	return r.quoteListedValue(ListingQuoteWhenNeededPlain, "`typeset -p`", k, ListedValueAlone)
+}
+
+// listedTableKey is the key spelling for a compound written in the dialect's
+// own declaration shape, which is two answers and not one.
+//
+// It exists because the two were one: every caller wrote `clusteredKey`, so
+// the shell whose declaration listing is *export spelled* wrote its keys in
+// bash's shape everywhere but the named `typeset -p`, and one value came back
+// two ways from one shell. Measured 2026-09-26 on zsh 5.9.2 under `-f` with
+// `typeset -A m=(["k'1"]="v'2")`:
+//
+//	typeset -p m       typeset -A m=( ['k'\''1']='v'\''2' )
+//	set                m=( ['k'\''1']='v'\''2' )      here: ["k'1"]
+//	typeset -A         m=( ['k'\''1']='v'\''2' )      here: ["k'1"]
+//	typeset -r         ro=( ['p q']=1 )               here: ["p q"]
+//
+// The **value** is right on every one of those rows and in both listings,
+// which is what narrowed it to the key: a value holding a quote is written in
+// single-quoted runs by both shells in both places (#4732).
+func (r *Runner) listedTableKey(k string) string {
+	if r.sem().DeclareListing == DeclareListingExportSpelled {
+		return r.declarationTableKey(k)
+	}
+	return r.clusteredKey(k)
 }
 
 // wholeArraySubscriptAsAKey reports whether a key is one of the two words that
@@ -1203,10 +1240,7 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		}
 		pairs := make([]string, 0, len(d.assoc))
 		for _, k := range r.assocKeys(d.name, d.assoc) {
-			// Keys never reach `$'...'` in this engine even where its values
-			// do, which is the trap listing's style rather than the alias
-			// one — measured, not assumed.
-			key := r.quoteListedValue(ListingQuoteWhenNeededPlain, "`typeset -p`", k, ListedValueAlone)
+			key := r.declarationTableKey(k)
 			pairs = append(pairs, "["+key+"]="+r.listedElement(d.assoc[k], ListedValueAlone))
 		}
 		return head + "=( " + strings.Join(pairs, " ") + " )"

@@ -6,6 +6,7 @@ package interp
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // How a shell spells a value it lists back — an alias's replacement, a
@@ -347,12 +348,52 @@ func (r *Runner) listedNeedsDollar(v string) bool {
 		return true
 	}
 	if r.sem().ListedNonAsciiIsOrdinary == Yes {
-		return false
+		// Ordinary means *a character*, and a high byte that is not part of
+		// one is neither ordinary nor a character. Measured 2026-09-26 with
+		// `v=$'\xc3'` and `typeset -p v`/`declare -p v` from a script file:
+		// zsh 5.9.2 writes `$'\M-C'` and bash 5.3.20 `$'\303'`, where a
+		// value holding `é` — the same first byte with its continuation — is
+		// written bare by both. So the two columns that call a non-ASCII
+		// byte ordinary agree that a *stray* one is not, and this shell wrote
+		// the raw byte into a listing for both of them (#4521).
+		return hasStrayByte(v)
 	}
 	for i := 0; i < len(v); i++ {
 		if v[i] >= 0x80 {
 			return true
 		}
+	}
+	return false
+}
+
+// strayBytes marks, per byte of a value, whether that byte is not part of a
+// character.
+//
+// Per byte and not per value, because the escaping is per byte: measured
+// 2026-09-26 on zsh 5.9.2, `v=$'\xc3\xa9\xff'` lists as `$'é\M-\C-?'` —
+// the valid character written as itself inside the quotes and only the stray
+// byte escaped.
+func strayBytes(v string) []bool {
+	out := make([]bool, len(v))
+	for i := 0; i < len(v); {
+		c, size := utf8.DecodeRuneInString(v[i:])
+		if c == utf8.RuneError && size == 1 {
+			out[i] = true
+		}
+		i += size
+	}
+	return out
+}
+
+// hasStrayByte is strayBytes asked of the whole value, for the question of
+// whether the `$'...'` form is needed at all.
+func hasStrayByte(v string) bool {
+	for i := 0; i < len(v); {
+		c, size := utf8.DecodeRuneInString(v[i:])
+		if c == utf8.RuneError && size == 1 {
+			return true
+		}
+		i += size
 	}
 	return false
 }
@@ -567,6 +608,10 @@ func doubleQuoted(v string) string {
 // character.
 func (r *Runner) dollarQuoted(v string) string {
 	style := r.sem().ListingControlEscape
+	ordinary := r.sem().ListedNonAsciiIsOrdinary == Yes
+	// Per byte, because a value can hold a character and a stray byte at
+	// once and the two are spelled differently — see strayBytes.
+	stray := strayBytes(v)
 	var b strings.Builder
 	b.WriteString("$'")
 	for i := 0; i < len(v); i++ {
@@ -575,7 +620,7 @@ func (r *Runner) dollarQuoted(v string) string {
 			b.WriteString(`\'`)
 		case c == '\\':
 			b.WriteString(`\\`)
-		case c >= 0x20 && c != 0x7f && (c < 0x80 || r.sem().ListedNonAsciiIsOrdinary == Yes):
+		case c >= 0x20 && c != 0x7f && (c < 0x80 || (ordinary && !stray[i])):
 			b.WriteByte(c)
 		default:
 			b.WriteString(controlEscaped(style, c))
@@ -630,14 +675,48 @@ func (c ControlEscapeStyle) String() string {
 	return "ControlEscapeUnspecified"
 }
 
-// controlEscaped spells one control byte in the given style.
+// controlEscaped spells one byte the quotes cannot carry as itself, in the
+// given style.
+//
+// A **high** byte reaches this too, for the one column where such a byte is
+// spelled out and for the two where only a *stray* one is — see
+// listedNeedsDollar. The hex and octal styles need nothing said: neither has
+// a named escape above 0x1f, so the numeric form at the end of this function
+// already answers, and bash writes `$'\303'` for a lone 0xc3.
+//
+// The caret style is the one with a shape of its own for them, and it is
+// measured rather than derived: zsh writes `\M-` and then spells the byte's
+// low seven bits exactly as it would spell that byte on its own. Measured
+// 2026-09-26 on zsh 5.9.2, one byte to a run, `typeset -p` on `$'\xNN'`:
+//
+//	80  \M-\C-@    89  \M-\t     a0  \M-      e9  \M-i
+//	81  \M-\C-A    8a  \M-\n     c3  \M-C     fe  \M-~
+//	8d  \M-\C-M    9b  \M-\C-[   ff  \M-\C-?  7f  \C-?
+//
+// So `\M-` is a prefix on the ordinary spelling and not a vocabulary of its
+// own, which is why this is one recursion rather than a second table.
+//
+// **Two bytes come out of the reference unreadable**, and they are matched
+// rather than repaired: the literal written after the prefix is the byte's
+// low half, and for 0xa7 that is a single quote and for 0xdc a backslash, so
+// the reference closes the form on one and escapes it on the other. zsh cannot read its own listing of either — `eval` on it says
+// `unmatched '` — and a spelling of ours that could would be a spelling
+// nothing else in the panel writes.
 func controlEscaped(style ControlEscapeStyle, c byte) string {
 	if style == ControlEscapeCaret {
+		if c >= 0x80 {
+			return `\M-` + controlEscaped(style, c&0x7f)
+		}
 		switch c {
 		case '\t':
 			return `\t`
 		case '\n':
 			return `\n`
+		}
+		if c >= 0x20 && c != 0x7f {
+			// Only reachable behind the `\M-` prefix above: a byte in this
+			// range is written as itself and never escaped on its own.
+			return string(c)
 		}
 		return fmt.Sprintf(`\C-%c`, c^0x40)
 	}

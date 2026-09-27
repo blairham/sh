@@ -1179,6 +1179,11 @@ func Semantics() interp.Semantics {
 	// `e=a,b; echo {$e}` is the one word `{a,b}` because the braces are
 	// never syntax here, which is a different fact from either reading.
 	//
+	// unanswered BraceEmptyAlternativeIsAField: dash has no brace
+	// expansion, so no alternative is ever read and none can come to
+	// nothing — `f {a,}` is the one field `{a,}` on dash 0.5.12, the word
+	// it was written as, which is a different fact from either reading.
+	//
 	// unanswered BraceRescanEntersFailedGroup: dash has no brace expansion,
 	// so there is no scan to resume. `@{x}{a,b}@` is the one word it was
 	// written as, and the question of how far past a group that did not

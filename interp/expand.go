@@ -78,7 +78,12 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 			// through the same helper: the doubling was in the fan and not
 			// in either caller. See braceFanHold (#4694).
 			r.eachBraceName(words, func(bw *syntax.Word) {
+				// And armed as a brace *name*, for the one question that
+				// is about where the word came from rather than about
+				// what is in it. See interp/braceemptyalt.go.
+				r.braceName = true
 				out = append(out, r.expandOneWordFields(bw)...)
+				r.braceName = false
 			})
 			return out
 		}
@@ -121,6 +126,11 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	if w == nil {
 		return nil
 	}
+	// Spent at once, so that nothing expanded *inside* this word inherits
+	// it: an operand word is a word of its own and is not a name the braces
+	// made. See interp/braceemptyalt.go.
+	braceName := r.braceName
+	r.braceName = false
 	// Before anything reads the spans, because the run may divide them
 	// differently from the parse. See wordForRun.
 	w = r.wordForRun(w)
@@ -303,7 +313,13 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 			listMarks{edges: listEdges{lead: lead, openEnd: openEnd}}, substituted)
 	}
 
-	return r.wordResult(&b)
+	fields := r.wordResult(&b)
+	if fields == nil && r.braceNameCameToNothing(&b, braceName) {
+		// The quoted null every column keeps, for an alternative that came
+		// to nothing rather than for one somebody wrote.
+		return []string{""}
+	}
+	return fields
 }
 
 // wordFields is the fields of one word as it is assembled, span by span.

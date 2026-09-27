@@ -67,6 +67,7 @@ ash   BareTypesetListing
 ash   BlankArithSubscriptIsTheEmptyExpression
 ash   BraceBodyReadAfterExpansion
 ash   BraceCharRangeSpansAnyCharacter
+ash   BraceEmptyAlternativeIsAField
 ash   BraceFanExpandsEachNameOnItsOwn
 ash   BraceOutputRereadAsText
 ash   BraceRangeEndpointsExpanded
@@ -369,6 +370,7 @@ dash  BareTypesetListing
 dash  BlankArithSubscriptIsTheEmptyExpression
 dash  BraceBodyReadAfterExpansion
 dash  BraceCharRangeSpansAnyCharacter
+dash  BraceEmptyAlternativeIsAField
 dash  BraceFanExpandsEachNameOnItsOwn
 dash  BraceOutputRereadAsText
 dash  BraceRangeEndpointsExpanded

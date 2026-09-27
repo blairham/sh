@@ -2345,6 +2345,11 @@ func Semantics() interp.Semantics {
 	// `e=a,b; echo {$e}` is the one word `{a,b}` because the braces are
 	// never syntax here.
 	//
+	// unanswered BraceEmptyAlternativeIsAField: this shell has no brace
+	// expansion either, so no alternative is ever read and none can come
+	// to nothing — `f {a,}` is the one field `{a,}`, the word it was
+	// written as.
+	//
 	// unanswered BraceRescanEntersFailedGroup: this shell has no brace
 	// expansion either, so nothing ever resumes a scan — `@{x}{a,b}@` is
 	// one word, and the nine `BraceRange…` and `BraceCharRange…` axes are

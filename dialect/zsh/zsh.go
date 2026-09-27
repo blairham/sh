@@ -755,6 +755,22 @@ func Dialect() syntax.Dialect {
 	// and is not one — `a=(1 2); $((#a))` is 49, the code of the `1`, where
 	// the count is `$(( $#a ))`.
 	d.ArithCharacterCode = true
+	// Its operand is one character, and `\C` and `\M` reach past themselves
+	// to take it: measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0)
+	// run `-f`, `$(( ##\C-a ))` is 1, `$(( ##\M-a ))` is 225 and
+	// `$(( ##\M-\C-a ))` is 129 — the separating `-` optional in both and
+	// either able to take the other as its argument. The span is what decides
+	// whether the operand is complete at all, which is why it is written here
+	// and not only where the escape is decoded: reading `\C` alone left `-a`
+	// standing and answered 0 (#4607).
+	d.ArithCharacterEscapes = syntax.ArithCharacterEscapesMaskedCaretMeta
+	// And the two branches of `c ? t : e` are read at the conditional level,
+	// so a bare assignment cannot begin one: measured 2026-09-26 on zsh 5.9.2,
+	// `$(( 1 ? x = 2 : 3 ))` is `':' expected` at 1 and `$(( 1 ? 2 : x = 3 ))`
+	// is `lvalue required`, where `$(( 1 ? (x = 2) : 3 ))` is 2. bash 5.3.20
+	// and ksh93u+ answer 2 to the first, which is why this is one column's
+	// grammar and not a shared refusal (#4680).
+	d.ArithConditionalBranchBelowAssignment = true
 	// And a name with a `(` touching it is a *math function* call —
 	// `$(( mf(5) ))` — where `mf` was registered with `functions -M`. The
 	// only shell in the panel with the construct; the other five read the
@@ -1276,6 +1292,16 @@ func Semantics() interp.Semantics {
 	// stream. ksh93 is the mirror image of both rows (#770).
 	s.BrokenPipeWriteErrorFailsTheCommand = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.No
+	// And a compound assignment hands back what it computed: `typeset -i n=1`
+	// makes `$(( n += 0.5 ))` 1.5 here, where the plain `$(( n = n + 0.5 ))`
+	// is 1 and `n` is 1 either way. Measured 2026-09-26 on zsh 5.9.2; ksh93u+
+	// converts both (#4606).
+	s.CompoundArithAssignmentConvertsItsValue = interp.No
+	// And a change of float letter keeps the number, exactly as a change of
+	// precision does: measured 2026-09-26, `typeset -F1 f=3.14159265358979;
+	// typeset -E10 f` reads `3.141592654e+00` here where ksh93 reads `3.1`
+	// (#4486).
+	s.FloatLetterChangeRereadsTheRendering = interp.No
 	// A numeral a double cannot hold saturates: `$((1e400))` is `Inf` and
 	// `$((-1e400))` is `-Inf`, the same answers the arithmetic gives for a
 	// value that overflowed while being computed.

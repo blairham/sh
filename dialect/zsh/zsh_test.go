@@ -146,6 +146,8 @@ func TestSemantics(t *testing.T) {
 		// capital, because `-F` is zsh's own short spelling of it.
 		{"NoglobLetterIsF", s.NoglobLetterIsF, interp.No},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.No},
+		{"CompoundArithAssignmentConvertsItsValue", s.CompoundArithAssignmentConvertsItsValue, interp.No},
+		{"FloatLetterChangeRereadsTheRendering", s.FloatLetterChangeRereadsTheRendering, interp.No},
 		// A numeral a double cannot hold saturates here: `$((1e400))` is
 		// `Inf` and `$((-1e400))` is `-Inf` (#2766).
 		{"ArithFloatOverflowIsZero", s.ArithFloatOverflowIsZero, interp.No},

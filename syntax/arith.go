@@ -1124,7 +1124,7 @@ func (a *arithParser) ternary() ArithExpr {
 	// `:` for itself would break every `a ? b : c` in the dialect that reads
 	// the byte as a token.
 	a.conditionals++
-	then := a.assign()
+	then := a.conditionalBranch()
 	a.conditionals--
 	if then == nil {
 		a.failArith(ErrArithConditionalThen, a.src[question:])
@@ -1137,12 +1137,28 @@ func (a *arithParser) ternary() ArithExpr {
 		return cond
 	}
 	a.space()
-	els := a.assign()
+	els := a.conditionalBranch()
 	if els == nil {
 		a.failArith(ErrArithConditionalElse, a.src[colon:])
 		return cond
 	}
 	return &ArithCond{Cond: cond, Then: then, Else: els}
+}
+
+// conditionalBranch reads one branch of a conditional, at whichever level the
+// dialect reads one.
+//
+// Both branches take the same level, which is measured rather than assumed:
+// the shell that reads them below assignment refuses a bare store in the
+// **then** with `':' expected` — the `=` is where the colon was looked for —
+// and in the **else** with `lvalue required`, because there the conditional
+// itself is left standing as the target of the `=`. Two sentences, one level.
+// See [Dialect.ArithConditionalBranchBelowAssignment].
+func (a *arithParser) conditionalBranch() ArithExpr {
+	if a.dial.ArithConditionalBranchBelowAssignment {
+		return a.ternary()
+	}
+	return a.assign()
 }
 
 // colonWithoutQuestion is a `:` standing where no `?` opened a conditional, in
@@ -2234,7 +2250,7 @@ func (a *arithParser) charCode(start Pos) ArithExpr {
 		// a `b` left over, which the caller then refuses as an operator it
 		// cannot read. An escape counts as the character it stands for, so
 		// `$((##\x41x))` is the same shape.
-		size := charCodeOperandLen(a.src[a.off:], n.Op == "##")
+		size := charCodeOperandLen(a.src[a.off:], n.Op == "##", a.dial.ArithCharacterEscapes)
 		if size == 0 {
 			a.p.failKind(ErrArithCharacterMissing, "character missing after %s", n.Op)
 			return nil
@@ -2274,7 +2290,7 @@ func (a *arithParser) charCode(start Pos) ArithExpr {
 // error that shell gives.
 func (a *arithParser) charConstant(start Pos) ArithExpr {
 	a.off++ // the opening quote
-	size := charCodeOperandLen(a.src[a.off:], true)
+	size := charCodeOperandLen(a.src[a.off:], true, a.dial.ArithCharacterEscapes)
 	if size == 0 {
 		a.failArith(ErrArithOperandEnd, "'")
 		return nil
@@ -2303,7 +2319,13 @@ func isCharCodeNameByte(c byte) bool {
 // operand ends. `escapes` is false for the single-`#` spelling, where a
 // backslash takes the next character as itself rather than beginning an escape
 // — measured, `$((#\n))` is the letter n where `$((##\n))` is a newline.
-func charCodeOperandLen(s string, escapes bool) int {
+//
+// `caret` is the one part of the table that is not shared: `\C` and `\M`
+// reach past themselves, by a different distance in each of the two shells
+// that have them, and an operand cut short there is not a wrong character but
+// a syntax error — the bytes the escape should have taken are left standing
+// where an operator belongs. See [Dialect.ArithCharacterEscapes].
+func charCodeOperandLen(s string, escapes bool, caret ArithCharacterEscapes) int {
 	if s == "" {
 		return 0
 	}
@@ -2327,6 +2349,35 @@ func charCodeOperandLen(s string, escapes bool) int {
 		return 2 + baseDigits(s[2:], 16, 8)
 	case c >= '0' && c <= '7':
 		return 1 + baseDigits(s[1:], 8, 3)
+	case caret == ArithCharacterEscapesMaskedCaretMeta && (c == 'C' || c == 'M'):
+		// The separator is optional and the argument may itself be an
+		// escape, which is what makes `\M-\C-a` one operand: the inner span
+		// is read by this same function rather than by a copy of it, so a
+		// nesting is as deep as it is written.
+		n := 2
+		if n < len(s) && s[n] == '-' {
+			n++
+		}
+		if inner := charCodeOperandLen(s[n:], true, caret); inner > 0 {
+			return n + inner
+		}
+		// Nothing after it at all, so the escape is the whole of what is
+		// there and the caller decides what an empty argument means.
+		return n
+	case caret == ArithCharacterEscapesFoldedCaret && c == 'C':
+		// One argument, which may be a further escape, and no dash in the
+		// spelling — so `\C-` is the escape applied to the `-`.
+		if inner := charCodeOperandLen(s[2:], true, caret); inner > 0 {
+			return 2 + inner
+		}
+		return 2
+	case caret == ArithCharacterEscapesFoldedCaret && c == 'M':
+		// `\M-` is a complete escape taking no argument, and a `\M` without
+		// the dash is not an escape at all — so it falls past this to the
+		// reading below, which takes the `M` and leaves what follows.
+		if len(s) > 2 && s[2] == '-' {
+			return 3
+		}
 	}
 	_, size := utf8.DecodeRuneInString(s[1:])
 	return 1 + size

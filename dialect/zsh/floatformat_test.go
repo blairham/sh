@@ -208,3 +208,93 @@ func TestAFloatLetterDecidesHowItIsWrittenNotWhatItIs(t *testing.T) {
 		})
 	}
 }
+
+// A change of the float **letter** keeps the number here, exactly as a change
+// of precision does — which is the row ksh93 does not share.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`,
+// beside ksh93u+ 2012-08-01 in the same run, with `x=3.14159265358979`. Every
+// row starts from a rendering that threw digits away and then asks for a
+// wider one, so the two readings give different answers and the row says
+// which this shell has:
+//
+//	written                            zsh 5.9.2         ksh93u+
+//	typeset -F1 f=$x; typeset -E10 f   3.141592654e+00   3.1
+//	typeset -E3 f=$x; typeset -F14 f   3.14159265358979  3.14000000000000
+//	typeset -F3 f=$x; typeset -E5  f   3.1416e+00        3.142
+//
+// See Semantics.FloatLetterChangeRereadsTheRendering and
+// dialect/ksh/floatletterreread_test.go (#4486).
+func TestAChangeOfFloatLetterKeepsTheNumber(t *testing.T) {
+	dir := t.TempDir()
+	const x = "3.14159265358979"
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"places to figures",
+			`typeset -F1 f=` + x + `; typeset -E10 f; print $f`,
+			"3.141592654e+00\n",
+		},
+		{
+			"figures to places",
+			`typeset -E3 f=` + x + `; typeset -F14 f; print $f`,
+			"3.14159265358979\n",
+		},
+		{
+			"places to figures, the other way round",
+			`typeset -F3 f=` + x + `; typeset -E5 f; print $f`,
+			"3.1416e+00\n",
+		},
+		{
+			"and the arithmetic value is whole after it",
+			`typeset -F1 f=` + x + `; typeset -E10 f; print $(( f ))`,
+			x + "\n",
+		},
+		{
+			"the same letter, a wider precision",
+			`typeset -F1 f=` + x + `; typeset -F14 f; print $f`,
+			"3.14159265358979\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// An infinity and a NaN in a float name, which are the two values whose
+// rendering is a **name** rather than a numeral.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`.
+// The `1.0/3` row is the control and it carries the finding: an ordinary
+// float is unaffected, so this was never "the float store is wrong" but "the
+// two values that are not numbers are dropped" — the store renders a number
+// and reads the characters back, and those two have no numeral to read.
+//
+// The listing is the one place the spelling parts: `print $g` writes `Inf`,
+// which is what `${#g}` counts and what a child is told, while `typeset -p g`
+// writes `inf` (#4662).
+func TestAFloatNameHoldsAnInfinityAndANaN(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{"a NaN", `float f; (( f = 0.0/0.0 )); typeset -p f`, "typeset -E f=nan\n"},
+		{"an infinity", `float g; (( g = 1.0/0.0 )); typeset -p g`, "typeset -E g=inf\n"},
+		{"a negative infinity", `float g; (( g = -1.0/0.0 )); typeset -p g`, "typeset -E g=-inf\n"},
+		{"under the F letter", `typeset -F3 g; (( g = 1.0/0.0 )); typeset -p g`, "typeset -F g=inf\n"},
+		{"read as a parameter", `float g; (( g = 1.0/0.0 )); print -- "$g" "${#g}"`, "Inf 3\n"},
+		{"read as a number", `float g; (( g = 1.0/0.0 )); print -- "$(( g ))" "$(( g + 1 ))"`, "Inf Inf\n"},
+		{"carried into another name", `float g; (( g = 1.0/0.0 )); (( g2 = g )); print -- "$g2"`, "Inf\n"},
+		{"a declaration's own value", `float g=1.0/0.0; typeset -p g`, "typeset -E g=inf\n"},
+		// The control.
+		{"an ordinary float", `float h; (( h = 1.0/3 )); typeset -p h`, "typeset -E h=3.333333333e-01\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

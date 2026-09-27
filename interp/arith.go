@@ -1136,7 +1136,15 @@ func (r *Runner) declareFloatFromArithmetic(name string, v float64) {
 		r.floatPrecision = map[string]int{}
 	}
 	r.floatPrecision[name] = 0
-	r.setVar(name, floatWrittenInFull(v))
+	text := floatWrittenInFull(v)
+	// The number travels with the text, because the store reads the
+	// characters back as an expression and not every number has a spelling
+	// this arithmetic reads: `Inf` is a literal in one of the two shells
+	// with floats and nothing at all in the other, so the round trip is
+	// where an infinity is lost. See Runner.floatArrivesAsANumber and #4662.
+	done := r.floatArrivesAsANumber(name, text, v)
+	r.setVar(name, text)
+	done()
 }
 
 // radixWritten is the base named by the first radix literal in an expression,
@@ -1289,6 +1297,15 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 			r.rerenderInTheNewBase(p.name)
 			return nil
 		}
+		if _, float := r.floatPrecision[p.name]; float && v.float {
+			// The same reason declareFloatFromArithmetic sends one: the
+			// store renders the number and reads the characters back, and an
+			// infinity or a NaN has no numeral for it to read (#4662).
+			done := r.floatArrivesAsANumber(p.name, text, v.asFloat())
+			r.setVar(p.name, text)
+			done()
+			return nil
+		}
 		r.setVar(p.name, text)
 		return nil
 	}
@@ -1364,14 +1381,22 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// leaves `10 9 30`, which is `${a[(r)20]}`'s element. Through
 		// flaggedTargetIndex, so an assignment's refusal is the fatal one and
 		// `unset`'s is not — the one thing the two sides do not share.
-		idx, ok := r.flaggedTargetIndex(&syntax.ParamExpr{
+		place, ok := r.flaggedTargetPlace(&syntax.ParamExpr{
 			Name: p.name, Index: p.flags.Arg, IndexFlags: p.flags,
 		}, true)
 		if !ok {
 			// Reported by name already, and nothing written.
 			return nil
 		}
-		r.setArrayElem(p.name, idx, p.sub, text)
+		if place.span {
+			// `(f)` over a string names the span of characters its line
+			// covers, here as on the ordinary left of `=`: measured on zsh
+			// 5.9.2, `v=$'aa\nbb'; (( v[(f)2] = 9 ))` leaves `aa\n9`. See
+			// Runner.lineTargetSpan.
+			r.spliceCharacterSpan(p.name, place.from, place.to, text, false)
+			return nil
+		}
+		r.setArrayElem(p.name, place.from, p.sub, text)
 		return nil
 	}
 	target := &syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked, Empty: p.empty}
@@ -1554,6 +1579,19 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 	if err := r.writePlace(place, v, x.Value); err != nil {
 		return intNum(0), err
 	}
+	if x.Op != "=" && was.isInteger && v.floatKind() {
+		// A **compound** operator, on a name whose integer attribute would
+		// make something else of what was computed. That is the one shape
+		// the two shells with floats answer differently, and it is asked
+		// here rather than beside the plain `=` below because everything
+		// else about the two is shared: the store is the same in both
+		// columns, and an integer value converts to itself, so
+		// `$(( n += 1 ))` never gets this far.
+		if r.ask(r.sem().CompoundArithAssignmentConvertsItsValue,
+			"a compound assignment converting its value through the target's numeric type") {
+			v = was.converts(v)
+		}
+	}
 	if x.Op == "=" {
 		// And the value of the assignment is the number that type makes of
 		// it. Applied **after** the store and not to the value the store is
@@ -1625,9 +1663,9 @@ func (r *Runner) numericAttributeOf(name string) numericAttribute {
 // way. That pair holds the attribute fixed and moves the operator, which is
 // what says the rule is keyed on the operator and not on "an assignment".
 // ksh93 converts both — `$(( n += 0.5 ))` on a `typeset -i n=1` is 1 there —
-// and that divergence is recorded and not modeled here; it is a shell's answer
-// to a question this rule does not ask. Nothing in this repository asks it
-// yet, so it is an issue rather than an axis (#4606).
+// and that is Semantics.CompoundArithAssignmentConvertsItsValue, asked by
+// evalAssign at the compound operator rather than folded in here: this
+// function is the conversion and not the decision to make one (#4606).
 //
 // The conversion is asInt and asFloat rather than a rule written out again
 // here, because it is the one the store already makes: `attributeFolded`
@@ -2838,13 +2876,8 @@ func (r *Runner) formatNum(n arithNum) string {
 	}
 	// An infinity and a NaN are named rather than formatted, and each shell
 	// names them its own way.
-	switch {
-	case math.IsInf(n.f, 1):
-		return Wording(r.diag().ArithInfinity, "+Inf")
-	case math.IsInf(n.f, -1):
-		return "-" + Wording(r.diag().ArithInfinity, "Inf")
-	case math.IsNaN(n.f):
-		return Wording(r.diag().ArithNotANumber, "NaN")
+	if text, named := r.floatIsNamedRatherThanWritten(n.f); named {
+		return text
 	}
 	digits := r.diag().ArithFloatDigits
 	if digits == 0 {

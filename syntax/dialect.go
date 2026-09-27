@@ -4686,6 +4686,57 @@ type Dialect struct {
 	// through a double quote include three that refuse this.
 	ArithCharacterConstant bool
 
+	// ArithCharacterEscapes is the escape vocabulary the *one character* after
+	// a character-code operator is written in — the operand of `##c` and of the
+	// `'c'` constant alike.
+	//
+	// A span and not a meaning. What an escape stands for is decoded where the
+	// value is taken, against the same table a `$'…'` is read with; all the
+	// parser has to know is where the one character ends. The common escapes —
+	// `\x41`, `\u00e9`, `\101`, and a backslash before anything else — are
+	// spanned the same way everywhere and are not this field's business.
+	//
+	// `\C` and `\M` are, because the two shells that have them **span them
+	// differently**, and the span is what decides whether the operand is
+	// complete. The key is the *dialect's escape table* and not the operator
+	// that reached it, which is worth saying because each of the two operators
+	// lives in exactly one dialect and so cannot tell the two readings apart on
+	// its own. The table is measurable without either operator, and that is the
+	// evidence: measured 2026-09-26 through `od`, `$'\C-a\M-b'` is `01 e2` in
+	// zsh 5.9.2, `6d 61 1b 62` in ksh93u+ 2012-08-01 — `m`, `a`, ESC, `b` — and
+	// the eight characters as written in bash 5.3.20. See
+	// interp.DollarSingleCaretMetaPolicy, which is the same split seen from the
+	// decoding end.
+	ArithCharacterEscapes ArithCharacterEscapes
+
+	// ArithConditionalBranchBelowAssignment reads the two branches of `c ? t :
+	// e` at the **conditional** level rather than the assignment level, so a
+	// bare assignment cannot begin one.
+	//
+	// It is a level and not a ban, which is the whole of why it is worth
+	// stating: a parenthesized assignment in the same position is taken.
+	// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`:
+	//
+	//	$(( 1 ? x = 2 : 3 ))     bad math expression: ':' expected
+	//	$(( 0 ? x += 2 : 3 ))    the same refusal
+	//	$(( 1 ? 2 : x = 3 ))     bad math expression: lvalue required
+	//	$(( 1 ? (x = 2) : 3 ))   2
+	//
+	// The third row is the else branch seen from the other side: the whole
+	// conditional becomes the target of the `=`, which is not a place, so the
+	// refusal is the one a `$(( 7 = 4 ))` earns. The fourth says the branch can
+	// hold a store — it just cannot begin with one written bare.
+	//
+	// One shell in the panel, and the controls say so: `$(( 1 ? x = 2 : 3 ))`
+	// is 2 in bash 5.3.20 and in ksh93u+ 2012-08-01 alike, so the other columns
+	// must not move. Off in the core, which is C's reading of the same
+	// grammar.
+	//
+	// The comma is **not** part of this and is already below both levels:
+	// `$(( 1 ? 2 , 3 : 4 ))` is refused in zsh and answers 3 in the other two,
+	// which this parser already had right (#4680).
+	ArithConditionalBranchBelowAssignment bool
+
 	// ExtendedPattern enables `@(a|b)`, `?(a)`, `+(a)`, `*(a)` and `!(a)` in
 	// a pattern: a group with a quantifier in front of it. ksh93 has them
 	// wherever a pattern may stand.
@@ -7218,6 +7269,53 @@ func POSIX() Dialect { return Dialect{} }
 // The two differ in where the shifts and the bitwise operators sit, and in
 // nothing else. Everything from `&&` down and everything from `*` up is the
 // same ladder either way.
+// ArithCharacterEscapes is how far the one character after a character-code
+// operator reaches when it is written as a `\C` or `\M` escape.
+//
+// See [Dialect.ArithCharacterEscapes] for why this is keyed on the dialect.
+type ArithCharacterEscapes uint8
+
+const (
+	// ArithCharacterEscapesWithoutCaretMeta has neither escape, so a
+	// backslash before a `C` or an `M` claims that one character and no
+	// more. The zero value, and what bash and dash hold: neither spells a
+	// character-code operator at all, so neither ever reaches it.
+	ArithCharacterEscapesWithoutCaretMeta ArithCharacterEscapes = iota
+
+	// ArithCharacterEscapesMaskedCaretMeta is zsh's span: `\C` and `\M`
+	// each take a separating `-` that may be left out and then one further
+	// character, which may itself be an escape — so `\C-a`, `\Ca` and
+	// `\M-\C-a` are each one operand. Measured 2026-09-26 on zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0), `-f`: `$(( ##\C-a ))` is 1, `$(( ##\M-a ))`
+	// is 225 and `$(( ##\M-\C-a ))` is 129.
+	ArithCharacterEscapesMaskedCaretMeta
+
+	// ArithCharacterEscapesFoldedCaret is ksh93's, and it is a different
+	// vocabulary rather than the same one spelled loosely: `\C` takes
+	// exactly one further character with **no dash in the spelling**, and
+	// the two characters `\M-` are a complete escape taking nothing at all
+	// while a `\M` without the dash is no escape.
+	//
+	// Measured 2026-09-26 on ksh93u+ 2012-08-01, through the character
+	// constant, which is the operator this dialect has: `$(( '\Ca' ))` and
+	// `$(( '\CA' ))` are both 1, `$(( '\C-' ))` is 109 — the `-` folded up
+	// and exclusive-ored with 0x40 — and `$(( '\C-a' ))`, `$(( '\M-x' ))`
+	// and `$(( '\Mx' ))` are each an arithmetic syntax error, because the
+	// escape ends before the quote does and a character is left standing
+	// where an operator belongs.
+	ArithCharacterEscapesFoldedCaret
+)
+
+func (p ArithCharacterEscapes) String() string {
+	switch p {
+	case ArithCharacterEscapesMaskedCaretMeta:
+		return "masked, the dash optional"
+	case ArithCharacterEscapesFoldedCaret:
+		return "folded, no dash, and `\\M-` is the whole escape"
+	}
+	return "neither is an escape"
+}
+
 type ArithPrecedencePolicy int
 
 const (

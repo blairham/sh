@@ -3,7 +3,10 @@
 
 package interp
 
-import "strconv"
+import (
+	"math"
+	"strconv"
+)
 
 // `typeset -E n`, where the letter is a **format** and not a width.
 //
@@ -73,6 +76,21 @@ func (p FloatFormatPolicy) String() string {
 // strconv.FormatFloat with 'f' in it before this existed, which is three
 // places that would each have had to learn about the second letter.
 func (r *Runner) floatFormatted(name string, v float64) (string, bool) {
+	if text, named := r.floatIsNamedRatherThanWritten(v); named {
+		// An infinity and a NaN are *named* wherever they are written, in a
+		// float name exactly as in an expression, so neither letter and
+		// neither precision reaches them. Measured 2026-09-26: `float g;
+		// (( g = 1.0/0.0 ))` leaves `$g` at the three characters `Inf` in
+		// zsh 5.9.2 and `inf` in ksh93u+ — which `${#g}` counts and which an
+		// exported child is told — where we wrote a formatted zero (#4662).
+		//
+		// Ahead of the `E` letter's axis, and that is asked at the
+		// disagreement rather than skipped: the two readings of that letter
+		// are two number formats, and neither of them writes a number here,
+		// so a dialect that has not answered it is not being asked
+		// something the answer would change.
+		return text, true
+	}
 	prec := r.floatPrecision[name]
 	if !r.floatIsExponent(name) {
 		return strconv.FormatFloat(v, 'f', floatPlaces(prec), 64), true
@@ -94,6 +112,27 @@ func (r *Runner) floatFormatted(name string, v float64) (string, bool) {
 	r.errf("%s\n", r.diag().Report(r.name(), r.line,
 		r.unanswered("the `E` letter of a declaration")))
 	r.status, r.unspecified = 2, true
+	return "", false
+}
+
+// floatIsNamedRatherThanWritten is what a value that is not a number is
+// *called* in this dialect, and false for one that is.
+//
+// One function for the expression and for the store, because they are one
+// question: `$(( 1.0/0.0 ))` and a float name holding that value write the
+// same three characters, and a second copy of the table beside this one is
+// how `Inf` and `inf` come to be right in one place and wrong in the other.
+// Measured 2026-09-26 on zsh 5.9.2 — `Inf`, `-Inf`, `NaN` — and ksh93u+
+// 2012-08-01 — `inf`, `-inf`, `nan`.
+func (r *Runner) floatIsNamedRatherThanWritten(v float64) (string, bool) {
+	switch {
+	case math.IsInf(v, 1):
+		return Wording(r.diag().ArithInfinity, "+Inf"), true
+	case math.IsInf(v, -1):
+		return "-" + Wording(r.diag().ArithInfinity, "Inf"), true
+	case math.IsNaN(v):
+		return Wording(r.diag().ArithNotANumber, "NaN"), true
+	}
 	return "", false
 }
 
@@ -207,6 +246,14 @@ type storedFloat struct {
 	text string
 	// value is the number those characters were written from.
 	value float64
+	// exponent is which float letter made the rendering — `E` rather than
+	// `F`. It is here and not read off the name's table at the far end
+	// because the question it answers is about the *past*: a declaration
+	// that changes the letter has already written the new one down by the
+	// time the standing value is re-read, so the only copy of the old one
+	// left is the one that traveled with the rendering. See
+	// Semantics.FloatLetterChangeRereadsTheRendering.
+	exponent bool
 }
 
 // floatWrittenInFull is a number written so that reading the characters back
@@ -220,12 +267,15 @@ func floatWrittenInFull(v float64) string {
 	return strconv.FormatFloat(v, 'g', -1, 64)
 }
 
-// rememberStoredFloat records the number a rendering was made from.
+// rememberStoredFloat records the number a rendering was made from, and the
+// letter it was made with.
 func (r *Runner) rememberStoredFloat(name, text string, v float64) {
 	if r.floatExact == nil {
 		r.floatExact = map[string]storedFloat{}
 	}
-	r.floatExact[name] = storedFloat{text: text, value: v}
+	r.floatExact[name] = storedFloat{
+		text: text, value: v, exponent: r.floatIsExponent(name),
+	}
 }
 
 // storedFloatValue is the number a float name is holding, and false where the
@@ -239,14 +289,22 @@ func (r *Runner) rememberStoredFloat(name, text string, v float64) {
 // is said once — on the way *in*, where a name that did not already carry the
 // attribute is one whose number can only come from its characters.
 func (r *Runner) storedFloatValue(name, text string) (float64, bool) {
+	c, ok := r.storedFloatRecord(name, text)
+	return c.value, ok
+}
+
+// storedFloatRecord is the whole record behind a float name's characters,
+// which the letter question needs as well as the number: see
+// Semantics.FloatLetterChangeRereadsTheRendering.
+func (r *Runner) storedFloatRecord(name, text string) (storedFloat, bool) {
 	if _, ok := r.floatPrecision[name]; !ok {
-		return 0, false
+		return storedFloat{}, false
 	}
 	c, ok := r.floatExact[name]
 	if !ok || c.text != text {
-		return 0, false
+		return storedFloat{}, false
 	}
-	return c.value, true
+	return c, true
 }
 
 // forgetStoredFloat drops the number a name was holding.
@@ -258,3 +316,46 @@ func (r *Runner) storedFloatValue(name, text string) (float64, bool) {
 // forget. Arriving is the one event they all have to pass through before the
 // number can be read again, so it is the one place that has to say it.
 func (r *Runner) forgetStoredFloat(name string) { delete(r.floatExact, name) }
+
+// arrivingFloat is a number on its way into a float name through the ordinary
+// store, beside the characters it is being handed as.
+//
+// It exists because the store is a **text** door: an arithmetic assignment
+// renders its value and setVar reads the characters back through the name's
+// attribute, which is right for every number that has a numeral and wrong for
+// the two that do not. `Inf` is a literal this arithmetic reads in one
+// dialect and nothing at all in the other, so the round trip is where an
+// infinity was lost and a formatted zero came back (#4662).
+//
+// Carried for one call rather than recorded against the name, because what it
+// says is about the characters being *given* and not the ones being *held* —
+// and those two are the same string often enough for a record to be read by
+// the wrong assignment. `typeset -F1 f=3.14159265358979; f=3.1` is the case:
+// the name is holding the three characters `3.1` rendered from every digit of
+// pi, and the plain assignment of those same characters means three tenths.
+type arrivingFloat struct {
+	name  string
+	text  string
+	value float64
+}
+
+// floatArrivesAsANumber says that the next store of text into name is a
+// rendering of v, and returns the undo.
+//
+// The caller runs the store and then the undo, in that order and always: a
+// slot left standing would be read by whatever assigned those characters
+// next, which is the confusion the type comment is about.
+func (r *Runner) floatArrivesAsANumber(name, text string, v float64) func() {
+	r.arrivingFloat = &arrivingFloat{name: name, text: text, value: v}
+	return func() { r.arrivingFloat = nil }
+}
+
+// arrivingFloatValue is the number behind the characters a float name is
+// being handed, where the store was told one.
+func (r *Runner) arrivingFloatValue(name, text string) (float64, bool) {
+	a := r.arrivingFloat
+	if a == nil || a.name != name || a.text != text {
+		return 0, false
+	}
+	return a.value, true
+}

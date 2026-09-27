@@ -5008,7 +5008,7 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 		"an attribute re-reading the value the name already holds") {
 		return false
 	}
-	if exact, held := r.storedFloatValue(name, v); held {
+	if rec, held := r.storedFloatRecord(name, v); held {
 		// The name is holding a *number* and the letter that just arrived
 		// says how to write it, so the new rendering is made from the number
 		// and not from the old rendering's characters. attributeFolded is
@@ -5017,23 +5017,38 @@ func (r *Runner) rereadStandingValue(name string) (startedOver bool) {
 		// f=3.14159265358979; f=3.1` really does leave 3.1 behind — and
 		// wrong for a re-read, where nothing was assigned at all.
 		//
-		// **ksh93 keeps the number across a change of *precision* and not
-		// across a change of *letter*, and that divergence is recorded and
-		// not modeled.** Measured 2026-09-25 on ksh93u+ 2012-08-01 beside
-		// the zsh rows above: `typeset -F1 f=3.14159265358979; typeset -F17
-		// f` reads 3.14159265358979000 there, and `typeset -E3 f=$same;
-		// typeset -F17 f` reads 3.14000000000000000 — so the one transition
-		// between the two letters re-reads the rendering, where zsh writes
-		// 3.14159 for the same pair. Every other row of this rule is shared:
-		// the same run has ksh93 answering 3.14159265358979 to `$(( f ))`
-		// under `-F1`, 6.3 to a doubling, and 4.14159265358979 to an append.
-		// One row in one dialect is a measurement to model deliberately, not
-		// an inline conditional, so it is written down here and left alone.
-		if text, ok := r.floatFormatted(name, exact); ok {
-			r.Vars[name] = text
-			r.rememberStoredFloat(name, text, exact)
+		// **One shell keeps the number across a change of *precision* and
+		// not across a change of *letter***, and that is
+		// FloatLetterChangeRereadsTheRendering rather than a rule here. The
+		// letter the rendering was made with travels with it, because a
+		// declaration that changes one has already written the new letter
+		// down by the time this runs — so the record is the only copy of the
+		// old one left.
+		//
+		// The axis is asked here and not at the top, because the two
+		// readings are the same everywhere else: a precision change, a
+		// re-declaration of the same letter, and a name whose characters are
+		// all there is each give one answer.
+		if rec.exponent == r.floatIsExponent(name) ||
+			!r.ask(r.sem().FloatLetterChangeRereadsTheRendering,
+				"a change of float letter re-reading the rendering") {
+			if text, ok := r.floatFormatted(name, rec.value); ok {
+				r.Vars[name] = text
+				r.rememberStoredFloat(name, text, rec.value)
+			}
+			return false
 		}
-		return false
+		// The other reading falls through to attributeFolded below, which
+		// reads the characters the name is holding — so a `-F1` rendering of
+		// `3.1` really is three tenths once the `E` letter arrives.
+		//
+		// The record goes first, and it has to: attributeFolded reads the
+		// number behind a rendering where it has one, which is what carries
+		// an infinity through a store (#4662), and here that is exactly the
+		// number this reading says is gone. Leaving it behind made
+		// `typeset -F3 g; (( g = 1.0/3 )); typeset -E17 g` write every digit
+		// where this shell writes `0.333`.
+		r.forgetStoredFloat(name)
 	}
 	if folded, ok := r.attributeFolded(name, v); ok {
 		r.Vars[name] = folded

@@ -567,6 +567,15 @@ func Dialect() syntax.Dialect {
 	// predicts it — three of the four shells that read through one refuse
 	// this (#1223).
 	d.ArithCharacterConstant = true
+	// Its escapes are this shell's own, and `\C` spans differently from zsh's:
+	// one argument, no dash in the spelling, and `\M-` a complete escape that
+	// takes none. Measured 2026-09-26 on ksh93u+ 2012-08-01: `$(( '\Ca' ))`
+	// and `$(( '\CA' ))` are 1, `$(( '\C-' ))` is 109, and `$(( '\C-a' ))`,
+	// `$(( '\M-x' ))` and `$(( '\Mx' ))` are each an arithmetic syntax error
+	// — the escape ends before the quote does, leaving a character where an
+	// operator belongs. See interp.DollarSingleCaretMetaFoldedWithNoDash, the
+	// same table seen from the decoding end.
+	d.ArithCharacterEscapes = syntax.ArithCharacterEscapesFoldedCaret
 	// Extended patterns wherever a pattern may stand.
 	d.ExtendedPattern = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
@@ -889,6 +898,23 @@ func Semantics() interp.Semantics {
 	// `irmsBE` (#4205).
 	s.DollarDashLetterOrder = "ircaefhkmnstuvxBCEHTl"
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
+	// And a compound assignment hands back what the target's type made of the
+	// number rather than the number: `typeset -i n=1` makes `$(( n += 0.5 ))`
+	// 1 here, where zsh answers 1.5 and leaves `n` at 1 just the same.
+	// Measured 2026-09-26 on ksh93u+ 2012-08-01, with `$(( n = n + 0.5 ))` —
+	// 1 in both columns — as the control that says the split is the compound
+	// operator's and not the store's (#4606).
+	s.CompoundArithAssignmentConvertsItsValue = interp.Yes
+	// And a declaration that changes a float name's *letter* re-reads the
+	// rendering the name is holding, where one that changes only its
+	// *precision* keeps the number. Measured 2026-09-26 with
+	// `x=3.14159265358979`: `typeset -F1 f=$x; typeset -E10 f` reads `3.1`
+	// here and `typeset -E3 f=$x; typeset -F17 f` reads `3.14000000000000000`,
+	// against `typeset -F1 f=$x; typeset -F17 f`, which keeps every digit. The
+	// control beside them is `typeset -E3 f=$x; print $(( f ))`, which is
+	// still 3.14159265358979 — so this is the letter and not a rounding on
+	// assignment (#4486).
+	s.FloatLetterChangeRereadsTheRendering = interp.Yes
 	// A numeral a double cannot hold is lost rather than saturated:
 	// `$((1e400))` is `-0` here where the same value *computed*,
 	// `$((1e300*1e300))`, is `inf`. The zero is the negative one and the

@@ -219,26 +219,58 @@ func TestALineSubscriptOverATableIsTheKeyReading(t *testing.T) {
 	}
 }
 
-// Writing through one is refused by name, because the letter names a span of
-// characters and that side of the construct answers with one subscript.
+// Writing through one replaces the **span of characters** the line covers,
+// which is the half the read side already resolves.
 //
-// The index of the line's first character is what it would be handed, and
-// writing there would put the value *inside* the line — a plausible wrong
-// string at status 0, which is the one thing a refusal by name exists to
-// prevent. See interp/subscriptflags.go for what the write is measured to be.
-func TestWritingThroughALineSubscriptIsRefusedByName(t *testing.T) {
+// The mutant this is aimed at is the cheap wrong answer: handing the write
+// the index of the line's *first* character instead of its span, which puts
+// the value inside the line and leaves a plausible wrong string at status 0.
+// Every row below has a line longer than one character for that reason —
+// a one-character line cannot tell the two apart. See
+// interp/linesubscript.go, which holds the measurements.
+func TestWritingThroughALineSubscriptReplacesTheLine(t *testing.T) {
+	const v = "v='aa\nbb\ncc'\n"
 	for _, tc := range []struct{ src, want string }{
-		{`v[(f)2]=ZZ`, `(f)`},
-		{`v[(f)2]+=ZZ`, `(f)`},
-		{`v[(fr)b]=ZZ`, `(f)`},
+		{`v[(f)2]=ZZ`, "[aa\nZZ\ncc]"},
+		{`v[(f)2]+=XX`, "[aa\nbbXX\ncc]"},
+		{`v[(f)4]=ZZ`, "[aa\nbb\nZZ]"},
+		{`v[(f)0]=ZZ`, "[ZZ\nbb\ncc]"},
+		{`v[(f)-1]=ZZ`, "[aa\nbb\nZZ]"},
+		{`v[(fr)bb]=ZZ`, "[aa\nZZ\ncc]"},
+		{`unset 'v[(f)2]'`, "[aa\n\ncc]"},
+		{`unset 'v[(f)3]'`, "[aa\nbb\n]"},
+		{`unset 'v[(fr)bb]'`, "[aa\n\ncc]"},
+		// A value longer than the line goes in whole, separators and all.
+		{`v[(f)2]=$'X\nY'`, "[aa\nX\nY\ncc]"},
+		// And the same span through the arithmetic store, so one construct
+		// does not come to have two answers. The third road a store reaches
+		// it by is a named reference, which needs a grammar these rows do
+		// not have — dialect/zsh/linesubscript_test.go carries that one.
+		{`(( v[(f)2] = 9 ))`, "[aa\n9\ncc]"},
 	} {
-		out, st := runSub(t, threeLines+tc.src+`
+		out, st := runSub(t, v+tc.src+`
 printf "[%s]" "$v"`)
-		if !strings.Contains(out, tc.want+" subscript flag is not implemented") || st == 0 {
-			t.Errorf("%s = %q (status %d), want a refusal naming %s", tc.src, out, st, tc.want)
+		if out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
 		}
-		if strings.Contains(out, "ZZ") {
-			t.Errorf("%s = %q, wrote through a refused subscript", tc.src, out)
+	}
+}
+
+// A search that matched nothing keeps the refusal, which is measured rather
+// than conservative: the shell with the construct answers one such row with
+// `assignment to invalid subscript range` and leaves the other holding a
+// duplicated value, and neither is a rule to copy. See
+// Runner.lineTargetSpan.
+func TestALineSearchThatMissedStillRefusesTheWrite(t *testing.T) {
+	const v = "v='aa\nbb\ncc'\n"
+	for _, src := range []string{`v[(fr)zz]=QQ`, `v[(fi)zz]=QQ`} {
+		out, st := runSub(t, v+src+`
+printf "[%s]" "$v"`)
+		if !strings.Contains(out, "(f) subscript flag is not implemented") || st == 0 {
+			t.Errorf("%s = %q (status %d), want a refusal naming (f)", src, out, st)
+		}
+		if strings.Contains(out, "QQ") {
+			t.Errorf("%s = %q, wrote through a refused subscript", src, out)
 		}
 	}
 }

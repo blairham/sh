@@ -738,6 +738,14 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 	}, true)
 }
 
+// flaggedAssignPlace is flaggedAssignIndex where the caller can splice a span
+// as well as write an element: see flaggedTarget.
+func (r *Runner) flaggedAssignPlace(a *syntax.Assign) (flaggedTarget, bool) {
+	return r.flaggedTargetPlace(&syntax.ParamExpr{
+		Name: a.Name, Index: a.Index, IndexFlags: a.IndexFlags,
+	}, true)
+}
+
 // flaggedTargetIndex is flaggedAssignIndex over the node rather than over an
 // assignment, so that `unset 'a[(r)y]'` names its element by the same rule
 // `a[(r)y]=Q` names one.
@@ -756,6 +764,47 @@ func (r *Runner) flaggedAssignIndex(a *syntax.Assign) (int, bool) {
 // which is the same shape it already has for a subscript that will not
 // evaluate.
 func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int, bool) {
+	p, ok := r.flaggedTargetPlace(e, endsTheLine)
+	if !ok {
+		return 0, false
+	}
+	if p.span {
+		// A span of characters where this caller can take one subscript, so
+		// there is nothing here it can be handed: the line the group
+		// selected is as many characters as it is long, and the index of its
+		// first one would put the value inside it. Refused by name rather
+		// than answered with a plausible wrong string — the two callers that
+		// splice ask for the place itself. See flaggedTargetPlace.
+		if endsTheLine {
+			r.refuseAssignSubscriptFlag(e, "f", " where a line of a string is written")
+		} else {
+			r.reportSubscriptFlag(e, "f", " where a line of a string is written")
+		}
+		return 0, false
+	}
+	return p.from, true
+}
+
+// flaggedTarget is the place a subscript's flag group names on the left of a
+// store: one element, or — where `(f)` counts a string's lines — the span of
+// characters the line covers.
+//
+// The span is the whole of why this is a type and not an int. A line is as
+// many characters as it is long, so the index of its first one is not the
+// place: `v[(f)2]=ZZ` on `$'aa\nbb\ncc'` would give `aa\nZZbb\ncc` rather
+// than `aa\nZZ\ncc`. Both ends come from one resolve of the line, so nothing
+// can find the start and the end by two different rules.
+type flaggedTarget struct {
+	from, to int
+	// span says the pair is a character range rather than one subscript
+	// written twice, so a caller that cannot splice must refuse rather than
+	// take `from` — which a one-character line would otherwise let through.
+	span bool
+}
+
+// flaggedTargetPlace is flaggedTargetIndex before the answer is narrowed to a
+// single subscript: see flaggedTarget.
+func (r *Runner) flaggedTargetPlace(e *syntax.ParamExpr, endsTheLine bool) (flaggedTarget, bool) {
 	g := e.IndexFlags
 	a := &syntax.Assign{Name: e.Name, Index: e.Index, IndexFlags: g}
 	refuse := func(flag, where string) {
@@ -765,29 +814,17 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 		}
 		r.reportSubscriptFlag(e, flag, where)
 	}
+	one := func(idx int, ok bool) (flaggedTarget, bool) {
+		return flaggedTarget{from: idx, to: idx}, ok
+	}
 	for _, c := range g.Flags {
 		if !strings.ContainsRune(implementedSubscriptFlags, c) {
 			refuse(string(c), "")
-			return 0, false
+			return one(0, false)
 		}
 	}
 	if subscriptCountsLines(g) && r.subscriptTargetIsAString(e) {
-		// `(f)` names a *span* of characters and this side answers with one
-		// subscript, so there is nothing here it can be handed: the line the
-		// group selected is as many characters as it is long, and the index
-		// of its first one would put the value inside it. Measured on zsh
-		// 5.9.2 with `v=$'aa\nbb\ncc'`, and refused by name until the write
-		// carries it rather than answered with a plausible wrong string:
-		//
-		//	v[(f)2]=ZZ     aa\nZZ\ncc   the line replaced, not a character
-		//	v[(f)2]+=XX    aa\nbbXX\ncc and joined at its end
-		//	v[(f)4]=ZZ     aa\nbb\nZZ   past the last clamps as the read does
-		//	unset 'v[(f)2]'  aa\n\ncc   the line taken out, separators kept
-		//
-		// The read side is the whole of this change; see the issue in
-		// docs/spec/grammar/parameter-expansion.md for the write.
-		refuse("f", " where a line of a string is written")
-		return 0, false
+		return r.lineTargetSpan(e, refuse)
 	}
 	search := lastOf(g.Flags, searchSubscriptFlags)
 	if search == 0 {
@@ -804,9 +841,9 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 			} else {
 				r.badSubscriptToUnset(text, err)
 			}
-			return 0, false
+			return one(0, false)
 		}
-		return idx, true
+		return one(idx, true)
 	}
 	if _, isAssoc := r.assocFor(a.Name); isAssoc {
 		// A search over a table names several elements and no place to write,
@@ -816,7 +853,7 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 		// *key* reading decide before they get here, so this is the safety
 		// net rather than the ordinary path (#2288).
 		r.refuseTableSliceWrite(a.Name, endsTheLine)
-		return 0, false
+		return one(0, false)
 	}
 	// `k` and `K` are `r` and `R` on everything but a table, which the branch
 	// above has just ruled out — see orderedSearchLetter. The letter as
@@ -842,12 +879,12 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 		// setArrayElem's to decide, exactly as it is for `s[3]=Q` — this
 		// side only says *which* subscript, which is what the read side says
 		// too.
-		return r.searchIndex(g, search, subscriptSource{name: a.Name, elems: elems, scalar: true}), true
+		return one(r.searchIndex(g, search, subscriptSource{name: a.Name, elems: elems, scalar: true}), true)
 	}
 	at, found, miss := r.searchElements(g, search, elems)
 	base := r.arrayBase()
 	if found {
-		return base + at, true
+		return one(base+at, true)
 	}
 	if miss == missBelow {
 		// The read side's rule reaches this side unchanged: a walk that
@@ -860,14 +897,14 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 		// they take from a start *above* the array, and neither of the two
 		// answers below is one this side can use (#1534).
 		refuse(letter, " where the search began before the first element")
-		return 0, false
+		return one(0, false)
 	}
 	switch search {
 	case 'i', 'r':
 		// One past the last element, which is what makes both of these an
 		// append: measured, `b[(i)nomatch]=W` and `b[(r)nomatch]=Q` on
 		// `(x y z)` each leave four elements with the new one last.
-		return base + len(elems), true
+		return one(base+len(elems), true)
 	}
 	// `R` and `I` missing are not the same answer as each other in the shell
 	// — the first is `assignment to invalid subscript range` and the second
@@ -876,7 +913,7 @@ func (r *Runner) flaggedTargetIndex(e *syntax.ParamExpr, endsTheLine bool) (int,
 	// cannot use. Refused by name rather than guessed at; see the issue the
 	// spec entry names.
 	refuse(letter, " where nothing matched")
-	return 0, false
+	return one(0, false)
 }
 
 // subscriptIsReadAsItsIndex reports whether `(k)` in front of an *ordinary*

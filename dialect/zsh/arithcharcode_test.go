@@ -106,3 +106,38 @@ func TestTheRadixLiteralStillReads(t *testing.T) {
 		t.Errorf("got %q at %d, want %q at 0", out, st, want)
 	}
 }
+
+// `\C` and `\M` inside the written-out operand, which reach past themselves
+// to take the character they mask.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`,
+// beside the three controls the last row carries: the single-hash spelling,
+// which has no escapes at all and reads the `C` itself, and the ordinary
+// escapes, which are unchanged. Before this the operand stopped at the `\C`
+// and left the `-a` standing as a subtraction, so `$(( ##\C-a ))` was 0
+// (#4607).
+//
+// A `\C` or `\M` with **nothing at all** after it is left out, and stays a
+// divergence rather than becoming one here: this shell refuses `$(( ##\C ))`
+// as `bad character after ##` where we answer 0, which is its own wording and
+// was the answer before this change too.
+func TestTheCharacterCodeOperatorReadsTheCaretEscapes(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"control", `echo $((##\C-a))`, "1\n"},
+		{"control, uppercase", `echo $((##\C-A))`, "1\n"},
+		{"control without the dash", `echo $((##\Ca))`, "1\n"},
+		{"control of at-sign is a NUL", `echo $((##\C-@))`, "0\n"},
+		{"meta", `echo $((##\M-a))`, "225\n"},
+		{"meta over a control", `echo $((##\M-\C-a))`, "129\n"},
+		{"meta without the dash", `echo $((##\M ))`, "160\n"},
+		{"the single hash has no escapes", `echo $((#\C-a))`, "67\n"},
+		{"the sum from the shell's own test", `foo=000; echo $((##A + ##\C-a + #foo + $#foo))`, "117\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s gave %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

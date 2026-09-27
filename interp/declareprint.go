@@ -402,7 +402,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		return d, true
 	}
 	if v, ok := r.Vars[name]; ok {
-		d.value, d.hasValue = v, true
+		d.value, d.hasValue = r.listedFloatText(name, d.float, v), true
 		return d, true
 	}
 	// A produced *scalar*, on the same terms as the produced array above and
@@ -1628,4 +1628,43 @@ func (d declaration) letters(order string) string {
 		}
 	}
 	return b.String()
+}
+
+// listedFloatText is a float name's value as a *listing* writes it, which
+// parts from what `$name` reads for exactly two numbers.
+//
+// A listing renders the double through the `%e` or `%f` a C library gives it,
+// and that writes an infinity as `inf` and a NaN as `nan` whatever the shell
+// calls them elsewhere. Measured 2026-09-26 on zsh 5.9.2
+// (aarch64-apple-darwin25.4.0) run `-f`: `float g; (( g = 1.0/0.0 ))` leaves
+// `print $g` writing `Inf` — three characters, which `${#g}` counts and which
+// an exported child is told — while `typeset -p g` writes
+// `typeset -E g=inf`. ksh93u+ 2012-08-01 spells both lowercase and is
+// unmoved. Every other value renders alike in the two places, which is why
+// this is a fold of two names and not a second rendering (#4662).
+//
+// The float attribute is what admits it, so a scalar holding the three
+// letters `Inf` lists as itself.
+func (r *Runner) listedFloatText(name string, float bool, v string) string {
+	if !float {
+		return v
+	}
+	if _, named := r.floatIsNamedRatherThanWritten(floatNamedValue(v)); !named {
+		return v
+	}
+	return strings.ToLower(v)
+}
+
+// floatNamedValue reads a rendering back as a number, so that the two values
+// that are not numbers can be told apart from every spelling that is. Zero
+// for text that is no number at all, which is reported as not named and so
+// listed as it stands. The text is parsed rather than compared against a
+// wording, so a dialect that spells its infinity some third way needs nothing
+// here — Go reads `Inf`, `inf` and `NaN` alike.
+func floatNamedValue(v string) float64 {
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0
+	}
+	return f
 }

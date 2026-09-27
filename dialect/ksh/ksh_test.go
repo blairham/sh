@@ -133,6 +133,8 @@ func TestSemantics(t *testing.T) {
 		// attribute's: `$((010))` is 8 and `typeset -i d=010` is 10.
 		{"IntegerAssignmentReadsALeadingZeroAsDecimal", s.IntegerAssignmentReadsALeadingZeroAsDecimal, interp.Yes},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.Yes},
+		{"CompoundArithAssignmentConvertsItsValue", s.CompoundArithAssignmentConvertsItsValue, interp.Yes},
+		{"FloatLetterChangeRereadsTheRendering", s.FloatLetterChangeRereadsTheRendering, interp.Yes},
 		// A numeral a double cannot hold is lost rather than saturated:
 		// `$((1e400))` is `-0` where the same value computed,
 		// `$((1e300*1e300))`, is `inf` (#2766).

@@ -2167,6 +2167,11 @@ func Semantics() interp.Semantics {
 	// unanswered TraceElementSubscriptIsEvaluated: and no subscript, so
 	// `a[1]=v` names a variable spelled `a[1]` and there is nothing to
 	// resolve.
+	// unanswered FloatLetterChangeRereadsTheRendering: no float letters here
+	// either, so nothing can change one. Measured 2026-09-26 (#4486).
+	// unanswered CompoundArithAssignmentConvertsItsValue: no floats here
+	// either, and no integer attribute, so a compound assignment has nothing
+	// to convert its value through. Measured 2026-09-26 (#4606).
 	// unanswered ArithFloatOverflowIsZero: no floats here either, so
 	// `$((1e400))` is a syntax error rather than a number out of range and
 	// the axis is unreachable.

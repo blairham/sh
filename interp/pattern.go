@@ -2031,6 +2031,24 @@ func alternativesAt(body string, at int, emptyCompiles bool) (arms []string, off
 // matches more than one length can only be resolved by what comes after it:
 // `+(a)b` against `aab` needs the group to stop before the b.
 func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, at int, o patternOpts) bool {
+	return matchGroupTimes(body, gp, quant, boundOf(quant), true, rest, rp, s, at, o)
+}
+
+// matchGroupTimes is matchGroup with how many repetitions of the group are
+// still allowed, and whether this is the group's first attempt rather than a
+// later round of the same one.
+//
+// b counts *down* as the recursion goes round: what reaches a recursive call
+// is what is left after the repetition the caller just matched, which is what
+// makes a finite ceiling terminate. An unbounded one never moves.
+//
+// first is what keeps the stop-here branch from being asked twice for the
+// same text. A caller that is about to recurse has already tried `rest` at
+// exactly this position with exactly these captures in hand — that is the
+// line above the recursion — so asking again inside it is a repeat of a call
+// that has just failed. It was asked twice before this, for `*`, and the
+// answer was the same both times.
+func matchGroupTimes(body string, gp int, quant byte, b repeatBound, first bool, rest string, rp int, s string, at int, o patternOpts) bool {
 	// The body opens one byte past the `(`, or two past it when a quantifier
 	// stands in front of one.
 	bp := gp + 1
@@ -2064,9 +2082,9 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 		}
 		return false
 	}
-	repeat := quant == '*' || quant == '+'
-	if quant == '?' || quant == '*' {
-		// Zero repetitions is allowed, so the rest may start here.
+	repeat := b.mayRepeat()
+	if first && b.mayStopHere() {
+		// No repetition is required, so the rest may start here.
 		mark := o.where.caps.mark()
 		if matchHere(rest, s, rp, at, o) {
 			return true
@@ -2130,7 +2148,8 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 			}
 			// A repetition has to consume something, or the recursion
 			// would not terminate.
-			if repeat && i > 0 && matchGroup(body, gp, quant, rest, rp, s[i:], at+i, o) {
+			if repeat && i > 0 &&
+				matchGroupTimes(body, gp, quant, b.afterOne(), false, rest, rp, s[i:], at+i, o) {
 				o.where.caps.record(gp, at, at+i)
 				return true
 			}

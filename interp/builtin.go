@@ -7388,7 +7388,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// shadow does nothing when there is no scope to save into, which is
 		// the dialect that took this as a global: there is nothing to put
 		// back, and it becomes a plain assignment.
-		fresh := r.shadow(name)
+		fresh, redeclared := r.shadow(name)
 		// And a name already holding a **reference** puts everything below on
 		// what it points at. After the shadow, which is what leaves a fresh
 		// binding out of it: the copy drops the reference along with every
@@ -7401,7 +7401,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// the reference points at — so the shadow is taken there too, and
 			// what the line writes goes away with the call like any other
 			// local. See Runner.aDeclarationThroughAReferenceIsTheTargets.
-			fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh, r.shadow)
+			fresh, redeclared = r.declarationThroughAReferenceShadowsTheTarget(name, fresh, redeclared, r.shadow)
 		}
 		// After the shadow, for the reason biDeclare gives: the cell this
 		// declaration writes is a fresh binding, and an attribute applied
@@ -7517,7 +7517,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		default:
-			if r.valuelessDeclarationLists(name, f, fresh) {
+			if r.valuelessDeclarationLists(name, f, redeclared) {
 				// The same listing under the other word, on a name this
 				// scope has already made local: `f(){ local s=1; local s; }`
 				// writes `s=1` in the shell that lists. See
@@ -8052,7 +8052,8 @@ func (r *Runner) readonlyDeclaresALocal(name string) bool {
 	if !r.ask(r.sem().ReadonlyDeclaresALocal, "`readonly` inside a function declaring a local") {
 		return false
 	}
-	return r.shadow(name)
+	fresh, _ := r.shadow(name)
+	return fresh
 }
 
 // readonlyScopesItsOperands reports whether a `readonly` written here will

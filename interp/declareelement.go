@@ -106,7 +106,7 @@ func (r *Runner) declareElement(base string, leading []string, sub, value string
 		// The array the element belongs to is what becomes local, and it has
 		// to become local before the element is written or the write lands
 		// on the caller's array and the shadow puts an empty one over it.
-		fresh = r.shadowTypeset(base)
+		fresh, _ = r.shadowTypeset(base)
 		if r.unspecified {
 			return
 		}

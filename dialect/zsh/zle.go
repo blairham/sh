@@ -265,6 +265,11 @@ const (
 	// what is on the screen and takes back what the widget left, so nothing
 	// here has to know when a line ended. See repl.Line.Postdisplay (#4217).
 	zlePostdisplay = ".zsh.zle.postdisplay"
+	// zleTransform is the transformation table `zle -T` writes: a flat array
+	// of pairs, the transformation's name and the widget registered for it.
+	// Beside the widget table and in the same shape, so a subshell gets its
+	// own copy of this too.
+	zleTransform = ".zsh.zle.transform"
 )
 
 // postdisplayName is what a widget reads the text drawn after the line under.
@@ -368,7 +373,7 @@ func registerZle(r *interp.Runner) {
 // is not built yet says so — the distinction whence.go documents.
 const (
 	zleLetters            = "acfglmrwACDFGIKLMNRTU"
-	zleLettersImplemented = "aACDFLNRUlw"
+	zleLettersImplemented = "aACDFLNRTUlrw"
 	// zleOperationLetters are the letters that choose what this builtin
 	// *does*. At most one may be given, and two is a refusal rather than a
 	// preference — see zleBuiltin.
@@ -385,17 +390,19 @@ const (
 
 // zleOpts is what the letters asked for.
 type zleOpts struct {
-	define   bool // -N
-	complete bool // -C
-	delete   bool // -D
-	alias    bool // -A
-	list     bool // -l
-	watch    bool // -F
-	draw     bool // -R
-	push     bool // -U
-	all      bool // -a
-	source   bool // -L
-	widget   bool // -w
+	define    bool // -N
+	complete  bool // -C
+	delete    bool // -D
+	alias     bool // -A
+	list      bool // -l
+	watch     bool // -F
+	draw      bool // -R
+	push      bool // -U
+	all       bool // -a
+	source    bool // -L
+	widget    bool // -w
+	forget    bool // -r, which only -T reads
+	transform bool // -T
 }
 
 func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -473,6 +480,8 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return redisplay(r, ctx, rest)
 	case opts.push:
 		return pushKeys(r, ctx, rest)
+	case opts.transform:
+		return transformation(r, opts, rest)
 	case len(rest) == 0:
 		// `zle` with nothing at all: status 1 and not a word, measured.
 		return 1
@@ -569,6 +578,14 @@ func setZleLetter(opts *zleOpts, letter rune) {
 		opts.all = true
 	case 'L':
 		opts.source = true
+	case 'T':
+		opts.transform = true
+	case 'r':
+		// A modifier and not an operation, and one only `-T` reads:
+		// measured 2026-09-26, `zle -N -r w f` defines `w` at status 0 with
+		// the letter making no difference, and `zle -r` on its own is the
+		// bare `zle` — status 1 and not a word.
+		opts.forget = true
 	}
 }
 
@@ -1542,4 +1559,100 @@ func removeWidget(r *interp.Runner, name string) bool {
 		}
 	}
 	return false
+}
+
+// `zle -T <transformation> <widget>` registers a function as a named
+// transformation the line editor calls at a defined point, and `zle -Tr
+// <transformation>` takes the registration away.
+//
+// The builtin's half is the table; what reads it is the editor. Measured
+// 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f` with
+// `env -u FPATH`, over a script file with `zmodload zsh/zle` and no terminal —
+// so this really is registration and not drawing, and it answers 0 with no
+// editor running at all.
+//
+// **There is exactly one transformation name**, and that is measured rather
+// than read: asked for every one-, two- and three-letter name — 18,278 of
+// them — this shell takes `tc` and answers `-T: no such transformation` to
+// every other one.
+//
+// The rest of the rows, each of which decides a line here:
+//
+//	zle -T tc f          0
+//	zle -T               too few arguments for option -T
+//	zle -T tc            the same — the widget is not optional
+//	zle -T nosuchtype    the same: the arity is judged before the name
+//	zle -T tc f extra    too many arguments for -T        — no `option`
+//	zle -Tr tc f         too many arguments for option -T — with it
+//	zle -Tr              too few arguments for option -T
+//	zle -T '' f          -T: no such transformation ''
+//	zle -T tc nosuchfn   0 — the widget is not looked up here
+//	zle -Tr nosuchtype   0 — and a removal checks no name at all
+//	zle -- tc f          0 — the marker ends the letters as ever
+//
+// The two `too many` wordings really do differ by the word `option`, which is
+// why they are written out separately instead of one sentence being reused.
+func transformation(r *interp.Runner, opts zleOpts, args []string) int {
+	if opts.forget {
+		switch {
+		case len(args) == 0:
+			r.Diagnosef("too few arguments for option -T\n")
+			return 1
+		case len(args) > 1:
+			r.Diagnosef("too many arguments for option -T\n")
+			return 1
+		}
+		forgetTransformation(r, args[0])
+		return 0
+	}
+	switch {
+	case len(args) < 2:
+		r.Diagnosef("too few arguments for option -T\n")
+		return 1
+	case len(args) > 2:
+		r.Diagnosef("too many arguments for -T\n")
+		return 1
+	}
+	if args[0] != zleTransformationName {
+		r.Diagnosef("-T: no such transformation '%s'\n", args[0])
+		return 1
+	}
+	writeTransformation(r, args[0], args[1])
+	return 0
+}
+
+// zleTransformationName is the one name this shell's line editor has a
+// transformation point for. A constant rather than a set, because the
+// alphabet sweep above found one.
+const zleTransformationName = "tc"
+
+// writeTransformation records one, replacing whatever the name held — the
+// same shape writeWidget uses, and for the same reason.
+func writeTransformation(r *interp.Runner, name, widget string) {
+	flat, _ := r.GetArray(zleTransform)
+	for i := 0; i+2 <= len(flat); i += 2 {
+		if flat[i] == name {
+			flat[i+1] = widget
+			r.SetArray(zleTransform, flat)
+			return
+		}
+	}
+	r.SetArray(zleTransform, append(flat, name, widget))
+}
+
+// forgetTransformation takes one away, and says nothing about a name that was
+// never there — measured, `zle -Tr nosuchtype` is 0 in silence.
+//
+// The table these two keep is written and not yet read: the point the editor
+// would call a transformation from is not built, and the registration is the
+// half a script can see. Said plainly here rather than left for a reader to
+// infer from a lookup that does not exist.
+func forgetTransformation(r *interp.Runner, name string) {
+	flat, _ := r.GetArray(zleTransform)
+	for i := 0; i+2 <= len(flat); i += 2 {
+		if flat[i] == name {
+			r.SetArray(zleTransform, append(flat[:i:i], flat[i+2:]...))
+			return
+		}
+	}
 }

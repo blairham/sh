@@ -105,15 +105,19 @@ print -r -- "[${(%)v}]"`)
 
 // `-P` is no longer among the letters named as missing, and the ones that
 // still are still are.
+//
+// `-D` used to stand here as the still-missing one and is implemented now
+// (#4444), so the control moved to `-v`, which this shell spells and this
+// engine does not.
 func TestPrintDashPIsNoLongerRefusedAsMissing(t *testing.T) {
 	out, _ := runZsh(t, t.TempDir(), `print -P 'x' 2>&1
-print -D 'x' 2>&1
+print -v foo 'x' 2>&1
 print -r -- "st=$?"`)
 	if strings.Contains(out, "-P is not implemented yet") {
 		t.Errorf("got %q, want -P implemented", out)
 	}
-	if !strings.Contains(out, "zsh:print:2: -D is not implemented yet") {
-		t.Errorf("got %q, want -D still named as missing", out)
+	if !strings.Contains(out, "zsh:print:2: -v is not implemented yet") {
+		t.Errorf("got %q, want -v still named as missing", out)
 	}
 }
 

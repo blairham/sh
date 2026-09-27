@@ -94,13 +94,18 @@ import (
 // with the measured wording and status.
 
 // printLetters are the option letters implemented here.
-const printLetters = "rRnlNmoOiszSpufP"
+const printLetters = "rRnlNmoOiszSpufPD"
 
 // printUnimplemented are the letters zsh's print has that this one does not:
-// the column layouts (`-a`, `-c`, `-C`), the bindkey-style escapes (`-b`), the
-// `~`-abbreviating one (`-D`), prompt expansion (`-P`), assignment to a
-// parameter (`-v`) and the tab-expanding pair (`-x`, `-X`).
-const printUnimplemented = "acCbDvxX"
+// the column layouts (`-a`, `-c`, `-C`), the bindkey-style escapes (`-b`),
+// assignment to a parameter (`-v`) and the tab-expanding pair (`-x`, `-X`).
+//
+// `-D` has left this list and joined printLetters above: it writes each
+// operand back with its leading directory replaced by the `~name` that stands
+// for it, and the table that lookup needs is the one `hash -d` already writes
+// (#4444). A letter in both lists is refused as missing while it works, and a
+// letter in neither is `bad option` for something this shell has.
+const printUnimplemented = "acCbvxX"
 
 // registerPrint installs the builtin.
 func registerPrint(r *interp.Runner) {
@@ -122,6 +127,7 @@ type printOptions struct {
 	single    bool
 	editor    bool
 	prompt    bool
+	named     bool
 	format    string
 	hasFormat bool
 	fd        int
@@ -161,6 +167,14 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		if rest, ok = printMatching(r, rest); !ok {
 			return 1
 		}
+	}
+	if opts.named {
+		// After the pattern and before the sort, which is measured both
+		// ways: `print -D -m '/tmp*'` matches the operand as it was written,
+		// and `print -D -o /var /tmp/x` comes out `/var ~foo/x` — an order
+		// only the abbreviated spellings have, since the written ones sort
+		// the other way round.
+		rest = printNamedDirectories(r, rest)
 	}
 	if opts.sorted {
 		printSort(rest, opts)
@@ -581,6 +595,8 @@ func setPrintLetter(r *interp.Runner, letter byte, opts *printOptions) int {
 		opts.editor = true
 	case 'P':
 		opts.prompt = true
+	case 'D':
+		opts.named = true
 	case 'p':
 		fd, running := r.CoprocWrite()
 		if !running {
@@ -987,4 +1003,24 @@ func printHexValue(c byte) int {
 	default:
 		return int(c-'A') + 10
 	}
+}
+
+// printNamedDirectories is `-D`: each operand written back with its leading
+// directory replaced by the `~name` the shell was told stands for it, which is
+// the substitution a prompt's working-directory code performs.
+//
+// The table is the one `hash -d` writes and the whole rule lives beside it, in
+// interp/nameddir.go — which is also what the prompt reads, so the two cannot
+// come to disagree about which of two names wins. An operand no entry covers
+// is written back as it stands, so a `print -D` in a shell that was told
+// nothing is `print -r` with extra steps.
+//
+// A copy rather than a rewrite in place: the operand slice is the caller's
+// argument vector, and `-s` puts what comes out of here into the history.
+func printNamedDirectories(r *interp.Runner, words []string) []string {
+	out := make([]string, len(words))
+	for i, w := range words {
+		out[i] = r.AbbreviateNamedDirectory(w)
+	}
+	return out
 }

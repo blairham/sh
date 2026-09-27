@@ -49,6 +49,19 @@ func (r *Runner) namedDirNames() []string {
 	return names
 }
 
+// AbbreviateNamedDirectory writes a path back with its leading directory
+// replaced by the `~name` that stands for it, which is what `print -D` does to
+// each of its operands.
+//
+// Exported because the builtin that spells that letter lives in a dialect
+// package. It is the *prompt's* shortening and not a second one —
+// Runner.abbreviatedDirectory, which is where the rule and its measurements
+// live — so the builtin and `%~` cannot come to disagree about which of two
+// names wins.
+func (r *Runner) AbbreviateNamedDirectory(path string) string {
+	return r.abbreviatedDirectory(path)
+}
+
 // validNamedDirName reports whether a name may stand in the table. A `/` is
 // what the one shell with this construct refuses, and it has to: the name a
 // `~` reads runs to the first slash, so an entry holding one could never be

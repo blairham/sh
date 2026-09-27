@@ -231,8 +231,12 @@ func TestZleRefusesEachMistakeItsOwnWay(t *testing.T) {
 // a letter leaves the list by being implemented and by nothing else. The three
 // remaining spellings that need a seam repl has not got are named in zle.go's
 // own comment rather than here.
+//
+// `T` and `r` left it together (#4450): the transformation table is built and
+// `-r` is the modifier that removes from it, and the letter that only `-T`
+// reads could not be left refusing while the operation it modifies works.
 func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
-	for _, letter := range []string{"M", "I", "K", "T", "c", "f", "g", "m", "r", "G"} {
+	for _, letter := range []string{"M", "I", "K", "c", "f", "g", "m", "G"} {
 		out, st := runZsh(t, t.TempDir(), "zle -"+letter+" x y\n")
 		want := "zsh:zle:1: -" + letter + " is not implemented yet\n"
 		if out != want || st != 1 {

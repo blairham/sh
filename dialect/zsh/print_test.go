@@ -163,7 +163,6 @@ func TestPrintRefusals(t *testing.T) {
 		{`print -b x`, "zsh:print:1: -b is not implemented yet\n", 1},
 		{`print -c x`, "zsh:print:1: -c is not implemented yet\n", 1},
 		{`print -C 2 x`, "zsh:print:1: -C is not implemented yet\n", 1},
-		{`print -D /tmp`, "zsh:print:1: -D is not implemented yet\n", 1},
 		// `-P` has left this list — it is implemented, and what it refuses
 		// is a prompt *escape* by name rather than the letter. See
 		// printprompt_test.go.

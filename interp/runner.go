@@ -8294,7 +8294,18 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// be recorded before the literal is stored, or the value lands as
 		// whatever kind it looks like and the letter then meets a name of
 		// the other kind. See Runner.containerLetterOverALiteral.
-		locks := argv[0] == "readonly" && !r.readonlyScopesItsOperands() &&
+		// And where the word *is* the declaration builtin under a second
+		// name, it takes the declaration's order under every scope rather
+		// than only inside a function — there is one word there, so there is
+		// one ordering, and the scope test above reaches only half of it.
+		// Measured: with the first order, `readonly -T TT tt=(a b)` at the
+		// top level stored the array and then tied the name, which empties
+		// it, where `typeset -rT TT tt=(a b)` — the same command under the
+		// other spelling — kept both elements. See
+		// Semantics.ReadonlyWord.
+		locks := argv[0] == "readonly" &&
+			r.sem().ReadonlyWord != ReadonlyWordIsTheDeclaration &&
+			!r.readonlyScopesItsOperands() &&
 			!r.containerLetterOverALiteral(argv, c)
 		outerFreezing := r.freezing
 		// Recorded whichever order the two halves run in, because the

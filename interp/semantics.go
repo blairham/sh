@@ -2039,15 +2039,57 @@ type Semantics struct {
 	// a letter accepted and ignored hands a script a success it did not earn
 	// (#3464).
 	//
-	// One thing the table still leaves out, measured and not modeled.
-	//
-	// **zsh's wider set.** `readonly` there is `typeset -r` wearing another
-	// name, so `-i`, `-x`, `-g`, `-l`, `-u` and `-t` are all taken at status
-	// 0 as well. Adding them would accept six letters this builtin then
-	// ignores, which is the same trap as `-n` six times over; the honest fix
-	// is `readonly` reading DeclareOptions there, and that is a change with
-	// its own measurements to make.
+	// **zsh's wider set** used to be written here as a thing measured and not
+	// modeled, on the reading that adding the letters would accept six this
+	// builtin then ignores. That is right for a `readonly` with a loop of its
+	// own and wrong for one that is the declaration word, which is what
+	// ReadonlyIsTheDeclarationWord now says zsh's is: there the set is
+	// DeclareOptions less `m`, `r` and `z`, and every letter in it reaches
+	// the attribute `typeset` already gives it.
 	ReadonlyOptions string
+	// ReadonlyWord is which of the two things this dialect's `readonly` is:
+	// POSIX's attribute on a name the shell already has, or the declaration
+	// builtin under a second name the way `integer` is — the letters read as
+	// a declaration's, and the operands through the same loop, with the
+	// readonly attribute already decided.
+	//
+	// It is the same shape ReadonlyDeclaresALocal records one consequence of.
+	// That axis is about the *scope* a declaration takes and this one is
+	// about the whole word, and the reason they are two is that a shell can
+	// answer the first without the second: nothing about `readonly B=1` going
+	// away with the call says the word also takes `-i`, `-L 5` or `-T`.
+	//
+	// Measured 2026-09-27 from a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C` with a scratch HOME, by asking each shell for every letter of
+	// the alphabet under `readonly` and again under its declaration word:
+	//
+	//	zsh 5.9.2     `readonly` takes afghilptuxAEFHLRTUZ and `typeset`
+	//	              takes those plus k, m, r and z — so the two sets are one
+	//	              set less the letters the word has already spent. And
+	//	              every shape they share answers alike: `readonly -p v`,
+	//	              `readonly -f b`, a bare `readonly`, `readonly +` and
+	//	              `readonly "a[1]"` are byte-identical to the `typeset -r`
+	//	              spelling of each, the complaint name apart.
+	//	bash 5.3      `readonly` takes aAfpn and `declare` takes aAfFgilnprtux
+	//	              — the kind letters and nothing else, and `readonly -i v`
+	//	              is `invalid option`. The word is POSIX's freeze with a
+	//	              container letter on it.
+	//	ksh93, dash,  `readonly` takes p alone. There is no declaration to be
+	//	ash           a second name for.
+	//
+	// So it is no everywhere but zsh, and the POSIX preset says no: XCU gives
+	// `readonly` one letter and has no `typeset` for it to be.
+	//
+	// Under the declaration reading, ReadonlyOptions is still what says which
+	// letters the word takes — the two sets are not the same and the
+	// difference is measured, not derived.
+	//
+	// An enum with a real zero value rather than an Answer, for the reason
+	// SetLongOptionWord has one: this is read on the common path of every
+	// `readonly` in every dialect, so an unset vector would refuse the word
+	// outright rather than answer it. The zero value is the reading five of
+	// the six columns have and the one the standard describes.
+	ReadonlyWord ReadonlyWordReading
 	// ReadonlyReferenceLetter is what the `n` letter does on `readonly`,
 	// where the dialect spells it in ReadonlyOptions at all.
 	//
@@ -28060,6 +28102,11 @@ func PosixSemantics() Semantics {
 		// And `readonly` exactly one. The kind letters are bash's and zsh's
 		// to add, and the axis `-a` raises is unreachable without them.
 		ReadonlyOptions: "p",
+		// XCU's `readonly` sets an attribute on a name; the standard has no
+		// `typeset` for the word to be a second name for. Written out
+		// although it is the zero value, because the preset is where a
+		// reader looks for what the standard says.
+		ReadonlyWord: ReadonlyWordIsAnAttribute,
 		// The POSIX jobs: -l and -p, and `-p` means the process ids alone.
 		// The state filters and the rest are the dialects' additions, and
 		// the two axes their letters raise are unreachable without them.
@@ -34303,6 +34350,29 @@ func (r *Runner) ask(a Answer, axis string) bool {
 	r.unspecified = true
 	return false
 }
+
+// ReadonlyWordReading is which of the two things a dialect's `readonly` is —
+// see [Semantics.ReadonlyWord].
+type ReadonlyWordReading uint8
+
+const (
+	// ReadonlyWordIsAnAttribute is POSIX's reading: the word puts the
+	// readonly attribute on the name the shell already has, wherever the
+	// line was written, and takes the few letters XCU and the dialect give
+	// it. bash, ksh93, dash and BusyBox ash.
+	//
+	// The zero value, because it is what the standard describes and what
+	// five of the six panel columns do — and because the axis is read on the
+	// common path of every `readonly` there is, so a vector with nothing set
+	// must still answer the word rather than refuse it.
+	ReadonlyWordIsAnAttribute ReadonlyWordReading = iota
+
+	// ReadonlyWordIsTheDeclaration makes the word the declaration builtin
+	// under a second name, with the readonly attribute already decided —
+	// the shape `integer` has, and for the same reason: one set of letters
+	// over one operand loop rather than two that drift. zsh alone.
+	ReadonlyWordIsTheDeclaration
+)
 
 // LongOptionWordAtSet is what the `set` builtin does with a word beginning
 // with `--` that is not a bare `--` — see [Semantics.SetLongOptionWord].

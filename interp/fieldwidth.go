@@ -84,6 +84,14 @@ type fieldWidth struct {
 	// Semantics.DeclareZeroFillLetter — and in the other column the
 	// justification is 'L' or 'R' with zeroFill saying the letter was
 	// written beside it.
+	//
+	// **Zero with zeroFill set is a fill that has lost its justification**,
+	// which is a state only a plus form can reach and only in the column
+	// where the fill rides on one: `typeset -Z5 -L5 v=7; typeset +L v` lists
+	// as `typeset -Z 5 v='7    '` on ksh93u+ and presents nothing at all
+	// from there on — a later `v=9` reads `9`. Zero with zeroFill clear is
+	// no attribute and the name carries no entry. See
+	// widthLettersTakenOffRiding (#4841).
 	letter byte
 	// zeroFill is the `Z` letter under the reading where it **rides on** a
 	// justification rather than being one. Its own field rather than a third
@@ -151,12 +159,22 @@ func (r *Runner) widthPadded(name, value string) string {
 	}
 	n := w.width
 	switch {
-	case len(value) > n && w.letter == 'L':
+	case len(value) > n && (w.letter == 'L' || w.letter == 0):
 		// Truncated from the far side of the one that is kept, which is the
-		// same rule as the padding: `-L` keeps the left.
+		// same rule as the padding: `-L` keeps the left. A fill with no
+		// justification left under it truncates that way too — measured,
+		// `typeset -Z3 -L3 v=7; typeset +L v; v='  abcd'` reads `abc`.
 		return value[:n]
 	case len(value) > n:
 		return value[len(value)-n:]
+	}
+	if w.letter == 0 {
+		// And lays nothing down: the width still cuts the value to size and
+		// the leading blanks still come off, but there is no justification
+		// to pad on either side. Measured on ksh93u+ 2012-08-01, `typeset
+		// -Z5 -L5 v=7; typeset +L v; v=9` reads `9` and lists `typeset -Z 5
+		// v=9`. See fieldWidth.letter (#4841).
+		return value
 	}
 	pad := strings.Repeat(" ", n-len(value))
 	if w.zeroFilling() && value != "" && value[0] >= '0' && value[0] <= '9' {
@@ -813,6 +831,104 @@ func (r *Runner) widthLettersTakenOff(name, letters string) {
 		// the store is the text the assignment carried. See widthUnwound.
 		delete(r.fieldWidth, name)
 		return
+	}
+	r.fieldWidth[name] = w
+}
+
+// widthLettersTakenOffRiding is a plus form in the column where the fill
+// **rides** on a justification: it clears the attributes each letter names
+// and leaves whatever is left standing.
+//
+// The letters are not the attributes one for one there, which is the whole of
+// why this is not widthLettersTakenOff next door. The name carries a left
+// justification, a right one and a fill, and `-Z` writes the fill *and* the
+// right justification — so `+Z` takes both back off, and a bare `R` goes with
+// a fill it was never written beside.
+//
+// Measured 2026-09-27 on ksh93u+ 2012-08-01 (`sh (AT&T Research) 93u+
+// 2012-08-01`), a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+// read back with `typeset -p` and `·` for a blank:
+//
+//	typeset -L5 v=7;     typeset +Z v   typeset -L 5 v='7····'
+//	typeset -Z5 v=7;     typeset +L v   typeset -Z 5 -R 5 v=00007
+//	typeset -Z5 -L5 v=7; typeset +Z v   typeset -L 5 v='7····'
+//	typeset -Z5 -L5 v=7; typeset +L v   typeset -Z 5 v='7····'
+//	typeset -L5 -Z5 v=7; typeset +R v   typeset -Z 5 -L 5 v='7····'
+//	typeset -Z5 v=7;     typeset +R v   typeset -Z 1 v=7
+//
+// The controls, and all four agreed before this existed — a letter that names
+// every attribute the name has still takes the whole thing off, and a blank
+// pad is not taken back where a zero one is:
+//
+//	typeset -Z4 v=7;  typeset +Z v    v=7
+//	typeset -R5 v=7;  typeset +Z v    v='····7'
+//	typeset -R5 v=ab; typeset +R v    v='···ab'
+//	typeset -L5 v=ab; typeset +L v    v='ab···'
+//
+// **`+R` over a fill resets the width**, which is measured and is the one
+// part that is not a bit being cleared. Same run, each row a `-Z` declaration
+// and then `typeset +R`:
+//
+//	typeset -Z5 v=1a     0001a  typeset -Z 2 v=1a
+//	typeset -Z5 v=1      00001  typeset -Z 1 v=1
+//	typeset -Z3 v=1      001    typeset -Z 1 v=1
+//	typeset -Z5 v=12345  12345  typeset -Z 5 v=12345
+//	typeset -Z5 v=ab     ···ab  typeset -Z 5 v=ab
+//	typeset -Z5 v=-7     ···-7  typeset -Z 5 v=-7
+//
+// — the width becomes the length of the value with its fill taken off where
+// that value **begins with a digit**, and stands where it does not. The last
+// two rows are what say it is the digit and not the unwinding: both of those
+// values lose a pad and keep their width, because the pad they lost was
+// blanks. It is the same first-character test widthPadded already makes for
+// whether the pad is zeros at all.
+//
+// `+L` is the control for that half and is measured in the fourth row above:
+// it leaves the width where it found it and does not unwind, so the value
+// keeps the blanks its left justification laid down.
+func (r *Runner) widthLettersTakenOffRiding(name, letters string) {
+	had, ok := r.fieldWidth[name]
+	if !ok {
+		return
+	}
+	w := had
+	unwind, relearn := false, false
+	for i := 0; i < len(letters); i++ {
+		switch letters[i] {
+		case 'Z':
+			// The letter writes the fill and a right justification both, so
+			// it takes both back — which is why a bare `R` goes with it and
+			// a bare `L` does not.
+			unwind = unwind || w.zeroFilling()
+			if w.letter == 'R' || w.letter == 'Z' {
+				w.letter = 0
+			}
+			w.zeroFill = false
+		case 'L':
+			if w.letter == 'L' {
+				w.letter = 0
+			}
+		case 'R':
+			if w.letter != 'R' {
+				break
+			}
+			w.letter = 0
+			// The fill outlives its justification, and the width is taken
+			// again from what the value is left holding.
+			unwind, relearn = unwind || w.zeroFill, w.zeroFill
+		}
+	}
+	if unwind {
+		// Before the entry moves, because the unwind reads the attribute it
+		// is undoing.
+		r.widthUnwound(name)
+	}
+	if w.letter == 0 && !w.zeroFill {
+		delete(r.fieldWidth, name)
+		return
+	}
+	if v := r.Vars[name]; relearn && v != "" && v[0] >= '0' && v[0] <= '9' {
+		w.width = len(v)
 	}
 	r.fieldWidth[name] = w
 }

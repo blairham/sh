@@ -319,3 +319,64 @@ echo "S=[$S] s=[${s[@]}]"`, withTies, Diagnostics{})
 		t.Errorf("a prefix over a tie = %q (stderr %q, status %d), want %q", out, errs, st, want)
 	}
 }
+
+// A freeze is on the name a script writes and not on the pair, so a write
+// that is the tie's own **mirror** goes through it — #4767, in both
+// directions, each with the refusal beside it that says the freeze is real.
+//
+// The refusals are the whole of the test. Without them a mirror that went
+// through because the name was never frozen at all would pass every row, and
+// that is a fix indistinguishable from a broken `readonly`.
+func TestATiesMirrorWritesThroughAFreeze(t *testing.T) {
+	t.Run("the array half is frozen", func(t *testing.T) {
+		out, errs, st := declRun(t, `typeset -ar arr=(1 2)
+typeset -T SS arr
+echo "tie=$? n=${#arr[@]}"
+SS=q:r
+echo "through=$? arr=[${arr[@]}]"`, withTies, Diagnostics{})
+		const want = "tie=0 n=0\nthrough=0 arr=[q r]\n"
+		if out != want || errs != "" || st != 0 {
+			t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
+		}
+	})
+	t.Run("the scalar half is frozen", func(t *testing.T) {
+		out, errs, st := declRun(t, `typeset -T S1 s1
+typeset -r S1
+s1=(x y)
+echo "through=$? S1=[$S1]"`, withTies, Diagnostics{})
+		const want = "through=0 S1=[x:y]\n"
+		if out != want || errs != "" || st != 0 {
+			t.Errorf("= %q (stderr %q, status %d), want %q", out, errs, st, want)
+		}
+	})
+	// And the controls, one to each direction: a write a *script* makes to
+	// the frozen half is still refused, and the refusal still ends the
+	// script.
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a literal over the frozen array",
+			"typeset -ar arr=(1 2)\ntypeset -T SS arr\narr=(x y)\necho after",
+			"",
+		},
+		{
+			"an append over it",
+			"typeset -ar arr=(1 2)\ntypeset -T SS arr\narr+=(z)\necho after",
+			"",
+		},
+		{
+			"an assignment to the frozen scalar",
+			"typeset -T S1 s1\ntypeset -r S1\nS1=direct\necho after",
+			"",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, _ := declRun(t, tc.src, withTies, Diagnostics{})
+			if out != tc.want {
+				t.Errorf("= %q, want %q — the refusal must end the script", out, tc.want)
+			}
+			if errs == "" {
+				t.Errorf("%s said nothing, want a readonly refusal", tc.src)
+			}
+		})
+	}
+}

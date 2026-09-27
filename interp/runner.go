@@ -10941,6 +10941,32 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 		// Runner.retypingFrozen.
 		return false
 	}
+	if r.mirroring {
+		// A write that is a tie's own **mirror**, which the freeze does not
+		// refuse: what is frozen is the name a script writes, and the other
+		// half following it is the pair working rather than an assignment.
+		//
+		// Measured 2026-09-26 on zsh 5.9.2, `-f` from a script file, in both
+		// directions and with the control on each:
+		//
+		//	typeset -ar arr=(1 2); typeset -T SS arr
+		//	                       taken at 0, and `arr` is left empty
+		//	SS=q:r                 `arr` is `q r`, through the freeze
+		//	arr=(x y)              read-only variable: arr, and fatal
+		//	arr+=(z)               the same
+		//
+		//	typeset -T S1 s1; typeset -r S1
+		//	s1=(x y)               `$S1` is `x:y`, through the freeze
+		//	S1=direct              read-only variable: S1, and fatal
+		//
+		// The two refusals are the controls that say the freeze is real and
+		// that this is about the route rather than about the name. The
+		// *scalar* half of the tie declaration is refused, and by the check
+		// declareTie makes itself before any of this: `typeset -r S=v;
+		// typeset -T S s` is `read-only variable: S` and the script is over
+		// (#4503, #4767).
+		return false
+	}
 	if form == assignedAsTheCompoundView && r.freezeSurvivesAShadow(name) {
 		// The empty a valueless declaration writes, over a produced
 		// parameter whose freeze the shadow did *not* displace. Measured:

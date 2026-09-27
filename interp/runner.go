@@ -3903,6 +3903,14 @@ type Runner struct {
 	// No lock: a subshell's runner is a copy owned by the goroutine running
 	// it, which is also the only thing that records or takes from this.
 	selfPending []string
+	// selfHeldForInput is selfPending's other half: what this body aimed at
+	// itself and is holding until the shell reads more input or finishes
+	// waiting for a child. See Runner.signalIsHeldUntilInputOrAChild.
+	//
+	// Discarded with the body, which is measured rather than incidental: a
+	// forked body that signals itself this way and then ends without waiting
+	// for anything runs nothing at all.
+	selfHeldForInput []string
 	// inheritedIgnored marks the entries in traps that arrived across the
 	// subshell boundary rather than being set inside it, because one
 	// dialect lists an ignore it set and not one it inherited.
@@ -8926,7 +8934,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	if !stopped {
 		// Reaped, so a child of this shell has ended — a stop is not one,
 		// the process being still there. See Runner.childReaped.
-		r.childReaped()
+		r.childWaitedFor()
 	}
 	r.status = status
 	if w.Killed {

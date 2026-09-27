@@ -658,6 +658,17 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// built from it one statement ago.
 	dialectRead := r.Dialect
 	for !stopped {
+		if !s.eval {
+			// A **file** is input the shell reads, and reading the next unit
+			// of it is one of the two moments a held signal waits for — see
+			// Runner.ReadingTheNextUnitOfInput, which is the same moment in
+			// the front end's own loop. Text handed to `eval` is not: it was
+			// in hand before this began, exactly as a command string was,
+			// and measured 2026-09-26 on zsh 5.9.2 a `kill -WINCH $$` on the
+			// first of three lines of evaluated text runs nothing until the
+			// *caller* reads its next line.
+			r.releaseSignalsHeldForInput()
+		}
 		if r.Dialect != dialectRead && r.Dialect != nil {
 			dialectRead = r.Dialect
 			// Still this text, so still this route: the replacement is a

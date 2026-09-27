@@ -115,9 +115,17 @@ func (r *Runner) signalThisBody(name string, sig syscall.Signal) error {
 		// forked body aims at itself is a signal, and the condition a `CHLD`
 		// handler answers is a child of its own. See
 		// Runner.selfAimedSignalIsTheCondition.
-		if r.selfAimedSignalIsTheCondition(key) {
-			r.selfSignaledBody(key)
+		if !r.selfAimedSignalIsTheCondition(key) {
+			break
 		}
+		if r.signalIsHeldUntilInputOrAChild(key) {
+			// Held for the body's own next moment rather than run between
+			// its commands — see Runner.signalIsHeldUntilInputOrAChild. A
+			// body that ends without waiting for a child runs nothing.
+			r.selfHeldForInput = append(r.selfHeldForInput, key)
+			break
+		}
+		r.selfSignaledBody(key)
 	case !trapped && fatalSignal(name, sig):
 		// **Without asking whether the shell ignores it untrapped**, which
 		// is the one place this switch parts from sendSignal's and is

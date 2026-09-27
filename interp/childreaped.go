@@ -91,6 +91,23 @@ func (r *Runner) childReaped() {
 	r.recordChildDeath()
 }
 
+// childWaitedFor is what the shell does when it has finished waiting for a
+// child: the condition a reaped child raises, and the release of anything
+// this shell is holding for exactly this moment.
+//
+// One call for both, at every site that waits, because they are the same
+// event read two ways — and a second copy of "the shell has just waited for a
+// child" is where the next one of these goes missing. See
+// Runner.signalIsHeldUntilInputOrAChild for what is held and why.
+//
+// On the waiting goroutine, which is the shell's own for every one of these
+// sites: a background job waits inside its own cloned runner, so the lists
+// touched here are never another goroutine's.
+func (r *Runner) childWaitedFor() {
+	r.childReaped()
+	r.releaseSignalsHeldForInput()
+}
+
 // childReapedByTheShell is childReaped for a raise that happens on another
 // goroutine — a background job finishing — where a subshell's own list cannot
 // be written safely. See the field comment on Runner.selfPending.

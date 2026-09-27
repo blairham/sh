@@ -2757,7 +2757,7 @@ func (r *Runner) startAndWait(cmd *exec.Cmd, ownGroup bool) error {
 	err := cmd.Wait()
 	// A child of this shell has been reaped, which is the whole of what the
 	// `CHLD` condition counts. See Runner.childReaped.
-	r.childReaped()
+	r.childWaitedFor()
 	return err
 }
 

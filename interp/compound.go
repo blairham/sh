@@ -199,7 +199,7 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// And it is a child reaped, which is the other thing that happens
 		// here in a shell that forks: one for the parentheses, whatever ran
 		// inside them. See Runner.childReaped.
-		r.childReaped()
+		r.childWaitedFor()
 		return err
 	})
 }

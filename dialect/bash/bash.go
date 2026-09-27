@@ -1097,6 +1097,10 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-26 over a script file, `trap 'echo C' CHLD` /
 	// `kill -CHLD $$; echo a` / `echo b` reads `a b` (#4756).
 	s.SelfAimedChildSignalRunsTheTrap = interp.No
+	// And a `WINCH` aimed the same way runs between commands like every other
+	// signal. Measured 2026-09-26 over a script file, `trap 'echo W' WINCH` /
+	// `kill -WINCH $$; echo a` / `echo b` reads `W a b` (#4755).
+	s.SelfAimedWindowChangeWaitsForInputOrAChild = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
 	// `set -e` is the one option a `$(…)` body does not simply inherit
 	// here. Measured 2026-09-15, `set -e; echo "end[$(false; echo no)]"` is

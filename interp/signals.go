@@ -106,6 +106,16 @@ type signalState struct {
 	// pending is what the shell already knows has arrived, ahead of the
 	// runtime telling it. Only `kill` puts anything here — see selfSignaled.
 	pending []string
+	// heldForInput is what the shell recorded for itself and is not running
+	// between commands: one condition, in one dialect, that arrives when the
+	// shell next reads a unit of its input or finishes waiting for a child.
+	// See Runner.signalIsHeldUntilInputOrAChild and
+	// Runner.releaseSignalsHeldForInput.
+	//
+	// A list of its own rather than a flag on pending, because what holds it
+	// back is a *moment* and the pending list has already passed it: an
+	// entry there runs at the top of the next statement by definition.
+	heldForInput []string
 	// pipeAbsorbed counts the broken pipes answered at the write that caused
 	// them, so the kernel's own copies of those SIGPIPEs — forwarded
 	// whenever the shell has asked to handle one — are dropped rather than
@@ -649,9 +659,19 @@ func (r *Runner) signalArranged(name string) signalDisposition {
 // Everything aimed anywhere else is a real signal to a real process — see
 // sendSignal for the three cases and which of them still make the call.
 func (r *Runner) selfSignaled(name string) {
+	// Asked before the lock, because answering an axis can write a refusal
+	// and nothing written to a stream belongs inside this mutex.
+	held := r.signalIsHeldUntilInputOrAChild(name)
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if held {
+		// Not between commands: this one waits for the shell to read more of
+		// its program or to finish waiting for a child. See
+		// signalIsHeldUntilInputOrAChild.
+		s.heldForInput = append(s.heldForInput, name)
+		return
+	}
 	s.pending = append(s.pending, name)
 	// A background job sending this is the shape the issue was reported as:
 	// the arrival has to reach a `wait` that is already blocked, and nothing
@@ -721,6 +741,71 @@ func (r *Runner) selfAimedSignalIsTheCondition(key string) bool {
 	}
 	return r.ask(r.sem().SelfAimedChildSignalRunsTheTrap,
 		"a `CHLD` a script aimed at the shell itself running the handler")
+}
+
+// signalIsHeldUntilInputOrAChild reports that a signal this script aimed at
+// the shell is not one to run between commands: it waits for the shell to
+// read the next unit of its input, or to finish waiting for a child.
+//
+// One condition asks this and the rest never reach it — see
+// Semantics.SelfAimedWindowChangeWaitsForInputOrAChild, which carries the
+// panel and the two arrival points. Asked at the record, where the choice of
+// list is made, and only for a condition with a body: with nothing to run
+// there is nothing to hold.
+//
+// The key rather than the name, for the reason selfAimedSignalIsTheCondition
+// gives.
+func (r *Runner) signalIsHeldUntilInputOrAChild(key string) bool {
+	if key != "WINCH" {
+		return false
+	}
+	return r.ask(r.sem().SelfAimedWindowChangeWaitsForInputOrAChild,
+		"a `WINCH` a script aimed at the shell itself waiting for input or a child")
+}
+
+// releaseSignalsHeldForInput hands whatever is held to the list handlers run
+// from, for one of the two moments such a signal waits for.
+//
+// Both lists, because both records exist for their own reasons: a forked body
+// holds what it aimed at itself, and the shell at the top holds what a script
+// aimed at `$$`. A body releasing the shared list is harmless — nothing in a
+// subshell drains it, and the shell above runs it at its own next moment.
+func (r *Runner) releaseSignalsHeldForInput() {
+	if len(r.selfHeldForInput) > 0 {
+		r.selfPending = append(r.selfPending, r.selfHeldForInput...)
+		r.selfHeldForInput = nil
+	}
+	s := r.signals
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.heldForInput) > 0 {
+		s.pending = append(s.pending, s.heldForInput...)
+		s.heldForInput = nil
+	}
+}
+
+// ReadingTheNextUnitOfInput says the shell is about to read the next unit of
+// its program, which is one of the two moments a held signal waits for.
+//
+// Called by the front end's run loop, once per unit and once more for the
+// read that finds the end — a script file's last line is followed by a read
+// that comes back empty, and the handler runs there. See
+// Semantics.SelfAimedWindowChangeWaitsForInputOrAChild.
+//
+// **A command string is not input the shell reads**, and the route is what
+// says so: measured 2026-09-26 on zsh 5.9.2, `-c` holding the whole program —
+// however many lines it is spread over — never runs the handler at all, where
+// the identical program in a file runs it at the line after the `kill`. The
+// text was in hand before the shell started, so there is no read for the
+// signal to arrive at.
+func (r *Runner) ReadingTheNextUnitOfInput() {
+	if r.Route == RouteCommandString {
+		return
+	}
+	r.releaseSignalsHeldForInput()
 }
 
 // takeSelfPending reports what this subshell raised on itself and has not

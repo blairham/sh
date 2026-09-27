@@ -1587,6 +1587,10 @@ func Semantics() interp.Semantics {
 	// script file, `trap 'echo C' CHLD` / `kill -CHLD $$; echo a` / `echo b`
 	// reads `C a b` (#4756).
 	s.SelfAimedChildSignalRunsTheTrap = interp.Yes
+	// And a `WINCH` aimed the same way runs between commands like every other
+	// signal. Measured 2026-09-26 over a script file, `trap 'echo W' WINCH` /
+	// `kill -WINCH $$; echo a` / `echo b` reads `W a b` (#4755).
+	s.SelfAimedWindowChangeWaitsForInputOrAChild = interp.No
 	// unanswered ExitTrapFiresPastTheEnd: the axis is the line a trap body
 	// counts as having fired on, and it is only asked where a body's lines
 	// are numbered from that line at all. Every trap body here counts from

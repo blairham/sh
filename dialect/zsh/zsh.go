@@ -1648,6 +1648,12 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-26 over a script file, `trap 'echo C' CHLD` /
 	// `kill -CHLD $$; echo a` / `echo b` reads `a b` (#4756).
 	s.SelfAimedChildSignalRunsTheTrap = interp.No
+	// And a `WINCH` aimed the same way is held until this shell reads the
+	// next unit of its input or finishes waiting for a child. Measured
+	// 2026-09-26 over a script file, `trap 'print W' WINCH` /
+	// `kill -WINCH $$; print a` / `print b` reads `a W b`, where the same
+	// program under `-c` runs the handler not at all (#4755).
+	s.SelfAimedWindowChangeWaitsForInputOrAChild = interp.Yes
 	s.SelectAssumesUnboundedWidth = interp.Yes
 	s.SelectEofEndsPromptLine = interp.Yes
 	s.SelectEofIsSuccess = interp.Yes

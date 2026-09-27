@@ -14,13 +14,24 @@ import "strings"
 // is a *flavor*, or a question about the whole word, and neither can be
 // honored from the middle of a glob by turning a flag on:
 //
-//   - `E X P G V F L K p s` choose a regular-expression flavor, so honoring
-//     one where it stands means matching a glob prefix and an expression
-//     suffix against two halves of a subject that nothing has divided yet;
+//   - `E X P G V F L` choose a regular-expression flavor, which settles the
+//     language of the whole pattern rather than setting a flag on a branch —
+//     interp/tildeflavorhere.go reads those, before any of this runs;
+//   - `K p s` choose ksh's own glob, which is the language the walk is
+//     already in, so they are consumed here and change nothing. That is what
+//     `[[ zab == z~(K)a* ]]` measures: it matches in ksh93u+, so the group
+//     is read and the `a*` behind it is an ordinary glob;
 //   - `N` deletes the *word* when the pattern names nothing, which is a
-//     question the matcher is never asked — see Runner.tildeGlobPattern;
-//   - `g l r` are about which span of the subject the match takes, and a
-//     branch cannot change that halfway along.
+//     question the matcher is never asked — see Runner.tildeGlobPattern, and
+//     measured: `f z~(N)qq*` is the word in ksh93u+ as it is here;
+//   - `g l r` are about which span of the subject the match takes. This used
+//     to say "a branch cannot change that halfway along", which is right
+//     about the mechanism and **wrong about the shell** — `v=aXbXc;
+//     ${v#a~(g)*X}` is `c` in ksh93u+ and `[[ zab == z~(l)ab ]]` matches
+//     there, so it does change it halfway along. Each wants plumbing of its
+//     own rather than a flag on a branch: the greed reaches a caller outside
+//     the matcher and the two anchors reach a comparison the walk does not
+//     make. #4893 has the rows.
 //
 // So a group holding any of them is left exactly as it was: four or more
 // ordinary characters, which is what this shell did with every mid-pattern
@@ -28,7 +39,7 @@ import "strings"
 // is #4883 — and **consuming the group without honoring it is not the fix**,
 // because `.` is an ordinary character in a glob and any one character in an
 // expression. Measured, and recorded in splitTildeFoldGroup.
-const tildeFoldGroupLetters = "+-i"
+const tildeFoldGroupLetters = "+-iKps"
 
 // splitTildeFoldGroup peels a `~(…)` group off the front of p when the group
 // is one this position can honor, reporting what it asks for.
@@ -147,7 +158,13 @@ func holdsTildeFoldGroup(field string) bool {
 			continue
 		}
 		if _, _, ok := splitTildeFoldGroup(field[i:]); !ok {
-			continue
+			// A group the walk will not consume may still be one that
+			// settles the language — `f z~(E)b` names `zb` in ksh93u+ — and
+			// a field holding one describes a name just as much. See
+			// findTildeFlavorGroup.
+			if _, _, _, flavor := findTildeFlavorGroup(field[i:]); !flavor {
+				continue
+			}
 		}
 		_, rest, _ := splitTildeModifier(field[i:])
 		if strings.Contains(rest, "/") {

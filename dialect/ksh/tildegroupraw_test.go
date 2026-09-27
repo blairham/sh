@@ -87,16 +87,22 @@ func TestATildeGroupTurnsTheRestOfTheWordRaw(t *testing.T) {
 			want: "Y\nN\n",
 		},
 		{
-			// Mid-word. This row is about the **parse**: ksh93 answers 1 for
-			// the first line and 0 for the second, and this shell answers 1
-			// for both because a `~(…)` group that is not at the head of the
-			// word reaches no modifier in the matcher — `[[ xabc == x~(E)a.c ]]`
-			// is `N` here and `Y` there, on `main` as much as on this branch.
-			// What changed is that neither line is a syntax error any more.
-			name: "the group mid-word parses",
+			// Mid-word, and this row began as one about the **parse** alone:
+			// neither line was a syntax error any more, and both answered `N`
+			// because a `~(…)` group away from the head reached no modifier
+			// in the matcher. The second line is `Y` in ksh93u+ and is `Y`
+			// here now — the group is read where it stands and the `x` in
+			// front of it is translated, so the expression is `x(ab)cd` and
+			// the subject holds it. #4883.
+			//
+			// The first line is the control and has not moved: the same
+			// expression against a subject with no `x` in front, which
+			// neither column matches. A change that dropped the glob rather
+			// than translating it would answer that one `Y`.
+			name: "the group mid-word parses, and is read",
 			src: `[[ abcd == x~(E)(ab)cd ]] && print -r -- Y || print -r -- N
 [[ xabcd == x~(E)(ab)cd ]] && print -r -- Y || print -r -- N`,
-			want: "N\nN\n",
+			want: "N\nY\n",
 		},
 		{
 			// A closing paren with nothing to close is text inside `[[ ]]`.

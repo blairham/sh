@@ -76,22 +76,22 @@ func TestATildeGroupInTheMiddleOfAPattern(t *testing.T) {
 		// answer.
 		{"an empty group asks nothing", `[[ zA == z~()A ]] && echo YES || echo NO`, "YES"},
 
-		// **A group holding a *flavor* letter is not read here, and these
-		// two rows pin today's answer rather than the reference's.** A
-		// flavor says what language the rest of the pattern is written in,
-		// and honoring one where it stands means matching a glob prefix
-		// against one part of the subject and an expression against the
-		// rest — which is a piece of work rather than a flag, and is #4883.
-		// ksh93u+ answers the first row `YES`, so the row is here to say
-		// which of the two states this tree is in: it fails the day the
-		// group starts being consumed, which is the day to read that issue.
+		// **A group holding a *flavor* letter is not this file's**, and it is
+		// read all the same — by interp/tildeflavorhere.go, which settles the
+		// language of the whole pattern rather than setting a flag on a
+		// branch. These two rows were written here pinning the opposite, so
+		// that they would fail on the day the group started being consumed;
+		// #4883 was that day, and they carry the reference's answers now.
+		// They stay because they are the boundary between the two readers:
+		// the first is the flavor being honored and the second is `E` not
+		// being a letter that matches itself.
 		{
-			"a flavor letter is not consumed",
-			`[[ zA == z~(E)A ]] && echo YES || echo NO`, "NO",
+			"a flavor letter is read by the other reader",
+			`[[ zA == z~(E)A ]] && echo YES || echo NO`, "YES",
 		},
 		{
-			"nor honored as a flavor", `[[ zEA == z~(E)A ]] && echo YES || echo NO`,
-			"NO",
+			"and is not text that matches itself",
+			`[[ zEA == z~(E)A ]] && echo YES || echo NO`, "NO",
 		},
 
 		// A `case` arm is the same pattern language.
@@ -140,9 +140,11 @@ func TestATildeGroupInTheMiddleOfAGlob(t *testing.T) {
 		{"a plus with no letter behind it too", `printf "[%s]" z~(+)b`, `[zb]`},
 		{"one at the front is not", `printf "[%s]" ~()zb`, `[~()zb]`},
 
-		// And one whose body this position cannot honor is left alone, which
-		// is the glob half of the two condition rows above. #4883.
-		{"nor one holding a flavor letter", `printf "[%s]" z~(E)b`, `[z~(E)b]`},
+		// And one holding a flavor letter is read by the other reader here
+		// too, which is the glob half of the two condition rows above: the
+		// gate at the top of the walk reads the field as a pattern and
+		// interp/tildeflavorhere.go answers it. #4883.
+		{"one holding a flavor letter is read too", `printf "[%s]" z~(E)b`, `[zb]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tildeMid(t, tc.src, func(r *Runner) { r.Dir = dir })

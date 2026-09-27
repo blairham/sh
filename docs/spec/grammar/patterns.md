@@ -2522,8 +2522,11 @@ the other way if the flavor reached backward over the whole pattern.
 ksh's own glob, which is the language the walk is already in, so the group is
 consumed where it stands and `[[ zab == z~(K)a* ]]` matches.
 
-One shape is measured and **not** read here rather than approximated: `\d`
-and its kin inside `~(P)` (#4894).
+Every shape measured here is read. `\d` and its kin inside an extended
+flavor were the last one left out and are read now — see *Which letters an
+extended flavor's backslash keeps* below, which also corrects what that gap
+was: the engine here has the Perl classes, and the backslash was being taken
+by quote removal before it could reach them.
 
 ### And a flavor group inside a pattern group is read too
 
@@ -2946,12 +2949,65 @@ regular-expression engine. Measured the same day:
 
 So ksh93's engine agrees with RE2 about `\d`, `\w`, `\s`, `\.` and `\+`, and
 parts from it on `\y` — a literal letter there and a pattern RE2 refuses
-outright. Passing every backslash through would fix the first four rows and
-break the fifth, so what is modeled is **only the digits**: a `\1` to `\9`
-keeps its backslash, because dropping it turns the pattern into the perfectly
-ordinary `(ab)1` and hides from the scan the one construct this shell has to
-name. The rest of the table is a divergence of its own and wants its own
-measurement. `X` and `P` inherit it unchanged.
+outright. Passing *every* backslash through would fix the first four rows and
+break the fifth, so what is modeled is **the digits and a named set of
+letters**. A `\1` to `\9` keeps its backslash because dropping it turns the
+pattern into the perfectly ordinary `(ab)1` and hides from the scan the one
+construct this shell has to name; the letters keep theirs because the two
+engines read them the same way.
+
+### Which letters an extended flavor's backslash keeps
+
+`E`, `X` and `P` kept **only** the digits until #4894, and that emptiness was
+a silent wrong answer in both directions: a written `\d` lost its backslash to
+quote removal and became the ordinary letter, so `[[ za1b == ~(E)za\db ]]`
+answered a quiet no where ksh93u+ matches, and `[[ zadb == ~(E)za\db ]]`
+answered a quiet **yes** where it does not. The issue reported the first half
+and its stated cause — that RE2 has no `\d` — is not the case: Go's `regexp`
+has the Perl classes and reads them as that shell does. The backslash simply
+never reached the engine.
+
+Measured on ksh93u+ 2012-08-01, 2026-09-27, `-c` under `env -i` with a scratch
+`HOME`. **Each letter is a pair**, because a class reading and a literal
+reading agree on half of all subjects and a row asserting only the first would
+pass for a shell that read the letter:
+
+| letter | matches | and does not |
+| --- | --- | --- |
+| `\d` | `[[ za1b == ~(E)za\db ]]` | `[[ zadb == … ]]` |
+| `\D` | `[[ zaXb == ~(E)za\Db ]]` | `[[ za1b == … ]]` |
+| `\w` | `[[ za1b == ~(E)za\wb ]]` | `[[ za.b == … ]]` |
+| `\W` | `[[ za.b == ~(E)za\Wb ]]` | `[[ za1b == … ]]` |
+| `\s` | `[[ 'za b' == ~(E)za\sb ]]` | `[[ zasb == … ]]` |
+| `\S` | `[[ za1b == ~(E)za\Sb ]]` | `[[ 'za b' == … ]]` |
+| `\t` | `[[ $'x\ty' == ~(E)x\ty ]]` | `[[ xty == … ]]` |
+| `\n` `\r` `\f` `\v` `\a` | the control character, the same pair each | the letter |
+| `\b` | `[[ xy == ~(E)\bxy ]]` | `[[ axy == ~(E)a\bxy ]]` |
+| `\B` | `[[ xy == ~(E)x\By ]]` | `[[ 'x y' == ~(E)x\B ]]` |
+| `\A` `\z` | `[[ xy == ~(E)\Axy\z ]]` | `[[ axy == ~(E)\Axy ]]` |
+
+Go's `regexp` answers every one of those the same way, which is why each
+letter is *kept* rather than translated. `X` and `P` have the same set: the
+flavor decides whose backslash it is, and all three are the same engine.
+
+**The letters left out are measured as disagreements rather than forgotten**,
+and each keeps the reading it had — the backslash goes and the letter stands
+for itself. `\Z` is an end anchor there and Go has `\z` only, so
+`[[ xy == ~(E)xy\Z ]]` is yes there and no here; `\e` is the escape character
+there and Go has no such escape; and `\c`, `\C`, `\E` and `\x` each mean
+something in that engine that Go's either lacks or spells with an argument.
+
+A **basic** flavor has none of them, which is measured too:
+`[[ za1b == ~(G)za\db ]]` does not match in ksh93u+ either, and
+`[[ zadb == ~(G)za\db ]]` does.
+
+**And the flavor need not be at the head of the word.** `~(P)` one character
+along settles the language just as much, so `[[ za1b == z~(P)a\db ]]` matches
+there and here; the reading is keyed on the flavor rather than on the group's
+position. A group naming **no** flavor leaves the backslash to the shell, so
+`[[ zadb == z~(i)a\db ]]` matches — with one exception measured and not
+modeled: `~(K)` names that shell's own glob and still reads `\d` as a digit
+class there, where `~(p)`, `~(s)`, `~(i)` and an empty group do not.
 
 **And the set ksh93 itself keeps differs by flavor**, which a written probe
 cannot see past and which is why every measurement in the section above is

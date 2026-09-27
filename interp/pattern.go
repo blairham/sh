@@ -302,9 +302,16 @@ func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
 // Read off the **source** rather than off the finished pattern, because the
 // thing it decides has to be decided while a backslash is still a backslash:
 // quote removal turns a written `\1` into the span `1`, and by the time the
-// pattern is a string the two are the same text. The group is literal,
-// unquoted and at the front of the word, so the first span holds all of it.
+// pattern is a string the two are the same text. The group is literal and
+// unquoted, so the first span holds all of it.
 // See tildeKeepsBackslash and #3894.
+//
+// **The group need not be at the front of the word**, since one where it
+// stands settles the language just as much: `[[ za1b == z~(P)a\db ]]` matches
+// in ksh93u+ and its backslash belongs to the expression, not to the shell.
+// So this asks findTildeFlavorGroup rather than reading a head group alone —
+// which also means a head group that names no flavor, `~(i)` or `~(K)`, does
+// not spend the one reading a later group could have used.
 func (r *Runner) tildeRegexFlavor(spans []syntax.Span) tildeFlavor {
 	if !r.lang().TildeGroup || len(spans) == 0 {
 		return tildeGlob
@@ -313,14 +320,14 @@ func (r *Runner) tildeRegexFlavor(spans []syntax.Span) tildeFlavor {
 	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
 		return tildeGlob
 	}
-	body, _, ok := splitTildeModifier(s.Value)
+	_, body, _, ok := findTildeFlavorGroup(s.Value)
 	if !ok {
+		// No group here names a language, which covers a group holding a
+		// letter this shell declines as well: that one is refused by name in
+		// Runner.tildeModifierOpts rather than guessed at here.
 		return tildeGlob
 	}
-	m, unhonored := readTildeModifier(body)
-	if unhonored != 0 {
-		return tildeGlob
-	}
+	m, _ := readTildeModifier(body)
 	return m.flavor
 }
 
@@ -346,15 +353,13 @@ func (r *Runner) tildeRegexFlavor(spans []syntax.Span) tildeFlavor {
 // So the extended flavors keep every backslash there and the basic ones keep
 // only some. What is modeled is narrower than either, and deliberately:
 //
-//   - For the extended flavors, **only the digits**, which is what #3894
-//     settled and is unchanged. A `\1` to `\9` keeps its backslash because
+//   - For the extended flavors, the digits and the letters in
+//     tildeExtendedEscapes. A `\1` to `\9` keeps its backslash because
 //     dropping it turns the pattern into the perfectly ordinary `(ab)1` and
 //     hides from unsupportedERE the one construct this shell has to name.
-//     The rest are left to quote removal because RE2 and ksh93's engine do
-//     not agree about all of them — both read `\d` as a digit class and `\.`
-//     as a literal dot, and ksh93 reads `\y` as the letter where RE2 refuses
-//     the pattern outright. Passing every backslash through would trade this
-//     silence for a new one on the letters.
+//     The letters keep theirs because the two engines read them the same
+//     way; the ones left out are the ones where they do not, and they are
+//     left to quote removal exactly as they were.
 //   - For `X` the ampersand as well, because there it is an **operator**:
 //     dropping the backslash would turn the literal `a\&b` into the
 //     conjunction `a&b`, which is a wrong answer rather than a narrower one.
@@ -379,13 +384,65 @@ func tildeKeepsBackslash(flavor tildeFlavor, s syntax.Span) bool {
 			flavor == tildePerl || flavor == tildeBRE
 	}
 	switch flavor {
-	case tildeAugERE:
-		return c == '&'
+	case tildeERE, tildeAugERE, tildePerl:
+		// The ampersand is `X`'s operator and is its own row above; the
+		// letters are the ones the two engines agree about.
+		return (flavor == tildeAugERE && c == '&') ||
+			strings.IndexByte(tildeExtendedEscapes, c) >= 0
 	case tildeBRE:
 		return strings.IndexByte(`()|?*[^<>`, c) >= 0
 	}
 	return false
 }
+
+// tildeExtendedEscapes are the letters whose backslash an **extended** flavor
+// keeps — `E`, `X` and `P` — because ksh93's engine and Go's `regexp` read
+// the pair the same way.
+//
+// This is the set that used to be empty, and the emptiness was a silent wrong
+// answer in **both** directions: a written `\d` lost its backslash to quote
+// removal and became the ordinary letter, so `[[ za1b == ~(E)za\db ]]` was a
+// quiet no where ksh93u+ matches, and `[[ zadb == ~(E)za\db ]]` was a quiet
+// *yes* where ksh93u+ does not. #4894 reported the first half and its stated
+// cause — that RE2 has no `\d` — is not the case: Go's `regexp` has the Perl
+// classes and reads them exactly as that shell does. The backslash simply
+// never reached it.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-27, `-c` under `env -i` with a
+// scratch `HOME`, each letter with the case that separates the class reading
+// from the literal one:
+//
+//	\d  [[ za1b == ~(E)za\db ]] yes    [[ zadb == … ]] no
+//	\D  [[ zaXb == ~(E)za\Db ]] yes    [[ za1b == … ]] no
+//	\w  [[ za1b == ~(E)za\wb ]] yes    [[ za.b == … ]] no
+//	\W  [[ za.b == ~(E)za\Wb ]] yes    [[ za1b == … ]] no
+//	\s  [[ 'za b' == ~(E)za\sb ]] yes  [[ zasb == … ]] no
+//	\S  [[ za1b == ~(E)za\Sb ]] yes    [[ 'za b' == … ]] no
+//	\t  [[ $'x\ty' == ~(E)x\ty ]] yes  [[ xty == … ]] no
+//	\n \r \f \v \a   the same pair each, the control character and not
+//	                 the letter
+//	\b  [[ xy == ~(E)\bxy ]] yes       [[ axy == ~(E)a\bxy ]] no
+//	\B  [[ xy == ~(E)x\By ]] yes       [[ 'x y' == ~(E)x\B ]] no
+//	\A  [[ xy == ~(E)\Axy\z ]] yes     [[ axy == ~(E)\Axy ]] no
+//	\z  the same pair, and `[[ xzy == ~(E)x\zy ]]` is no
+//
+// Every one of those is what Go's `regexp` answers too, which is why the
+// letter is here rather than translated.
+//
+// **What is left out is measured as a disagreement rather than forgotten**,
+// and each stays exactly as it was — the backslash goes and the letter
+// stands for itself:
+//
+//	\Z  an end anchor there, and Go has `\z` only
+//	\e  the escape character there, and Go has no such escape
+//	\c  \C  \x  \E  each something in that engine and either absent from
+//	                Go's or spelled with an argument it would have to be
+//	                given
+//
+// A **basic** flavor is not in this set at all, which is measured too:
+// `[[ za1b == ~(G)za\db ]]` does not match in ksh93u+, so `G` and `V` keep
+// the characters breToRE2's own table names and nothing else.
+const tildeExtendedEscapes = "dDsSwWbBAzafnrtv"
 
 // patternTilde expands a leading tilde into the builder and gives back the
 // spans still to be read as a pattern.

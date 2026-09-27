@@ -426,3 +426,76 @@ func TestTheLastWidthNumberWritten(t *testing.T) {
 		})
 	}
 }
+
+// The pair arriving on **two** declarations, and then coming apart again.
+//
+// #4798 is the pair written on one declaration; this is the same pair reaching
+// a name one letter at a time. A letter arriving on a later declaration joins
+// what the name is carrying rather than replacing it, and a plus form takes
+// off the letter it names rather than the whole attribute — so the value comes
+// back through whichever attribute is left, which is why `7    ` becomes
+// `00007` when the `L` goes and the `Z` stays.
+//
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
+// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` (#4828).
+func TestAWidthLetterOnALaterDeclarationJoinsThePair(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{
+			`typeset -L5 v=7; typeset -Z5 v; typeset -p v; print -r -- "${(t)v} [$v]"`,
+			"typeset -L5 -Z5 v=7\nscalar-left-right_zeros [7    ]\n",
+		},
+		{
+			`typeset -Z5 v=7; typeset -L5 v; typeset -p v; print -r -- "${(t)v} [$v]"`,
+			"typeset -L5 -Z5 v=7\nscalar-left-right_zeros [7    ]\n",
+		},
+		{
+			`typeset -L5 -Z5 v=7; typeset +Z v; typeset -p v; print -r -- "${(t)v} [$v]"`,
+			"typeset -L5 v=7\nscalar-left [7    ]\n",
+		},
+		{
+			`typeset -L5 -Z5 v=7; typeset +L v; typeset -p v; print -r -- "${(t)v} [$v]"`,
+			"typeset -Z5 v=7\nscalar-right_zeros [00007]\n",
+		},
+		// The number the arriving declaration writes reaches both letters,
+		// and the standing one stands where it writes none.
+		{`typeset -L5 v=7; typeset -Z3 v; typeset -p v`, "typeset -L3 -Z3 v=7\n"},
+		{`typeset -L5 v=7; typeset -Z v; typeset -p v`, "typeset -L5 -Z5 v=7\n"},
+		{`typeset -Z5 v=7; typeset -L3 v; typeset -p v`, "typeset -L3 -Z3 v=7\n"},
+		{`typeset -Z5 v=7; typeset -L v; typeset -p v`, "typeset -L5 -Z5 v=7\n"},
+		{`typeset -L5 v=7; typeset -Z5 v; typeset -Z3 v; typeset -p v`, "typeset -L3 -Z3 v=7\n"},
+		// A plus form naming a letter the name does not carry takes nothing.
+		{`typeset -L5 -Z5 v=7; typeset +R v; typeset -p v`, "typeset -L5 -Z5 v=7\n"},
+		{`typeset -L5 v=7; typeset +Z v; typeset -p v`, "typeset -L5 v=7\n"},
+		{`typeset -L5 v=7; typeset +R v; typeset -p v`, "typeset -L5 v=7\n"},
+		{`typeset -Z5 v=7; typeset +L v; typeset -p v`, "typeset -Z5 v=7\n"},
+		{`typeset -Z5 v=7; typeset +R v; typeset -p v`, "typeset -Z5 v=7\n"},
+		{`typeset -R5 v=7; typeset +L v; typeset -p v`, "typeset -R5 v=7\n"},
+		{`typeset -R5 v=7; typeset +Z v; typeset -p v`, "typeset -R5 v=7\n"},
+		// And the letters the name does carry really do come off, which is
+		// what keeps the rows above a removal rather than a no-op.
+		{`typeset -L5 v=7; typeset +L v; typeset -p v`, "typeset v=7\n"},
+		{`typeset -Z5 v=7; typeset +Z v; typeset -p v`, "typeset v=7\n"},
+		{`typeset -R5 v=7; typeset +R v; typeset -p v`, "typeset v=7\n"},
+		{`typeset -L5 -Z5 v=7; typeset +Z v; typeset +L v; typeset -p v`, "typeset v=7\n"},
+		// The controls: `R` joins nothing in either direction, and the same
+		// letter twice replaces rather than accumulating. Each agreed before
+		// the rows above did.
+		{`typeset -L5 v=7; typeset -R3 v; typeset -p v`, "typeset -R3 v=7\n"},
+		{`typeset -Z5 v=7; typeset -R3 v; typeset -p v`, "typeset -R3 v=7\n"},
+		{`typeset -R5 v=7; typeset -Z3 v; typeset -p v`, "typeset -Z3 v=7\n"},
+		{`typeset -R5 v=7; typeset -L3 v; typeset -p v`, "typeset -L3 v=7\n"},
+		// The conflicting declaration lists the name rather than declaring
+		// it, which is the shape #4766 measured and is left exactly as it
+		// stood.
+		{`typeset -L5 v; typeset -L5 -R5 v; typeset -p v`, "v=''\ntypeset -L5 v=''\n"},
+		{`typeset -L3 v=abcd; typeset -R4 v; typeset -p v; print -r -- "[$v]"`, "typeset -R4 v=abcd\n[abcd]\n"},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

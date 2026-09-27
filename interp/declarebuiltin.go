@@ -3047,18 +3047,30 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 	}
 	if f.widthLetter != 0 {
 		if f.remove {
-			// `typeset +L e` takes the attribute off and reveals the text
-			// the name was holding all along — measured, `typeset -L 3
-			// e=abcd; typeset +L e` reads `abcd` and lists as a plain
-			// `typeset e=abcd`. Nothing is written back, exactly as `+F`
-			// and `+i` write nothing back, because this shell never stored
-			// the padded text in the first place.
-			//
-			// A zero fill is the one part of a presentation that does come
-			// back off, in the column that stored one — see
-			// widthZerosUnwound, where the measurement is.
-			r.widthZerosUnwound(name)
-			delete(r.fieldWidth, name)
+			if r.widthLettersAreSeparable() {
+				// Where the letters are two attributes rather than one, a
+				// plus form takes off the one it **names** and leaves the
+				// rest standing — see widthLettersTakenOff, where the rows
+				// are (#4828).
+				r.widthLettersTakenOff(name, widthLettersRemoved(f))
+			} else {
+				// `typeset +L e` takes the attribute off and reveals the text
+				// the name was holding all along — measured, `typeset -L 3
+				// e=abcd; typeset +L e` reads `abcd` and lists as a plain
+				// `typeset e=abcd`. Nothing is written back, exactly as
+				// `+F` and `+i` write nothing back, because this shell
+				// never stored the padded text in the first place.
+				//
+				// A zero fill is the one part of a presentation that does
+				// come back off, in the column that stored one — see
+				// widthZerosUnwound, where the measurement is. The other
+				// column's plus form was measured at the same time and is
+				// neither of these: `typeset -L5 a=7; typeset +Z a` leaves
+				// the `L` standing there where this takes the whole
+				// attribute off. Left as found, and filed.
+				r.widthZerosUnwound(name)
+				delete(r.fieldWidth, name)
+			}
 		} else {
 			// The attribute being replaced presented the text the name is
 			// holding, and the one arriving has to read the text rather than
@@ -3068,11 +3080,8 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 			if r.fieldWidth == nil {
 				r.fieldWidth = map[string]fieldWidth{}
 			}
-			w := fieldWidth{
-				letter:   f.widthLetter,
-				zeroFill: f.widthZeroFill,
-				width:    r.fieldWidth[name].width,
-			}
+			had, hadOne := r.fieldWidth[name]
+			w := r.widthArriving(f, had, hadOne)
 			if n, named := r.declaredWidthNumber(f); named {
 				// A number written down replaces whatever the name had,
 				// including a width it had learned: measured, `typeset -L 3

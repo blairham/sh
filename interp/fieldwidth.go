@@ -656,3 +656,163 @@ func (r *Runner) declaredWidthNumber(f declareFlags) (int, bool) {
 	}
 	return f.width, f.widthNamed
 }
+
+// widthLettersAreSeparable reports whether the letters a name carries come off
+// and go on **one at a time**.
+//
+// The same fact DeclareZeroFillLetter records, asked of the name rather than
+// of the declaration: where `Z` combines with `L` the name can carry two width
+// letters at once, so a second declaration writing the other one has something
+// to join and a plus form naming one has something to leave behind. Where the
+// fill rides on a justification the two are one attribute, and there is no
+// second letter for either question to be about.
+//
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
+// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`, and on ksh93u+
+// 2012-08-01 in the same run:
+//
+//	typeset -L5 v=7; typeset -Z5 v   typeset -L5 -Z5 v=7   typeset -Z 5 -R 5 v=00007
+//	typeset -Z5 v=7; typeset -L5 v   typeset -L5 -Z5 v=7   typeset -L 5 v='7    '
+//
+// — the pair joining on the left and the second declaration replacing on the
+// right, which is what says the two columns part here and that they part for
+// the reason the axis already records (#4828).
+func (r *Runner) widthLettersAreSeparable() bool {
+	return r.sem().DeclareZeroFillLetter == DeclareZeroFillLetterCombinesWithTheLeftJustification
+}
+
+// widthArriving is the width attribute a declaration leaves a name with, given
+// what the name was already carrying.
+//
+// Replacing is the answer almost everywhere and is what a name carrying one
+// letter can do: a second declaration's letter stands where the first one did.
+// The exception is the pair, which **joins**. Measured in the run above, each
+// row a declaration and then a second one over the same name:
+//
+//	typeset -L5 v=7;  typeset -Z5 v      typeset -L5 -Z5 v=7  scalar-left-right_zeros
+//	typeset -Z5 v=7;  typeset -L5 v      typeset -L5 -Z5 v=7  scalar-left-right_zeros
+//	typeset -L5 v=7;  typeset -Z3 v      typeset -L3 -Z3 v=7
+//	typeset -L5 v=7;  typeset -Z v       typeset -L5 -Z5 v=7
+//	typeset -Z5 v=7;  typeset -L3 v      typeset -L3 -Z3 v=7
+//	typeset -L5 v=7;  typeset -Z5 v; typeset -Z3 v   typeset -L3 -Z3 v=7
+//
+// So the number is the arriving declaration's where it wrote one and the
+// standing one where it did not — which is the rule this function already
+// found at the call site — and it reaches **both** letters, which is why the
+// join cannot be done by leaving the old entry alone.
+//
+// `R` is not part of it in either direction, and those rows are the controls:
+//
+//	typeset -L5 v=7; typeset -R3 v   typeset -R3 v=7
+//	typeset -Z5 v=7; typeset -R3 v   typeset -R3 v=7
+//	typeset -R5 v=7; typeset -Z3 v   typeset -Z3 v=7
+//	typeset -R5 v=7; typeset -L3 v   typeset -L3 v=7
+//
+// — a declaration writing `R` replaces whatever stood, and one arriving over a
+// standing `R` replaces that. Which is the same keying
+// WidthJustificationConflictLeavesNoWidth has on one declaration, reached from
+// the other side.
+func (r *Runner) widthArriving(f declareFlags, had fieldWidth, hadOne bool) fieldWidth {
+	w := fieldWidth{letter: f.widthLetter, zeroFill: f.widthZeroFill, width: had.width}
+	if !hadOne || !r.widthLettersAreSeparable() ||
+		had.letter == 'R' || w.letter == 'R' {
+		return w
+	}
+	left := had.letter == 'L' || w.letter == 'L'
+	zeros := had.zeroFillLetter() || w.zeroFillLetter()
+	switch {
+	case left && zeros:
+		w.letter, w.zeroFill = 'L', true
+	case left:
+		w.letter, w.zeroFill = 'L', false
+	case zeros:
+		w.letter, w.zeroFill = 'Z', false
+	}
+	return w
+}
+
+// widthLettersRemoved is the width letters a declaration wrote with a **plus**
+// sign.
+//
+// Read off the letters as written rather than off the flags, for the reason
+// widthLetterCompany is: recordWidthLetter has already folded the letters into
+// one attribute, so `typeset +L +Z v` reaches the store as the pair and no
+// longer says that two letters were each named for removal.
+func widthLettersRemoved(f declareFlags) string {
+	var out []byte
+	for i := 0; i < len(f.letters) && i < len(f.letterSigns); i++ {
+		if f.letterSigns[i] == '+' && strings.IndexByte("LRZ", f.letters[i]) >= 0 {
+			out = append(out, f.letters[i])
+		}
+	}
+	return string(out)
+}
+
+// widthLettersTakenOff is a plus form in the column where the letters come off
+// one at a time: it removes the letters it **names** and leaves the rest of
+// what the name was carrying standing.
+//
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
+// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`, read back with
+// `typeset -p`, `${(t)v}` and the value:
+//
+//	typeset -L5 -Z5 v=7; typeset +Z v   typeset -L5 v=7  scalar-left        7····
+//	typeset -L5 -Z5 v=7; typeset +L v   typeset -Z5 v=7  scalar-right_zeros 00007
+//	typeset -L5 -Z5 v=7; typeset +R v   typeset -L5 -Z5 v=7
+//	typeset -L5 v=7;     typeset +Z v   typeset -L5 v=7
+//	typeset -L5 v=7;     typeset +R v   typeset -L5 v=7
+//	typeset -Z5 v=7;     typeset +L v   typeset -Z5 v=7
+//	typeset -Z5 v=7;     typeset +R v   typeset -Z5 v=7
+//	typeset -R5 v=7;     typeset +L v   typeset -R5 v=7
+//	typeset -R5 v=7;     typeset +Z v   typeset -R5 v=7
+//	typeset -L5 v=7;     typeset +L v   typeset v=7
+//	typeset -Z5 v=7;     typeset +Z v   typeset v=7
+//	typeset -R5 v=7;     typeset +R v   typeset v=7
+//
+// (`·` for a blank.) The second row is the sharp one: the value comes back
+// through whichever attribute is left, so `7····` becomes `00007` when the
+// `L` goes and the `Z` stays. The last three are what keep this a removal
+// rather than a no-op — a letter the name really carries does come off — and
+// the six above them say a letter it does not carry takes nothing with it.
+//
+// The width is untouched throughout: what is left keeps the number the pair
+// shared.
+func (r *Runner) widthLettersTakenOff(name, letters string) {
+	w, ok := r.fieldWidth[name]
+	if !ok {
+		return
+	}
+	for i := 0; i < len(letters); i++ {
+		switch letters[i] {
+		case 'L':
+			switch {
+			case w.letter != 'L':
+			case w.zeroFill:
+				// The fill standing beside it becomes the whole attribute,
+				// and the value is right-justified with zeros from here on.
+				w.letter, w.zeroFill = 'Z', false
+			default:
+				w.letter = 0
+			}
+		case 'Z':
+			switch {
+			case w.zeroFill:
+				w.zeroFill = false
+			case w.letter == 'Z':
+				w.letter = 0
+			}
+		case 'R':
+			if w.letter == 'R' {
+				w.letter = 0
+			}
+		}
+	}
+	if w.letter == 0 {
+		// Nothing left to present the value in. The zeros a fill laid down
+		// are not taken back here, because this column never stored them —
+		// the store is the text the assignment carried. See widthUnwound.
+		delete(r.fieldWidth, name)
+		return
+	}
+	r.fieldWidth[name] = w
+}

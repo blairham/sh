@@ -342,12 +342,12 @@ release:
 
     ### Where it stands
 
-    Each dialect graded against the real shell it models, over 4423 cases —
+    Each dialect graded against the real shell it models, over 4488 cases —
     `make conformance-dialects`:
 
     | binary | against | exact | behavioral |
     | --- | --- | --- | --- |
-    | `bash` | bash 5.3.20 | 97% | **100%** |
+    | `bash` | bash 5.3.20 | 98% | **100%** |
     | `zsh` | zsh 5.9.2 | 98% | 99% |
     | `dash` | dash | 98% | **100%** |
     | `ksh` | ksh93 AJM 93u+ | 96% | 99% |
@@ -365,7 +365,7 @@ release:
     headline gap: a bounded sample of twenty everyday error situations — a
     missing command, `cd` onto a file, a redirect that cannot open, an unknown
     option to six builtins — comes back byte-identical on standard error *and*
-    exit status for every one of the five, 100 of 100 on 2026-09-22. The probe
+    exit status for every one of the five, 100 of 100 on 2026-09-27. The probe
     is `internal/cmd/diagsample` and takes a few seconds a column, so this line
     can be re-measured rather than inherited.
   # `.PreviousTag` is empty for a first tag, which would render this as a

@@ -422,6 +422,12 @@ func Semantics() interp.Semantics {
 	// ordinary set. That closes the gap #3379 left open, where no BusyBox
 	// was reachable and this kept dash's answer.
 	s.UnterminatedBracketAfterASubExpression = interp.BracketLiteral
+	// And no empty bracket, measured 2026-09-26 in the pinned alpine image
+	// rather than derived from dash's: `echo []`, `echo []a`, `echo [!]` and
+	// `echo [^]` all print the word, while `echo []]`, `echo []a]` and
+	// `echo []a~b]` are ordinary sets. See
+	// interp.Semantics.EmptyBracketExpressionCompiles.
+	s.EmptyBracketExpressionCompiles = interp.No
 	// But inside a bracket expression it escapes nothing at all: the
 	// backslash is an ordinary member of the set and the character behind it
 	// keeps whatever meaning it has there. `case 'a]c' in a[\]]c)` reaches

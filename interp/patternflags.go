@@ -178,11 +178,11 @@ func (o *patternOpts) eqPatternHere(pat, sub string) (pw, sw int, ok bool) {
 // The body is what stands between `(#` and the `)` that closes it, and is
 // empty for `(#)` — which is a group that says nothing and is measured to
 // match: `[[ abc == (#)abc ]]` is true.
-func splitPatternFlags(p string) (body, rest string, ok bool) {
+func splitPatternFlags(p string, emptyCompiles bool) (body, rest string, ok bool) {
 	if !strings.HasPrefix(p, "(#") {
 		return "", "", false
 	}
-	end, found := closingParen(p)
+	end, found := closingParen(p, emptyCompiles)
 	if !found {
 		return "", "", false
 	}
@@ -250,7 +250,7 @@ func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok 
 		case ')':
 			depth--
 		case '[':
-			i = skipBracket(p, i)
+			i = skipBracket(p, i, o.emptyBracket)
 		case '~':
 			if depth == 0 {
 				cuts = append(cuts, i)
@@ -337,19 +337,26 @@ func splitExclusion(p string, o *patternOpts) (left string, rights []string, ok 
 //
 // The scan itself is [bracketEnd], which is the matcher's own, so a walker
 // and the matcher cannot read the same text two ways.
-func skipBracket(p string, i int) int {
-	if end, ok := bracketEnd(p, i); ok {
+func skipBracket(p string, i int, emptyCompiles bool) int {
+	if end, ok := bracketEnd(p, i, emptyCompiles); ok {
 		return end
 	}
 	return i
 }
 
-func bracketEnd(p string, i int) (int, bool) {
+func bracketEnd(p string, i int, emptyCompiles bool) (int, bool) {
 	j := i + 1
 	if j < len(p) && (p[j] == '!' || p[j] == '^') {
 		j++
 	}
 	if j < len(p) && p[j] == ']' {
+		if emptyCompiles && !memberReadingCloses(p, i) {
+			// Nothing later closes it, and in this dialect that makes the
+			// `]` the terminator rather than a member — so the expression
+			// is `[]`, `[!]` or `[^]` and it ends here. See
+			// Semantics.EmptyBracketExpressionCompiles.
+			return j, true
+		}
 		j++
 	}
 	for ; j < len(p); j++ {
@@ -470,7 +477,7 @@ func closureBounds(p string, o *patternOpts) (lo, hi int, rest string, ok bool) 
 	if strings.HasPrefix(p, "#") {
 		return 0, unboundedRepeat, p[1:], true
 	}
-	body, after, found := splitPatternFlags(p)
+	body, after, found := splitPatternFlags(p, o.emptyBracket)
 	if !found || !strings.HasPrefix(body, "c") {
 		return 0, 0, "", false
 	}
@@ -668,7 +675,7 @@ func scanExtendedPattern(p string, o patternOpts) (patternFault, bool) {
 			p, closable = p[1:], false
 			continue
 		}
-		if body, rest, ok := splitPatternFlags(p); ok {
+		if body, rest, ok := splitPatternFlags(p, o.emptyBracket); ok {
 			if _, _, isCount := countClosure(body); isCount {
 				if !closable {
 					return patternFault{bad: true}, true
@@ -709,7 +716,7 @@ func scanExtendedPattern(p string, o patternOpts) (patternFault, bool) {
 			break
 		}
 		if body, _, _, isGroup := splitGroup(item, -1, &o); isGroup {
-			for _, arm := range alternatives(body) {
+			for _, arm := range alternatives(body, o.emptyBracket) {
 				if f, found := scanExtendedPattern(arm, o); found {
 					return f, true
 				}

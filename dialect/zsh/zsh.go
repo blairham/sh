@@ -2885,6 +2885,15 @@ func Semantics() interp.Semantics {
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: not a pattern, the same as a bare `[`.
 	s.UnterminatedBracketAfterASubExpression = interp.BracketBadPattern
+	// And the one column that **compiles** a bracket the member reading
+	// cannot close: measured 2026-09-26 on 5.9.2, `echo []` is `no matches
+	// found: []` where the other five print the word, and `echo [!]` lists
+	// every one-character name — the negation of a set with no members.
+	// `echo []]`, `echo []a]` and `echo []a~b]` are the controls and they
+	// are ordinary sets here exactly as they are everywhere else, which is
+	// why this is keyed on the bracket and not on the `]`. See
+	// interp.Semantics.EmptyBracketExpressionCompiles (#4644).
+	s.EmptyBracketExpressionCompiles = interp.Yes
 	s.UnknownCharacterClass = interp.UnknownClassIsInert
 	// The one column with neither construct: `[[.a.]]` is the three-member
 	// set `[`, `.`, `a` followed by a literal `]`, so it matches `a]` where

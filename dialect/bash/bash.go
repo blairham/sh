@@ -2168,6 +2168,12 @@ func Semantics() interp.Semantics {
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: a literal `[`, and the rest of the pattern behind it — `[[:alpha:]` takes `[` plus one of `:alpha`'s five characters, which is the same reading the axis above gives a bare `[`.
 	s.UnterminatedBracketAfterASubExpression = interp.BracketLiteral
+	// A bracket the member reading cannot close stays **unterminated** here
+	// rather than becoming an empty set: measured 2026-09-26 on 5.3.20 and
+	// on 3.2.57 alike, `echo []` and `echo [!]` print the word itself, while
+	// `echo []]` and `echo []a~b]` are ordinary sets in every column. See
+	// interp.Semantics.EmptyBracketExpressionCompiles (#4644).
+	s.EmptyBracketExpressionCompiles = interp.No
 	// And inside a bracket expression the backslash protects the character
 	// behind it and puts nothing of its own in the set: `[\)]` is the
 	// one-character set `)`, and `[a\-z]` is the three members a, `-` and z,

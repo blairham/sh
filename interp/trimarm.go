@@ -252,7 +252,7 @@ func expandArms(p string, o patternOpts, out *[]string) bool {
 	// other: measured, `L='a|ab'; x=abc; ${x##${~L}}` is `bc` in the shell
 	// that answers Yes, the same reading the written group gets.
 	if o.topGroup {
-		if arms, _ := topAlternatives(p); len(arms) > 1 {
+		if arms, _ := topAlternatives(p, o.emptyBracket); len(arms) > 1 {
 			for _, arm := range arms {
 				if !expandArms(arm, o, out) {
 					return false
@@ -270,7 +270,7 @@ func expandArms(p string, o patternOpts, out *[]string) bool {
 		return true
 	}
 	head := p[:start]
-	for _, arm := range alternatives(body) {
+	for _, arm := range alternatives(body, o.emptyBracket) {
 		// The substituted group has one arm, so the next pass walks past it
 		// and finds the next alternation — including one nested inside the
 		// arm just chosen.
@@ -301,7 +301,7 @@ func firstArmedGroup(p string, o patternOpts) (start int, body, rest string, fou
 		case '[':
 			// Past the whole bracket expression: a bar between two members
 			// is not an arm, which is the rule topAlternatives states.
-			if end, ok := bracketEnd(p, i); ok {
+			if end, ok := bracketEnd(p, i, o.emptyBracket); ok {
 				i = end
 			}
 			continue
@@ -310,7 +310,7 @@ func firstArmedGroup(p string, o patternOpts) (start int, body, rest string, fou
 		if !ok {
 			continue
 		}
-		if len(alternatives(b)) < 2 {
+		if len(alternatives(b, o.emptyBracket)) < 2 {
 			// A flag group, or a group of one arm. The scan carries on into
 			// it rather than over it, so an alternation nested inside is
 			// found on the way past.

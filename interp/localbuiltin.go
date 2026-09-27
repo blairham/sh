@@ -262,7 +262,7 @@ func (r *Runner) listStandingDeclaration(name string) {
 //   - the name **holds** something. `unset u; typeset u` prints nothing,
 //     which is the control that says this is not "one operand means list".
 func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, fresh bool) bool {
-	if f != (declareFlags{}) || fresh || !r.declaredNameHolds(name) {
+	if (f != (declareFlags{}) && !f.onlyAConflictedWidth()) || fresh || !r.declaredNameHolds(name) {
 		return false
 	}
 	if r.freezing[name] {
@@ -550,4 +550,29 @@ func (r *Runner) localListingSkipsAName(name string) bool {
 	}
 	return r.ask(r.sem().LocalListingIsTheRunningCallsOwn,
 		"`local -p` listing only the names the running call made local")
+}
+
+// onlyAConflictedWidth reports whether the letters this declaration wrote
+// annihilated each other, leaving it carrying nothing at all.
+//
+// The first condition above is "the line carried no letters", and a pair of
+// width letters that cannot stand together is a line that carried letters and
+// **has no attribute to apply** — see
+// interp.WidthJustificationConflictLeavesNoWidth. Measured 2026-09-27 on zsh
+// 5.9.2: `typeset -L5 q; typeset -L5 -R5 q` writes the name back as an empty
+// assignment, where `typeset -L5 q; typeset -R5 q` — a pair that does not
+// conflict, one letter to a line — writes nothing and leaves `typeset -R5 q`
+// standing.
+func (f declareFlags) onlyAConflictedWidth() bool {
+	if !f.widthConflicted {
+		return false
+	}
+	rest := f
+	rest.widthConflicted, rest.width, rest.widthNamed = false, 0, false
+	rest.letters, rest.letterSigns = "", ""
+	// And the record that *some* minus letter was written, which is the `-m`
+	// listing's question and not this one: the letters that set it are the
+	// pair that annihilated.
+	rest.added = false
+	return rest == declareFlags{}
 }

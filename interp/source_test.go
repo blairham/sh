@@ -102,6 +102,11 @@ func permissive() Semantics {
 	// TestBareLocalLists — and the suite that is *about* the axis runs both
 	// sides itself (#2999).
 	s.ValuelessDeclarationRecordsTheName = Yes
+	// And the same for the other route into that state — an `unset` of a
+	// local the running scope declared — which is one answer with the line
+	// above in every column but zsh's emulations. The suite that is about
+	// the split sets both itself (#4787).
+	s.UnsetOfALocalRecordsTheName = Yes
 	// What an assignment prefix does to the export attribute of the name it
 	// stands in front of at a *builtin*: the leave-alone reading, which is
 	// four of the six columns and is the one that changes nothing about a

@@ -367,11 +367,17 @@ echo "top=[${w-UNSET}]"`
 	}
 }
 
-// records is the answer that keeps a name a declaration brought into being
-// with no value — Semantics.ValuelessDeclarationRecordsTheName, which is
-// what `unset` of a running scope's own local leaves behind as well.
+// records is the answer that keeps a name whose value an `unset` took while
+// the scope that declared it was running — Semantics.UnsetOfALocalRecordsTheName.
+//
+// The declaration's own route is set to the same answer beside it, which is
+// what every column but one holds and what these rows, which write both
+// spellings, expect. The two were one axis until zsh parted them; see
+// TestTheTwoValuelessRecordsAreAskedSeparately for the rows that hold one
+// still and move the other (#4787).
 func records(yes Answer) func(*Semantics) {
 	return func(s *Semantics) {
+		s.UnsetOfALocalRecordsTheName = yes
 		s.ValuelessDeclarationRecordsTheName = yes
 		// The letters `local` reads, so a suite about what survives an
 		// `unset` can write a declaration that carries one, and the

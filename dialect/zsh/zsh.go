@@ -1730,17 +1730,30 @@ func Semantics() interp.Semantics {
 	// `bad substitution` — so no listing of that shape ever reaches the axis
 	// to be asked. Measured 2026-09-16 on zsh 5.9.2.
 	// A declaration without a value leaves the name holding the empty string
-	// here, so `typeset xyz; typeset -p xyz` writes `typeset xyz=''` and the
-	// record below is not what that shape reaches (#2999). It is reached
-	// from the other side: `unset` of a local the running call declared
-	// leaves the name unset with the shadow still standing, which is the
-	// same state, and this shell writes **nothing** for it. Measured
-	// 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME,
-	// `v=global; f() { local v; unset v; typeset -p v; }; f` — no output, at
-	// 0, with `${v-UNSET}` firing its default. bash writes `declare -- v`
-	// there. Answered rather than left unanswered because that route is a
-	// spelling this shell has.
-	s.ValuelessDeclarationRecordsTheName = interp.No
+	// under this shell's own emulation, so `typeset xyz; typeset -p xyz`
+	// writes `typeset xyz=''` and never reaches the record (#2999). Under
+	// `emulate sh` and `emulate ksh` it does reach it, and the row is the
+	// name alone: `emulate sh; typeset X; typeset -p X` is `typeset X` at 0.
+	// Measured 2026-09-27 on zsh 5.9.2, `-f`, from a script file, read both
+	// through `emulate MODE` and through a copy of the reference named for
+	// the mode.
+	//
+	// So **one value is right in every mode** and this is not a fifth field
+	// on the emulation table: where the mode says a declared name is empty
+	// the axis is unreachable, and where it does not the answer is yes. What
+	// the mode moves is DeclaredNameWithoutValueIsEmpty, which is already on
+	// that table (#4753).
+	s.ValuelessDeclarationRecordsTheName = interp.Yes
+	// The other route into the same state is the opposite answer here, which
+	// is what split the two axes: `unset` of a local the running call
+	// declared leaves the name unset with the shadow standing, and this
+	// shell writes **nothing** for it under every emulation. Measured
+	// 2026-09-21 and again 2026-09-27, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// with a scratch HOME, `v=global; f() { local v; unset v; typeset -p v;
+	// }; f` — no output, at 0, with `${v-UNSET}` firing its default inside
+	// and the global back afterwards. bash writes `declare -- v` there
+	// (#4787).
+	s.UnsetOfALocalRecordsTheName = interp.No
 	// The name is there and the listing writes nothing for it — the third
 	// state the field above cannot spell. See Semantics.ValuelessRecordIsStillAName
 	// for the rows (#4053).
@@ -4342,12 +4355,19 @@ func Semantics() interp.Semantics {
 	// for a pair, and the value the surviving letter's. See
 	// interp/fieldwidth.go for ksh93's pair of letters (#2859).
 	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterIsAJustificationOfItsOwn
-	// And which of them survives is the numeric letters' rule again, with
-	// the same answer: the **first written** wins. Measured in the same run
-	// — `typeset -LR 5 t=7` lists as `typeset -L5 t=7`, `-RL` as `typeset
-	// -R5`, `-ZRL` as `typeset -Z5` and `-LRZ` as `typeset -L5`. ksh93 takes
-	// the last.
-	s.WidthJustificationPrecedence = interp.WidthJustificationFirstWrittenWins
+	// And where a declaration writes two of them, the name ends up with
+	// **neither** — silently, at 0, with the value unpadded. Measured
+	// 2026-09-27: `typeset -L5 -R5 v=7` and `typeset -Z5 -R5 v=7` both list
+	// as `typeset v=7` and read `7`, where ksh93 takes the last letter.
+	//
+	// This used to read `the first written wins`, and the five rows it was
+	// measured on are all one-word spellings with a **detached** number —
+	// `typeset -LR 5 t=7`, `-RL 5`, `-ZR 5`, `-ZL 5`, `-LRZ 5`. Those still
+	// answer exactly as recorded, because the second letter is never read
+	// there: DeclareNumberDetachedOnlyAtTheWordEnd discards the rest of the
+	// word. So every row agreed and the axis was keyed on the wrong thing,
+	// which the separate-word spelling is what shows (#4766).
+	s.WidthJustificationPrecedence = interp.WidthJustificationConflictLeavesNoWidth
 	// And a width letter may stand beside the integer one, the first written
 	// winning there too: measured 2026-09-18, `typeset -iL 5 a=7` lists as
 	// `typeset -i5 a=7` — the `5` a base — and `typeset -Li 5 a=7` as

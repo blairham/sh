@@ -1067,11 +1067,36 @@ func Semantics() interp.Semantics {
 	// And `!`, which zsh leaves bare too and bash does not.
 	s.ListedBangIsOrdinary = interp.Yes
 	s.ListedCaretIsOrdinary = interp.Yes
-	// And the column that spells a byte above ASCII out: `$'\xc3\xa9'` for
-	// a value, for a key and for an alias body alike, where bash and zsh
-	// write the character. The same answer decides both halves — whether
-	// such a byte is bare, and whether it survives inside `$'...'`.
-	s.ListedNonAsciiIsOrdinary = interp.No
+	// The character and not the escape, which is this shell's answer in every
+	// locale but `C` — the same shape bash's answer to this axis has, and
+	// measured the same way. 2026-09-27 on ksh93u+ 2012-08-01 from a script
+	// file, one binary, the locale the only thing that moved:
+	//
+	//	                       LC_ALL=C             LC_ALL=en_US.UTF-8
+	//	u=é; typeset -p u      u=$'\xc3\xa9'        u=é
+	//	w=$'\xc3\xa9'          w=$'\xc3\xa9'        w=é
+	//	alias al=é; alias al   al=$'\xc3\xa9'       al=é
+	//	m[é]=é; typeset -p m   [$'\xc3\xa9']=$'…'   [é]=é
+	//	v=$'\xc3'; typeset -p v  v=$'\xc3'          v=$'\xc3'
+	//
+	// The last row is the control and it is why this is `Yes` rather than a
+	// third answer: a high byte that is **not** a character is spelled out
+	// in both locales, which is exactly the distinction #4521 drew for the
+	// two columns that already answered `Yes`. A stray byte is not ordinary
+	// here either.
+	//
+	// It used to say `No`, with `in every locale` as the reason — and that
+	// was recorded from the `LC_ALL=C` the corpus harness pins, where the
+	// answer really is `No`. The corpus keeps recording that cell; this
+	// shell carries the reading a person's terminal sees, which is the
+	// choice dialect/bash states for the identical split (#4770).
+	//
+	// One row of the issue's table is **not** closed by this and is #4807: a
+	// word that needs quoting *and* holds such a character is `$'a \u[e9]
+	// b'` here — a code-point form nothing in this engine writes — where
+	// this shell now writes `'a é b'`. The axis decides whether the byte is
+	// bare; what a `$'...'` spells it as is a second question.
+	s.ListedNonAsciiIsOrdinary = interp.Yes
 	// `=` is not an ordinary byte here. What is bare is a leading `name=`,
 	// with the rest quoted on its own: `a=b` bare, `a='b c'`, `x='y=z'`,
 	// `'=x'` and `'1=2'`, keys included — `[a=b]` and `[x='y=z']`.
@@ -1601,6 +1626,14 @@ func Semantics() interp.Semantics {
 	// so this is the unattributed one alone. Measured 2026-09-15 on ksh93u+
 	// under `env -i PATH=/usr/bin:/bin` (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// Nor by the other route, and that is measured rather than argued from
+	// this shell's lack of a `local`: `function f { typeset v; unset v;
+	// typeset -p v; }` is the spelling that scopes here, it reaches the
+	// route, and it writes nothing at 0 — with `${v-UNSET}` firing its
+	// default inside the call and the outer value back after it, so the
+	// shadow really is standing. Measured 2026-09-27 on ksh93u+ under
+	// `env -i PATH=/usr/bin:/bin`, from a file (#4787).
+	s.UnsetOfALocalRecordsTheName = interp.No
 	// Either answer is right here: this shell says nothing at 0 for a name
 	// it has never heard of either, so the missing-name route and the
 	// silent one meet. `No` is the one that says what it holds.

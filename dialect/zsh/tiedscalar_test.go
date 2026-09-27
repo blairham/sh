@@ -377,3 +377,87 @@ func TestThePlusFormOfTheTieLetterIsRefused(t *testing.T) {
 		})
 	}
 }
+
+// A tie over a **frozen array** is taken, and the pair then writes through the
+// freeze — #4767, the mirror image of #4503's scalar half, which must still
+// refuse.
+//
+// Measured 2026-09-26 and again 2026-09-27 on `/opt/homebrew/bin/zsh`, zsh
+// 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a script file under `env -i
+// PATH=/usr/bin:/bin`; `go version -m` says *not a Go executable* for it.
+//
+// The listing rows are what say the freeze survived rather than having been
+// lifted: `arr` is still `-ar` afterwards, and a literal or an append a script
+// writes to it is still refused and still fatal.
+func TestATieOverAFrozenArrayIsTakenAndWritesThroughIt(t *testing.T) {
+	const src = `typeset -ar arr=(1 2)
+typeset -T SS arr
+print "tie=$? SS=[$SS] arr=[${arr[*]}]"
+SS=q:r
+print "through=$? SS=[$SS] arr=[${arr[*]}] n=${#arr}"
+typeset -p SS arr`
+	const want = "tie=0 SS=[] arr=[]\n" +
+		"through=0 SS=[q:r] arr=[q r] n=2\n" +
+		"typeset -T SS arr=( q r )\n" +
+		"typeset -arT SS arr=( q r )\n"
+	out, st := runZsh(t, t.TempDir(), src)
+	if out != want || st != 0 {
+		t.Errorf("= %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The other direction, and it is the row that says this is about the mirror
+// and not about arrays: a frozen **scalar** half is written through by an
+// assignment to the array.
+func TestAnArrayWriteReachesAFrozenTiedScalar(t *testing.T) {
+	const src = `typeset -T S1 s1
+typeset -r S1
+s1=(x y)
+print "through=$? S1=[$S1]"
+typeset -p S1 s1`
+	const want = "through=0 S1=[x:y]\n" +
+		"typeset -rT S1 s1=( x y )\n" +
+		"typeset -aT S1 s1=( x y )\n"
+	out, st := runZsh(t, t.TempDir(), src)
+	if out != want || st != 0 {
+		t.Errorf("= %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And the four refusals that keep the exemption on the mirror alone. Each one
+// is measured to end the script, so the row is what did *not* run.
+func TestTheWritesATiedFreezeStillRefuses(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{
+			"a literal over the frozen array half",
+			"typeset -ar arr=(1 2)\ntypeset -T SS arr\narr=(x y)\nprint after",
+		},
+		{
+			"an append over it",
+			"typeset -ar arr=(1 2)\ntypeset -T SS arr\narr+=(z)\nprint after",
+		},
+		{
+			"an assignment to the frozen scalar half",
+			"typeset -T S1 s1\ntypeset -r S1\nS1=direct\nprint after",
+		},
+		// #4503's row, which is the scalar half of the *tie itself* and is
+		// refused before any of this is reached.
+		{
+			"the tie over a frozen scalar",
+			"typeset -r S=v\ntypeset -T S s\nprint after",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if strings.Contains(out, "after") {
+				t.Errorf("%s = %q, want the refusal to end the script", tc.src, out)
+			}
+			if !strings.Contains(out, "read-only variable") {
+				t.Errorf("%s = %q, want a readonly refusal", tc.src, out)
+			}
+			if st == 0 {
+				t.Errorf("%s: status 0, want a failure", tc.src)
+			}
+		})
+	}
+}

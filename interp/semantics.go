@@ -10723,17 +10723,66 @@ type Semantics struct {
 	// `typeset xyz; typeset -p xyz` answered `xyz: not found` at status 1 —
 	// which is no column's answer, since the two that record say 0 with a
 	// row and the one that does not says 0 with silence.
+	//
+	// **It is the declaration's route alone.** An `unset` of a local the
+	// running scope declared arrives at the same *state* — the binding
+	// stands, its value and its letters are gone — and it is a second
+	// question, because one column parts the two: see
+	// UnsetOfALocalRecordsTheName below for the rows (#4787).
 	ValuelessDeclarationRecordsTheName Answer
 
-	// ValuelessRecordIsStillAName is asked where the field above said **no**
-	// and a `-p` names the record anyway: is the name one the shell still
-	// has — written as nothing, at 0 — or one it has never heard of, which
-	// is DeclarePrintReportsAMissingName's question.
+	// UnsetOfALocalRecordsTheName is the same listing question asked of the
+	// *other* route into that state: `unset` of a local the running scope
+	// declared, which leaves the shadow standing with nothing in it.
 	//
-	// A second field rather than a third value on the one above, because the
-	// two answer different things: that one says what the **listing writes**
-	// and this says whether the **name is there**. A dialect can write no row
-	// and still have the name, which is exactly the state one column is in.
+	// One field for both routes was right for as long as no column parted
+	// them, and zsh parts them under its `sh` and `ksh` emulations.
+	// Measured 2026-09-27, `env -i PATH=/usr/bin:/bin`, from a script file:
+	//
+	//	typeset X; typeset -p X                     the declaration's route
+	//	v=g; f(){ local v; unset v; typeset -p v; }  this one
+	//
+	//	                          declared   unset
+	//	bash 5.3.20               declare -- X       declare -- v
+	//	ksh93u+ (function f {…})  (nothing)          (nothing)
+	//	zsh 5.9.2, emulate zsh    typeset X=''       (nothing)
+	//	zsh 5.9.2, emulate sh     typeset X          (nothing)
+	//	zsh 5.9.2, emulate ksh    typeset X          (nothing)
+	//	zsh 5.9.2, emulate csh    typeset X=''       (nothing)
+	//
+	// The `emulate zsh` and `emulate csh` rows of the first column are
+	// DeclaredNameWithoutValueIsEmpty saying yes — the name has a value, so
+	// the record is never made and neither axis is reached. The two rows
+	// under them are this shell answering **yes** to the declaration's route
+	// and **no** to this one at the same time, which is what a single field
+	// cannot hold.
+	//
+	// ksh93's column is measured rather than reasoned from its lack of
+	// `local`: `function f { typeset v; unset v; typeset -p v; }` is the
+	// spelling that scopes there, it reaches this route, and it writes
+	// nothing at 0 with the outer value still hidden — `${v-UNSET}` inside
+	// fires its default and the global is back afterwards.
+	//
+	// Asked only for a name that really carries the record, so a dialect
+	// that never makes one is never asked. See interp/baredeclaration.go.
+	UnsetOfALocalRecordsTheName Answer
+
+	// ValuelessRecordIsStillAName is asked where whichever of the two fields
+	// above owns the record said **no** and a `-p` names it anyway: is the
+	// name one the shell still has — written as nothing, at 0 — or one it
+	// has never heard of, which is DeclarePrintReportsAMissingName's
+	// question.
+	//
+	// A field rather than a third value on those, because they answer
+	// different things: they say what the **listing writes** and this says
+	// whether the **name is there**. A dialect can write no row and still
+	// have the name, which is exactly the state one column is in.
+	//
+	// It stays one field over both routes where they are two, and that is
+	// not an oversight the split above left behind: it is reached only for a
+	// record whose own route wrote no row, so zsh — which writes a row for
+	// the declaration and nothing for the `unset` — asks it about the
+	// `unset` alone.
 	//
 	// Measured 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
 	// scratch HOME, from a script file, over

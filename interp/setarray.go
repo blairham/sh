@@ -77,14 +77,28 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 	if r.refuseReadonly(name, assignedByDeclaration) {
 		return 1
 	}
+	if front && len(values) == 0 {
+		// Nothing to put at the front leaves the array exactly as it was,
+		// which is unanimous — and is *not* the minus form's answer to the
+		// same emptiness. Ahead of the re-creation question because a store
+		// that does not happen takes nothing off the name: `export e=(p q);
+		// set +A e` lists `typeset -ax e=( p q )` in zsh and `typeset -x -a
+		// e=(p q)` in ksh93.
+		return 0
+	}
+	if r.setArrayStartsTheNameOver(name, front) {
+		// A re-created name keeps neither the letters that say what its
+		// values are nor the export attribute, and the clearing is ahead of
+		// the store so that the values land untyped: ksh93 answers `typeset
+		// -i b=1; set -A b 5+5` with `typeset -a b=(5+5)` rather than folding
+		// it to 10. See setArrayStartsTheNameOver.
+		r.clearAttributesAReCreationDrops(name)
+	}
+	if r.unspecified {
+		return r.status
+	}
 	switch {
 	case front:
-		if len(values) == 0 {
-			// Nothing to put at the front leaves the array exactly as it was,
-			// which is unanimous — and is *not* the minus form's answer to
-			// the same emptiness.
-			return 0
-		}
 		a := make(Array, len(values))
 		for k, v := range r.Arrays[name] {
 			a[k] = v
@@ -148,3 +162,68 @@ func (r *Runner) setArrayWithoutAName(on bool) int {
 // `Illegal option -A` in dash. Asking an axis would replace a correct answer
 // with a complaint about a missing dialect.
 func (r *Runner) setArrayLetter() bool { return r.sem().SetArrayLetter == Yes }
+
+// setArrayStartsTheNameOver reports whether this store re-creates the name
+// rather than replacing its elements, having asked the dialect.
+//
+// `set -A` reaches the array store by a road of its own, and until #4768 that
+// road never asked the question at all: `export a=1; set -A a x y` kept the
+// export attribute here where both shells that have the letter take it off.
+// The same three axes answer it as answer the literal — the disagreement is
+// about what counts as a *re-creation*, not about which spelling wrote it —
+// and the two routes are measured here rather than assumed to agree.
+//
+// Measured 2026-09-27, `env -i PATH=/usr/bin:/bin`, from a script file, on
+// zsh 5.9.2 (aarch64-apple-darwin25.4.0) and ksh93u+ 2012-08-01, each read
+// back with that shell's own `typeset -p`. `x` is the export attribute
+// surviving; `·` is it gone:
+//
+//	                                              zsh   ksh93
+//	export a=1;     set -A a x y                   ·      ·
+//	export a=(p q); set -A a x y                   x      ·
+//	typeset -a a; export a; set -A a x             x      ·
+//	export a=1;     set +A a x y                   ·      x
+//	export a=(p q); set +A a x y                   x      x
+//
+// Row one is ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver (both yes),
+// rows two and three are ArrayLiteralAssignmentStartsTheNameOver (zsh no,
+// ksh93 yes), and row four is
+// AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver (zsh yes, ksh93
+// no). Row five is the shape every column agrees about, as it is for `a+=(…)`.
+// The type letters move with the export attribute in every one of the ten
+// cells — `typeset -i b=1; set -A b 5+5` is `typeset -a b=(5+5)` in ksh93 and
+// `typeset -l c=AB; set -A c CD` is `typeset -a c=( CD )` in zsh — which is
+// what says this is the re-creation question and not an export rule.
+//
+// **One thing the literal does that this does not**, and it is measured
+// rather than inherited: arrayLiteralStartsTheNameOver never asks about a
+// name whose array letter was written and which is holding nothing yet,
+// because the first literal such a name receives keeps the letter in both
+// shells. `set -A` is not that — ksh93 drops the attribute on row three above
+// where `typeset -a a; export a; a=(x)` keeps it — so the axis is asked for
+// any array here, and only the *append* form is exempt. Carrying the
+// literal's guard across would have left row three answering keep in both
+// columns, which is the wrong answer in one of them.
+func (r *Runner) setArrayStartsTheNameOver(name string, front bool) bool {
+	if !r.nameCarriesAnAttributeAReCreationDrops(name) {
+		// Nothing on the name to lose, so the question cannot be seen and is
+		// not put — the same guard the literal keeps, and the same list, so
+		// the two cannot come apart.
+		return false
+	}
+	if !r.nameIsAnArray(name) {
+		if front {
+			return r.ask(r.sem().AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver,
+				"a `set +A` re-creating a name that is not an array")
+		}
+		return r.ask(r.sem().ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver,
+			"a `set -A` re-creating a name that is not an array")
+	}
+	if front {
+		// An append over an array it is already holding never re-creates it,
+		// which is unanimous for `a+=(…)` and measured here for `set +A`.
+		return false
+	}
+	return r.ask(r.sem().ArrayLiteralAssignmentStartsTheNameOver,
+		"a `set -A` re-creating the name it writes")
+}

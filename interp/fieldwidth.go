@@ -269,6 +269,46 @@ const (
 	// order of one word's characters: there both letters are really read,
 	// and the later one still wins.
 	WidthJustificationLastWrittenWins
+
+	// WidthJustificationConflictLeavesNoWidth is zsh's, and it is neither of
+	// the two above: where the `R` letter is really read beside an `L` or a
+	// `Z`, the name ends up with **no width attribute at all** — silently,
+	// at status 0, with the value unpadded.
+	//
+	// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f`
+	// from a script file under `env -i PATH=/usr/bin:/bin`, each row read
+	// back with `typeset -p`, `${(t)v}` and the value:
+	//
+	//	typeset -L5 -R5 v=7    typeset v=7    scalar    7
+	//	typeset -Z5 -R5 v=7    typeset v=7    scalar    7
+	//	typeset -R5 -L5 v=7    typeset v=7    scalar    7
+	//	typeset -R -Z v=7      typeset v=7    scalar    7
+	//	typeset -LR5 v=7       typeset v=7    scalar    7
+	//	typeset -RZ5 v=7       typeset v=7    scalar    7
+	//	typeset -L5 -R5 -L5 v=7  typeset v=7  scalar    7
+	//
+	// The last row is what makes it sticky rather than a precedence: a third
+	// letter does not undo it. Two controls say it reaches the width alone —
+	// `typeset -i -L5 -R5 v=7` is `typeset -i v=7` and `typeset -u -L5 -R5
+	// v=ab` is `typeset -u v=AB` — and a third says it does not reach an
+	// attribute the **name already had**: `typeset -L5 v; typeset -L5 -R5 v`
+	// leaves `typeset -L5 v` standing, so the conflicting declaration
+	// contributes nothing rather than removing something.
+	//
+	// **It is keyed on the `R` letter and not on "two letters".** `L` and
+	// `Z` written together are a *combination* in this column — `typeset -L5
+	// -Z5 v=00700` is `700  `, left-justified with the leading zeros off,
+	// and `${(t)v}` is `scalar-left-right_zeros` — which this engine does not
+	// record and which is #4798. Repeating one letter is the last width
+	// written: `typeset -L5 -L3` is `typeset -L3`.
+	//
+	// The one-word spellings with a **detached** number are not this and
+	// still answer first-letter-wins, because the second letter is never
+	// read: `typeset -LR 5 t=7` is `typeset -L5`, `-RL 5` is `typeset -R5`
+	// and `-LRZ 5` is `typeset -L5`. That is
+	// DeclareNumberDetachedOnlyAtTheWordEnd discarding the rest of the word,
+	// which is why those five rows agreed all along and this one did not.
+	WidthJustificationConflictLeavesNoWidth
 )
 
 func (p WidthJustificationPrecedencePolicy) String() string {
@@ -277,6 +317,8 @@ func (p WidthJustificationPrecedencePolicy) String() string {
 		return "the first letter written"
 	case WidthJustificationLastWrittenWins:
 		return "the last letter written"
+	case WidthJustificationConflictLeavesNoWidth:
+		return "no width at all where the letters conflict"
 	}
 	return "unspecified"
 }
@@ -302,6 +344,23 @@ func (r *Runner) recordWidthLetter(f *declareFlags, c byte) {
 			// `typeset -ZL 5 q=7` is `-Z 5 -L 5`.
 			f.widthLetter = 'R'
 		}
+		return
+	}
+	if f.widthConflicted {
+		// A conflict already seen on this declaration, and a later letter
+		// does not undo it: `typeset -L5 -R5 -L5 v=7` is `typeset v=7`.
+		return
+	}
+	if f.widthLetter != 0 && f.widthLetter != c &&
+		r.sem().WidthJustificationPrecedence == WidthJustificationConflictLeavesNoWidth &&
+		(c == 'R' || f.widthLetter == 'R') {
+		// Two letters that cannot stand together, so the name carries
+		// neither. Keyed on the `R` letter because that is what was
+		// measured: `L` beside `Z` is a combination in this column rather
+		// than a conflict, and is left at the first letter — the answer that
+		// gets the value right — until #4798 records it. See
+		// WidthJustificationConflictLeavesNoWidth.
+		f.widthLetter, f.widthConflicted = 0, true
 		return
 	}
 	if f.widthLetter == 0 ||

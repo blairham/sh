@@ -63,12 +63,19 @@ type declareFlags struct {
 	// — `typeset -Z 4 -R 4 d=0007`.
 	widthLetter   byte
 	widthZeroFill bool
-	width         int
-	widthNamed    bool
-	readonly      bool
-	export        bool
-	assoc         bool
-	array         bool
+	// widthConflicted is a pair of width letters this dialect answers by
+	// giving the name neither — see
+	// interp.WidthJustificationConflictLeavesNoWidth. A field rather than
+	// the zero widthLetter on its own, because the two states differ: no
+	// letter written leaves whatever the name had, and a conflict has to
+	// stay empty however many letters follow it.
+	widthConflicted bool
+	width           int
+	widthNamed      bool
+	readonly        bool
+	export          bool
+	assoc           bool
+	array           bool
 	// compoundVar is `-C`, ksh93's compound-variable letter: a fourth kind
 	// beside the scalar and the two arrays. Its own field rather than a
 	// third value of a container enum because it is not a container — the
@@ -3808,7 +3815,7 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 func withoutListingLetters(f declareFlags) declareFlags {
 	f.integer, f.integerOff, f.base, f.baseNamed = false, false, 0, false
 	f.float, f.precision, f.precisionNamed = false, 0, false
-	f.widthLetter, f.widthZeroFill = 0, false
+	f.widthLetter, f.widthZeroFill, f.widthConflicted = 0, false, false
 	f.width, f.widthNamed = 0, false
 	f.readonly, f.readonlyOff = false, false
 	f.export, f.assoc, f.array = false, false, false

@@ -3407,6 +3407,40 @@ func (r *Runner) unsetOneName(name string) {
 		// on answering every read with what it was never told to drop.
 		write(r, nil)
 	}
+	if _, produced := r.DynamicAssocs[name]; produced {
+		// An `unset` of a produced **table** takes the producer away with
+		// the parameter, so the name is an ordinary one afterwards and
+		// nothing answers for it.
+		//
+		// **Not** the produced array's row above, and the difference is
+		// measured rather than a reading of the two shapes. An array
+		// producer *is* the thing — `set -- a b c; unset argv` really does
+		// leave `$#` at 0, which is why that row is delivered as a write of
+		// no elements — where a table producer is a **view** of something
+		// else the shell keeps, and the view going does not take the thing
+		// with it. Measured 2026-09-27 on zsh 5.9.2, `-f` from a script
+		// file:
+		//
+		//	alias ex=echo; unset aliases
+		//	alias ex                    still `ex=echo`
+		//	alias foo=bar; alias foo    still defined afterwards
+		//	$aliases[foo]               empty — the parameter is gone
+		//	${(t)aliases}               empty
+		//	aliases=str; print $aliases `str`, an ordinary scalar
+		//
+		// and the same five rows for `functions`, where `g` is still
+		// callable after `unset functions` and `$functions[g]` is empty.
+		//
+		// So delivering `emptyProducedAssoc` here would have erased every
+		// alias and every function in the shell — which is the reading that
+		// makes the two producers one rule, and is what the alias rows above
+		// falsify.
+		//
+		// The type word already agreed before this: `${(t)aliases}` was
+		// empty and `$aliases[foo]` still answered `bar`, so the name's own
+		// reading of itself and the view behind it disagreed (#4764).
+		r.UnsetDynamic(name)
+	}
 	delete(r.Arrays, name)
 	delete(r.AssocArrays, name)
 	// A compound an element of either table held goes with the table, for the

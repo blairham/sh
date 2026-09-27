@@ -204,15 +204,23 @@ func TestAnArrayLiteralDropsTheWidthAttribute(t *testing.T) {
 // of the other two and writes both letters back. Measured on zsh 5.9.2,
 // 2026-09-18, the same arrangement as the rows above (#2859).
 //
-// The rows are chosen so that each of the two readings answers them
-// differently: under the other one `-LZ` would be `L` **and** a fill, so the
-// last row would be `12   ` rather than `0012 `.
+// **Every row here is a one-word spelling with a detached number**, and that
+// is now known to be the reason they agree rather than a property of `Z`: the
+// detached number ends the word and the rest of it is discarded, so the second
+// letter is never read and both readings of `Z` produce these bytes. The last
+// row was chosen *as* the discriminator and is not one. See #4798, which holds
+// the separate-word measurement, and #4766, which is the pair the reference
+// drops.
+//
+// They are kept because they are correct and because they are the control on
+// #4766: the conflict answer must not reach a spelling where only one letter
+// was read.
 func TestTheZeroFillLetterIsAJustificationOfItsOwn(t *testing.T) {
 	if got := zsh.Semantics().DeclareZeroFillLetter; got != interp.DeclareZeroFillLetterIsAJustificationOfItsOwn {
 		t.Errorf("DeclareZeroFillLetter = %v, want a justification of its own", got)
 	}
-	if got := zsh.Semantics().WidthJustificationPrecedence; got != interp.WidthJustificationFirstWrittenWins {
-		t.Errorf("WidthJustificationPrecedence = %v, want the first letter written", got)
+	if got := zsh.Semantics().WidthJustificationPrecedence; got != interp.WidthJustificationConflictLeavesNoWidth {
+		t.Errorf("WidthJustificationPrecedence = %v, want no width where the letters conflict", got)
 	}
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
@@ -252,6 +260,92 @@ func TestAWidthLetterSharesWithTheIntegerLetter(t *testing.T) {
 	} {
 		t.Run(tc.src, func(t *testing.T) {
 			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// Two width letters that really are both read leave the name with **no**
+// width attribute — #4766, and the row the five controls above could not
+// reach.
+//
+// Measured 2026-09-27 on `/opt/homebrew/bin/zsh`, zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `-f` from a script file under `env -i
+// PATH=/usr/bin:/bin`; `go version -m` says *not a Go executable* for it.
+//
+// The grid varies the two things the rule turns on — whether the `R` letter
+// is in the pair, and whether the letters were really read or the second was
+// discarded by a detached number. Varying only the letters, which is what the
+// suite above does, agrees under every reading.
+func TestTwoWidthLettersReallyReadLeaveNoWidth(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"L and R in separate words",
+			`typeset -L5 -R5 v=7; typeset -p v; print -r -- "${(t)v}[$v]"`,
+			"typeset v=7\nscalar[7]\n",
+		},
+		{
+			"Z and R in separate words",
+			`typeset -Z5 -R5 v=7; typeset -p v; print -r -- "${(t)v}[$v]"`,
+			"typeset v=7\nscalar[7]\n",
+		},
+		{
+			"R and L, the other order",
+			`typeset -R5 -L5 v=7; typeset -p v; print -r -- "${(t)v}[$v]"`,
+			"typeset v=7\nscalar[7]\n",
+		},
+		{
+			"and in one word, where no number is detached",
+			`typeset -LR5 v=7; typeset -p v`,
+			"typeset v=7\n",
+		},
+		{
+			"a third letter does not undo it",
+			`typeset -L5 -R5 -L5 v=7; typeset -p v`,
+			"typeset v=7\n",
+		},
+		// The three controls that say it reaches the width and nothing else.
+		{
+			"the integer letter is untouched",
+			`typeset -i -L5 -R5 v=7; typeset -p v; print -r -- "[$v]"`,
+			"typeset -i v=7\n[7]\n",
+		},
+		{
+			"and so is a case letter",
+			`typeset -u -L5 -R5 v=ab; typeset -p v; print -r -- "[$v]"`,
+			// The listing writes the text the name is holding rather than
+			// the presentation, which is what CaseAttributeFoldsWhenRead
+			// records for this column: `v=ab` in the row and `AB` in the
+			// expansion.
+			"typeset -u v=ab\n[AB]\n",
+		},
+		{
+			"an attribute the name already had is not removed",
+			`typeset -L5 q; typeset -L5 -R5 q; q=7; typeset -p q`,
+			"q=''\ntypeset -L5 q=7\n",
+		},
+		// And the pair that is a combination rather than a conflict: the
+		// first letter, which is what this engine records until #4798.
+		{
+			"L beside Z is not a conflict",
+			`typeset -L5 -Z5 v=7; print -r -- "[$v]"`,
+			"[7    ]\n",
+		},
+		// One letter written twice is the last width, which is the row that
+		// says this is about the letters differing and not about repetition.
+		{
+			"one letter twice is the last width",
+			`typeset -L5 -L3 v=7; typeset -p v`,
+			"typeset -L3 v=7\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A directory of its own per row: every row writes the same
+			// name, so a shared one would let an earlier declaration answer
+			// a later row.
+			out, st := runZsh(t, t.TempDir(), tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 			}

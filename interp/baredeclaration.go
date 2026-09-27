@@ -43,16 +43,24 @@ package interp
 // without a line there: it is remembered in one place and forgotten in the
 // other. The listing is the only reader either way.
 //
-// # Two records, one state
+// # Two records, one state, two axes
 //
 // `unset` of a local the running scope declared arrives at the same state
 // from the other side — the binding stands, its value and its letters are
-// gone — so it is the same listing and the same axis, and
-// Runner.unsetLeftItDeclared is where that route's record lives. A second
-// bool rather than a second write of the one above, because one reader has
-// to tell them apart: the `unset` that falls through to the *function* table
-// counts a declaration as a parameter and does not count this. Everything
-// else here is shared, the scope's save and restore included.
+// gone — so it is the same listing, and Runner.unsetLeftItDeclared is where
+// that route's record lives. A second bool rather than a second write of the
+// one above, because two readers have to tell them apart: the `unset` that
+// falls through to the *function* table counts a declaration as a parameter
+// and does not count this, and — since #4787 — the listing asks a different
+// axis of each. Everything else here is shared, the scope's save and restore
+// included.
+//
+// It was one axis until a column parted the two. zsh under `emulate sh` and
+// `emulate ksh` writes `typeset X` for the declaration and nothing at all for
+// the `unset`, so no single answer is right for it; see
+// Semantics.UnsetOfALocalRecordsTheName for the grid. The *state* is still
+// one state, which is why hasAValuelessRecord survives as the gate the two
+// other readers share.
 //
 // It is not written back as a letter. attributeLetters and every listing form
 // read the fields beside it and none of them read this one, which is what
@@ -76,12 +84,23 @@ func (r *Runner) recordBareDeclaration(name string) {
 // disagrees is one step later, over what a listing does with the name, and
 // a dialect with no declaration listing never arrives.
 //
-// The `&&` is load-bearing: the ask only happens for a name that has such a
-// record, so a dialect that never makes one is never asked.
+// The gate on each record is load-bearing: the ask only happens for a name
+// that has that record, so a dialect that never makes one is never asked.
+//
+// Two asks and not one, because the two routes into the state are two
+// questions for one column — see "Two records, one state, two axes" above. A
+// name can carry both records at once (`typeset X` and then an `unset` of it
+// inside the scope that declared it), and then either yes is a row: the state
+// they describe is the same state, so a listing that writes it once has
+// written it.
 func (r *Runner) bareDeclarationListed(name string) bool {
-	return r.hasAValuelessRecord(name) &&
-		r.ask(r.sem().ValuelessDeclarationRecordsTheName,
-			"what a listing does with a name declared with neither a value nor an attribute")
+	if r.declaredBare[name] && r.ask(r.sem().ValuelessDeclarationRecordsTheName,
+		"what a listing does with a name declared with neither a value nor an attribute") {
+		return true
+	}
+	return r.unsetLeftItDeclared[name] &&
+		r.ask(r.sem().UnsetOfALocalRecordsTheName,
+			"what a listing does with a local whose value an `unset` took")
 }
 
 // hasAValuelessRecord reports whether either route into the state has left a

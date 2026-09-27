@@ -871,6 +871,10 @@ func Semantics() interp.Semantics {
 	// record back with. Answered rather than left unanswered because `local
 	// x` reaches the axis (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// And the `unset` route into the same state, for the same reason: no
+	// declaration listing to read a record back with. Answered rather than
+	// left out because `local x; unset x` reaches it (#4787).
+	s.UnsetOfALocalRecordsTheName = interp.No
 	// No declaration listing to ask it with.
 	s.ValuelessRecordIsStillAName = interp.No
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: dash's reason

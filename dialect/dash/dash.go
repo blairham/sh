@@ -483,6 +483,12 @@ func Semantics() interp.Semantics {
 	// is still answered rather than left out, because `local x` reaches it
 	// and an unanswered axis refuses at run time (#2272, #2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// The `unset` route into the same state is answered for the same reason
+	// and with the same value: `f(){ local x; unset x; export -p; }` is the
+	// only listing this shell can be asked with and it names exported names
+	// alone, so nothing here can tell the two answers apart. Answered rather
+	// than left out because `local x; unset x` reaches it (#4787).
+	s.UnsetOfALocalRecordsTheName = interp.No
 	// No declaration listing to ask it with.
 	s.ValuelessRecordIsStillAName = interp.No
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is neither a

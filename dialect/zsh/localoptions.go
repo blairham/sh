@@ -3,7 +3,10 @@
 
 package zsh
 
-import "github.com/blairham/sh/interp"
+import (
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
+)
 
 // LOCAL_OPTIONS: options a function changes go back when it returns.
 //
@@ -68,7 +71,19 @@ func (b optionBits) on(i int) bool { return b[i/64]&(1<<uint(i%64)) != 0 }
 // being put does not weaken that: what it skips is making a copy nobody would
 // be able to tell from the one already held.
 type optionState struct {
-	sem      *interp.Semantics
+	sem *interp.Semantics
+	// dialect is the grammar, and it is saved for the reason the vector is:
+	// an emulation replaces it per mode (see emulategrammar.go), so a scope
+	// that put the *mode* back and left the grammar behind would be a restore
+	// that restores the wrong half of one thing. Held as it stands rather than
+	// copied, like the vector and for the same reason — it is swapped
+	// copy-on-write and never written through.
+	//
+	// Options that reach the grammar — `rcquotes`, `extendedglob` — are put
+	// back by the loop below as well; that is a second write of a value
+	// already restored rather than a disagreement, since the loop's answer is
+	// taken from the same moment this pointer is.
+	dialect  *syntax.Dialect
 	mode     string
 	recorded []string
 	on       optionBits
@@ -109,7 +124,7 @@ func setLocalPatterns(r *interp.Runner, on bool) {
 // recorded, because the loop that reads them is the same loop and skipping
 // them would only buy a branch.
 func saveOptionState(r *interp.Runner) optionState {
-	s := optionState{sem: r.Semantics, mode: currentEmulation(r)}
+	s := optionState{sem: r.Semantics, dialect: r.Dialect, mode: currentEmulation(r)}
 	// The store held as it stands rather than copied: see the type's comment.
 	s.recorded, _ = r.GetArray(zshRecordedStore)
 	for i := range zshOptions {
@@ -128,6 +143,7 @@ func saveOptionState(r *interp.Runner) optionState {
 // restore puts the whole table back.
 func (s optionState) restore(r *interp.Runner) {
 	r.Semantics = s.sem
+	r.Dialect = s.dialect
 	setRecordedOptions(r, s.recorded)
 	for i := range zshOptions {
 		o := &zshOptions[i]

@@ -100,6 +100,10 @@ func (sh Shell) session(argv []string, in source) int {
 	// applyOptions below, which is where the script route has it too — see
 	// Runner.StartupFilesSuppressed (#1864).
 	r.StartupFilesSuppressed = in.startup.none
+	// And the narrower one, for the reason the line above is here: the
+	// prompt route never reaches the place the script routes carry it
+	// (#4733).
+	r.SystemStartupFilesSuppressed = in.startup.noSystem
 	// And an interactive shell runs the monitor. Unanimous with a terminal —
 	// bash, dash, ksh93 and zsh all report `monitor on` and put `m` in `$-`
 	// — and a prompt has one by definition on every route but `-i` with

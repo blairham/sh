@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"maps"
 	"sort"
 	"strings"
 
@@ -1213,4 +1214,90 @@ func (r *Runner) reportAliasName(name, operand string, isDefinition bool) (taken
 		return true, true
 	}
 	return true, false
+}
+
+// AliasesReadWhole is the three parser hooks over a **copy** of the tables,
+// for a front end whose dialect reads a program's whole text before running
+// any of it.
+//
+// The route set says that shell expands no alias in its own `-c` string, and
+// that is a stand-in rather than the fact: what the reference really does is
+// read the string *whole*, so an `alias` on line 1 has not run when line 2 is
+// parsed. This front end reads a command string a line at a time, so declining
+// the route is how "the definition has not run yet" was modeled — and the
+// stand-in is one-sided, because it also declines an alias that was **already
+// in the table** when the string arrived, which the reference expands.
+//
+// Measured 2026-09-26 on `/opt/homebrew/bin/zsh`, zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `env -i` with `-f` and `env -u FPATH`, against
+// a shell whose only aliases are the two its startup defines (#4597):
+//
+//	zsh -f -c $'unalias which-command\nwhich-command print'   print, 0
+//	zsh -f -c $'alias which-command=echo\nwhich-command hi'   the *old* value
+//	zsh -f -c $'unsetopt aliases\nwhich-command print'        print, 0
+//	zsh -f -c $'alias myal=print\nmyal hi'                    `myal` not found
+//	zsh -f -c 'f() { which-command print; }; f'               print, 0
+//
+// The fourth row is the control and it is the reason the stand-in existed: an
+// alias the string itself defines is expanded in neither shell. The first
+// three are what separate the two readings — a name in the table before the
+// parse expands, and neither an `unalias`, a redefinition nor `unsetopt
+// aliases` written on the string stops it, because none of them has run. So
+// the **switch** is frozen with the tables and not read live.
+//
+// Taken on first use rather than here, and that is the placement rather than
+// an economy: the front end joins the runner to the parser before the
+// prelude and the startup files have run, which is where the aliases a shell
+// starts with come from, and a copy taken at that point would be empty. The
+// first read of the program's own text is after all of it (#4747).
+func (r *Runner) AliasesReadWhole() (plain, global, suffix syntax.Aliases) {
+	var held *readWholeAliases
+	take := func() *readWholeAliases {
+		if held == nil {
+			held = &readWholeAliases{
+				expanding: r.aliasExpansion,
+				aliases:   maps.Clone(r.aliases),
+				suffix:    maps.Clone(r.suffixAliases),
+			}
+		}
+		return held
+	}
+	return func(name string) (string, bool) { return take().plain(name) },
+		func(name string) (string, bool) { return take().global(name) },
+		func(s string) (string, bool) { return take().suffixAlias(s) }
+}
+
+// readWholeAliases is the copy itself: the two tables and the switch over
+// them, as they stood when the program's text was first read.
+type readWholeAliases struct {
+	expanding bool
+	aliases   map[string]aliasDef
+	suffix    map[string]string
+}
+
+func (w *readWholeAliases) plain(name string) (string, bool) {
+	if !w.expanding {
+		return "", false
+	}
+	a, ok := w.aliases[name]
+	return a.value, ok
+}
+
+func (w *readWholeAliases) global(name string) (string, bool) {
+	if !w.expanding {
+		return "", false
+	}
+	a, ok := w.aliases[name]
+	if !ok || !a.global {
+		return "", false
+	}
+	return a.value, true
+}
+
+func (w *readWholeAliases) suffixAlias(s string) (string, bool) {
+	if !w.expanding {
+		return "", false
+	}
+	v, ok := w.suffix[s]
+	return v, ok
 }

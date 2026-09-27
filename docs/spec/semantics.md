@@ -18391,11 +18391,13 @@ column and 1 in bash and ksh93.
 Rows four and six narrow the reading to a **value** being removed: a
 declaration is not an assignment and a subshell's assignment does not reach the
 parent, which is what a flag written at the `unset` gets right without the
-assignment path having to notice anything. Row four is the one this shell still
-answers wrong and not because of this axis — `typeset X` gives the name an
-empty value here under every emulation, where the reference does that under
-`emulate zsh` alone; the name does not matter and the mode does, and it is
-#4753.
+assignment path having to notice anything. Row four used to be the one this
+shell answered wrong and not because of this axis — `typeset X` gave the name
+an empty value here under every emulation, where the reference does that under
+`emulate zsh` alone. The name does not matter and the mode does, so it was
+never a fact about `HOME`: `DeclaredNameWithoutValueIsEmpty` is on the zsh
+emulation table now, beside `CdWithoutHomeIsAnError` and
+`StartupFillsAnAbsentHome`, and the row agrees.
 
 dash and BusyBox ash cannot answer the second axis, which their column above is
 the whole of: `CdWithoutHomeIsAnError` is No there, so a `cd` with no home at

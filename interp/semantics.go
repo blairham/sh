@@ -5882,15 +5882,16 @@ type Semantics struct {
 	// `unset` gets right without the assignment path having to notice
 	// anything.
 	//
-	// **Row four is the one this shell still answers wrong, and not because
-	// of this axis.** `typeset HOME` gives the name an empty value here where
-	// the reference leaves it declared and valueless, so the `unset` after it
-	// finds something to remove. Two things say the home is only where it was
-	// noticed: the name does not matter, and the *mode* does. Measured the
-	// same day, `typeset X; printf %s "${X+set}"` is `set` here under every
-	// emulation, and in zsh 5.9.2 it is `set` under `emulate zsh` and nothing
-	// at all under `emulate sh` and `emulate ksh` — so what differs is a
-	// declaration with no value, keyed on the emulation, and it is #4753.
+	// **Row four used to be the one this shell answered wrong, and not
+	// because of this axis.** `typeset HOME` gave the name an empty value
+	// here where the reference leaves it declared and valueless, so the
+	// `unset` after it found something to remove. Two things said the home
+	// was only where it was noticed: the name does not matter, and the
+	// *mode* does. Measured the same day, `typeset X; printf %s "${X+set}"`
+	// is `set` in zsh 5.9.2 under `emulate zsh` and nothing at all under
+	// `emulate sh` and `emulate ksh`, whatever the name — so what differs is
+	// DeclaredNameWithoutValueIsEmpty keyed on the emulation, which is where
+	// it lives now, and the row agrees (#4753).
 	//
 	// dash and BusyBox ash cannot answer it, which the dash column above is
 	// the whole of: CdWithoutHomeIsAnError is No there, so a `cd` with no
@@ -10451,6 +10452,13 @@ type Semantics struct {
 	// ValuelessDeclarationRecordsTheName below is the half that was missing:
 	// where this says no the name may still be *recorded*, and bash and
 	// ksh93 part on exactly that (#2999).
+	//
+	// **One dialect moves it while the shell runs**, which is why the answer
+	// is read through the runner's vector rather than settled at startup:
+	// zsh says yes under its own emulation and no under `emulate sh` and
+	// `emulate ksh`, whatever the name the shell was invoked under. See
+	// dialect/zsh/emulate.go, where the mode's table carries it beside
+	// CdWithoutHomeIsAnError and StartupFillsAnAbsentHome (#4753).
 	DeclaredNameWithoutValueIsEmpty Answer
 
 	// ValuelessDeclarationRecordsTheName brings a name into being with no

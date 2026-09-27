@@ -2650,6 +2650,12 @@ func (sh Shell) runInput(in source) int {
 	// moving off a base the front end already set rather than the other way
 	// round — measured, `zsh -f -o rcs` answers `rcs` on (#1864).
 	r.StartupFilesSuppressed = in.startup.none
+	// And the narrower one beside it, which suppresses the machine's files
+	// and leaves the person's. Carried over for the same reason and at the
+	// same moment, so that `-d -o globalrcs` is the option moving off the
+	// base the front end set — measured, `zsh -d -o globalrcs` answers
+	// `globalrcs` on (#4733).
+	r.SystemStartupFilesSuppressed = in.startup.noSystem
 	if in.interactive {
 		// `sh -i script.sh` is interactive while it runs, and an interactive
 		// shell runs the monitor: measured, bash 5.3.15, dash, ksh93u+ and
@@ -2729,6 +2735,20 @@ func (sh Shell) runInput(in source) int {
 		pr.aliases = r.ExpandingAlias
 		pr.globalAliases = r.ExpandingGlobalAlias
 		pr.suffixAliases = r.ExpandingSuffixAlias
+	} else if in.wholeFirst {
+		// The one route in the panel that declines, and it declines because
+		// this dialect reads the program's text *whole* rather than because
+		// it does not expand. Those are different facts and the route set
+		// stands in for the second, so a nil table here was one-sided: it
+		// also declined an alias that was in the table before the text
+		// arrived, which the reference expands.
+		//
+		// A frozen copy is the shape that says both at once — a name the
+		// shell already had is substituted, and nothing the text itself
+		// writes reaches the parse, because none of it has run. See
+		// interp.Runner.AliasesReadWhole for the measured rows and for why
+		// the copy is taken at the first read rather than here (#4747).
+		pr.aliases, pr.globalAliases, pr.suffixAliases = r.AliasesReadWhole()
 	}
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {

@@ -758,7 +758,26 @@ var zshOptions = []zshOption{
 	recorded("functionargzero", true),
 	setOptBacked("glob", true, "noglob", true),
 	recorded("globalexport", true),
-	recorded("globalrcs", true),
+	// And the narrower escape hatch beside `rcs` below: whether this shell
+	// reads the files in the machine's own directory, which the invocation
+	// initializes from `-d` and `--no-globalrcs`.
+	//
+	// The same shape `rcs` has and measured the same way on zsh 5.9.2,
+	// 2026-09-26, under `env -i` with an empty `HOME` and `ZDOTDIR`: `zsh -d
+	// -c '[[ -o globalrcs ]]'` is off where a plain `zsh -c` is on, a bare
+	// `setopt` in that shell prints `noglobalrcs`, `$-` carries `d`, and a
+	// script still moves the name both ways — `zsh -d -c 'setopt globalrcs'`
+	// answers on again and drops the letter with it. So the invocation
+	// decides the base and nothing is fixed, which is what `recordedOver`
+	// says and what `recorded` could not: the name read `on` in a `-d` shell
+	// until now, so a script asking `[[ -o globalrcs ]]` got the opposite
+	// answer from the shell it was running in (#4733).
+	//
+	// Recorded and not implemented, exactly as `rcs` is: which files are
+	// read is `driver`'s, and it has the invocation first-hand there.
+	recordedOver("globalrcs", true, func(r *interp.Runner) bool {
+		return !r.SystemStartupFilesSuppressed
+	}),
 	{
 		// GLOB_ASSIGN: the right-hand side of a **plain scalar assignment**
 		// is a pattern, so `a=*.txt` stores the names it matched and the

@@ -7063,6 +7063,7 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 // environment — there is only ever one set of variables, and `local` says
 // which of them to put back.
 func biLocal(r *Runner, _ context.Context, args []string) int {
+	word := r.localDeclarationWord()
 	// Asked here rather than at the prefix, so that a shell which never
 	// finds this builtin through `command` is never asked — see biCommand.
 	nowhere := r.localUnderCommandPrefix &&
@@ -7086,12 +7087,28 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	// `typeset`'s, because in both shells that read letters here they are
 	// the same letters meaning the same attributes.
 	var f declareFlags
-	if known := r.sem().LocalOptions; known != "" {
-		rest, flags, code := r.parseDeclareFlags("local", args, known)
+	if known := r.localDeclarationOptions(); known != "" {
+		rest, flags, code := r.parseDeclareFlags(word, args, known)
 		if code != 0 {
 			return code
 		}
 		args, f = rest, flags
+	}
+	if f.private && !r.declaringPrivate {
+		// `local -P` is the `private` word spelled as a letter, and the two
+		// are the same request rather than two that resemble each other —
+		// measured 2026-09-27, `local -P v=1` and `private v=1` leave
+		// `${(t)v}` at `scalar-local-hide-special` alike, both hide the name
+		// from a callee, and a second one of *either* is refused in the same
+		// sentence naming `private`. So the letter turns the flag on for the
+		// rest of this call rather than reaching the scope machinery itself.
+		//
+		// Only where the word has not already, so a `private -P` — which
+		// that shell takes — is not two requests. See
+		// interp/privatescope.go.
+		outer := r.declaringPrivate
+		r.declaringPrivate = true
+		defer func() { r.declaringPrivate = outer }()
 	}
 	if len(r.scopes) > 0 && (len(args) == 0 || f.print) {
 		// Bare `local` is a listing, and the shells do not agree what of —
@@ -7156,9 +7173,9 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// `local -gp q` still lists what `local` lists. Above the name
 		// check, because declareNames does that itself and a bad name
 		// refused twice is reported twice.
-		return r.declareNames("local", args, f)
+		return r.declareNames(word, args, f)
 	}
-	args, status, ended := r.builtinNames("local", args, false)
+	args, status, ended := r.builtinNames(word, args, false)
 	if r.unspecified {
 		return status
 	}
@@ -7173,7 +7190,16 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
-		if f.nameref && r.namerefNameCannotBeSubscripted("local", name) {
+		if r.refusePrivateRedeclaration(name) {
+			// `private` over a name the running call has already declared,
+			// which is the one refusal that belongs to the second word and
+			// not to this one. Ahead of everything below, because the
+			// declaration does not happen: the binding standing there keeps
+			// its value and its letters. See interp/privatescope.go.
+			status = 1
+			continue
+		}
+		if f.nameref && r.namerefNameCannotBeSubscripted(word, name) {
 			// A reference is a name, and a subscript is not part of one —
 			// `local` refuses it in the same words `declare` does, under its
 			// own word. Ahead of the subscript branch below, which would
@@ -7195,7 +7221,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		if base, subs, subscripted := r.operandSubscripts("local", name); subscripted {
+		if base, subs, subscripted := r.operandSubscripts(word, name); subscripted {
 			if hasValue {
 				// `local a[1]=v` is `typeset a[1]=v` under the other word, and
 				// the scope is the whole of what it adds — see declareelement.go.
@@ -7316,7 +7342,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			// See the declaration loop in interp/declarebuiltin.go, where
 			// the rows are.
 			adopts := !fresh || r.prefixEntryIsInThisCell(name)
-			if code := r.declareNameref("local", name, value, f, hasValue,
+			if code := r.declareNameref(word, name, value, f, hasValue,
 				appends, r.readonly[name] && !f.readonlyOff, adopts, held,
 				fresh); code != 0 {
 				status = code

@@ -717,6 +717,26 @@ func (r *Runner) declarePrintFiltered(names []string, form DeclarationListingFor
 	}
 	for _, name := range names {
 		d, known := r.listedDeclarationOf(name, produced[name], listing)
+		if known && dashP && r.privateHere(name) {
+			// A binding the running call declared **private**, which this
+			// listing does not write. Measured 2026-09-27 on zsh 5.9.2:
+			// inside `f(){ private v=1; local w=2; … }`, `typeset -p v` is
+			// **nothing** at status 0, `typeset -p` with no operand writes
+			// `typeset w=2` and no row for `v`, and `local -p v` is nothing
+			// at 0 as well.
+			//
+			// It is the `-p` listing alone, which is the control that says
+			// this is about the form rather than about the name being
+			// hidden: a bare `typeset` in the same function writes
+			// `local v=1` and `local w=2`, both of them. So the row exists
+			// and this form declines to write it.
+			//
+			// Silent at 0 and not the missing-name route below, which would
+			// report `v: not found` in the dialect that reports one — the
+			// name is there, and a listing saying it is not would be a
+			// different and worse answer.
+			continue
+		}
 		if known && r.listingIsALocalsOwn {
 			// The `local` word's own listing, in the dialect where it answers
 			// for the running call rather than for the shell: a name this

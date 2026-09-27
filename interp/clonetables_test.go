@@ -106,6 +106,9 @@ func seedStacks(r *Runner) {
 		savedReadonly:       map[string]bool{"seed": true},
 		savedHideInScope:    map[string]bool{"seed": true},
 		hiddenShadow:        map[string]bool{"seed": true},
+		private:             map[string]bool{"seed": true},
+		privateSealed:       map[string]sealedName{"seed": {}},
+		privateShielded:     append(make([]string, 0, 4), "seed"),
 		suspendedProducers:  map[string]suspendedProducer{"seed": {}},
 		savedAttrs:          map[string]nameAttributes{"seed": {}},
 		savedAssigned:       map[string]string{"seed": "v"},
@@ -365,6 +368,7 @@ func seedTables(r *Runner) {
 	r.trapFuncs = map[string]string{"seed": "v"}
 	r.hidden = map[string]bool{"seed": true}
 	r.hideInScope = map[string]bool{"seed": true}
+	r.privateShield = map[string]int{"seed": 1}
 	r.inheritedIgnored = map[string]bool{"seed": true}
 	r.integer = map[string]bool{"seed": true}
 	r.localMarked = map[string]bool{"seed": true}

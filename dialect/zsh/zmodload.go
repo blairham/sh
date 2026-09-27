@@ -234,6 +234,24 @@ var zmodloadFeatures = map[string][]string{
 	// than by letter. Measured 2026-09-26, `zmodload -lF zsh/rlimits` is
 	// `+b:limit`, `+b:ulimit` and `+b:unlimit`. See rlimits.go (#4736).
 	"zsh/rlimits": {"b:limit", "b:ulimit", "b:unlimit"},
+	// One builtin and the whole of the module: a `local` whose binding the
+	// functions the declaring call invokes read straight past. Measured
+	// 2026-09-26, `zmodload -lF zsh/param/private` on a loaded one is
+	// `+b:private` and nothing else.
+	//
+	// The entry lands *with* the builtin and the visibility rule behind it,
+	// which is this table's rule and matters here for the reason it matters
+	// for a condition: a `private` that declared an ordinary local would
+	// load the module, answer 0, and leave every callee reading a name the
+	// script had gone out of its way to keep from it. See zsh.go, where the
+	// word is registered, and interp/privatescope.go for the rule (#4738).
+	//
+	// The reference reaches the word without this line at all — it autoloads
+	// the module off the first `private` — so `zmodload zsh/param/private`
+	// there is a script being explicit rather than a script switching
+	// something on. Here it is the ordinary question this table answers:
+	// every feature the module names is present, so it loads.
+	"zsh/param/private": {"b:private"},
 	// One infix condition and nothing else: `[[ subject -regex-match
 	// expression ]]`, a POSIX extended regular expression rather than a
 	// PCRE. Measured 2026-09-26 on zsh 5.9.2, `zmodload -lF zsh/regex` is

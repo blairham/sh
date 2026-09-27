@@ -123,7 +123,20 @@ func TestReadKeysDoesNotSwallowALetter(t *testing.T) {
 // unimplemented list broke nothing at all.
 func TestNoLetterIsBothAcceptedAndCalledMissing(t *testing.T) {
 	sem, dg := zsh.Semantics(), zsh.Diagnostics()
-	accepted := map[string]string{"read": sem.ReadOptions}
+	// `private` joined `read` here with #4738, and it is the second word in
+	// the tree to hold both halves of the pair: `-E` and `-m` are letters
+	// that shell takes and this engine has not built under a scoped
+	// declaration, so they are named missing and must not also be accepted.
+	// A letter in both is refused as missing while it works; a letter in
+	// neither is `bad option` for something zsh has.
+	accepted := map[string]string{
+		"read":    sem.ReadOptions,
+		"private": sem.PrivateOptions,
+		"local":   sem.LocalOptions,
+		"integer": sem.IntegerOptions,
+		"float":   sem.FloatOptions,
+		"typeset": sem.DeclareOptions,
+	}
 	for builtin, missing := range dg.UnimplementedOptionLetters {
 		take, known := accepted[builtin]
 		if !known {

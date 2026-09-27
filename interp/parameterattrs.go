@@ -137,9 +137,34 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		Upper:     r.uppered[name],
 		Unique:    r.unique[name],
 		HideValue: r.hidden[name],
-		Hidden:    r.hideInScope[name],
+		// A **private** binding carries both of the last two words without
+		// either having been written on the declaration, and that is
+		// measured rather than reasoned from. zsh 5.9.2, 2026-09-27, inside
+		// a function:
+		//
+		//	private v=1;    ${(t)v}   scalar-local-hide-special
+		//	private -i n=5; ${(t)n}   integer-local-hide-special
+		//	private -a a;   ${(t)a}   array-local-hide-special
+		//	private -A m;   ${(t)m}   association-local-hide-special
+		//	private -x e=1; ${(t)e}   scalar-local-export-hide-special
+		//	local l=1;      ${(t)l}   scalar-local     ← the control
+		//
+		// So the shell being modeled builds a private out of the two
+		// attributes this engine already has words for: `hide`, which says a
+		// local declaration of the name is an ordinary parameter, and
+		// `special`, which says the name is the shell's own rather than a
+		// script's. The control row is what makes the pair a statement about
+		// `private` and not about every local.
+		//
+		// Answered here rather than by *setting* the two: writing
+		// `hideInScope` would suspend producers and move the freeze — see
+		// hideinscope.go, where the letter has real work behind it — for a
+		// binding that needs none of it, and marking the name shell-own would
+		// put it in tables the shell walks. What the word reports is a
+		// description, and a description is what this function is.
+		Hidden: r.hideInScope[name] || r.privateHere(name),
 		Provided: r.DynamicParameter(name) || r.AbsentParameter(name) ||
-			r.shellOwnParameter(name),
+			r.shellOwnParameter(name) || r.privateHere(name),
 	}
 	_, a.Tied = r.tied[name]
 	if w, ok := r.fieldWidth[name]; ok {

@@ -13452,6 +13452,28 @@ type Semantics struct {
 	// which is what those two really do with it.
 	IntegerOptions string
 
+	// PrivateOptions is the set of letters the `private` builtin takes,
+	// spelled the way IntegerOptions is and empty for the same reason: empty
+	// means the word is not registered at all, which is the answer in every
+	// dialect but one. See interp/privatebuiltin.go for the word and
+	// interp/privatescope.go for what the declaration it makes does.
+	//
+	// A field of its own rather than LocalOptions reused, because the one
+	// shell with the word gives it a set that is neither its `local`'s nor
+	// its `typeset`'s. Measured 2026-09-27 on zsh 5.9.2 under `-f`, a letter
+	// at a time against `private -X v` inside a function: it takes `a`, `A`,
+	// `E`, `F`, `H`, `h`, `i`, `L`, `l`, `m`, `p`, `R`, `r`, `t`, `u`, `U`,
+	// `x` and `Z`, and refuses `f`, `g`, `M`, `n`, `T` and `z` as bad
+	// options. So it is that shell's `typeset` set less `f`, `g` and `T` —
+	// where its `local` has `T` and has neither `E` nor `m`, which is why
+	// neither of the two existing fields is the answer.
+	//
+	// `-g` being refused is the letter worth noticing: it is the one that
+	// says *do not take a scope*, and a declaration that took no scope could
+	// not be private to a call, so the word and the letter are a
+	// contradiction rather than a combination.
+	PrivateOptions string
+
 	// FloatOptions is the set of letters the `float` builtin takes, spelled
 	// the way IntegerOptions is and empty for the same reason: empty means
 	// the builtin is not registered at all, which is the answer everywhere

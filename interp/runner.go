@@ -1061,6 +1061,26 @@ type Runner struct {
 	// live only inside one listing.
 	listingIsALocalsOwn bool
 
+	// declaringPrivate is set while a declaration word that makes **private**
+	// bindings is running, and is read in Runner.shadow — the one place a
+	// declaration makes its binding, whatever word, letters or kind it
+	// carries. See interp/privatescope.go and Runner.DeclaringPrivateName.
+	declaringPrivate bool
+	// privateDeclared says this shell has taken a private shadow at least
+	// once, and it is the whole of what a shell without the word pays: one
+	// bool compared against false at each function call, and nothing at all
+	// on any path that reads or writes a name. See sealPrivateNames.
+	privateDeclared bool
+	// privateShield is the names a frame may read the absence of and may not
+	// write — one enclosing call declared each of them private over nothing,
+	// so the seal left this frame with no such parameter and an assignment
+	// there is a refusal rather than the creation of a global it looks like.
+	//
+	// A count per name rather than a bool, because seals nest. Nil until the
+	// first such seal, which is what keeps the question off the assignment
+	// path in every other dialect — see Runner.refusePrivateWrite.
+	privateShield map[string]int
+
 	// producedReading is the value a produced parameter last gave a *script*,
 	// kept for the one listing form that writes the reading rather than
 	// taking a new one — see ProducedListingLastReading.
@@ -9705,6 +9725,23 @@ type scope struct {
 	// the way out. Nil in every other dialect, and in this one for a call
 	// with nothing declared below it. See staticscope.go.
 	sealed map[string]sealedName
+	// private is the names this call declared **private** — a local that the
+	// functions this call goes on to invoke read straight past. Nil for
+	// every call that declared none, which is nearly all of them, and nil in
+	// every dialect without the word. See interp/privatescope.go.
+	private map[string]bool
+	// privateSealed is what an enclosing call's private declarations were
+	// when this call took its scope, put aside for the duration so that this
+	// frame reads what they displaced. The same shape `sealed` above keeps
+	// and deliberately the same type, because it is the same operation over
+	// a narrower set of names.
+	privateSealed map[string]sealedName
+	// privateShielded is the subset of those whose private displaced
+	// *nothing*, so that this frame has no such parameter and a write to one
+	// is refused. Kept as the list to unshield at the return rather than
+	// recomputed, since what was absent on the way in is not what is absent
+	// on the way out. See Runner.privateShield.
+	privateShielded []string
 	// owner is the runner whose call pushed this scope.
 	//
 	// A subshell is a clone that shares the stack, so a scope reached from
@@ -10932,6 +10969,15 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 // is the same, and so is every answer about what the refusal costs — see the
 // ReadonlyReassignment axes below.
 func (r *Runner) refuseReadonly(name string, form assignForm) bool {
+	if r.refusePrivateWrite(name) {
+		// A name an enclosing call declared private over nothing, which this
+		// frame can see the shape of and may not write. Ahead of the freeze,
+		// because the two are different refusals with different wordings and
+		// a name can be neither, either or both — and this gate is the one
+		// every route to a stored name already comes through. See
+		// interp/privatescope.go.
+		return true
+	}
 	if !r.readonly[name] {
 		return false
 	}
@@ -12161,6 +12207,13 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		return
 	}
 	if r.unspecified {
+		return
+	}
+	if r.privateKindWouldChange(a) {
+		// An array literal over a **private** the declaration made a scalar.
+		// A private keeps the kind it was declared with, where an ordinary
+		// local is retyped by the literal — see interp/privatescope.go, where
+		// the control row is.
 		return
 	}
 	// **A subscript does not aim a reference.** A write to a name with

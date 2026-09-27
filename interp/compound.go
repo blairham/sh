@@ -1364,6 +1364,13 @@ func (r *Runner) popScope(sc *scope) {
 	// whatever this body wrote to the shell's own names underneath them.
 	// After this scope's own restore above, so the name it declared is the
 	// caller's again before the caller's is put back over it.
+	// And the private ones, ahead of the whole-scope seal below: the narrower
+	// seal went up second, so it is the inner of the two and comes off
+	// first. The two never stand over one call as things are — the dialect
+	// that has a private word hands its caller's locals down, and the one
+	// that seals them has no such word — but an order that is only right by
+	// accident is the kind that stops being right.
+	r.unsealPrivateNames(sc)
 	r.unsealCallerLocals(sc)
 	r.scopes = r.scopes[:len(r.scopes)-1]
 	// And the message for every name the unwind moved, last of all: an
@@ -1798,6 +1805,15 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// of names and a body that never reads `v` may still write it. See
 	// staticscope.go.
 	r.sealCallerLocals(sc)
+	// And, in the dialect with a second declaration word, the names the
+	// calls below this one declared **private** — put aside for exactly the
+	// same reason and through the same machinery, over a set of names
+	// instead of over all of them. Here rather than at the first read
+	// because the boundary is the *frame*: a body that never mentions the
+	// name may still write it, and a subshell or a command substitution
+	// inside the declaring call is not a frame and sees it. See
+	// interp/privatescope.go, where the measured table is.
+	r.sealPrivateNames(sc)
 	// And whatever a dialect saves around every call, taken now rather than
 	// when the body asks for it: the option table, in the shell whose
 	// options are function-scoped. See AtEveryFunctionCall for why the

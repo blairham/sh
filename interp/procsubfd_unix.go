@@ -192,7 +192,7 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) 
 	// Before the park, because the number it gives up is one of the numbers
 	// the park is about to ask for.
 	shell = raiseShellEnd(shell, want)
-	parked, pub, err := parkDescriptor(child, dir, want, view)
+	parked, pub, fellBack, err := parkDescriptor(child, dir, want, view)
 	// The original is closed either way: on success the parked duplicate is
 	// the one the path names, and on failure there is nothing to hand over.
 	_ = child.Close()
@@ -207,6 +207,14 @@ func newProcSubPipe(childWrites bool, dir string, want []int, view substFdView) 
 		// descriptor's: a borrowed number was never the kernel's to give, so
 		// there is nothing to ask it again about.
 		parked = reparkPreferred(parked, dir, want, view)
+		if fellBack && int(parked.Fd()) == pub {
+			// Nothing in the list landed even on the second pass, so the
+			// number is the lowest free one — and *that* question has a
+			// second answer now too, for exactly reparkPreferred's reason:
+			// this pipe's own original was sitting on the best number while
+			// it was being duplicated. See reparkLowest.
+			parked = reparkLowest(parked, dir)
+		}
 		pub = int(parked.Fd())
 	}
 	ends := procSubEnds{shell: shell, child: parked, fd: pub, path: dir + "/" + strconv.Itoa(pub)}
@@ -331,6 +339,47 @@ func reparkPreferred(parked *os.File, dir string, want []int, view substFdView) 
 	return parked
 }
 
+// reparkLowest asks the *fallback* again, once, now that this pipe's own
+// originals are closed.
+//
+// reparkPreferred is this for the wish list and the argument is the same one:
+// the park has to run while the original is still open, because the original
+// is what is being duplicated, so it is itself occupying a number the answer
+// wants. Where a wish lands, reparkPreferred is the whole of the fix. Where
+// **none** does — a process holding more descriptors than the list spans,
+// which is every rule here at seventy — the answer is the lowest free number
+// and the original was sitting on it.
+//
+// Measured 2026-09-26 with 3..72 opened on the null device before the shell
+// started, so the lowest free number is 73: `bash -c 'echo <(true)'` is
+// `/dev/fd/73` and ksh93 answers the same, where on a clean table they answer
+// 63 and 3. This shell answered one above the lowest free, every time,
+// because the child end of its own pipe was on it during the park (#4463).
+//
+// Only reached where the park fell past the whole list, which is what keeps
+// it from undoing a rule: a dialect that publishes at 63 with 10 free has
+// landed a wish, and asking for the lowest free number there would move the
+// answer to 10.
+//
+// Failure is not one: the number in hand is already a working descriptor.
+func reparkLowest(parked *os.File, dir string) *os.File {
+	cur := int(parked.Fd())
+	got, err := fcntlInt(cur, syscall.F_DUPFD_CLOEXEC, firstProcSubFd)
+	if err != nil {
+		return parked
+	}
+	if got >= cur {
+		// Nothing lower came free — the original was not what was in the way
+		// — so the number in hand is still the answer.
+		_ = syscall.Close(got)
+		return parked
+	}
+	// No SetNonblock: the duplicate shares the open file description with the
+	// one parkDescriptor already cleared the mode on.
+	_ = parked.Close()
+	return os.NewFile(uintptr(got), dir+"/"+strconv.Itoa(got))
+}
+
 // parkDescriptor duplicates a file onto one of the numbers want asks for, and
 // answers both the descriptor and the number to publish.
 //
@@ -383,10 +432,10 @@ func reparkPreferred(parked *os.File, dir string, want []int, view substFdView) 
 // Cleared on the duplicate, which is the end nothing in this process reads or
 // writes through: the shell's own end is the pipe's *other* description and
 // keeps the mode Go gave it, so the poller is untouched.
-func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.File, int, error) {
+func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.File, int, bool, error) {
 	conn, err := f.SyscallConn()
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, false, err
 	}
 	// Where a borrowed number's descriptor goes: above everything this
 	// dialect could publish, which is raiseShellEnd's floor and is chosen for
@@ -399,6 +448,10 @@ func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.F
 	}
 	var parked, published int
 	var parkErr error
+	// Whether the answer is the floor rather than a wish, which the caller
+	// needs in order to know which of the two second passes to make. See
+	// reparkPreferred and reparkLowest.
+	fellBack := false
 	if cerr := conn.Control(func(fd uintptr) {
 		for _, n := range want {
 			if view.isTaken(n) {
@@ -439,19 +492,51 @@ func parkDescriptor(f *os.File, dir string, want []int, view substFdView) (*os.F
 			// would leak one descriptor per wish that missed.
 			_ = syscall.Close(got)
 		}
+		// The wish list is exhausted, so the number will be the lowest free
+		// one — which is what every shell in the panel answers from a table
+		// too crowded for its own rule. Measured 2026-09-26 with 3..72
+		// opened on /dev/null before the shell started, so the lowest free
+		// number is 73: `bash -c 'echo <(true) <(true) <(true)'` is `73 74
+		// 75` where on a clean table it is `63 62 61`, and ksh93 answers the
+		// same three where it answers `3 4 5`. So the descent and the two
+		// climbs collapse onto one rule and the fallback below is it.
+		//
+		// **The release does not collapse with them**, and that is the half
+		// this used to lose. A number a fork would have freed is published
+		// without being taken wherever it is offered, and the wish list is
+		// the only place it was offered — so a nested substitution in a
+		// crowded table took a fresh number instead of the enclosing one.
+		// Measured in the same run: `bash -c 'cat <(echo <(true))'` is
+		// `/dev/fd/73` with 3..72 held, the same number the flat case takes,
+		// and ksh93 and zsh each republish theirs too. Asked here rather
+		// than by extending the list, because what makes these numbers
+		// special is that the kernel would refuse them and they are correct
+		// anyway.
+		for _, n := range view.released {
+			if view.isTaken(n) {
+				continue
+			}
+			got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, floor)
+			if err != nil {
+				continue
+			}
+			parked, published = got, n
+			return
+		}
+		fellBack = true
 		parked, parkErr = fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, firstProcSubFd)
 		published = parked
 	}); cerr != nil {
-		return nil, 0, cerr
+		return nil, 0, false, cerr
 	}
 	if parkErr != nil {
-		return nil, 0, parkErr
+		return nil, 0, false, parkErr
 	}
 	if err := syscall.SetNonblock(parked, false); err != nil {
 		_ = syscall.Close(parked)
-		return nil, 0, err
+		return nil, 0, false, err
 	}
-	return os.NewFile(uintptr(parked), dir+"/"+strconv.Itoa(parked)), published, nil
+	return os.NewFile(uintptr(parked), dir+"/"+strconv.Itoa(parked)), published, fellBack, nil
 }
 
 // fcntlInt is the one fcntl this package needs, with the errno turned into an

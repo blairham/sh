@@ -1686,6 +1686,13 @@ func Semantics() interp.Semantics {
 	// [zb] [zq] [y*]` here where ksh93u+ answers `[z*] [y*]`, and `g='[ab]'`
 	// goes the same way (#4843).
 	s.BraceMakesAProducedStarOrBracketText = interp.No
+	// And it frees nothing either: bash reads group syntax out of a value
+	// everywhere, brace or no brace, which is
+	// ExpansionResultSuppliesGroupSyntax above. With `za` and `ya` in the
+	// directory, `g='?(a)'; f {z,y}$g` is `[z?(a)] [y?(a)]` on 5.3.20 —
+	// `extglob` is off by default, and turning it on makes both rows live
+	// rather than one of them (#4848).
+	s.BraceFreesProducedGroupSyntax = interp.No
 	// A produced brace is data here too, which is the same fact as the
 	// braces being found in the word the parse cut: `e='{a,b}'; echo $e`
 	// is `{a,b}` on 5.3.20 and 3.2.57 alike.

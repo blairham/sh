@@ -2375,6 +2375,9 @@ func Semantics() interp.Semantics {
 	// expansion either, so no text is scanned for braces, written or
 	// produced — `e='{a,b}'; echo $e` is the one word `{a,b}`.
 	//
+	// unanswered BraceFreesProducedGroupSyntax: this shell has no brace
+	// expansion and no pattern groups either, so neither half of the
+	// question can be put to it.
 	// unanswered BraceMakesAProducedStarOrBracketText: this shell has no
 	// brace expansion either, so a `{` in a word is an ordinary character
 	// and there is no brace to take a produced pattern's match away.

@@ -3754,6 +3754,37 @@ type Semantics struct {
 	// which zsh answers no, so a written brace there changes nothing that
 	// was ever going to be a pattern.
 	BraceMakesAProducedStarOrBracketText Answer
+	// BraceFreesProducedGroupSyntax reads the `(`, `)` and `|` an expansion
+	// produced behind a `{` the script wrote unquoted as the syntax of a
+	// pattern group, where the same characters out of the same value are
+	// four ordinary ones everywhere else in that column.
+	//
+	// It is [Semantics.ExpansionResultSuppliesGroupSyntax] read the other way
+	// round. In a directory holding `za`, `ya`, `{z}` and `{z}a`, so that
+	// either reading of either row has a file it could reach:
+	//
+	//	g='?(a)'; echo z$g       z?(a)       the recorded reading, no brace
+	//	g='?(a)'; echo {z,y}$g   za ya       in ksh93u+, and `z?(a) y?(a)` in
+	//	                                     bash 5.3.20
+	//	g='?(a)'; echo {z}$g     {z} {z}a    a brace that is no list does it
+	//	                                     just the same
+	//
+	// The first row is what says it is the brace and not the value. The keys
+	// are BraceStopsFieldSplitting's: the **character** and not a list, the
+	// **written unquoted** one — a quoted, escaped or produced `{` frees
+	// nothing — and the **rest of the word**, since what stands in front of
+	// the brace keeps its text.
+	//
+	// The openers `*` and `@` stay text, which is not an exception to it: a
+	// group is introduced by one of `? * + @ !` and a bare `(…)` is ordinary
+	// text, so an opener that is itself marked takes its parentheses with it.
+	// See producedPatternLeavesABraceMarks and interp/bracegroupsyntax.go.
+	//
+	// Asked only where an expansion's result is matched against the
+	// filesystem at all and the dialect has groups for the syntax to build:
+	// zsh answers GlobExpansionResults no, and a shell with no brace
+	// expansion never reaches the question.
+	BraceFreesProducedGroupSyntax Answer
 	// BraceScanReadsProducedText reads brace syntax in the text an expansion
 	// produced and not only in the text the script wrote. ksh93u+ does:
 	// `e='{a,b}'; echo $e` is `a b` there and `{a,b}` in bash 5.3.20, bash

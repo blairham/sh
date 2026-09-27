@@ -1203,6 +1203,9 @@ func Semantics() interp.Semantics {
 	// the one word `{a,b}` on dash 0.5.12 because a brace is never syntax
 	// here, written or produced.
 	//
+	// unanswered BraceFreesProducedGroupSyntax: dash has no brace expansion
+	// and no pattern groups either, so neither half of the question can be
+	// put to it.
 	// unanswered BraceMakesAProducedStarOrBracketText: dash has no brace
 	// expansion, so a `{` in a word is an ordinary character and there is no
 	// brace to take a produced pattern's match away.

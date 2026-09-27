@@ -298,6 +298,41 @@ against: zsh never matches an expansion's result against the filesystem
 (`GlobExpansionResults`), so `g='*'; f z$g` is the single field `z*` there with
 `za` present, and there is nothing for a brace to take away.
 
+The same brace reads that column's **group** syntax the other way round, and
+`BraceFreesProducedGroupSyntax` is that axis. Outside a brace, ksh93u+ globs
+an expansion's result and refuses to let the result build a pattern *group* —
+which is `ExpansionResultSuppliesGroupSyntax` — and behind a written unquoted
+`{` the `(`, `)` and `|` in that result are syntax after all. With `za`, `ya`,
+`{z}` and `{z}a` in the directory:
+
+| probe | ksh93 | bash 5.3 |
+| --- | --- | --- |
+| `g='?(a)'; f z$g` | `[z?(a)]` | same |
+| `g='?(a)'; f {z,y}$g` | `[za] [ya]` | `[z?(a)] [y?(a)]` |
+| `g='+(a)'; f {z,y}$g` | `[za] [ya]` | `[z+(a)] [y+(a)]` |
+| `g='a\|b'; f {z,y}@($g)` | `[za] [zb] [ya] [yb]` | `[z@(a\|b)] …` |
+| `g='?(a)'; f {z}$g` | `[{z}] [{z}a]` | `[{z}?(a)]` |
+| `g='?(a)'; f "{z}"$g` | `[{z}?(a)]` | same |
+| `b='{'; g='?(a)'; f ${b}z,y}$g` | `[z?(a)] [y?(a)]` | — |
+
+The keys are the two rules above's: the **character** and not a list, so the
+fifth row goes the way the second does; the **written unquoted** brace, so a
+quoted, escaped or produced one frees nothing; and the **rest of the word**.
+
+**The fifth row is why the fixture matters more here than anywhere else in
+this file.** `{z}?(a)` matches nothing in a directory with no `{z}` in it, so
+that row reads `[{z}?(a)]` under *both* answers and was written up as "the
+brace has to have expanded" — a key the shell does not have, off a row that
+could not tell the two apart. `{z}` and `{z}a` are what make it falsifiable.
+
+**The openers `*` and `@` stay text**, and that is not an exception to the
+rule but a consequence of the one above it. A pattern group is introduced by
+one of `? * + @ !` and a bare `(…)` is ordinary text, so an opener that is
+itself marked takes its parentheses with it: `*` is marked by the axis above
+and `@` joins it there — invisible everywhere else, since an escaped ordinary
+character is that character. With `za`, `z*a` and `z@a` in the directory,
+`g='*(a)'; f {z,y}$g` and `g='@(a)'; f {z,y}$g` reach none of the three.
+
 An expansion in the body that yields **fields of its own** is not this
 reading's: `set -- 1 2; echo {$@}` is the two words `{1` and `2}` in ksh93 and
 zsh alike, the group's braces having landed in different words. A body's

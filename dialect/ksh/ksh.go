@@ -2146,6 +2146,13 @@ func Semantics() interp.Semantics {
 	// controls are a produced `*` with no brace in the word and a written
 	// one behind a brace, and both match here (#4843).
 	s.BraceMakesAProducedStarOrBracketText = interp.Yes
+	// And the group syntax a value holds behind that brace is live, where
+	// the same three characters out of the same value are ordinary
+	// everywhere else here — see ExpansionResultSuppliesGroupSyntax. With
+	// `za`, `ya`, `{z}` and `{z}a` in the directory, `g='?(a)'; f {z,y}$g`
+	// is `[za] [ya]` and `f z$g` is the one field `z?(a)`, which is what
+	// says it is the brace (#4848).
+	s.BraceFreesProducedGroupSyntax = interp.Yes
 	// The one shell that reads brace syntax in the text an expansion
 	// produced: `e='{a,b}'; echo $e` is `a b` and `echo x$e` is `xa xb`,
 	// where the other three answer the word as written. A brace pairs only

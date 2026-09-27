@@ -130,10 +130,23 @@ print "after=[$path]"`)
 	// it was reachable there because the declaration was taken outright — and
 	// it belongs to the letter rather than to this name set.
 	out, st = answersRun(t, `zmodload zsh/param/private
-f() { private + path; print "st=$?"; private -a + HOME; print "st=$?" }
+f() { private + path; print "st=$?"; private + HOME; print "st=$?" }
 f`)
 	if out != "st=0\nst=0\n" || st != 0 {
 		t.Errorf("private + over the shell's own = %q (status %d), want both 0", out, st)
+	}
+	// A **kind letter** on such a line is not past it, and this row used to
+	// read `private -a + HOME` and expect 0 because nothing here refused a
+	// kind letter yet. It is refused in the reference, in the other
+	// sentence, and it ends the shell: `f:private: HOME: can't change type
+	// of a special parameter`. Two rules over one name, and the type one is
+	// asked first — see interp/parameterkindfixed.go (#4834).
+	out, st = answersRun(t, `zmodload zsh/param/private
+f() { private -a + HOME; print "st=$?" }
+f
+print after`)
+	if want := "f:private: HOME: can't change type of a special parameter\n"; out != want || st != 1 {
+		t.Errorf("a kind letter on a plus line = %q (status %d), want %q at 1", out, st, want)
 	}
 	// With a value the sign is a declaration again, and the parameter is left
 	// exactly as it was.

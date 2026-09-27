@@ -6701,6 +6701,21 @@ type Diagnostics struct {
 	// which is why they are two fields and not one with a flag. Empty falls
 	// back to the substrate's wording.
 	PrivateRedeclaresName string
+	// SpecialParameterKind is a kind letter aimed at a name the shell holds
+	// in a slot of its own. One verb: the name.
+	//
+	// The builtin is named in the *location* rather than in the sentence,
+	// which is where the one dialect with the refusal puts it:
+	// `zsh:typeset:1: path: can't change type of a special parameter`, and
+	// `f:local: path: …` from inside a function. The same shape
+	// InconsistentType above has, and for the same reason.
+	//
+	// Fatal: the shell ends at 1 and the rest of the script never runs.
+	// Empty falls back to the substrate's wording, which is the measured
+	// one — and a dialect that marks no name reaches this field at all, so
+	// the wording is not what turns the refusal on. See
+	// Runner.MarkParameterKindFixed.
+	SpecialParameterKind string
 	// UnsetReadonly is `unset` refusing to remove a readonly name. One verb:
 	// the name — the *base* name, since a subscripted operand is refused by
 	// the variable it indexes rather than by the element.

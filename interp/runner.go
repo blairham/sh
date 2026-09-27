@@ -4472,6 +4472,12 @@ type Runner struct {
 	// a name out of that one and leaves this one alone, and the two sets are
 	// not the same names anyway.
 	scopeFixed map[string]bool
+	// kindFixed names the parameters the shell holds in a slot of a fixed
+	// kind, against the set of kinds that slot will take. A declaration
+	// whose kind letter would leave the name anything else is refused. See
+	// interp/parameterkindfixed.go, which is a different table from the one
+	// above and says why.
+	kindFixed map[string]parameterKinds
 	// traced names the parameters carrying the trace attribute — `typeset
 	// -t`. Every shell on the panel but the two without the builtin records
 	// it and lists it back, and none of them lets it change what a *value*

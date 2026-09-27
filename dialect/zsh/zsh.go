@@ -5316,6 +5316,12 @@ func Diagnostics() interp.Diagnostics {
 		// made by `private` or by `local` — where `local` or `typeset` over
 		// a *private* is taken at 0.
 		PrivateRedeclaresName: "%[1]s: can't change scope of existing param: %[2]s",
+		// And a kind letter aimed at a name this shell holds a slot for:
+		// `f:typeset: path: can't change type of a special parameter`, the
+		// shell ending at 1 with the rest of the script unrun, and the
+		// written word in the location under every declaration utility.
+		// Measured 2026-09-27; see dialect/zsh/kindfixedparameters.go.
+		SpecialParameterKind: "%s: can't change type of a special parameter",
 		// The one dialect that words the refusal to unset exactly as it words
 		// the refusal to assign, and the only one that does not name `unset`.
 		UnsetReadonly: "read-only variable: %s",
@@ -6482,6 +6488,7 @@ func Apply(r *interp.Runner) {
 	// which is a different set from the one above and is measured rather than
 	// derived from it — see scopefixedparameters.go, and #4802.
 	markTheScopeFixedParameters(r)
+	markTheKindFixedParameters(r)
 	// And the four scalar pairs that are one parameter under two names —
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)

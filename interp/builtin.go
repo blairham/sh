@@ -7276,6 +7276,15 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// it; the hide-in-scope letter asks for an ordinary local over the
 		// shell's own name, which is the one way past the second reason
 		// alone. Both measured — see Runner.refusePrivateDeclaration.
+		if r.kindLetterOverAShellParameterRefused(name, f) {
+			// A kind letter aimed at one of the shell's own parameters. Ahead
+			// of `private`'s two refusals, which is measured rather than
+			// chosen: `f(){ private -A path }` is the type sentence and is
+			// fatal, where `f(){ private -i RANDOM }` — a letter that slot
+			// takes — is the scope sentence at 1 with the script carrying on.
+			// See interp/parameterkindfixed.go.
+			return r.status
+		}
 		if r.refusePrivateDeclaration(name,
 			f.plusAlone && !hasValue, f.hideNamed && f.hide) {
 			// `private` over a name the running call has already declared,

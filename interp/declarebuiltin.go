@@ -1653,6 +1653,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// Runner.compoundMemberThroughAReference.
 		name = r.compoundMemberThroughAReference(name)
 		f := r.exportContainerLetterForThisOperand(name, f, hasValue)
+		if r.kindLetterOverAShellParameterRefused(name, f) {
+			// A kind letter aimed at one of the shell's own parameters, which
+			// is refused before anything this operand would do and ends the
+			// script. Ahead of the array-literal refusal below because the
+			// two are asked of different things — that one is about this
+			// line's *value* and this one about the name — and the shell
+			// that has both reaches this one first: `typeset -i path=(1 2)`
+			// is the special-parameter sentence there. See
+			// interp/parameterkindfixed.go.
+			return r.status
+		}
 		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
 			// Ahead of everything else this operand would do, because the
 			// shell that refuses declares nothing: the name is not brought

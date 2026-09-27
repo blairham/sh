@@ -257,13 +257,27 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign) {
 		// The value first and the two slices afterwards, in that order: the
 		// lookup reads them as a pair, and an assignment recorded before its
 		// value would be found with nothing beside it.
-		value := r.prefixExpansion(a)
-		r.prefixTraceAssigns = append(r.prefixTraceAssigns, a)
-		r.prefixTraceValues = append(r.prefixTraceValues, value)
+		joined := r.recordPrefixTraceValue(a, r.prefixExpansion(a))
 		if name, ok := r.prefixHoldableName(a); ok {
-			held.hold(r, name, r.prefixJoined(a, value))
+			held.hold(r, name, joined)
 		}
 	}
+}
+
+// recordPrefixTraceValue keeps this entry's expansion for the trace and for
+// the route that applies it, and hands back the value the name comes to.
+//
+// The join is taken **here**, before the caller holds it under the name for
+// the entries behind it — see interp/prefixsees.go. Taking it again later
+// would read the held value and append the word to it a second time, which is
+// what the ordered walk did: it writes each entry's trace line inside the same
+// loop that does the holding (#4431).
+func (r *Runner) recordPrefixTraceValue(a *syntax.Assign, value string) string {
+	joined := r.prefixJoined(a, value)
+	r.prefixTraceAssigns = append(r.prefixTraceAssigns, a)
+	r.prefixTraceValues = append(r.prefixTraceValues, value)
+	r.prefixTraceJoins = append(r.prefixTraceJoins, joined)
+	return joined
 }
 
 // prefixTraceValue is the value expanded for this assignment's trace, and
@@ -273,6 +287,17 @@ func (r *Runner) prefixTraceValue(a *syntax.Assign) (string, bool) {
 	for i, held := range r.prefixTraceAssigns {
 		if held == a {
 			return r.prefixTraceValues[i], true
+		}
+	}
+	return "", false
+}
+
+// prefixTraceJoin is what an appending entry came to, as recorded when it
+// expanded. False for an assignment nothing has expanded for this command.
+func (r *Runner) prefixTraceJoin(a *syntax.Assign) (string, bool) {
+	for i, held := range r.prefixTraceAssigns {
+		if held == a {
+			return r.prefixTraceJoins[i], true
 		}
 	}
 	return "", false
@@ -289,9 +314,16 @@ func (r *Runner) prefixTraceWords(assigns []*syntax.Assign, d Diagnostics) []str
 		if a.Append && d.TracePrefixAppendIsTheJoinedValue {
 			// One column writes an appending prefix as the assignment it
 			// came to rather than as the assignment it was — see the field.
+			// The joined value as it was recorded, never joined again: by
+			// the time the ordered walk writes this line the name already
+			// holds the join (#4431).
+			joined, ok := r.prefixTraceJoin(a)
+			if !ok {
+				joined = r.prefixJoined(a, value)
+			}
 			plain := *a
 			plain.Append = false
-			words = append(words, r.traceAssign(&plain, r.prefixJoined(a, value), r.prefixGlobTraced(a), d))
+			words = append(words, r.traceAssign(&plain, joined, r.prefixGlobTraced(a), d))
 			continue
 		}
 		words = append(words, r.traceAssign(a, value, r.prefixGlobTraced(a), d))

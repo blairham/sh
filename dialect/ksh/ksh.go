@@ -3114,6 +3114,10 @@ func Semantics() interp.Semantics {
 	// *succeeds*: `V=1 export > /dev/null 2>&1` writes the complaint here
 	// because the check happens before the `2>&1` is in force.
 	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedFirstWhereItPersists
+	// And whatever the order against the redirections, the frozen name's
+	// own *value* is evaluated first and its failure is what is written —
+	// `readonly r=1; r=$((1/0)) echo RAN` is the division here (#4685).
+	s.FrozenPrefixIsCheckedBeforeItsValue = interp.No
 	// The same as the bash column: measured 2026-09-11 on ksh93u+,
 	// `typeset -A m; m[k]=9; $(( m[*] ))` is 0.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No
@@ -4231,9 +4235,15 @@ func Diagnostics() interp.Diagnostics {
 		// measured. The location is already name-only for line 1 under `-c`;
 		// this says so for every line, since a construct typed over three
 		// lines is still `ksh: syntax error: …` there.
-		PromptLocation:              interp.LocationNameOnly,
-		BuiltinLocation:             interp.LocationBracketLineAfterFirst,
-		ScriptBuiltinLocation:       interp.LocationBracketLine,
+		PromptLocation:        interp.LocationNameOnly,
+		BuiltinLocation:       interp.LocationBracketLineAfterFirst,
+		ScriptBuiltinLocation: interp.LocationBracketLine,
+		// And a value in an assignment prefix that will not expand is the
+		// builtin's where the prefix is that builtin's environment, and this
+		// shell's where it is a store this shell keeps. The eighteen rows
+		// are in interp/prefixfailurelocation.go; this is the only column
+		// with two shapes to choose between (#4683).
+		PrefixFailureIsTheBuiltins:  true,
 		ParseFailureNamesItsOwnLine: true,
 		// And for a here-document body that line is the one the message is
 		// located at rather than the body's own. See

@@ -189,6 +189,23 @@ func (r *Runner) prefixFailureIsThisCommandsAlone(p prefixCommand) bool {
 	if r.sem().FailedExpansionAbandonsTheLine == Yes {
 		return false
 	}
+	if r.posixModeSharpenedTheAbandon() {
+		// POSIX mode is what turned this column's "give up the line" into
+		// "end the shell", and it does so for **every** kind of command
+		// word. Measured 2026-09-26 on bash 5.3.20 over a script file with
+		// `set -o posix` and `a=$((1/0)) <command>` on the line after it:
+		// `echo RAN`, `:`, a function, `/bin/echo RAN`, `command echo RAN`
+		// and a word that names nothing all write the complaint and stop,
+		// and all six write the complaint and reach the next line without
+		// the mode. So the kind-keyed containment below is not this
+		// column's, and reading it here gave bash another column's answer
+		// for five of the six (#4686).
+		//
+		// The same sentence Semantics.PrefixRefusalFatality's own site
+		// already carries: what the mode does to a *failed expansion* is
+		// the ordinary failed-expansion question and belongs here.
+		return false
+	}
 	fatal, answered := r.prefixFatalityForTheCommand(p)
 	// An unanswered axis falls back to ending the shell, which is what the
 	// standard describes, what four of the five columns do for most command

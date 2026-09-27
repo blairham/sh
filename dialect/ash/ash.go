@@ -1111,6 +1111,12 @@ func Semantics() interp.Semantics {
 	// only` and leaves `u` unset, so neither the value nor the command was
 	// reached. dash answers the other way (#1943).
 	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedFirst
+	// And this column is on *both* sides of the pair, which is what makes
+	// the two separate fields: the name is checked ahead of the
+	// redirections as in bash, and the name's own value is still evaluated
+	// first as in the other three — `readonly r=1; r=$((1/0)) /bin/echo
+	// RAN` writes `divide by zero` in BusyBox 1.37.0 (#4685).
+	s.FrozenPrefixIsCheckedBeforeItsValue = interp.No
 	// `printf 'a\cb'` writes `a` and stops, where dash writes the letter.
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	// `printf '%ld\n' 5` is 5, so the length modifiers are read rather than

@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"context"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // When a command's assignment prefix is expanded, against when its
 // redirections are opened.
@@ -65,6 +69,51 @@ func (r *Runner) prefixExpandedBeforeTheRedirections(assigns []*syntax.Assign, a
 	}
 	r.errf("%s\n", r.diag().Report(r.name(), r.line,
 		r.unanswered("a command's assignment prefix against its redirections")))
+	r.status, r.unspecified = 2, true
+	return false, false
+}
+
+// assignmentsExpandedBeforeTheRedirections is the same axis asked of a command
+// that has **no command word** — assignments and redirections and nothing else.
+//
+// The middle answer collapses here, and that is what makes it the same axis
+// rather than a second one: `PrefixExpandedBeforeRedirectionsWhereItPersists`
+// is keyed on whether the assignment is a real store, and an assignment with
+// no command name in front of it always is. So the two columns that work
+// through a prefix first do the same with a bare assignment, and the three
+// that open the redirections first do that.
+//
+// Measured 2026-09-26 from a script file with `</dev/null`, writing the two
+// sides' order rather than reading it off a status — `X=$(echo A >&2) >
+// $(echo B >&2; echo /dev/null)`:
+//
+//	bash 5.3.20          A B
+//	ksh93u+ 2012-08-01   A B
+//	dash 0.5.12          B A
+//	zsh 5.9.2            B A
+//	BusyBox ash 1.37.0   B A
+//
+// The status follows the order rather than being a rule of its own: a command
+// that runs nothing reports its last command substitution (#4589), so
+// `false; X=$(exit 2) > $(echo /dev/null; exit 3)` is 3 in the first two and 2
+// in the other three. So does a **failed** redirection — `X=$(echo A >&2; echo
+// v) > /nope/dir/x` writes `A` and leaves `X` set in the first two, and writes
+// nothing and leaves `X` unset in the other three, because there the open has
+// already failed and the right-hand side is never reached (#4613).
+//
+// The second result is whether the dialect answered. Asked only where both an
+// assignment and a redirection are written, so a bare `>f` and a bare `x=1`
+// ask nothing.
+func (r *Runner) assignmentsExpandedBeforeTheRedirections() (bool, bool) {
+	switch r.sem().PrefixExpandedBeforeTheRedirections {
+	case PrefixExpandedBeforeRedirectionsAlways,
+		PrefixExpandedBeforeRedirectionsWhereItPersists:
+		return true, true
+	case PrefixExpandedBeforeRedirectionsNever:
+		return false, true
+	}
+	r.errf("%s\n", r.diag().Report(r.name(), r.line,
+		r.unanswered("a command's assignments against its redirections")))
 	r.status, r.unspecified = 2, true
 	return false, false
 }
@@ -173,11 +222,9 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 		if !r.prefixEntryHasATraceableValue(a) {
 			continue
 		}
-		value := r.prefixExpansion(a)
-		r.prefixTraceAssigns = append(r.prefixTraceAssigns, a)
-		r.prefixTraceValues = append(r.prefixTraceValues, value)
+		joined := r.recordPrefixTraceValue(a, r.prefixExpansion(a))
 		if name, ok := r.prefixHoldableName(a); ok {
-			held.hold(r, name, r.prefixJoined(a, value))
+			held.hold(r, name, joined)
 		}
 		if !traceEach {
 			continue
@@ -190,4 +237,35 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 		}
 	}
 	return wrote
+}
+
+// openTheBareRedirections opens the redirections of a command that has no
+// command word, and reports whether the open failed.
+//
+// `>b` with no command still opens the file, and truncates it if it exists.
+// Returning early skipped that, so a redirection that was the whole command
+// did nothing at all — which is how `echo hi &>b` in a dialect without `&>`
+// came to leave no file behind.
+//
+// Split out of the caller because it is reached from two places: ahead of the
+// assignments in the three columns that open first, and behind them in the two
+// that do not — see Runner.assignmentsExpandedBeforeTheRedirections.
+// The first result puts them back, and is never nil.
+func (r *Runner) openTheBareRedirections(ctx context.Context, c *syntax.SimpleCmd, argv []string) (func(), bool, error) {
+	if len(c.Redirs) == 0 {
+		return func() {}, false, nil
+	}
+	r.traceCommand(argv)
+	// Assignments and a redirection with no command name. There is no other
+	// process for a here-document body to expand in.
+	closers, err := r.applyRedirs(ctx, c.Redirs, false, redirOwnerThisShell)
+	put := func() {
+		for _, cl := range closers {
+			_ = cl.Close()
+		}
+	}
+	if err != nil {
+		return put, true, err
+	}
+	return put, r.redirErr, nil
 }

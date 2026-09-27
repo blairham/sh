@@ -464,6 +464,25 @@ type Diagnostics struct {
 	// has none. False names it.
 	ExecNotFoundIsTheShellsOwn bool
 
+	// PrefixFailureIsTheBuiltins locates a value in an **assignment prefix**
+	// that will not expand as the builtin the prefix stands in front of,
+	// where that prefix is the builtin's environment rather than a store this
+	// shell keeps.
+	//
+	// ksh93 alone, because it is the only column with two location shapes to
+	// choose between. Eighteen rows are measured in
+	// interp/prefixfailurelocation.go and they come to one rule: the builtin
+	// speaks for a regular builtin's prefix, and this shell speaks for a
+	// prefix it keeps, for a function's, and for an external's. False — the
+	// zero value — is every other column, and it has to be: one of them names
+	// the builtin *in* the location, so a builtin speaking here would write
+	// `S:echo:2:` where that shell writes `S:2:`.
+	//
+	// Not "an arithmetic failure past line 1", which is the shape this looks
+	// like from one row and which would also have moved `echo $((1/0))` —
+	// that does not move (#4683).
+	PrefixFailureIsTheBuiltins bool
+
 	// BuiltinLocationIsTheSpeakersOnly gives BuiltinLocation to a complaint
 	// the builtin makes itself, and never to a redirection opened for one.
 	//
@@ -3337,11 +3356,20 @@ type Diagnostics struct {
 	// none of which differs by invocation. Zero leaves the dialect's
 	// ordinary fatal status standing either way.
 	//
-	// It covers a *failed* expansion and not an unreadable word, which is
-	// the line the same shell draws itself: `${x@QQ}` on a value exits 127
-	// under `-c` and `${(q)x}` — a bad substitution for a different reason,
-	// found while reading the word rather than while expanding it — exits 1
-	// from the same invocation.
+	// It covers every failure that is **fatal**, and the line the shell
+	// draws is about fatality rather than about a second number. Measured
+	// 2026-09-26, `x=a` in front and `echo after` behind, each line its own
+	// `-c` on bash 5.3.20: `${x@QQ}` ends the shell at 127 in either mode,
+	// where `${(q)x}` and `${#+}` write the same sentence, reach `after`
+	// with `$?` at 1 and exit 0 — and under `set -o posix`, where an
+	// unperformable expansion is fatal for everybody, those two end the
+	// shell at 127 too. So the earlier reading of this field — that an
+	// unreadable word keeps the ordinary number — was reading a **non-fatal**
+	// line's `$?`, and there is no second number to keep.
+	//
+	// A **bracketed** expression is the one shape that does keep it: `bash -c
+	// 'set -o posix; echo ${a[1+]}'` is 1 where `${#+}` on the same line is
+	// 127. See Runner.failedExpansion, which is where that is read.
 	//
 	// And it is the status of the shell that was *handed* the string, not
 	// of every runner under it: the same failure inside `( … )` or inside a

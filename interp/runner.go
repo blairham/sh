@@ -1732,6 +1732,14 @@ type Runner struct {
 	// dispatch routes skip the value of a frozen name and the ordinary check
 	// does not report the same names a second time.
 	prefixCheckedFirst bool
+	// prefixSpeaker is who a value in the running command's assignment
+	// prefix is located as if it will not expand, decided once per command
+	// from the command itself — and prefixValueSpeaker is that answer armed
+	// for the length of one such expansion. Both are per-command scratch and
+	// both are cleared when the command is over. See
+	// interp/prefixfailurelocation.go.
+	prefixSpeaker      prefixValueSpeaker
+	prefixValueSpeaker prefixValueSpeaker
 	// prefixTraceAssigns and prefixTraceValues hold this command's
 	// assignment-prefix values, for the one command being traced. `set -x`
 	// has to write the value it is about to hand over and the route that
@@ -1750,6 +1758,18 @@ type Runner struct {
 	// pretend to be one.
 	prefixTraceAssigns []*syntax.Assign
 	prefixTraceValues  []string
+	// prefixTraceJoins is the third, and it holds what an **appending**
+	// entry came to: the name's value at the moment this entry expanded,
+	// with the expansion behind it. Recorded rather than derived again,
+	// because the ordered walk in interp/prefixredirorder.go writes an
+	// entry's own trace line *after* it has held that joined value under the
+	// name — so asking Runner.prefixJoined a second time reads the join back
+	// and appends the word to it twice: `v=14; v+=5 :` traced `+ v=1455`
+	// where the one column that writes an append as its joined value writes
+	// `+ v=145` (#4431). A plain assignment's entry holds its own value, so
+	// the slice is the same length as the two above and is read by index
+	// with them.
+	prefixTraceJoins []string
 	// prefixGlobMatches holds what this command's assignment prefixes
 	// matched, for the one shell that reads a prefix's value as a pattern —
 	// see interp/prefixglob.go. Per-command scratch and not a table, kept
@@ -4954,6 +4974,14 @@ func (r *Runner) lastStatementLine() int {
 // builtin, because the two dialects that ask want different answers for a
 // failed redirection: ksh93 counts it as the builtin's and zsh does not.
 func (r *Runner) builtinIsSpeaking() bool {
+	if byBuiltin, answered := r.prefixValueIsTheBuiltins(); answered {
+		// A value in an assignment prefix is being expanded, in the one
+		// column that chooses a location shape by which command is speaking.
+		// The command decides it rather than what this shell happens to have
+		// on the record at the moment the value fails — see
+		// interp/prefixfailurelocation.go.
+		return byBuiltin
+	}
 	return r.speaking() != "" || r.redirectForBuiltin != ""
 }
 
@@ -7266,6 +7294,39 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// five columns with no such hook report the substitution's 3. See
 		// Runner.nullCommand, which takes the command off this path before
 		// it ever gets here.
+		// Which of the two goes first — these assignments' own right-hand
+		// sides or the redirection words — is the disagreement
+		// interp/prefixredirorder.go records, asked here for the command
+		// that has no word at all. Asked only where both are written, so a
+		// bare `>f` and a bare `x=1` ask nothing and no dialect has to have
+		// an answer for them.
+		redirsFirst := false
+		if len(c.Redirs) > 0 && aPrefixIsWritten(c.Assigns) {
+			first, answered := r.assignmentsExpandedBeforeTheRedirections()
+			if !answered {
+				return nil
+			}
+			redirsFirst = !first
+		}
+		if redirsFirst {
+			put, stop, err := r.openTheBareRedirections(ctx, c, argv)
+			// Held open **across the assignments**, which is the other half
+			// of opening them first: measured 2026-09-26, `Y=$(echo A >&2)
+			// 2> $(echo B >&2; echo /dev/null)` writes `B` alone in dash
+			// 0.5.12, zsh 5.9.2 and BusyBox ash 1.37.0, because the `A` goes
+			// to the file the command has already opened. bash and ksh93
+			// write both, having expanded the right-hand side first.
+			defer put()
+			if err != nil {
+				return err
+			}
+			if stop {
+				// The open failed, and in these columns nothing behind it
+				// runs: `X=$(echo A >&2; echo v) > /nope/dir/x` writes no
+				// `A` and leaves `X` unset.
+				return nil
+			}
+		}
 		// And whether a `.set` or `.append` discipline ran, whose status the
 		// assignment answers with — see the block below and
 		// Runner.disciplineStatus. Cleared here rather than by the store, so
@@ -7329,25 +7390,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// the guard here a refused subscript reported success.
 			r.status = 0
 		}
-		// `>b` with no command still opens the file, and truncates it if it
-		// exists. Returning early skipped that, so a redirection that was
-		// the whole command did nothing at all — which is how `echo hi &>b`
-		// in a dialect without `&>` came to leave no file behind, the exact
-		// silent case the AmpersandRedirect comment warns about.
-		if len(c.Redirs) > 0 {
-			r.traceCommand(argv)
-
-			// Assignments and a redirection with no command name. There is
-			// no other process for a here-document body to expand in.
-			closers, err := r.applyRedirs(ctx, c.Redirs, false, redirOwnerThisShell)
-			for _, cl := range closers {
-				_ = cl.Close()
-			}
+		if !redirsFirst {
+			put, _, err := r.openTheBareRedirections(ctx, c, argv)
+			put()
 			if err != nil {
 				return err
-			}
-			if r.redirErr {
-				return nil
 			}
 		}
 		// No zeroing here: the status was decided above from what the
@@ -7441,18 +7488,38 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// — its plain-assignment location — where this engine, having already
 	// said a builtin's redirection was being opened, wrote the builtin form
 	// `<script>[1]:` (#3314).
+	if aPrefixValueCanFail(c.Assigns) {
+		// Who a value in this command's prefix is located as if it will not
+		// expand, decided from the command while the command is in hand: the
+		// four routes a prefixed command takes reach the expansion from four
+		// different places. Asked only where a right-hand side could raise a
+		// diagnostic at all, so a literal prefix asks nothing. See
+		// interp/prefixfailurelocation.go.
+		r.prefixSpeaker = r.prefixFailureSpeaker(argv)
+	}
 	if len(argv) > 0 {
 		// The word itself, whatever it names: a refused `{name}>` store is
 		// reported under it whether it is a builtin or a program — measured,
 		// `declare -n s; /bin/echo hi {s}>/dev/null` is `/bin/echo: `10':
 		// not a valid identifier` in bash 5.3.20.
 		r.redirForCommandWord = argv[0]
-		if _, ok := r.lookupBuiltin(argv[0]); ok {
+		if _, ok := r.lookupBuiltin(argv[0]); ok && r.commandRunsInThisShell(argv) {
+			// And only where the word really reaches one. `command` is a
+			// builtin itself, so reading argv[0] alone made `command
+			// /bin/echo RAN > /nonexistent/d/f` a builtin's redirection in
+			// the column that locates those differently — and that column
+			// writes its ordinary `<script>: line N:` there, because the
+			// redirection belongs to the process it was about to start. The
+			// same reading Runner.applyRedirs takes for the *owner* one line
+			// below, and the same noun: a builtin behind the word. See
+			// interp/heredocprocess.go and #4707.
 			r.redirectForBuiltin = argv[0]
 		}
 	}
 	defer func() {
-		r.prefixTraceAssigns, r.prefixTraceValues, r.prefixGlobMatches = nil, nil, nil
+		r.prefixTraceAssigns, r.prefixTraceValues = nil, nil
+		r.prefixTraceJoins, r.prefixGlobMatches = nil, nil
+		r.prefixSpeaker = prefixValueSpeakerNone
 	}()
 	tracedHere := false
 	// What this command knew before any prefix value was expanded, so that a
@@ -7668,12 +7735,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// part of this walk — a marker taken after it would read a value
 		// that would not expand as something that had already failed.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst {
-			for _, a := range c.Assigns {
-				if !a.Operand && r.readonly[a.Name] {
-					r.expandWord(a.Value)
-				}
-			}
+		if !r.prefixCheckedFirst && r.expandTheFrozenPrefixValues(c.Assigns) {
+			// A frozen name's own value is what failed, in one of the four
+			// columns that evaluate it first: the expansion's sentence is
+			// the whole of what the script is told, the refusal is never
+			// written, and the command is over. See
+			// interp/frozenprefixvalue.go.
+			r.givesUpForAFailedPrefix(walk, prefixCommand{kind: prefixBeforeFunction})
+			return nil
 		}
 		refused, stop := r.refusePrefixes(c.Assigns, prefixCommand{kind: prefixBeforeFunction}, !r.expandErr)
 		if stop {
@@ -7877,6 +7946,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// the loop below because a refusal that costs the command must not
 		// have applied the names in front of it first.
 		kind := r.prefixCommandOf(argv)
+		// Taken here rather than below the refusal, because the frozen
+		// names' values are expanded between the two and a marker behind
+		// them would read a value that would not expand as something already
+		// on the record. The redirections have been opened since the marker
+		// runSimple took, and what they may have left is not this prefix's.
+		walk = r.beginPrefixWalk(c.Assigns)
+		if !r.prefixCheckedFirst && r.expandTheFrozenPrefixValues(c.Assigns) {
+			// What the frozen name was being given is what failed, in one of
+			// the four columns that evaluate it ahead of the refusal: its
+			// sentence is the whole of what the script is told, and the
+			// command is over. See interp/frozenprefixvalue.go.
+			r.givesUpForAFailedPrefix(walk, kind)
+			return nil
+		}
 		refused, stop := r.refusePrefixes(c.Assigns, kind, true)
 		if stop {
 			return nil
@@ -7892,8 +7975,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 		var undo []savedVar
 		var held []string
-		// Taken again for the reason the function route's is.
-		walk = r.beginPrefixWalk(c.Assigns)
+		// The marker was taken above the frozen names' values rather than
+		// here, so a value of theirs that would not expand is this walk's
+		// failure and gives the command up.
 		for _, a := range c.Assigns {
 			if r.prefixWalkFailed(walk) {
 				// Nothing behind a value that would not expand is expanded
@@ -8217,6 +8301,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// to have expanded below, because the order of the two is a dialect
 	// question and not this one's.
 	external := prefixCommand{kind: prefixBeforeExternal}
+	// Whether a frozen name's value is this route's to expand. The other
+	// three reach the question through expandTheFrozenPrefixValues; this one
+	// expands every value on its way to the child's environment, so here it
+	// takes the shape of a skip. See interp/frozenprefixvalue.go.
+	frozenValueSpent := r.frozenPrefixValueIsSpentForAChild(c.Assigns)
+	if r.unspecified {
+		return nil
+	}
 	// The shell the prefix's stores land in. An external command is run by a
 	// **child**, and where a hook is watching one of these names the store is
 	// the child's — see Runner.prefixChildForTheDisciplines.
@@ -8268,12 +8360,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			_ = r.prefixValue(a)
 			continue
 		}
-		if r.prefixCheckedFirst && r.readonly[a.Name] {
-			// Refused before anything was expanded, which is what the order
-			// axis buys: the value is never evaluated, so `x=$((1/0)) cmd`
-			// says nothing about the division in the column that checks
-			// first. The name keeps its value and the child sees that, the
-			// same as below.
+		if frozenValueSpent && r.readonly[a.Name] {
+			// Refused without its value ever being evaluated, so
+			// `x=$((1/0)) cmd` says nothing about the division in the column
+			// that answers so — or already evaluated by the early check,
+			// where a second expansion here would run a substitution twice.
+			// The name keeps its value and the child sees that, the same as
+			// below. See interp/frozenprefixvalue.go.
 			continue
 		}
 		if r.subscriptedPrefixDropped(a) {
@@ -9793,7 +9886,27 @@ func (r *Runner) failedExpansion() {
 		return
 	}
 	if r.sem().FailedExpansionAbandonsTheLine != Yes {
-		r.fatalQuiet()
+		if r.badSubscript {
+			// A bracketed expression is the one shape that keeps the
+			// ordinary fatal status here, and it keeps it because the
+			// column with a number of its own does not reach this door for
+			// one: measured 2026-09-26, `bash -c 'set -o posix; echo
+			// ${a[1+]}'` writes the complaint and exits **1**, where
+			// `$((1/0))`, `${#+}` and `${(q)x}` on the same line exit 127.
+			// The same subscript from a script file is not fatal there at
+			// all — it gives up the line and the next one runs — which is a
+			// gap of its own and not this one's.
+			r.fatalQuiet()
+			return
+		}
+		// fatalExpansionQuiet and not fatalQuiet: this *is* a failed
+		// expansion, so the number one column gives one from a `-c` string
+		// is this path's as much as it is `${x?word}`'s. Measured
+		// 2026-09-26, `bash -c 'set -o posix; echo $((1/0))'` is 127 and
+		// the same line from a script file is 1, which is exactly the split
+		// Diagnostics.ExpansionFailureStatusFromCommandString records
+		// (#4686).
+		r.fatalExpansionQuiet()
 		return
 	}
 	if r.badSubscript {

@@ -59,19 +59,21 @@ func TestWhenAFrozenPrefixIsChecked(t *testing.T) {
 		expandOut, expandErr string
 	}{
 		{
-			// The value never expands under the first reading, so the
-			// division is silent there and is the only complaint under the
-			// other. That is the row that says this is not merely a
-			// reordering of two diagnostics.
+			// Whether the frozen name's **own value** is evaluated is a
+			// field of its own — Semantics.FrozenPrefixIsCheckedBeforeItsValue,
+			// held here at the answer that evaluates it — and these two rows
+			// are what says it does not ride on this axis: the division is
+			// the only complaint under *both* readings, and the command runs
+			// under neither. The rows that discriminate on the value are in
+			// interp/frozenprefixvalue_test.go.
 			//
-			// **And the command runs only under the first reading**, which
-			// is the same fact read once more: what the refusal costs here
-			// is nothing (PrefixRefusalCostsTheCommand is No above), and
-			// what a failed *expansion* costs is the command, in every
-			// column. See interp/prefixexpansionfailed.go (#4675).
+			// They were this axis's own rows until #4685, which is how one
+			// column came to write the frozen name where it writes the
+			// expansion: the two questions partition the panel differently
+			// and one answer cannot serve both.
 			"a value that will not expand",
 			"readonly x=1\nx=$((1/0)) /bin/echo RAN\n",
-			"RAN\n", "testsh: line 2: x: readonly variable\n",
+			"", "testsh: line 2: division by zero\n",
 			"", "testsh: line 2: division by zero\n",
 		},
 		{
@@ -80,7 +82,7 @@ func TestWhenAFrozenPrefixIsChecked(t *testing.T) {
 			// answer the order differently (#1940).
 			"a value that will not expand in front of a function",
 			"f() { echo IN-F; }\nreadonly x=1\nx=$((1/0)) f\n",
-			"IN-F\n", "testsh: line 3: x: readonly variable\n",
+			"", "testsh: line 3: division by zero\n",
 			"", "testsh: line 3: division by zero\n",
 		},
 		{

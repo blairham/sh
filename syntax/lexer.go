@@ -2250,6 +2250,38 @@ func (l *Lexer) opensTildeGroup() bool {
 	return l.dialect.TildeGroup && l.off > 0 && l.src[l.off-1] == '~'
 }
 
+// bareGroupOpensHere reports whether a bare `(` at the cursor opens a pattern
+// group, in either of the two readings a dialect can have of that.
+//
+// One function rather than the test written twice, because the second caller
+// is scanGroupSpans and what it asks is the *complement*: a group that a bare
+// parenthesis did not open is one a quantifier did, and the two take different
+// amounts of text. Written out twice, the narrowed reading was read as a
+// quantified group wherever a `@` happened to stand in front of it, and
+// `case "x;y" in x@([;])y)` — a refusal in the reference under every mode —
+// parsed. See [Dialect.BarePatternGroupInsideAWord].
+func (l *Lexer) bareGroupOpensHere() bool {
+	if l.dialect.PatternAlternation {
+		return true
+	}
+	// The narrowed reading: a bare group where a word has already begun and
+	// nowhere else. A word's *first* character never reaches a scan at all —
+	// Next asks before it starts one, with no word open — so the parenthesis
+	// there stays the shell's own operator.
+	return l.dialect.BarePatternGroupInsideAWord && l.insideAWord()
+}
+
+// insideAWord reports whether the cursor stands past the first character of a
+// word the scanner has opened.
+//
+// Lexer.wordStart is the scanner's own record and is invalid between words, so
+// this answers no wherever Next is deciding what a character starts. A literal
+// builder's length cannot stand in for it: a word may have begun with an
+// expansion and hold no literal text at the cursor at all, as `$x(y)` does.
+func (l *Lexer) insideAWord() bool {
+	return l.wordStart.IsValid() && l.off > int(l.wordStart.Offset)
+}
+
 func (l *Lexer) opensPatternGroup() bool {
 	// A `(` straight after `=` opens an array literal, never a group —
 	// measured, because it is the same shell: `a=(b|c)` is a parse error
@@ -2270,7 +2302,7 @@ func (l *Lexer) opensPatternGroup() bool {
 	if l.off > 0 && l.src[l.off-1] == '=' && l.arrayLiteralCouldStandHere() {
 		return false
 	}
-	if l.dialect.PatternAlternation {
+	if l.bareGroupOpensHere() {
 		// An empty `()` is a function definition and not a *bare* group,
 		// which is how `f() { … }` survives the rule: the shell that takes
 		// bare groups rejects `a()` as a pattern outright, so nothing is
@@ -2438,7 +2470,7 @@ func (l *Lexer) scanGroupSpans() []Span {
 	// The quantifier is the character in front of the parenthesis, and
 	// opensPatternGroup has already read it: a bare group is opened by the
 	// parenthesis alone, in the one dialect that takes those.
-	quantified := !l.dialect.PatternAlternation && l.off > 0 &&
+	quantified := !l.bareGroupOpensHere() && l.off > 0 &&
 		strings.IndexByte("@?+*!", l.src[l.off-1]) >= 0
 	var spans []Span
 	var lit strings.Builder

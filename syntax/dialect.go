@@ -5359,6 +5359,44 @@ type Dialect struct {
 	// extended pattern — the same text, read by a different rule.
 	PatternAlternation bool
 
+	// BarePatternGroupInsideAWord opens a bare `(a|b)` group where a word has
+	// already begun and refuses one where a word begins — so
+	// `[[ ab == a(b|c) ]]` reads a group and `[[ a == (a|b) ]]` is a parse
+	// error naming the parenthesis, in one dialect in one state.
+	//
+	// It is only asked where [Dialect.PatternAlternation] is off, which takes
+	// a group wherever it stands; this is the narrowed reading of the same
+	// construct and it is lexed by the same span scan, so exactly the same
+	// text belongs to the word.
+	//
+	// **One shell reaches it, through an option pair**, which is why it is a
+	// flag of its own rather than a consequence of the one above. Measured on
+	// zsh 5.9.2 (aarch64-apple-darwin25.4.0) at `/opt/homebrew/bin/zsh`, run
+	// `-f` over a script file under `set -n`, 2026-09-27, with the options
+	// moved on the line before:
+	//
+	//	                          bare     shglob    shglob+kshglob
+	//	[[ ab == a(b|c) ]]        parses   refused   parses
+	//	[[ a == (a|b) ]]          parses   refused   refused
+	//	let a=(5 + 3)/2           parses   refused   parses
+	//	echo x=(echo hi)          parses   refused   parses
+	//	print -r -- a(b ; print x one word  refused   one word, and the
+	//	                                              `;` ends it
+	//
+	// The second row is what makes this about the **position**: the same two
+	// characters are refused where a word begins and taken inside one, in the
+	// same shell in the same state. The fifth is what says the *lexing* is
+	// unchanged — the unterminated group runs past the blank and stops at the
+	// `;`, exactly as it does with the option pair off, which is
+	// [Dialect.UnterminatedPatternGroupIsAWord]'s rule and not a second one.
+	//
+	// What such a group then *means* to the matcher is a second question this
+	// does not answer, and the measurement is worth recording beside it:
+	// `[[ 'a(b' == a(b|c) ]]` matches in that state, so there the parentheses
+	// are literal and the `|` outside them alternates the whole pattern. This
+	// flag is the lexer's half of it.
+	BarePatternGroupInsideAWord bool
+
 	// UnterminatedPatternGroupIsAWord says that a pattern group the input
 	// runs out of is the word's own text rather than unfinished input. The
 	// `(` stays in the word, the parser is handed a word like any other, and

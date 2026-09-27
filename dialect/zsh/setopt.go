@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 112 of the 185
+//     typing a directory name still does not change directory. 111 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -220,7 +220,7 @@ import (
 // operand are refused with the option off exactly as with it on. See
 // interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
 //
-// Nothing else about the split moved, and 112 is still most of the table.
+// Nothing else about the split moved, and 111 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -1014,7 +1014,44 @@ var zshOptions = []zshOption{
 		},
 	},
 	recorded("kshautoload", false),
-	recorded("kshglob", false),
+	{
+		// KSH_GLOB: the quantified group spellings, and — measured, and the
+		// half this wires — **where a bare group may open once `shglob` has
+		// taken them away**.
+		//
+		// On its own it changes nothing about the grammar here: with `shglob`
+		// off a bare group already opens wherever it stands, so this name is
+		// state a script set and can read back. Beside `shglob` it is the
+		// third reading of one construct — a group inside a word and not
+		// where one begins.
+		//
+		// Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+		// `/opt/homebrew/bin/zsh`, `-f`, from a script file under `set -n`,
+		// 2026-09-27, with the options moved on the line before:
+		//
+		//	                        neither   shglob   shglob+kshglob
+		//	[[ ab == a(b|c) ]]      parses    refused  parses
+		//	[[ a == (a|b) ]]        parses    refused  refused
+		//	let a=(5 + 3)/2         parses    refused  parses
+		//	echo x=(echo hi)        parses    refused  parses
+		//
+		// The second row is the discriminator and the reason this is not
+		// "`kshglob` undoes `shglob` for parentheses": the same two characters
+		// are refused where a word begins and taken inside one, in one shell
+		// in one state.
+		//
+		// **What it does not reach yet** is the rest of the name: the `@(…)`,
+		// `+(…)` and `!(…)` spellings, which this option also brings in the
+		// reference. That is a row of #4814 and is measured where it lands;
+		// until then `kshglob` is more than the nothing it was and less than
+		// the whole of what zsh means by it.
+		base: "kshglob", def: false,
+		get: kshGlobOn,
+		set: func(r *interp.Runner, on bool) int {
+			setBareGroupGrammar(r, shGlobOn(r), on)
+			return 0
+		},
+	},
 	// KSH_OPTION_PRINT: **the shape of the two bare listings**, and nothing
 	// else. On, `setopt` and `unsetopt` each write every option in the table
 	// as `name<pad>on|off` instead of writing the deviating names and the
@@ -1716,6 +1753,7 @@ var zshOptions = []zshOption{
 		get: func(r *interp.Runner) bool { return !r.CasePatternListReadAsOneWord() },
 		set: func(r *interp.Runner, on bool) int {
 			r.SetCasePatternListReadAsOneWord(!on)
+			setBareGroupGrammar(r, on, kshGlobOn(r))
 			return 0
 		},
 	},
@@ -2799,4 +2837,29 @@ func shOptionLettersOption() zshOption {
 		return code
 	}
 	return o
+}
+
+// shGlobOn and kshGlobOn read the two option states back off the grammar.
+//
+// Each has a field of its own that carries it whatever the other is doing —
+// the `case` pattern list for the first and the narrowed bare-group reading
+// for the second — which is what makes the pair recoverable: a script that
+// turns the second one on inside an emulation that has already turned the
+// first one on must still be able to read both back.
+func shGlobOn(r *interp.Runner) bool { return !r.CasePatternListReadAsOneWord() }
+
+func kshGlobOn(r *interp.Runner) bool { return r.BarePatternGroupsOpenInsideAWord() }
+
+// setBareGroupGrammar writes where a bare pattern group may open, given the
+// two option states.
+//
+// The composition is the measurement and is stated once here rather than in
+// each option's setter: `shglob` takes bare groups away wherever they stand,
+// and `kshglob` gives them back **inside a word** and not where one begins.
+// So the first name alone decides whether a group opens anywhere, and the
+// second alone decides whether the narrowed reading is in force — with
+// `shglob` off the narrowed one is never asked, which is why `kshglob` on its
+// own changes nothing and is still readable back.
+func setBareGroupGrammar(r *interp.Runner, shGlob, kshGlob bool) {
+	r.SetBarePatternGroups(!shGlob, kshGlob)
 }

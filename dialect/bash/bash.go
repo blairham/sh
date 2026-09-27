@@ -1741,6 +1741,13 @@ func Semantics() interp.Semantics {
 	// through `-c` and from a file. ksh93 is the column that parts here,
 	// which is what makes it a question of its own (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.Yes
+	// And the `unset` route into the same state writes the same row:
+	// `v=g; f(){ local v; unset v; declare -p v; }; f` is `declare -- v` at
+	// 0, with `${v-UNSET}` firing its default inside and the global back
+	// afterwards. Measured 2026-09-27 under `env -i PATH=/usr/bin:/bin` on
+	// bash 5.3.20, from a file. One answer for both routes here, which is
+	// why this was one axis until zsh parted them (#4787).
+	s.UnsetOfALocalRecordsTheName = interp.Yes
 	// Never reached: the record is a row here, so a `-p` naming it is a
 	// listing rather than a missing name. Answered so that no route can
 	// refuse it, and answered `No` because it is the row that speaks.

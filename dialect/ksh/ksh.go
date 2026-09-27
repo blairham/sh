@@ -1578,6 +1578,14 @@ func Semantics() interp.Semantics {
 	// so this is the unattributed one alone. Measured 2026-09-15 on ksh93u+
 	// under `env -i PATH=/usr/bin:/bin` (#2999).
 	s.ValuelessDeclarationRecordsTheName = interp.No
+	// Nor by the other route, and that is measured rather than argued from
+	// this shell's lack of a `local`: `function f { typeset v; unset v;
+	// typeset -p v; }` is the spelling that scopes here, it reaches the
+	// route, and it writes nothing at 0 — with `${v-UNSET}` firing its
+	// default inside the call and the outer value back after it, so the
+	// shadow really is standing. Measured 2026-09-27 on ksh93u+ under
+	// `env -i PATH=/usr/bin:/bin`, from a file (#4787).
+	s.UnsetOfALocalRecordsTheName = interp.No
 	// Either answer is right here: this shell says nothing at 0 for a name
 	// it has never heard of either, so the missing-name route and the
 	// silent one meet. `No` is the one that says what it holds.

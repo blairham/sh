@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -41,6 +42,12 @@ func withBareRecord(records Answer) func(*Semantics) {
 		// record: the `No` answer is the missing-name route the control
 		// above then reports. See Semantics.ValuelessRecordIsStillAName.
 		s.ValuelessRecordIsStillAName = No
+		// The *other* route into the same state, held flat so these rows are
+		// about the declaration's: an `unset` of a local the running scope
+		// declared. No row here reaches it — the one `unset` below is at the
+		// top level, where no scope declared the name — and holding it apart
+		// is what says so. See Semantics.UnsetOfALocalRecordsTheName.
+		s.UnsetOfALocalRecordsTheName = No
 	}
 }
 
@@ -318,6 +325,67 @@ func TestTheGlobalLetterDoesNotCreateAReferencesTarget(t *testing.T) {
 			}, Diagnostics{})
 			if out != tc.want {
 				t.Errorf("%s: out = %q (stderr %q), want %q", tc.src, out, errs, tc.want)
+			}
+		})
+	}
+}
+
+// The two routes into the state are two axes, and this is the pair that says
+// so: each of the four answers is asked of the route that owns it and of
+// neither other one.
+//
+// A grid keyed on the route rather than on the state, because the state is
+// the same state and reading it is what folded the two together. One column
+// holds one route at yes while the other is no — zsh under `emulate sh`
+// writes `typeset X` for a bare declaration and nothing at all for an `unset`
+// of a local — so a single answer cannot be right for it (#4787).
+//
+// The mutant this kills is the `||` the reader used to be: with both records
+// behind one ask, the `no` row of either half comes out as a row, because the
+// other half's `yes` answered for it.
+func TestTheTwoValuelessRecordsAreAskedSeparately(t *testing.T) {
+	const declared = `f() { typeset xyz; typeset -p xyz; echo "st=$?"; }
+f`
+	const unsetLocal = `xyz=G
+f() { local xyz; unset xyz; typeset -p xyz; echo "st=$?"; }
+f`
+	for _, tc := range []struct {
+		name                  string
+		decl, unset           Answer
+		wantDeclared, wantUns string
+	}{
+		{"both record", Yes, Yes, "declare -- xyz\nst=0\n", "declare -- xyz\nst=0\n"},
+		{"neither records", No, No, "st=1\n", "st=1\n"},
+		// The two that part them, which is the whole of the finding: the
+		// answer each route is given is the answer it gets, and the other
+		// route's does not reach it.
+		{"the declaration alone", Yes, No, "declare -- xyz\nst=0\n", "st=1\n"},
+		{"the unset alone", No, Yes, "st=1\n", "declare -- xyz\nst=0\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			set := func(s *Semantics) {
+				withBareRecord(tc.decl)(s)
+				s.UnsetOfALocalRecordsTheName = tc.unset
+				// The letters `local` reads, so the second source's
+				// declaration is a declaration rather than a bad option.
+				s.LocalOptions = "agiprux"
+			}
+			for _, route := range []struct {
+				name, src, want string
+			}{
+				{"a bare declaration", declared, tc.wantDeclared},
+				{"an unset of a local", unsetLocal, tc.wantUns},
+			} {
+				out, errs, _ := declRun(t, route.src, set, Diagnostics{})
+				if out != route.want {
+					t.Errorf("%s = %q (stderr %q), want %q", route.name, out, errs, route.want)
+				}
+				// And no axis was left unanswered on either route, which is
+				// the failure that also writes no row: a missing-name
+				// complaint is this dialect's answer and the refusal is not.
+				if strings.Contains(errs, "no dialect was chosen") {
+					t.Errorf("%s: stderr %q, want no unanswered axis", route.name, errs)
+				}
 			}
 		})
 	}

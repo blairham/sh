@@ -1716,17 +1716,30 @@ func Semantics() interp.Semantics {
 	// `bad substitution` — so no listing of that shape ever reaches the axis
 	// to be asked. Measured 2026-09-16 on zsh 5.9.2.
 	// A declaration without a value leaves the name holding the empty string
-	// here, so `typeset xyz; typeset -p xyz` writes `typeset xyz=''` and the
-	// record below is not what that shape reaches (#2999). It is reached
-	// from the other side: `unset` of a local the running call declared
-	// leaves the name unset with the shadow still standing, which is the
-	// same state, and this shell writes **nothing** for it. Measured
-	// 2026-09-21, `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME,
-	// `v=global; f() { local v; unset v; typeset -p v; }; f` — no output, at
-	// 0, with `${v-UNSET}` firing its default. bash writes `declare -- v`
-	// there. Answered rather than left unanswered because that route is a
-	// spelling this shell has.
-	s.ValuelessDeclarationRecordsTheName = interp.No
+	// under this shell's own emulation, so `typeset xyz; typeset -p xyz`
+	// writes `typeset xyz=''` and never reaches the record (#2999). Under
+	// `emulate sh` and `emulate ksh` it does reach it, and the row is the
+	// name alone: `emulate sh; typeset X; typeset -p X` is `typeset X` at 0.
+	// Measured 2026-09-27 on zsh 5.9.2, `-f`, from a script file, read both
+	// through `emulate MODE` and through a copy of the reference named for
+	// the mode.
+	//
+	// So **one value is right in every mode** and this is not a fifth field
+	// on the emulation table: where the mode says a declared name is empty
+	// the axis is unreachable, and where it does not the answer is yes. What
+	// the mode moves is DeclaredNameWithoutValueIsEmpty, which is already on
+	// that table (#4753).
+	s.ValuelessDeclarationRecordsTheName = interp.Yes
+	// The other route into the same state is the opposite answer here, which
+	// is what split the two axes: `unset` of a local the running call
+	// declared leaves the name unset with the shadow standing, and this
+	// shell writes **nothing** for it under every emulation. Measured
+	// 2026-09-21 and again 2026-09-27, `env -i PATH=/usr/bin:/bin LC_ALL=C`
+	// with a scratch HOME, `v=global; f() { local v; unset v; typeset -p v;
+	// }; f` — no output, at 0, with `${v-UNSET}` firing its default inside
+	// and the global back afterwards. bash writes `declare -- v` there
+	// (#4787).
+	s.UnsetOfALocalRecordsTheName = interp.No
 	// The name is there and the listing writes nothing for it — the third
 	// state the field above cannot spell. See Semantics.ValuelessRecordIsStillAName
 	// for the rows (#4053).

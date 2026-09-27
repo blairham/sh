@@ -2654,6 +2654,12 @@ func Semantics() interp.Semantics {
 	// the shipped `regexp-replace`, where an accepted empty pattern would
 	// write the replacement between every pair of characters (#2043).
 	s.EmptyRegexOperandIsAnError = interp.Yes
+	// `[[ subject -regex-match expression ]]`, which is zsh/regex's one
+	// feature and is the `=~` question under another name — measured byte
+	// for byte over eleven expressions, agreeing on the status, on `$MATCH`,
+	// on `$match`, on `$MBEGIN`, on `$MEND` and on the refusal of an
+	// expression that will not compile. See the axis (#4739).
+	s.RegexMatchCondition = interp.Yes
 	// unanswered RegexMatchSurvivesAFailedMatch,
 	// RegexMatchOmitsGroupsThatDidNotMatch,
 	// PatternMatchWritesTheMatchRecord: this shell keeps its captures
@@ -5759,6 +5765,9 @@ func Apply(r *interp.Runner) {
 	// #3042 for the measurement that says loading the module is not what
 	// makes them exist.
 	registerCompletionConditions(r)
+	// `limit` and `unlimit`, which are `zsh/rlimits` beside the `ulimit`
+	// this shell already has. See rlimits.go (#4736).
+	registerRlimits(r)
 	// And `zsh/computil`'s eight, which is what the completion system zsh
 	// *ships* is written in: `_arguments`, `_describe`, `_tags` and `_values`
 	// are shell functions whose working parts are these. See computil.go.

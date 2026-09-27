@@ -1319,6 +1319,24 @@ func topAlternatives(pattern string, emptyCompiles bool) (arms []string, offsets
 // from 8.05s to 0.145s against real zsh's 0.143s on the same configuration.
 func matchHere(p, s string, pp, at int, o patternOpts) bool {
 	w := o.where
+	// A `~(…)` flavor group inside this piece of the pattern settles the
+	// language of the piece, so the piece is not walked at all — it is
+	// translated and handed to that flavor's engine. matchPatternIn reads the
+	// one at the top of a pattern; this is the same reading for the body of a
+	// group, an arm, or whatever follows one. See matchTildeFlavorInPiece.
+	//
+	// Ahead of the memo rather than behind it, so the answer is never keyed
+	// on a position that does not carry the fold the branch arrived with.
+	//
+	// `whole` is the gate because a surface that **chooses a span** is one
+	// the reference shell does not answer consistently for this shape — see
+	// matchTildeFlavorInPiece's last table — so a trim or a substitution is
+	// left exactly as it was.
+	if o.whole && o.tildeFold && (!w.ready || !w.noTilde) {
+		if got, claimed := matchTildeFlavorInPiece(p, s, at, o); claimed {
+			return got
+		}
+	}
 	w.asked++
 	if w.asked <= memoThreshold {
 		return matchBranch(p, s, pp, at, o)

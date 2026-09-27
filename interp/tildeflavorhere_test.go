@@ -81,20 +81,29 @@ func TestATildeFlavorGroupInTheMiddleOfAPattern(t *testing.T) {
 		{"a group that keeps the glob", `[[ zab == z~(K)a* ]] && echo YES || echo NO`, "YES"},
 		{"with a glob in front of it", `[[ zXab == z?~(K)a* ]] && echo YES || echo NO`, "YES"},
 
-		// **A prefix globToRE2 cannot carry is not claimed**, and this row is
-		// the control that says so rather than the comment. Inside a pattern
-		// group the text in front of the flavor is `@(z`, which is not a glob
-		// on its own, so the pattern falls through to the walk and answers
-		// what it answered before — ksh93u+ says yes and this says no, which
-		// is #4892. Dropping the prefix instead would answer *this* row right
-		// and `@(zq~(E)a)` wrong, which is the plausible-wrong-answer shape,
-		// so the row is here to fail if anybody reaches for it.
+		// **A prefix globToRE2 cannot carry is not claimed here**, and this
+		// row is the control that says so rather than the comment. Inside a
+		// pattern group the text in front of the flavor is `@(z`, which is
+		// not a glob on its own, so this reader declines it — and the walk
+		// then reaches the group's *body*, where `z` is a glob and
+		// matchTildeFlavorInPiece reads it. The row used to be `NO` and is
+		// ksh93u+'s `YES` now; what it still pins is that nothing here
+		// dropped the prefix, which would answer this row right and
+		// `@(zq~(E)a)` wrong. The pair below it is that falsifier.
 		{
-			"a prefix that cannot be translated is not claimed",
-			`[[ za == @(z~(E)a) ]] && echo YES || echo NO`, "NO",
+			"a group's body is read by the arm matcher",
+			`[[ za == @(z~(E)a) ]] && echo YES || echo NO`, "YES",
 		},
 		{
-			"nor one holding a second group",
+			"and a prefix is not dropped to get there",
+			`[[ za == @(zq~(E)a) ]] && echo YES || echo NO`, "NO",
+		},
+		{
+			"with the subject that does carry it as the control",
+			`[[ zqa == @(zq~(E)a) ]] && echo YES || echo NO`, "YES",
+		},
+		{
+			"nor is a prefix holding a second group claimed",
 			`[[ zqa == z~(i)q~(E)a ]] && echo YES || echo NO`, "NO",
 		},
 		{

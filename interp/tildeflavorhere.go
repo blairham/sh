@@ -213,3 +213,85 @@ func withGlobPrefix(o patternOpts, expr string) patternOpts {
 	o.tildePrefix = expr
 	return o
 }
+
+// matchTildeFlavorInPiece answers a *piece* of a pattern that carries a
+// flavor group — the body of a `@(…)`, one arm of it, or the text behind one —
+// against the whole of the subject text that piece was handed.
+//
+// matchTildeFlavorHere is the same reading for a whole pattern and is where
+// the translation is argued. What this adds is the **extent**: a flavor at
+// the top of a pattern is a *substring* search, since that is what ksh93's
+// expressions are, and a flavor inside a pattern group is anchored to the
+// span the group takes. That is not a choice, it is what the matcher's own
+// contract already says — every caller of matchHere is asking whether the
+// piece it handed over is described whole — and it is measured. On ksh93u+
+// 2012-08-01, 2026-09-27, `-c` under `env -i` with a scratch `HOME`:
+//
+//	[[ zza == z~(E)a ]]      (control) yes    the top level searches
+//	[[ zza == @(z~(E)a) ]]             **no**
+//	[[ zXa == @(z~(E)a) ]]             no
+//	[[ zab == @(z~(E)a)b ]]            yes    so the group took exactly `za`
+//	[[ zaXb == @(z~(E)a)b ]]           no
+//	[[ zaaq == @(z~(E)a)q ]]           no
+//
+// The first two are the pair: the same subject and the same flavor answer
+// differently with the group around them, which is the whole of what this
+// function is for. The last three say the group takes the span it describes
+// and no more, which a substring search inside the group would not.
+//
+// `a*` inside the group is the row that says the expression is really
+// compiled rather than the glob being walked: `[[ zab == @(z~(E)a*) ]]` is
+// **no** there, because `a*` is zero-or-more `a` in an expression and would
+// be `a` then anything in a glob.
+//
+// The second result is false where the piece is not of this shape — no
+// flavor group in it, or a glob in front of one that globToRE2 cannot carry —
+// so the caller falls through to the walk and answers exactly what it
+// answered before. `@(z)~(E)a` is the shape still left out: the text in front
+// of the group is a *pattern group*, which has no translation here, so a
+// subject the group and the expression do not cover contiguously keeps the
+// answer it had.
+//
+// **A trim and a substitution are left out at the call site**, and that is a
+// refusal to copy rather than a gap. The reference shell's answers for this
+// shape on a surface that chooses a span do not compose — with `v=abcd`:
+//
+//	${v#a~(E)b}        cd     (control) ungrouped, the span is removed
+//	${v#@(a~(E)b)}     empty  the **whole value**, where the span is `ab`
+//	${v/@(b~(E)c)/X}   X      the whole value again
+//	${v%@(c~(E)d)}     abcd   and nothing at all
+//
+// Three answers from one shape, and no reading produces all three. Those
+// surfaces therefore behave exactly as they did before this existed, which
+// is the one answer here that cannot be a new wrong one — the same posture
+// tildeGlobPattern takes for a field whose remainder holds a `/`.
+func matchTildeFlavorInPiece(p, s string, at int, o patternOpts) (bool, bool) {
+	before, body, after, ok := findTildeFlavorGroup(p)
+	if !ok {
+		return false, false
+	}
+	expr := ""
+	if before != "" {
+		translated, unsupported := globToRE2(before)
+		if unsupported != "" {
+			// Not claimed, for the reason matchTildeFlavorHere gives: a
+			// shape nobody has measured keeps the answer it already had
+			// rather than trading one wrong answer for a second.
+			return false, false
+		}
+		expr = translated
+	}
+	// findTildeFlavorGroup has already declined a letter this shell does not
+	// answer, so the group here is one of the flavors.
+	m, _ := readTildeModifier(body)
+	// A fold the branch arrived with is the group's too, exactly as it is for
+	// a group at the top of the pattern: the expression's flags are written
+	// from the modifier rather than from the options.
+	m.fold = m.fold || o.fold
+	// Anchored rather than searched, which is what `whole` false asks
+	// tildeRegexAfter for. Every caller of matchHere wants the piece
+	// described whole.
+	o.whole = false
+	got, _ := matchTilde(m, after, s, o.where.subject, at, withGlobPrefix(o, expr))
+	return got, true
+}

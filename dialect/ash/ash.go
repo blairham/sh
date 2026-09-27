@@ -357,6 +357,17 @@ func Semantics() interp.Semantics {
 	// string: `set -- one two three four; "${*:1:2}"` is `ne` here and
 	// `one two` in bash, zsh and ksh93.
 	s.SubstringOfPositionalsSlicesTheList = interp.No
+	// A negative length whose end falls behind the offset hands back
+	// everything from the offset, in silence and at 0, which is the third
+	// answer on this axis and not either of the readings the other columns
+	// have. Measured 2026-09-27 on BusyBox 1.37.0 in the pinned image with
+	// `v=abcdef`: `${v:1:-9}` is `bcdef`, `${v:2:-10}` is `cdef` and
+	// `${v:4:-3}` is `ef` — the rest from the offset every time — where
+	// `${v:0:-6}`, whose end lands exactly at the start, is empty like
+	// everywhere else and `${v:1:-2}` is the unanimous `bcd`. So it is an
+	// end strictly behind the start and it is not a reading of negative
+	// lengths in general.
+	s.SubstringEndBehindTheStart = interp.SubstringEndBehindStartIsTheRest
 	// The panel's dash column is the one with no multibyte decoder; this
 	// shell has one and does not need a locale to use it. Measured with the
 	// harness's fixed `LC_ALL=C`: `s=héllo; echo ${#s}` is 5 here and 6 in

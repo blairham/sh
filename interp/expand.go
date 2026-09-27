@@ -4579,6 +4579,34 @@ func (r *Runner) positionalSliceElems(e *syntax.ParamExpr, elems []string) []str
 	return append([]string{zero}, elems...)
 }
 
+// positionalSliceBound restates the bound a refused positional slice names,
+// in the numbers the shell that names them counts in.
+//
+// positionalSliceElems above puts `$0` on the front of the list, so the slice
+// this engine performs is over one more element than the parameters. The
+// shell that quotes the computed end and start back does **not** count that
+// element — except at offset 0, where `$0` is in the slice and it does.
+// Measured 2026-09-27 on zsh 5.9.2, `${@:off:-9}` on six parameters:
+//
+//	off  0   substring expression: -2 < 0     7 - 9, and the start as written
+//	off  1   substring expression: -3 < 0     6 - 9, and the start one back
+//	off  2   substring expression: -3 < 1
+//	off  3   substring expression: -3 < 2
+//	off  4   substring expression: -3 < 3
+//
+// and the same two shapes again on a list of two with `-5`. So it is the
+// numbers in the sentence and nothing else: which slices are refused, and
+// what they come back as where they are not, is the same either way.
+func positionalSliceBound(e *syntax.ParamExpr, end, start int) (int, int) {
+	if e.Name != "@" && e.Name != "*" {
+		return end, start
+	}
+	if start <= 0 {
+		return end, start
+	}
+	return end - 1, start - 1
+}
+
 func sliceElems(elems []string, off int, e *syntax.ParamExpr, r *Runner) []string {
 	lenWord := e.Arg2
 	if off < 0 {
@@ -4623,6 +4651,18 @@ func sliceElems(elems []string, off int, e *syntax.ParamExpr, r *Runner) []strin
 		// others count it from the end, which is the axis the string form
 		// beside this one already asks.
 		if r.ask(r.sem().SubstringNegativeLengthIsEmpty, "a negative substring length") {
+			return nil
+		}
+		// And the same bound the string spelling asks about, in the column
+		// that takes a negative length on a list at all: an end behind the
+		// offset draws the identical sentence there. See
+		// interp/substringendbehindstart.go.
+		end := len(elems) + n
+		if end-off < 0 {
+			reportEnd, reportStart := positionalSliceBound(e, end, off)
+			if r.substringEndBehindTheStart(lenWord, reportEnd, reportStart) {
+				return out
+			}
 			return nil
 		}
 	}
@@ -5897,7 +5937,18 @@ func substringUnits(units []string, off int, e *syntax.ParamExpr, r *Runner) []s
 			return nil
 		}
 		// A negative length is an offset from the end.
-		n = len(units) + n - off
+		end := len(units) + n
+		n = end - off
+		if n < 0 {
+			// And the end it computed is behind the offset, which is an
+			// axis of its own: two columns refuse it in different words,
+			// one hands back the rest of the value, and `end == start` is
+			// not this row at all. See interp/substringendbehindstart.go.
+			if r.substringEndBehindTheStart(lenWord, end, off) {
+				return units[off:]
+			}
+			return nil
+		}
 	}
 	if n < 0 {
 		n = 0

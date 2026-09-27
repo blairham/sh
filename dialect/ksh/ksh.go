@@ -1414,6 +1414,16 @@ func Semantics() interp.Semantics {
 	// 2012-08-01. The yes here gave every `f "${a[@]}"` on a name nothing
 	// had filled yet one spurious empty argument.
 	s.SubstringNegativeLengthIsEmpty = interp.Yes
+	// unanswered SubstringEndBehindTheStart: the line above is what makes
+	// the question unputtable here. A negative length is answered with
+	// nothing before any end is computed, so the bound the other columns
+	// disagree about is never reached and both readings produce the same
+	// bytes. Measured 2026-09-27 against 93u+ 2012-08-01 with `v=abcdef`:
+	// `${v:1:-9}`, whose end falls behind the offset, and `${v:1:-2}`,
+	// whose end is well inside the value, are each `[]` at 0 — and it is
+	// the second that says the emptiness is the other axis's and not this
+	// one's, since every column that reaches this axis at all answers that
+	// row `bcd`.
 	// `${!ab@}` and `${!ab*}` list the names *extending* the prefix here:
 	// with `ab=1; abc=2; abd=3` the answer is `abc abd`, and `ab` — which
 	// is set, and which every other column with the operator lists — is

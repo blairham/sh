@@ -3887,6 +3887,18 @@ func Semantics() interp.Semantics {
 	// shell refuses is `a[0]`, which is below its first element rather than
 	// counting back from the last.
 	s.NegativeSubscriptPastTheStartInserts = interp.Yes
+	// A negative substring length whose end falls behind the offset is
+	// refused, and the refusal ends the shell — `v=abcdef; ${v:1:-9}` is
+	// `substring expression: -3 < 1` and nothing after it runs. The
+	// computed **end and start** are what is named, where bash names the
+	// length as written, so the two sentences share no verb. The control
+	// either side: `${v:1:-2}` is `bcd` at 0 and `${v:1:-5}` — the end
+	// exactly at the start — is empty at 0, so it is a strictly smaller end
+	// and not a negative length. The list spelling draws the identical
+	// sentence: `a=(p q r s t u); ${a[@]:1:-9}` is `substring expression:
+	// -3 < 1` where `${a[@]:1:-2}` is `q r s`. Measured 2026-09-27 against
+	// 5.9.2.
+	s.SubstringEndBehindTheStart = interp.SubstringEndBehindStartIsRefused
 	s.SubscriptBeforeTheFirstElementRead = interp.SubscriptBeforeStartIsNothing
 	s.SubscriptBeforeTheFirstElementNeedsAnElement = interp.No
 	// And the length is answered exactly as the read is — silently, at `0`.
@@ -5316,6 +5328,9 @@ func Diagnostics() interp.Diagnostics {
 		// made by `private` or by `local` — where `local` or `typeset` over
 		// a *private* is taken at 0.
 		PrivateRedeclaresName: "%[1]s: can't change scope of existing param: %[2]s",
+		// The computed end and the start, in that order, where bash's
+		// sentence for the same bound names the length as it was written.
+		SubstringEndBehindTheStart: "substring expression: %[2]s < %[3]s",
 		// And a kind letter aimed at a name this shell holds a slot for:
 		// `f:typeset: path: can't change type of a special parameter`, the
 		// shell ending at 1 with the rest of the script unrun, and the

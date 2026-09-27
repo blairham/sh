@@ -8352,6 +8352,17 @@ type Diagnostics struct {
 	// than the number it came to, so `${a[@]:1:1-$n}` names `1-$n`.
 	ListSliceNegativeLength string
 
+	// SubstringEndBehindTheStart is the refusal a negative length draws when
+	// the end it computes falls behind the offset — see
+	// Semantics.SubstringEndBehindTheStart, which is where the rows are.
+	//
+	// Three verbs, indexed, because the two columns that refuse blame
+	// different numbers: the length **as written**, the computed **end**,
+	// and the **start**. bash writes `%[1]s: substring expression < 0` and
+	// zsh `substring expression: %[2]s < %[3]s`, so neither field could be
+	// dropped and neither sentence could be derived from the other.
+	SubstringEndBehindTheStart string
+
 	// UnrecognizedModifier is the reason when a substring range read as a
 	// modifier list names one the dialect does not have. One verb: the
 	// segment as written.

@@ -286,6 +286,14 @@ type suspendedProducer struct {
 
 	declaration ProducedDeclaration
 	declared    bool
+	// shellOwn is the mark a dialect puts on one of its *stored* parameters
+	// — see Runner.MarkShellOwnParameter. It suspends with the producers
+	// because the hide letter means the same thing for it: a local
+	// declaration of the name is an ordinary parameter, and the word a type
+	// query writes must say so. Measured 2026-09-26 on zsh 5.9.2 under `-f`,
+	// `f(){ local dirstack; print ${(t)dirstack} }` is `scalar-local` there
+	// and was `scalar-local-special` here (#4615).
+	shellOwn bool
 }
 
 // suspendProducer takes a name out of the produced tables for as long as one
@@ -298,10 +306,12 @@ func (r *Runner) suspendProducer(sc *scope, name string) {
 	if _, already := sc.suspendedProducers[name]; already {
 		return
 	}
-	if !r.DynamicParameter(name) {
+	own := r.shellOwn[name]
+	if !r.DynamicParameter(name) && !own {
 		return
 	}
 	p := suspendedProducer{
+		shellOwn:    own,
 		scalar:      r.Dynamic[name],
 		array:       r.DynamicArrays[name],
 		assoc:       r.DynamicAssocs[name],
@@ -311,6 +321,7 @@ func (r *Runner) suspendProducer(sc *scope, name string) {
 		writeAssoc:  r.dynamicAssocWriters[name],
 	}
 	p.declaration, p.declared = r.dynamicDeclarations[name]
+	delete(r.shellOwn, name)
 	delete(r.Dynamic, name)
 	delete(r.DynamicArrays, name)
 	delete(r.DynamicAssocs, name)
@@ -358,6 +369,9 @@ func (r *Runner) resumeProducer(sc *scope, name string) {
 	}
 	if p.declared {
 		putBack(&r.dynamicDeclarations, name, p.declaration)
+	}
+	if p.shellOwn {
+		r.MarkShellOwnParameter(name)
 	}
 	delete(sc.suspendedProducers, name)
 }

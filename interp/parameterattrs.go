@@ -101,10 +101,12 @@ type ParameterAttributes struct {
 	// bit told a script switching on the word about the wrong letter (#2042).
 	Hidden bool
 	// Provided is the shell's own rather than a script's: a parameter whose
-	// value is produced on being read, or one the shell has registered a
-	// refusal for. It is the closest thing the core has to "this name is not
-	// a variable somebody assigned", and a dialect that calls such a name
-	// special is reading this.
+	// value is produced on being read, one the shell has registered a
+	// refusal for, or one a dialect has said outright is its own — see
+	// [Runner.MarkShellOwnParameter], which is the third source and the only
+	// one that is a statement rather than a shape. It is the closest thing
+	// the core has to "this name is not a variable somebody assigned", and a
+	// dialect that calls such a name special is reading this.
 	Provided bool
 }
 
@@ -136,7 +138,8 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		Unique:    r.unique[name],
 		HideValue: r.hidden[name],
 		Hidden:    r.hideInScope[name],
-		Provided:  r.DynamicParameter(name) || r.AbsentParameter(name),
+		Provided: r.DynamicParameter(name) || r.AbsentParameter(name) ||
+			r.shellOwnParameter(name),
 	}
 	_, a.Tied = r.tied[name]
 	if w, ok := r.fieldWidth[name]; ok {

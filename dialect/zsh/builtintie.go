@@ -62,16 +62,24 @@ import "github.com/blairham/sh/interp"
 //     line was typed on. The tie is what carries it into `fpath`, which is
 //     why the seed happens after this runs (#1250).
 func tieTheBuiltInPairs(r *interp.Runner) {
-	for _, pair := range [...][2]string{
-		{"PATH", "path"},
-		{"FPATH", "fpath"},
-		{"CDPATH", "cdpath"},
-		{"MANPATH", "manpath"},
-		{"MAILPATH", "mailpath"},
-		{"MODULE_PATH", "module_path"},
-		{"PSVAR", "psvar"},
-		{"FIGNORE", "fignore"},
-	} {
+	for _, pair := range builtInTies {
 		r.Tie(pair[0], pair[1], ":")
 	}
+}
+
+// builtInTies is the list itself, named so that the pairs can be walked
+// twice: once to make them, and once to say they are the shell's own. Both
+// halves of every one of them describes as `special` in the shell being
+// modeled — measured 2026-09-26, sixteen names, `array-tied-special` for the
+// lower-case half and `scalar-tied-special` for the upper, with `PATH` and
+// `MAILPATH` carrying `export` besides. See markTheShellsOwnParameters.
+var builtInTies = [...][2]string{
+	{"PATH", "path"},
+	{"FPATH", "fpath"},
+	{"CDPATH", "cdpath"},
+	{"MANPATH", "manpath"},
+	{"MAILPATH", "mailpath"},
+	{"MODULE_PATH", "module_path"},
+	{"PSVAR", "psvar"},
+	{"FIGNORE", "fignore"},
 }

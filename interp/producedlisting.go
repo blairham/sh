@@ -116,6 +116,21 @@ type ProducedDeclaration struct {
 // is the answer every parameter here had before this and the right one for a
 // name the shell being modeled does not list either.
 //
+// **A parameter with an ordinary stored value reaches it too**, and the name
+// is the narrower half of what this does rather than a restriction. What it
+// records is *how a name describes itself* for a name that carries no
+// attribute record to read that off, and a shell's own stored parameter is in
+// exactly that position: measured 2026-09-26 on zsh 5.9.2 under `-f`,
+// `typeset -p UID` is `typeset -i10 UID=501` and `${(t)UID}` is
+// `integer-special` from a name whose value is stored rather than produced.
+// The alternative for those four was [Runner.MarkInteger], which is the
+// attribute table and therefore also decides what `UID=1+1` stores — and the
+// reference stores nothing at all for that line, attempting a `setuid` and
+// reporting `failed to change user ID` (measured the same day, and #4476 is
+// why a library does not make that call). So the letter is stated here, where
+// it is a listing and a type word and nothing else, and the write is left
+// exactly as it was.
+//
 // Deliberately not the attribute tables. Marking `RANDOM` integer would put
 // the letter in a listing by the route an ordinary name takes, and would also
 // change what `RANDOM=abc` does, what `typeset +i RANDOM` can take off, and

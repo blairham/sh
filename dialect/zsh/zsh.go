@@ -5997,18 +5997,24 @@ func Apply(r *interp.Runner) {
 	// `chgrp file` and the *system's* `chgrp` wrote the `usage:` line. The
 	// symptom was a third-party program's message and none of ours.
 	//
-	// Not marked integer or readonly, and that is measured too rather than
-	// left out. `${(t)GID}` is `integer-special` there against a bare
-	// `scalar` here — but so is `${(t)UID}`, and `${(t)IFS}` is
-	// `scalar-special` against `scalar`, so the missing mark belongs to
-	// `SetSpecial` as a whole and is filed against all four rather than
-	// grown for the new pair alone. Assignment is the other half and is
-	// deliberately absent: `GID=999` in an unprivileged shell is `failed to
-	// change group ID: operation not permitted` and stops the shell, while
-	// `GID=20` — the gid it already has — is taken at 0, so the rule is "the
-	// setgid call happened", not a flat refusal. A library may not make that
-	// call (see the purity rule above), and a privileged path is not
-	// testable from here, so neither is guessed at.
+	// Not marked readonly, and that is measured rather than left out: the
+	// four identity names are ordinary writable parameters in this shell,
+	// unlike bash's, so `MarkReadonly` is the bash answer and is not copied
+	// across.
+	//
+	// The integer letter and the `special` suffix *are* here, and they were
+	// the whole of #4488 — `${(t)GID}` is `integer-special` in the reference
+	// against a bare `scalar` here, and so was `${(t)UID}`, `${(t)IFS}` and
+	// every other name this hook stores. See markTheShellsOwnParameters
+	// below for both halves and for why the hook does not do it itself.
+	//
+	// Assignment is still the other half and is still deliberately absent:
+	// `GID=999` in an unprivileged shell is `failed to change group ID:
+	// operation not permitted` and stops the shell, while `GID=20` — the gid
+	// it already has — is taken at 0, so the rule is "the setgid call
+	// happened", not a flat refusal. A library may not make that call (see
+	// the purity rule above), and a privileged path is not testable from
+	// here, so neither is guessed at.
 	r.SetSpecial("GID", strconv.Itoa(os.Getgid()))
 	// The login name for that same uid, for the `%n` prompt escape. Asked
 	// here for the reason the uid above is: nothing a script does changes
@@ -6165,6 +6171,10 @@ func Apply(r *interp.Runner) {
 	// reach and which never move — see nullcommand.go in this package.
 	registerNullCommandParameters(r)
 	tieTheBuiltInPairs(r)
+	// And what all of those names say about *themselves*, which nothing said
+	// until #4488. After the ties, because half the names it marks are made
+	// by them.
+	markTheShellsOwnParameters(r)
 	// And the four scalar pairs that are one parameter under two names —
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)

@@ -4295,6 +4295,11 @@ type Runner struct {
 	// refuses it and ksh93 does not have it, so the dialect decides who may
 	// set it — see Semantics.DeclareOptions.
 	unique map[string]bool
+	// shellOwn names the parameters the shell provides itself, for the ones
+	// that hold an ordinary stored value and so look like a script's. See
+	// interp/shellownparameter.go, and ParameterAttributes.Provided, which
+	// is what reads it.
+	shellOwn map[string]bool
 	// traced names the parameters carrying the trace attribute — `typeset
 	// -t`. Every shell on the panel but the two without the builtin records
 	// it and lists it back, and none of them lets it change what a *value*

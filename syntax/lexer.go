@@ -1189,7 +1189,7 @@ func (l *Lexer) next() Token {
 	// `[[ x =~ | ]]` are both 0 there, an empty branch being one that shell
 	// takes — where this was `unexpected argument `|' to conditional binary
 	// operator` (#4173).
-	if l.inRegex && (l.peek() == '(' ||
+	if l.inRegex && ((l.peek() == '(' && !l.dialect.RegexParenthesisIsTheShellsOwn) ||
 		(l.peek() == ')' && l.dialect.RegexKeepsAnUnbalancedCloser) ||
 		(l.peek() == '|' && l.dialect.RegexTakesAlternation)) {
 		return l.scanWord(start)
@@ -1868,7 +1868,13 @@ func (l *Lexer) endsWord(c byte) bool {
 		// `[[ ]]` and is a parse error in the third.
 		switch c {
 		case '(':
-			return false
+			if !l.dialect.RegexParenthesisIsTheShellsOwn {
+				return false
+			}
+			// The dialect has taken the parentheses back off the operand, so
+			// the question is the ordinary one and is asked at the bottom of
+			// this function with every other word's. Falling out of the
+			// switch rather than answering here is the whole of that.
 		case ')':
 			// A balanced group was taken whole by the scanner above, so a `)`
 			// reaching here closes nothing — and two of the three columns end
@@ -2338,7 +2344,15 @@ func (l *Lexer) opensPatternGroup() bool {
 func (l *Lexer) scanPatternGroup() string {
 	start := l.off
 	depth := 0
+	// One dialect's regular-expression group is the same construct as its
+	// pattern group, which shows only here: a shell operator inside it stops
+	// the scan, the group never closes, and the word ends where the operator
+	// does. See [Dialect.RegexGroupEndsAtAShellOperator].
+	stopsAtAnOperator := l.inRegex && l.dialect.RegexGroupEndsAtAShellOperator
 	for !l.eof() {
+		if stopsAtAnOperator && depth > 0 && strings.IndexByte(";<>&", l.peek()) >= 0 {
+			return l.src[start:l.off]
+		}
 		c := l.advance()
 		switch c {
 		case '(':
@@ -2987,7 +3001,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 				Pos:     escPos,
 			})
 
-		case c == '(' && l.inRegex:
+		case c == '(' && l.inRegex && !l.dialect.RegexParenthesisIsTheShellsOwn:
 			// A regular expression's group is taken whole, balanced, with
 			// whatever is inside it — an alternation in there belongs to the
 			// group in all three shells that have `[[ ]]`, so it needs no

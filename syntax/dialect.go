@@ -6215,9 +6215,71 @@ type Dialect struct {
 	// RegexTakesAlternation makes a bare `|` part of a `=~` operand rather
 	// than the end of the word. bash and ksh93 say yes, so `[[ ab =~ a|b ]]`
 	// matches there; zsh says no and reports a parse error. Parentheses are
-	// taken by all three and so need no flag — a dialect without `[[ ]]`
-	// never reaches the question.
+	// taken by all three unless [Dialect.RegexParenthesisIsTheShellsOwn] says
+	// otherwise — a dialect without `[[ ]]` never reaches either question.
 	RegexTakesAlternation bool
+
+	// RegexParenthesisIsTheShellsOwn takes the parentheses back off a `=~`
+	// operand: an unquoted `(` there is read by the word rules that apply
+	// everywhere else — [Dialect.PatternAlternation] and
+	// [Dialect.BarePatternGroupInsideAWord] — rather than opening the regex's
+	// own group.
+	//
+	// Off is every dialect's answer today and the reason the flag names the
+	// state a dialect has to ask for: a regular expression's group is the
+	// operand's in bash, ksh93 and zsh alike.
+	//
+	// **One shell reaches it, through an option**, and the rule it lands in
+	// is the ordinary one rather than a refusal of its own. Measured on zsh
+	// 5.9.2 (aarch64-apple-darwin25.4.0) at `/opt/homebrew/bin/zsh`, run `-f`
+	// over a script file under `set -n`, 2026-09-27, with the options moved
+	// on the line before:
+	//
+	//	                          bare     shglob    shglob+kshglob
+	//	[[ a =~ (a) ]]            parses   refused   refused
+	//	[[ abc =~ ^(a|x)bc$ ]]    parses   refused   parses
+	//	[[ abc =~ ^a.c$ ]]        parses   parses    parses
+	//	[[ abc =~ "^(a)" ]]       parses   parses    parses
+	//	[[ abc =~ a\(b ]]         parses   parses    parses
+	//
+	// The first two rows are the same split a *pattern* operand has in the
+	// same states — refused where a word begins, taken inside one — which is
+	// what says this is the word rules reaching the operand rather than a
+	// second rule about regular expressions. The last three are the controls:
+	// an operand with no bare parenthesis in it, and the two quotings, are
+	// untouched in every state.
+	RegexParenthesisIsTheShellsOwn bool
+
+	// RegexGroupEndsAtAShellOperator stops a `=~` operand's group at a `;`,
+	// `<`, `>` or `&` standing inside it, so the group never closes and the
+	// word ends where the operator does.
+	//
+	// Off is the answer of every shell but one, and the one is the dissenter
+	// [Dialect.RegexTakesAlternation]'s comment already names: a regular
+	// expression owns its operators in bash 5.3, bash 3.2, bash-as-`sh` and
+	// ksh93, all four of which match `a<b` and `a;b` against `(a<b)` and
+	// `(a;b)`, and zsh refuses the `<` while parsing.
+	//
+	// Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+	// `/opt/homebrew/bin/zsh`, run `-f` over a script file under `set -n`,
+	// 2026-09-27, which is what says the four characters are the set and the
+	// others are not:
+	//
+	//	[[ "a<b" =~ (a<b) ]]   refused        [[ "a b" =~ (a b) ]]   parses
+	//	[[ "a;b" =~ (a;b) ]]   refused        [[ "a|b" =~ (a|b) ]]   parses
+	//	[[ "a>b" =~ (a>b) ]]   refused
+	//	[[ "a&b" =~ (a&b) ]]   refused
+	//
+	// It is the same four [Dialect.UnterminatedPatternGroupIsAWord] records
+	// for a *pattern* group in that shell, and the same two exceptions — a
+	// blank and a `|` are text in both — which is what says the two groups
+	// are one construct there rather than two that happen to agree.
+	//
+	// Outside a group the question does not arise and is measured to not:
+	// `[[ "a<b" =~ a<b ]]` is refused wherever the `<` is not inside
+	// parentheses, in that shell and in this one alike, because the word
+	// simply ends at the operator.
+	RegexGroupEndsAtAShellOperator bool
 
 	// RegexKeepsAnUnbalancedCloser keeps a `)` that closes nothing inside a
 	// `=~` operand rather than letting it end the word.

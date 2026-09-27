@@ -69,3 +69,29 @@ func (r *Runner) SetBarePatternGroups(anywhere, insideAWord bool) {
 	d.BarePatternGroupInsideAWord = insideAWord
 	r.Dialect = &d
 }
+
+// RegexOperandParenthesisIsTheShellsOwn reports whether an unquoted `(` in a
+// `=~` operand is read by the word rules above rather than opening the
+// regular expression's own group.
+//
+// It is the same pair of readings reaching one more place — measured, the two
+// operands of `[[ ]]` split the same way in the same states — and it is a
+// third accessor rather than a fourth value on the pair because a dialect
+// answers it whether or not it has bare groups at all.
+func (r *Runner) RegexOperandParenthesisIsTheShellsOwn() bool {
+	return r.lang().RegexParenthesisIsTheShellsOwn
+}
+
+// SetRegexOperandParenthesisIsTheShellsOwn moves it, for a dialect whose
+// option namespace has a name for the reading.
+//
+// The dialect is copied and replaced rather than written through, for the
+// reason the setter above is.
+func (r *Runner) SetRegexOperandParenthesisIsTheShellsOwn(on bool) {
+	d := r.dialect()
+	if d.RegexParenthesisIsTheShellsOwn == on {
+		return
+	}
+	d.RegexParenthesisIsTheShellsOwn = on
+	r.Dialect = &d
+}

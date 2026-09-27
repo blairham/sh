@@ -343,6 +343,15 @@ func Dialect() syntax.Dialect {
 	// parse error. The refusal has to be the matcher's for the option to be
 	// able to withhold it (#4645).
 	d.UnterminatedPatternGroupIsAWord = true
+	// And a *regular expression's* group is the same construct: a `;`, `<`,
+	// `>` or `&` inside `(…)` stops the group here where the four shells with
+	// `=~` all keep it. Measured 2026-09-27 on zsh 5.9.2 under `set -n` —
+	// `[[ "a<b" =~ (a<b) ]]` and the rows for the other three are refused,
+	// and `(a b)` and `(a|b)` are taken, which is the same pair of exceptions
+	// the line above records for a pattern group. Until this the corpus row
+	// `cond/a-regex-operands-group-keeps-its-operators` was answered here
+	// with the reading the other four have.
+	d.RegexGroupEndsAtAShellOperator = true
 	// And a `|` outside every group, which is the same alternation one level
 	// out, and only for a bar a value supplied: `L='a|b'; [[ a = ${~L} ]]`.
 	// Measured on zsh 5.9.2 in a condition, in a `case` arm, under `setopt

@@ -32907,10 +32907,33 @@ func (r *Runner) caretNegates(pattern string) bool {
 	return r.ask(r.sem().BracketCaretNegates, "`^` negating a bracket class")
 }
 
+// patternSurface is where a pattern this function is asked about was written.
+//
+// Three values rather than the bool this used to take, because the surface
+// decides two separate things and they do not split the same way. One dialect
+// reads a **condition's** pattern by different rules from a `case` arm's, and
+// the same dialect gives a refused pattern a status that depends on the
+// surface too — and there the `case` arm is the one that parts from everything
+// else. See Runner.refusedPatternStatus.
+type patternSurface uint8
+
+const (
+	// patternInAWord is every surface that is neither of the other two: an
+	// element filter, an element replacement, an `(r)` subscript, and a
+	// dialect's own registered matcher.
+	patternInAWord patternSurface = iota
+
+	// patternInACondition is `[[ … ]]` and the `test` builtin's `=` and
+	// `!=`.
+	patternInACondition
+
+	// patternInACaseArm is a `case` arm's pattern.
+	patternInACaseArm
+)
+
 // matchPatternR is matchPattern with the caret axis resolved from the dialect.
-// condition says the pattern stands inside `[[ ]]`, which one dialect reads by
-// different rules from a `case` pattern.
-func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
+func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
+	condition := surface == patternInACondition
 	o := patternOpts{
 		caret:        r.caretNegates(pattern),
 		group:        r.lang().PatternAlternation,
@@ -32983,11 +33006,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// on zsh 5.9.2 (`-f -c`), `case zzz in (x[[:alpha:]))` is `bad
 		// pattern` there and took the `*` arm here, while the same arm
 		// without the `x` was refused by both (#4659).
-		status := badStatus
-		if status == 0 {
-			status = r.fatalStatus()
-		}
-		r.fatalPattern(pattern, status)
+		r.fatalPattern(pattern, r.refusedPatternStatus(surface, badStatus))
 		return false
 	}
 	// The whole-subject question, like matchPattern's: a condition, a `case`
@@ -33022,11 +33041,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// success to whatever ran it, which is the shape that turns a broken
 		// script into a green build (#3398). The condition's own 2 still
 		// wins where there is one.
-		status := badStatus
-		if status == 0 {
-			status = r.fatalStatus()
-		}
-		r.fatalPattern(pattern, status)
+		r.fatalPattern(pattern, r.refusedPatternStatus(surface, badStatus))
 		return false
 	}
 	// The surfaces this function serves are the ones that report a match
@@ -33039,6 +33054,54 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		r.recordPatternMatch(report)
 	}
 	return matched
+}
+
+// refusedPatternStatus is what a pattern the dialect will not compile costs.
+//
+// badStatus is the surface's own answer where it has one — a condition's 2 —
+// and nought where it has none. What stands in for the nought is the
+// dialect's ordinary fatal status, with one exception, and the exception is
+// keyed on the **route** rather than on anything about the pattern.
+//
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`,
+// each snippet given to `-c`, to a script file and on standard input, with
+// both streams discarded and `$?` taken immediately:
+//
+//	case '[a' in ([a)                -c 0   file 1   stdin 1
+//	case zzz in (x[[:alpha:])         -c 0   file 1   stdin 1
+//	the same, inside a function       -c 0   file 1
+//	[[ '[a' == [a ]]                  -c 2   file 2
+//	print -r -- "[a"*                 -c 1   file 1
+//	v='[a'; print -r -- ${v#[a}       -c 1   file 1
+//	typeset -m '[a'                   -c 1   file 1
+//	${v:#[a} over an array            -c 1   file 1
+//	eval 'case "[a" in ([a) :;; esac' -c 1   file 1
+//
+// The four rows under the first three are what make this the `case` arm's
+// row and not the refusal's: the same refusal at every other surface is the
+// ordinary fatal status on both routes, and a condition's own 2 is unmoved on
+// both. The `eval` row is the boundary rather than the route — the borrowed
+// text is what ends, and it reports the ordinary status, which is why
+// borrowed text is excluded here rather than left to a boundary to correct
+// afterwards. A `.` is the same shape one number further on: it reports 126
+// and the script carries on, measured 2026-09-18 and unmoved by this.
+//
+// Two rows this deliberately does **not** reach, both measured the same day
+// and both currently answered with the ordinary fatal status here: the same
+// refusal inside `( … )` or inside a command substitution leaves **0** in
+// that shell on either route, where every other give-up leaves 1 or 2 through
+// the same boundary. That is what the refusal *leaves behind* rather than
+// which route ended the shell, so it is a separate question and is filed as
+// one.
+func (r *Runner) refusedPatternStatus(surface patternSurface, badStatus int) int {
+	if badStatus != 0 {
+		return badStatus
+	}
+	if surface == patternInACaseArm && r.diag().CasePatternRefusalEndsACommandStringAtNought &&
+		r.Route == RouteCommandString && !r.inSubshell && len(r.borrowed) == 0 {
+		return 0
+	}
+	return r.fatalStatus()
 }
 
 // fatalPattern reports a pattern the dialect rejects outright.

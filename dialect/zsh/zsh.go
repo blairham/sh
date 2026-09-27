@@ -4653,6 +4653,16 @@ func Diagnostics() interp.Diagnostics {
 		// the first alone looks like a base name rather than a fixed one.
 		// The other three shells print argv[0] whole.
 		SelfName: "zsh",
+		// A pattern this shell will not compile, standing as a `case` arm,
+		// ends the shell at **nought** from `-c` and at 1 from a script file
+		// or from standard input. Measured 2026-09-27 on 5.9.2 run `-f`, both
+		// streams discarded: `case '[a' in ([a) …` and `case zzz in
+		// (x[[:alpha:]) …` are each 0, 1 and 1 over the three routes, while a
+		// condition holding either pattern is 2 on every route and every
+		// other pattern surface is 1 on every route. The complaint reaches
+		// standard error and the shell leaves either way, so the status is
+		// the whole of what a caller loses (#4765).
+		CasePatternRefusalEndsACommandStringAtNought: true,
 		// With one exception, and it goes the other way from ksh93's: an
 		// option refused at an invocation names the **whole word** the shell
 		// was started by, where SelfName above would have written `zsh`.

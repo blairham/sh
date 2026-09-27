@@ -7802,7 +7802,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// part of this walk — a marker taken after it would read a value
 		// that would not expand as something that had already failed.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst && r.expandTheFrozenPrefixValues(c.Assigns) {
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns) {
 			// A frozen name's own value is what failed, in one of the four
 			// columns that evaluate it first: the expansion's sentence is
 			// the whole of what the script is told, the refusal is never
@@ -8019,7 +8019,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// on the record. The redirections have been opened since the marker
 		// runSimple took, and what they may have left is not this prefix's.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst && r.expandTheFrozenPrefixValues(c.Assigns) {
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns) {
 			// What the frozen name was being given is what failed, in one of
 			// the four columns that evaluate it ahead of the refusal: its
 			// sentence is the whole of what the script is told, and the
@@ -9952,17 +9952,40 @@ func (r *Runner) failedExpansion() {
 		// Runner.arithNounsetRefusal.
 		return
 	}
-	if r.sem().FailedExpansionAbandonsTheLine != Yes {
+	abandons := r.sem().FailedExpansionAbandonsTheLine
+	if r.badSubscript && r.posixModeSharpenedTheAbandon() {
+		// **POSIX mode does not reach a bracketed expression**, so the axis
+		// a bad subscript reads here is the one the dialect holds outside
+		// the mode. Everything else the mode sharpens: measured 2026-09-27
+		// on bash 5.3.20 and on the 3.2.57 macOS ships, which agree row for
+		// row, with `a=(1 2)` and `echo B4` in front and `echo "after st=$?"`
+		// behind, each line run as a script file and as one `-c` string:
+		//
+		//	                 mode  file              -c
+		//	echo ${a[1+]}    on    after st=1, 0     nothing, 1
+		//	echo ${a[1+]}    off   after st=1, 0     nothing, 1
+		//	echo $((1/0))    on    nothing, 1        nothing, 127
+		//	echo $((1/0))    off   after st=1, 0     after st=1, 0
+		//	echo ${#+}       on    nothing, 1        nothing, 127
+		//	echo ${#+}       off   after st=1, 0     after st=1, 0
+		//
+		// The first pair is the finding: the two mode rows are identical for
+		// a subscript and differ for everything else. A store — `v=${a[1+]}`
+		// — and the same expansion inside a function body move with it, and
+		// a subshell contains it on both routes in both modes, which is
+		// Runner.giveUpForABadSubscript's own shape (#4784).
+		abandons = Yes
+	}
+	if abandons != Yes {
 		if r.badSubscript {
-			// A bracketed expression is the one shape that keeps the
-			// ordinary fatal status here, and it keeps it because the
-			// column with a number of its own does not reach this door for
-			// one: measured 2026-09-26, `bash -c 'set -o posix; echo
-			// ${a[1+]}'` writes the complaint and exits **1**, where
-			// `$((1/0))`, `${#+}` and `${(q)x}` on the same line exit 127.
-			// The same subscript from a script file is not fatal there at
-			// all — it gives up the line and the next one runs — which is a
-			// gap of its own and not this one's.
+			// A bracketed expression keeps the ordinary fatal status here
+			// rather than the number a `-c` string gives a failed
+			// expansion, because the column with such a number does not
+			// reach this door for one: measured 2026-09-26, `bash -c 'set
+			// -o posix; echo ${a[1+]}'` writes the complaint and exits
+			// **1**, where `$((1/0))`, `${#+}` and `${(q)x}` on the same
+			// line exit 127. Reached only by a dialect that does not give
+			// up the line at all, the mode having been taken out above.
 			r.fatalQuiet()
 			return
 		}

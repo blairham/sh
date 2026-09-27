@@ -1887,7 +1887,7 @@ func (r *Runner) conditionOption(name string) (on, known bool) {
 // except inside `[[ =~ ]]`: `pwd` matches the line `pwd` and not `pwd /tmp`.
 // Not the condition-context reading, since a setting is not a condition.
 func (r *Runner) MatchPattern(pattern, s string) bool {
-	return r.matchPatternR(pattern, s, false)
+	return r.matchPatternR(pattern, s, patternInAWord)
 }
 
 // Expand performs parameter and command expansion on raw text.

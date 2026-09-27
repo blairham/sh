@@ -72,9 +72,9 @@ func (r *Runner) elementKeeper(e *syntax.ParamExpr) func(string) bool {
 		// `M` keeps what the pattern matched instead of dropping it, which
 		// is the whole of the flag here — the same test, read the other way.
 		if matchingFlag(e) {
-			return func(el string) bool { return r.matchPatternR(pattern, el, false) }
+			return func(el string) bool { return r.matchPatternR(pattern, el, patternInAWord) }
 		}
-		return func(el string) bool { return !r.matchPatternR(pattern, el, false) }
+		return func(el string) bool { return !r.matchPatternR(pattern, el, patternInAWord) }
 	}
 	// The set operators name an array. Its *elements* are the operand, and a
 	// name nothing is stored under contributes none of them.

@@ -402,7 +402,7 @@ func (r *Runner) subscriptMatcher(g *syntax.SubscriptFlags, prefix bool) func(st
 		// a longest match would end.
 		operand += "*"
 	}
-	return func(el string) bool { return r.matchPatternR(operand, el, false) }
+	return func(el string) bool { return r.matchPatternR(operand, el, patternInAWord) }
 }
 
 // searchOperand renders a subscript search's operand: every substitution

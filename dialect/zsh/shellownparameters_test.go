@@ -29,7 +29,15 @@ func TestTheShellsOwnStoredParametersDescribeThemselves(t *testing.T) {
 		// The integer letter rides on a *declaration* rather than on the
 		// attribute table, so a listing writes it and an assignment is
 		// untouched — which is the half #4476 measured and left alone.
-		{"the listing carries the letter and the base", `typeset -p UID`, "typeset -i10 UID=501\n"},
+		{
+			// The letter and the base, without the *number*, which is the
+			// machine's: a row spelling `501` passes on the laptop it was
+			// written on and fails on a runner. The value is checked in the
+			// same row, against `$UID` rather than against a constant.
+			"the listing carries the letter and the base",
+			`x=$(typeset -p UID); print -r -- "${x%=*}"; [[ ${x##*=} = $UID ]] && print -r -- "value ok"`,
+			"typeset -i10 UID\nvalue ok\n",
+		},
 		{"and the separator's does not", `typeset -p IFS`, "typeset IFS=$' \\t\\n\\C-@'\n"},
 		{"an assignment is still stored as written", `EGID=1+1; print -r -- $EGID`, "1+1\n"},
 		// The controls. A produced parameter was right throughout — that is

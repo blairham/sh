@@ -567,6 +567,15 @@ func Dialect() syntax.Dialect {
 	// predicts it — three of the four shells that read through one refuse
 	// this (#1223).
 	d.ArithCharacterConstant = true
+	// Its escapes are this shell's own, and `\C` spans differently from zsh's:
+	// one argument, no dash in the spelling, and `\M-` a complete escape that
+	// takes none. Measured 2026-09-26 on ksh93u+ 2012-08-01: `$(( '\Ca' ))`
+	// and `$(( '\CA' ))` are 1, `$(( '\C-' ))` is 109, and `$(( '\C-a' ))`,
+	// `$(( '\M-x' ))` and `$(( '\Mx' ))` are each an arithmetic syntax error
+	// — the escape ends before the quote does, leaving a character where an
+	// operator belongs. See interp.DollarSingleCaretMetaFoldedWithNoDash, the
+	// same table seen from the decoding end.
+	d.ArithCharacterEscapes = syntax.ArithCharacterEscapesFoldedCaret
 	// Extended patterns wherever a pattern may stand.
 	d.ExtendedPattern = true
 	// And inside `[[ ]]`, which is the only place bash reads them.

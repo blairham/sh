@@ -755,6 +755,15 @@ func Dialect() syntax.Dialect {
 	// and is not one — `a=(1 2); $((#a))` is 49, the code of the `1`, where
 	// the count is `$(( $#a ))`.
 	d.ArithCharacterCode = true
+	// Its operand is one character, and `\C` and `\M` reach past themselves
+	// to take it: measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0)
+	// run `-f`, `$(( ##\C-a ))` is 1, `$(( ##\M-a ))` is 225 and
+	// `$(( ##\M-\C-a ))` is 129 — the separating `-` optional in both and
+	// either able to take the other as its argument. The span is what decides
+	// whether the operand is complete at all, which is why it is written here
+	// and not only where the escape is decoded: reading `\C` alone left `-a`
+	// standing and answered 0 (#4607).
+	d.ArithCharacterEscapes = syntax.ArithCharacterEscapesMaskedCaretMeta
 	// And a name with a `(` touching it is a *math function* call —
 	// `$(( mf(5) ))` — where `mf` was registered with `functions -M`. The
 	// only shell in the panel with the construct; the other five read the

@@ -838,15 +838,38 @@ The `base#digits` literal above is untouched, and could not collide: that
 `#` follows digits and is read by the number, where this one stands where
 an operand belongs.
 
-Recorded and not reproduced: zsh's key-binding escape notation reaches
-this operator too — `$((##^A))` is 1 and `$((##\M-a))` is 225 — and
-nothing else in this implementation reads `^X` or `\M-`, so a table for
-them would exist for one operator alone. `$(( # ))` is also left out of
-the corpus, though it is implemented: the spelling makes bash lose the
-closing parenthesis of the whole word, so the row would be about its
-scanner rather than about the operator.
+`\C` and `\M` reach **past themselves** to take the character they mask,
+and how far they reach is the dialect's rather than the operator's. In zsh
+the separating `-` is optional and either may take the other as its
+argument: `$((##\C-a))` and `$((##\Ca))` are 1, `$((##\M-a))` is 225 and
+`$((##\M-\C-a))` is 129. ksh93 spells the same two letters differently in
+the one character-code operator it has — the constant `'c'` below — where
+`\C` takes exactly one argument with no dash in the spelling and `\M-` is a
+complete escape taking none: `$(( '\Ca' ))` is 1, `$(( '\C-' ))` is 109 and
+`$(( '\C-a' ))` is an arithmetic syntax error, the `a` left standing where
+an operator belongs.
 
-Grammar flag: `ArithCharacterCode` — core: off; `zsh`: on.
+That span is what decides whether the operand is complete at all, so it is
+a grammar flag and not only a decoding rule: reading `\C` alone left `-a`
+behind as a subtraction and answered 0 (#4607). The key is the dialect's
+`$'…'` table and not the operator that reached it, which each of the two
+operators cannot show on its own, since each lives in exactly one dialect.
+The table is measurable without either: through `od`, `$'\C-a\M-b'` is
+`01 e2` in zsh 5.9.2, `6d 61 1b 62` in ksh93u+ 2012-08-01 — `m`, `a`, ESC,
+`b` — and the eight characters as written in bash 5.3.20.
+
+Recorded and not reproduced: zsh's key-binding **caret** notation reaches
+this operator too — `$((##^A))` is 1 — and nothing else in this
+implementation reads `^X`, so a table for it would exist for one operator
+alone. A `\C` or `\M` with nothing at all after it is also left alone:
+zsh refuses `$(( ##\C ))` as `bad character after ##` where we answer 0.
+`$(( # ))` is left out of the corpus, though it is implemented: the
+spelling makes bash lose the closing parenthesis of the whole word, so the
+row would be about its scanner rather than about the operator.
+
+Grammar flags: `ArithCharacterCode` — core: off; `zsh`: on — and
+`ArithCharacterEscapes`, which is the span above: core neither, `zsh`
+masked with an optional dash, `ksh` folded with no dash.
 
 ## Quote characters inside an expression
 

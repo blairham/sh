@@ -27,6 +27,11 @@ func braceBody(t *testing.T, src string, read Answer) (string, int) {
 		s.BraceRangeEndpointsExpanded = Yes
 		s.BraceOutputRereadAsText = No
 		s.BraceRescanEntersFailedGroup = No
+		// The redirection row reaches the target's own two axes, which are
+		// not this one's and must not be the thing that refuses it.
+		s.RedirectTargetIsAnOrdinaryWord = No
+		s.RedirectTargetTakesPathnameExpansion = No
+		s.RedirectsUseEveryTarget = No
 		r.Semantics = &s
 	})
 	return strings.TrimSpace(out), st
@@ -207,6 +212,42 @@ func TestAProducedOpeningBraceLeavesTheGroupAsWritten(t *testing.T) {
 		{"nor with text between", `e={; echo {a,b}x$e`, "ax{ bx{"},
 		{"a group in front of the abandoned one still reads", `e={; echo {a,b}{c,d$e}`, "a{c,d{} b{c,d{}"},
 		{"and the scan does not carry on past it", `e={; echo {c,d$e}{a,b}`, "{c,d{}{a,b}"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, st := braceBody(t, tc.src, Yes)
+			if st != 0 {
+				t.Fatalf("status = %d, want 0; out = %q", st, got)
+			}
+			if got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// An expansion that yields *fields of its own* puts the group's two braces in
+// different words, so there is no group left for either reading to read.
+//
+// Written with the fields bracketed rather than echoed, which is the whole of
+// whether the row says anything: `echo` joins its arguments with a blank, so
+// the two fields `{1` and `2}` and the single field `{1 2}` print the same
+// line. Measured 2026-09-27 on ksh93u+ and zsh 5.9.2, which agree — and an
+// earlier form of this reading answered the single field.
+//
+// A group with a **written** comma beside the list — `x{p,$@}y` — is three
+// words here and two in both of those shells, and that is a different
+// question: the word is expanded once and the braces fan what came out, so a
+// field boundary inside the group leaves no group. It is #4561 and it is not
+// decided by how a body is read, so no row here asserts it.
+func TestAListInABraceBodyLeavesNoGroup(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the body is the list", `set -- 1 2; printf '[%s]' {$@}`, "[{1][2}]"},
+		{"a one-element list is still one field", `set -- 1; printf '[%s]' {$@}`, "[{1}]"},
+		{"and an empty one leaves the braces", `set --; printf '[%s]' {$@}`, "[{}]"},
+
+		// The control: the same shape with a scalar, where the body *is*
+		// read after its expansion and the produced comma divides it.
+		{"a scalar body is read", `e=1,2; printf '[%s]' {$e}`, "[1][2]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, st := braceBody(t, tc.src, Yes)

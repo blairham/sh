@@ -21,9 +21,10 @@ import (
 // is inert, which is the third kind of span this reading needs and the reason
 // it cannot be had by expanding the body and reading the text back whole.
 //
-// Three results rather than two. The third says the group was **abandoned**:
-// the produced text holds a `{`, which this reading does not carry, and the
-// word is left exactly as it was written. See
+// Three results rather than two, and the third is the one the caller cannot
+// get from the other two: the group was **abandoned**, because the produced
+// text holds a `{` that this reading will not carry, and the word is left
+// exactly as it was written with nothing further in it read. See
 // producedBraceAbandonsTheGroup.
 //
 // Asked only where the two readings can part, which is a body holding
@@ -39,16 +40,21 @@ func (r *Runner) alternativesAfterExpansion(w *syntax.Word, open, close cursor, 
 	}
 	answer := r.sem().BraceBodyReadAfterExpansion
 	if answer == No {
-		// The common answer, and the one that must cost nothing: three of
-		// the four columns that expand braces at all find them in the word
-		// the parse cut.
+		// The common answer, and the one that must cost nothing: bash 5.3,
+		// bash 3.2 and zsh all find a group's commas in the word the parse
+		// cut, and dash and BusyBox ash have no braces to find.
 		return nil, false, false
 	}
 	body := sliceSpans(w.Spans, next(open), close)
 	if !bodyHoldsAnExpansion(body) {
 		return nil, false, false
 	}
-	resolved, inert, ok := r.resolveBraceBody(w, body)
+	resolved, produced, outcome := r.resolveBraceBody(w, body)
+	if outcome == braceBodyNotAGroupHere {
+		// Neither reading has a group here, so the word goes on to the one
+		// that finds its braces where the parse cut them and finds none.
+		return nil, false, false
+	}
 	if answer != Yes {
 		// Unanswered, and this is the one state the inert test is for. The
 		// two readings give the same words wherever nothing an expansion
@@ -62,13 +68,13 @@ func (r *Runner) alternativesAfterExpansion(w *syntax.Word, open, close cursor, 
 		// same choice braceFanRepeatsTheWork makes: a refusal abandons the
 		// word, and running the work once before refusing is better than
 		// running it once to compare and again to use.
-		if !ok || !inert {
+		if outcome != braceBodyResolved || produced.partsTheReadings(rangeShaped(body)) {
 			r.askBrace(answer, braceBodyAxis)
 			return nil, false, false
 		}
 		return r.braceBodyAlternatives(w, open, resolved)
 	}
-	if !ok {
+	if outcome == braceBodyAbandoned {
 		return nil, false, true
 	}
 	return r.braceBodyAlternatives(w, open, resolved)
@@ -130,6 +136,26 @@ func (r *Runner) braceBodyAlternatives(w *syntax.Word, open cursor, resolved []s
 	}}}, true, false
 }
 
+// braceBodyOutcome is what resolving a group's body came to. Three answers
+// rather than two, because "this reading does not apply" and "the word is
+// left as written" are different things to the caller: one falls through to
+// the reading that finds the braces in the word the parse cut, and the other
+// ends the scan.
+type braceBodyOutcome uint8
+
+const (
+	// braceBodyResolved is a body whose expansions ran and whose produced
+	// text is beside the written spans.
+	braceBodyResolved braceBodyOutcome = iota
+	// braceBodyNotAGroupHere is a body holding an expansion that yields
+	// *fields of its own*, which no reading of a body can carry: the group's
+	// braces end up in different words. See resolveBraceBody.
+	braceBodyNotAGroupHere
+	// braceBodyAbandoned is a body whose produced text holds a `{`. See
+	// producedBraceAbandonsTheGroup.
+	braceBodyAbandoned
+)
+
 // resolveBraceBody runs the body's expansions once and puts what they
 // produced back beside the written spans, as the two kinds of span this
 // reading splits over.
@@ -147,35 +173,115 @@ func (r *Runner) braceBodyAlternatives(w *syntax.Word, open cursor, resolved []s
 // matches — and with `e=*`, `{p,a$e}` is `p a*`, where the same two
 // characters came the other way round.
 //
-// The second result says every produced run means the same thing under both
-// readings — see producedRunIsInert, which is what keeps an unanswered vector
-// from refusing `a=1; echo {$a,2}`. The third is false where the produced
-// text holds a `{`; see producedBraceAbandonsTheGroup.
-func (r *Runner) resolveBraceBody(w *syntax.Word, body []syntax.Span) ([]syntax.Span, bool, bool) {
+// **An expansion that yields fields of its own is not this reading's**, and
+// that is the one place the body is read rather than resolved. A body's
+// expansions are unsplit — `e="a b,c"; echo {$e}` is two fields and not three
+// — but a *list* still divides the word, so the group's two braces land in
+// different words and there is no group left to read. Measured 2026-09-27 on
+// ksh93u+ and zsh 5.9.2 with `set -- 1 2`, which agree:
+//
+//	echo {$@}         {1 2}     is wrong; both answer  {1  2}
+//	echo x{p,$@}y     both answer  x{p,1  2}y
+//	echo x{p,"$@"}y   the same, so quoting the list does not put it back
+//
+// bash 5.3.20 and 3.2.57 expand all three, which is
+// [Semantics.BraceFanExpandsEachNameOnItsOwn]'s column split rather than this
+// axis's — see #4561, where the word count is the subject.
+//
+// The spans are expanded one at a time through the same pair the unsplit word
+// loop uses, rather than through expandWordNoSplit over the body: the pair is
+// what says whether an expansion produced a list, and joining first throws
+// that away. Nothing here expands a tilde, which is measured — `echo {~,$e}`
+// is `~ a b` in ksh93 — and follows from every span reaching this being an
+// expansion rather than a literal.
+func (r *Runner) resolveBraceBody(w *syntax.Word, body []syntax.Span) ([]syntax.Span, producedText, braceBodyOutcome) {
+	// The promise expandWordNoSplit makes, kept here for the same reason it
+	// keeps it: a `${u:-*}` inside the body must not match on its own.
+	defer r.withoutGlobbing()()
+	defer r.inWord(&syntax.Word{Spans: body, Start: w.Start, Stop: w.Stop})()
+	failed := r.expandErr
 	out := make([]syntax.Span, 0, len(body))
-	inert := true
+	var produced producedText
 	for _, s := range body {
 		if s.Kind == syntax.Literal {
 			out = append(out, s)
 			continue
 		}
-		// One span at a time rather than the run they sit in, so that
-		// nothing about the sub-word changes what an expansion comes to:
-		// every span here is an expansion rather than a literal, so no
-		// sub-word can open with a `~` that the body as written did not
-		// open with, and splitting is off on this road either way.
-		text := strings.Join(r.expandWordNoSplit(&syntax.Word{
-			Spans: []syntax.Span{s}, Start: w.Start, Stop: w.Stop,
-		}), "")
+		if (r.expandErr && !failed) || r.ctl == controlExit {
+			// The body is abandoned at its first failed expansion, here as
+			// in every other word loop.
+			break
+		}
+		// Held around the pair rather than inside either half, for the
+		// reason expandOneWordFields gives. See subscriptSubstHold.
+		release := r.armSubscriptSubsts(s)
+		parts, _, atList := r.expandAt(s, splitNever, false)
+		var text string
+		if atList {
+			if len(parts) != 1 {
+				release()
+				return nil, produced, braceBodyNotAGroupHere
+			}
+			text = r.joinUnsplitEscaped(s.Param, parts)
+		} else {
+			text, _ = r.expandSpan(s, splitNever, false)
+		}
+		release()
+		// The marks come off a span at a time, exactly as the unsplit word
+		// loop takes them off: what goes back into the body is the text a
+		// script would see, and the inert spans it lands in are what keep a
+		// later stage from reading it.
+		text = globUnescape(text)
 		if producedBraceAbandonsTheGroup(text) {
-			return nil, false, false
+			return nil, produced, braceBodyAbandoned
 		}
-		if !r.producedRunIsInert(text) {
-			inert = false
-		}
+		produced.read(r, text)
 		out = append(out, producedBraceSpans(text, s.Pos)...)
 	}
-	return out, inert, true
+	return out, produced, braceBodyResolved
+}
+
+// producedText is what a body's expansions left, read for the one question an
+// *unanswered* vector has to put: can the two readings of this body part?
+//
+// Two flags rather than one, because the answer depends on the body's written
+// shape as well. See producedText.partsTheReadings.
+type producedText struct {
+	// structural is a produced `,` or `{`: the characters this axis is
+	// about, which divide a body under one reading and stand for themselves
+	// under the other.
+	structural bool
+	// live is produced text that a later stage would *read* — a pattern's
+	// metacharacter, a separator the current IFS holds, a `$`, a quote, a
+	// tilde, or the `..` a range is written with. Inert text reaches the word
+	// the same way whether it went back as a span of data or as the value of
+	// an expansion the word ran itself.
+	live bool
+}
+
+// read folds one produced run into what is known about the body.
+func (p *producedText) read(r *Runner, text string) {
+	if strings.ContainsAny(text, ",{") {
+		p.structural = true
+	}
+	if !r.producedRunIsInert(text) {
+		p.live = true
+	}
+}
+
+// partsTheReadings reports whether the two readings of this body can give
+// different words, which is what an unanswered vector must refuse over and
+// must not refuse without.
+//
+// A produced `,` or `{` always parts them — that is the axis. Live text parts
+// them only where the written body is **not** range-shaped: a range's
+// endpoints are already read after their expansions under the other reading
+// too, and what a range that will not form leaves is inert either way, so
+// `sp='2 3'; echo @{1..$sp}@` is the single field `@{1..2 3}@` however the
+// body is read. Without that exemption an unanswered vector refused a word
+// [Semantics.BraceRangeEndpointsExpanded] already decides on its own.
+func (p producedText) partsTheReadings(writtenRange bool) bool {
+	return p.structural || (!writtenRange && p.live)
 }
 
 // producedRunIsInert reports whether text an expansion produced means the

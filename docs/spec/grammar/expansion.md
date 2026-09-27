@@ -145,6 +145,12 @@ is the same question one level out: `e='{a,b}'; echo $e` is `a b` in ksh93
 and `{a,b}` in bash 5.3, bash 3.2 and zsh, and reading a body does not
 answer it.
 
+An expansion in the body that yields **fields of its own** is not this
+reading's: `set -- 1 2; echo {$@}` is the two words `{1` and `2}` in ksh93 and
+zsh alike, the group's braces having landed in different words. A body's
+expansions are otherwise unsplit, which is what makes `e='a b,c'; echo {$e}`
+two fields rather than three.
+
 A redirection target does not take this reading, which is the gate
 `BraceRangeEndpointsExpanded` already stands behind: `e=x,y; : > {a,$e}`
 writes one file called `{a,x,y}`.

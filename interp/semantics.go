@@ -3681,6 +3681,13 @@ type Semantics struct {
 	// give the same words there — `a=1; echo {$a,2}` is `1 2` either way.
 	// See Runner.producedRunIsInert for what inert means and why the set is
 	// written out.
+	//
+	// And an expansion in the body that yields **fields of its own** is not
+	// this reading's at all: `set -- 1 2; echo {$@}` is `{1` and `2}` in
+	// ksh93 and zsh alike, the group's two braces having landed in different
+	// words, so there is nothing left for either reading to read. A body's
+	// expansions are otherwise unsplit here, which is what makes
+	// `e="a b,c"; echo {$e}` two fields rather than three.
 	BraceBodyReadAfterExpansion Answer
 	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range
 	// endpoint and pads every element to the widest endpoint, zeros after

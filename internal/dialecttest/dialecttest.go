@@ -89,6 +89,12 @@ type Base struct {
 	// takes, and because a runner that claimed to be interactive without one
 	// would answer `$-` with an `i` no terminal backs.
 	Interactive bool
+	// Rlimits gives the runner resource limits of its own, so a case about
+	// `ulimit`, `limit` or `unlimit` reads a table the test wrote rather
+	// than whatever the machine running it happens to have. Nil leaves the
+	// runner with no limits at all, which is what a library embedder gets
+	// and is the state every other case here runs in.
+	Rlimits *Rlimits
 	// Terminal gives the runner a terminal, which is a different fact from
 	// Interactive and is the one job control turns on: `set -m` and zsh's
 	// `setopt monitor` are granted with one and refused or declined without,
@@ -145,6 +151,9 @@ func (p Preset) Runner(b Base) *interp.Runner {
 		Terminal:       b.Terminal,
 		LoginShell:     b.LoginShell,
 		Route:          b.Route,
+	}
+	if b.Rlimits != nil {
+		b.Rlimits.apply(r)
 	}
 	p.Apply(r)
 	return r
@@ -292,5 +301,59 @@ func (p Preset) PromptTableInstalled(t testing.TB, b Base, drawn interp.PromptSt
 	if !reflect.DeepEqual(got, drawn) {
 		t.Errorf("%s: the interpreter's prompt table is not the drawer's:\n interp: %+v\n drawer: %+v",
 			p.Name, got, drawn)
+	}
+}
+
+// Rlimits is a resource-limit table a test owns, standing in for the
+// kernel's.
+//
+// It exists because a limit is the one piece of shell state that is neither
+// the script's nor the dialect's: `ulimit -a` and `limit` read what the
+// machine happens to grant, so a case written against a real limit passes on
+// a laptop and fails on a runner, or the reverse. A test that supplies its
+// own reads the same table everywhere — and can reach a limit no real process
+// would let it set.
+//
+// The order is the kernel's numbering, which is what `limit 2` and
+// `ulimit -N 2` address a row by, so a test that cares about those has to say
+// what it is.
+type Rlimits struct {
+	// Order is the resources this fixture's kernel has, in its own numbering.
+	Order []interp.Resource
+	// Soft and Hard are the limits themselves. A resource in Order with no
+	// entry here is unlimited.
+	Soft, Hard map[interp.Resource]int64
+}
+
+func (l *Rlimits) apply(r *interp.Runner) {
+	has := make(map[interp.Resource]bool, len(l.Order))
+	for _, res := range l.Order {
+		has[res] = true
+	}
+	get := func(res interp.Resource) (int64, int64) {
+		soft, hard := interp.RlimitInfinity, interp.RlimitInfinity
+		if v, ok := l.Soft[res]; ok {
+			soft = v
+		}
+		if v, ok := l.Hard[res]; ok {
+			hard = v
+		}
+		return soft, hard
+	}
+	r.RlimitOrder = l.Order
+	r.HasRlimit = func(res interp.Resource) bool { return has[res] }
+	r.GetRlimit = func(res interp.Resource) (int64, int64, error) {
+		soft, hard := get(res)
+		return soft, hard, nil
+	}
+	r.SetRlimit = func(res interp.Resource, soft, hard int64) error {
+		if l.Soft == nil {
+			l.Soft = map[interp.Resource]int64{}
+		}
+		if l.Hard == nil {
+			l.Hard = map[interp.Resource]int64{}
+		}
+		l.Soft[res], l.Hard[res] = soft, hard
+		return nil
 	}
 }

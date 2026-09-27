@@ -170,6 +170,9 @@ func (r *Runner) evalCond(ctx context.Context, c syntax.CondExpr) (bool, error) 
 // refusal is 2 in the one shell that has it, where the same shell's generic
 // answer is 1.
 func (r *Runner) condUnknown(x *syntax.CondUnknown) (bool, error) {
+	if ok, answered, err := r.namedCondition(x); answered {
+		return ok, err
+	}
 	d := r.diag()
 	r.diagf("%s\n", Wording(d.UnknownCondition, "unknown condition: %s", x.Op))
 	status := orDefault(d.UnknownConditionStatus, 2)
@@ -179,6 +182,64 @@ func (r *Runner) condUnknown(x *syntax.CondUnknown) (bool, error) {
 	// written: condStatus is the shape testClause takes the number from
 	// without saying anything further, and the shell has been stopped above.
 	return false, condStatus{code: status}
+}
+
+// namedCondition answers an infix `-word` condition a dialect has, before the
+// refusal above is reached.
+//
+// The grammar hands every `-word` it does not know to CondUnknown, with the
+// operand written in front of the operator kept in Left for exactly this —
+// see syntax.CondUnknown. A dialect that has one of them answers here; the
+// third result is whether it was answered at all, so an operator no dialect
+// claims falls through to the sentence unchanged.
+//
+// `-regex-match` is the one, and it is handled in this package rather than
+// registered from dialect/zsh because it *is* [Runner.regexMatch] — measured,
+// byte for byte, against `=~` over eleven expressions. Reaching it through a
+// dialect seam would mean a second copy of the operand reading, the empty
+// operand refusal, the ERE validation, the leftmost-longest rule and the
+// record, which is how two spellings of one question come to disagree. See
+// [Semantics.RegexMatchCondition], which carries the measurement.
+func (r *Runner) namedCondition(x *syntax.CondUnknown) (ok, answered bool, err error) {
+	if x.Op != "-regex-match" || x.Left == nil || len(x.Words) != 1 {
+		// The infix shape and nothing else. `[[ -regex-match abc ]]` is
+		// `unknown condition: -regex-match` in the reference too, measured,
+		// so a prefix spelling is not this condition written short.
+		return false, false, nil
+	}
+	if !r.ask(r.sem().RegexMatchCondition, "the `-regex-match` condition") {
+		return false, false, nil
+	}
+	if r.unspecified {
+		return false, true, condStatus{code: r.status}
+	}
+	// Both operands before either is expanded, which is the rule every other
+	// primary here follows: the command a refused process substitution holds
+	// is never started.
+	for _, w := range []*syntax.Word{x.Left, x.Words[0]} {
+		if e := r.condProcSubAllowed(w, false); e != nil {
+			return false, true, e
+		}
+	}
+	left := r.condOperandText(x.Left)
+	if r.condOperandDidNotExpand() {
+		return false, true, errCondOperandFailed
+	}
+	// The same pair `=~` reads: the operand as it expanded, and the same
+	// operand with everything the script quoted turned into letters. Which
+	// of the two the matcher gets is the dialect's answer about quoting, and
+	// it is the same answer, because this is the same operator.
+	text, literal := r.condRegexOperand(x.Words[0])
+	if r.condOperandDidNotExpand() {
+		return false, true, errCondOperandFailed
+	}
+	r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(text))
+	pat := text
+	if x.Words[0].IsQuoted() && r.regexQuotingIsLiteral() {
+		pat = literal
+	}
+	ok, err = r.regexMatch(pat, left)
+	return ok, true, err
 }
 
 // evalCondCompletion answers one of the four completion-context conditions —

@@ -50,3 +50,24 @@ func (r *Runner) KnownCondition(op string) bool {
 	_, ok := r.conditionAnswers[op]
 	return ok
 }
+
+// KnownInfixCondition reports whether this shell can answer a conditional
+// operator written **between** its operands — `[[ subject -regex-match
+// expression ]]` — again named with its leading dash.
+//
+// Its own question rather than a second caller of KnownCondition, because the
+// two kinds are different features and one shell's own feature listing tells
+// them apart by letter: `zmodload -lF zsh/complete` writes `+c:prefix` for a
+// completion condition and `zmodload -lF zsh/regex` writes `+C:regex-match`
+// for this one, measured on zsh 5.9.2, 2026-09-26. A single answer would let
+// a module load on the strength of a condition of the wrong shape.
+//
+// There is no registry behind it: an infix condition this package answers is
+// one it implements, keyed on a Semantics axis rather than on a dialect
+// closure, for the reason Runner.namedCondition gives. The axis is asked
+// without the refusal an unanswered one would otherwise draw, because this is
+// `zmodload` asking what the shell has rather than a script asking for a
+// match.
+func (r *Runner) KnownInfixCondition(op string) bool {
+	return op == "-regex-match" && r.sem().RegexMatchCondition == Yes
+}

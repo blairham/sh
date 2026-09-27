@@ -877,8 +877,15 @@ print -r -- "one=$?"`)
 	}
 }
 
-// A declaration is a table of names and says nothing about what will load:
-// two names this shell has no part of go in and come back out, at 0.
+// A declaration takes two names this shell has no part of, reports them back,
+// and at 0 — the table is written whether or not either name can load.
+//
+// **The load then complains about the dependency and not about the module**,
+// and this row used to expect the other way round: while `-d` was inert the
+// declaration was never read, so the module itself was the first thing to
+// fail. Measured on zsh 5.9.2, 2026-09-26, `zmodload -d zsh/nosuchmod
+// zsh/alsonot; zmodload zsh/nosuchmod` names `zsh/alsonot` — the dependency
+// is loaded first, so it is the first thing that can fail (#4740).
 func TestZmodloadDashDRecordsNamesItCannotLoad(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/nosuchmod zsh/alsonot
 print -r -- "declare=$?"
@@ -887,7 +894,7 @@ print -r -- "report=$?"
 zmodload zsh/nosuchmod 2>&1
 print -r -- "load=$?"`)
 	want := "declare=0\nzsh/nosuchmod: zsh/alsonot\nreport=0\n" +
-		"zsh:5: failed to load module `zsh/nosuchmod': not implemented yet\nload=1\n"
+		"zsh:5: failed to load module `zsh/alsonot': not implemented yet\nload=1\n"
 	if out != want || st != 0 {
 		t.Errorf("a dependency on a module this shell has not got = %q (status %d), want %q", out, st, want)
 	}

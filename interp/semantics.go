@@ -8226,6 +8226,33 @@ type Semantics struct {
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
 	RegexQuotingMakesLiteral Answer
+	// RegexMatchCondition answers `[[ subject -regex-match expression ]]`,
+	// the infix condition one shell's `zsh/regex` module carries.
+	//
+	// **It is the `=~` question under another name**, and that is measured
+	// rather than assumed. On zsh 5.9.2 (`-f`, 2026-09-26), the two spellings
+	// were run side by side over eleven expressions — `b`, `^b`, `a|z`, `a+`,
+	// `(a)(b)(c)`, `(z)?(b)`, `a{1,2}`, `\d`, `B`, `[` and `x` against the
+	// subject `abc` — and every row agreed byte for byte on the status, on
+	// `$MATCH`, on `$match`, on `$MBEGIN` and on `$MEND`, the refusal of `[`
+	// included. So this axis routes the operator to the same matcher rather
+	// than describing a second engine, and everything already measured about
+	// `=~` in this dialect — the leftmost-longest rule, what a quoted portion
+	// means, what a failed match leaves behind — holds here by construction.
+	//
+	// It is its own axis and not a consequence of having `=~`, because the
+	// two are not the same feature: bash and ksh93 have the operator and no
+	// such condition, and a shell could have one without the other. What the
+	// axis says is only that this spelling exists and means that.
+	//
+	// **This shell answers it whether or not `zmodload zsh/regex` has run**,
+	// which is a measured departure recorded here rather than papered over:
+	// in the reference the condition is `unknown condition: -regex-match`
+	// before the module loads. It is the same stance dialect/zsh takes for
+	// the four completion conditions, which are the grammar's at all times —
+	// and there the reference agrees. The cost is one direction only: a
+	// script that forgot its `zmodload` is answered here and refused there.
+	RegexMatchCondition Answer
 	// RegexMatchSurvivesAFailedMatch leaves the record of the last `=~`
 	// alone when a later one fails, rather than emptying it.
 	//
@@ -27562,6 +27589,10 @@ func PosixSemantics() Semantics {
 		CommandStringShowsSInDollarDash: No,
 		ArithInvalidOctalDigitIsError:   Yes,
 		RegexQuotingMakesLiteral:        No,
+		// POSIX has no `[[ ]]` at all, so it has no infix condition either,
+		// and `-regex-match` is one shell's module rather than a reading of
+		// the standard anything else shares.
+		RegexMatchCondition: No,
 		// POSIX has no `[[ ]]` and so no `=~`, but it does define the ERE
 		// the operator's two refusers use, and that grammar has no empty
 		// expression: `[[:alpha:]]*` and every other ERE is built from at

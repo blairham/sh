@@ -229,6 +229,24 @@ var zmodloadFeatures = map[string][]string{
 	// that registered `stat` would shadow /usr/bin/stat for every script it
 	// ran.
 	"zsh/stat": {"b:stat", "b:zstat"},
+	// Three builtins: `ulimit`, which this shell had already, and `limit`
+	// and `unlimit`, which are the same limits addressed by word rather
+	// than by letter. Measured 2026-09-26, `zmodload -lF zsh/rlimits` is
+	// `+b:limit`, `+b:ulimit` and `+b:unlimit`. See rlimits.go (#4736).
+	"zsh/rlimits": {"b:limit", "b:ulimit", "b:unlimit"},
+	// One infix condition and nothing else: `[[ subject -regex-match
+	// expression ]]`, a POSIX extended regular expression rather than a
+	// PCRE. Measured 2026-09-26 on zsh 5.9.2, `zmodload -lF zsh/regex` is
+	// `+C:regex-match` and nothing else — the capital letter being what
+	// separates an infix condition from a completion one.
+	//
+	// The entry lands *with* the condition, which is the rule this table is
+	// written by and matters most for a feature of this kind: a condition
+	// has no call site to refuse at, so `[[ x -regex-match y ]]` on a shell
+	// without it is not `command not found` but a test that quietly answers
+	// something. See interp.Semantics.RegexMatchCondition, where the eleven
+	// rows against `=~` are (#4739).
+	"zsh/regex": {"C:regex-match"},
 	// One builtin, and a Unix-domain socket is the whole of it. See
 	// socketmodule.go.
 	"zsh/net/socket": {"b:zsocket"},
@@ -328,6 +346,14 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 		// the other three kinds, so the gate opens by itself the day a
 		// dialect answers one (#3042).
 		return r.KnownCondition("-" + name)
+	case "C":
+		// An **infix** condition, which the listing spells with a capital
+		// letter where a completion condition gets a small one: measured on
+		// zsh 5.9.2, 2026-09-26, `zmodload -lF zsh/complete` is `+c:prefix`
+		// and `zmodload -lF zsh/regex` is `+C:regex-match`. Two kinds, two
+		// questions, so a module cannot load on the strength of a condition
+		// of the other shape.
+		return r.KnownInfixCondition("-" + name)
 	}
 	return false
 }
@@ -1025,6 +1051,78 @@ func setZmodloadLetter(opts *zmodloadOpts, letter byte) {
 // puts back every feature `-F` had switched off, so it is the one command
 // that widens a narrowed module. See zmodloadWiden.
 func zmodloadLoad(r *interp.Runner, opts zmodloadOpts, module string) int {
+	return zmodloadLoadDepending(r, opts, module, nil)
+}
+
+// zmodloadLoadDepending is zmodloadLoad with the chain of modules already
+// being loaded on its way down, so a declaration that leads back to one of
+// them is a cycle rather than a recursion that never ends.
+//
+// **A declaration is not a record.** `zmodload -d M dep` used to write a row
+// and nothing more, so a module loaded with everything it declared still
+// missing — which is the silent success the rest of this file is written to
+// avoid, arrived at from the one direction the feature gate cannot see
+// (#4740).
+//
+// Measured 2026-09-26 on zsh 5.9.2 (`-f`, `env -i PATH=/usr/bin:/bin`), one
+// probe at a time, reading the module listing afterwards:
+//
+//	-d zsh/datetime zsh/stat            both load, zsh/stat is in the listing
+//	-d zsh/datetime zsh/stat zsh/zpty   both deps load, in the order declared
+//	-d zsh/datetime zsh/nosuchmod       the dep fails; zsh/datetime is NOT
+//	                                    loaded and the status is 1
+//	-d zsh/datetime zsh/nosuchmod zsh/stat
+//	                                    the walk stops at the first failure,
+//	                                    so zsh/stat is not loaded either
+//	-d zsh/nosuchmod zsh/stat           the dep loads and **stays** loaded
+//	                                    when the module itself then fails
+//	-d zsh/datetime zsh/stat; -d zsh/stat zsh/zpty
+//	                                    transitive: all three load
+//
+// So the dependency is loaded **first**, in declaration order, the walk stops
+// at the first one that will not load, the module is not loaded when one
+// fails, and nothing is rolled back.
+//
+// A dependency already loaded is stepped over rather than loaded again, which
+// is measured from the other side: `zmodload zsh/stat` and then
+// `zmodload zsh/datetime` declaring it is a silent 0 with one of each in the
+// listing.
+//
+// `-e` does not take this route at all: `zmodload -d zsh/datetime zsh/stat;
+// zmodload -e zsh/datetime` is 1 with nothing loaded, so the letter asks
+// about the module and does not act on the declaration. Neither does `-u`:
+// unloading a module leaves its dependency standing.
+func zmodloadLoadDepending(r *interp.Runner, opts zmodloadOpts, module string, loading []string) int {
+	if containsWord(loading, module) {
+		// A cycle, and this one ends the shell rather than reporting: the
+		// line after it does not run and `(zmodload a)` in a subshell is 1.
+		// Measured, `-s` does not silence it and the name is always the one
+		// `zmodload` was asked for rather than the module the walk came back
+		// to — `-d a b; -d b c; -d c a` then `zmodload b` is `;b`.
+		//
+		// The stray `;` in front of the name is the reference's, measured on
+		// every shape above and reproduced rather than tidied: this sentence
+		// is what a script looking for the failure would grep for.
+		r.DiagnoseAsTheShellf("circular dependencies for module ;%s\n", loading[0])
+		r.StopTheScript(1)
+		return 1
+	}
+	for _, dep := range zmodloadDependencies(r, module) {
+		if containsWord(zmodloadLoaded(r), dep) {
+			continue
+		}
+		if code := zmodloadLoadDepending(r, opts, dep, append(loading, module)); code != 0 {
+			// The module is not loaded and the dependencies already loaded
+			// on the way here are left standing, both measured.
+			return code
+		}
+	}
+	return zmodloadLoadItself(r, opts, module)
+}
+
+// zmodloadLoadItself is the judgement about one module, with its declared
+// dependencies already dealt with by the caller.
+func zmodloadLoadItself(r *interp.Runner, opts zmodloadOpts, module string) int {
 	features, known := zmodloadFeatures[module]
 	if !known {
 		// A module this shell has no part of. Not worded as though the

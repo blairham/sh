@@ -3501,6 +3501,11 @@ type Runner struct {
 	// reference reads 2 for an `eval "myfunc"` on line 7 of a function
 	// written on line 5.
 	linePinFuncLine int
+	// pinnedSourceOffset is the offset the lines of a file sourced from
+	// pinned text are read at, and nothing outside one. See the note in
+	// interp/source.go for the measurement and for why it is in force
+	// rather than applied per file (#4757).
+	pinnedSourceOffset int
 
 	// locatedByNameAlone drops the line from the one message it is set
 	// around, for a refusal the dialect locates by the shell's name and

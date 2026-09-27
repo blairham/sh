@@ -388,8 +388,49 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 			r.linePinFuncLine = outerPinFunc
 		}()
 	}
+	// A **file** read from inside pinned text has lines of its own, and they
+	// are its own line plus one.
+	//
+	// A pin stands for the text that took it — a trap body reported at the
+	// line it fired on, or evaluated text a dialect has said is not a place
+	// — and a file the text sources is neither of those. Measured 2026-09-26
+	// on zsh 5.9.2 under `-f` over a script file, a three-line file each of
+	// whose lines reads `$LINENO`, sourced from a `trap '. ./inc3.zsh' USR1`:
+	// the reference reads `2 3 4` where this read the firing line three
+	// times. The same file sourced at the top level is `1 2 3` in both, and
+	// the offset is constant — a three-line trap body whose `.` is on its
+	// last line reads `2 3 4` as well, so it is neither the body's length nor
+	// where in the body the `.` stands.
+	//
+	// Both kinds of pin, which is the noun this is keyed on: the EXIT and
+	// signal bodies answer it and so does `eval` under the option that turns
+	// the text's own numbering off, measured the same day. And it is the
+	// whole location and not only the parameter — a `command not found` from
+	// the third line of such a file is located at its fourth.
+	//
+	// Carried on the runner rather than read from the pin, because a file
+	// that sources another is the row that tells them apart: the inner file
+	// reads `2 3 4` as well and not `3 4 5`, so the offset is *in force*
+	// rather than applied again. A call ends it, since the pin itself ends at
+	// one — a function the body calls that sources a file reads `1 2 3`
+	// (#4757).
+	outerPinnedFile := r.pinnedSourceOffset
+	defer func() { r.pinnedSourceOffset = outerPinnedFile }()
+	if !s.eval {
+		if r.linePin != 0 {
+			r.pinnedSourceOffset = 1
+		}
+		if r.pinnedSourceOffset != 0 {
+			outerPin, outerEnds := r.linePin, r.linePinEndsAtACall
+			r.linePin, r.linePinEndsAtACall = 0, false
+			defer func() { r.linePin, r.linePinEndsAtACall = outerPin, outerEnds }()
+		}
+	}
 	outerBase := r.lineBase
 	r.lineBase = 0
+	if !s.eval {
+		r.lineBase = r.pinnedSourceOffset
+	}
 	defer func() { r.lineBase = outerBase }()
 	if s.eval && !keepsCallersLocation && r.line != 1+r.lineOrigin {
 		// Asked at the disagreement and nowhere else: on the route's *first*

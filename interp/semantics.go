@@ -3725,6 +3725,35 @@ type Semantics struct {
 	// BraceFanExpandsEachNameOnItsOwn, and a vector that answered one brace
 	// axis answers them all. See interp/bracefields.go.
 	BraceStopsFieldSplitting Answer
+	// BraceMakesAProducedStarOrBracketText takes the match away from a `*`
+	// or a `[` an expansion produced behind a `{` the script wrote unquoted,
+	// for the rest of the word: `g='*'; echo {z,y}$g` is `z* y*` in ksh93u+
+	// and `za zb zq y*` in bash 5.3.20, in a directory holding `za`, `zb`
+	// and `zq`. `g='[ab]'` goes the same way.
+	//
+	// **A produced `?` still matches** — `g='?'; echo {z,y}$g` is `za zb zq
+	// y?` in both columns — so this is a set of characters and not the rest
+	// of the word becoming text. The set was measured a character at a time
+	// and it is `*` and `[`; see interp/braceglobstop.go for the grid and
+	// for the two positive controls that make the rows readable, a produced
+	// `*` matching with no brace in the word and a written one matching with
+	// one.
+	//
+	// The keys are BraceStopsFieldSplitting's, which is the case for reading
+	// the two as one brace at two stages: the **character** and not a group,
+	// since `{z}` is no list and does it just the same; the **written
+	// unquoted** one, since a quoted, escaped or produced `{` leaves the
+	// matching alone; and the **rest of the word**, since what stands in
+	// front of the brace still matches. They are two axes because the
+	// matching half has a character set the splitting half has not, and
+	// because the columns that can be asked are not the same ones.
+	//
+	// Read rather than asked, on the road that finds the braces in the
+	// fields the word came to. Asked only where an expansion's result is
+	// matched against the filesystem at all — see GlobExpansionResults,
+	// which zsh answers no, so a written brace there changes nothing that
+	// was ever going to be a pattern.
+	BraceMakesAProducedStarOrBracketText Answer
 	// BraceScanReadsProducedText reads brace syntax in the text an expansion
 	// produced and not only in the text the script wrote. ksh93u+ does:
 	// `e='{a,b}'; echo $e` is `a b` there and `{a,b}` in bash 5.3.20, bash

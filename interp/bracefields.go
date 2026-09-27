@@ -432,13 +432,32 @@ func segsSpell(segs []fieldSeg, field string) bool {
 // `c` in ksh93u+ because the body stands behind a brace, and that is the same
 // rule rather than one of its own. See Semantics.BraceStopsFieldSplitting.
 //
-// nil wherever the question does not arise, which is four columns out of five
-// and every word with no brace in it: the ordinary word pays a scan of its
-// spans and no allocation.
+// nil wherever the question does not arise, which is four columns out of
+// five. The extent itself is spansBehindAWrittenBrace, shared with the rule
+// that reads the same brace one stage later.
 func (r *Runner) braceSplitStopSpans(spans []syntax.Span) []bool {
 	if r.sem().BraceStopsFieldSplitting != Yes {
 		return nil
 	}
+	return spansBehindAWrittenBrace(spans)
+}
+
+// spansBehindAWrittenBrace marks the spans that stand behind the first `{`
+// the script wrote unquoted, which is the extent two separate rules share.
+//
+// One function because there are two of them and they are keyed identically:
+// splitting stops there (Semantics.BraceStopsFieldSplitting) and a produced
+// `*` or `[` stops being a pattern there
+// (Semantics.BraceMakesAProducedStarOrBracketText). Written as a helper each
+// had of its own, the second copy is where a later fix to the first would
+// fail to arrive — the brace's quoted and escaped exemptions live in
+// findBraceFrom's reader, and only a shared call keeps both rules reading
+// them the same way.
+//
+// nil wherever no written unquoted brace has anything behind it, which is
+// every word with no brace in it: the ordinary word pays a scan of its spans
+// and no allocation.
+func spansBehindAWrittenBrace(spans []syntax.Span) []bool {
 	open, ok := findBraceFrom(spans, cursor{0, 0}, '{')
 	if !ok || open.span+1 >= len(spans) {
 		return nil

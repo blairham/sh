@@ -2117,6 +2117,13 @@ func Semantics() interp.Semantics {
 	// the brace still splits. It is the same rule that lets a group's body
 	// through the splitter, so `e='a b,c'; echo {$e}` is `a b` and `c`.
 	s.BraceStopsFieldSplitting = interp.Yes
+	// And the same brace takes the match away from a `*` or a `[` an
+	// expansion produced behind it: with `za`, `zb` and `zq` in the
+	// directory, `g='*'; f {z,y}$g` is `[z*] [y*]` here and `[za] [zb] [zq]
+	// [y*]` in bash 5.3.20, while `g='?'; f {z,y}$g` matches in both. The
+	// controls are a produced `*` with no brace in the word and a written
+	// one behind a brace, and both match here (#4843).
+	s.BraceMakesAProducedStarOrBracketText = interp.Yes
 	// The one shell that reads brace syntax in the text an expansion
 	// produced: `e='{a,b}'; echo $e` is `a b` and `echo x$e` is `xa xb`,
 	// where the other three answer the word as written. A brace pairs only

@@ -69,6 +69,7 @@ ash   BraceBodyReadAfterExpansion
 ash   BraceCharRangeSpansAnyCharacter
 ash   BraceEmptyAlternativeIsAField
 ash   BraceFanExpandsEachNameOnItsOwn
+ash   BraceMakesAProducedStarOrBracketText
 ash   BraceOutputRereadAsText
 ash   BraceRangeEndpointsExpanded
 ash   BraceRangeMissingEndCountsFromZero
@@ -378,6 +379,7 @@ dash  BraceBodyReadAfterExpansion
 dash  BraceCharRangeSpansAnyCharacter
 dash  BraceEmptyAlternativeIsAField
 dash  BraceFanExpandsEachNameOnItsOwn
+dash  BraceMakesAProducedStarOrBracketText
 dash  BraceOutputRereadAsText
 dash  BraceRangeEndpointsExpanded
 dash  BraceRangeMissingEndCountsFromZero
@@ -675,6 +677,7 @@ zsh   AliasInvalidNameFatal
 zsh   AliasNameCheckReachesALookup
 zsh   ArrayLetterOverAnUnaimedReferenceDropsIt
 zsh   BackgroundJobInputIsOnlyTheShellsOwn
+zsh   BraceMakesAProducedStarOrBracketText
 zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceNamesTheOperand

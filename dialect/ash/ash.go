@@ -2359,6 +2359,9 @@ func Semantics() interp.Semantics {
 	// expansion either, so no text is scanned for braces, written or
 	// produced — `e='{a,b}'; echo $e` is the one word `{a,b}`.
 	//
+	// unanswered BraceMakesAProducedStarOrBracketText: this shell has no
+	// brace expansion either, so a `{` in a word is an ordinary character
+	// and there is no brace to take a produced pattern's match away.
 	// unanswered BraceStopsFieldSplitting: this shell has no brace
 	// expansion either, so a `{` is an ordinary character and ends
 	// nothing — `IFS=:; v=a:b; f x{p,q}$v` splits exactly as `f x$v` does.

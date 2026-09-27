@@ -262,6 +262,30 @@ stands in front of the brace still splits: `f $v{p,q}$w` splits `$v` and
 not `$w`. It is also why a group's body survives the splitter there, which
 is what makes `e='a b,c'; echo {$e}` two fields rather than three.
 
+The same brace reaches one stage further in that column, and
+`BraceMakesAProducedStarOrBracketText` is the axis. A written, unquoted `{`
+takes the match away from a `*` or a `[` an **expansion produced** behind it:
+in a directory holding `za`, `zb` and `zq`, `g='*'; f {z,y}$g` is `[z*] [y*]`
+in ksh93u+ and `[za] [zb] [zq] [y*]` in bash 5.3.20, and `g='[ab]'` goes the
+same way. Two controls are what make those rows readable rather than a pattern
+that was simply never tried — `g='*'; f z$g` matches in both columns, and so
+does the written `f {z,y}*` — and the keys are the splitting rule's: the
+character rather than a group (`g='*'; f {z}$g` is `[{z}*]`), the *written
+unquoted* brace (a quoted, escaped or produced one leaves the matching alone),
+and the rest of the word (what stands in front still matches).
+
+**It is a set of characters and not the rest of the word becoming text**, and
+that is the half a rule stated the shorter way gets wrong: a produced `?` still
+matches, so `g='?'; f {z,y}$g` is `[za] [zb] [zq] [y?]` in *both* columns, and
+`g='a?'` matches where `g='a*'` does not. The set was measured a character at a
+time and it is `*` and `[` — every bracket spelling goes the way `[ab]` does,
+`[!a]`, `[^a]`, `[a-b]` and `[[:alpha:]]` alike.
+
+zsh cannot be asked this at all, which is why bash is the column it is measured
+against: zsh never matches an expansion's result against the filesystem
+(`GlobExpansionResults`), so `g='*'; f z$g` is the single field `z*` there with
+`za` present, and there is nothing for a brace to take away.
+
 An expansion in the body that yields **fields of its own** is not this
 reading's: `set -- 1 2; echo {$@}` is the two words `{1` and `2}` in ksh93 and
 zsh alike, the group's braces having landed in different words. A body's

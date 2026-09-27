@@ -1193,6 +1193,9 @@ func Semantics() interp.Semantics {
 	// the one word `{a,b}` on dash 0.5.12 because a brace is never syntax
 	// here, written or produced.
 	//
+	// unanswered BraceMakesAProducedStarOrBracketText: dash has no brace
+	// expansion, so a `{` in a word is an ordinary character and there is no
+	// brace to take a produced pattern's match away.
 	// unanswered BraceStopsFieldSplitting: dash has no brace expansion, so
 	// a `{` is an ordinary character and cannot end anything — `IFS=:;
 	// v=a:b; f x{p,q}$v` is `[x{p,q}a] [b]` on dash 0.5.12, split exactly

@@ -319,3 +319,84 @@ func TestWhatTheFirstWidthNumberAnswerLeavesAlone(t *testing.T) {
 		}
 	}
 }
+
+// A plus form takes off the attributes its letter **writes**, and the three
+// letters do not name the three attributes one for one — #4841.
+//
+// The name carries a left justification, a right one and a fill, and `-Z`
+// writes the fill *and* a right justification. So `+Z` takes both back and a
+// bare `R` goes with a fill it was never written beside, while `+L` reaches
+// only the left justification and can leave a fill standing on its own.
+//
+// Measured 2026-09-27 on ksh93u+ 2012-08-01 (`sh (AT&T Research) 93u+
+// 2012-08-01`), a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`.
+func TestAPlusFormTakesOffTheAttributesItsLetterWrites(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`typeset -L5 a=7; typeset +Z a; typeset -p a`, "typeset -L 5 a='7    '\n"},
+		{`typeset -Z5 b=7; typeset +L b; typeset -p b`, "typeset -Z 5 -R 5 b=00007\n"},
+		{`typeset -Z5 -L5 c=7; typeset +Z c; typeset -p c`, "typeset -L 5 c='7    '\n"},
+		{`typeset -Z5 -L5 d=7; typeset +L d; typeset -p d`, "typeset -Z 5 d='7    '\n"},
+		{`typeset -L5 -Z5 e=7; typeset +R e; typeset -p e`, "typeset -Z 5 -L 5 e='7    '\n"},
+		{`typeset -Z5 f=7; typeset +R f; typeset -p f`, "typeset -Z 1 f=7\n"},
+		// The controls, and all four agreed before this did: a letter that
+		// names every attribute the name has still takes the whole thing
+		// off, and a blank pad is not taken back where a zero one is.
+		{`typeset -Z4 g=7; typeset +Z g; typeset -p g`, "g=7\n"},
+		{`typeset -R5 h=7; typeset +Z h; typeset -p h`, "h='    7'\n"},
+		{`typeset -R5 i=ab; typeset +R i; typeset -p i`, "i='   ab'\n"},
+		{`typeset -L5 j=ab; typeset +L j; typeset -p j`, "j='ab   '\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}
+
+// A fill that has lost its justification is a state of its own: it keeps the
+// width, cuts a value to it from the same side a left justification would,
+// and lays nothing down.
+func TestAFillThatHasLostItsJustification(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`typeset -Z5 -L5 a=7; typeset +L a; a=9; typeset -p a`, "typeset -Z 5 a=9\n"},
+		{`typeset -Z5 -L5 b=7; typeset +L b; b=abcdefg; typeset -p b`, "typeset -Z 5 b=abcde\n"},
+		{`typeset -Z3 -L3 c=7; typeset +L c; c='  abcd'; typeset -p c`, "typeset -Z 3 c=abc\n"},
+		{`typeset -Z5 -L5 d=7; typeset +L d; d=00012; typeset -p d`, "typeset -Z 5 d=00012\n"},
+		{`typeset -Z9 -L9 e=7; typeset +L e; e=''; typeset -p e`, "typeset -Z 9 e=''\n"},
+		// Taking the fill off too leaves the text exactly as it stood, the
+		// blanks its justification laid down included.
+		{`typeset -Z5 -L5 f=7; typeset +L f; typeset +Z f; typeset -p f`, "f='7    '\n"},
+		// And a width letter arriving over it replaces the whole thing, which
+		// is this column's rule for a second declaration.
+		{`typeset -Z5 -L5 g=7; typeset +L g; typeset -L3 g; typeset -p g`, "typeset -L 3 g='7  '\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}
+
+// `+R` over a fill takes the width again from what the value is left holding,
+// and only where that value begins with a **digit**.
+//
+// The last two rows are what say it is the digit and not the unwinding: both
+// of those values lose a pad and keep their width, because the pad they lost
+// was blanks rather than zeros. `+L` is the control for the other half and is
+// in the suite above — it leaves the width where it found it.
+func TestAPlusRightOverAFillReadsTheWidthAgain(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`typeset -Z5 a=1a; typeset +R a; typeset -p a`, "typeset -Z 2 a=1a\n"},
+		{`typeset -Z5 b=1; typeset +R b; typeset -p b`, "typeset -Z 1 b=1\n"},
+		{`typeset -Z3 c=1; typeset +R c; typeset -p c`, "typeset -Z 1 c=1\n"},
+		{`typeset -Z5 d=12345; typeset +R d; typeset -p d`, "typeset -Z 5 d=12345\n"},
+		{`typeset -Z5 e=ab; typeset +R e; typeset -p e`, "typeset -Z 5 e=ab\n"},
+		{`typeset -Z5 f=-7; typeset +R f; typeset -p f`, "typeset -Z 5 f=-7\n"},
+		// And the state it leaves behind answers as the suite above says.
+		{`typeset -Z5 g=7; typeset +R g; g=99; typeset -p g`, "typeset -Z 1 g=9\n"},
+		{`typeset -Z5 h=7; typeset +R h; typeset -R3 h; typeset -p h`, "typeset -R 3 h='  7'\n"},
+		{`typeset -Z5 i=7; typeset +R i; typeset +Z i; typeset -p i`, "i=7\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}

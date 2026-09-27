@@ -3128,6 +3128,12 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 				// rest standing — see widthLettersTakenOff, where the rows
 				// are (#4828).
 				r.widthLettersTakenOff(name, widthLettersRemoved(f))
+			} else if r.sem().DeclareZeroFillLetter == DeclareZeroFillLetterRidesOnTheJustification {
+				// And where the fill rides on a justification the letters are
+				// still not one attribute: they are three, and each plus
+				// form clears the ones its letter writes — see
+				// widthLettersTakenOffRiding, where the rows are (#4841).
+				r.widthLettersTakenOffRiding(name, widthLettersRemoved(f))
 			} else {
 				// `typeset +L e` takes the attribute off and reveals the text
 				// the name was holding all along — measured, `typeset -L 3

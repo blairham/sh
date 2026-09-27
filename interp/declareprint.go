@@ -1549,7 +1549,13 @@ func bareAssignmentFlags(d declaration) []string {
 			// reading writes one letter for the pair.
 			flags = append(flags, "-Z", itoa(d.width.width))
 		}
-		flags = append(flags, "-"+string(d.width.letter), itoa(d.width.width))
+		if d.width.letter != 0 {
+			// Zero is the fill that has lost its justification, which writes
+			// the `-Z` above and no justification beside it: measured,
+			// `typeset -Z5 -L5 v=7; typeset +L v` lists as `typeset -Z 5
+			// v='7    '`. See interp.fieldWidth (#4841).
+			flags = append(flags, "-"+string(d.width.letter), itoa(d.width.width))
+		}
 	}
 	return dropACompoundLetterBesideAnother(flags, compoundAt)
 }
@@ -1635,7 +1641,12 @@ func (d declaration) widthLetters() []string {
 	if !d.hasWidth {
 		return nil
 	}
-	out := []string{string(d.width.letter)}
+	var out []string
+	if d.width.letter != 0 {
+		// Zero is the fill that has lost its justification, which writes the
+		// `Z` below and nothing else — see interp.fieldWidth (#4841).
+		out = append(out, string(d.width.letter))
+	}
 	if d.width.zeroFill && d.width.letter != 'Z' {
 		out = append(out, "Z")
 	}

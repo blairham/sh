@@ -186,9 +186,14 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		// letter is what the name carries, and the number is what a listing
 		// writes. Measured on zsh 5.9.2, `typeset -L v; print ${(t)v}` is
 		// `scalar-left` from a name holding nothing at all.
-		if w.letter == 'L' {
+		switch w.letter {
+		case 0:
+			// A fill that has lost its justification, which only the other
+			// column can reach and which justifies nothing — see
+			// interp.fieldWidth (#4841).
+		case 'L':
 			a.Justified = LeftJustified
-		} else {
+		default:
 			a.Justified = RightJustified
 		}
 		a.ZeroFilled = w.zeroFillLetter()

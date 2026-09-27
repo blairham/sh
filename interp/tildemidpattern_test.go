@@ -36,7 +36,7 @@ func tildeMid(t *testing.T, src string, setup func(*Runner)) string {
 // pattern.
 //
 // The one letter honored from the middle is `i`, and the rows are
-// splitTildeFoldGroup's own table put to the three surfaces a pattern has:
+// splitTildeHereGroup's own table put to the three surfaces a pattern has:
 // the condition, a `case` arm, and pathname expansion. Nothing here names a
 // shell — the construct is a grammar flag and the letter is that construct's.
 func TestATildeGroupInTheMiddleOfAPattern(t *testing.T) {

@@ -264,6 +264,98 @@ const (
 	HeredocDelimiterTabsAreStrippedToo
 )
 
+// HeredocDelimiterSubstitution is what a here-document's **delimiter** may be
+// written as. See [Dialect.HeredocDelimiterSubstitutions].
+//
+// Nothing in a delimiter expands in any shell in the panel — `<<$d` waits for
+// a line reading `$d` — so what the columns disagree about is whether the
+// parser will *accept* the shapes an expansion is written in.
+//
+// Measured 2026-09-27 under `-c`, `env -i PATH=/usr/bin:/bin LC_ALL=C`, the
+// program being `: <<$D` / `body` / `END` / `echo alive`, against bash 5.3.20,
+// zsh 5.9.2 (`-f`), ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 in
+// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b;
+// `go version -m` on each of the four native ones: *not a Go executable*.
+//
+//	$D            bash  zsh  ksh93     dash        ash
+//	$(echo E)     warns 0    refuses   refuses     refuses
+//	$((1))        warns 0    0         refuses     refuses
+//	a$(echo E)b   warns 0    refuses   refuses     refuses
+//	"$(echo E)"   warns 0    refuses   0           0
+//	`a`           warns 0    0         0           0
+//	`a b`         warns 0    0         refuses     refuses
+//	"`a b`"       warns 0    0         0           0
+//	${v}          warns 0    0         0           0
+//	$v            warns 0    0         0           0
+//
+// bash's warning is the control that says no column expands a delimiter: it
+// is `here-document at line 1 delimited by end-of-file (wanted `$(( 1/0 ))')`,
+// the *literal* word being looked for, and we write it identically.
+//
+// Two rules, not one, and the `"$(echo E)"` row is what parts them (#4691).
+type HeredocDelimiterSubstitution uint8
+
+const (
+	// HeredocDelimiterTakesEverySubstitution scans each substitution spelling
+	// for its extent, keeps the source it covered as literal text, and
+	// refuses nothing. bash, zsh and the core.
+	HeredocDelimiterTakesEverySubstitution HeredocDelimiterSubstitution = iota
+
+	// HeredocDelimiterScansNoUnquotedSubstitution reads the unquoted part of
+	// a delimiter as plain text, so no substitution is scanned there at all.
+	// dash and BusyBox ash.
+	//
+	// One reading with two visible consequences, which is why it is a
+	// statement about the *scanning* rather than a refusal of a spelling:
+	//
+	//   - a `$(` is not a substitution, so the `(` stands where no word may
+	//     have one and is an unexpected token — the same sentence those two
+	//     say about a `(` anywhere else. `$((1))` goes the same way, which is
+	//     what says the rule is the two characters and not the expression.
+	//   - a backquote does not open one either, so it does not protect a
+	//     blank: `<<`a b`` ends the delimiter at the space and leaves the
+	//     backquote open, which then swallows the rest of the input and ends
+	//     at EOF. `<<`a`` has no blank in it and is simply a delimiter with
+	//     backquotes in its name.
+	//
+	// A quoted run inside a delimiter is unaffected — `<<"$(a b)"` and
+	// `<<"`a b`"` are both taken — which is the row that makes this a
+	// statement about the unquoted part rather than about the word.
+	HeredocDelimiterScansNoUnquotedSubstitution
+
+	// HeredocDelimiterRefusesACommandSubstitution scans as the core does and
+	// then refuses a `$( )` **however it is written**, quoted or not. ksh93.
+	//
+	// A command substitution and nothing else: `$((1))` is taken, a backquote
+	// is taken, and `${v}` is taken. The refusal is that shell's
+	// here-document sentence, which is
+	// [Dialect.HeredocBodyMustBeInsideTheSubstitution]'s.
+	//
+	// **The rule that shell really holds is wider than this one**, and the
+	// wider half is deliberately not claimed here. Measured the same day:
+	// `: <<END $(echo hi)` — a substitution written *after* a delimiter that
+	// is an ordinary word — is refused with the same sentence, while
+	// `: $(a b) <<END`, with the substitution in front of the operator, runs.
+	// So what that shell refuses is a `$( )` standing anywhere behind a
+	// here-document operator whose body has not been read yet. Claiming that
+	// needs the operator's reach to outlive the word it is written beside,
+	// which is a seam this grammar does not have; the delimiter is the half
+	// #4691 measured and the half this answers.
+	//
+	// **And the token its sentence quotes is approximated.** That shell
+	// quotes `<<` and a string taken from *inside* the substitution at an
+	// offset that moves with the text: `$(echo E)` is quoted as `` `<<E' ``,
+	// `$(export q)` as `` `<<rt' `` — a suffix of `export` — and
+	// `$(a=1 b c)` as `` `<<=1' ``, which is not a word of the program at
+	// all. A quoted string that falls in the middle of a word is an artifact
+	// of that parser's own buffer rather than a fact about the language, and
+	// reproducing it would mean deciding what it had in hand, which
+	// CLEANROOM.md forbids. So the token written here is `<<` and the
+	// delimiter as it stands, which is the convention every other
+	// here-document refusal in this grammar already follows.
+	HeredocDelimiterRefusesACommandSubstitution
+)
+
 // ContinuedHeredocDelimiter is how far a here-document body line assembled
 // across a backslash-newline may go toward being the delimiter. See
 // [Dialect.HeredocDelimiterAcrossAContinuation].
@@ -2745,6 +2837,9 @@ type Dialect struct {
 	// <(cat <<EOF)` — while `${ cat <<EOF; }`, that shell's shared-state
 	// form, is refused with the same sentence.
 	HeredocBodyMustBeInsideTheSubstitution bool
+	// HeredocDelimiterSubstitutions is what a delimiter may be written as.
+	// See [HeredocDelimiterSubstitution], which carries the panel (#4691).
+	HeredocDelimiterSubstitutions HeredocDelimiterSubstitution
 	// HeredocMax bounds the here-documents one command may open, and zero means
 	// no bound.
 	//

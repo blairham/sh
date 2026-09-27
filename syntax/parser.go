@@ -2875,7 +2875,12 @@ func (p *Parser) parseRedirect() *Redirect {
 	savedDelimiter := p.lex.inHeredocDelimiter
 	p.lex.noAssignment, p.lex.inRedirectTarget = true, true
 	p.lex.inHeredocDelimiter = r.Op.IsHeredoc()
+	// Cleared here and read once the word is built: the delimiter's spans are
+	// literal text by then, so nothing in the word still says a `$( )` was
+	// written in it. See Lexer.delimiterCommandSubst.
+	p.lex.delimiterCommandSubst = false
 	p.next()
+	delimiterSubst := p.lex.delimiterCommandSubst
 	p.lex.noAssignment, p.lex.inRedirectTarget = savedNoAssign, savedInRedirect
 	p.lex.inHeredocDelimiter = savedDelimiter
 	if p.aliasNextWord && p.aliasSpliced == 0 && p.Aliases != nil {
@@ -2946,6 +2951,14 @@ func (p *Parser) parseRedirect() *Redirect {
 		// be opened, and the dialect that admits `cat < <(:)` refuses
 		// `cat <<< <(:)` while reading. The operator is what separates them,
 		// so it is tested here rather than in the helper (#930).
+		return nil
+	}
+	if r.Op.IsHeredoc() && delimiterSubst &&
+		p.lex.dialect.HeredocDelimiterSubstitutions == HeredocDelimiterRefusesACommandSubstitution {
+		// A `$( )` in a delimiter, however it was written. Raised here
+		// rather than where it was scanned, because the sentence names the
+		// operator and the whole delimiter and the scanner has neither.
+		p.failHeredocDelimiterSubstitution(r)
 		return nil
 	}
 	if r.Op.IsHeredoc() {
@@ -5062,6 +5075,26 @@ func (p *Parser) argsCanBeFuncNames(args []*Word) bool {
 
 // failRedirectAt records a redirection operator the grammar did not want,
 // named by the operator and not by what follows it.
+// failHeredocDelimiterSubstitution refuses a here-document whose delimiter
+// holds a `$( )`, in the one dialect that does.
+//
+// The same kind and the same sentence as a here-document opened inside a
+// substitution and left unfed, because that shell words the two identically
+// — and the token follows that refusal's convention, `<<` and the delimiter
+// with its quoting off. Which is an **approximation** of what the reference
+// quotes there; see [HeredocDelimiterRefusesACommandSubstitution] for the
+// measurement and for why reproducing it is not available to this tree.
+func (p *Parser) failHeredocDelimiterSubstitution(r *Redirect) {
+	if p.err != nil {
+		return
+	}
+	p.err = &Error{
+		Pos: r.OpPos, Kind: ErrHeredocOutsideSubstitution,
+		Token: "<<" + r.Word.Literal(),
+		Msg:   "here-document not contained within command substitution",
+	}
+}
+
 func (p *Parser) failRedirectAt(pos Pos, op Kind) {
 	if p.err != nil {
 		return

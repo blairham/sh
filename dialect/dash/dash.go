@@ -20,6 +20,12 @@ func Dialect() syntax.Dialect {
 	// `ABC` document — and one that joined after text does not. bash and zsh
 	// take both and ksh93 neither (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterAfterALeadingContinuation
+	// The unquoted part of a here-document's delimiter is plain text, so no
+	// substitution is scanned there: a `$(` leaves the `(` where no word may
+	// have one, and a backquote does not protect a blank. A quoted run in a
+	// delimiter is unaffected. See syntax.HeredocDelimiterSubstitution for
+	// the panel (#4691).
+	d.HeredocDelimiterSubstitutions = syntax.HeredocDelimiterScansNoUnquotedSubstitution
 	// **Both** spellings of a command substitution are parsed while the line
 	// that holds them is read, so a body that will not parse refuses the
 	// line before any of it runs. Measured 2026-09-19: `echo before; v=$(if)`

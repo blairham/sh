@@ -503,6 +503,10 @@ func Dialect() syntax.Dialect {
 	// See syntax.Dialect.HeredocBodyMustBeInsideTheSubstitution for the panel
 	// (#3361).
 	d.HeredocBodyMustBeInsideTheSubstitution = true
+	// And a `$( )` written in a here-document's *delimiter*, quoted or not.
+	// `$((1))`, a backquote and `${v}` are all taken there. See
+	// syntax.HeredocDelimiterSubstitution for the panel (#4691).
+	d.HeredocDelimiterSubstitutions = syntax.HeredocDelimiterRefusesACommandSubstitution
 	// And the process substitution is not refused but *read*: `cat <(cat
 	// <<EOF)` with the body after it prints the body there, silently, which
 	// is bash 5.3's answer without bash's warning. Measured 2026-09-20; see

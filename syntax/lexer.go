@@ -411,6 +411,15 @@ type Lexer struct {
 	// file was swallowed as the body (#2745).
 	inHeredocDelimiter bool
 
+	// delimiterCommandSubst records that the delimiter being read holds a
+	// `$( )`, so that the dialect which refuses one can be told without the
+	// spans saying so: scanDelimiterSubstitution keeps the source it covered
+	// as *literal* text, which is what makes Token.Literal the delimiter
+	// again and what leaves nothing in the word to recognize afterwards.
+	// Cleared by the parser before the delimiter is read and read by it
+	// after. See HeredocDelimiterRefusesACommandSubstitution.
+	delimiterCommandSubst bool
+
 	// inRawBody is set while the text being read is a *body* rather than a
 	// word: a here-document's, or a value being read again by the flag that
 	// re-evaluates one. Both go through heredocSpans, which marks every span
@@ -3181,6 +3190,18 @@ func (l *Lexer) startsDelimiterSubstitution() bool {
 	return l.startsBareParam()
 }
 
+// scansUnquotedDelimiterSubstitutions reports whether the unquoted part of a
+// here-document's delimiter is scanned for substitutions at all.
+//
+// Two dialects read it as plain text, and the `(` of a `$(` is then an
+// unexpected token where no word may have one while a backquote is an
+// ordinary character that does not protect a blank. Asked only of the
+// unquoted path: a quoted run inside a delimiter is scanned in every column.
+// See [HeredocDelimiterScansNoUnquotedSubstitution].
+func (l *Lexer) scansUnquotedDelimiterSubstitutions() bool {
+	return l.dialect.HeredocDelimiterSubstitutions != HeredocDelimiterScansNoUnquotedSubstitution
+}
+
 // scanDelimiterSubstitution reads a substitution standing in a here-document's
 // delimiter and hands back the source it occupied, as literal text.
 //
@@ -3200,6 +3221,11 @@ func (l *Lexer) scanDelimiterSubstitution(q Quoting) Span {
 	case l.peekAt(1) == '[':
 		l.scanBracket(q)
 	case l.peekAt(1) == '(':
+		// Recorded for the dialect that refuses one here however it is
+		// written; the parser raises it, because the sentence names the
+		// operator and the whole delimiter and neither is known yet. See
+		// HeredocDelimiterRefusesACommandSubstitution.
+		l.delimiterCommandSubst = true
 		l.scanParens(CommandSubst, q)
 	case l.peekAt(1) == '{':
 		l.scanBraces(q)
@@ -3258,6 +3284,15 @@ func (l *Lexer) substitutionSpans(flush func()) ([]Span, bool) {
 			spans[i].Translated = true
 		}
 		return spans, true
+
+	case l.inHeredocDelimiter && !l.scansUnquotedDelimiterSubstitutions():
+		// Nothing is a substitution in the unquoted part of a delimiter
+		// here, so the character goes on with the literal run: a `$(`
+		// leaves its `(` standing where no word may have one, and a
+		// backquote is an ordinary character that does not protect a blank.
+		// Below `$'` and `$"`, which are quoting and apply in every column.
+		// See HeredocDelimiterScansNoUnquotedSubstitution.
+		return nil, false
 
 	case l.inHeredocDelimiter && l.startsDelimiterSubstitution():
 		// Below `$'` and `$"`, which are quoting rather than expansion and

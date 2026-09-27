@@ -332,8 +332,12 @@ func (r *Runner) refusePrivateDeclaration(name string, lists, hidesTheShellsOwn 
 	if len(r.scopes) == 0 {
 		return false
 	}
-	if !r.localInTheInnermostScope(name) &&
-		!(r.parameterScopeFixed(name) && !hidesTheShellsOwn) {
+	// The two reasons, named rather than folded into one condition: they
+	// produce one sentence and they are not one question, and only the
+	// second has the letter's exemption on it.
+	redeclaration := r.localInTheInnermostScope(name)
+	theShellsOwn := r.parameterScopeFixed(name) && !hidesTheShellsOwn
+	if !redeclaration && !theShellsOwn {
 		return false
 	}
 	// The refusal names `private` and **not the word as written**, which is

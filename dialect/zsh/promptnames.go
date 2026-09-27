@@ -89,5 +89,27 @@ func registerPromptNames(r *interp.Runner) {
 		r.SetDynamicWriter(spelling, func(rr *interp.Runner, value string) {
 			rr.SetVar(store, value)
 		})
+		// And a **row**, which is the other half of being a parameter and was
+		// missing for all five at once (#4911). A produced name is in none of
+		// the tables a listing walks, so these were present, correct and
+		// invisible: `${+PROMPT}` was 1 and `$PROMPT3` read `?# ` while
+		// `typeset -p PROMPT3` answered `no such variable` at 1 and a bare
+		// `typeset` wrote no line for any of them. That is a *different*
+		// fault from an absent parameter — #4865's family rather than
+		// #4866's — and the same seam closes it that closed `$pipestatus`.
+		//
+		// An **empty** declaration on purpose. These carry no attribute a
+		// listing writes: measured 2026-09-27 on zsh 5.9.2 under `-f` from a
+		// script file, `typeset -p` writes `typeset PROMPT=''`,
+		// `typeset PROMPT3='?# '` and `typeset PROMPT4='+%N:%i> '` — the bare
+		// command word, no letters, and the value. Stating anything else here
+		// would claim a letter the reference does not write.
+		//
+		// The type word is not this field's and must not move: `${(t)PROMPT}`
+		// is `scalar-special` already, from markTheShellsOwnParameters, and
+		// stays that way — which is measured in place rather than assumed,
+		// because five names arriving in two listings at once is exactly the
+		// shape that takes a third answer with them.
+		r.SetDynamicDeclaration(spelling, interp.ProducedDeclaration{})
 	}
 }

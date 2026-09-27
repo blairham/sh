@@ -228,7 +228,9 @@ func (p Preset) RunLinesOn(t testing.TB, r *interp.Runner, src string) int {
 	if perr == nil {
 		return r.Finish(ctx)
 	}
-	fmt.Fprint(r.Stderr, d.ParseDiagnostic(name, "", perr, src))
+	if _, err := fmt.Fprint(r.Stderr, d.ParseDiagnostic(name, "", perr, src)); err != nil {
+		t.Fatalf("write the diagnostic: %v", err)
+	}
 	// The status the refusal leaves, set before the teardown so that an EXIT
 	// trap sees it — which is what every column of the panel was measured
 	// doing.

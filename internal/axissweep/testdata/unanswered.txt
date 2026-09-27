@@ -83,6 +83,7 @@ ash   CaseAttributeReplacesTheNumericAttribute
 ash   ChainedSubscriptReadsANestedValue
 ash   CodePointPastSixBytesIsEncoded
 ash   CommandTrackingStartsOn
+ash   CompoundArithAssignmentConvertsItsValue
 ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
 ash   CompoundPipelineStatusRecord
@@ -282,6 +283,7 @@ bash  BareFloatLetterResetsThePrecision
 bash  BareSubscriptIsASubscript
 bash  ChainedSubscriptReadsANestedValue
 bash  CommandTrackingStartsOn
+bash  CompoundArithAssignmentConvertsItsValue
 bash  DeclareHideInScopeLetter
 bash  DeclareHideValueLetter
 bash  DeclareMappingLetter
@@ -373,6 +375,7 @@ dash  CaseAttributeReplacesTheNumericAttribute
 dash  ChainedSubscriptReadsANestedValue
 dash  CodePointPastSixBytesIsEncoded
 dash  CommandTrackingStartsOn
+dash  CompoundArithAssignmentConvertsItsValue
 dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute
 dash  CompoundPipelineStatusRecord

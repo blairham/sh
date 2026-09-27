@@ -1594,6 +1594,11 @@ func Semantics() interp.Semantics {
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.
 	s.ArithNegativeExponentIsError = interp.Yes
+	// unanswered CompoundArithAssignmentConvertsItsValue: the same absence of
+	// floats. `declare -i n=1; echo $(( n += 0.5 ))` cannot be written here at
+	// all — the numeral is refused while the expression is read — so there is
+	// no float value for an integer attribute to convert or keep, and the two
+	// readings have nothing to disagree about. Measured 2026-09-26 (#4606).
 	// unanswered ArithFloatOverflowIsZero: the same absence of floats. A
 	// numeral this shell cannot hold is refused while it is being read —
 	// `$((1e400))` is `value too great for base` — so there is no value for

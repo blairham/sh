@@ -7554,6 +7554,42 @@ type Semantics struct {
 	// which is why bash and dash leave it unanswered.
 	ArithIntegerOperatorRefusesFloat Answer
 
+	// CompoundArithAssignmentConvertsItsValue hands a compound assignment the
+	// number the target's numeric type made of what was computed, rather than
+	// what was computed.
+	//
+	// The plain `=` converts in both shells that have the question — see
+	// numericAttribute.converts, which is #4595 — and a **compound** operator
+	// is where they part. Measured 2026-09-26, zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0) run `-f` and ksh93u+ 2012-08-01, each with
+	// `typeset -i n=1`:
+	//
+	//	probe                  ksh93   zsh    n afterwards
+	//	$(( n += 0.5 ))        1       1.5    1 in both
+	//	$(( n = n + 0.5 ))     1       1      1 in both
+	//	$(( n *= 2.5 ))        2       2.5    2 in both
+	//	$(( n -= 0.5 ))        0       0.5    0 in both
+	//
+	// The second row is the control and it is what makes this one question
+	// rather than two: the plain operator agrees in both columns, and the
+	// *store* agrees on every row. The only thing that moves is the compound
+	// operator's value, and it moves with the shell. That pair also holds the
+	// attribute fixed and moves the operator, which is what says the rule is
+	// keyed on the operator — a rule stated about "an assignment" would have
+	// made zsh's compound row wrong while fixing ksh93's.
+	//
+	// **Asked only where the two readings differ**: a compound operator whose
+	// target carries the integer attribute and whose value came out a float.
+	// An integer value converts to itself, so `$(( n += 1 ))` is 2 under both
+	// readings and never reaches the question; and a name carrying a *float*
+	// attribute does not either, because a float value is already what that
+	// type makes of it — `typeset -F f=1; $(( f += 1 ))` is `2.` in zsh and
+	// `2` in ksh93, which is FloatKeepsItsPoint and not this.
+	//
+	// bash, dash and BusyBox ash reach none of it, having no floating point in
+	// arithmetic at all (#4606).
+	CompoundArithAssignmentConvertsItsValue Answer
+
 	// ArithFloatOverflowIsZero loses a float numeral whose magnitude a
 	// double cannot hold, answering zero, where the other reading saturates
 	// to an infinity.

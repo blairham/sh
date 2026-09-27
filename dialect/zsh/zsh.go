@@ -1292,6 +1292,11 @@ func Semantics() interp.Semantics {
 	// stream. ksh93 is the mirror image of both rows (#770).
 	s.BrokenPipeWriteErrorFailsTheCommand = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.No
+	// And a compound assignment hands back what it computed: `typeset -i n=1`
+	// makes `$(( n += 0.5 ))` 1.5 here, where the plain `$(( n = n + 0.5 ))`
+	// is 1 and `n` is 1 either way. Measured 2026-09-26 on zsh 5.9.2; ksh93u+
+	// converts both (#4606).
+	s.CompoundArithAssignmentConvertsItsValue = interp.No
 	// A numeral a double cannot hold saturates: `$((1e400))` is `Inf` and
 	// `$((-1e400))` is `-Inf`, the same answers the arithmetic gives for a
 	// value that overflowed while being computed.

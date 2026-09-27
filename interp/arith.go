@@ -1554,6 +1554,19 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 	if err := r.writePlace(place, v, x.Value); err != nil {
 		return intNum(0), err
 	}
+	if x.Op != "=" && was.isInteger && v.floatKind() {
+		// A **compound** operator, on a name whose integer attribute would
+		// make something else of what was computed. That is the one shape
+		// the two shells with floats answer differently, and it is asked
+		// here rather than beside the plain `=` below because everything
+		// else about the two is shared: the store is the same in both
+		// columns, and an integer value converts to itself, so
+		// `$(( n += 1 ))` never gets this far.
+		if r.ask(r.sem().CompoundArithAssignmentConvertsItsValue,
+			"a compound assignment converting its value through the target's numeric type") {
+			v = was.converts(v)
+		}
+	}
 	if x.Op == "=" {
 		// And the value of the assignment is the number that type makes of
 		// it. Applied **after** the store and not to the value the store is
@@ -1625,9 +1638,9 @@ func (r *Runner) numericAttributeOf(name string) numericAttribute {
 // way. That pair holds the attribute fixed and moves the operator, which is
 // what says the rule is keyed on the operator and not on "an assignment".
 // ksh93 converts both — `$(( n += 0.5 ))` on a `typeset -i n=1` is 1 there —
-// and that divergence is recorded and not modeled here; it is a shell's answer
-// to a question this rule does not ask. Nothing in this repository asks it
-// yet, so it is an issue rather than an axis (#4606).
+// and that is Semantics.CompoundArithAssignmentConvertsItsValue, asked by
+// evalAssign at the compound operator rather than folded in here: this
+// function is the conversion and not the decision to make one (#4606).
 //
 // The conversion is asInt and asFloat rather than a rule written out again
 // here, because it is the one the store already makes: `attributeFolded`

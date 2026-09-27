@@ -898,6 +898,13 @@ func Semantics() interp.Semantics {
 	// `irmsBE` (#4205).
 	s.DollarDashLetterOrder = "ircaefhkmnstuvxBCEHTl"
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
+	// And a compound assignment hands back what the target's type made of the
+	// number rather than the number: `typeset -i n=1` makes `$(( n += 0.5 ))`
+	// 1 here, where zsh answers 1.5 and leaves `n` at 1 just the same.
+	// Measured 2026-09-26 on ksh93u+ 2012-08-01, with `$(( n = n + 0.5 ))` —
+	// 1 in both columns — as the control that says the split is the compound
+	// operator's and not the store's (#4606).
+	s.CompoundArithAssignmentConvertsItsValue = interp.Yes
 	// A numeral a double cannot hold is lost rather than saturated:
 	// `$((1e400))` is `-0` here where the same value *computed*,
 	// `$((1e300*1e300))`, is `inf`. The zero is the negative one and the

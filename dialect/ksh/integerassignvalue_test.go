@@ -81,19 +81,46 @@ func TestAnAssignmentsValueIsWhatTheAttributeMadeOfIt(t *testing.T) {
 // Where the two shells part: this one converts what a **compound** assignment
 // computed as well, and zsh hands that value back untouched.
 //
-// Recorded and deliberately **not modeled**, exactly as #4475 recorded ksh93
-// keeping a float across a change of precision but not across a change of
-// letter. Measured 2026-09-26 in one run of both binaries, with `typeset -i
-// n=1`:
+// Measured 2026-09-26 in one run of both binaries — ksh93u+ 2012-08-01 at
+// `/bin/ksh` and zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f` — with
+// `typeset -i n=1` in front of each:
 //
-//	$(( n += 0.5 ))   ksh93u+  1      zsh 5.9.2  1.5    n is 1 in both
+//	probe                  ksh93u+   zsh 5.9.2   n afterwards
+//	$(( n += 0.5 ))        1         1.5         1 in both
+//	$(( n = n + 0.5 ))     1         1           1 in both
+//	$(( n *= 2.5 ))        2         2.5         2 in both
 //
-// So the case below is this shell's *standing* answer rather than its
-// measured one, and it is written down so that a change to the compound path
-// has to come here and say what it is doing. #4606 holds the measurement.
-func TestACompoundAssignmentIsNotConvertedHereYet(t *testing.T) {
-	out, st := runKsh(t, t.TempDir(), `typeset -i n=1; print -- "$(( n += 0.5 )) $n"`)
-	if want := "1.5 1\n"; out != want || st != 0 {
-		t.Errorf("got %q at %d, want %q at 0 — the standing answer; real ksh93 writes `1 1`", out, st, want)
+// The second row is the control and it is what makes this one question
+// rather than two: the plain operator agrees in both columns and the store
+// agrees on every row, so the only thing that moves is the compound
+// operator's value. That pair also holds the attribute fixed and moves the
+// operator, which is what says the rule is keyed on the operator rather than
+// on "an assignment".
+//
+// This used to be recorded and deliberately not modeled, asserting the
+// standing answer of `1.5 1`. It is
+// Semantics.CompoundArithAssignmentConvertsItsValue now (#4606).
+func TestACompoundAssignmentIsConvertedHere(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{"added", `typeset -i n=1; print -- "$(( n += 0.5 )) $n"`, "1 1\n"},
+		{"subtracted", `typeset -i n=1; print -- "$(( n -= 0.5 )) $n"`, "0 0\n"},
+		{"multiplied", `typeset -i n=1; print -- "$(( n *= 2.5 )) $n"`, "2 2\n"},
+		{"divided", `typeset -i n=8; print -- "$(( n /= 3.0 )) $n"`, "2 2\n"},
+		{
+			"read out of a larger expression",
+			`typeset -i n=1; print -- "$(( (n += 0.5) + 0 )) $n"`, "1 1\n",
+		},
+		// The controls, each unmoved by the axis.
+		{"the plain operator", `typeset -i n=1; print -- "$(( n = n + 0.5 )) $n"`, "1 1\n"},
+		{"an integer value", `typeset -i n=1; print -- "$(( n += 1 )) $n"`, "2 2\n"},
+		{"no attribute at all", `n=1; print -- "$(( n += 0.5 )) $n"`, "1.5 1.5\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runKsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
 	}
 }

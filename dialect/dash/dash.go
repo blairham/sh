@@ -562,6 +562,10 @@ func Semantics() interp.Semantics {
 	// expression — measured 2026-09-18, `x=x; echo $(( x ))` is `Illegal
 	// number: x` at 2 and the chain the axis is about cannot be built at all
 	// (#3416).
+	// unanswered CompoundArithAssignmentConvertsItsValue: dash has neither
+	// floats nor an integer attribute, so neither half of the question exists
+	// — there is no `typeset -i` to carry the type and no `0.5` to convert.
+	// Measured 2026-09-26 (#4606).
 	// unanswered ArithFloatOverflowIsZero: dash has no floats, so `1e400` is
 	// not a number out of range but a word its arithmetic cannot read at
 	// all. Measured 2026-09-14, `$((1e400))` is `arithmetic expression:

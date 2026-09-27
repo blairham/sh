@@ -207,6 +207,14 @@ type storedFloat struct {
 	text string
 	// value is the number those characters were written from.
 	value float64
+	// exponent is which float letter made the rendering — `E` rather than
+	// `F`. It is here and not read off the name's table at the far end
+	// because the question it answers is about the *past*: a declaration
+	// that changes the letter has already written the new one down by the
+	// time the standing value is re-read, so the only copy of the old one
+	// left is the one that traveled with the rendering. See
+	// Semantics.FloatLetterChangeRereadsTheRendering.
+	exponent bool
 }
 
 // floatWrittenInFull is a number written so that reading the characters back
@@ -220,12 +228,15 @@ func floatWrittenInFull(v float64) string {
 	return strconv.FormatFloat(v, 'g', -1, 64)
 }
 
-// rememberStoredFloat records the number a rendering was made from.
+// rememberStoredFloat records the number a rendering was made from, and the
+// letter it was made with.
 func (r *Runner) rememberStoredFloat(name, text string, v float64) {
 	if r.floatExact == nil {
 		r.floatExact = map[string]storedFloat{}
 	}
-	r.floatExact[name] = storedFloat{text: text, value: v}
+	r.floatExact[name] = storedFloat{
+		text: text, value: v, exponent: r.floatIsExponent(name),
+	}
 }
 
 // storedFloatValue is the number a float name is holding, and false where the
@@ -239,14 +250,22 @@ func (r *Runner) rememberStoredFloat(name, text string, v float64) {
 // is said once — on the way *in*, where a name that did not already carry the
 // attribute is one whose number can only come from its characters.
 func (r *Runner) storedFloatValue(name, text string) (float64, bool) {
+	c, ok := r.storedFloatRecord(name, text)
+	return c.value, ok
+}
+
+// storedFloatRecord is the whole record behind a float name's characters,
+// which the letter question needs as well as the number: see
+// Semantics.FloatLetterChangeRereadsTheRendering.
+func (r *Runner) storedFloatRecord(name, text string) (storedFloat, bool) {
 	if _, ok := r.floatPrecision[name]; !ok {
-		return 0, false
+		return storedFloat{}, false
 	}
 	c, ok := r.floatExact[name]
 	if !ok || c.text != text {
-		return 0, false
+		return storedFloat{}, false
 	}
-	return c.value, true
+	return c, true
 }
 
 // forgetStoredFloat drops the number a name was holding.

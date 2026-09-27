@@ -202,3 +202,37 @@ func TestTheTruthOfAnAssignmentIsTheConvertedNumber(t *testing.T) {
 		})
 	}
 }
+
+// And the other side of the split: a **compound** assignment here hands back
+// what it computed, where ksh93 converts that through the target's type too.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`,
+// beside ksh93u+ 2012-08-01 in the same run. The plain-operator row is the
+// control that says the split is the compound operator's alone: both shells
+// answer 1 to `$(( n = n + 0.5 ))`, and `n` is 1 in both columns on every
+// row here. See dialect/ksh/integerassignvalue_test.go for the other column
+// and Semantics.CompoundArithAssignmentConvertsItsValue for the axis (#4606).
+func TestACompoundAssignmentKeepsWhatItComputed(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{"added", `integer n=1; print -- "$(( n += 0.5 )) $n"`, "1.5 1\n"},
+		{"subtracted", `integer n=1; print -- "$(( n -= 0.5 )) $n"`, "0.5 0\n"},
+		{"multiplied", `integer n=1; print -- "$(( n *= 2.5 )) $n"`, "2.5 2\n"},
+		{
+			"read out of a larger expression",
+			`integer n=1; print -- "$(( (n += 0.5) + 0 )) $n"`, "1.5 1\n",
+		},
+		{"a whole float still keeps its point", `integer n=1; print -- "$(( n += 0.0 )) $n"`, "1. 1\n"},
+		// The controls, each unmoved by the axis.
+		{"the plain operator", `integer n=1; print -- "$(( n = n + 0.5 )) $n"`, "1 1\n"},
+		{"an integer value", `integer n=1; print -- "$(( n += 1 )) $n"`, "2 2\n"},
+		{"no attribute at all", `n=1; print -- "$(( n += 0.5 )) $n"`, "1.5 1.5\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

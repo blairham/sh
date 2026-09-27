@@ -1327,9 +1327,37 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
 			"a redirection target's braces making several names")) {
 		if made := r.braceExpand(rd.Word); len(made) > 1 {
 			braced = true
-			if !ordinary {
-				fields, words, plain = r.redirectTargetViewsOf(made)
-				fromTheNames = true
+			fields, words, plain = r.redirectTargetViewsOf(made)
+			fromTheNames = true
+			if ordinary {
+				// The reading that is about to refuse this target walks the
+				// names a **second** time on the way to refusing it, and
+				// that is measured rather than incidental. A counter a
+				// substitution in the word appends a line to, read as a
+				// line count rather than as output — nothing the word
+				// produces survives a refusal, so counting what reached
+				// standard output would count nothing:
+				//
+				//	: > {x}$(f)         1 name, not refused   1 run
+				//	: > {x,y}$(f)       2 names               4 runs
+				//	: > {x,y,w}$(f)     3 names               6 runs
+				//	: > {a,b}{c,d}$(f)  4 names               8 runs
+				//
+				// Two per name, on bash 5.3.20 and 3.2.57 alike, measured
+				// 2026-09-26 under `env -i PATH=/usr/bin:/bin` with a
+				// scratch HOME and each case in a directory of its own. The
+				// single-name row is the control that keeps this off the
+				// fan's own axis: an argument's fan runs the word once per
+				// name in this column — Semantics.BraceFanSharesTheWork —
+				// and `echo {x,y}$(f)` is unmoved at 2 (#4705).
+				//
+				// Only where the first walk left a name behind. A value
+				// that would not expand is **one** sentence in every
+				// column, and a second walk over `{x,y}${q?bad}` would
+				// write the same complaint twice.
+				if !r.targetExpansionFailed() {
+					fields, words, plain = r.redirectTargetViewsOf(made)
+				}
 			}
 		}
 	}

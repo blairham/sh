@@ -288,6 +288,7 @@ ash   WholeArraySubscriptAssigningAnArray
 ash   WholeArraySubscriptThroughAReferenceToATable
 ash   WidthJustificationPrecedence
 ash   WidthLettersExcludeTheIntegerLetter
+ash   WidthNumberPrecedence
 
 bash  ArithDivisionByZeroYieldsAValue
 bash  ArithFloatOverflowIsZero
@@ -329,6 +330,7 @@ bash  ShiftFromTheEndLetter
 bash  SubscriptedPrefixIsTakenBack
 bash  WidthJustificationPrecedence
 bash  WidthLettersExcludeTheIntegerLetter
+bash  WidthNumberPrecedence
 
 dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
@@ -625,6 +627,7 @@ dash  WholeArraySubscriptAssigningAnArray
 dash  WholeArraySubscriptThroughAReferenceToATable
 dash  WidthJustificationPrecedence
 dash  WidthLettersExcludeTheIntegerLetter
+dash  WidthNumberPrecedence
 dash  WritingSubstitutionIsWaitedForAtTheCommand
 
 ksh   ArithSubscriptSkippedWhenNameUnset

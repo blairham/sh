@@ -754,6 +754,8 @@ func Semantics() interp.Semantics {
 	// under either reading.
 	// unanswered WidthJustificationPrecedence: the same wall — there are no
 	// width letters here to write two of.
+	// unanswered WidthNumberPrecedence: nor a width number, since there is no
+	// letter here to carry one (#4827).
 	// unanswered WidthLettersExcludeTheIntegerLetter: nor a declaration to
 	// carry the integer letter beside one (#2859).
 	// unanswered NumericTypeLettersAreExclusive: nor a pair of numeric

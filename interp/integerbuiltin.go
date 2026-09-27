@@ -425,6 +425,14 @@ func (r *Runner) readOptionNumber(builtin string, f *declareFlags, letter byte, 
 	// already written it — the detached one in the word before, the attached
 	// one in what is left of this word after the number comes off.
 	if letter == 'L' || letter == 'R' || letter == 'Z' {
+		if r.widthNumberIsSettled(f, n) {
+			// The column where the **first** number written is the one the
+			// name keeps, so a later one is read off the word and thrown
+			// away rather than stored: `typeset -R3 -L5 v=7` is `typeset -L
+			// 3` on ksh93u+, the letter from the second word and the number
+			// from the first. See Semantics.WidthNumberPrecedence (#4827).
+			return true
+		}
 		// A width rather than a precision, and one field pair each so the
 		// listing knows which letter to write the number back onto.
 		f.width, f.widthNamed = n, true

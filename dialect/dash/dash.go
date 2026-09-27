@@ -737,6 +737,8 @@ func Semantics() interp.Semantics {
 	// there is no `Z` letter to read either way.
 	// unanswered WidthJustificationPrecedence: the same wall — no width
 	// letters, so no pair of them to rank.
+	// unanswered WidthNumberPrecedence: and no width number either, for the
+	// same reason — there is no letter to attach one to (#4827).
 	// unanswered WidthLettersExcludeTheIntegerLetter: and no declaration to
 	// write the integer letter beside one on (#2859).
 	// unanswered NumericTypeLettersAreExclusive: nor a pair of numeric

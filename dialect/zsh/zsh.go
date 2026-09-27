@@ -4400,6 +4400,13 @@ func Semantics() interp.Semantics {
 	// word. So every row agreed and the axis was keyed on the wrong thing,
 	// which the separate-word spelling is what shows (#4766).
 	s.WidthJustificationPrecedence = interp.WidthJustificationConflictLeavesNoWidth
+	// The **number** is the last written, which is the reading the store
+	// falls into on its own. Measured 2026-09-27 under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`: `typeset -L5 -L3 v=7` is `typeset -L3`,
+	// `typeset -R5 -R3` is `-R3` and `typeset -Z5 -Z3` is `-Z3`, where ksh93
+	// keeps the first number written (#4827). Which number the `L`/`Z` pair
+	// takes is a rule on top of this one — see interp.declaredWidthNumber.
+	s.WidthNumberPrecedence = interp.WidthNumberLastWrittenWins
 	// And a width letter may stand beside the integer one, the first written
 	// winning there too: measured 2026-09-18, `typeset -iL 5 a=7` lists as
 	// `typeset -i5 a=7` — the `5` a base — and `typeset -Li 5 a=7` as

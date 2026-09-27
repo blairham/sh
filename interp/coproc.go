@@ -336,8 +336,13 @@ func (r *Runner) startCoproc(ctx context.Context, name string, run func(*Runner)
 	// descriptor table — see shellOwnedFd for what a child holding the write
 	// end open would cost the coprocess.
 	rfd, wfd := r.coprocEndNumbers()
-	r.setFd(rfd, shellOwnedFd{shellR})
-	r.setFd(wfd, shellOwnedFd{shellW})
+	readEnd, writeEnd := shellOwnedFd{shellR}, shellOwnedFd{shellW}
+	r.setFd(rfd, readEnd)
+	r.setFd(wfd, writeEnd)
+	// And the record CleanUp closes them from, which is the only thing
+	// holding a reference once the table entry goes. See closeCoprocEnds.
+	r.coprocOwnEnds = append(r.coprocOwnEnds,
+		coprocNearEnd{fd: rfd, held: readEnd}, coprocNearEnd{fd: wfd, held: writeEnd})
 	// Kept whichever dialect this is: `print -p` and `read -p` need them in
 	// the shell that has no array to find them in, and the shell that has one
 	// loses nothing by the record. A second `coproc` replaces the first,
@@ -881,5 +886,64 @@ func (r *Runner) coprocEndHandedOver(op syntax.Kind) {
 	case syntax.TokLessAmp:
 		r.forgetCoprocFd(c.read)
 		c.read = -1
+	}
+}
+
+// coprocNearEnd is one end of a coprocess's pipe that this shell holds: the
+// number it was published at, and the entry that was put in the table there.
+//
+// Both halves are needed at the end of the shell's life. The number says
+// which slot was this coprocess's own, so that slot is not mistaken for
+// somebody else still naming the file; the entry is what a duplicate made
+// with `exec 3>&${CP[1]}` compares equal to, since a redirection that copies
+// a descriptor copies the *value* in the table and not the file underneath
+// it.
+type coprocNearEnd struct {
+	fd   int
+	held any
+}
+
+// closeCoprocEnds closes the near ends of every coprocess this shell started,
+// at the end of the shell's life.
+//
+// **This is not forgetCoprocFd's rule and does not weaken it.** That one runs
+// while the shell is still running and deliberately leaves the file open: a
+// script may have duplicated an end onto a number of its own, and that
+// duplicate is the same open file, so closing it there would turn a write
+// into a pipe with no reader — a SIGPIPE, which is what bash gives — into a
+// complaint about a descriptor that is not there. The question this answers
+// is the other one: what a Runner owes when it *stops being a shell*.
+//
+// It owes the descriptors. A shell **process** does not have to care, because
+// the kernel reclaims everything at exit; a Runner embedded in a long-lived
+// program is exactly the shape this library is for, and there the ends
+// accumulate against that program's open-file limit until the garbage
+// collector runs an `*os.File` finalizer. Measured 2026-09-25 on darwin/arm64:
+// twenty Runners, each running `coproc { sleep 0.01; echo noise >&2; }`, each
+// settled and dropped, left 3 descriptors open before and **44** after, and
+// two `runtime.GC()` calls did not bring the number down. `CleanUp` — the
+// call whose name says it is the end of the Runner's life — did not close
+// them, and nothing told the embedder (#4499).
+//
+// The slot each end was published at is emptied before the aliasing question
+// is asked, or the entry on its way out would be found and every end would
+// look shared with itself — the same clause closeOwnPipe carries, and for the
+// same reason. What is left after that is a *duplicate* a script made, and
+// that one is not closed here: the file is still named by the table, and this
+// runs beside the table rather than instead of it.
+func (r *Runner) closeCoprocEnds() {
+	ends := r.coprocOwnEnds
+	r.coprocOwnEnds = nil
+	for _, e := range ends {
+		if r.fds[e.fd] == e.held {
+			delete(r.fds, e.fd)
+		}
+	}
+	for _, e := range ends {
+		own, ok := e.held.(shellOwnedFd)
+		if !ok || r.fdAliased(e.held) {
+			continue
+		}
+		_ = own.Close()
 	}
 }

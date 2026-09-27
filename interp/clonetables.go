@@ -389,6 +389,18 @@ func (c *Runner) ownTables(r *Runner) {
 	// and the same reason — TestACloneOwnsEveryStack is the instrument that
 	// says so, and it fails with this line removed.
 	c.prefixGlobMatches = slices.Clone(r.prefixGlobMatches)
+	// The coprocess near ends a shell is to close at the end of its life, and
+	// the one stack here that is **emptied** rather than copied.
+	//
+	// It is a list of what this runner *started*, which is the same ownership
+	// coprocEnds.owner already carries, read from the other side: a clone did
+	// not start the parent's coprocess and must not close its ends. Copying
+	// the list would hand every clone that reaches CleanUp — and the three
+	// that are not the shell do reach Finish — the parent's own pipe ends to
+	// close underneath it. Sharing the array would be the ordinary hazard
+	// this file exists to prevent on top of that, since a subshell starting a
+	// coprocess of its own appends.
+	c.coprocOwnEnds = nil
 	// And where that command's declaration operands stood, which a clone
 	// inherits for exactly as long as it takes to run a command of its own —
 	// the same reading, and cloned for the same reason.

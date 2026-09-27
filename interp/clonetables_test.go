@@ -139,6 +139,7 @@ func seedStacks(r *Runner) {
 	r.sourceClosedSubscriptOperands = append(make([]string, 0, 4), "seed")
 	r.prefixTraceValues = append(make([]string, 0, 4), "seed")
 	r.prefixGlobMatches = append(make([]prefixGlobMatch, 0, 4), prefixGlobMatch{})
+	r.coprocOwnEnds = append(make([]coprocNearEnd, 0, 4), coprocNearEnd{})
 	r.prefixHeldNames = append(make([]string, 0, 4), "seed")
 	r.prefixKeptNames = append(make([]string, 0, 4), "seed")
 	r.prefixShadowed = append(make([]string, 0, 4), "seed")

@@ -275,6 +275,17 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 		}
 		_ = o.set(r, emulationDefault(o, mode))
 	}
+	// And the grammar, which is the part of an emulation that reaches how the
+	// *next line is read* rather than what a line already read means.
+	//
+	// After the option loop rather than before it, although the two cannot
+	// collide: emulategrammar.go may not name a `syntax.Dialect` field an
+	// option name already owns, since a field with two writers in one call
+	// answers to whichever ran last. Last is still the right place for it —
+	// this is the emulation's own answer, and a later addition that did
+	// overlap would then be visible as an option that stopped taking effect
+	// rather than as a grammar that intermittently did.
+	setEmulationGrammar(r, mode)
 	r.SetVar(emulationMode, mode)
 }
 

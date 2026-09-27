@@ -93,6 +93,17 @@ type ParameterAttributes struct {
 	ZeroFilled bool
 	// Tied is one half of a scalar-and-array pair that share a value.
 	Tied bool
+	// Traced is the trace attribute — `typeset -t`, which one shell writes
+	// back as the word `tag`.
+	//
+	// The letter changes nothing about the name's value and the only reader
+	// is the DEBUG trap, so it is here for the same reason Unique and
+	// HideValue are: it is a property of the *name* that a listing and a type
+	// query both describe. It was reachable from a listing before it was
+	// reachable from here — `typeset -t v=1; typeset -p v` already wrote
+	// `typeset -t v=1` byte for byte — which is what said the attribute was
+	// recorded and only the description could not see it (#4872).
+	Traced bool
 	// HideValue withholds a name's *value* from a listing — the name is
 	// declared, holds what it holds and reads back exactly as it would
 	// without the letter, and only a listing that would have written
@@ -150,6 +161,7 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		Lower:     r.lowered[name],
 		Upper:     r.uppered[name],
 		Unique:    r.unique[name],
+		Traced:    r.traced[name],
 		HideValue: r.hidden[name],
 		// A **private** binding carries both of the last two words without
 		// either having been written on the declaration, and that is
@@ -222,6 +234,12 @@ func (r *Runner) parameterKind(name string) ParameterKind {
 		return ArrayParameter
 	}
 	if _, ok := r.DynamicArrays[name]; ok {
+		return ArrayParameter
+	}
+	// The pipeline status is an array in both shells that name it, and it
+	// reaches none of the tables above — see
+	// Runner.namesTheProducedPipelineStatus.
+	if r.namesTheProducedPipelineStatus(name) {
 		return ArrayParameter
 	}
 	if _, ok := r.floatPrecision[name]; ok {
@@ -318,8 +336,10 @@ func (r *Runner) ParameterIsNamed(name string) bool {
 	if _, ok := r.DynamicArrays[name]; ok {
 		return true
 	}
-	_, ok := r.DynamicAssocs[name]
-	return ok
+	if _, ok := r.DynamicAssocs[name]; ok {
+		return true
+	}
+	return r.namesTheProducedPipelineStatus(name)
 }
 
 func (r *Runner) ParameterNames() []string {
@@ -352,6 +372,12 @@ func (r *Runner) ParameterNames() []string {
 	}
 	for name := range r.DynamicAssocs {
 		add(name)
+	}
+	// And the fourth, which is one name and is the dialect's rather than a
+	// table's. A union over seven tables that forgot it answered *no* for a
+	// name the same shell expands (#4865).
+	if r.namesTheProducedPipelineStatus(r.pipeStatusName) {
+		add(r.pipeStatusName)
 	}
 	sort.Strings(out)
 	return out

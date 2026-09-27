@@ -335,8 +335,14 @@ func (r *Runner) DynamicParameter(name string) bool {
 	if _, ok := r.DynamicArrays[name]; ok {
 		return true
 	}
-	_, ok := r.DynamicAssocs[name]
-	return ok
+	if _, ok := r.DynamicAssocs[name]; ok {
+		return true
+	}
+	// And the fourth table, which is a field rather than a map because the
+	// record is the core's and only the name is a dialect's — see
+	// Runner.namesTheProducedPipelineStatus, which is where the three unions
+	// this name was missing from are named.
+	return r.namesTheProducedPipelineStatus(name)
 }
 
 // InSubshell reports whether this runner stands for a body a real shell would

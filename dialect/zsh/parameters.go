@@ -129,6 +129,29 @@ func describeParameter(a interp.ParameterAttributes) string {
 		{a.Lower, "lower"},
 		{a.Upper, "upper"},
 		{a.Readonly, "readonly"},
+		// **Between the freeze and the tie**, which is measured rather than
+		// slotted in beside the letter it comes from. Measured 2026-09-27 on
+		// zsh 5.9.2 from a script file under `env -i PATH=/usr/bin:/bin`
+		// with a scratch `HOME`, one run per cell, `typeset -t` paired with
+		// every other letter that reaches a word:
+		//
+		//	typeset -t -L5 v   scalar-left-tag
+		//	typeset -t -Z5 v   scalar-right_zeros-tag
+		//	typeset -t -l  v   scalar-lower-tag
+		//	typeset -t -u  v   scalar-upper-tag
+		//	typeset -t -r  v   scalar-readonly-tag
+		//	typeset -t     PATH  scalar-tag-tied-export-special
+		//	typeset -t     path  array-tag-tied-special
+		//	typeset -t -x  v   scalar-tag-export
+		//	typeset -t -U -a v scalar… array-tag-unique
+		//	typeset -t -h  v   scalar-tag-hide
+		//	typeset -t -H  v   scalar-tag-hideval
+		//
+		// and the whole of it in one name, which is what says the position
+		// is a single place in the sequence rather than a rule per pair:
+		// `typeset -t -x -r -u -H -h -L5 v` is
+		// `scalar-left-upper-readonly-tag-export-hide-hideval`.
+		{a.Traced, "tag"},
 		// **After the freeze and after the width and case words, and before
 		// everything below it** — not straight after `local`, which is where
 		// it used to stand (#4856). The position is a measurement and not a

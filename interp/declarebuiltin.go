@@ -113,6 +113,15 @@ type declareFlags struct {
 	// shell with the option off exactly as `-I` does. There is no spelling
 	// that turns inheritance *off* for one declaration.
 	inherit bool
+	// private is the `P` letter: the binding this declaration makes is one a
+	// deeper function frame reads past. The per-declaration spelling of what
+	// the `private` word asks for — see interp/privatescope.go, and note
+	// that the word and the letter are the *same* request rather than two,
+	// so both end up here.
+	//
+	// One bool and no sign, for the reason `inherit` has one: the plus form
+	// is the same request in the one shell that spells the letter.
+	private bool
 	// nameref is the `n` letter: the name being declared is a **reference**
 	// to another parameter rather than a parameter of its own, and the value
 	// on the operand is the name it points at. Its own field rather than a
@@ -630,6 +639,19 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// the one spelling that changes an answer — see
 				// hideinscope.go.
 				f.hide, f.hideNamed = !f.remove, true
+			case 'P':
+				// **Private**: the binding this declaration makes is one the
+				// functions the declaring call invokes read straight past.
+				// See interp/privatescope.go for the rule and for the frame
+				// table it is measured from.
+				//
+				// One bool and no sign, which is measured rather than an
+				// omission: `local +P v=1` makes a private exactly as `-P`
+				// does — `${(t)v}` is `scalar-local-hide-special` for both —
+				// so there is no spelling that takes the request off. Same
+				// shape `-I` has, and the opposite of `h`, whose sign is the
+				// whole of what it says.
+				f.private = true
 			case 'H':
 				// Hide the value from listings. The name is declared, holds
 				// what it holds and reads back exactly as it would without
@@ -5385,6 +5407,22 @@ func (r *Runner) shadow(name string) (fresh bool) {
 		return false
 	}
 	sc := r.scopes[len(r.scopes)-1]
+	if r.declaringPrivate {
+		// The word in front of this declaration makes bindings the functions
+		// this call invokes read straight past. Recorded here rather than at
+		// the word for the reason DeclaringPrivateName gives: this is the
+		// one place a declaration makes its binding, so a name that arrives
+		// as `-A m`, as an operand with a subscript, or as the second of
+		// three on one line is marked by having been declared rather than by
+		// being worked out a second time.
+		//
+		// Outside the freshness check below, because a second declaration of
+		// a name this call already shadowed is still a declaration of it:
+		// `private v=1; local v=2` leaves the binding private in the shell
+		// this models, measured — `${(t)v}` is `scalar-local-hide-special`
+		// after both lines. See interp/privatescope.go.
+		r.privateShadowTaken(sc, name)
+	}
 	if _, seen := sc.saved[name]; !seen {
 		fresh = true
 		// A live assignment prefix is holding this name, so the value the

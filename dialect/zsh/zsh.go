@@ -4411,7 +4411,31 @@ func Semantics() interp.Semantics {
 	// them and this shell has not built them, `typeset -E` being `-E is not
 	// implemented yet` in the same run. Claiming them here would move the
 	// refusal from the letter to nowhere at all.
-	s.LocalOptions = "aAFHhiLlpRrtuUTxZ"
+	s.LocalOptions = "aAFHhiLlPpRrtuUTxZ"
+	// `private`'s set is neither that one nor DeclareOptions, which is why it
+	// is a field of its own. Measured a letter at a time against `private -X
+	// v` inside a function on zsh 5.9.2, 2026-09-27: it takes `aAEFHhiLlmpRr
+	// tuUxZ` and refuses `f`, `g`, `M`, `n`, `T` and `z`. So against `local`
+	// it gains `E` and `m` and loses `T`.
+	//
+	// `-g` is the refusal worth reading twice: that letter means *do not
+	// take a scope*, and a declaration with no scope cannot be private to a
+	// call, so the word and the letter are a contradiction rather than a
+	// combination. `-f` is refused for the same shape of reason `local`
+	// refuses it.
+	//
+	// `E` and `m` are left out here and **not** because the shell refuses
+	// them: it takes both. They are letters this engine has not built under
+	// a scoped declaration — `-E` is the float-exponent format, which
+	// LocalOptions leaves out for the same reason, and `-m` reads the
+	// operands as patterns, which `local` has no route for either. So they
+	// are named in UnimplementedOptionLetters below instead, which is the
+	// difference between telling a script the letter is on its way and
+	// telling it zsh never had one. The two tables move together and
+	// TestNoLetterIsBothAcceptedAndCalledMissing is the invariant.
+	//
+	// `T` is left out of both, because zsh's own `private` refuses it.
+	s.PrivateOptions = "aAFHhiLlPpRrtuUxZ"
 	// A bad `typeset` option is reported and the script goes on.
 	s.TypesetBadOptionFatal = interp.No
 	// `integer` here is `typeset` with the letter prepended rather than a
@@ -5168,6 +5192,17 @@ func Diagnostics() interp.Diagnostics {
 			// this shell's `integer` really takes. `-h` was here too and is
 			// implemented now, in IntegerOptions above.
 			"integer": "LRZ",
+			// `private`'s own two, and they are `local`'s missing letters
+			// rather than `typeset`'s: measured 2026-09-27 a letter at a
+			// time on zsh 5.9.2, `private -E v` and `private -m 'v*'` are
+			// each taken there and neither has a route under a scoped
+			// declaration here. `-T`, `-f`, `-g`, `-M`, `-n` and `-z` are
+			// in neither table, because that shell's `private` refuses them
+			// too — so the substrate's own bad-letter refusal is already
+			// its answer, and `-g` is the one worth reading twice: the
+			// letter means *do not take a scope*, which is the opposite of
+			// what the word asks for.
+			"private": "Em",
 			// `functions`' own letters, none of which is `typeset`'s: -u
 			// and -U mark a name for autoloading, -k and -z pick which
 			// shell the autoloaded file is read as, -t and -T trace, -x
@@ -5214,6 +5249,24 @@ func Diagnostics() interp.Diagnostics {
 		// option complaint here.
 		OptionNeedsArgument: "%[1]s: argument expected: -%[2]s",
 		ReadonlyVariable:    "read-only variable: %s",
+		// A frame writing a name one of its callers declared `private` over
+		// nothing. Measured 2026-09-27 on zsh 5.9.2, `-f`, under `-c` and
+		// from a script file alike: `g: v: can't change parameter attribute`,
+		// the script ending at 1 — for a scalar, for an array, for a `+=`
+		// append and for `typeset -g v=7`, and with the function's name in
+		// the location exactly as the readonly refusal above has it.
+		//
+		// It is a different sentence from that one, which is what says the
+		// two rules are different rules: a callee assigning a frozen name in
+		// the same shell is `g: read-only variable: rr`, also fatal, also 1.
+		PrivateParameterWrite: "%s: can't change parameter attribute",
+		// And `private` over a name the running call has already declared:
+		// `f:private: can't change scope of existing param: v`, status 1,
+		// the script carrying on and the binding standing there untouched.
+		// Measured the same day, and the same sentence whether the name was
+		// made by `private` or by `local` — where `local` or `typeset` over
+		// a *private* is taken at 0.
+		PrivateRedeclaresName: "%[1]s: can't change scope of existing param: %[2]s",
 		// The one dialect that words the refusal to unset exactly as it words
 		// the refusal to assign, and the only one that does not name `unset`.
 		UnsetReadonly: "read-only variable: %s",
@@ -6436,6 +6489,19 @@ func Apply(r *interp.Runner) {
 	// exist.
 	r.Register("float", interp.FloatBuiltin())
 	r.SetDeclaring("float")
+	// `private` is `local` making a binding the functions this call goes on
+	// to invoke read straight **past** — to whatever the declaration
+	// displaced, not to nothing — which is the one thing a `local` cannot be
+	// wrapped into doing and the whole reason the word exists. Registered
+	// rather than built here for `integer`'s reason: the declaration itself
+	// is interp's, and only the visibility rule is new. See
+	// interp/privatescope.go for the measured table and
+	// interp/privatebuiltin.go for why the word is here from the start
+	// rather than behind `zmodload zsh/param/private` — the shell being
+	// modeled autoloads the module off the word, so a script that never
+	// writes the `zmodload` still has it.
+	r.Register("private", interp.PrivateBuiltin())
+	r.SetDeclaring("private")
 	// And the classification this shell's grammar gives all seven of them.
 	// zsh's reserved-word table is not its parser's in the sense the other
 	// four dialects' are: the seven declaration commands and four words the

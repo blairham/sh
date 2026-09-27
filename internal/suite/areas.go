@@ -116,7 +116,13 @@ var Areas = []Area{
 	{"set options and shopt", 2313, []string{"setopts", "shell-options", "options"}},
 	{"traps, signals and exit", 2314, []string{"signals"}},
 	{"invocation and argv", 2315, []string{"invocation", "argv", "shelllevel"}},
-	{"variables, declarations and scope", 2316, []string{"variables", "typeset", "namerefs"}},
+	// `private` is a declaration whose binding a deeper *function frame* reads
+	// past, so it could be read as belonging to the function area instead —
+	// and it is filed here for the reason `namespace` is filed under grammar
+	// above: the area is the construct the file is written in, and the file
+	// is a page of declarations and the reads that follow them. The frame is
+	// what the declaration is measured *against*, not what it is (#4738).
+	{"variables, declarations and scope", 2316, []string{"variables", "typeset", "namerefs", "private"}},
 	{"indexed and associative arrays", 2317, []string{"arrays"}},
 	{"job control and background commands", 2318, []string{"jobs"}},
 	{"aliases", 2319, []string{"aliases"}},

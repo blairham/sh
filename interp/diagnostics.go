@@ -6640,6 +6640,27 @@ type Diagnostics struct {
 	// ReadonlyVariable is an assignment to a readonly name. One verb: the
 	// name.
 	ReadonlyVariable string
+	// PrivateParameterWrite is a frame writing a name one of its callers
+	// declared private over nothing — see interp/privatescope.go. One verb:
+	// the name.
+	//
+	// A field of its own rather than ReadonlyVariable's, because the two are
+	// different complaints in the one shell that can make this one:
+	// measured 2026-09-27 on zsh 5.9.2, a callee assigning such a name is
+	// `g: v: can't change parameter attribute` where the same callee
+	// assigning a frozen name is `g: read-only variable: rr`. Both end the
+	// script at 1, so the status is not what tells them apart — the sentence
+	// is, and the sentence says which of the two rules refused.
+	//
+	// Empty falls back to the substrate's wording, which is the measured one.
+	PrivateParameterWrite string
+	// PrivateRedeclaresName is `private` over a name the running call has
+	// already declared. Two verbs: the word as written, and the name.
+	//
+	// Reported and survivable, where PrivateParameterWrite above is fatal,
+	// which is why they are two fields and not one with a flag. Empty falls
+	// back to the substrate's wording.
+	PrivateRedeclaresName string
 	// UnsetReadonly is `unset` refusing to remove a readonly name. One verb:
 	// the name — the *base* name, since a subscripted operand is refused by
 	// the variable it indexes rather than by the element.

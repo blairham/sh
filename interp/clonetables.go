@@ -130,6 +130,13 @@ func (c *Runner) ownTables(r *Runner) {
 	c.traced = maps.Clone(r.traced)
 	c.nameref = maps.Clone(r.nameref)
 	c.hideInScope = maps.Clone(r.hideInScope)
+	// The names a caller's `private` declared over nothing, which a frame may
+	// see the shape of and may not write. Copied like every other refusal
+	// table: a subshell is a frame's clone and the seal that put an entry
+	// here is the parent's, so a `( … )` written under one must read the same
+	// refusal — and the moment it pushes a call of its own, the count it
+	// unwinds has to be the one it incremented. See interp/privatescope.go.
+	c.privateShield = maps.Clone(r.privateShield)
 	c.tied = maps.Clone(r.tied)
 	// The type names `typeset -T` registered — see interp/declaretype.go.
 	// A slice rather than a map, so it is copied outright: a subshell that
@@ -543,6 +550,17 @@ func cloneScopes(scopes []*scope) []*scope {
 		c.savedTraps = maps.Clone(sc.savedTraps)
 		c.savedOptions = maps.Clone(sc.savedOptions)
 		c.sealed = cloneSealed(sc.sealed, at, out)
+		// The private half of the same three, on exactly the same terms:
+		// `private` is a `local` whose name a deeper frame reads past, so a
+		// subshell writing the parent's private set is the concurrent map
+		// write this file exists to end, and a seal whose holder still
+		// pointed into the parent's stack would write the shell's own name
+		// back there on the way out. cloneSealed is reused rather than
+		// copied because privateSealed is the same type holding the same
+		// pointers for the same reason. See interp/privatescope.go.
+		c.private = maps.Clone(sc.private)
+		c.privateSealed = cloneSealed(sc.privateSealed, at, out)
+		c.privateShielded = slices.Clone(sc.privateShielded)
 		// The two that hold a container per name, on the same terms as Arrays
 		// and AssocArrays above: cloning the outer map alone would give the
 		// clone its own name table pointing at the parent's elements.

@@ -1,0 +1,100 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# `private`: the one declaration in the panel whose binding a function the
+# declaring call invokes does **not** see — #4738's half of #4601.
+#
+# This file is in zsh/ and not in ext/ because no other shell in the panel has
+# the word at all. bash, ksh93, dash and BusyBox ash each answer `private:
+# command not found`, so a case here is a statement about one shell rather
+# than a construct a portable script may assume.
+#
+# The rule is not "the callee cannot see the name", and that is the whole
+# reason this file is worth having rather than a line in variables.tests. A
+# callee reads **past** the declaration, to whatever it displaced — so the
+# outer value is what it gets, `${+name}` answers about *that*, and a shell
+# that hid the name outright would print an empty string where this prints
+# the global. Every block below is paired with the same block written
+# `local`, because the two words differ in exactly one thing and a file that
+# ran only the private spelling could not tell a working seal from a shell
+# where every declaration behaves this way.
+#
+# The boundary is the **function frame** and not the scope, which is what the
+# subshell and command-substitution rows are for: both run at the declaring
+# frame and both see the private, where a function called from the same place
+# does not.
+#
+# The file ends with the refusal that stops the shell — a write to a name a
+# caller's private displaced nothing under — because nothing can follow it.
+
+zmodload zsh/param/private
+
+# The headline pair. `g` reads past the private to the global; the same body
+# under `local` reads the declaration.
+V=9
+g() { printf 'callee [%s] set=%s\n' "$V" "${+V}"; }
+priv() { private V=1; g; printf 'declaring call [%s]\n' "$V"; }
+loc()  { local   V=1; g; printf 'declaring call [%s]\n' "$V"; }
+priv
+printf 'after private [%s]\n' "$V"
+loc
+printf 'after local [%s]\n' "$V"
+
+# With nothing underneath, what the callee reads past to is the absence of
+# the name rather than an empty local.
+h() { printf 'callee [%s] set=%s\n' "${W-unset}" "${+W}"; }
+privw() { private W=1; h; printf 'declaring call [%s]\n' "$W"; }
+privw
+printf 'after [%s]\n' "${W-unset}"
+
+# What runs at the declaring frame sees it: a subshell and a command
+# substitution, neither of which is a call.
+frame() { private V=2; ( printf 'subshell [%s]\n' "$V" ); printf 'substitution [%s]\n' "$(printf '%s' "$V")"; }
+frame
+
+# An `eval` is not a frame and a function called from inside one still is.
+ev() { private V=3; eval 'g'; }
+ev
+
+# A callee's write reaches the cell the private displaced, and the
+# declaration is unmoved by it.
+w() { V=7; }
+privw2() { private V=1; w; printf 'declaring call [%s]\n' "$V"; }
+privw2
+printf 'after the callee wrote [%s]\n' "$V"
+
+# A callee that declares the name first has a binding of its own, whichever
+# word it uses.
+own()  { private V=5; printf 'callee own [%s]\n' "$V"; }
+own2() { typeset V;   printf 'callee typeset [%s]\n' "${V-unset}"; }
+privo() { private V=1; own; own2; printf 'declaring call [%s]\n' "$V"; }
+privo
+
+# The words a type query writes. A private carries `hide` and `special`
+# without either having been asked for; the local row is the control.
+words() { private S=1; private -i N=5; private -a A; local L=1
+  printf 'scalar %s\n' "${(t)S}"
+  printf 'integer %s\n' "${(t)N}"
+  printf 'array %s\n' "${(t)A}"
+  printf 'local %s\n' "${(t)L}"; }
+words
+
+# `typeset -p` writes no row for a private and the bare listing writes one.
+listed() { private P=1; local Q=2; typeset -p P; printf 'dash-p status %s\n' "$?"
+  typeset | grep -E '^local [PQ]='; }
+listed
+
+# `private` over a name this call has already declared is refused and the
+# script carries on; the other order is taken.
+twice() { private R=1; private R=6; printf 'twice status %s value [%s]\n' "$?" "$R"; }
+twice
+narrow() { private R=1; local R=6; printf 'narrowed status %s value [%s]\n' "$?" "$R"; }
+narrow
+
+# Writing a name a caller's private displaced nothing under. Nothing runs
+# after this line.
+bad() { Z=7; }
+privz() { private Z=1; bad; printf 'this line is not reached\n'; }
+printf 'about to write through a private\n'
+privz
+printf 'this line is not reached either\n'

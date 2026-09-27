@@ -136,14 +136,37 @@ produced text is re-read as shell text":
   the word back unexpanded. The scan does not carry on past it either —
   `e='{'; echo {c,d$e}{a,b}` is the single field `{c,d{}{a,b}`.
 
-Two neighboring questions are deliberately outside it. Whether an **empty
-alternative** is a field — `echo {a,}` is `a` and an empty word in ksh93,
-`a` alone in bash and zsh — is a disagreement about a *written* group and
-is unmodeled, so a produced empty is dropped exactly as a written one is.
-And whether produced text **outside** a group is scanned for braces at all
-is the same question one level out: `e='{a,b}'; echo $e` is `a b` in ksh93
-and `{a,b}` in bash 5.3, bash 3.2 and zsh, and reading a body does not
-answer it.
+Whether an **empty alternative** is a field is a neighboring question with
+its own axis, `BraceEmptyAlternativeIsAField`, and it splits the panel the
+same way this one's *structural* neighbors do rather than the way this one
+does. Measured 2026-09-27 with
+`f(){ printf '%d |' $#; for x in "$@"; do printf ' [%s]' "$x"; done; }`:
+
+| probe | bash 5.3 / bash 3.2 | ksh93 / zsh |
+| --- | --- | --- |
+| `f {a,b}` *(control)* | `2 \| [a] [b]` | `2 \| [a] [b]` |
+| `f {a,}` | `1 \| [a]` | `2 \| [a] []` |
+| `f {,}` | `0 \|` | `2 \| [] []` |
+| `unset u; f {a,$u}` | `1 \| [a]` | `2 \| [a] []` |
+| `f {a,$(true)}` | `1 \| [a]` | `2 \| [a] []` |
+
+It is the **alternative** and not the word: `unset u; f {a,b}$u` is `2 |
+[a] [b]` everywhere, and `a=(); f {p,q}${^a}` stays **no word at all** in
+zsh, where a distributive span with no elements takes the word with it. So
+the shape is a name whose whole expansion came to a single field nothing
+reached, which only an empty alternative can produce.
+
+This paragraph used to say the row was ksh93's alone and that it was
+unmodeled. Both were wrong: zsh answers every row above the way ksh93 does,
+and #4800 filed it as one column because its probe set asked bash-shaped
+questions of zsh. A quoted empty alternative is not the disagreement —
+`f {a,""}` is `2 | [a] []` in every column, and the axis is whether an
+alternative that came to nothing *is* that quoted null.
+
+Whether produced text **outside** a group is scanned for braces at all is
+the same question one level out and stays outside this one: `e='{a,b}';
+echo $e` is `a b` in ksh93 and `{a,b}` in bash 5.3, bash 3.2 and zsh, and
+reading a body does not answer it.
 
 An expansion in the body that yields **fields of its own** is not this
 reading's: `set -- 1 2; echo {$@}` is the two words `{1` and `2}` in ksh93 and

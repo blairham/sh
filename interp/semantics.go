@@ -3689,6 +3689,21 @@ type Semantics struct {
 	// expansions are otherwise unsplit here, which is what makes
 	// `e="a b,c"; echo {$e}` two fields rather than three.
 	BraceBodyReadAfterExpansion Answer
+	// BraceEmptyAlternativeIsAField keeps a brace alternative that came to
+	// nothing as a field of its own: `f {a,}` is `[a] []` in ksh93u+ and zsh
+	// 5.9.2 and the single field `[a]` in bash 5.3.20 and 3.2.57, and the
+	// same two columns part over an alternative an *expansion* emptied —
+	// `unset u; f {a,$u}`.
+	//
+	// It is the alternative and not the word: `f {a,b}$u` is two fields in
+	// every column, and a word a distributive span with no elements took
+	// away stays taken away. See interp/braceemptyalt.go for the panel and
+	// for the shape the rule is keyed on.
+	//
+	// Asked only where an alternative actually came to nothing, and only in
+	// a dialect whose braces expand at all — dash and BusyBox ash never
+	// reach it.
+	BraceEmptyAlternativeIsAField Answer
 	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range
 	// endpoint and pads every element to the widest endpoint, zeros after
 	// the sign: `{01..3}` is `01 02 03` and `{-03..3..3}` is `-03 000 003`.

@@ -2690,6 +2690,13 @@ func Semantics() interp.Semantics {
 	// word as written: `e=a,b; echo {$e}` is `{a,b}` here too, even though
 	// a range's endpoints are read after their expansions below.
 	s.BraceBodyReadAfterExpansion = interp.No
+	// An alternative that came to nothing is still a field: `f {a,}` is
+	// `[a] []` here and `[a]` in bash, and an alternative an expansion
+	// emptied answers the same way — `unset u; f {a,$u}` is `[a] []`,
+	// `f {,}` is two empty fields. ksh93 is the other column that keeps
+	// it; #4800 filed the row as ksh93's alone and this column was
+	// measured the same way it answers (#4800).
+	s.BraceEmptyAlternativeIsAField = interp.Yes
 	// Pads like bash — `{01..3}` is `01 02 03` — but a negative step
 	// reverses the walk the endpoints chose: `{3..1..-1}` is `1 2 3` and
 	// `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards rather than the

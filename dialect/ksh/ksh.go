@@ -2092,6 +2092,11 @@ func Semantics() interp.Semantics {
 	// written `{a*,z}` matches — and a produced `{` leaves the whole word
 	// alone.
 	s.BraceBodyReadAfterExpansion = interp.Yes
+	// An alternative that came to nothing is still a field: `f {a,}` is
+	// `[a] []` here and `[a]` in bash, and the produced half answers the
+	// same way — `unset u; f {a,$u}` and `e=a,; f {$e}` are both `[a] []`.
+	// zsh is the other column that keeps it (#4800).
+	s.BraceEmptyAlternativeIsAField = interp.Yes
 	// The one shell that strips a range endpoint's zeros — `{01..3}` is
 	// `1 2 3` — and takes a written step's sign at its word, so `{10..1..3}`
 	// is `10` alone and `{1..10..-3}` is `1`. A negative step that agrees

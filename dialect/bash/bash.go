@@ -1659,6 +1659,12 @@ func Semantics() interp.Semantics {
 	// parameter holds is an ordinary character: `e=a,b; echo {$e}` is the
 	// one word `{a,b}` and `echo {x,$e}` is `x a,b`.
 	s.BraceBodyReadAfterExpansion = interp.No
+	// An alternative that came to nothing is removed with the word it left
+	// empty: `f {a,}` is the one field `[a]`, `f {,}` is no field at all,
+	// and an alternative an expansion emptied goes the same way — `unset u;
+	// f {a,$u}` is `[a]`. ksh93 and zsh keep it. Measured on 5.3.20 and
+	// 3.2.57 alike, which agree (#4800).
+	s.BraceEmptyAlternativeIsAField = interp.No
 	// `{01..3}` is `01 02 03`; `{10..1..3}` is `10 7 4 1` and `{1..10..-3}`
 	// climbs anyway — the endpoints decide the direction and a step
 	// contributes magnitude alone, so `{3..1..-1}` stays `3 2 1`.

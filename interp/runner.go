@@ -4113,6 +4113,13 @@ type Runner struct {
 	// expand never reads this, and a dialect that does not declare the option
 	// has no way to move it (#1856).
 	noBraceExpand bool
+	// braceName arms the word about to be expanded as one of the names a
+	// brace fan made, for the one question whose answer depends on that: an
+	// alternative that came to nothing is a field in two of the four columns
+	// that have braces. It is spent by the expansion it arms, so an operand
+	// word nested inside the name is not read as a name of its own. See
+	// interp/braceemptyalt.go.
+	braceName bool
 
 	// globSuspended is pathname expansion switched off for one nested
 	// expansion, from the inside: the contexts where a word substitutes as

@@ -27,6 +27,11 @@ func braceBody(t *testing.T, src string, read Answer) (string, int) {
 		s.BraceRangeEndpointsExpanded = Yes
 		s.BraceOutputRereadAsText = No
 		s.BraceRescanEntersFailedGroup = No
+		// A produced body can hold an alternative that comes to nothing,
+		// which is its own axis and not this one's: pinned to the reading
+		// that removes it so that the rows here measure where the commas
+		// were read and not what an empty alternative leaves.
+		s.BraceEmptyAlternativeIsAField = No
 		// The redirection row reaches the target's own two axes, which are
 		// not this one's and must not be the thing that refuses it.
 		s.RedirectTargetIsAnOrdinaryWord = No
@@ -100,8 +105,9 @@ func TestABraceBodyIsReadAfterTheExpansionsInIt(t *testing.T) {
 		},
 		{
 			// The empty alternative between the two commas is dropped here
-			// under both readings, which is a question of its own and not
-			// this axis's — see the note in Semantics.BraceBodyReadAfterExpansion.
+			// under both readings, because BraceEmptyAlternativeIsAField is
+			// pinned above to the reading that removes it. That is a
+			// question of its own and not this axis's.
 			"two produced commas make three alternatives",
 			`e=a,,b; echo {$e}`, "a b", "{a,,b}",
 		},

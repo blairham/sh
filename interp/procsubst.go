@@ -1154,9 +1154,11 @@ func (r *Runner) holdsDescriptorOnto(p procSubPipe) bool {
 // CleanUp removes what this shell made for itself and hands back what it
 // borrowed from the process.
 //
-// The directory the named pipes went in, and the signal dispositions a `trap`
+// The directory the named pipes went in, the signal dispositions a `trap`
 // changed — see restoreDispositions for why those two belong together, and
-// why the second is the only process-wide state a script can still reach.
+// why the second is the only process-wide state a script can still reach —
+// the descriptor held on the shell's own directory, and the near ends of
+// every coprocess it started.
 // Finish calls it, so
 // a shell that ran to its end — a binary, a Session that was closed, a
 // Runner.Run that returned — has already had this done. It stays public for
@@ -1185,6 +1187,10 @@ func (r *Runner) CleanUp() {
 	// counts what is open after twenty-five shells have come and gone and
 	// does not wait for a collector.
 	r.dropDirectoryHold()
+	// And the near ends of every coprocess this shell started, which the
+	// table stopped naming when each was let go of and which nothing but a
+	// finalizer was closing. See closeCoprocEnds (#4499).
+	r.closeCoprocEnds()
 }
 
 // cleanUpAtEnd is CleanUp for the two places a shell stops being one.

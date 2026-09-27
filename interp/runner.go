@@ -2604,6 +2604,15 @@ type Runner struct {
 	// number, so a script that hands a bare descriptor number to a child for
 	// the child's own use is not served by this.
 	fds map[int]any
+	// coprocOwnEnds are the near ends of every coprocess this shell has
+	// started, by the number each was published at and the entry that was
+	// put there. Kept because the *table* entry is dropped when the
+	// coprocess is let go of and the file deliberately is not — see
+	// forgetCoprocFd — which leaves the only reference to an end nothing
+	// else names in the garbage collector's hands. CleanUp is where a
+	// Runner's life ends and is where they are closed; see
+	// closeCoprocEnds (#4499).
+	coprocOwnEnds []coprocNearEnd
 	// coproc is the pair of descriptors in that table that the running
 	// coprocess is reached by. Kept apart from the array a dialect may also
 	// publish them in, because one of the two shells with a coprocess

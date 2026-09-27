@@ -413,6 +413,13 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	}
 	for i := 0; i < last; i++ {
 		sub := r.clone()
+		if commandIsParenthesized(p.Cmds[i]) {
+			// A stage is a fork and a `( … )` standing as one is that fork,
+			// so the parentheses' own clone is not a second boundary — the
+			// same rule `( … ) &` follows, and measured on the same grid.
+			// See theForkIsTheParentheses.
+			sub.subshellDepth = r.subshellDepth
+		}
 		if r.bg != nil {
 			sub.part = &jobPart{job: r.bg}
 		}

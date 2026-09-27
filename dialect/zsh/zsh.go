@@ -6691,6 +6691,11 @@ func Apply(r *interp.Runner) {
 	// middle of it is the `kill -l` this shell already answered correctly
 	// (#4906).
 	registerTheSignalNames(r)
+	// And the three counters the shell keeps and names — the history event,
+	// how many subshells deep this is, and how long the terminal has been
+	// idle. See counters.go, and note that the second one is the name a
+	// probe's own apparatus changes (#4904).
+	registerTheCounters(r)
 	// And the four scalar pairs that are one parameter under two names —
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)

@@ -175,8 +175,12 @@ func (r *Runner) unhashNames(table unhashTable) []string {
 // with no complaint when nothing matches and 0 when something does. So the
 // status is the whole of the answer and there is no wording to give.
 func (r *Runner) unhashByPattern(patterns []string, table unhashTable) int {
-	removed := false
+	removed, refused := false, false
 	for _, pattern := range patterns {
+		if r.refusedSelectionPattern(pattern) {
+			refused = true
+			continue
+		}
 		o := r.patternOpts(pattern)
 		for _, name := range r.unhashNames(table) {
 			if !matchPattern(pattern, name, o) {
@@ -187,7 +191,7 @@ func (r *Runner) unhashByPattern(patterns []string, table unhashTable) int {
 			}
 		}
 	}
-	if removed {
+	if removed && !refused {
 		return 0
 	}
 	return 1

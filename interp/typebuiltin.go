@@ -129,6 +129,17 @@ type typeMode struct {
 	// noFuncs is `-f`: functions left out of the search — or, in the
 	// dialect where TypeFSaysTheFunctionBack answers yes, printed whole.
 	noFuncs bool
+	// link is `-s` and chain is `-S`: where the path a name resolved to
+	// itself leads, named after the sentence rather than inside it. One
+	// dialect spells them, through Semantics.TypeOptions, and both are the
+	// same walk read to two depths — see interp.Runner.SymlinkArrow.
+	//
+	// `-S` wins when both are written, in either order: measured on zsh
+	// 5.9.2 (`-f`, 2026-09-26), `type -sS c` and `type -Ss c` both write the
+	// whole chain. So this is not the later-letter rule `-t` and `-p` use,
+	// and the two are read separately for that reason.
+	link  bool
+	chain bool
 	// kindWins says the `-t` was written *after* the last of `-p` and `-P`,
 	// which is what decides between them. See typeLetterOrder.
 	kindWins bool
@@ -199,6 +210,8 @@ func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code i
 		path:       strings.ContainsRune(opts, 'p'),
 		pathSearch: strings.ContainsRune(opts, 'P'),
 		noFuncs:    strings.ContainsRune(opts, 'f'),
+		link:       strings.ContainsRune(opts, 's'),
+		chain:      strings.ContainsRune(opts, 'S'),
 		kindWins:   typeLetterOrder(opts),
 	}
 	return rest, m, 0
@@ -247,22 +260,16 @@ func (r *Runner) typeOneMode(name string, m typeMode) int {
 				return 0
 			}
 		}
-		return r.describeName(name, m.asked(), true, r.typeNotFoundWording(name))
+		return r.describeNameLinking(name, m.asked(), true, r.typeNotFoundWording(name), symlinkArrowFor(m))
 	}
-	return r.typeOne(name, m.asked())
-}
-
-// typeOne accounts for one name — as a sentence, or as `-t`'s bare kind —
-// and reports a status if it could not.
-//
-// The kinds are one dialect's words and every dialect's words at once: only
-// one shell in the panel has `-t` at all, so there is no second wording to
-// hold a field for. The measured shell also answers `alias`, which is out of
-// reach here for the same reason plain `type` never names one: whether
-// aliases expand is the parser's fact — see syntax.Dialect.ExpandAliases —
-// and the runner holds only the table.
-func (r *Runner) typeOne(name string, kind typeKind) int {
-	return r.describeName(name, kind, false, r.typeNotFoundWording(name))
+	// The plain account of one name — a sentence, or `-t`'s bare kind. The
+	// kinds are one dialect's words and every dialect's words at once: only
+	// one shell in the panel has `-t` at all, so there is no second wording
+	// to hold a field for. The measured shell also answers `alias`, which is
+	// out of reach here for the same reason plain `type` never names one:
+	// whether aliases expand is the parser's fact — see
+	// syntax.Dialect.ExpandAliases — and the runner holds only the table.
+	return r.describeNameLinking(name, m.asked(), false, r.typeNotFoundWording(name), symlinkArrowFor(m))
 }
 
 func (r *Runner) typeNotFoundWording(name string) string {
@@ -534,7 +541,12 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 			// letter changes how many rows there are, not how a row spells
 			// what it found. Measured 2026-09-19 — zsh's `type -a 'a b'` is
 			// `a b is '/…/a b'`, the same line its plain `type` writes.
-			r.printf("%s is %s\n", name, r.typeSentencePathWord(path))
+			//
+			// And the link letters reach every row, measured 2026-09-26:
+			// `type -sa c` writes the arrow the plain `-s` writes. The
+			// arrow follows the sentence rather than the quoted path, for
+			// the reason interp.Runner.SymlinkArrow gives.
+			r.printf("%s is %s%s\n", name, r.typeSentencePathWord(path), symlinkArrowFor(m)(r, path))
 		}
 	}
 	if found {
@@ -595,6 +607,7 @@ func (r *Runner) typeAllPaths(name string, m typeMode) int {
 	// before its own: the lookup hashes the name in one of the two columns
 	// that have a hashed sentence. See Runner.typeExternalSentence.
 	_, hashed := r.hashedCommandPath(name)
+	arrow := symlinkArrowFor(m)
 	if !r.reservedBuiltin(name) {
 		for _, path := range r.lookPathAll(name) {
 			found = true
@@ -608,9 +621,12 @@ func (r *Runner) typeAllPaths(name string, m typeMode) int {
 				// of the rows the search left, not for their paths.
 				r.printf("file\n")
 			case sentence:
-				r.printf("%s\n", r.typeExternalSentence(name, path, hashed))
+				// `-a` carries the link letters too, measured: `type -sa c`
+				// writes the same arrow the plain `-s` writes, on every row
+				// the search left.
+				r.printf("%s%s\n", r.typeExternalSentence(name, path, hashed), arrow(r, path))
 			default:
-				r.printf("%s\n", path)
+				r.printf("%s%s\n", path, arrow(r, path))
 			}
 		}
 	}
@@ -662,6 +678,23 @@ func (r *Runner) reportNameNotFound(msg string) {
 // `type`'s question with a complaint of its own for a name that is nothing —
 // the one line the two spell differently, so it arrives already worded.
 func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFound string) int {
+	return r.describeNameLinking(name, kind, skipFuncs, notFound, noSymlinkArrow)
+}
+
+// noSymlinkArrow is what a caller with no link letter to honor passes: a
+// resolution names its own path and nothing after it.
+func noSymlinkArrow(*Runner, string) string { return "" }
+
+// symlinkArrowFor is the tail the `-s` and `-S` letters ask for, as a function
+// of the path a name resolved to — nil-free so the plain callers stay plain.
+func symlinkArrowFor(m typeMode) func(*Runner, string) string {
+	if !m.link && !m.chain {
+		return noSymlinkArrow
+	}
+	return func(r *Runner, path string) string { return r.SymlinkArrow(path, m.chain) }
+}
+
+func (r *Runner) describeNameLinking(name string, kind typeKind, skipFuncs bool, notFound string, arrow func(*Runner, string) string) int {
 	dg := r.diag()
 	// The tables come first, as they do in every shell in the panel and as
 	// the parser does when it reads a line: an alias beats a function of the
@@ -741,7 +774,11 @@ func (r *Runner) describeName(name string, kind typeKind, skipFuncs bool, notFou
 			if r.unspecified {
 				return r.status
 			}
-			r.printf("%s\n", r.typeExternalSentence(name, path, hashedBefore))
+			// The arrow follows the sentence rather than the path inside
+			// it, which is what keeps a path with a space in it quoted and
+			// the resolution after it bare. Empty unless a letter asked and
+			// something on the way is a link.
+			r.printf("%s%s\n", r.typeExternalSentence(name, path, hashedBefore), arrow(r, path))
 			return 0
 		}
 	}

@@ -2691,8 +2691,12 @@ func (r *Runner) unsetFunctions(names []string, matching bool) int {
 // listing under the same letter has. One pattern matching is enough —
 // `unfunction -m 'f*' 'zz*'` with an `fa` defined is 0.
 func (r *Runner) unsetMatchingFunctions(patterns []string) int {
-	matched := false
+	matched, refused := false, false
 	for _, pattern := range patterns {
+		if r.refusedSelectionPattern(pattern) {
+			refused = true
+			continue
+		}
 		o := r.patternOpts(pattern)
 		// Collected before anything is removed, because the table being
 		// walked is the one being changed.
@@ -2704,7 +2708,7 @@ func (r *Runner) unsetMatchingFunctions(patterns []string) int {
 			r.removeFunction(name)
 		}
 	}
-	if !matched {
+	if !matched || refused {
 		return 1
 	}
 	return 0
@@ -2722,8 +2726,12 @@ func (r *Runner) unsetMatchingFunctions(patterns []string) int {
 // is a silent 1, and this reported success.
 func (r *Runner) unsetMatching(patterns []string) int {
 	status := 0
-	matched := false
+	matched, refused := false, false
 	for _, pattern := range patterns {
+		if r.refusedSelectionPattern(pattern) {
+			refused = true
+			continue
+		}
 		// Collected before anything is removed, because what is being
 		// walked is the tables themselves; and sorted, so that a refusal
 		// from one removal arrives in the same order every run.
@@ -2745,7 +2753,7 @@ func (r *Runner) unsetMatching(patterns []string) int {
 			}
 		}
 	}
-	if !matched && status == 0 {
+	if (!matched || refused) && status == 0 {
 		return 1
 	}
 	return status

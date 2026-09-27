@@ -529,7 +529,12 @@ func (r *Runner) readAliasPlusWords(args []string, known string) (rest []string,
 // expects and a name says one.
 func (r *Runner) aliasPatternListing(patterns []string, form aliasForm) int {
 	names := r.aliasNames(form.kind)
+	status := 0
 	for _, pattern := range patterns {
+		if r.refusedSelectionPattern(pattern) {
+			status = 1
+			continue
+		}
 		o := r.patternOpts(pattern)
 		for _, name := range names {
 			if matchPattern(pattern, name, o) {
@@ -537,7 +542,7 @@ func (r *Runner) aliasPatternListing(patterns []string, form aliasForm) int {
 			}
 		}
 	}
-	return 0
+	return status
 }
 
 // aliasOptionLetters is the set `alias` takes in this dialect, which is the
@@ -860,14 +865,21 @@ func biUnalias(r *Runner, _ context.Context, args []string) int {
 // answer a name that is not there gets in this dialect — measured — so the
 // status is about "nothing was removed" rather than about a name.
 func (r *Runner) unaliasByPattern(patterns []string, kind AliasKind) int {
-	status := 1
+	status, refused := 1, false
 	for _, pattern := range patterns {
+		if r.refusedSelectionPattern(pattern) {
+			refused = true
+			continue
+		}
 		o := r.patternOpts(pattern)
 		for _, name := range r.aliasNames(kind) {
 			if matchPattern(pattern, name, o) && r.removeAlias(name, kind) {
 				status = 0
 			}
 		}
+	}
+	if refused {
+		return 1
 	}
 	return status
 }

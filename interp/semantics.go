@@ -18901,6 +18901,38 @@ type Semantics struct {
 	// `bad option` it already is.
 	HashReadsOperandsAsPatterns Answer
 
+	// HashClearRefusesOperands makes `hash -r` with anything beside it a
+	// count error rather than "clear the table, then do that as well".
+	//
+	// There is no subset relationship here, which is what makes it an axis.
+	// Measured 2026-09-26 under `env -i PATH=/usr/bin:/bin`, one probe at a
+	// time, with `hash -r ls; hash` afterwards:
+	//
+	//	zsh 5.9.2     `hash:1: too many arguments`, 1, table untouched
+	//	bash 5.3.20   silent, 0, the entry is there
+	//	ksh93u+       silent, 0, the entry is there
+	//	dash 0.5.12   silent, 0
+	//
+	// So two of the columns read the letter and the operands as two actions
+	// one call may ask for, and the third reads the letter as the whole of
+	// the call.
+	//
+	// **Asked only where there is an operand beside the letter**, because
+	// `hash -r` on its own is 0 in every column and a dialect that has not
+	// answered must not be stopped over a line nobody disagrees about. The
+	// operand is what poses the question.
+	//
+	// It covers every operand the builtin takes, measured on the shell that
+	// refuses: a name, a `name=value`, and a `-m` pattern are each `too many
+	// arguments` at 1, and the table — the command one or, under `-d`, the
+	// named-directory one — is left exactly as it was. That last part is the
+	// half worth having, since the other reading does the destructive half of
+	// a command the shell declines to run (#4744).
+	//
+	// Other letters are not operands: `hash -r -m` with no pattern,
+	// `hash -rd`, `hash -L -r` and `hash -r -v` are all 0 there.
+	HashClearRefusesOperands Answer
+
 	// CommandHashIsTrusted runs the path the command hash holds without
 	// asking whether it is still there.
 	//
@@ -28132,6 +28164,11 @@ func PosixSemantics() Semantics {
 		// reason every extension is.
 		HashDefinesAnEntryFromAnAssignment: No,
 		HashReadsOperandsAsPatterns:        No,
+		// POSIX's `hash -r` "shall forget all remembered locations" and the
+		// same sentence goes on to describe the operands, so the standard's
+		// reading is that a call may do both. The majority of the panel
+		// agrees; the one that does not overrides.
+		HashClearRefusesOperands: No,
 		// POSIX says a shell "shall remember" the location and says nothing
 		// about re-checking it; the majority of the panel looks again, and
 		// the one that does not overrides. The letters past `-r` are bash's

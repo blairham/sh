@@ -3662,6 +3662,10 @@ func Semantics() interp.Semantics {
 	s.EmptyListTakesTheWord = interp.EmptyListReachWhatStandsBeforeIt
 	// The expand-first order, with dash and ksh93 (#1943).
 	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedWithTheCommand
+	// And the frozen name's own value is evaluated before the refusal, so
+	// `readonly r=1; r=$((1/0)) echo RAN` writes the division and never
+	// names `r` (#4685).
+	s.FrozenPrefixIsCheckedBeforeItsValue = interp.No
 	// A `*` or `@` subscript inside an expression is the slice, joined and
 	// then read as an expression: measured 2026-09-11 on 5.9.2, `typeset -A
 	// m; m[k]=9; $(( m[*] ))` is 9 and `a=(1+1); $(( a[*] * 3 ))` is 6.

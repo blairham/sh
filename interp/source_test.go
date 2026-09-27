@@ -80,6 +80,12 @@ func permissive() Semantics {
 	// interp/xtracearrayvalue_test.go (#1959).
 	s.TraceArrayLiteralShowsTheExpandedElements = No
 	s.TraceElementSubscriptIsEvaluated = No
+	// Whether a frozen name in a prefix is refused before its own value is
+	// evaluated, at the answer four of the five columns give: the value is
+	// evaluated and its failure is what is written. The suite that is
+	// *about* the axis sets both sides itself; see
+	// interp/frozenprefixvalue_test.go (#4685).
+	s.FrozenPrefixIsCheckedBeforeItsValue = No
 	// `readonly`'s kind letters, which POSIX does not give it and two of the
 	// panel's shells refuse outright — see Semantics.ReadonlyOptions. A suite
 	// asking what `readonly -a` *does* needs the letter to exist first, and

@@ -204,6 +204,19 @@ func (r *Runner) refusePrefixesEarly(assigns []*syntax.Assign, argv []string) bo
 		return false
 	}
 	r.prefixCheckedFirst = true
+	// And the values of those names before the refusal, in the column that
+	// checks the name ahead of the redirections and still evaluates what it
+	// was being given: BusyBox ash is on both sides of that pair, and writing
+	// the refusal here gave it bash's answer. The marker is taken in front of
+	// the expansion for the reason every other one is. See
+	// interp/frozenprefixvalue.go.
+	walk := r.beginPrefixWalk(assigns)
+	if r.expandTheFrozenPrefixValues(assigns) {
+		// The expansion's sentence is the whole of what the script is told,
+		// and the command is over: the refusal is never written.
+		r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv))
+		return true
+	}
 	_, stop := r.refusePrefixesNow(assigns, r.prefixCommandOf(argv), true)
 	return stop
 }

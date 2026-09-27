@@ -50,6 +50,14 @@ func testSemantics() Semantics {
 	// on the way to something else need an answer rather than a refusal.
 	s.RedirectsUseEveryTarget = No
 
+	// Whether a frozen name in an assignment prefix is refused before its own
+	// value is evaluated, at the answer four of the five columns give — the
+	// value runs and its failure is what is written. Every suite here that
+	// freezes a name on its way to something else needs an answer rather than
+	// a refusal; the suite that is *about* the axis sets both sides itself.
+	// See interp/frozenprefixvalue_test.go (#4685).
+	s.FrozenPrefixIsCheckedBeforeItsValue = No
+
 	// The mark in front of a value written in an output base, spelled as
 	// `base#` — the majority reading, and the one every test not about the
 	// C spellings needs answered rather than refused. See

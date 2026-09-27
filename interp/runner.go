@@ -7695,12 +7695,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// part of this walk — a marker taken after it would read a value
 		// that would not expand as something that had already failed.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst {
-			for _, a := range c.Assigns {
-				if !a.Operand && r.readonly[a.Name] {
-					r.expandWord(a.Value)
-				}
-			}
+		if !r.prefixCheckedFirst && r.expandTheFrozenPrefixValues(c.Assigns) {
+			// A frozen name's own value is what failed, in one of the four
+			// columns that evaluate it first: the expansion's sentence is
+			// the whole of what the script is told, the refusal is never
+			// written, and the command is over. See
+			// interp/frozenprefixvalue.go.
+			r.givesUpForAFailedPrefix(walk, prefixCommand{kind: prefixBeforeFunction})
+			return nil
 		}
 		refused, stop := r.refusePrefixes(c.Assigns, prefixCommand{kind: prefixBeforeFunction}, !r.expandErr)
 		if stop {
@@ -7904,6 +7906,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// the loop below because a refusal that costs the command must not
 		// have applied the names in front of it first.
 		kind := r.prefixCommandOf(argv)
+		// Taken here rather than below the refusal, because the frozen
+		// names' values are expanded between the two and a marker behind
+		// them would read a value that would not expand as something already
+		// on the record. The redirections have been opened since the marker
+		// runSimple took, and what they may have left is not this prefix's.
+		walk = r.beginPrefixWalk(c.Assigns)
+		if !r.prefixCheckedFirst && r.expandTheFrozenPrefixValues(c.Assigns) {
+			// What the frozen name was being given is what failed, in one of
+			// the four columns that evaluate it ahead of the refusal: its
+			// sentence is the whole of what the script is told, and the
+			// command is over. See interp/frozenprefixvalue.go.
+			r.givesUpForAFailedPrefix(walk, kind)
+			return nil
+		}
 		refused, stop := r.refusePrefixes(c.Assigns, kind, true)
 		if stop {
 			return nil
@@ -7919,8 +7935,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 		var undo []savedVar
 		var held []string
-		// Taken again for the reason the function route's is.
-		walk = r.beginPrefixWalk(c.Assigns)
+		// The marker was taken above the frozen names' values rather than
+		// here, so a value of theirs that would not expand is this walk's
+		// failure and gives the command up.
 		for _, a := range c.Assigns {
 			if r.prefixWalkFailed(walk) {
 				// Nothing behind a value that would not expand is expanded
@@ -8244,6 +8261,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// to have expanded below, because the order of the two is a dialect
 	// question and not this one's.
 	external := prefixCommand{kind: prefixBeforeExternal}
+	// Whether a frozen name's value is this route's to expand. The other
+	// three reach the question through expandTheFrozenPrefixValues; this one
+	// expands every value on its way to the child's environment, so here it
+	// takes the shape of a skip. See interp/frozenprefixvalue.go.
+	frozenValueSpent := r.frozenPrefixValueIsSpentForAChild(c.Assigns)
+	if r.unspecified {
+		return nil
+	}
 	// The shell the prefix's stores land in. An external command is run by a
 	// **child**, and where a hook is watching one of these names the store is
 	// the child's — see Runner.prefixChildForTheDisciplines.
@@ -8295,12 +8320,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			_ = r.prefixValue(a)
 			continue
 		}
-		if r.prefixCheckedFirst && r.readonly[a.Name] {
-			// Refused before anything was expanded, which is what the order
-			// axis buys: the value is never evaluated, so `x=$((1/0)) cmd`
-			// says nothing about the division in the column that checks
-			// first. The name keeps its value and the child sees that, the
-			// same as below.
+		if frozenValueSpent && r.readonly[a.Name] {
+			// Refused without its value ever being evaluated, so
+			// `x=$((1/0)) cmd` says nothing about the division in the column
+			// that answers so — or already evaluated by the early check,
+			// where a second expansion here would run a substitution twice.
+			// The name keeps its value and the child sees that, the same as
+			// below. See interp/frozenprefixvalue.go.
 			continue
 		}
 		if r.subscriptedPrefixDropped(a) {

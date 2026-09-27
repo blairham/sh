@@ -3080,6 +3080,10 @@ func Semantics() interp.Semantics {
 	// *succeeds*: `V=1 export > /dev/null 2>&1` writes the complaint here
 	// because the check happens before the `2>&1` is in force.
 	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedFirstWhereItPersists
+	// And whatever the order against the redirections, the frozen name's
+	// own *value* is evaluated first and its failure is what is written —
+	// `readonly r=1; r=$((1/0)) echo RAN` is the division here (#4685).
+	s.FrozenPrefixIsCheckedBeforeItsValue = interp.No
 	// The same as the bash column: measured 2026-09-11 on ksh93u+,
 	// `typeset -A m; m[k]=9; $(( m[*] ))` is 0.
 	s.ArithWholeArraySubscriptIsTheSlice = interp.No

@@ -2990,6 +2990,11 @@ func Semantics() interp.Semantics {
 	// division, and `x=2 /bin/echo RAN >/nope/f` names the name and then the
 	// file where dash, ksh93 and zsh name the file alone (#1943).
 	s.PrefixToAFrozenNameIsCheckedFirst = interp.FrozenPrefixCheckedFirst
+	// And the *value* the frozen name was being given is never evaluated
+	// here either: `readonly r=1; r=$((1/0)) echo RAN` is the refusal and
+	// nothing about the division, where the other four columns write the
+	// division and never the name (#4685).
+	s.FrozenPrefixIsCheckedBeforeItsValue = interp.Yes
 	// The brackets of an arithmetic subscript hold an expression, and `*` is
 	// not one: measured 2026-09-11 on 5.3.15, `typeset -A m; m[k]=9;
 	// $(( m[*] ))` is 0, where the expansion `"${m[*]}"` is 9.

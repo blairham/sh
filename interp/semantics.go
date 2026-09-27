@@ -1410,6 +1410,39 @@ type Semantics struct {
 	// the panel parts at: an external command, a special builtin and a
 	// function are all refused in all six columns. See #1219.
 	PrefixToARegularBuiltinIsRefused Answer
+
+	// FrozenPrefixIsCheckedBeforeItsValue refuses a frozen name in an
+	// assignment prefix **without evaluating what it was being given**, so
+	// that a value which would not expand is never heard from.
+	//
+	// Yes in bash alone. Measured 2026-09-26 from a script file under `env -i
+	// PATH=/usr/bin:/bin` with a scratch HOME, `readonly r=1` on the line
+	// before and `echo "st=$?"` on the line after — the same command word in
+	// every row, `echo RAN`:
+	//
+	//	r=$((1/0)) echo RAN
+	//	bash 5.3.20          r: readonly variable, RAN, 0
+	//	ksh93u+ 2012-08-01   1/0: divide by zero, no RAN, 1
+	//	dash 0.5.12          arithmetic expression: division by zero
+	//	zsh 5.9.2            division by zero
+	//	BusyBox ash 1.37.0   divide by zero
+	//
+	// So four columns evaluate the value and report *its* failure, and never
+	// mention the frozen name; one reports the name and never evaluates
+	// anything. The same split shows with a value that merely has a side
+	// effect — `r=$(echo R >&2) echo RAN` writes `R` in the four and nothing
+	// in bash — so it is an ordering fact and not a fact about failures.
+	//
+	// **Not the same question as
+	// [Semantics.PrefixToAFrozenNameIsCheckedFirst]**, which is the name
+	// against the *redirections*, and the two partition the panel
+	// differently: that one puts bash and BusyBox ash together, splits ksh93
+	// off by the kind of command, and leaves dash and zsh on the third
+	// answer. This one is bash against the other four, on every kind of
+	// command. Answering it with the other axis is what gave a frozen name's
+	// refusal to four dialects that name the expansion (#4685).
+	FrozenPrefixIsCheckedBeforeItsValue Answer
+
 	// PrefixRefusalFatality is what a *reported* refusal of an assignment
 	// prefix costs the script. Four answers, two of them keyed on the kind of
 	// command the prefix stood in front of and keyed on different lines. See

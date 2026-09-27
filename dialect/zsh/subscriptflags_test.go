@@ -307,22 +307,27 @@ func TestTheHookTableSearchAPluginManagerReaches(t *testing.T) {
 	}
 }
 
-// `(A)` in this dialect: nothing where the expansion does not assign, and a
-// refusal naming the flag where it does.
+// `(A)` in this dialect: nothing where the expansion does not assign, an
+// array where it does, and a refusal naming the doubled letter that asks for
+// a table.
 func TestTheArrayFlagIsThisDialects(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{`v="a|b"; printf "[%s]" "${(@Akons:|:u)v}"`, `[a][b]`},
 		{`v="a b"; printf "[%s]" "${(A)#v}"`, `[3]`},
 		{`v=abc; printf "[%s]" "${(AA)v}"`, `[abc]`},
+		{`printf "[%s]" "${(A)u=x y}" "${(t)u}" "${#u}"`, `[x y][array][1]`},
+		{`: ${(A)=u=x y}; printf "[%s]" "${(t)u}" "${#u}" "${u[1]}" "${u[2]}"`, `[array][2][x][y]`},
+		{`: ${(A)u=}; printf "[%s]" "${(t)u}" "${#u}"`, `[array][1]`},
+		{`: ${(A)u[2]=x y}; printf "[%s]" "${(t)u}" "${#u}" "${u[2]}"`, `[array][2][x y]`},
 	} {
 		out, st := runZsh(t, t.TempDir(), tc.src)
 		if out != tc.want || st != 0 {
 			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
 		}
 	}
-	out, st := runZsh(t, t.TempDir(), `printf "[%s]" "${(A)u=x y}"`)
-	if !strings.Contains(out, "(A) expansion flag is not implemented for an assignment") || st == 0 {
-		t.Errorf(`${(A)u=x y} = %q (status %d), want the assignment refused`, out, st)
+	out, st := runZsh(t, t.TempDir(), `printf "[%s]" "${(AA)u=k v}"`)
+	if !strings.Contains(out, "(AA) expansion flag is not implemented for an assignment") || st == 0 {
+		t.Errorf(`${(AA)u=k v} = %q (status %d), want the assignment refused`, out, st)
 	}
 }
 

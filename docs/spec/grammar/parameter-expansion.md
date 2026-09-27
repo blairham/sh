@@ -3582,6 +3582,7 @@ zsh 5.9.2:
 | `unset u; ${(A)u=x y}` | `x y`, and `u` is `typeset -a u=( 'x y' )` | `u` is a scalar |
 | `unset u; ${(A)u::=x y}` | the same array | a scalar |
 | `unset u; ${(AA)u=k v}` | `bad set of key/value pairs …` | assigns a scalar |
+| `unset u; ${(A)=u=x y}` | `typeset -a u=( x y )`, the `=` splitting | a scalar |
 
 So the flag changes nothing at all unless the expansion carries an
 assignment operator — `=`, `:=` or `::=` — and where it does, it changes
@@ -3591,10 +3592,44 @@ expansion substitutes.
 **Both halves are answered here, and only one of them by doing
 something.** Every reading in the first block is carried by leaving the
 value alone, which is what the six lines a real plugin manager writes
-need; an expansion that assigns is refused by name —
-`${(A)u=x y}: the (A) expansion flag is not implemented for an
-assignment` — because a scalar left where the script asked for an array
-is read as empty by the first `${u[2]}` and by nothing before it.
+need; the assignment is the other half and stores an array (#4453).
+
+**The array is the value's own fields**, and the rest of the group runs
+on what the expansion *yields* and never reaches the store. Measured
+2026-09-26 on zsh 5.9.2, `-f`:
+
+| written | the array left behind |
+| --- | --- |
+| `unset u; ${(A)u=x y}` | one element, `x y` |
+| `unset u; ${(A)=u=x y}` | two, the `=` splitting the value |
+| `unset u; ${(A)=u="x y"}` | one — quoting protects, as it does anywhere |
+| `s="p q"; ${(A)u=$s}` | one, this shell not splitting an expansion |
+| `s="p q"; ${(A)=u=$s}` | two, the `=` turning that on |
+| `a=(1 2); ${(A)u=$a}` | two, the value already being several words |
+| `unset u; ${(As:,:)u="a,b"}` | two — the `(s)` split is of the *text* and quoting does not protect |
+| `unset u; ${(AU)u=x y}` | one element, `x y`, in **lower** case |
+| `a=(1 2); ${(Aj:-:)u=$a}` | two elements, unjoined |
+| `unset u; ${(A)u[2]=x y}` | two, the value in the second: a subscript aims at an element |
+| `u=set; ${(A)u=x y}` | nothing — `=` assigns only an unset name |
+
+The last four rows are the discriminating ones: a store built from the
+finished value rather than from the operand's fields would upper-case,
+join, replace the array and assign over the scalar respectively.
+
+An enclosing quote does not protect the value either — `"${(A)=u=x y}"`
+stores two elements — because the quoting the operand's spans carry there
+is the *enclosing* word's. Nothing inside the operand can be told from it,
+so `"${(A)=u="x y"}"`, quotes inside a quoted expansion, is one element
+in that shell and two here. It is the one shape of the store not carried.
+
+**What is still refused by name is the doubled letter and the pair with
+`(P)`.** `(AA)` asks for an *association*, so the fields have to pair off
+and an odd count has a refusal of its own — `${(AA)u=k v}` is
+`bad set of key/value pairs for associative array` there — and `(AP)`
+puts the array behind an indirection whose target is a text rather than a
+name. Neither measurement is carried, and a table or a target quietly
+left a scalar is read as empty by the first `${u[k]}` and by nothing
+before it.
 
 The unit test asserts the first block as *pairs* rather than as recorded
 values: each row runs the expansion with the flag and without it and

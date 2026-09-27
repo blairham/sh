@@ -1153,6 +1153,17 @@ func (r *Runner) splittingTheSubstitutedWord(s syntax.Span, sp splitPolicy) func
 type splitLiterals struct {
 	on     bool
 	answer Answer
+	// evenQuoted splits a literal span whose quoting is the *enclosing*
+	// word's rather than its own. Only an `(A)` assignment arms it, and only
+	// where the whole expansion was written inside quotes: the operand's
+	// spans inherit that quoting, so without this `"${(A)=u=x y}"` would
+	// store one element where zsh 5.9.2 stores two. It is off for every
+	// other caller, where the span's quoting is the span's own.
+	//
+	// The cost is the one shape the span model cannot tell apart —
+	// `"${(A)=u="x y"}"`, quotes inside a quoted expansion — which this
+	// splits and that shell does not. See interp/arrayassignflag.go.
+	evenQuoted bool
 }
 
 // splits reports whether this span's text is literal text of an armed word
@@ -1162,7 +1173,10 @@ type splitLiterals struct {
 // separator in it is one field either way — which is the guard
 // expansionResult puts in front of the same question.
 func (sl splitLiterals) splits(r *Runner, s syntax.Span, text string) bool {
-	if !sl.on || s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+	if !sl.on || s.Kind != syntax.Literal {
+		return false
+	}
+	if s.Quoting != syntax.Unquoted && !sl.evenQuoted {
 		return false
 	}
 	ifs, _ := r.ifs()

@@ -252,7 +252,20 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		r.expandErr = true
 		return nil, false, false, false
 	}
-	if strings.ContainsRune(e.Flags, 'A') && isAssignOp(e.Op) {
+	if arrayAssignFlag(e) && isAssignOp(e.Op) && strings.ContainsRune(e.Flags, 'P') {
+		// `(A)` beside a `(P)`: the array would be the *target* the
+		// indirection names, and that target is a text rather than a name —
+		// it may spell an element or a reference, each of which stores
+		// differently. Measured on zsh 5.9.2, `v=tgt; ${(AP)v::=x y}` leaves
+		// `tgt` a one-element array, and the shapes beside it are a
+		// measurement this does not carry. Named rather than stored as a
+		// scalar, which is what the pair did before the single letter's
+		// assignment was carried at all.
+		r.diagf("${%s}: the (A) expansion flag is not implemented beside a (P) for an assignment\n", e.Src)
+		r.expandErr = true
+		return nil, false, false, false
+	}
+	if assocAssignFlag(e) && isAssignOp(e.Op) {
 		// `(A)` is the one flag whose whole job is a *side effect*: it makes
 		// the name an array — `(AA)` an association — where the expansion
 		// assigns, and does nothing at all where it does not. Measured on
@@ -264,19 +277,26 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		//	v="a b"; "${(A)v}"     one field, exactly as "${v}"
 		//	v="a|b"; ${(As:|:)v}   `a b`, exactly as ${(s:|:)v}
 		//
-		// So the flag is carried by *not* acting on the six lines the panel's
-		// plugin managers actually write, which are all the second kind, and
-		// the assignment it exists for is refused by name here rather than
-		// left to look like it worked: an assignment silently making a
-		// scalar where the script asked for an array is the shape a later
-		// `${u[2]}` reads as empty.
+		// The single letter's assignment is carried now — see
+		// interp/arrayassignflag.go, which is the other half of the rows
+		// above. **The doubled letter is not**, and that is a narrowing
+		// rather than an omission: `(AA)` makes the name an *association*,
+		// so the value's fields have to pair off and an odd count is a
+		// refusal with wording of its own — `${(AA)u=k v}` on zsh 5.9.2 is
+		// `bad set of key/value pairs for associative array`, the one word
+		// `k v` being an odd number of fields, where `${(AA)=u=k v}` splits
+		// into two and builds the table. That is a separate measurement and
+		// this does not carry it, so the letter is named rather than left to
+		// look like it worked: an assignment silently making an indexed
+		// array where the script asked for a table is the shape a later
+		// `${u[k]}` reads as empty.
 		//
 		// Refused for the *operator* rather than for the assignment actually
-		// firing, which is deliberate. `${(A)u=x y}` assigns nothing when `u`
-		// is already set, so a check on whether it fired would refuse a line
-		// on one run and carry it on the next, and the reader would have
+		// firing, which is deliberate. `${(AA)u=k v}` assigns nothing when
+		// `u` is already set, so a check on whether it fired would refuse a
+		// line on one run and carry it on the next, and the reader would have
 		// nothing to go on. The refusal is a statement about the construct.
-		r.diagf("${%s}: the (A) expansion flag is not implemented for an assignment\n", e.Src)
+		r.diagf("${%s}: the (AA) expansion flag is not implemented for an assignment\n", e.Src)
 		r.expandErr = true
 		return nil, false, false, false
 	}
@@ -385,7 +405,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// Rule 7: the operator, applied to the value at this level. Measured:
 	// the flags apply to what the operator leaves — `${(U)x:-def}` is DEF,
 	// `${(U)u:=def}` assigns def and substitutes DEF.
-	words, isList, ok, nothing := r.applyFlagOp(e, words, set, isList, indirect)
+	words, isList, ok, nothing := r.applyFlagOp(e, words, set, isList, indirect, quoted)
 	if !ok {
 		return nil, false, false, false
 	}
@@ -695,7 +715,31 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 // One function for both operators so the two cannot drift: the only
 // difference between them is *whether* this runs, which is the caller's
 // question and not this one's.
-func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarget) ([]string, bool, bool) {
+func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarget, quoted bool) ([]string, bool, bool) {
+	// The `(A)` flag makes this an *array* assignment over the words the
+	// value comes to, and only where the name itself is what is being
+	// written: a `(P)` has moved the name along and a written subscript aims
+	// at one element, and neither of those is the array. The branch is taken
+	// before the text is built, because the operand is expanded to fields
+	// there instead and a command substitution in it must run once. See
+	// interp/arrayassignflag.go.
+	if arrayAssignFlag(e) && indirect == nil && !writesOneElement(e, r) {
+		elems := r.assignedArrayElements(e, quoted)
+		if !r.assignableTarget(e.Op, e.Name) {
+			return nil, false, false
+		}
+		r.setArray(e.Name, elems)
+		if quoted {
+			// One word, the elements joined — measured with `a=(1 2)`,
+			// `print -rl -- "${(A)u=$a}"` is the one line `1 2`. So the
+			// yield joins under quotes the way `$*` does and not the way a
+			// quoted `${a[@]}` does, which would keep a field each.
+			return []string{strings.Join(elems, " ")}, false, true
+		}
+		// Unquoted, the elements are the fields: `print -rl -- ${(A)u=$a}`
+		// is two lines where a joined word would be one.
+		return elems, true, true
+	}
 	v := r.joinWord(e.Arg)
 	switch {
 	case indirect != nil:
@@ -706,7 +750,7 @@ func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarge
 		if !r.assignIndirect(e.Name, indirect, v) {
 			return nil, false, false
 		}
-	case e.Index != nil && !r.wholeArrayIndex(e):
+	case writesOneElement(e, r):
 		r.assignSubscript(e, v)
 	default:
 		// The name check, through the same door the route without a flag
@@ -733,6 +777,15 @@ func (r *Runner) assignThroughFlags(e *syntax.ParamExpr, indirect *indirectTarge
 // both leave `typeset -a u=( 'x y' )`.
 func isAssignOp(op syntax.ParamOp) bool {
 	return op == syntax.ParamAssign || op == syntax.ParamAssignAlways
+}
+
+// writesOneElement reports whether a written subscript aims this assignment
+// at one element rather than at the name. One reading in two places, because
+// the `(A)` branch above and the subscript branch below have to agree about
+// which of them a `${(A)u[2]=x y}` belongs to — measured, it is the element's:
+// zsh 5.9.2 leaves `u` a two-element array with `x y` in the second.
+func writesOneElement(e *syntax.ParamExpr, r *Runner) bool {
+	return e.Index != nil && !r.wholeArrayIndex(e)
 }
 
 // flagKeepsFields reports whether a double-quoted result keeps one field per
@@ -1329,7 +1382,7 @@ func substitutedNothing(e *syntax.ParamExpr, words []string, fired bool) bool {
 // from the outside would have to re-derive `fires`, and a second reading of
 // which side ran is how the two come apart.
 func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bool,
-	indirect *indirectTarget,
+	indirect *indirectTarget, quoted bool,
 ) ([]string, bool, bool, bool) {
 	fires := !set
 	if e.Colon {
@@ -1344,14 +1397,14 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		}
 	case syntax.ParamAssign:
 		if fires {
-			w, l, ok := r.assignThroughFlags(e, indirect)
+			w, l, ok := r.assignThroughFlags(e, indirect, quoted)
 			return w, l, ok, false
 		}
 	case syntax.ParamAssignAlways:
 		// No test, so the assignment is the only branch there is. The flags
 		// still apply to what is substituted and not to what is stored:
 		// measured, `${(U)v::=abc}` is `ABC` and leaves `abc` behind.
-		w, l, ok := r.assignThroughFlags(e, indirect)
+		w, l, ok := r.assignThroughFlags(e, indirect, quoted)
 		return w, l, ok, false
 	case syntax.ParamAlternate:
 		if fires {

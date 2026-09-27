@@ -1813,9 +1813,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// while leaving the shape that lost it — a valueless `typeset -g n`
 		// still brought no name into being, which is the whole of a
 		// `typeset -gA a b c` setup line (#989).
-		fresh := false
+		// True until a shadow says otherwise, for the reason shadow's own
+		// no-scope case returns it: a declaration that makes no binding —
+		// `typeset -g` — is writing over whatever is standing there.
+		fresh, redeclared := false, true
 		if !df.global {
-			fresh = r.shadowTypeset(name)
+			fresh, redeclared = r.shadowTypeset(name)
 		}
 		// And a name that is already a **reference** is not what the rest of
 		// this operand is about: the attributes, the value and the freeze all
@@ -1941,7 +1944,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				// binding at all — `typeset -g v=4` through a reference
 				// really does write the shell's own cell, in bash and here
 				// alike.
-				fresh = r.declarationThroughAReferenceShadowsTheTarget(name, fresh, r.shadowTypeset)
+				fresh, redeclared = r.declarationThroughAReferenceShadowsTheTarget(name, fresh, redeclared, r.shadowTypeset)
 			}
 		}
 		// Attributes after the shadow, and ahead of the value: `-i` changes
@@ -2218,7 +2221,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				return r.status
 			}
 		default:
-			if r.valuelessDeclarationLists(name, f, fresh) {
+			if r.valuelessDeclarationLists(name, f, redeclared) {
 				// Said back and nothing more: the value is unchanged, which
 				// is why this does not return — the branch below still runs
 				// and still decides nothing here.
@@ -5606,13 +5609,16 @@ func (r *Runner) declarationShadowRefused(name string) bool {
 //
 // The result reports whether this call is what took the scope's copy — see
 // shadow, and declareEmpty, which is the one caller that needs to know.
-func (r *Runner) shadowTypeset(name string) (fresh bool) {
+func (r *Runner) shadowTypeset(name string) (fresh, redeclared bool) {
 	if len(r.scopes) == 0 {
-		return false
+		return false, true
 	}
 	if !r.scopes[len(r.scopes)-1].keyword &&
 		r.ask(r.sem().TypesetLocalNeedsKeywordFunction, "`typeset` needing a keyword-defined function to declare a local") {
-		return false
+		// No binding is made, so whatever the name holds it is holding
+		// already — the same answer the no-scope case gives and for the same
+		// reason.
+		return false, true
 	}
 	return r.shadow(name)
 }
@@ -5620,13 +5626,39 @@ func (r *Runner) shadowTypeset(name string) (fresh bool) {
 // shadow saves a name in the innermost scope so the function's exit puts it
 // back, which is what makes a declaration local.
 //
-// The result reports whether the copy was taken *here*: with it, the cell the
-// declaration is about to write is new and holds nothing, whatever the outer
-// name held. A second declaration of the same name in the same scope finds
-// the copy already made and is writing over a cell that is its own.
-func (r *Runner) shadow(name string) (fresh bool) {
+// The first result reports whether the copy was taken *here*: with it, the
+// cell the declaration is about to write is new and holds nothing, whatever
+// the outer name held. A second declaration of the same name in the same
+// scope finds the copy already made and is writing over a cell that is its
+// own.
+//
+// The second reports whether the binding this declaration writes is one it is
+// **not** making — a redeclaration — which used to be read straight off the
+// first as `!fresh`.
+// They part over one of the shell's own ties: `typeset PATH` displaces `path`
+// with it, so a `typeset path` after it finds the copy made — the cell is not
+// fresh, and measurably so, since it is still holding what the mirror put
+// there — while nothing has declared `path`. Measured 2026-09-27 on zsh
+// 5.9.2 under `-f` from a script file:
+//
+//	f(){ typeset PATH=/x; typeset path; print "n=$#path [$path]" }
+//	                                        n=1 [/x]   — the value stands
+//	f(){ typeset path; print "n=$#path" }   n=0        — a fresh cell
+//
+// So the *value* side wants the first answer and the listing wants the
+// second: a valueless declaration writes a held name back only over a
+// binding it is not making, and the reference writes nothing for the pair
+// above where this shell wrote `path=( ” )` (#4890).
+//
+// With no scope at all there is no binding to make and nothing to mirror, so
+// every declaration there is over a standing name: the second answer is true,
+// which is what it has always been as `!fresh`. That branch is reachable and
+// measured rather than reasoned — `local` is the one word that gets here
+// without a scope, and `local v; local v` at the top level writes `v=”` in
+// the reference, as does `v=hi; local v`.
+func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 	if len(r.scopes) == 0 {
-		return false
+		return false, true
 	}
 	sc := r.scopes[len(r.scopes)-1]
 	if r.declaringPrivate {
@@ -5650,6 +5682,7 @@ func (r *Runner) shadow(name string) (fresh bool) {
 	// check below for the reason the private mark above is: the mirror may
 	// have displaced the cell already, and a later `typeset path` on its own
 	// line is still a local declaration of `path`. See scope.tieMirrorOnly.
+	overAMirror := sc.tieMirrorOnly[name]
 	delete(sc.tieMirrorOnly, name)
 	if _, seen := sc.saved[name]; !seen {
 		fresh = true
@@ -5844,7 +5877,10 @@ func (r *Runner) shadow(name string) (fresh bool) {
 	// value under two names and so cannot have one of them saved alone. See
 	// tielocal.go.
 	r.shadowTiedHalf(name)
-	return fresh
+	// A copy that was already here and that nothing but the partner's mirror
+	// had put there is not a redeclaration: this is the first declaration of
+	// *this* name, even though the cell is not fresh.
+	return fresh, !fresh && !overAMirror
 }
 
 // declarationUtilities are the commands whose `name=value` arguments are

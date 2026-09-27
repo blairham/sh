@@ -180,3 +180,141 @@ func TestAFrozenTieTakesTheScalarHalfsValue(t *testing.T) {
 		})
 	}
 }
+
+// A declaration of the half the mirror displaced is that name's first, not a
+// redeclaration, so it writes nothing back — see Runner.shadow, where the two
+// answers `fresh` used to carry part company (#4890).
+//
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
+// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME.
+func TestADeclarationOverATieMirrorIsNotARedeclaration(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the array half after the scalar was declared",
+			`f(){ typeset PATH; typeset path; print "${(t)path}" }; f`,
+			"array-local-tied-special\n",
+		},
+		{
+			"the scalar half after the array was declared",
+			`f(){ typeset path; typeset PATH; print "${(t)path}" }; f`,
+			"array-local-tied-special\n",
+		},
+		// The controls, and they are the whole of what keeps the listing rule
+		// itself intact: a genuine second declaration still writes the name
+		// back, on a tied name and an ordinary one alike, and so does one at
+		// the top level where there is no binding to be making.
+		{
+			"a real redeclaration of the tied name still lists",
+			`f(){ typeset path; typeset path; print "${(t)path}" }; f`,
+			"path=(  )\narray-local-tied-special\n",
+		},
+		{
+			"a real redeclaration of an ordinary name still lists",
+			`f(){ typeset v; typeset v; print "${(t)v}" }; f`,
+			"v=''\nscalar-local\n",
+		},
+		{
+			"and of the scalar half",
+			`f(){ typeset PATH; typeset PATH; print "${(t)PATH}" }; f`,
+			"PATH=''\nscalar-local-tied-special\n",
+		},
+		{
+			"the top level lists, having no binding to make",
+			`typeset PATH; typeset path; print "${(t)path}"`,
+			"PATH=/usr/bin:/bin\npath=( /usr/bin /bin )\narray-tied-special\n",
+		},
+		{
+			"one declaration on its own writes nothing",
+			`f(){ typeset path; print "${(t)path}" }; f`,
+			"array-local-tied-special\n",
+		},
+		// And the exemption is spent by the declaration that uses it: the
+		// mark the mirror left is consumed, so a *third* line naming either
+		// half is a redeclaration again and lists once — not twice, which is
+		// what a shell that never cleared the mark would do, and not never,
+		// which is what one that read the mark for every later line would.
+		{
+			"a second declaration of the displaced half lists again",
+			`f(){ typeset PATH; typeset path; typeset path; print "${(t)path}" }; f`,
+			"path=( '' )\narray-local-tied-special\n",
+		},
+		{
+			"and the partner, whose own mark the first line spent",
+			`f(){ typeset PATH; typeset path; typeset PATH; print "${(t)PATH}" }; f`,
+			"PATH=''\nscalar-local-tied-special\n",
+		},
+		// A second of the shell's own pairs, which says the rule is about the
+		// mirror and not about `path` in particular.
+		{
+			"the FPATH pair writes nothing either",
+			`f(){ typeset FPATH; typeset fpath; print "${(t)fpath}" }; f`,
+			"array-local-tied-special\n",
+		},
+		// A tie the *script* made is not one the shell mirrors, so nothing
+		// here is exempt and nothing here changes: the control that says the
+		// exemption did not widen to every tie.
+		{
+			"a script's own tie is untouched by any of this",
+			`typeset -T TT tt; f(){ typeset TT; typeset tt; print "${(t)tt}" }; f`,
+			"scalar-local\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q status %d, want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the value the mirror left is still standing, which is what says this is
+// a *listing* fix and not the cell being made fresh. A declaration over a
+// mirror keeps what the partner put there; a first declaration of the name
+// with no mirror in front of it does not.
+func TestADeclarationOverATieMirrorKeepsTheValue(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"over the mirror", `f(){ typeset PATH=/x; typeset path; print "n=$#path [$path]" }; f`, "n=1 [/x]\n"},
+		{"with no mirror", `f(){ typeset path; print "n=$#path [$path]" }; f`, "n=0 []\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q status %d, want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// `local` at the top level reaches the shadow that makes no binding at all,
+// which is the second place the redeclaration answer cannot be read off
+// `fresh` — there is no scope, so nothing is fresh and everything is standing
+// already.
+//
+// Its own test because `local` is the one word that gets there: every other
+// caller of the shadow with no scope carries an attribute letter, so it never
+// asks the listing question. Without these rows the branch was a reading
+// nothing could contradict.
+func TestLocalAtTheTopLevelListsAHeldName(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a second local of the same name", `local v; local v; print "${(t)v}"`, "v=''\nscalar\n"},
+		{"a local over a name already holding", `v=hi; local v; print "${(t)v}"`, "v=hi\nscalar\n"},
+		{
+			"and the mirror pair, which has no binding to be making either",
+			`local PATH; local path; print "${(t)path}"`,
+			"PATH=/usr/bin:/bin\npath=( /usr/bin /bin )\narray-tied-special\n",
+		},
+		{
+			"while inside a function the same pair writes nothing",
+			`f(){ local PATH; local path; print "${(t)path}" }; f`,
+			"array-local-tied-special\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q status %d, want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

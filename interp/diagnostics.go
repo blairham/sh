@@ -1618,6 +1618,16 @@ type Diagnostics struct {
 	// default below.
 	MathFunctionStringArity string
 
+	// ReadOnlyOneArray is `read -A` given a second operand, in the dialect
+	// that refuses the line rather than reading into the first name — see
+	// Semantics.ReadArrayTakesOneNameOnly. No verbs. Measured 2026-09-26 on
+	// zsh 5.9.2: `only one array argument allowed`, status 1, with nothing
+	// read and no operand touched.
+	//
+	// One dialect refuses, so there is one wording; empty is the default
+	// below, which no shell in the panel says.
+	ReadOnlyOneArray string
+
 	// CoprocessAlreadyRunning is a second `cmd |&` started while the first
 	// coprocess is still running, in the dialect that spells a coprocess as
 	// an operator. ksh93 says `process already exists` and it is fatal —

@@ -1357,6 +1357,10 @@ func Semantics() interp.Semantics {
 	// name check and not the letter (#3881).
 	s.ExportOrReadonlyTakesAReferenceToAnElement = interp.No
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
+	// unanswered ReadArrayTakesOneNameOnly: this shell's array letter is
+	// `-a` and takes its name as the option's own argument, so every operand
+	// after it is an ordinary name to fill and there is no second array
+	// operand to judge. Measured 2026-09-26 on bash 5.3.
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.Yes

@@ -245,6 +245,25 @@ func extendedRenders(v string) bool {
 	return found
 }
 
+// QuoteControlCaret is the `$'…'` spelling a value moves into when single
+// quotes cannot carry it back out of a listing, and reports whether it needed
+// one at all.
+//
+// Exported for a listing written in a dialect package — `zstyle -L`, whose
+// values a script reads back as the command that made them, and where a raw
+// NUL turns the whole output binary. It is the same question `${(q+)v}` asks
+// and is answered by the same two helpers, so the builtin and the flag cannot
+// come to disagree about which bytes have a name. Measured against zsh 5.9.2
+// on 2026-09-26 through the builtin: `con<NUL>text` is `$'con\C-@text'`,
+// `m<0x80>y` is `$'m\M-\C-@y'`, and `héx` — whose high bytes are a valid
+// rune — is written bare.
+func QuoteControlCaret(v string) (string, bool) {
+	if !extendedRenders(v) {
+		return v, false
+	}
+	return quoteExtendedRendered(v), true
+}
+
 // quoteExtendedRendered is the `$'…'` spelling the whole value moves into.
 //
 // The vocabulary is the caret one and not `qqqq`'s octal, which is what makes

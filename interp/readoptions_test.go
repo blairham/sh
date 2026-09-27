@@ -215,6 +215,10 @@ func TestReadArrayFlagTakesTheFirstOperand(t *testing.T) {
 	withA := func(r *Runner) {
 		s := *r.Semantics
 		s.ReadOptions = "rsAd:n:N:t:u:"
+		// The names behind the array are cleared here rather than the line
+		// being declined — see Semantics.ReadArrayTakesOneNameOnly, which
+		// is the axis this case is on the far side of.
+		s.ReadArrayTakesOneNameOnly = No
 		r.Semantics = &s
 	}
 	out, _ := run(t, `printf 'a b c\n' | { read -A arr; echo "[${arr[1]}]"; }`, withA)

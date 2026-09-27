@@ -261,17 +261,35 @@ func TestALineWrittenBeforeTheFirstPromptReachesAnEditorlessSession(t *testing.T
 		"HISTFILE=" + filepath.Join(home, "hist"),
 	}
 	screen := smoke.Watch(control)
+	// **Written before the shell is started at all**, which is the whole of
+	// the test and is where the wait that used to be missing went.
+	//
+	// The property is that a line already on its way is not lost, and the
+	// moment it arrives is what decides: the old shape started the shell and
+	// then wrote, which is a *race* between the write and whatever the
+	// startup does to the terminal — usually the write got there first, and
+	// once on a loaded ubuntu runner it did not, and the row failed with no
+	// way to say which way it had lost (#4522). Writing first removes the
+	// ordering question instead of answering it: the bytes are in the
+	// terminal's queue before the shell has a chance to do anything at all,
+	// so this is the **earliest** arrival there is and the hardest case
+	// rather than a weakened one.
+	//
+	// It is not a wait and it is not a pause. The comment this replaces
+	// warned that a two-second sleep before the write made all three
+	// affected `zpty` files pass *while the bug was live*, which is exactly
+	// what a wait here would bring back; this moves the write earlier, not
+	// later.
+	//
+	// Both lines at once, so the session also ends without a second wait.
+	zleOffType(t, control, "echo zle-$((6 * 7))-ok")
+	zleOffType(t, control, "exit")
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"zsh", "-i", "+Z"}) }()
 	t.Cleanup(func() {
 		_ = terminal.Close()
 		_ = control.Close()
 	})
-	// **No wait for the prompt**, which is the whole of the test: the line is
-	// written while the shell is still starting, exactly as a driver writes
-	// it. Both lines at once, so the session also ends without a second wait.
-	zleOffType(t, control, "echo zle-$((6 * 7))-ok")
-	zleOffType(t, control, "exit")
 	select {
 	case <-done:
 	case <-time.After(zleOffBudget):
@@ -287,6 +305,29 @@ func TestALineWrittenBeforeTheFirstPromptReachesAnEditorlessSession(t *testing.T
 			err, smoke.Readable(smoke.LastLines(screen.Text(), 8)))
 	}
 	if drawn := screen.Text(); !strings.Contains(drawn, zleOffAnswer) {
-		t.Fatalf("the line was lost:\n%s", smoke.Readable(smoke.LastLines(drawn, 8)))
+		t.Fatalf("the line was lost, %s:\n%s",
+			zleOffLostHow(drawn), smoke.Readable(smoke.LastLines(drawn, 8)))
 	}
+}
+
+// zleOffLostHow says which way the row above lost, for the failure message.
+//
+// The `select` on the shell's own return already tells a session that never
+// exits from one that did, and the `Contains` under it told nothing at all —
+// which is what made the one failure on a runner a report with no cause in it
+// (#4522). Two states are worth separating and the terminal's own echo is
+// what separates them: with the editor off the kernel echoes what is typed,
+// so the typed line appearing on the screen says the bytes reached the
+// terminal and the shell had them to read.
+//
+// **The echo is a diagnosis and never a pass.** A wait or an assertion on
+// text the session types is satisfied by a shell that drew the line back and
+// ran nothing, which is the hazard zleOffMark's own comment is about; the
+// pass condition stays the answer, written as an expression precisely so the
+// echo cannot be mistaken for it.
+func zleOffLostHow(drawn string) string {
+	if strings.Contains(drawn, "zle-$((6 * 7))-ok") {
+		return "the terminal echoed it and the shell's answer never came back"
+	}
+	return "the terminal never echoed it, so the bytes did not reach the session"
 }

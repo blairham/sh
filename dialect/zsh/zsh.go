@@ -2703,6 +2703,11 @@ func Semantics() interp.Semantics {
 	// it; #4800 filed the row as ksh93's alone and this column was
 	// measured the same way it answers (#4800).
 	s.BraceEmptyAlternativeIsAField = interp.Yes
+	// A brace does not end field splitting here: under `shwordsplit`,
+	// `IFS=:; v=a:b; f x{p,q}$v` is the three fields `xpa`, `xqa` and `b`,
+	// and `e='a b,c'; f {$e}` is `{a` and `b,c}` — the splitter reaches
+	// inside the group. ksh93 is the one column that stops.
+	s.BraceStopsFieldSplitting = interp.No
 	// Pads like bash — `{01..3}` is `01 02 03` — but a negative step
 	// reverses the walk the endpoints chose: `{3..1..-1}` is `1 2 3` and
 	// `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards rather than the

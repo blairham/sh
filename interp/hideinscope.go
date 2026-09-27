@@ -266,21 +266,99 @@ func (r *Runner) shadowIsHidden(name string) bool {
 // the top level the letter is an attribute and there is no shadow for it to
 // detach, so the tie is still the binding's and the word still says so — the
 // same "only where a shadow stands" the freeze half records in
-// freezeSurvivesAShadow, and the reason this asks
-// localInTheInnermostScope first. Rows four and five are the controls that
-// make this a statement about the *tie*: the shell's own untied name and an
-// ordinary name are already right and stay right.
+// freezeSurvivesAShadow, and the reason this asks whether the half is
+// shadowed at all first. Rows four and five are the controls that make this a
+// statement about the *tie*: the shell's own untied name and an ordinary name
+// are already right and stay right.
 //
 // The value either side of the word was already right and is untouched: the
 // hidden local starts empty and the shell's own `path` is back at the return.
+//
+// ## And a script's tie is not inherited by a local at all
+//
+// The rows above are the *shell's* pairs, where it takes the `-h` letter to
+// detach one. A tie a **script** made with `typeset -T` is detached by an
+// ordinary local with no letter on it, and that is the second half of the
+// same question rather than a rule of its own — measured 2026-09-27 on zsh
+// 5.9.2 under `-f` from a script file:
+//
+//	typeset -T TT tt; f(){ typeset tt }        scalar-local
+//	typeset -T TT tt; f(){ local   tt }        scalar-local
+//	typeset -T TT tt; f(){ typeset -i tt }     integer-local
+//	typeset -T TT tt; f(){ typeset -a tt }     array-local
+//	f(){ typeset path }                        array-local-tied-special
+//	f(){ typeset PATH }                        scalar-local-tied-special
+//
+// So the shell treats the eight pairs it hardwires differently from one a
+// script makes, and a rule keyed on "a local over a tie is not tied" would
+// get rows five and six wrong (#4854).
+//
+// **The question is asked of the half, not of the pair**, and that is
+// measured rather than assumed — it is the row that decides how this is
+// written:
+//
+//	typeset -T TT tt; f(){ typeset TT; print ${(t)tt} }    array-tied
+//	typeset -T TT tt; f(){ typeset tt; print ${(t)tt} }    scalar-local
+//
+// The partner nothing shadowed is still tied, in the same call, under the
+// same detached pair. So this cannot be [Runner.tieDetached], which answers
+// for the tie as a whole and is right to: that predicate decides what an
+// assignment *moves*, and moving is a property of the pair — `TT=q:r` inside
+// that function leaves the caller's `tt` alone whichever half was shadowed.
+// One predicate for both would have had to answer the narrower question with
+// the wider one.
+//
+// The depth is what keeps a tie's own declaration from turning it off, and it
+// is the same depth tieShadowedInItsScope reads for the same reason:
+// `typeset -T` shadows both halves before recording the tie, so "is this half
+// shadowed anywhere" answers yes for every function-local tie there is.
+// Measured: `f(){ typeset -T TT tt; print ${(t)tt} }` is `array-local-tied`.
 func (r *Runner) tieDescribesTheBinding(name string) bool {
-	if _, tied := r.tied[name]; !tied {
+	t, tied := r.tieOf(name)
+	if !tied {
 		return false
 	}
-	if !r.localInTheInnermostScope(name) {
+	if !r.tieHalfShadowedInItsScope(t, name) {
+		// Nothing of this half is displaced, so the tie is the binding's
+		// whatever has happened to the other name.
 		return true
 	}
+	if !t.special {
+		// A script's pair, with a local standing over this half: an ordinary
+		// parameter that merely happens to be spelled like one of the two.
+		return false
+	}
+	// The shell's own, which a plain local still inherits — only the letter
+	// that detaches the shadow takes the word off it.
 	return !r.shadowIsHidden(name)
+}
+
+// tieHalfShadowedInItsScope is tieShadowedInItsScope asked of one half.
+//
+// Two functions rather than a parameter on one, because they answer different
+// questions and the difference is measured: what an assignment *moves* is a
+// property of the pair, and what a type query writes is a property of the
+// half — see tieDescribesTheBinding for the row that splits them.
+//
+// The depth is the sibling's reading and is kept for that reason rather than
+// for one of its own, which is worth saying plainly: no row separates it from
+// a scan of every live scope here. A tie's own `typeset -T` leaves nothing
+// saved under either name by the time a word is asked of it — measured
+// 2026-09-27, `f(){ typeset -T TT tt; typeset -h TT; print ${(t)tt} }` and
+// `f(){ typeset -T TT tt; typeset tt; print ${(t)tt} }` are both
+// `array-local-tied` in zsh 5.9.2 and in this shell with either reading. It
+// also keeps the slice in range where a tie outlives the scope it was made
+// in, which is the half that is not a judgement.
+func (r *Runner) tieHalfShadowedInItsScope(t tie, name string) bool {
+	if t.depth >= len(r.scopes) {
+		return false
+	}
+	for _, sc := range r.scopes[t.depth:] {
+		if _, saved := sc.saved[name]; saved {
+			return true
+		}
+	}
+	return false
 }
 
 // hidesItsTie reports whether either half of a tie stands under a hidden

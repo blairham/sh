@@ -83,6 +83,12 @@ func Dialect() syntax.Dialect {
 	// written still reaches the delimiter, as in dash; one that joined after
 	// text does not (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterAfterALeadingContinuation
+	// The unquoted part of a here-document's delimiter is plain text, so no
+	// substitution is scanned there: a `$(` leaves the `(` where no word may
+	// have one, and a backquote does not protect a blank. A quoted run in a
+	// delimiter is unaffected. See syntax.HeredocDelimiterSubstitution for
+	// the panel (#4691).
+	d.HeredocDelimiterSubstitutions = syntax.HeredocDelimiterScansNoUnquotedSubstitution
 	// There is no `time` keyword here, and the thing that made it look like
 	// one is a program. `time echo hi` prints a three-row summary because
 	// `/usr/bin/time` is a BusyBox applet on this image, so that line runs an
@@ -2536,8 +2542,15 @@ func Diagnostics() interp.Diagnostics {
 		UnterminatedExpectingAClass:      "syntax error: unexpected end of file (expecting %[4]s)",
 		UnterminatedNoConstruct:          "syntax error: unexpected end of file",
 		UnmatchedQuote:                   "syntax error: unterminated quoted string",
-		UnmatchedBackquote:               "syntax error: unterminated quoted string",
-		UnmatchedCmdSubst:                `syntax error: unexpected end of file (expecting ")")`,
+		// Its own sentence, where an unterminated quote of either kind is
+		// `unterminated quoted string`. Measured 2026-09-27 on BusyBox
+		// 1.37.0 in the pinned image: ``echo `abc`` is `syntax error: EOF
+		// in backquote substitution` where `echo "abc` and `echo 'abc` are
+		// the quoted-string wording and `echo $(abc` names the `)` it
+		// wanted. This held the quote wording, which is dash's answer for
+		// neither (#4691).
+		UnmatchedBackquote: "syntax error: EOF in backquote substitution",
+		UnmatchedCmdSubst:  `syntax error: unexpected end of file (expecting ")")`,
 		// Backticks alone, exactly as dash does it: this shell numbers a
 		// `$( … )` body from the file and a backquoted one from one.
 		// Measured 2026-09-18 on BusyBox 1.37.0 in the pinned image, both

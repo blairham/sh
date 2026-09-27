@@ -201,3 +201,88 @@ func runAbsentWithVar(t *testing.T, src, name, value string) (out, errs string, 
 	}
 	return o.String(), e.String(), r.ExitStatus()
 }
+
+// runAbsentSetTest is runAbsent with the one grammar flag the set test needs.
+//
+// Named for the flag and not for a shell, which is this package's rule: what
+// the rows below depend on is `${+name}` being *parsed* as a set test, and
+// that is [syntax.Dialect.ParamSetTestFlag] rather than any particular shell
+// having it.
+func runAbsentSetTest(t *testing.T, src string) (out, errs string, status int) {
+	t.Helper()
+	var o, e strings.Builder
+	r := seamRunner(t, &o, &e)
+	r.SetAbsentParameter("nothere", "parameter not implemented yet")
+	d := syntax.Core()
+	d.ParamSetTestFlag = true
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	return o.String(), e.String(), r.ExitStatus()
+}
+
+// The set test is the same question the conditional operators ask, in the
+// spelling that is not an operator at all — so it is answered rather than
+// refused.
+//
+// `${+name}` substitutes `1` or `0` and never the value, so there is nothing
+// for an absent name to read as empty, which is the whole of what this seam
+// guards. It refused for two years while `${name+x}` beside it answered, and
+// the cost was not a wrong answer: `(( ${+name} ))` is what a script writes
+// *before* depending on a parameter, and it got no further lines (#4882).
+//
+// A subscript and an expansion flag leave the reading alone and a written
+// operator takes it away, which is measured rather than read off the flag —
+// see refuseAbsentParameter for the reference's rows.
+func TestTheSetTestOfAnAbsentParameterIsAnswered(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`printf '[%s]' "${+nothere}"`, "[0]"},
+		// A subscript does not make it a value read.
+		{`printf '[%s]' "${+nothere[k]}"`, "[0]"},
+		// And the answer is a real one, from the same runner: a name that
+		// *is* there answers 1, so `0` above is the test working rather than
+		// a constant.
+		{`there=1; printf '[%s]' "${+there}" "${+nothere}" "${+neverheardof}"`, "[1][0][0]"},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			out, errs, status := runAbsentSetTest(t, tc.src)
+			if out != tc.want {
+				t.Errorf("stdout = %q, want %q", out, tc.want)
+			}
+			if errs != "" || status != 0 {
+				t.Errorf("stderr = %q (status %d), want silence and 0", errs, status)
+			}
+		})
+	}
+}
+
+// And the exemption is the *pure* set test, which is the control that says it
+// was widened by one spelling rather than switched off.
+//
+// Each of these carries the `+` and reads a value through an operator or a
+// length, so each still names the parameter and still fails.
+func TestASetTestWithAnOperatorStillRefuses(t *testing.T) {
+	for _, src := range []string{
+		`printf '[%s]' "${+nothere#a}"`,
+		`printf '[%s]' "${+nothere%a}"`,
+		`printf '[%s]' "${#nothere}"`,
+		`printf '[%s]' "$nothere"`,
+	} {
+		t.Run(src, func(t *testing.T) {
+			out, errs, status := runAbsentSetTest(t, src)
+			if !strings.Contains(errs, "nothere: parameter not implemented yet") {
+				t.Errorf("stderr = %q, want the parameter named", errs)
+			}
+			if out != "" {
+				t.Errorf("stdout = %q, want nothing handed to the caller", out)
+			}
+			if status == 0 {
+				t.Error("status 0, want a failure")
+			}
+		})
+	}
+}

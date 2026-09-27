@@ -536,6 +536,31 @@ detail.
 Grammar flags: `ArithIncDec` and `ArithComma` — core: on for both;
 `posix` and `dash`: off for both.
 
+**The conditional's two branches are not read at the same level in every
+column.** C's grammar, and four of the six, read a branch at the assignment
+level, so a bare store may begin one. zsh reads both branches at the
+**conditional** level and refuses a bare store there, with a different
+sentence at each end. Measured 2026-09-26 — zsh 5.9.2, bash 5.3.20(1) and
+ksh93u+ 2012-08-01, each run with no startup files:
+
+| written | zsh 5.9.2 | bash 5.3.20 | ksh93u+ |
+| --- | --- | --- | --- |
+| `$(( 1 ? x = 2 : 3 ))` | `bad math expression: ':' expected` at 1 | `2` | `2` |
+| `$(( 0 ? x += 2 : 3 ))` | the same refusal | `3` | `3` |
+| `$(( 1 ? 2 : x = 3 ))` | `bad math expression: lvalue required` | `2` | `2` |
+| `$(( 1 ? (x = 2) : 3 ))` | `2` | `2` | `2` |
+
+The last row is what says this is a **level** and not a ban: the same store
+in the same position is taken. The two sentences are one rule seen from its
+two ends — in the then branch the `=` stands where the colon was looked for,
+and in the else branch the whole conditional is left standing as the target
+of the store, which earns the refusal a `$(( 7 = 4 ))` earns.
+
+The sequence operator is below both levels already and is not part of this:
+`$(( 1 ? 2 , 3 : 4 ))` is refused in zsh and is 3 in the other two.
+
+Grammar flag: `ArithConditionalBranchBelowAssignment` — core: off; `zsh`: on.
+
 **Off does not mean refused.** Where the increment operators are absent the
 doubled sign is not a token the reader then rejects: it is two unary signs,
 and the expression evaluates. Measured 2026-09-17 on dash 0.5.12, the one

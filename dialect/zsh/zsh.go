@@ -764,6 +764,13 @@ func Dialect() syntax.Dialect {
 	// and not only where the escape is decoded: reading `\C` alone left `-a`
 	// standing and answered 0 (#4607).
 	d.ArithCharacterEscapes = syntax.ArithCharacterEscapesMaskedCaretMeta
+	// And the two branches of `c ? t : e` are read at the conditional level,
+	// so a bare assignment cannot begin one: measured 2026-09-26 on zsh 5.9.2,
+	// `$(( 1 ? x = 2 : 3 ))` is `':' expected` at 1 and `$(( 1 ? 2 : x = 3 ))`
+	// is `lvalue required`, where `$(( 1 ? (x = 2) : 3 ))` is 2. bash 5.3.20
+	// and ksh93u+ answer 2 to the first, which is why this is one column's
+	// grammar and not a shared refusal (#4680).
+	d.ArithConditionalBranchBelowAssignment = true
 	// And a name with a `(` touching it is a *math function* call —
 	// `$(( mf(5) ))` — where `mf` was registered with `functions -M`. The
 	// only shell in the panel with the construct; the other five read the

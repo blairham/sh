@@ -4709,6 +4709,34 @@ type Dialect struct {
 	// decoding end.
 	ArithCharacterEscapes ArithCharacterEscapes
 
+	// ArithConditionalBranchBelowAssignment reads the two branches of `c ? t :
+	// e` at the **conditional** level rather than the assignment level, so a
+	// bare assignment cannot begin one.
+	//
+	// It is a level and not a ban, which is the whole of why it is worth
+	// stating: a parenthesized assignment in the same position is taken.
+	// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`:
+	//
+	//	$(( 1 ? x = 2 : 3 ))     bad math expression: ':' expected
+	//	$(( 0 ? x += 2 : 3 ))    the same refusal
+	//	$(( 1 ? 2 : x = 3 ))     bad math expression: lvalue required
+	//	$(( 1 ? (x = 2) : 3 ))   2
+	//
+	// The third row is the else branch seen from the other side: the whole
+	// conditional becomes the target of the `=`, which is not a place, so the
+	// refusal is the one a `$(( 7 = 4 ))` earns. The fourth says the branch can
+	// hold a store — it just cannot begin with one written bare.
+	//
+	// One shell in the panel, and the controls say so: `$(( 1 ? x = 2 : 3 ))`
+	// is 2 in bash 5.3.20 and in ksh93u+ 2012-08-01 alike, so the other columns
+	// must not move. Off in the core, which is C's reading of the same
+	// grammar.
+	//
+	// The comma is **not** part of this and is already below both levels:
+	// `$(( 1 ? 2 , 3 : 4 ))` is refused in zsh and answers 3 in the other two,
+	// which this parser already had right (#4680).
+	ArithConditionalBranchBelowAssignment bool
+
 	// ExtendedPattern enables `@(a|b)`, `?(a)`, `+(a)`, `*(a)` and `!(a)` in
 	// a pattern: a group with a quantifier in front of it. ksh93 has them
 	// wherever a pattern may stand.

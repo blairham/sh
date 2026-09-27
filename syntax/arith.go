@@ -1124,7 +1124,7 @@ func (a *arithParser) ternary() ArithExpr {
 	// `:` for itself would break every `a ? b : c` in the dialect that reads
 	// the byte as a token.
 	a.conditionals++
-	then := a.assign()
+	then := a.conditionalBranch()
 	a.conditionals--
 	if then == nil {
 		a.failArith(ErrArithConditionalThen, a.src[question:])
@@ -1137,12 +1137,28 @@ func (a *arithParser) ternary() ArithExpr {
 		return cond
 	}
 	a.space()
-	els := a.assign()
+	els := a.conditionalBranch()
 	if els == nil {
 		a.failArith(ErrArithConditionalElse, a.src[colon:])
 		return cond
 	}
 	return &ArithCond{Cond: cond, Then: then, Else: els}
+}
+
+// conditionalBranch reads one branch of a conditional, at whichever level the
+// dialect reads one.
+//
+// Both branches take the same level, which is measured rather than assumed:
+// the shell that reads them below assignment refuses a bare store in the
+// **then** with `':' expected` — the `=` is where the colon was looked for —
+// and in the **else** with `lvalue required`, because there the conditional
+// itself is left standing as the target of the `=`. Two sentences, one level.
+// See [Dialect.ArithConditionalBranchBelowAssignment].
+func (a *arithParser) conditionalBranch() ArithExpr {
+	if a.dial.ArithConditionalBranchBelowAssignment {
+		return a.ternary()
+	}
+	return a.assign()
 }
 
 // colonWithoutQuestion is a `:` standing where no `?` opened a conditional, in

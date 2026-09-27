@@ -150,6 +150,10 @@ type Diagnostics struct {
 	// TieSecondMustBeArray is a scalar value on the array half:
 	// `typeset -T S s=plain`.
 	TieSecondMustBeArray string
+	// UntieRefused is what the *plus* form of the letter says: `typeset +T
+	// SCALAR` is not the tie's undoing but a refusal naming the builtin that
+	// is. See Runner.refuseUntie.
+	UntieRefused string
 
 	// SyntaxErrorStatus is the exit status of a script that did not parse.
 	//

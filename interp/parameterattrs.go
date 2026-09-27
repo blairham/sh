@@ -36,14 +36,32 @@ const (
 	FloatParameter
 )
 
+// ParameterJustification is which side of a fixed width a name's value is
+// kept on, for the three letters that present a value in a set number of
+// characters — `typeset -L`, `-R` and `-Z`.
+//
+// The *fill* is a second fact and not a third value here: a right-justified
+// name pads with blanks or with zeros and both are right-justified, which is
+// the split interp/fieldwidth.go already carries and which one shell's type
+// word spells out as `right_blanks` against `right_zeros`.
+type ParameterJustification int
+
+const (
+	// NoJustification is a name carrying none of the three letters.
+	NoJustification ParameterJustification = iota
+	// LeftJustified keeps the left of the value and pads on the right.
+	LeftJustified
+	// RightJustified keeps the right of the value and pads on the left.
+	RightJustified
+)
+
 // ParameterAttributes is everything the runner knows about one name.
 //
 // Deliberately not a set of letters: the letters are a dialect's spelling of
 // these, and two shells spell the same attribute differently. Nor is there a
-// field for an attribute this runner does not track — the padding attributes
-// and whether a name is local are absent here because they are absent from
-// the runner, and a field answering false for something never recorded would
-// read as a measurement rather than as a gap.
+// field for an attribute this runner does not track — a field answering false
+// for something never recorded would read as a measurement rather than as a
+// gap.
 type ParameterAttributes struct {
 	Kind ParameterKind
 	// Local is a name a declaration in the *current* function scope
@@ -57,6 +75,13 @@ type ParameterAttributes struct {
 	Upper bool
 	// Unique is an array that keeps no duplicate.
 	Unique bool
+	// Justified is the width attribute's side, and ZeroFilled is whether the
+	// pad it lays down is zeros rather than blanks. Two fields because the
+	// two facts are independent — see [ParameterJustification] — and because
+	// the shell that publishes them writes `right_blanks` and `right_zeros`
+	// as two words for one side.
+	Justified  ParameterJustification
+	ZeroFilled bool
 	// Tied is one half of a scalar-and-array pair that share a value.
 	Tied bool
 	// HideValue withholds a name's *value* from a listing — the name is
@@ -76,10 +101,12 @@ type ParameterAttributes struct {
 	// bit told a script switching on the word about the wrong letter (#2042).
 	Hidden bool
 	// Provided is the shell's own rather than a script's: a parameter whose
-	// value is produced on being read, or one the shell has registered a
-	// refusal for. It is the closest thing the core has to "this name is not
-	// a variable somebody assigned", and a dialect that calls such a name
-	// special is reading this.
+	// value is produced on being read, one the shell has registered a
+	// refusal for, or one a dialect has said outright is its own — see
+	// [Runner.MarkShellOwnParameter], which is the third source and the only
+	// one that is a statement rather than a shape. It is the closest thing
+	// the core has to "this name is not a variable somebody assigned", and a
+	// dialect that calls such a name special is reading this.
 	Provided bool
 }
 
@@ -111,9 +138,22 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		Unique:    r.unique[name],
 		HideValue: r.hidden[name],
 		Hidden:    r.hideInScope[name],
-		Provided:  r.DynamicParameter(name) || r.AbsentParameter(name),
+		Provided: r.DynamicParameter(name) || r.AbsentParameter(name) ||
+			r.shellOwnParameter(name),
 	}
 	_, a.Tied = r.tied[name]
+	if w, ok := r.fieldWidth[name]; ok {
+		// A width a *value* has not taught yet is still the attribute: the
+		// letter is what the name carries, and the number is what a listing
+		// writes. Measured on zsh 5.9.2, `typeset -L v; print ${(t)v}` is
+		// `scalar-left` from a name holding nothing at all.
+		if w.letter == 'L' {
+			a.Justified = LeftJustified
+		} else {
+			a.Justified = RightJustified
+		}
+		a.ZeroFilled = w.zeroFilling()
+	}
 	if !a.Provided && !r.parameterExists(name) {
 		return ParameterAttributes{}, false
 	}

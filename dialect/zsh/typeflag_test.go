@@ -43,6 +43,21 @@ func TestTheTypeFlagWordsWhatANameIs(t *testing.T) {
 			`typeset -rHhU -a c=(1 2); print -r -- ${(t)c}`,
 			"array-readonly-unique-hide-hideval\n",
 		},
+		// The three width letters, which said nothing here until #4504 — a
+		// fact the runner already held and nothing carried across the seam.
+		// `-Z` and `-R` are two spellings of one *side*, which is why the
+		// word names the fill rather than the letter.
+		{"the left-justifying width letter", `typeset -L v=ab; print -r -- ${(t)v}`, "scalar-left\n"},
+		{"the right-justifying one", `typeset -R w=ab; print -r -- ${(t)w}`, "scalar-right_blanks\n"},
+		{"and the zero-filling one, which is the same side", `typeset -Z z=ab; print -r -- ${(t)z}`, "scalar-right_zeros\n"},
+		{"a width with no value to learn from still carries the letter", `typeset -L v; print -r -- ${(t)v}`, "scalar-left\n"},
+		{"local before a width", `f() { typeset -L l=ab; print -r -- ${(t)l}; }; f`, "scalar-local-left\n"},
+		{"a width before unique", `f() { typeset -UL l=ab; print -r -- ${(t)l}; }; f`, "scalar-local-left-unique\n"},
+		{"a width before upper", `typeset -uL v=ab; print -r -- ${(t)v}`, "scalar-left-upper\n"},
+		{"a width before readonly", `typeset -rL v=ab; print -r -- ${(t)v}`, "scalar-left-readonly\n"},
+		{"a width before export", `typeset -xL v=ab; print -r -- ${(t)v}`, "scalar-left-export\n"},
+		{"a width before hideval", `typeset -HL v=ab; print -r -- ${(t)v}`, "scalar-left-hideval\n"},
+		{"and the numeric attribute keeps its own word", `typeset -iL n=5; print -r -- ${(t)n}`, "integer-left\n"},
 		{"the container wins over the numeric attribute", `typeset -ia ia; ia=(1 2); print -r -- ${(t)ia}`, "array\n"},
 		{"an unset name is empty, and unset", `unset u; print -r -- "[${(t)u}][${(t)u-D}]"`, "[][D]\n"},
 		{

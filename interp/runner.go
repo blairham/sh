@@ -4315,6 +4315,11 @@ type Runner struct {
 	// refuses it and ksh93 does not have it, so the dialect decides who may
 	// set it — see Semantics.DeclareOptions.
 	unique map[string]bool
+	// shellOwn names the parameters the shell provides itself, for the ones
+	// that hold an ordinary stored value and so look like a script's. See
+	// interp/shellownparameter.go, and ParameterAttributes.Provided, which
+	// is what reads it.
+	shellOwn map[string]bool
 	// traced names the parameters carrying the trace attribute — `typeset
 	// -t`. Every shell on the panel but the two without the builtin records
 	// it and lists it back, and none of them lets it change what a *value*
@@ -11540,7 +11545,7 @@ func (r *Runner) arrayLiteralStartsTheNameOver(a *syntax.Assign) bool {
 	if a.Operand {
 		return false
 	}
-	if !r.nameCarriesATypeAttribute(a.Name) {
+	if !r.nameCarriesAnAttributeAReCreationDrops(a.Name) {
 		return false
 	}
 	if !r.nameIsAnArray(a.Name) {
@@ -11612,12 +11617,24 @@ func (r *Runner) nameIsAnArray(name string) bool {
 // and `-u` rows that were already here. The width has to go from the store
 // and not only from the listing: the name can be assigned a scalar again
 // afterwards, and `d=zz` then reads back `zz` rather than `zz ` (#1461).
-// nameCarriesATypeAttribute reports whether clearTypeAttributes would take
-// anything off the name. It is the guard on asking the re-creation question
-// at all, and it is here rather than beside that question so the two lists
-// are one list: an attribute added to the clearing and not to the guard is an
-// attribute the question is never asked about, which is how the float
-// precision and the width both survived a `c=(a bb)` that zsh drops them on.
+// nameCarriesAnAttributeAReCreationDrops reports whether
+// clearAttributesAReCreationDrops would take anything off the name. It is the
+// guard on asking the re-creation question at all, and it is here rather than
+// beside that question so the two lists are one list: an attribute added to
+// the clearing and not to the guard is an attribute the question is never
+// asked about, which is how the float precision and the width both survived a
+// `c=(a bb)` that zsh drops them on — and, until #4676, the **export**
+// attribute, which is in neither list because it is not a type attribute and
+// goes for exactly the same reason.
+func (r *Runner) nameCarriesAnAttributeAReCreationDrops(name string) bool {
+	if r.nameCarriesATypeAttribute(name) {
+		return true
+	}
+	return r.isExported(name)
+}
+
+// nameCarriesATypeAttribute is the *type* half of that list, which the routes
+// that clear without asking the re-creation question use on its own.
 func (r *Runner) nameCarriesATypeAttribute(name string) bool {
 	if r.integer[name] || r.lowered[name] || r.uppered[name] || r.capitalized[name] {
 		return true
@@ -11636,6 +11653,52 @@ func (r *Runner) clearTypeAttributes(name string) {
 	delete(r.capitalized, name)
 	delete(r.floatPrecision, name)
 	delete(r.fieldWidth, name)
+}
+
+// clearAttributesAReCreationDrops is that list plus the **export** attribute,
+// which is what a re-created name loses and a retyped one does not.
+//
+// It is a second function rather than a line added to the one above because
+// the two callers of the one above are not asking this question: those are
+// the glob-assignment routes, which clear the type letters on every store —
+// scalar or array, match or single match — and one of them is a *command
+// prefix*, whose whole point is that the child is told the name. A route that
+// took the export attribute off there would be answering a row nobody
+// measured with the one thing that route exists to do.
+//
+// Measured 2026-09-26 against zsh 5.9.2, bash 5.3.20 and ksh93u+ 2012-08-01,
+// one line to a name, then that shell's own `typeset -p` / `declare -p`:
+//
+//	written                          bash   zsh    ksh93
+//	export a=1; a=(x y)              -ax    -a     -a
+//	export a=1; a+=(x y)             -ax    -a     -x -a
+//	export a=(p q); a=(x y)          -ax    -ax    -a
+//
+// Those are exactly the three shapes the re-creation question is already
+// three axes for, and every cell of the nine agrees with the cell that axis
+// holds — ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver for the first,
+// AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver for the second,
+// ArrayLiteralAssignmentStartsTheNameOver for the third. So this is not a new
+// disagreement and gets no axis of its own: the export attribute is one more
+// thing a *re-created* name does not keep, and the panel's split over it is
+// the panel's split over what counts as a re-creation.
+//
+// The tri-state entry is **deleted** rather than set to false, because those
+// are two different states: an entry saying false is a name this shell has
+// been told about, and no entry at all falls back to the environment the
+// shell was born with. What a re-creation does is put the name back where an
+// unexported one stands. See Runner.isExported.
+//
+// Two controls, both measured and both unmoved by this. `export` applied to a
+// name that is **already** an array keeps the attribute everywhere —
+// `a=(x y); export a` is `typeset -ax a=( x y )` in zsh — so this is about
+// the assignment and not about whether an array may carry it. And the child
+// sees nothing either way: `typeset -x a=1; a=(p q); printenv a` exits 1 in
+// zsh and here, because that shell exports no array's value whatever the
+// attribute says. What moves is what a listing reports (#4676).
+func (r *Runner) clearAttributesAReCreationDrops(name string) {
+	r.clearTypeAttributes(name)
+	delete(r.exported, name)
 }
 
 // assignAll performs a bare assignment list, tracing it as it goes.
@@ -12007,7 +12070,7 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 			// new elements for the one that is there, so the attributes go
 			// before the elements land — see
 			// Semantics.ArrayLiteralAssignmentStartsTheNameOver.
-			r.clearTypeAttributes(a.Name)
+			r.clearAttributesAReCreationDrops(a.Name)
 		}
 		if r.unspecified {
 			return

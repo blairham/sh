@@ -51,4 +51,21 @@ func registerArgv(r *interp.Runner) {
 	r.SetDynamicArrayWriter("argv", func(rr *interp.Runner, values []string) {
 		rr.Params = values
 	})
+	// And how it lists back, which the *printer* could not see: a produced
+	// array is in none of the tables a listing walks, so `typeset -p argv`
+	// was `no such variable: argv` from a name the same shell had just
+	// expanded three elements out of (#4632). Measured 2026-09-26 on zsh
+	// 5.9.2 under `-f` with `set -- x y z`:
+	//
+	//	typeset -p argv    typeset -a argv=( x y z )
+	//	set --             typeset -a argv=(  ), at 0 — an empty list and
+	//	                   not a missing name
+	//
+	// ListsItsElements because the elements are the parameters themselves
+	// rather than a number the producer would draw: see
+	// ProducedDeclaration.Array, where the withholding is about a *reading*.
+	r.SetDynamicDeclaration("argv", interp.ProducedDeclaration{
+		Array:            true,
+		ListsItsElements: true,
+	})
 }

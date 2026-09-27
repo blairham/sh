@@ -38,7 +38,20 @@ import (
 //
 // One of zsh's attributes is deliberately never written here, because this
 // shell does not record it and a word claiming one would be a measurement
-// nobody made: the `L`/`R`/`Z` padding attributes.
+// nobody made. There are none left: the `L`/`R`/`Z` width letters were the
+// last of them, and they were absent here because nothing carried them across
+// the seam rather than because the runner did not know — `interp` has held
+// them in `fieldWidth` since the letters were implemented, so the word was
+// missing from a fact the shell already had (#4504).
+//
+// The three letters are two words apart from the other attributes, and that
+// is measured rather than a rendering choice: `-L` is `left`, `-R` is
+// `right_blanks` and `-Z` is `right_zeros`, so the side and the *fill* are
+// spelled as one word and a name carries one of the three. Written between
+// `tied` and `lower`, which is where zsh puts them — measured 2026-09-26 on
+// zsh 5.9.2 under `-f`, one row per neighbor: `scalar-local-left`,
+// `scalar-left-unique`, `scalar-left-upper`, `scalar-left-readonly`,
+// `scalar-left-export`, `scalar-left-hideval` and `integer-left`.
 //
 // `hideval` used to be in that list too, on the ground that it "always
 // accompanies `hide` in zsh's own module parameters, so writing `hide` alone
@@ -107,6 +120,9 @@ func describeParameter(a interp.ParameterAttributes) string {
 	}{
 		{a.Local, "local"},
 		{a.Tied, "tied"},
+		{a.Justified == interp.LeftJustified, "left"},
+		{a.Justified == interp.RightJustified && !a.ZeroFilled, "right_blanks"},
+		{a.Justified == interp.RightJustified && a.ZeroFilled, "right_zeros"},
 		{a.Lower, "lower"},
 		{a.Upper, "upper"},
 		{a.Readonly, "readonly"},

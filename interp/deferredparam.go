@@ -96,6 +96,20 @@ func (r *Runner) DeferredParameter(name string) bool {
 	return r.deferredParams[name] && !r.removed[name]
 }
 
+// ReferToParameter brings a deferred parameter in from outside the expansion
+// machinery, for a dialect that has a second route to the same arrival.
+//
+// One caller and it is measured: an explicit module load. `zmodload
+// zsh/parameter` in a shell that has read none of the module's names makes
+// `unset funcstack` on the next line `read-only variable: funcstack` at 1 in
+// zsh 5.9.2, where without it the `unset` is a silent 0 — so the load is a
+// reference, though nothing in the script named the parameter.
+//
+// A method rather than the unexported one below because the fact is the
+// dialect's: the core knows what an arrival *does* and has no way of knowing
+// that loading a module is one.
+func (r *Runner) ReferToParameter(name string) { r.referredToParameter(name) }
+
 // referredToParameter is the arrival: the script has named this parameter, so
 // whatever was waiting on a first reference is waiting no longer.
 //

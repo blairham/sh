@@ -1174,6 +1174,7 @@ func zmodloadLoadItself(r *interp.Runner, opts zmodloadOpts, module string) int 
 	// still loaded, and still narrowed by the feature that would not go back.
 	code := zmodloadWiden(r, module)
 	zmodloadSetLoaded(r, module, true)
+	zmodloadRefersToItsParameters(r, module)
 	return code
 }
 
@@ -1633,6 +1634,7 @@ func zmodloadSelect(r *interp.Runner, opts zmodloadOpts, module string, specs []
 	selected, code := zmodloadRestorable(r, module, selected)
 	zmodloadNarrow(r, module, selected)
 	zmodloadSetLoaded(r, module, true)
+	zmodloadRefersToItsParameters(r, module)
 	return code
 }
 
@@ -1776,4 +1778,29 @@ func zshWithdrawnPlainNames(module string) []string {
 		return statPlainNames()
 	}
 	return nil
+}
+
+// zmodloadRefersToItsParameters is the load counting as a reference to every
+// parameter the module names.
+//
+// These parameters arrive on the script's first reference — see
+// deferredparameters.go — and an explicit load is one, which is measured
+// rather than reasoned from what a load "ought" to mean. zsh 5.9.2, 2026-09-27,
+// from a script file, in a shell that has read none of the names:
+//
+//	zmodload zsh/parameter; unset funcstack      read-only variable: funcstack
+//	unset funcstack                              silent 0
+//	zmodload zsh/zleparameter; unset widgets     read-only variable: widgets
+//
+// The **listing** is a separate question and this does not settle it: after
+// the same `zmodload zsh/parameter`, `typeset -p builtins` still writes
+// nothing there while `typeset -p keymaps` after `zmodload zsh/zleparameter`
+// writes its row. That split is not materialization and is #4864's, so what
+// is modeled here is the arrival and nothing else.
+func zmodloadRefersToItsParameters(r *interp.Runner, module string) {
+	for _, feature := range zmodloadFeatures[module] {
+		if name, ok := strings.CutPrefix(feature, "p:"); ok {
+			r.ReferToParameter(name)
+		}
+	}
 }

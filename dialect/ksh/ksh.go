@@ -1097,6 +1097,18 @@ func Semantics() interp.Semantics {
 	// this shell now writes `'a é b'`. The axis decides whether the byte is
 	// bare; what a `$'...'` spells it as is a second question.
 	s.ListedNonAsciiIsOrdinary = interp.Yes
+	// And `ordinary` is narrower here than in the two columns that also
+	// answer `Yes`: only a character this shell calls **alphabetic** stands
+	// bare, and every other one above ASCII takes `$'...'` whatever is
+	// around it. Measured 2026-09-27 under `LC_ALL=en_US.UTF-8` — `é`, `µ`,
+	// `中`, `٣`, `ʰ`, `Ⅷ` and `Ⓐ` are bare where `€`, `°`, `²`, `½`, `×`, a
+	// non-breaking space, a soft hyphen, a combining acute and an emoji are
+	// not. The reading is `[[:alpha:]]` and it is measured rather than
+	// inferred: a sweep of 683 code points across twenty blocks agrees with
+	// this shell's own class on every one of them, where the nearest
+	// alternatives miss between 63 and 78. See
+	// interp.Semantics.ListedNonAsciiIsBareOnlyWhenAlphabetic (#4829).
+	s.ListedNonAsciiIsBareOnlyWhenAlphabetic = interp.Yes
 	// And inside a `$'...'` the character is a **code point** — `\u[e9]`,
 	// lower-case hexadecimal with no leading zeros — where bash and zsh write
 	// the character itself. Measured 2026-09-27 on `/bin/ksh`, Version AJM

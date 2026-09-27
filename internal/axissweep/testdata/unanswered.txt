@@ -168,6 +168,7 @@ ash   ListedAssignmentPrefixIsBare
 ash   ListedBangIsOrdinary
 ash   ListedCaretIsOrdinary
 ash   ListedEqualsIsOrdinary
+ash   ListedNonAsciiIsBareOnlyWhenAlphabetic
 ash   ListedNonAsciiIsOrdinary
 ash   ListedNonAsciiIsSpelledAsACodePoint
 ash   ListedNonAsciiTakesTheDollarFormAfterANonName
@@ -497,6 +498,7 @@ dash  ListedAssignmentPrefixIsBare
 dash  ListedBangIsOrdinary
 dash  ListedCaretIsOrdinary
 dash  ListedEqualsIsOrdinary
+dash  ListedNonAsciiIsBareOnlyWhenAlphabetic
 dash  ListedNonAsciiIsOrdinary
 dash  ListedNonAsciiIsSpelledAsACodePoint
 dash  ListedNonAsciiTakesTheDollarFormAfterANonName

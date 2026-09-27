@@ -1526,6 +1526,11 @@ func Semantics() interp.Semantics {
 	// as `typeset v=a-é`, where ksh93 writes a code point for both (#4807).
 	s.ListedNonAsciiIsSpelledAsACodePoint = interp.No
 	s.ListedNonAsciiTakesTheDollarFormAfterANonName = interp.No
+	// Nor does the character itself narrow it: measured 2026-09-27 on 5.9.2
+	// under `LC_ALL=en_US.UTF-8`, `°`, `€`, `×`, a non-breaking space, `Ⓐ`
+	// and an emoji all list bare, where ksh93 takes every one but `Ⓐ` into
+	// `$'...'` (#4829).
+	s.ListedNonAsciiIsBareOnlyWhenAlphabetic = interp.No
 	s.ListedAssignmentPrefixIsBare = interp.No
 	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a
 	// bad substitution here in the *bare* form too, so there is no listing

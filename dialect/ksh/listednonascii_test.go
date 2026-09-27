@@ -95,14 +95,12 @@ func TestAListedNonAsciiCharacterIsWrittenAsItself(t *testing.T) {
 // `LC_ALL=C` cell. So these assert the same bytes whatever locale the test
 // runs in, which is the claim the preset is making.
 //
-// **Two things measured in the same run are deliberately not here.** That
-// column also refuses to leave some characters above ASCII bare at all —
-// `€`, a non-breaking space, `°`, `²`, `½`, `×`, a soft hyphen, a combining
-// acute and an emoji each take the form on their own, where `é`, `µ`, `中`,
-// `å`, `٣`, `ʰ`, `Ⅷ` and `Ⓐ` do not — and it treats a character above ASCII
-// as a name character in the `=` and `#` rules, so `é=a` is bare there and
-// `é#a` is quoted, both the other way round here. Each is a rule of its own
-// and neither is inferable from these rows; see nonAsciiAfterANonName.
+// **Two things measured in the same run are rules of their own**, neither
+// inferable from these rows, and each now has its own suite below: which
+// characters above ASCII may stand bare at all (#4829), and that a character
+// above ASCII counts as a **name** character in the `=` and `#` listing rules
+// (#4830). Both decide the same thing these rows do, so all three are asked
+// in listedNeedsDollar and listedNameLike.
 func TestAListedNonAsciiCharacterIsACodePointInsideDollarQuotes(t *testing.T) {
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
@@ -175,5 +173,136 @@ func TestTheTwoNonAsciiListingAxesAreAnsweredHere(t *testing.T) {
 	}
 	if got := s.ListedNonAsciiTakesTheDollarFormAfterANonName; got != interp.Yes {
 		t.Errorf("ListedNonAsciiTakesTheDollarFormAfterANonName = %v, want Yes", got)
+	}
+}
+
+// Which characters above ASCII may stand bare at all — #4829.
+//
+// A property of the character where the suite above is a property of what
+// stands in front of it. Measured 2026-09-27 on `/bin/ksh`, `Version AJM 93u+
+// 2012-08-01`, from a script file under `env -i PATH=/usr/bin:/bin
+// LC_ALL=en_US.UTF-8`; `go version -m` says *not a Go executable* for it and
+// `github.com/blairham/sh/cmd/ksh` for ours.
+//
+// **The locale is stated because the question cannot be put without it**: the
+// same binary under `LC_ALL=C` spells every character above ASCII out byte by
+// byte, so every row below would read the same there and say nothing about
+// the split. This engine is locale-blind and carries the UTF-8 reading, which
+// is the choice #4770 made for the axis these rest on.
+//
+// **The split is not a Unicode general category**, which is the finding that
+// makes this a measurement before it is a change: `Ⓐ` is `So` and is bare,
+// `°` and the emoji are `So` and are not, `×` is `Sm` and is not. It is that
+// shell's own `[[:alpha:]]`, measured over a sweep of 683 code points across
+// twenty blocks that agrees with the listing on every one of them. See
+// interp.Semantics.ListedNonAsciiIsBareOnlyWhenAlphabetic.
+func TestOnlyAnAlphabeticCharacterAboveAsciiListsBare(t *testing.T) {
+	if got := ksh.Semantics().ListedNonAsciiIsBareOnlyWhenAlphabetic; got != interp.Yes {
+		t.Errorf("ListedNonAsciiIsBareOnlyWhenAlphabetic = %v, want Yes", got)
+	}
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		// Bare, and the last three are what a general category cannot
+		// produce: a decimal digit, a letter-number and an enclosed letter.
+		{"a letter", `v='é'; typeset -p v`, "v=é\n"},
+		{"a micro sign", `v='µ'; typeset -p v`, "v=µ\n"},
+		{"a ring above", `v='å'; typeset -p v`, "v=å\n"},
+		{"a CJK ideograph", `v='中'; typeset -p v`, "v=中\n"},
+		{"a modifier letter", `v='ʰ'; typeset -p v`, "v=ʰ\n"},
+		{"an Arabic-Indic digit", `v='٣'; typeset -p v`, "v=٣\n"},
+		{"a Roman numeral", `v='Ⅷ'; typeset -p v`, "v=Ⅷ\n"},
+		{"a circled letter", `v='Ⓐ'; typeset -p v`, "v=Ⓐ\n"},
+		// And taken into the form on their own, with nothing in front of
+		// them — which is what keeps these off the rule above.
+		{"a currency sign", `v='€'; typeset -p v`, "v=$'\\u[20ac]'\n"},
+		{"a degree sign", `v='°'; typeset -p v`, "v=$'\\u[b0]'\n"},
+		{"a superscript two", `v='²'; typeset -p v`, "v=$'\\u[b2]'\n"},
+		{"a vulgar fraction", `v='½'; typeset -p v`, "v=$'\\u[bd]'\n"},
+		{"a multiplication sign", `v='×'; typeset -p v`, "v=$'\\u[d7]'\n"},
+		{"a non-breaking space", `v=$'\u00a0'; typeset -p v`, "v=$'\\u[a0]'\n"},
+		{"a soft hyphen", `v=$'\u00ad'; typeset -p v`, "v=$'\\u[ad]'\n"},
+		{"a combining acute", `v=$'\u0301'; typeset -p v`, "v=$'\\u[301]'\n"},
+		{"an emoji", `v=$'\U0001f600'; typeset -p v`, "v=$'\\u[1f600]'\n"},
+		// Every character is judged and not only the first, and one failing
+		// takes the whole value into the form — including the `é` beside it,
+		// which would have stood bare on its own.
+		{"one of two failing", `v='é°'; typeset -p v`, "v=$'\\u[e9]\\u[b0]'\n"},
+		{"and in the other order", `v='°é'; typeset -p v`, "v=$'\\u[b0]\\u[e9]'\n"},
+		{"in the middle of a value", `v='x°y'; typeset -p v`, "v=$'x\\u[b0]y'\n"},
+		// A value that would have been quoted for a blank is taken into the
+		// form instead, where the same value with a bare character keeps its
+		// quotes — the pair that says this is about the character.
+		{"quoted for a blank", `v='° b'; typeset -p v`, "v=$'\\u[b0] b'\n"},
+		{"the control beside it", `v='é b'; typeset -p v`, "v='é b'\n"},
+		// And the same rule reaching the other listing surfaces.
+		{"an alias body", `alias al='°'; alias al`, "al=$'\\u[b0]'\n"},
+		{
+			"a table's key and its value",
+			`typeset -A m; m['°']='é'; typeset -p m`,
+			"typeset -A m=([$'\\u[b0]']=é)\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runKsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A character above ASCII is a **name** character in the `=` and `#` listing
+// rules — #4830.
+//
+// The two rules go opposite ways over the same character, which is what says
+// they are one fact rather than two: a leading `name=` is written bare, so
+// `é=a` is bare; and a `#` is left bare only where the text in front of it is
+// *not* a name, so `é#a` is quoted. Measured in the same run and the same
+// locale as the suite above.
+//
+// The character has to be one the listing would leave bare in the first
+// place, which the `°` rows are: there the value is in `$'...'` and neither
+// rule gets a say.
+func TestACharacterAboveAsciiIsANameInTheListingRules(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{"a bare assignment head", `v='é=a'; typeset -p v`, "v=é=a\n"},
+		{"a hash after a name", `v='é#a'; typeset -p v`, "v='é#a'\n"},
+		// And the ASCII controls, which agreed before this did.
+		{"an ASCII name and an equals", `v='a=b'; typeset -p v`, "v=a=b\n"},
+		{"no name in front of the equals", `v='=x'; typeset -p v`, "v='=x'\n"},
+		{"a digit is no name", `v='1=2'; typeset -p v`, "v='1=2'\n"},
+		{"an ASCII name and a hash", `v='a#b'; typeset -p v`, "v='a#b'\n"},
+		{"no name in front of the hash", `v='1#b'; typeset -p v`, "v=1#b\n"},
+		{"what looks like a base", `v='16#ff'; typeset -p v`, "v=16#ff\n"},
+		// A digit behind such a character is still a name, which is #4807's
+		// row read through these two rules.
+		{"a digit behind one", `v='é9é=a'; typeset -p v`, "v=é9é=a\n"},
+		{"and the hash rule agrees", `v='é9é#a'; typeset -p v`, "v='é9é#a'\n"},
+		{"a leading ASCII digit is still no name", `v='9é=a'; typeset -p v`, "v=$'9\\u[e9]=a'\n"},
+		// The other bare characters are names too, including the three no
+		// general category would give: a digit, a letter-number and an
+		// enclosed letter.
+		{"a CJK ideograph", `v='中=a'; typeset -p v`, "v=中=a\n"},
+		{"an Arabic-Indic digit, at the front", `v='٣=a'; typeset -p v`, "v=٣=a\n"},
+		{"a Roman numeral", `v='Ⅷ=a'; typeset -p v`, "v=Ⅷ=a\n"},
+		{"a circled letter", `v='Ⓐ=a'; typeset -p v`, "v=Ⓐ=a\n"},
+		{"and its hash row", `v='Ⓐ#a'; typeset -p v`, "v='Ⓐ#a'\n"},
+		// And a character the listing will not leave bare is no name either:
+		// the head does not split and the whole value takes the form.
+		{"a degree sign is no name", `v='°=a'; typeset -p v`, "v=$'\\u[b0]=a'\n"},
+		{"a currency sign is no name", `v='€=a'; typeset -p v`, "v=$'\\u[20ac]=a'\n"},
+		// The head really is bare, which these say by keeping the tail's own
+		// answer: a tail needing the form gets it without the head moving.
+		{"a bare head and a dollar tail", `v='a=é'; typeset -p v`, "v=a=$'\\u[e9]'\n"},
+		{"the same with a name above ASCII", `v='é=°'; typeset -p v`, "v=é=$'\\u[b0]'\n"},
+		{"a bare head and a quoted tail", `v='é=b c'; typeset -p v`, "v=é='b c'\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runKsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
 	}
 }

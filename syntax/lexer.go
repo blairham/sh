@@ -4192,6 +4192,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	}
 
 	start := l.off
+	closerSettled, settledLineEnded := false, false
 	if holdsCommands(kind) {
 		// Where the contents end is a question about the grammar, not about
 		// how many parentheses have been seen: a `case` arm's `)` closes
@@ -4259,6 +4260,18 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			// Kept in case the line does not read. See
 			// Lexer.settledBodyRefusal.
 			l.settleBodyRefusal(open, kind, l.lastBodyRefusal)
+			// And where nothing downstream will refuse the line, the scan
+			// has to stop looking for the closer itself. A dialect that
+			// reads the body **with its line** does not need that: the
+			// parser reads the same body again and fails, so the counting
+			// loop below is free to find the closer and the position it
+			// finds is the one every measured wording for those dialects
+			// comes from. A dialect that reads the body when it *runs* has
+			// nothing else to refuse with, and would otherwise charge the
+			// failure at expansion — after the commands written before the
+			// substitution on that line have run. See
+			// Dialect.SubstitutionBodyRefusalEndsTheRead.
+			closerSettled = l.dialect.SubstitutionBodyRead == SubstitutionBodyReadWhenItRuns
 		}
 		// Not something the parser could read — half a line at a prompt,
 		// most often. Counting is the older answer and is kept for it: it
@@ -4288,7 +4301,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	l.lastInnerHeredocExpands = false
 	joined := l.collectContinuations()
 	for depth > 0 {
-		if l.eof() {
+		if l.eof() || settledLineEnded {
 			if !l.incomplete && inner != "" && inner != openingOf(kind) {
 				l.innerOpen, l.innerHeredocExpands = inner, innerExpands
 			}
@@ -4334,6 +4347,24 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			// accounted for, so stepping over it is the whole of what is
 			// left to do with it. See Lexer.lastBodyStop.
 			l.advance()
+			continue
+		}
+		if closerSettled && l.peek() == '\n' {
+			// The closer is not being looked for, so the construct runs out
+			// at the end of the line the body's read stopped on — and the
+			// newline is part of what it ran out on.
+			//
+			// The line the *read* stopped on and not the one the opener is
+			// on, which two measurements on zsh 5.9.2 settle between them,
+			// 2026-09-27: `v=$(&&)` on line 2 of a four-line file is
+			// ``parse error near `v=$(&&)' `` at line **3**, and
+			// `v=$(echo hi; if true; then)` — whose `then` steps over the
+			// parenthesis, so the read carries on to the next line — is the
+			// same complaint at line **4** of a three-line file. Stopping at
+			// the opener's line gets the first and not the second. See
+			// Dialect.SubstitutionBodyRefusalEndsTheRead.
+			l.advance()
+			settledLineEnded = true
 			continue
 		}
 		switch c := l.peek(); c {
@@ -4385,7 +4416,9 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			depth++
 			l.advance()
 		case ')':
-			depth--
+			if !closerSettled {
+				depth--
+			}
 			l.advance()
 		default:
 			l.advance()

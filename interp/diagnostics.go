@@ -460,6 +460,25 @@ type Diagnostics struct {
 	// has none. False names it.
 	ExecNotFoundIsTheShellsOwn bool
 
+	// PrefixFailureIsTheBuiltins locates a value in an **assignment prefix**
+	// that will not expand as the builtin the prefix stands in front of,
+	// where that prefix is the builtin's environment rather than a store this
+	// shell keeps.
+	//
+	// ksh93 alone, because it is the only column with two location shapes to
+	// choose between. Eighteen rows are measured in
+	// interp/prefixfailurelocation.go and they come to one rule: the builtin
+	// speaks for a regular builtin's prefix, and this shell speaks for a
+	// prefix it keeps, for a function's, and for an external's. False — the
+	// zero value — is every other column, and it has to be: one of them names
+	// the builtin *in* the location, so a builtin speaking here would write
+	// `S:echo:2:` where that shell writes `S:2:`.
+	//
+	// Not "an arithmetic failure past line 1", which is the shape this looks
+	// like from one row and which would also have moved `echo $((1/0))` —
+	// that does not move (#4683).
+	PrefixFailureIsTheBuiltins bool
+
 	// BuiltinLocationIsTheSpeakersOnly gives BuiltinLocation to a complaint
 	// the builtin makes itself, and never to a redirection opened for one.
 	//

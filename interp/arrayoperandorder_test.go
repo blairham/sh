@@ -34,12 +34,22 @@ import (
 // output reached.
 func operandOrderRun(t *testing.T, dir, src string) (out, errOut string) {
 	t.Helper()
+	return operandOrderRunWith(t, dir, src, nil)
+}
+
+// operandOrderRunWith is the same with a hand on the vector, for the one
+// control below whose shape asks an axis of its own.
+func operandOrderRunWith(t *testing.T, dir, src string, set func(*Semantics)) (out, errOut string) {
+	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	sem := permissive()
 	sem.DeclarationCommandWord = DeclarationByUnquotedLiteralWord
+	if set != nil {
+		set(&sem)
+	}
 	var o, e bytes.Buffer
 	r := newTestRunner(t, &Runner{
 		Dir: dir, Stdout: &o, Stderr: &e,
@@ -137,16 +147,33 @@ func TestAScalarOperandIsExpandedOutsideTheRedirectionsToo(t *testing.T) {
 // TestABareArrayLiteralKeepsItsOwnExpansionPosition is the other control, and
 // it is the one that pins the *shape* rather than the stream. A literal
 // written as a statement of its own is not an operand — nothing runs between
-// its expansion and its store — so it must go on answering exactly as it did,
-// value and side effect alike, however the operand is moved.
+// its expansion and its store — so the value it comes to must not move,
+// however the operand is moved.
+//
+// The **stream** is a different question and one the panel splits on, which is
+// why the axis is answered here rather than left to the vector: a command with
+// no command word opens its redirections either before or after its
+// assignments expand, and where it opens them first the substitution's
+// standard error goes to the file the statement just opened. See
+// interp/prefixredirorder.go. The value is `[kept]` at both answers, which is
+// what this control is for.
 func TestABareArrayLiteralKeepsItsOwnExpansionPosition(t *testing.T) {
-	out, errOut := operandOrderRun(t, t.TempDir(),
-		"a=($(echo VISIBLE >&2) kept) 2>/dev/null\n"+
-			`printf "[%s]" "${a[@]}"`+"\n")
-	if errOut != "VISIBLE\n" {
-		t.Errorf("stderr = %q, want %q", errOut, "VISIBLE\n")
-	}
-	if out != "[kept]" {
-		t.Errorf("stored = %q, want %q", out, "[kept]")
+	for _, row := range []struct {
+		order PrefixRedirectionOrder
+		errs  string
+	}{
+		{PrefixExpandedBeforeRedirectionsAlways, "VISIBLE\n"},
+		{PrefixExpandedBeforeRedirectionsNever, ""},
+	} {
+		out, errOut := operandOrderRunWith(t, t.TempDir(),
+			"a=($(echo VISIBLE >&2) kept) 2>/dev/null\n"+
+				`printf "[%s]" "${a[@]}"`+"\n",
+			func(s *Semantics) { s.PrefixExpandedBeforeTheRedirections = row.order })
+		if errOut != row.errs {
+			t.Errorf("%v: stderr = %q, want %q", row.order, errOut, row.errs)
+		}
+		if out != "[kept]" {
+			t.Errorf("%v: stored = %q, want %q", row.order, out, "[kept]")
+		}
 	}
 }

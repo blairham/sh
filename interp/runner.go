@@ -1732,6 +1732,14 @@ type Runner struct {
 	// dispatch routes skip the value of a frozen name and the ordinary check
 	// does not report the same names a second time.
 	prefixCheckedFirst bool
+	// prefixSpeaker is who a value in the running command's assignment
+	// prefix is located as if it will not expand, decided once per command
+	// from the command itself — and prefixValueSpeaker is that answer armed
+	// for the length of one such expansion. Both are per-command scratch and
+	// both are cleared when the command is over. See
+	// interp/prefixfailurelocation.go.
+	prefixSpeaker      prefixValueSpeaker
+	prefixValueSpeaker prefixValueSpeaker
 	// prefixTraceAssigns and prefixTraceValues hold this command's
 	// assignment-prefix values, for the one command being traced. `set -x`
 	// has to write the value it is about to hand over and the route that
@@ -4935,6 +4943,14 @@ func (r *Runner) lastStatementLine() int {
 // builtin, because the two dialects that ask want different answers for a
 // failed redirection: ksh93 counts it as the builtin's and zsh does not.
 func (r *Runner) builtinIsSpeaking() bool {
+	if byBuiltin, answered := r.prefixValueIsTheBuiltins(); answered {
+		// A value in an assignment prefix is being expanded, in the one
+		// column that chooses a location shape by which command is speaking.
+		// The command decides it rather than what this shell happens to have
+		// on the record at the moment the value fails — see
+		// interp/prefixfailurelocation.go.
+		return byBuiltin
+	}
 	return r.speaking() != "" || r.redirectForBuiltin != ""
 }
 
@@ -7441,6 +7457,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// — its plain-assignment location — where this engine, having already
 	// said a builtin's redirection was being opened, wrote the builtin form
 	// `<script>[1]:` (#3314).
+	if aPrefixValueCanFail(c.Assigns) {
+		// Who a value in this command's prefix is located as if it will not
+		// expand, decided from the command while the command is in hand: the
+		// four routes a prefixed command takes reach the expansion from four
+		// different places. Asked only where a right-hand side could raise a
+		// diagnostic at all, so a literal prefix asks nothing. See
+		// interp/prefixfailurelocation.go.
+		r.prefixSpeaker = r.prefixFailureSpeaker(argv)
+	}
 	if len(argv) > 0 {
 		// The word itself, whatever it names: a refused `{name}>` store is
 		// reported under it whether it is a builtin or a program — measured,
@@ -7454,6 +7479,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	defer func() {
 		r.prefixTraceAssigns, r.prefixTraceValues = nil, nil
 		r.prefixTraceJoins, r.prefixGlobMatches = nil, nil
+		r.prefixSpeaker = prefixValueSpeakerNone
 	}()
 	tracedHere := false
 	// What this command knew before any prefix value was expanded, so that a

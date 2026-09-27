@@ -75,6 +75,11 @@ type prefixGlobMatch struct {
 // command takes each reach the expansion through Runner.prefixExpansion and
 // only three of them care what the match was.
 func (r *Runner) prefixAssignValue(a *syntax.Assign) string {
+	// Who a failure in here is located as, in the one column that chooses:
+	// armed for the expansion and put away after it, so a builtin that runs
+	// commands of its own does not lend them a speaker. See
+	// interp/prefixfailurelocation.go.
+	defer r.speakForAPrefixValue()()
 	value, fields, globbed := r.expandScalarAssignValue(a.Value)
 	if globbed {
 		r.prefixGlobMatches = append(r.prefixGlobMatches, prefixGlobMatch{assign: a, fields: fields})

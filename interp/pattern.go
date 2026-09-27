@@ -714,6 +714,14 @@ type patternOpts struct {
 	// answer, because the lexer has to have let the `(` into the word
 	// before anything here can see it.
 	tilde bool
+	// tildePrefix is the glob standing in front of a `~(…)` flavor group,
+	// already rendered as the regular expression that matches the same text.
+	// It is carried rather than concatenated at the call site because every
+	// flavor turns into one language in tildeRegex and nowhere earlier — a
+	// literal flavor quotes its pattern, a basic one is translated, and an
+	// extended one is taken as it stands, so the only place a prefix can be
+	// joined to all three is after that. See interp/tildeflavorhere.go.
+	tildePrefix string
 	// tildeFold is the same construct read where it *stands* rather than at
 	// the front, for the letters that are an option for the rest of the
 	// branch. Separate from tilde because that one is cleared the moment a
@@ -1128,6 +1136,15 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 			m, _ := readTildeModifier(body)
 			return matchTilde(m, rest, piece, subject, base, o)
 		}
+		// And one standing further along, which settles the whole match the
+		// same way rather than being a flag the walk carries: a flavor says
+		// what language the pattern is written in. See
+		// interp/tildeflavorhere.go.
+		o.tilde = false
+		if got, isFlavor := matchTildeFlavorHere(pattern, piece, subject, base, o); isFlavor {
+			return got, matchReport{}
+		}
+		o.tilde = true
 	}
 	w := o.where
 	if w == nil {

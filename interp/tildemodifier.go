@@ -302,6 +302,17 @@ type tildeOperand struct {
 // `[[ xabcx == ~(E)a.c ]]` matches, and `s=aXbXc; ${s//~(E)X/-}` is `a-b-c`
 // rather than `-c`, which it would be if each span were searched.
 func (m tildeModifier) tildeRegex(pattern string, whole bool) (tildeExpr, bool) {
+	return m.tildeRegexAfter("", pattern, whole)
+}
+
+// tildeRegexAfter is tildeRegex with a glob standing in front of the group,
+// already rendered as an expression by globToRE2.
+//
+// The join is here and not at the call site because this is the first point
+// at which every flavor is one language: a literal one has been quoted, a
+// basic one translated, and an extended one taken as it stands. Joining
+// earlier would mean writing the translation out once per flavor.
+func (m tildeModifier) tildeRegexAfter(prefix, pattern string, whole bool) (tildeExpr, bool) {
 	switch m.flavor {
 	case tildeLiteral:
 		pattern = regexp.QuoteMeta(pattern)
@@ -316,7 +327,7 @@ func (m tildeModifier) tildeRegex(pattern string, whole bool) (tildeExpr, bool) 
 		pattern = expr
 	}
 	x := tildeExpr{left: !whole || m.left, right: !whole || m.right}
-	if m.flavor == tildeAugERE {
+	if m.flavor == tildeAugERE && prefix == "" {
 		if alts, ok := tildeConjunction(pattern); ok {
 			for _, alt := range alts {
 				group := make([]tildeOperand, 0, len(alt))
@@ -337,7 +348,7 @@ func (m tildeModifier) tildeRegex(pattern string, whole bool) (tildeExpr, bool) 
 			return x, true
 		}
 	}
-	re, err := regexp.Compile(m.wrapRegex(pattern, x.left, x.right))
+	re, err := regexp.Compile(m.wrapRegex(prefix+"(?:"+pattern+")", x.left, x.right))
 	if err != nil {
 		return tildeExpr{}, false
 	}
@@ -781,6 +792,14 @@ func matchTilde(m tildeModifier, pattern, piece, subject string, base int, o pat
 		return false, matchReport{}
 	}
 	if m.flavor == tildeGlob {
+		// A group at the head that left the flavor alone does not settle the
+		// language, so one further along still can: `[[ zA == ~(i)z~(E)a ]]`
+		// matches in ksh93u+, the fold carried into the expression. Without
+		// this the head group spends the one reading and the second is text.
+		if got, isFlavor := matchTildeFlavorHere(pattern, piece, subject, base,
+			tildeFoldHere(o, true, o.fold || m.fold)); isFlavor {
+			return got, matchReport{}
+		}
 		// The default, and the one flavor that is this shell's own matcher:
 		// the letters left to honor here are `i`, which is the same fold the
 		// run-time options ask for and reaches one place further than they
@@ -792,7 +811,7 @@ func matchTilde(m tildeModifier, pattern, piece, subject string, base int, o pat
 		o.foldClass = o.foldClass || m.fold
 		return matchPatternIn(pattern, piece, subject, base, o)
 	}
-	x, ok := m.tildeRegex(pattern, o.whole)
+	x, ok := m.tildeRegexAfter(o.tildePrefix, pattern, o.whole)
 	if !ok {
 		return false, matchReport{}
 	}

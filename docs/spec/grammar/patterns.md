@@ -2497,12 +2497,37 @@ whether the group changes anything: a pattern with a piece taken out of it is
 not the name the field was written as.
 
 **A flavor letter is a different matcher and not a flag**, so `~(E)` mid-word
-is not the same change as `~(i)` mid-word — honoring one means matching a glob
-prefix against part of the subject and an expression against the rest. ksh93u+
-does read one there; this shell does not, which is #4883, and the row that
-says so is `f z~(E).`: `.` is an ordinary character in a glob and any one
-character in an expression, so consuming the group and ignoring its letter
-would be a plausible wrong answer rather than a fix.
+is not the same change as `~(i)` mid-word, and what it turns out to be is not
+a split either. The glob in front of the group is **translated into the
+flavor's language** and the whole is matched the way that flavor is matched,
+which for ksh93's expressions is a substring search. Measured on ksh93u+, the
+same day:
+
+| probe | ksh93 | what it rules out |
+| --- | --- | --- |
+| `[[ zA == z~(E)A ]]` | yes | |
+| `[[ zAB == z~(E)A ]]` | yes | |
+| `[[ zXA == z~(E)A ]]` | **no** | a split searching what is left |
+| `[[ zzA == z~(E)A ]]` | yes | a split anchored where the glob stopped |
+
+`z` and `A` become the one expression `zA`, which is in `zzA` and is not in
+`zXA`. The glob keeps its glob meaning through that translation and does not
+become the expression's text, which is the other half and is measured apart:
+`[[ zXA == z.~(E)A ]]` is **no** while `[[ 'z.A' == z.~(E)A ]]` is yes, so the
+`.` is a literal period; `[[ zaaa == za+~(E)a ]]` is **no** while
+`[[ 'za+a' == za+~(E)a ]]` is yes, so the `+` is a literal plus. Both would go
+the other way if the flavor reached backward over the whole pattern.
+
+`K`, `p` and `s` are the same construct with nothing to translate: they name
+ksh's own glob, which is the language the walk is already in, so the group is
+consumed where it stands and `[[ zab == z~(K)a* ]]` matches.
+
+Three shapes are measured and **not** read here, each with its own issue
+rather than an approximation: a flavor group **inside a pattern group**,
+`@(z~(E)a)`, where the text in front is not a glob anybody can translate on
+its own (#4892); `~(g)`, `~(l)` and `~(r)`, which are about the span a match
+takes rather than the language and want plumbing of their own (#4893); and
+`\d` and its kin inside `~(P)`, which RE2 has not (#4894).
 
 ### And the group turns what follows it into the flavor's text
 

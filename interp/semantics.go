@@ -6063,11 +6063,12 @@ type Semantics struct {
 	//
 	// It is asked only where a `..` is present, so an ordinary `cd` puts no
 	// question. **It is asked under `-P` as well**, where it used not to be:
-	// the whole path is walked with its `..` in place in three of the four
-	// columns, and the fourth cancels a `..` that reaches past the operand
-	// into the logical `$PWD` there exactly as it does without the letter.
-	// See Runner.physicalPathCancelingIntoTheDirectoryHeld for that grid and
-	// for why the two kinds of `..` have to interleave (#4628).
+	// ksh93 cancels a `..` that reaches past the operand into the logical
+	// `$PWD` there exactly as it does without the letter, and bash 5.3, zsh,
+	// dash and BusyBox ash all walk the whole path with its `..` in place.
+	// See Runner.physicalPathCancelingIntoTheDirectoryHeld for that grid,
+	// measured over all five columns, and for why the two kinds of `..` have
+	// to interleave (#4628).
 	//
 	// The `/nosuch/..` row is one mechanism and not a second question, and it
 	// is the row this shell used to answer *both* ways: an absolute operand

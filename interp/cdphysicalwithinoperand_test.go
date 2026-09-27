@@ -16,9 +16,11 @@ import (
 // Semantics.CdCancelsADotDot, which carries the panel, and
 // Runner.physicalPathCancelingIntoTheDirectoryHeld for the grid.
 //
-// Three of the four columns resolve the whole path with every `..` in place
-// there; one cancels a `..` that reaches past the operand and into the
-// directory the shell is **logically** in, and resolves only what is left. It
+// Four of the five columns resolve the whole path with every `..` in place
+// there — bash, zsh, dash and BusyBox ash, the last of them measured in the
+// digest-pinned Alpine image — and ksh93 cancels a `..` that reaches past the
+// operand and into the directory the shell is **logically** in, resolving
+// only what is left. It
 // is the same reading the `-L` route is keyed on, which is why it is the same
 // axis rather than a second one.
 //

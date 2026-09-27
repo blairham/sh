@@ -397,13 +397,15 @@ func (r *Runner) canceledComponentRefused(base, operand string, withinOperand bo
 // reached, by whether the component it pops is one the operand put there.
 //
 // Measured 2026-09-27 against ksh93u+ 2012-08-01 — with dash 0.5.12, bash
-// 5.3.20 and zsh 5.9.2 as the unanimous controls — in a tree `t` holding
-// `real/deep`, `sub`, and `sub/fake` pointing at `../real`; `go version -m`
-// says *not a Go executable* for each of the four. `$PWD` is the logical name
-// the shell arrived under, and the same figures come back whether it was
-// reached absolutely or a component at a time:
+// 5.3.20, zsh 5.9.2 and BusyBox ash 1.37.0 in
+// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+// as the unanimous controls — in a tree `t` holding `real/deep`, `sub`, and
+// `sub/fake` pointing at `../real`; `go version -m` says *not a Go executable*
+// for each of the four native ones. `$PWD` is the logical name the shell
+// arrived under, and the same figures come back whether it was reached
+// absolutely or a component at a time:
 //
-//	from              cd -P …          ksh93    the other three
+//	from              cd -P …          ksh93    the unanimous four
 //	t                 sub/fake/..      t        t
 //	t                 sub/fake/deep/.. t/real   t/real
 //	t                 sub/fake/../..   above t  above t
@@ -422,9 +424,8 @@ func (r *Runner) canceledComponentRefused(base, operand string, withinOperand bo
 // Three of those rows are the split and two of them carry the rule. **`../fake/..`
 // is the sharpest**: the first `..` cancels the link's own name logically,
 // putting the walk in `t/sub` where a `fake` really is, and the second
-// resolves it physically — so one operand produces both readings and the
-// other three columns, which never take the first step, refuse the row
-// outright. And **`deep/../..` is what rules out "a leading `..`"**: the
+// resolves it physically — so one operand produces both readings, and the
+// four columns that never take the first step refuse the row outright. And **`deep/../..` is what rules out "a leading `..`"**: the
 // first `..` pops a component the operand put there and resolves, the second
 // reaches `$PWD` and cancels, and the answer is decided per component rather
 // than by what the operand starts with. `t/sub/fake/deep` with a bare `..` is

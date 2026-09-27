@@ -5177,8 +5177,8 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// the built name up and does not fall back on the descriptor it holds:
 	// measured 2026-09-27 with the shell in `d/s`, `d` renamed to `e` and a
 	// fresh `d` made at the old name, `cd -P ..` lands in the **impostor**
-	// in that column and follows the descriptor into `e` in the other three.
-	// So the last resort below is not offered this one (#4628, #4668).
+	// in that column and follows the descriptor into `e` in bash, zsh and
+	// dash. So the last resort below is not offered this one (#4628, #4668).
 	canceledIntoTheDirectory := false
 	if physical {
 		// `-P` is where the directory *is*, rather than the name it was

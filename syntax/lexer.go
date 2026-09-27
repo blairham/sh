@@ -2236,7 +2236,12 @@ func (l *Lexer) caseArmParenOpensAGroup() bool {
 // is without a depth counter. A `(` anywhere else in a word is the pattern
 // group question and is answered below.
 func (l *Lexer) opensSubscriptFlags() bool {
-	if !l.dialect.ArraySubscriptFlags || l.off == 0 || l.src[l.off-1] != '[' {
+	if !l.dialect.ArraySubscriptFlags || l.dialect.CommandWordSubscriptHasNoFlagGroup ||
+		l.off == 0 || l.src[l.off-1] != '[' {
+		// This is the word scanner's question and so is only ever asked of a
+		// command word; a substitution's subscript is read by paramexp.go and
+		// keeps its group whatever this says. See
+		// [Dialect.CommandWordSubscriptHasNoFlagGroup].
 		return false
 	}
 	_, _, ok := scanSubscriptFlags(l.src[l.off:])

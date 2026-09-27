@@ -95,3 +95,28 @@ func (r *Runner) SetRegexOperandParenthesisIsTheShellsOwn(on bool) {
 	d.RegexParenthesisIsTheShellsOwn = on
 	r.Dialect = &d
 }
+
+// CommandWordSubscriptHasAFlagGroup reports whether a subscript written in a
+// command word — `b[(r)y]=Q` — carries a parenthesized flag group.
+//
+// A subscript written inside a substitution keeps its group whatever this
+// says, which is measured rather than a convenience of the implementation:
+// with the option that moves this on, `b[(r)y]=Q` is a parse error in the
+// reference and `${b[(r)y]}` still runs the search.
+func (r *Runner) CommandWordSubscriptHasAFlagGroup() bool {
+	return !r.lang().CommandWordSubscriptHasNoFlagGroup
+}
+
+// SetCommandWordSubscriptHasAFlagGroup moves it, for a dialect whose option
+// namespace has a name for the reading.
+//
+// The dialect is copied and replaced rather than written through, for the
+// reason the setters above are.
+func (r *Runner) SetCommandWordSubscriptHasAFlagGroup(on bool) {
+	d := r.dialect()
+	if d.CommandWordSubscriptHasNoFlagGroup == !on {
+		return
+	}
+	d.CommandWordSubscriptHasNoFlagGroup = !on
+	r.Dialect = &d
+}

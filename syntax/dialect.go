@@ -6574,6 +6574,31 @@ type Dialect struct {
 	// group.
 	ArraySubscriptFlags bool
 
+	// CommandWordSubscriptHasNoFlagGroup takes the flag group off a subscript
+	// written in a **command word** — `b[(r)y]=Q` — and leaves it on a
+	// subscript written inside a substitution — `${b[(r)y]}`. With it on the
+	// `(` is the shell's own operator where a command word carries one, so
+	// the word ends there and the line is refused.
+	//
+	// The two halves are one measurement and the second is what makes this a
+	// field rather than [Dialect.ArraySubscriptFlags] going off. On zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0) at `/opt/homebrew/bin/zsh`, run `-f` from a
+	// script file, 2026-09-27, with `shglob` on and `kshglob` off:
+	//
+	//	b[(r)y]=Q                          parse error near `('
+	//	b=(x y z); printf %s "${b[(r)y]}"  y — the search still runs
+	//
+	// So the group is gone from one position and not from the construct, and
+	// a flag turning the whole thing off would have taken a working
+	// substitution with it.
+	//
+	// The blanks are the control and they do not move: `b[a b]=Q` parses in
+	// that state exactly as it does without the option, so this is about the
+	// parenthesis rather than about a command word's subscript being read the
+	// standard's way. See [Dialect.SubscriptSpansSeparators], which is the
+	// flag that would have moved if it were.
+	CommandWordSubscriptHasNoFlagGroup bool
+
 	// BareSubscript lets a parameter written without braces carry a
 	// subscript, and lets `$#name` mean that parameter's length: `$a[1]` is
 	// an element and `$#a` is a count, where a grammar without the flag

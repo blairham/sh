@@ -7271,12 +7271,20 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
-		if r.refusePrivateRedeclaration(name) {
+		// A bare `+` over a valueless operand is an option word and a
+		// listing rather than a declaration, so neither reason applies to
+		// it; the hide-in-scope letter asks for an ordinary local over the
+		// shell's own name, which is the one way past the second reason
+		// alone. Both measured — see Runner.refusePrivateDeclaration.
+		if r.refusePrivateDeclaration(name,
+			f.plusAlone && !hasValue, f.hideNamed && f.hide) {
 			// `private` over a name the running call has already declared,
-			// which is the one refusal that belongs to the second word and
-			// not to this one. Ahead of everything below, because the
-			// declaration does not happen: the binding standing there keeps
-			// its value and its letters. See interp/privatescope.go.
+			// or over one the shell holds a binding for — the two refusals
+			// that belong to the second word and not to this one. Ahead of
+			// everything below, because the declaration does not happen: the
+			// binding standing there keeps its value and its letters, and the
+			// operands after it are still declared. See
+			// interp/privatescope.go.
 			status = 1
 			continue
 		}

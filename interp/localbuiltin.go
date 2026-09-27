@@ -254,7 +254,12 @@ func (r *Runner) listStandingDeclaration(name string) {
 //   - the line carried **no letters at all**. `typeset -i n` over a standing
 //     `n` is silent in the shell that lists, and so is `typeset -g s` — which
 //     is also why `readonly`, `export`, `integer` and `float` never do it:
-//     each of those words is an attribute already.
+//     each of those words is an attribute already. A **sign on its own** is
+//     not a letter and does not stop it: measured 2026-09-27 on zsh 5.9.2
+//     under `-f`, `v=hi; typeset + v` and `v=hi; typeset - v` both write
+//     `v=hi`, exactly as `typeset v` does. `-` reached this already because
+//     it leaves every field at its zero; `+` did not, because it sets
+//     `remove`, and the two spellings of one word are not two answers.
 //   - the cell is not a **fresh** one. A declaration inside a function that
 //     shadows the caller's name finds nothing standing in it, which is what
 //     keeps a shell from narrating every `local` in every function; a second
@@ -262,7 +267,11 @@ func (r *Runner) listStandingDeclaration(name string) {
 //   - the name **holds** something. `unset u; typeset u` prints nothing,
 //     which is the control that says this is not "one operand means list".
 func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, fresh bool) bool {
-	if (f != (declareFlags{}) && !f.onlyAConflictedWidth()) || fresh || !r.declaredNameHolds(name) {
+	letters := f
+	// A bare `+` is an option word carrying no letters — see the sign branch
+	// in parseDeclareFlags — so what it leaves behind is not a letter either.
+	letters.remove, letters.plusAlone = false, false
+	if (letters != (declareFlags{}) && !f.onlyAConflictedWidth()) || fresh || !r.declaredNameHolds(name) {
 		return false
 	}
 	if r.freezing[name] {

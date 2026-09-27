@@ -4706,7 +4706,7 @@ func Diagnostics() interp.Diagnostics {
 		// other pattern surface is 1 on every route. The complaint reaches
 		// standard error and the shell leaves either way, so the status is
 		// the whole of what a caller loses (#4765).
-		CasePatternRefusalEndsACommandStringAtNought: true,
+		CasePatternRefusalLeavesNought: true,
 		// With one exception, and it goes the other way from ksh93's: an
 		// option refused at an invocation names the **whole word** the shell
 		// was started by, where SelfName above would have written `zsh`.
@@ -6449,6 +6449,10 @@ func Apply(r *interp.Runner) {
 	// until #4488. After the ties, because half the names it marks are made
 	// by them.
 	markTheShellsOwnParameters(r)
+	// And which of them a `private` declaration may not take into a scope,
+	// which is a different set from the one above and is measured rather than
+	// derived from it — see scopefixedparameters.go, and #4802.
+	markTheScopeFixedParameters(r)
 	// And the four scalar pairs that are one parameter under two names —
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)

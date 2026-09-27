@@ -88,6 +88,11 @@ type declareFlags struct {
 	capital     bool
 	global      bool
 	hidden      bool
+	// plusAlone says the last option word was a bare `+` rather than a
+	// letter carrying that sign. The two are different requests and only
+	// this one is a listing — see the bare-sign branch in parseDeclareFlags,
+	// and Runner.refusePrivateDeclaration for the row that needs them apart.
+	plusAlone bool
 	// hide is the sign of the last `h` letter written and hideNamed says one
 	// was written at all — the hide-in-scope attribute, which is a tri-state
 	// and not a bool: `-h` sets it, `+h` takes it off, and a declaration with
@@ -451,6 +456,11 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			}
 			pending = 0
 			f.remove = a == "+"
+			// And that it was a sign *alone*, which `f.remove` cannot say:
+			// `+h` sets that too and means something else entirely. One word
+			// reads it — see Runner.refusePrivateDeclaration, where `private
+			// + path` is taken and `private +h path` is refused.
+			f.plusAlone = f.remove
 			if f.function {
 				// And it reaches the function listing where the `f` letter
 				// has already been read, which is the same sign meaning the

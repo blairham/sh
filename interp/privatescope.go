@@ -251,9 +251,51 @@ func (r *Runner) unsealPrivateNames(sc *scope) {
 	sc.privateSealed = nil
 }
 
-// refusePrivateRedeclaration reports whether this `private` declaration is
-// refused because the running call has already declared the name, having said
-// so.
+// refusePrivateDeclaration reports whether this `private` declaration is
+// refused, having said so.
+//
+// There are two reasons and one sentence. The first is a **redeclaration**:
+// the running call has already declared the name. The second is a name the
+// **shell** holds a binding for and will not let a scope take — the measured
+// set is in interp/parameterscopefixed.go, and it is a second reason here
+// rather than a gate of its own because the reference says the same thing
+// either way, down to the location, and a second call site is where the
+// wording of one of them would later drift from the other.
+//
+// The second reason has two exemptions the first does not, and both
+// asymmetries are measured rather than tidied.
+//
+// **`private -h path` is taken**, and what it makes is an ordinary local that
+// hides the shell's parameter for the call — `${(t)path}` is
+// `array-local-hide-special`, the value starts empty, and the shell's own
+// `path` is back when the call returns. That is the hide-in-scope letter
+// doing exactly what it says, and it is the one way to ask for a binding of
+// one's own over a name the shell holds. Measured 2026-09-27 on zsh 5.9.2
+// under `-f`, letter by letter over `path`: `-h` is 0; `+h` is the refusal;
+// `-a`, `-x`, `-r`, `-U`, `-l`, `-u`, `-t`, `-H`, `-Z` and `-P` are the
+// refusal; `-p` and `-m` are listings and never reach it.
+//
+// The `-h` exemption is the *scope-fixed* reason's alone: `private v=1;
+// private -h v=2` is still the refusal, so a redeclaration is not something
+// the letter buys past.
+//
+// **A bare `+` over a valueless operand is taken, and by both reasons.** A
+// sign on its own is an option word rather than a declaration — it is what
+// makes `typeset + v` write `v=hi`, the same as `typeset v` — so there is no
+// binding being asked for and nothing to refuse. Measured the same day:
+// `private + path`, `private -a + path` and `private + HOME` are 0, and so is
+// `private + v` after `private v=1` in the same call, which *lists* `v=1` at
+// 0. Put a value on the operand and both reasons come back: `private +
+// path=(/x)` and `private + HOME=/x` are the refusal with the parameter
+// untouched, and so is `private v=1; private + v=2`. It is
+// [declareFlags.plusAlone] that says this and not `f.remove`, because `+h`
+// sets that too and `+h path` is refused.
+//
+// The `+` word has a second row this does not reach: `private + v` leaves
+// `${(t)v}` at `scalar-local` in the reference and at
+// `scalar-local-hide-special` here, so the sign takes the *private* off the
+// declaration there and does not here. That stands on `main` as it does
+// after this and is left for the issue that measures the sign.
 //
 // Measured 2026-09-27 on zsh 5.9.2 under `-f`, inside a function:
 //
@@ -277,8 +319,21 @@ func (r *Runner) unsealPrivateNames(sc *scope) {
 // the innermost scope and of nothing else: a name the shell holds, or one a
 // *calling* function declared, is something this declaration displaces rather
 // than something it would have to move.
-func (r *Runner) refusePrivateRedeclaration(name string) bool {
-	if !r.declaringPrivate || !r.localInTheInnermostScope(name) {
+func (r *Runner) refusePrivateDeclaration(name string, lists, hidesTheShellsOwn bool) bool {
+	if !r.declaringPrivate || lists {
+		return false
+	}
+	// A declaration that takes no shadow is not moving a binding into a
+	// scope, so neither reason applies to it: at the top level `private path`
+	// is a listing at 0 and `private HOME=/x` assigns, measured — and the
+	// same line in [Runner.shadow] is what makes that true. Asked here as
+	// well, because parameterScopeFixed is a fact about the name alone and
+	// would otherwise answer at the top level too.
+	if len(r.scopes) == 0 {
+		return false
+	}
+	if !r.localInTheInnermostScope(name) &&
+		!(r.parameterScopeFixed(name) && !hidesTheShellsOwn) {
 		return false
 	}
 	// The refusal names `private` and **not the word as written**, which is

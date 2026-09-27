@@ -4439,6 +4439,14 @@ type Runner struct {
 	// interp/shellownparameter.go, and ParameterAttributes.Provided, which
 	// is what reads it.
 	shellOwn map[string]bool
+	// scopeFixed names the parameters whose binding the shell holds itself,
+	// so that a declaration asking to move one into a function's scope is
+	// refused. Only one word in the panel asks for that — see
+	// interp/parameterscopefixed.go, which has the measured set, and
+	// interp/privatescope.go for the word. Not shellOwn above: `unset` takes
+	// a name out of that one and leaves this one alone, and the two sets are
+	// not the same names anyway.
+	scopeFixed map[string]bool
 	// traced names the parameters carrying the trace attribute — `typeset
 	// -t`. Every shell on the panel but the two without the builtin records
 	// it and lists it back, and none of them lets it change what a *value*

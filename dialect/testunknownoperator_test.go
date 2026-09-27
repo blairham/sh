@@ -70,7 +70,13 @@ func TestTheShortFormsNameTheOperatorToo(t *testing.T) {
 		{"bash", "bash: line 1: [: -Q: unary operator expected\n", "bash: line 1: [: -Q: binary operator expected\n"},
 		{"dash", "dash: 1: [: -Q: unexpected operator\n", "dash: 1: [: x: unexpected operator\n"},
 		{"ksh", "ksh: [: -Q: unknown operator\n", "ksh: [: -Q: unknown operator\n"},
-		{"zsh", "zsh:[:1: unknown condition: -Q\n", "zsh:1: condition expected: -Q\n"},
+		// The three-word row was `condition expected: -Q` here and that was
+		// never what the shell says: re-measured 2026-09-27 on zsh 5.9.2,
+		// `[ x -Q x ]` is `unknown condition: -Q` exactly as the two-word
+		// form is — a word spelled like an operator and not known is named
+		// in both places, and the builtin is in the location for both
+		// (#4513).
+		{"zsh", "zsh:[:1: unknown condition: -Q\n", "zsh:[:1: unknown condition: -Q\n"},
 	} {
 		t.Run(c.dialect, func(t *testing.T) {
 			p := presets[c.dialect]

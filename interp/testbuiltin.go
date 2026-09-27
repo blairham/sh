@@ -115,6 +115,19 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 	}
 	if err != nil {
 		var te *testError
+		if errors.As(err, &te) && r.diag().TestRefusalCountsTheWordsBetweenConnectives {
+			// One column words a refusal from the word counts of the
+			// segments between the connectives rather than from where the
+			// reading above stopped. Asked here, over a list that has
+			// already been refused, because it is a second reading of the
+			// refusal and not a second evaluator — see
+			// interp/testcountedsegments.go. A list it finds nothing wrong
+			// with keeps the complaint the reading above made, which is
+			// every failure of *evaluation* rather than of arity.
+			if counted := r.countedSegmentRefusal(form, args); counted != nil {
+				err = counted
+			}
+		}
 		if errors.As(err, &te) {
 			if te.kind == errArithmeticOperand {
 				// An operand the arithmetic could not read, in the dialect
@@ -129,7 +142,8 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 			if r.unspecified {
 				return 2
 			}
-			if te.kind == errBinaryExpected && r.diag().NamesBuiltinInLocation &&
+			if (te.kind == errBinaryExpected || te.kind == errTwoWordOperatorExpected) &&
+				r.diag().NamesBuiltinInLocation &&
 				!r.diag().BuiltinNamesTheShellAlone[name] {
 				// An expression that never parsed is not the builtin's
 				// complaint, *in the dialects that write the builtin's name
@@ -205,6 +219,11 @@ const (
 	errUnaryExpected testErrorKind = iota
 	// errBinaryExpected is a word where a binary operator belonged.
 	errBinaryExpected
+	// errTwoWordOperatorExpected is a word where an operator belonged in a
+	// **two-word** expression, for the column that words that one
+	// differently from the longer forms. See
+	// Diagnostics.TestTwoWordOperatorExpected.
+	errTwoWordOperatorExpected
 	// errOperandExpected is an operator with nothing after it.
 	errOperandExpected
 	// errTrailingOperandExpected is the same with the operator named, for
@@ -290,6 +309,11 @@ func (e *testError) format(d Diagnostics) string {
 		return ""
 	case errBinaryExpected:
 		return d.TestBinaryExpected
+	case errTwoWordOperatorExpected:
+		if d.TestTwoWordOperatorExpected != "" {
+			return d.TestTwoWordOperatorExpected
+		}
+		return d.TestUnaryExpected
 	case errClosingParenExpected:
 		if e.operand != "" && d.TestClosingParenExpectedFound != "" {
 			// A word was there and was not the parenthesis, in the column

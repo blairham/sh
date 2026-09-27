@@ -2869,4 +2869,11 @@ func setBareGroupGrammar(r *interp.Runner, shGlob, kshGlob bool) {
 	// `[[ a =~ (a) ]]` is refused wherever `[[ a == (a|b) ]]` is, and
 	// `[[ abc =~ ^(a|x)bc$ ]]` wherever `[[ ab == a(b|c) ]]` is.
 	r.SetRegexOperandParenthesisIsTheShellsOwn(shGlob)
+	// And the one position where a parenthesis is neither a pattern group nor
+	// a regular expression's: the flag group at the front of a **command
+	// word's** subscript. It goes with the bare group and comes back with it,
+	// and a subscript written inside a substitution keeps its own whatever
+	// either name says — measured, `b[(r)y]=Q` is a parse error with `shglob`
+	// alone and `${b[(r)y]}` still runs the search in that state.
+	r.SetCommandWordSubscriptHasAFlagGroup(!shGlob || kshGlob)
 }

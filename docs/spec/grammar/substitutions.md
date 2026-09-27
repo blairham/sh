@@ -740,6 +740,62 @@ an open done by the **shell itself** — the redirection of `read x < <(cmd)` �
 goes through the real table, so it is mapped back to the descriptor first;
 without that it would reach the enclosing pipe.
 
+### A table too crowded for the rule
+
+Every rule above reaches a bounded region — the descent walks [10,63] and
+each climb offers sixty-four numbers from its base — so a shell started in a
+process already holding more descriptors than that has **no number its rule
+can land on**. That is not a contrived state: it is a `Runner` embedded in a
+long-lived program, which is what this library is for, and it is what a CI
+runner handed `go test` (#4459, #4463).
+
+Measured 2026-09-26 with 3..72 opened on the null device before the shell
+started, so the lowest number really free is 73. References are
+`/opt/homebrew/bin/bash` 5.3.20, `/opt/homebrew/bin/zsh` 5.9.2 run `-f`, and
+`/bin/ksh` AT&T 93u+ 2012-08-01 — `go version -m` says *not a Go executable*
+for each.
+
+| written | | clean table | 3..72 held |
+| --- | --- | --- | --- |
+| `echo <(true)` | bash | `/dev/fd/63` | `/dev/fd/73` |
+| `echo <(true) <(true) <(true)` | bash | `63 62 61` | `73 74 75` |
+| | zsh | `11 12 13` | `74 75 76` |
+| | ksh93 | `3 4 5` | `73 74 75` |
+| `cat <(echo <(true))` | bash | `/dev/fd/63` | `/dev/fd/73` |
+| | ksh93 | `/dev/fd/3` | `/dev/fd/73` |
+| | zsh | `/dev/fd/10` | `/dev/fd/73` |
+
+Two facts, and they point in opposite directions.
+
+**The three rules collapse onto one.** A descent with nothing to descend
+through and a climb with nothing above it both answer the lowest free number
+and then walk *upward* from it — bash's direction reverses, which is what
+says the region is gone rather than merely shifted. So the fallback needs no
+widening: the number every column answers is the one the fallback already
+gives, and the search bound is not the defect.
+
+**The release does not collapse with them.** A number a fork would have
+freed is not a number the kernel will offer, so it is published by being
+*asked for* rather than by being free — and in a crowded table the wish list
+that asked for it can never land. All three columns still republish the
+enclosing number there, so the release is asked separately from the list.
+
+**Three of them cannot be consecutive here, and that is structural.** A real
+shell forks for a body and closes the far end in the parent, so it holds one
+descriptor per live substitution; a body here is a goroutine in one process,
+so this shell holds two — the published end and its own end of the same pipe.
+In a clean table the second is hidden above every number the dialect could
+publish. A crowded table has no such region, because every number above the
+crowd is one the next substitution wants, so the published numbers interleave
+with this shell's own ends. What is the same is the *first* one, which is
+what the fallback decides.
+
+**And a pipe's own original is in the way of its own answer.** The park
+duplicates the child end while that end is still open, so it is itself
+occupying the best number; the second pass that exists for the wish list has
+to exist for the fallback too, or every substitution in a crowded table
+answers one above the lowest free number.
+
 ### Which directory the path names
 
 The number is the shell's own and is not promised, but the **directory** in

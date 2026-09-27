@@ -115,6 +115,73 @@ func measuredInAQuietDescriptorTable(t *testing.T) bool {
 	return true
 }
 
+// crowdedFdTableEnv marks the child a crowded-table case is measured in, and
+// crowdedFdTableHeld is how many descriptors it is handed.
+//
+// Seventy, because the question is what happens when the table holds **more
+// than a wish list spans**: every rule here offers at most sixty-four numbers
+// from its base, so a process holding seventy is a process where none of them
+// can land and the fallback is the whole answer. That is not a contrived
+// number — it is the shape a Runner embedded in a long-lived program is in,
+// and it is the shape a CI runner handed `go test` (#4459, #4463).
+const (
+	crowdedFdTableEnv  = "SH_TEST_CROWDED_FD_TABLE"
+	crowdedFdTableHeld = 70
+)
+
+// measuredInACrowdedDescriptorTable runs this case in a child of this test
+// binary holding crowdedFdTableHeld descriptors above stdio, and reports the
+// child's result here. It is measuredInAQuietDescriptorTable's mirror image
+// and the comment above that one is the whole of why either exists: the table
+// is an **input** to a placement rule, so it is pinned rather than measured
+// around — quiet for the cases about a rule, crowded for the cases about what
+// happens when no rule can reach.
+//
+// The descriptors are real opens on the null device passed as ExtraFiles, so
+// they land at 3 upward in the child and are the kernel's rather than the
+// Runner's — which is the distinction the fault was made of. The wish list is
+// built from the *runner's* table, so it goes on offering numbers a crowded
+// kernel has taken, and everything derived from the list inherits that.
+//
+// The child is told it is the quiet run as well, so that a case reaching for
+// either harness measures here rather than starting a third process.
+func measuredInACrowdedDescriptorTable(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv(crowdedFdTableEnv) != "" {
+		return false
+	}
+	name := t.Name()
+	if strings.Contains(name, "/") {
+		t.Fatalf("%s: a crowded table is asked for by the case, not by a subtest — "+
+			"the child is selected by the whole of -test.run", name)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("finding this test binary to run %s in a crowded table: %v", name, err)
+	}
+	cmd := exec.Command(exe, "-test.run=^"+regexp.QuoteMeta(name)+"$", "-test.v",
+		"-test.timeout="+quietFdTableTimeout.String())
+	cmd.Env = append(os.Environ(), crowdedFdTableEnv+"=1", quietFdTableEnv+"=1")
+	for range crowdedFdTableHeld {
+		held, err := os.Open(os.DevNull)
+		if err != nil {
+			t.Fatalf("opening a descriptor to crowd the child's table with: %v", err)
+		}
+		defer func() { _ = held.Close() }()
+		cmd.ExtraFiles = append(cmd.ExtraFiles, held)
+	}
+	out, runErr := cmd.CombinedOutput()
+	if !strings.Contains(string(out), "=== RUN   "+name+"\n") {
+		t.Fatalf("the crowded-table run of %s never started it (%v) — a child that "+
+			"matched no test exits like one that passed:\n%s", name, runErr, out)
+	}
+	if runErr != nil {
+		t.Errorf("in a descriptor table holding %d descriptors above stdio (%v):\n%s",
+			crowdedFdTableHeld, runErr, out)
+	}
+	return true
+}
+
 // keepInheritedDescriptorsOutOfChildren marks every descriptor this binary was
 // handed close-on-exec, so that none of them reaches the children the cases
 // above measure in.

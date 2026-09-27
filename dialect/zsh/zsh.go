@@ -5982,6 +5982,14 @@ func Apply(r *interp.Runner) {
 	// is — #1282 recorded that `compinit` is not close, the file being
 	// refused and `zmodload zsh/complete` refusing by name — so the one
 	// parser would be reachable by nothing.
+	//
+	// Since #4761 that absence is a recorded **decision** rather than
+	// unfinished work, and declined.go is where it is recorded with the
+	// measurement: the manual gives the builtin one sentence and no
+	// synopsis, so there is nothing on the green list to implement from, and
+	// the cheap half — registering the name and refusing on arity — is
+	// deliberately not done, because a builtin that takes its operands and
+	// then answers wrongly is worse than one a caller cannot find.
 	registerZparseopts(r)
 	registerZformat(r)
 	// And the line editor's key table, which a real rc file also reaches for.

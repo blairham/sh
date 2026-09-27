@@ -276,6 +276,12 @@ print -r -- "X=$?"`)
 // alongside `zsh/zprof`, `zsh/curses`, `zsh/net/tcp`, `zsh/db/gdbm` and
 // `zsh/attr`, any of which would serve when this one lands too.
 //
+// **And this one will not land**, which is the first time the name in this
+// test has been a settled answer rather than the next one to move: #4737
+// decided the module against the measurement in declined.go, so the fifth
+// move will be somebody taking that decision back rather than somebody
+// finishing a module. The alternatives above stay listed for that day.
+//
 // A module this shell has *no part of* rather than one short of a feature,
 // which is the other half of what a script sees. Both are one status and one
 // silenced line to the caller, and the branch it takes is the same.

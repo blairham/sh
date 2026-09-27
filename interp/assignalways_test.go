@@ -214,24 +214,28 @@ func TestAFlagGroupStillRefusesAParameterItCannotName(t *testing.T) {
 	}
 }
 
-// The `(A)` flag is refused for this operator too, and the refusal is the
-// whole point of carrying the letter at all.
+// The `(A)` flag reaches this operator too, and so does the refusal the
+// doubled letter still carries.
 //
 // `(A)` makes an assignment an *array* assignment — measured on zsh 5.9.2,
 // `unset u; ${(A)u::=x y}` leaves `typeset -a u=( 'x y' )`, one element, where
-// the same line without the flag leaves the scalar `x y`. This engine does not
-// build that, so it says so: a letter carried without its side effect would
-// leave a scalar where the script asked for an array, which the first
-// `${u[2]}` reads as empty and nothing before it does.
+// the same line without the flag leaves the scalar `x y`.
 //
-// Asserted for this operator and not only for `=` and `:=`, because the
-// refusal asks about the *operator* and a reading that named only the
-// conditional assignment would let this one through silently — which is what
-// mutation says: narrowing that question to `ParamAssign` breaks no other
-// test.
-func TestTheArrayFlagIsRefusedOnTheAlwaysAssignToo(t *testing.T) {
-	out, st := runGrammar(t, `printf "[%s]" "${(A)x::=a b}"; echo AFTER`, alwaysAssigning, nil)
-	want := "the (A) expansion flag is not implemented for an assignment"
+// Asserted for this operator and not only for `=` and `:=`, because both the
+// store and the refusal ask about the *operator* and a reading that named
+// only the conditional assignment would let this one through silently — which
+// is what mutation says: narrowing either question to `ParamAssign` breaks no
+// other test.
+func TestTheArrayFlagReachesTheAlwaysAssignToo(t *testing.T) {
+	// The elements printed one per field, which is what tells an array of two
+	// from a scalar holding the same three characters — a length or a first
+	// element would read the same either way.
+	out, st := runGrammar(t, `: ${(A)=x::=a b}; printf "<%s>" "${x[@]}"`, arrayAssigning, nil)
+	if want := "<a><b>"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
+	}
+	out, st = runGrammar(t, `printf "[%s]" "${(AA)x::=a b}"; echo AFTER`, arrayAssigning, nil)
+	want := "the (AA) expansion flag is not implemented for an assignment"
 	if !strings.Contains(out, want) {
 		t.Errorf("output = %q, want %q in it", out, want)
 	}

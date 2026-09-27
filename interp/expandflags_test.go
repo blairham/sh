@@ -294,9 +294,11 @@ func TestAnUnimplementedExpansionFlagIsRefusedByName(t *testing.T) {
 		t.Errorf("out=%q st=%d, want the line abandoned with status 1", out, st)
 	}
 
-	_, errs, st = flagsRun(t, `echo "${(A)=r::=a b c}"`)
-	if !strings.Contains(errs, "the (A) expansion flag is not implemented") || st != 1 {
-		t.Errorf("errs=%q st=%d, want the (A) flag refused by name", errs, st)
+	// The single `(A)` assigns an array now (#4453); what is left refused for
+	// an assignment is the doubled letter, which asks for a table.
+	_, errs, st = flagsRun(t, `echo "${(AA)r=a b c}"`)
+	if !strings.Contains(errs, "the (AA) expansion flag is not implemented") || st != 1 {
+		t.Errorf("errs=%q st=%d, want the (AA) flag refused by name", errs, st)
 	}
 }
 

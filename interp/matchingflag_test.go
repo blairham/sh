@@ -125,23 +125,23 @@ func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
 	}
 }
 
-// `A` is refused for the half of it that does anything, and only that half.
+// `A` does nothing at all where the expansion assigns nothing, and what is
+// still refused is named.
 //
-// The flag makes an *assignment* an array assignment and does nothing at all
-// where the expansion assigns nothing — measured on zsh 5.9.2, where
-// `${(A)#v}` is the string's length and `${(As:|:)v}` is `${(s:|:)v}`. So the
-// letter is carried by leaving the value alone, and the assignment it exists
-// for is named rather than left to look as though it worked: a scalar where
-// the script asked for an array is read as empty by the first `${u[2]}` and
-// by nothing before it.
+// The flag makes an *assignment* an array assignment — that half is carried
+// now, in interp/arrayassignflag.go — and everywhere else it is measured to
+// be a no-op: on zsh 5.9.2 `${(A)#v}` is the string's length and
+// `${(As:|:)v}` is `${(s:|:)v}`. So the letter is carried by leaving the
+// value alone, and what is left refused is named rather than left to look as
+// though it worked: the doubled letter, which asks for a *table*, and the
+// pair with `(P)`, where the array would be a target this does not resolve.
 //
 // It is the letter easiest to lose, because `a` beside it *is* built and the
 // two differ only in case: one orders a list by its index.
 func TestTheArrayFlagIsRefusedOnlyForTheAssignment(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
-		{"an assignment is refused by name", `printf "[%s]" "${(A)x=a b c}"`, "sh: ${(A)x=a b c}: the (A) expansion flag is not implemented for an assignment\n"},
-		{"and a colon assignment too", `printf "[%s]" "${(A)x:=a b c}"`, "sh: ${(A)x:=a b c}: the (A) expansion flag is not implemented for an assignment\n"},
-		{"an association assignment names the same flag", `printf "[%s]" "${(AA)x=k v}"`, "sh: ${(AA)x=k v}: the (A) expansion flag is not implemented for an assignment\n"},
+		{"an association assignment names the doubled letter", `printf "[%s]" "${(AA)x=k v}"`, "sh: ${(AA)x=k v}: the (AA) expansion flag is not implemented for an assignment\n"},
+		{"and the colon form of it too", `printf "[%s]" "${(AA)x:=k v}"`, "sh: ${(AA)x:=k v}: the (AA) expansion flag is not implemented for an assignment\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, selectingWithFlags, nil)

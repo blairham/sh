@@ -40,11 +40,35 @@ expansion does not, and each is measured:
 
 | code | a drawn prompt | `${(%)…}` and `print -P` | measured |
 | --- | --- | --- | --- |
-| `%!` `%h` | the session's history number | **refused by name** | zsh answers 0 under `-c`, which is a plausible number for a question nobody answered |
+| `%!` `%h` | the session's history number | the **list's** number, where the dialect said how to count it | see below |
 | `%y` `%l` | the terminal's name | **refused by name** | zsh answers `()` with no terminal |
 | `%_` | the construct being continued | nothing | `print -P '%_'` is empty — a script that reached an expansion has parsed |
 | `%{` `%}` | the editor's width markers | nothing | `print -P '%{X%}'` is `X`, and neither marker reaches the output |
 | a newline | `\r\n` | `\n` | the terminal is in raw mode while a prompt is drawn, so a bare newline leaves the cursor where it was across |
+
+**The history number is the one row that moved back across that line, and
+what moved it was measuring the answer rather than assuming it.** It was
+refused by name on the reading that zsh's `0` under `-c` is "a plausible
+number for a question nobody answered". It is not: a script can fill the list
+— `fc -R`, `history -r`, `print -s` — and the escape follows it. Measured
+2026-09-26 on zsh 5.9.2, `-f`, against a three-line file:
+
+| probe | zsh 5.9.2 |
+| --- | --- |
+| `print -P '%h'` | `0` |
+| `fc -R f; print -P '%h'` | `3`, and `fc -l` numbers those entries 1..3 |
+| `fc -R f; HISTSIZE=2; print -P '%h'` | `3`, the oldest entry dropped and the numbering kept |
+
+So `0` is the **newest event's number** over an empty list and not a
+placeholder. The arithmetic stays the dialect's, because the two shells count
+from different ends of it: bash's `\!` is the number the **next** line will
+take — measured `bash --norc -c 'set -o history; history -s a; history -s b;
+PS1="x\!y"; echo "${PS1@P}"'` is `x3y` on two entries, where zsh answers 2 for
+the same list. They coincide interactively, where the line being edited is
+already an event in zsh's list and is not yet one in bash's, and a script is
+the only place the choice is visible. `interp.Runner.SetPromptHistoryNumber`
+is where a dialect says which reading it holds, and a runner nobody told
+refuses the escape by name with the rest.
 
 A code in **no** part of the table splits the same way, and this is the
 convention that let the whole surface be enumerated exactly rather than

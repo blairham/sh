@@ -147,6 +147,9 @@ func registerFcHistory(r *interp.Runner) {
 	// the list still holds is numbered by everything the size has dropped.
 	// See fcTrimToSize.
 	r.SetHistoryNumbering(fcFirst)
+	// And what `%h` and `%!` draw over that numbering, which is this
+	// dialect's own arithmetic rather than the core's. See fcCurrentEvent.
+	r.SetPromptHistoryNumber(fcCurrentEvent)
 	// And the parameter that bounds the list, which trims it where it
 	// stands. See fcTrimToSize for the rows, and
 	// interp.Runner.SetAssignmentAction for why a stored name needs a seam
@@ -517,6 +520,26 @@ func fcTrimToSize(r *interp.Runner, keep int) {
 
 // fcFirst is the history number of the oldest entry the list holds.
 func fcFirst(r *interp.Runner) int { return fcDropped(r) + 1 }
+
+// fcCurrentEvent is what the `%h` and `%!` prompt escapes draw: the number of
+// the **newest** event, which is one less than the number the next line will
+// take.
+//
+// Measured 2026-09-26 on zsh 5.9.2, `-f`:
+//
+//	print -P '%h'                          0    nothing in the list
+//	fc -R three-line-file; print -P '%h'   3    and `fc -l` numbers them 1..3
+//
+// so an empty list draws 0 rather than 1, and a loaded one draws the last
+// number `fc -l` printed rather than the one after it. Interactively the two
+// readings coincide, because the line being edited is already an event in
+// this shell's list — a prompt drawn after one command shows 2, measured
+// through a pseudo-terminal in the same run — which is why a script is the
+// only place the choice is visible. bash's `\!` is the other reading and is
+// why the arithmetic is the dialect's; see interp.Runner.SetPromptHistoryNumber.
+func fcCurrentEvent(r *interp.Runner) int {
+	return fcFirst(r) + len(r.HistoryEntries()) - 1
+}
 
 func fcDropped(r *interp.Runner) int {
 	value, _ := r.GetVar(fcHistoryDropped)

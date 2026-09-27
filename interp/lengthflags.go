@@ -130,11 +130,27 @@ func (r *Runner) measuredLength(e *syntax.ParamExpr, v string) int {
 //
 // A `m` beside it measures the words in columns and leaves the separator in
 // characters, which is measured rather than symmetrical.
+//
+// **And the argument is read the way the join reads it**, so a `(p)` in front
+// of the `j` reaches the count. Measured 2026-09-26 on zsh 5.9.2 with
+// `a=(abc de f)`:
+//
+//	${(pcj:\t\t:)#a}   10   two separators of one tab each
+//	${(cj:\t\t:)#a}     14   and the four written characters without the `p`
+//	${(pcj:\n:)#a}      8
+//
+// The pair is what discriminates: the two readings differ only where an
+// escape's decoded length differs from its written one, so a probe on a
+// letter that decodes to itself agrees with itself either way.
 func (r *Runner) countCharacters(e *syntax.ParamExpr, words []string) int {
 	sep := " "
 	switch joinFlagWritten(e.Flags) {
 	case 'j':
-		sep = e.JoinSep
+		// Read through flagArgument, which is what applies a `(p)` written
+		// in front of the `j`. The join itself has always read it that way;
+		// this read it raw, so one expansion had two readings of one
+		// argument and `${(pcj:\t:)#a}` counted a backslash and a `t`.
+		sep = r.flagArgument(e, 'j', e.JoinSep)
 	case 'F':
 		sep = "\n"
 	}

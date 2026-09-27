@@ -926,10 +926,27 @@ its text arrived.
 The algorithm, four rules, each measured and unanimous across the shells
 that expand aliases in scripts:
 
-- **Only an unquoted word in command position.** `"a"` is a command name
-  and not an alias — the rule that lets a script reach the real thing past
-  an alias shadowing it. The lookup is by the token's source text, quotes
-  and all.
+- **A word in command position, looked up by its source text, quotes and
+  all.** `"a"` does not find the alias `a` — the rule that lets a script
+  reach the real thing past an alias shadowing it — and neither does `\a`.
+  Quoting is not a separate disqualification, though: a name may hold a
+  backslash or a quote, and there the written word carries the same
+  characters and does match. Measured 2026-09-26 on zsh 5.9.2, from a
+  script file so that a definition is in force where it is used; the other
+  columns refuse such a name at the `alias` builtin, so nothing there
+  disagrees (#4481):
+
+  | written | zsh 5.9.2 |
+  | --- | --- |
+  | `alias '\bar=echo BS'` then `\bar hi` | `BS hi` |
+  | `alias '"a"=echo Q'` then `"a" hi` | `Q hi` |
+  | `alias 'a=echo A'` then `\a hi` | `command not found: a` |
+  | `alias 'a=echo A'` then `"a" hi` | `command not found: a` |
+  | `alias -g '"G"=world'` then `echo "G"` | `world` |
+  | `alias -g G=world` then `echo "G"` | `G` |
+
+  The last two pairs are what say it is the text and not the quoting: the
+  escape hatch still works against a table holding the bare name.
 - **Keep expanding while the replacement names another**, with the names
   already used in *this command* remembered. That is the whole of the
   recursion guard: `alias echo='echo x'` gives `x hi` rather than looping,

@@ -120,25 +120,3 @@ func (r *Runner) splittingTheAssignedWord(split, quoted bool) func() {
 	r.splitWordLiterals = splitLiterals{on: true, answer: Yes, evenQuoted: quoted}
 	return func() { r.Semantics, r.splitWordLiterals = savedSem, savedLit }
 }
-
-// assignArrayThroughExpansion performs an `(A)` assignment and answers what
-// the expansion yields.
-//
-// The yield is the elements joined on the first character of `$IFS`, which is
-// what the same expansion reads back as: measured, `x=${(A)=u=a b}` leaves
-// `x` holding `a b` with the array at two elements, and `x=${(A)u=x y}`
-// leaves `x` holding `x y` with the array at one. Joining here rather than
-// expanding the operand a second time, because the operand may hold a command
-// substitution and a second expansion would run it twice.
-// assignable is asked **after** the operand has been expanded, which is the
-// order the scalar path was measured into: `${#::=$(echo RAN >&2)}` writes
-// RAN and then refuses the name, so a command substitution in the operand
-// runs even on the failing line.
-func (r *Runner) assignArrayThroughExpansion(e *syntax.ParamExpr, quoted bool, assignable func() bool) string {
-	elems := r.assignedArrayElements(e, quoted)
-	if !assignable() {
-		return ""
-	}
-	r.setArray(e.Name, elems)
-	return strings.Join(elems, r.ifsFirst(r.ifs()))
-}

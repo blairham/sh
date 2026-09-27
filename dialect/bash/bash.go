@@ -1092,6 +1092,11 @@ func Semantics() interp.Semantics {
 	// line: inside the EXIT trap the pair is `1`/`2`, not the `6`/`7` that
 	// counting past the end would give (#4193).
 	s.ExitTrapFiresPastTheEnd = interp.No
+	// A `kill -CHLD` naming the shell runs nothing: the condition is a child
+	// of this shell changing state, and a signal the script sent is not that.
+	// Measured 2026-09-26 over a script file, `trap 'echo C' CHLD` /
+	// `kill -CHLD $$; echo a` / `echo b` reads `a b` (#4756).
+	s.SelfAimedChildSignalRunsTheTrap = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
 	// `set -e` is the one option a `$(…)` body does not simply inherit
 	// here. Measured 2026-09-15, `set -e; echo "end[$(false; echo no)]"` is

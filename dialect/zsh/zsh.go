@@ -1643,6 +1643,11 @@ func Semantics() interp.Semantics {
 	// here, and this is the one that describes what zsh did.
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ExitTrapFiresPastTheEnd = interp.Yes
+	// A `kill -CHLD` naming the shell runs nothing: the condition is a child
+	// of this shell changing state, and a signal the script sent is not that.
+	// Measured 2026-09-26 over a script file, `trap 'echo C' CHLD` /
+	// `kill -CHLD $$; echo a` / `echo b` reads `a b` (#4756).
+	s.SelfAimedChildSignalRunsTheTrap = interp.No
 	s.SelectAssumesUnboundedWidth = interp.Yes
 	s.SelectEofEndsPromptLine = interp.Yes
 	s.SelectEofIsSuccess = interp.Yes

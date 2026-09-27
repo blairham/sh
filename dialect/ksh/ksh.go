@@ -1220,6 +1220,11 @@ func Semantics() interp.Semantics {
 	// question has the same answer as the first.
 	s.CommandTrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
 	s.ExitTrapFiresPastTheEnd = interp.No
+	// A `kill -CHLD` naming the shell runs nothing: the condition is a child
+	// of this shell changing state, and a signal the script sent is not that.
+	// Measured 2026-09-26 over a script file, `trap 'echo C' CHLD` /
+	// `kill -CHLD $$; echo a` / `echo b` reads `a b` (#4756).
+	s.SelfAimedChildSignalRunsTheTrap = interp.No
 	// A call of `function g { … }` is a scope for the trap table and a call
 	// of `g() { … }` is not, which is the third answer to the locality
 	// question and the only one keyed on how the function was *written*. It

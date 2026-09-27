@@ -111,7 +111,13 @@ func (r *Runner) signalThisBody(name string, sig syscall.Signal) error {
 	}
 	switch {
 	case trapped && body != "":
-		r.selfSignaledBody(key)
+		// The same question the top level asks, for the same reason: what a
+		// forked body aims at itself is a signal, and the condition a `CHLD`
+		// handler answers is a child of its own. See
+		// Runner.selfAimedSignalIsTheCondition.
+		if r.selfAimedSignalIsTheCondition(key) {
+			r.selfSignaledBody(key)
+		}
 	case !trapped && fatalSignal(name, sig):
 		// **Without asking whether the shell ignores it untrapped**, which
 		// is the one place this switch parts from sendSignal's and is

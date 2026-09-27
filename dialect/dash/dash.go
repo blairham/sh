@@ -1509,6 +1509,12 @@ func Semantics() interp.Semantics {
 	s.TestTrailingConnectiveTakesAMissingOperand = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.No
+	// A `kill -CHLD` naming the shell runs the handler: this shell has no
+	// notion of the condition standing for a child changing state, so the
+	// number is taken like any other signal's. Measured 2026-09-26 over a
+	// script file, `trap 'echo C' CHLD` / `kill -CHLD $$; echo a` / `echo b`
+	// reads `C a b` (#4756).
+	s.SelfAimedChildSignalRunsTheTrap = interp.Yes
 	// unanswered ExitTrapFiresPastTheEnd: the axis is the line a trap body
 	// counts as having fired on, and it is only asked where a body's lines
 	// are numbered from that line at all. Every trap body here counts from

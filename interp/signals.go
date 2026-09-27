@@ -701,6 +701,28 @@ func (r *Runner) brokenPipeAbsorbed(deliver bool) {
 	s.poke()
 }
 
+// selfAimedSignalIsTheCondition reports whether a signal this script aimed at
+// the shell itself is the condition the trap table holds a body for.
+//
+// One condition asks this and the rest never reach it: `CHLD` stands for "a
+// child of this shell changed state" in most of the panel, and a `kill`
+// naming the shell is not that — see
+// Semantics.SelfAimedChildSignalRunsTheTrap for the five columns. Asked at
+// the send, where the arrival would be recorded, and only for a condition
+// that has a body: everywhere else there is nothing to run either way and so
+// nothing to disagree about.
+//
+// The key rather than the name, because that is what the pending list is read
+// against — a nameless number is trapped under its decimal spelling and could
+// never be this condition anyway.
+func (r *Runner) selfAimedSignalIsTheCondition(key string) bool {
+	if key != "CHLD" {
+		return true
+	}
+	return r.ask(r.sem().SelfAimedChildSignalRunsTheTrap,
+		"a `CHLD` a script aimed at the shell itself running the handler")
+}
+
 // takeSelfPending reports what this subshell raised on itself and has not
 // handled yet, and forgets it. No lock; see the field.
 func (r *Runner) takeSelfPending() []string {

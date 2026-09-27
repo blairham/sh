@@ -152,6 +152,16 @@ const zmodloadAlwaysLoaded = "zsh/main"
 // rather than as a command, so `f` is the math functions and there is no
 // separate letter for them.
 //
+// **A module absent on purpose is in declined.go**, which is the distinction
+// this table cannot make on its own: a name that is not here is refused, and
+// nothing says whether that is because nobody has written it yet or because
+// somebody measured it and decided not to. `zsh/pcre` is the second kind
+// (#4737) — Go's regular expressions are RE2, which cannot express the
+// backreferences and lookaround the module's own suite uses — and the ledger
+// there carries the measurement, the cost and what would change the answer.
+// declined_test.go holds the two tables apart, so an entry that lands here
+// for a declined module fails rather than quietly overruling the decision.
+//
 // **`zsh/zpty` was deliberately kept out of this table until the builtin
 // existed**, and the reason is worth keeping now that it is in. Its one
 // feature is a builtin, and a missing builtin never holds a module shut — see

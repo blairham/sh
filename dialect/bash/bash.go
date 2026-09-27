@@ -1649,6 +1649,10 @@ func Semantics() interp.Semantics {
 	// list nested inside it is still found: `@{x}{a,b}@` is `@{x}a@ @{x}b@`,
 	// `{a{b,c}}` is `{ab} {ac}`, and the unclosed `{a{b,c}` is `{ab} {ac`.
 	s.BraceRescanEntersFailedGroup = interp.Yes
+	// The braces are found in the word the parse cut, so a comma a
+	// parameter holds is an ordinary character: `e=a,b; echo {$e}` is the
+	// one word `{a,b}` and `echo {x,$e}` is `x a,b`.
+	s.BraceBodyReadAfterExpansion = interp.No
 	// `{01..3}` is `01 02 03`; `{10..1..3}` is `10 7 4 1` and `{1..10..-3}`
 	// climbs anyway — the endpoints decide the direction and a step
 	// contributes magnitude alone, so `{3..1..-1}` stays `3 2 1`.

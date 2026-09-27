@@ -3610,6 +3610,78 @@ type Semantics struct {
 	// Asked only in a dialect whose braces expand at all, and only once a
 	// group has already failed to produce alternatives.
 	BraceRescanEntersFailedGroup Answer
+	// BraceBodyReadAfterExpansion reads a group's **body** once the
+	// expansions written in it have run, so `e=a,b; echo {$e}` is the two
+	// words `a` and `b`. True in ksh93 and false in bash 5.3, bash 3.2 and
+	// zsh, where the braces are found in the word the parse cut and a comma
+	// that arrives from a parameter is an ordinary character.
+	//
+	// It is the brace question asked on the **input** side. The three axes
+	// above it are asked on the output side — what a group's product
+	// re-enters the word as, and where a scan resumes — and this one is
+	// whether a produced comma is brace syntax at all.
+	//
+	// Measured 2026-09-26 and 2026-09-27 against `/bin/ksh` — `Version AJM
+	// 93u+ 2012-08-01` — `/opt/homebrew/bin/bash` 5.3.20, `/bin/bash` 3.2.57
+	// and `/opt/homebrew/bin/zsh -f` 5.9.2, `-c` in a directory of its own
+	// holding `aa`, `ab` and `zz`:
+	//
+	//	e=a,b;    echo {$e}          a b        in ksh93; bash 5.3, bash 3.2
+	//	                                        and zsh all answer {a,b}
+	//	e=a,b;    echo {x,$e}        x a b      the written comma does not decide
+	//	e=1..3;   echo {$e}          1 2 3      a produced range is read too
+	//	e=,;      echo {a${e}b}      a b
+	//	e=a,b;    echo pre{$e}post   preapost prebpost
+	//
+	// The reading is narrower than "the produced text is re-read as shell
+	// text", which is [Semantics.BraceOutputRereadAsText]'s question about
+	// the other end. **The delimiters are the written ones**, so quoting the
+	// *word* hides them — `echo "{$e}"` is `{a,b}` — while quoting the
+	// *expansion* does not hide the comma it produced, `echo {"$e"}` being
+	// `a b`; and a produced `}` closes no group, `e="}"; echo {a,b$e` being
+	// `{a,b}`.
+	//
+	// And what a produced alternative leaves is **inert** — neither split,
+	// nor matched, nor expanded again, which is the same state a failed
+	// expanded range endpoint already produces:
+	//
+	//	x=BOOM; e='$x,b'; echo {$e}      $x b     expanded once, not again
+	//	e="a*,z";         echo {$e}      a* z     where written {a*,z} is aa ab z
+	//	e="a b,c";  f(){ echo $#;}; f {$e}   2    the blank is no separator
+	//	e=",,";                     f {$e}   3    empty alternatives are kept
+	//	e="1..3,z";       echo {$e}      1..3 z   a comma still beats a range
+	//
+	// Inert per **character** and not per alternative: with `e=a`,
+	// `echo {p,$e*}` is `p aa ab` because the `*` is written, and with
+	// `e=*`, `echo {p,a$e}` is `p a*` because it is not.
+	//
+	// A produced `{` is the one thing the reading will not carry, and it
+	// leaves the whole word as written — see producedBraceAbandonsTheGroup,
+	// which has the seven rows that say it is the character rather than the
+	// balance.
+	//
+	// Two neighboring questions are deliberately **not** this one, and both
+	// were measured while it was. Whether an *empty* alternative is a field —
+	// `echo {a,}` is `a` and an empty word in ksh93 and `a` alone in bash and
+	// zsh — is a disagreement about a written group and is unmodeled here, so
+	// a produced empty is dropped exactly as a written one is. And whether
+	// produced text **outside** a group is scanned for braces at all is the
+	// same question asked one level out: `e="{a,b}"; echo $e` is `a b` in
+	// ksh93 and `{a,b}` in bash 5.3, bash 3.2 and zsh. Neither is decided by
+	// this axis and neither is answered by reading a body.
+	//
+	// dash and BusyBox ash have no brace expansion, so neither reaches it.
+	// Asked only where a group's body holds something to expand, and only on
+	// the word road: the one column that reads a body this way brace-expands
+	// an argument and not a redirection target, where `e="x,y"; : > {a,$e}`
+	// writes a file called `{a,x,y}`.
+	//
+	// A vector that has **not** answered it expands a body whose produced
+	// text is inert rather than refusing the script, since the two readings
+	// give the same words there — `a=1; echo {$a,2}` is `1 2` either way.
+	// See Runner.producedRunIsInert for what inert means and why the set is
+	// written out.
+	BraceBodyReadAfterExpansion Answer
 	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range
 	// endpoint and pads every element to the widest endpoint, zeros after
 	// the sign: `{01..3}` is `01 02 03` and `{-03..3..3}` is `-03 000 003`.

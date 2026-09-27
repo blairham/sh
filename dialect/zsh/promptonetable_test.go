@@ -165,13 +165,18 @@ func TestTheRefusalsThatRemainAfterOneTable(t *testing.T) {
 		{`print -P '%(e.y.n)'`, "zsh:print:1: the %(e prompt escape is not implemented\n"},
 		{`echo "${(%):-%(e.y.n)}"`, "zsh:1: ${(%):-%(e.y.n)}: the %(e prompt escape is not implemented\n"},
 		// A code whose value is a fact about a *session*: the table has
-		// the row, and a runner reading a script has no history to number.
-		{`print -P '%h'`, "zsh:print:1: the %h prompt escape is not implemented\n"},
+		// the row, and a runner reading a script has no terminal to name.
+		//
+		// `%h` used to be in this set beside it, on the reading that a
+		// script has no history to number. That was measured and is not so:
+		// a script can fill the list with `fc -R`, and the escape follows it
+		// — so it is an answer now, pinned in prompthistorynumber_test.go
+		// (#4451). What is left here is the row with nothing behind it.
 		{`print -P '%y'`, "zsh:print:1: the %y prompt escape is not implemented\n"},
 		// The one *before* the one that fails is still the one named: a word
 		// holding several escapes says which of them this shell could not
 		// answer.
-		{`print -P '%n%h'`, "zsh:print:1: the %h prompt escape is not implemented\n"},
+		{`print -P '%n%y'`, "zsh:print:1: the %y prompt escape is not implemented\n"},
 	} {
 		out, st := runZsh(t, dir, tc.src)
 		if out != tc.want || st == 0 {

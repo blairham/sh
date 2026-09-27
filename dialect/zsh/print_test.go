@@ -170,11 +170,13 @@ func TestPrintRefusals(t *testing.T) {
 		// `%d` has left it too, and for the better reason: the working
 		// directory is a thing the interpreter holds, so once there was one
 		// prompt-escape table it became an *answer* rather than a refusal
-		// (#1090). What is still refused by name is a code in no part of the
-		// table, and a code whose value is a fact about a *session* that a
-		// runner has not got — the history number here.
+		// (#1090). `%h` left it the same way — the history list is a thing
+		// the interpreter holds, and a script can fill it (#4451). What is
+		// still refused by name is a code in no part of the table, and a
+		// code whose value is a fact about a *session* that a runner has not
+		// got — the terminal's name here.
 		{`print -P '%q'`, "zsh:print:1: the %q prompt escape is not implemented\n", 1},
-		{`print -P '%h'`, "zsh:print:1: the %h prompt escape is not implemented\n", 1},
+		{`print -P '%y'`, "zsh:print:1: the %y prompt escape is not implemented\n", 1},
 		{`print -v foo x`, "zsh:print:1: -v is not implemented yet\n", 1},
 		{`print -x2 a`, "zsh:print:1: -x is not implemented yet\n", 1},
 		{`print -X2 a`, "zsh:print:1: -X is not implemented yet\n", 1},

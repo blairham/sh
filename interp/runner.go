@@ -2207,6 +2207,12 @@ type Runner struct {
 	// line is in the list and how to take it off. See SetHistoryOwnLine.
 	histHasOwn  func(*Runner) bool
 	histDropOwn func(*Runner)
+	// histPromptNumber is the number the history-number prompt escape draws,
+	// which is the dialect's arithmetic over the same list rather than this
+	// package's. Nil in a runner nobody told, where the escape is refused by
+	// name with the rest of the session's own facts. See
+	// SetPromptHistoryNumber.
+	histPromptNumber func(*Runner) int
 	// fcLayout is how `fc -l` writes one entry, which differs by dialect
 	// where the list itself does not. See Runner.SetHistoryListingLayout.
 	fcLayout fcListingLayout

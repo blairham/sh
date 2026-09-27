@@ -1962,6 +1962,16 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		return itoa(n), true
 	case FieldExitStatus:
 		return itoa(r.ExitStatus()), true
+	case FieldHistoryNumber:
+		// The list is a fact a Runner has — a script can fill it with `fc
+		// -R` or `history -r` — so this is answered where the dialect said
+		// how to count it, and refused with the rest where nobody did. The
+		// arithmetic is the dialect's because the two shells count from
+		// different ends of it; see SetPromptHistoryNumber.
+		if r.histPromptNumber == nil {
+			return "", false
+		}
+		return itoa(r.histPromptNumber(r)), true
 	case FieldNonPrintingStart, FieldNonPrintingEnd:
 		// Nothing, measured: `print -P '%{X%}'` is `X` and neither marker
 		// reaches the output. The drawer puts its width markers here instead.
@@ -1975,9 +1985,9 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 	if v, ok := r.promptClockField(f, arg, braced); ok {
 		return v, true
 	}
-	// The session's own facts, which a Runner has not got: the history
-	// number, how many commands this session has run, and the terminal's
-	// name. Refused by name rather than answered with a plausible zero.
+	// The session's own facts, which a Runner has not got: how many commands
+	// this session has run, and the terminal's name. Refused by name rather
+	// than answered with a plausible zero.
 	return "", false
 }
 

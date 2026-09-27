@@ -322,6 +322,29 @@ func (r *Runner) HistoryFirst() int {
 	return r.histFirst(r)
 }
 
+// SetPromptHistoryNumber hands the Runner the number the history-number
+// prompt escape draws — zsh's `%h` and `%!`, bash's `\!`.
+//
+// The arithmetic is the dialect's and not this package's, because the two
+// shells count from different ends of the same list. Measured 2026-09-26,
+// each shell non-interactive with three entries read in from a file:
+//
+//	zsh -f -c 'fc -R f; print -P "%h"'                    3
+//	bash --norc -c 'set -o history; history -s a
+//	                history -s b; echo "${PS1@P}"'        3 for `\!` on two
+//
+// so zsh's escape is the *newest entry's* number and bash's is the number the
+// **next** line will take. They agree interactively, where the line being
+// edited is itself an event in zsh's list and is not yet one in bash's, and a
+// script is where they part: an empty list draws 0 in zsh and 1 in bash.
+// One rule written here would have to be wrong about one of them.
+//
+// A runner nobody told refuses the escape by name, with the session's own
+// facts it has not got. That is deliberate and it is the same rule
+// SetPromptUser states: a history number guessed at is a prompt drawing a
+// plausible number at status 0, which nobody reports.
+func (r *Runner) SetPromptHistoryNumber(number func(*Runner) int) { r.histPromptNumber = number }
+
 // RecordHistoryEntry appends one command to the list.
 //
 // The **expanded** text, which is what every reference after it resolves

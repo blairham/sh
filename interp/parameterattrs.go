@@ -137,7 +137,7 @@ type ParameterAttributes struct {
 // `${+parameters[nosuch]}` be 0 without the dialect keeping a second list of
 // what exists.
 func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
-	if name == "" || r.removed[name] {
+	if name == "" || r.removedForDescription(name) {
 		return ParameterAttributes{}, false
 	}
 	a := ParameterAttributes{
@@ -315,7 +315,7 @@ func (r *Runner) parameterExists(name string) bool {
 // plainly there. TestTheTwoReadingsOfParameterNamesAgree is what holds them
 // together.
 func (r *Runner) ParameterIsNamed(name string) bool {
-	if name == "" || r.removed[name] {
+	if name == "" || r.removedForDescription(name) {
 		return false
 	}
 	if _, ok := r.Vars[name]; ok {
@@ -346,7 +346,7 @@ func (r *Runner) ParameterNames() []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(name string) {
-		if name == "" || seen[name] || r.removed[name] {
+		if name == "" || seen[name] || r.removedForDescription(name) {
 			return
 		}
 		seen[name] = true

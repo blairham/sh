@@ -151,7 +151,9 @@ func (r *Runner) SetDynamicDeclaration(name string, d ProducedDeclaration) {
 // reached the producer anyway would draw a value from a name a read of which
 // answers nothing.
 func (r *Runner) producedDeclaration(name string) (ProducedDeclaration, bool) {
-	if r.removed[name] {
+	// See Runner.removedForDescription: a removed name has no declaration,
+	// with the one measured exception this engine keeps a producer across.
+	if r.removedForDescription(name) {
 		return ProducedDeclaration{}, false
 	}
 	d, ok := r.dynamicDeclarations[name]

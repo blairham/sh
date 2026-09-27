@@ -327,3 +327,23 @@ func (r *Runner) namesTheProducedPipelineStatus(name string) bool {
 	}
 	return true
 }
+
+// removedForDescription reports whether `unset` has taken a name away *as far
+// as a description is concerned*.
+//
+// One predicate and not five copies of `r.removed[name]`, which is what these
+// sites were. Every one of them opened by answering "no such parameter" for a
+// removed name, in front of anything that could ask a producer — and that is
+// right for every producer in this engine but one. `unset RANDOM` and `unset
+// LINENO` really do end those names, measured on bash 5.3.20 and matched here
+// exactly; the pipeline record is the single exception, and whether it is one
+// is [Semantics.UnsetEndsTheProducedPipelineStatus], which this asks. Five
+// spellings of the same test is how the exception came to be missing from all
+// five (#4877).
+//
+// The *read* already went through [Runner.pipelineStatuses] and was right
+// throughout, which is what said the gap was in the description rather than
+// in the producer.
+func (r *Runner) removedForDescription(name string) bool {
+	return r.removed[name] && !r.namesTheProducedPipelineStatus(name)
+}

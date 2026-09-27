@@ -28,6 +28,11 @@ func TestTheBracesAreFoundInTheWordHere(t *testing.T) {
 		{"a scalar inside the group", `set -- 1; f x{p,$1}y`, "2 | [xpy] [x1y]\n"},
 		{"an empty list joins", `set --; f x{p,q}$@y`, "2 | [xpy] [xqy]\n"},
 		{"a brace stops no splitter", `IFS=:; v=a:b; f x{p,q}$v`, "4 | [xpa] [b] [xqa] [b]\n"},
+		{"a produced group is data", `e='{a,b}'; f $e`, "1 | [{a,b}]\n"},
+		// And what the braces produced goes back into the word as shell
+		// **text** here, so the two names are `$ea` and `$eb`, which are
+		// unset: this row is that axis and this one together.
+		{"and so is a produced opening brace", `e='{'; f $e{a,b}`, "0 |\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if out, st := runBash(t, t.TempDir(), braceCounter+tc.src); out != tc.want || st != 0 {

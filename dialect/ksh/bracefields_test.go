@@ -61,6 +61,28 @@ func TestTheBracesAreFoundInTheFieldsHere(t *testing.T) {
 		},
 		{"a produced closing brace is data", `e='}'; f {a,b$e,c}`, "3 | [a] [b}] [c]\n"},
 
+		// And a group an expansion produced *outside* any written group is a
+		// list here too, which is the same fact one level out. A brace pairs
+		// only with one of its own provenance, which is what the last four
+		// rows hold apart.
+		{"a produced group", `e='{a,b}'; f $e`, "2 | [a] [b]\n"},
+		{"beside written text", `e='{a,b}'; f x$e`, "2 | [xa] [xb]\n"},
+		{
+			"and a written group behind it", `e='{a,b}'; f $e{c,d}`,
+			"4 | [ac] [ad] [bc] [bd]\n",
+		},
+		{"halves from two expansions", `e='{a,'; g='b}'; f $e$g`, "2 | [a] [b]\n"},
+		{"a produced range", `e='{1..3}'; f $e`, "3 | [1] [2] [3]\n"},
+		{"a produced closing brace closes nothing", `e='}'; f {a,b$e`, "1 | [{a,b}]\n"},
+		{"a produced opening brace opens", `e='{'; f $e{a,b}`, "1 | [{{a,b}]\n"},
+		{"two produced braces pair", `e='{}'; f $e{a,b}`, "2 | [{}a] [{}b]\n"},
+		{
+			"and a produced one in a written body takes the word", `e='{'; f {c,d$e}{a,b}`,
+			"1 | [{c,d{}{a,b}]\n",
+		},
+		{"a quoted expansion's result is no brace", `e='{a,b}'; f "$e"`, "1 | [{a,b}]\n"},
+		{"nor a quoted list's element", `set -- '{a,b}'; f "$@"`, "1 | [{a,b}]\n"},
+
 		// A written brace ends field splitting for the rest of the word,
 		// which is this column's alone.
 		{"a brace stops the splitter", `IFS=:; v=a:b; f x{p,q}$v`, "2 | [xpa:b] [xqa:b]\n"},

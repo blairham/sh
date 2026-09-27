@@ -171,7 +171,11 @@ func (r *Runner) expandFieldsThenBraces(w *syntax.Word) []string {
 // rule, the step and padding readings and the rest from being written a second
 // time, which is the duplication this tree keeps paying for.
 func (r *Runner) braceExpandField(field string, segs []fieldSeg) []string {
-	if !segsSpell(segs, field) {
+	// A field with no `{` in it anywhere holds no group of any provenance,
+	// so nothing is rebuilt and nothing is scanned. That is most fields on
+	// this road, since the column that reads the braces a value holds has to
+	// look at every word with an expansion in it.
+	if !strings.ContainsRune(field, '{') || !segsSpell(segs, field) {
 		return []string{field}
 	}
 	made := r.braceFieldProducts(segs)
@@ -261,6 +265,8 @@ func fieldSpans(segs []fieldSeg) []syntax.Span {
 			q = syntax.Unquoted
 		case segQuoted:
 			q = syntax.DoubleQuoted
+		case segQuotedProduced:
+			q = syntax.BackslashQuoted
 		default:
 			q = syntax.DollarSingleQuoted
 		}
@@ -273,6 +279,13 @@ func fieldSpans(segs []fieldSeg) []syntax.Span {
 // produced. See fieldSpans for the tags.
 func producedRun(s syntax.Span) bool {
 	return s.Kind == syntax.Literal && s.Quoting == syntax.DollarSingleQuoted
+}
+
+// bodyProducedRun is producedRun widened by what a *quoted* expansion
+// produced, which a group the script wrote still reads the commas in.
+func bodyProducedRun(s syntax.Span) bool {
+	return producedRun(s) ||
+		(s.Kind == syntax.Literal && s.Quoting == syntax.BackslashQuoted)
 }
 
 // braceRangeReads is the same for a *range*: its endpoints are read after the
@@ -316,7 +329,7 @@ func (r *Runner) braceRangeReads() func(syntax.Span) bool {
 // than a delimiter, and what a produced alternative leaves is neither split
 // nor matched. See Runner.braceBodyAlternatives.
 func (r *Runner) fieldAlternatives(w *syntax.Word, open, close cursor) ([][]syntax.Span, bool, bool) {
-	body := sliceSpans(w.Spans, next(open), close)
+	body := sliceSpansRead(w.Spans, next(open), close, r.braceScanReads())
 	if r.sem().BraceBodyReadAfterExpansion == Yes {
 		resolved, abandoned := resolvedFieldBody(body)
 		if abandoned {
@@ -347,7 +360,7 @@ func (r *Runner) fieldAlternatives(w *syntax.Word, open, close cursor) ([][]synt
 func resolvedFieldBody(body []syntax.Span) ([]syntax.Span, bool) {
 	out := make([]syntax.Span, 0, len(body))
 	for _, s := range body {
-		if !producedRun(s) {
+		if !bodyProducedRun(s) {
 			out = append(out, s)
 			continue
 		}
@@ -469,4 +482,51 @@ func (r *Runner) braceRangeText(body []syntax.Span) (string, bool) {
 		b.WriteString(globUnescape(s.Value))
 	}
 	return b.String(), true
+}
+
+// braceScanReads is which of a rebuilt field's runs a brace may be found in.
+//
+// The runs the script wrote, always — and, in the one column that reads the
+// braces a value holds, the runs an expansion produced as well. A run the
+// script wrote inside quotes is brace syntax in no column.
+//
+// See Semantics.BraceScanReadsProducedText.
+func (r *Runner) braceScanReads() func(syntax.Span) bool {
+	if !r.braceFieldRoute || r.sem().BraceScanReadsProducedText != Yes {
+		return braceable
+	}
+	return braceOrProducedRun
+}
+
+// braceOrProducedRun is braceable widened by the runs an expansion produced.
+func braceOrProducedRun(s syntax.Span) bool { return braceable(s) || producedRun(s) }
+
+// braceClassOf is the set a brace may be **closed** by: its own provenance.
+//
+// A written `{` is closed by a written `}` and a produced one by a produced
+// one, and nothing pairs across: `e='}'; echo {a,b$e` is `{a,b}` in ksh93u+
+// where `e='{}'; echo $e{a,b}` is `{}a {}b`. Where produced text is not read
+// at all the two sets are the same set and this decides nothing.
+func braceClassOf(opener syntax.Span, scan func(syntax.Span) bool) func(syntax.Span) bool {
+	if braceable(opener) {
+		return braceable
+	}
+	if scan(opener) {
+		return producedRun
+	}
+	return scan
+}
+
+// braceScanMayReadProducedText reports whether a word with no brace the
+// script wrote still has to be looked at, which is the column that reads the
+// braces a value holds.
+//
+// The axis is read and not put, for the reason braceFieldsFirst reads its
+// own: this is the road the dialect chose. A word with no expansion in it has
+// nothing to produce and never reaches here.
+func (r *Runner) braceScanMayReadProducedText(w *syntax.Word) bool {
+	return !r.noBraceExpand && r.sem().BraceExpansion == Yes &&
+		r.sem().BraceScanReadsProducedText == Yes &&
+		r.sem().BraceFanExpandsEachNameOnItsOwn == No &&
+		wordHoldsAnExpansion(w.Spans)
 }

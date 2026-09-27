@@ -103,13 +103,14 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 	// scan therefore carries on past a failed group rather than abandoning
 	// the word, and how far it carries is the one thing the panel disagrees
 	// about — BraceRescanEntersFailedGroup.
+	scan := r.braceScanReads()
 	from := cursor{0, 0}
 	for {
-		open, ok := findBraceFrom(w.Spans, from, '{')
+		open, ok := findBraceFromRead(w.Spans, from, '{', scan)
 		if !ok {
 			return []*syntax.Word{w}
 		}
-		close, matched := matchBraceAcross(w.Spans, open)
+		close, matched := matchBraceAcrossRead(w.Spans, open, braceClassOf(w.Spans[open.span], scan))
 		if matched {
 			alts, ok, abandoned := r.alternativesAcross(w, open, close, endpoints)
 			if abandoned {
@@ -130,7 +131,7 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 		// way, so the axis is not asked about `{a}` or `{a..5}`: a question
 		// whose two answers are the same answer must not be the thing that
 		// refuses a script no shell disagrees about.
-		inner, hasInner := findBraceFrom(w.Spans, next(open), '{')
+		inner, hasInner := findBraceFromRead(w.Spans, next(open), '{', scan)
 		diverges := hasInner && (!matched || before(inner, close))
 		if diverges && r.askBrace(r.sem().BraceRescanEntersFailedGroup,
 			"the scan entering a brace group that did not expand") {
@@ -163,8 +164,9 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 // same for `{6..{7,8,9}}` and `{{1,2,3}..{7,8,9}}` — this is not an axis, it
 // is one pass over the word in every shell that expands braces at all.
 func (r *Runner) braceProduct(w *syntax.Word, open, close cursor, alts [][]syntax.Span, endpoints bool) []*syntax.Word {
-	before := sliceSpans(w.Spans, cursor{0, 0}, open)
-	after := sliceSpans(w.Spans, next(close), cursor{len(w.Spans), 0})
+	scan := r.braceScanReads()
+	before := sliceSpansRead(w.Spans, cursor{0, 0}, open, scan)
+	after := sliceSpansRead(w.Spans, next(close), cursor{len(w.Spans), 0}, scan)
 
 	// The tail is read once rather than once per alternative: it is the same
 	// text every time, and `{a,b}{c,d}` is four words either way.
@@ -216,8 +218,14 @@ func braceable(s syntax.Span) bool {
 // literal, and a scan that could only resume at the next span would find
 // nothing after the first `{`.
 func findBraceFrom(spans []syntax.Span, from cursor, c byte) (cursor, bool) {
+	return findBraceFromRead(spans, from, c, braceable)
+}
+
+// findBraceFromRead is findBraceFrom over a named set of spans. See
+// alternativesInBodyRead.
+func findBraceFromRead(spans []syntax.Span, from cursor, c byte, read func(syntax.Span) bool) (cursor, bool) {
 	for i := from.span; i < len(spans); i++ {
-		if !braceable(spans[i]) {
+		if !read(spans[i]) {
 			continue
 		}
 		off := 0
@@ -236,9 +244,20 @@ func findBraceFrom(spans []syntax.Span, from cursor, c byte) (cursor, bool) {
 
 // matchBraceAcross finds the brace closing the one at open.
 func matchBraceAcross(spans []syntax.Span, open cursor) (cursor, bool) {
+	return matchBraceAcrossRead(spans, open, braceable)
+}
+
+// matchBraceAcrossRead is matchBraceAcross over a named set of spans, which
+// is how a brace comes to pair only with one of its **own** provenance: on
+// the road that reads the braces a value holds, a written `{` is closed by a
+// written `}` and a produced one by a produced one, and the spans the other
+// class stands in are stepped over rather than counted. Measured 2026-09-27
+// on ksh93u+: `e='}'; echo {a,b$e` is `{a,b}` and `e='{}'; echo $e{a,b}` is
+// `{}a {}b`.
+func matchBraceAcrossRead(spans []syntax.Span, open cursor, read func(syntax.Span) bool) (cursor, bool) {
 	depth := 0
 	for i := open.span; i < len(spans); i++ {
-		if !braceable(spans[i]) {
+		if !read(spans[i]) {
 			continue
 		}
 		start := 0
@@ -372,7 +391,7 @@ func alternativesInBodyRead(body []syntax.Span, read func(syntax.Span) bool) ([]
 // braces or — where the endpoints are written as expansions and the dialect
 // says so — from what those expansions come to.
 func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool) ([][]syntax.Span, bool) {
-	body := sliceSpans(w.Spans, next(open), close)
+	body := sliceSpansRead(w.Spans, next(open), close, r.braceScanReads())
 	pos := w.Spans[open.span].Pos
 	if text, ok := r.braceRangeText(body); ok {
 		alts, outcome := r.braceRange(text)

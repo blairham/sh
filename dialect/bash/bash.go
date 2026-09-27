@@ -1676,6 +1676,10 @@ func Semantics() interp.Semantics {
 	// f x{p,q}$v` is `[xpa] [b] [xqa] [b]` on 5.3.20, the word expanded
 	// once per name and split each time.
 	s.BraceStopsFieldSplitting = interp.No
+	// A produced brace is data here too, which is the same fact as the
+	// braces being found in the word the parse cut: `e='{a,b}'; echo $e`
+	// is `{a,b}` on 5.3.20 and 3.2.57 alike.
+	s.BraceScanReadsProducedText = interp.No
 	// `{01..3}` is `01 02 03`; `{10..1..3}` is `10 7 4 1` and `{1..10..-3}`
 	// climbs anyway — the endpoints decide the direction and a step
 	// contributes magnitude alone, so `{3..1..-1}` stays `3 2 1`.

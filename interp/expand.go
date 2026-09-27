@@ -74,6 +74,11 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 		// See interp/bracefields.go.
 		return r.expandFieldsThenBraces(w)
 	}
+	if !hasBrace && r.braceScanMayReadProducedText(w) {
+		// A word whose braces the script never wrote, in the column that
+		// reads the ones a value holds: `e='{a,b}'; echo $e` is `a b` there.
+		return r.expandFieldsThenBraces(w)
+	}
 	if hasBrace {
 		if words := r.braceExpand(w); !r.noBraceExpand &&
 			(len(words) > 1 || len(words) == 1 && words[0] != w) &&
@@ -427,7 +432,7 @@ type fieldSeg struct {
 type segKind uint8
 
 const (
-	// segProduced is text an expansion produced.
+	// segProduced is text an *unquoted* expansion produced.
 	segProduced segKind = iota
 	// segWritten is an unquoted literal span of the word — the text every
 	// column reads braces in.
@@ -435,12 +440,22 @@ const (
 	// segQuoted is a literal span the script wrote inside quotes, which is
 	// brace syntax in no column: `echo "{a,b}"` is one word everywhere.
 	segQuoted
+	// segQuotedProduced is what a *quoted* expansion produced. It is not a
+	// brace anywhere — `e='{a,b}'; echo "$e"` is one word in every column,
+	// and so is `set -- '{a,b}'; echo "$@"` — and a group the script wrote
+	// around it still reads the commas in it where a produced comma is a
+	// separator at all: `e=a,b; echo {"$e"}` is `a b` in ksh93u+. The two
+	// questions part over quoting and this is the class that says so.
+	segQuotedProduced
 )
 
 // spanSegKind is where the text a span expanded to came from.
 func spanSegKind(s syntax.Span) segKind {
 	if s.Kind != syntax.Literal {
-		return segProduced
+		if s.Quoting == syntax.Unquoted {
+			return segProduced
+		}
+		return segQuotedProduced
 	}
 	if s.Quoting == syntax.Unquoted {
 		return segWritten
@@ -515,11 +530,11 @@ func (b *wordFields) openSeg(t string, kind segKind) {
 
 // newSeg is the segment list a field that a list or a split produced starts
 // with: one run, produced rather than written.
-func (b *wordFields) newSeg(t string) []fieldSeg {
+func (b *wordFields) newSeg(t string, kind segKind) []fieldSeg {
 	if !b.tracked || t == "" {
 		return nil
 	}
-	return []fieldSeg{{text: t}}
+	return []fieldSeg{{text: t, kind: kind}}
 }
 
 // head reports whether nothing has been accumulated in front of the next
@@ -653,10 +668,12 @@ func leadingSeparatorEdge(text string, boundary []bool, ifs string, ifsSet bool)
 // loop's to apply, because they are boundaries around the span rather than
 // anything to lay in — see interp/splitawayedge.go.
 func (r *Runner) addSpan(b *wordFields, s syntax.Span, parts []string, marks listMarks, written bool) {
+	kind := spanSegKind(s)
 	if r.rcExpandOn(s) {
 		// The edges are fields of their own under this rule and boundaries
 		// under the other — see interp/spreadedges.go.
-		b.spread(spreadEdges(parts, marks))
+		sp, spNulls := spreadEdges(parts, marks)
+		b.spread(sp, spNulls, kind)
 		return
 	}
 	// The edges of what the split left: a boundary at either end with
@@ -666,7 +683,7 @@ func (r *Runner) addSpan(b *wordFields, s syntax.Span, parts []string, marks lis
 	if marks.edges.lead {
 		b.separate(written)
 	}
-	b.lay(parts, marks.nulls)
+	b.lay(parts, marks.nulls, kind)
 	if marks.edges.openEnd {
 		b.separate(written)
 	}
@@ -676,13 +693,13 @@ func (r *Runner) addSpan(b *wordFields, s syntax.Span, parts []string, marks lis
 // stays open for whatever follows, and everything between is a word of its
 // own. It is what makes `x$@y` attach its literal text to the first and last
 // fields rather than becoming words of its own.
-func (b *wordFields) lay(parts []string, nulls []bool) {
+func (b *wordFields) lay(parts []string, nulls []bool, kind segKind) {
 	if len(parts) == 0 {
 		return
 	}
 	b.flush()
 	b.reached(true)
-	b.text(parts[0], segProduced)
+	b.text(parts[0], kind)
 	if !nullFieldAt(nulls, 0) {
 		// Whatever was open has had something in it that is not an empty
 		// element, so it is a field even if that something carried no text.
@@ -700,7 +717,7 @@ func (b *wordFields) lay(parts []string, nulls []bool) {
 		b.all = append(b.all, p)
 		b.keep = append(b.keep, !nullFieldAt(nulls, i+1))
 		if b.tracked {
-			b.segs = append(b.segs, b.newSeg(p))
+			b.segs = append(b.segs, b.newSeg(p, kind))
 		}
 	}
 	b.open = len(b.all) - 1
@@ -718,7 +735,7 @@ func (b *wordFields) lay(parts []string, nulls []bool) {
 // elements, so it is produced no times. Measured, `a=(); x${^a}y` is no word
 // at all where `x${a}y` is the single word `xy` — and a field finished before
 // it still stands, `a=(1 2); b=(); x${a}z${^b}q` being the single word `x1`.
-func (b *wordFields) spread(parts []string, nulls []bool) {
+func (b *wordFields) spread(parts []string, nulls []bool, kind segKind) {
 	if len(parts) > 0 {
 		b.flush()
 	}
@@ -742,7 +759,7 @@ func (b *wordFields) spread(parts []string, nulls []bool) {
 				// produced rather than written.
 				copied := append([]fieldSeg(nil), openSegs[j]...)
 				if p != "" {
-					copied = append(copied, fieldSeg{text: p})
+					copied = append(copied, fieldSeg{text: p, kind: kind})
 				}
 				segs = append(segs, copied)
 			}

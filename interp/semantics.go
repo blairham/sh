@@ -3725,6 +3725,29 @@ type Semantics struct {
 	// BraceFanExpandsEachNameOnItsOwn, and a vector that answered one brace
 	// axis answers them all. See interp/bracefields.go.
 	BraceStopsFieldSplitting Answer
+	// BraceScanReadsProducedText reads brace syntax in the text an expansion
+	// produced and not only in the text the script wrote. ksh93u+ does:
+	// `e='{a,b}'; echo $e` is `a b` there and `{a,b}` in bash 5.3.20, bash
+	// 3.2.57 and zsh 5.9.2; `echo x$e` is `xa xb`; and `e='{a,'; g='b}';
+	// echo $e$g` is `a b`, the two halves of a group arriving from different
+	// expansions.
+	//
+	// A brace pairs only with one of its **own** provenance. A produced `}`
+	// does not close a written `{` — `e='}'; echo {a,b$e` is `{a,b}` — while
+	// two produced ones do: `e='{}'; echo $e{a,b}` is `{}a {}b`, the empty
+	// produced group failing and the written one behind it still a list. A
+	// produced `{` with nothing of its own to close it is an unmatched brace
+	// and takes the word: `e='{'; echo $e{a,b}` is `{{a,b}`.
+	//
+	// A run the script wrote inside quotes is brace syntax in no column, and
+	// the *result* of a quoted expansion is not read either: `echo "{a,b}"`
+	// and `e='{a,b}'; echo "$e"` are both one word everywhere.
+	//
+	// It is [Semantics.BraceBodyReadAfterExpansion] one level out — that one
+	// is a produced comma inside a group the script wrote, this one is a
+	// group the script never wrote at all — and only the road that finds the
+	// braces in the fields the word came to can put it.
+	BraceScanReadsProducedText Answer
 	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range
 	// endpoint and pads every element to the widest endpoint, zeros after
 	// the sign: `{01..3}` is `01 02 03` and `{-03..3..3}` is `-03 000 003`.

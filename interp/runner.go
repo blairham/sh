@@ -12398,14 +12398,16 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	if r.unspecified {
 		return
 	}
-	if r.privateKindWouldChange(a) {
-		// An array literal over a **private** the declaration made a scalar.
-		// A private keeps the kind it was declared with, where an ordinary
-		// local is retyped by the literal — see interp/privatescope.go, where
-		// the control row is.
+	if r.fixedSlotRefusesABareArrayLiteral(a) {
+		// An array literal over a slot whose kind is not a container — a
+		// `private` the declaration made a scalar, or one of the shell's own
+		// names. Such a slot keeps its kind where an ordinary name is
+		// retyped by the literal, and this is the *bare* assignment's
+		// sentence; the declaration words have one of their own. See
+		// interp/privatekindfixed.go.
 		return
 	}
-	if r.privateContainerKeepsItsKind(a) {
+	if r.fixedContainerKeepsItsKind(a) {
 		// And the same rule read the other way: a plain value over a private
 		// holding a **container** does not retype it either — an array takes
 		// the value as its one element and a table refuses outright. See

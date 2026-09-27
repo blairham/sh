@@ -76,21 +76,48 @@ import "github.com/blairham/sh/syntax"
 // same day. That is interp/parameterkindfixed.go's table rather than a
 // private's, and it is filed on its own.
 
-// privateSlotKinds is the set of kinds the slot a private declaration made
-// will take, and whether the name is a private at all.
+// fixedSlotKinds is the set of kinds a slot of a fixed kind
+// will take, and whether the name is in one at all.
 //
-// One kind, which is the one the binding is holding — a private is declared
-// and then may not move, so what it is now is what it was declared as. That
-// is only true while the two rules below hold; before them a plain value
-// retyped the name and the set would have drifted with it.
-func (r *Runner) privateSlotKinds(name string) (parameterKinds, bool) {
+// **Two sources and one rule**, which is what #4879 folded together. A
+// `private` binding's set is the single kind its declaration gave it, read
+// off the binding — a private is declared and then may not move, so what it
+// is now is what it was declared as, and that stays true only while the rules
+// below hold. A name the *shell* holds carries its set in `r.kindFixed`,
+// written out per name by the dialect that measured it, because a shell-held
+// slot can take two kinds and nothing about the name says which:
+// interp/parameterkindfixed.go has that table and the sweep behind it.
+//
+// The private is asked first. The two sets never both answer for one name in
+// practice — `private path` is refused by the scope rule before it declares
+// anything — and asking the nearer one first is the order every other
+// binding question in this package takes.
+func (r *Runner) fixedSlotKinds(name string) (parameterKinds, bool) {
+	if allowed, private := r.privateSlotKindsOnly(name); private {
+		return allowed, true
+	}
+	if r.localInTheInnermostScope(name) && r.shadowIsHidden(name) {
+		// A hidden shadow makes an ordinary parameter that merely happens to
+		// be spelled like the shell's, so there is no slot left to keep a
+		// kind — the same exemption
+		// Runner.kindLetterOverAShellParameterRefused records, reached from
+		// the value side.
+		return 0, false
+	}
+	allowed, fixed := r.kindFixed[name]
+	return allowed, fixed
+}
+
+// privateSlotKindsOnly is the private half of fixedSlotKinds, for the one
+// caller that must not answer for a name the shell holds.
+func (r *Runner) privateSlotKindsOnly(name string) (parameterKinds, bool) {
 	if !r.privateDeclared || !r.privateHere(name) {
 		return 0, false
 	}
 	return kindBit(r.parameterKind(name)), true
 }
 
-// privateSlotRefusesThisOperand reports whether a declaration word's operand
+// fixedSlotRefusesThisOperand reports whether a declaration word's operand
 // over a private binding is refused, having said so and ended the script.
 //
 // Both refusals, in one place and in this order, because the order is the
@@ -105,9 +132,9 @@ func (r *Runner) privateSlotKinds(name string) (parameterKinds, bool) {
 // it is worded by the same field: the `special` in that sentence is the word
 // `${(t)}` already gives a private, so the shell that has both writes one
 // sentence for two sources of one rule.
-func (r *Runner) privateSlotRefusesThisOperand(name string, f declareFlags) bool {
-	allowed, private := r.privateSlotKinds(name)
-	if !private {
+func (r *Runner) fixedSlotRefusesThisOperand(name string, f declareFlags) bool {
+	allowed, fixed := r.fixedSlotKinds(name)
+	if !fixed {
 		return false
 	}
 	if r.literalOperands[name] &&
@@ -120,6 +147,16 @@ func (r *Runner) privateSlotRefusesThisOperand(name string, f declareFlags) bool
 			Wording(r.diag().ArrayValueToNonArray,
 				"%[1]s: attempt to assign array value to non-array", name), name))
 		return true
+	}
+	if _, private := r.privateSlotKindsOnly(name); !private {
+		// The **letter** half is the private's alone here. A name the shell
+		// holds reaches it through
+		// Runner.kindLetterOverAShellParameterRefused, which runs ahead of
+		// this on every route that has a letter record to read and carries
+		// the hidden-shadow exemptions a shell-held slot has and a private
+		// has not. Asking it twice would answer those rows by the wrong one
+		// of the two.
+		return false
 	}
 	kind, plus, written := f.kindLetterWritten()
 	if !written {
@@ -137,11 +174,12 @@ func (r *Runner) privateSlotRefusesThisOperand(name string, f declareFlags) bool
 	return true
 }
 
-// privateContainerKeepsItsKind reports whether a plain value written over a
-// private holding a **container** was dealt with by this rule rather than by
-// the ordinary scalar store.
+// fixedContainerKeepsItsKind reports whether a plain value written over a
+// slot whose kind is a **container** was dealt with by this rule rather than
+// by the ordinary scalar store.
 //
-// The two containers answer differently and both are measured:
+// The two containers answer differently and both are measured, over a private
+// and over a name the shell holds alike:
 //
 //	private -a at; at=plain            array-local-hide-special, one element
 //	private -a at; at=$(echo "x y")    the same, and the element holds both
@@ -149,25 +187,30 @@ func (r *Runner) privateSlotRefusesThisOperand(name string, f declareFlags) bool
 //	private -A m;  m=plain             m: attempt to set slice of
 //	                                   associative array, and the shell ends
 //	private -A m;  m+=plain            the same
+//	path=plain                         array-tied-special, one element
+//	fpath=plain                        the same
+//	fignore=plain                      the same
 //
-// and the control is the ordinary local, which is retyped by the identical
-// line in both shells: `local -a at; at=plain` and `typeset -a at; at=plain`
-// are `scalar-local` holding five characters. `private -i n; n=abc` is the
-// other control — a kind that is not a container takes the value and stays
-// itself, in both — so this is about the container and not about every
-// private.
+// and the control is the ordinary name, which is retyped by the identical
+// line in both shells: `local -a at; at=plain`, `typeset -a at; at=plain` and
+// a bare `q=plain` over a `typeset -a q` are all `scalar` holding five
+// characters. `private -i n; n=abc` and `SECONDS=plain` are the other
+// control — a slot whose kind is not a container takes the value and stays
+// itself, in both — so this is about the container and not about every fixed
+// slot.
 //
 // The append is the array's one exception and it is not an exception to the
 // rule: `private -a at=(p q); at+=x` is three elements in both shells, which
 // is the element append the operator already means over an array.
-func (r *Runner) privateContainerKeepsItsKind(a *syntax.Assign) bool {
+func (r *Runner) fixedContainerKeepsItsKind(a *syntax.Assign) bool {
 	if a.IsArray || a.Index != nil || len(a.Members) > 0 || a.Member != "" {
 		return false
 	}
-	if _, private := r.privateSlotKinds(a.Name); !private {
+	allowed, fixed := r.fixedSlotKinds(a.Name)
+	if !fixed {
 		return false
 	}
-	if r.assocDeclared(a.Name) {
+	if allowed.has(AssocParameter) && r.assocDeclared(a.Name) {
 		outer := r.inBuiltin
 		// The store is speaking and not the word in front of it: measured,
 		// the sentence carries the function's name and no builtin's.
@@ -177,7 +220,7 @@ func (r *Runner) privateContainerKeepsItsKind(a *syntax.Assign) bool {
 		r.inBuiltin = outer
 		return true
 	}
-	if a.Append || !r.nameIsAnArray(a.Name) {
+	if a.Append || !allowed.has(ArrayParameter) || !r.nameIsAnArray(a.Name) {
 		return false
 	}
 	value, _, globbed := r.scalarAssignValue(a)
@@ -189,5 +232,70 @@ func (r *Runner) privateContainerKeepsItsKind(a *syntax.Assign) bool {
 	}
 	r.setArray(a.Name, []string{value})
 	r.markForAllexport(a.Name)
+	return true
+}
+
+// fixedSlotRefusesABareArrayLiteral reports whether an array literal written
+// as a **plain assignment** — no declaration word in front of it — over a
+// slot that is not a container is refused, having said so and ended the
+// script.
+//
+// **A fixed slot keeps its kind**, where an ordinary name is retyped by an
+// array literal without a word. Measured 2026-09-27 on zsh 5.9.2 under `-f`:
+//
+//	typeset -a at=(t l); (){ private at; at=(in fn) }
+//	                     (anon): at: attempt to assign array value to
+//	                     non-array, and the shell ends at 1
+//	                     (){ private at=x; at+=(p q) }   the same
+//	(){ local at; at=(p q); print ${(t)at} }
+//	                     array-local — the control, taken at 0
+//	(){ private -a at; at=(p q) }    taken at 0: the kind is the one the
+//	                                 declaration asked for
+//
+// **The declaration's own operand is not a retype, and that is the exemption
+// the two flags buy.** Every row above is a *later* line writing over a
+// binding some earlier line declared, and the kind that may not move is the
+// one that declaration gave. A literal written on the declaration itself is
+// what gives it — measured the same day:
+//
+//	(){ private q=(1 2); print ${(t)q} $#q }   array-local-hide-special 2
+//	(){ local -P q=(1 2); print ${(t)q} $#q }  the same
+//	private topq=(1 2)                         `array`, at the top level
+//
+// so there is nothing to keep the kind of yet. r.declaringPrivate is the span
+// of the builtin and r.privateDeclarationRan the `name=( … )` operand, which
+// Runner.simple stores after the builtin has returned. Both are one command
+// line wide, so every later line above runs outside them.
+//
+// The neighbor of fixedSlotRefusesThisOperand above, and the two are told
+// apart by the sentence rather than by the rule: measured 2026-09-27 on zsh
+// 5.9.2, with a `private v` standing and over the shell's own scalars alike,
+//
+//	v=(p q)             v: attempt to assign array value to non-array
+//	local v=(p q)       local: v: can't assign array value to non-array special
+//	HOME=(p q)          HOME: attempt to assign array value to non-array
+//	typeset HOME=(p q)  typeset: HOME: can't assign array value to non-array …
+//	IFS=(p q)           the bare sentence, naming IFS
+//	RANDOM=(p q)        the bare sentence, naming RANDOM
+//	SECONDS=(p q)       the bare sentence, naming SECONDS
+//
+// The control is a slot that **is** a container, which takes the literal in
+// both shells: `path=(a b)` is `array-tied-special` holding two elements, and
+// so is `typeset -a path=(a b)`. The other control is the ordinary name,
+// which is retyped by the identical line: `q=1; q=(p q)` is an array
+// everywhere.
+func (r *Runner) fixedSlotRefusesABareArrayLiteral(a *syntax.Assign) bool {
+	if !a.IsArray || len(a.Members) > 0 || a.Index != nil {
+		return false
+	}
+	if r.declaringPrivate || r.privateDeclarationRan {
+		return false
+	}
+	allowed, fixed := r.fixedSlotKinds(a.Name)
+	if !fixed || allowed.has(ArrayParameter) || allowed.has(AssocParameter) {
+		return false
+	}
+	r.fatal("%s\n", Wording(r.diag().ArrayValueToNonArray,
+		"%[1]s: attempt to assign array value to non-array", a.Name))
 	return true
 }

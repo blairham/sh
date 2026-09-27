@@ -105,3 +105,74 @@ func TestTheTypeFlagWordsWhatANameIs(t *testing.T) {
 		})
 	}
 }
+
+// A **kind letter** written over a name that already has another kind takes
+// the old one away here, where the rest of the panel lets the two stand
+// together (#4881). See interp.Semantics.KindLetterReplacesTheKind for the
+// measured grid and for bash's and ksh93's answers.
+func TestAKindLetterReplacesTheKind(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an array under the integer letter", `typeset -a q; typeset -i q; typeset -p q`, "typeset -i q=0\n"},
+		{"an array under a float letter", `typeset -a q; typeset -F q; typeset -p q`, "typeset -F q=0.0000000000\n"},
+		{"a table under a float letter", `typeset -A q; typeset -F q; typeset -p q`, "typeset -F q=0.0000000000\n"},
+		{"an integer under the array letter", `typeset -i q; typeset -a q; typeset -p q`, "typeset -a q=(  )\n"},
+		{"an integer under the table letter", `typeset -i q; typeset -A q; typeset -p q`, "typeset -A q=( )\n"},
+		{"a float under the array letter", `typeset -F q; typeset -a q; typeset -p q`, "typeset -a q=(  )\n"},
+		// The value the container held goes with it, which is the row that
+		// says the old kind is dropped rather than converted: `q=1` would be
+		// the first element arriving through the scalar view.
+		{"and the elements go with it", `typeset -a q=(1 2); typeset -i q; typeset -p q`, "typeset -i q=0\n"},
+		{"a table's values too", `typeset -A m=(k v); typeset -i m; typeset -p m`, "typeset -i m=0\n"},
+		// Two kind letters on **one** line are a different question already
+		// answered elsewhere — the numeric letter takes the container's here
+		// and both stand in bash — so what this rule replaces is a kind an
+		// *earlier* declaration gave, never one the same line wrote. See
+		// Runner.typeLetterTakesTheCompoundLetter.
+		{"two letters on one line are not this rule", `typeset -ia q; typeset -p q`, "typeset -i q=0\n"},
+		{"whichever order they are written in", `typeset -ai q; typeset -p q`, "typeset -i q=0\n"},
+		// A letter that is not a kind leaves the kind alone, which is the
+		// control that keeps this from reading as "any second declaration
+		// resets the name".
+		{"an export letter leaves the array", `typeset -a q; typeset -x q; typeset -p q`, "typeset -ax q=(  )\n"},
+		{"a freeze leaves the integer", `typeset -i q=5; typeset -r q; typeset -p q`, "typeset -ir q=5\n"},
+		// And one container letter over the other is a conversion with a
+		// measured answer of its own, not a deletion by this rule.
+		{"a table under the array letter", `typeset -A m=(k v); typeset -a m; typeset -p m`, "typeset -a m=(  )\n"},
+		{"an array under the table letter", `typeset -a a=(1 2); typeset -A a; typeset -p a`, "typeset -A a=( )\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And a **plus** letter takes off the container it names and leaves the other
+// kind standing, which is not an axis: zsh and bash 5.3 agree on all four
+// rows, bash 3.2 has no `-A` and ksh93 refuses every plus form of either
+// (#4881). See declareFlags.containerLetterRemoved.
+func TestAPlusContainerLetterTakesOffOnlyItsOwn(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the array letter over an array", `typeset -a q; typeset +a q; typeset -p q`, "typeset q=''\n"},
+		{"the table letter over a table", `typeset -A q; typeset +A q; typeset -p q`, "typeset q=''\n"},
+		// The pair that says the letter is read: before this either plus
+		// form emptied the name, so a script removing the attribute it had
+		// not got lost the one it had.
+		{"the table letter over an array", `typeset -a q; typeset +A q; typeset -p q`, "typeset -a q=(  )\n"},
+		{"the array letter over a table", `typeset -A q; typeset +a q; typeset -p q`, "typeset -A q=( )\n"},
+		{"and the values stay with it", `typeset -A m=(k v); typeset +a m; print -r -- ${m[k]}`, "v\n"},
+		{"both letters together take both", `typeset -a a=(1 2); typeset +aA a; typeset -p a`, "typeset a=''\n"},
+		// The controls: a name that is neither is silent, in both shells.
+		{"a scalar is left alone", `q=1; typeset +a q; typeset -p q`, "typeset q=1\n"},
+		{"and a name that is not there", `typeset +A nosuch; print st=$?`, "st=0\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

@@ -1820,6 +1820,11 @@ func Semantics() interp.Semantics {
 	// listing is what tells it from bash's promotion, and a one-element array
 	// of this shell's own making does carry the letter — `b=(1)` lists as
 	// `typeset -a b=(1)`.
+	// The kind letters accumulate, and this shell writes them both out:
+	// measured 2026-09-27 on ksh93u+ 2012-08-01, `typeset -i q; typeset -a q`
+	// lists `typeset -a -i q`. See
+	// interp.Semantics.KindLetterReplacesTheKind (#4881).
+	s.KindLetterReplacesTheKind = interp.No
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundStaysAScalar
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
 	// A name holding a compound reaches a child as its **first value**:

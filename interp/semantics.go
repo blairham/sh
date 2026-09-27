@@ -11850,6 +11850,57 @@ type Semantics struct {
 	// makes of a compound value the name is already holding — see
 	// CompoundAttributePolicy, where the three answers are.
 	CompoundAttribute CompoundAttributePolicy
+	// KindLetterReplacesTheKind is whether a **kind** letter written over a
+	// name that already has another kind takes the old one away, or stands
+	// beside it.
+	//
+	// The five kind letters are `-a`, `-A`, `-i` and the two float spellings
+	// `-F` and `-E`. Yes means the name ends up the kind the *last*
+	// declaration named and nothing else; No means the attributes accumulate
+	// and a name can be an array and an integer at once.
+	//
+	// Measured 2026-09-27 from a script file under `env -i
+	// PATH=/usr/bin:/bin` with a scratch `HOME`, `typeset -p q` behind each
+	// pair:
+	//
+	//	written                  zsh 5.9.2                 bash 5.3.20
+	//	-i q; -a q               typeset -a q=(  )         declare -ai q
+	//	-a q; -i q               typeset -i q=0            declare -ai q
+	//	-i q; -A q               typeset -A q=( )          declare -Ai q
+	//	-A q; -i q               typeset -i q=0            declare -Ai q
+	//	-a q; -F q               typeset -F q=0.0000000000 declare -a q
+	//
+	// bash 3.2.57 agrees with bash 5.3 on the rows it has — `declare -ai q`
+	// either way round — and has no `-A` at all. ksh93u+ 2012-08-01 agrees
+	// too and says so most plainly: `typeset -i q; typeset -a q` lists
+	// `typeset -a -i q`, both letters written out.
+	//
+	// **This is about a kind an *earlier* declaration gave**, and two
+	// letters on one line are a different question already answered
+	// elsewhere: `typeset -ia q` is `typeset -i q=0` in zsh and `declare -ai
+	// q` in bash, which is Semantics.TypeLetterTakesTheCompoundLetter. So
+	// the rule here is applied to what the name is carrying *before* this
+	// line's letters land, never to the letters among themselves — a
+	// distinction the two shells make in opposite directions and which one
+	// field could not hold.
+	//
+	// The control on the other side is a letter that is not a kind, and it
+	// leaves the kind alone in both: measured, `typeset -a q; typeset -x q`
+	// is still an array and `typeset -i q=5; typeset -r q` is still an
+	// integer holding 5.
+	//
+	// The `+` forms are not this axis and are deliberately left out: a plus
+	// letter takes off the container it names and leaves the other kind
+	// standing, in zsh and in bash 5.3 alike — `typeset -a q; typeset +A q`
+	// is still an array in both — so that half is a rule and not a split.
+	// See declareFlags.containerLetterRemoved (#4881).
+	//
+	// unanswered dash, ash: neither shell has a declaration utility to write
+	// a kind letter on. Measured 2026-09-27, `typeset -i q` is `typeset: not
+	// found` in dash and `typeset: not found` in BusyBox ash, so there is no
+	// second declaration for the question to be about.
+	// TestTypesetIsNotABuiltinHere pins the absence.
+	KindLetterReplacesTheKind Answer
 	// ScalarUnderAnArrayDeclaration is what `typeset -a` makes of a scalar
 	// the name is already holding — see ScalarUnderACompoundPolicy, where the
 	// three answers are. The converse of CompoundAttribute above, which asks

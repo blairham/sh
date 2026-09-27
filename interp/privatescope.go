@@ -3,8 +3,6 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
-
 // A declaration a deeper **function frame** reads straight past.
 //
 // One shell in the panel has a second declaration word beside `local`, and
@@ -449,67 +447,6 @@ func (r *Runner) privateHere(name string) bool {
 		}
 	}
 	return false
-}
-
-// privateKindWouldChange reports whether this assignment would retype a
-// private binding, having refused it.
-//
-// **A private keeps the kind its declaration gave it**, where an ordinary
-// local is retyped by an array literal without a word. Measured 2026-09-27 on
-// zsh 5.9.2 under `-f`, with the module loaded:
-//
-//	typeset -a at=(t l); (){ private at; at=(in fn) }
-//	                     (anon): at: attempt to assign array value to
-//	                     non-array, and the shell ends at 1
-//	                     (){ private at=x; at+=(p q) }   the same
-//	(){ local at; at=(p q); print ${(t)at} }
-//	                     array-local — the control, taken at 0
-//	(){ private -a at; at=(p q) }    taken at 0: the kind is the one the
-//	                                 declaration asked for
-//	(){ private -a at; at=plain }    taken at 0, and still `array-…`
-//
-// The control is what makes this a statement about `private` rather than
-// about this engine's retyping: the same two lines with `local` retype the
-// name and print `array-local`, in that shell and in this one.
-//
-// Rows three and four are the other control, and they are why this asks about
-// the *declared kind* rather than about the literal: a private declared with
-// `-a` takes an array literal, so the refusal is not "no literal over a
-// private" — it is a kind that may not move.
-//
-// The scalar direction is deliberately left alone and is not an omission: row
-// five is that case measured, and the shell takes it. Whatever it does to the
-// value, `${(t)}` still says `array-…` afterwards, so nothing was retyped
-// there either.
-//
-// **The declaration's own operand is not a retype, and that is the exemption
-// the flag buys.** Every row above is a *later* line writing over a binding
-// some earlier line declared, and the kind that may not move is the one that
-// declaration gave. A literal written on the declaration itself is what gives
-// it — measured 2026-09-27 on zsh 5.9.2 under `-f`, module loaded:
-//
-//	(){ private q=(1 2); print ${(t)q} $#q }   array-local-hide-special 2
-//	(){ local -P q=(1 2); print ${(t)q} $#q }  the same
-//	private topq=(1 2)                         `array`, at the top level
-//
-// so there is nothing to keep the kind of yet. The two flags between them are
-// exactly "this store is a private declaration's own": r.declaringPrivate for
-// the span of the builtin, and r.privateDeclarationRan for the `name=( … )`
-// operand, which Runner.simple stores after the builtin has returned. Both
-// are one command line wide, so every later line above runs outside them.
-func (r *Runner) privateKindWouldChange(a *syntax.Assign) bool {
-	if !a.IsArray || len(a.Members) > 0 || a.Index != nil {
-		return false
-	}
-	if r.declaringPrivate || r.privateDeclarationRan {
-		return false
-	}
-	if !r.privateHere(a.Name) || r.nameIsAnArray(a.Name) || r.assocDeclared(a.Name) {
-		return false
-	}
-	r.fatal("%s\n", Wording(r.diag().ArrayValueToNonArray,
-		"%[1]s: attempt to assign array value to non-array", a.Name))
-	return true
 }
 
 // bindingIsAbsent reports whether a captured binding holds no parameter at

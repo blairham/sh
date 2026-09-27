@@ -1986,6 +1986,12 @@ func Semantics() interp.Semantics {
 	// typeset -A a` is `typeset -A a=( )`. Measured 2026-09-08 against
 	// 5.9.2 — the one column that throws the script's own value away, and
 	// the one this implementation was giving every dialect.
+	// A kind letter replaces the kind here, alone in the panel: measured
+	// 2026-09-27, `typeset -i q; typeset -a q` lists `typeset -a q=(  )` with
+	// the integer attribute gone, and `typeset -a q; typeset -F q` is
+	// `typeset -F q=0.0000000000`. See
+	// interp.Semantics.KindLetterReplacesTheKind (#4881).
+	s.KindLetterReplacesTheKind = interp.Yes
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundDiscardsIt
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundDiscardsIt
 	// A name holding a compound reaches no child, with bash and against

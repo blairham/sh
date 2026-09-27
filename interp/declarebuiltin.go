@@ -1679,7 +1679,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// interp/parameterkindfixed.go.
 			return r.status
 		}
-		if r.privateSlotRefusesThisOperand(name, f) {
+		if r.fixedSlotRefusesThisOperand(name, f) {
 			// The same rule over a name a call declared **private**, whose
 			// slot takes the one kind its declaration gave it — see
 			// interp/privatekindfixed.go, where the grid and the ordering
@@ -1987,6 +1987,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// the attributes are about to reach is the cell that has to go back.
 		// See declarationtakenback.go.
 		held := r.holdTheDeclaration(name)
+		// The kind this line names takes the place of the kind the name had,
+		// in the one dialect that answers it that way. Ahead of both the
+		// numeric attributes below and the container mark further down,
+		// because what it clears is what the name was carrying *before* this
+		// line's letters land — see interp/kindletterreplaces.go.
+		r.kindLetterReplacesWhatTheNameWas(name, df)
 		r.applyAttributes(name, df)
 		if hasValue && !fresh && r.compoundNameHolds(name) && r.declaresAType(name) {
 			// An attribute **arriving** over a standing array or table reaches
@@ -2289,6 +2295,40 @@ func (f declareFlags) arrayLetterRemoved() bool {
 	return false
 }
 
+// containerLetterRemoved is **which** container the plus letter names, which
+// is not the same question arrayLetterRemoved answers: that one is whether
+// there is a removal to make at all, and this one is what it is a removal of.
+//
+// A plus letter takes off the container it names and leaves the other kind
+// standing. Measured 2026-09-27 from a script file under `env -i
+// PATH=/usr/bin:/bin`, `typeset -p` behind each line:
+//
+//	                          zsh 5.9.2        bash 5.3.20
+//	-a q; +a q                typeset q=''     declare -- q
+//	-A q; +A q                typeset q=''     declare -- q
+//	-a q; +A q                typeset -a q     declare -a q
+//	-A q; +a q                typeset -A q     declare -A q
+//
+// The first two are what the letter is for and were already right; the last
+// two are the pair that says the letter is read, and both columns that have
+// the two letters agree on all four. bash 3.2 has no `-A` at all and ksh93u+
+// refuses every plus form of either — `cannot unset attribute C or A or a` —
+// so neither is evidence either way and this is a rule rather than an axis
+// (#4881).
+//
+// Both letters written on one line takes both off, which is the one shape
+// with nothing left to decide: `typeset -a a=(1 2); typeset +aA a` is
+// `typeset a=”` in zsh, measured the same day.
+func (f declareFlags) containerLetterRemoved() (array, table bool) {
+	if plus, written := f.lastSign('a'); written && plus {
+		array = true
+	}
+	if plus, written := f.lastSign('A'); written && plus {
+		table = true
+	}
+	return array, table
+}
+
 // arrayAttributeRemoved does what this dialect does with a `+a` or `+A`, and
 // reports whether the declaration survives it.
 //
@@ -2326,8 +2366,27 @@ func (r *Runner) arrayAttributeRemoved(name string, f declareFlags) bool {
 		// other kind of container and not the elements as a string. Measured:
 		// `typeset -A a; a[x]=1; typeset +A a; typeset -p a` lists
 		// `typeset a=''` in zsh 5.9.2.
-		delete(r.Arrays, name)
-		delete(r.AssocArrays, name)
+		//
+		// **The letter that was written decides which container goes**, and
+		// the other one stands: `typeset -a q; typeset +A q` is still
+		// `typeset -a q` and `typeset -A q; typeset +a q` is still
+		// `typeset -A q`, in zsh and in bash 5.3 alike. Taking both off
+		// whichever letter was written made either plus form empty the name,
+		// so a script that removed the attribute it had not got lost the one
+		// it had (#4881). See declareFlags.containerLetterRemoved.
+		array, table := f.containerLetterRemoved()
+		if array && !r.arrayDeclared(name) && !table {
+			return true
+		}
+		if table && !r.assocDeclared(name) && !array {
+			return true
+		}
+		if array {
+			delete(r.Arrays, name)
+		}
+		if table {
+			delete(r.AssocArrays, name)
+		}
 		r.setVar(name, "")
 	}
 	return true

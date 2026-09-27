@@ -1963,6 +1963,11 @@ func Semantics() interp.Semantics {
 	// typeset -A a` as `declare -A a=([0]="1" )`, and `$b` still reads `1`
 	// under both. bash 3.2.57 answers the array letter the same way and has
 	// no `-A` at all.
+	// The kind letters accumulate here: `typeset -i q; typeset -a q` lists
+	// `declare -ai q` and so does the pair the other way round, measured
+	// 2026-09-27 on 5.3.20 and on 3.2.57, which has the same answer on the
+	// rows it has. See interp.Semantics.KindLetterReplacesTheKind (#4881).
+	s.KindLetterReplacesTheKind = interp.No
 	s.ScalarUnderAnArrayDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
 	s.ScalarUnderATableDeclaration = interp.ScalarUnderACompoundBecomesTheFirstElement
 	// A name holding an array or a table reaches no child at all: measured

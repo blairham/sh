@@ -166,6 +166,7 @@ ash   KeyedLetterOverAFrozenNameHoldingAValueIsRefused
 ash   KeyedLiteralAppendJoinsTheReplacedValue
 ash   KeyedTableScalarIsTheFirstValue
 ash   KeywordPromotesADeclarationsOperand
+ash   KindLetterReplacesTheKind
 ash   ListedAssignmentPrefixIsBare
 ash   ListedBangIsOrdinary
 ash   ListedCaretIsOrdinary
@@ -498,6 +499,7 @@ dash  KeyedLetterOverAFrozenNameHoldingAValueIsRefused
 dash  KeyedLiteralAppendJoinsTheReplacedValue
 dash  KeyedTableScalarIsTheFirstValue
 dash  KeywordPromotesADeclarationsOperand
+dash  KindLetterReplacesTheKind
 dash  ListedAssignmentPrefixIsBare
 dash  ListedBangIsOrdinary
 dash  ListedCaretIsOrdinary

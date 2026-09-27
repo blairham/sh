@@ -113,6 +113,13 @@ func permissive() Semantics {
 	// suite asking something else. The suite that is about the axis sets it
 	// itself — see interp/prefixbuiltinexport_test.go (#3437).
 	s.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
+	// Whether a **kind** letter written over a name that already has another
+	// kind takes the old one away, at the answer four of the five columns
+	// give: it does not, and the attributes accumulate. That is what every
+	// suite here that writes a second kind letter on the way to something
+	// else already expects, and the suite that is *about* the axis sets it
+	// itself — see dialect/zsh/typeflag_test.go (#4881).
+	s.KindLetterReplacesTheKind = No
 	// And whether a declaration keeps the value its own prefix set. No,
 	// which is five of the six and is the answer every suite here that
 	// merely writes `x=1 readonly y` already expects.

@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // What this shell's own stored parameters say about themselves.
 //
@@ -57,5 +60,64 @@ func TestTheShellsOwnStoredParametersDescribeThemselves(t *testing.T) {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 			}
 		})
+	}
+}
+
+// A slot the shell holds keeps its **kind**, so a value of the wrong shape
+// does not retype it: an array slot makes the value its one element and a
+// slot that is not a container refuses an array literal outright (#4879).
+//
+// The same rule a `private` declaration's slot follows — see
+// interp/privatekindfixed.go, which holds both — and the sentence parts by
+// the *word*: a declaration utility names itself and says `special`, a bare
+// assignment writes the ordinary one.
+//
+// Measured 2026-09-27 against zsh 5.9.2 from a script file under `env -i
+// PATH=/usr/bin:/bin` with a scratch `HOME`.
+func TestAShellHeldSlotKeepsItsKind(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"an array slot takes the value as one element", `path=plain; print "${(t)path} n=${#path} [$path]"`, "array-tied-special n=1 [plain]\n"},
+		{"and so do the other two", `fpath=plain; fignore=plain; print "${(t)fpath} ${#fpath} ${(t)fignore} ${#fignore}"`, "array-tied-special 1 array-tied-special 1\n"},
+		// The controls on that half: an ordinary array *is* retyped by the
+		// identical line, and the slot still takes a real literal.
+		{"an ordinary array is retyped", `typeset -a q; q=plain; print "${(t)q} n=${#q}"`, "scalar n=5\n"},
+		{"and the slot takes a literal", `path=(a b); print "${(t)path} n=${#path}"`, "array-tied-special n=2\n"},
+		{"a slot that is not a container takes the value", `IFS=plain; print "${(t)IFS} [$IFS]"`, "scalar-special [plain]\n"},
+		{"and an integer slot reads it as one", `SECONDS=plain; print "${(t)SECONDS} [$SECONDS]"`, "integer-special [0]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+	// An array literal over a slot that is not a container is refused, and
+	// the two sentences are the pair that says the word in front decides.
+	for _, name := range []string{"HOME", "IFS", "RANDOM", "SECONDS"} {
+		out, st := runZsh(t, t.TempDir(), name+`=(p q); print reached`)
+		if want := name + ": attempt to assign array value to non-array"; !strings.Contains(out, want) {
+			t.Errorf("%s=(p q) = %q, want %q", name, out, want)
+		}
+		if strings.Contains(out, "reached") || st != 1 {
+			t.Errorf("%s=(p q) = %q (status %d), want the script to end at 1", name, out, st)
+		}
+		out, st = runZsh(t, t.TempDir(), `typeset `+name+`=(p q); print reached`)
+		if want := name + ": can't assign array value to non-array special"; !strings.Contains(out, want) || !strings.Contains(out, "typeset:") {
+			t.Errorf("typeset %s=(p q) = %q, want %q", name, out, want)
+		}
+		if strings.Contains(out, "reached") || st != 1 {
+			t.Errorf("typeset %s=(p q) = %q (status %d), want the script to end at 1", name, out, st)
+		}
+	}
+	// And the letter is refused ahead of the value where the slot *would*
+	// take the literal, which is the ordering interp/privatekindfixed.go
+	// records: an array slot takes `(1 2)`, so only `-i` is left to refuse.
+	out, st := runZsh(t, t.TempDir(), `typeset -i path=(1 2); print reached`)
+	if want := "path: can't change type of a special parameter"; !strings.Contains(out, want) || !strings.Contains(out, "typeset:") {
+		t.Errorf("typeset -i path=(1 2) = %q, want %q", out, want)
+	}
+	if strings.Contains(out, "reached") || st != 1 {
+		t.Errorf("typeset -i path=(1 2) = %q (status %d), want the script to end at 1", out, st)
 	}
 }

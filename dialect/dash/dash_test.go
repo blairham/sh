@@ -524,6 +524,12 @@ func TestParametersDashDoesNotProvide(t *testing.T) {
 
 // TestDashHasNeitherDeclarationName: the core provides `typeset` because
 // three of the four have it, and the one that does not takes it away.
+//
+// It is also what pins the absence
+// interp.Semantics.KindLetterReplacesTheKind is left unanswered on, under the
+// name TestTypesetIsNotABuiltinHere in dialect/ash: with no declaration
+// utility there is no kind letter to write, so the question of what a second
+// one does to the first has no line to be about (#4881).
 func TestDashHasNeitherDeclarationName(t *testing.T) {
 	for _, name := range []string{"typeset", "declare"} {
 		f, err := syntax.Parse(name+` x=1`, dash.Dialect())

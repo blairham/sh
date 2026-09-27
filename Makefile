@@ -56,7 +56,7 @@ SHELLS := sh bash zsh ksh dash ash
 FUNCSRC := share/sh/functions
 FUNCS := $(sort $(notdir $(wildcard $(FUNCSRC)/*)))
 
-.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage coverage wild wild-run wild-run-contained fmt-wild smoke prompt-fidelity acp acp-wire acp-bench startup perfgate suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
+.PHONY: all build test test-cover fmt vet tidy clean check corpus-guard oracle oracle-case oracle-check conformance conformance-gated conformance-dialects axis-sweep axis-coverage emulate-sweep coverage wild wild-run wild-run-contained fmt-wild smoke prompt-fidelity acp acp-wire acp-bench startup perfgate suite suite-cells suite-guard suite-panel bash-suite zsh-suite ksh-suite dash-suite install uninstall
 
 all: build
 
@@ -307,6 +307,22 @@ axis-coverage: ## Report every interp.Semantics axis a dialect does not answer, 
 # for why most pairs have no probe and why that number is printed (#2441).
 axis-grade: ## Grade every dialect preset against the golden record, and report the pairs nothing compares and the splits no tier can express (#2441, #3482)
 	@go run ./internal/cmd/axissweep -grade $(ARGS)
+
+# How far `emulate MODE` reaches into the grammar (#4734). Every corpus
+# snippet is run as a file of `emulate MODE`, `set -n` and the snippet, under
+# all three modes, through the reference zsh and through ours; a snippet moves
+# when the modes disagree about whether it parses, and the number is the count
+# the two binaries answer differently about. It is the bar for the emulation
+# epic and the check for every row under it.
+#
+# Not in `check` and it must not be: some twenty-seven thousand shell
+# processes. Exit 1 means a disagreement, which is the expected state until
+# the epic closes; exit 2 means the instrument could not be trusted — a
+# control that did not fire, a selection matching nothing, a shell that hung.
+emulate-sweep: ## Report every corpus snippet the emulations move for the reference and not for us (#4734)
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/emulate-zsh ./cmd/zsh
+	@go run ./internal/cmd/emulatesweep -bin $(BINDIR)/emulate-zsh $(ARGS)
 
 sandbox: ## Try every way a script has of reaching the filesystem, against the shipped binaries, and report what the boundary stopped
 	@mkdir -p $(BINDIR)

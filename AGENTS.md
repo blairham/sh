@@ -890,6 +890,71 @@ nothing grades must never read as a pair that agrees. The same rule shapes the
 ledger: a pair the record *cannot* answer is a committed line reading `-`
 rather than a missing one.
 
+`make emulate-sweep` asks how far `emulate MODE` reaches into the **grammar**.
+Every corpus snippet is run as a file of `emulate MODE`, `set -n` and the
+snippet — so the mode is in force and nothing executes — under all three modes,
+through the reference zsh and through ours. A snippet **moves with the mode**
+when the three modes disagree about whether it parses, and the number the
+epic is graded on is the count of snippets the two binaries answer differently
+about. `internal/emulatesweep` holds it and `internal/cmd/emulatesweep` prints
+the report.
+
+It exists because #4734 could not be closed honestly as one change. The mode
+reaches the option table and the semantics vector and never reaches
+`syntax.Dialect` at all, so `emulate -R sh -c 'd1() { print hi }'` is a parse
+error in the reference and a defined function here — and the same thing happens
+on a **script file** and under an `argv[0]` of `sh`, which is what says the noun
+is the mode rather than the `-c` route. The fix is a per-mode grammar table
+applied in `applyEmulation`, the mechanism `set -o posix` and `rcquotes` already
+use, whose ~110 fields each have to be measured. The sweep is in the tree before
+any of those rows so that every row is graded by the same number rather than by
+its author's own.
+
+**The bar is the *relative* verdict**, not the raw one: each mode is read
+against that binary's own native-mode answer. A construct one shell has and the
+other has not shifts all three modes together, and the corpus already grades
+those — counting them here would bury the emulation signal under several hundred
+rows that have nothing to do with it.
+
+**The controls are fired on both binaries before anything is counted, and a
+failure stops the run.** This shell's answer to the population is a null, and a
+null is also what a harness that cannot see a parse error reports, so `{ fi; }`
+must be refused under all three modes and `echo hi` under none. Both are tests
+as well — against `cmd/zsh`, which is always in the tree, so the check does not
+skip on a machine without a reference — and so is the falsifier: `true` and
+`false` are pointed at the same control block and each must fail the half it
+cannot answer.
+
+**A hang is a column of its own.** The reference really does hang on
+`cmd/function-keyword-with-a-name-holding-a-dollar` under `emulate ksh`, and
+folding that into "not refused" would have counted it as the mode reaching
+nothing — which is precisely this shell's answer, so the one shape that must
+never be manufactured is another zero. Nineteen snippets are in that state and
+the first framing of this measurement scored all nineteen as *refused under ksh
+alone*; they are named in the report instead, and the unmeasured count is
+printed on every run, empty or not.
+
+**And the counts are per corpus prefix, because a total that falls is not a
+per-row check.** Each row of the epic owns a family, so a row that made its own
+family worse while another improved would be invisible in the total.
+
+Measured on `main` at `214484c93`, 2026-09-27, against `/opt/homebrew/bin/zsh`
+— `zsh 5.9.2 (aarch64-apple-darwin25.4.0)`: of 4487 snippets, 4467 scored and 20
+unmeasured; the reference moves on **162**, this shell on **2**, and the two
+answer **160** differently. That 160 is the epic's bar and it closes at zero.
+The movers split 81 under `sh` and `ksh` together, 55 under `sh` alone, 0 under
+`ksh` alone, and **24 refused by zsh's own mode and accepted by a mode** — so
+the modes are not a subset lattice and a table built on the narrowing
+assumption would get two dozen rows wrong quietly.
+
+Not in `make check` and it must not be: some twenty-seven thousand shell
+processes, about forty-five seconds at `-jobs 10`. Exit 1 means a disagreement,
+which is the expected state until the epic closes; exit 2 means the instrument
+could not be trusted — a control that did not fire, a `-only` matching nothing,
+a binary that never started. Those two are deliberately different, because a
+sweep reporting zero from being broken must not look like a sweep reporting zero
+from being finished.
+
 `make startup` times process start to a first prompt, and the `-c` path a
 script's every subshell pays, against the real shells on the same machine in
 the same minute. `internal/startupcost` is the harness; it uses a

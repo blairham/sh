@@ -5454,6 +5454,12 @@ func Diagnostics() interp.Diagnostics {
 		// written word in the location under every declaration utility.
 		// Measured 2026-09-27; see dialect/zsh/kindfixedparameters.go.
 		SpecialParameterKind: "%s: can't change type of a special parameter",
+		// And the same name refusing an array literal on a declaration word,
+		// which is a second sentence rather than the bare assignment's:
+		// measured 2026-09-27, `private v; local v=(p q)` is this and
+		// `private v; v=(p q)` is ArrayValueToNonArray above. See
+		// interp/privatekindfixed.go.
+		ArrayValueToANonArraySpecial: "%s: can't assign array value to non-array special",
 		// The one dialect that words the refusal to unset exactly as it words
 		// the refusal to assign, and the only one that does not name `unset`.
 		UnsetReadonly: "read-only variable: %s",

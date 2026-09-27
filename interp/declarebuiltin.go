@@ -1679,6 +1679,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// interp/parameterkindfixed.go.
 			return r.status
 		}
+		if r.privateSlotRefusesThisOperand(name, f) {
+			// The same rule over a name a call declared **private**, whose
+			// slot takes the one kind its declaration gave it — see
+			// interp/privatekindfixed.go, where the grid and the ordering
+			// against this line's value are.
+			return r.status
+		}
 		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
 			// Ahead of everything else this operand would do, because the
 			// shell that refuses declares nothing: the name is not brought

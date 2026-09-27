@@ -3670,6 +3670,15 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			// which values are exportable.
 			return r.status
 		}
+		if r.privateSlotRefusesThisOperand(name, declareFlags{export: true}) {
+			// An array literal over a name this call declared **private**
+			// whose slot is not a container. This loop is where `export`
+			// declares when no letter sent it through declareNames, which is
+			// why the check stands here as well — see
+			// interp/privatekindfixed.go, and exportRefusesACompound above
+			// for the same argument about the same pair of routes.
+			return r.status
+		}
 		if base, subs, subscripted := r.operandSubscripts("export", name); subscripted {
 			if hasValue {
 				// `export a[1]=v` in the two dialects that take the operand:
@@ -7304,6 +7313,15 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			status = 1
 			continue
 		}
+		if r.privateSlotRefusesThisOperand(name, f) {
+			// A kind letter aimed at a name this call declared **private**,
+			// whose slot takes the one kind the declaration gave it. Behind
+			// `private`'s own scope refusal, which is measured: `private at;
+			// private -a at` is `can't change scope of existing param` at 1
+			// with the script carrying on, so that word never reaches this.
+			// See interp/privatekindfixed.go.
+			return r.status
+		}
 		if f.nameref && r.namerefNameCannotBeSubscripted(word, name) {
 			// A reference is a name, and a subscript is not part of one —
 			// `local` refuses it in the same words `declare` does, under its
@@ -7767,6 +7785,21 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 			// froze a variable literally named `a[1]` and left `a` writable,
 			// where ksh93 leaves `typeset -r -a a` (#3501, #1380).
 			name = n
+		}
+		if r.privateSlotRefusesThisOperand(name, f) {
+			// An array literal over a name this call declared **private**
+			// whose slot is not a container, which this word refuses in its
+			// own sentence exactly as the other three declaration words do.
+			// Ahead of the scope below because the shell that refuses
+			// declares nothing. See interp/privatekindfixed.go.
+			//
+			// The *letter* half of that rule is out of reach from here and
+			// says so rather than being half-answered: this loop builds its
+			// own declareFlags without the letter record kindLetterWritten
+			// reads, and this word's letter set is short by thirteen of the
+			// eighteen it takes — `readonly -i path` is `bad option` here
+			// where the reference answers the type sentence.
+			return r.status
 		}
 		// The scope, where this dialect reads `readonly` as its own
 		// `typeset -r` — see Semantics.ReadonlyDeclaresALocal. Ahead of

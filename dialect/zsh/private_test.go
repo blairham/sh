@@ -277,3 +277,223 @@ f1; f2`)
 		t.Errorf("the controls = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// A `private` declaration makes a slot of a fixed **kind**, so a later
+// declaration word asking for another one is refused (#4862).
+//
+// The grid is five declared kinds against seven letter spellings, measured
+// 2026-09-27 against zsh 5.9.2 from a script file under `env -i
+// PATH=/usr/bin:/bin` with a scratch `HOME`, one run per cell. See
+// interp/privatekindfixed.go, which holds it in full; what is asserted here
+// is the whole of it, because the rule is a set membership and a handful of
+// cells would not say which set.
+func TestAPrivateSlotTakesOneKind(t *testing.T) {
+	const (
+		typeRefusal = "(anon):typeset: at: can't change type of a special parameter\n"
+		taken       = "ok "
+	)
+	for _, tc := range []struct{ declared, letter, want string }{
+		{"", "-a", typeRefusal},
+		{"", "-A", typeRefusal},
+		{"", "-i", typeRefusal},
+		{"", "-F", typeRefusal},
+		{"", "", "at=''\n" + taken + "scalar-local-hide-special\n"},
+		{"", "+a", taken + "scalar-local-hide-special\n"},
+		{"", "+i", taken + "scalar-local-hide-special\n"},
+
+		{"-a", "-a", taken + "array-local-hide-special\n"},
+		{"-a", "-A", typeRefusal},
+		{"-a", "-i", typeRefusal},
+		{"-a", "-F", typeRefusal},
+		{"-a", "", "at=(  )\n" + taken + "array-local-hide-special\n"},
+		// The plus of the kind the slot holds is the refusal, and the plus of
+		// one it has not is taken: the pair is what says the sign half is
+		// read the same way the shell's own table reads it.
+		{"-a", "+a", typeRefusal},
+		{"-a", "+i", taken + "array-local-hide-special\n"},
+
+		{"-A", "-a", typeRefusal},
+		{"-A", "-A", taken + "association-local-hide-special\n"},
+		{"-A", "-i", typeRefusal},
+		{"-A", "-F", typeRefusal},
+		{"-A", "", "at=( )\n" + taken + "association-local-hide-special\n"},
+		{"-A", "+i", taken + "association-local-hide-special\n"},
+
+		{"-i", "-a", typeRefusal},
+		{"-i", "-A", typeRefusal},
+		{"-i", "-i", taken + "integer-local-hide-special\n"},
+		{"-i", "-F", typeRefusal},
+		{"-i", "", "at=0\n" + taken + "integer-local-hide-special\n"},
+		{"-i", "+a", taken + "integer-local-hide-special\n"},
+		{"-i", "+i", typeRefusal},
+
+		{"-F", "-a", typeRefusal},
+		{"-F", "-A", typeRefusal},
+		{"-F", "-i", typeRefusal},
+		{"-F", "-F", taken + "float-local-hide-special\n"},
+		{"-F", "", "at=0.0000000000\n" + taken + "float-local-hide-special\n"},
+		{"-F", "+a", taken + "float-local-hide-special\n"},
+		{"-F", "+i", taken + "float-local-hide-special\n"},
+	} {
+		t.Run("private "+tc.declared+" then typeset "+tc.letter, func(t *testing.T) {
+			out, st := answersRun(t, `zmodload zsh/param/private
+(){ private `+tc.declared+` at; typeset `+tc.letter+` at; print "ok ${(t)at}" }`)
+			if out != tc.want {
+				t.Errorf("= %q (status %d), want %q", out, st, tc.want)
+			}
+			if refused := strings.Contains(tc.want, "can't"); refused != (st == 1) {
+				t.Errorf("status = %d for %q", st, out)
+			}
+		})
+	}
+	// The control, and it is the row that makes the grid evidence: the same
+	// thirty-five cells under `local` are thirty-five takes in that shell and
+	// in this one, so this is the second declaration word's and not a rule
+	// about redeclaring a name.
+	out, st := answersRun(t, `f1() { local -a at; typeset -A at; print "  1 ${(t)at}" }
+f2() { local at; typeset -i at; print "  2 ${(t)at}" }
+f3() { local -A at; typeset +i at; print "  3 ${(t)at}" }
+f1; f2; f3`)
+	want := "  1 association-local\n  2 integer-local\n  3 association-local\n"
+	if out != want || st != 0 {
+		t.Errorf("the local control = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And a plain value does not retype one either: a private holding a
+// **container** keeps it, where an ordinary local is retyped by the identical
+// line in both shells (#4862).
+func TestAPrivateContainerIsNotRetypedByAValue(t *testing.T) {
+	out, st := answersRun(t, `zmodload zsh/param/private
+f1() { private -a at; at=plain;           print "  1 ${(t)at} n=${#at} [$at]" }
+f2() { private -a at; at=$(echo "x y");   print "  2 ${(t)at} n=${#at} [$at]" }
+f3() { private -a at=(p q); at+=x;        print "  3 ${(t)at} n=${#at} [$at]" }
+f4() { private -i n; n=abc;               print "  4 ${(t)n} [$n]" }
+f5() { local -a at; at=plain;             print "  5 ${(t)at} n=${#at}" }
+f6() { typeset -a at; at=plain;           print "  6 ${(t)at} n=${#at}" }
+f1; f2; f3; f4; f5; f6`)
+	want := "  1 array-local-hide-special n=1 [plain]\n" +
+		"  2 array-local-hide-special n=1 [x y]\n" +
+		"  3 array-local-hide-special n=3 [p q x]\n" +
+		"  4 integer-local-hide-special [0]\n" +
+		"  5 scalar-local n=5\n" +
+		"  6 scalar-local n=5\n"
+	if out != want || st != 0 {
+		t.Errorf("a value over a private = %q (status %d), want %q", out, st, want)
+	}
+	// Rows two and three are what keep row one from being read as a split: a
+	// command substitution's two words become **one** element, and the
+	// operator still appends an element rather than joining the string.
+	// Rows five and six are the control: the ordinary local is retyped.
+
+	// A table refuses the same line outright and ends the shell, which is the
+	// other container and the other answer.
+	for _, src := range []string{`m=plain`, `m+=plain`} {
+		out, st := answersRun(t, `zmodload zsh/param/private
+f() { private -A m; `+src+`; print "reached" }
+f
+print after`)
+		if !strings.Contains(out, "m: attempt to set slice of associative array") {
+			t.Errorf("%s over a table private = %q, want the refusal", src, out)
+		}
+		if strings.Contains(out, "reached") || strings.Contains(out, "after") {
+			t.Errorf("%s over a table private = %q, want the script to end there", src, out)
+		}
+		if st != 1 {
+			t.Errorf("%s over a table private status = %d, want 1", src, st)
+		}
+	}
+	// And the control for that half, which is the one that says it belongs to
+	// `private`: the same two lines under `local` make an ordinary scalar.
+	out, st = answersRun(t, `f() { local -A m; m=plain; print "  ${(t)m} n=${#m}" }
+f`)
+	want = "  scalar-local n=5\n"
+	if out != want || st != 0 {
+		t.Errorf("a value over a local table = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A declaration word's array literal over a private whose slot is not a
+// container is refused in a sentence of its own, with the word in the
+// location — where the *bare* assignment keeps the sentence it always had
+// (#4863).
+func TestADeclarationWordNamesItselfRefusingALiteralOverAPrivate(t *testing.T) {
+	for _, word := range []string{"local", "typeset", "declare", "readonly", "export"} {
+		for _, letter := range []string{"", "-a "} {
+			out, st := answersRun(t, `zmodload zsh/param/private
+f() { private at; `+word+` `+letter+`at=(p q); print "reached" }
+f
+print after`)
+			want := "f:" + word + ": at: can't assign array value to non-array special\n"
+			if out != want || st != 1 {
+				t.Errorf("private at; %s %sat=(p q) = %q (status %d), want %q at 1",
+					word, letter, out, st, want)
+			}
+		}
+	}
+	// The bare assignment is the control and is byte-identical in both
+	// shells, which is what says the sentence belongs to the word in front of
+	// the operand rather than to the refusal.
+	out, st := answersRun(t, `zmodload zsh/param/private
+f() { private at; at=(p q); print "reached" }
+f
+print after`)
+	want := "f: at: attempt to assign array value to non-array\n"
+	if out != want || st != 1 {
+		t.Errorf("the bare assignment = %q (status %d), want %q at 1", out, st, want)
+	}
+	// And a private that is already a container takes the identical line, in
+	// every one of the five words — the control on the other side, without
+	// which five refusals would read the same from a shell that refused every
+	// literal over a private.
+	out, st = answersRun(t, `zmodload zsh/param/private
+f1() { private -a at; local at=(p q);    print "  1 ${(t)at} n=${#at}" }
+f2() { private -a at; typeset at=(p q);  print "  2 ${(t)at} n=${#at}" }
+f3() { private -a at; declare at=(p q);  print "  3 ${(t)at} n=${#at}" }
+f4() { private -a at; readonly at=(p q); print "  4 ${(t)at} n=${#at}" }
+f5() { private -a at; export at=(p q);   print "  5 ${(t)at} n=${#at}" }
+f1; f2; f3; f4; f5`)
+	want = "  1 array-local-hide-special n=2\n" +
+		"  2 array-local-hide-special n=2\n" +
+		"  3 array-local-hide-special n=2\n" +
+		"  4 array-local-readonly-hide-special n=2\n" +
+		"  5 array-local-export-hide-special n=2\n"
+	if out != want || st != 0 {
+		t.Errorf("a literal over a container private = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The value is asked about before the letter, and the pair that shows it is
+// two lines that differ only in what the slot would do with the value (#4862,
+// #4863).
+func TestTheValueDecidesBeforeTheKindLetter(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a literal the slot will not take is the assign sentence",
+			`f() { private at; typeset -a at=(p q); }; f`,
+			"f:typeset: at: can't assign array value to non-array special\n",
+		},
+		{
+			"and a scalar value beside the same letter is the type sentence",
+			`f() { private at; typeset -a at=plain; }; f`,
+			"f:typeset: at: can't change type of a special parameter\n",
+		},
+		{
+			"a table takes an array literal, so only the letter is left",
+			`f() { private -A m; typeset -a m=(p q); }; f`,
+			"f:typeset: m: can't change type of a special parameter\n",
+		},
+		{
+			"and an integer does not take one",
+			`f() { private -i n; typeset -a n=(p q); }; f`,
+			"f:typeset: n: can't assign array value to non-array special\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, "zmodload zsh/param/private\n"+tc.src+"\nprint after")
+			if out != tc.want || st != 1 {
+				t.Errorf("= %q (status %d), want %q at 1", out, st, tc.want)
+			}
+		})
+	}
+}

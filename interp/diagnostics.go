@@ -6716,6 +6716,30 @@ type Diagnostics struct {
 	// the wording is not what turns the refusal on. See
 	// Runner.MarkParameterKindFixed.
 	SpecialParameterKind string
+	// ArrayValueToANonArraySpecial is an array literal written on a
+	// **declaration word** over a name whose slot is not a container. One
+	// verb: the name.
+	//
+	// The neighbor of ArrayValueToNonArray and not a spelling of it: that
+	// one is what a *bare* assignment says, and the shell with both writes
+	// them differently for the same name on the same line. Measured
+	// 2026-09-27 on zsh 5.9.2 from a script file, with a `private v`
+	// standing:
+	//
+	//	v=(p q)           v: attempt to assign array value to non-array
+	//	local v=(p q)     local: v: can't assign array value to non-array special
+	//	typeset v=(p q)   typeset: v: …
+	//	declare v=(p q)   declare: v: …
+	//	readonly v=(p q)  readonly: v: …
+	//	export v=(p q)    export: v: …
+	//
+	// so the word decides the sentence, and the builtin is named in the
+	// *location* the way SpecialParameterKind's is rather than in the text.
+	//
+	// Fatal: the shell ends at 1 and the rest of the script never runs.
+	// Empty falls back to ArrayValueToNonArray, so a dialect that has not
+	// measured a second sentence keeps the one it had.
+	ArrayValueToANonArraySpecial string
 	// UnsetReadonly is `unset` refusing to remove a readonly name. One verb:
 	// the name — the *base* name, since a subscripted operand is refused by
 	// the variable it indexes rather than by the element.

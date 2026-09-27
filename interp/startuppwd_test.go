@@ -188,3 +188,51 @@ func TestTheNameTakenAtStartupCarriesIntoALaterCd(t *testing.T) {
 		t.Errorf("PWD after a relative cd = %s, want %s", strings.TrimSpace(out.String()), want)
 	}
 }
+
+// `$PWD` carries the export attribute however the name was settled.
+//
+// Not an axis: every shell in the panel hands the name down and none of the
+// dialect binaries in this tree did, so a child of any of them saw no `PWD` at
+// all — see exportStartupPwd for the measurement. Stated over all four
+// policies because the export is a fact about the parameter and not about
+// where its value came from, and the two that read the environment would
+// otherwise be passing only because an inherited name is exported anyway.
+func TestTheStartupPwdCarriesTheExportAttribute(t *testing.T) {
+	real, via := linkedDir(t)
+	for _, c := range []struct {
+		name   string
+		policy StartupPwdNamePolicy
+		env    []string
+	}{
+		{"asked of the kernel, nothing handed over", StartupPwdNameFromTheKernel, nil},
+		{"asked of the kernel, a handed name ignored", StartupPwdNameFromTheKernel, []string{"PWD=" + via}},
+		{"a handed name taken", StartupPwdNameFromTheEnvironmentWhenItFits, []string{"PWD=" + via}},
+		{"a handed name dropped", StartupPwdNameFromTheEnvironmentWhenItFits, []string{"PWD=/nonexistent-zz"}},
+		{"named under home", StartupPwdNameFromTheEnvironmentOrHome, []string{"HOME=" + via}},
+		{"unanswered", StartupPwdNameUnspecified, nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := PosixSemantics()
+			sem.StartupPwdName = c.policy
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: real,
+				Env: c.env, Stdout: &strings.Builder{}, Stderr: &strings.Builder{},
+			})
+			runCd(t, r, `:`)
+			a, ok := r.ParameterAttributes("PWD")
+			if !ok {
+				t.Fatalf("PWD is not a parameter of a shell that has just started in %s", real)
+			}
+			if !a.Exported {
+				t.Errorf("PWD = %+v, want the export attribute on it", a)
+			}
+			// The control, and it is the reason this is not simply "mark
+			// everything the startup writes": the name beside it in the same
+			// startup is settled by a policy of its own and is not exported
+			// under the answer this runner holds.
+			if b, ok := r.ParameterAttributes("OPTIND"); ok && b.Exported {
+				t.Errorf("OPTIND = %+v, want no export attribute on it", b)
+			}
+		})
+	}
+}

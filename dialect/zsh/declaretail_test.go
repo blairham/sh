@@ -4,7 +4,9 @@
 package zsh_test
 
 import (
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -483,26 +485,45 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // `env -i zsh -c "export V='a b'; export -p"` writes `export OLDPWD=$PWD`
 // beside `export PWD=$PWD` and `export -i10 SHLVL=1` (#1490).
 //
-// `SHLVL` is the second of those three, and it is here now: this shell counts
-// its own depth and exports it (#3097). The row is `export SHLVL=1` where the
-// real shell writes `export -i10 SHLVL=1` — zsh gives the name the integer
-// attribute and a base, which is #3099's row and not this one — so the
-// listing is two names closer to the reference rather than equal to it. `PWD`
-// is the third and is still absent.
+// `SHLVL` is the second of those three and `PWD` the third, and both are here
+// now: this shell counts its own depth and exports it (#3097), and it exports
+// the directory it starts in as every shell in the panel does (#4857). `SHLVL`
+// carries the integer attribute and its base with it, so the row is
+// `export -i10 SHLVL=1` — the reference's own spelling, where it used to be
+// `export SHLVL=1`. All three names now match the run quoted above.
+//
+// **`PPID` arrives on both readonly listings and only one of them is right**,
+// which is stated here rather than left to be found. Measured 2026-09-27 on
+// zsh 5.9.2 under `-f` in one run: a bare `readonly` writes `PPID=15568`
+// beside `ARGC=0` and `LINENO=1`, and `readonly -p` writes `typeset -r R=2`
+// and nothing else. So freezing the name — which is what `${(t)PPID}` being
+// `integer-readonly-special` requires — gains the row on the left listing and
+// costs one on the right, and the rule behind the right-hand side is that a
+// `-p` listing there omits a name that is readonly **and** special:
+// `typeset -p RANDOM` and `typeset -p UID` write their rows, `typeset -p ARGC`,
+// `typeset -p LINENO` and `typeset -p PPID` write nothing, and a script's own
+// `typeset -r rx=1` writes its row. `ARGC` and `LINENO` already agree here
+// because a produced name is not in a listing's roster at all; `PPID` is
+// stored, so it is. That rule is #4864 and is not this test.
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	dir := t.TempDir()
 	out, st := runZsh(t, dir,
 		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
+	// The parent this process has, which is what the shell answers `$PPID`
+	// with — a number rather than a constant, since the row is the machine's.
+	ppid := strconv.Itoa(os.Getppid())
 	// `LINENO=1` sits between them because this shell's LINENO is read-only,
 	// which is measured: zsh 5.9.2's own bare `readonly` writes `ARGC=0` and
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
-	want := "OLDPWD=" + dir + "\nSHLVL=1\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nR=2\n" +
+	want := "OLDPWD=" + dir + "\nPWD=" + dir + "\nSHLVL=1\nV='a b'\n" +
+		"ARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nPPID=" + ppid + "\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
 		"errnos\nfuncfiletrace\nfuncsourcetrace\nfuncstack\nfunctrace\nhistory\n" +
 		"jobdirs\njobstates\njobtexts\nkeymaps\nlanginfo\n" +
 		"parameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
-		"export OLDPWD=" + dir + "\nexport SHLVL=1\nexport V='a b'\n" +
+		"export OLDPWD=" + dir + "\nexport PWD=" + dir +
+		"\nexport -i10 SHLVL=1\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's
 		// `readonly -p` writes `typeset -Fr EPOCHREALTIME` and
 		// `typeset -ir EPOCHSECONDS` (#2451).
@@ -512,6 +533,9 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// which is ProducedDeclaration.Silent and is asked of the `-p`
 		// *word* rather than of the shape that came back (#2518).
 		"typeset -Fr EPOCHREALTIME\ntypeset -ir EPOCHSECONDS\n" +
+		// The row real zsh does not write — see the paragraph above the
+		// function, and #4864.
+		"typeset -i10 -r PPID=" + ppid + "\n" +
 		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +

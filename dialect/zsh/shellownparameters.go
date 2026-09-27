@@ -57,7 +57,97 @@ func markTheShellsOwnParameters(r *interp.Runner) {
 		r.MarkShellOwnParameter(pair[0])
 		r.MarkShellOwnParameter(pair[1])
 	}
+	for _, name := range storedShellOwnParameters {
+		r.MarkShellOwnParameter(name)
+	}
+	markTheProcessDepthAndIndex(r)
 	markTheDirectoryStack(r)
+}
+
+// storedShellOwnParameters are the names this shell stores an ordinary value
+// into and still calls its own.
+//
+// #4488 marked the names `SetSpecial` and `Tie` make; these are the rest, and
+// nothing distinguishes them from a script's variable except that the shell
+// put them there. Swept 2026-09-27 — `${(t)NAME}` for each of the 123 names a
+// fresh `zsh -f` lists under `typeset +`, one script, both shells in the same
+// run, `-f` from a script file under `env -i PATH=/usr/bin:/bin` with a
+// scratch `HOME`, against `/opt/homebrew/bin/zsh`, `zsh 5.9.2
+// (aarch64-apple-darwin25.4.0)`. `go version -m` says *not a Go executable*
+// for the reference and `github.com/blairham/sh/cmd/zsh` for ours, so the
+// two columns are two programs:
+//
+//	              reference                 here, before
+//	HOME          scalar-export-special     scalar-export
+//	HISTSIZE      integer-special           integer
+//	NULLCMD       scalar-special            scalar
+//	READNULLCMD   scalar-special            scalar
+//	WORDCHARS     scalar-special            scalar
+//	PS1           scalar-special            scalar
+//	PS2           scalar-special            scalar
+//	PS4           scalar-special            scalar
+//	histchars     scalar-special            scalar
+//
+// **The control is the 72 rows of that sweep that already agreed**, which is
+// what makes the list a finding rather than "this shell never says special":
+// `IFS`, `RANDOM`, `SECONDS`, `LINENO`, `path` and `PATH` all matched, and so
+// did `HOST scalar` — the row that says the mark cannot be moved into
+// `SetSpecial`, since `$HOST` is stored through that hook and carries no
+// `special` in the reference.
+//
+// `histchars` is in the list and `HISTCHARS` is not, for the reason `PS1` is
+// in it and `PROMPT` is not: each of those pairs is one parameter under two
+// names, the lower-case half holds the value and the upper-case half is
+// produced over it — and a producer is already the statement, so the produced
+// half has been answering `special` all along while the half that holds the
+// value had nowhere to hang the fact. That asymmetry is what the sweep found:
+// `HISTCHARS`, `PROMPT`, `PROMPT2`, `PROMPT3` and `PROMPT4` agreed in the
+// same run their stores disagreed in.
+var storedShellOwnParameters = [...]string{
+	"HISTSIZE",
+	"HOME",
+	"NULLCMD",
+	"PS1",
+	"PS2",
+	"PS4",
+	"READNULLCMD",
+	"WORDCHARS",
+	"histchars",
+}
+
+// markTheProcessDepthAndIndex is the three names whose *kind* was wrong as
+// well as their specialness, and for two of them the attribute is not
+// decoration.
+//
+// Measured in the same sweep and the same run as the list above:
+//
+//	              reference                  here, before
+//	OPTIND        integer-special            scalar
+//	PPID          integer-readonly-special   scalar
+//	SHLVL         integer-export-special     scalar-export
+//
+// and, in the reference, `typeset -p` writes `typeset -i10 OPTIND=1` and
+// `export -i10 SHLVL=1`, `SHLVL=1+2` stores 3, `SHLVL=abc` stores 0, and
+// `PPID=7` is `read-only variable: PPID` at status 1 where this shell took it
+// at 0. So the integer letter and the freeze are the attribute tables and not
+// a listing's spelling — an assignment consults both — which is the split
+// [interp.Runner.SetIntegerParameter] states and the opposite of the choice
+// the four identity names above are given.
+//
+// The freeze is on `PPID` alone. `OPTIND` is the name `getopts` writes and a
+// script resets between scans, and `SHLVL` is what a nested shell increments,
+// so freezing either would refuse a write the shell itself makes — the same
+// row dialect/bash/shellparameters.go records for its own four.
+func markTheProcessDepthAndIndex(r *interp.Runner) {
+	for _, name := range [...]string{"OPTIND", "PPID", "SHLVL"} {
+		r.MarkShellOwnParameter(name)
+		// Base ten written down rather than left off, which is what
+		// separates one of this shell's own integers from one a script
+		// declared: the reference lists all three with `-i10` where its own
+		// `typeset -i x=5` carries no base at all.
+		r.SetIntegerParameter(name, 10)
+	}
+	r.MarkReadonly("PPID")
 }
 
 // markTheDirectoryStack is `$dirstack`, whose *behavior* agreed with the

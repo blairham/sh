@@ -194,8 +194,13 @@ func TestAPlusWordAfterAMinusWordTakesNothingOff(t *testing.T) {
 		// between `PWD` and `_` (#3097). It is the shell's own row rather
 		// than anything these two declarations did, and the name under
 		// test is still the one after it.
-		{"the export letter", `typeset -li -x e=1; typeset -li +x e; export -p`, "export SHLVL=1\nexport e=1\n"},
-		{"and alone it unexports", `typeset -x e=1; typeset +x e; export -p`, "export SHLVL=1\n"},
+		//
+		// `PWD` is the other name in that sentence and it is exported here
+		// too now, so it is removed first: its value is a temporary
+		// directory, which is the machine's rather than anything these rows
+		// are about. `unset` is what takes the export attribute off.
+		{"the export letter", `unset PWD; typeset -li -x e=1; typeset -li +x e; export -p`, "export SHLVL=1\nexport e=1\n"},
+		{"and alone it unexports", `unset PWD; typeset -x e=1; typeset +x e; export -p`, "export SHLVL=1\n"},
 	} {
 		out, _ := runKshWithPrelude(t, c.src)
 		if out != c.want {

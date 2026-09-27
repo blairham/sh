@@ -64,11 +64,25 @@ func posixListingRun(t *testing.T, src string, mode func(*Runner), set func(*Sem
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}
-	// The scratch TMPDIR every test runner is given is exported, so it is in
-	// every listing here and is not what any of this is about.
+	// Two names are exported in every listing here and neither is what any of
+	// this is about: the scratch TMPDIR every test runner is given, and the
+	// shell's own PWD, which every shell in the panel hands down — see
+	// interp/inheritedpwd.go's exportStartupPwd. Dropping each is checked, so
+	// a startup that stopped exporting one turns this red rather than quietly
+	// making every table shorter.
+	//
+	// Asked of the runner rather than counted in the output, because a case
+	// here may refuse the listing outright and write no rows at all — and a
+	// count over rows would then read "nothing to strip" as "nothing was
+	// exported".
+	for _, name := range [...]string{"TMPDIR", "PWD"} {
+		if a, ok := r.ParameterAttributes(name); !ok || !a.Exported {
+			t.Fatalf("%s is not exported, so this run is stripping nothing", name)
+		}
+	}
 	var kept []string
 	for line := range strings.SplitSeq(strings.TrimSuffix(o.String(), "\n"), "\n") {
-		if line == "" || strings.Contains(line, "TMPDIR") {
+		if line == "" || strings.Contains(line, "TMPDIR") || strings.Contains(line, "PWD") {
 			continue
 		}
 		kept = append(kept, line)

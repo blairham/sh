@@ -117,6 +117,34 @@ func (r *Runner) settleStartupPwd() bool {
 	return true
 }
 
+// exportStartupPwd puts the export attribute on the `PWD` this shell has just
+// settled, which every shell in the panel does and none of ours did.
+//
+// Measured 2026-09-27 under `env -i PATH=/usr/bin:/bin` with a scratch
+// `HOME`, so that nothing in the environment could be handing the name down:
+// `printenv PWD` from a child of zsh 5.9.2, bash 5.3, bash 3.2 and dash all
+// print the directory at status 0, and from every dialect binary in this tree
+// printed nothing at status 1. It is not only the word a type query writes —
+// `${(t)PWD}` was `scalar` here against `scalar-export` there (#4857) — it is
+// a name the child process could not see.
+//
+// Unanimous, so it belongs here and not in a preset. What is **not**
+// unanimous is what happens after `unset PWD`: zsh exports the name the next
+// `cd` re-creates and bash does not, which is a second question with a
+// measured split and is deliberately left to the general rule this shell
+// already has — `unset` takes the attribute off and an assignment afterwards
+// makes an ordinary variable. That leaves the bash answer in every column,
+// which is what was there before this, so no row moves backwards on it.
+func (r *Runner) exportStartupPwd() {
+	if r.removed["PWD"] {
+		return
+	}
+	if r.exported == nil {
+		r.exported = map[string]bool{}
+	}
+	r.exported["PWD"] = true
+}
+
 // namesWorkingDirectory reports whether an absolute path is another spelling
 // of the directory the shell is in.
 //

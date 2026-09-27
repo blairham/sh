@@ -95,7 +95,7 @@ func TestTheWaysIntoABodyFromTextAgree(t *testing.T) {
 // It stood for as long as it did because every reader in the shell consumed
 // the number as a *subtrahend* — `$LINENO` in a body and a diagnostic's
 // offset are both `at - funcLine`, and both carried the extra line, so the
-// wrapper cancelled itself. The first reader to want the line **absolutely**
+// wrapper canceled itself. The first reader to want the line **absolutely**
 // is the one that found it (#4471), which is why the row that matters here
 // reads a line with no function offset anywhere near it.
 //

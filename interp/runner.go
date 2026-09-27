@@ -1129,6 +1129,26 @@ type Runner struct {
 	// dialect fills it in through SetAbsentParameter — see absentparam.go.
 	absentParams map[string]string
 
+	// deferredParams are the registered parameters the shell brings into
+	// being on the script's first reference to one, to the fact that nothing
+	// has referred to it yet.
+	//
+	// Beside absentParams above because it is the same kind of statement — a
+	// dialect's roster rather than a question every preset answers — and the
+	// opposite kind of name: an absent parameter is one this shell has not
+	// got, and a deferred one is one it has and has not been asked for. A
+	// dialect fills it in through SetDeferredParameter; see
+	// interp/deferredparam.go.
+	deferredParams map[string]bool
+
+	// removedShellOwn are the parameters of the shell's own that an `unset`
+	// has taken away, in the dialect whose listing still knows the name.
+	//
+	// Written by the removal and never derived afterwards, because every
+	// source of the fact is something the removal takes away — see
+	// interp/removedshellown.go.
+	removedShellOwn map[string]bool
+
 	// absentElements are the produced associations that answer only the keys
 	// their producer holds, to the sentence a read of any other key is
 	// refused with.
@@ -12364,6 +12384,16 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 	// kind either way. No letters here, so nothing is ever exempt. See
 	// Runner.kindChangeForgetsTheHide.
 	defer r.kindChangeForgetsTheHide(r.hiddenNameKinds())
+	if a.Name != "" {
+		// A script writing the name is a reference to it, so a parameter
+		// waiting on its first one arrives here — measured, and the row that
+		// separates it from the shell's own writes to the same table:
+		// `aliases=(zz 1)` brings `$aliases` in where `alias zz=1` leaves it
+		// waiting. Ahead of every refusal below, because an assignment that
+		// is *refused* has referred to the name too: the freeze it meets is
+		// the freeze the arrival put there. See interp/deferredparam.go.
+		r.referredToParameter(a.Name)
+	}
 	// The refusal stands in front of all three, and it used to stand in front
 	// of one: setVarAs is where it lived, and only the scalar branch below
 	// goes through setVarAs. An element write, an array literal and a

@@ -1673,6 +1673,11 @@ func Semantics() interp.Semantics {
 	// it has never heard of either, so the missing-name route and the
 	// silent one meet. `No` is the one that says what it holds.
 	s.ValuelessRecordIsStillAName = interp.No
+	// Either answer again, and for the same reason: `unset RANDOM; typeset
+	// -p RANDOM` is nothing at 0 here and so is a name nothing has heard of,
+	// so the silent route and the missing-name route meet. `No` is what it
+	// holds. Measured 2026-09-27 on ksh93u+ (#4896).
+	s.RemovedShellOwnParameterIsStillAName = interp.No
 	// A table the letters merely declared *is* among the names a prefix
 	// listing comes to: `typeset -A q1; typeset -a q2; echo "[${!q@}]"` is
 	// `[q1 q2]` here, where bash 5.3 answers `[]`. Measured 2026-09-16 on

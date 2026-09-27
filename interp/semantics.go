@@ -10970,6 +10970,41 @@ type Semantics struct {
 	// makes none is never asked at all. See interp/baredeclaration.go
 	// (#4053).
 	ValuelessRecordIsStillAName Answer
+
+	// RemovedShellOwnParameterIsStillAName is the same question asked about a
+	// name the **shell** owns rather than one a script declared: `unset
+	// RANDOM` and then a listing that names it.
+	//
+	// `Yes` writes nothing at 0 — the shell still has the name, it has no
+	// value to print, and an assignment brings the special back. `No` leaves
+	// the name to whatever the listing would otherwise do with it, which is
+	// DeclarePrintReportsAMissingName's route where the parameter is gone and
+	// an ordinary row where its attributes outlived it.
+	//
+	// A third field beside the two above rather than a third reading of
+	// either, because the route in is the shell's and not a script's: the two
+	// above are reached only from a declaration a script wrote or an `unset`
+	// of a local a call declared, and neither happens to `$RANDOM`.
+	//
+	// Measured 2026-09-27, `env -i PATH=/usr/bin:/bin TERM=dumb` with a
+	// scratch HOME, from a script file:
+	//
+	//	zsh 5.9.2    `unset RANDOM; typeset -p RANDOM` is nothing at 0, and
+	//	             `w=1; unset w; typeset -p w` on the next line is `no
+	//	             such variable: w` at 1 — so the shell tells the two
+	//	             apart, which is what makes this a field
+	//	bash 5.3.20  `typeset: RANDOM: not found` at 1, and the same for the
+	//	             ordinary name: it reports both
+	//	ksh93u+      nothing at 0 for both, so either value leaves it where
+	//	             DeclarePrintReportsAMissingName already puts it
+	//	dash, ash    no such builtin to ask
+	//
+	// The word it is keyed on is `special` and not the kind — the pairs that
+	// hold the other attribute words fixed are in interp/removedshellown.go,
+	// which is also where the state is described and where the question is
+	// asked. It is asked only for a name really in it.
+	RemovedShellOwnParameterIsStillAName Answer
+
 	// PrefixListingNamesADeclaredOnlyCompound lists, among the names
 	// `${!prefix@}` and `${!prefix*}` come to, a compound that a declaration
 	// brought into being and that nothing has written to.

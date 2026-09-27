@@ -3,7 +3,11 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 // What every produced parameter in this dialect says about *itself* — #4812.
 //
@@ -121,17 +125,38 @@ print -r -- "v=[${(t)v}] h=[${(t)h}]"`
 // The sweep that found it is the one #4811 asked for and is why that issue's
 // own row did not survive: see TestUnsettingAProducedTableLeavesTheAliasesStanding
 // for the tables the reference really does let a script unset.
+//
+// **The `unset` row needs the read in front of it and the line above says
+// why**: the freeze is on a parameter, and until something refers to the name
+// there is no parameter for it to be on. `unset funcstack` as the *first*
+// line of a script is a silent 0 in the reference and was the whole of #4895;
+// `${+funcstack}` before it is what the measurement above was taken with, and
+// the set test is the lightest reference there is. The assignment needs no
+// such line, because an assignment is itself a reference — which is the pair
+// that says the read is arming the freeze rather than hiding a refusal.
 func TestAProducedViewRefusesAWriteAndAnUnset(t *testing.T) {
 	for _, tc := range []struct{ name, src string }{
 		{"assignment", `funcstack=(a b); print "unreached"`},
-		{"unset", `unset funcstack; print "unreached"`},
+		{"unset after a reference", `: ${+funcstack}` + "\n" + `unset funcstack; print "unreached"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), tc.src)
-			const want = "zsh:1: read-only variable: funcstack\n"
+			line := strings.Count(tc.src[:strings.Index(tc.src, "unreached")], "\n") + 1
+			want := fmt.Sprintf("zsh:%d: read-only variable: funcstack\n", line)
 			if out != want || st != 1 {
 				t.Errorf("%s = %q (status %d), want %q at status 1", tc.src, out, st, want)
 			}
 		})
+	}
+}
+
+// And the other side of it, which is the row that keeps the read above from
+// looking like a way of making a test pass: with nothing in front of it the
+// same `unset` is a silent 0 and the script goes on, exactly as it does in the
+// reference (#4895).
+func TestAProducedViewTakesAnUnsetNothingHasReferredTo(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `unset funcstack`+"\n"+`print -r -- "reached=${+funcstack}"`)
+	if want := "reached=0\n"; out != want || st != 0 {
+		t.Errorf("= %q (status %d), want %q at 0", out, st, want)
 	}
 }

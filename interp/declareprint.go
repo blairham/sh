@@ -723,6 +723,47 @@ func (r *Runner) declarePrintFiltered(names []string, form DeclarationListingFor
 		}
 	}
 	for _, name := range names {
+		if dashP && r.DeferredParameter(name) {
+			// A registered parameter nothing has referred to yet: the shell
+			// has not brought it into being, so there is no row to write and
+			// no name to report missing. One of the three listing loops this
+			// applies to, and deliberately not all five — see
+			// interp/deferredparam.go, where the five forms are measured
+			// side by side and two of them write such a name.
+			//
+			// A read of the state and never a reference to the parameter,
+			// because a listing that brought a name in by asking about it
+			// would be the mechanism defeating every probe of itself.
+			//
+			// The `-p` word and not the name, which is the cell that
+			// separates the two: `typeset -p funcstack` is nothing at 0 in
+			// zsh 5.9.2 and `typeset + funcstack` on the next line writes
+			// `funcstack`, both with the name as an operand and neither
+			// having referred to it.
+			continue
+		}
+		if r.removedShellOwnIsStillAName(name) {
+			// A parameter of the shell's own that an `unset` removed: the
+			// name is still the shell's, nothing is left to print, and the
+			// listing writes nothing at 0 in the one column that tells this
+			// state from a name it has never heard of.
+			//
+			// Ahead of everything, because it has to reach the row and the
+			// refusal alike. `unset RANDOM` leaves nothing behind and would
+			// take the missing-name route below; `unset COLUMNS` keeps its
+			// letters, since a window size is not a script's to lose — see
+			// clearAttributes — and would be written as `typeset -i10
+			// COLUMNS` with no value. The reference writes nothing for
+			// either, so this is asked of the name rather than of what
+			// survived it.
+			//
+			// And of every form rather than the `-p` word alone, which is
+			// the control that separates it from the private binding below:
+			// `export -p`, `readonly -p`, `typeset +` and the whole-table
+			// dump are all silent about it too. See
+			// interp/removedshellown.go.
+			continue
+		}
 		d, known := r.listedDeclarationOf(name, produced[name], listing)
 		if known && dashP && r.privateHere(name) {
 			// A binding the running call declared **private**, which this

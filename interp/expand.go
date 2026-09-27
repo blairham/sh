@@ -1892,6 +1892,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 		// shell it claims to be calls it a bad substitution.
 		return nil, false
 	}
+	r.referredToParameter(s.Param.Name)
 	if r.refuseAbsentParameter(s.Param) {
 		// Before every shape below, because the shape that loses the read is
 		// the subscript one: `${jobstates[x]}` is answered here with no
@@ -3252,6 +3253,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		r.reportBadSubstitution(e)
 		return ""
 	}
+	r.referredToParameter(e.Name)
 	if r.refuseAbsentParameter(e) {
 		// A parameter a module of this shell's names and this shell has not
 		// got. Refused by name rather than expanded to nothing, and refused

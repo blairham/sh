@@ -2549,14 +2549,21 @@ func (r *Runner) unsetReadonly(name string) int {
 	if !r.readonly[name] && !refused {
 		return 0
 	}
-	if r.AbsentParameter(name) {
-		// A parameter the dialect names and this shell has not got is frozen
-		// against a *write* and not against `unset`, which is measured
-		// rather than a tidiness: the shell being modeled refuses
-		// `jobstates=(a b c)` as a read-only variable and answers `unset
-		// jobstates` with a silent 0 on the very next line. The two are one
-		// attribute here, so the exemption is written down where the
-		// difference is — see the dialect's registerAbsentParameters.
+	if r.DeferredParameter(name) {
+		// A registered parameter nothing has referred to yet, which the
+		// shell being modeled has not brought into being — so there is no
+		// frozen parameter for the `unset` to meet and it is a silent 0.
+		//
+		// This used to be an exemption for an *absent* parameter, on the
+		// reading that such a name is frozen against a write and not against
+		// `unset`. That reading came from a probe that had read nothing
+		// first, and it does not survive one: `${+modules}` on the line
+		// before makes `unset modules` `read-only variable: modules` at 1 in
+		// the reference, exactly as it is for every other frozen name. What
+		// the old measurement recorded was the deferral. See
+		// interp/deferredparam.go (#4895), and absentparam.go for the half
+		// of that rule which stands — a read of an absent name still refuses
+		// by name.
 		return 0
 	}
 	// The builtin has been named in the sentence by three of the four
@@ -3398,6 +3405,41 @@ func (r *Runner) unsetOneName(name string) {
 		r.exported = map[string]bool{}
 	}
 	r.exported[name] = false
+	if r.DeferredParameter(name) {
+		// A parameter nothing has referred to yet is removed **outright**:
+		// the registration goes with the name, so nothing answers for it
+		// afterwards and a listing reports a name it has never heard of.
+		// Measured 2026-09-27 on zsh 5.9.2 from a script file, `unset
+		// funcstack` as the first line — `${+funcstack}` is 0 on the next,
+		// `${(t)funcstack}` is empty, a function that reads `$funcstack`
+		// sees nothing, and `typeset -p funcstack` is `no such variable:
+		// funcstack` at 1.
+		//
+		// That last row is what makes this the opposite answer from the one
+		// below: a special the script *has* referred to keeps its slot and
+		// its listing is silent at 0, where this one has no slot to keep
+		// because the shell never brought the parameter into being. See
+		// interp/deferredparam.go and interp/removedshellown.go for the two
+		// halves side by side.
+		//
+		// Ahead of the two producer rows, because a produced array with no
+		// writer is reached by neither of them and would otherwise go on
+		// answering every read — which is how `unset funcstack` came to
+		// leave `${+funcstack}` at 1.
+		r.UnsetDynamic(name)
+		delete(r.absentParams, name)
+		delete(r.shellOwn, name)
+		delete(r.deferredParams, name)
+	} else if r.wasTheShellsOwnParameter(name) {
+		// And a parameter the shell owns that the script *has* referred to
+		// leaves its slot behind: the name is still one the shell has, with
+		// nothing left to print for it. Recorded here rather than derived at
+		// listing time, because the removal is what takes the evidence away
+		// — the producer is deregistered a few lines below and the pipeline
+		// record's own membership test reads `removed`. See
+		// interp/removedshellown.go.
+		setBool(&r.removedShellOwn, name, true)
+	}
 	if write, produced := r.dynamicArrayWriters[name]; produced {
 		// An `unset` of a produced array is a write of no elements, which is
 		// the same message the shell being modeled sends: measured on

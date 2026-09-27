@@ -1854,6 +1854,15 @@ func Semantics() interp.Semantics {
 	// state the field above cannot spell. See Semantics.ValuelessRecordIsStillAName
 	// for the rows (#4053).
 	s.ValuelessRecordIsStillAName = interp.Yes
+	// And the same answer for a name of the *shell's* own that an `unset`
+	// removed, which is the state a script reaches without a function at
+	// all: `unset RANDOM; typeset -p RANDOM` is nothing at 0, where `w=1;
+	// unset w; typeset -p w` on the next line is `no such variable: w` at 1.
+	// The word it turns on is `special` — `HOME` against `LOGNAME`,
+	// `HISTSIZE` against `MAILCHECK`, `PS1` against `TTY`, each pair holding
+	// the other attribute words still. Measured 2026-09-27 on zsh 5.9.2;
+	// interp/removedshellown.go has the grid (#4896).
+	s.RemovedShellOwnParameterIsStillAName = interp.Yes
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still
 	// does, and a name this scope has already made local stays local.
@@ -6373,6 +6382,13 @@ func Apply(r *interp.Runner) {
 	// And `zsh/mathfunc`'s forty-seven, which are the C math library under
 	// names arithmetic can call. See mathmodule.go.
 	registerMathFuncModule(r)
+	// And, after every one of them, which of the parameters they registered
+	// are still waiting for the script's first reference. Last rather than
+	// beside each registration, because it is one measured roster rather
+	// than a property of the function that installed each name — see
+	// deferredparameters.go for the route it was taken by and for the five
+	// names it deliberately leaves out.
+	registerDeferredParameters(r)
 	// This shell's richer `echo`, and not ksh93's builtin of the same
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.

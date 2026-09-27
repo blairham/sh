@@ -104,12 +104,68 @@ func TestAListedProducedParameterCarriesTheProducedValue(t *testing.T) {
 // A name `unset` has taken away is not listed however it was registered: a
 // read of it answers nothing, and a listing that reached the producer anyway
 // would draw a value out of a parameter that is gone.
+//
+// The removal makes the name one RemovedShellOwnParameterIsStillAName is
+// asked about — a producer is one of the three things that make a name the
+// shell's own — so the vector answers it, and this row is the `No` side: the
+// name goes to whatever the listing would otherwise do with it, which here is
+// the missing-name route the field above turns on.
 func TestAnUnsetProducedParameterIsNotListed(t *testing.T) {
-	answered := func(s *Semantics) { s.DeclarePrintReportsAMissingName = Yes }
+	answered := func(s *Semantics) {
+		s.DeclarePrintReportsAMissingName = Yes
+		s.RemovedShellOwnParameterIsStillAName = No
+	}
 	out, errs, st := declRunWith(t, "unset X; typeset -p X", answered, Diagnostics{}, nil,
 		producing("X", "5", &ProducedDeclaration{Integer: true}))
 	if out != "" || errs != "testsh: typeset: X: not found\n" || st != 1 {
 		t.Errorf("stdout %q stderr %q status %d, want the name reported missing", out, errs, st)
+	}
+}
+
+// And the other side of that axis, which is the state a listing has no other
+// way to spell: the name is still the shell's, nothing is left to print, and
+// the listing writes nothing at 0 rather than reporting a name it has heard
+// of. The `Yes` row is the same run with the same missing-name answer turned
+// on, so what moves between the two is this field alone — a row that let both
+// fields move would not say which one decided it.
+func TestARemovedShellOwnParameterCanStillBeAName(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		errs   string
+		status int
+	}{
+		{"still a name", Yes, "", 0},
+		{"reported missing", No, "testsh: typeset: X: not found\n", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			answered := func(s *Semantics) {
+				s.DeclarePrintReportsAMissingName = Yes
+				s.RemovedShellOwnParameterIsStillAName = tc.answer
+			}
+			out, errs, st := declRunWith(t, "unset X; typeset -p X", answered, Diagnostics{}, nil,
+				producing("X", "5", &ProducedDeclaration{Integer: true}))
+			if out != "" || errs != tc.errs || st != tc.status {
+				t.Errorf("stdout %q stderr %q status %d, want %q at %d", out, errs, st, tc.errs, tc.status)
+			}
+		})
+	}
+}
+
+// And a name nothing registered is untouched by it: the axis is asked only
+// about a parameter the shell owns, so an ordinary variable an `unset` took
+// still reaches the missing-name route with the permissive answer in force.
+// Without this row the `Yes` above could be a listing that had gone silent
+// about every removed name.
+func TestARemovedOrdinaryNameIsStillReportedMissing(t *testing.T) {
+	answered := func(s *Semantics) {
+		s.DeclarePrintReportsAMissingName = Yes
+		s.RemovedShellOwnParameterIsStillAName = Yes
+	}
+	out, errs, st := declRunWith(t, "w=1; unset w; typeset -p w", answered, Diagnostics{}, nil,
+		producing("X", "5", &ProducedDeclaration{Integer: true}))
+	if want := "testsh: typeset: w: not found\n"; out != "" || errs != want || st != 1 {
+		t.Errorf("stdout %q stderr %q status %d, want %q at 1", out, errs, st, want)
 	}
 }
 

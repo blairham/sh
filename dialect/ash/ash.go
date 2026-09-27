@@ -908,6 +908,8 @@ func Semantics() interp.Semantics {
 	s.UnsetOfALocalRecordsTheName = interp.No
 	// No declaration listing to ask it with.
 	s.ValuelessRecordIsStillAName = interp.No
+	// And no listing to ask that of a name of the shell's own either.
+	s.RemovedShellOwnParameterIsStillAName = interp.No
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: dash's reason
 	// exactly — no `${!prefix@}` and no compound for a declaration to bring
 	// into being, so the axis is never asked.

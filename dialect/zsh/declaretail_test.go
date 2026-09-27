@@ -492,19 +492,14 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // `export -i10 SHLVL=1` — the reference's own spelling, where it used to be
 // `export SHLVL=1`. All three names now match the run quoted above.
 //
-// **`PPID` arrives on both readonly listings and only one of them is right**,
-// which is stated here rather than left to be found. Measured 2026-09-27 on
-// zsh 5.9.2 under `-f` in one run: a bare `readonly` writes `PPID=15568`
-// beside `ARGC=0` and `LINENO=1`, and `readonly -p` writes `typeset -r R=2`
-// and nothing else. So freezing the name — which is what `${(t)PPID}` being
-// `integer-readonly-special` requires — gains the row on the left listing and
-// costs one on the right, and the rule behind the right-hand side is that a
-// `-p` listing there omits a name that is readonly **and** special:
-// `typeset -p RANDOM` and `typeset -p UID` write their rows, `typeset -p ARGC`,
-// `typeset -p LINENO` and `typeset -p PPID` write nothing, and a script's own
-// `typeset -r rx=1` writes its row. `ARGC` and `LINENO` already agree here
-// because a produced name is not in a listing's roster at all; `PPID` is
-// stored, so it is. That rule is #4864 and is not this test.
+// **`PPID` is on the bare listing and not on the `-p` one**, which is the
+// reference's own shape and is the cost #4857 named in place and #4864 closed.
+// Measured 2026-09-27 on zsh 5.9.2 under `-f` in one run: a bare `readonly`
+// writes `PPID=15568` beside `ARGC=0` and `LINENO=1`, and `readonly -p` writes
+// `typeset -r R=2` and nothing else. The name answers all four listing forms
+// exactly as `ARGC` and `LINENO` do, which is what
+// ProducedDeclaration.Silent says — see dialect/zsh/shellownparameters.go,
+// where the three are measured side by side.
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	dir := t.TempDir()
 	out, st := runZsh(t, dir,
@@ -533,9 +528,6 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// which is ProducedDeclaration.Silent and is asked of the `-p`
 		// *word* rather than of the shape that came back (#2518).
 		"typeset -Fr EPOCHREALTIME\ntypeset -ir EPOCHSECONDS\n" +
-		// The row real zsh does not write — see the paragraph above the
-		// function, and #4864.
-		"typeset -i10 -r PPID=" + ppid + "\n" +
 		"typeset -r R=2\n" +
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +

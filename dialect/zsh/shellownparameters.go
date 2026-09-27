@@ -148,6 +148,37 @@ func markTheProcessDepthAndIndex(r *interp.Runner) {
 		r.SetIntegerParameter(name, 10)
 	}
 	r.MarkReadonly("PPID")
+	// And the row a `-p` listing writes for it, which is none.
+	//
+	// `$PPID` answers the four listing forms exactly as `$ARGC` and `$LINENO`
+	// do, and those two have carried [interp.ProducedDeclaration.Silent]
+	// since they were implemented — which is why they already agreed and this
+	// one did not. Measured 2026-09-27 on zsh 5.9.2 under `-f` from a script
+	// file, `env -i PATH=/usr/bin:/bin` with a scratch `HOME`, all three names
+	// in one run:
+	//
+	//	                   PPID        ARGC        LINENO
+	//	typeset -p NAME    nothing, 0  nothing, 0  nothing, 0
+	//	readonly -p        no row      no row      no row
+	//	readonly           one row     one row     one row
+	//	typeset -r         one row     one row     one row
+	//
+	// against `typeset -i10 -r PPID=17841` from the named form here, and a
+	// row on `readonly -p` besides. The freeze and the integer letter stay:
+	// this is the *listing* being told the name writes nothing, not the
+	// attributes being taken off, and `readonly`'s own two forms still write
+	// their row.
+	//
+	// **Silent rather than a rule about frozen specials**, which was the
+	// shape #4864 was filed with and which the same run disproves:
+	// `$keymaps`, `$widgets` and `$zsh_scheduled_events` carry the attribute
+	// word `builtins` and `funcstack` carry, byte for byte, and the reference
+	// writes the first three and omits the second two. So the answer is not a
+	// function of the attributes and there is nothing to derive it from — it
+	// is a fact about each name, which is what this seam is for.
+	r.SetDynamicDeclaration("PPID", interp.ProducedDeclaration{
+		Integer: true, Base: 10, Silent: true,
+	})
 }
 
 // markTheDirectoryStack is `$dirstack`, whose *behavior* agreed with the

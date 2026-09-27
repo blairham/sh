@@ -124,3 +124,40 @@ func TestALengthIsTakenBeforeTheQuotedJoin(t *testing.T) {
 		})
 	}
 }
+
+// The `(p)` flag reaches the separator the character count reads.
+//
+// `c` counts the separator between the words, and where a `j` wrote one, the
+// argument is read exactly as the join reads it — so a `p` in front of the
+// `j` decodes the escapes there too. It did not: the join decoded the
+// argument and the count read it as written, so one expansion had two
+// readings of one argument.
+//
+// The discriminating probe is an escape whose decoded length differs from its
+// written one. `\t` is two characters written and one decoded; a letter that
+// decodes to itself agrees with itself under either reading and is the row
+// that says nothing. Measured on zsh 5.9.2, 2026-09-26, with the escape set
+// this package installs.
+func TestThePrintFlagReachesTheCountedSeparator(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The control: the same count without the flag, which both readings
+		// answer alike and which is what says the count itself is not moving.
+		{"without the flag the argument is counted as written", `a=(abc de f); printf "[%s]" "${(cj:\t\t:)#a}"`, "[14]"},
+		{"and with it the decoded separator is", `a=(abc de f); printf "[%s]" "${(pcj:\t\t:)#a}"`, "[10]"},
+		{"a one-character escape", `a=(abc de f); printf "[%s]" "${(pcj:\n:)#a}"`, "[8]"},
+		{"and a shorter list", `a=(x y); printf "[%s]" "${(pcj:\t:)#a}"`, "[3]"},
+		// A name substitutes here as it does for the join, which is the rest
+		// of what flagArgument does reaching the count.
+		{"a name is substituted too", `s=-; a=(x y); printf "[%s]" "${(pcj:$s:)#a}"`, "[3]"},
+		// And a separator with no escape in it is the row that cannot tell
+		// the two readings apart, kept as the negative control.
+		{"an escapeless separator says nothing either way", `a=(x y); printf "[%s]" "${(cj:--:)#a}${(pcj:--:)#a}"`, "[44]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runGrammar(t, tc.src, escapingFlags, withTestEscapes)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q (status %d), want %q at 0", out, st, tc.want)
+			}
+		})
+	}
+}

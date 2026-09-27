@@ -94,7 +94,7 @@ print -r -- "complete=$?"`)
 // right to be. The other eighteen refuse by name at the expansion that reads
 // one — which is what lets the module load at all, and it is why the second
 // line here is not `n=0`. A shell that loaded the module *and* answered `0`
-// for `$jobstates` would be exactly the silent success the module rule was
+// for `$modules` would be exactly the silent success the module rule was
 // written to prevent; a shell that refuses the module over a parameter no
 // script in the file touches stops a plugin manager at its second line.
 //
@@ -107,10 +107,10 @@ print -r -- "st=$?"
 g(){ :; }
 print -r -- "functions=${#functions}"
 print -r -- "galiases=${#galiases}"
-print -r -- "jobstates=${#jobstates}"
+print -r -- "modules=${#modules}"
 print -r -- "after=$?"`)
 	want := "st=0\nfunctions=1\ngaliases=0\n" +
-		"zsh:6: jobstates: parameter not implemented yet\n"
+		"zsh:6: modules: parameter not implemented yet\n"
 	if out != want || st != 1 {
 		t.Errorf("zmodload zsh/parameter = %q (status %d), want %q", out, st, want)
 	}

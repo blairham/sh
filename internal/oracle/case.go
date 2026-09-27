@@ -22566,7 +22566,7 @@ echo "st=$?"`,
 	{
 		ID: "parameter/a-parameter-of-the-module-nothing-here-provides", Category: "variables",
 		Snippet: `zmodload zsh/parameter 2>/dev/null; echo "n=${#jobstates} one=[${jobstates[x]}]"; echo "after=$?"`,
-		Why:     "**a recorded divergence, and the one this module's rule turns on.** zsh has the parameter and writes `n=0 one=[]`, which is the truth there — no jobs. This shell has not got it, and answering the same `0` would hand a caller an empty value for a question nobody answered, at status 0, in the spelling a plugin manager writes most (`${p[k]}` reaches no unset check at all). So it refuses by name at the expansion instead, and the row records the difference rather than leaving it to be discovered",
+		Why:     "the spelling a plugin manager writes most, over a parameter whose table is empty in a shell with no jobs. zsh has the three job parameters and writes `n=0 one=[]`, with `job not found: x` on the way past because the key is a *job specification* and not a plain key. This row recorded a deliberate divergence until #4760: the parameter was absent here and refused by name, on the reasoning that answering the same `0` would hand a caller an empty value for a question nobody answered. The table is published now, so the row pins the agreement -- including the complaint, which is the only thing separating a key that misses by number from one that misses by name, both being empty at status 0",
 	},
 	// `zsh/terminfo` and `zsh/termcap`: the terminal's capabilities as two
 	// associations (#1388, then #2076). Both parameters read the terminfo

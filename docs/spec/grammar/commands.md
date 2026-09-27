@@ -1171,6 +1171,19 @@ name rather than by an assignment prefix (`DeclarationUtilities`;
 measured: `decl/an-array-assignment-as-an-operand`,
 `decl/a-local-array-stays-local`, `decl/readonly-takes-its-array-first`).
 
+Which names are in the set is a dialect's own answer: bash and zsh add
+`declare` to the four POSIX-family words, ksh93 has only `typeset`, and
+dash has no array literal at all. **zsh has a sixth, `private`** —
+measured 2026-09-27 on zsh 5.9.2 from a script file behind `zmodload
+zsh/param/private`, `private q=(1 2)` is an array of two elements,
+`private -A m=(k v)` a table, and `'private' q=(1 2)` is the same glob
+qualifier `'typeset' a=(x y)` is, so it answers
+`DeclarationArrayFromTheCommandWord` the way the rest of that shell's
+declaration words do. The reference gates the word on the module being
+loaded and this shell registers it from the start, which is the divergence
+`interp/privatebuiltin.go` already records for `whence -w private` and for
+`local -P` (#4855).
+
 #### Only a declaration's operand, and only from the word as written
 
 Two things decide whether a `name=( … )` word is an array literal at all,

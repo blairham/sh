@@ -80,10 +80,38 @@ func Dialect() syntax.Dialect {
 	// as `sh` takes it back, which is interp.Runner.SetPosixMode's half and
 	// is why the value here is the shell's own and not the mode's.
 	d.AliasesExpandReservedWords = true
-	// zsh has all five, like bash.
+	// zsh has all five, like bash, and a sixth the others have not.
+	//
+	// `private` is a declaration word in the grammar and not only at the
+	// store: measured 2026-09-27 on zsh 5.9.2 from a script file under
+	// `env -i PATH=/usr/bin:/bin`, behind `zmodload zsh/param/private`,
+	//
+	//	private q=(1 2)        array-local-hide-special, two elements
+	//	private -a q=(1 2)     the same
+	//	private -A m=(k v)     association-local-hide-special, ${m[k]} is v
+	//	private -a q=()        array-local-hide-special, empty
+	//	local -P q=(1 2)       array-local-hide-special, two elements
+	//	private topq=(1 2)     array, at the top level
+	//	'private' q=(1 2)      unknown file attribute: 1 — a glob qualifier,
+	//	                       exactly as `'typeset' a=(x y)` is
+	//
+	// The last row is why the word belongs in this map rather than in a
+	// rule of its own: it answers
+	// [syntax.Dialect.DeclarationArrayFromTheCommandWord] the way every
+	// other declaration word in this shell answers it.
+	//
+	// **Unconditional, where the reference gates it on the module.** Without
+	// `zmodload zsh/param/private` the reference reads `private q=(1 2)` as
+	// a glob qualifier too, because the word is not reserved until the
+	// module is loaded. That is the same one-state-for-two divergence
+	// interp/privatebuiltin.go records for `whence -w private` and for
+	// `local -P`: this shell registers the word from the start and does not
+	// autoload, so the grammar cannot be gated on a load that never happens.
+	// A script that writes the `zmodload` — which is every script the word
+	// was measured through — sees the same shell either way.
 	d.DeclarationUtilities = map[string]bool{
 		"declare": true, "typeset": true, "local": true,
-		"export": true, "readonly": true,
+		"export": true, "readonly": true, "private": true,
 	}
 	// `nocorrect` is a reserved word here and in no other panel shell:
 	// measured 2026-09-08, `whence -w nocorrect` is `reserved` where

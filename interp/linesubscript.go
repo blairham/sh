@@ -315,7 +315,7 @@ func (r *Runner) lineTargetSpan(e *syntax.ParamExpr, refuse func(flag, where str
 	v, _ := r.getVar(e.Name)
 	lines, starts, ends := scalarLines(r.units(v))
 	base := r.arrayBase()
-	at := -1
+	var at int
 	if search := lastOf(g.Flags, searchSubscriptFlags); search != 0 {
 		found := false
 		at, _, found = r.lineSearchAt(g, orderedSearchLetter(search), lines, starts)

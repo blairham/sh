@@ -2464,7 +2464,12 @@ func (r *Runner) readArraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// rather than above, so the text is expanded once on this path and
 		// once on the other.
 		written := r.subscriptTextAsWritten(e.Subscript())
-		r.refusesEmptySubscriptText(trimSubscript(written))
+		if r.refusesEmptySubscriptText(trimSubscript(written)) {
+			return nil, true
+		}
+		if !r.absentNameSubscriptEvaluates(e, written) {
+			return nil, true
+		}
 		r.absentNameSubscriptBeforeTheFirstElement(e, written)
 		return nil, true
 	}
@@ -2725,6 +2730,52 @@ func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, o
 		return []string{v}, true, true
 	}
 	return nil, false, false
+}
+
+// absentNameSubscriptEvaluates reads the subscript written on a name that
+// holds nothing, for the refusal alone, and reports whether it evaluated.
+//
+// **A subscript that will not evaluate is refused whether or not the name
+// exists**, and the whole panel says so. Measured 2026-09-27 from a script
+// file, `: ${x[1+]}` with `x` never created:
+//
+//	zsh 5.9.2    bad math expression: operand expected at end of string
+//	bash 5.3.20  1+: arithmetic syntax error: operand expected
+//	bash 3.2.57  1+: syntax error: operand expected
+//	ksh93u+      1+: more tokens expected
+//
+// and each of them ends the shell at 1, which `( : ${x[1+]} ); print $?` is
+// the way to see: at the **top level** the reference prints nothing at all
+// and stops, so a probe comparing only stdout there cannot tell the two
+// shells apart. The subshell, the command substitution, the function frame
+// and the `eval` rows of #4837 are that one miss carried outward and not four
+// findings.
+//
+// Put anything at all under the name — an array, an empty array, a bare
+// `typeset -a`, a scalar, an empty scalar — and every column already agreed,
+// because the read then reaches subscriptOver and its arithmetic. This path
+// did not, so the expression was skipped rather than evaluated and forgiven.
+//
+// The evaluation is for the refusal only: the *value* side was already right,
+// and `${x[1]}` on an absent name expands to nothing here as it does there.
+//
+// Ahead of absentNameSubscriptBeforeTheFirstElement rather than inside it,
+// because that one is a dialect's answer — it returns at once where
+// SubscriptBeforeTheFirstElementRead is SubscriptBeforeStartIsNothing, which
+// is zsh — and this refusal is not: every column that reads a subscript at
+// all makes it. Folding the two left the arithmetic behind that axis, which
+// is exactly why this shell was the only one of ours that missed the row
+// (#4837).
+func (r *Runner) absentNameSubscriptEvaluates(e *syntax.ParamExpr, written string) bool {
+	if e.IndexRange != nil || r.wholeArrayIndex(e) {
+		return true
+	}
+	idx := trimSubscript(written)
+	if _, _, isRange := splitSubscriptRange(idx); isRange {
+		return true
+	}
+	_, ok := r.subscriptIndexAsWritten(r.writtenSubscript(e, idx), written)
+	return ok
 }
 
 // absentNameSubscriptBeforeTheFirstElement answers a negative subscript

@@ -121,6 +121,51 @@ import "github.com/blairham/sh/syntax"
 //
 // Nested, because a dialect may build the word on another and because the
 // restore has to be the caller's value rather than false.
+// signAloneIsNotAPrivateDeclaration turns the private flag off for the rest
+// of this call when the line is a bare `+` with no valued operand.
+//
+// The sign is an option word rather than a letter — a bare `typeset +` is a
+// listing — and this shell reads such a line as an ordinary declaration of
+// whatever names it does not already have. Measured 2026-09-27 on zsh 5.9.2
+// under `-f`, with the module loaded:
+//
+//	private + v        ${(t)v}  scalar-local        an ordinary local
+//	private -a + q     ${(t)q}  array-local         the kind letter stands
+//	private v          ${(t)v}  scalar-local-hide-special   the control
+//	private + v=1      ${(t)v}  scalar-local-hide-special   still private
+//	local -P + v       ${(t)v}  scalar-local        the letter moves with it
+//
+// **And the visibility follows the word**, which is what makes this more than
+// an attribute: `w=9; g(){ print $w }; f(){ private + w; w=1; g }` prints `1`
+// there — an ordinary local, which the callee sees — and printed `9` here,
+// the callee reading straight past a binding that should not have been
+// sealed.
+//
+// **Per line and not per operand**, which is the reading the issue proposed
+// and the measurement killed: `private + a b=1 c` leaves all three of `a`,
+// `b` and `c` `scalar-local-hide-special` in the reference, and a callee sees
+// none of them. `private + a b` — nothing valued — leaves both ordinary. So
+// one valued operand anywhere on the line makes the whole line a declaration
+// again, which is why this is a flag cleared once rather than a question
+// asked per name.
+//
+// That also decides the scope refusal, which used to ask the per-operand
+// question itself: `private + path b=1` refuses `path` in the reference, and
+// a per-operand exemption would have let it past because `path` carries no
+// value. See [Runner.refusePrivateDeclaration], which now reads the flag
+// alone.
+func (r *Runner) signAloneIsNotAPrivateDeclaration(args []string, f declareFlags) {
+	if !r.declaringPrivate || !f.plusAlone {
+		return
+	}
+	for _, a := range args {
+		if _, _, hasValue, _ := declarationOperand(a); hasValue {
+			return
+		}
+	}
+	r.declaringPrivate = false
+}
+
 func (r *Runner) DeclaringPrivateName(f func()) {
 	outer := r.declaringPrivate
 	r.declaringPrivate = true
@@ -279,23 +324,11 @@ func (r *Runner) unsealPrivateNames(sc *scope) {
 // private -h v=2` is still the refusal, so a redeclaration is not something
 // the letter buys past.
 //
-// **A bare `+` over a valueless operand is taken, and by both reasons.** A
-// sign on its own is an option word rather than a declaration — it is what
-// makes `typeset + v` write `v=hi`, the same as `typeset v` — so there is no
-// binding being asked for and nothing to refuse. Measured the same day:
-// `private + path`, `private -a + path` and `private + HOME` are 0, and so is
-// `private + v` after `private v=1` in the same call, which *lists* `v=1` at
-// 0. Put a value on the operand and both reasons come back: `private +
-// path=(/x)` and `private + HOME=/x` are the refusal with the parameter
-// untouched, and so is `private v=1; private + v=2`. It is
-// [declareFlags.plusAlone] that says this and not `f.remove`, because `+h`
-// sets that too and `+h path` is refused.
-//
-// The `+` word has a second row this does not reach: `private + v` leaves
-// `${(t)v}` at `scalar-local` in the reference and at
-// `scalar-local-hide-special` here, so the sign takes the *private* off the
-// declaration there and does not here. That stands on `main` as it does
-// after this and is left for the issue that measures the sign.
+// **A bare `+` over a line with no valued operand is taken, and by both
+// reasons.** Such a line is not a private declaration at all — see
+// [Runner.signAloneIsNotAPrivateDeclaration], which turns the flag off for
+// the whole call — so this function is never reached for one, and the
+// exemption is that rule rather than a condition here.
 //
 // Measured 2026-09-27 on zsh 5.9.2 under `-f`, inside a function:
 //
@@ -319,8 +352,8 @@ func (r *Runner) unsealPrivateNames(sc *scope) {
 // the innermost scope and of nothing else: a name the shell holds, or one a
 // *calling* function declared, is something this declaration displaces rather
 // than something it would have to move.
-func (r *Runner) refusePrivateDeclaration(name string, lists, hidesTheShellsOwn bool) bool {
-	if !r.declaringPrivate || lists {
+func (r *Runner) refusePrivateDeclaration(name string, hidesTheShellsOwn bool) bool {
+	if !r.declaringPrivate {
 		return false
 	}
 	// A declaration that takes no shadow is not moving a binding into a

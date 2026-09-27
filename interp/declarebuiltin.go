@@ -463,12 +463,27 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				break
 			}
 			pending = 0
-			f.remove = a == "+"
+			// A sign *word* does not change the sign of a letter already
+			// written, which is measured in the two columns that read one as
+			// an option word at all: `typeset -a + q` is `array-local` in
+			// zsh 5.9.2 and `typeset -x v=1; typeset + v` leaves `typeset -x
+			// v=1` on ksh93u+, where this engine dropped the letter and
+			// answered `scalar-local` and `scalar` (#4836). bash is the
+			// third column and never arrives — a bare `+` is a *name* there,
+			// and `` `+': not a valid identifier `` — which is what
+			// Semantics.SignAloneIsAnOptionWord above has just asked.
+			//
+			// Still set where no letter was written, because that is the
+			// listing the word is: a bare `typeset +` writes names without
+			// values, and `f.remove` is what the listing reads.
+			if a == "-" || f.letters == "" {
+				f.remove = a == "+"
+			}
 			// And that it was a sign *alone*, which `f.remove` cannot say:
 			// `+h` sets that too and means something else entirely. One word
 			// reads it — see Runner.refusePrivateDeclaration, where `private
 			// + path` is taken and `private +h path` is refused.
-			f.plusAlone = f.remove
+			f.plusAlone = a == "+"
 			if f.function {
 				// And it reaches the function listing where the `f` letter
 				// has already been read, which is the same sign meaning the

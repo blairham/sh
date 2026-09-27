@@ -750,6 +750,13 @@ func (r *Runner) SetPosixMode(on bool) {
 		if failedExpansion = r.posixSavedFailedExpansion; failedExpansion != Unspecified {
 			failedExpansion = No
 		}
+		// The saved answer is read back while the mode is on — see
+		// Runner.posixModeSharpenedTheAbandon — because "the shell ends
+		// because the mode says so" and "the shell ends because this
+		// dialect always does" are not the same thing one question along:
+		// an assignment prefix's failure is contained by command kind in
+		// two of the columns that answer No on their own, and in none of
+		// them under the mode.
 		// And the one thing the mode moves that is not on the semantics
 		// vector at all: a `shift` past the end saying so. The wording is
 		// bash's `shopt shift_verbose` and the *withholding* is the
@@ -2154,4 +2161,17 @@ func (r *Runner) longSetOptionName(word string) (name string, on bool) {
 		}
 	}
 	return name, on
+}
+
+// posixModeSharpenedTheAbandon reports whether POSIX mode is what turned this
+// dialect's "a failed expansion gives up the line" into "a failed expansion
+// ends the shell".
+//
+// One column has the mode and one answer to sharpen, so this is true of bash
+// under `set -o posix` or the `sh` name and of nothing else: a dialect that
+// already ends the shell saved a No and a dialect with no answer saved
+// Unspecified. See interp/prefixexpansionfailed.go, which is the one caller
+// and which explains what the distinction buys.
+func (r *Runner) posixModeSharpenedTheAbandon() bool {
+	return r.posixMode && r.posixSavedFailedExpansion == Yes
 }

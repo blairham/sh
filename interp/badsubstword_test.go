@@ -207,8 +207,20 @@ func TestTheTransformLetterIsCheckedOnlyWhenTheAxisSaysThereIsAValue(t *testing.
 
 // A bad letter in a grammar that *has* the family is a failed expansion and
 // carries the status one, which one dialect answers by how the shell started.
-// Every other unreadable operator is a word that could not be read and keeps
-// the ordinary fatal status.
+//
+// What separates it from every other unreadable operator is **fatality and not
+// the number**. Measured 2026-09-26 on bash 5.3.20, `x=a` in front and `echo
+// after` behind, each line its own `-c`: `${x@QQ}` ends the shell at 127 with
+// or without `set -o posix`, where `${(q)x}` and `${#+}` write the same
+// sentence, reach `after` with `$?` at 1 and exit 0 — and under `set -o posix`,
+// where an unperformable expansion is fatal for everybody, those two end the
+// shell at **127** as well. So a word that could not be read is not a second
+// number; it is a failure that is fatal only where the mode makes it one, and
+// there it takes the same number.
+//
+// That is why the third row below is 127: the vector it runs under is the one
+// where a failed expansion is fatal, which is what the mode produces, and the
+// dialect names 127 for the route.
 func TestABadTransformLetterCarriesTheExpansionFailureStatus(t *testing.T) {
 	sem := wordNamingSemantics()
 	dg := Diagnostics{ExpansionFailureStatusFromCommandString: 127}
@@ -219,9 +231,18 @@ func TestABadTransformLetterCarriesTheExpansionFailureStatus(t *testing.T) {
 	if _, _, st := badWordRun(t, `x=a; echo "${x@QQ}"`, dg, sem, false); st != 1 {
 		t.Errorf("status = %d, want the ordinary fatal status off a command string", st)
 	}
-	// The same grammar, an operator that is not the family at all.
-	if _, _, st := badWordRun(t, `x=a; echo "${x ~}"`, dg, sem, true); st != 1 {
-		t.Errorf("status = %d, want the fatal status for a word that could not be read", st)
+	// The same grammar, an operator that is not the family at all: fatal
+	// here because this vector says a failed expansion is, and carrying the
+	// route's number because it is one.
+	if _, _, st := badWordRun(t, `x=a; echo "${x ~}"`, dg, sem, true); st != 127 {
+		t.Errorf("status = %d, want the command-string expansion status", st)
+	}
+	// And a **bracketed** expression is the one shape that keeps the
+	// ordinary number, because the column with a number of its own does not
+	// reach this door for one: `bash -c 'set -o posix; echo ${a[1+]}'` is 1
+	// where `${#+}` on the same line is 127.
+	if _, _, st := badWordRun(t, `a=(1 2); echo "${a[1+]}"`, dg, sem, true); st != 1 {
+		t.Errorf("status = %d, want the ordinary fatal status for a bad subscript", st)
 	}
 }
 

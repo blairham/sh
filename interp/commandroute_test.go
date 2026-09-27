@@ -141,3 +141,73 @@ func TestACommandPrefixWithNoRedirectionIsQuiet(t *testing.T) {
 		t.Errorf("out = %q (status %d), want a silent st=0", out, st)
 	}
 }
+
+// And **where the failure is located** follows the same noun, in the one
+// column that has two location shapes: a redirection opened for a builtin is
+// that builtin's there, and one opened for a process this shell was about to
+// start is the shell's own. `command` is a builtin itself, so reading the
+// command word alone made every `command <program> > …` a builtin's (#4707).
+//
+// The probe holds the redirection fixed and moves what stands behind the word.
+func commandRouteLocation(t *testing.T, src string, reaches Answer) string {
+	t.Helper()
+	out, _ := sourceRun(t, t.TempDir(), src, commandRouteSemantics(reaches),
+		Diagnostics{
+			Location:        LocationLineWord,
+			BuiltinLocation: LocationBracketLine,
+			CannotCreate:    "%s: cannot create",
+		})
+	line, _, _ := strings.Cut(out, "\n")
+	prefix, _, ok := strings.Cut(line, "cannot create")
+	if !ok {
+		t.Fatalf("no complaint about the target in %q", out)
+	}
+	return prefix
+}
+
+func commandRouteSemantics(reaches Answer) Semantics {
+	sem := permissive()
+	sem.CommandReachesABuiltin = reaches
+	sem.RedirectTargetExpandsInTheCommandsProcess = Yes
+	sem.HeredocExpandsInTheCommandsProcess = Yes
+	return sem
+}
+
+func TestACommandPrefixedRedirectionIsLocatedByWhatIsBehindTheWord(t *testing.T) {
+	t.Parallel()
+	// The word reaches a builtin, so the redirection is that builtin's.
+	if got := commandRouteLocation(t, "command : > /nonexistent/d/f\n", Yes); got != "testsh[1]: /nonexistent/d/f: " {
+		t.Errorf("reaching the builtin: located %q, want the builtin's own shape", got)
+	}
+	// The same line where the word reaches no builtin: a process's, and the
+	// shell writes its ordinary location for one.
+	if got := commandRouteLocation(t, "command : > /nonexistent/d/f\n", No); got != "testsh: line 1: /nonexistent/d/f: " {
+		t.Errorf("naming a program: located %q, want the shell's own shape", got)
+	}
+}
+
+// A *program* behind the word is a process under either answer, so it is the
+// shell's own location under both — which is the pair that says the noun is a
+// builtin behind the word rather than the word itself.
+func TestACommandPrefixedProgramIsTheShellsLocationEitherWay(t *testing.T) {
+	t.Parallel()
+	for _, reaches := range []Answer{Yes, No} {
+		got := commandRouteLocation(t, "command /nonexistent/zz RAN > /nonexistent/d/f\n", reaches)
+		if got != "testsh: line 1: /nonexistent/d/f: " {
+			t.Errorf("CommandReachesABuiltin=%v: located %q, want the shell's own shape", reaches, got)
+		}
+	}
+}
+
+// And the bare builtin is the control on the other side: with no `command` in
+// front of it the redirection is the builtin's under both answers, because the
+// axis is about what that word reaches and nothing else.
+func TestABareBuiltinsRedirectionIsTheBuiltinsEitherWay(t *testing.T) {
+	t.Parallel()
+	for _, reaches := range []Answer{Yes, No} {
+		got := commandRouteLocation(t, ": > /nonexistent/d/f\n", reaches)
+		if got != "testsh[1]: /nonexistent/d/f: " {
+			t.Errorf("CommandReachesABuiltin=%v: located %q, want the builtin's own shape", reaches, got)
+		}
+	}
+}

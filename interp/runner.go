@@ -7472,7 +7472,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// `declare -n s; /bin/echo hi {s}>/dev/null` is `/bin/echo: `10':
 		// not a valid identifier` in bash 5.3.20.
 		r.redirForCommandWord = argv[0]
-		if _, ok := r.lookupBuiltin(argv[0]); ok {
+		if _, ok := r.lookupBuiltin(argv[0]); ok && r.commandRunsInThisShell(argv) {
+			// And only where the word really reaches one. `command` is a
+			// builtin itself, so reading argv[0] alone made `command
+			// /bin/echo RAN > /nonexistent/d/f` a builtin's redirection in
+			// the column that locates those differently — and that column
+			// writes its ordinary `<script>: line N:` there, because the
+			// redirection belongs to the process it was about to start. The
+			// same reading Runner.applyRedirs takes for the *owner* one line
+			// below, and the same noun: a builtin behind the word. See
+			// interp/heredocprocess.go and #4707.
 			r.redirectForBuiltin = argv[0]
 		}
 	}
@@ -9846,7 +9855,27 @@ func (r *Runner) failedExpansion() {
 		return
 	}
 	if r.sem().FailedExpansionAbandonsTheLine != Yes {
-		r.fatalQuiet()
+		if r.badSubscript {
+			// A bracketed expression is the one shape that keeps the
+			// ordinary fatal status here, and it keeps it because the
+			// column with a number of its own does not reach this door for
+			// one: measured 2026-09-26, `bash -c 'set -o posix; echo
+			// ${a[1+]}'` writes the complaint and exits **1**, where
+			// `$((1/0))`, `${#+}` and `${(q)x}` on the same line exit 127.
+			// The same subscript from a script file is not fatal there at
+			// all — it gives up the line and the next one runs — which is a
+			// gap of its own and not this one's.
+			r.fatalQuiet()
+			return
+		}
+		// fatalExpansionQuiet and not fatalQuiet: this *is* a failed
+		// expansion, so the number one column gives one from a `-c` string
+		// is this path's as much as it is `${x?word}`'s. Measured
+		// 2026-09-26, `bash -c 'set -o posix; echo $((1/0))'` is 127 and
+		// the same line from a script file is 1, which is exactly the split
+		// Diagnostics.ExpansionFailureStatusFromCommandString records
+		// (#4686).
+		r.fatalExpansionQuiet()
 		return
 	}
 	if r.badSubscript {

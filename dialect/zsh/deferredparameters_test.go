@@ -119,6 +119,51 @@ func TestAParameterArrivesOnItsFirstReference(t *testing.T) {
 	}
 }
 
+// An explicit module load is a reference too, though nothing in the script
+// named the parameter.
+//
+// Measured 2026-09-27 on zsh 5.9.2 from a script file, in a shell that has
+// read none of the names. The pair is the point again: the load is what moves
+// the row, and the same `unset` without it is a silent 0.
+func TestAnExplicitModuleLoadIsAReference(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"after the load the freeze is there",
+			`zmodload zsh/parameter
+			 unset funcstack
+			 print -r -- unreached`,
+			"zsh:2: read-only variable: funcstack\n",
+		},
+		{
+			"and without it the unset is taken",
+			`unset funcstack; print -r -- "rc=$?"`,
+			"rc=0\n",
+		},
+		{
+			"the same for another module's parameters",
+			`zmodload zsh/zleparameter
+			 unset widgets
+			 print -r -- unreached`,
+			"zsh:2: read-only variable: widgets\n",
+		},
+		{
+			// The control that says the load is reaching the *module's own*
+			// names rather than every deferred name at once.
+			"and it reaches only that module's names",
+			`zmodload zsh/zleparameter
+			 unset funcstack; print -r -- "rc=$?"`,
+			"rc=0\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runZshPrelude(t, t.TempDir(), tc.src)
+			if out != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+			}
+		})
+	}
+}
+
 // And the listing forms split, which is measured and is why the skip is in
 // three of the five loops rather than in the name's own record.
 //

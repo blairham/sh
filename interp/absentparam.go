@@ -87,6 +87,24 @@ func (r *Runner) AbsentParameter(name string) bool {
 // own words. This is the same exemption `set -u` makes and for the same
 // reason — an absent parameter answering *no* to "is it there?" is an answer,
 // where one answering *empty* to "what is it?" is not.
+//
+// **And the set test, which is that same question in the other spelling.**
+// `${+jobstates}` is not an operator on a value at all — it is
+// [syntax.ParamExpr.SetTest], and it substitutes `1` or `0` rather than
+// anything the name holds. It was refused here for two years while
+// `${jobstates+x}` and `[[ -v jobstates ]]` both answered, in the same shell
+// in the same run, which is one question with three spellings and one of them
+// taking the script down. That is the shape a careful script writes — `((
+// ${+functions_source} ))` is how zsh feature-detects, and it got no further
+// lines rather than a wrong answer (#4882).
+//
+// The exemption is the **pure** set test, and the boundary is measured rather
+// than reasoned from the flag: `${+v}`, `${+v[1]}` and `${(k)+v}` on an unset
+// name are all `0` in zsh 5.9.2, so a subscript and an expansion flag leave
+// the reading alone — while `${+v#a}` is the empty *value* and `${+v:-x}` is
+// `x`, so a written operator takes the set test away entirely. An operator is
+// therefore the whole of what disqualifies it, and the four above already
+// return by name.
 func (r *Runner) refuseAbsentParameter(e *syntax.ParamExpr) bool {
 	if e == nil {
 		return false
@@ -97,6 +115,9 @@ func (r *Runner) refuseAbsentParameter(e *syntax.ParamExpr) bool {
 	}
 	switch e.Op {
 	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamAlternate, syntax.ParamError:
+		return false
+	}
+	if e.SetTest && e.Op == syntax.ParamNone {
 		return false
 	}
 	if _, held := r.getVar(e.Name); held {

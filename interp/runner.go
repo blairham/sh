@@ -12387,6 +12387,13 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// the control row is.
 		return
 	}
+	if r.privateContainerKeepsItsKind(a) {
+		// And the same rule read the other way: a plain value over a private
+		// holding a **container** does not retype it either — an array takes
+		// the value as its one element and a table refuses outright. See
+		// interp/privatekindfixed.go.
+		return
+	}
 	// **A subscript does not aim a reference.** A write to a name with
 	// nothing to point at is the write that aims it — `typeset -n ref;
 	// ref=foo` leaves `declare -n ref="foo"` — but a *subscripted* write is

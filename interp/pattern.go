@@ -2050,10 +2050,7 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 	// later would have. Asked of the whole bracket rather than of the byte,
 	// because that is the noun: `[]a]` is a two-member set in every column
 	// and `[]` is a set with no members in one of them.
-	first := true
-	if o.emptyBracket && !memberReadingCloses(p, 0) {
-		first = false
-	}
+	first := !o.emptyBracket || memberReadingCloses(p, 0)
 	for i < len(p) {
 		if p[i] == ']' && !first {
 			i++

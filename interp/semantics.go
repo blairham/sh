@@ -22341,6 +22341,45 @@ type Semantics struct {
 	// all.
 	SubstringNegativeLengthIsEmpty Answer
 
+	// SubstringEndBehindTheStart answers `${v:1:-9}` on a six-character
+	// value: a negative length whose end falls *behind* the offset rather
+	// than inside the value.
+	//
+	// The neighbor of SubstringNegativeLengthIsEmpty above and not the same
+	// question. That one is what a negative length *means*, and every column
+	// with substrings agrees about it until the end falls behind the start —
+	// `v=abcdef; ${v:1:-2}` is `bcd` in bash 5.3.20, zsh 5.9.2 and BusyBox
+	// ash alike. This is the arithmetic of the bound itself.
+	//
+	// Measured 2026-09-27, one run per row, `v=abcdef`:
+	//
+	//	                writes                         then
+	//	bash 5.3.20   -9: substring expression < 0   gives up the line at 1
+	//	bash 3.2.57   -9: substring expression < 0   gives up the line at 1
+	//	zsh 5.9.2     substring expression: -3 < 1   ends the shell at 1
+	//	BusyBox ash   bcdef                          the rest, at 0
+	//
+	// So the two that refuse do not refuse in the same words or at the same
+	// cost: bash names the length **as written** and zsh names the computed
+	// **end and start**. Both sentences are Diagnostics.SubstringEndBehind-
+	// TheStart, whose verbs are indexed so each column takes what it names.
+	//
+	// **`end == start` is not this**, which is the row that says where the
+	// boundary is: `${v:1:-5}` is empty at 0 in bash 5.3.20 and zsh 5.9.2
+	// alike, and only a strictly smaller end is refused.
+	//
+	// **The list slice is the same question**, measured rather than assumed:
+	// `a=(p q r s t u); ${a[@]:1:-9}` draws the identical sentence from zsh.
+	// bash refuses a negative length on a list outright, however far it
+	// reaches — that is ListSliceNegativeLengthIsAnError — so this axis is
+	// reached there only by the string spelling.
+	//
+	// ksh93 and dash are in the ledger rather than here, and for different
+	// reasons: ksh93 answers every negative length with nothing before an
+	// end is ever computed, so the two rules produce the same bytes and the
+	// question cannot be put to it; dash has no `${x:offset:length}` at all.
+	SubstringEndBehindTheStart SubstringEndBehindStartPolicy
+
 	// ArithSubscriptRereadsItsExpandedText hands what a subscript's
 	// expansion produced back to the bracket scanner, so a key holding `]`
 	// or `[` is read as syntax rather than as the string a key is: zsh.
@@ -33892,6 +33931,47 @@ func (p SubscriptBeforeStartPolicy) String() string {
 		return "the complaint is made and the line carries on"
 	case SubscriptBeforeStartEndsTheScript:
 		return "the script ends"
+	}
+	return "unspecified"
+}
+
+// SubstringEndBehindStartPolicy is what a substring whose negative length
+// puts the end behind the offset produces: a complaint, or the rest of the
+// value from the offset.
+//
+// Two answers and not an Answer, because `No` would have to stand for
+// something and the thing it stands for is a behavior rather than the absence
+// of one — BusyBox ash hands back everything from the offset, where an empty
+// result would be the obvious reading of "not refused". Naming it is what
+// keeps a reader from assuming the other. See
+// Semantics.SubstringEndBehindTheStart for the rows.
+//
+// How far the complaint unwinds is deliberately **not** a value here: bash
+// gives up the line at 1 and zsh ends the shell, and that is the split
+// Semantics.FailedExpansionAbandonsTheLine already holds for every other
+// failed expansion. Measured on the same day and the same shells, `${v:1+:2}`
+// parts exactly the same way, so a second answer here would be that one
+// written twice.
+type SubstringEndBehindStartPolicy uint8
+
+const (
+	// SubstringEndBehindStartUnspecified is no answer, and is refused like
+	// any other.
+	SubstringEndBehindStartUnspecified SubstringEndBehindStartPolicy = iota
+	// SubstringEndBehindStartIsRefused writes the complaint and fails the
+	// expansion: bash and zsh, in different words.
+	SubstringEndBehindStartIsRefused
+	// SubstringEndBehindStartIsTheRest hands back everything from the
+	// offset to the end of the value, in silence and at 0: BusyBox ash.
+	SubstringEndBehindStartIsTheRest
+)
+
+func (p SubstringEndBehindStartPolicy) String() string {
+	switch p {
+	case SubstringEndBehindStartIsRefused:
+		return "the bound is refused"
+	case SubstringEndBehindStartIsTheRest:
+		return "the rest of the value from the offset"
 	}
 	return "unspecified"
 }

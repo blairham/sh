@@ -7191,6 +7191,12 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		r.declaringPrivate = true
 		defer func() { r.declaringPrivate = outer }()
 	}
+	// And a bare `+` with no valued operand turns it back off, whichever of
+	// the two spellings brought it in: the sign is an option word and the
+	// line is an ordinary declaration. Behind the letter above so that
+	// `local -P + v` is reached, and ahead of every operand below because the
+	// answer is the line's. See Runner.signAloneIsNotAPrivateDeclaration.
+	r.signAloneIsNotAPrivateDeclaration(args, f)
 	if len(r.scopes) > 0 && (len(args) == 0 || f.print) {
 		// Bare `local` is a listing, and the shells do not agree what of —
 		// see BareLocalListingForm. `local -p` is the same listing spelled
@@ -7271,13 +7277,22 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
-		// A bare `+` over a valueless operand is an option word and a
-		// listing rather than a declaration, so neither reason applies to
-		// it; the hide-in-scope letter asks for an ordinary local over the
+		// The hide-in-scope letter asks for an ordinary local over the
 		// shell's own name, which is the one way past the second reason
-		// alone. Both measured — see Runner.refusePrivateDeclaration.
-		if r.refusePrivateDeclaration(name,
-			f.plusAlone && !hasValue, f.hideNamed && f.hide) {
+		// alone. Measured — see Runner.refusePrivateDeclaration. The bare
+		// sign is the other way past and is not asked here any more: such a
+		// line is not a private declaration at all, and
+		// signAloneIsNotAPrivateDeclaration says so once for the call.
+		if r.kindLetterOverAShellParameterRefused(name, f) {
+			// A kind letter aimed at one of the shell's own parameters. Ahead
+			// of `private`'s two refusals, which is measured rather than
+			// chosen: `f(){ private -A path }` is the type sentence and is
+			// fatal, where `f(){ private -i RANDOM }` — a letter that slot
+			// takes — is the scope sentence at 1 with the script carrying on.
+			// See interp/parameterkindfixed.go.
+			return r.status
+		}
+		if r.refusePrivateDeclaration(name, f.hideNamed && f.hide) {
 			// `private` over a name the running call has already declared,
 			// or over one the shell holds a binding for — the two refusals
 			// that belong to the second word and not to this one. Ahead of

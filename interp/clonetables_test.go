@@ -389,6 +389,7 @@ func seedTables(r *Runner) {
 	r.unique = map[string]bool{"seed": true}
 	r.shellOwn = map[string]bool{"seed": true}
 	r.scopeFixed = map[string]bool{"seed": true}
+	r.kindFixed = map[string]parameterKinds{"seed": kindBit(ArrayParameter)}
 	r.traced = map[string]bool{"seed": true}
 	r.nameref = map[string]string{"seed": "target"}
 	r.floatExponent = map[string]bool{"seed": true}

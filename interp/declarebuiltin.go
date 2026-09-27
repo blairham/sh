@@ -463,12 +463,27 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				break
 			}
 			pending = 0
-			f.remove = a == "+"
+			// A sign *word* does not change the sign of a letter already
+			// written, which is measured in the two columns that read one as
+			// an option word at all: `typeset -a + q` is `array-local` in
+			// zsh 5.9.2 and `typeset -x v=1; typeset + v` leaves `typeset -x
+			// v=1` on ksh93u+, where this engine dropped the letter and
+			// answered `scalar-local` and `scalar` (#4836). bash is the
+			// third column and never arrives — a bare `+` is a *name* there,
+			// and `` `+': not a valid identifier `` — which is what
+			// Semantics.SignAloneIsAnOptionWord above has just asked.
+			//
+			// Still set where no letter was written, because that is the
+			// listing the word is: a bare `typeset +` writes names without
+			// values, and `f.remove` is what the listing reads.
+			if a == "-" || f.letters == "" {
+				f.remove = a == "+"
+			}
 			// And that it was a sign *alone*, which `f.remove` cannot say:
 			// `+h` sets that too and means something else entirely. One word
 			// reads it — see Runner.refusePrivateDeclaration, where `private
 			// + path` is taken and `private +h path` is refused.
-			f.plusAlone = f.remove
+			f.plusAlone = a == "+"
 			if f.function {
 				// And it reaches the function listing where the `f` letter
 				// has already been read, which is the same sign meaning the
@@ -1653,6 +1668,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// Runner.compoundMemberThroughAReference.
 		name = r.compoundMemberThroughAReference(name)
 		f := r.exportContainerLetterForThisOperand(name, f, hasValue)
+		if r.kindLetterOverAShellParameterRefused(name, f) {
+			// A kind letter aimed at one of the shell's own parameters, which
+			// is refused before anything this operand would do and ends the
+			// script. Ahead of the array-literal refusal below because the
+			// two are asked of different things — that one is about this
+			// line's *value* and this one about the name — and the shell
+			// that has both reaches this one first: `typeset -i path=(1 2)`
+			// is the special-parameter sentence there. See
+			// interp/parameterkindfixed.go.
+			return r.status
+		}
 		if r.typeLetterOverAnArrayLiteralRefused(name, f) {
 			// Ahead of everything else this operand would do, because the
 			// shell that refuses declares nothing: the name is not brought
@@ -2814,6 +2840,55 @@ func (r *Runner) localCell(name string) bool {
 	}
 	_, saved := r.scopes[len(r.scopes)-1].saved[name]
 	return saved
+}
+
+// localInAnyScope reports whether *some* live scope has taken the name over,
+// so the cell being read belongs to a function call rather than to the shell
+// itself — this one or one that is still on the stack below it.
+//
+// This is a different question from localCell's and it has exactly one
+// caller: the word a type query writes. Measured on zsh 5.9.2, 2026-09-27,
+// three frames deep —
+//
+//	inner() { print "inner: ${(t)ht}" }
+//	outer() { inner }
+//	top()   { typeset -a ht=(top level); outer }
+//	top                                        inner: array-local
+//
+// and a true global read the same way is plain `array`, so the word is about
+// whether the binding is any call's and not about whose.
+//
+// **A listing is not this question and must not be given this answer.** In
+// that same callee `typeset -p ht` writes `typeset -g -a ht=( top level )` in
+// the reference — so the shell's own two answers disagree about one binding,
+// and a fix keyed on making them agree would make the listing wrong. That is
+// why this stands beside localCell rather than widening it: localCell is what
+// a *declaration* asks, and a declaration lands in the innermost scope.
+func (r *Runner) localInAnyScope(name string) bool {
+	for i := len(r.scopes) - 1; i >= 0; i-- {
+		sc := r.scopes[i]
+		if sn, sealed := sc.privateSealed[name]; sealed {
+			// This frame is looking *past* an enclosing call's private at
+			// whatever that declaration displaced, so neither this scope nor
+			// the one holding the private describes the binding being read.
+			// Measured on zsh 5.9.2, 2026-09-27, with the module loaded:
+			// `v=9; g(){ print ${(t)v} }; f(){ private v=1; g }; f` is plain
+			// `scalar` there, where the same pair with `local v=1` is
+			// `scalar-local`. The walk therefore resumes outside the holder
+			// rather than stopping, since what the private displaced may be
+			// a *caller's* local and is then local like any other.
+			j := i - 1
+			for j >= 0 && r.scopes[j] != sn.holder {
+				j--
+			}
+			i = j
+			continue
+		}
+		if _, saved := sc.saved[name]; saved {
+			return true
+		}
+	}
+	return false
 }
 
 // inconsistentTypeRefused reports whether a declaration's plain word is

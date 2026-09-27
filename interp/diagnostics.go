@@ -6701,6 +6701,21 @@ type Diagnostics struct {
 	// which is why they are two fields and not one with a flag. Empty falls
 	// back to the substrate's wording.
 	PrivateRedeclaresName string
+	// SpecialParameterKind is a kind letter aimed at a name the shell holds
+	// in a slot of its own. One verb: the name.
+	//
+	// The builtin is named in the *location* rather than in the sentence,
+	// which is where the one dialect with the refusal puts it:
+	// `zsh:typeset:1: path: can't change type of a special parameter`, and
+	// `f:local: path: …` from inside a function. The same shape
+	// InconsistentType above has, and for the same reason.
+	//
+	// Fatal: the shell ends at 1 and the rest of the script never runs.
+	// Empty falls back to the substrate's wording, which is the measured
+	// one — and a dialect that marks no name reaches this field at all, so
+	// the wording is not what turns the refusal on. See
+	// Runner.MarkParameterKindFixed.
+	SpecialParameterKind string
 	// UnsetReadonly is `unset` refusing to remove a readonly name. One verb:
 	// the name — the *base* name, since a subscripted operand is refused by
 	// the variable it indexes rather than by the element.
@@ -8336,6 +8351,17 @@ type Diagnostics struct {
 	// verb: the length as it was written, which is what is blamed rather
 	// than the number it came to, so `${a[@]:1:1-$n}` names `1-$n`.
 	ListSliceNegativeLength string
+
+	// SubstringEndBehindTheStart is the refusal a negative length draws when
+	// the end it computes falls behind the offset — see
+	// Semantics.SubstringEndBehindTheStart, which is where the rows are.
+	//
+	// Three verbs, indexed, because the two columns that refuse blame
+	// different numbers: the length **as written**, the computed **end**,
+	// and the **start**. bash writes `%[1]s: substring expression < 0` and
+	// zsh `substring expression: %[2]s < %[3]s`, so neither field could be
+	// dropped and neither sentence could be derived from the other.
+	SubstringEndBehindTheStart string
 
 	// UnrecognizedModifier is the reason when a substring range read as a
 	// modifier list names one the dialect does not have. One verb: the

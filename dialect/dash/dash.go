@@ -1086,6 +1086,11 @@ func Semantics() interp.Semantics {
 	s.CaseSubjectKeepsThePreviousLine = interp.No
 	// unanswered SubstringRangeThirdColonIsABadSubstitution: no substring
 	// range at all here, so there is no third segment to refuse.
+	// unanswered SubstringEndBehindTheStart: the same absence, one segment
+	// earlier — there is no length for an end to be computed from. Measured
+	// 2026-09-27, `v=abcdef; echo "${v:1:-9}"` is `Bad substitution` at 2,
+	// and so is `${v:1:-2}`, whose end is well inside the value, so the
+	// refusal is of the construct and never reaches the bound.
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfNumberOperand = interp.PrintfNumberLeadingNumber
 	// Exact, as in bash: `printf '%d' 1000000000000000001` keeps its last

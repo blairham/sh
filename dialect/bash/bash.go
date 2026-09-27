@@ -1717,6 +1717,15 @@ func Semantics() interp.Semantics {
 	// the same way and the string form as well, which is a version
 	// difference rather than a dialect's.
 	s.ListSliceNegativeLengthIsAnError = interp.Yes
+	// And the *string* spelling's own bound, which that line is deliberately
+	// not: a negative length is accepted there and counts from the end until
+	// the end it computes falls behind the offset. `v=abcdef; ${v:1:-9}` is
+	// `-9: substring expression < 0` at 1 with the line given up, where
+	// `${v:1:-2}` is `bcd` at 0 and `${v:1:-5}` — the end exactly at the
+	// start — is empty at 0. The length **as written** is what is blamed,
+	// which is the same verb the list sentence takes. Measured 2026-09-27
+	// against 5.3.20, and 3.2.57 says it in the same words.
+	s.SubstringEndBehindTheStart = interp.SubstringEndBehindStartIsRefused
 	s.RegexQuotingMakesLiteral = interp.Yes
 	// An empty right operand is refused rather than matched: `[[ abc =~ "" ]]`
 	// names an empty subexpression and exits 2, where Go's engine would
@@ -4325,8 +4334,12 @@ func Diagnostics() interp.Diagnostics {
 		// alone, with no parameter in front of it: `-1: substring
 		// expression < 0`.
 		ListSliceNegativeLength: "%[1]s: substring expression < 0",
-		ArithOperandExpected:    "arithmetic syntax error: operand expected",
-		ArithOperatorExpected:   "arithmetic syntax error in expression",
+		// The same sentence for the string spelling's end-behind-start
+		// bound, which is a different axis reaching one wording here and a
+		// wholly different one in zsh.
+		SubstringEndBehindTheStart: "%[1]s: substring expression < 0",
+		ArithOperandExpected:       "arithmetic syntax error: operand expected",
+		ArithOperatorExpected:      "arithmetic syntax error in expression",
 		// A name whose subscript never closes is a *bad subscript* here rather
 		// than leftover text, and the refusal names it from the name: measured
 		// 2026-09-23, `let 'b[c'` is `b[c: bad array subscript (error token is

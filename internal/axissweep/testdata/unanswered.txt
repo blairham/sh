@@ -597,6 +597,7 @@ dash  SubscriptedOperandTakesTheContainerAttribute
 dash  SubscriptedOperandTakesTheIntegerAttribute
 dash  SubscriptedPrefixIsTakenBack
 dash  SubstitutionPathPrefersProcSelfFd
+dash  SubstringEndBehindTheStart
 dash  SubstringRangeThirdColonIsABadSubstitution
 dash  TableLetterReachesItsOwnOperandsSubscript
 dash  TableUnderAnArrayDeclaration
@@ -669,6 +670,7 @@ ksh   ReadonlyReferenceLetter
 ksh   SelectAssumesUnboundedWidth
 ksh   SetValidatesOptionLettersFirst
 ksh   ShiftFromTheEndLetter
+ksh   SubstringEndBehindTheStart
 ksh   TestAndArithmeticUpdatePipelineStatus
 ksh   TransformLetterCheckedOnlyWhenValued
 ksh   TrapReportsAnUnknownSingleCondition

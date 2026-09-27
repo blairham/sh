@@ -7590,6 +7590,45 @@ type Semantics struct {
 	// arithmetic at all (#4606).
 	CompoundArithAssignmentConvertsItsValue Answer
 
+	// FloatLetterChangeRereadsTheRendering makes a declaration that changes a
+	// float name's **letter** read the characters the name is holding, where a
+	// declaration that changes only its **precision** keeps the number.
+	//
+	// The two letters say how a float is *written* and not what it is — that
+	// is what storedFloat is for, and #4475 is where both shells were measured
+	// to agree about it. This is the one row they do not share.
+	//
+	// Measured 2026-09-26 on ksh93u+ 2012-08-01 at `/bin/ksh` and zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0) run `-f`, with `x=3.14159265358979`:
+	//
+	//	written                                        ksh93        zsh
+	//	typeset -F1 f=$x; typeset -F17 f; print $f     3.141592…    3.141592…
+	//	typeset -E3 f=$x; typeset -E10 f; print $f     3.141592654  3.141592654e+00
+	//	typeset -F3 f=$x; typeset -F   f; print $f     3.1415926536 3.142
+	//	typeset -F1 f=$x; typeset -E10 f; print $f     **3.1**      3.141592654e+00
+	//	typeset -E3 f=$x; typeset -F17 f; print $f     **3.14000…** 3.141592…
+	//	typeset -F3 f=$x; typeset -E5  f; print $f     **3.142**    3.1416e+00
+	//	typeset -E3 f=$x; print $(( f ))               3.14159265…  3.14159265…
+	//
+	// **The noun is the letter, and the first three rows are what prove it.**
+	// They hold the letter fixed and move the precision, and they move it the
+	// discriminating way — from a lossy rendering to a wider one, where
+	// re-reading the characters and keeping the number give different answers
+	// — and ksh93 keeps the number on all three. The three bold rows hold the
+	// same kind of precision change and move the *letter*, and there it does
+	// not. The last row is the control that says this is not "ksh93 rounds on
+	// assignment": the number is still there under `-E3` until the other
+	// letter arrives.
+	//
+	// Asked **only when the letter really changed**, which the rendering's own
+	// record carries — see storedFloat.exponent. A precision change, a
+	// re-declaration of the same letter, and a name holding characters rather
+	// than a number never reach it.
+	//
+	// bash, dash and BusyBox ash spell neither letter, so no declaration of
+	// theirs can change one (#4486).
+	FloatLetterChangeRereadsTheRendering Answer
+
 	// ArithFloatOverflowIsZero loses a float numeral whose magnitude a
 	// double cannot hold, answering zero, where the other reading saturates
 	// to an infinity.

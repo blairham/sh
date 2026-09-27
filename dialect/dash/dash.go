@@ -562,6 +562,9 @@ func Semantics() interp.Semantics {
 	// expression — measured 2026-09-18, `x=x; echo $(( x ))` is `Illegal
 	// number: x` at 2 and the chain the axis is about cannot be built at all
 	// (#3416).
+	// unanswered FloatLetterChangeRereadsTheRendering: dash has no float
+	// letters and no declaration builtin to write one with, so neither half
+	// of the question exists. Measured 2026-09-26 (#4486).
 	// unanswered CompoundArithAssignmentConvertsItsValue: dash has neither
 	// floats nor an integer attribute, so neither half of the question exists
 	// — there is no `typeset -i` to carry the type and no `0.5` to convert.

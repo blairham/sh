@@ -208,3 +208,58 @@ func TestAFloatLetterDecidesHowItIsWrittenNotWhatItIs(t *testing.T) {
 		})
 	}
 }
+
+// A change of the float **letter** keeps the number here, exactly as a change
+// of precision does — which is the row ksh93 does not share.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`,
+// beside ksh93u+ 2012-08-01 in the same run, with `x=3.14159265358979`. Every
+// row starts from a rendering that threw digits away and then asks for a
+// wider one, so the two readings give different answers and the row says
+// which this shell has:
+//
+//	written                            zsh 5.9.2         ksh93u+
+//	typeset -F1 f=$x; typeset -E10 f   3.141592654e+00   3.1
+//	typeset -E3 f=$x; typeset -F14 f   3.14159265358979  3.14000000000000
+//	typeset -F3 f=$x; typeset -E5  f   3.1416e+00        3.142
+//
+// See Semantics.FloatLetterChangeRereadsTheRendering and
+// dialect/ksh/floatletterreread_test.go (#4486).
+func TestAChangeOfFloatLetterKeepsTheNumber(t *testing.T) {
+	dir := t.TempDir()
+	const x = "3.14159265358979"
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"places to figures",
+			`typeset -F1 f=` + x + `; typeset -E10 f; print $f`,
+			"3.141592654e+00\n",
+		},
+		{
+			"figures to places",
+			`typeset -E3 f=` + x + `; typeset -F14 f; print $f`,
+			"3.14159265358979\n",
+		},
+		{
+			"places to figures, the other way round",
+			`typeset -F3 f=` + x + `; typeset -E5 f; print $f`,
+			"3.1416e+00\n",
+		},
+		{
+			"and the arithmetic value is whole after it",
+			`typeset -F1 f=` + x + `; typeset -E10 f; print $(( f ))`,
+			x + "\n",
+		},
+		{
+			"the same letter, a wider precision",
+			`typeset -F1 f=` + x + `; typeset -F14 f; print $f`,
+			"3.14159265358979\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q at %d, want %q at 0", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

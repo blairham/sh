@@ -1594,6 +1594,10 @@ func Semantics() interp.Semantics {
 	// bash has no floats, so `2**-1` has no integer answer and stops the
 	// expression; the two shells with floats answer 0.5 instead.
 	s.ArithNegativeExponentIsError = interp.Yes
+	// unanswered FloatLetterChangeRereadsTheRendering: this shell spells
+	// neither float letter, so no declaration of its own can change one and
+	// there is no rendering for a re-read to be about. Measured 2026-09-26
+	// (#4486).
 	// unanswered CompoundArithAssignmentConvertsItsValue: the same absence of
 	// floats. `declare -i n=1; echo $(( n += 0.5 ))` cannot be written here at
 	// all — the numeral is refused while the expression is read — so there is

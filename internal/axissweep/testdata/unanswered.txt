@@ -131,6 +131,7 @@ ash   ExportThroughASubscriptedOperandRecordsTheLetter
 ash   ExportedCompoundReachesAChildAsItsFirstValue
 ash   FailingPipelineWhoseLastElementRanHere
 ash   FloatFormatLetterE
+ash   FloatLetterChangeRereadsTheRendering
 ash   ForNameWhenTheLoopRuns
 ash   FunctionNamesUnderPlus
 ash   GlobalReplacementAnchors
@@ -293,6 +294,7 @@ bash  DeclareTypeLetter
 bash  DeclareZeroFillLetter
 bash  ExportThroughASubscriptedOperandRecordsTheLetter
 bash  FloatFormatLetterE
+bash  FloatLetterChangeRereadsTheRendering
 bash  ImmovableOptionsSetAtInvocation
 bash  IntegerPlusFormTakesAttributesOff
 bash  JobsListsWhatChangedSinceTheLastReport
@@ -440,6 +442,7 @@ dash  ExportThroughASubscriptedOperandRecordsTheLetter
 dash  ExportedCompoundReachesAChildAsItsFirstValue
 dash  FailingPipelineWhoseLastElementRanHere
 dash  FloatFormatLetterE
+dash  FloatLetterChangeRereadsTheRendering
 dash  ForNameWhenTheLoopRuns
 dash  FunctionNameWhenTheDefinitionRuns
 dash  FunctionNamesUnderPlus

@@ -1297,6 +1297,11 @@ func Semantics() interp.Semantics {
 	// is 1 and `n` is 1 either way. Measured 2026-09-26 on zsh 5.9.2; ksh93u+
 	// converts both (#4606).
 	s.CompoundArithAssignmentConvertsItsValue = interp.No
+	// And a change of float letter keeps the number, exactly as a change of
+	// precision does: measured 2026-09-26, `typeset -F1 f=3.14159265358979;
+	// typeset -E10 f` reads `3.141592654e+00` here where ksh93 reads `3.1`
+	// (#4486).
+	s.FloatLetterChangeRereadsTheRendering = interp.No
 	// A numeral a double cannot hold saturates: `$((1e400))` is `Inf` and
 	// `$((-1e400))` is `-Inf`, the same answers the arithmetic gives for a
 	// value that overflowed while being computed.

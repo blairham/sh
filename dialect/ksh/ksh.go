@@ -905,6 +905,16 @@ func Semantics() interp.Semantics {
 	// 1 in both columns — as the control that says the split is the compound
 	// operator's and not the store's (#4606).
 	s.CompoundArithAssignmentConvertsItsValue = interp.Yes
+	// And a declaration that changes a float name's *letter* re-reads the
+	// rendering the name is holding, where one that changes only its
+	// *precision* keeps the number. Measured 2026-09-26 with
+	// `x=3.14159265358979`: `typeset -F1 f=$x; typeset -E10 f` reads `3.1`
+	// here and `typeset -E3 f=$x; typeset -F17 f` reads `3.14000000000000000`,
+	// against `typeset -F1 f=$x; typeset -F17 f`, which keeps every digit. The
+	// control beside them is `typeset -E3 f=$x; print $(( f ))`, which is
+	// still 3.14159265358979 — so this is the letter and not a rounding on
+	// assignment (#4486).
+	s.FloatLetterChangeRereadsTheRendering = interp.Yes
 	// A numeral a double cannot hold is lost rather than saturated:
 	// `$((1e400))` is `-0` here where the same value *computed*,
 	// `$((1e300*1e300))`, is `inf`. The zero is the negative one and the

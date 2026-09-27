@@ -415,6 +415,47 @@ func TestWhichBackslashesBelongToTheExpression(t *testing.T) {
 		{tildeAugERE, backslashed("&"), true},
 		{tildePerl, backslashed("1"), true},
 		{tildePerl, backslashed("&"), false},
+
+		// The letters the two engines agree about, which every extended
+		// flavor keeps — see tildeExtendedEscapes for the measured pair per
+		// letter.
+		{tildeERE, backslashed("d"), true},
+		{tildeERE, backslashed("D"), true},
+		{tildeERE, backslashed("w"), true},
+		{tildeERE, backslashed("W"), true},
+		{tildeERE, backslashed("s"), true},
+		{tildeERE, backslashed("S"), true},
+		{tildeERE, backslashed("b"), true},
+		{tildeERE, backslashed("B"), true},
+		{tildeERE, backslashed("A"), true},
+		{tildeERE, backslashed("z"), true},
+		{tildeERE, backslashed("t"), true},
+		{tildeERE, backslashed("n"), true},
+		{tildeERE, backslashed("r"), true},
+		{tildeERE, backslashed("f"), true},
+		{tildeERE, backslashed("v"), true},
+		{tildeERE, backslashed("a"), true},
+		{tildeAugERE, backslashed("d"), true},
+		{tildePerl, backslashed("d"), true},
+
+		// And the ones they do **not** agree about, which keep the reading
+		// they had: `\Z` is an end anchor there and Go has `\z` only, `\e`
+		// is the escape character there and Go has no such escape, and
+		// `\c`, `\C`, `\E` and `\x` each mean something in that engine that
+		// Go's either lacks or spells with an argument.
+		{tildeERE, backslashed("Z"), false},
+		{tildeERE, backslashed("e"), false},
+		{tildeERE, backslashed("c"), false},
+		{tildeERE, backslashed("C"), false},
+		{tildeERE, backslashed("E"), false},
+		{tildeERE, backslashed("x"), false},
+		{tildeERE, backslashed("y"), false},
+
+		// A **basic** flavor has none of them: `[[ za1b == ~(G)za\db ]]`
+		// does not match in ksh93u+ either.
+		{tildeBRE, backslashed("d"), false},
+		{tildeBRE, backslashed("w"), false},
+		{tildeBRE, backslashed("s"), false},
 		{tildeBRE, backslashed("1"), true},
 		{tildeBRE, backslashed("("), true},
 		{tildeBRE, backslashed(")"), true},

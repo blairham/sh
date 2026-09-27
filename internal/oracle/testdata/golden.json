@@ -187724,6 +187724,108 @@
         "TimedOut": false
       }
     },
+    "setarray/a-prepend-goes-through-the-case-attribute": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: not found~\u003cscript\u003e: set: line 2: illegal option +A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "declare -u d=\"AB\"~declare -au e=([0]=\"AB\" [1]=\"CD\")",
+        "Stderr": "\u003cscript\u003e: line 2: set: +A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: set: +A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "declare -a e='([0]=\"cd\")'",
+        "Stderr": "\u003cscript\u003e: line 1: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~\u003cscript\u003e: line 2: set: +A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]~\u003cscript\u003e: line 3: typeset: d: not found~\u003cscript\u003e: line 4: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: typeset: not found~\u003cscript\u003e: 2: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "typeset -a -u d=(CD)~typeset -a -u e=(AB CD)",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "typeset -a d=( cd )~typeset -a e=( ab cd )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "setarray/an-empty-prepend-over-a-name-that-is-not-an-array": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: set: line 2: illegal option +A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "n=1 v=[v]~declare -- s=\"v\"",
+        "Stderr": "\u003cscript\u003e: line 2: set: +A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: set: +A: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "n=1 v=[v]~declare -- s=\"v\"",
+        "Stderr": "\u003cscript\u003e: line 2: set: +A: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 2: set: Illegal option -A",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "n=1 v=[v]~s=v",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "n=0 v=[]~typeset -a s=(  )",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "setarray/no-values-and-whether-the-name-survives": {
       "ash": {
         "Stdout": "",

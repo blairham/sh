@@ -4512,6 +4512,12 @@ func Semantics() interp.Semantics {
 	// 0, so the difference shows only to a script that asks whether the name
 	// is set at all.
 	s.SetArrayWithNoValuesUnsetsTheName = interp.No
+	// And the plus form over a name that is not an array, which is a store
+	// this column makes and the other does not. Measured 2026-09-27 on zsh
+	// 5.9.2 under `-f`: `s=v; set +A s` lists `typeset -a s=(  )`, and the
+	// export attribute and the integer letter come off with the re-creation
+	// (#4810).
+	s.SetArrayEmptyPrependMakesANonArrayAnEmptyArray = interp.Yes
 	// `typeset -g x=new` with a `local x` in front assigns the *local* —
 	// the letter only widens where a new declaration would land, it does
 	// not reach past what already stands. Measured: `in=new out=out`

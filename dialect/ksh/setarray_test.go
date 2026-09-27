@@ -139,3 +139,88 @@ func TestTheArrayLetterIsNoLongerCalledMissingHere(t *testing.T) {
 		t.Errorf("set -A a x = %q, want it taken", out)
 	}
 }
+
+// A prepend's values go through the folding attribute the name carries, which
+// is the one store in this column that had a road of its own around it —
+// #4809.
+//
+// Measured 2026-09-27 on `/bin/ksh`, `Version AJM 93u+ 2012-08-01`, from a
+// script file under `env -i PATH=/usr/bin:/bin`; `go version -m` says *not a
+// Go executable* for it and `github.com/blairham/sh/cmd/ksh` for ours. The
+// second row of each pair is the **append** control, which has agreed all
+// along and is what says the fold reaches every other route through the array
+// literal and not this one.
+func TestAPrependGoesThroughTheAttributeHere(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"upper over a scalar",
+			"typeset -u d=ab\nset +A d cd\ntypeset -p d",
+			"typeset -a -u d=(CD)\n",
+		},
+		{
+			"upper over an array",
+			"typeset -a -u d=(ab)\nset +A d cd\ntypeset -p d",
+			"typeset -a -u d=(CD)\n",
+		},
+		{
+			"lower",
+			"typeset -l h=AB\nset +A h CD\ntypeset -p h",
+			"typeset -a -l h=(cd)\n",
+		},
+		{
+			"integer",
+			"typeset -i i=1\nset +A i 5+5\ntypeset -p i",
+			"typeset -a -i i=(10)\n",
+		},
+		{
+			"the append control over a scalar",
+			"typeset -u d=ab\nd+=(cd)\ntypeset -p d",
+			"typeset -a -u d=(AB CD)\n",
+		},
+		{
+			"the append control over an array",
+			"typeset -a -u d=(ab)\nd+=(cd)\ntypeset -p d",
+			"typeset -a -u d=(AB CD)\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runKsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%q = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// `set +A name` with no values behind it writes nothing at all in this
+// column, whatever the name was holding — #4810.
+//
+// Measured in the same run. The last row is the control the axis is *not*
+// asked on: over a name that is already an array the two columns agree, and
+// this one has to keep agreeing.
+func TestAnEmptyPrependWritesNothingHere(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a scalar", "s=v\nset +A s\ntypeset -p s", "s=v\n"},
+		{"an exported scalar", "export e=1\nset +A e\ntypeset -p e", "typeset -x e=1\n"},
+		{"an integer", "typeset -i n=3\nset +A n\ntypeset -p n", "typeset -i n=3\n"},
+		{
+			"an array, which is the unanimous row",
+			"export f=(p q)\nset +A f\ntypeset -p f",
+			"typeset -x -a f=(p q)\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runKsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%q = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the axis each of those rows rests on, read off the vector.
+func TestTheEmptyPrependAxisIsAnsweredHere(t *testing.T) {
+	if got := ksh.Semantics().SetArrayEmptyPrependMakesANonArrayAnEmptyArray; got != interp.No {
+		t.Errorf("SetArrayEmptyPrependMakesANonArrayAnEmptyArray = %v, want No", got)
+	}
+}

@@ -3955,6 +3955,12 @@ func Semantics() interp.Semantics {
 	// array with no elements — measured with `typeset -p a`, which writes
 	// nothing at all in this shell.
 	s.SetArrayWithNoValuesUnsetsTheName = interp.Yes
+	// And the plus form over a name that is not an array, where this column
+	// writes nothing at all. Measured 2026-09-27 on ksh93u+ 2012-08-01:
+	// `s=v; set +A s` leaves `s=v`, `export e=1; set +A e` leaves `typeset
+	// -x e=1`, and a name that does not exist is still absent afterwards
+	// (#4810).
+	s.SetArrayEmptyPrependMakesANonArrayAnEmptyArray = interp.No
 	// A bare `set` lists the variables alone, values bare until one needs
 	// quoting and `$'...'` from there.
 	s.SetListing = interp.SetListingAssignments

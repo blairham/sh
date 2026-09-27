@@ -14383,10 +14383,33 @@ type Semantics struct {
 	// `${a+x}` and a listing — which is exactly what makes it worth a field:
 	// a script that tests whether the name is set gets opposite answers.
 	//
-	// The *plus* form is not this question and needs no field: `set +A a`
-	// with no values leaves the array exactly as it was in both, which is
-	// unanimous and is a different operation.
+	// The *plus* form is a question of its own and has a field beside this
+	// one: over a name that is already an array it leaves every element
+	// standing in both columns, and over a name that is not, the two part.
+	// See SetArrayEmptyPrependMakesANonArrayAnEmptyArray, which is the row
+	// this comment used to call unanimous for the whole question.
 	SetArrayWithNoValuesUnsetsTheName Answer
+
+	// SetArrayEmptyPrependMakesANonArrayAnEmptyArray is `set +A name` with
+	// nothing behind the name, over a name that is not already an array:
+	// zsh makes it an array with no elements and ksh93 leaves it alone.
+	//
+	//	s=v; set +A s; typeset -p s
+	//	  zsh    typeset -a s=(  )
+	//	  ksh93  s=v
+	//
+	// Over a name that *is* an array the two agree and nothing is asked —
+	// `export f=(p q); set +A f` leaves both the elements and the export
+	// attribute standing in each — so the axis is put only where the columns
+	// disagree. See interp.Runner.emptyPrependStores, which holds the rows
+	// and the control.
+	//
+	// The store zsh makes is a **re-creation**, so the export attribute and
+	// the type letters come off with it — that half is
+	// AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver and needs
+	// nothing here; what this field decides is whether the store happens at
+	// all (#4810).
+	SetArrayEmptyPrependMakesANonArrayAnEmptyArray Answer
 
 	// JobSpecsByName resolves `%name` — the job whose command begins with
 	// the text — and `%?text`, the one whose command contains it. POSIX

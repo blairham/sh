@@ -232,6 +232,7 @@ ash   SelectEofPrintsNewline
 ash   SelectPromptNeedsTerminal
 ash   SelectTakesUnterminatedReply
 ash   SetArrayBadNameLeavesZero
+ash   SetArrayEmptyPrependMakesANonArrayAnEmptyArray
 ash   SetArrayLetter
 ash   SetArrayOptionsContinuePastTheName
 ash   SetArrayWithNoValuesUnsetsTheName
@@ -315,6 +316,7 @@ bash  PrintfRefusedOperandKeepsItsLeadingNumber
 bash  ReadArrayDefault
 bash  ReadArrayTakesOneNameOnly
 bash  SetArrayBadNameLeavesZero
+bash  SetArrayEmptyPrependMakesANonArrayAnEmptyArray
 bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
@@ -558,6 +560,7 @@ dash  SelectEofPrintsNewline
 dash  SelectPromptNeedsTerminal
 dash  SelectTakesUnterminatedReply
 dash  SetArrayBadNameLeavesZero
+dash  SetArrayEmptyPrependMakesANonArrayAnEmptyArray
 dash  SetArrayLetter
 dash  SetArrayOptionsContinuePastTheName
 dash  SetArrayWithNoValuesUnsetsTheName

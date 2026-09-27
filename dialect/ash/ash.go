@@ -744,6 +744,11 @@ func Semantics() interp.Semantics {
 	// because it cannot write one (#2419).
 	// unanswered DeclareHideInScopeLetter: no `typeset` here either, so the
 	// lower-case `h` cannot be put to this shell under either reading.
+	// unanswered SetArrayEmptyPrependMakesANonArrayAnEmptyArray: the same wall
+	// — `set: illegal option -A` at status 2 in the ash column of the corpus
+	// row `setarray/no-values-and-whether-the-name-survives`, measured in the
+	// container that column is reached through rather than reasoned across
+	// from dash, so BusyBox ash has no prepend to write with no values behind.
 	// unanswered DeclareZeroFillLetter: BusyBox ash has no `typeset` at all,
 	// measured 2026-09-15 on v1.37.0, so the `Z` letter cannot be put to it
 	// under either reading.

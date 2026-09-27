@@ -3568,6 +3568,12 @@ func Semantics() interp.Semantics {
 	// reading. Measured 2026-09-14, `typeset -h s q=1` and `declare -h s
 	// q=1` are both `invalid option` with the usage line, so neither the
 	// hide-in-scope attribute nor the string argument can be put to it.
+	// unanswered SetArrayEmptyPrependMakesANonArrayAnEmptyArray: there is no
+	// `set +A` here to write with no values behind it. Recorded in the corpus
+	// at `setarray/no-values-and-whether-the-name-survives`: bash 5.3, bash 3.2
+	// and bash-as-`sh` each answer `set: -A: invalid option` with the usage
+	// line, so the letter is refused before the question of what an empty
+	// prepend stores can be put.
 	// unanswered DeclareZeroFillLetter: there is no `Z` letter here under
 	// either reading. Measured 2026-09-18 on 5.3.20 and 3.2 alike, `declare
 	// -Z 4 d=7` is `declare: -Z: invalid option` with the usage line, so the

@@ -728,6 +728,10 @@ func Semantics() interp.Semantics {
 	// declaration utility being absent entirely (#2419).
 	// unanswered DeclareHideInScopeLetter: the same wall, for `typeset -h s
 	// q=1`, which is `typeset: not found` at 127.
+	// unanswered SetArrayEmptyPrependMakesANonArrayAnEmptyArray: the same wall
+	// one letter over — `set: Illegal option -A` in the corpus row
+	// `setarray/no-values-and-whether-the-name-survives`, so there is no
+	// prepend here to write with no values behind it.
 	// unanswered DeclareZeroFillLetter: the declaration utility is absent
 	// entirely, so `typeset -Z 4 d=7` is `typeset: not found` at 127 and
 	// there is no `Z` letter to read either way.

@@ -1332,7 +1332,7 @@ func matchHere(p, s string, pp, at int, o patternOpts) bool {
 	// the reference shell does not answer consistently for this shape — see
 	// matchTildeFlavorInPiece's last table — so a trim or a substitution is
 	// left exactly as it was.
-	if o.whole && o.tildeFold && !(w.ready && w.noTilde) {
+	if o.whole && o.tildeFold && (!w.ready || !w.noTilde) {
 		if got, claimed := matchTildeFlavorInPiece(p, s, at, o); claimed {
 			return got
 		}

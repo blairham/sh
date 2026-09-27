@@ -133,7 +133,7 @@ func (r *Runner) elementReplacer(e *syntax.ParamExpr) func(string) (string, bool
 	repl := r.replacementWord(e)
 	if r.patternReports(pattern) {
 		return func(el string) (string, bool) {
-			if !r.matchPatternR(pattern, el, false) {
+			if !r.matchPatternR(pattern, el, patternInAWord) {
 				return "", false
 			}
 			return r.replacementFor(repl)(el), true
@@ -141,7 +141,7 @@ func (r *Runner) elementReplacer(e *syntax.ParamExpr) func(string) (string, bool
 	}
 	with := r.replacementFor(repl)
 	return func(el string) (string, bool) {
-		if !r.matchPatternR(pattern, el, false) {
+		if !r.matchPatternR(pattern, el, patternInAWord) {
 			return "", false
 		}
 		return with(el), true

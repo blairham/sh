@@ -492,7 +492,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// substitution in it twice (#1915). ksh93 quotes the unexpanded value
 		// instead and is recorded rather than modeled.
 		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, pat)
-		got := r.matchPatternR(pat, left, true)
+		got := r.matchPatternR(pat, left, patternInACondition)
 		if x.Op == "!=" {
 			return !got, nil
 		}

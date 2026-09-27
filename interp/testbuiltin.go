@@ -1386,7 +1386,7 @@ func (r *Runner) binaryTest(form testForm, left, op, right string) (bool, error,
 			// A pattern, and never a quoted literal: the words were expanded
 			// and had their quotes removed before the builtin was called, so
 			// there is nothing left to say which characters were quoted.
-			got := r.matchPatternR(right, left, true)
+			got := r.matchPatternR(right, left, patternInACondition)
 			return got == (op != "!="), nil, true
 		case "=~":
 			ok, err := r.regexMatch(right, left)

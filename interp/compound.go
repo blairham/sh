@@ -1061,7 +1061,7 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 		if tracing {
 			tried = append(tried, pat)
 		}
-		if r.matchPatternR(pat, subject, false) {
+		if r.matchPatternR(pat, subject, patternInACaseArm) {
 			if tracing {
 				r.traceCaseArm(subject, tried)
 			}

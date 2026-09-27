@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -392,10 +393,6 @@ func mathFuncStringArgument(text string) string {
 // nothing registered, and the implementation operand is still read, so
 // `functions -Ms n 1 1 other` stands.
 func (r *Runner) mathFuncOperands(builtin string, args []string, stringArg bool) (string, mathFunc, bool) {
-	if len(args) > 4 {
-		r.diagf("%s\n", Wording(r.diag().MathFunctionTooManyOperands, "%s: -M: too many arguments", builtin))
-		return "", mathFunc{}, false
-	}
 	name := args[0]
 	if !mathFuncNameValid(name) {
 		r.diagf("%s\n", Wording(r.diag().MathFunctionBadName, "%[1]s: -M %[2]s: bad math function name", builtin, name))
@@ -408,21 +405,10 @@ func (r *Runner) mathFuncOperands(builtin string, args []string, stringArg bool)
 		// `sf 1` where the ordinary form with no arity says `sf`.
 		fn.stringArg = true
 		fn.min, fn.max = 1, 1
-		for _, operand := range args[1:min(len(args), 3)] {
-			if operand != "1" {
-				r.diagf("%s\n", Wording(r.diag().MathFunctionStringArity,
-					"%s: -Ms: must take a single string argument", builtin))
-				return "", mathFunc{}, false
-			}
-		}
-		if len(args) > 3 {
-			fn.impl = args[3]
-		}
-		return name, fn, true
 	}
 	if len(args) > 1 {
-		n, err := strconv.Atoi(args[1])
-		if err != nil || n < 0 {
+		n, ok := mathFuncCount(args[1])
+		if !ok || n < 0 {
 			r.diagf("%s\n", Wording(r.diag().MathFunctionBadMinimum,
 				"%[1]s: -M: invalid min number of arguments: %[2]s", builtin, args[1]))
 			return "", mathFunc{}, false
@@ -430,20 +416,144 @@ func (r *Runner) mathFuncOperands(builtin string, args []string, stringArg bool)
 		// A minimum on its own is also the maximum: `functions -M mf 1`
 		// takes exactly one argument and refuses `mf()` and `mf(1,2)`.
 		fn.min, fn.max = n, n
+		// And only then the arity the letter fixes, because an operand that
+		// is not a count at all earns a different complaint and earns it
+		// first. The rule is applied per operand rather than once at the end:
+		// `functions -Ms mf 2 1` is the arity here, where a maximum below the
+		// minimum would otherwise be reported, and `functions -Ms mf 1 0` is
+		// the maximum, because that operand's own arity is never reached.
+		// Measured 2026-09-27 on zsh 5.9.2 (#4791).
+		if !r.mathFuncStringArity(builtin, fn, stringArg) {
+			return "", mathFunc{}, false
+		}
 	}
 	if len(args) > 2 {
-		n, err := strconv.Atoi(args[2])
-		if err != nil || (n < fn.min && n != mathFuncUnbounded) {
+		n, ok := mathFuncCount(args[2])
+		if !ok || (n < fn.min && n != mathFuncUnbounded) {
 			r.diagf("%s\n", Wording(r.diag().MathFunctionBadMaximum,
 				"%[1]s: -M: invalid max number of arguments: %[2]s", builtin, args[2]))
 			return "", mathFunc{}, false
 		}
 		fn.max = n
+		if !r.mathFuncStringArity(builtin, fn, stringArg) {
+			return "", mathFunc{}, false
+		}
+	}
+	if len(args) > 4 {
+		r.diagf("%s\n", Wording(r.diag().MathFunctionTooManyOperands, "%s: -M: too many arguments", builtin))
+		return "", mathFunc{}, false
 	}
 	if len(args) > 3 {
 		fn.impl = args[3]
 	}
 	return name, fn, true
+}
+
+// mathFuncStringArity applies the rule that a `-Ms` registration takes exactly
+// one argument, and is false when it reported. It is a no-op for the ordinary
+// form, whose arity is whatever was written.
+func (r *Runner) mathFuncStringArity(builtin string, fn mathFunc, stringArg bool) bool {
+	if !stringArg || (fn.min == 1 && fn.max == 1) {
+		return true
+	}
+	r.diagf("%s\n", Wording(r.diag().MathFunctionStringArity,
+		"%s: -Ms: must take a single string argument", builtin))
+	return false
+}
+
+// mathFuncCount reads an operand that says how many arguments a registration
+// takes. The bool is false when the spelling is not a count at all.
+//
+// It is not [strconv.Atoi], and the difference is the whole of why it is a
+// function rather than a call: this shell skips leading blanks, takes an
+// optional sign, and then reads digits in whichever base the spelling
+// announces — `0x` hexadecimal, `0b` binary, a bare leading `0` octal,
+// anything else decimal. A spelling that runs out before any digit is
+// **zero** rather than a refusal, and anything left standing after the digits
+// refuses the operand.
+//
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`,
+// through `functions -M mf <operand>` and the listing it leaves:
+//
+//	0x10      16        007     7         ""      0     1abc    refused
+//	0X10      16        01      1         " "     0     1_0     refused
+//	0b1       1         0       0         "+"     0     08      refused
+//	"\n1"     1         -0      0         "-"     0     " 1 "   refused
+//	"\t1"     1         -1      -1        0x      0     1+1     refused
+//	"  0x1f"  31        +1      1                       1.5     refused
+//	                                                    8#10    refused
+//
+// A `-1` is read and then refused by the caller, which is where the sign
+// means something: a minimum may not be negative, and a maximum of -1 is
+// [mathFuncUnbounded] rather than a refusal.
+//
+// An operand too large to hold is refused. The reference truncates it and
+// then refuses it too, with a warning line of its own first, which is a
+// different question and not this one.
+func mathFuncCount(s string) (int, bool) {
+	i := 0
+	for i < len(s) && isMathCountBlank(s[i]) {
+		i++
+	}
+	negative := false
+	if i < len(s) && (s[i] == '+' || s[i] == '-') {
+		negative = s[i] == '-'
+		i++
+	}
+	base := 10
+	switch {
+	case i+1 < len(s) && s[i] == '0' && (s[i+1] == 'x' || s[i+1] == 'X'):
+		base, i = 16, i+2
+	case i+1 < len(s) && s[i] == '0' && (s[i+1] == 'b' || s[i+1] == 'B'):
+		base, i = 2, i+2
+	case i < len(s) && s[i] == '0':
+		base, i = 8, i+1
+	}
+	n := 0
+	for i < len(s) {
+		d := mathCountDigit(s[i])
+		if d < 0 || d >= base {
+			break
+		}
+		if n > (math.MaxInt-d)/base {
+			return 0, false
+		}
+		n = n*base + d
+		i++
+	}
+	if i != len(s) {
+		return 0, false
+	}
+	if negative {
+		n = -n
+	}
+	return n, true
+}
+
+// isMathCountBlank is the run a count operand may begin with. The three
+// measured are a space, a tab and a newline; the other three are the rest of
+// what a C library calls a blank, and none of them can stand in a word that
+// reached a builtin by any other route.
+func isMathCountBlank(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', '\v', '\f', '\r':
+		return true
+	}
+	return false
+}
+
+// mathCountDigit is one digit's value in the widest base a count operand can
+// announce, or -1 for a byte that is not a digit at all.
+func mathCountDigit(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	case c >= 'A' && c <= 'F':
+		return int(c-'A') + 10
+	}
+	return -1
 }
 
 // mathFunctionsBuiltin is the `-M` and `+M` halves of the builtin that spells

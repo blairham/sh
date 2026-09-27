@@ -3399,6 +3399,32 @@ type Diagnostics struct {
 	// this one. See Runner.fatalExpansionQuiet for the rows.
 	ExpansionFailureStatusFromCommandString int
 
+	// CasePatternRefusalEndsACommandStringAtNought makes a pattern the shell
+	// will not compile, standing as a `case` arm, end the shell at **nought**
+	// when the program was handed over as an argument — `-c` — where from a
+	// script file or from standard input the same refusal ends it at the
+	// dialect's ordinary fatal status.
+	//
+	// A bool and not a number, because the number this records *is* nought
+	// and a zero-valued int field cannot say so — which is the whole
+	// difference between this and
+	// Diagnostics.ExpansionFailureStatusFromCommandString beside it, where a
+	// zero means the dialect has nothing to add.
+	//
+	// zsh alone, and the surface is as narrow as the route. Measured
+	// 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`, both
+	// streams discarded and `$?` taken immediately — see
+	// Runner.refusedPatternStatus for the rows. The two controls that make
+	// this the `case` arm's answer and not the refusal's are a condition,
+	// which is 2 on both routes, and every other pattern surface, which is 1
+	// on both; and the control that makes it the *route* and not the verdict
+	// is that two different refusals — a plain unterminated bracket and one a
+	// `[:name:]` left open — both move together.
+	//
+	// The shell leaves in either case and nothing after the complaint runs,
+	// so what this costs a caller is the status alone (#4765).
+	CasePatternRefusalEndsACommandStringAtNought bool
+
 	// SubstitutionParseFailureStatusFromCommandString is that same kind of
 	// answer for a `$( … )` **body that will not parse**: what the shell
 	// exits with when the program came from an argument rather than from a

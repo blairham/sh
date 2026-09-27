@@ -3874,12 +3874,21 @@ func (r *Runner) unsetFlaggedSubscript(base, operand, sub string) (handled bool,
 	if !ok || e.IndexFlags == nil {
 		return false, 0
 	}
-	idx, named := r.flaggedTargetIndex(e, false)
+	place, named := r.flaggedTargetPlace(e, false)
 	if !named {
 		// Refused by name, and the refusal has already been written.
 		return true, 1
 	}
-	return true, r.unsetArrayElem(base, idx, sub)
+	if place.span {
+		// `(f)` over a string names the span of characters a line covers, so
+		// taking the line out is replacing that span with nothing — and the
+		// separators around it stay, which is what the shell leaves:
+		// measured, `v=$'aa\nbb\ncc'; unset 'v[(f)2]'` is `aa\n\ncc`. See
+		// Runner.lineTargetSpan.
+		r.spliceCharacterSpan(base, place.from, place.to, "", false)
+		return true, 0
+	}
+	return true, r.unsetArrayElem(base, place.from, sub)
 }
 
 // unsetEmptiesAnUnwrittenArray is what removing one element does, in a

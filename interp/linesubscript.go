@@ -279,3 +279,62 @@ func (r *Runner) subscriptTargetIsAString(e *syntax.ParamExpr) bool {
 	_, scalar, held := r.subscriptTarget(e)
 	return held && scalar
 }
+
+// lineTargetSpan is the character span a `(f)` subscript names on the **left**
+// of a store: where the line it selected begins, and where it ends.
+//
+// Both ends come from one resolve of the line, which is the whole of why this
+// answers a pair rather than a subscript. The read side already resolves the
+// same line — see lineSubscript — and the write's job is only to say which
+// characters it covers, so that the value replaces the line instead of
+// landing inside it.
+//
+// Measured 2026-09-25 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f`, the
+// one shell in the panel with the construct, with `v=$'aa\nbb\ncc'` each
+// time:
+//
+//	v[(f)2]=ZZ       aa\nZZ\ncc     the line replaced, not a character
+//	v[(f)2]+=XX      aa\nbbXX\ncc   and joined at its end
+//	v[(f)4]=ZZ       aa\nbb\nZZ     past the last clamps as the read does
+//	v[(f)0]=ZZ       ZZ\nbb\ncc     and below the first clamps too
+//	v[(fr)bb]=ZZ     aa\nZZ\ncc     a search names the line it matched
+//	unset 'v[(f)2]'  aa\n\ncc       the line taken out, separators kept
+//	unset 'v[(f)3]'  aa\nbb\n
+//
+// A **search that missed keeps the refusal**, which is measured rather than
+// conservative: that shell answers `v[(fr)zz]=QQ` with `assignment to invalid
+// subscript range` — the shape the `R` miss is already refused for — and
+// leaves `v[(fi)zz]=QQ` holding `aa\nbb\ncQQaa\nbb\ncc`, a duplicated value
+// that is an artifact of its own span arithmetic rather than a statement
+// about the construct.
+//
+// An **array** is not a string, so `a[(f)2]=ZZ` is the ordinary write and
+// never reaches this: the caller asks subscriptTargetIsAString first.
+func (r *Runner) lineTargetSpan(e *syntax.ParamExpr, refuse func(flag, where string)) (flaggedTarget, bool) {
+	g := e.IndexFlags
+	v, _ := r.getVar(e.Name)
+	lines, starts, ends := scalarLines(r.units(v))
+	base := r.arrayBase()
+	at := -1
+	if search := lastOf(g.Flags, searchSubscriptFlags); search != 0 {
+		found := false
+		at, _, found = r.lineSearchAt(g, orderedSearchLetter(search), lines, starts)
+		if !found {
+			refuse("f", " where a search over the lines of a string matched nothing")
+			return flaggedTarget{}, false
+		}
+	} else {
+		idx, ok := r.lineSubscriptValue(g.Arg)
+		if !ok {
+			return flaggedTarget{}, false
+		}
+		at = r.lineAt(idx, len(lines))
+	}
+	if at < 0 {
+		// No lines at all, so there is no span to name and nothing the
+		// clamp could have reached.
+		refuse("f", " where the string has no lines")
+		return flaggedTarget{}, false
+	}
+	return flaggedTarget{from: base + starts[at], to: base + ends[at] - 1, span: true}, true
+}

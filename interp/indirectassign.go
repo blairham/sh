@@ -314,11 +314,19 @@ func (r *Runner) assignThroughReference(e *syntax.ParamExpr, v string) bool {
 		// does — and through flaggedTargetIndex, so the refusal is the fatal
 		// one an assignment earns rather than the per-operand one `unset`
 		// gets.
-		idx, ok := r.flaggedTargetIndex(e, true)
+		place, ok := r.flaggedTargetPlace(e, true)
 		if !ok {
 			return false
 		}
-		r.setArrayElem(e.Name, idx, r.subscriptText(e.Subscript()), v)
+		if place.span {
+			// `(f)` over a string names the span of characters its line
+			// covers, on this road as on the direct one: measured on zsh
+			// 5.9.2, `v=$'aa\nbb'; n="v[(f)2]"; : ${(P)n::=Z}` leaves
+			// `aa\nZ`. See Runner.lineTargetSpan.
+			r.spliceCharacterSpan(e.Name, place.from, place.to, v, false)
+			return true
+		}
+		r.setArrayElem(e.Name, place.from, r.subscriptText(e.Subscript()), v)
 		return true
 	}
 	if e.IndexRange != nil {

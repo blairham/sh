@@ -12066,16 +12066,28 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// `a[(r)y]=Q` replaces the element whose value is `y`, and
 		// `a[(i)nomatch]=W` appends, because `(i)` missing answers one past
 		// the last element. See Runner.flaggedAssignIndex.
-		idx, ok := r.flaggedAssignIndex(a)
+		place, ok := r.flaggedAssignPlace(a)
 		if !ok {
 			return
 		}
 		text := subscriptSubject(a.IndexText, r.subscriptAsWritten(a.Index))
-		if a.Append {
-			r.appendArrayElem(a.Name, idx, text, r.assignValue(a))
+		if place.span {
+			// `(f)` over a string names the **span** of characters its line
+			// covers, and the value replaces the whole of it:
+			// `v=$'aa\nbb\ncc'; v[(f)2]=ZZ` is `aa\nZZ\ncc`. Handing the
+			// line's first character on instead would put the value inside
+			// the line — `aa\nZZbb\ncc` — which is the plausible wrong
+			// string the letter was refused by name for until now. See
+			// Runner.lineTargetSpan.
+			r.spliceCharacterSpan(a.Name, place.from, place.to,
+				r.assignValue(a), a.Append)
 			return
 		}
-		r.setArrayElem(a.Name, idx, text, r.assignValue(a))
+		if a.Append {
+			r.appendArrayElem(a.Name, place.from, text, r.assignValue(a))
+			return
+		}
+		r.setArrayElem(a.Name, place.from, text, r.assignValue(a))
 	case a.Index != nil:
 		// The subscript is an expression, and one that will not evaluate ends
 		// the script in every shell measured — the same complaint, worded the

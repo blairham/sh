@@ -5900,8 +5900,8 @@ the *scan*, and `Assign.IndexFlags` carries it exactly as
 
 `r R i I e n b k K` are carried, for an ordinary array, for an
 associative array, for the positional parameters and for a scalar. `f` is
-carried for a **read**, and is nothing at all anywhere but a string — see
-*A subscript that counts lines* below.
+carried for a **read** and for a **write**, and is nothing at all anywhere
+but a string — see *A subscript that counts lines* below.
 
 `w p s` are read by the grammar and **refused by name** when the
 subscript is reached — `${a[(w)x]}: the (w) subscript flag is not
@@ -5909,12 +5909,41 @@ implemented` — for the reason the expansion flags are: a subscript flag
 answered wrong returns a plausible element at status 0, which is the one
 failure this repository exists to avoid.
 
-`f` on the **left of an assignment**, and in `unset`, is refused by the
-same rule and with a clause saying which side it was on: `${v[(f)2]}: the
-(f) subscript flag is not implemented where a line of a string is
-written`. That side answers with one subscript and a line is as many
+`f` on the **left of an assignment**, and in `unset`, replaces the
+**span of characters** the line covers rather than writing at one
+subscript. That is the whole of the difference: a line is as many
 characters as it is long, so the index of its first character would put
-the value *inside* the line.
+the value *inside* it — `v[(f)2]=ZZ` on `$'aa\nbb\ncc'` would give
+`aa\nZZbb\ncc`. Measured 2026-09-25 on zsh 5.9.2, the one shell with the
+construct:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `v[(f)2]=ZZ` | `aa\nZZ\ncc` — the line replaced |
+| `v[(f)2]+=XX` | `aa\nbbXX\ncc` — and joined at its end |
+| `v[(f)4]=ZZ` | `aa\nbb\nZZ` — past the last clamps as the read does |
+| `v[(f)0]=ZZ` | `ZZ\nbb\ncc` — and below the first clamps too |
+| `v[(fr)bb]=ZZ` | `aa\nZZ\ncc` — a search names the line it matched |
+| `unset 'v[(f)2]'` | `aa\n\ncc` — the line taken out, separators kept |
+| `unset 'v[(f)3]'` | `aa\nbb\n` |
+
+Both ends come from one resolve of the line, the same one the read side
+makes, so nothing finds the start and the end by two different rules. The
+arithmetic store and a named reference reach the same span — `(( v[(f)2] =
+9 ))` is `aa\n9\ncc` and `n='v[(f)2]'; ${(P)n::=Z}` is `aa\nZ\ncc` — so
+one construct does not come to have three answers.
+
+An **array** is not a string, so `a[(f)2]=ZZ` is the ordinary element
+write.
+
+A search that **missed** keeps the refusal by name, and that is measured
+rather than conservative: that shell answers `v[(fr)zz]=QQ` with
+`assignment to invalid subscript range` — the shape its `R` miss already
+earns — and leaves `v[(fi)zz]=QQ` holding `aa\nbb\ncQQaa\nbb\ncc`, a
+duplicated value that is an artifact of its own span arithmetic rather
+than a statement about the construct. A string with **no lines at all** is
+refused by name too: `e=; e[(f)1]=ZZ` is `assignment to invalid subscript
+range` there, which is the same shape and not a rule to copy either.
 
 #### A search over a scalar
 

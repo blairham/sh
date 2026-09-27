@@ -1381,14 +1381,22 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// leaves `10 9 30`, which is `${a[(r)20]}`'s element. Through
 		// flaggedTargetIndex, so an assignment's refusal is the fatal one and
 		// `unset`'s is not — the one thing the two sides do not share.
-		idx, ok := r.flaggedTargetIndex(&syntax.ParamExpr{
+		place, ok := r.flaggedTargetPlace(&syntax.ParamExpr{
 			Name: p.name, Index: p.flags.Arg, IndexFlags: p.flags,
 		}, true)
 		if !ok {
 			// Reported by name already, and nothing written.
 			return nil
 		}
-		r.setArrayElem(p.name, idx, p.sub, text)
+		if place.span {
+			// `(f)` over a string names the span of characters its line
+			// covers, here as on the ordinary left of `=`: measured on zsh
+			// 5.9.2, `v=$'aa\nbb'; (( v[(f)2] = 9 ))` leaves `aa\n9`. See
+			// Runner.lineTargetSpan.
+			r.spliceCharacterSpan(p.name, place.from, place.to, text, false)
+			return nil
+		}
+		r.setArrayElem(p.name, place.from, p.sub, text)
 		return nil
 	}
 	target := &syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked, Empty: p.empty}

@@ -1800,19 +1800,39 @@ var zshOptions = []zshOption{
 		// emulationDefaults has it off under `sh` and `ksh` and on under
 		// `csh`, all measured before this.
 		//
-		// **What it does not reach yet** is the short bodies themselves —
-		// `while`, `until`, `for i` and `repeat 2` are complete programs in
-		// the reference with this on and refused with it off, and are taken
-		// here in every state. `syntax.Dialect.ShortForm` is what would move
-		// them and it is **wider than this option**: the brace-bodied `if
-		// (( 1 )) { … }` does not move with the name and is refused under
-		// `emulate sh` and taken under `emulate ksh`, so the flag wants
-		// splitting before the option is wired to it. That is #4817's, and
-		// #4887 is where the split is written down.
+		// **And it reaches the short bodies themselves**, which is the half
+		// the name is for: a body written as one command, or omitted
+		// altogether. `syntax.Dialect.ShortFormBody` is that half, split out
+		// of `ShortForm` by #4887 because the flag was wider than this name —
+		// the **brace**-spelled body does not move with it, and neither does
+		// the parenthesized item list nor the redundant `fi`. Same binary,
+		// same day, `-f` over a script file under `set -n`:
+		//
+		//	                             on        off
+		//	while (( 0 )) :              parses    refused
+		//	while true                   parses    refused
+		//	for i (a b) echo $i          parses    refused
+		//	for i                        parses    refused
+		//	repeat 2 echo x              parses    refused
+		//	if (( 1 )) echo hi           parses    refused
+		//	while (( 0 )) { :; }         parses    parses
+		//	for i (a b) { echo $i; }     parses    parses
+		//	if (( 1 )) { echo A; } fi    parses    parses
+		//
+		// **All three emulations answer every one of those rows alike**, so
+		// the option is the whole of what decides and the mode reaches them
+		// only through it — `emulate sh` and `emulate ksh` reset the name off
+		// and `emulate csh` sets it on, all in emulationDefaults above.
+		//
+		// The brace rows carry a `;` before the `}` on purpose. Without one,
+		// `{ echo A }` is a brace group `emulate sh` refuses on its own, which
+		// is a question about a *group* rather than about a loop's body and is
+		// #4817's to answer.
 		base: "shortloops", def: true,
 		get: shortLoopsOn,
 		set: func(r *interp.Runner, on bool) int {
 			r.SetSubstitutionBodyRefusesAnUnfinishedCondition(!on)
+			r.SetShortFormBodyIsOneCommandOrNone(on)
 			return 0
 		},
 	},
@@ -2900,6 +2920,10 @@ func kshGlobOn(r *interp.Runner) bool { return r.BarePatternGroupsOpenInsideAWor
 // shortLoopsOn reads `shortloops` back off the grammar, the way the two glob
 // names above are read off theirs: the option is what places the reading and
 // the reading is where the state lives.
+//
+// It reads one of the two readings the name writes. They are written together
+// and can only be moved together through this name, so either one answers;
+// this is the one that was here first.
 func shortLoopsOn(r *interp.Runner) bool {
 	return !r.SubstitutionBodyRefusesAnUnfinishedCondition()
 }

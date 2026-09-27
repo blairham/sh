@@ -216,6 +216,7 @@ func TestAPatternGroupPrintsBackAsAPattern(t *testing.T) {
 	bare.GlobQualifiers = true
 	bare.Select = true
 	bare.ShortForm = true
+	bare.ShortFormBody = true
 
 	behind := syntax.Core()
 	behind.ExtendedPattern = true

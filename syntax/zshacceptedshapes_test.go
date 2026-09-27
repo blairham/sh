@@ -19,6 +19,7 @@ func shapesDialect() Dialect {
 	d := Core()
 	d.CloseBraceAlwaysReserved = true
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.OpenEndedAndOr = true
 	// Two more the joining-operator rows need: the second pipeline spelling,
 	// and the second short-form loop.

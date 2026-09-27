@@ -5823,7 +5823,7 @@ func (p *Parser) parseForArith(start Pos) Command {
 	}
 	// This header ends itself too, so where a body may be short it may also
 	// be one command, or nothing.
-	if p.dialect.ShortForm && !p.atWord("do") {
+	if p.shortFormBodyFollows() && !p.atWord("do") {
 		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}
@@ -5840,6 +5840,22 @@ func (p *Parser) parseForArith(start Pos) Command {
 // braceBodyFollows reports whether a brace group stands where `do` belongs.
 func (p *Parser) braceBodyFollows() bool {
 	return p.dialect.ForBraceBody && p.atWord("{")
+}
+
+// shortFormBodyFollows reports whether the dialect can read a body here at
+// all where `do … done` stands.
+//
+// Two flags and not one, because the shell that has the family carries an
+// option that moves half of it: [Dialect.ShortForm] is what the family is and
+// [Dialect.ShortFormBody] is whether a body may be written without braces. So
+// a brace group is still a body with the second flag off, and a single
+// command or nothing at all is not.
+//
+// It is asked *before* the separator a short body may take is consumed, so a
+// dialect that cannot read one here falls through to `requireSep` with its
+// token where it found it.
+func (p *Parser) shortFormBodyFollows() bool {
+	return p.dialect.ShortForm && (p.dialect.ShortFormBody || p.braceBodyFollows())
 }
 
 // braceLoopBody reads a brace group standing where `do … done` stands.
@@ -6394,7 +6410,7 @@ func (p *Parser) clauseCannotUse() bool {
 // this, because the `;` ended the whole command and left `else` with nothing
 // to attach to.
 func (p *Parser) shortIf(cond []*Stmt) (body []*Stmt, stop Pos, short bool) {
-	if !p.dialect.ShortForm || !condEndedItself(cond) {
+	if !p.shortFormBodyFollows() || !condEndedItself(cond) {
 		return nil, Pos{}, false
 	}
 	// `then` needs no test of its own: it is a stop word, so the long form
@@ -6612,7 +6628,7 @@ func (p *Parser) parseLoop() Command {
 	// it has just ended: what stands here is either `do`, or the body, or
 	// nothing. The list is what decides — a `;` kept it going, so anything
 	// after one was tested rather than run.
-	if p.dialect.ShortForm && !p.atWord("do") {
+	if p.shortFormBodyFollows() && !p.atWord("do") {
 		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}
@@ -6682,7 +6698,7 @@ func (p *Parser) parseFor() Command {
 		c.Body, c.Stop = p.braceLoopBody()
 		return c
 	}
-	if p.dialect.ShortForm && !p.atWord("do") {
+	if p.shortFormBodyFollows() && !p.atWord("do") {
 		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}
@@ -7015,7 +7031,7 @@ func (p *Parser) shortItems() (items []*Word, end Pos) {
 // so a header that did not end itself, a dialect without the flag, and a `do`
 // standing where it always could all fall through untouched.
 func (p *Parser) shortBodyAfterHeader(headerEnded bool) (body []*Stmt, stop Pos, short bool) {
-	if !p.dialect.ShortForm || !headerEnded {
+	if !p.shortFormBodyFollows() || !headerEnded {
 		return nil, Pos{}, false
 	}
 	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
@@ -7056,7 +7072,7 @@ func (p *Parser) parseRepeat() Command {
 		c.Body, c.Stop = p.braceLoopBody()
 		return c
 	}
-	if p.dialect.ShortForm && !p.atWord("do") {
+	if p.shortFormBodyFollows() && !p.atWord("do") {
 		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}
@@ -7180,7 +7196,7 @@ func (p *Parser) parseSelect() Command {
 		c.Body, c.Stop = p.braceLoopBody()
 		return c
 	}
-	if p.dialect.ShortForm && !p.atWord("do") {
+	if p.shortFormBodyFollows() && !p.atWord("do") {
 		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}

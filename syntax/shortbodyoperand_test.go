@@ -15,6 +15,7 @@ import (
 func shortLoop() syntax.Dialect {
 	d := syntax.Core()
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.EmptyCompoundBody = true
 	return d
 }

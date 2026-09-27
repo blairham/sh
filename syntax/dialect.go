@@ -1063,7 +1063,67 @@ type Dialect struct {
 	// written short is printed as `do … done`, which parses to the same tree
 	// under any dialect. Only an *omitted* body has no long spelling, so
 	// that one is printed back short.
+	//
+	// **Two of the three body spellings are [Dialect.ShortFormBody]'s**, and
+	// the split is measured rather than tidy: the shell that has this family
+	// carries an option moving the one-command and omitted bodies and leaving
+	// the brace-spelled one alone. This flag is what the family *is* — the
+	// parenthesized item list, the brace body wherever the family reaches,
+	// and the redundant `fi` — and the other one is which bodies may be
+	// written without braces.
 	ShortForm bool
+
+	// ShortFormBody is the half of [Dialect.ShortForm] a running script can
+	// move: a body written as **one command**, or omitted altogether. The
+	// brace-spelled body is not this flag's, and neither is anything else the
+	// family adds.
+	//
+	// A dialect with ShortForm and not this one keeps `while (( i < 2 )) { …
+	// }`, `for i (a b) { … }`, `if (( 1 )) { … }` and `for i (a b); do …
+	// done`, and refuses `while (( i < 2 )) echo $i`, `for i (a b) echo $i`,
+	// `if (( 1 )) echo A`, `repeat 2 echo x` and `while false`.
+	//
+	// Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+	// `/opt/homebrew/bin/zsh`, `-f` over a script file under `set -n`,
+	// 2026-09-27, with the option moved on the line after an `emulate`, in
+	// each of that shell's three emulations:
+	//
+	//	                             on      off
+	//	for i in a b; echo $i        parses  refused
+	//	for i (a b) echo $i          parses  refused
+	//	if (( 1 )) echo hi           parses  refused
+	//	while (( 0 )); :             parses  refused
+	//	while (( 0 )) :              parses  refused
+	//	until (( 1 )); :             parses  refused
+	//	repeat 2 echo x              parses  refused
+	//	select o (a b) :             parses  refused
+	//	for i                        parses  refused
+	//	for i in a b                 parses  refused
+	//	while                        parses  refused
+	//	while true                   parses  refused
+	//	until                        parses  refused
+	//	  and the brace half, which the same option leaves alone:
+	//	if (( 1 )) { echo A; }       parses  parses
+	//	while (( 0 )) { :; }         parses  parses
+	//	until (( 1 )) { :; }         parses  parses
+	//	repeat 2 { echo x; }         parses  parses
+	//	select o (a b) { :; }        parses  parses
+	//	for i (a b) { echo $i; }     parses  parses
+	//	for i (a b); do echo $i; done parses parses
+	//	if (( 1 )) { echo A; } fi    parses  parses
+	//
+	// **The three emulations answer every row of that table alike**, which is
+	// what says the noun is the option and not the mode. A table keyed on the
+	// mode gets the first thirteen wrong whenever a script moves the option by
+	// hand, and one keyed on the flag as it stood before the split refuses the
+	// brace rows along with them.
+	//
+	// The brace rows are written with a `;` before the `}` on purpose. Without
+	// one, `{ echo A }` is a *brace group* that only some readings of the
+	// grammar accept, which is a question about a group and not about a loop's
+	// body — and reading the two together is what made this look like a split
+	// between emulations before it was measured a separator apart.
+	ShortFormBody bool
 
 	// Repeat is `repeat N`, a loop over a count rather than over a list or a
 	// condition. One shell in the panel has it; the other four read the word

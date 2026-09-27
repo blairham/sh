@@ -2010,11 +2010,44 @@ file for that reason, and the harness writes one with the newline on it.
 | `() { …; } p q` | error | error | error | error | **runs** |
 | `function { …; }` | error | error | error | error | **runs** |
 
-Grammar flags: `ShortForm` — off in the core, on for `zsh` alone — plus
-`Repeat`, `Foreach` and `AnonymousFunction`, which are separate because
-they are separate questions: a shell could spell a `repeat` body only as
-`do … done`, and the words `repeat`, `foreach`, `end` and `()` are
-constructs rather than body spellings.
+Grammar flags: `ShortForm` and `ShortFormBody` — both off in the core, both
+on for `zsh` alone — plus `Repeat`, `Foreach` and `AnonymousFunction`, which
+are separate because they are separate questions: a shell could spell a
+`repeat` body only as `do … done`, and the words `repeat`, `foreach`, `end`
+and `()` are constructs rather than body spellings.
+
+**The first two are a pair because that shell's own option splits them.**
+`ShortForm` is what the family *is* — the parenthesized item list, the
+brace-spelled body wherever the family reaches, and the redundant `fi` —
+and `ShortFormBody` is whether a body may be written as **one command** or
+left out altogether. `shortloops` moves the second and not the first, in
+every one of that shell's three emulations. Measured on zsh 5.9.2 at
+`/opt/homebrew/bin/zsh`, `-f` over a script file under `set -n`, with the
+option moved on the line after an `emulate`, 2026-09-27:
+
+| probe | `setopt shortloops` | `unsetopt shortloops` |
+| --- | --- | --- |
+| `for i in a b; echo $i` | parses | error |
+| `for i (a b) echo $i` | parses | error |
+| `if (( 1 )) echo hi` | parses | error |
+| `while (( 0 )) :`, `while true`, `for i` | parses | error |
+| `repeat 2 echo x`, `select o (a b) :` | parses | error |
+| `while (( 0 )) { :; }` | parses | parses |
+| `for i (a b) { echo $i; }` | parses | parses |
+| `if (( 1 )) { echo A; } fi` | parses | parses |
+| `for i (a b); do echo $i; done` | parses | parses |
+
+So an emulation reaches the short bodies **through the option** and not by
+naming the grammar: `emulate sh` and `emulate ksh` reset `shortloops` off
+and `emulate csh` sets it on, and with the option held by hand all three
+modes answer every row of that table alike. A table keyed on the mode would
+be a hundred cells of the wrong question (#4887).
+
+The brace rows are written with a `;` before the `}` on purpose. Without one,
+`{ echo A }` is a brace *group* that `emulate sh` refuses on its own — a
+question about a group rather than about a loop's body, and reading the two
+together is what made this look like a split between emulations before it was
+measured a separator apart.
 
 ### The two `if` spellings compose in either direction
 

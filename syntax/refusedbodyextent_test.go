@@ -70,6 +70,7 @@ func TestAShortFormBodyMeasuresNoRefusedDefinition(t *testing.T) {
 	t.Parallel()
 	d := syntax.Core()
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.FuncDefAtParen = true
 	mustBeSyntaxError(t, `if [[ -n x ]] echo( A; echo after`, d, `1:21: "A" unexpected`)
 	mustBeSyntaxError(t, `while (( i )) echo( A`, d, `1:21: "A" unexpected`)

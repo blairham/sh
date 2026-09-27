@@ -1503,8 +1503,31 @@ func (p *Parser) NextLine() (*File, bool) {
 		// in a dialect where that settles the read. The line did not read, so
 		// what stopped it is text the shell would never have reached — the
 		// body is what it is reporting. See Lexer.settledBodyRefusal.
-		if se, ok := p.err.(*Error); ok && settled.Pos.Offset < se.Pos.Offset {
+		se, ok := p.err.(*Error)
+		switch {
+		case !ok && p.err == nil:
+			// **The line read, and it still does not run.** The counting
+			// loop found a closer where the grammar had already refused the
+			// body, so nothing downstream would have said anything until the
+			// word was expanded — which is after the commands written before
+			// it on that line. The shell this is written for refuses the
+			// line: measured 2026-09-27, `echo b; v=$(for); echo a` writes
+			// no `b` on zsh 5.9.2 (#4859).
 			p.err = settled
+		case !ok:
+			// An error that is not this package's, which nothing here can
+			// stand in front of.
+		case settled.Pos.Offset <= se.Pos.Offset:
+			p.err = settled
+		case se.BodyRefusal == nil:
+			// The construct that stopped the line **encloses** the
+			// substitution — a quote, a brace, an outer `$( … )` — so it is
+			// not the body's refusal to replace: both are written, the
+			// body's first. Measured 2026-09-27 on zsh 5.9.2, `echo "x
+			// $(echo hi; for) y"` from a script file is ``s.sh:2: parse
+			// error near `)' `` and then `s.sh:2: unmatched "`, and
+			// replacing left only the second.
+			se.BodyRefusal = settled.BodyRefusal
 		}
 	}
 	if p.err != nil {

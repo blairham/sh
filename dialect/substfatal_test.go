@@ -226,6 +226,43 @@ func TestTheCoreIsAskedOnlyFromInsideASubshell(t *testing.T) {
 // indistinguishable from "carried on with a complaint in the middle".
 func splitRun(t *testing.T, p dialecttest.Preset, src string) (out, errs string, status int) {
 	t.Helper()
+	// A line that does not read is a route of its own and the one some of
+	// these cases now take: a `$( … )` body refused at the closing
+	// parenthesis settles the read in one preset, so the refusal is the
+	// *line's* (#4859).
+	//
+	// Read **a line at a time** rather than the file whole, which is what a
+	// shell does and what makes the difference visible here: `printf 'start'`
+	// on line 1 runs before line 2 fails to parse, so the output this hands
+	// back is the output the front end would have produced. Parsing the file
+	// whole ran nothing at all and reported it as a shell that wrote nothing.
+	// See syntax.Parser.NextLine, which is the same unit the front end uses.
+	//
+	// The runner is handed no program text, exactly as it is on the route
+	// below, so a refusal is the sentence without the echoed line — which is
+	// what the tables in this package are written against.
+	if _, whole := syntax.Parse(src, p.Dialect()); whole != nil {
+		var o, e strings.Builder
+		r := p.Runner(dialecttest.Base{Stdout: &o, Stderr: &e})
+		parser := syntax.NewParser(src, p.Dialect())
+		st := 0
+		for {
+			line, ok := parser.NextLine()
+			if !ok {
+				break
+			}
+			var err error
+			if st, err = r.Run(context.Background(), line); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+		}
+		if err := parser.Err(); err != nil {
+			d := p.Diagnostics()
+			e.WriteString(d.ParseDiagnostic(p.Name, "", err, ""))
+			st = d.SyntaxStatus()
+		}
+		return o.String(), e.String(), st
+	}
 	f := p.Parse(t, src)
 	var o, e strings.Builder
 	r := p.Runner(dialecttest.Base{Stdout: &o, Stderr: &e})

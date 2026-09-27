@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/dialecttest"
+	"github.com/blairham/sh/syntax"
 )
 
 // A control character in the script text a diagnostic quotes back (#3563).
@@ -74,7 +75,17 @@ func TestTheCutCountsTheScriptsBytesAndNotTheRenderings(t *testing.T) {
 // script line reads from.
 func splitRunWithText(t *testing.T, p dialecttest.Preset, src string) (out, errs string, status int) {
 	t.Helper()
-	f := p.Parse(t, src)
+	// A line that does not read is a route of its own and the one several of
+	// these cases now take: a `$( … )` body refused at the closing
+	// parenthesis settles the read in this preset, so the refusal is the
+	// *line's* and the front end writes the dialect's parse diagnostic with
+	// nothing run (#4859). The same two messages either way — the body's own
+	// and the quote under it — which is why the rows below are unchanged.
+	f, err := syntax.Parse(src, p.Dialect())
+	if err != nil {
+		d := p.Diagnostics()
+		return "", d.ParseDiagnostic(p.Name, src, err, src), d.SyntaxStatus()
+	}
 	var o, e strings.Builder
 	r := p.Runner(dialecttest.Base{Stdout: &o, Stderr: &e})
 	r.SetProgramText(src)

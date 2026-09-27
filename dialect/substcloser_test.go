@@ -51,16 +51,24 @@ import (
 // one line; TestASubstitutionRefusalQuotesTheScript runs the front end that
 // hands it over (#3331).
 func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
+	// settles names the presets whose read the body's refusal **settles**, so
+	// that the token below is the first of two messages rather than the whole
+	// of one. Only zsh has the reading, and only for the bodies refused at
+	// the closing parenthesis — measured 2026-09-27 on zsh 5.9.2 under
+	// `set -n`, where each of the five is refused with the line (#4859).
+	settledInZsh := map[string]bool{"zsh": true}
 	for _, c := range []struct {
-		body string
-		want map[string]string
+		body    string
+		want    map[string]string
+		settles map[string]bool
 	}{
 		{
 			// The construct the issue was filed from, and the one where the
 			// panel splits: dash and BusyBox judge the closer as a loop
 			// variable's name rather than as a token, so they keep their own
 			// sentence while the other three name the `)`.
-			body: "for",
+			body:    "for",
+			settles: settledInZsh,
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
 				"zsh":   "zsh:2: parse error near `)'\n",
@@ -115,7 +123,8 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			},
 		},
 		{
-			body: "if true; then :; else",
+			body:    "if true; then :; else",
+			settles: settledInZsh,
 			want: map[string]string{
 				// The closer, and the quote that follows it in the real
 				// shell is absent here for the reason every other row's is:
@@ -126,7 +135,8 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			},
 		},
 		{
-			body: "{",
+			body:    "{",
+			settles: settledInZsh,
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
 				"zsh":   "zsh:2: parse error near `)'\n",
@@ -151,7 +161,8 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			// the second message is not counting from the failure either —
 			// TestASubstitutionRefusalQuotesTheScript holds that half, since
 			// this harness hands the runner no program text (#3961).
-			body: "f()",
+			body:    "f()",
+			settles: settledInZsh,
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
 				"zsh":   "zsh: parse error near `)'\n",
@@ -165,7 +176,8 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			// An operator left wanting rather than a compound left open,
 			// which is a different road to the same place: the body ends
 			// where a command was due.
-			body: "echo x |",
+			body:    "echo x |",
+			settles: settledInZsh,
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
 				"zsh":   "zsh:2: parse error near `)'\n",
@@ -228,6 +240,24 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			for preset, want := range c.want {
 				t.Run(preset, func(t *testing.T) {
 					out, errs, _ := splitRun(t, presets[preset], src)
+					// Where the body's refusal **settles the read** the
+					// message is the line's rather than the expansion's, so
+					// the quote this dialect writes under it comes with it.
+					// The line before the substitution still runs — a shell
+					// reads a line at a time — and what this row is about is
+					// the **token**, which is the first of the two messages
+					// either way. The second is the front end's and is
+					// measured in TestASubstitutionRefusalQuotesTheScript,
+					// which hands the runner the program text (#4859).
+					if c.settles[preset] {
+						if !strings.HasPrefix(errs, want) {
+							t.Errorf("wrote %q, want it to open with %q", errs, want)
+						}
+						if !strings.HasPrefix(out, "start\n") {
+							t.Errorf("standard output was %q; the line before the substitution has to have run", out)
+						}
+						return
+					}
 					if errs != want {
 						t.Errorf("wrote %q, want %q", errs, want)
 					}

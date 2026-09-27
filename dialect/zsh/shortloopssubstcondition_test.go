@@ -111,29 +111,38 @@ func TestAnEmulationReachesAnUnfinishedConditionThroughTheOption(t *testing.T) {
 	})
 }
 
-// And the rows that defeated the model, pinned at today's behavior so that a
-// change which moved them would have to say so.
+// And the rest of the closer's population, which settles here now and did
+// not before: a refusal on the closing parenthesis is the body's like any
+// other, and the rows above are the one shape carved back out of that.
 //
-// The reference refuses every one of these **with the line** under every mode
-// — `$(for)`, `$(case x)`, `$({)`, `$(select)`, `$(repeat)` and `$(echo |)` —
-// and this shell takes them, because the carve-out an unfinished condition is
-// itself carved out of defers any refusal that lands on the closing
-// parenthesis. Closing that is #4859, and what it costs is written there.
-func TestTheRestOfTheClosersPopulationIsStillDeferredHere(t *testing.T) {
+// Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+// `/opt/homebrew/bin/zsh`, `-f` over a script file under `set -n`,
+// 2026-09-27: every body below is refused **with the line** there under all
+// three modes, and every one of them was taken here until #4859.
+func TestTheRestOfTheClosersPopulationSettlesTheReadHere(t *testing.T) {
 	for _, body := range []string{
 		"for", "case x", "{", "select", "repeat", "echo |",
 		// And the three `if` shapes the option does **not** reach, which are
-		// the ones that say this flag is narrower than the rule it is carved
-		// out of: an `if` past its `then`, and an unfinished `if` inside
-		// something else. The reference refuses all three with the line.
+		// what says the flag above is narrower than the rule it sits in: an
+		// `if` past its `then`, and an unfinished `if` inside something else.
 		"if true; then :; else", "if true; then if", "while true; do if",
 	} {
 		t.Run(body, func(t *testing.T) {
 			r := caseListRunner(t)
 			src := "echo b; v=$(" + body + "); echo a\n"
-			if !parsesHere(t, r, src) {
-				t.Errorf("$(%s) is refused with the line now — #4859 moved and this row is the news",
-					body)
+			if parsesHere(t, r, src) {
+				t.Errorf("$(%s) still reads as a closed substitution", body)
+			}
+			// And the option does not move it, which is what keeps the two
+			// rules apart: `shortloops` reaches the unfinished condition and
+			// nothing else on the closer.
+			for _, on := range []bool{true, false} {
+				if code := setOption(r, "shortloops", on); code != 0 {
+					t.Fatalf("setting shortloops answered %d", code)
+				}
+				if parsesHere(t, r, src) {
+					t.Errorf("$(%s) reads as closed with shortloops=%v", body, on)
+				}
 			}
 		})
 	}

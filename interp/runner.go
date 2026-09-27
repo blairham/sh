@@ -4538,6 +4538,15 @@ type Runner struct {
 	// attribute here it decides nothing on its own: it decides only where a
 	// scope has displaced the name. See hideinscope.go.
 	hideInScope map[string]bool
+	// hideLetterWritten says the declaration being run wrote the `-h` letter
+	// itself, which exempts every name it touches from the rule that a kind
+	// change forgets the attribute — the line is writing the attribute, not
+	// carrying one over. A flag rather than an argument because the value of
+	// `typeset -h v=(a b)` is stored by Runner.assignOperands, which runs
+	// after the builtin has returned and has no letters of its own to read.
+	// Kept the way Runner.privateDeclarationRan is, and for the same reason.
+	// See Runner.hiddenNameKinds.
+	hideLetterWritten bool
 	// tied holds the ties `typeset -T` made — see tiedscalar.go — under
 	// both of each tie's names, so either half finds it.
 	tied map[string]tie
@@ -8357,9 +8366,19 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// Runner.privateDeclarationRan.
 		outerPrivateRan := r.privateDeclarationRan
 		r.privateDeclarationRan = false
+		// And whether this word wrote the `-h` letter, on exactly the same
+		// terms and for the same reason: `typeset -h v=(a b)` retypes the
+		// name from the operand store below, which runs after the builtin has
+		// returned and cannot ask it what letters it read. See
+		// Runner.hiddenNameKinds, where a line writing the letter is what
+		// exempts it from the rule that a kind change forgets the attribute.
+		outerHideRan := r.hideLetterWritten
+		r.hideLetterWritten = false
 		st := r.callBuiltin(ctx, argv[0], fn, argv[1:])
 		privateRan := r.privateDeclarationRan
 		r.privateDeclarationRan = outerPrivateRan
+		hideRan := r.hideLetterWritten
+		r.hideLetterWritten = outerHideRan
 		r.commandWordWasWritten = outerWritten
 		r.inBuiltin = outer
 		fatal := false
@@ -8382,7 +8401,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				r.inBuiltin, r.locatedUnderACall = call, true
 			}
 			r.privateDeclarationRan = privateRan
+			r.hideLetterWritten = hideRan
 			r.assignOperands(ctx, c)
+			r.hideLetterWritten = outerHideRan
 			r.privateDeclarationRan = outerPrivateRan
 			r.inBuiltin, r.locatedUnderACall = outerCall, false
 			putShadowsBack()
@@ -12338,6 +12359,11 @@ func (r *Runner) assignValue(a *syntax.Assign) string {
 // assign performs one assignment, which is three different things wearing the
 // same syntax: a scalar, a whole array, or one element of one.
 func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
+	// A bare assignment retypes a name as readily as a declaration word
+	// does — `v=(p q)` over a scalar — and the hide attribute goes with the
+	// kind either way. No letters here, so nothing is ever exempt. See
+	// Runner.kindChangeForgetsTheHide.
+	defer r.kindChangeForgetsTheHide(r.hiddenNameKinds())
 	// The refusal stands in front of all three, and it used to stand in front
 	// of one: setVarAs is where it lived, and only the scalar branch below
 	// goes through setVarAs. An element write, an array literal and a

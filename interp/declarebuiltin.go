@@ -1136,6 +1136,13 @@ func (r *Runner) exportContainerLetterForThisOperand(name string, f declareFlags
 // name with the integer attribute already decided, and a second copy of this
 // is the thing that would drift. See integerbuiltin.go.
 func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
+	// The hide attribute a name was already carrying does not survive this
+	// line changing the name's kind — see kindChangeForgetsTheHide, and
+	// hiddenNameKinds for why a line writing the letter is exempt. Deferred
+	// so that the two dozen refusals below, each of which leaves the kind
+	// where it was, do not have to say so one at a time.
+	r.noteTheHideLetter(f)
+	defer r.kindChangeForgetsTheHide(r.hiddenNameKinds())
 	if f.function || f.funcNames {
 		// A marking letter written under a plus, in the one shell that
 		// refuses it. Ahead of everything because it is a refusal of the

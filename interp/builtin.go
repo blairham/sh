@@ -7184,6 +7184,11 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		}
 		args, f = rest, flags
 	}
+	// The same kind-change rule `typeset` carries, under the other word: see
+	// Runner.kindChangeForgetsTheHide. After the letters are parsed, because
+	// whether this line writes `-h` is what exempts it.
+	r.noteTheHideLetter(f)
+	defer r.kindChangeForgetsTheHide(r.hiddenNameKinds())
 	if f.private && !r.declaringPrivate {
 		// `local -P` is the `private` word spelled as a letter, and the two
 		// are the same request rather than two that resemble each other —

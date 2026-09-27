@@ -511,7 +511,15 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	// which is measured: zsh 5.9.2's own bare `readonly` writes `ARGC=0` and
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
 	want := "OLDPWD=" + dir + "\nPWD=" + dir + "\nSHLVL=1\nV='a b'\n" +
-		"ARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nPPID=" + ppid + "\nR=2\n" +
+		// `HISTCMD`, `TTYIDLE` and `ZSH_SUBSHELL` are on this side for the
+		// same reason `ARGC` is, and they arrive in this listing with the
+		// change that gave them a parameter at all: measured 2026-09-27 on
+		// zsh 5.9.2 in one run, a bare `readonly` writes `HISTCMD=0`,
+		// `TTYIDLE=-1` and `ZSH_SUBSHELL=0` beside `ARGC=0`, and a bare
+		// `typeset` writes `integer 10 readonly` rows for all four (#4904,
+		// and dialect/zsh/counters.go).
+		"ARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nHISTCMD=0\nLINENO=1\nPPID=" + ppid +
+		"\nR=2\nTTYIDLE=-1\nZSH_SUBSHELL=0\n" +
 		// And none of the module tables, which is measured and is the whole
 		// of what this run has to say about them: a bare `readonly` in a zsh
 		// 5.9.2 that has referred to none of them writes `ARGC`, `LINENO`,

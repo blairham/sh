@@ -707,6 +707,13 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	}
 
 	sub := r.clone()
+	if theForkIsTheParentheses(st) {
+		// `( … ) &` forks once and the parentheses are that fork, so the
+		// clone the parentheses are about to make is not a second boundary.
+		// The same reconstruction Runner.forkedForABackgroundJob is, counted
+		// rather than copied — see theForkIsTheParentheses for the grid.
+		sub.subshellDepth = r.subshellDepth
+	}
 	sub.inheritJobs(jobBoundaryBackground)
 	// The fork a background job is, which a `( … )` standing as its body does
 	// not fork again: measured 2026-09-17, ksh93u+'s `a=(1 2 3); ( unset

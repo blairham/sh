@@ -4046,6 +4046,11 @@ type Runner struct {
 	// main script, and not in either of those — so the copy must know it is
 	// a copy.
 	inSubshell bool
+	// subshellDepth is how many of those boundaries are between this runner
+	// and the shell that was started, which is a *count* where inSubshell is
+	// a flag. A dialect has a parameter for it — see [Runner.SubshellDepth],
+	// where the difference between the two is measured rather than argued.
+	subshellDepth int
 
 	// dotFailureFile is the file `.` could not open, for the dialect that
 	// writes it where the script's own name goes. Set around the one message
@@ -4812,6 +4817,11 @@ func (r *Runner) clone() *Runner {
 	r.streamLocks()
 	c := *r
 	c.inSubshell = true
+	// And one boundary further from the shell that was started. The flag
+	// above cannot answer this: it is already true in a subshell of a
+	// subshell, and a dialect that names the count needs to tell those two
+	// apart. See Runner.SubshellDepth.
+	c.subshellDepth = r.subshellDepth + 1
 	// The hold on the working directory crosses, because a subshell of a real
 	// shell inherits the *directory* and not a name for it: a fork's cwd is
 	// the parent's object, so `mv ../d ../e; (cd .)` works in every shell in

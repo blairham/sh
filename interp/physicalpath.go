@@ -377,3 +377,121 @@ func (r *Runner) canceledComponentRefused(base, operand string, withinOperand bo
 	}
 	return nil
 }
+
+// physicalPathCancelingIntoTheDirectoryHeld resolves operand physically, with
+// one exception: a `..` that reaches past the operand and into the directory
+// the shell is **logically** in cancels a component of that directory unseen,
+// and only what is left of the path is resolved.
+//
+// One column reads `-P` that way and the other four resolve the whole path
+// with every `..` in place — see [Semantics.CdCancelsADotDot], which is the
+// same axis and the same reading, `CdDotDotLooksWithinTheOperand`, that the
+// `-L` route is keyed on. Asked only where the operand holds a `..`, so an
+// ordinary `cd -P` puts no question.
+//
+// **The two kinds of `..` interleave, which is why this is a walk and not a
+// two-part split.** Cancel the logical ones first and hand the rest to the
+// physical resolver and `cd -P deep/../..` comes out wrong: the first `..`
+// belongs to the operand, resolves physically, and leaves the walk somewhere
+// the second `..` must be read from. Every `..` is therefore decided as it is
+// reached, by whether the component it pops is one the operand put there.
+//
+// Measured 2026-09-27 against ksh93u+ 2012-08-01 — with dash 0.5.12, bash
+// 5.3.20 and zsh 5.9.2 as the unanimous controls — in a tree `t` holding
+// `real/deep`, `sub`, and `sub/fake` pointing at `../real`; `go version -m`
+// says *not a Go executable* for each of the four. `$PWD` is the logical name
+// the shell arrived under, and the same figures come back whether it was
+// reached absolutely or a component at a time:
+//
+//	from              cd -P …          ksh93    the other three
+//	t                 sub/fake/..      t        t
+//	t                 sub/fake/deep/.. t/real   t/real
+//	t                 sub/fake/../..   above t  above t
+//	t/sub             fake/..          t        t
+//	t/sub/fake        ..               t/sub    t
+//	t/sub/fake        ./..             t/sub    t
+//	t/sub/fake        ../real          refused  t/real
+//	t/sub/fake        ../..            t        above t
+//	t/sub/fake        .././..          t        above t
+//	t/sub/fake        deep/..          t/real   t/real
+//	t/sub/fake        deep/../..       t        t
+//	t/sub/fake        deep/../../..    above t  above t
+//	t/sub/fake        ../fake/..       t        refused
+//	t/sub/fake/deep   ..               t/real   t/real
+//
+// Three of those rows are the split and two of them carry the rule. **`../fake/..`
+// is the sharpest**: the first `..` cancels the link's own name logically,
+// putting the walk in `t/sub` where a `fake` really is, and the second
+// resolves it physically — so one operand produces both readings and the
+// other three columns, which never take the first step, refuse the row
+// outright. And **`deep/../..` is what rules out "a leading `..`"**: the
+// first `..` pops a component the operand put there and resolves, the second
+// reaches `$PWD` and cancels, and the answer is decided per component rather
+// than by what the operand starts with. `t/sub/fake/deep` with a bare `..` is
+// the row that looks like agreement and is not evidence: the two readings
+// coincide one level down.
+//
+// A failure is handed back as physicalPath's is, and the caller does with it
+// what it does for any path it could not resolve.
+func (r *Runner) physicalPathCancelingIntoTheDirectoryHeld(base, operand string) (string, error) {
+	if base == "" || filepath.IsAbs(operand) {
+		// Nothing of the shell's own directory is in the path, so there is
+		// no component for a `..` to reach into and the two readings are
+		// the same one.
+		return r.physicalPath(operand)
+	}
+	vol := filepath.VolumeName(base)
+	built := splitPathComponents(base[len(vol):])
+	// How much of the stack the shell's own directory put there. A `..` that
+	// would pop below this mark is one the operand ran past.
+	fromBase := len(built)
+	joined := func() string {
+		return vol + string(filepath.Separator) + strings.Join(built, string(filepath.Separator))
+	}
+	for _, comp := range splitPathComponents(operand) {
+		switch comp {
+		case ".":
+			continue
+		case "..":
+			if len(built) == 0 {
+				// The root's parent is the root, in every column.
+				continue
+			}
+			if len(built) <= fromBase {
+				// A component of the directory the shell is logically in:
+				// canceled without being looked at, which is the whole of
+				// this reading.
+				built = built[:len(built)-1]
+				fromBase--
+				continue
+			}
+			// The operand's own, so it is the physical parent — which means
+			// resolving what has been built before taking the parent off,
+			// since the component being popped may be a link.
+			resolved, err := r.physicalPath(joined())
+			if err != nil {
+				return "", err
+			}
+			rest := resolved[len(vol):]
+			parent := splitPathComponents(rest)
+			if len(parent) > 0 {
+				parent = parent[:len(parent)-1]
+			}
+			built, fromBase = parent, 0
+		default:
+			built = append(built, comp)
+		}
+	}
+	if resolved, err := r.physicalPath(joined()); err == nil {
+		return resolved, nil
+	} else {
+		// **The path that is blamed is the canceled one**, which is what
+		// makes this reading visible in a failure as well as in an arrival:
+		// `cd -P ../real` from inside a link names the directory the
+		// cancellation built and not the operand, because the operand is not
+		// where this shell looked. An operand that failed on its own
+		// components above returns nothing here and is blamed as written,
+		// which is the same shell's answer for `cd -P nosuch/..`.
+		return joined(), err
+	}
+}

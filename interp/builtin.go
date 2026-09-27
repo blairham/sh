@@ -5172,6 +5172,14 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	if !filepath.IsAbs(dir) {
 		fromHere = dir
 	}
+	// Whether the `-P` walk below canceled a `..` against the directory this
+	// shell is *logically* in rather than resolving it. That reading looks
+	// the built name up and does not fall back on the descriptor it holds:
+	// measured 2026-09-27 with the shell in `d/s`, `d` renamed to `e` and a
+	// fresh `d` made at the old name, `cd -P ..` lands in the **impostor**
+	// in that column and follows the descriptor into `e` in the other three.
+	// So the last resort below is not offered this one (#4628, #4668).
+	canceledIntoTheDirectory := false
 	if physical {
 		// `-P` is where the directory *is*, rather than the name it was
 		// reached by. Every shell in the panel resolves the whole path and
@@ -5203,9 +5211,40 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		// Through the gate, one component at a time: resolving is a walk
 		// over the filesystem and a script chose the path, so a policy has
 		// to see each step of it. See physicalpath.go.
-		if resolved, err := r.physicalPath(uncleanedJoin(old, dir)); err == nil {
+		//
+		// **And one column does not resolve every `..` here.** A `..` that
+		// reaches past the operand and into the directory the shell is
+		// *logically* in cancels a component of that directory unseen there,
+		// and only what is left is resolved — the same reading, and the same
+		// axis, the `-L` route below is keyed on. Asked only where the
+		// operand holds a `..`, so an ordinary `cd -P` takes the unanimous
+		// walk. See Runner.physicalPathCancelingIntoTheDirectoryHeld for the
+		// grid and for why the two kinds of `..` cannot be split into two
+		// passes (#4628).
+		resolve := func() (string, error) {
+			if hasDotDotComponent(dir) && r.cdCancelsADotDot() == CdDotDotLooksWithinTheOperand {
+				canceledIntoTheDirectory = true
+				return r.physicalPathCancelingIntoTheDirectoryHeld(old, dir)
+			}
+			return r.physicalPath(uncleanedJoin(old, dir))
+		}
+		resolved, err := resolve()
+		switch {
+		case err == nil:
 			dir = resolved
-		} else {
+		case resolved != "":
+			// A reading that rebuilt the path before failing says which path
+			// to blame, and it is not the operand: see
+			// Runner.physicalPathCancelingIntoTheDirectoryHeld. Measured
+			// 2026-09-27 with the shell in a logically reached link, `cd -P
+			// ../real` names the *canceled* path and not the two words that
+			// were typed — which is the cancellation being visible in a
+			// failure as it is in an arrival. An operand that failed on its
+			// own components rebuilt nothing, comes back empty, and is
+			// blamed as written, which is the same column's answer for `cd
+			// -P nosuch/..`.
+			dir, named = resolved, resolved
+		default:
 			// **And the path that could not be resolved keeps its `..`.** It
 			// used to fall through to the join below, which cleans, so a
 			// `cd -P nosuch/..` that no shell accepts was canceled into the
@@ -5319,12 +5358,20 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 		// so `cd nosuchdir` puts no question in any dialect. See
 		// Semantics.CdDestinationIsNotThere for the panel and
 		// interp/helddirectory.go for the hold.
-		if arrived, moved, asked := r.cdFromTheDirectoryHeld(fromHere, dir); asked {
-			if r.unspecified {
-				return 2
-			}
-			if moved {
-				dir, err, heldTheArrival = arrived, nil, true
+		//
+		// Not offered to a `-P` walk that canceled into the directory this
+		// shell is logically in: that reading looks the built name up and
+		// never asks the descriptor. Asked *before* the call rather than
+		// filtered after it, because the call adopts the hold on the way to
+		// answering. See canceledIntoTheDirectory above.
+		if !canceledIntoTheDirectory {
+			if arrived, moved, asked := r.cdFromTheDirectoryHeld(fromHere, dir); asked {
+				if r.unspecified {
+					return 2
+				}
+				if moved {
+					dir, err, heldTheArrival = arrived, nil, true
+				}
 			}
 		}
 	}

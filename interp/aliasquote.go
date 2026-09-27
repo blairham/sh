@@ -442,8 +442,10 @@ func nonAsciiAfterANonName(v string) bool {
 			}
 			continue
 		}
+		// A digit only behind something, which is what makes `9é` reach the
+		// form where `a9é` does not.
 		b := byte(c)
-		if !isLetter(b) && b != '_' && !(isDigit(b) && i > 0) {
+		if nameChar := isLetter(b) || b == '_' || (isDigit(b) && i > 0); !nameChar {
 			name = false
 		}
 	}

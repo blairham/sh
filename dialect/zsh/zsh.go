@@ -8,7 +8,6 @@ import (
 	"context"
 	"os"
 	"strconv"
-	"syscall"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -4836,11 +4835,7 @@ func Diagnostics() interp.Diagnostics {
 		// table and for why this is keyed on the signal rather than worded
 		// with SignalDescriptions: `(signal)` is not what this shell calls
 		// SIGSTOP anywhere else (#4527).
-		JobStoppedBySignal: map[syscall.Signal]string{
-			syscall.SIGSTOP: "suspended (signal)",
-			syscall.SIGTTIN: "suspended (tty input)",
-			syscall.SIGTTOU: "suspended (tty output)",
-		},
+		JobStoppedBySignal: jobStopWords,
 		// ^Z is a sentence rather than a listing row here, and the shell
 		// names itself in it: `zsh: suspended  sleep 40`, two spaces, no job
 		// number. Under a newline of its own, as bash's is.

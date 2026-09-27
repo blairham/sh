@@ -14,7 +14,7 @@ import (
 // associations a script can read.
 //
 // Measured 2026-09-06 against zsh 5.9.2 with a scratch HOME and no startup
-// files. Fifteen of the module's thirty-three parameters are **implemented**.
+// files. Nineteen of the module's thirty-three parameters are **implemented**.
 // Five of them are the five a real plugin manager reads, counted in
 // `~/.zi/bin/zi.zsh`: `functions` 46 times, `options` 24, `commands` 3,
 // `builtins` 2 and `aliases` 1; the other ten arrived one reader at a time —
@@ -25,8 +25,10 @@ import (
 // call-stack arrays — `functrace` for a tracing handler saying where it was
 // entered from (#4447), `funcfiletrace` for the same call site as a file and
 // a line (#4470) and `funcsourcetrace` for where each unit was *defined*,
-// which is how a shipped completion finds its own directory (#4469). The
-// other eighteen are sorted into two kinds, and which
+// which is how a shipped completion finds its own directory (#4469), and the
+// three job parameters — `jobstates`, `jobtexts` and `jobdirs`, over a table
+// `jobs` already lists (#4760). The
+// other fourteen are sorted into two kinds, and which
 // kind a parameter is in is a statement about this shell rather than about
 // how far along it is:
 //
@@ -39,8 +41,8 @@ import (
 //     is *true*, and it starts reporting by itself the day one of those
 //     letters lands. See zshEmptyParams, whose second column is what each is
 //     waiting on and which the tests hold to it.
-//   - **Eleven are absent**, and they refuse by name when a script reads
-//     one — `jobstates: parameter not implemented yet`, at the expansion
+//   - **Seven are absent**, and they refuse by name when a script reads
+//     one — `modules: parameter not implemented yet`, at the expansion
 //     that asked. None of them reads as empty, which is the whole reason
 //     the module can load without them; see the note on the module rule in
 //     zmodload.go and [interp.Runner.SetAbsentParameter].
@@ -106,8 +108,8 @@ import (
 // the function at status 0, exactly as here. Modeling the refusal would have
 // meant reproducing a zsh bug against a state this shell cannot be in.
 
-// registerParameterModule installs all thirty-three: fifteen as views, seven
-// as empty views, and eleven as refusals.
+// registerParameterModule installs all thirty-three: nineteen as views, seven
+// as empty views, and seven as refusals.
 func registerParameterModule(r *interp.Runner) {
 	r.SetDynamicAssoc("functions", zshFunctionsView)
 	// And the same table read one key at a time, which is what nearly every
@@ -231,6 +233,10 @@ func registerParameterModule(r *interp.Runner) {
 	// history list rather than a table this package keeps. See
 	// historyparam.go.
 	registerHistoryParameter(r)
+	// The three views over the job table, in a file of their own for the
+	// reason the history parameter is: what they view is the shell's job
+	// bookkeeping rather than a table this package keeps. See jobparam.go.
+	registerJobParameters(r)
 	registerAbsentParameters(r)
 }
 
@@ -334,11 +340,11 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 	}
 }
 
-// zshAbsentParams are the ten this shell has not got at all.
+// zshAbsentParams are the seven this shell has not got at all.
 //
 // Every one of them is non-empty, or can be, in a shell that has it: `$modules`
 // is 14 entries in a fresh zsh, `$parameters` 214, `$patchars` 15,
-// `$usergroups` 16, and the job and history tables fill as a session runs.
+// `$usergroups` 16, and the history word list fills as a session runs.
 // So none of them can be answered with an empty table the way the eight above
 // are — an empty `$patchars` is not "no pattern characters", it is "nobody
 // asked the shell" — and each refuses by name instead. `$reswords` was the
@@ -362,6 +368,11 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 // Neither is a distinction a script can see, so it is not one this file makes;
 // both kinds refuse identically until they are implemented.
 //
+// `jobstates`, `jobtexts` and `jobdirs` left together in #4760, by the route
+// `reswords` took: the job table they report on is the one `jobs` already
+// lists and `jobs -d` already names a directory from, so what was missing was
+// the publication and never the fact. See jobparam.go.
+//
 // `dirstack` was the eleventh and left in #4592, by the same route and for
 // the same reason: the stack it reports on is the one `pushd`, `popd` and
 // `dirs` already kept, so what was missing was the parameter. It is the one
@@ -371,15 +382,14 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 // assign to it. The prelude keeps the array under that name outright, so
 // `$dirstack` and `dirs` cannot come to disagree; see dialect/zsh/prelude.go.
 //
-// One of the ten is worth naming, because it looks like it belongs with the
+// One of the seven is worth naming, because it looks like it belongs with the
 // empty ones and does not. `userdirs` fills as `~user` is expanded, and
 // `~root` here does not expand — but it does not *refuse* either, it stays
 // literal, so there is no line to hold an honesty check against and no way to
 // tell "no users looked up yet" from "this shell cannot look one up".
 var zshAbsentParams = []string{
 	"dis_builtins", "functions_source", "historywords",
-	"jobdirs", "jobstates", "jobtexts", "modules",
-	"patchars", "userdirs", "usergroups",
+	"modules", "patchars", "userdirs", "usergroups",
 }
 
 // registerAbsentParameters makes each of them refuse by name when it is read,
@@ -400,15 +410,15 @@ var zshAbsentParams = []string{
 // others shut.
 //
 // **The freeze is the other half of the same fact** and was missing: a name
-// this shell has not got was one a script could take over — `jobstates=(a b
-// c)` made an ordinary array here and is `read-only variable: jobstates` at
+// this shell has not got was one a script could take over — `modules=(a b
+// c)` made an ordinary array here and is `read-only variable: modules` at
 // status 1, fatally, in the shell being modeled. So a script probing for the
 // module by writing the name got a value where it should have been stopped,
 // and a test in this package asserted that (#1604). The element spelling
-// refuses too: `jobstates[1]=q` is the same sentence naming the table.
+// refuses too: `modules[1]=q` is the same sentence naming the table.
 //
 // `unset` of one is still allowed, which is measured rather than tidy: zsh
-// answers `unset jobstates` with a silent 0 while refusing the assignment on
+// answers `unset modules` with a silent 0 while refusing the assignment on
 // the line before. See interp's unsetReadonly, which exempts an absent
 // parameter for that reason.
 func registerAbsentParameters(r *interp.Runner) {

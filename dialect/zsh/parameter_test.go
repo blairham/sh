@@ -399,7 +399,7 @@ func TestAProducedAssociationIsReadThroughInsideASubshell(t *testing.T) {
 }
 
 // **An absent parameter refuses by name on every route that reads one**, and
-// the routes are the point: a test of `$jobstates` alone passes against a
+// the routes are the point: a test of `$modules` alone passes against a
 // shell that loses `${jobstates[x]}`, which is the spelling a plugin manager
 // actually writes — `${functions[name]}` is 57 of zinit's uses.
 //
@@ -411,22 +411,22 @@ func TestAProducedAssociationIsReadThroughInsideASubshell(t *testing.T) {
 // absence looks like from the caller's side.
 func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
 	for _, tc := range []struct{ name, snippet string }{
-		{"a bare name", `print -r -- "[$jobstates]"`},
-		{"a subscript", `print -r -- "[${jobstates[running]}]"`},
-		{"the whole array", `print -r -- "[${jobstates[@]}]"`},
-		{"a length", `print -r -- "[${#jobstates}]"`},
-		{"a flag group", `print -r -- "[${(k)jobstates}]"`},
-		{"an unquoted word", `print -r -- ${jobstates[x]}`},
-		{"a condition", `[[ -n $jobstates ]]`},
+		{"a bare name", `print -r -- "[$modules]"`},
+		{"a subscript", `print -r -- "[${modules[zsh/zle]}]"`},
+		{"the whole array", `print -r -- "[${modules[@]}]"`},
+		{"a length", `print -r -- "[${#modules}]"`},
+		{"a flag group", `print -r -- "[${(k)modules}]"`},
+		{"an unquoted word", `print -r -- ${modules[x]}`},
+		{"a condition", `[[ -n $modules ]]`},
 		// A pattern rather than a value, which is where an empty read is
 		// least visible of all: an unrefused one matches nothing, takes
 		// the `*` branch, and looks exactly like a script whose input did
 		// not match.
-		{"a case pattern", `case x in $jobstates) print -r -- matched;; *) print -r -- fell-through;; esac`},
+		{"a case pattern", `case x in $modules) print -r -- matched;; *) print -r -- fell-through;; esac`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), tc.snippet+"\nprint -r -- UNREACHED")
-			if !strings.Contains(out, "jobstates: parameter not implemented yet") {
+			if !strings.Contains(out, "modules: parameter not implemented yet") {
 				t.Errorf("%s = %q (status %d), want the parameter named", tc.snippet, out, st)
 			}
 			if strings.Contains(out, "[") || strings.Contains(out, "UNREACHED") {
@@ -461,9 +461,9 @@ func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
 // spellings now stop at the diagnostic, because a body fed to a program is
 // expanded in that program's process and a failure there costs the command.
 func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T) {
-	absent, ast := runZsh(t, t.TempDir(), "cat <<E\n[$jobstates]\nE\n")
+	absent, ast := runZsh(t, t.TempDir(), "cat <<E\n[$modules]\nE\n")
 	unset, ust := runZsh(t, t.TempDir(), "set -u\ncat <<E\n[$nosuchvar]\nE\n")
-	if !strings.Contains(absent, "jobstates: parameter not implemented yet") {
+	if !strings.Contains(absent, "modules: parameter not implemented yet") {
 		t.Errorf("a here-document reading an absent parameter = %q (status %d), want it named", absent, ast)
 	}
 	if !strings.Contains(unset, "nosuchvar: parameter not set") {
@@ -481,12 +481,12 @@ func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T
 }
 
 // Arithmetic is deliberately left alone, and that is measured rather than
-// overlooked: `$(( jobstates + 1 ))` in a real zsh with the module loaded is
+// overlooked: `$(( modules + 1 ))` in a real zsh with the module loaded is
 // `1`, because an association read as a number is 0 there. A refusal here
 // would be this shell inventing a diagnostic the shell it models does not
 // write, over a spelling that means nothing in either.
 func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `print -r -- "n=$(( jobstates + 1 ))"`)
+	out, st := runZsh(t, t.TempDir(), `print -r -- "n=$(( modules + 1 ))"`)
 	if want := "n=1\n"; out != want || st != 0 {
 		t.Errorf("arithmetic on an absent parameter = %q (status %d), want %q", out, st, want)
 	}
@@ -500,8 +500,8 @@ func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
 // for, and `${p+x}` answering "no" is an answer where `${p}` answering empty
 // is not.
 func TestAnAbsentParameterYieldsToTheScriptsOwnAnswer(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `print -r -- "default=[${jobstates-d}]"
-print -r -- "alternate=[${jobstates+set}]"
+	out, st := runZsh(t, t.TempDir(), `print -r -- "default=[${modules-d}]"
+print -r -- "alternate=[${modules+set}]"
 dirstack=(a b)
 print -r -- "own=[$dirstack] [${dirstack[1]}] [${#dirstack}]"`)
 	want := "default=[d]\nalternate=[]\nown=[a b] [a] [2]\n"
@@ -510,20 +510,20 @@ print -r -- "own=[$dirstack] [${dirstack[1]}] [${#dirstack}]"`)
 	}
 }
 
-// `dirstack` rather than `jobstates` for the owning half, because owning is
-// exactly what the rest of them no longer allow: fifteen of the sixteen
-// absent names are frozen against a write here as they are in zsh, and
+// `dirstack` rather than `modules` for the owning half, because owning is
+// exactly what the rest of them no longer allow: every absent name is frozen
+// against a write here as it is in zsh, and
 // `dirstack` is the one the shell being modeled lets a script assign — it is
 // the directory stack, and setting one is what the assignment is for. So the
 // exemption is still reachable and this is where it is reached.
 func TestAnAbsentParameterRefusesAWriteAsAReadOnlyName(t *testing.T) {
 	for _, src := range []string{
-		`jobstates=(a b c)`,
-		`jobstates[1]=q`,
-		`typeset -g jobstates=(a)`,
+		`modules=(a b c)`,
+		`modules[1]=q`,
+		`typeset -g modules=(a)`,
 	} {
 		out, st := runZsh(t, t.TempDir(), src+"\necho unreached")
-		if st == 0 || !strings.Contains(out, "read-only variable: jobstates") ||
+		if st == 0 || !strings.Contains(out, "read-only variable: modules") ||
 			strings.Contains(out, "unreached") {
 			t.Errorf("%s = %q (status %d), want the read-only refusal and the script ended", src, out, st)
 		}
@@ -531,11 +531,11 @@ func TestAnAbsentParameterRefusesAWriteAsAReadOnlyName(t *testing.T) {
 }
 
 // And `unset` of one is *not* refused, which is measured rather than tidy:
-// the shell being modeled answers `unset jobstates` with a silent 0 on the
-// line after refusing `jobstates=(a b c)` as read-only. Two answers from one
+// the shell being modeled answers `unset modules` with a silent 0 on the
+// line after refusing `modules=(a b c)` as read-only. Two answers from one
 // attribute, so the exemption is written down where the difference is.
 func TestAnAbsentParameterMayStillBeUnset(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), "unset jobstates\necho \"st=$?\"")
+	out, st := runZsh(t, t.TempDir(), "unset modules\necho \"st=$?\"")
 	if out != "st=0\n" || st != 0 {
 		t.Errorf("unsetting an absent parameter = %q (status %d), want a silent 0", out, st)
 	}
@@ -888,19 +888,20 @@ echo "onpath=[${commands[toolx]:+found}]"`)
 // `parameters[nope]` evaluated to 0 and was silent at status 0, which is the
 // answer this mechanism exists to stop.
 func TestUnsettingAnAbsentParametersElementRefusesByName(t *testing.T) {
-	// `jobstates` rather than `parameters`, which this used to ask about:
-	// that one is a live table now (#1599), so it is no longer an example of
-	// the thing being tested. The mechanism is unchanged and so is the
+	// `modules` rather than `jobstates`, which this used to ask about, and
+	// `parameters` before that. Each move is the same correction one step
+	// further along: a name this shell now has is no longer an example of one
+	// it has not (#1599, #4760). The mechanism is unchanged and so is the
 	// wording — only the parameter standing in for "absent" moved.
-	out, st := runZsh(t, t.TempDir(), `unset "jobstates[PATH]" 2>&1
+	out, st := runZsh(t, t.TempDir(), `unset "modules[PATH]" 2>&1
 echo "known=$?"
-unset "jobstates[nope]" 2>&1
+unset "modules[nope]" 2>&1
 echo "unknown=$?"
-unset "jobtexts[1]" 2>&1
+unset "patchars[1]" 2>&1
 echo "other=$?"`)
-	want := "zsh:unset:1: jobstates: parameter not implemented yet\nknown=1\n" +
-		"zsh:unset:3: jobstates: parameter not implemented yet\nunknown=1\n" +
-		"zsh:unset:5: jobtexts: parameter not implemented yet\nother=1\n"
+	want := "zsh:unset:1: modules: parameter not implemented yet\nknown=1\n" +
+		"zsh:unset:3: modules: parameter not implemented yet\nunknown=1\n" +
+		"zsh:unset:5: patchars: parameter not implemented yet\nother=1\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting an absent parameter's element = %q (status %d), want %q", out, st, want)
 	}
@@ -1012,12 +1013,12 @@ func implementedModuleParams() []string {
 	return []string{
 		"aliases", "builtins", "commands", "dirstack", "funcfiletrace",
 		"funcsourcetrace", "funcstack", "functions", "functrace",
-		"galiases", "history", "nameddirs", "options", "parameters",
-		"reswords", "saliases",
+		"galiases", "history", "jobdirs", "jobstates", "jobtexts",
+		"nameddirs", "options", "parameters", "reswords", "saliases",
 	}
 }
 
-// absentModuleParams is the ten this shell has not got, each registered
+// absentModuleParams is the seven this shell has not got, each registered
 // with [interp.Runner.SetAbsentParameter] so that reading one is refused at
 // the expansion that asked (#1152).
 //
@@ -1043,12 +1044,14 @@ func implementedModuleParams() []string {
 // could never have been answered with an empty array: `pushd` and `dirs`
 // already kept a stack, so an empty one here would have been a claim and not
 // an answer. It is also the only one that stopped being a *view* on the way
-// out — see implementedModuleParams.
+// out — see implementedModuleParams. `jobstates`, `jobtexts` and `jobdirs`
+// left together seventh (#4760), by the first route rather than the last: the
+// job table they report on is the one `jobs` already lists and `jobs -d`
+// already names a directory from, so what was missing was the publication.
 func absentModuleParams() []string {
 	return []string{
 		"dis_builtins", "functions_source", "historywords",
-		"jobdirs", "jobstates", "jobtexts", "modules",
-		"patchars", "userdirs", "usergroups",
+		"modules", "patchars", "userdirs", "usergroups",
 	}
 }
 

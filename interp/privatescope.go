@@ -158,17 +158,44 @@ func (r *Runner) signAloneIsNotAPrivateDeclaration(args []string, f declareFlags
 	if !r.declaringPrivate || !f.plusAlone {
 		return
 	}
+	if len(r.literalOperands) > 0 || len(r.compoundOperands) > 0 {
+		// A `name=( … )` operand is a value, and it is the one value this
+		// scan cannot see: the parser takes it off the command line and the
+		// utility is handed the bare name, so every word here reads as
+		// valueless. Measured 2026-09-27 on zsh 5.9.2 with the module
+		// loaded, and the two rows are a pair —
+		//
+		//	private + path=(/x)   can't change scope of existing param: path
+		//	private + a b=(1) c   all three scalar/array-local-hide-special,
+		//	                      and a callee sees none of them
+		//
+		// — where `private + a b` with nothing valued leaves both ordinary.
+		// So the literal counts exactly as `b=1` does, which is what the
+		// per-line rule above says and what the argument scan alone would
+		// have got wrong the moment `private` became a declaration utility
+		// in the grammar (#4855).
+		return
+	}
 	for _, a := range args {
 		if _, _, hasValue, _ := declarationOperand(a); hasValue {
 			return
 		}
 	}
-	r.declaringPrivate = false
+	// Both flags, so the line's mark and the builtin's stay in step. Nothing
+	// is stored past this point on such a line — the early return above is
+	// the only way a literal operand reaches it — so this is the invariant
+	// rather than a behavior.
+	r.declaringPrivate, r.privateDeclarationRan = false, false
 }
 
 func (r *Runner) DeclaringPrivateName(f func()) {
 	outer := r.declaringPrivate
 	r.declaringPrivate = true
+	// And the line's own mark, which outlives this span on purpose: a
+	// `name=( … )` operand is stored after the builtin has returned, so the
+	// flag above is gone by the time the store asks. Runner.simple owns the
+	// window. See Runner.privateDeclarationRan.
+	r.privateDeclarationRan = true
 	defer func() { r.declaringPrivate = outer }()
 	f()
 }
@@ -454,8 +481,27 @@ func (r *Runner) privateHere(name string) bool {
 // five is that case measured, and the shell takes it. Whatever it does to the
 // value, `${(t)}` still says `array-…` afterwards, so nothing was retyped
 // there either.
+//
+// **The declaration's own operand is not a retype, and that is the exemption
+// the flag buys.** Every row above is a *later* line writing over a binding
+// some earlier line declared, and the kind that may not move is the one that
+// declaration gave. A literal written on the declaration itself is what gives
+// it — measured 2026-09-27 on zsh 5.9.2 under `-f`, module loaded:
+//
+//	(){ private q=(1 2); print ${(t)q} $#q }   array-local-hide-special 2
+//	(){ local -P q=(1 2); print ${(t)q} $#q }  the same
+//	private topq=(1 2)                         `array`, at the top level
+//
+// so there is nothing to keep the kind of yet. The two flags between them are
+// exactly "this store is a private declaration's own": r.declaringPrivate for
+// the span of the builtin, and r.privateDeclarationRan for the `name=( … )`
+// operand, which Runner.simple stores after the builtin has returned. Both
+// are one command line wide, so every later line above runs outside them.
 func (r *Runner) privateKindWouldChange(a *syntax.Assign) bool {
 	if !a.IsArray || len(a.Members) > 0 || a.Index != nil {
+		return false
+	}
+	if r.declaringPrivate || r.privateDeclarationRan {
 		return false
 	}
 	if !r.privateHere(a.Name) || r.nameIsAnArray(a.Name) || r.assocDeclared(a.Name) {

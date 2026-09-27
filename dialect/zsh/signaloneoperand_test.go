@@ -81,6 +81,31 @@ print "  after=[$path]"`)
 	if out != want || st != 0 {
 		t.Errorf("the refusal on a mixed line = %q (status %d), want %q", out, st, want)
 	}
+	// And a `name=( … )` operand is a value for this rule too, which is the
+	// row the argument scan cannot see on its own: the parser takes the
+	// literal off the command line and hands the utility the bare name, so
+	// every word it reads looks valueless. Measured 2026-09-27 with the rest
+	// (#4855).
+	out, st = answersRun(t, `zmodload zsh/param/private
+g() { print "  g sees a=[$a] b=[$b] c=[$c]" }
+a=A b=B c=C
+f() { private + a b=(1) c; print "  a=${(t)a} b=${(t)b} c=${(t)c}"; g }
+f`)
+	want = "  a=scalar-local-hide-special b=array-local-hide-special" +
+		" c=scalar-local-hide-special\n  g sees a=[A] b=[B] c=[C]\n"
+	if out != want || st != 0 {
+		t.Errorf("a literal operand on a plus line = %q (status %d), want %q", out, st, want)
+	}
+	// And the refusal reads it too, which is the pair that says the literal
+	// counts on the *line* and not merely for its own name.
+	out, st = answersRun(t, `zmodload zsh/param/private
+f() { private + path b=(1); print "  st=$?" }
+f
+print "  after=[$path]"`)
+	want = "f:private: can't change scope of existing param: path\n  st=1\n  after=[/usr/bin /bin]\n"
+	if out != want || st != 0 {
+		t.Errorf("the refusal beside a literal operand = %q (status %d), want %q", out, st, want)
+	}
 }
 
 // The sign word does not change the sign of a letter already written, which

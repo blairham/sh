@@ -1066,6 +1066,20 @@ type Runner struct {
 	// declaration makes its binding, whatever word, letters or kind it
 	// carries. See interp/privatescope.go and Runner.DeclaringPrivateName.
 	declaringPrivate bool
+	// privateDeclarationRan says a `private` declaration — the word, or
+	// `local -P` — has run on the command line now being finished, and is
+	// what tells the operand store that the literal it is about to write is
+	// the declaration's **own**.
+	//
+	// A second field rather than declaringPrivate itself, because the two
+	// spans are genuinely different: declaringPrivate is the builtin's, and
+	// a declaration's `name=( … )` operand is stored by Runner.simple
+	// *after* the builtin has returned, so the builtin's flag is already
+	// back to what it was. Cleared before the call and put back after the
+	// operand store, so the window is one command line and a private
+	// declaration inside some other command's expansion cannot reach it.
+	// Read by Runner.privateKindWouldChange.
+	privateDeclarationRan bool
 	// privateDeclared says this shell has taken a private shadow at least
 	// once, and it is the whole of what a shell without the word pays: one
 	// bool compared against false at each function call, and nothing at all
@@ -8325,7 +8339,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// builtin runs builtins.
 		outerWritten := r.commandWordWasWritten
 		r.commandWordWasWritten = commandWordWasWritten(c)
+		// Whether this word makes **private** bindings, which the operand
+		// store below has to know and cannot ask the builtin, since the
+		// builtin has returned by then. Cleared first so that what comes
+		// back is this line's answer and not an enclosing one's — see
+		// Runner.privateDeclarationRan.
+		outerPrivateRan := r.privateDeclarationRan
+		r.privateDeclarationRan = false
 		st := r.callBuiltin(ctx, argv[0], fn, argv[1:])
+		privateRan := r.privateDeclarationRan
+		r.privateDeclarationRan = outerPrivateRan
 		r.commandWordWasWritten = outerWritten
 		r.inBuiltin = outer
 		fatal := false
@@ -8347,7 +8370,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				r.containerLetterOverALiteral(argv, c) {
 				r.inBuiltin, r.locatedUnderACall = call, true
 			}
+			r.privateDeclarationRan = privateRan
 			r.assignOperands(ctx, c)
+			r.privateDeclarationRan = outerPrivateRan
 			r.inBuiltin, r.locatedUnderACall = outerCall, false
 			putShadowsBack()
 			switch {

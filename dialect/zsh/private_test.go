@@ -180,3 +180,100 @@ f`)
 		t.Errorf("the letters it takes = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// A `private` declaration's parenthesized operand is an **array literal**,
+// which is a grammar question and not the builtin's: the word is one of this
+// shell's declaration utilities, so `name=( … )` behind it is an element list
+// exactly as it is behind `typeset` (#4855).
+//
+// Measured 2026-09-27 against zsh 5.9.2 from a script file under `env -i
+// PATH=/usr/bin:/bin` with a scratch `HOME`, every row behind the `zmodload`.
+// Before this the parentheses were kept as characters — `${(t)q}` was
+// `scalar-local-hide-special` holding the five characters `(1 2)` — and with
+// `-a` or `-A` the text reached the re-read of
+// Semantics.DeclarationRereadsAParenthesizedValue, which this shell leaves
+// unanswered for this dialect, so the line also wrote a refusal to stderr.
+//
+// The `typeset -a` row is the control that says this is the second
+// declaration word's and not the literal's: it was right throughout.
+func TestAPrivateDeclarationTakesAnArrayLiteral(t *testing.T) {
+	out, st := answersRun(t, `zmodload zsh/param/private
+f1() { private q=(1 2);       print "  1 ${(t)q} n=${#q} [$q]" }
+f2() { private -a q=(1 2);    print "  2 ${(t)q} n=${#q} [$q]" }
+f3() { private -A m=(k v);    print "  3 ${(t)m} n=${#m} [${m[k]}]" }
+f4() { private -a q=();       print "  4 ${(t)q} n=${#q}" }
+f5() { local -P q=(1 2);      print "  5 ${(t)q} n=${#q}" }
+f6() { private -A m=([k]=v);  print "  6 ${(t)m} [${m[k]}]" }
+f7() { typeset -a q=(1 2);    print "  7 ${(t)q} n=${#q}" }
+f1; f2; f3; f4; f5; f6; f7
+private topq=(1 2); print "  8 ${(t)topq} n=${#topq}"`)
+	want := "  1 array-local-hide-special n=2 [1 2]\n" +
+		"  2 array-local-hide-special n=2 [1 2]\n" +
+		"  3 association-local-hide-special n=1 [v]\n" +
+		"  4 array-local-hide-special n=0\n" +
+		"  5 array-local-hide-special n=2\n" +
+		"  6 association-local-hide-special [v]\n" +
+		"  7 array-local n=2\n" +
+		"  8 array n=2\n"
+	if out != want || st != 0 {
+		t.Errorf("a private's array literal = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And the word has to be **written** for that reading, which is the row that
+// says `private` belongs in Dialect.DeclarationUtilities rather than in a
+// rule of its own: quote it and the parenthesis is a glob qualifier, exactly
+// as `'typeset' a=(x y)` is in this shell.
+//
+// Measured 2026-09-27, `f() { 'private' q=(1 2); print no }` is
+// `f: unknown file attribute: 1` with the `print` never reached.
+func TestAQuotedPrivateIsNotADeclarationUtility(t *testing.T) {
+	out, _ := answersRun(t, `zmodload zsh/param/private
+f() { 'private' q=(1 2); print "reached" }
+f`)
+	if !strings.Contains(out, "unknown file attribute: 1") {
+		t.Errorf("a quoted private = %q, want the glob qualifier's refusal", out)
+	}
+	if strings.Contains(out, "reached") {
+		t.Errorf("a quoted private = %q, want the command never to run", out)
+	}
+}
+
+// The kind a private declaration gave it still may not move, and that is what
+// keeps the row above from being a loosening: the exemption is the
+// declaration's **own** operand and nothing else.
+//
+// Measured 2026-09-27. Rows one and two are refusals the shell ends on; rows
+// three and four are the controls that say the refusal is about the kind
+// rather than about a literal over a private at all.
+func TestAPrivateStillKeepsTheKindItsDeclarationGave(t *testing.T) {
+	for _, row := range []struct {
+		name string
+		src  string
+	}{
+		{"a later line", `f() { private at; at=(p q); print "reached" }; f`},
+		{"an append", `f() { private at=x; at+=(p q); print "reached" }; f`},
+	} {
+		out, st := answersRun(t, "zmodload zsh/param/private\n"+row.src+"\nprint after")
+		if !strings.Contains(out, "at: attempt to assign array value to non-array") {
+			t.Errorf("%s = %q, want the retype refusal", row.name, out)
+		}
+		if strings.Contains(out, "reached") || strings.Contains(out, "after") {
+			t.Errorf("%s = %q, want the script to end there", row.name, out)
+		}
+		if st != 1 {
+			t.Errorf("%s status = %d, want 1", row.name, st)
+		}
+	}
+	// The controls: an ordinary local is retyped by the same two lines, and a
+	// private declared `-a` takes the literal because its kind is already the
+	// one being written.
+	out, st := answersRun(t, `zmodload zsh/param/private
+f1() { local at; at=(p q);      print "  1 ${(t)at} n=${#at}" }
+f2() { private -a at; at=(p q); print "  2 ${(t)at} n=${#at}" }
+f1; f2`)
+	want := "  1 array-local n=2\n  2 array-local-hide-special n=2\n"
+	if out != want || st != 0 {
+		t.Errorf("the controls = %q (status %d), want %q", out, st, want)
+	}
+}

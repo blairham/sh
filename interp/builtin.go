@@ -7189,6 +7189,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// interp/privatescope.go.
 		outer := r.declaringPrivate
 		r.declaringPrivate = true
+		r.privateDeclarationRan = true
 		defer func() { r.declaringPrivate = outer }()
 	}
 	// And a bare `+` with no valued operand turns it back off, whichever of

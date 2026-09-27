@@ -40,6 +40,21 @@ func TestAConditionalBranchWillNotBeginWithAnAssignment(t *testing.T) {
 		{"nested in the then", `print -- "$(( 1 ? 0 ? 5 : 6 : 3 ))"`, "6\n", 0},
 		{"nested in the else", `print -- "$(( 0 ? 1 : 0 ? 2 : 3 ))"`, "3\n", 0},
 		{"an assignment around the whole of it", `print -- "$(( x = 1 ? 2 : 3 ))"`, "2\n", 0},
+
+		// The then branch is below the sequence operator as well as below
+		// assignment, which is what makes this column's then level its own
+		// rather than the core's. Measured 2026-09-27 on 5.9.2 run `-f`:
+		// `$(( 1 ? 2 , 3 : 4 ))` is `':' expected` here and 3 in bash 5.3.20,
+		// ksh93u+ 2012-08-01 and BusyBox ash 1.37.0. The row under it is the
+		// control that keeps it off the operator itself — a comma written
+		// after the whole conditional is taken here exactly as it is there,
+		// so the refusal is about *where* the comma stood (#4776).
+		{
+			"a comma in the then branch", `print -- "$(( 1 ? 2 , 3 : 4 ))"`,
+			"zsh:1: bad math expression: ':' expected\n", 1,
+		},
+		{"a comma after the conditional", `print -- "$(( 1 ? 2 : 3 , 4 ))"`, "4\n", 0},
+		{"the sequence operator on its own", `print -- "$(( 1 , 2 ))"`, "2\n", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := answersRun(t, tc.src)

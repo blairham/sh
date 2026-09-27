@@ -763,13 +763,20 @@ func Dialect() syntax.Dialect {
 	// and not only where the escape is decoded: reading `\C` alone left `-a`
 	// standing and answered 0 (#4607).
 	d.ArithCharacterEscapes = syntax.ArithCharacterEscapesMaskedCaretMeta
-	// And the two branches of `c ? t : e` are read at the conditional level,
-	// so a bare assignment cannot begin one: measured 2026-09-26 on zsh 5.9.2,
-	// `$(( 1 ? x = 2 : 3 ))` is `':' expected` at 1 and `$(( 1 ? 2 : x = 3 ))`
-	// is `lvalue required`, where `$(( 1 ? (x = 2) : 3 ))` is 2. bash 5.3.20
-	// and ksh93u+ answer 2 to the first, which is why this is one column's
-	// grammar and not a shared refusal (#4680).
-	d.ArithConditionalBranchBelowAssignment = true
+	// And *both* branches of `c ? t : e` are read at the conditional level,
+	// so a bare assignment cannot begin either: measured 2026-09-26 on zsh
+	// 5.9.2, `$(( 1 ? x = 2 : 3 ))` is `':' expected` at 1 and
+	// `$(( 1 ? 2 : x = 3 ))` is `lvalue required`, where
+	// `$(( 1 ? (x = 2) : 3 ))` is 2. bash 5.3.20 and ksh93u+ answer 2 to the
+	// first, which is why this is one column's grammar and not a shared
+	// refusal (#4680).
+	//
+	// The then level is this column's alone, and the sequence operator is
+	// what shows it: `$(( 1 ? 2 , 3 : 4 ))` is `':' expected` here and 3 in
+	// bash, ksh93 and BusyBox ash, which read that branch at the loosest
+	// level C's grammar gives it. Measured 2026-09-27 (#4776).
+	d.ArithConditionalThenLevel = syntax.ArithConditionalBranchConditional
+	d.ArithConditionalElseLevel = syntax.ArithConditionalBranchConditional
 	// And a name with a `(` touching it is a *math function* call —
 	// `$(( mf(5) ))` — where `mf` was registered with `functions -M`. The
 	// only shell in the panel with the construct; the other five read the

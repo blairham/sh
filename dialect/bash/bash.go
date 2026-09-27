@@ -3593,6 +3593,9 @@ func Semantics() interp.Semantics {
 	// question of whether it is a justification or a fill cannot be put.
 	// unanswered WidthJustificationPrecedence: nor can a pair of them be
 	// written to rank — `declare -LR 5 a=7` is the same refusal, at the `L`.
+	// unanswered WidthNumberPrecedence: and no width number to rank either,
+	// since the letter that would carry one is refused before its digits are
+	// looked at (#4827).
 	// unanswered WidthLettersExcludeTheIntegerLetter: nor the integer letter
 	// beside one, for the same reason (#2859).
 	// unanswered NumericTypeLettersAreExclusive: the pair cannot be written.

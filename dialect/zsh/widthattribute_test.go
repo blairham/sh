@@ -394,3 +394,35 @@ func TestTwoWidthLettersReallyReadLeaveNoWidth(t *testing.T) {
 		})
 	}
 }
+
+// The **number** a declaration's width ends up with is the last one written
+// here, where ksh93 keeps the first — which is #4827's row read from this
+// side and is the reason that question is an axis of its own rather than a
+// second reading of the letter rule.
+//
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
+// script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`. The zero rows are
+// what say the answer is the order and not "a number already stored":
+// `-L4 -L0` really does fall back to the width the value teaches.
+func TestTheLastWidthNumberWritten(t *testing.T) {
+	if got := zsh.Semantics().WidthNumberPrecedence; got != interp.WidthNumberLastWrittenWins {
+		t.Errorf("WidthNumberPrecedence = %v, want the last number written", got)
+	}
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`typeset -L5 -L3 v=7; typeset -p v`, "typeset -L3 v=7\n"},
+		{`typeset -R5 -R3 v=7; typeset -p v`, "typeset -R3 v=7\n"},
+		{`typeset -Z5 -Z3 v=7; typeset -p v`, "typeset -Z3 v=7\n"},
+		{`typeset -L4 -L0 v=ab; typeset -p v`, "typeset -L2 v=ab\n"},
+		{`typeset -L0 -L4 v=ab; typeset -p v`, "typeset -L4 v=ab\n"},
+		{`typeset -R4 -R0 v=ab; typeset -p v`, "typeset -R2 v=ab\n"},
+		{`typeset -L0 v=abcdef; typeset -p v`, "typeset -L6 v=abcdef\n"},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			out, st := runZsh(t, dir, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

@@ -262,3 +262,60 @@ func TestTheWidthLettersAreNotExportsLetters(t *testing.T) {
 		}
 	}
 }
+
+// And the **number** goes the other way from the letter: the first one
+// written is the one the name keeps, whichever letter carried it.
+//
+// Measured 2026-09-27 on ksh93u+ 2012-08-01 (`sh (AT&T Research) 93u+
+// 2012-08-01`), a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`.
+// The last two rows are the ones the two rules have to be two rules to
+// produce: the `L` from the second option word presented in the number from
+// the first (#4827).
+func TestTheFirstWidthNumberWritten(t *testing.T) {
+	if got := ksh.Semantics().WidthNumberPrecedence; got != interp.WidthNumberFirstWrittenWins {
+		t.Errorf("WidthNumberPrecedence = %v, want the first number written", got)
+	}
+	for _, c := range []struct{ src, want string }{
+		{`typeset -L5 -Z3 a=7; typeset -p a`, "typeset -Z 5 -L 5 a='7    '\n"},
+		{`typeset -Z3 -L5 b=7; typeset -p b`, "typeset -Z 3 -L 3 b='7  '\n"},
+		{`typeset -R5 -Z3 e=7; typeset -p e`, "typeset -Z 5 -R 5 e=00007\n"},
+		{`typeset -Z3 -R5 f=7; typeset -p f`, "typeset -Z 3 -R 3 f=007\n"},
+		{`typeset -L5 -L3 g=7; typeset -p g`, "typeset -L 5 g='7    '\n"},
+		{`typeset -R5 -R3 h=7; typeset -p h`, "typeset -R 5 h='    7'\n"},
+		{`typeset -Z5 -Z3 i=7; typeset -p i`, "typeset -Z 5 -R 5 i=00007\n"},
+		{`typeset -L3 -L5 -L7 j=7; typeset -p j`, "typeset -L 3 j='7  '\n"},
+		{`typeset -R3 -L5 k=7; typeset -p k`, "typeset -L 3 k='7  '\n"},
+		{`typeset -L5 -Z3 -L1 l=7; typeset -p l`, "typeset -Z 5 -L 5 l='7    '\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}
+
+// The controls, and each agreed before the answer above existed.
+//
+// A letter written bare takes the standing number under either reading, so
+// those rows are evidence about neither; a written zero names no width at all
+// and leaves it to the first value; a second declaration starts the question
+// over; and the **precision** and the integer base take the *last* number
+// written in this very shell, which is what keeps the answer to the width
+// letters alone.
+func TestWhatTheFirstWidthNumberAnswerLeavesAlone(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`typeset -L -Z5 a=7; typeset -p a`, "typeset -Z 5 -L 5 a='7    '\n"},
+		{`typeset -Z5 -L b=7; typeset -p b`, "typeset -Z 5 -L 5 b='7    '\n"},
+		{`typeset -L3 -R c=7; typeset -p c`, "typeset -R 3 c='  7'\n"},
+		{`typeset -L4 -L d=abcd; typeset -p d`, "typeset -L 4 d=abcd\n"},
+		{`typeset -L0 -L4 e=ab; typeset -p e`, "typeset -L 4 e='ab  '\n"},
+		{`typeset -L4 -L0 f=ab; typeset -p f`, "typeset -L 4 f='ab  '\n"},
+		{`typeset -L5 g=ab; typeset -L3 g; typeset -p g`, "typeset -L 3 g='ab '\n"},
+		{`typeset -F5 -F3 h=1.5; typeset -p h`, "typeset -F 3 h=1.500\n"},
+		{`typeset -E5 -E3 i=1.5; typeset -p i`, "typeset -E 3 i=1.5\n"},
+		{`typeset -i8 -i10 j=9; typeset -p j`, "typeset -i j=9\n"},
+	} {
+		if out, st := kshOut(t, c.src); out != c.want || st != 0 {
+			t.Errorf("%s\n got %q at %d\nwant %q at 0", c.src, out, st, c.want)
+		}
+	}
+}

@@ -3827,6 +3827,14 @@ func Semantics() interp.Semantics {
 	// `typeset -L 5`, and the two-word `typeset -R -L 5 b=7` as `typeset -L
 	// 5 b='7    '`.
 	s.WidthJustificationPrecedence = interp.WidthJustificationLastWrittenWins
+	// And the **number** goes the other way: the first one written is the one
+	// the name keeps, whichever letter carried it. Measured 2026-09-27 under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` from a script file — `typeset -R3
+	// -L5 v=7` is `typeset -L 3 v='7  '`, the letter from the second option
+	// word and the number from the first, and `typeset -L5 -Z3 v=7` is
+	// `typeset -Z 5 -L 5`. So the two precedence rules point in opposite
+	// directions here and each needs its own axis (#4827).
+	s.WidthNumberPrecedence = interp.WidthNumberFirstWrittenWins
 	// And a width letter cannot stand beside the integer one: measured,
 	// `typeset -iL 5 a=7`, `typeset -Li 5 a=7`, `typeset -iZ 5 a=7` and
 	// `integer -L 5 a=ab` are all typeset's whole usage block at 2, and the

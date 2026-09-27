@@ -375,6 +375,106 @@ func (p WidthJustificationPrecedencePolicy) String() string {
 	return "unspecified"
 }
 
+// WidthNumberPrecedencePolicy is which of a declaration's width **numbers**
+// the name ends up with, where more than one letter carried one.
+//
+// A separate question from WidthJustificationPrecedence, and the two point in
+// opposite directions in one column, which is why they are two fields: ksh93
+// takes the **last letter** written and the **first number** written, so
+// `typeset -R3 -L5 v=7` is `typeset -L 3` there — the `L` from the second
+// option word and the `3` from the first.
+//
+// A written zero names no number under either reading: it is the spelling
+// that leaves the width to be learned from the first value — `typeset -L 0
+// i=abcd` lists as `typeset -L4 i=abcd` in both columns — so it neither takes
+// the first-written slot nor is taken as one.
+type WidthNumberPrecedencePolicy int
+
+const (
+	// WidthNumberPrecedenceUnspecified is no answer, held by the dialects
+	// that have no width letters to carry a number.
+	WidthNumberPrecedenceUnspecified WidthNumberPrecedencePolicy = iota
+
+	// WidthNumberLastWrittenWins is zsh's: each number written replaces the
+	// one before it, and the name ends up with the last. Measured 2026-09-27
+	// on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a script file
+	// under `env -i PATH=/usr/bin:/bin LC_ALL=C`, read back with
+	// `typeset -p`:
+	//
+	//	typeset -L5 -L3 v=7     typeset -L3
+	//	typeset -R5 -R3 v=7     typeset -R3
+	//	typeset -Z5 -Z3 v=7     typeset -Z3
+	//	typeset -L4 -L0 v=ab    typeset -L2   the zero leaves it to the value
+	//	typeset -L0 -L4 v=ab    typeset -L4
+	//
+	// Which number the *pair* `L`/`Z` takes is a rule on top of this one and
+	// not a second reading of it — there the justification's number is the
+	// one that counts, whether or not it was written last. See
+	// declaredWidthNumber.
+	WidthNumberLastWrittenWins
+
+	// WidthNumberFirstWrittenWins is ksh93's: the first number written on the
+	// declaration is the one the name keeps, whichever letter carried it and
+	// whatever is written after it.
+	//
+	// Measured 2026-09-27 on ksh93u+ 2012-08-01 (`sh (AT&T Research) 93u+
+	// 2012-08-01`), a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`,
+	// read back with `typeset -p` and `·` for a blank:
+	//
+	//	typeset -L5 -Z3 v=7      typeset -Z 5 -L 5 v='7····'
+	//	typeset -Z3 -L5 v=7      typeset -Z 3 -L 3 v='7··'
+	//	typeset -R5 -Z3 v=7      typeset -Z 5 -R 5 v=00007
+	//	typeset -Z3 -R5 v=7      typeset -Z 3 -R 3 v=007
+	//	typeset -L5 -L3 v=7      typeset -L 5 v='7····'
+	//	typeset -R5 -R3 v=7      typeset -R 5 v='····7'
+	//	typeset -Z5 -Z3 v=7      typeset -Z 5 -R 5 v=00007
+	//	typeset -R3 -L5 v=7      typeset -L 3 v='7··'
+	//	typeset -L5 -Z3 -L1 v=7  typeset -Z 5 -L 5 v='7····'
+	//	typeset -L3 -L5 -L7 v=7  typeset -L 3 v='7··'
+	//
+	// The last four are what say the two rules are one each rather than one
+	// between them: the **letter** is the last written throughout — see
+	// WidthJustificationLastWrittenWins — and the number is not.
+	//
+	// The zero rows and the letters written bare are the controls, and they
+	// agreed before this value existed:
+	//
+	//	typeset -L0 -L4 v=ab     typeset -L 4 v='ab··'
+	//	typeset -L4 -L0 v=ab     typeset -L 4 v='ab··'
+	//	typeset -L -Z5 v=7       typeset -Z 5 -L 5 v='7····'
+	//	typeset -Z5 -L v=7       typeset -Z 5 -L 5 v='7····'
+	//	typeset -L3 -R v=7       typeset -R 3 v='··7'
+	//	typeset -L4 -L v=abcd    typeset -L 4 v=abcd
+	//
+	// — a letter with no number of its own takes the standing one under
+	// either reading, so those rows are produced identically by both and are
+	// evidence about neither.
+	WidthNumberFirstWrittenWins
+)
+
+func (p WidthNumberPrecedencePolicy) String() string {
+	switch p {
+	case WidthNumberLastWrittenWins:
+		return "the last number written"
+	case WidthNumberFirstWrittenWins:
+		return "the first number written"
+	}
+	return "unspecified"
+}
+
+// widthNumberIsSettled reports whether a width number already written on this
+// declaration is the one the name keeps, so a later one is not read.
+//
+// The zero is here rather than at the call site because it is the same fact
+// on both sides of the rule: a written zero names no width, so it does not
+// settle the question and it does not answer it either.
+func (r *Runner) widthNumberIsSettled(f *declareFlags, n int) bool {
+	if r.sem().WidthNumberPrecedence != WidthNumberFirstWrittenWins {
+		return false
+	}
+	return f.widthNamed || n == 0
+}
+
 // recordWidthLetter is one width letter arriving on a declaration.
 //
 // Three letters, two questions and one field, which is why the whole of it is
@@ -541,13 +641,14 @@ func (r *Runner) widthZerosUnwound(name string) {
 // — the last number an `L` or an `R` named, and the last number written at
 // all where neither named one, which is the last two rows.
 //
-// **The other reading takes the first number written and this engine does not
-// model that yet.** Measured in the same run on ksh93u+ 2012-08-01: `typeset
-// -L5 -Z3 a=7` is `typeset -Z 5 -L 5`, `typeset -Z3 -L5 b=7` is `typeset -Z 3
-// -L 3`, `typeset -R5 -Z3` is 5 and `typeset -Z3 -R5` is 3 — the first number
-// whichever letter carried it, where this shell takes the last. That is a
-// row of its own rather than something to fold in here on a guess, and it is
-// deliberately left as this function found it.
+// **Which number is standing at all is asked one step earlier**, in
+// readOptionNumber, because it is a rule about the option words and not about
+// the letters a name ends up with: ksh93 keeps the **first** number written
+// and zsh the last. See Semantics.WidthNumberPrecedence, where the rows are.
+// The branch above is on top of that one rather than a second reading of it —
+// it picks the justification's number out of a declaration that wrote two,
+// and only the column where the fill stands beside a justification has two to
+// pick from (#4827).
 func (r *Runner) declaredWidthNumber(f declareFlags) (int, bool) {
 	if f.justificationNamed &&
 		r.sem().DeclareZeroFillLetter == DeclareZeroFillLetterCombinesWithTheLeftJustification {

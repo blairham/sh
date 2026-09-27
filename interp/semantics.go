@@ -13483,6 +13483,13 @@ type Semantics struct {
 	// writing both ends up with — see WidthJustificationPrecedencePolicy.
 	WidthJustificationPrecedence WidthJustificationPrecedencePolicy
 
+	// WidthNumberPrecedence is which of a declaration's width numbers the
+	// name ends up with, where more than one letter carried one — see
+	// WidthNumberPrecedencePolicy. A separate field from the one above
+	// because the two point opposite ways in ksh93: the last letter written
+	// and the first number.
+	WidthNumberPrecedence WidthNumberPrecedencePolicy
+
 	// WidthLettersExcludeTheIntegerLetter refuses a declaration carrying
 	// both the integer letter and one of the width letters, with the
 	// builtin's usage block.

@@ -42,7 +42,7 @@ func TestTheIdleTimeIsMeasuredFromTheAccessTime(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			// Opening the file does not read from it, so the access time is
 			// still the one Chtimes wrote. Asserted rather than assumed: a
 			// platform that stamped it on open would make every row zero and

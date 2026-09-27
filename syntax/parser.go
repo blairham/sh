@@ -1498,12 +1498,32 @@ func (p *Parser) NextLine() (*File, bool) {
 	f.Substitutions, p.lineSubsts = p.lineSubsts, nil
 	f.CarriedHeredocs, p.lex.carried = p.lex.carried, nil
 	if settled := p.lex.settledBodyRefusal; settled != nil {
-		p.lex.settledBodyRefusal = nil
+		refusesTheLine := p.lex.settledRefusesTheLine
+		p.lex.settledBodyRefusal, p.lex.settledRefusesTheLine = nil, false
 		// A substitution earlier in the line whose body the grammar refused,
 		// in a dialect where that settles the read. The line did not read, so
 		// what stopped it is text the shell would never have reached — the
 		// body is what it is reporting. See Lexer.settledBodyRefusal.
-		if se, ok := p.err.(*Error); ok && settled.Pos.Offset < se.Pos.Offset {
+		switch se, ok := p.err.(*Error); {
+		case p.err == nil && refusesTheLine && !p.substitutionBody:
+			// **The line read, and it still does not run.** The body was
+			// refused at the closing parenthesis, so the construct closed and
+			// the rest of the line read around it — and nothing downstream
+			// would have said a word until the substitution was expanded,
+			// which is after the commands written in front of it have run.
+			// The shell this is written for refuses the line instead:
+			// measured 2026-09-27, `echo b; v=$(for); echo a` writes no `b`
+			// on zsh 5.9.2. See Lexer.bodyRefusalRefusesTheLine.
+			//
+			// **Not inside a body**, which is the other half of the same
+			// rule: text an interpreter handed over at expansion time is a
+			// body already cut out of a script, so what a shell complains
+			// about there is the construct *around* it and taking the read
+			// here writes this complaint in its place — `cat <(v=$(for))`
+			// lost the process substitution's own message that way. See
+			// Parser.InsideASubstitution, which is how a caller says so.
+			p.err = settled
+		case ok && settled.Pos.Offset < se.Pos.Offset:
 			p.err = settled
 		}
 	}

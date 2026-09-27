@@ -122,6 +122,15 @@ type Lexer struct {
 	// *after* it — see Parser.NextLine. A line that read is a line whose
 	// closer was found where it should have been.
 	settledBodyRefusal *Error
+	// settledRefusesTheLine says the refusal above is one the construct
+	// closed around: the body was refused at the closing parenthesis, so the
+	// line reads and still has an answer. It is the half of the rule
+	// [Parser.NextLine] raises where nothing else did, and it is separate
+	// from the refusal itself because the older population — a body refused
+	// at a token, where the scan stops looking — is recorded for every
+	// dialect with the rule and must keep every wording it already has. See
+	// [Lexer.bodyRefusalRefusesTheLine].
+	settledRefusesTheLine bool
 	// lastBodyRefusal is what the most recent failed read of a program
 	// between parentheses had to say for itself, waiting for scanParens to
 	// run out of the same input. Nil where that read raised nothing — a body
@@ -4142,7 +4151,7 @@ func skipQuotedFrom(src string, i int) int {
 //
 // The first one only, which is the rule every refusal here follows: the
 // earliest thing that went wrong is what a shell reports.
-func (l *Lexer) settleBodyRefusal(open Pos, kind SpanKind, body *Error) {
+func (l *Lexer) settleBodyRefusal(open Pos, kind SpanKind, body *Error, refusesTheLine bool) {
 	if l.settledBodyRefusal != nil {
 		return
 	}
@@ -4151,7 +4160,114 @@ func (l *Lexer) settleBodyRefusal(open Pos, kind SpanKind, body *Error) {
 		return
 	}
 	e.BodyRefusal = body
+	l.settledRefusesTheLine = refusesTheLine
+	if refusesTheLine {
+		l.numberSettledRefusalAtItsBody(e, body)
+	}
 	l.settledBodyRefusal = e
+}
+
+// numberSettledRefusalAtItsBody puts the settled refusal where a construct
+// that never closed would have run out: at the end of the line the body's read
+// stopped on, which is the line **after** the one the body is blamed at.
+//
+// Measured 2026-09-27 on zsh 5.9.2 — `v=$(echo hi; for)` on line 2 of a
+// three-line file is “s.sh:2: parse error near `)' “ and then the
+// substitution at `s.sh:3:`, and `v=$(  # c` followed by `for)`, whose body
+// runs onto the next line, moves both down with it.
+//
+// The refusal's own line and not this lexer's, which is the opener's: the body
+// is read by a lexer of its own, so a body that ran onto later lines has moved
+// nothing here.
+//
+// And never past the end of the text, which is what separates the two routes
+// into borrowed text: `eval 'echo b; v=$(for); echo a'` writes both messages
+// at `(eval):1:` because there is no line 2 to end on, where the same line in
+// a sourced file — one newline longer — writes the second at line 2.
+//
+// Only for the refusal that refuses the line. [Lexer.failUnmatched] counts
+// from the end of the *input*, which is what a construct that really did run
+// out ran out on, and every dialect reading a body with its line keeps that.
+// See Error.EndLine and Error.EofLine, which are what a dialect reads.
+func (l *Lexer) numberSettledRefusalAtItsBody(e, body *Error) {
+	end := l.line + strings.Count(l.src[l.off:], "\n")
+	e.EndLine = min(int(body.Pos.Line)+1, end)
+	e.EofLine = e.EndLine
+}
+
+// bodyRefusalRefusesTheLine reports whether the grammar's refusal of a
+// `$( … )` body is the line's answer, so that nothing written on that line
+// runs.
+//
+// **Wider than [Lexer.bodyRefusalSettlesTheRead], and the two are different
+// questions**, which is what #4859 is. That one asks whether the read should
+// stop looking for a closing parenthesis; this one asks only whether the
+// **line** is dead once the body has been refused. A body refused at the
+// closer closes the construct — the `)` is right there — so the scan is right
+// to find it and every wording downstream is right to count from it. What is
+// wrong without this is that the line then reads, and a shell that reads it
+// runs the commands written in front of the substitution before anything
+// notices, because the body is not read again until the word is expanded.
+//
+// Measured 2026-09-27 on zsh 5.9.2, each as the one-line script file
+// `echo b; v=$(X); echo a`. `b` is written for a body the reference defers
+// and not for one it refuses:
+//
+//	$(for)  $(case)  $({)  $(echo x |)  $(select)  $(repeat)    no b
+//	$(if)  $(echo &&)  $(echo ;)  $(echo hi)  $(!)              b
+//
+// The first row is refused at the closing parenthesis under every emulation
+// mode, which is why [Lexer.bodyRefusalSettlesTheRead] — reading the closer
+// as a token the construct legitimately ended on — passed them through.
+// `$(if)` is the deferred shape and is a dialect's answer rather than a rule:
+// see [Dialect.SubstitutionBodyRefusesAnUnfinishedCondition], whose option
+// moves it.
+//
+// **Unquoted text only**, which is a limit on this shell rather than on the
+// rule. Inside a quote the reference's second message is the *quote's* —
+// `echo "x $(for) y"` is “parse error near `)' “ and then `unmatched "`,
+// because the read it stopped never found the closing parenthesis and so
+// never found the closing quote either. Here the scan does find both, so
+// refusing the line writes the substitution's complaint where the quote's
+// belongs. The same holds for a parameter expansion's word. Those rows are
+// left where they already are — the body's refusal reaches them from the read
+// that runs the word, with the text in front of the substitution having run
+// first — and they are what is left of #4859.
+func (l *Lexer) bodyRefusalRefusesTheLine() bool {
+	if !l.dialect.SubstitutionBodyRefusalEndsTheRead ||
+		l.dialect.SubstitutionBodyRead != SubstitutionBodyReadWhenItRuns {
+		// **A dialect that reads the body with the line has nothing to add**,
+		// and this is the gate the widening needs that the rule it widens does
+		// not. There the parser reads the same body again as part of the word,
+		// so the line is already refused where it stands and in the wording
+		// that read produces — ``s.sh: line 2: syntax error near unexpected
+		// token `)' `` on bash 5.3.20, which is what the panel is pinned to.
+		// Standing a settled refusal in front of that replaces a measured
+		// message with this construct's, and `unexpected EOF while looking for
+		// matching `)'` is what came out. See Dialect.SubstitutionBodyRead.
+		return false
+	}
+	e := l.lastBodyRefusal
+	if e == nil || e.Kind != ErrUnexpected || l.lastBodyRanOut {
+		return false
+	}
+	if e.Token == closingOf(CommandSubst) {
+		if e.FuncBody {
+			// A function's body that never came is the one refusal at the
+			// closer this shell numbers from the **parentheses** rather than
+			// placing in the file, and the closed and unclosed routes to it
+			// are measurably numbered differently: `v=$(echo hi; foo())`
+			// writes the second message at `s.sh:1:` where
+			// `v=$(echo hi; foo()` writes it with no line at all. See
+			// Diagnostics.bodyRefusalWrittenFirst, which holds both. Refusing
+			// the line here takes the closed shape down the unclosed shape's
+			// route and loses that line, so it is left where it already
+			// matches — which costs the `b` above for this one body (#4859).
+			return false
+		}
+		return !l.lastBodyWaitedForAThen
+	}
+	return false
 }
 
 func (l *Lexer) bodyRefusalSettlesTheRead() bool {
@@ -4278,10 +4394,11 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			l.carryHeredocsOut(kind, open)
 			return Span{Kind: kind, Value: value, Quoting: q, Pos: open, Comments: l.bodyComments(kind)}
 		}
-		if kind == CommandSubst && l.bodyRefusalSettlesTheRead() {
+		switch {
+		case kind == CommandSubst && l.bodyRefusalSettlesTheRead():
 			// Kept in case the line does not read. See
 			// Lexer.settledBodyRefusal.
-			l.settleBodyRefusal(open, kind, l.lastBodyRefusal)
+			l.settleBodyRefusal(open, kind, l.lastBodyRefusal, false)
 			// And where nothing downstream will refuse the line, the scan
 			// has to stop looking for the closer itself. A dialect that
 			// reads the body **with its line** does not need that: the
@@ -4294,6 +4411,12 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 			// substitution on that line have run. See
 			// Dialect.SubstitutionBodyRefusalEndsTheRead.
 			closerSettled = l.dialect.SubstitutionBodyRead == SubstitutionBodyReadWhenItRuns
+		case kind == CommandSubst && q == Unquoted && l.bodyRefusalRefusesTheLine():
+			// The construct **did** close — the refusal is on its own closing
+			// parenthesis — so the scan is left alone and every wording fed by
+			// it is unchanged. What is kept is the line's answer, which is
+			// that it has one. See Lexer.bodyRefusalRefusesTheLine.
+			l.settleBodyRefusal(open, kind, l.lastBodyRefusal, true)
 		}
 		// Not something the parser could read — half a line at a prompt,
 		// most often. Counting is the older answer and is kept for it: it

@@ -309,6 +309,20 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 		chain, innermost := r.borrowedStack(*d, r.locationFileOrName())
 		r.errf("%s%s: %s\n", chain, innermost, d.ParseFailure(err))
 	} else {
+		if body, at, _, ok := d.bodyRefusalToWriteFirst(err); ok {
+			// The program between the delimiters never got to say what was
+			// wrong with it, and one dialect says it first — here as well as
+			// on the front end's own route, which is where the rule was
+			// written and where it stayed. See
+			// Diagnostics.bodyRefusalToWriteFirst, and
+			// UnterminatedSubstitutionWritesItsBodysRefusal for the shell.
+			bodyLine := at
+			if bodyLine < 0 {
+				bodyLine = line
+			}
+			r.errf("%s\n", d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
+				bodyLine+r.lineBase+r.lineOrigin, d.ParseFailure(body)))
+		}
 		r.errf("%s\n", d.SourceReport(s.naming(*d), r.name(), s.sourceName(*d),
 			line, d.ParseFailure(err)))
 	}

@@ -10476,16 +10476,41 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 // from its parentheses rather than placed in the file: `v=$(echo hi; ()` is
 // `s.sh:1:` twice over. See MissingFuncBodyCountsFromItsParens.
 func (d Diagnostics) bodyRefusalWrittenFirst(name, input string, err error) (string, int, bool) {
+	body, at, quoteAt, ok := d.bodyRefusalToWriteFirst(err)
+	if !ok {
+		return "", 0, false
+	}
+	if at < 0 {
+		named := d
+		named.Location = LocationNameOnly
+		return named.ReportFrom(name, input, 1, named.ParseFailure(body)+"\n"), -1, true
+	}
+	return d.ReportFrom(name, input, at, d.ParseFailure(body)+"\n"), quoteAt, true
+}
+
+// bodyRefusalToWriteFirst is the decision bodyRefusalWrittenFirst renders:
+// which refusal goes in front, the line to write it at — -1 for the one that
+// is written with no line — and where the complaint under it then stands.
+//
+// Split out because a parse failure is located in two places and borrowed
+// text goes to the other one: `eval` and `.` render through
+// [Diagnostics.SourceReport], which names the text as well as the shell, so
+// they cannot share the rendering here and must share the decision. They did
+// not, and the first message was simply missing from both of them — measured
+// 2026-09-27, `eval 'echo b; v=$(for); echo a'` on zsh 5.9.2 writes
+// “(eval):1: parse error near `)' “ and then the substitution, where this
+// wrote the substitution alone.
+func (d Diagnostics) bodyRefusalToWriteFirst(err error) (body *syntax.Error, at, quoteAt int, ok bool) {
 	var se *syntax.Error
 	if !d.UnterminatedSubstitutionWritesItsBodysRefusal || !errors.As(err, &se) {
-		return "", 0, false
+		return nil, 0, 0, false
 	}
-	body := se.BodyRefusal
+	body = se.BodyRefusal
 	if body == nil {
-		return "", 0, false
+		return nil, 0, 0, false
 	}
 	counted, isFuncBody := d.missingFuncBodyLine(body)
-	at := d.ParseFailureLine(body)
+	at = d.ParseFailureLine(body)
 	if isFuncBody && counted == 0 {
 		// The refusal says where it was by not saying, and so does the quote
 		// under it: -1 is how that is told apart from "leave the quote where
@@ -10494,18 +10519,15 @@ func (d Diagnostics) bodyRefusalWrittenFirst(name, input string, err error) (str
 		// Runner.substFailureLocatedByNameAlone — which is measured rather
 		// than an inconsistency: `v=$(echo hi; foo())` is `s.sh:1:` for the
 		// quote and `v=$(echo hi; foo()` is bare.
-		named := d
-		named.Location = LocationNameOnly
-		return named.ReportFrom(name, input, 1, named.ParseFailure(body)+"\n"), -1, true
+		return body, -1, -1, true
 	}
 	if at == 0 {
 		at = 1
 	}
-	quoteAt := 0
 	if isFuncBody {
 		quoteAt = at
 	}
-	return d.ReportFrom(name, input, at, d.ParseFailure(body)+"\n"), quoteAt, true
+	return body, at, quoteAt, true
 }
 
 // substitutionBodyReplacesTheQuote is the body refusal that stands in for an

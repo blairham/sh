@@ -50,6 +50,26 @@ import (
 // measured. A Runner built here is handed no program text, so it writes the
 // one line; TestASubstitutionRefusalQuotesTheScript runs the front end that
 // hands it over (#3331).
+// zshClosesTheLine is what that preset writes for a body refused at the
+// closing parenthesis: the closer, and then the **line's** own complaint
+// under it.
+//
+// The second message is there because the refusal is the line's answer in
+// that shell — the text written in front of the substitution never runs — so
+// the construct is reported as one that never closed, on the line after the
+// body's. Measured 2026-09-27 on zsh 5.9.2 over
+// `printf 'start\n'` followed by `v=$(echo hi; X)`: “s.sh:2: parse error
+// near `)' “ and then “s.sh:3: parse error near `v=$(echo hi; X)' “, with
+// `start` written and nothing after it. See
+// syntax.Lexer.bodyRefusalRefusesTheLine (#4859).
+//
+// near is the text the second message quotes, which this shell cuts at twenty
+// bytes of the script and follows with an ellipsis.
+func zshClosesTheLine(near string) string {
+	return "zsh:2: parse error near `)'\n" +
+		"zsh:3: parse error near `" + near + "'\n"
+}
+
 func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 	for _, c := range []struct {
 		body string
@@ -63,7 +83,7 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			body: "for",
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
-				"zsh":   "zsh:2: parse error near `)'\n",
+				"zsh":   zshClosesTheLine("v=$(echo hi; for)"),
 				"ksh":   "ksh: line 2: syntax error at line 2: `)' unexpected\n",
 				"dash":  "dash: 2: Syntax error: Bad for loop variable\n",
 				"ash":   "ash: syntax error: bad for loop variable\n",
@@ -117,19 +137,18 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 		{
 			body: "if true; then :; else",
 			want: map[string]string{
-				// The closer, and the quote that follows it in the real
-				// shell is absent here for the reason every other row's is:
-				// this harness hands the runner no program text. What the
-				// row pins is that the *first* message is the closer, which
-				// is the half that moves between an `elif` and an `else`.
-				"zsh": "zsh:2: parse error near `)'\n",
+				// The closer, and then the substitution's own complaint.
+				// What the row pins is that the *first* message is the
+				// closer, which is the half that moves between an `elif` and
+				// an `else`.
+				"zsh": zshClosesTheLine("v=$(echo hi; if true..."),
 			},
 		},
 		{
 			body: "{",
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
-				"zsh":   "zsh:2: parse error near `)'\n",
+				"zsh":   zshClosesTheLine("v=$(echo hi; {)"),
 				"ksh":   "ksh: line 2: syntax error at line 2: `)' unexpected\n",
 				"dash":  "dash: 2: Syntax error: \")\" unexpected\n",
 				"ash":   "ash: syntax error: unexpected \")\"\n",
@@ -168,7 +187,7 @@ func TestASubstitutionRefusalNamesTheCloser(t *testing.T) {
 			body: "echo x |",
 			want: map[string]string{
 				"bash":  "bash: line 2: syntax error near unexpected token `)'\n",
-				"zsh":   "zsh:2: parse error near `)'\n",
+				"zsh":   zshClosesTheLine("v=$(echo hi; echo x ..."),
 				"ksh":   "ksh: line 2: syntax error at line 2: `)' unexpected\n",
 				"dash":  "dash: 2: Syntax error: \")\" unexpected\n",
 				"ash":   "ash: syntax error: unexpected \")\"\n",

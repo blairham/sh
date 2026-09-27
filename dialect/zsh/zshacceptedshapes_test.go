@@ -126,10 +126,10 @@ func TestTheNeighborsThatStayRefused(t *testing.T) {
 // settles the read here too — see
 // syntax.Dialect.SubstitutionBodyRefusalEndsTheRead.
 //
-// The `|` row is the one still on the older route, because its body's read
-// stops at the closing parenthesis itself and that is carved out of the rule
-// — see syntax.Lexer.bodyRefusalSettlesTheRead, where the carve-out and what
-// it is still wider than are written down.
+// The `|` row joined it at #4859: its body's read stops at the closing
+// parenthesis, which the older rule carved out and which now refuses the line
+// it is written on — see syntax.Lexer.bodyRefusalRefusesTheLine, where the
+// measurement is.
 //
 // So the rows assert the refusal and say which route each takes, rather than
 // asserting the route for both: what #3898 is about is that neither shape is
@@ -139,7 +139,7 @@ func TestASubstitutionBodyStillRefusesTheOtherOperators(t *testing.T) {
 		name, src string
 		atParse   bool
 	}{
-		{"a pipeline never takes it", `v=$(echo x |); print -r -- "[$v]"`, false},
+		{"a pipeline never takes it", `v=$(echo x |); print -r -- "[$v]"`, true},
 		{"nor does a case terminator", `v=$(echo x ;;); print -r -- "[$v]"`, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/dialecttest"
+	"github.com/blairham/sh/syntax"
 )
 
 // A control character in the script text a diagnostic quotes back (#3563).
@@ -74,7 +75,19 @@ func TestTheCutCountsTheScriptsBytesAndNotTheRenderings(t *testing.T) {
 // script line reads from.
 func splitRunWithText(t *testing.T, p dialecttest.Preset, src string) (out, errs string, status int) {
 	t.Helper()
-	f := p.Parse(t, src)
+	f, perr := syntax.Parse(src, p.Dialect())
+	if perr != nil {
+		// The body refuses the line it is written on in this dialect, so
+		// there is nothing to run and the whole message comes from the front
+		// end's own route. The first line of the script is still written,
+		// because a script is read a line at a time — the point of the case
+		// is the *second* message either way, and it is the same message on
+		// both routes. See syntax.Lexer.bodyRefusalRefusesTheLine (#4859).
+		d := p.Diagnostics().ForScript()
+		first, _, _ := strings.Cut(src, "\n")
+		out, _, _ = p.Combined(t, dialecttest.Base{}, first+"\n")
+		return out, d.ParseDiagnostic("./s.sh", "", perr, src), 1
+	}
 	var o, e strings.Builder
 	r := p.Runner(dialecttest.Base{Stdout: &o, Stderr: &e})
 	r.SetProgramText(src)

@@ -246,7 +246,17 @@ func (p procSubPipe) waitAndFlush() {
 // of them and a parse failure is reported the same way: the word produces
 // nothing and the expansion is in error.
 func (r *Runner) substBody(span syntax.Span) (*syntax.File, bool) {
-	f, perr := syntax.Parse(r.substSource(span), r.bodyDialect(span))
+	// The text is a substitution's body, already cut out of the script it came
+	// from, which is the same thing Runner.readSubstBody tells the read that
+	// runs a `$( )` body — and it is what stops a body refused inside *this*
+	// text settling the read of it, where what a shell complains about is the
+	// construct around it. Told here because this is the other reader of a
+	// body and the two must not disagree: without it, `cat <(v=$(for))` lost
+	// the complaint about the process substitution and kept only the inner
+	// one's. See syntax.Parser.InsideASubstitution.
+	sub := syntax.NewParser(r.substSource(span), r.bodyDialect(span))
+	sub.InsideASubstitution()
+	f, perr := sub.Parse(), sub.Err()
 	if perr != nil {
 		r.diagf("%s\n", r.diag().ParseFailure(perr))
 		r.expandErr = true

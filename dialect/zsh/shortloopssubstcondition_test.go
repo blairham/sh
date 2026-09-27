@@ -111,15 +111,18 @@ func TestAnEmulationReachesAnUnfinishedConditionThroughTheOption(t *testing.T) {
 	})
 }
 
-// And the rows that defeated the model, pinned at today's behavior so that a
-// change which moved them would have to say so.
+// And the rest of the closer's population, which is refused with the line
+// under every mode since #4859 — this test is the row that said it was not.
 //
-// The reference refuses every one of these **with the line** under every mode
-// — `$(for)`, `$(case x)`, `$({)`, `$(select)`, `$(repeat)` and `$(echo |)` —
-// and this shell takes them, because the carve-out an unfinished condition is
-// itself carved out of defers any refusal that lands on the closing
-// parenthesis. Closing that is #4859, and what it costs is written there.
-func TestTheRestOfTheClosersPopulationIsStillDeferredHere(t *testing.T) {
+// The reference refuses every one of these with the line: `$(for)`,
+// `$(case x)`, `$({)`, `$(select)`, `$(repeat)`, `$(echo |)` and the three
+// `if` shapes the option does not reach. Measured 2026-09-27 on zsh 5.9.2
+// over `echo b; v=$(X); echo a` as a script file, with `setopt shortloops`
+// and with `unsetopt shortloops` on the line above it: no `b` in any of the
+// eighteen columns. What the option still decides is the four rows above —
+// a condition short of its `then` — which is why it is narrower than the
+// rule it is carved out of.
+func TestTheRestOfTheClosersPopulationIsRefusedWithTheLine(t *testing.T) {
 	for _, body := range []string{
 		"for", "case x", "{", "select", "repeat", "echo |",
 		// And the three `if` shapes the option does **not** reach, which are
@@ -131,9 +134,8 @@ func TestTheRestOfTheClosersPopulationIsStillDeferredHere(t *testing.T) {
 		t.Run(body, func(t *testing.T) {
 			r := caseListRunner(t)
 			src := "echo b; v=$(" + body + "); echo a\n"
-			if !parsesHere(t, r, src) {
-				t.Errorf("$(%s) is refused with the line now — #4859 moved and this row is the news",
-					body)
+			if parsesHere(t, r, src) {
+				t.Errorf("$(%s) still parses, so the closer's population is deferred again", body)
 			}
 		})
 	}

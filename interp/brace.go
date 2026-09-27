@@ -272,6 +272,13 @@ func matchBraceAcross(spans []syntax.Span, open cursor) (cursor, bool) {
 // Runner.alternativesAfterExpansion.
 func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoints bool) ([][]syntax.Span, bool, bool) {
 	spans := w.Spans
+	if r.braceFieldRoute {
+		// The word has already been expanded, so there is no body to
+		// resolve: what an expansion produced is text in the field, and
+		// whether it is *syntax* is read off the run it arrived in. See
+		// interp/bracefields.go.
+		return r.fieldAlternatives(w, open, close)
+	}
 	if !spans[open.span].PidBrace {
 		// Asked before the range, because a produced comma beats a produced
 		// range exactly as a written one beats a written range, and the body
@@ -319,11 +326,22 @@ func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoint
 // produced stands as spans of its own. One walk for both, so the depth rule,
 // the escape rule and what counts as a comma cannot drift apart.
 func alternativesInBody(body []syntax.Span) ([][]syntax.Span, bool) {
+	return alternativesInBodyRead(body, braceable)
+}
+
+// alternativesInBodyRead is alternativesInBody over a named set of spans.
+//
+// read says which spans are the group's *syntax*. It is braceable on the road
+// that finds the braces in the word the parse cut, and on the road that finds
+// them in the fields the word came to it is wider by exactly the runs an
+// expansion produced, in the column that reads a produced comma. See
+// interp/bracefields.go.
+func alternativesInBodyRead(body []syntax.Span, read func(syntax.Span) bool) ([][]syntax.Span, bool) {
 	var out [][]syntax.Span
 	depth := 0
 	from := cursor{0, 0}
 	for i, s := range body {
-		if !braceable(s) {
+		if !read(s) {
 			continue
 		}
 		v := s.Value
@@ -337,7 +355,7 @@ func alternativesInBody(body []syntax.Span) ([][]syntax.Span, bool) {
 				depth--
 			case ',':
 				if depth == 0 {
-					out = append(out, sliceSpans(body, from, cursor{i, j}))
+					out = append(out, sliceSpansRead(body, from, cursor{i, j}, read))
 					from = cursor{i, j + 1}
 				}
 			}
@@ -347,7 +365,7 @@ func alternativesInBody(body []syntax.Span) ([][]syntax.Span, bool) {
 		// `{a}` is not a brace expression and is left alone.
 		return nil, false
 	}
-	return append(out, sliceSpans(body, from, cursor{len(body), 0})), true
+	return append(out, sliceSpansRead(body, from, cursor{len(body), 0}, read)), true
 }
 
 // rangeAcross expands `{n..m}`, either from the literal text between the
@@ -356,7 +374,7 @@ func alternativesInBody(body []syntax.Span) ([][]syntax.Span, bool) {
 func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool) ([][]syntax.Span, bool) {
 	body := sliceSpans(w.Spans, next(open), close)
 	pos := w.Spans[open.span].Pos
-	if text, ok := literalBody(body); ok {
+	if text, ok := r.braceRangeText(body); ok {
 		alts, outcome := r.braceRange(text)
 		switch outcome {
 		case braceRangeCounted:
@@ -366,7 +384,10 @@ func (r *Runner) rangeAcross(w *syntax.Word, open, close cursor, endpoints bool)
 		}
 		return nil, false
 	}
-	if !endpoints || !rangeShaped(body) {
+	if !endpoints || r.braceFieldRoute || !rangeShaped(body) {
+		// Never on the road that rebuilt this body from a finished field:
+		// the expansions in it have already run, and the text they left is
+		// what literalBodyRead above already read. See braceRangeReads.
 		return nil, false
 	}
 	if !r.askBrace(r.sem().BraceRangeEndpointsExpanded,
@@ -410,9 +431,15 @@ func collapsedRange(text string, pos syntax.Pos) [][]syntax.Span {
 // literals, which is the only body a range can be read from without expanding
 // anything. A quoted or substituted span makes it the other case.
 func literalBody(body []syntax.Span) (string, bool) {
+	return literalBodyRead(body, braceable)
+}
+
+// literalBodyRead is literalBody over a named set of spans. See
+// alternativesInBodyRead.
+func literalBodyRead(body []syntax.Span, read func(syntax.Span) bool) (string, bool) {
 	var b strings.Builder
 	for _, s := range body {
-		if !braceable(s) {
+		if !read(s) {
 			return "", false
 		}
 		b.WriteString(s.Value)
@@ -428,9 +455,15 @@ func literalBody(body []syntax.Span) (string, bool) {
 // Asking first is also what keeps a list's expansions from being run twice —
 // nothing here may expand a body that a range will not read.
 func rangeShaped(body []syntax.Span) bool {
+	return rangeShapedRead(body, braceable)
+}
+
+// rangeShapedRead is rangeShaped over a named set of spans. See
+// alternativesInBodyRead.
+func rangeShapedRead(body []syntax.Span, read func(syntax.Span) bool) bool {
 	depth, dots := 0, false
 	for _, s := range body {
-		if !braceable(s) {
+		if !read(s) {
 			continue
 		}
 		v := s.Value
@@ -534,10 +567,17 @@ func inertInAWord(c rune) bool {
 // sliceSpans copies the spans between two cursors, splitting the ones at the
 // ends.
 func sliceSpans(spans []syntax.Span, from, to cursor) []syntax.Span {
+	return sliceSpansRead(spans, from, to, braceable)
+}
+
+// sliceSpansRead is sliceSpans over a named set of spans: read says which
+// ones a cursor can point *into*, which is the same set the scan that made
+// the cursor was walking. See alternativesInBodyRead.
+func sliceSpansRead(spans []syntax.Span, from, to cursor, read func(syntax.Span) bool) []syntax.Span {
 	var out []syntax.Span
 	for i := from.span; i <= to.span && i < len(spans); i++ {
 		s := spans[i]
-		if !braceable(s) {
+		if !read(s) {
 			if i > from.span || from.off == 0 {
 				out = append(out, s)
 			}

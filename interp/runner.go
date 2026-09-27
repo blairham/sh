@@ -4138,6 +4138,12 @@ type Runner struct {
 	// word nested inside the name is not read as a name of its own. See
 	// interp/braceemptyalt.go.
 	braceName bool
+	// braceFieldRoute says the word being brace-expanded is a *field* the
+	// word already came to, rebuilt as spans, rather than the word the parse
+	// cut. The brace machinery is the same either way; what changes is which
+	// runs of it are syntax, since there is nothing left to expand. See
+	// interp/bracefields.go.
+	braceFieldRoute bool
 
 	// globSuspended is pathname expansion switched off for one nested
 	// expansion, from the inside: the contexts where a word substitutes as

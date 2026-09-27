@@ -67,7 +67,14 @@ func (r *Runner) expandWordEscaped(w *syntax.Word) []string {
 	// question, so there is no answer being stepped over — and it is worth
 	// doing because the slice was a fifth of the allocations in the gate's
 	// workload (#1403), which has no brace in it.
-	if _, hasBrace := findBraceFrom(w.Spans, cursor{0, 0}, '{'); hasBrace {
+	_, hasBrace := findBraceFrom(w.Spans, cursor{0, 0}, '{')
+	if hasBrace && r.braceFieldsFirst(w) {
+		// The other reading: the word is expanded once with its braces as
+		// inert text, and the braces are found in the fields that came out.
+		// See interp/bracefields.go.
+		return r.expandFieldsThenBraces(w)
+	}
+	if hasBrace {
 		if words := r.braceExpand(w); !r.noBraceExpand &&
 			(len(words) > 1 || len(words) == 1 && words[0] != w) &&
 			r.ask(r.sem().BraceExpansion, "brace expansion") {
@@ -123,8 +130,20 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 // fields in their marked form. See expandWordEscaped for why the two stages
 // are separable.
 func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
+	fields, _ := r.expandWordFieldsTracked(w, false)
+	return fields
+}
+
+// expandWordFieldsTracked is expandOneWordFields with the provenance of each
+// field's bytes kept beside it, for the one caller that asks: brace expansion
+// run after the word rather than before it. See interp/bracefields.go.
+//
+// A parameter and a second result rather than a pair of fields on the runner,
+// because it is neither state nor a stack — it belongs to this one call, and
+// a clone has nothing to own. See TestACloneOwnsEveryStack.
+func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, [][]fieldSeg) {
 	if w == nil {
-		return nil
+		return nil, nil
 	}
 	// Spent at once, so that nothing expanded *inside* this word inherits
 	// it: an operand word is a word of its own and is not a name the braces
@@ -154,6 +173,18 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	// unless splitting started a new one, which is what makes x$(f)y attach
 	// its literal text to the first and last resulting fields.
 	b := newWordFields()
+	if track {
+		// The runs of each field, kept for the brace pass that runs after
+		// the word rather than before it. See interp/bracefields.go.
+		b = newTrackedWordFields()
+	}
+	// And, in the one column where a written brace ends field splitting, the
+	// spans that stand behind one: `IFS=:; v=a:b; echo x{p,q}$v` is
+	// `xpa:b xqa:b` there and `xpa xqa b` in the other column that takes
+	// this road. A *list* behind the brace still makes fields of its own —
+	// `set -- 1 2; echo x{p,q}$@y` is three words in both — which is what
+	// splitNever leaves alone. See Semantics.BraceStopsFieldSplitting.
+	unsplit := r.braceSplitStopSpans(w.Spans)
 
 	// Whether an expansion has already failed on this word. Every shell in
 	// the panel abandons the word at the first failure rather than going on
@@ -195,11 +226,15 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 		// — so a subscript's substitutions are held around the pair, here,
 		// and not inside either. See subscriptSubstHold (#3240).
 		release := r.armSubscriptSubsts(s)
-		parts, marks, atList := r.expandAt(s, splitByDialect, head)
+		policy := splitByDialect
+		if unsplit != nil && unsplit[i] {
+			policy = splitNever
+		}
+		parts, marks, atList := r.expandAt(s, policy, head)
 		var text string
 		var split bool
 		if !atList {
-			text, split = r.expandSpan(s, splitByDialect, head)
+			text, split = r.expandSpan(s, policy, head)
 		}
 		release()
 		if atList {
@@ -244,7 +279,7 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 				// alike (#3395).
 				b.flush()
 			}
-			b.text(text)
+			b.text(text, spanSegKind(s))
 			if text != "" || s.Quoting != syntax.Unquoted {
 				// A quoted *literal* is a quoted null the word keeps whatever
 				// else is in it — `printf '[%s]' "$@"''` is one field in every
@@ -317,9 +352,9 @@ func (r *Runner) expandOneWordFields(w *syntax.Word) []string {
 	if fields == nil && r.braceNameCameToNothing(&b, braceName) {
 		// The quoted null every column keeps, for an alternative that came
 		// to nothing rather than for one somebody wrote.
-		return []string{""}
+		return []string{""}, nil
 	}
-	return fields
+	return fields, b.segs
 }
 
 // wordFields is the fields of one word as it is assembled, span by span.
@@ -371,6 +406,46 @@ type wordFields struct {
 	noFields      bool
 	sinceNoFields bool
 	revived       bool
+	// segs is, per field, the runs of text that made it, each saying whether
+	// the script *wrote* it — an unquoted literal span of the word — or an
+	// expansion produced it. Parallel to all, and built only while tracked
+	// is set, which is the one caller that asks: brace expansion run after
+	// the fields has to read the braces the script wrote and step over the
+	// ones a value happens to hold. See interp/bracefields.go.
+	segs    [][]fieldSeg
+	tracked bool
+}
+
+// fieldSeg is one run of a field's text, and where it came from.
+type fieldSeg struct {
+	text string
+	kind segKind
+}
+
+// segKind is where a run of a field's text came from, which is what decides
+// whether brace syntax may be read in it. See interp/bracefields.go.
+type segKind uint8
+
+const (
+	// segProduced is text an expansion produced.
+	segProduced segKind = iota
+	// segWritten is an unquoted literal span of the word — the text every
+	// column reads braces in.
+	segWritten
+	// segQuoted is a literal span the script wrote inside quotes, which is
+	// brace syntax in no column: `echo "{a,b}"` is one word everywhere.
+	segQuoted
+)
+
+// spanSegKind is where the text a span expanded to came from.
+func spanSegKind(s syntax.Span) segKind {
+	if s.Kind != syntax.Literal {
+		return segProduced
+	}
+	if s.Quoting == syntax.Unquoted {
+		return segWritten
+	}
+	return segQuoted
 }
 
 // reached records that something arrived in the word, and whether it is
@@ -406,6 +481,47 @@ func (b *wordFields) listProducedNothing(ownQuotedRun bool) {
 
 func newWordFields() wordFields { return wordFields{all: []string{""}, keep: []bool{false}} }
 
+// newTrackedWordFields is newWordFields with the provenance of each field's
+// bytes kept beside it. See wordFields.segs.
+func newTrackedWordFields() wordFields {
+	b := newWordFields()
+	b.segs, b.tracked = [][]fieldSeg{nil}, true
+	return b
+}
+
+// addSeg records a run of text on one field, joining it to the run in front
+// of it when both came from the same place — which keeps a word's spans from
+// becoming one segment each for no reason.
+func (b *wordFields) addSeg(i int, t string, kind segKind) {
+	if !b.tracked || t == "" {
+		return
+	}
+	if n := len(b.segs[i]); n > 0 && b.segs[i][n-1].kind == kind {
+		b.segs[i][n-1].text += t
+		return
+	}
+	b.segs[i] = append(b.segs[i], fieldSeg{text: t, kind: kind})
+}
+
+// openSeg is addSeg over every field still open.
+func (b *wordFields) openSeg(t string, kind segKind) {
+	if !b.tracked {
+		return
+	}
+	for i := b.open; i < len(b.all); i++ {
+		b.addSeg(i, t, kind)
+	}
+}
+
+// newSeg is the segment list a field that a list or a split produced starts
+// with: one run, produced rather than written.
+func (b *wordFields) newSeg(t string) []fieldSeg {
+	if !b.tracked || t == "" {
+		return nil
+	}
+	return []fieldSeg{{text: t}}
+}
+
 // head reports whether nothing has been accumulated in front of the next
 // span, which is what the `${~spec}` flag's tilde half asks about.
 func (b *wordFields) head() bool { return len(b.all) == 1 && b.all[0] == "" }
@@ -425,10 +541,14 @@ func (b *wordFields) keepOpen() {
 }
 
 // text joins literal or unsplit text onto every field still open.
-func (b *wordFields) text(t string) {
+//
+// kind is where the text came from, which is what the tracked form records
+// beside it. See wordFields.segs.
+func (b *wordFields) text(t string, kind segKind) {
 	if t != "" {
 		b.flush()
 	}
+	b.openSeg(t, kind)
 	for i := b.open; i < len(b.all); i++ {
 		b.all[i] += t
 	}
@@ -461,6 +581,9 @@ func (b *wordFields) flush() {
 	b.sep = false
 	b.all = append(b.all, "")
 	b.keep = append(b.keep, false)
+	if b.tracked {
+		b.segs = append(b.segs, nil)
+	}
 	b.open = len(b.all) - 1
 }
 
@@ -559,7 +682,7 @@ func (b *wordFields) lay(parts []string, nulls []bool) {
 	}
 	b.flush()
 	b.reached(true)
-	b.text(parts[0])
+	b.text(parts[0], segProduced)
 	if !nullFieldAt(nulls, 0) {
 		// Whatever was open has had something in it that is not an empty
 		// element, so it is a field even if that something carried no text.
@@ -576,6 +699,9 @@ func (b *wordFields) lay(parts []string, nulls []bool) {
 	for i, p := range parts[1:] {
 		b.all = append(b.all, p)
 		b.keep = append(b.keep, !nullFieldAt(nulls, i+1))
+		if b.tracked {
+			b.segs = append(b.segs, b.newSeg(p))
+		}
 	}
 	b.open = len(b.all) - 1
 }
@@ -601,9 +727,25 @@ func (b *wordFields) spread(parts []string, nulls []bool) {
 	keep := make([]bool, 0, b.open+len(open)*len(parts))
 	all = append(all, b.all[:b.open]...)
 	keep = append(keep, b.keep[:b.open]...)
+	var segs [][]fieldSeg
+	var openSegs [][]fieldSeg
+	if b.tracked {
+		openSegs = b.segs[b.open:]
+		segs = append(segs, b.segs[:b.open]...)
+	}
 	for j, f := range open {
 		for i, p := range parts {
 			all = append(all, f+p)
+			if b.tracked {
+				// A copy of the word per element, so the copy carries the
+				// runs the word had and the element arrives behind them,
+				// produced rather than written.
+				copied := append([]fieldSeg(nil), openSegs[j]...)
+				if p != "" {
+					copied = append(copied, fieldSeg{text: p})
+				}
+				segs = append(segs, copied)
+			}
 			// A copy of the word is made per element, so an empty element's
 			// copy is the word with nothing added — which is the field the
 			// word already was, not a null the list produced.
@@ -611,6 +753,9 @@ func (b *wordFields) spread(parts []string, nulls []bool) {
 		}
 	}
 	b.all, b.keep = all, keep
+	if b.tracked {
+		b.segs = segs
+	}
 	// Guarded rather than unconditional, and the guard is equivalent rather
 	// than load-bearing: with no parts the open run is now empty, so either
 	// there are finished fields — which any cannot change the reading of —
@@ -669,11 +814,20 @@ func (b *wordFields) withoutNulls() []string {
 		return b.all
 	}
 	out := make([]string, 0, len(b.all))
+	var segs [][]fieldSeg
 	for i, f := range b.all {
 		if null(i) {
 			continue
 		}
 		out = append(out, f)
+		if b.tracked {
+			segs = append(segs, b.segs[i])
+		}
+	}
+	if b.tracked {
+		// In step with what came out, so a caller reading the runs beside
+		// the fields is never reading the runs of a field that went.
+		b.segs = segs
 	}
 	return out
 }
@@ -997,13 +1151,13 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 		b.WriteString(text)
 		// And never splits, whatever the span asked for. That is the whole
 		// of the difference from the fields view below.
-		u.text(text)
+		u.text(text, segProduced)
 		if text != "" || s.Quoting != syntax.Unquoted {
 			u.any = true
 			u.keepOpen()
 		}
 		if !split {
-			f.text(text)
+			f.text(text, segProduced)
 			if text != "" || s.Quoting != syntax.Unquoted {
 				f.any = true
 				f.keepOpen()

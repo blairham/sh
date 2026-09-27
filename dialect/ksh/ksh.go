@@ -2097,6 +2097,13 @@ func Semantics() interp.Semantics {
 	// same way — `unset u; f {a,$u}` and `e=a,; f {$e}` are both `[a] []`.
 	// zsh is the other column that keeps it (#4800).
 	s.BraceEmptyAlternativeIsAField = interp.Yes
+	// A written `{` ends field splitting for the rest of the word here:
+	// `IFS=:; v=a:b; f x{p,q}$v` is `[xpa:b] [xqa:b]` where zsh under
+	// shwordsplit answers `[xpa] [xqa] [b]`, and `f x{p}$v` is the single
+	// field `x{p}a:b` although `{p}` is no list. What stands in front of
+	// the brace still splits. It is the same rule that lets a group's body
+	// through the splitter, so `e='a b,c'; echo {$e}` is `a b` and `c`.
+	s.BraceStopsFieldSplitting = interp.Yes
 	// The one shell that strips a range endpoint's zeros — `{01..3}` is
 	// `1 2 3` — and takes a written step's sign at its word, so `{10..1..3}`
 	// is `10` alone and `{1..10..-3}` is `1`. A negative step that agrees

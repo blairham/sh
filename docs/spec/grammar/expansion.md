@@ -66,9 +66,12 @@ Not POSIX, and **absent from dash**:
 | `a=1; echo {$a,2}` | `{1,2}` | `1 2` | `1 2` | `1 2` |
 | `n=3; echo {1..$n}` | `{1..3}` | `{1..3}` | `1 2 3` | `1 2 3` |
 
-It runs **before** parameter expansion, which is why the second row
+It runs **before** parameter expansion in bash, which is why the second row
 produces two fields rather than one: the braces are resolved against the
-literal text `$a,2`, and only then does `$a` become `1`.
+literal text `$a,2`, and only then does `$a` become `1`. ksh93 and zsh
+reach the same two fields from the other side — see *Where the braces are
+found, on the output side* below — and the row above cannot tell the two
+apart, which is why it took a different probe to find out.
 
 The third row is where that ordering stops being a fact and becomes a
 **disagreement**. bash keeps it for a *range* too, so the range is gone by
@@ -166,7 +169,73 @@ alternative that came to nothing *is* that quoted null.
 Whether produced text **outside** a group is scanned for braces at all is
 the same question one level out and stays outside this one: `e='{a,b}';
 echo $e` is `a b` in ksh93 and `{a,b}` in bash 5.3, bash 3.2 and zsh, and
-reading a body does not answer it.
+reading a body does not answer it. It is #4797, and what it needs beyond
+the section below is a rule about which braces *pair*: measured 2026-09-27,
+a produced `}` does not close a written `{` — `e='}'; echo {a,b$e` is
+`{a,b}` — while two produced braces do, `e='{}'; echo $e{a,b}` being
+`{}a {}b`.
+
+### Where the braces are found, on the output side
+
+The section above is about a group's **body**. This one is about the whole
+word, and it is the same disagreement seen from the other end: bash finds
+the braces in the word the parse cut and expands the word **again for every
+name** they make, while ksh93 and zsh expand the word **once**, with the
+braces as inert text, and find the braces in the fields that came out.
+
+`f` counts its arguments; `set -- 1 2` unless stated. Measured 2026-09-25
+through 2026-09-27 against zsh 5.9.2 `-f`, ksh93u+ 2012-08-01, bash 5.3.20
+and bash 3.2.57:
+
+| probe | bash 5.3 / 3.2 | ksh93 / zsh |
+| --- | --- | --- |
+| `f x{p,q}y` *(control)* | `2 \| [xpy] [xqy]` | `2 \| [xpy] [xqy]` |
+| `f x{p,q}$@y` | `4 \| [xp1] [2y] [xq1] [2y]` | `3 \| [xp1] [xq1] [2y]` |
+| `f {p,q}$@` | `4 \| [p1] [2] [q1] [2]` | `3 \| [p1] [q1] [2]` |
+| `f $@{p,q}y` | `4 \| [1] [2py] [1] [2qy]` | `3 \| [1] [2py] [2qy]` |
+| `f x{p,$@}y` | `3 \| [xpy] [x1] [2y]` | **`2 \| [x{p,1] [2}y]`** |
+| `f x{p,$1}y` *(control)* | `2 \| [xpy] [x1y]` | `2 \| [xpy] [x1y]` |
+| `set --; f x{p,q}$@y` | `2 \| [xpy] [xqy]` | `2 \| [xpy] [xqy]` |
+
+**`x{p,$@}y` is the row that says what the model is.** A rule that
+distributes the group over the word answers it three words; both reference
+shells answer two, and the braces are still in the output. The list put a
+**field boundary between the group's braces**, so there is no group left —
+and no rule about distributing over a word can say that. `x{p,$1}y` is the
+control that holds the written shape fixed and varies only whether the
+expansion in the group yields one field or two.
+
+It is the same axis as whether the word is expanded once or once per name,
+because it is the same fact: `BraceFanExpandsEachNameOnItsOwn`. A word of
+literal text comes to one field holding exactly the word, so the two roads
+agree about `echo {a,b}` and the question is never put there.
+
+Two consequences fall out with nothing said about braces:
+
+- **`RC_EXPAND_PARAM`'s order.** `a=(1 2); f x{p,q}${^a}y` is
+  `xp1y xq1y xp2y xq2y` in zsh: the distributive span copies the word with
+  the braces still text, and each copy is brace-expanded afterwards, so the
+  brace varies fastest *within* a copy. A plan that applied the group at
+  its own position in the word interleaves them the other way round and
+  cannot be taught not to.
+- **The pass sits between field building and pathname expansion.**
+  `a=(a); f ${a}{*,z}` in a directory holding `aa` and `ab` is `aa ab az`.
+
+Only the text the **script wrote** is brace syntax in the field: `e=a,b;
+echo {$e}` is `{a,b}` in zsh, `a=("x{p" "q}y"); echo ${a[@]}` is the two
+words it was, and `echo "x{p,q}"$@y` keeps its quoted braces. ksh93 reads a
+produced comma inside a group the script wrote, which is
+`BraceBodyReadAfterExpansion` above.
+
+One more thing is this column's alone. `BraceStopsFieldSplitting`: in
+ksh93 a written, unquoted `{` ends field splitting for the rest of the
+word, so `IFS=:; v=a:b; f x{p,q}$v` is `[xpa:b] [xqa:b]` there and
+`[xpa] [xqa] [b]` in zsh under `shwordsplit`, where `f x$v` is `[xa] [b]`
+in both. It is the character and not a group — `f x{p}$v` is one field —
+and a quoted, escaped or produced `{` leaves the splitting alone. What
+stands in front of the brace still splits: `f $v{p,q}$w` splits `$v` and
+not `$w`. It is also why a group's body survives the splitter there, which
+is what makes `e='a b,c'; echo {$e}` two fields rather than three.
 
 An expansion in the body that yields **fields of its own** is not this
 reading's: `set -- 1 2; echo {$@}` is the two words `{1` and `2}` in ksh93 and

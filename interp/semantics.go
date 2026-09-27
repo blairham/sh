@@ -3704,6 +3704,27 @@ type Semantics struct {
 	// a dialect whose braces expand at all — dash and BusyBox ash never
 	// reach it.
 	BraceEmptyAlternativeIsAField Answer
+	// BraceStopsFieldSplitting ends field splitting at the first `{` the
+	// script wrote unquoted, for the rest of the word: `IFS=:; v=a:b; f
+	// x{p,q}$v` is the two fields `xpa:b` and `xqa:b` in ksh93u+ and the
+	// three fields `xpa`, `xqa` and `b` in zsh 5.9.2 under `shwordsplit`,
+	// where `f x$v` is `xa` and `b` in both.
+	//
+	// The character and not a group — `f x{p}$v` is one field there — and
+	// the *written unquoted* one: a quoted, escaped or produced `{` leaves
+	// the splitting alone. What stands in front of the brace splits, so
+	// `f $v{p,q}$w` splits `$v` and not `$w`.
+	//
+	// It is why a group's body survives the splitter in that column, which
+	// is what makes `e='a b,c'; echo {$e}` the two fields `a b` and `c`
+	// there: the body stands behind a brace like anything else in the word.
+	// A list behind the brace still makes fields of its own.
+	//
+	// Read rather than put, on the road that finds the braces in the fields
+	// the word came to: that road is taken only by a vector that answered
+	// BraceFanExpandsEachNameOnItsOwn, and a vector that answered one brace
+	// axis answers them all. See interp/bracefields.go.
+	BraceStopsFieldSplitting Answer
 	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range
 	// endpoint and pads every element to the widest endpoint, zeros after
 	// the sign: `{01..3}` is `01 02 03` and `{-03..3..3}` is `-03 000 003`.

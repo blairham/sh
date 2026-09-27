@@ -1179,6 +1179,11 @@ func Semantics() interp.Semantics {
 	// `e=a,b; echo {$e}` is the one word `{a,b}` because the braces are
 	// never syntax here, which is a different fact from either reading.
 	//
+	// unanswered BraceStopsFieldSplitting: dash has no brace expansion, so
+	// a `{` is an ordinary character and cannot end anything — `IFS=:;
+	// v=a:b; f x{p,q}$v` is `[x{p,q}a] [b]` on dash 0.5.12, split exactly
+	// as `f x$v` is.
+	//
 	// unanswered BraceEmptyAlternativeIsAField: dash has no brace
 	// expansion, so no alternative is ever read and none can come to
 	// nothing — `f {a,}` is the one field `{a,}` on dash 0.5.12, the word

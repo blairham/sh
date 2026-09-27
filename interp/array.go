@@ -932,21 +932,25 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 // quotes it back — `[x-9]`, not the -9 it came to.
 func (r *Runner) unsetArrayElem(name string, idx int, sub string) int {
 	blanks := r.unsetBlanksInPlace()
-	a, isArray := r.Arrays[name]
+	a, isArray := r.writableArrayCell(name)
 	if !isArray {
 		if _, produced := r.DynamicArrays[name]; produced {
-			// A **produced** array has no stored element for this to take
-			// away: the producer answers ahead of anything here, so a removal
-			// would be accepted and then read back as whatever the producer
-			// says. The same argument storeArray's produced branch makes
-			// about a write, and the measured answer where it can be asked —
-			// 2026-09-18, bash 5.3.20's `unset 'DIRSTACK[2]'` is silent at 0
-			// with the stack whole, where this reached the scalar path and
-			// refused the name as not an array.
+			// A **produced** array with no writer: there is nowhere to put
+			// the removal, so the producer answers ahead of anything here
+			// and a change left in the store would be accepted and then read
+			// back as whatever the producer says. The same argument
+			// storeArray's produced branch makes about a write, and the
+			// measured answer where it can be asked — 2026-09-18, bash
+			// 5.3.20's `unset 'DIRSTACK[2]'` is silent at 0 with the stack
+			// whole, where this reached the scalar path and refused the name
+			// as not an array.
 			//
-			// Silent and 0, which is what the name *not* being a scalar
-			// means: the refusal below is about a name holding a value that
-			// has no elements, and a produced array has elements.
+			// A produced array that *can* be written is not here at all: it
+			// comes back from writableArrayCell above and takes the ordinary
+			// element rules, which is #4631. Silent and 0, which is what the
+			// name *not* being a scalar means: the refusal below is about a
+			// name holding a value that has no elements, and a produced
+			// array has elements.
 			return 0
 		}
 		return r.unsetScalarElem(name, idx, sub)
@@ -1102,7 +1106,10 @@ func (r *Runner) unsetSubscriptRange(name, sub string) (handled bool, code int) 
 		}
 		return true, r.refuseSubscriptToUnset(name, sub)
 	}
-	if a, isArray := r.Arrays[name]; isArray {
+	if a, isArray := r.writableArrayCell(name); isArray {
+		// writableArrayCell rather than the table, so that a produced array
+		// a script can assign to is a span's target too — see #4631, which
+		// is this and the single subscript below it.
 		return quietly(r.unsetElementSpan(name, a, from, to))
 	}
 	v, held := r.getVar(name)
@@ -2144,7 +2151,7 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 		// reading and comes back empty; a name holding nothing has no span,
 		// and nothing is what it keeps. An array that is already empty has no
 		// span either, so `a=(); unset a[@]` does not gain an element.
-		if a, ok := r.Arrays[name]; ok {
+		if a, ok := r.writableArrayCell(name); ok {
 			if len(a) > 0 {
 				r.storeArray(name, Array{0: {}})
 			}

@@ -346,6 +346,28 @@ type ArithCall struct {
 	// `wrong number of arguments: mf( 5 , 6 )`, spaces and all, so the
 	// sentence is the source text rather than a rendering of the tree.
 	Text string
+	// ArgumentsAreText says the text between the parentheses is not an
+	// argument list this reader could make sense of, so Args is empty and
+	// Text is all there is.
+	//
+	// **The registration is what decides, and it does not exist yet.** A
+	// string math function takes that text raw and unevaluated — `sf( a , b
+	// c )` passes the one argument ` a , b c ` — and the registration that
+	// says so is made by a builtin at run time, several hundred lines after
+	// the program was read. So the reader cannot refuse here without
+	// refusing a program the shell it models runs, and it cannot accept
+	// silently either: a name that turns out *not* to be registered that way
+	// still owes a complaint. Keeping the text and saying that it is text is
+	// what lets the evaluator answer both.
+	//
+	// Both columns with the construct defer in exactly this way, so it is
+	// not a dialect's question. Measured 2026-09-26 from a script file with
+	// a `print` on the line in front: `$(( sqrt( a , b c ) ))` is
+	// `arithmetic syntax error` at run time in ksh93u+ and `unknown
+	// function: sqrt` in zsh 5.9.2, and both print the line before it — so
+	// the file is read either way, and the name is resolved before the
+	// argument text is weighed at all.
+	ArgumentsAreText bool
 	// Within is the whole expression the call was written in, and Offset the
 	// byte position of the call's first byte inside it — so `Within[Offset:]`
 	// is the text from the name to the end of the expression.
@@ -1530,14 +1552,21 @@ func (a *arithParser) primary() ArithExpr {
 // `$(( 1,2 ))` as a sequence, so the two readings of `,` are told apart by
 // which of them is inside the parentheses.
 func (a *arithParser) call(name string, start Pos, begin int) ArithExpr {
-	a.off++ // the `(`
+	open := a.off // the `(`
+	// The reader's state before any of the arguments were tried, so that a
+	// failure can be taken back and the same bytes kept as text. Only the
+	// *first* failure is recorded, so putting this back restores whatever
+	// the caller was already carrying — which is nothing, or a complaint
+	// this call is not allowed to have replaced.
+	held := a.p.err
+	a.off++
 	n := &ArithCall{Name: name, Start: start, Stop: start}
 	a.space()
 	if !a.has(")") {
 		for {
 			arg := a.assign()
 			if arg == nil {
-				return nil
+				return a.callText(n, held, open, begin)
 			}
 			n.Args = append(n.Args, arg)
 			a.space()
@@ -1559,12 +1588,50 @@ func (a *arithParser) call(name string, start Pos, begin int) ArithExpr {
 	}
 	a.space()
 	if !a.take(")") {
-		a.p.fail("expected ) in arithmetic")
-		return nil
+		return a.callText(n, held, open, begin)
 	}
 	n.Text = a.src[begin:a.off]
 	n.Within, n.Offset = a.src, begin
 	return n
+}
+
+// callText takes back a failed argument list and keeps the bytes instead, for
+// the evaluator to decide about once it knows what the name is registered as.
+//
+// held is the complaint the reader was carrying before the arguments were
+// tried, open the offset of the `(` and begin the offset of the name.
+//
+// The scan is parentheses alone, counted, which is what a reader with no
+// grammar left to apply can do — and it is enough, because the text it hands
+// over is passed to a shell function verbatim rather than read again.
+// Where the parentheses do not balance there is nothing to hand over and the
+// original complaint stands, which is the one shape that is still a parse
+// failure: `$(( sf( a b ))` has no closing parenthesis for the call at all.
+func (a *arithParser) callText(n *ArithCall, held error, open, begin int) ArithExpr {
+	depth, off := 0, open
+	for off < len(a.src) {
+		switch a.src[off] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				a.p.err = held
+				a.off = off + 1
+				a.stopped = -1
+				n.Args = nil
+				n.ArgumentsAreText = true
+				n.Text = a.src[begin:a.off]
+				n.Within, n.Offset = a.src, begin
+				return n
+			}
+		}
+		off++
+	}
+	if a.p.err == nil {
+		a.p.fail("expected ) in arithmetic")
+	}
+	return nil
 }
 
 // number reads a literal without converting it, including the `base#digits`

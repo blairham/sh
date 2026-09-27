@@ -264,6 +264,27 @@ func (r *Runner) evalMathFunc(x *syntax.ArithCall) (arithNum, error) {
 		// mathFuncStringArgument.
 		return r.callMathFunc(fn, x.Name, []string{mathFuncStringArgument(x.Text)})
 	}
+	if x.ArgumentsAreText {
+		// The reader kept the bytes rather than an argument list, because
+		// only this line knows whether the registration wanted them raw —
+		// see syntax.ArithCall.ArgumentsAreText. This one did not, so the
+		// text is read now, as an expression, and the complaint is the one
+		// an expression read at run time gets: measured 2026-09-26, `of() {
+		// REPLY=$((1)); }; functions -M of; : $(( of( a , b c ) ))` is
+		// ``bad math expression: operator expected at `c '`` in zsh 5.9.2,
+		// which is the same sentence `v='a , b c'; : $(( $v ))` gets there
+		// and here.
+		//
+		// It cannot come back a tree: this is the same reader over the same
+		// bytes from the same offset, and it is here only because that
+		// reader already refused them. The branch is written all the same,
+		// because "cannot fail" is what a missing check always says.
+		text := mathFuncStringArgument(x.Text)
+		if _, err := r.arithTreeRead(text); err != nil {
+			return intNum(0), arithError{msg: r.expressionFailure(x.Within, err), complete: true}
+		}
+		return intNum(0), arithError{msg: Wording(r.diag().ArithOperandExpected, "operand expected")}
+	}
 	if len(x.Args) == 0 && fn.min > 0 && r.diag().MathFunctionNoArgumentIsASyntaxError {
 		// A known name with nothing between its parentheses, in the dialect
 		// that reads that as an operand missing rather than as a count. Not

@@ -287,16 +287,7 @@ func (r *Runner) exprCountsForPipelineStatus(e syntax.Expr) bool {
 // The second result says whether the name is produced at all, so a shell
 // without one sees an ordinary — and absent — variable.
 func (r *Runner) pipelineStatuses(name string) ([]string, bool) {
-	if name == "" || name != r.pipeStatusName {
-		return nil, false
-	}
-	// `unset` is the axis. In bash the producer outlives it and the next
-	// pipeline fills the name again; in zsh the name is gone for good. That
-	// is the opposite of what a produced *scalar* does, where unset ends it
-	// in both — which is why this is asked here rather than assumed from
-	// the rule Dynamic already follows.
-	if r.removed[name] &&
-		r.ask(r.sem().UnsetEndsTheProducedPipelineStatus, "`unset` ending the produced pipeline status") {
+	if !r.namesTheProducedPipelineStatus(name) {
 		return nil, false
 	}
 	out := make([]string, len(r.pipeStatus))
@@ -304,4 +295,35 @@ func (r *Runner) pipelineStatuses(name string) ([]string, bool) {
 		out[i] = itoa(st)
 	}
 	return out, true
+}
+
+// namesTheProducedPipelineStatus reports whether a name is the one this
+// dialect calls the record, and whether the record is still reachable through
+// it.
+//
+// Split out of [Runner.pipelineStatuses] rather than written a second time.
+// The record is a **produced parameter** and it is the fourth kind: `Dynamic`,
+// `DynamicArrays` and `DynamicAssocs` are the other three and are what
+// [Runner.DynamicParameter], [Runner.ParameterIsNamed] and
+// [Runner.ParameterNames] used to be the whole of. This one is held on a field
+// of its own because the *record* is the core's and only the name is the
+// dialect's, and those three unions did not know about it — so a shell could
+// expand `$pipestatus`, answer `${+pipestatus}` with 1, and describe the same
+// name as one it does not have (#4865). Two readings of one question
+// disagreeing inside one shell is what said the gap was here and not in the
+// description.
+//
+// `unset` is the axis, and it is asked here for the reason it was asked in the
+// producer: in bash the producer outlives the removal and the next pipeline
+// fills the name again; in zsh the name is gone for good. That is the opposite
+// of what a produced *scalar* does, where unset ends it in both.
+func (r *Runner) namesTheProducedPipelineStatus(name string) bool {
+	if name == "" || name != r.pipeStatusName {
+		return false
+	}
+	if r.removed[name] &&
+		r.ask(r.sem().UnsetEndsTheProducedPipelineStatus, "`unset` ending the produced pipeline status") {
+		return false
+	}
+	return true
 }

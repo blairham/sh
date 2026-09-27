@@ -6408,6 +6408,18 @@ func Apply(r *interp.Runner) {
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("pipestatus")
+	// And the shape a listing writes it in, which is the same line
+	// dialect/bash gives `PIPESTATUS` and is here for the same reason: the
+	// record is not in any of the tables a listing walks, so without a
+	// declaration to hang the letters on the name is one `typeset -p` cannot
+	// find. Measured 2026-09-27 on zsh 5.9.2 under `-f` from a script file,
+	// in a shell that has run one command:
+	//
+	//	typeset -p pipestatus     typeset -a pipestatus=( 0 )
+	//	a bare typeset -p         typeset -a pipestatus=(  )
+	//
+	// against `typeset:3: no such variable: pipestatus` at 1 here (#4865).
+	r.SetDynamicDeclaration("pipestatus", interp.ProducedDeclaration{Array: true, ListsItsElements: true})
 	// A read of the process, in library code, on purpose. The purity rule
 	// covers dialect/ as well as interp/ — an embedder links this and Apply
 	// runs inside the Runner — but it is about state a Runner owns and two

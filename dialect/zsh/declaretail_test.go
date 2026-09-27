@@ -515,7 +515,11 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
 		"errnos\nfuncfiletrace\nfuncsourcetrace\nfuncstack\nfunctrace\nhistory\n" +
 		"jobdirs\njobstates\njobtexts\nkeymaps\nlanginfo\n" +
-		"parameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
+		// `status` is on this side and not on the other, for the reason
+		// `ARGC` beside it is: measured 2026-09-27 on zsh 5.9.2 in one run,
+		// a bare `readonly` writes `status=0` and `readonly -p` writes no
+		// row for the name (#4866, and dialect/zsh/laststatus.go).
+		"parameters\nreswords\nstatus=0\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
 		"export OLDPWD=" + dir + "\nexport PWD=" + dir +
 		"\nexport -i10 SHLVL=1\nexport V='a b'\n" +

@@ -37,6 +37,22 @@ import "github.com/blairham/sh/interp"
 // this shell already answers to, and only the four left-hand ones are
 // tied.
 //
+// # A fifth pair, in lower case, and only one of them
+//
+// Re-measured 2026-09-27 on zsh 5.9.2, `-f` from a script file, one fresh
+// shell per direction:
+//
+//	prompt=PP   -> $PS1 is PP        PS1=QQ  -> $prompt is QQ
+//
+// and `${+prompt2}`, `${+prompt3}`, `${+prompt4}` and `${+rprompt}` are all
+// **0** in the same run, which is the half that has to be measured rather
+// than inferred: a rule read off the four upper-case pairs would have added
+// three lower-case names the reference does not have. `$prompt` is
+// `scalar-special` there, which is what the produced side answers here
+// already — it was absent altogether before #4866, so a theme that sets
+// `prompt` in lower case, which is the spelling the manual's own examples
+// use, wrote into a variable no reader here ever looked at.
+//
 // # `PS` is the store and `PROMPT` is the spelling
 //
 // The pair is one parameter in zsh and two names here, with the `PS` name
@@ -57,6 +73,7 @@ func registerPromptNames(r *interp.Runner) {
 		{"PROMPT2", "PS2"},
 		{"PROMPT3", "PS3"},
 		{"PROMPT4", "PS4"},
+		{"prompt", "PS1"},
 	} {
 		spelling, store := pair[0], pair[1]
 		r.SetDynamic(spelling, func(rr *interp.Runner) string {

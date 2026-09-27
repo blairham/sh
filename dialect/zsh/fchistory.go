@@ -478,14 +478,39 @@ func fcStartSize(r *interp.Runner) {
 // rewrites it: `echo $HISTSIZE` answers `2` for an inherited `2x`. See
 // fcStartSize, which stores what this answered before the attribute that
 // would have evaluated it goes on.
+// The floor is this parameter's own and the scan is not, which is why the
+// scan is importedInteger and shared: the same reading answers every integer
+// name this shell is handed a value for, and the four in startupvalues.go
+// keep a negative one where this floors it. A second copy here is the shape
+// this tree keeps finding, where a helper written beside another omits what
+// the first one learned.
 func fcImportedSize(value string) int {
+	return max(importedInteger(value), 1)
+}
+
+// importedInteger is an integer parameter's value as the shell was **handed**
+// it, which is scanned rather than evaluated.
+//
+// Measured 2026-09-27, zsh 5.9.2, `env -i PATH=/usr/bin:/bin KEYTIMEOUT=<v>
+// zsh -f -c 'typeset -p KEYTIMEOUT'` — a name with no floor of its own, so
+// the scan is visible on every row:
+//
+//	2x → 2    1+1 → 1    " 2 " → 2    0x2 → 2    3.9 → 3
+//	abc → 0   08 → 0     "" → 0       -1 → -1
+//
+// A leading integer, base prefix and all, stopping at the first character
+// that is not part of one. `1+1` is the row that says an inherited value is
+// not evaluated — an *assigned* `1+1` is two — and `08` is the row that says
+// the prefix is read as a base rather than skipped, since it is not a legal
+// octal number and answers zero rather than eight.
+func importedInteger(value string) int {
 	text := strings.TrimSpace(value)
 	for end := len(text); end > 0; end-- {
 		if n, err := strconv.ParseInt(text[:end], 0, 64); err == nil {
-			return max(int(n), 1)
+			return int(n)
 		}
 	}
-	return 1
+	return 0
 }
 
 // fcHistorySize is the size the list is held at.

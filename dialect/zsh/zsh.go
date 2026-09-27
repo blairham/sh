@@ -6665,6 +6665,11 @@ func Apply(r *interp.Runner) {
 	// derived from it — see scopefixedparameters.go, and #4802.
 	markTheScopeFixedParameters(r)
 	markTheKindFixedParameters(r)
+	// And the names it starts with a *value* in that had no parameter here
+	// at all — see startupvalues.go for the ten, for the one the
+	// environment may not supply, and for which of them this shell reads
+	// back (#4866).
+	registerTheStartupValues(r)
 	// And the four scalar pairs that are one parameter under two names —
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)

@@ -6,6 +6,7 @@ package interp
 import (
 	"io/fs"
 	"path/filepath"
+	"strings"
 )
 
 // SymlinkSteps is where a path arrives, one symlink at a time.
@@ -88,4 +89,35 @@ func (r *Runner) oneSymlinkStep(path string) (string, bool) {
 		return filepath.Join(append([]string{target}, rest...)...), true
 	}
 	return "", false
+}
+
+// SymlinkArrow is what a `-s` or `-S` letter writes after a path: ` -> ` and
+// where the path goes, either the end of the chain or every step of it.
+//
+// It renders and never decides. `chain` is the `-S` reading — every path on
+// the way — and false is `-s`, which names only where the walk ends; a path
+// with no link anywhere on it is the empty string in both, which is the
+// answer that makes a real file print as it would with no letter at all.
+//
+// Exported and here rather than in the dialect that spells the letters,
+// because **two builtins in that shell write this same tail**: `whence -sv`
+// and `type -s` produce byte-identical lines, measured, and a second
+// rendering is exactly how the two came to disagree about `-w` before #2180.
+// The letters themselves stay the dialect's, through Semantics.TypeOptions
+// and that shell's own `whence` — this is the walk and the arrow only.
+//
+// The arrow goes **after** whatever sentence names the path, never inside it,
+// and the difference shows only on a path with a space: measured on zsh 5.9.2
+// (`-f`, 2026-09-26), `type -s sp` is `sp is '/…/w d/sp' -> /bin/ls`, so the
+// quoting a dialect puts round a path reaches the path and not the resolution
+// after it.
+func (r *Runner) SymlinkArrow(path string, chain bool) string {
+	steps := r.SymlinkSteps(path)
+	if len(steps) == 0 {
+		return ""
+	}
+	if chain {
+		return " -> " + strings.Join(steps, " -> ")
+	}
+	return " -> " + steps[len(steps)-1]
 }

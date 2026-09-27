@@ -2124,6 +2124,12 @@ func Semantics() interp.Semantics {
 	// letters and shapes only this shell has; see the axes for the columns.
 	s.HashDefinesAnEntryFromAnAssignment = interp.Yes
 	s.HashReadsOperandsAsPatterns = interp.Yes
+	// And `-r` here is the whole of the call rather than a first half of
+	// one: an operand beside it is `too many arguments` at 1 and the table
+	// is left standing, where every other column clears and then hashes the
+	// name it was given. Measured 2026-09-26 — see the axis for the panel
+	// (#4744).
+	s.HashClearRefusesOperands = interp.Yes
 	// `hash -d` here is not bash's "forget one name": it is the table of
 	// **named directories** that `~name` reads back, written as an
 	// assignment. `hash -d a=/tmp; print -r -- ~a` is `/tmp`, `hash -d`
@@ -4048,7 +4054,16 @@ func Semantics() interp.Semantics {
 	// where its six words are measured against the other dialect's `-t`
 	// (#2512). `-t` itself is a bad option here and is absent from the
 	// letters, which is the whole of how that is said since #2180.
-	s.TypeOptions = "afpw"
+	//
+	// `s` and `S` name what the path a command resolved to itself resolves
+	// to — the last link and the whole chain — written as an arrow after
+	// the sentence. The same answer this shell's own `whence -sv` and
+	// `whence -Sv` give, measured 2026-09-26 on zsh 5.9.2 (`-f`) with
+	// `c -> b -> sub/a -> /bin/ls` on PATH, byte for byte. They are here
+	// rather than in `whence`'s own letters because `type` is the *shared*
+	// builtin: the walk and the arrow are interp's (Runner.SymlinkArrow)
+	// and only which letters exist is the dialect's.
+	s.TypeOptions = "afpsSw"
 	s.TypePSearchesPathPastTheShell = interp.Yes
 	s.TypePathAnswerIsASentence = interp.Yes
 	s.TypeFSaysTheFunctionBack = interp.Yes
@@ -5015,7 +5030,11 @@ func Diagnostics() interp.Diagnostics {
 			// and a letter in neither is `bad option` for something this
 			// shell has. TestNoLetterIsBothAcceptedAndCalledMissing is the
 			// invariant.
-			"type": "mvsS",
+			// `s` and `S` left this list with `w` and for the same reason,
+			// in #4742: `whence -sv` and `whence -Sv` already wrote the two
+			// lines, so `type` refusing them was one spelling of a question
+			// answering where the other did not.
+			"type": "mv",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.

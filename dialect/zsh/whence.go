@@ -488,12 +488,8 @@ func whenceLinkArrow(r *interp.Runner, path string, m whenceMode) string {
 	if !m.link && !m.chain {
 		return ""
 	}
-	steps := r.SymlinkSteps(path)
-	if len(steps) == 0 {
-		return ""
-	}
-	if m.chain {
-		return " -> " + strings.Join(steps, " -> ")
-	}
-	return " -> " + steps[len(steps)-1]
+	// The walk and the rendering are the core's, because `type -s` in this
+	// same shell writes this identical tail and a second copy is how two
+	// spellings of one question come to disagree. See interp.Runner.SymlinkArrow.
+	return r.SymlinkArrow(path, m.chain)
 }

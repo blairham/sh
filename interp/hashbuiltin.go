@@ -49,6 +49,25 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	if strings.ContainsRune(opts, 'r') && len(args) > 0 &&
+		r.ask(r.sem().HashClearRefusesOperands, "`hash -r` with an operand beside it") {
+		// In front of every branch below, because the refusal's whole point
+		// is that **nothing happens**: the other reading empties the table
+		// and then does the listing or the lookup, which is the destructive
+		// half of a command this column declines to run. It covers the
+		// named-directory table under `-d` for the same reason, so the one
+		// check reaches both tables.
+		//
+		// The wording is `rehash`'s, because in this column `hash -r` *is*
+		// `rehash` — the same builtin reached by the other spelling, and a
+		// second field for one sentence is how two spellings come to
+		// disagree.
+		r.diagf("%s\n", Wording(r.diag().RehashTooManyArguments, "too many arguments"))
+		return 1
+	}
+	if r.unspecified {
+		return r.status
+	}
 	switch {
 	case strings.ContainsRune(opts, 'p'):
 		// `-p pathname name…`: an entry put there by hand. The path is taken

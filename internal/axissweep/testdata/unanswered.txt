@@ -166,6 +166,8 @@ ash   ListedBangIsOrdinary
 ash   ListedCaretIsOrdinary
 ash   ListedEqualsIsOrdinary
 ash   ListedNonAsciiIsOrdinary
+ash   ListedNonAsciiIsSpelledAsACodePoint
+ash   ListedNonAsciiTakesTheDollarFormAfterANonName
 ash   LocalListingIsTheRunningCallsOwn
 ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
@@ -488,6 +490,8 @@ dash  ListedBangIsOrdinary
 dash  ListedCaretIsOrdinary
 dash  ListedEqualsIsOrdinary
 dash  ListedNonAsciiIsOrdinary
+dash  ListedNonAsciiIsSpelledAsACodePoint
+dash  ListedNonAsciiTakesTheDollarFormAfterANonName
 dash  LocalListingIsTheRunningCallsOwn
 dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber

@@ -1511,6 +1511,12 @@ func Semantics() interp.Semantics {
 	// interp.TildeWithNoHomePolicy (#4179).
 	s.TildeWithNoHome = interp.TildeWithNoHomeIsEmpty
 	s.ListedNonAsciiIsOrdinary = interp.Yes
+	// And as **itself** inside a `$'...'`, with no text in front of it
+	// reaching for the form. Measured 2026-09-27 on zsh 5.9.2 under
+	// `LC_ALL=en_US.UTF-8`: `v=$'a\téb'` lists as `$'a\téb'` and `v="a-é"`
+	// as `typeset v=a-é`, where ksh93 writes a code point for both (#4807).
+	s.ListedNonAsciiIsSpelledAsACodePoint = interp.No
+	s.ListedNonAsciiTakesTheDollarFormAfterANonName = interp.No
 	s.ListedAssignmentPrefixIsBare = interp.No
 	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a
 	// bad substitution here in the *bare* form too, so there is no listing

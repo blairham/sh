@@ -963,6 +963,13 @@ func Semantics() interp.Semantics {
 	// all, writing `é`. The corpus runs in `C` and records that cell;
 	// this shell carries the reading a person's terminal sees.
 	s.ListedNonAsciiIsOrdinary = interp.Yes
+	// And the character is written as **itself** inside a `$'...'` a control
+	// byte put this shell in, rather than as a code point, and no text in
+	// front of it reaches for the form. Measured 2026-09-27 on GNU bash
+	// 5.3.20 under `LC_ALL=en_US.UTF-8`: `v=$'a\téb'` lists as `$'a\téb'`
+	// and `v="a-é"` lists bare (#4807).
+	s.ListedNonAsciiIsSpelledAsACodePoint = interp.No
+	s.ListedNonAsciiTakesTheDollarFormAfterANonName = interp.No
 	// And no bare assignment head: the `=` rule here is the character, not
 	// a prefix, so `x=y=z` is bare rather than `x='y=z'`.
 	s.ListedAssignmentPrefixIsBare = interp.No

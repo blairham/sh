@@ -12681,7 +12681,73 @@ type Semantics struct {
 	// alike — a third answer rather than the other side of a switch, and the
 	// reason this one field decides both whether such a byte is bare and
 	// whether it is escaped (#2820).
+	//
+	// **The ksh93 half of that last sentence was the C locale's**, and this
+	// field now carries the character reading in that column too: with a
+	// UTF-8 locale named, the same binary writes `v1=é` bare and reaches for
+	// a *code point* where the form is forced. See
+	// ListedNonAsciiIsSpelledAsACodePoint and
+	// ListedNonAsciiTakesTheDollarFormAfterANonName, which are that column's
+	// two remaining answers (#4770, #4807).
 	ListedNonAsciiIsOrdinary Answer
+
+	// ListedNonAsciiIsSpelledAsACodePoint writes a character above ASCII
+	// inside `$'...'` as its **code point** rather than as itself.
+	//
+	// ksh93 alone, and only where something else has already forced the
+	// form: `v=$'a\téb'` lists as `$'a\t\u[e9]b'` there against `$'a\téb'`
+	// in bash and zsh. The spelling is `\u[`, the code point in lower-case
+	// hexadecimal with no leading zeros, and `]` — measured 2026-09-27 on
+	// `/bin/ksh`, Version AJM 93u+ 2012-08-01, from a script file under `env
+	// -i PATH=/usr/bin:/bin LC_ALL=en_US.UTF-8`, one character at a time:
+	// `\u[e9]`, `\u[80]`, `\u[ff]`, `\u[101]`, `\u[7ff]`, `\u[800]`,
+	// `\u[20ac]`, `\u[4e2d]`, `\u[fdd0]`, `\u[feff]`, `\u[fffd]`,
+	// `\u[1f600]`, `\u[10000]`, `\u[1fffe]`, `\u[10ffff]`.
+	//
+	// **Two characters are written byte by byte instead**, and they are
+	// measured rather than a class: U+FFFE and U+FFFF come back
+	// `$'\xef\xbf\xbe'` and `$'\xef\xbf\xbf'` where U+FDD0, U+FDEF,
+	// U+1FFFE and U+1FFFF — the rest of the noncharacters — take the code
+	// point like anything else. So it is those two and not the class, and
+	// the engine writes what was measured.
+	//
+	// A field of its own rather than a second reading of
+	// ListedNonAsciiIsOrdinary, because the two questions are separately
+	// live: bash and zsh reach `$'...'` for a control byte and write the
+	// character itself inside it, which is this axis answered `No` on a
+	// route the other one never decides.
+	ListedNonAsciiIsSpelledAsACodePoint Answer
+
+	// ListedNonAsciiTakesTheDollarFormAfterANonName reaches for `$'...'`
+	// where a character above ASCII stands in a value whose text in front of
+	// it is not a name.
+	//
+	// ksh93 alone, and it is the rule that decides *whether* the form is
+	// reached rather than what goes inside it. Measured 2026-09-27 on
+	// `/bin/ksh`, Version AJM 93u+ 2012-08-01, from a script file under `env
+	// -i PATH=/usr/bin:/bin LC_ALL=en_US.UTF-8`, over every ASCII character
+	// in front of the same `é`:
+	//
+	//	bare      aé  a1é  a9é  aAé  _é  __é  _9é  a_9é  éé  é9é  aé-b  abé-
+	//	$'...'    a-é  a.é  a/é  a:é  a@é  a+é  a,é  a%é  a!é  a#é  a~é  a=é
+	//	          9é  1é  0é  1aé  99é  9_é  a-bé  a-b-é  é-é  -é  a bé  a|é
+	//
+	// So the text before the character has to be a **name** — a letter or
+	// `_` first and letters, digits or `_` after it, a character above ASCII
+	// counting as a letter — and any character before it that a name cannot
+	// hold reaches the form, whether the value would otherwise have needed
+	// quoting or not. `é b` is `'é b'` there and `x é` is `$'x \u[e9]'`,
+	// which is the pair that says this is about what stands *before* the
+	// character rather than about the value needing quotes.
+	//
+	// Every character in the value is judged rather than the first: `é-é` is
+	// `$'\u[e9]-\u[e9]'`, where the first one has nothing in front of it and
+	// the second has a `-`, and one character failing takes the whole value
+	// into the form.
+	//
+	// bash and zsh answer `No`: `a-é` lists bare in both. dash and BusyBox
+	// ash quote whatever they are given and are not asked (#4807).
+	ListedNonAsciiTakesTheDollarFormAfterANonName Answer
 
 	// ListedAssignmentPrefixIsBare writes a listed value's leading `name=`
 	// without quotes and quotes what follows on its own.

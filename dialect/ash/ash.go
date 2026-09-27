@@ -840,6 +840,11 @@ func Semantics() interp.Semantics {
 	// 2026-09-14 with a bare `set` over all four (#2820).
 	// unanswered ListedCaretIsOrdinary: the same always-quoting style.
 	// unanswered ListedEqualsIsOrdinary: the same always-quoting style.
+	// unanswered ListedNonAsciiIsSpelledAsACodePoint: the same always-quoting
+	// style as dash, so BusyBox ash never writes a `$'...'` and has no
+	// spelling inside one to choose.
+	// unanswered ListedNonAsciiTakesTheDollarFormAfterANonName: the same wall
+	// — there is no form here for a character to be taken into.
 	// unanswered ListedNonAsciiIsOrdinary: the same always-quoting style,
 	// and no `$'...'` listing here for the escaped half of the question.
 	// unanswered ListedAssignmentPrefixIsBare: a bare head is only visible

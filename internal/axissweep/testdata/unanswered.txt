@@ -193,6 +193,11 @@ ash   PrefixInAWholeTableListing
 ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
 ash   PrefixToAKeywordFunctionIsScopedToTheCall
+ash   PrintfCountAttribute
+ash   PrintfCountBadNameStopsThePass
+ash   PrintfCountEmptyNameIsIgnored
+ash   PrintfCountFrozenNameStopsThePass
+ash   PrintfCountOperandTakesASubscript
 ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfHexFloatDefaultIsTwelveDigits
 ash   PrintfHexFloatZeroFillPrecedesThePrefix
@@ -507,6 +512,11 @@ dash  PrefixInAWholeTableListing
 dash  PrefixListingNamesADeclaredOnlyCompound
 dash  PrefixRefusalCostsTheCommand
 dash  PrefixToAKeywordFunctionIsScopedToTheCall
+dash  PrintfCountAttribute
+dash  PrintfCountBadNameStopsThePass
+dash  PrintfCountEmptyNameIsIgnored
+dash  PrintfCountFrozenNameStopsThePass
+dash  PrintfCountOperandTakesASubscript
 dash  PrintfFloatOperandIsEvaluatedTwice
 dash  PrintfOutputPrecedesComplaint
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
@@ -605,7 +615,6 @@ dash  WritingSubstitutionIsWaitedForAtTheCommand
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   AssignmentUpdatesPipelineStatus
 ksh   AutoCdAnnouncesTheSubstitution
-ksh   BadNameToPrintfFatal
 ksh   BareElementsInATableLiteralAreEachOneValue
 ksh   BareElementsInATableLiteralMustPairOff
 ksh   BareSubscriptIsASubscript

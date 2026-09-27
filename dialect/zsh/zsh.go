@@ -3137,6 +3137,27 @@ func Semantics() interp.Semantics {
 	// None of C99's three: `printf '%F' 1.5` is `%F: invalid directive` at
 	// 1 in zsh 5.9.2, and `%a` and `%A` the same.
 	s.PrintfC99FloatConversions = interp.No
+	// `%n` all the same, and the count is this pass's bytes: `printf
+	// '%.10e%n\n' 1 count` leaves 16 in zsh 5.9.2, measured 2026-09-26.
+	s.PrintfCountConversion = interp.Yes
+	// A name the shell did not already have becomes an integer — `printf
+	// 'abcd%n' n` is `typeset -i n=4` — and one the script has already made
+	// is left as it was: `q=plain; printf 'abc%n' q` is `typeset q=3`, and
+	// `q=` beforehand is enough to make that so.
+	s.PrintfCountAttribute = interp.PrintfCountIntegerOnANewName
+	// The one column whose `%n` fills an element: `arr=(x y z); printf
+	// 'abcd%n' 'arr[2]'` leaves `arr[2]` at 4 and reports 0.
+	s.PrintfCountOperandTakesASubscript = interp.Yes
+	// And the one that refuses an operand which is present and empty:
+	// `printf 'ab%ncd' ''` is `not an identifier: ` and ends the script.
+	s.PrintfCountEmptyNameIsIgnored = interp.No
+	// Neither refusal stops the format. `printf 'abc%nXYZ' '1bad'` writes
+	// the whole `abcXYZ`, and a second `%n` after the bad one still stores —
+	// `printf 'abc%nX%n' 1bad good` leaves `good` at 4, read back through an
+	// EXIT trap because the shell ends once the builtin has returned. See
+	// BadNameToPrintfFatal, which is what ends it.
+	s.PrintfCountBadNameStopsThePass = interp.No
+	s.PrintfCountFrozenNameStopsThePass = interp.No
 	// unanswered PrintfHexFloatZeroFillPrecedesThePrefix: and so no fill to
 	// place in it either.
 	// unanswered PrintfHexFloatDefaultIsTwelveDigits: there is no `%a` here

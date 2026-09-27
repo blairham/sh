@@ -2372,6 +2372,28 @@ func Semantics() interp.Semantics {
 	// C99's three: `%F` is `1.500000`, `%a` is `0x1.8p+0` and `%A` is
 	// `0X1.8P+0`, all measured 2026-09-14 on bash 5.3.15 under `LC_ALL=C`.
 	s.PrintfC99FloatConversions = interp.Yes
+	// `%n`, and the count is the bytes this pass has produced: `printf
+	// '%.10e%n\n' 1 count` leaves 16 in bash 5.3.20 and in 3.2.57 alike,
+	// measured 2026-09-26.
+	s.PrintfCountConversion = interp.Yes
+	// And it leaves a plain value behind: `q=plain; printf 'abc%n' q` is
+	// `q=3` here, where two of the panel make the name an integer.
+	s.PrintfCountAttribute = interp.PrintfCountLeavesTheAttribute
+	// The operand has to be a plain name, where `printf -v 'a[0]'` and
+	// `read 'a[0]'` both fill the element: `arr=(x y z); printf 'abcd%n'
+	// 'arr[2]'` is `` printf: `arr[2]': not a valid identifier `` at 1 and
+	// leaves the array alone.
+	s.PrintfCountOperandTakesASubscript = interp.No
+	// An operand that is present and empty is the same as none at all here:
+	// `printf 'ab%ncd' ''` writes `abcd`, says nothing and reports 0.
+	s.PrintfCountEmptyNameIsIgnored = interp.Yes
+	// A word that cannot be a name gives up the rest of the format —
+	// `printf 'abc%nXYZ' '1bad'` writes `abc` at 1 — where a name this shell
+	// may not write is reported and then stepped over: `typeset -r ro=1;
+	// printf 'ab%ncd' ro` writes `abcd`, says `ro: readonly variable` and
+	// reports 0. The two cells are why the two axes are not one.
+	s.PrintfCountBadNameStopsThePass = interp.Yes
+	s.PrintfCountFrozenNameStopsThePass = interp.No
 	// And the shortest run of digits that names the value, which is C's
 	// default: `printf '%a' 0.1` is `0x1.999999999999ap-4` here.
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.No
@@ -4731,7 +4753,12 @@ func Diagnostics() interp.Diagnostics {
 		// `printf -v '1x' %s Q` and `printf -v 'a[]' X` are both 2 with the
 		// rest of the line still running, where `read '1x'` and `read 'a[]'`
 		// are 1. See Diagnostics.BuiltinBadNameStatusFor.
-		BuiltinBadNameStatusFor:  map[string]int{"printf": 2},
+		BuiltinBadNameStatusFor: map[string]int{"printf": 2},
+		// And `printf`'s own 2 is the *option*'s: a `%n` whose operand is
+		// not a name is an ordinary runtime failure and reports 1.
+		// Measured 2026-09-26: `printf -v '1x' %s Q` is 2 and
+		// `printf 'abc%n' '1bad'` is 1, on the same sentence.
+		PrintfCountBadNameStatus: 1,
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		BuiltinHelpStatus:        2,

@@ -1077,6 +1077,22 @@ func Semantics() interp.Semantics {
 	// 2026-09-14 — `%a` of 1.5 is `0x1.8p+0` and of 0.1 is
 	// `0x1.999999999999ap-4`, the shortest run that names the value.
 	s.PrintfC99FloatConversions = interp.Yes
+	// No `%n`: `printf '%.10e%n\n' 1 count` is `printf: %n: invalid
+	// directive` at 1 in dash 0.5.13 and stores nothing, measured
+	// 2026-09-26.
+	s.PrintfCountConversion = interp.No
+	// unanswered PrintfCountAttribute: no `%n` to reach a name with, and no
+	// integer attribute in this shell to leave on one.
+	// unanswered PrintfCountOperandTakesASubscript: the directive is refused
+	// before an operand is looked at, and this shell has no subscripts to
+	// take in any case.
+	// unanswered PrintfCountEmptyNameIsIgnored: no `%n` to hand an empty
+	// operand to.
+	// unanswered PrintfCountBadNameStopsThePass: the refusal here is of the
+	// directive rather than of a name, so nothing reaches the question of
+	// what a bad name costs.
+	// unanswered PrintfCountFrozenNameStopsThePass: and nothing reaches a
+	// freeze either.
 	s.PrintfHexFloatDefaultIsTwelveDigits = interp.No
 	// And a `%a`'s zero fill goes between the `0x` and the digits.
 	s.PrintfHexFloatZeroFillPrecedesThePrefix = interp.No

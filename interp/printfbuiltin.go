@@ -1293,6 +1293,17 @@ func printfPadToWidth(field string, width int, left, zero bool) string {
 
 // printfConvert formats one conversion whose width and precision are settled.
 func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func() (string, bool)) (string, int, bool) {
+	if verb == 'n' {
+		// In front of the field machinery, because this conversion has no
+		// field: a width or a precision on it is read and then ignored, with
+		// nothing laid out — `printf 'xy%5n' w` and `printf 'xy%.3n' w` both
+		// leave 2 in bash 5.3.20, zsh 5.9.2 and ksh93u+ alike. Going through
+		// the layout below would have padded what it writes, which is
+		// nothing, and taken a second operand for a `*` it can never honor.
+		name, present := next()
+		code, stop := r.printfCount(name, present)
+		return "", code, stop
+	}
 	// A field past the C int a reference stores it in is settled before
 	// anything else, because the layout below would honor it: 21 GB of
 	// padding is a hang rather than a slow answer, and no shell on the panel
@@ -2058,6 +2069,22 @@ func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
 		// character it is and is refused the way any unknown one is; that is
 		// the shape #2646 had, and the reason both halves live here.
 		if r.ask(r.sem().PrintfC99FloatConversions, "`printf` having C99's `%F`, `%a` and `%A` float conversions") {
+			return spec, verb, "", i + 1, 0
+		}
+		if r.unspecified {
+			return "", 0, "", i + 1, r.status
+		}
+		return spec, 0, "", i + 1, 0
+	}
+	if verb == 'n' {
+		// The one conversion that writes nothing and stores instead. Asked
+		// here rather than at the top, so a dialect without it is questioned
+		// only where the letter is actually written — and a dialect that
+		// has not got it wants the letter *not* taken, so that it arrives
+		// below as the conversion character it is and is refused the way any
+		// unknown one is. That is the shape PrintfC99FloatConversions has,
+		// for the same reason. See Semantics.PrintfCountConversion.
+		if r.ask(r.sem().PrintfCountConversion, "`printf '%n'` storing the byte count") {
 			return spec, verb, "", i + 1, 0
 		}
 		if r.unspecified {

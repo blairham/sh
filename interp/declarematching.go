@@ -80,7 +80,39 @@ func (p DeclareMatchingLetterPolicy) String() string {
 
 // declareMatching is `typeset -m` with at least one pattern. See the file
 // comment for why the letters around it are the whole question.
+//
+// An operand this engine cannot read as a pattern is refused before any of
+// the arms below sees it, rather than inside matchedNames, for two reasons:
+// the `-p` assigning arm walks the operands twice and would complain twice,
+// and the refusal has to reach the arm that never asks matchedNames anything
+// — `typeset -fm '['` goes to the function table. Every *other* operand on
+// the line is still answered, measured: `typeset -m 'zq*' '[' 'zr*'` writes
+// both parameters and the complaint, at 1.
 func (r *Runner) declareMatching(name string, patterns []string, f declareFlags) int {
+	kept := make([]string, 0, len(patterns))
+	for _, operand := range patterns {
+		pattern, _, _ := strings.Cut(operand, "=")
+		if r.refusedSelectionPattern(pattern) {
+			continue
+		}
+		kept = append(kept, operand)
+	}
+	if len(kept) == 0 {
+		// Nothing left to select with. Returning here rather than falling
+		// through matters: an arm handed no patterns at all lists the whole
+		// table, which is the opposite of what a refused line should write.
+		return 1
+	}
+	code := r.declareMatchingKept(name, kept, f)
+	if len(kept) != len(patterns) && code == 0 {
+		return 1
+	}
+	return code
+}
+
+// declareMatchingKept is declareMatching over the operands that survived the
+// pattern check above.
+func (r *Runner) declareMatchingKept(name string, patterns []string, f declareFlags) int {
 	switch {
 	case f.function || f.funcNames:
 		// The function table rather than the parameters, and the sign of the

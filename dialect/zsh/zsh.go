@@ -4857,6 +4857,10 @@ func Diagnostics() interp.Diagnostics {
 		// at 4, and a group that runs out of text errors just past the end.
 		ExpansionFlagsError: "error in flags near position %[1]d in '%[2]s'",
 		BadPattern:          "bad pattern: %s",
+		// A space before the colon, and it is this shell's own spelling
+		// rather than a typo carried forward: measured 2026-09-26 on zsh
+		// 5.9.2 at every `-m` surface, `zsh:typeset:1: bad pattern : [`.
+		BadSelectionPattern: "bad pattern : %s",
 		// No verbs: this shell names neither the escape nor the value it
 		// refused. Measured 2026-09-11 under `LC_ALL=C`, the whole line is
 		// `zsh:1: character not in range` (#1851).

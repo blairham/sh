@@ -8302,6 +8302,21 @@ type Diagnostics struct {
 	AssignThroughExpansionBadName string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string
+	// BadSelectionPattern is a `-m` operand the dialect will not compile as
+	// a pattern. One verb: the pattern.
+	//
+	// Its own field rather than a reuse of BadPattern because the shell with
+	// both writes them one byte apart, and the byte is not decoration: `bad
+	// pattern : [` here against `bad pattern: a(b` there, measured on zsh
+	// 5.9.2 (2026-09-26, `-f`) at `typeset -m`, `functions -m`, `hash -m`,
+	// `hash -dm`, `unhash -m`, `alias -m`, `unalias -m`, `unfunction -m`,
+	// `declare -m` and `autoload -m` for the first and at `${v:#a(b}` for
+	// the second. Sharing the string would tie a change to either wording to
+	// the other, and the two are not reached by one route.
+	//
+	// Read only where Semantics.UnterminatedBracket is BracketBadPattern, so
+	// a dialect that calls such a pattern a literal needs no wording.
+	BadSelectionPattern string
 	// CodePointOutsideTheLocale is a `\u` escape naming a code point the
 	// locale's encoding cannot hold, in the dialect that refuses one. No
 	// verbs: the shell that says this names neither the escape nor the

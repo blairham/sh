@@ -198,7 +198,12 @@ func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 		// asked, so a dialect adding the capability has to come and look.
 		return r.declareFunctions(nil, false, namesOnly, false, false, false)
 	}
+	status := 0
 	for _, pattern := range patterns {
+		if r.refusedSelectionPattern(pattern) {
+			status = 1
+			continue
+		}
 		o := r.patternOpts(pattern)
 		for _, name := range r.scriptFuncNames() {
 			if !matchPattern(pattern, name, o) {
@@ -211,7 +216,7 @@ func (r *Runner) functionsMatching(patterns []string, namesOnly bool) int {
 			r.printf("%s", r.listedFunctionLine(name, r.funcs[name]))
 		}
 	}
-	return 0
+	return status
 }
 
 // functionsIndentLetter reads `functions -x num`, which writes each level of

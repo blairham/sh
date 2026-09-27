@@ -428,7 +428,12 @@ func (r *Runner) hashNamedDirs(args []string, asCommands, clear, patterns bool) 
 		// The operands are patterns and the command is a listing, whatever
 		// they look like: measured, `hash -dm foo=/tmp` adds nothing and
 		// `hash -dm` with no operand writes nothing rather than the table.
+		status := 0
 		for _, pattern := range args {
+			if r.refusedSelectionPattern(pattern) {
+				status = 1
+				continue
+			}
 			o := r.patternOpts(pattern)
 			for _, name := range r.namedDirNames() {
 				if matchPattern(pattern, name, o) {
@@ -436,7 +441,7 @@ func (r *Runner) hashNamedDirs(args []string, asCommands, clear, patterns bool) 
 				}
 			}
 		}
-		return 0
+		return status
 	}
 	if clear {
 		if len(args) > 0 {
@@ -506,7 +511,12 @@ func (r *Runner) printNamedDir(name string, asCommands bool) {
 // and `functions -m '['` answer the same way here, and the wording belongs to
 // all three at once.
 func (r *Runner) hashMatchingListing(patterns []string) int {
+	status := 0
 	for _, pattern := range patterns {
+		if r.refusedSelectionPattern(pattern) {
+			status = 1
+			continue
+		}
 		o := r.patternOpts(pattern)
 		for _, name := range r.hashedCommandNames() {
 			if r.unspecified {
@@ -517,7 +527,7 @@ func (r *Runner) hashMatchingListing(patterns []string) int {
 			}
 		}
 	}
-	return 0
+	return status
 }
 
 // printHashEntry writes one command-table entry in the dialect's own shape,

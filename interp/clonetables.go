@@ -129,6 +129,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.localMarked = maps.Clone(r.localMarked)
 	c.unique = maps.Clone(r.unique)
 	c.shellOwn = maps.Clone(r.shellOwn)
+	c.notShellOwn = maps.Clone(r.notShellOwn)
 	c.scopeFixed = maps.Clone(r.scopeFixed)
 	c.kindFixed = maps.Clone(r.kindFixed)
 	c.traced = maps.Clone(r.traced)

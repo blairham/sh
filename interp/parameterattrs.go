@@ -191,8 +191,17 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		// put it in tables the shell walks. What the word reports is a
 		// description, and a description is what this function is.
 		Hidden: r.hideInScope[name] || r.privateHere(name),
-		Provided: r.DynamicParameter(name) || r.AbsentParameter(name) ||
-			r.shellOwnParameter(name) || r.privateHere(name),
+		// The three shapes, less the names a dialect has said outright are
+		// not its own — see Runner.MarkParameterNotTheShellsOwn, which is
+		// the statement that overrides the shape rather than a fourth source
+		// beside it.
+		//
+		// Asked of the *word* and not of existence, which is the whole of
+		// why parameterIsProvided sits beside this: a produced name a
+		// dialect has said is not its own is still a name the shell has, and
+		// folding the statement into the guard below made three of them stop
+		// existing.
+		Provided: r.parameterIsProvided(name) && !r.notShellOwn[name],
 	}
 	a.Tied = r.tieDescribesTheBinding(name)
 	if w, ok := r.fieldWidth[name]; ok {
@@ -212,7 +221,7 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		}
 		a.ZeroFilled = w.zeroFillLetter()
 	}
-	if !a.Provided && !r.parameterExists(name) {
+	if !r.parameterIsProvided(name) && !r.parameterExists(name) {
 		return ParameterAttributes{}, false
 	}
 	return a, true
@@ -383,4 +392,29 @@ func (r *Runner) ParameterNames() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// parameterIsProvided is the *shape*: a name whose value is produced on being
+// read, one the shell has registered a refusal for, one a dialect has said
+// outright is its own, or one a `private` opened.
+//
+// Split out from [ParameterAttributes.Provided] because the two questions it
+// used to answer at once came apart. It says whether the shell **has** the
+// name, which is what the guard at the end of ParameterAttributes asks; the
+// field says whether the name is the shell's **own**, which a dialect renders
+// as `special` and which [Runner.MarkParameterNotTheShellsOwn] can take back.
+// Folding the second into the first made three produced names report as
+// absent.
+// **A producer with a presence predicate is asked it**, which is what makes
+// a name that is registered and not yet there report as absent rather than
+// as an empty scalar. Measured 2026-09-27: `${(t)ZSH_SCRIPT}` in zsh 5.9.2
+// under `-c` is nothing at all and `${+ZSH_SCRIPT}` is 0, where a registered
+// producer alone answered `scalar` here — so a script asking
+// `${ZSH_SCRIPT-nope}` off a script file would have got the empty string
+// from a name the reference does not have.
+func (r *Runner) parameterIsProvided(name string) bool {
+	if r.DynamicParameter(name) {
+		return r.dynamicParameterIsThere(name)
+	}
+	return r.AbsentParameter(name) || r.shellOwnParameter(name) || r.privateHere(name)
 }

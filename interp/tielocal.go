@@ -82,10 +82,21 @@ func (r *Runner) shadowTiedHalf(name string) {
 	if name == t.array {
 		other = t.scalar
 	}
-	if _, seen := r.scopes[len(r.scopes)-1].saved[other]; seen {
+	sc := r.scopes[len(r.scopes)-1]
+	if _, seen := sc.saved[other]; seen {
 		return
 	}
 	r.shadow(other)
+	// And recorded as the partner's shadow rather than a declaration of it.
+	// The displacement is the same either way — that is the rule this
+	// function exists for — and what a type query *says* about the two is
+	// not: the half a declaration named is `local` and the half dragged
+	// along with it is not. After the shadow, because shadow clears this
+	// mark for the name it is given. See scope.tieMirrorOnly (#4875).
+	if sc.tieMirrorOnly == nil {
+		sc.tieMirrorOnly = map[string]bool{}
+	}
+	sc.tieMirrorOnly[other] = true
 }
 
 // tieDetached reports whether a tie is out of effect right now, which is the

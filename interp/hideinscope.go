@@ -141,6 +141,23 @@ func (r *Runner) setHideInScope(name string, f declareFlags) {
 	r.shadowStartsHiding(name)
 }
 
+// dropHideInScope takes the letter off a name without a declaration having
+// written a plus, which is what a construct that *starts a name over* needs.
+//
+// Its own name rather than a `setHideInScope` with a made-up `declareFlags`,
+// because the two say different things: that one is "this line wrote `+h`"
+// and this is "whatever this name carried is not this binding's any more".
+// `typeset -T` is the caller — see [Runner.declareTie], where a tie drops
+// every attribute either half was carrying — and the seam is shared so that
+// the shadow's record is corrected the one way rather than two.
+func (r *Runner) dropHideInScope(name string) {
+	if _, hidden := r.hideInScope[name]; !hidden {
+		return
+	}
+	delete(r.hideInScope, name)
+	r.shadowStopsHiding(name)
+}
+
 // shadowStartsHiding makes the shadow standing over a name a hidden one:
 // an ordinary parameter that merely happens to be spelled like one of the
 // shell's own.

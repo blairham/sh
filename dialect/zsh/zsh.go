@@ -2984,6 +2984,13 @@ func Semantics() interp.Semantics {
 	// zsh alone: a bare `exit` there reports what the trap's own last
 	// command did, so `trap "false; exit" 0` exits 1.
 	s.ExitInTrapReportsEarlierStatus = interp.No
+	// And a `return` written in that body names the status the shell leaves
+	// with, exactly as an `exit` there does: measured 2026-09-26 over a
+	// script file, `trap 'print X; return 5' EXIT; false` writes X and exits
+	// 5, and a subshell's own trap makes its `$?` 5 the same way. ksh93 is
+	// the other column that answers this way; dash and BusyBox ash end the
+	// body and keep the status they had.
+	s.ReturnInTheExitTrapNamesTheStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	// One subtraction, and what it cannot name it prints back — `kill -l
 	// 160` is `160` here. No EXIT: this shell answers `kill -l 0` with 0.

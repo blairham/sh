@@ -205,17 +205,16 @@ func funcfiletraceEntries(r *interp.Runner) []string {
 // and called from the script names the library here and the script there,
 // measured both ways.
 //
-// One route is off by one line and is named rather than papered over: a
-// function `autoload` defined reports its line one too high, because
-// Runner.defineFromText reads a body out of text by wrapping it in a
-// synthetic `name() {` line that the parser then counts. Every other route is
-// exact — a script, a sourced file, a `-c` string, a definition nested inside
-// another function, either declaration spelling — and the *sourced* reading of
-// the very same file is byte-identical to the reference, which is what says
-// the fault is the wrapper and not this walk. It stood because everything else
-// consumes the line as a subtrahend, `at - funcLine`, where the extra line
-// cancels itself. See #4471, which owns the fix; this array is its first
-// reader and not its cause.
+// Every route is exact — a script, a sourced file, a `-c` string, an
+// `autoload`ed file, a definition nested inside another function, either
+// declaration spelling. The autoloaded one was not, and this array is what
+// found it: `Runner.defineFromText` reads a body out of text by wrapping it
+// in a synthetic `name() {` line that the parser then counts, so a function
+// `autoload` defined reported its declaration a line below itself. It stood
+// because every other reader consumes the line as a subtrahend, `at -
+// funcLine`, where the extra line cancels itself, and this is the first
+// reader to want the line absolutely. `interp.funcOrigin.wrapperLines` is the
+// correction and #4471 is the measurement.
 func funcsourcetraceEntries(r *interp.Runner) []string {
 	return traceEntries(r, func(frames []interp.Frame, i int) string {
 		f := frames[i]

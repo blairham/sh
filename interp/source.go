@@ -371,9 +371,14 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// a diagnostic raised inside it names the script rather than the text.
 	keepsCallersLocation := s.eval && !r.EvalTextHasALocationOfItsOwn()
 	if keepsCallersLocation {
-		outerPin := r.linePin
+		outerPin, outerEnds := r.linePin, r.linePinEndsAtACall
 		r.linePin = r.lineNow()
-		defer func() { r.linePin = outerPin }()
+		// And it stands for everything the text sets going, a call
+		// included, because what the dialect has said is that the text is
+		// not a place: the caller's location is the location of the lot.
+		// See Runner.linePinEndsAtACall.
+		r.linePinEndsAtACall = false
+		defer func() { r.linePin, r.linePinEndsAtACall = outerPin, outerEnds }()
 	}
 	outerBase := r.lineBase
 	r.lineBase = 0
@@ -433,9 +438,16 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		// which names it rather than the file or the function around it.
 		// The mark is the frame count, so anything the text calls stands
 		// above it — see Runner.evalTextFloor.
-		outerFloor := r.evalTextFloor
+		outerFloor, outerOwn := r.evalTextFloor, r.evalTextNumbersFromItself
 		r.evalTextFloor = len(r.frames) + 1
-		defer func() { r.evalTextFloor = outerFloor }()
+		// And whether the text starts its own line one, which is what the
+		// offset settled above says: nothing means the text's first line is
+		// the numbering's first line. Read here rather than asked again,
+		// since the axis has already been put to the dialect once.
+		r.evalTextNumbersFromItself = r.lineBase == 0
+		defer func() {
+			r.evalTextFloor, r.evalTextNumbersFromItself = outerFloor, outerOwn
+		}()
 	}
 	d := r.dialect().On(s.route())
 	// With this shell's alias tables, because borrowed text is text this

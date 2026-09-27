@@ -151,3 +151,71 @@ func TestTheCommandTrapStyleDoesNotOutlastTheBody(t *testing.T) {
 		t.Errorf("output %q: want the EXIT body counted by its own rule", got)
 	}
 }
+
+// A function the body *calls* is a body of its own, and the pin does not
+// reach it: its lines are counted the way any function's are, which in the
+// dialect that pins is from the line the function was written on.
+//
+// Measured 2026-09-26 on the reference this reading was taken from, `-f`
+// over a script file: a two-line function printing `$LINENO` from its second
+// line reads 1 at every firing of a `DEBUG` trap that calls it, and a
+// `command not found` from its third line is located at the function's line
+// 2 — where this engine read the firing line for both, so the number climbed
+// with the script (#4478).
+//
+// **One script asks both halves**, because "the body's own lines" and "the
+// lines of everything the body sets going" are different amounts to pin and
+// they agree in every arrangement where the body calls nothing. The `body=`
+// row is the firing line and the `fn=` row is the function's own, from the
+// same firing.
+func TestAPinnedTrapBodyDoesNotPinAFunctionItCalls(t *testing.T) {
+	// myfunc is defined on line 1 and prints from line 2; the trap is set on
+	// lines 4 and 5 and fires before `echo two` on line 6. So the body's own
+	// read is 6 and the function's is 1, and a pin that reached the call
+	// would make the second 5.
+	const src = "myfunc() {\n  echo fn=$LINENO\n}\n" +
+		"trap 'echo body=$LINENO\nmyfunc' DEBUG\necho two"
+	got := echoed(t, src, func(s *Semantics) {
+		pinnedAt(s)
+		s.LinenoCountsFromTheFunction = Yes
+	})
+	if want := "body=6\nfn=1"; !strings.Contains(got, want) {
+		t.Errorf("got %q, want it to contain %q", got, want)
+	}
+}
+
+// And the same for a diagnostic, which reads the same line through a
+// different door: the two must not disagree about which text the failing
+// line was in.
+func TestAFailureInAFunctionATrapCalledNamesTheFunctionsLine(t *testing.T) {
+	const src = "myfunc() {\n  :\n  nosuchcmd-xyz\n}\n" +
+		"trap 'myfunc' DEBUG\necho two"
+	got := lineNamed(t, src, func(s *Semantics) {
+		pinnedAt(s)
+		s.LinenoCountsFromTheFunction = Yes
+	})
+	// The failing line is the function's third and the trap fired before
+	// line 6, so the pinned reading is 6 and the function's text says 3.
+	// Three and not the 2 the shell would print, because the Diagnostics
+	// these tests use names no function and so subtracts no definition
+	// line; what is being separated here is which *text* the line came out
+	// of, which is the half this fix moves.
+	if !strings.Contains(got, "line 3:") {
+		t.Errorf("got %q, want a line of the function's own text", got)
+	}
+}
+
+// The handler written as a *function* is the same question arriving by the
+// other spelling — `TRAP<NAL>` names a function and a function's lines are
+// its own — and it is the spelling the report was written from.
+func TestATrapFunctionsLinesAreItsOwn(t *testing.T) {
+	const src = "TRAPDEBUG() {\n  echo fn=$LINENO\n}\necho two\necho three"
+	got := echoed(t, src, func(s *Semantics) {
+		pinnedAt(s)
+		s.LinenoCountsFromTheFunction = Yes
+		s.TrapIsNamedByAFunction = Yes
+	})
+	if want := "fn=1\ntwo\nfn=1\nthree"; !strings.Contains(got, want) {
+		t.Errorf("got %q, want it to contain %q", got, want)
+	}
+}

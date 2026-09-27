@@ -3449,6 +3449,21 @@ type Runner struct {
 	// linePin overrides the line a node reports, for the dialect that names
 	// where a trap fired rather than where in its body a failure was.
 	linePin int
+	// linePinEndsAtACall says that pin is a fact about one body's *text*
+	// rather than about everything that text sets going, so a function
+	// called from it counts from its own lines again.
+	//
+	// Two things set a pin and they are pinning different amounts. A trap
+	// body is a body of its own whose lines are reported as the firing
+	// line, and a function it calls is a body of its own in turn: measured
+	// 2026-09-26 on zsh 5.9.2 under `-f`, `myfunc(){\n print F $LINENO\n}`
+	// with `trap 'myfunc' DEBUG` reads `F 1` at every firing, and the same
+	// function's `command not found` is located `myfunc:1:` (#4478). Text
+	// `eval` is running under a dialect that says it is *not a place* pins
+	// the other amount: the caller's location stands for everything under
+	// it, and a function called from that text reports the `eval`'s own
+	// line — measured the same day with `unsetopt evallineno`.
+	linePinEndsAtACall bool
 
 	// locatedByNameAlone drops the line from the one message it is set
 	// around, for a refusal the dialect locates by the shell's name and
@@ -4502,6 +4517,20 @@ type Runner struct {
 	// only the innermost is ever asked, and `eval` inside `eval` overwrites
 	// the outer mark with an equal one.
 	evalTextFloor int
+	// evalTextNumbersFromItself says the text that mark stands for starts
+	// its own line one rather than sitting at an offset into the caller's
+	// numbering — Semantics.EvalTextContinuesTheCallersLines, read once
+	// where the offset is settled rather than asked again at every reader.
+	//
+	// It is the half of the question `$LINENO` needs and the floor alone
+	// cannot answer. The floor says the line is in the text; this says
+	// whether the line the *function* around it was written on is a
+	// comparable origin. It is not, for text numbered from itself: the two
+	// numbers are lines of different texts, and subtracting one from the
+	// other took the parameter below nought (#4510).
+	//
+	// Saved and restored beside the floor, for the floor's reasons.
+	evalTextNumbersFromItself bool
 	// borrowed is the stack of text the shell is reading from somewhere
 	// other than the file it was handed: a file `.` read, or the string
 	// `eval` was given, innermost last.
@@ -4907,6 +4936,17 @@ func (r *Runner) builtinIsSpeaking() bool {
 // three cannot disagree.
 func (r *Runner) locationIsInsideEvalText() bool {
 	return r.evalTextFloor > 0 && r.evalTextFloor-1 == len(r.frames)-r.outsideCall
+}
+
+// locationIsInsideEvalTextNumberedFromItself is that question and one more:
+// the line is in the text, *and* the text starts its own line one rather than
+// continuing the caller's. See Runner.evalTextNumbersFromItself.
+//
+// The pair is what a reader wanting an *origin* asks, rather than the floor
+// alone — only a line in the caller's numbering can be measured against a
+// line of the caller's file.
+func (r *Runner) locationIsInsideEvalTextNumberedFromItself() bool {
+	return r.locationIsInsideEvalText() && r.evalTextNumbersFromItself
 }
 
 // locationNameAndLine is the pair a location is written from: the name that
@@ -5802,13 +5842,34 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	// thing a shell runs, so nothing reads this afterwards.
 	r.inExitTrap = false
 	exitedInTheBody = r.ctl == controlExit
-	if !exitedInTheBody {
-		// The body ran to the end without exiting, so the script keeps the
-		// status it already had.
+	if !exitedInTheBody && !r.returnNamedTheExitStatus() {
+		// The body ran to the end without naming a status, so the script
+		// keeps the one it already had.
 		r.status = before
 	}
 	r.stopTheShell()
 	return exitedInTheBody
+}
+
+// returnNamedTheExitStatus reports whether a `return` the EXIT trap's body
+// ended on is the shell's last word, the way an `exit` written there already
+// is — see Semantics.ReturnInTheExitTrapNamesTheStatus for the panel.
+//
+// Asked only where the body really ended on one, which is what keeps the
+// question off the three columns that never reach it: a body that ran to its
+// end, or that exited, has said nothing about a `return`, and the column that
+// *refuses* a `return` with nothing to return from carries on past the line
+// and ends with no control flow set at all.
+//
+// The status is already the one the `return` named — the builtin wrote it —
+// so there is nothing to compute here. What this decides is whether the
+// status the shell was about to report is put back over it.
+func (r *Runner) returnNamedTheExitStatus() bool {
+	if r.ctl != controlReturn {
+		return false
+	}
+	return r.ask(r.sem().ReturnInTheExitTrapNamesTheStatus,
+		"a `return` in the EXIT trap naming the shell's status")
 }
 
 // runExitHook runs the dialect's exit hook — zsh's `zshexit` — as the shell

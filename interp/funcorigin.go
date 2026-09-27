@@ -34,6 +34,28 @@ type funcOrigin struct {
 	// is recorded, so the two readings coincide by construction rather than
 	// by a second switch that could disagree with the first.
 	lineBase int
+	// wrapperLines is how many lines a definition *seam* put in front of the
+	// body before parsing it, and nought for a definition the parser read
+	// out of the program.
+	//
+	// [Runner.defineFromText] is handed a body without its braces — what a
+	// file on the function search path holds — and reads it by wrapping it
+	// in a declaration of its own. That wrapper is a real line to the
+	// parser, so every position inside the body is one greater than the line
+	// the file actually has, and an *absolute* reader of those positions is
+	// one too high: `$funcsourcetrace` reported the declaration a line below
+	// itself, and the call site inside such a file reported a line past the
+	// one that made the call. Measured 2026-09-25 against zsh 5.9.2, an
+	// `autoload`ed file whose declaration is on line 2 reading `:3` here and
+	// `:2` there (#4471).
+	//
+	// It stood because every other reader consumes the line as a
+	// *subtrahend* — `$LINENO` in a body and a diagnostic's `name:N:` are
+	// both `at - funcLine`, and both carry the same extra line, so the
+	// wrapper cancels itself. Which is why this is subtracted from the
+	// definition line and from the body's offset **together**: move one
+	// without the other and the readings that were right stop being.
+	wrapperLines int
 	// text is the source the definition was read out of, where that was not
 	// the script's own — see runningText. Unset for a function the script
 	// defined, which is quoted against the script's text wherever it is
@@ -47,16 +69,34 @@ type funcOrigin struct {
 // An origin with nothing in it is deleted rather than stored, so a lookup
 // for a name nobody recorded and a lookup for a name recorded as coming
 // from nowhere answer the same.
-func (r *Runner) recordFunctionOrigin(name, file string, lineBase int, text runningText) {
-	if file == "" && lineBase == 0 && !text.borrowed {
+func (r *Runner) recordFunctionOrigin(name string, o funcOrigin) {
+	if o == (funcOrigin{}) {
 		delete(r.funcOrigins, name)
 		return
 	}
 	if r.funcOrigins == nil {
 		r.funcOrigins = map[string]funcOrigin{}
 	}
-	r.funcOrigins[name] = funcOrigin{file: file, lineBase: lineBase, text: text}
+	r.funcOrigins[name] = o
 }
+
+// definitionLine is the line a declaration at this parsed position sits on in
+// the file the body was read from: the offset the text was running at, less
+// whatever a seam's wrapper added in front of it.
+//
+// The two corrections are one question — *where is this really* — and they
+// arrive by different routes, so they are added here rather than at each of
+// the two callers. A function defined inside an autoloaded body needs both at
+// once: its own record carries the body's offset and no wrapper, while the
+// body around it carries the wrapper and no offset.
+func (o funcOrigin) definitionLine(parsed int) int {
+	return parsed + o.lineBase - o.wrapperLines
+}
+
+// bodyLineBase is the offset a body read at this origin runs under, which
+// moves with the definition line so that the difference between them — every
+// relative reading in the shell — is what it was.
+func (o funcOrigin) bodyLineBase() int { return o.lineBase - o.wrapperLines }
 
 // functionFile is where a function was defined, or the empty string for one
 // whose definition route had no file to name.

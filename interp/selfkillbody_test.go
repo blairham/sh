@@ -5,6 +5,7 @@ package interp
 
 import (
 	"os"
+	"syscall"
 	"testing"
 )
 
@@ -88,5 +89,57 @@ func TestABodysOwnSignalIsRecordedOnItsOwnList(t *testing.T) {
 	s.mu.Unlock()
 	if len(shared) != 0 {
 		t.Errorf("the shared list holds %v, want nothing: the process never had this signal", shared)
+	}
+}
+
+// A signal a forked body aims at itself is answered from the **default**
+// disposition, even for the one signal this shell replaces the default of.
+//
+// Three of the panel's columns ignore an untrapped QUIT when the shell is not
+// interactive — Semantics.QuitIgnoredWhenNotInteractive, which is the shell's
+// own answer and is right: `kill -QUIT $$` is 0 there and silent. A body a
+// real shell would have forked takes the signal all the same, in both
+// references and in either mode, so the two are different questions and this
+// switch must not ask the first one (#4724).
+//
+// The row above the assertion is the control, and it is the point of the
+// test: the same runner really is one that ignores an untrapped QUIT. Without
+// it the death below would pass for a shell that had never been asked.
+func TestAForkedBodyTakesAQuitTheShellItselfWouldIgnore(t *testing.T) {
+	sem := PosixSemantics()
+	sem.QuitIgnoredWhenNotInteractive = Yes
+	r := newTestRunner(t, &Runner{inSubshell: true, Semantics: &sem})
+	if !r.untrappedSignalIgnored("QUIT") {
+		t.Fatal("this shell does not ignore an untrapped QUIT, so the test asks nothing")
+	}
+	if err := r.signalThisBody("QUIT", syscall.SIGQUIT); err != nil {
+		t.Fatalf("signalThisBody: %v", err)
+	}
+	if want := 128 + int(syscall.SIGQUIT); r.status != want {
+		t.Errorf("status %d, want %d: the body dies of the signal", r.status, want)
+	}
+	if r.killedBySig != syscall.SIGQUIT {
+		t.Errorf("killedBySig = %v, want QUIT", r.killedBySig)
+	}
+}
+
+// And the half that stays: a signal the body has a *trap* for runs that trap
+// rather than ending anything, which is what says the change above reaches
+// only the untrapped case.
+func TestATrappedQuitInAForkedBodyStillRunsItsHandler(t *testing.T) {
+	sem := PosixSemantics()
+	sem.QuitIgnoredWhenNotInteractive = Yes
+	r := newTestRunner(t, &Runner{
+		inSubshell: true, Semantics: &sem,
+		traps: map[string]string{"QUIT": "echo Q"},
+	})
+	if err := r.signalThisBody("QUIT", syscall.SIGQUIT); err != nil {
+		t.Fatalf("signalThisBody: %v", err)
+	}
+	if r.killedBySig != 0 {
+		t.Errorf("killedBySig = %v, want nothing: the handler answers it", r.killedBySig)
+	}
+	if len(r.selfPending) != 1 || r.selfPending[0] != "QUIT" {
+		t.Errorf("selfPending = %v, want [QUIT]", r.selfPending)
 	}
 }

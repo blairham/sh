@@ -143,3 +143,100 @@ func TestAFunctionDefinedInEvalsTextKeepsTheOffset(t *testing.T) {
 		})
 	}
 }
+
+// Where `$LINENO` is read from inside `eval`'s text in a *function*, which is
+// the two rules above composed and is neither of them. One dialect numbers a
+// function's lines from the line the function was written on
+// (Semantics.LinenoCountsFromTheFunction); the text's own line one is a line
+// of the text, so the function's line is not an origin it can be measured
+// against, and subtracting it took the parameter below nought — measured
+// 2026-09-25 on a script whose line 3 is `g(){ eval 'echo G=$LINENO'; }`,
+// where the reference reads 1 and this read -2 (#4510).
+//
+// **The noun is the numbering and not the construct.** "An `eval` is running"
+// and "this line was read from `eval`'s text, numbered from its own line one"
+// agree in the arrangement above and part in the two rows below it, which is
+// why both are here: a function *called* from the text is a line of the
+// function again, and text that continues the caller's lines is in the
+// caller's numbering and keeps the offset.
+func TestLinenoInEvalsTextIsNotOffsetByTheFunctionAroundIt(t *testing.T) {
+	// The eval is on line 3 and its text is two lines, so the text's own
+	// numbering says 1 then 2, the function offset would take that to -2 and
+	// -1, and the caller's numbering says 0 then 1.
+	const inAFunction = evalOnOneLine +
+		`f(){ eval "echo A=\$LINENO${nl}echo B=\$LINENO"; }` + "\nf\n"
+	for _, tc := range []struct {
+		name  string
+		setup func(*Runner)
+		want  string
+	}{
+		{
+			// The text is a place of its own and starts its own line one.
+			"text numbered from itself", func(r *Runner) {
+				s := *r.Semantics
+				s.EvalTextContinuesTheCallersLines = No
+				r.Semantics = &s
+			}, "A=1\nB=2",
+		},
+		{
+			// The text sits at an offset into the caller's lines, so the
+			// line the function was written on is a comparable origin and
+			// the offset applies as it does anywhere else in the body.
+			"text continuing the caller's lines", func(r *Runner) {
+				s := *r.Semantics
+				s.EvalTextContinuesTheCallersLines = Yes
+				r.Semantics = &s
+			}, "A=0\nB=1",
+		},
+		{
+			// And the switch that says the text is not a place at all: the
+			// line stays pinned at the `eval`'s own, which is a line of the
+			// function's file, so both reads are that line's offset.
+			"text keeping the caller's location", func(r *Runner) {
+				s := *r.Semantics
+				s.EvalTextContinuesTheCallersLines = No
+				r.Semantics = &s
+				r.SetEvalTextHasALocationOfItsOwn(false)
+			}, "A=0\nB=0",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, inAFunction, func(r *Runner) {
+				s := *r.Semantics
+				s.LinenoCountsFromTheFunction = Yes
+				r.Semantics = &s
+				tc.setup(r)
+			})
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The row that holds the `eval` fixed and moves the line out of its text: a
+// function the text *calls* is a frame above the mark, so its body counts
+// from its own definition line again. Measured 2026-09-26 on the reference
+// this axis was taken from, where `h(){ eval 'k(){ echo $LINENO; }\nk'; }`
+// and a `g` defined outside and called from the text both read their own
+// offset.
+//
+// It is the discriminator for the test above rather than a second case of
+// it. A rule keyed on "an `eval` is somewhere below us" answers that one
+// correctly and this one 4, and nothing in an arrangement where the two
+// agree could tell them apart.
+func TestTheEvalTextRuleEndsAtAFunctionCalledFromIt(t *testing.T) {
+	for _, a := range []Answer{Yes, No} {
+		src := evalOnOneLine + "g(){\necho G=$LINENO\n}\n" +
+			`f(){ eval "g"; }` + "\nf\n"
+		out, _ := run(t, src, func(r *Runner) {
+			s := *r.Semantics
+			s.LinenoCountsFromTheFunction = Yes
+			s.EvalTextContinuesTheCallersLines = a
+			r.Semantics = &s
+		})
+		if got := strings.TrimSpace(out); got != "G=1" {
+			t.Errorf("%v: got %q, want the called function's own offset", a, got)
+		}
+	}
+}

@@ -4052,6 +4052,38 @@ type Semantics struct {
 	// exits 0. A wrong exit status is what a caller branches on, so this is
 	// the quiet kind of difference.
 	ExitInTrapReportsEarlierStatus Answer
+	// ReturnInTheExitTrapNamesTheStatus makes a `return` written in an EXIT
+	// trap's body the shell's last word, the way `exit` already is there:
+	// the status the `return` names is what the shell — or the subshell —
+	// reports, in place of the status it was about to report.
+	//
+	// Measured 2026-09-26 over script files, with `trap 'echo X; return 5'
+	// EXIT` and a script whose own last command sets a status of its own:
+	//
+	//	                     trap … EXIT; false    ( trap … EXIT; true ); $?
+	//	zsh 5.9.2            5                     5
+	//	ksh93 2012-08-01     5                     5
+	//	dash 0.5.12          1                     0
+	//	BusyBox ash 1.37.0   1                     —
+	//	bash 5.3.20          1, and a refusal      0, and a refusal
+	//
+	// So it is two columns against two, and the shapes move together: a
+	// subshell's own EXIT trap is the same boundary and the same answer.
+	// The `false` is the discriminating half — with the script already at 0
+	// every column reports 0 and the probe decides nothing, which is how a
+	// one-line repro can make this look unanimous.
+	//
+	// The body **ends** at the `return` under either answer, and that is
+	// core rather than part of this: dash, ash, ksh93 and zsh all leave a
+	// line written after it unrun. What the axis moves is the status alone.
+	//
+	// unpinned bash: the question cannot be put to it. bash refuses a
+	// `return` with nothing to return from — Semantics.ReturnOutsideAFunctionIsRefused,
+	// which is its own axis and is asked first — so the body carries on past
+	// the line and never ends on a `return` at all. Pinned in interp by
+	// TestAReturnInTheExitTrapCanNameTheShellsStatus, whose refusing row is
+	// the control that says the two axes are asked in that order.
+	ReturnInTheExitTrapNamesTheStatus Answer
 
 	// SignalHandlerSeesEarlierStatus shows a signal handler the status from
 	// before the command that triggered it rather than that command's own.
@@ -27197,11 +27229,17 @@ func PosixSemantics() Semantics {
 		// the discriminating half — with a bare `exit` in the trap body all
 		// seven report 7, and the probe decides nothing.
 		ExitInTrapReportsEarlierStatus: Yes,
-		UnsetPositionalIsAllowed:       No,
-		TraceShowsItsOwnDisabling:      Yes,
-		TraceAssignmentsSeparately:     No,
-		StatusArgument:                 StatusArgStrict,
-		EqualsExpansion:                No,
+		// POSIX leaves a `return` with nothing to return from undefined, and
+		// the two columns nearest the standard let it end the trap's body
+		// without letting it name a status — measured on dash 0.5.12 and
+		// BusyBox ash 1.37.0, where `trap 'return 5' EXIT; false` is 1. The
+		// two that take the status say so themselves.
+		ReturnInTheExitTrapNamesTheStatus: No,
+		UnsetPositionalIsAllowed:          No,
+		TraceShowsItsOwnDisabling:         Yes,
+		TraceAssignmentsSeparately:        No,
+		StatusArgument:                    StatusArgStrict,
+		EqualsExpansion:                   No,
 		// POSIX gives `test` one spelling of string equality, so `==` is not
 		// an operator; the three shells that accept it added it.
 		TestAcceptsDoubleEqual: No,

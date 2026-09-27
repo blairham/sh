@@ -212,6 +212,19 @@ type Parser struct {
 	// open. A prompt asking what it is waiting for asks afterwards.
 	openAtEnd []opener
 
+	// refusedWaitingForAThen says the parse refused a **token** while the
+	// outermost construct it had open was an `if` or `elif` short of its
+	// `then`. Taken where the refusal lands, for the same reason openAtEnd is
+	// taken where the input runs out: the stack is unwound by the time the
+	// caller can ask.
+	//
+	// One reader, and it is a reader of a *body*: a `$( … )` whose read
+	// stopped at the closing parenthesis answers differently in exactly this
+	// state. See Lexer.bodyRefusalSettlesTheRead and
+	// [Dialect.SubstitutionBodyDefersAnUnfinishedCondition], where the grid
+	// is and where the rows that make it the **outermost** construct are.
+	refusedWaitingForAThen bool
+
 	// funcBody says the command about to be parsed is a function's body, so
 	// that a brace group standing as one is recorded as the function rather
 	// than as a group. They are the same syntax and not the same thing to
@@ -1041,6 +1054,29 @@ type Open struct {
 	Construct bool
 }
 
+// waitsForAThen reports whether the **outermost** construct open here is an
+// `if` or `elif` that has not read its `then` yet.
+//
+// The outermost and not the innermost, which is the whole of what the rows
+// either side of it measure: `$(if if true)` is two `if`s deep and is deferred
+// where `$(if true; then if)` — one `if` deep with a `then` read, and another
+// inside it — is not. A reading of the innermost takes them the same way and
+// is wrong about the second. See
+// [Dialect.SubstitutionBodyDefersAnUnfinishedCondition].
+//
+// The `then` shows on the stack as a clause entry above the construct, which
+// opensClause puts there once the keyword is consumed; `elif` replaces it and
+// is a condition again, which is why it reads the same way as the bare `if`.
+func (p *Parser) waitsForAThen() bool {
+	if len(p.open) == 0 || p.open[0].word != "if" {
+		return false
+	}
+	if len(p.open) > 1 && !p.open[1].construct {
+		return p.open[1].word == "elif"
+	}
+	return true
+}
+
 // unterminated describes the state the parser gave up in.
 func (p *Parser) unterminated(expected string) *Error {
 	e := &Error{
@@ -1202,6 +1238,12 @@ func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 		// [Dialect.EmptyParensAreOneToken].
 		literal, text, source = "()", `"()"`, ""
 	}
+	// What was still waiting for a partner when this refusal landed, taken
+	// while the stack is standing — opens unwinds it by deferring, so a
+	// caller asking afterwards is always told nothing was open. The first
+	// refusal only, which the guard at the top of this function already
+	// makes true of everything else here.
+	p.refusedWaitingForAThen = p.waitsForAThen()
 	p.err = &Error{
 		Pos: tok.Pos, Kind: ErrUnexpected,
 		Token: literal, TokenOpener: tokenOpener(tok),

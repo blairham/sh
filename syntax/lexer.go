@@ -99,6 +99,11 @@ type Lexer struct {
 	// beside lastBodyStop and cleared with it; see
 	// Lexer.bodyRefusalSettlesTheRead, which is the one thing that asks.
 	lastBodyRanOut bool
+	// lastBodyWaitedForAThen says that read refused a token with the
+	// outermost construct it had open an `if` or `elif` short of its `then`.
+	// Kept beside lastBodyRanOut and cleared with it; see
+	// Lexer.bodyRefusalSettlesTheRead, which is the one thing that asks.
+	lastBodyWaitedForAThen bool
 	// settledBodyRefusal is a `$( … )` whose body the grammar refused at a
 	// token, in a dialect where that settles the read — see
 	// Dialect.SubstitutionBodyRefusalEndsTheRead.
@@ -4162,7 +4167,23 @@ func (l *Lexer) bodyRefusalSettlesTheRead() bool {
 	// construct did close and counting is right about where. The same carve
 	// out the closed case makes — see
 	// Diagnostics.substitutionBodyReplacesTheQuote.
-	return e.Token != closingOf(CommandSubst)
+	//
+	// **With one shape carved back out of it**, and only where a dialect says
+	// so: an `if` or `elif` still short of its `then`. There the shell that
+	// closes the construct is the one whose short-body option is *on*, and
+	// with it off the same body settles the read. See
+	// [Dialect.SubstitutionBodyRefusesAnUnfinishedCondition], where the grid
+	// and the rows that make it the outermost construct are.
+	//
+	// The rest of the closer's population is wider than the panel and is
+	// #4859's: `$(for)`, `$(case)`, `$({)`, `$(select)`, `$(repeat)` and
+	// `$(echo |)` are refused with the line in that shell under every mode
+	// and are taken here.
+	if e.Token == closingOf(CommandSubst) {
+		return l.dialect.SubstitutionBodyRefusesAnUnfinishedCondition &&
+			l.lastBodyWaitedForAThen
+	}
+	return true
 }
 
 // scanParens reads $( … ) or $(( … )).
@@ -4221,6 +4242,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		l.lastInner, l.lastBodyRefusal, l.lastBodyStop = "", nil, 0
 		l.lastBodyGaveUp = nil
 		l.lastBodyOpenParens, l.lastBodyRanOut = 0, false
+		l.lastBodyWaitedForAThen = false
 		l.lastInnerHeredocExpands = false
 		if end, remarks, inSource, ok := l.parseToClose(start); ok {
 			// What that read had to say comes back with it. A parse inside a
@@ -4972,6 +4994,7 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool, bool) {
 			l.lastBodyStop = from + int(sub.tok.Pos.Offset)
 			l.lastBodyOpenParens = sub.subshellsLeftOpen
 			l.lastBodyRanOut = sub.lex.incomplete
+			l.lastBodyWaitedForAThen = sub.refusedWaitingForAThen
 		}
 		if sub.err == nil && !sub.at(TokEOF) {
 			// The read *stopped* rather than refusing, which is what a

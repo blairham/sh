@@ -3499,6 +3499,33 @@ type Runner struct {
 	// it, and a function called from that text reports the `eval`'s own
 	// line — measured the same day with `unsetopt evallineno`.
 	linePinEndsAtACall bool
+	// linePinFuncLine is the line the function in force stood on when the
+	// pin was taken, for the dialect that counts a function's lines from
+	// where the function was written.
+	//
+	// A pin is a location that has already been resolved, so a later reader
+	// must not measure it against an origin from a *different* text. Under
+	// the option that says evaluated text is not a place of its own, a
+	// function called from that text reports the caller's pinned line — and
+	// subtracting the callee's own definition line from it measured two
+	// texts against each other. Measured 2026-09-26 on zsh 5.9.2 under `-f`
+	// over a script file, `unsetopt evallineno` with `myfunc` written on
+	// line 2 and `eval "myfunc"` on line 7: the reference reads 7 and this
+	// read 5, and the diagnostic from the same body was `myfunc:7:` against
+	// `myfunc:5:` (#4758).
+	//
+	// Carried beside the pin rather than derived at the reader, because by
+	// then the frame that took the pin is gone. Where the `eval` is itself
+	// inside a function the number is that function's definition line, and
+	// the subtraction comes out at the line the pin was taken at: the same
+	// reference reads 2 for an `eval "myfunc"` on line 7 of a function
+	// written on line 5.
+	linePinFuncLine int
+	// pinnedSourceOffset is the offset the lines of a file sourced from
+	// pinned text are read at, and nothing outside one. See the note in
+	// interp/source.go for the measurement and for why it is in force
+	// rather than applied per file (#4757).
+	pinnedSourceOffset int
 
 	// locatedByNameAlone drops the line from the one message it is set
 	// around, for a refusal the dialect locates by the shell's name and
@@ -3896,6 +3923,14 @@ type Runner struct {
 	// No lock: a subshell's runner is a copy owned by the goroutine running
 	// it, which is also the only thing that records or takes from this.
 	selfPending []string
+	// selfHeldForInput is selfPending's other half: what this body aimed at
+	// itself and is holding until the shell reads more input or finishes
+	// waiting for a child. See Runner.signalIsHeldUntilInputOrAChild.
+	//
+	// Discarded with the body, which is measured rather than incidental: a
+	// forked body that signals itself this way and then ends without waiting
+	// for anything runs nothing at all.
+	selfHeldForInput []string
 	// inheritedIgnored marks the entries in traps that arrived across the
 	// subshell boundary rather than being set inside it, because one
 	// dialect lists an ignore it set and not one it inherited.
@@ -4997,6 +5032,20 @@ func (r *Runner) locationIsInsideEvalText() bool {
 	return r.evalTextFloor > 0 && r.evalTextFloor-1 == len(r.frames)-r.outsideCall
 }
 
+// functionLineOrigin is the line a location is measured against, for the
+// dialect that counts a function's lines from where the function was written.
+//
+// The function in force, except where the line is **pinned** — a pin is a
+// location that was resolved in some other text, and the origin that goes
+// with it is the one that stood when it was taken. See Runner.linePinFuncLine
+// (#4758).
+func (r *Runner) functionLineOrigin() int {
+	if r.linePin != 0 {
+		return r.linePinFuncLine
+	}
+	return r.funcLine
+}
+
 // locationIsInsideEvalTextNumberedFromItself is that question and one more:
 // the line is in the text, *and* the text starts its own line one rather than
 // continuing the caller's. See Runner.evalTextNumbersFromItself.
@@ -5052,7 +5101,7 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 		return d.EvalSourceName, at, false
 	}
 	if functionCounts && d.LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {
-		return r.inFunc, at - r.funcLine, true
+		return r.inFunc, at - r.functionLineOrigin(), true
 	}
 	name = r.name()
 	if r.dotFailureFile != "" {
@@ -8978,7 +9027,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	if !stopped {
 		// Reaped, so a child of this shell has ended — a stop is not one,
 		// the process being still there. See Runner.childReaped.
-		r.childReaped()
+		r.childWaitedFor()
 	}
 	r.status = status
 	if w.Killed {

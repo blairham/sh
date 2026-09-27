@@ -1118,7 +1118,13 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		//
 		// The key and not the name, because the pending list is read against
 		// the trap table and a nameless number has no entry under "".
-		r.selfSignaled(key)
+		//
+		// Unless the condition is not what the script just sent, which is
+		// one condition and not a class: see selfAimedSignalIsTheCondition
+		// and Semantics.SelfAimedChildSignalRunsTheTrap (#4756).
+		if r.selfAimedSignalIsTheCondition(key) {
+			r.selfSignaled(key)
+		}
 	case !trapped && fatalSignal(name, sig) && r.untrappedSignalIgnored(name):
 		// The shell has taken this signal's default action away from the
 		// kernel and put nothing in its place, so the raise is not merely

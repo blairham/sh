@@ -50,11 +50,13 @@ echo "sub=$?"`)
 // error appended, so the order here is the concatenation's and not the
 // shell's — at a terminal the notice comes first, as it does in the reference.
 //
-// The command is written back by this project's printer and the reference
-// writes it back by its own, so the two part on a body spanning lines:
-// bash 5.3.20 renders this one as `( kill $BASHPID; echo sender-ran-on )` and
-// keeps the newlines in a body holding a `for` or an `if`. That is a
-// deparsing difference rather than a job-control one — see #4725.
+// The command is written back through the arrangement this shell writes a
+// whole program back in, which is what the reference's own deparser produces:
+// measured 2026-09-26 on bash 5.3.20, this body comes back as
+// `( kill $BASHPID; echo sender-ran-on )` on one line, and a body holding a
+// `for` or an `if` keeps newlines in places of its own. Both shapes are
+// byte-identical here (#4725); the arrangement itself is pinned in
+// interp/killedcommandlayout_test.go.
 func TestAnUntrappedSignalAtBashPidEndsOnlyTheBody(t *testing.T) {
 	got := runBashAnchored(t, `( kill $BASHPID
   echo sender-ran-on )
@@ -67,7 +69,7 @@ echo still-here`)
 	// The notice's own words are the host's — `Terminated: 15` on a BSD and
 	// `Terminated` on Linux — so what is asserted is that it named this
 	// command and nothing else ran.
-	if !strings.HasSuffix(got, "( kill $BASHPID\necho sender-ran-on )\n") {
+	if !strings.HasSuffix(got, "( kill $BASHPID; echo sender-ran-on )\n") {
 		t.Errorf("output = %q, want the subshell's own text written back", got)
 	}
 }

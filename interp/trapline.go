@@ -122,7 +122,7 @@ func (r *Runner) bodyLineStyle() TrapBodyLineStyle {
 // reads: EXIT is the one trap whose body is not a level of indirection.
 func (r *Runner) enterTrapBody(cond string) func() {
 	base, pin, command, inTrap := r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody
-	pinEnds := r.linePinEndsAtACall
+	pinEnds, pinFunc := r.linePinEndsAtACall, r.linePinFuncLine
 	trapCond := r.trapBodyCond
 	text := r.runText
 	indirection := r.indirection
@@ -162,7 +162,7 @@ func (r *Runner) enterTrapBody(cond string) func() {
 	line := r.line
 	restore := func() {
 		r.lineBase, r.linePin, r.inCommandTrap, r.inTrapBody = base, pin, command, inTrap
-		r.linePinEndsAtACall = pinEnds
+		r.linePinEndsAtACall, r.linePinFuncLine = pinEnds, pinFunc
 		r.trapBodyCond = trapCond
 		r.runText = text
 		r.line, r.indirection = line, indirection
@@ -174,6 +174,9 @@ func (r *Runner) enterTrapBody(cond string) func() {
 		r.linePin = r.firedAt()
 		// The body's own text and no further: see linePinEndsAtACall.
 		r.linePinEndsAtACall = true
+		// And the origin the pin was taken against, which for a body a call
+		// does not reach is the one already in force. See linePinFuncLine.
+		r.linePinFuncLine = r.funcLine
 	}
 	// Cleared for the run of the body itself. The flag says which condition
 	// *this* body belongs to, and a trap that fires while it runs is a

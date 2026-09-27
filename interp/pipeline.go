@@ -535,7 +535,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// Every element is a fork of its own, and the shell reaps every
 			// one of them — a pipeline of two counts two. See
 			// Runner.childReaped.
-			r.childReaped()
+			r.childWaitedFor()
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)
 			}

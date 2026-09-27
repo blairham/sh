@@ -155,12 +155,16 @@ func (r *Runner) ensureSpecials() {
 			// lineNow rather than r.line, for the one construct that has
 			// not advanced it yet: see
 			// Semantics.CaseSubjectKeepsThePreviousLine.
+			//
+			// And a line the dialect has **pinned** is measured against the
+			// origin that stood when the pin was taken, never against the
+			// callee's: see Runner.functionLineOrigin (#4758).
 			at := r.lineNow()
-			if r.locationIsInsideAFunctionBody() &&
+			if origin := r.functionLineOrigin(); r.locationIsInsideAFunctionBody() &&
 				!r.locationIsInsideEvalTextNumberedFromItself() &&
-				r.funcLine > 0 &&
+				origin > 0 &&
 				r.ask(r.sem().LinenoCountsFromTheFunction, "`$LINENO` inside a function counting from it") {
-				return strconv.Itoa(at - r.funcLine)
+				return strconv.Itoa(at - origin)
 			}
 			return strconv.Itoa(at)
 		}

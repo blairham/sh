@@ -16035,6 +16035,75 @@ type Semantics struct {
 	// EXIT trap reports the line the parser stopped at. ksh93 says no, which
 	// makes an EXIT body read like a small script of its own.
 	ExitTrapFiresPastTheEnd Answer
+
+	// SelfAimedChildSignalRunsTheTrap runs the `CHLD` handler for a `kill`
+	// that names the shell itself.
+	//
+	// **Whether it runs at all**, rather than when: `CHLD` is not an ordinary
+	// trappable signal in most of the panel. It stands for "a child of this
+	// shell changed state", and a `kill` naming the shell is not that, so the
+	// handler that answers a reaped child answers nothing here. The columns
+	// that have no such notion treat the number like any other signal's.
+	//
+	// Measured 2026-09-26, script files, `trap 'echo C' CHLD` / `kill -CHLD
+	// $$; echo a` / `echo b`; `go version -m` on each reference: *not a Go
+	// executable*.
+	//
+	//	bash 5.3.20     a b        no
+	//	ksh93 2012-08-01   a b     no
+	//	zsh 5.9.2       a b        no
+	//	dash 0.5.12     C a b      yes
+	//	BusyBox ash 1.37.0   C a b yes
+	//
+	// The short probe is what decides it. A longer one with a `sleep` and an
+	// external command in it reads `C a x C b` in the first column, and both
+	// of those `C`s are real children being reaped — which is how this rode
+	// along unnoticed beside a *timing* row until the children were taken
+	// out (#4756).
+	//
+	// A handler still runs for a real child wherever the column runs one at
+	// all; this is about the signal a script sends, and nothing else.
+	SelfAimedChildSignalRunsTheTrap Answer
+
+	// SelfAimedWindowChangeWaitsForInputOrAChild holds a `WINCH` a script
+	// aimed at the shell itself until the shell next **reads a unit of its
+	// input** or **finishes waiting for a child**, rather than running the
+	// handler between commands as every other signal's is.
+	//
+	// Measured 2026-09-26 against zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+	// bash 5.3.20, ksh93 2012-08-01 and dash 0.5.12; `go version -m` on each:
+	// *not a Go executable*. Output captured to a file rather than through a
+	// pipe. `trap 'print W' WINCH` on the first line of a script file, and
+	// then:
+	//
+	//	kill -WINCH $$; print a; print b        zsh a b W   the rest W a b
+	//	kill -WINCH $$; print a / print b       zsh a W b   the rest W a b
+	//	for i in 1 / do / kill -WINCH $$ /
+	//	  print a / done / print b              zsh a W b   the rest W a b
+	//
+	// The third separates **the physical line** from **the unit of input**,
+	// and it is the row this is keyed on: the `kill` and the `print a` are
+	// on different lines and nothing fires between them, because the whole
+	// `for` is read in one go. A multi-line function body and a multi-line
+	// brace group answer identically, and a `;`-separated line is one unit
+	// however many statements are on it — which is what the first row says.
+	//
+	// The **wait** is the other arrival point and is not the same thing said
+	// twice: `kill -WINCH $$; /bin/echo x; print a` on one line reads
+	// `x W a` there, so the handler runs when the child is done and inside
+	// the unit. A `sleep` in place of the external command cannot tell the
+	// two apart, since it writes nothing.
+	//
+	// Two shapes reach neither moment and run nothing at all, and both are
+	// measured: `-c`, however many lines the program is spread over, holds
+	// its whole text before the shell starts and never reads again; and a
+	// forked body that signals itself and then ends without waiting for a
+	// child takes the arrival with it.
+	//
+	// Every other signal dispatches promptly in that column too — `TERM`,
+	// `URG` and `TSTP` were measured in the same shapes — so this is one
+	// condition and not a class (#4755).
+	SelfAimedWindowChangeWaitsForInputOrAChild Answer
 	// SelectPromptNeedsTerminal withholds PS3 unless the input is a terminal.
 	// ksh93 alone says yes, which is why a ksh93 script's transcript has the
 	// menu in it and no prompt.

@@ -63,6 +63,11 @@ func (c *Runner) inheritTraps(r *Runner) {
 	// an undelivered arrival of its own would otherwise hand a copy of it to
 	// every child it started.
 	c.selfPending = nil
+	// And nothing held for a moment this subshell has not reached: the list
+	// belongs to the body that raised it, and a body that ends without
+	// waiting for a child takes what it is holding with it. See
+	// Runner.selfHeldForInput.
+	c.selfHeldForInput = nil
 	for name, action := range r.trapTable() {
 		if action == "" {
 			c.traps[name] = ""

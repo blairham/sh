@@ -130,11 +130,39 @@ func (r *Runner) killedNotice(sig syscall.Signal, pid int, command string) {
 // after the operator and the comment gone. So this needs no record of the
 // text — Stmt.Text is kept only for a background statement, and this is the
 // evidence that the narrowness is right rather than an oversight.
+//
+// **Through the shell's own arrangement, not through a bare tree walk.** An
+// external command is one line whichever way it is printed, which is the
+// shape this notice carried for as long as it only ever reached one; a
+// foreground subshell a signal ended (#4649) put a *compound* command in it
+// and the two printers parted. Measured 2026-09-26 on bash 5.3.20 over a
+// script file, `( kill $BASHPID` / `echo sender-ran-on )`: the reference
+// writes `( kill $BASHPID; echo sender-ran-on )` on one line where a printer
+// keeping the source's line structure writes two, and the notice is meant to
+// be one line.
+//
+// It is **not** "the reference writes one line", which is the trap this is
+// written down to keep: a compound body keeps newlines and puts them in
+// places of its own — `( for i in 1 2;` / `do` / `    echo "$i";` /
+// `done; if true; then` / `    kill $BASHPID;` / `fi )`. That is the
+// arrangement the same shell writes a *program* back in, byte for byte
+// across the probe scripts it was compared on, so this asks for that
+// arrangement rather than inventing a second one. A dialect that has no such
+// arrangement is unmoved: the zero [syntax.Layout] keeps the source's own
+// lines, which is what this printed before (#4725).
 func (r *Runner) killedCommandText() string {
 	if r.killed == nil {
 		return ""
 	}
-	return syntax.PrintCommand(r.killed)
+	l := r.scriptListingLayout
+	// A *command*, and not a body. [syntax.Layout.BodyIsAlwaysBraced] is the
+	// one field of that arrangement that is a fact about the caller rather
+	// than about the shell — a function body written `f() ( … )` lists with
+	// braces around it — and taking it as it stands wrote the notice as
+	// `{ ( kill $BASHPID; echo sender-ran-on ); }`, which is not what was
+	// measured and not a listing of anything.
+	l.BodyIsAlwaysBraced = false
+	return syntax.PrintWith(r.killed, l)
 }
 
 // signalDescription is the shell's words for the signal.

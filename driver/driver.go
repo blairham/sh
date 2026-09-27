@@ -3167,6 +3167,12 @@ func (sh Shell) executeLines(
 			// half way down a file the moment a builtin changed the grammar.
 			pr.setDialect(dialect.On(in.programRoute()))
 		}
+		// The shell is about to read the next unit of its program, which is
+		// one of the two moments a held signal waits for — and once more for
+		// the read that finds the end, which is why this is above the break
+		// rather than beside the run below. See
+		// interp.Runner.ReadingTheNextUnitOfInput.
+		r.ReadingTheNextUnitOfInput()
 		line, ok := pr.nextLine()
 		if !ok {
 			if err := pr.err(); err != nil {

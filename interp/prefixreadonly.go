@@ -211,7 +211,7 @@ func (r *Runner) refusePrefixesEarly(assigns []*syntax.Assign, argv []string) bo
 	// the expansion for the reason every other one is. See
 	// interp/frozenprefixvalue.go.
 	walk := r.beginPrefixWalk(assigns)
-	if r.expandTheFrozenPrefixValues(assigns) {
+	if r.expandThePrefixUpToTheFrozenName(assigns) {
 		// The expansion's sentence is the whole of what the script is told,
 		// and the command is over: the refusal is never written.
 		r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv))

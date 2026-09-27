@@ -723,6 +723,25 @@ func (r *Runner) declarePrintFiltered(names []string, form DeclarationListingFor
 		}
 	}
 	for _, name := range names {
+		if dashP && r.DeferredParameter(name) {
+			// A registered parameter nothing has referred to yet: the shell
+			// has not brought it into being, so there is no row to write and
+			// no name to report missing. One of the three listing loops this
+			// applies to, and deliberately not all five — see
+			// interp/deferredparam.go, where the five forms are measured
+			// side by side and two of them write such a name.
+			//
+			// A read of the state and never a reference to the parameter,
+			// because a listing that brought a name in by asking about it
+			// would be the mechanism defeating every probe of itself.
+			//
+			// The `-p` word and not the name, which is the cell that
+			// separates the two: `typeset -p funcstack` is nothing at 0 in
+			// zsh 5.9.2 and `typeset + funcstack` on the next line writes
+			// `funcstack`, both with the name as an operand and neither
+			// having referred to it.
+			continue
+		}
 		if r.removedShellOwnIsStillAName(name) {
 			// A parameter of the shell's own that an `unset` removed: the
 			// name is still the shell's, nothing is left to print, and the

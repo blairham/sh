@@ -512,15 +512,26 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
 	want := "OLDPWD=" + dir + "\nPWD=" + dir + "\nSHLVL=1\nV='a b'\n" +
 		"ARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nPPID=" + ppid + "\nR=2\n" +
-		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"errnos\nfuncfiletrace\nfuncsourcetrace\nfuncstack\nfunctrace\nhistory\n" +
-		"jobdirs\njobstates\njobtexts\nkeymaps\nlanginfo\n" +
+		// And none of the module tables, which is measured and is the whole
+		// of what this run has to say about them: a bare `readonly` in a zsh
+		// 5.9.2 that has referred to none of them writes `ARGC`, `LINENO`,
+		// `PPID`, `status`, the script's own frozen name and the positional
+		// specials, and not one of `builtins`, `funcstack`, `keymaps` or the
+		// rest. They are waiting on a first reference and this form leaves
+		// such a name out — see interp/deferredparam.go (#4895), and the
+		// bare `typeset` two lines later in the same shell, which writes
+		// every one of them.
+		//
+		// `epochtime`, `errnos`, `langinfo` and `sysparams` stay, and they
+		// are the four this shell registers that a bare reference has not
+		// got at all: their modules declare no autoloadable parameter, so
+		// deferring them would have been modeling the wrong state.
+		//
 		// `status` is on this side and not on the other, for the reason
 		// `ARGC` beside it is: measured 2026-09-27 on zsh 5.9.2 in one run,
 		// a bare `readonly` writes `status=0` and `readonly -p` writes no
 		// row for the name (#4866, and dialect/zsh/laststatus.go).
-		"parameters\nreswords\nstatus=0\nsysparams\ntermcap\nterminfo\n" +
-		"widgets\nzsh_scheduled_events\n" +
+		"epochtime\nerrnos\nlanginfo\nstatus=0\nsysparams\n" +
 		"export OLDPWD=" + dir + "\nexport PWD=" + dir +
 		"\nexport -i10 SHLVL=1\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's
@@ -533,17 +544,10 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// *word* rather than of the shape that came back (#2518).
 		"typeset -Fr EPOCHREALTIME\ntypeset -ir EPOCHSECONDS\n" +
 		"typeset -r R=2\n" +
-		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
-		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +
-		"typeset -ar errnos\ntypeset -ar funcfiletrace\n" +
-		"typeset -ar funcsourcetrace\ntypeset -ar funcstack\n" +
-		"typeset -ar functrace\ntypeset -Ar history\n" +
-		"typeset -Ar jobdirs\ntypeset -Ar jobstates\ntypeset -Ar jobtexts\n" +
-		"typeset -ar keymaps\ntypeset -Ar langinfo\n" +
-		"typeset -Ar parameters\ntypeset -ar reswords\ntypeset -Ar sysparams\n" +
-		"typeset -Ar termcap\n" +
-		"typeset -Ar terminfo\ntypeset -Ar widgets\n" +
-		"typeset -ar zsh_scheduled_events\n"
+		// And the same four here, for the same reason: `readonly -p` writes
+		// no row for a name waiting on its first reference either.
+		"typeset -ar epochtime\ntypeset -ar errnos\n" +
+		"typeset -Ar langinfo\ntypeset -Ar sysparams\n"
 	if st != 0 || out != want {
 		t.Errorf("got %q status %d, want %q at 0", out, st, want)
 	}

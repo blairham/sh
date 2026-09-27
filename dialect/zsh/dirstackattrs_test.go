@@ -44,9 +44,24 @@ func TestTheDirectoryStackDescribesItself(t *testing.T) {
 			"[dirstack]\n",
 		},
 		{
+			// The `cd` is not a reference and the read is, which is the
+			// pair rather than a precaution: this parameter arrives on the
+			// script's first reference, and the *shell* filling the stack
+			// is not one. Measured 2026-09-27 on zsh 5.9.2 — `setopt
+			// autopushd; cd sub; typeset -p dirstack` is nothing at 0
+			// there, and the same line with `${#dirstack}` in front of it
+			// writes the row. See interp/deferredparam.go (#4899).
 			"and the declaration printer writes the kind and no value",
-			`setopt autopushd; cd sub; typeset -p dirstack; print -r -- "st=$?"`,
+			`setopt autopushd; cd sub; : ${#dirstack}; typeset -p dirstack; print -r -- "st=$?"`,
 			"typeset -a dirstack\nst=0\n",
+		},
+		{
+			// And the other half of that pair, which is what says the read
+			// above is arming the row rather than hiding one: with the `cd`
+			// alone the listing writes nothing, at 0.
+			"and a shell-driven push writes no row at all",
+			`setopt autopushd; cd sub; typeset -p dirstack; print -r -- "st=$?"`,
+			"st=0\n",
 		},
 		{
 			// `hide` is the third word, and this is the row that separates

@@ -119,17 +119,42 @@ func TestKeymapsIsTheSameListBindkeyPrints(t *testing.T) {
 // writes `typeset -Ar widgets` for the association and `typeset -ar keymaps`
 // for the array, which is measured and is what says `$keymaps` is a list of
 // names rather than a table.
+//
+// **Three of the five rows need a reference in front of them**, and the two
+// that do not are what says the reference is arming the state rather than
+// hiding an answer. These parameters arrive on the script's first reference,
+// so until something refers to the name there is no parameter to freeze and
+// no row to list: `unset widgets` and `typeset -p widgets` as the first line
+// of a script are a silent 0 in zsh 5.9.2 and here. An *assignment* is itself
+// a reference, so the two assignment rows arm their own refusal and are left
+// as they were. Measured 2026-09-27; see interp/deferredparam.go (#4895).
 func TestBothAreReadonlyAndHidden(t *testing.T) {
+	const refer = ": ${+widgets} ${+keymaps}\n"
 	for _, c := range []struct{ name, src, want string }{
 		{"a widget assignment", "widgets[x]=y", "zsh:1: read-only variable: widgets\n"},
-		{"unsetting the widgets", "unset widgets", "zsh:1: read-only variable: widgets\n"},
+		{"unsetting the widgets", refer + "unset widgets", "zsh:2: read-only variable: widgets\n"},
 		{"a keymap assignment", "keymaps[1]=y", "zsh:1: read-only variable: keymaps\n"},
-		{"the widgets listing", "typeset -p widgets", "typeset -Ar widgets\n"},
-		{"the keymaps listing", "typeset -p keymaps", "typeset -ar keymaps\n"},
+		{"the widgets listing", refer + "typeset -p widgets", "typeset -Ar widgets\n"},
+		{"the keymaps listing", refer + "typeset -p keymaps", "typeset -ar keymaps\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := zleParam(t, c.src); got != c.want {
 				t.Errorf("output = %q, want %q", got, c.want)
+			}
+		})
+	}
+	// And the other side of the three, which keeps the reference above from
+	// reading as a way of making a row pass: with nothing in front of them the
+	// `unset` is taken and the listing writes nothing, exactly as in the
+	// reference.
+	for _, c := range []struct{ name, src string }{
+		{"unsetting the widgets with nothing in front", "unset widgets"},
+		{"the widgets listing with nothing in front", "typeset -p widgets"},
+		{"the keymaps listing with nothing in front", "typeset -p keymaps"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := zleParam(t, c.src); got != "" {
+				t.Errorf("output = %q, want nothing", got)
 			}
 		})
 	}

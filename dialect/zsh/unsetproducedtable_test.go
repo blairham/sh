@@ -136,56 +136,87 @@ print -r -- "store=$?"`
 //	                                        and loaded afterwards
 //	unset parameters after that read        read-only variable: parameters
 //
-// So the refusal is the reference's answer for every state this shell can be
-// in — it produces the table from the start and has no module to autoload —
-// and the row is not a disagreement. The grid below is what the sweep did
-// find: the tables the reference lets a script unset, and the views it
-// refuses, which this shell now answers alike for all of them. `funcstack` was
-// the one that differed and is fixed with #4812's letters.
+// That reading of the mechanism was right and the conclusion drawn from it —
+// that the refusal is the reference's answer for every state *this* shell can
+// be in, because it produces the table from the start and has no module to
+// autoload — stopped being true when the shell learned the state (#4895).
+// A deferred parameter is now exactly that stub: nothing has referred to the
+// name, so there is no parameter for the freeze to be on and the `unset`
+// takes the name away. See interp/deferredparam.go.
+//
+// So the grid below is run **twice**, and the two halves are the measurement
+// rather than a belt-and-braces: with nothing in front of it every name is a
+// silent 0 in both shells, and with a `${+name}` in front the refused column
+// is the refusal in both. A grid run only the first way would pass on a shell
+// that had stopped freezing anything, and one run only the second way is the
+// grid that hid the mechanism for two issues running.
 func TestUnsetAcrossEveryProducedParameter(t *testing.T) {
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name    string
 		refused bool
+		// ours marks a parameter this shell registers that a bare reference
+		// has not got at all: `zsh/system` and `zsh/datetime` declare no
+		// autoloadable parameter, so `typeset -p sysparams` is `no such
+		// variable` at 1 there where every deferred name is nothing at 0.
+		// They are therefore deliberately *not* deferred — the gap is that
+		// this shell has them before a `zmodload`, which is a different
+		// question — and the row asserts this shell's own freeze rather than
+		// a comparison. Measured 2026-09-27 on zsh 5.9.2.
+		ours bool
 	}{
-		{"commands", false},
-		{"options", false},
-		{"aliases", false},
-		{"galiases", false},
-		{"saliases", false},
-		{"functions", false},
-		{"dis_aliases", false},
-		{"dis_galiases", false},
-		{"dis_saliases", false},
-		{"dis_functions", false},
-		{"nameddirs", false},
-		{"mapfile", false},
-		{"dirstack", false},
-		{"parameters", true},
-		{"builtins", true},
-		{"history", true},
-		{"dis_functions_source", true},
-		{"jobdirs", true},
-		{"jobtexts", true},
-		{"jobstates", true},
-		{"sysparams", true},
-		{"reswords", true},
-		{"dis_reswords", true},
-		{"dis_patchars", true},
-		{"funcstack", true},
-		{"functrace", true},
-		{"funcsourcetrace", true},
-		{"funcfiletrace", true},
-		{"errnos", true},
+		{"commands", false, false},
+		{"options", false, false},
+		{"aliases", false, false},
+		{"galiases", false, false},
+		{"saliases", false, false},
+		{"functions", false, false},
+		{"dis_aliases", false, false},
+		{"dis_galiases", false, false},
+		{"dis_saliases", false, false},
+		{"dis_functions", false, false},
+		{"nameddirs", false, false},
+		{"mapfile", false, false},
+		{"dirstack", false, false},
+		{"parameters", true, false},
+		{"builtins", true, false},
+		{"history", true, false},
+		{"dis_functions_source", true, false},
+		{"jobdirs", true, false},
+		{"jobtexts", true, false},
+		{"jobstates", true, false},
+		{"sysparams", true, true},
+		{"reswords", true, false},
+		{"dis_reswords", true, false},
+		{"dis_patchars", true, false},
+		{"funcstack", true, false},
+		{"functrace", true, false},
+		{"funcsourcetrace", true, false},
+		{"funcfiletrace", true, false},
+		{"errnos", true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// Nothing has referred to the name, so there is no parameter to
+			// refuse the removal: silent 0 for every row, refused column
+			// included.
 			out, st := runZsh(t, dir, "unset "+tc.name+`; print "st=$?"`)
 			want, wantStatus := "st=0\n", 0
-			if tc.refused {
+			if tc.ours && tc.refused {
 				want, wantStatus = "zsh:1: read-only variable: "+tc.name+"\n", 1
 			}
 			if out != want || st != wantStatus {
-				t.Errorf("unset %s = %q (status %d), want %q at status %d",
+				t.Errorf("unset %s with nothing in front = %q (status %d), want %q at %d",
+					tc.name, out, st, want, wantStatus)
+			}
+			// And with the lightest reference there is in front of it, the
+			// freeze is there and the column splits.
+			out, st = runZsh(t, dir, ": ${+"+tc.name+"}\nunset "+tc.name+`; print "st=$?"`)
+			want, wantStatus = "st=0\n", 0
+			if tc.refused {
+				want, wantStatus = "zsh:2: read-only variable: "+tc.name+"\n", 1
+			}
+			if out != want || st != wantStatus {
+				t.Errorf("unset %s after a reference = %q (status %d), want %q at status %d",
 					tc.name, out, st, want, wantStatus)
 			}
 		})

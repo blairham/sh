@@ -6382,6 +6382,13 @@ func Apply(r *interp.Runner) {
 	// And `zsh/mathfunc`'s forty-seven, which are the C math library under
 	// names arithmetic can call. See mathmodule.go.
 	registerMathFuncModule(r)
+	// And, after every one of them, which of the parameters they registered
+	// are still waiting for the script's first reference. Last rather than
+	// beside each registration, because it is one measured roster rather
+	// than a property of the function that installed each name — see
+	// deferredparameters.go for the route it was taken by and for the five
+	// names it deliberately leaves out.
+	registerDeferredParameters(r)
 	// This shell's richer `echo`, and not ksh93's builtin of the same
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.

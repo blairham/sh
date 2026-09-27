@@ -553,6 +553,16 @@ func (r *Runner) declarationFilteredListing(names []string, produced map[string]
 	listing ProducedListing, keep func(declaration) bool,
 ) int {
 	for _, name := range names {
+		if r.DeferredParameter(name) {
+			// Except a parameter waiting on its first reference, which this
+			// *filtered* bare form leaves out where the unfiltered one
+			// writes it. Measured 2026-09-27 on zsh 5.9.2 in a shell that
+			// has referred to none of them: `readonly` writes `ARGC`,
+			// `LINENO`, `PPID` and the script's own frozen name and none of
+			// the module tables, while a bare `typeset` two lines later
+			// writes every one of them. See interp/deferredparam.go.
+			continue
+		}
 		// Whatever the listing knows, the way the bare listing takes it: a
 		// name that is typed and holds nothing is still a row, and the form
 		// is what decides how it writes one. Through listedDeclarationOf so
@@ -575,6 +585,13 @@ func (r *Runner) declarationFilteredNameListing(names []string, produced map[str
 	listing ProducedListing, keep func(declaration) bool,
 ) int {
 	for _, name := range names {
+		if r.DeferredParameter(name) {
+			// The same exception as the form above, measured on the same
+			// run: a whole-table `typeset +` writes none of them, where
+			// `typeset + funcstack` — the name as an operand — writes the
+			// name at 0. See interp/deferredparam.go.
+			continue
+		}
 		d, known := r.listedDeclarationOf(name, produced[name], listing)
 		if !known || !keep(d) {
 			continue

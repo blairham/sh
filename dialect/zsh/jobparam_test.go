@@ -181,7 +181,13 @@ func TestTheJobParametersAreReadOnly(t *testing.T) {
 	for _, src := range []string{
 		`jobstates=(a b c)`,
 		`jobtexts[1]=q`,
-		`unset jobdirs`,
+		// The `unset` row needs the reference in front of it: these
+		// parameters arrive on the script's first one, so `unset jobdirs`
+		// as the opening line of a script finds nothing to refuse and is a
+		// silent 0 in the reference too. An assignment is itself a
+		// reference, which is why the two rows above need no such line.
+		// Measured 2026-09-27; see interp/deferredparam.go (#4895).
+		`: ${+jobdirs}` + "\n" + `unset jobdirs`,
 	} {
 		out, st := runZsh(t, t.TempDir(), src+"\nprint -r -- unreached")
 		if st == 0 || !strings.Contains(out, "read-only variable: ") ||

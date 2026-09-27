@@ -83,19 +83,30 @@ package interp
 // means a dialect is asked only about a name that is really in this state, so
 // a shell whose parameters are all a script's never arrives.
 //
-// The shell's own is read the way [ParameterAttributes] reads it and not
-// through [Runner.shellOwnParameter], which masks a removed name on purpose —
-// the mask is the whole reason a `${(t)}` of one is empty, and asking through
-// it here would be asking whether a name the shell still owns has been
-// removed, which is never true.
+// The removal is asked of [Runner.removed] and the ownership of the record
+// the `unset` left, and both halves are load-bearing: a name that has come
+// back is an ordinary parameter with a row of its own, measured — `unset
+// RANDOM; RANDOM=5; typeset -p RANDOM` is `typeset -i10 RANDOM=…` in zsh
+// 5.9.2 and the type word is `integer-special` again. The record outlives the
+// assignment that lifts the removal, so reading it alone would have kept a
+// name silent for the rest of the shell.
+//
+// The record is written by the `unset` rather than derived here, and that is
+// the placement rather than an economy. Every source of the fact is something
+// the removal takes away: a produced table's producer is deregistered by the
+// same function a few lines later, an absent parameter's refusal goes with
+// it, and the pipeline record's own membership test consults
+// [Runner.removed]. A reader that asked afterwards would be asking a shell
+// that had just forgotten — which is the shape of every probe this cluster's
+// issues were filed from, in code instead of in shell.
 func (r *Runner) removedShellOwnIsStillAName(name string) bool {
-	return r.removed[name] && r.wasTheShellsOwnParameter(name) &&
+	return r.removed[name] && r.removedShellOwn[name] &&
 		r.ask(r.sem().RemovedShellOwnParameterIsStillAName,
 			"what a listing does with a parameter of the shell's own that an `unset` removed")
 }
 
 // wasTheShellsOwnParameter is [ParameterAttributes.Provided]'s three durable
-// sources, read without the removal mask.
+// sources, asked by the `unset` at the moment before it removes the name.
 //
 // A registration outlives the `unset` that took the value: a producer stays in
 // its table and a refusal stays in absentParams, and [Runner.removed] is what
@@ -105,19 +116,12 @@ func (r *Runner) removedShellOwnIsStillAName(name string) bool {
 // the listing has already declined a row for by the time this is asked and
 // whose removal is a local's question rather than the shell's.
 //
-// The pipeline record is named directly rather than through
-// [Runner.DynamicParameter], and that is the one place the two unions part.
-// It is the fourth kind of produced parameter and the only one whose own
-// membership test consults `removed` — see
-// Runner.namesTheProducedPipelineStatus, where `unset` is an axis because bash
-// fills the name again on the next pipeline and zsh does not. Asking through
-// it here would have meant asking whether a *live* producer had been removed,
-// which is never true in the column that ends it: `unset pipestatus; typeset
-// -p pipestatus` is nothing at 0 in zsh 5.9.2, and was `no such variable` here
-// until this line named the field.
+// The pipeline record needs nothing said about it *here* and would have if
+// this were asked later: its own membership test consults `removed`, so after
+// the removal [Runner.DynamicParameter] stops answering for it — which is the
+// second reason the question is put before the name is taken away rather than
+// after. `unset pipestatus; typeset -p pipestatus` is nothing at 0 in zsh
+// 5.9.2, and was `no such variable` here.
 func (r *Runner) wasTheShellsOwnParameter(name string) bool {
-	if name != "" && name == r.pipeStatusName {
-		return true
-	}
 	return r.shellOwn[name] || r.DynamicParameter(name) || r.AbsentParameter(name)
 }

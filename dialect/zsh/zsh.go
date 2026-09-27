@@ -2722,6 +2722,12 @@ func Semantics() interp.Semantics {
 	// and `e='a b,c'; f {$e}` is `{a` and `b,c}` — the splitter reaches
 	// inside the group. ksh93 is the one column that stops.
 	s.BraceStopsFieldSplitting = interp.No
+	// unanswered BraceMakesAProducedStarOrBracketText: zsh cannot be asked
+	// it. The axis is about what a brace takes from a pattern an expansion
+	// produced, and this shell never matches an expansion's result against
+	// the filesystem at all — GlobExpansionResults is No here, so with `za`
+	// in the directory `g='*'; f z$g` is the single field `z*` with no brace
+	// anywhere in the word. There is nothing for a brace to take away.
 	// A produced brace is data here: `e='{a,b}'; echo $e` is `{a,b}`,
 	// `e='{'; echo $e{a,b}` is `{a {b` and `a=("x{p" "q}y"); echo ${a[@]}`
 	// is the two words it was. ksh93 is the one column that reads them.

@@ -1681,6 +1681,11 @@ func Semantics() interp.Semantics {
 	// f x{p,q}$v` is `[xpa] [b] [xqa] [b]` on 5.3.20, the word expanded
 	// once per name and split each time.
 	s.BraceStopsFieldSplitting = interp.No
+	// And it takes nothing from a pattern the expansion produced behind it:
+	// with `za`, `zb` and `zq` in the directory, `g='*'; f {z,y}$g` is `[za]
+	// [zb] [zq] [y*]` here where ksh93u+ answers `[z*] [y*]`, and `g='[ab]'`
+	// goes the same way (#4843).
+	s.BraceMakesAProducedStarOrBracketText = interp.No
 	// A produced brace is data here too, which is the same fact as the
 	// braces being found in the word the parse cut: `e='{a,b}'; echo $e`
 	// is `{a,b}` on 5.3.20 and 3.2.57 alike.

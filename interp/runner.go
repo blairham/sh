@@ -4144,6 +4144,13 @@ type Runner struct {
 	// runs of it are syntax, since there is nothing left to expand. See
 	// interp/bracefields.go.
 	braceFieldRoute bool
+	// braceStopsGlob says the span being expanded stands behind a `{` the
+	// script wrote unquoted, in the one column where that takes the match
+	// away from a `*` or a `[` the expansion produces. Per span rather than
+	// per word, because what stands in *front* of the brace still matches,
+	// and saved and restored around each word so that a substitution's own
+	// words are read on their own terms. See interp/braceglobstop.go.
+	braceStopsGlob bool
 
 	// globSuspended is pathname expansion switched off for one nested
 	// expansion, from the inside: the contexts where a word substitutes as

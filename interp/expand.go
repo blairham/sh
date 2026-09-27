@@ -190,6 +190,16 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	// `set -- 1 2; echo x{p,q}$@y` is three words in both — which is what
 	// splitNever leaves alone. See Semantics.BraceStopsFieldSplitting.
 	unsplit := r.braceSplitStopSpans(w.Spans)
+	// And, in the one column where the same written brace takes the match
+	// away from a `*` or a `[` an expansion produces behind it: `g='*'; echo
+	// {z,y}$g` is `z* y*` there and `za zb zq y*` in bash 5.3.20. A produced
+	// `?` still matches, which is what says this is a character set and not
+	// "the rest of the word is text". See interp/braceglobstop.go.
+	stopsGlob := r.braceGlobStopSpans(w.Spans)
+	// Restored rather than cleared: a substitution in this word runs a
+	// program whose own words are read on their own terms, and the span this
+	// word is in is what they come back to.
+	defer func(prev bool) { r.braceStopsGlob = prev }(r.braceStopsGlob)
 
 	// Whether an expansion has already failed on this word. Every shell in
 	// the panel abandons the word at the first failure rather than going on
@@ -215,6 +225,7 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 			break
 		}
 		r.expandingSpan = i
+		r.braceStopsGlob = stopsGlob != nil && stopsGlob[i]
 		// The head of the word, for the `${~spec}` flag: nothing has been
 		// accumulated in front of this span. An empty span in front of it
 		// leaves the head where it was, which is measured — `${empty}${~t}`
@@ -2922,7 +2933,13 @@ func (r *Runner) escapeResult(v string, glob Answer) string {
 		// observed twice rather than two quirks.
 		return globEscape(v)
 	}
-	return r.markGroupSyntaxFromTheValue(esc)
+	// Two marks over one value, and they are different questions about the
+	// same result: which of its characters may build a pattern *group*, and
+	// which of its leaves the written brace in front of it has taken the
+	// match from. See markGroupSyntaxFromTheValue and
+	// markPatternLeavesBehindABrace; each is a no-op where the value carries
+	// nothing it reads.
+	return r.markPatternLeavesBehindABrace(r.markGroupSyntaxFromTheValue(esc))
 }
 
 // groupSyntax is the three characters that build an extended group: the two

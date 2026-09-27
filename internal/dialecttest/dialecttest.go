@@ -28,6 +28,7 @@ package dialecttest
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -169,6 +170,72 @@ func (p Preset) Parse(t testing.TB, src string) *syntax.File {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	return f
+}
+
+// RunLinesOn reads src through r the way a front end reads a script file: one
+// line at a time, running each as it parses, and stopping at the first line
+// this dialect refuses.
+//
+// It returns the status a front end would exit with, and writes the refusal's
+// diagnostic to the runner's standard error.
+//
+// [Preset.Parse] is the older shape and is still right for a snippet that
+// parses: it reads the whole text first, so a test written on it asserts what
+// a *runner* does with a tree. What it cannot model is a line one dialect
+// refuses where another defers — see [syntax.Lexer.bodyRefusalRefusesTheLine],
+// where a `$( … )` body refused at its closing parenthesis refuses the line it
+// is written on, so the commands in front of it never run. There the whole
+// text does not parse, Preset.Parse fails the test before anything runs, and
+// the message and the status both come from the front end rather than from an
+// expansion (#4859).
+//
+// One helper rather than a copy in each suite, for the reason this package
+// exists at all: the near-identical local runner is how an omission spreads.
+func (p Preset) RunLinesOn(t testing.TB, r *interp.Runner, src string) int {
+	t.Helper()
+	d := p.Diagnostics().ForScript()
+	name := r.Name
+	if name == "" {
+		name = p.Name
+	}
+	ctx := context.Background()
+	if f, err := syntax.Parse(src, p.Dialect()); err == nil {
+		// The whole text reads, so the older shape is the right one and is
+		// kept byte for byte: one tree, one Run, one teardown.
+		st, err := r.Run(ctx, f)
+		if err != nil {
+			t.Fatalf("run %q: %v", src, err)
+		}
+		return st
+	}
+	pr := syntax.NewParser(src, p.Dialect())
+	for {
+		line, ok := pr.NextLine()
+		if !ok || pr.Err() != nil {
+			break
+		}
+		// RunPart and not Run, which is what a front end reading a line at a
+		// time uses: Run tears the shell down at the end of every call, so an
+		// EXIT trap would fire on the first line rather than once at the end.
+		if err := r.RunPart(ctx, line); err != nil {
+			t.Fatalf("run %q: %v", src, err)
+		}
+		if r.Exited() {
+			break
+		}
+	}
+	perr := pr.Err()
+	if perr == nil {
+		return r.Finish(ctx)
+	}
+	if _, err := fmt.Fprint(r.Stderr, d.ParseDiagnostic(name, "", perr, src)); err != nil {
+		t.Fatalf("write the diagnostic: %v", err)
+	}
+	// The status the refusal leaves, set before the teardown so that an EXIT
+	// trap sees it — which is what every column of the panel was measured
+	// doing.
+	r.SetExitStatus(d.StatusForParseError(perr))
+	return r.Finish(ctx)
 }
 
 // Combined parses and runs src with stdout and stderr joined into one string,

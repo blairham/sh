@@ -270,7 +270,16 @@ func TestTheBorrowedTextBoundaryCatchesItWhereTheDialectSaysSo(t *testing.T) {
 			src: "printf 'start\\n'\neval 'printf \"inner-start\\n\"; v=$(echo hi; for); printf \"inner-after\\n\"'\n" +
 				"printf 'after st=%s\\n' \"$?\"\n",
 			want: map[string]string{
-				"zsh": "start\ninner-start\nafter st=1\n",
+				// **No `inner-start` in this column**, and that is the whole
+				// of what #4859 moved here: the substitution is on the *same
+				// line* of the borrowed text as the `printf` in front of it,
+				// and a body this shell refuses at the closing parenthesis
+				// refuses the line it is written on. The sourced file above
+				// is the control — there the `printf` has a line of its own
+				// and is written in every column. Measured 2026-09-27 on zsh
+				// 5.9.2 over this source: `start`, the two messages, and
+				// `after st=1`. See syntax.Lexer.bodyRefusalRefusesTheLine.
+				"zsh": "start\nafter st=1\n",
 				"ksh": "start\ninner-start\nafter st=3\n",
 			},
 		},

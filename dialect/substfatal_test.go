@@ -4,7 +4,6 @@
 package dialect_test
 
 import (
-	"context"
 	"strconv"
 	"strings"
 	"testing"
@@ -226,13 +225,9 @@ func TestTheCoreIsAskedOnlyFromInsideASubshell(t *testing.T) {
 // indistinguishable from "carried on with a complaint in the middle".
 func splitRun(t *testing.T, p dialecttest.Preset, src string) (out, errs string, status int) {
 	t.Helper()
-	f := p.Parse(t, src)
 	var o, e strings.Builder
 	r := p.Runner(dialecttest.Base{Stdout: &o, Stderr: &e})
-	st, err := r.Run(context.Background(), f)
-	if err != nil {
-		t.Fatalf("run: %v", err)
-	}
+	st := p.RunLinesOn(t, r, src)
 	return o.String(), e.String(), st
 }
 

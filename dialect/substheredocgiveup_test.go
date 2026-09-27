@@ -4,7 +4,6 @@
 package dialect_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,15 +182,11 @@ func runWithPath(t *testing.T, p dialecttest.Preset, src string) (out, errs stri
 	if err := os.WriteFile(filepath.Join(dir, "inner.sh"), []byte(inner), 0o600); err != nil {
 		t.Fatalf("write inner.sh: %v", err)
 	}
-	f := p.Parse(t, src)
 	var o, e strings.Builder
 	r := p.Runner(dialecttest.Base{
 		Stdout: &o, Stderr: &e, Dir: dir,
 		Env: []string{"PATH=/usr/bin:/bin"},
 	})
-	st, err := r.Run(context.Background(), f)
-	if err != nil {
-		t.Fatalf("run: %v", err)
-	}
+	st := p.RunLinesOn(t, r, src)
 	return o.String(), e.String(), st
 }

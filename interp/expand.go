@@ -4594,6 +4594,9 @@ func sliceElems(elems []string, off int, e *syntax.ParamExpr, r *Runner) []strin
 			r.diagf("%s\n", Wording(r.diag().ListSliceNegativeLength,
 				"%[1]s: substring expression < 0", syntax.PrintWord(lenWord)))
 			r.expandErr = true
+			// A range, like the reader below: measured, POSIX mode does not
+			// sharpen this refusal either. See Runner.badRange.
+			r.badRange = true
 			return nil
 		}
 		if r.unspecified {
@@ -4670,6 +4673,11 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 		r.diagf("%s\n", Wording(r.diag().SubstringRangeError, "%[2]s",
 			r.paramSubject(e), r.expressionFailure(blame, err)))
 		r.expandErr = true
+		// And that what failed was a **range**, which is what keeps POSIX
+		// mode from sharpening the give-up over it — see Runner.badRange,
+		// and Runner.failedExpansion, which is the door it is read at. A
+		// flag that outlives this expansion, unlike rangeRefused below.
+		r.badRange = true
 		// One complaint per range, which is unanimous: `${x:&&:&&}` is one
 		// line in bash 5.3 and one in ksh93u+, and we wrote two — the
 		// offset's and then the length's. See Runner.rangeRefused.

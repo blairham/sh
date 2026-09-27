@@ -173,7 +173,7 @@ func (r *Runner) givesUpForAFailedPrefix(w prefixWalk, p prefixCommand) bool {
 // has already been paid for.
 func (r *Runner) containTheFailureInTheCommand() {
 	r.ctl, r.abandon, r.errexitStopped = controlNone, abandonRequested, false
-	r.expandErr, r.badSubscript = false, false
+	r.expandErr, r.badSubscript, r.badRange = false, false, false
 	r.setFatalStatus()
 }
 

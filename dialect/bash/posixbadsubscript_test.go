@@ -104,3 +104,63 @@ func posixRouteStatus(t *testing.T, src string, route interp.Route) (string, int
 	}
 	return out, st
 }
+
+// The second shape the mode does not reach: a **substring range**.
+//
+// Measured 2026-09-27 the same way, against the same two builds, which agree
+// on every row here — with `a=(1 2 3); v=abcdef` in front (#4804):
+//
+//	                     mode  file              -c
+//	echo ${v:1+}         on    after st=1, 0     after st=1, 0
+//	echo ${v:0:1+}       on    after st=1, 0     after st=1, 0
+//	echo ${a[@]:1+}      on    after st=1, 0     after st=1, 0
+//	echo ${a[@]:0:1+}    on    after st=1, 0     after st=1, 0
+//	echo ${a[@]:1:-1}    on    after st=1, 0     after st=1, 0
+//	echo ${v:$((1/0))}   on    nothing, 1        nothing, 127
+//	echo ${v:$((1/0))}   off   after st=1, 0     after st=1, 0
+//
+// The last pair is the one that matters and is why this is a shape of its own
+// rather than the bracket's rule widened: an arithmetic expansion written
+// *inside* the range is sharpened on both routes, so what escapes the mode is
+// the range's reader and not "an expression inside a parameter expansion".
+//
+// The `-c` column is the other difference: a range prints the next line's
+// `after st=1` where a subscript prints nothing at all.
+func TestPosixModeDoesNotSharpenASubstringRange(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		probe    string
+		sharpens bool
+	}{
+		{"an offset that will not evaluate", "echo ${v:1+}", false},
+		{"a length that will not evaluate", "echo ${v:0:1+}", false},
+		{"a list's offset", "echo ${a[@]:1+}", false},
+		{"a list's length", "echo ${a[@]:0:1+}", false},
+		{"a list's negative length", "echo ${a[@]:1:-1}", false},
+		{"the same range in a store", "x=${v:1+}", false},
+		{"an arithmetic expansion inside the range", "echo ${v:$((1/0))}", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			src := "a=(1 2 3)\nv=abcdef\n" + c.probe + "\necho AFTER\n"
+			inMode := posixRouteRun(t, "set -o posix\n"+src, interp.RouteScriptFile)
+			without := posixRouteRun(t, src, interp.RouteScriptFile)
+			if !strings.Contains(without, "AFTER") {
+				t.Fatalf("%q without the mode: got %q, want the next line to run", c.probe, without)
+			}
+			if c.sharpens && strings.Contains(inMode, "AFTER") {
+				t.Errorf("%q in the mode: got %q, want the shell ended", c.probe, inMode)
+			}
+			if !c.sharpens && !strings.Contains(inMode, "AFTER") {
+				t.Errorf("%q in the mode: got %q, want the next line to run", c.probe, inMode)
+			}
+			// And the command-string route, where the two shapes' unwinding
+			// parts: a range costs the line there too.
+			if !c.sharpens {
+				out := posixRouteRun(t, "set -o posix\n"+src, interp.RouteCommandString)
+				if !strings.Contains(out, "AFTER") {
+					t.Errorf("%q from a command string: got %q, want the next line to run", c.probe, out)
+				}
+			}
+		})
+	}
+}

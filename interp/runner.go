@@ -1737,6 +1737,24 @@ type Runner struct {
 	// door this routes to (#3502). Cleared with expandErr, everywhere
 	// expandErr is cleared.
 	badSubscript bool
+	// badRange records that the expansion which failed was a **substring
+	// range** — the offset or the length of `${v:off:len}` or of
+	// `${a[@]:off:len}` — rather than any other unreadable expression.
+	//
+	// A third flag beside expandErr and badSubscript, and it exists for one
+	// of the two reasons that one does and not the other. What it shares:
+	// POSIX mode does not sharpen a give-up over it, exactly as it does not
+	// over a bracketed subscript. What it does not: a range gives up the
+	// *line* and nothing more, where a subscript gives a `-c` string up
+	// whole — so the two cannot be one flag, and a reading that made them
+	// one would give `echo ${v:1+}` a subscript's unwinding.
+	//
+	// Keyed on the range's own reader and not on "an expression inside a
+	// parameter expansion", which is the near-rule the measurement rules
+	// out: `${v:$((1/0))}` is an arithmetic expansion written inside the
+	// range, and the mode sharpens *that* on both routes (#4804). Cleared
+	// with expandErr, everywhere expandErr is cleared.
+	badRange bool
 	// arithNounsetNamedTheParameter records that the expression which failed
 	// was stopped by `set -u` reaching a name it read, in a dialect that
 	// calls that refusal the shell's own rather than the expression's — see
@@ -6974,6 +6992,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 	}
 	r.unspecified, r.expandErr, r.badSubscript, r.assignFailed = false, false, false, false
+	r.badRange = false
 	r.lettersRefusedTheOperand = false
 	r.arithNounsetNamedTheParameter = false
 	// Here rather than beside the assignments, which is where it used to be
@@ -9911,6 +9930,7 @@ func (r *Runner) fatalUsage(format string, args ...any) {
 // clearing it first would abandon itself over the previous line's failure.
 func (r *Runner) beginHeading() {
 	r.unspecified, r.expandErr, r.badSubscript = false, false, false
+	r.badRange = false
 	r.arithNounsetNamedTheParameter = false
 }
 
@@ -9998,10 +10018,11 @@ func (r *Runner) failedExpansion() {
 		return
 	}
 	abandons := r.sem().FailedExpansionAbandonsTheLine
-	if r.badSubscript && r.posixModeSharpenedTheAbandon() {
-		// **POSIX mode does not reach a bracketed expression**, so the axis
-		// a bad subscript reads here is the one the dialect holds outside
-		// the mode. Everything else the mode sharpens: measured 2026-09-27
+	if (r.badSubscript || r.badRange) && r.posixModeSharpenedTheAbandon() {
+		// **POSIX mode does not reach a bracketed expression, nor a
+		// substring range**, so the axis either of them reads here is the
+		// one the dialect holds outside the mode. Everything else the mode
+		// sharpens: measured 2026-09-27
 		// on bash 5.3.20 and on the 3.2.57 macOS ships, which agree row for
 		// row, with `a=(1 2)` and `echo B4` in front and `echo "after st=$?"`
 		// behind, each line run as a script file and as one `-c` string:
@@ -10019,6 +10040,33 @@ func (r *Runner) failedExpansion() {
 		// — and the same expansion inside a function body move with it, and
 		// a subshell contains it on both routes in both modes, which is
 		// Runner.giveUpForABadSubscript's own shape (#4784).
+		//
+		// **A substring range is the second shape the mode does not reach**,
+		// and it was ending the shell here (#4804). Measured the same way
+		// 2026-09-27 on bash 5.3.20 and 3.2.57, which agree on every one of
+		// these rows, with `a=(1 2 3); v=abcdef` in front:
+		//
+		//	                    mode  file              -c
+		//	echo ${v:1+}        on    after st=1, 0     after st=1, 0
+		//	echo ${v:0:1+}      on    after st=1, 0     after st=1, 0
+		//	echo ${a[@]:1+}     on    after st=1, 0     after st=1, 0
+		//	echo ${a[@]:0:1+}   on    after st=1, 0     after st=1, 0
+		//	echo ${a[@]:1:-1}   on    after st=1, 0     after st=1, 0
+		//	echo ${v:$((1/0))}  on    nothing, 1        nothing, 127
+		//	echo ${v:$((1/0))}  off   after st=1, 0     after st=1, 0
+		//
+		// **The two are not one rule, and the last pair is what says so.**
+		// "An expression inside a parameter expansion" would have been the
+		// tidy reading and it is wrong: an arithmetic expansion written
+		// *in* the range is sharpened like any other, on both routes. What
+		// the mode does not reach is the **reader** — the brackets' and the
+		// range's — rather than the place the text stands in.
+		//
+		// They also do not unwind alike, which is the second reason for two
+		// flags: the `-c` column above prints `after st=1` for every range
+		// row and prints nothing at all for a subscript, because a bracketed
+		// expression gives the whole string up. So a range takes the
+		// ordinary line abandon below and a subscript does not.
 		abandons = Yes
 	}
 	if abandons != Yes {

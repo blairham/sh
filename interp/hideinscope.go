@@ -158,6 +158,94 @@ func (r *Runner) dropHideInScope(name string) {
 	r.shadowStopsHiding(name)
 }
 
+// The kind a hidden name held when a line started, for every name carrying
+// the attribute — which is nearly always none of them, so the map is nil and
+// the check below costs a length.
+//
+// The names come from r.hideInScope and not from shadowIsHidden, and that is
+// the whole of what keeps this about the binding in front of the line: a
+// shadow deletes the entry and records the answer in the scope instead, so a
+// deeper function's declaration of the same name finds nothing here to
+// forget. Measured 2026-09-27 on zsh 5.9.2, and the rows are the reason:
+//
+//	f(){ typeset -h v; g }; g(){ typeset -a v }   f's `v` is still hidden
+//	typeset -h v; f(){ typeset -a v }             the global is still hidden
+//
+// A line that writes `-h` itself is exempt and answers nil, for the reason
+// kindLetterReplacesWhatTheNameWas gives for its own rule: what a kind change
+// forgets is what the name was carrying *before* the line, never what the
+// line writes. `f(){ typeset -h v; typeset -h v=(a b) }` is
+// `array-local-hide` in the reference, and so is the `-h -a` spelling.
+func (r *Runner) hiddenNameKinds() map[string]ParameterKind {
+	if r.hideLetterWritten || len(r.hideInScope) == 0 {
+		return nil
+	}
+	kinds := make(map[string]ParameterKind, len(r.hideInScope))
+	for name, hidden := range r.hideInScope {
+		if hidden {
+			kinds[name] = r.parameterKind(name)
+		}
+	}
+	return kinds
+}
+
+// kindChangeForgetsTheHide takes the hide attribute off every name whose kind
+// the line just run changed.
+//
+// The attribute belongs to the *kind* the name had when it was written, and a
+// name that becomes something else is not carrying it any more. Measured
+// 2026-09-27 on zsh 5.9.2 under `-f` from a script file with `env -i
+// PATH=/usr/bin:/bin`, one run per row:
+//
+//	f(){ typeset -h v; v=(p q);       ${(t)v} }   array-local
+//	f(){ typeset -h v; typeset v=(p q); …    }   array-local
+//	f(){ typeset -h v; typeset -a v;  ${(t)v} }   array-local
+//	f(){ typeset -h v; typeset -i v;  ${(t)v} }   integer-local
+//	f(){ typeset -h -i v; typeset +i v; …    }   scalar-local
+//	f(){ typeset -h -a v; typeset -i v; …    }   integer-local
+//	f(){ typeset -h -a v; v=str;      ${(t)v} }   scalar-local
+//
+// **The kind, not the array**, and rows five and six are what say so: the
+// word goes when the name becomes a *scalar* again and when one non-container
+// kind replaces another, neither of which "it became an array" reaches. The
+// issue this closes was written around the array rows alone (#4901).
+//
+// The controls are the other half and they are every letter that is not a
+// kind: `typeset -h v; typeset -x v` is `scalar-local-export-hide`, and so
+// are the `-U`, `-r` and `-l` spellings — the attribute stands wherever the
+// kind does. `typeset -h -F v; typeset -E v` keeps it too, both letters
+// naming the one float kind.
+//
+// Only the attribute, and never the shadow's own answer: a hidden shadow of
+// one of the shell's own names stays an ordinary parameter after the kind
+// moves under it. Measured, and it is what rules shadowStopsHiding out as the
+// body here — `f(){ local -h ARGC=5; typeset -a ARGC; ${(t)ARGC} }` is
+// `array-local` in the reference and not `array-local-special`, so the
+// producer the letter suspended does not come back with the word.
+func (r *Runner) kindChangeForgetsTheHide(was map[string]ParameterKind) {
+	for name, kind := range was {
+		if r.parameterKind(name) != kind {
+			delete(r.hideInScope, name)
+		}
+	}
+}
+
+// noteTheHideLetter records that the declaration being run writes `-h`, which
+// is the exemption hiddenNameKinds reads.
+//
+// A mark on the runner rather than an argument, because a declaration's array
+// value is stored by [Runner.assignOperands] *after* the builtin has returned:
+// `typeset -h v=(a b)` retypes the name from outside the call that read the
+// letter, and that store has no letters of its own to be exempted by. Set and
+// not restored here for the same reason [Runner.privateDeclarationRan] is —
+// the command that dispatched the builtin clears it beforehand and puts the
+// enclosing answer back once the operands are written.
+func (r *Runner) noteTheHideLetter(f declareFlags) {
+	if f.hideNamed && f.hide {
+		r.hideLetterWritten = true
+	}
+}
+
 // shadowStartsHiding makes the shadow standing over a name a hidden one:
 // an ordinary parameter that merely happens to be spelled like one of the
 // shell's own.

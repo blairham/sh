@@ -200,3 +200,205 @@ print -r -- "after"`)
 			"the freeze makes — the plus form puts that back too", out, st)
 	}
 }
+
+// The `hide` attribute does not survive the name's **kind** changing, which
+// is a fact about the kind and not about arrays — see
+// Runner.kindChangeForgetsTheHide.
+//
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), run `-f`
+// from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
+// scratch HOME, one run per row.
+func TestAKindChangeTakesTheHideWordOff(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The two spellings #4901 was filed for: a declaration word carrying
+		// the container and a bare assignment reaching the same place.
+		{
+			"a valued declaration that makes the name an array",
+			`f(){ typeset -h path; typeset path=(p q); print "${(t)path} n=${#path}" }; f`,
+			"array-local n=2\n",
+		},
+		{
+			"and a bare assignment of a literal",
+			`f(){ typeset -h path; path=(p q); print "${(t)path}" }; f`,
+			"array-local\n",
+		},
+		// **The kind, not the array.** These four are what say the rule is
+		// keyed on the kind changing rather than on the name becoming a
+		// container: the word goes when the name becomes a *scalar* again,
+		// and when one non-container kind replaces another. A rule written
+		// around the array rows alone passes every row above and none of
+		// these.
+		{
+			"an integer taken back off, so the name is a scalar again",
+			`f(){ typeset -h -i v; typeset +i v; print "${(t)v}" }; f`,
+			"scalar-local\n",
+		},
+		{
+			"an array becoming an integer",
+			`f(){ typeset -h -a v; typeset -i v; print "${(t)v}" }; f`,
+			"integer-local\n",
+		},
+		{
+			"an array becoming a scalar by assignment",
+			`f(){ typeset -h -a v; v=str; print "${(t)v}" }; f`,
+			"scalar-local\n",
+		},
+		{
+			"a scalar becoming a float",
+			`f(){ typeset -h v; typeset -F v; print "${(t)v}" }; f`,
+			"float-local\n",
+		},
+		// And the kind standing still keeps it, whatever else the line does.
+		// The last of these is the pair that says `-F` and `-E` name one
+		// kind between them and not two.
+		{
+			"a container letter over the container it already has",
+			`f(){ typeset -h -a v; typeset -a v; print "${(t)v}" }; f`,
+			"array-local-hide\n",
+		},
+		{
+			"a literal assigned to a name that is already an array",
+			`f(){ typeset -h -a v; v=(p q); print "${(t)v}" }; f`,
+			"array-local-hide\n",
+		},
+		{
+			"a scalar assigned to a scalar",
+			`f(){ typeset -h v; v=1; print "${(t)v}" }; f`,
+			"scalar-local-hide\n",
+		},
+		{
+			"the two float letters, which name one kind",
+			`f(){ typeset -h -F v; typeset -E v; print "${(t)v}" }; f`,
+			"float-local-hide\n",
+		},
+		// The controls #4901 names: every letter that is not a kind leaves
+		// the word where it is.
+		{
+			"the letter alone",
+			`f(){ typeset -h path; print "${(t)path}" }; f`,
+			"scalar-local-hide\n",
+		},
+		{
+			"an ordinary name, so it is not the shell's own that matters",
+			`f(){ typeset -h v=1; print "${(t)v}" }; f`,
+			"scalar-local-hide\n",
+		},
+		{
+			"the export letter arriving afterwards",
+			`f(){ typeset -h path; typeset -x path; print "${(t)path}" }; f`,
+			"scalar-local-export-hide\n",
+		},
+		{
+			"and the unique letter",
+			`f(){ typeset -h v; typeset -U v; print "${(t)v}" }; f`,
+			"scalar-local-unique-hide\n",
+		},
+		// **A line that writes the letter is writing this binding's
+		// attribute**, so the kind it changes on the way is not something to
+		// forget. The first row is the one the operand store had to be told
+		// about: the value lands after the declaration has returned.
+		{
+			"the letter and an array literal on one line",
+			`f(){ typeset -h v=(a b); print "${(t)v}" }; f`,
+			"array-local-hide\n",
+		},
+		{
+			"the letter written again beside a container letter",
+			`f(){ typeset -h v; typeset -h -a v; print "${(t)v}" }; f`,
+			"array-local-hide\n",
+		},
+		{
+			"and again beside a literal",
+			`f(){ typeset -h v; typeset -h v=(a b); print "${(t)v}" }; f`,
+			"array-local-hide\n",
+		},
+		{
+			"while the plus form takes it off as it always did",
+			`f(){ typeset -h v; typeset +h -a v; print "${(t)v}" }; f`,
+			"array-local\n",
+		},
+		// Every other word that retypes a name reaches the same rule, which
+		// is what says this is one seam and not a rule per builtin.
+		{
+			"`local` with a container letter",
+			`f(){ typeset -h v; local -a v; print "${(t)v}" }; f`,
+			"array-local\n",
+		},
+		{
+			"the `integer` word",
+			`f(){ typeset -h v; integer v; print "${(t)v}" }; f`,
+			"integer-local\n",
+		},
+		{
+			"the `float` word",
+			`f(){ typeset -h v; float v; print "${(t)v}" }; f`,
+			"float-local\n",
+		},
+		{
+			"an append that makes the name an array",
+			`f(){ typeset -h v; v+=(a); print "${(t)v}" }; f`,
+			"array-local\n",
+		},
+		{
+			"and the top level, where there is no scope at all",
+			`typeset -h v; v=(p q); print "${(t)v}"`,
+			"array\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q status %d, want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The attribute forgotten is the one the **binding in front of the line** is
+// carrying, and a declaration in a deeper scope has a binding of its own — so
+// the name the caller hid is still hidden when the call returns. Without this
+// the rule above would reach through a shadow and take an outer scope's
+// attribute off for good.
+//
+// Measured with the rows above.
+func TestAKindChangeUnderAShadowLeavesTheOuterHideAlone(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a called function retyping its own local",
+			`g(){ typeset -a v; print "in-g ${(t)v}" }
+f(){ typeset -h v; g; print "in-f ${(t)v}" }
+f`,
+			"in-g array-local\nin-f scalar-local-hide\n",
+		},
+		{
+			"and a function retyping a local over a hidden global",
+			`typeset -h v
+f(){ typeset -a v; print "in-f ${(t)v}" }
+f
+print "top ${(t)v}"`,
+			"in-f array-local\ntop scalar-hide\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := answersRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%s = %q status %d, want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// Only the attribute goes, never the hidden shadow's own answer: the producer
+// the letter suspended does not come back with the word. `array-local` and
+// not `array-local-special` is what says so — the second would be the shell's
+// own `ARGC` back again, holding the shell's value rather than the empty
+// array this line made.
+func TestAKindChangeDoesNotPutAProducerBack(t *testing.T) {
+	const src = `f(){ local -h ARGC=5; print "${(t)ARGC}"; typeset -a ARGC; print "after ${(t)ARGC} [$ARGC]" }
+f`
+	want := "scalar-local-hide\nafter array-local []\n"
+	out, st := answersRun(t, src)
+	if out != want || st != 0 {
+		t.Errorf("%s = %q status %d, want %q", src, out, st, want)
+	}
+}

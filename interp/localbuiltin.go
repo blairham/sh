@@ -260,18 +260,29 @@ func (r *Runner) listStandingDeclaration(name string) {
 //     `v=hi`, exactly as `typeset v` does. `-` reached this already because
 //     it leaves every field at its zero; `+` did not, because it sets
 //     `remove`, and the two spellings of one word are not two answers.
-//   - the cell is not a **fresh** one. A declaration inside a function that
-//     shadows the caller's name finds nothing standing in it, which is what
-//     keeps a shell from narrating every `local` in every function; a second
-//     declaration of a name this scope already made local does list.
+//
+//   - the declaration is a **redeclaration**: it is not making the binding it
+//     writes. A declaration inside a function that shadows the caller's name
+//     is making one, which is what keeps a shell from narrating every `local`
+//     in every function; a second declaration of a name this scope already
+//     made local is not, and does list.
+//
+//     Not `!fresh`, which is the same answer everywhere but one and was what
+//     this asked until #4890: a local of one half of one of the
+//     shell's own ties displaces the other half with it, so a `typeset path`
+//     after a `typeset PATH` writes a cell that is not fresh — it is still
+//     holding what the mirror put there, measured — under a name nothing has
+//     declared. The reference writes nothing for that pair. See
+//     Runner.shadow, which is where the two answers part.
+//
 //   - the name **holds** something. `unset u; typeset u` prints nothing,
 //     which is the control that says this is not "one operand means list".
-func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, fresh bool) bool {
+func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, redeclared bool) bool {
 	letters := f
 	// A bare `+` is an option word carrying no letters — see the sign branch
 	// in parseDeclareFlags — so what it leaves behind is not a letter either.
 	letters.remove, letters.plusAlone = false, false
-	if (letters != (declareFlags{}) && !f.onlyAConflictedWidth()) || fresh || !r.declaredNameHolds(name) {
+	if (letters != (declareFlags{}) && !f.onlyAConflictedWidth()) || !redeclared || !r.declaredNameHolds(name) {
 		return false
 	}
 	if r.freezing[name] {

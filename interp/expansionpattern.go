@@ -98,7 +98,7 @@ func (r *Runner) operandPatternOpts(pattern string, bad *bool, subjects ...strin
 		r.fatalPattern(pattern, 1)
 		return o, true
 	}
-	if !hasUnterminatedBracket(pattern) {
+	if !hasUnterminatedBracket(pattern, r.emptyBracketCompiles()) {
 		return o, false
 	}
 	o.bracket = r.bracketPolicy()

@@ -479,7 +479,7 @@ func fieldUnitAt(s string, i int) (unit string, live bool, width int) {
 // showed up as three of the five quantifiers rather than as the construct
 // (#1042).
 func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, extendedOperators bool,
-	slashLeavesABracket func() bool,
+	slashLeavesABracket func() bool, emptyBracketCompiles bool,
 ) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' {
@@ -547,7 +547,8 @@ func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, ext
 			// The axis is a function and is called here and nowhere else: a
 			// question this shell cannot answer must refuse the one word it
 			// is about, not every field that reaches the gate.
-			if closesBracket(s, i) && (!bracketHoldsASlash(s, i) || slashLeavesABracket()) {
+			if closesBracket(s, i, emptyBracketCompiles) &&
+				(!bracketHoldsASlash(s, i) || slashLeavesABracket()) {
 				return true
 			}
 			continue
@@ -646,11 +647,50 @@ func closesGroup(s string, i int) bool {
 	return false
 }
 
+// emptyBracketCompiles is [Semantics.EmptyBracketExpressionCompiles] read,
+// and it is compared against Yes rather than asked through [Runner.ask] for
+// the reason the field states: five of the six measured columns leave such a
+// bracket unterminated, so a core with no dialect chosen already has the
+// common answer.
+func (r *Runner) emptyBracketCompiles() bool {
+	return r.sem().EmptyBracketExpressionCompiles == Yes
+}
+
+// memberReadingCloses reports whether the bracket opened at i closes under
+// the **POSIX** reading, where a `]` written first is a member of the set.
+//
+// Split out because it is the question the dialect's answer is asked *after*:
+// every column reads that `]` as a member while something later closes the
+// bracket, and the one column that differs differs only where nothing does.
+// See [Semantics.EmptyBracketExpressionCompiles] for the panel.
+func memberReadingCloses(s string, i int) bool {
+	j := i + 1
+	if j < len(s) && (s[j] == '!' || s[j] == '^') {
+		j++
+	}
+	if j < len(s) && s[j] == ']' {
+		j++
+	}
+	for ; j < len(s); j++ {
+		if s[j] == '\\' {
+			j++
+			continue
+		}
+		if s[j] == ']' {
+			return true
+		}
+	}
+	return false
+}
+
 // closesBracket reports whether the bracket expression opened at i is closed.
 //
 // A `!` or `^` directly after the bracket negates, and a `]` directly after
 // that is a literal member rather than the terminator — so `[]]` is a
-// one-member class and `[]` is not a class at all.
+// one-member class and `[]` is not a class at all **unless** this dialect
+// compiles an empty one, where that `]` ends the expression rather than
+// leaving it open. Which it is, is the dialect's: see
+// [Semantics.EmptyBracketExpressionCompiles].
 // hasUnterminatedPatternGroup reports whether a pattern holds a `(` that
 // nothing closes, so the question "will this compile" is asked only of the
 // patterns it applies to — the companion to [hasUnterminatedBracket], and
@@ -664,7 +704,7 @@ func closesGroup(s string, i int) bool {
 // balance it. Measured on zsh 5.9.2 (`-f`, 2026-09-26): `print -r -- a[(]b`
 // writes `a(b` at 0, and reading the bracket's `(` as an opener would refuse
 // it as a bad pattern.
-func hasUnterminatedPatternGroup(p string) bool {
+func hasUnterminatedPatternGroup(p string, emptyCompiles bool) bool {
 	for i := 0; i < len(p); i++ {
 		switch p[i] {
 		case '\\':
@@ -673,7 +713,7 @@ func hasUnterminatedPatternGroup(p string) bool {
 			// characters: both reach here escaped.
 			i++
 		case '[':
-			i = skipBracket(p, i)
+			i = skipBracket(p, i, emptyCompiles)
 		case '(':
 			if !closesGroup(p, i) {
 				return true
@@ -711,27 +751,24 @@ func hasUnterminatedPatternGroup(p string) bool {
 // without taking bare groups would otherwise be asked the wrong question.
 func (r *Runner) badPatternFromAnOpenGroup(p string) bool {
 	return r.sem().UnterminatedBracket == BracketBadPattern &&
-		r.lang().PatternAlternation && hasUnterminatedPatternGroup(p)
+		r.lang().PatternAlternation && hasUnterminatedPatternGroup(p, r.emptyBracketCompiles())
 }
 
-func closesBracket(s string, i int) bool {
+func closesBracket(s string, i int, emptyCompiles bool) bool {
+	if memberReadingCloses(s, i) {
+		return true
+	}
+	// Nothing closed it with the `]` read as a member. In the one column
+	// that compiles an empty bracket, a `]` written first is the terminator
+	// instead — so the expression is `[]`, `[!]` or `[^]` and it closes.
+	if !emptyCompiles {
+		return false
+	}
 	j := i + 1
 	if j < len(s) && (s[j] == '!' || s[j] == '^') {
 		j++
 	}
-	if j < len(s) && s[j] == ']' {
-		j++
-	}
-	for ; j < len(s); j++ {
-		if s[j] == '\\' {
-			j++
-			continue
-		}
-		if s[j] == ']' {
-			return true
-		}
-	}
-	return false
+	return j < len(s) && s[j] == ']'
 }
 
 // splitFieldParts cuts a field into the components a pattern is matched one at
@@ -838,7 +875,8 @@ func (r *Runner) describesRatherThanSpells(s string) bool {
 	}
 	if hasUnescapedMeta(s, r.lang().NumericRangePattern,
 		r.lang().PatternAlternation, r.lang().ExtendedPattern,
-		r.MatchOption(ExtendedPatternOperators), r.slashLeavesABracket) {
+		r.MatchOption(ExtendedPatternOperators), r.slashLeavesABracket,
+		r.emptyBracketCompiles()) {
 		return true
 	}
 	// Only one of the two readings reaches the filesystem. ksh93 expands
@@ -897,7 +935,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		return nil, false
 	}
 	if (r.sem().UnterminatedBracket == BracketBadPattern &&
-		field != "[" && hasUnterminatedBracket(field)) ||
+		field != "[" && hasUnterminatedBracket(field, r.emptyBracketCompiles())) ||
 		r.badPatternFromAnOpenGroup(field) ||
 		r.bracketAfterSubIsABadPattern(field) {
 		// zsh rejects an unterminated bracket against the filesystem too,
@@ -1897,7 +1935,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	if err != nil {
 		return nil
 	}
-	hidden := seeHidden || patternBeginsWithPeriod(pattern, o.group, o.quantified)
+	hidden := seeHidden || patternBeginsWithPeriod(pattern, o.group, o.quantified, o.emptyBracket)
 	// Whether `.` and `..` are in this dialect's listings at all, which is
 	// what separates the two ways they reach the match below.
 	listsDotAndDotDot := r.sem().GlobListsDotAndDotDot == Yes
@@ -1910,7 +1948,7 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool, ign
 	o.chars = r.patternMatchCountsCharacters(pattern, entryNames(entries)...)
 
 	var out []string
-	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group, o.quantified)) {
+	for _, name := range r.globListingNames(entries, patternBeginsWithPeriod(pattern, o.group, o.quantified, o.emptyBracket)) {
 		// Only a *leading* period is special, and only in pathname
 		// expansion: `*.b` matches `a.b`, and `.hid` needs `.*id`.
 		if strings.HasPrefix(name, ".") && !hidden {

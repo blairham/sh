@@ -114,7 +114,7 @@ func patternSpanBytes(p string, o patternOpts) (lo, hi int, bounded bool) {
 			lo, hi, i = lo+1, hi+unitMostBytes(o), i+1
 			continue
 		case '[':
-			end, ok := bracketSpanEnd(p, i)
+			end, ok := bracketSpanEnd(p, i, o.emptyBracket)
 			if !ok {
 				return 0, 0, false
 			}
@@ -159,8 +159,8 @@ func unitMostBytes(o patternOpts) int {
 // holding a literal `[` member is refused with them. That costs the
 // attempts it would have skipped and can lose nothing, which is the trade
 // this whole file makes.
-func bracketSpanEnd(p string, i int) (int, bool) {
-	end, ok := bracketEnd(p, i)
+func bracketSpanEnd(p string, i int, emptyCompiles bool) (int, bool) {
+	end, ok := bracketEnd(p, i, emptyCompiles)
 	if !ok {
 		// Nothing closes it, so it is not a bracket expression at all and
 		// its text is ordinary.

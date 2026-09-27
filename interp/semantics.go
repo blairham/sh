@@ -3784,6 +3784,60 @@ type Semantics struct {
 	// so it is the literal reading on both axes — bash's, and not the
 	// sibling's it had been given (#3419, #3420).
 	UnterminatedBracketAfterASubExpression BracketPolicy
+	// EmptyBracketExpressionCompiles is what `[]` and `[!]` are: a bracket
+	// the POSIX reading leaves **unterminated**, because the `]` written
+	// first is a member of the set and nothing closes it afterwards — or a
+	// bracket that **ends at that `]`**, holding no members at all.
+	//
+	// It is not "what a `]` written first means", which is the wider noun and
+	// is wrong: that `]` is a member in **every** column while the bracket
+	// closes later, and the one column that parts from the others parts only
+	// where it does not. Measured 2026-09-26 in a directory holding `a`, `z`,
+	// `]`, `a]` and `~`, against bash 5.3.20 and bash 3.2.57 (`--norc
+	// --noprofile -c`), ksh93u+ 2012-08-01 and dash 0.5.12 (`-c`), BusyBox
+	// ash in the pinned alpine image, and zsh 5.9.2 (`-f -c`):
+	//
+	//	              bash 5.3  bash 3.2  ksh93     dash    ash     zsh
+	//	echo []]      ]         ]         ]         ]       ]       ]
+	//	echo []a]     ] a       ] a       ] a       ] a     ] a     ] a
+	//	echo [!]]     a z ~     a z ~     ] a z ~   a z ~   a z ~   a z ~
+	//	echo []a~b]   ] a ~     ] a ~     ] a ~     ] a ~   ] a ~   ] a ~
+	//	echo []       []        []        []        []      []      no matches
+	//	echo []a      []a       []a       []a       []a     []a     no matches
+	//	echo [!]      [!]       [!]       [!]       [!]     [!]     ] a z ~
+	//	echo [^]      [^]       [^]       [^]       [^]     [^]     ] a z ~
+	//
+	// **The first four rows are the controls and they are the point.** A
+	// bracket that closes later reads the `]` as a member in every column,
+	// zsh included, so an implementation keyed on "a `]` written first
+	// closes" gets all four wrong — and `[]a~b]` is the row that says so
+	// loudest, since the same four characters are a set in all six. (ksh93's
+	// third row is its own: it holds `]` in a negated set where the other
+	// five do not, which is a different question from this one.)
+	//
+	// The last four are the disagreement, and they are exactly the brackets
+	// the member reading cannot close. Five columns hand them to
+	// [UnterminatedBracket]; the sixth re-reads them with that `]` as the
+	// terminator, which makes `[]` a set with no members — matching nothing,
+	// so `echo []` is a miss rather than a word — and `[!]` its negation,
+	// matching **any one character**. A `^` negates there too, so `[^]` is
+	// the same pattern.
+	//
+	// The trim shows the same split from the other side and is where the
+	// panel's other bracket axis is visible beside this one: on `[]abc`,
+	// `${w#[]}` is `abc` in bash, ksh93 and ash — the literal reading of an
+	// unterminated bracket — `[]abc` in dash, which matches nothing, and
+	// `[]abc` in zsh, where the empty set matches nothing either. The two
+	// agree there for different reasons, which is why the rows above are the
+	// ones that pin it.
+	//
+	// Read against Yes rather than through [Runner.ask], which is
+	// [Runner.scalarAssignmentGlobs]'s arrangement and for a version of its
+	// reason: five of the six measured columns leave such a bracket
+	// unterminated, so the common answer is the one a core with no dialect
+	// chosen already has, and putting the question to every bracket in the
+	// language would report an absence rather than a disagreement.
+	EmptyBracketExpressionCompiles Answer
 	// UnknownCharacterClass is what a bracket does with a `[:name:]` whose
 	// name this shell has never heard of — including the empty one, `[::]`,
 	// which every column answers the same way it answers a name.
@@ -30351,7 +30405,7 @@ func (c CollatingElementPolicy) String() string {
 // opens a `[.` or a `[=` inside a bracket expression — so a shell with no
 // answer is not asked a question the pattern never poses.
 func (r *Runner) collatingElements(pattern string) CollatingElementPolicy {
-	if !hasCollatingDelimiter(pattern) {
+	if !hasCollatingDelimiter(pattern, r.emptyBracketCompiles()) {
 		return NoCollatingElements
 	}
 	p := r.sem().CollatingElements
@@ -32323,6 +32377,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 		// can spot, and asking up front would either put the axis to a
 		// pattern that never poses it or need a second scan to decide.
 		askBracketAfterSub: r.bracketAfterSubPolicy,
+		emptyBracket:       r.emptyBracketCompiles(),
 	}
 	// The locale narrows the fold, and only a fold there is asks: the helper
 	// is shared with the sites that convert a value rather than match one,
@@ -32345,7 +32400,7 @@ func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
 	// script on `case '[a' in [[:alpha:]])` and this shell answered the
 	// next arm. Writing to it costs nothing where no pattern is refused.
 	o.bad = &bad
-	if hasUnterminatedBracket(pattern) {
+	if hasUnterminatedBracket(pattern, r.emptyBracketCompiles()) {
 		o.bracket = r.bracketPolicy()
 	}
 	// A group nothing closes is the same refusal arriving by the other of

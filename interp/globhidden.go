@@ -53,11 +53,11 @@ import "strings"
 // one; where neither holds, only the front of the pattern is a place a
 // pattern can start, which is the reading this had before groups were looked
 // into.
-func patternBeginsWithPeriod(pattern string, group, quantified bool) bool {
+func patternBeginsWithPeriod(pattern string, group, quantified, emptyCompiles bool) bool {
 	if !group && !quantified {
 		return strings.HasPrefix(globUnescape(pattern), ".")
 	}
-	return periodStartsAt(pattern, 0, group, quantified, 0)
+	return periodStartsAt(pattern, 0, group, quantified, 0, emptyCompiles)
 }
 
 // periodStartsAt is that question asked at one position, following groups
@@ -66,7 +66,7 @@ func patternBeginsWithPeriod(pattern string, group, quantified bool) bool {
 // depth bounds the recursion rather than the nesting: a pattern is a string a
 // script wrote, and a thousand nested parentheses is not a shell behavior to
 // model but a stack to run out of.
-func periodStartsAt(pattern string, i int, group, quantified bool, depth int) bool {
+func periodStartsAt(pattern string, i int, group, quantified bool, depth int, emptyCompiles bool) bool {
 	if i >= len(pattern) || depth > 32 {
 		return false
 	}
@@ -82,23 +82,23 @@ func periodStartsAt(pattern string, i int, group, quantified bool, depth int) bo
 	if quantified && i+1 < len(pattern) && pattern[i+1] == '(' && !escapedAt(pattern, i+1) {
 		switch pattern[i] {
 		case '@', '?', '+', '*', '!':
-			return periodStartsAtQuantified(pattern, i, group, quantified, depth)
+			return periodStartsAtQuantified(pattern, i, group, quantified, depth, emptyCompiles)
 		}
 	}
 	if !group || pattern[i] != '(' {
 		return pattern[i] == '.'
 	}
-	end, ok := groupEndsAt(pattern, i)
+	end, ok := groupEndsAt(pattern, i, emptyCompiles)
 	if !ok {
 		return false
 	}
 	if i+1 < end && pattern[i+1] == '#' && !escapedAt(pattern, i+1) {
 		// A pattern-flag group draws nothing, so the start of the pattern is
 		// whatever stands after it.
-		return periodStartsAt(pattern, end+1, group, quantified, depth+1)
+		return periodStartsAt(pattern, end+1, group, quantified, depth+1, emptyCompiles)
 	}
-	for _, alt := range groupAlternatives(pattern, i+1, end) {
-		if periodStartsAt(pattern, alt, group, quantified, depth+1) {
+	for _, alt := range groupAlternatives(pattern, i+1, end, emptyCompiles) {
+		if periodStartsAt(pattern, alt, group, quantified, depth+1, emptyCompiles) {
 			return true
 		}
 	}
@@ -130,22 +130,22 @@ func periodStartsAt(pattern string, i int, group, quantified bool, depth int) bo
 // `*(x|y)` matches no empty arm and allows it. And `!` neither lends its arms
 // nor steps aside, though it plainly matches the empty string — so this is a
 // rule about which bytes are written, not about what the group can match.
-func periodStartsAtQuantified(pattern string, i int, group, quantified bool, depth int) bool {
-	end, ok := groupEndsAt(pattern, i+1)
+func periodStartsAtQuantified(pattern string, i int, group, quantified bool, depth int, emptyCompiles bool) bool {
+	end, ok := groupEndsAt(pattern, i+1, emptyCompiles)
 	if !ok {
 		// Nothing closes it, so the quantifier and the parenthesis are
 		// ordinary text and neither is a period.
 		return false
 	}
 	if pattern[i] != '!' {
-		for _, alt := range groupAlternatives(pattern, i+2, end) {
-			if periodStartsAt(pattern, alt, group, quantified, depth+1) {
+		for _, alt := range groupAlternatives(pattern, i+2, end, emptyCompiles) {
+			if periodStartsAt(pattern, alt, group, quantified, depth+1, emptyCompiles) {
 				return true
 			}
 		}
 	}
 	if pattern[i] == '*' || pattern[i] == '?' {
-		return periodStartsAt(pattern, end+1, group, quantified, depth+1)
+		return periodStartsAt(pattern, end+1, group, quantified, depth+1, emptyCompiles)
 	}
 	return false
 }
@@ -159,7 +159,7 @@ func periodStartsAtQuantified(pattern string, i int, group, quantified bool, dep
 // all, so the leading-period question was answered `no` and a dotfile the
 // second alternative names was passed over. Measured 2026-09-15 on zsh
 // 5.9.2, which lists `.b` for that pattern where this listed nothing (#3075).
-func groupEndsAt(pattern string, i int) (int, bool) {
+func groupEndsAt(pattern string, i int, emptyCompiles bool) (int, bool) {
 	depth := 0
 	for j := i; j < len(pattern); j++ {
 		if escapedAt(pattern, j) {
@@ -167,7 +167,7 @@ func groupEndsAt(pattern string, i int) (int, bool) {
 		}
 		switch pattern[j] {
 		case '[':
-			j = skipBracket(pattern, j)
+			j = skipBracket(pattern, j, emptyCompiles)
 		case '(':
 			depth++
 		case ')':
@@ -189,7 +189,7 @@ func groupEndsAt(pattern string, i int) (int, bool) {
 // looked like a pattern beginning with a period and matched a dotfile.
 // Measured 2026-09-15 on zsh 5.9.2, where that pattern matches nothing and
 // `(x|[a|.]b)` matches `x` alone (#3075).
-func groupAlternatives(pattern string, start, end int) []int {
+func groupAlternatives(pattern string, start, end int, emptyCompiles bool) []int {
 	out := []int{start}
 	depth := 0
 	for j := start; j < end; j++ {
@@ -198,7 +198,7 @@ func groupAlternatives(pattern string, start, end int) []int {
 		}
 		switch pattern[j] {
 		case '[':
-			j = skipBracket(pattern, j)
+			j = skipBracket(pattern, j, emptyCompiles)
 		case '(':
 			depth++
 		case ')':

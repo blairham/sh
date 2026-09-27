@@ -865,6 +865,10 @@ func Semantics() interp.Semantics {
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: a class that can never match, the same as a bare `[`.
 	s.UnterminatedBracketAfterASubExpression = interp.BracketNoMatch
+	// And no empty bracket: measured on 0.5.12, `echo []` and `echo [!]`
+	// are the words themselves. See
+	// interp.Semantics.EmptyBracketExpressionCompiles.
+	s.EmptyBracketExpressionCompiles = interp.No
 	// And inside a bracket expression the backslash protects the character
 	// behind it and puts nothing of its own in the set: `[\)]` is the
 	// one-character set `)`, and `[a\-z]` is the three members a, `-` and z,

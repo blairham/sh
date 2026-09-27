@@ -530,7 +530,7 @@ func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capt
 			p, base = p[1:], base+1
 			continue
 		}
-		if body, rest, ok := splitPatternFlags(p); ok {
+		if body, rest, ok := splitPatternFlags(p, o.emptyBracket); ok {
 			if anchorPatternFlag(body) == anchorNone {
 				capturing, whole = planFlags(body, capturing, whole)
 			}
@@ -564,7 +564,7 @@ func planWalk(p string, base int, capturing, whole bool, o patternOpts, pl *capt
 				pl.index[base] = pl.count
 				pl.count++
 			}
-			arms, armAt := alternativesAt(body, bp)
+			arms, armAt := alternativesAt(body, bp, o.emptyBracket)
 			for k, a := range arms {
 				planWalk(a, armAt[k], capturing, whole, o, pl)
 			}
@@ -743,7 +743,7 @@ func (r *Runner) publishMatch(m matchReport) {
 // of "read the pattern once"; what it does not do is remove the re-derivation
 // of *which* construct stands at a position, which wants a compiled form and
 // a design note of its own.
-func (w *matchWhere) prepare(pattern string) {
+func (w *matchWhere) prepare(pattern string, emptyCompiles bool) {
 	if !patternPrepares {
 		// Every table below is consulted through a lookup that falls back to
 		// the scan it replaces, so leaving them empty is the matcher as it
@@ -768,11 +768,11 @@ func (w *matchWhere) prepare(pattern string) {
 		w.parenEnd[i], w.brackEnd[i] = -1, -1
 		switch pattern[i] {
 		case '(':
-			if end, ok := closingParen(pattern[i:]); ok {
+			if end, ok := closingParen(pattern[i:], emptyCompiles); ok {
 				w.parenEnd[i] = int32(i + end)
 			}
 		case '[':
-			if end, ok := bracketEnd(pattern, i); ok {
+			if end, ok := bracketEnd(pattern, i, emptyCompiles); ok {
 				w.brackEnd[i] = int32(end)
 			}
 		}
@@ -818,7 +818,7 @@ func closingParenAt(o *patternOpts, p string, pp int) (int, bool) {
 			return end, true
 		}
 	}
-	return closingParen(p)
+	return closingParen(p, o.emptyBracket)
 }
 
 // bracketEndAt is bracketEnd for the bracket standing at p[i], with the
@@ -830,7 +830,7 @@ func bracketEndAt(o *patternOpts, p string, i, pp int) (int, bool) {
 			return i + end, true
 		}
 	}
-	return bracketEnd(p, i)
+	return bracketEnd(p, i, o.emptyBracket)
 }
 
 // armsOf is alternativesAt with the arms of each group remembered by where
@@ -840,17 +840,17 @@ func bracketEndAt(o *patternOpts, p string, i, pp int) (int, bool) {
 // split allocates two slices each time. The body is a fixed piece of the
 // pattern, so the answer is too — the length is compared as well as the
 // offset because a one-time scan reads bodies the table was not built for.
-func (w *matchWhere) armsOf(body string, bp int) ([]string, []int) {
+func (w *matchWhere) armsOf(body string, bp int, emptyCompiles bool) ([]string, []int) {
 	if w == nil || !w.ready {
-		return alternativesAt(body, bp)
+		return alternativesAt(body, bp, emptyCompiles)
 	}
 	if !patternPrepares {
-		return alternativesAt(body, bp)
+		return alternativesAt(body, bp, emptyCompiles)
 	}
 	if a, ok := w.arms[bp]; ok && a.length == len(body) {
 		return a.arms, a.offsets
 	}
-	arms, offsets := alternativesAt(body, bp)
+	arms, offsets := alternativesAt(body, bp, emptyCompiles)
 	if w.arms == nil {
 		w.arms = map[int]armSplit{}
 	}

@@ -2843,7 +2843,7 @@ func hasLiveByteOf(esc, set string) bool {
 func (r *Runner) resultReadsAsPattern(esc string) bool {
 	if hasUnescapedMeta(esc, r.lang().NumericRangePattern, r.lang().PatternAlternation,
 		r.lang().ExtendedPattern, r.MatchOption(ExtendedPatternOperators),
-		r.slashLeavesABracket) {
+		r.slashLeavesABracket, r.emptyBracketCompiles()) {
 		return true
 	}
 	// The second gap of the same shape, and #1331 is the one that opened it.
@@ -2886,7 +2886,7 @@ func (r *Runner) resultReadsAsPattern(esc string) bool {
 	// pattern would be right to refuse this field, since there the result
 	// really is a pattern. Only the dialect that answers No to the axis
 	// reaches the escape below.
-	if r.sem().UnterminatedBracket == BracketBadPattern && hasUnterminatedBracket(esc) {
+	if r.sem().UnterminatedBracket == BracketBadPattern && hasUnterminatedBracket(esc, r.emptyBracketCompiles()) {
 		return true
 	}
 	// And a group nothing closes, which is #1386's gap arriving through the

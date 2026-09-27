@@ -2068,6 +2068,10 @@ func Semantics() interp.Semantics {
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: the column that moves: a bare `[` is a literal `[` here and `[[:alpha:]` matches nothing at all.
 	s.UnterminatedBracketAfterASubExpression = interp.BracketNoMatch
+	// And no empty bracket: measured on 93u+ 2012-08-01, `echo []` and
+	// `echo [!]` are the words themselves. See
+	// interp.Semantics.EmptyBracketExpressionCompiles.
+	s.EmptyBracketExpressionCompiles = interp.No
 	// And inside a bracket expression the backslash protects the character
 	// behind it and puts nothing of its own in the set: `[\)]` is the
 	// one-character set `)`, and `[a\-z]` is the three members a, `-` and z,

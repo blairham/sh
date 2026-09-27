@@ -277,7 +277,7 @@ func (r *Runner) markWrittenBars(pattern string, valueAt [][2]int) string {
 		case ')':
 			depth--
 		case '[':
-			if end, ok := bracketEnd(pattern, i); ok {
+			if end, ok := bracketEnd(pattern, i, r.emptyBracketCompiles()); ok {
 				i = end
 			}
 		case '|':
@@ -616,7 +616,7 @@ func (r *Runner) expansionPattern(v string, q syntax.Quoting, glob Answer) (stri
 // Off — every column but one — nothing is rewritten and the value reaches the
 // matcher as it stands.
 func (r *Runner) bracketEscapeAsMember(v string) string {
-	if !hasBracketEscape(v) || r.bracketEscape() != BracketEscapeProtectsAndIsAMember {
+	if !hasBracketEscape(v, r.emptyBracketCompiles()) || r.bracketEscape() != BracketEscapeProtectsAndIsAMember {
 		return v
 	}
 	var b strings.Builder
@@ -631,7 +631,7 @@ func (r *Runner) bracketEscapeAsMember(v string) string {
 				i++
 				b.WriteByte(v[i])
 			}
-		case v[i] == '[' && closesBracket(v, i):
+		case v[i] == '[' && closesBracket(v, i, r.emptyBracketCompiles()):
 			i = writeBracketWithEscapesAsMembers(&b, v, i)
 		default:
 			b.WriteByte(v[i])
@@ -724,6 +724,12 @@ type patternOpts struct {
 	// is about the piece it was handed and cannot tell the two apart.
 	whole   bool
 	bracket BracketPolicy
+	// emptyBracket says a bracket the POSIX reading leaves unterminated is
+	// re-read with the `]` written first as its terminator, so `[]` is a set
+	// with no members and `[!]` matches any one character. See
+	// Semantics.EmptyBracketExpressionCompiles, and memberReadingCloses in
+	// glob.go, which is the scan this is asked after.
+	emptyBracket bool
 	// unknownClass is what a `[:name:]` the shell has never heard of does to
 	// the bracket around it — see Semantics.UnknownCharacterClass. Read only
 	// when a pattern actually holds one, so the zero value here is "no
@@ -1138,7 +1144,7 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 			// pattern against every name in a directory, so the subject
 			// changes far more often than the pattern does, and none of
 			// what prepare works out is about the subject.
-			w.prepare(pattern)
+			w.prepare(pattern, o.emptyBracket)
 		}
 	}
 	if !matchTopLevel(pattern, piece, base, o) {
@@ -1187,7 +1193,7 @@ func matchTopLevel(pattern, piece string, base int, o patternOpts) bool {
 	if !o.topGroup {
 		return matchHere(pattern, piece, 0, base, o)
 	}
-	arms, armAt := topAlternatives(pattern)
+	arms, armAt := topAlternatives(pattern, o.emptyBracket)
 	if len(arms) == 1 {
 		return matchHere(pattern, piece, 0, base, o)
 	}
@@ -1213,7 +1219,7 @@ func matchTopLevel(pattern, piece string, base int, o patternOpts) bool {
 // out of as well, and `[a|b]` is measured to be a bracket holding three
 // members rather than two arms — bracketEnd is the same scan the matcher's
 // own bracket reader uses, so the two cannot disagree about where one ends.
-func topAlternatives(pattern string) (arms []string, offsets []int) {
+func topAlternatives(pattern string, emptyCompiles bool) (arms []string, offsets []int) {
 	depth, start := 0, 0
 	for i := 0; i < len(pattern); i++ {
 		switch pattern[i] {
@@ -1229,7 +1235,7 @@ func topAlternatives(pattern string) (arms []string, offsets []int) {
 			// between two members is not a split. An unterminated `[` is not
 			// a bracket expression and its text is ordinary, which is what
 			// skipBracket answers by standing still.
-			i = skipBracket(pattern, i)
+			i = skipBracket(pattern, i, emptyCompiles)
 		case '|':
 			if depth == 0 {
 				arms, offsets = append(arms, pattern[start:i]), append(offsets, start)
@@ -1338,7 +1344,7 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			}
 			// A flag group has to be read before splitGroup below, which
 			// would otherwise take `(#i)` for an alternation of one.
-			if body, rest, ok := splitPatternFlags(p); ok {
+			if body, rest, ok := splitPatternFlags(p, o.emptyBracket); ok {
 				if a := anchorPatternFlag(body); a != anchorNone {
 					// A zero-width assertion about where the match
 					// stands, so it consumes nothing and decides the
@@ -1811,14 +1817,14 @@ func splitGroup(p string, pp int, o *patternOpts) (body string, quant byte, rest
 // The second and third rows are what say this is the bracket *reaching* past
 // the parenthesis rather than the group being poisoned by it: a group whose
 // bracket does close is a group, and it holds the `)` the bracket swallowed.
-func closingParen(p string) (int, bool) {
+func closingParen(p string, emptyCompiles bool) (int, bool) {
 	depth := 0
 	for i := 0; i < len(p); i++ {
 		switch p[i] {
 		case '\\':
 			i++
 		case '[':
-			end, ok := bracketEnd(p, i)
+			end, ok := bracketEnd(p, i, emptyCompiles)
 			if !ok {
 				return 0, false
 			}
@@ -1837,8 +1843,8 @@ func closingParen(p string) (int, bool) {
 
 // alternatives splits a group's body on the `|` between its arms, ignoring the
 // ones inside a nested group or a bracket expression.
-func alternatives(body string) []string {
-	out, _ := alternativesAt(body, 0)
+func alternatives(body string, emptyCompiles bool) []string {
+	out, _ := alternativesAt(body, 0, emptyCompiles)
 	return out
 }
 
@@ -1860,7 +1866,7 @@ func alternatives(body string) []string {
 // 5.9.2 all match `a` against `@([a|b])` and `|` against `@([]|])`; dash and
 // BusyBox ash have neither `[[ ]]` nor the group, so six of seven columns
 // agree and the seventh cannot be asked. A plain bug, not an axis.
-func alternativesAt(body string, at int) (arms []string, offsets []int) {
+func alternativesAt(body string, at int, emptyCompiles bool) (arms []string, offsets []int) {
 	depth, start := 0, 0
 	for i := 0; i < len(body); i++ {
 		switch body[i] {
@@ -1874,7 +1880,7 @@ func alternativesAt(body string, at int) (arms []string, offsets []int) {
 			// An unterminated `[` is not a bracket expression and its text
 			// is ordinary, so a `|` behind one still splits — which is what
 			// skipBracket answers by standing still.
-			i = skipBracket(body, i)
+			i = skipBracket(body, i, emptyCompiles)
 		case '|':
 			if depth == 0 {
 				arms, offsets = append(arms, body[start:i]), append(offsets, at+start)
@@ -1897,7 +1903,7 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 	if quant != 0 {
 		bp = gp + 2
 	}
-	arms, armAt := o.where.armsOf(body, bp)
+	arms, armAt := o.where.armsOf(body, bp, o.emptyBracket)
 	// `!(…)` is the odd one: it matches any text the arms do *not*, so it is
 	// answered by asking the ordinary question and inverting it rather than
 	// by trying the arms one at a time.
@@ -2039,7 +2045,15 @@ func matchBracket(p string, c string, o *patternOpts) (rest string, ok bool) {
 	// open, and what the text is instead is a different answer from what a
 	// bare `[` is. See Semantics.UnterminatedBracketAfterASubExpression.
 	sub := false
+	// first is what keeps a `]` written straight away from ending the
+	// expression, and in one column it does end it — but only where nothing
+	// later would have. Asked of the whole bracket rather than of the byte,
+	// because that is the noun: `[]a]` is a two-member set in every column
+	// and `[]` is a set with no members in one of them.
 	first := true
+	if o.emptyBracket && !memberReadingCloses(p, 0) {
+		first = false
+	}
 	for i < len(p) {
 		if p[i] == ']' && !first {
 			i++
@@ -2341,13 +2355,13 @@ func plainBracketMember(p string, i int, o *patternOpts) (unit string, next int,
 // bracket expression, which is the only place [Semantics.BracketEscape]
 // decides anything — so an ordinary `[a-z]`, and a backslash standing
 // anywhere else in the pattern, put no question to the dialect.
-func hasBracketEscape(p string) bool {
+func hasBracketEscape(p string, emptyCompiles bool) bool {
 	for i := 0; i < len(p); i++ {
 		switch p[i] {
 		case '\\':
 			i++
 		case '[':
-			end, ok := bracketEnd(p, i)
+			end, ok := bracketEnd(p, i, emptyCompiles)
 			if !ok {
 				return false
 			}
@@ -2362,13 +2376,13 @@ func hasBracketEscape(p string) bool {
 
 // hasUnterminatedBracket reports whether a pattern contains a `[` with no
 // closing `]`, so the axis is asked only about patterns it applies to.
-func hasUnterminatedBracket(p string) bool {
+func hasUnterminatedBracket(p string, emptyCompiles bool) bool {
 	for i := 0; i < len(p); i++ {
 		if p[i] == '\\' {
 			i++
 			continue
 		}
-		if p[i] == '[' && !closesBracket(p, i) {
+		if p[i] == '[' && !closesBracket(p, i, emptyCompiles) {
 			return true
 		}
 	}
@@ -2878,6 +2892,11 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		// `[a` is empty in bash and `[a` in ksh93 and dash, where
 		// `${w#[}` takes the `[` in bash and in ksh93 alike.
 		askBracketAfterSub: r.bracketAfterSubPolicy,
+		// And whether a bracket the member reading cannot close is read as
+		// an empty set rather than left open. Resolved here rather than
+		// inside the matcher because it is the same answer the scan that
+		// decides whether a word is a pattern at all already needs.
+		emptyBracket: r.emptyBracketCompiles(),
 	}, pattern, 1), pattern)
 }
 
@@ -2887,7 +2906,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 // The bracket has to be found first: `a[.b` outside one is an ordinary `[`
 // followed by a period in every column, and asking the axis about it would
 // record a measurement the pattern never took.
-func hasCollatingDelimiter(p string) bool {
+func hasCollatingDelimiter(p string, emptyCompiles bool) bool {
 	for i := 0; i < len(p); i++ {
 		if p[i] == '\\' {
 			i++
@@ -2900,7 +2919,7 @@ func hasCollatingDelimiter(p string) bool {
 		// closes it — an unclosed `[.` is one of the shapes the axis
 		// decides, so the scan must reach text no `]` stands behind.
 		end := len(p)
-		if e, ok := bracketEnd(p, i); ok {
+		if e, ok := bracketEnd(p, i, emptyCompiles); ok {
 			end = e
 		}
 		for j := i + 1; j+1 < end; j++ {
@@ -2917,7 +2936,7 @@ func hasCollatingDelimiter(p string) bool {
 // matcher, and only for a pattern that really holds a backslash inside a
 // bracket expression.
 func (r *Runner) bracketEscapeIsOnlyAMember(pattern string) bool {
-	if !hasBracketEscape(pattern) {
+	if !hasBracketEscape(pattern, r.emptyBracketCompiles()) {
 		return false
 	}
 	return r.bracketEscape() == BracketEscapeIsOnlyAMember

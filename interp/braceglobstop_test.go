@@ -57,6 +57,10 @@ func TestABraceTakingTheMatchFromAProducedPattern(t *testing.T) {
 			s.BraceEmptyAlternativeIsAField = No
 			s.BraceStopsFieldSplitting = No
 			s.GlobExpansionResults = Yes
+			// Held at yes across both columns, so that the extent stays
+			// armed when this rule's own axis is flipped off: without it the
+			// two rules would share one guard and nothing would notice.
+			s.BraceFreesProducedGroupSyntax = Yes
 			s.BraceMakesAProducedStarOrBracketText = a
 			r.Semantics = &s
 		})

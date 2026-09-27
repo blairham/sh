@@ -3022,6 +3022,12 @@ func (r *Runner) markGroupSyntaxFromTheValue(esc string) string {
 	if !hasLiveByteOf(esc, groupSyntax) {
 		return esc
 	}
+	if r.braceGroupSyntaxIsFreed() {
+		// Behind a `{` the script wrote unquoted, the same column reads the
+		// same three characters the other way round. See
+		// interp/bracegroupsyntax.go.
+		return esc
+	}
 	if r.ask(r.sem().ExpansionResultSuppliesGroupSyntax,
 		"an expansion result supplying the syntax of a pattern group") {
 		return esc

@@ -9,14 +9,22 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// producedPatternLeavesABraceMarks is the two characters a written brace
-// makes ordinary in the text an expansion produced behind it.
+// producedPatternLeavesABraceMarks is the characters a written brace makes
+// ordinary in the text an expansion produced behind it.
 //
 // `?` is deliberately **not** among them, and that is the whole of what this
 // rule is keyed on rather than an omission — see
-// braceGlobStopSpans for the grid. The two here are the leaves whose match
-// the brace takes away; the third leaf keeps its.
-const producedPatternLeavesABraceMarks = "*["
+// braceGlobStopSpans for the grid. `*` and `[` are the leaves whose match the
+// brace takes away; the third leaf keeps its.
+//
+// `@` is the fourth and is not a leaf at all: it is ordinary text wherever it
+// stands alone, so marking it is invisible except in front of a `(`, where it
+// is the difference between a pattern group and four characters. It earns its
+// place only beside the rule that frees a produced group's parentheses — with
+// `za` and `z@a` in the directory, `g='@(a)'; f {z,y}$g` is `[z@(a)]
+// [y@(a)]` in ksh93u+, matching neither — and it is spelled here rather than
+// there because it is the same mark on the same run. See freeGroupSyntaxIn.
+const producedPatternLeavesABraceMarks = "*[@"
 
 // braceGlobStopSpans marks the spans a written `{` stands in front of, for
 // the column where the brace takes the match away from a `*` or a `[` an
@@ -64,7 +72,13 @@ const producedPatternLeavesABraceMarks = "*["
 // nil wherever the question does not arise, which is four columns out of
 // five and every word with no brace in it.
 func (r *Runner) braceGlobStopSpans(spans []syntax.Span) []bool {
-	if r.sem().BraceMakesAProducedStarOrBracketText != Yes {
+	// Two rules stand on this extent now, and either one arms it: the marks
+	// this file puts on, and the marks
+	// Semantics.BraceFreesProducedGroupSyntax takes off. Each asks its own
+	// axis where it is applied, so a vector that answered one of them and
+	// not the other gets exactly the one it answered.
+	if r.sem().BraceMakesAProducedStarOrBracketText != Yes &&
+		r.sem().BraceFreesProducedGroupSyntax != Yes {
 		return nil
 	}
 	return spansBehindAWrittenBrace(spans)
@@ -84,7 +98,7 @@ func (r *Runner) braceGlobStopSpans(spans []syntax.Span) []bool {
 // never matches an expansion's result at all — never reaches it and is never
 // refused over a field with nothing wrong with it.
 func (r *Runner) markPatternLeavesBehindABrace(esc string) string {
-	if !r.braceStopsGlob {
+	if !r.braceStopsGlob || r.sem().BraceMakesAProducedStarOrBracketText != Yes {
 		return esc
 	}
 	if !hasLiveByteOf(esc, producedPatternLeavesABraceMarks) {

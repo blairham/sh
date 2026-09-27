@@ -2778,6 +2778,10 @@ func Semantics() interp.Semantics {
 	// and `e='a b,c'; f {$e}` is `{a` and `b,c}` — the splitter reaches
 	// inside the group. ksh93 is the one column that stops.
 	s.BraceStopsFieldSplitting = interp.No
+	// unanswered BraceFreesProducedGroupSyntax: zsh cannot be asked it for
+	// the reason below — it never matches an expansion's result against the
+	// filesystem, so there is no pattern behind the brace whose group syntax
+	// could be freed.
 	// unanswered BraceMakesAProducedStarOrBracketText: zsh cannot be asked
 	// it. The axis is about what a brace takes from a pattern an expansion
 	// produced, and this shell never matches an expansion's result against

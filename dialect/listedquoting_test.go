@@ -20,12 +20,26 @@ import (
 // agree within each column, so one table answers for all three:
 //
 //	              ! bare   ^ bare   = bare   a byte above ASCII bare
-//	bash 5.3.15   no       no       yes      yes
-//	ksh93u+       yes      yes      *        no — `$'\xc3\xa9'`, byte by byte
+//	bash 5.3.15   no       no       yes      yes †
+//	ksh93u+       yes      yes      *        yes †
 //	zsh 5.9.2     yes      no       no       yes
 //
 // No two columns group the same way, and no two bytes group the same way
 // either, which is why these are four questions.
+//
+// **† is the locale, and it is two of the three columns rather than one.**
+// bash and ksh93 both write the character in every locale but `C`, where both
+// spell it out — one binary each, the locale the only thing that moved,
+// measured 2026-09-15 for bash and 2026-09-27 for ksh93. zsh writes the
+// character in both. The presets carry the reading a person's terminal sees;
+// the corpus harness pins `LC_ALL=C` and records the other spelling there.
+//
+// The ksh93 column read `no` until #4770, with `byte by byte, in every
+// locale` as its reason — recorded from the `env -i` above, which is a `C`
+// locale, and contradicted by the same binary with `LC_ALL` set to anything
+// else. A high byte that is **not** part of a character is spelled out in
+// every column and every locale, which is the distinction #4521 drew and
+// which is the `no` side of this axis.
 // The `*` is ksh93's fourth answer: a leading `name=` is bare and the rest is
 // quoted on its own.
 //
@@ -65,9 +79,9 @@ func TestHowAListingSpellsTheThreeBytesThePanelSplitsOn(t *testing.T) {
 			"declare -A w=([\"!\"]=\"4\" [\"^\"]=\"2\" [a=b]=\"1\" [é]=\"3\" )\n",
 		},
 		{
-			"ksh leaves the caret and the assignment head bare and spells the byte out", "ksh",
+			"ksh leaves the caret and the assignment head bare and the character alone", "ksh",
 			`k='^'; b='!'; typeset -A w; w[a=b]=1; w[$k]=2; w[é]=3; w[$b]=4; typeset -p w`,
-			"typeset -A w=([!]=4 [^]=2 [a=b]=1 [$'\\xc3\\xa9']=3)\n",
+			"typeset -A w=([!]=4 [^]=2 [a=b]=1 [é]=3)\n",
 		},
 		{
 			"zsh quotes the caret and the equals and leaves the byte alone", "zsh",
@@ -80,7 +94,7 @@ func TestHowAListingSpellsTheThreeBytesThePanelSplitsOn(t *testing.T) {
 		{
 			"ksh values follow the same three rules", "ksh",
 			`v1='^'; v2='a=b'; v3='x=y=z'; v4=é; v5='!'; typeset -p v1 v2 v3 v4 v5`,
-			"v1=^\nv2=a=b\nv3=x='y=z'\nv4=$'\\xc3\\xa9'\nv5=!\n",
+			"v1=^\nv2=a=b\nv3=x='y=z'\nv4=é\nv5=!\n",
 		},
 		{
 			"zsh values follow the same three rules", "zsh",
@@ -149,7 +163,7 @@ func TestEachDialectAnswersTheListedByteAxes(t *testing.T) {
 		bang, caret, equals, nonASCII, head interp.Answer
 	}{
 		{"bash", bash.Semantics(), interp.No, interp.No, interp.Yes, interp.Yes, interp.No},
-		{"ksh", ksh.Semantics(), interp.Yes, interp.Yes, interp.No, interp.No, interp.Yes},
+		{"ksh", ksh.Semantics(), interp.Yes, interp.Yes, interp.No, interp.Yes, interp.Yes},
 		{"zsh", zsh.Semantics(), interp.Yes, interp.No, interp.No, interp.Yes, interp.No},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

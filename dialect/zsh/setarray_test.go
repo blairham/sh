@@ -169,3 +169,65 @@ func TestTheArrayLetterIsNoLongerCalledMissingHere(t *testing.T) {
 		t.Errorf("set -A a x = %q, want it taken", out)
 	}
 }
+
+// `set +A name` with no values behind it makes a name that is **not** an
+// array an array with no elements here, where the other column writes nothing
+// at all — #4810.
+//
+// Measured 2026-09-27 on `/opt/homebrew/bin/zsh`, `zsh 5.9.2
+// (aarch64-apple-darwin25.4.0)`, run `-f` from a script file under `env -i
+// PATH=/usr/bin:/bin`; `go version -m` says *not a Go executable* for it and
+// `github.com/blairham/sh/cmd/zsh` for ours.
+//
+// The store is a re-creation, so the export attribute and the integer letter
+// come off with it — that half is
+// AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver and is why the
+// second and third rows carry neither letter back. The last row is the
+// control the axis is not asked on.
+func TestAnEmptyPrependMakesANonArrayAnEmptyArrayHere(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a scalar", "s=v\nset +A s\ntypeset -p s", "typeset -a s=(  )\n"},
+		{"an exported scalar", "export e=1\nset +A e\ntypeset -p e", "typeset -a e=(  )\n"},
+		{"an integer", "typeset -i n=3\nset +A n\ntypeset -p n", "typeset -a n=(  )\n"},
+		{"a name that is not there", "unset u\nset +A u\ntypeset -p u", "typeset -a u=(  )\n"},
+		{
+			"an array, which is the unanimous row",
+			"export f=(p q)\nset +A f\ntypeset -p f",
+			"typeset -ax f=( p q )\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%q = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}
+
+// And the axis those rows rest on, read off the vector.
+func TestTheEmptyPrependAxisIsAnsweredHere(t *testing.T) {
+	if got := zsh.Semantics().SetArrayEmptyPrependMakesANonArrayAnEmptyArray; got != interp.Yes {
+		t.Errorf("SetArrayEmptyPrependMakesANonArrayAnEmptyArray = %v, want Yes", got)
+	}
+}
+
+// The fold #4809 is about does not reach this column, and the rows say why
+// rather than leaving it out: the case letters fold on the *read* here — see
+// Semantics.CaseAttributeFoldsWhenRead — and a prepend over a name that is
+// not already an array re-creates it, so the letter is gone before the values
+// land. Measured in the same run.
+func TestAPrependIsNotFoldedHere(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"upper over a scalar", "typeset -u d=ab\nset +A d cd\ntypeset -p d", "typeset -a d=( cd )\n"},
+		{"upper over an array", "typeset -a -u e=(ab)\nset +A e cd\ntypeset -p e", "typeset -au e=( cd )\n"},
+		{"integer", "typeset -i i=1\nset +A i 5+5\ntypeset -p i", "typeset -a i=( 5+5 )\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("%q = %q (status %d), want %q", tc.src, out, st, tc.want)
+			}
+		})
+	}
+}

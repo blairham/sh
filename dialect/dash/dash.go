@@ -728,6 +728,10 @@ func Semantics() interp.Semantics {
 	// declaration utility being absent entirely (#2419).
 	// unanswered DeclareHideInScopeLetter: the same wall, for `typeset -h s
 	// q=1`, which is `typeset: not found` at 127.
+	// unanswered SetArrayEmptyPrependMakesANonArrayAnEmptyArray: the same wall
+	// one letter over — `set: Illegal option -A` in the corpus row
+	// `setarray/no-values-and-whether-the-name-survives`, so there is no
+	// prepend here to write with no values behind it.
 	// unanswered DeclareZeroFillLetter: the declaration utility is absent
 	// entirely, so `typeset -Z 4 d=7` is `typeset: not found` at 127 and
 	// there is no `Z` letter to read either way.
@@ -830,6 +834,11 @@ func Semantics() interp.Semantics {
 	// 2026-09-14 with a bare `set` over all four (#2820).
 	// unanswered ListedCaretIsOrdinary: the same always-quoting style.
 	// unanswered ListedEqualsIsOrdinary: the same always-quoting style.
+	// unanswered ListedNonAsciiIsSpelledAsACodePoint: this shell single-quotes
+	// every value it lists and writes a control byte as itself, so it never
+	// reaches `$'...'` and there is no spelling inside one to choose.
+	// unanswered ListedNonAsciiTakesTheDollarFormAfterANonName: the same wall
+	// — there is no form here for a character to be taken into.
 	// unanswered ListedNonAsciiIsOrdinary: the same always-quoting style,
 	// and no `$'...'` listing here for the escaped half of the question.
 	// unanswered ListedAssignmentPrefixIsBare: a bare head is only visible

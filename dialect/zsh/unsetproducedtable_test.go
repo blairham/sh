@@ -111,3 +111,83 @@ print -r -- "store=$?"`
 		t.Errorf("status 0, want the store to have been refused")
 	}
 }
+
+// The grid #4811 asked for: `unset` against every produced parameter this
+// shell has, in both shells, in one run — and the row that issue was filed
+// for did not survive it.
+//
+// The claim was that `unset parameters` is refused here and taken in the
+// reference, with the name going. It is taken in a *fresh* reference, and the
+// reason is not this question at all: `zsh/parameter` is not loaded in a
+// `-f` shell, so `$parameters` is still zsh's **autoload stub** for the
+// module — an ordinary scalar holding the string `zsh/parameter` — and the
+// unset removes the stub. Every access but `unset` materializes the parameter
+// first, which is the same mechanism the note at the top of dialect/zsh's
+// parameter.go records for `unset "functions[m]"` (#1527).
+//
+// Measured 2026-09-27 on `/opt/homebrew/bin/zsh`, `zsh 5.9.2
+// (aarch64-apple-darwin25.4.0)`, `-f` from a script file under `env -i
+// PATH=/usr/bin:/bin`, with `zmodload -e zsh/parameter` beside each step:
+//
+//	fresh shell                             not loaded
+//	unset parameters                        status 0, still not loaded
+//	${(t)parameters} after that unset       empty, still not loaded
+//	${(t)parameters} first                  association-readonly-hide-hideval-special,
+//	                                        and loaded afterwards
+//	unset parameters after that read        read-only variable: parameters
+//
+// So the refusal is the reference's answer for every state this shell can be
+// in — it produces the table from the start and has no module to autoload —
+// and the row is not a disagreement. The grid below is what the sweep did
+// find: the tables the reference lets a script unset, and the views it
+// refuses, which this shell now answers alike for all of them. `funcstack` was
+// the one that differed and is fixed with #4812's letters.
+func TestUnsetAcrossEveryProducedParameter(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name    string
+		refused bool
+	}{
+		{"commands", false},
+		{"options", false},
+		{"aliases", false},
+		{"galiases", false},
+		{"saliases", false},
+		{"functions", false},
+		{"dis_aliases", false},
+		{"dis_galiases", false},
+		{"dis_saliases", false},
+		{"dis_functions", false},
+		{"nameddirs", false},
+		{"mapfile", false},
+		{"dirstack", false},
+		{"parameters", true},
+		{"builtins", true},
+		{"history", true},
+		{"dis_functions_source", true},
+		{"jobdirs", true},
+		{"jobtexts", true},
+		{"jobstates", true},
+		{"sysparams", true},
+		{"reswords", true},
+		{"dis_reswords", true},
+		{"dis_patchars", true},
+		{"funcstack", true},
+		{"functrace", true},
+		{"funcsourcetrace", true},
+		{"funcfiletrace", true},
+		{"errnos", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, dir, "unset "+tc.name+`; print "st=$?"`)
+			want, wantStatus := "st=0\n", 0
+			if tc.refused {
+				want, wantStatus = "zsh:1: read-only variable: "+tc.name+"\n", 1
+			}
+			if out != want || st != wantStatus {
+				t.Errorf("unset %s = %q (status %d), want %q at status %d",
+					tc.name, out, st, want, wantStatus)
+			}
+		})
+	}
+}

@@ -498,7 +498,7 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
 	want := "OLDPWD=" + dir + "\nSHLVL=1\nV='a b'\nARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nLINENO=1\nR=2\n" +
 		"builtins\ndis_functions_source\ndis_patchars\ndis_reswords\nepochtime\n" +
-		"errnos\nfuncfiletrace\nfuncsourcetrace\nfunctrace\nhistory\n" +
+		"errnos\nfuncfiletrace\nfuncsourcetrace\nfuncstack\nfunctrace\nhistory\n" +
 		"jobdirs\njobstates\njobtexts\nkeymaps\nlanginfo\n" +
 		"parameters\nreswords\nsysparams\ntermcap\nterminfo\n" +
 		"widgets\nzsh_scheduled_events\n" +
@@ -516,7 +516,8 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		"typeset -Ar builtins\ntypeset -Ar dis_functions_source\n" +
 		"typeset -ar dis_patchars\ntypeset -ar dis_reswords\ntypeset -ar epochtime\n" +
 		"typeset -ar errnos\ntypeset -ar funcfiletrace\n" +
-		"typeset -ar funcsourcetrace\ntypeset -ar functrace\ntypeset -Ar history\n" +
+		"typeset -ar funcsourcetrace\ntypeset -ar funcstack\n" +
+		"typeset -ar functrace\ntypeset -Ar history\n" +
 		"typeset -Ar jobdirs\ntypeset -Ar jobstates\ntypeset -Ar jobtexts\n" +
 		"typeset -ar keymaps\ntypeset -Ar langinfo\n" +
 		"typeset -Ar parameters\ntypeset -ar reswords\ntypeset -Ar sysparams\n" +

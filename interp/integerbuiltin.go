@@ -428,6 +428,12 @@ func (r *Runner) readOptionNumber(builtin string, f *declareFlags, letter byte, 
 		// A width rather than a precision, and one field pair each so the
 		// listing knows which letter to write the number back onto.
 		f.width, f.widthNamed = n, true
+		if letter != 'Z' {
+			// And the same number kept apart as the *justification's*, for
+			// the column where the fill's own number is the one that does
+			// not count. See Runner.declaredWidthNumber.
+			f.justificationWidth, f.justificationNamed = n, true
+		}
 		return true
 	}
 	f.precision, f.precisionNamed = n, true

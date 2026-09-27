@@ -963,6 +963,13 @@ func Semantics() interp.Semantics {
 	// all, writing `é`. The corpus runs in `C` and records that cell;
 	// this shell carries the reading a person's terminal sees.
 	s.ListedNonAsciiIsOrdinary = interp.Yes
+	// And the character is written as **itself** inside a `$'...'` a control
+	// byte put this shell in, rather than as a code point, and no text in
+	// front of it reaches for the form. Measured 2026-09-27 on GNU bash
+	// 5.3.20 under `LC_ALL=en_US.UTF-8`: `v=$'a\téb'` lists as `$'a\téb'`
+	// and `v="a-é"` lists bare (#4807).
+	s.ListedNonAsciiIsSpelledAsACodePoint = interp.No
+	s.ListedNonAsciiTakesTheDollarFormAfterANonName = interp.No
 	// And no bare assignment head: the `=` rule here is the character, not
 	// a prefix, so `x=y=z` is bare rather than `x='y=z'`.
 	s.ListedAssignmentPrefixIsBare = interp.No
@@ -3574,6 +3581,12 @@ func Semantics() interp.Semantics {
 	// reading. Measured 2026-09-14, `typeset -h s q=1` and `declare -h s
 	// q=1` are both `invalid option` with the usage line, so neither the
 	// hide-in-scope attribute nor the string argument can be put to it.
+	// unanswered SetArrayEmptyPrependMakesANonArrayAnEmptyArray: there is no
+	// `set +A` here to write with no values behind it. Recorded in the corpus
+	// at `setarray/no-values-and-whether-the-name-survives`: bash 5.3, bash 3.2
+	// and bash-as-`sh` each answer `set: -A: invalid option` with the usage
+	// line, so the letter is refused before the question of what an empty
+	// prepend stores can be put.
 	// unanswered DeclareZeroFillLetter: there is no `Z` letter here under
 	// either reading. Measured 2026-09-18 on 5.3.20 and 3.2 alike, `declare
 	// -Z 4 d=7` is `declare: -Z: invalid option` with the usage line, so the

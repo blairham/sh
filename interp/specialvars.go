@@ -810,6 +810,15 @@ func (r *Runner) SetDynamicArrayWriter(name string, write func(r *Runner, values
 // caller whose close did nothing, and the tests could not see it because they
 // asked the question of a shell that had never run a widget. The name is what
 // this takes away, not the shape it was registered under.
+//
+// **And the two hiding marks, for the reason the readonly one is here.** They
+// are the letters that say a name is the shell's own — `hide` and `hideval` —
+// and nothing else can lift them, so a name left carrying them describes
+// itself as the shell's long after the producer behind it is gone. Measured
+// 2026-09-27 on zsh 5.9.2 under `-f`: `unset aliases; aliases=string` gives
+// `${(t)aliases}` of `scalar` there, in a shell that has read the table first
+// and in one that has not, where this engine answered `scalar-hide` the
+// moment the table was given the letters it is described with (#4812).
 func (r *Runner) UnsetDynamic(name string) {
 	delete(r.Dynamic, name)
 	delete(r.dynamicWriters, name)
@@ -821,6 +830,8 @@ func (r *Runner) UnsetDynamic(name string) {
 	delete(r.dynamicAssocEmptied, name)
 	delete(r.assigned, name)
 	delete(r.readonly, name)
+	delete(r.hidden, name)
+	delete(r.hideInScope, name)
 	delete(r.localMarked, name)
 }
 

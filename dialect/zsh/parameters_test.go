@@ -94,12 +94,12 @@ func TestParametersAnswersAboutTheNamesThemselves(t *testing.T) {
 			// shell's rather than a script's.
 			name: "a produced table is described and marked special",
 			src:  `zmodload zsh/parameter; print -r -- "${parameters[options]}"`,
-			want: "association-special\n",
+			want: "association-hide-hideval-special\n",
 		},
 		{
 			name: "a produced array is too",
 			src:  `zmodload zsh/parameter; print -r -- "${parameters[funcstack]}"`,
-			want: "array-special\n",
+			want: "array-readonly-hide-hideval-special\n",
 		},
 		{
 			// zsh answers `parameters[x]=y` with `read-only variable`, and a

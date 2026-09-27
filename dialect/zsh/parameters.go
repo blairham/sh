@@ -122,7 +122,11 @@ func describeParameter(a interp.ParameterAttributes) string {
 		{a.Tied, "tied"},
 		{a.Justified == interp.LeftJustified, "left"},
 		{a.Justified == interp.RightJustified && !a.ZeroFilled, "right_blanks"},
-		{a.Justified == interp.RightJustified && a.ZeroFilled, "right_zeros"},
+		// Not `RightJustified &&`, which is the pair that says the fill is a
+		// letter of its own here rather than a flavor of the right-hand side:
+		// a name carrying `-L` and `-Z` both is `scalar-left-right_zeros` on
+		// zsh 5.9.2, measured 2026-09-27 (#4798).
+		{a.ZeroFilled, "right_zeros"},
 		{a.Lower, "lower"},
 		{a.Upper, "upper"},
 		{a.Readonly, "readonly"},

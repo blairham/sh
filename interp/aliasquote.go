@@ -152,6 +152,16 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string, pla
 		if tail == "" {
 			return head
 		}
+		if r.listedNeedsDollar(v) {
+			// The form is decided on the **whole** value and not on the tail,
+			// which is the one thing the split cannot be allowed to move:
+			// measured 2026-09-27 on ksh93u+ 2012-08-01 under
+			// `LC_ALL=en_US.UTF-8`, `a=é` lists as `a=$'\u[e9]'` where the
+			// tail on its own would have stood bare. Only the column with a
+			// bare assignment head reaches here, and its style is the one that
+			// writes `$'...'`, so there is no second style to choose between.
+			return head + r.dollarQuoted(tail)
+		}
 		return head + r.quoteListedValueBody(style, what, tail)
 	}
 	return r.quoteListedValueBody(style, what, v)
@@ -348,6 +358,16 @@ func (r *Runner) listedNeedsDollar(v string) bool {
 		return true
 	}
 	if r.sem().ListedNonAsciiIsOrdinary == Yes {
+		if r.sem().ListedNonAsciiTakesTheDollarFormAfterANonName == Yes &&
+			nonAsciiAfterANonName(v) {
+			// One column reaches the form for a character it would otherwise
+			// leave bare, keyed on what stands in front of it — see
+			// Semantics.ListedNonAsciiTakesTheDollarFormAfterANonName, which
+			// holds the grid. Read rather than asked, for the reason
+			// listedByteIsOrdinary is: a listing that stopped to say the
+			// shells disagree would be a `set` with a complaint in it.
+			return true
+		}
 		// Ordinary means *a character*, and a high byte that is not part of
 		// one is neither ordinary nor a character. Measured 2026-09-26 with
 		// `v=$'\xc3'` and `typeset -p v`/`declare -p v` from a script file:
@@ -383,6 +403,53 @@ func strayBytes(v string) []bool {
 		i += size
 	}
 	return out
+}
+
+// nonAsciiAfterANonName reports whether the value holds a character above
+// ASCII with an ASCII character in front of it that a name cannot hold.
+//
+// The rule one column reaches `$'...'` by — see
+// Semantics.ListedNonAsciiTakesTheDollarFormAfterANonName, where the grid is.
+//
+// **Every such character is judged and not only the first**, which is
+// measured rather than derived: `é-é` is `$'\u[e9]-\u[e9]'`, where the first
+// one has nothing in front of it and would stand bare on its own. One
+// character failing takes the whole value into the form, and then every one
+// of them is spelled out.
+//
+// A character above ASCII never breaks the name, measured one at a time on
+// ksh93u+ 2012-08-01 under `LC_ALL=en_US.UTF-8`: `é9é`, `a中`, `aå`, `aµ`,
+// `a٣`, `aʰ`, `aⅧ` and `aⒶ` all stand bare, so what is being asked about is
+// the **ASCII** text in front of the character.
+//
+// **There is a second question this does not answer**, and it is left out
+// rather than guessed: that column also refuses to leave *some* characters
+// above ASCII bare at all, whatever stands in front of them. Measured in the
+// same run — `€`, a non-breaking space, `°`, `²`, `½`, `×`, a soft hyphen, a
+// combining acute and an emoji each take the form on their own, where `é`,
+// `µ`, `中`, `å`, `٣`, `ʰ`, `Ⅷ` and `Ⓐ` do not. The line is the locale's
+// character table rather than a Unicode property this tree could compute —
+// `Ⓐ` is a symbol and is bare, `×` is a symbol and is not — so writing a
+// predicate for it would be inventing a rule rather than recording one. It is
+// a row of its own; bash and zsh leave all of them bare, so nothing else in
+// the panel is waiting on it.
+func nonAsciiAfterANonName(v string) bool {
+	name := true
+	for i, c := range v {
+		if c >= utf8.RuneSelf {
+			if !name {
+				return true
+			}
+			continue
+		}
+		// A digit only behind something, which is what makes `9é` reach the
+		// form where `a9é` does not.
+		b := byte(c)
+		if nameChar := isLetter(b) || b == '_' || (isDigit(b) && i > 0); !nameChar {
+			name = false
+		}
+	}
+	return false
 }
 
 // hasStrayByte is strayBytes asked of the whole value, for the question of
@@ -609,21 +676,57 @@ func doubleQuoted(v string) string {
 func (r *Runner) dollarQuoted(v string) string {
 	style := r.sem().ListingControlEscape
 	ordinary := r.sem().ListedNonAsciiIsOrdinary == Yes
+	// And whether such a character is written as its code point rather than
+	// as itself, which is the one column that does — see
+	// Semantics.ListedNonAsciiIsSpelledAsACodePoint. Only where the byte is
+	// ordinary at all: the other reading spells every one of them out, and a
+	// code point would be a third answer nobody holds.
+	codePoint := ordinary && r.sem().ListedNonAsciiIsSpelledAsACodePoint == Yes
 	// Per byte, because a value can hold a character and a stray byte at
 	// once and the two are spelled differently — see strayBytes.
 	stray := strayBytes(v)
 	var b strings.Builder
 	b.WriteString("$'")
-	for i := 0; i < len(v); i++ {
-		switch c := v[i]; {
+	for i := 0; i < len(v); {
+		c := v[i]
+		switch {
 		case c == '\'':
 			b.WriteString(`\'`)
+			i++
 		case c == '\\':
 			b.WriteString(`\\`)
-		case c >= 0x20 && c != 0x7f && (c < 0x80 || (ordinary && !stray[i])):
-			b.WriteByte(c)
-		default:
+			i++
+		case c < 0x80:
+			if c >= 0x20 && c != 0x7f {
+				b.WriteByte(c)
+			} else {
+				b.WriteString(controlEscaped(style, c))
+			}
+			i++
+		case stray[i] || !ordinary:
+			// A byte that is not part of a character, and every high byte in
+			// the column that spells them all out.
 			b.WriteString(controlEscaped(style, c))
+			i++
+		default:
+			ru, size := utf8.DecodeRuneInString(v[i:])
+			switch {
+			case !codePoint:
+				b.WriteString(v[i : i+size])
+			case ru == 0xfffe || ru == 0xffff:
+				// The two characters the code-point column writes byte by
+				// byte instead. Measured rather than a class: the rest of the
+				// noncharacters — U+FDD0, U+FDEF, U+1FFFE, U+1FFFF — take the
+				// code point like anything else, so this is those two and not
+				// "a noncharacter". See
+				// Semantics.ListedNonAsciiIsSpelledAsACodePoint.
+				for j := i; j < i+size; j++ {
+					b.WriteString(controlEscaped(style, v[j]))
+				}
+			default:
+				fmt.Fprintf(&b, `\u[%x]`, ru)
+			}
+			i += size
 		}
 	}
 	b.WriteString("'")

@@ -167,6 +167,8 @@ ash   ListedBangIsOrdinary
 ash   ListedCaretIsOrdinary
 ash   ListedEqualsIsOrdinary
 ash   ListedNonAsciiIsOrdinary
+ash   ListedNonAsciiIsSpelledAsACodePoint
+ash   ListedNonAsciiTakesTheDollarFormAfterANonName
 ash   LocalListingIsTheRunningCallsOwn
 ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
@@ -233,6 +235,7 @@ ash   SelectEofPrintsNewline
 ash   SelectPromptNeedsTerminal
 ash   SelectTakesUnterminatedReply
 ash   SetArrayBadNameLeavesZero
+ash   SetArrayEmptyPrependMakesANonArrayAnEmptyArray
 ash   SetArrayLetter
 ash   SetArrayOptionsContinuePastTheName
 ash   SetArrayWithNoValuesUnsetsTheName
@@ -316,6 +319,7 @@ bash  PrintfRefusedOperandKeepsItsLeadingNumber
 bash  ReadArrayDefault
 bash  ReadArrayTakesOneNameOnly
 bash  SetArrayBadNameLeavesZero
+bash  SetArrayEmptyPrependMakesANonArrayAnEmptyArray
 bash  SetArrayLetter
 bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
@@ -488,6 +492,8 @@ dash  ListedBangIsOrdinary
 dash  ListedCaretIsOrdinary
 dash  ListedEqualsIsOrdinary
 dash  ListedNonAsciiIsOrdinary
+dash  ListedNonAsciiIsSpelledAsACodePoint
+dash  ListedNonAsciiTakesTheDollarFormAfterANonName
 dash  LocalListingIsTheRunningCallsOwn
 dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
@@ -560,6 +566,7 @@ dash  SelectEofPrintsNewline
 dash  SelectPromptNeedsTerminal
 dash  SelectTakesUnterminatedReply
 dash  SetArrayBadNameLeavesZero
+dash  SetArrayEmptyPrependMakesANonArrayAnEmptyArray
 dash  SetArrayLetter
 dash  SetArrayOptionsContinuePastTheName
 dash  SetArrayWithNoValuesUnsetsTheName

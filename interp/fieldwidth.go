@@ -185,6 +185,17 @@ func (w fieldWidth) zeroFilling() bool {
 	return w.letter == 'Z' || (w.zeroFill && w.letter == 'R')
 }
 
+// zeroFillLetter reports whether the name carries the zero-fill letter at
+// all, which is not the same question as whether the pad is zeros: a fill
+// standing beside a *left* justification lays down blanks and strips the
+// value's leading zeros instead, and both columns that have the letter spell
+// it back in that case — `typeset -L5 -Z5` here, `typeset -Z 5 -L 5` there.
+// The type word is the reader that wants this one: zsh 5.9.2 answers
+// `scalar-left-right_zeros` for a name carrying both.
+func (w fieldWidth) zeroFillLetter() bool {
+	return w.letter == 'Z' || w.zeroFill
+}
+
 // DeclareZeroFillLetterPolicy is what the `Z` letter of a declaration **is**.
 //
 // Two readings, and neither contains the other: under one the letter names a
@@ -200,14 +211,55 @@ const (
 	// cannot write the letter.
 	DeclareZeroFillLetterUnspecified DeclareZeroFillLetterPolicy = iota
 
-	// DeclareZeroFillLetterIsAJustificationOfItsOwn makes `Z` the third
-	// member of an exclusive set with `L` and `R`: it right-justifies, it
-	// fills with zeros, and a declaration writing it beside either of the
-	// others keeps one letter and drops the rest. zsh 5.9.2, measured
-	// 2026-09-18: `typeset -ZL 5 q=7` lists as `typeset -Z5 q=7` and
-	// `typeset -LZ 5 r=7` as `typeset -L5 r=7`, so the pair is settled by
-	// WidthJustificationPrecedence and never by the letters themselves.
-	DeclareZeroFillLetterIsAJustificationOfItsOwn
+	// DeclareZeroFillLetterCombinesWithTheLeftJustification makes `Z` a
+	// letter that is exclusive with `R` and a **combination** with `L`: the
+	// two stand together, the listing writes both, and `${(t)}` names both.
+	// On its own it is a right justification with a zero fill and one letter
+	// is written for it.
+	//
+	// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f`
+	// from a script file under `env -i PATH=/usr/bin:/bin`, each row read
+	// back three ways — `typeset -p`, `${(t)v}` and the value, with `·` for
+	// a blank:
+	//
+	//	typeset -L5 -Z5 v=7      typeset -L5 -Z5  scalar-left-right_zeros  7····
+	//	typeset -Z5 -L5 v=7      typeset -L5 -Z5  scalar-left-right_zeros  7····
+	//	typeset -L -Z v=7        typeset -L1 -Z1  scalar-left-right_zeros  7
+	//	typeset -L5 -Z5 v=00700  typeset -L5 -Z5  scalar-left-right_zeros  700··
+	//	typeset -L5 -Z5 v=ab     typeset -L5 -Z5  scalar-left-right_zeros  ab···
+	//	typeset -Z5 v=7          typeset -Z5      scalar-right_zeros       00007
+	//	typeset -L5 -R5 v=7      typeset v=7      scalar                   7
+	//
+	// So the value is left-justified with its **leading zeros removed**,
+	// which is the same thing the other reading does where its fill rides on
+	// a left justification and has no pad to lay down — the two columns
+	// part on the listing and on `R` rather than on the value.
+	//
+	// **The width is the justification's**, which is the one sub-rule the
+	// letters do not carry on their own. Measured in the same run:
+	//
+	//	typeset -L5 -Z3 v=7      typeset -L5 -Z5
+	//	typeset -Z3 -L5 v=7      typeset -L5 -Z5
+	//	typeset -L -Z5 v=7       typeset -L5 -Z5
+	//	typeset -Z5 -L v=7       typeset -L5 -Z5
+	//	typeset -Z5 -L3 -Z1 v=7  typeset -L3 -Z3
+	//	typeset -L5 -Z3 -L1 v=7  typeset -L1 -Z1
+	//	typeset -Z5 -Z3 v=7      typeset -Z3
+	//
+	// — the last number an `L` or an `R` named, and where neither named one
+	// the last number written at all. The other reading takes the **first**
+	// number written whichever letter carried it, which is a difference this
+	// engine does not model yet: see declaredWidthNumber.
+	//
+	// **This value replaces one that no column held.** The axis used to read
+	// `a justification of its own` here — `Z` exclusive with `L` as well as
+	// with `R` — and every row that was measured on is a one-word spelling
+	// with a *detached* number, where the second letter is never read at all
+	// because DeclareNumberDetachedOnlyAtTheWordEnd discards the rest of the
+	// word. `typeset -ZL 5 q=7`, `typeset -LZ 5 r=7` and `typeset -LZ 5
+	// i=0012` are produced identically by both readings, so they were never
+	// evidence about `Z`; they still agree and are the controls (#4798).
+	DeclareZeroFillLetterCombinesWithTheLeftJustification
 
 	// DeclareZeroFillLetterRidesOnTheJustification makes `Z` a fill that
 	// needs a justification under it — `R` where the declaration names none.
@@ -224,8 +276,8 @@ const (
 
 func (p DeclareZeroFillLetterPolicy) String() string {
 	switch p {
-	case DeclareZeroFillLetterIsAJustificationOfItsOwn:
-		return "a justification of its own"
+	case DeclareZeroFillLetterCombinesWithTheLeftJustification:
+		return "a combination with the left justification"
 	case DeclareZeroFillLetterRidesOnTheJustification:
 		return "a fill riding on the justification"
 	}
@@ -346,6 +398,22 @@ func (r *Runner) recordWidthLetter(f *declareFlags, c byte) {
 		}
 		return
 	}
+	if r.sem().DeclareZeroFillLetter == DeclareZeroFillLetterCombinesWithTheLeftJustification &&
+		!f.widthConflicted {
+		// The one pair this column stands together, and it stands together
+		// whichever order it was written in: the `L` is the justification and
+		// the `Z` is a fill beside it. See
+		// DeclareZeroFillLetterCombinesWithTheLeftJustification, where the
+		// rows are. `R` is not this and falls through to the conflict below.
+		switch {
+		case c == 'Z' && f.widthLetter == 'L':
+			f.widthZeroFill = true
+			return
+		case c == 'L' && f.widthLetter == 'Z':
+			f.widthLetter, f.widthZeroFill = 'L', true
+			return
+		}
+	}
 	if f.widthConflicted {
 		// A conflict already seen on this declaration, and a later letter
 		// does not undo it: `typeset -L5 -R5 -L5 v=7` is `typeset v=7`.
@@ -451,4 +519,39 @@ func (r *Runner) widthZerosUnwound(name string) {
 		return
 	}
 	r.widthUnwound(name)
+}
+
+// declaredWidthNumber is which of a declaration's width numbers the name ends
+// up with, where more than one letter carried one.
+//
+// Where the fill **combines** with the left justification the number is the
+// justification's — the `Z` is a fill beside a letter that already has a
+// width, and the listing writes that one width onto both letters. Measured
+// 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a script
+// file under `env -i PATH=/usr/bin:/bin`:
+//
+//	typeset -L5 -Z3 v=7      typeset -L5 -Z5
+//	typeset -Z3 -L5 v=7      typeset -L5 -Z5
+//	typeset -L -Z5 v=7       typeset -L5 -Z5
+//	typeset -Z5 -L v=7       typeset -L5 -Z5
+//	typeset -Z5 -L3 -Z1 v=7  typeset -L3 -Z3
+//	typeset -L5 -Z3 -L1 v=7  typeset -L1 -Z1
+//	typeset -Z5 -Z3 v=7      typeset -Z3
+//
+// — the last number an `L` or an `R` named, and the last number written at
+// all where neither named one, which is the last two rows.
+//
+// **The other reading takes the first number written and this engine does not
+// model that yet.** Measured in the same run on ksh93u+ 2012-08-01: `typeset
+// -L5 -Z3 a=7` is `typeset -Z 5 -L 5`, `typeset -Z3 -L5 b=7` is `typeset -Z 3
+// -L 3`, `typeset -R5 -Z3` is 5 and `typeset -Z3 -R5` is 3 — the first number
+// whichever letter carried it, where this shell takes the last. That is a
+// row of its own rather than something to fold in here on a guess, and it is
+// deliberately left as this function found it.
+func (r *Runner) declaredWidthNumber(f declareFlags) (int, bool) {
+	if f.justificationNamed &&
+		r.sem().DeclareZeroFillLetter == DeclareZeroFillLetterCombinesWithTheLeftJustification {
+		return f.justificationWidth, true
+	}
+	return f.width, f.widthNamed
 }

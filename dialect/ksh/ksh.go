@@ -1097,6 +1097,19 @@ func Semantics() interp.Semantics {
 	// this shell now writes `'a é b'`. The axis decides whether the byte is
 	// bare; what a `$'...'` spells it as is a second question.
 	s.ListedNonAsciiIsOrdinary = interp.Yes
+	// And inside a `$'...'` the character is a **code point** — `\u[e9]`,
+	// lower-case hexadecimal with no leading zeros — where bash and zsh write
+	// the character itself. Measured 2026-09-27 on `/bin/ksh`, Version AJM
+	// 93u+ 2012-08-01, from a script file under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=en_US.UTF-8`: `z=$'\xc3\xa9\xff'` lists as `$'\u[e9]\xff'`,
+	// the character as a code point and the stray byte as a byte (#4807).
+	s.ListedNonAsciiIsSpelledAsACodePoint = interp.Yes
+	// And the form is *reached* for such a character whenever the text in
+	// front of it is not a name, which is a rule the other two columns do not
+	// have: `a-é` is `$'a-\u[e9]'` here and bare in both of them, where `aé`,
+	// `a9é` and `é-a` are bare in all three. Measured in the same run — see
+	// Semantics.ListedNonAsciiTakesTheDollarFormAfterANonName for the grid.
+	s.ListedNonAsciiTakesTheDollarFormAfterANonName = interp.Yes
 	// `=` is not an ordinary byte here. What is bare is a leading `name=`,
 	// with the rest quoted on its own: `a=b` bare, `a='b c'`, `x='y=z'`,
 	// `'=x'` and `'1=2'`, keys included — `[a=b]` and `[x='y=z']`.
@@ -3960,6 +3973,12 @@ func Semantics() interp.Semantics {
 	// array with no elements — measured with `typeset -p a`, which writes
 	// nothing at all in this shell.
 	s.SetArrayWithNoValuesUnsetsTheName = interp.Yes
+	// And the plus form over a name that is not an array, where this column
+	// writes nothing at all. Measured 2026-09-27 on ksh93u+ 2012-08-01:
+	// `s=v; set +A s` leaves `s=v`, `export e=1; set +A e` leaves `typeset
+	// -x e=1`, and a name that does not exist is still absent afterwards
+	// (#4810).
+	s.SetArrayEmptyPrependMakesANonArrayAnEmptyArray = interp.No
 	// A bare `set` lists the variables alone, values bare until one needs
 	// quoting and `$'...'` from there.
 	s.SetListing = interp.SetListingAssignments

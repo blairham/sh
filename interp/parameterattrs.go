@@ -76,10 +76,17 @@ type ParameterAttributes struct {
 	// Unique is an array that keeps no duplicate.
 	Unique bool
 	// Justified is the width attribute's side, and ZeroFilled is whether the
-	// pad it lays down is zeros rather than blanks. Two fields because the
-	// two facts are independent — see [ParameterJustification] — and because
-	// the shell that publishes them writes `right_blanks` and `right_zeros`
-	// as two words for one side.
+	// name carries the zero-fill letter. Two fields because the two facts are
+	// independent — see [ParameterJustification] — and because the shell that
+	// publishes them writes `right_blanks` and `right_zeros` as two words for
+	// one side.
+	//
+	// **Carrying the letter is not the same as padding with zeros**, and the
+	// pair that shows it is the one where the fill stands beside a *left*
+	// justification: there the pad is blanks and the value's leading zeros
+	// come off instead, and the shell still names the letter. Measured on zsh
+	// 5.9.2, `typeset -L5 -Z5 v=00700` is `700  ` and `${(t)v}` is
+	// `scalar-left-right_zeros` (#4798).
 	Justified  ParameterJustification
 	ZeroFilled bool
 	// Tied is one half of a scalar-and-array pair that share a value.
@@ -177,7 +184,7 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		} else {
 			a.Justified = RightJustified
 		}
-		a.ZeroFilled = w.zeroFilling()
+		a.ZeroFilled = w.zeroFillLetter()
 	}
 	if !a.Provided && !r.parameterExists(name) {
 		return ParameterAttributes{}, false

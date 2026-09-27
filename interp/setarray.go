@@ -78,13 +78,19 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 		return 1
 	}
 	if front && len(values) == 0 {
-		// Nothing to put at the front leaves the array exactly as it was,
-		// which is unanimous — and is *not* the minus form's answer to the
-		// same emptiness. Ahead of the re-creation question because a store
-		// that does not happen takes nothing off the name: `export e=(p q);
+		// Nothing to put at the front, which is a store that may not happen
+		// at all — see emptyPrependStores, where the two columns part. Ahead
+		// of the re-creation question only where it does not: a store that
+		// does not happen takes nothing off the name, and `export e=(p q);
 		// set +A e` lists `typeset -ax e=( p q )` in zsh and `typeset -x -a
 		// e=(p q)` in ksh93.
-		return 0
+		stores := r.emptyPrependStores(name)
+		if r.unspecified {
+			return r.status
+		}
+		if !stores {
+			return 0
+		}
 	}
 	if r.setArrayStartsTheNameOver(name, front) {
 		// A re-created name keeps neither the letters that say what its
@@ -99,14 +105,10 @@ func (r *Runner) setArrayOperands(name string, front bool, values []string) int 
 	}
 	switch {
 	case front:
-		a := make(Array, len(values))
-		for k, v := range r.Arrays[name] {
-			a[k] = v
+		r.storeArray(name, r.prependedArray(name, values))
+		if r.unspecified {
+			return r.status
 		}
-		for i, v := range values {
-			a[i] = Scalar(v)
-		}
-		r.storeArray(name, a)
 	case len(values) == 0:
 		if r.ask(r.sem().SetArrayWithNoValuesUnsetsTheName,
 			"`set -A name` with no values unsetting the name") {
@@ -226,4 +228,95 @@ func (r *Runner) setArrayStartsTheNameOver(name string, front bool) bool {
 	}
 	return r.ask(r.sem().ArrayLiteralAssignmentStartsTheNameOver,
 		"a `set -A` re-creating the name it writes")
+}
+
+// prependedArray is the plus form's store: the values written laid over the
+// front of what the name is holding, with the rest left standing.
+//
+// **The values go through the name's folding attributes**, which is the half
+// this took a road of its own around. `setArray` next door runs every element
+// it is given through compoundElemsFolded, and the array literal reaches the
+// same fold; this built its elements by hand, so the one store that did not
+// ask was the one spelling nothing else in the tree shares — the second-helper
+// shape, a store written beside the one that carries the fold and without it.
+//
+// Measured 2026-09-27 on `/bin/ksh`, `Version AJM 93u+ 2012-08-01`, from a
+// script file under `env -i PATH=/usr/bin:/bin`, each row read back with
+// `typeset -p`:
+//
+//	typeset -u d=ab;      set +A d cd     typeset -a -u d=(CD)
+//	typeset -a -u e=(ab); set +A e cd     typeset -a -u e=(CD)
+//	typeset -l h=AB;      set +A h CD     typeset -a -l h=(cd)
+//	typeset -i i=1;       set +A i 5+5    typeset -a -i i=(10)
+//
+// and the append spelling of the first two, which is the control and has
+// always agreed: `typeset -u d=ab; d+=(cd)` is `typeset -a -u d=(AB CD)`.
+// This shell wrote `(cd)`, `(CD)` and `(5+5)` — the value unfolded in every
+// row while the letter it was supposed to go through survived beside it
+// (#4809).
+//
+// The fold reaches the **arriving** values and not the standing ones: what
+// the name is already holding was folded when it was stored, and in the one
+// column that keeps a width attribute's presentation in the store those
+// elements are already presented. Both readings agree on every row above,
+// which is why this is stated rather than left to whichever was nearer.
+//
+// zsh is the other column and is quiet here for a reason of its own rather
+// than by not being asked: its case letters fold on the *read* — see
+// Semantics.CaseAttributeFoldsWhenRead — so there is nothing for a store to
+// do, and its `set +A` over a name that is not already an array re-creates
+// the name and takes the letter off before the values land.
+func (r *Runner) prependedArray(name string, values []string) Array {
+	front := make(Array, len(values))
+	for i, v := range values {
+		front[i] = Scalar(v)
+	}
+	front = r.compoundElemsFolded(name, front)
+	a := make(Array, len(r.Arrays[name]))
+	for k, v := range r.Arrays[name] {
+		a[k] = v
+	}
+	for k, v := range front {
+		a[k] = v
+	}
+	return a
+}
+
+// emptyPrependStores reports whether `set +A name` with no values behind it
+// writes anything at all.
+//
+// Over a name that is **already an array** it does not, in either column, and
+// that is the row interp/setarray.go recorded as unanimous for the whole
+// question: `export e=(p q); set +A e` leaves `typeset -ax e=( p q )` in zsh
+// and `typeset -x -a e=(p q)` in ksh93, the export attribute and every element
+// untouched.
+//
+// Over a name that is **not** an array the two columns part, and that row had
+// never been measured. Both references from a script file under `env -i
+// PATH=/usr/bin:/bin`, 2026-09-27 — `/opt/homebrew/bin/zsh`, zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), run `-f`, and `/bin/ksh`, Version AJM 93u+
+// 2012-08-01 — each row read back with that shell's own `typeset -p`:
+//
+//	                                zsh                 ksh93
+//	s=v;          set +A s          typeset -a s=(  )   s=v
+//	export e=1;   set +A e          typeset -a e=(  )   typeset -x e=1
+//	typeset -i n=3; set +A n        typeset -a n=(  )   typeset -i n=3
+//	unset u;      set +A u          typeset -a u=(  )   the name is absent
+//	export f=(p q); set +A f        typeset -ax f=( p q )  typeset -x -a f=(p q)
+//
+// So zsh makes the name an empty array — dropping the export attribute and
+// the integer letter doing it, which is the re-creation
+// AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver already records
+// — and ksh93 leaves the name exactly as it was, down to a name that is not
+// there at all. The last row is the control and is what keeps this narrow.
+//
+// The empty prepend is a spelling nobody writes on purpose: it is what a loop
+// produces when its list came out empty, and the difference is one empty array
+// against an untouched scalar (#4810).
+func (r *Runner) emptyPrependStores(name string) bool {
+	if r.nameIsAnArray(name) {
+		return false
+	}
+	return r.ask(r.sem().SetArrayEmptyPrependMakesANonArrayAnEmptyArray,
+		"a `set +A name` with no values making a name that is not an array an empty array")
 }

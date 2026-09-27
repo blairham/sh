@@ -1511,6 +1511,12 @@ func Semantics() interp.Semantics {
 	// interp.TildeWithNoHomePolicy (#4179).
 	s.TildeWithNoHome = interp.TildeWithNoHomeIsEmpty
 	s.ListedNonAsciiIsOrdinary = interp.Yes
+	// And as **itself** inside a `$'...'`, with no text in front of it
+	// reaching for the form. Measured 2026-09-27 on zsh 5.9.2 under
+	// `LC_ALL=en_US.UTF-8`: `v=$'a\téb'` lists as `$'a\téb'` and `v="a-é"`
+	// as `typeset v=a-é`, where ksh93 writes a code point for both (#4807).
+	s.ListedNonAsciiIsSpelledAsACodePoint = interp.No
+	s.ListedNonAsciiTakesTheDollarFormAfterANonName = interp.No
 	s.ListedAssignmentPrefixIsBare = interp.No
 	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a
 	// bad substitution here in the *bare* form too, so there is no listing
@@ -4354,14 +4360,24 @@ func Semantics() interp.Semantics {
 	// into on its own: `typeset -iF 3 a=1.5` is `typeset -i3 a=1` and
 	// `-Fi 3` is `typeset -F a=1.500`.
 	s.NumericTypeLetterPrecedence = interp.NumericLetterFirstWrittenWins
-	// `Z` is a **justification of its own** here and the third member of an
-	// exclusive set with `L` and `R`, where ksh93 reads it as a fill riding
-	// on one of the other two. Measured 2026-09-18 on zsh 5.9.2: `typeset
-	// -ZL 5 q=7` lists as `typeset -Z5 q=7` and is `00007`, and `typeset -LZ
-	// 5 r=7` as `typeset -L5 r=7` and is `7    ` — one letter written back
-	// for a pair, and the value the surviving letter's. See
-	// interp/fieldwidth.go for ksh93's pair of letters (#2859).
-	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterIsAJustificationOfItsOwn
+	// `Z` is exclusive with `R` here and a **combination** with `L`: the two
+	// stand together, the listing writes both and `${(t)}` names both, where
+	// ksh93 reads the letter as a fill riding on whichever justification it
+	// has. Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+	// `-f` from a script file under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	typeset -L5 -Z5 v=7      typeset -L5 -Z5  scalar-left-right_zeros
+	//	typeset -Z5 -L5 v=7      typeset -L5 -Z5  scalar-left-right_zeros
+	//	typeset -L5 -Z5 v=00700  the value is `700  ` — the zeros come off
+	//	typeset -Z5 v=7          typeset -Z5      scalar-right_zeros
+	//
+	// This used to read `a justification of its own`, and every row it was
+	// measured on is a one-word spelling with a **detached** number — the
+	// second letter is never read there at all, so those rows are produced
+	// identically by both readings and were never evidence about `Z`. They
+	// still agree and are the controls. See interp/fieldwidth.go, where the
+	// rest of the table is (#2859, #4798).
+	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterCombinesWithTheLeftJustification
 	// And where a declaration writes two of them, the name ends up with
 	// **neither** — silently, at 0, with the value unpadded. Measured
 	// 2026-09-27: `typeset -L5 -R5 v=7` and `typeset -Z5 -R5 v=7` both list
@@ -4519,6 +4535,12 @@ func Semantics() interp.Semantics {
 	// 0, so the difference shows only to a script that asks whether the name
 	// is set at all.
 	s.SetArrayWithNoValuesUnsetsTheName = interp.No
+	// And the plus form over a name that is not an array, which is a store
+	// this column makes and the other does not. Measured 2026-09-27 on zsh
+	// 5.9.2 under `-f`: `s=v; set +A s` lists `typeset -a s=(  )`, and the
+	// export attribute and the integer letter come off with the re-creation
+	// (#4810).
+	s.SetArrayEmptyPrependMakesANonArrayAnEmptyArray = interp.Yes
 	// `typeset -g x=new` with a `local x` in front assigns the *local* —
 	// the letter only widens where a new declaration would land, it does
 	// not reach past what already stands. Measured: `in=new out=out`

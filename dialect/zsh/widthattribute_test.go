@@ -199,33 +199,75 @@ func TestAnArrayLiteralDropsTheWidthAttribute(t *testing.T) {
 	}
 }
 
-// `Z` is a **justification of its own** here and the third member of an
-// exclusive set with `L` and `R`, where ksh93 reads it as a fill riding on one
-// of the other two and writes both letters back. Measured on zsh 5.9.2,
-// 2026-09-18, the same arrangement as the rows above (#2859).
+// `Z` is exclusive with `R` here and a **combination** with `L`, where ksh93
+// reads it as a fill riding on whichever justification it has and writes both
+// letters back in either case (#2859, #4798).
 //
-// **Every row here is a one-word spelling with a detached number**, and that
-// is now known to be the reason they agree rather than a property of `Z`: the
-// detached number ends the word and the rest of it is discarded, so the second
-// letter is never read and both readings of `Z` produce these bytes. The last
-// row was chosen *as* the discriminator and is not one. See #4798, which holds
-// the separate-word measurement, and #4766, which is the pair the reference
-// drops.
+// **Every row in the second group is a one-word spelling with a detached
+// number**, and that is the reason they agree rather than a property of `Z`:
+// the detached number ends the word and the rest of it is discarded, so the
+// second letter is never read and every reading of `Z` produces these bytes.
+// The `0012` row was chosen *as* the discriminator and is not one. They are
+// kept because they are correct and because they are the control on #4766 and
+// on the separate-word rows above them: an answer about two letters must not
+// reach a spelling where only one was read.
 //
-// They are kept because they are correct and because they are the control on
-// #4766: the conflict answer must not reach a spelling where only one letter
-// was read.
-func TestTheZeroFillLetterIsAJustificationOfItsOwn(t *testing.T) {
-	if got := zsh.Semantics().DeclareZeroFillLetter; got != interp.DeclareZeroFillLetterIsAJustificationOfItsOwn {
-		t.Errorf("DeclareZeroFillLetter = %v, want a justification of its own", got)
+// Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
+// script file under `env -i PATH=/usr/bin:/bin`; `go version -m` says *not a
+// Go executable* for it and `github.com/blairham/sh/cmd/zsh` for ours.
+func TestTheZeroFillLetterCombinesWithTheLeftJustification(t *testing.T) {
+	if got := zsh.Semantics().DeclareZeroFillLetter; got != interp.DeclareZeroFillLetterCombinesWithTheLeftJustification {
+		t.Errorf("DeclareZeroFillLetter = %v, want a combination with the left "+
+			"justification", got)
 	}
 	if got := zsh.Semantics().WidthJustificationPrecedence; got != interp.WidthJustificationConflictLeavesNoWidth {
 		t.Errorf("WidthJustificationPrecedence = %v, want no width where the letters conflict", got)
 	}
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
-		// One letter written back for a pair, and the value the surviving
-		// letter's.
+		// Two option words, where both letters are really read: the pair
+		// stands, the listing writes both, `${(t)}` names both, and the value
+		// is left-justified with its leading zeros off.
+		{
+			`typeset -L5 -Z5 v=7; typeset -p v; print -r -- "${(t)v} [$v]"`,
+			"typeset -L5 -Z5 v=7\nscalar-left-right_zeros [7    ]\n",
+		},
+		{
+			`typeset -Z5 -L5 v=7; typeset -p v; print -r -- "${(t)v} [$v]"`,
+			"typeset -L5 -Z5 v=7\nscalar-left-right_zeros [7    ]\n",
+		},
+		{`typeset -L -Z v=7; typeset -p v`, "typeset -L1 -Z1 v=7\n"},
+		{`typeset -L5 -Z5 v=00700; print -r -- "[$v]"`, "[700  ]\n"},
+		{`typeset -L5 -Z5 v=ab; print -r -- "[$v]"`, "[ab   ]\n"},
+		{`typeset -L5 -Z5 v=0; print -r -- "[$v]"`, "[     ]\n"},
+		{`typeset -L5 -Z5 v=-07; print -r -- "[$v]"`, "[-07  ]\n"},
+		// The width is the justification's, whichever order and whichever
+		// letter carried a number.
+		{`typeset -L5 -Z3 v=7; typeset -p v`, "typeset -L5 -Z5 v=7\n"},
+		{`typeset -Z3 -L5 v=7; typeset -p v`, "typeset -L5 -Z5 v=7\n"},
+		{`typeset -L -Z5 v=7; typeset -p v`, "typeset -L5 -Z5 v=7\n"},
+		{`typeset -Z5 -L v=7; typeset -p v`, "typeset -L5 -Z5 v=7\n"},
+		{`typeset -Z5 -L3 -Z1 v=7; typeset -p v`, "typeset -L3 -Z3 v=7\n"},
+		{`typeset -L5 -Z3 -L1 v=7; typeset -p v`, "typeset -L1 -Z1 v=7\n"},
+		{`typeset -Z5 -Z3 v=7; typeset -p v`, "typeset -Z3 v=7\n"},
+		// `R` is not part of the combination, in either order: that pair is
+		// #4766's and leaves the name with no width at all. These are the
+		// control that keeps the conflict rule keyed where it was measured.
+		{
+			`typeset -R5 -Z5 v=7; typeset -p v; print -r -- "${(t)v} [$v]"`,
+			"typeset v=7\nscalar [7]\n",
+		},
+		{`typeset -Z5 -R5 v=7; typeset -p v`, "typeset v=7\n"},
+		{`typeset -L5 -R5 v=7; typeset -p v`, "typeset v=7\n"},
+		// And the pair beside other letters, which is what says the two
+		// numbered letters each end their own option word.
+		{`typeset -i -L5 -Z5 v=7; typeset -p v`, "typeset -iL5 -Z5 v=7\n"},
+		{
+			`typeset -u -L5 -Z5 v=ab; typeset -p v; print -r -- "${(t)v} [$v]"`,
+			"typeset -L5 -Z5 -u v=ab\nscalar-left-right_zeros-upper [AB   ]\n",
+		},
+		// The one-word spellings with a detached number, where the second
+		// letter is never read at all.
 		{`typeset -ZL 5 c=7; print -r -- "[$c]"; typeset -p c`, "[00007]\ntypeset -Z5 c=7\n"},
 		{`typeset -LZ 5 r=7; print -r -- "[$r]"; typeset -p r`, "[7    ]\ntypeset -L5 r=7\n"},
 		{`typeset -ZRL 5 d=7; typeset -p d`, "typeset -Z5 d=7\n"},

@@ -1854,6 +1854,15 @@ func Semantics() interp.Semantics {
 	// state the field above cannot spell. See Semantics.ValuelessRecordIsStillAName
 	// for the rows (#4053).
 	s.ValuelessRecordIsStillAName = interp.Yes
+	// And the same answer for a name of the *shell's* own that an `unset`
+	// removed, which is the state a script reaches without a function at
+	// all: `unset RANDOM; typeset -p RANDOM` is nothing at 0, where `w=1;
+	// unset w; typeset -p w` on the next line is `no such variable: w` at 1.
+	// The word it turns on is `special` — `HOME` against `LOGNAME`,
+	// `HISTSIZE` against `MAILCHECK`, `PS1` against `TTY`, each pair holding
+	// the other attribute words still. Measured 2026-09-27 on zsh 5.9.2;
+	// interp/removedshellown.go has the grid (#4896).
+	s.RemovedShellOwnParameterIsStillAName = interp.Yes
 	// The export letter carries `-g` with it, so `typeset -x v=1` inside a
 	// function declares no local — `local -x` is the spelling that still
 	// does, and a name this scope has already made local stays local.

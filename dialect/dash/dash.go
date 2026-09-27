@@ -496,6 +496,8 @@ func Semantics() interp.Semantics {
 	s.UnsetOfALocalRecordsTheName = interp.No
 	// No declaration listing to ask it with.
 	s.ValuelessRecordIsStillAName = interp.No
+	// And no listing to ask that of a name of the shell's own either.
+	s.RemovedShellOwnParameterIsStillAName = interp.No
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is neither a
 	// `${!prefix@}` nor a compound to declare — `${!q@}` is `Bad
 	// substitution` — so nothing here can reach the axis. Measured

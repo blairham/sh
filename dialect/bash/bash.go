@@ -1809,6 +1809,13 @@ func Semantics() interp.Semantics {
 	// listing rather than a missing name. Answered so that no route can
 	// refuse it, and answered `No` because it is the row that speaks.
 	s.ValuelessRecordIsStillAName = interp.No
+	// And the shell's own names are reported missing exactly as a script's
+	// are: `unset RANDOM; typeset -p RANDOM` is `typeset: RANDOM: not found`
+	// at 1, the same sentence and the same status as `w=1; unset w; typeset
+	// -p w`. Measured 2026-09-27 on bash 5.3.20 and bash 3.2.57 alike, `env
+	// -i PATH=/usr/bin:/bin` with a scratch HOME, from a file. This is the
+	// column zsh parts from (#4896).
+	s.RemovedShellOwnParameterIsStillAName = interp.No
 	// A table the letters merely declared is not among the names a prefix
 	// listing comes to: `declare -A q1; echo "[${!q@}]"` is `[]`, and the
 	// same declaration with `=()` behind it is `[q1]`. Measured 2026-09-16 on

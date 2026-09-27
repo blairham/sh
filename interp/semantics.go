@@ -16207,6 +16207,46 @@ type Semantics struct {
 	// all; this is about the signal a script sends, and nothing else.
 	SelfAimedChildSignalRunsTheTrap Answer
 
+	// ChildConditionCountsEveryReapedChild raises the `CHLD` condition for
+	// every child this shell reaped, rather than for a **background job**
+	// alone.
+	//
+	// A different question from SelfAimedChildSignalRunsTheTrap, which is
+	// about a signal a *script* sent: this one is about a real child, and
+	// what moves is **which children** count. Not the `wait` and not the
+	// process — the background probe waits in every column and the
+	// foreground one waits in none — but whether the child was something the
+	// shell put in its **job table**, which is the noun `jobs` and `%1` are
+	// keyed on.
+	//
+	// Measured 2026-09-27, script files, against bash 5.3.20, dash 0.5.12,
+	// ksh93 2012-08-01, zsh 5.9.2 and BusyBox ash 1.37.0 in
+	// alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b;
+	// `go version -m` on each of the four native ones: *not a Go executable*.
+	// Every row is `trap 'echo C' CHLD` and then the command, and the last
+	// line of each is `echo a`:
+	//
+	//	                     bash  dash  ash   ksh93  zsh
+	//	/bin/echo x          x C a x C a x C a x a    x a
+	//	/bin/echo x & wait   x C a x C a x C a x C a  x C a
+	//	/bin/echo x|/bin/cat x C C x C a x C a x a    x a
+	//	v=$(/bin/echo x)     C x a C x a C x a x a    x a
+	//	( /bin/echo x )      x C a x C a x C a x a    x a
+	//
+	// The background row is the control, and it is what makes this a
+	// question about the children rather than about the condition: it is the
+	// same child, the same handler and the same `wait`, and the two columns
+	// that run nothing for any of the others run the handler there. The
+	// three foreground shapes below the first — a pipeline, a substitution
+	// and a subshell — are the breadth that says the rule is keyed on the
+	// job and not on the *external command*, since each of them reaps a
+	// child that is not one.
+	//
+	// #4780. What a column that says yes counts *per* shape — bash's two for
+	// a pipeline of two against dash's one — is a separate question this
+	// does not answer.
+	ChildConditionCountsEveryReapedChild Answer
+
 	// SelfAimedWindowChangeWaitsForInputOrAChild holds a `WINCH` a script
 	// aimed at the shell itself until the shell next **reads a unit of its
 	// input** or **finishes waiting for a child**, rather than running the

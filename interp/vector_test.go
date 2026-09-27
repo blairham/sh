@@ -226,6 +226,11 @@ func testSemantics() Semantics {
 	// — see redirtarget_test.go.
 	s.RedirectTargetExpandsInTheCommandsProcess = Yes
 	s.TrapQuoting = ListingQuoteAlwaysEscaped
+	// Every child the shell reaped raises the `CHLD` condition, which is the
+	// reading three of the five columns hold and the one the trap tests here
+	// count against. The suite that is *about* it sets both — see
+	// childcondition_test.go.
+	s.ChildConditionCountsEveryReapedChild = Yes
 
 	// `read` — the option letters decide which of its axes are even
 	// reachable, and the four below are the ones the letters open up.

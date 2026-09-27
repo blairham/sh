@@ -1609,6 +1609,12 @@ func Semantics() interp.Semantics {
 	// script file, `trap 'echo C' CHLD` / `kill -CHLD $$; echo a` / `echo b`
 	// reads `C a b` (#4756).
 	s.SelfAimedChildSignalRunsTheTrap = interp.Yes
+	// Every child this shell reaped raises the condition, a foreground
+	// external command included, rather than a background job alone.
+	// Measured 2026-09-27 over script files, `trap 'echo C' CHLD` and then
+	// `/bin/echo x`, a pipeline, `v=$(/bin/echo x)` or `( /bin/echo x )`,
+	// each followed by `echo a`: every one of them runs the handler (#4780).
+	s.ChildConditionCountsEveryReapedChild = interp.Yes
 	// And a `WINCH` aimed the same way runs between commands like every other
 	// signal. Measured 2026-09-26 over a script file, `trap 'echo W' WINCH` /
 	// `kill -WINCH $$; echo a` / `echo b` reads `W a b` (#4755).

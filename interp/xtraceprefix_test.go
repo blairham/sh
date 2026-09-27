@@ -166,3 +166,35 @@ func TestAnAppendingPrefixIsRenderedByItsColumn(t *testing.T) {
 	joined := traceOf(t, src, permissive(), Diagnostics{TracePrefixAppendIsTheJoinedValue: true})
 	wantTrace(t, joined, "+ v=145\n+ true\n+ w=1\n+ w+=2\n+ set +x\n")
 }
+
+// TestAnAppendingPrefixJoinsOnce holds the rendering still and moves the axis
+// that decides *when* a command's prefix is worked through.
+//
+// The two are connected by one loop. Where the prefix is worked through ahead
+// of the redirections, each entry's trace line is written inside the walk that
+// also holds the entry's value under its name for the entries behind it — so
+// by the time the line is rendered the name already carries the join, and
+// deriving it a second time appends the word twice: `v=14; v+=5 true` traced
+// `+ v=1455` where the column that writes an append as its joined value writes
+// `+ v=145` (#4431).
+//
+// The unset name beside it separates the two arithmetics rather than repeating
+// the first row: joining nothing to `2` is `2` either way round, so a single
+// join writes `+ w=2` and a second one writes `+ w=22`. A special builtin
+// carries it, because that is the command the middle answer takes the walk
+// for while it opens a regular builtin's redirections first.
+func TestAnAppendingPrefixJoinsOnce(t *testing.T) {
+	for _, order := range []PrefixRedirectionOrder{
+		PrefixExpandedBeforeRedirectionsAlways,
+		PrefixExpandedBeforeRedirectionsWhereItPersists,
+		PrefixExpandedBeforeRedirectionsNever,
+	} {
+		t.Run(order.String(), func(t *testing.T) {
+			sem := permissive()
+			sem.PrefixExpandedBeforeTheRedirections = order
+			got := traceOf(t, "v=14\nset -x\nv+=5 true\nw+=2 :\nset +x\n", sem,
+				Diagnostics{TracePrefixAppendIsTheJoinedValue: true})
+			wantTrace(t, got, "+ v=145\n+ true\n+ w=2\n+ :\n+ set +x\n")
+		})
+	}
+}

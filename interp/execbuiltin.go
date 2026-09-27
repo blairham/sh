@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -565,7 +566,52 @@ func (r *Runner) execArgv(argv []string, flags execFlags, base string) []string 
 // over everything and looked like it worked.
 func (r *Runner) execEnviron(flags execFlags) []string {
 	if flags.clearEnv {
+		// And the prefix goes with everything else, measured rather than
+		// carved out: `V=1 exec -c /usr/bin/printenv V` writes nothing and
+		// exits 1 in bash 5.3.20, the one column with the letter.
 		return []string{}
 	}
-	return r.environ()
+	return r.prefixReachesTheReplacement(r.environ())
+}
+
+// prefixReachesTheReplacement puts the names this command's own assignment
+// prefix is holding into the environment `exec` hands over.
+//
+// `exec` is the one builtin whose prefix stands in front of a **command**
+// rather than in front of the shell doing something: the program that takes
+// this shell's place is the command that was written there, so it is handed
+// the prefix the way an external command in the same position is. Unanimous
+// in the panel — `V=1 exec /usr/bin/printenv V` writes `1` in bash 5.3.20,
+// ksh93u+ 2012-08-01, dash 0.5.12, zsh 5.9.2 and BusyBox ash 1.37.0, and in a
+// subshell in every one of them.
+//
+// Not the same question as what a builtin's *children* are told, which the
+// panel does split on and which Semantics.PrefixExportAtABuiltin answers:
+// `V=1 eval 'printenv V'` writes `1` in bash alone. Four columns answer that
+// one with "the attribute is left alone", so the name was in r.Vars and not in
+// the environment, and four dialects handed the replacement nothing while bash
+// looked correct for a reason that had nothing to do with `exec` (#4641).
+//
+// An entry already in the environment is **replaced** rather than joined: the
+// name is exported and r.environ has already written it, so the two agree, and
+// handing execve the same name twice would leave the stale copy first.
+//
+// `ARGV0=x exec cmd` comes with it and is not a rule of its own — the name
+// the replacement is given is read out of the environment this builds, so a
+// prefix that sets it is read there like any other (#4626).
+func (r *Runner) prefixReachesTheReplacement(env []string) []string {
+	for _, name := range r.prefixHeldNames {
+		value, _ := r.getVar(name)
+		entry := name + "=" + value
+		i := slices.IndexFunc(env, func(kv string) bool {
+			k, _, ok := strings.Cut(kv, "=")
+			return ok && k == name
+		})
+		if i >= 0 {
+			env[i] = entry
+			continue
+		}
+		env = append(env, entry)
+	}
+	return env
 }

@@ -1750,6 +1750,18 @@ type Runner struct {
 	// pretend to be one.
 	prefixTraceAssigns []*syntax.Assign
 	prefixTraceValues  []string
+	// prefixTraceJoins is the third, and it holds what an **appending**
+	// entry came to: the name's value at the moment this entry expanded,
+	// with the expansion behind it. Recorded rather than derived again,
+	// because the ordered walk in interp/prefixredirorder.go writes an
+	// entry's own trace line *after* it has held that joined value under the
+	// name — so asking Runner.prefixJoined a second time reads the join back
+	// and appends the word to it twice: `v=14; v+=5 :` traced `+ v=1455`
+	// where the one column that writes an append as its joined value writes
+	// `+ v=145` (#4431). A plain assignment's entry holds its own value, so
+	// the slice is the same length as the two above and is read by index
+	// with them.
+	prefixTraceJoins []string
 	// prefixGlobMatches holds what this command's assignment prefixes
 	// matched, for the one shell that reads a prefix's value as a pattern —
 	// see interp/prefixglob.go. Per-command scratch and not a table, kept
@@ -7235,6 +7247,39 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// five columns with no such hook report the substitution's 3. See
 		// Runner.nullCommand, which takes the command off this path before
 		// it ever gets here.
+		// Which of the two goes first — these assignments' own right-hand
+		// sides or the redirection words — is the disagreement
+		// interp/prefixredirorder.go records, asked here for the command
+		// that has no word at all. Asked only where both are written, so a
+		// bare `>f` and a bare `x=1` ask nothing and no dialect has to have
+		// an answer for them.
+		redirsFirst := false
+		if len(c.Redirs) > 0 && aPrefixIsWritten(c.Assigns) {
+			first, answered := r.assignmentsExpandedBeforeTheRedirections()
+			if !answered {
+				return nil
+			}
+			redirsFirst = !first
+		}
+		if redirsFirst {
+			put, stop, err := r.openTheBareRedirections(ctx, c, argv)
+			// Held open **across the assignments**, which is the other half
+			// of opening them first: measured 2026-09-26, `Y=$(echo A >&2)
+			// 2> $(echo B >&2; echo /dev/null)` writes `B` alone in dash
+			// 0.5.12, zsh 5.9.2 and BusyBox ash 1.37.0, because the `A` goes
+			// to the file the command has already opened. bash and ksh93
+			// write both, having expanded the right-hand side first.
+			defer put()
+			if err != nil {
+				return err
+			}
+			if stop {
+				// The open failed, and in these columns nothing behind it
+				// runs: `X=$(echo A >&2; echo v) > /nope/dir/x` writes no
+				// `A` and leaves `X` unset.
+				return nil
+			}
+		}
 		// And whether a `.set` or `.append` discipline ran, whose status the
 		// assignment answers with — see the block below and
 		// Runner.disciplineStatus. Cleared here rather than by the store, so
@@ -7298,25 +7343,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// the guard here a refused subscript reported success.
 			r.status = 0
 		}
-		// `>b` with no command still opens the file, and truncates it if it
-		// exists. Returning early skipped that, so a redirection that was
-		// the whole command did nothing at all — which is how `echo hi &>b`
-		// in a dialect without `&>` came to leave no file behind, the exact
-		// silent case the AmpersandRedirect comment warns about.
-		if len(c.Redirs) > 0 {
-			r.traceCommand(argv)
-
-			// Assignments and a redirection with no command name. There is
-			// no other process for a here-document body to expand in.
-			closers, err := r.applyRedirs(ctx, c.Redirs, false, redirOwnerThisShell)
-			for _, cl := range closers {
-				_ = cl.Close()
-			}
+		if !redirsFirst {
+			put, _, err := r.openTheBareRedirections(ctx, c, argv)
+			put()
 			if err != nil {
 				return err
-			}
-			if r.redirErr {
-				return nil
 			}
 		}
 		// No zeroing here: the status was decided above from what the
@@ -7421,7 +7452,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 	}
 	defer func() {
-		r.prefixTraceAssigns, r.prefixTraceValues, r.prefixGlobMatches = nil, nil, nil
+		r.prefixTraceAssigns, r.prefixTraceValues = nil, nil
+		r.prefixTraceJoins, r.prefixGlobMatches = nil, nil
 	}()
 	tracedHere := false
 	// What this command knew before any prefix value was expanded, so that a

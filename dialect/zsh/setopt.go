@@ -2862,4 +2862,11 @@ func kshGlobOn(r *interp.Runner) bool { return r.BarePatternGroupsOpenInsideAWor
 // own changes nothing and is still readable back.
 func setBareGroupGrammar(r *interp.Runner, shGlob, kshGlob bool) {
 	r.SetBarePatternGroups(!shGlob, kshGlob)
+	// And the one place the word rules do not ordinarily reach: a `=~`
+	// operand's parentheses are the regular expression's in every dialect
+	// that has the operator, and `shglob` takes them back off it so that the
+	// two operands of `[[ ]]` split the same way. Measured in the same run —
+	// `[[ a =~ (a) ]]` is refused wherever `[[ a == (a|b) ]]` is, and
+	// `[[ abc =~ ^(a|x)bc$ ]]` wherever `[[ ab == a(b|c) ]]` is.
+	r.SetRegexOperandParenthesisIsTheShellsOwn(shGlob)
 }

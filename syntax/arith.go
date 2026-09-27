@@ -1146,7 +1146,7 @@ func (a *arithParser) ternary() ArithExpr {
 	// `:` for itself would break every `a ? b : c` in the dialect that reads
 	// the byte as a token.
 	a.conditionals++
-	then := a.conditionalBranch()
+	then := a.conditionalBranch(a.dial.ArithConditionalThenLevel)
 	a.conditionals--
 	if then == nil {
 		a.failArith(ErrArithConditionalThen, a.src[question:])
@@ -1159,7 +1159,7 @@ func (a *arithParser) ternary() ArithExpr {
 		return cond
 	}
 	a.space()
-	els := a.conditionalBranch()
+	els := a.conditionalBranch(a.dial.ArithConditionalElseLevel)
 	if els == nil {
 		a.failArith(ErrArithConditionalElse, a.src[colon:])
 		return cond
@@ -1168,19 +1168,26 @@ func (a *arithParser) ternary() ArithExpr {
 }
 
 // conditionalBranch reads one branch of a conditional, at whichever level the
-// dialect reads one.
+// dialect reads that branch.
 //
-// Both branches take the same level, which is measured rather than assumed:
-// the shell that reads them below assignment refuses a bare store in the
-// **then** with `':' expected` — the `=` is where the colon was looked for —
-// and in the **else** with `lvalue required`, because there the conditional
-// itself is left standing as the target of the `=`. Two sentences, one level.
-// See [Dialect.ArithConditionalBranchBelowAssignment].
-func (a *arithParser) conditionalBranch() ArithExpr {
-	if a.dial.ArithConditionalBranchBelowAssignment {
+// The two branches take a level each rather than sharing one, which is
+// measured rather than assumed: C's grammar puts the then branch at
+// `expression` and the else branch at `conditional-expression`, and each end
+// of that is parted from by one column of the panel. A branch read below
+// assignment refuses a bare store with a sentence that depends on which end it
+// was at — in the then the `=` stands where the colon was looked for, and in
+// the else the conditional itself is left standing as the target of the `=`,
+// which is the ordinary non-place refusal. See
+// [Dialect.ArithConditionalThenLevel].
+func (a *arithParser) conditionalBranch(level ArithConditionalBranchLevel) ArithExpr {
+	switch level {
+	case ArithConditionalBranchConditional:
 		return a.ternary()
+	case ArithConditionalBranchAssignment:
+		return a.assign()
+	default:
+		return a.expr()
 	}
-	return a.assign()
 }
 
 // colonWithoutQuestion is a `:` standing where no `?` opened a conditional, in

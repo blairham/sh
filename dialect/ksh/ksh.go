@@ -397,6 +397,18 @@ func Dialect() syntax.Dialect {
 	// command named `0)` here where the bash columns refuse the expression
 	// (#3530).
 	d.ArithSubstScanIgnoresQuoting = true
+	// The **else** branch of `c ? t : e` is read at the assignment level here,
+	// where every other column in the panel reads it below one. Measured
+	// 2026-09-27 on ksh93u+ 2012-08-01: `$(( 1 ? 2 : x = 3 ))` is 2 and
+	// `$(( 0 ? 2 : x = 3 ))` is 3, against `attempted assignment to
+	// non-variable` in bash 5.3.20 and 3.2.57, `lvalue required` in zsh 5.9.2
+	// and an arithmetic syntax error in dash 0.5.12 and BusyBox ash 1.37.0.
+	// The store in the branch nobody takes does not happen — `y` is still 9
+	// after `y=9; : $(( 1 ? 2 : y = 3 ))` — so this is where the branch is
+	// *read* and not a store made eagerly. The then branch is the core's
+	// sequence level, which this column shares with the bash ones:
+	// `$(( 1 ? 2 , 3 : 4 ))` is 3 (#4775, #4776).
+	d.ArithConditionalElseLevel = syntax.ArithConditionalBranchAssignment
 	// And a pattern character earlier in the word takes away the stop a
 	// continuation behind a `$` puts on it: `echo [$\⏎x]` is `[5]` here,
 	// which is the shape a reader is most likely to write (#3523).

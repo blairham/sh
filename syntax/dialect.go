@@ -4709,33 +4709,52 @@ type Dialect struct {
 	// decoding end.
 	ArithCharacterEscapes ArithCharacterEscapes
 
-	// ArithConditionalBranchBelowAssignment reads the two branches of `c ? t :
-	// e` at the **conditional** level rather than the assignment level, so a
-	// bare assignment cannot begin one.
+	// ArithConditionalThenLevel is the level the **then** branch of
+	// `c ? t : e` is read at, and ArithConditionalElseLevel the level the
+	// **else** branch is read at.
 	//
-	// It is a level and not a ban, which is the whole of why it is worth
-	// stating: a parenthesized assignment in the same position is taken.
-	// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0) run `-f`:
+	// Two fields rather than one, because the panel's columns do not hold the
+	// two branches at the same level and no single value can say so. C's
+	// grammar is the shape three of the columns have — the then-expression is
+	// a full `expression`, so the sequence operator may stand in it, and the
+	// else-expression is a `conditional-expression`, which is not a place — and
+	// the other two each part from it at one end. Measured 2026-09-27 on
+	// bash 5.3.20 and 3.2.57, ksh93u+ 2012-08-01, zsh 5.9.2 run `-f`, dash
+	// 0.5.12 and BusyBox ash 1.37.0:
 	//
-	//	$(( 1 ? x = 2 : 3 ))     bad math expression: ':' expected
-	//	$(( 0 ? x += 2 : 3 ))    the same refusal
-	//	$(( 1 ? 2 : x = 3 ))     bad math expression: lvalue required
-	//	$(( 1 ? (x = 2) : 3 ))   2
+	//	written                   bash  ksh93  zsh             dash    ash
+	//	$(( 1 ? 2 , 3 : 4 ))      3     3      ':' expected    —       3
+	//	$(( 1 ? x = 2 : 3 ))      2     2      ':' expected    2       2
+	//	$(( 1 ? 2 : x = 3 ))      refused  2   lvalue required refused refused
+	//	$(( 0 ? 2 : x = 3 ))      refused  3   lvalue required refused refused
+	//	$(( 1 ? 2 : (x = 3) ))    2     2      2               2       2
+	//	$(( 1 ? 2 : 3 , 4 ))      4     4      4               —       4
 	//
-	// The third row is the else branch seen from the other side: the whole
-	// conditional becomes the target of the `=`, which is not a place, so the
-	// refusal is the one a `$(( 7 = 4 ))` earns. The fourth says the branch can
-	// hold a store — it just cannot begin with one written bare.
+	// So the then branch is the sequence level everywhere but zsh, and the
+	// else branch is the conditional level everywhere but ksh93. The last two
+	// rows are the controls that make each of those a **level** rather than a
+	// ban: a parenthesized store in the else is taken in every column, and a
+	// comma written after the whole conditional belongs to the expression
+	// around it rather than to the branch, so `4` is the same answer under
+	// both readings of the else.
 	//
-	// One shell in the panel, and the controls say so: `$(( 1 ? x = 2 : 3 ))`
-	// is 2 in bash 5.3.20 and in ksh93u+ 2012-08-01 alike, so the other columns
-	// must not move. Off in the core, which is C's reading of the same
-	// grammar.
+	// The dash cells written `—` are the sequence operator being absent from
+	// that dialect altogether rather than an answer about a branch: `$(( 1 ,
+	// 2 ))` is refused there too, so nothing measurable distinguishes the two
+	// loosest levels in that column. It holds the sequence level vacuously,
+	// which is what the zero value means.
 	//
-	// The comma is **not** part of this and is already below both levels:
-	// `$(( 1 ? 2 , 3 : 4 ))` is refused in zsh and answers 3 in the other two,
-	// which this parser already had right (#4680).
-	ArithConditionalBranchBelowAssignment bool
+	// A refused else branch earns the refusal a `$(( 7 = 4 ))` earns, because
+	// the whole conditional is left standing as the target of the store —
+	// which is what makes the sentence the dialect's own rather than one
+	// written here. zsh's `lvalue required` and bash's `attempted assignment
+	// to non-variable` are the same reading (#4775, #4776).
+	ArithConditionalThenLevel ArithConditionalBranchLevel
+
+	// ArithConditionalElseLevel is the level the **else** branch of
+	// `c ? t : e` is read at. See [Dialect.ArithConditionalThenLevel] for the
+	// measurement, which covers both.
+	ArithConditionalElseLevel ArithConditionalBranchLevel
 
 	// ExtendedPattern enables `@(a|b)`, `?(a)`, `+(a)`, `*(a)` and `!(a)` in
 	// a pattern: a group with a quantifier in front of it. ksh93 has them
@@ -7252,13 +7271,35 @@ func Core() Dialect {
 		ArithComma:        true,
 		ArithExponent:     true,
 		ArithExplicitBase: true,
+
+		// C's reading of the conditional, which is the head count as well:
+		// the then branch takes a comma in bash, ksh93 and BusyBox ash, and
+		// the else branch refuses a bare store everywhere but ksh93. Both
+		// measured 2026-09-27 — see ArithConditionalThenLevel for the table
+		// and for what dash can and cannot say about the then level.
+		ArithConditionalThenLevel: ArithConditionalBranchSequence,
+		ArithConditionalElseLevel: ArithConditionalBranchConditional,
 	}
 }
 
 // POSIX is the specification's shell language and nothing else. It is
 // deliberately narrower than any shell anyone actually runs, which makes it
 // the right setting for a portability check and the wrong one for a runtime.
-func POSIX() Dialect { return Dialect{} }
+func POSIX() Dialect {
+	return Dialect{
+		// The one field here that is not a zero value, and it is the
+		// standard's own reading rather than a shell's: XCU 2.6.4 defines
+		// arithmetic expansion as the ISO C signed-integer expression
+		// language, and C's else-expression is a `conditional-expression`,
+		// which is not a place. So `$(( 1 ? 2 : x = 3 ))` is refused, which
+		// is what dash 0.5.12 and BusyBox ash 1.37.0 — the two dialects
+		// built on this preset — were both measured doing on 2026-09-27.
+		// The then level is left at its zero value, which is the loosest
+		// there is and so is the assignment level until a dialect turns the
+		// sequence operator on.
+		ArithConditionalElseLevel: ArithConditionalBranchConditional,
+	}
+}
 
 // ArithPrecedencePolicy is the order the binary arithmetic operators bind in.
 //
@@ -7314,6 +7355,43 @@ func (p ArithCharacterEscapes) String() string {
 		return "folded, no dash, and `\\M-` is the whole escape"
 	}
 	return "neither is an escape"
+}
+
+// ArithConditionalBranchLevel is how loose an expression one branch of
+// `c ? t : e` may be. The three values are the three rungs of the ladder a
+// dialect can stop a branch at, from the loosest down.
+//
+// See [Dialect.ArithConditionalThenLevel] for the panel's measurement and for
+// why the two branches need a field each.
+type ArithConditionalBranchLevel uint8
+
+const (
+	// ArithConditionalBranchSequence reads a branch at the loosest level
+	// there is, so the sequence operator may stand in it where the dialect
+	// has one at all. C's `expression`, and the zero value — which is the
+	// same reading as the level below it in a dialect without the operator,
+	// since there is then nothing between the two.
+	ArithConditionalBranchSequence ArithConditionalBranchLevel = iota
+
+	// ArithConditionalBranchAssignment reads a branch at the assignment
+	// level, so a bare store may begin one but a comma may not stand in it.
+	ArithConditionalBranchAssignment
+
+	// ArithConditionalBranchConditional reads a branch at the conditional
+	// level, so a bare store cannot begin one. It is a level and not a ban:
+	// a parenthesized store in the same position is taken, and what a bare
+	// one earns is the refusal an assignment to any other non-place earns.
+	ArithConditionalBranchConditional
+)
+
+func (l ArithConditionalBranchLevel) String() string {
+	switch l {
+	case ArithConditionalBranchAssignment:
+		return "assignment"
+	case ArithConditionalBranchConditional:
+		return "conditional"
+	}
+	return "sequence"
 }
 
 type ArithPrecedencePolicy int

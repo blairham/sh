@@ -536,30 +536,47 @@ detail.
 Grammar flags: `ArithIncDec` and `ArithComma` — core: on for both;
 `posix` and `dash`: off for both.
 
-**The conditional's two branches are not read at the same level in every
-column.** C's grammar, and four of the six, read a branch at the assignment
-level, so a bare store may begin one. zsh reads both branches at the
-**conditional** level and refuses a bare store there, with a different
-sentence at each end. Measured 2026-09-26 — zsh 5.9.2, bash 5.3.20(1) and
-ksh93u+ 2012-08-01, each run with no startup files:
+**The conditional's two branches are not read at the same level, and they are
+not read at the same level as each other.** C's grammar puts the
+then-expression at `expression` — the level the sequence operator lives at —
+and the else-expression at `conditional-expression`, which is not a place. Three
+of the panel's columns have exactly that reading, and the other two part from it
+at one end each. Measured 2026-09-26 and 2026-09-27 — bash 5.3.20(1) and the
+3.2.57 macOS ships, ksh93u+ 2012-08-01, zsh 5.9.2, dash 0.5.12 and BusyBox ash
+1.37.0 in `alpine@sha256:28bd5f…`, each run with no startup files:
 
-| written | zsh 5.9.2 | bash 5.3.20 | ksh93u+ |
-| --- | --- | --- | --- |
-| `$(( 1 ? x = 2 : 3 ))` | `bad math expression: ':' expected` at 1 | `2` | `2` |
-| `$(( 0 ? x += 2 : 3 ))` | the same refusal | `3` | `3` |
-| `$(( 1 ? 2 : x = 3 ))` | `bad math expression: lvalue required` | `2` | `2` |
-| `$(( 1 ? (x = 2) : 3 ))` | `2` | `2` | `2` |
+| written | bash 5.3 / 3.2 | ksh93u+ | zsh 5.9.2 | dash 0.5.12 | ash 1.37.0 |
+| --- | --- | --- | --- | --- | --- |
+| `$(( 1 ? x = 2 : 3 ))` | `2` | `2` | `':' expected` at 1 | `2` | `2` |
+| `$(( 0 ? x += 2 : 3 ))` | `3` | `3` | the same refusal | `3` | `3` |
+| `$(( 1 ? 2 , 3 : 4 ))` | `3` | `3` | the same refusal | — | `3` |
+| `$(( 1 ? 2 : x = 3 ))` | `attempted assignment to non-variable` at 1 | `2` | `lvalue required` at 1 | `expecting EOF` at 2 | `syntax error` at 2 |
+| `$(( 0 ? 2 : x = 3 ))` | the same refusal | `3` | the same refusal | the same refusal | the same refusal |
+| `$(( 1 ? (x = 2) : 3 ))` | `2` | `2` | `2` | `2` | `2` |
+| `$(( 1 ? 2 : (x = 3) ))` | `2` | `2` | `2` | `2` | `2` |
+| `$(( 1 ? 2 : 3 , 4 ))` | `4` | `4` | `4` | — | `4` |
 
-The last row is what says this is a **level** and not a ban: the same store
-in the same position is taken. The two sentences are one rule seen from its
-two ends — in the then branch the `=` stands where the colon was looked for,
-and in the else branch the whole conditional is left standing as the target
-of the store, which earns the refusal a `$(( 7 = 4 ))` earns.
+So the **then** branch is the sequence level everywhere but zsh, and the
+**else** branch is below assignment everywhere but ksh93. The two cells
+written `—` are the sequence operator being absent from dash altogether —
+`$(( 1 , 2 ))` is refused there too — rather than an answer about a branch, so
+that column can say nothing about its then level beyond the assignment one.
 
-The sequence operator is below both levels already and is not part of this:
-`$(( 1 ? 2 , 3 : 4 ))` is refused in zsh and is 3 in the other two.
+The parenthesized rows are what say this is a **level** and not a ban: the same
+store in the same position is taken in every column. The refusals are one rule
+seen from its two ends — in the then branch the `=` stands where the colon was
+looked for, and in the else branch the whole conditional is left standing as
+the target of the store, which earns the refusal `$(( 7 = 4 ))` earns, byte for
+byte, in each of the four columns that make one.
 
-Grammar flag: `ArithConditionalBranchBelowAssignment` — core: off; `zsh`: on.
+And the last row is the control that keeps the comma finding on the *branch*:
+a comma written after the whole conditional belongs to the expression around
+it, so `4` is the answer whichever level the else branch is read at.
+
+Grammar flags: `ArithConditionalThenLevel` — core, `bash`, `ksh`, `ash`:
+sequence; `zsh`: conditional; `dash`: sequence, vacuously, having no operator
+there to reach it. `ArithConditionalElseLevel` — core, `bash`, `zsh`, `dash`,
+`ash`: conditional; `ksh`: assignment.
 
 **Off does not mean refused.** Where the increment operators are absent the
 doubled sign is not a token the reader then rejects: it is two unary signs,

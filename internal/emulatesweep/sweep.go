@@ -308,7 +308,7 @@ func Sweep(ctx context.Context, o Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	for _, b := range []Binary{o.Reference, o.Ours} {
 		if err := fireControls(ctx, dir, b); err != nil {
@@ -437,7 +437,7 @@ func askOne(ctx context.Context, dir string, b Binary, mode, snippet string) (re
 	if err != nil {
 		return false, false, err
 	}
-	defer os.RemoveAll(run)
+	defer func() { _ = os.RemoveAll(run) }()
 
 	script := filepath.Join(run, "case.zsh")
 	body := fmt.Sprintf("emulate %s\nset -n\n%s\n", mode, snippet)

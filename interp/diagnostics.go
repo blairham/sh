@@ -586,6 +586,38 @@ type Diagnostics struct {
 	// operand against an unknown operand — which is TestOperandExpected's
 	// question rather than this one's.
 	TestBinaryExpected string
+	// TestTwoWordOperatorExpected is the same complaint for a **two-word**
+	// expression whose first word is not an operator, where that differs
+	// from the sentence the longer forms take. One verb: that word.
+	//
+	// One column parts them, and the split is the *word count* rather than
+	// the position: `[ a b ]` there is `parse error: condition expected: a`
+	// and `[ a b c ]` is `condition expected: b`, the same sentence without
+	// the prefix. It holds inside a connective-separated segment as well —
+	// `[ a -o b c ]` takes the prefix and `[ a -o b c d ]` does not — which
+	// is what says it belongs to the two-word *form* and not to the top
+	// level. Measured 2026-09-27 on zsh 5.9.2 over forty-five operand
+	// lists (#4513).
+	//
+	// Empty leaves the two-word form to TestUnaryExpected, which is what
+	// every other column wants: they word the two places alike or split
+	// them on a different seam again — see TestBinaryExpected.
+	TestTwoWordOperatorExpected string
+	// TestRefusalCountsTheWordsBetweenConnectives reads a refused `test`
+	// from the word counts of the segments between `-a` and `-o`, rather
+	// than from where a left-to-right parse stopped.
+	//
+	// A second reading of the same refusal and not a second evaluator: every
+	// list it moves is status 2 either way, and only the sentence and the
+	// word it names change. See interp/testcountedsegments.go, which carries
+	// the rule and the measurement, and Runner.runTestForm, which asks it
+	// only once the ordinary reading has refused.
+	//
+	// The pair that makes it a count is `[ a b c -a ]` naming `b` and
+	// `[ a b c d -o ]` — one word longer — naming `a`: a reader that stopped
+	// where the words stopped making sense would name the same word in both
+	// (#4513).
+	TestRefusalCountsTheWordsBetweenConnectives bool
 	// TestIntegerExpected is a non-numeric operand to `-eq` and its siblings.
 	// One verb: the operand.
 	TestIntegerExpected string

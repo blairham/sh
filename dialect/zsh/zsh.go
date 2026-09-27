@@ -5812,7 +5812,14 @@ func Diagnostics() interp.Diagnostics {
 		TestUnknownLongOperator: interp.TestUnknownOperatorNamed,
 		TestUnaryExpected:       "unknown condition: %[1]s",
 		TestBinaryExpected:      "condition expected: %[1]s",
-		TestIntegerExpected:     "integer expression expected: %[1]s",
+		// The two-word form carries a prefix the longer ones do not, and
+		// the refusal is read from the word counts of the segments between
+		// the connectives. See interp/testcountedsegments.go for the rule
+		// and the forty-five lists it was measured and then predicted over
+		// (#4513).
+		TestTwoWordOperatorExpected:                 "parse error: condition expected: %[1]s",
+		TestRefusalCountsTheWordsBetweenConnectives: true,
+		TestIntegerExpected:                         "integer expression expected: %[1]s",
 		// The whole substitution as it was written, not its inside.
 		ProcessSubstitutionNotInCondition: "process substitution %[1]s cannot be used here",
 		// An empty `=~` right operand, which this shell refuses in its

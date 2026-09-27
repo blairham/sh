@@ -8510,10 +8510,10 @@ because the operand was joined against the working directory with a lexical
 clean *before* the walk that was there to resolve the `..`. A path the walk
 **cannot** resolve keeps its `..` too, which was the other half of the same
 fault: `cd -P nosuch/..` fell through to that join and answered 0 where all
-six refuse (#4627). One measured exception is on the board rather than
-modeled: ksh93 cancels a **leading** `..` against the logical `$PWD` even
-under `-P`, so `cd sub/fake` then `cd -P ..` is `t/sub` there and `t` in the
-other four (#4628).
+six refuse (#4627). One column reads the letter differently and it is the
+same axis rather than an exception: ksh93 cancels a `..` that reaches past
+the operand and into the logical `$PWD` under `-P` as well, so `cd sub/fake`
+then `cd -P ..` is `t/sub` there and `t` in the other four (#4628, below).
 
 **A directory can be renamed out from under the shell, and then the shell's
 own name for it leads nowhere.** `cd d; mv ../d ../e` is the whole of the
@@ -8607,10 +8607,54 @@ in place — this shell answered 0 there in every dialect, having let an
 unresolvable path fall through to the lexical join that the walk existed to
 avoid (#4627).
 
-One measured exception is still on the board rather than modeled: ksh93
-cancels a leading `..` against the logical `$PWD` **under `-P` as well**, so
-`cd sub/fake` then `cd -P ..` is `t/sub` there and `t` in the other four
-(#4628). The axis above reaches the `-L` route only.
+**The same axis reaches `-P`, and the noun there is not "a leading `..`".**
+ksh93 cancels a `..` that reaches past the operand and into the logical
+`$PWD` under `-P` as well, and resolves only what is left; bash 5.3, zsh,
+dash and BusyBox ash walk the whole path with every `..` in place. Measured
+2026-09-27 in the `t` tree above — `real/deep`, `sub`, and `sub/fake` pointing
+at `../real` — against ksh93u+ 2012-08-01, dash 0.5.12, bash 5.3.20, zsh 5.9.2
+and BusyBox ash 1.37.0 in the digest-pinned Alpine image, which answers every
+row as the other three do:
+
+| from | `cd -P …` | ksh93 | the unanimous four |
+| --- | --- | --- | --- |
+| `t` | `sub/fake/..` | `t` | `t` |
+| `t` | `sub/fake/deep/..` | `t/real` | `t/real` |
+| `t` | `sub/fake/../..` | above `t` | above `t` |
+| `t/sub` | `fake/..` | `t` | `t` |
+| `t/sub/fake` | `..` | `t/sub` | `t` |
+| `t/sub/fake` | `./..` | `t/sub` | `t` |
+| `t/sub/fake` | `../real` | refused | `t/real` |
+| `t/sub/fake` | `../..` | `t` | above `t` |
+| `t/sub/fake` | `.././..` | `t` | above `t` |
+| `t/sub/fake` | `deep/..` | `t/real` | `t/real` |
+| `t/sub/fake` | `deep/../..` | `t` | `t` |
+| `t/sub/fake` | `deep/../../..` | above `t` | above `t` |
+| `t/sub/fake` | `../fake/..` | `t` | refused |
+| `t/sub/fake/deep` | `..` | `t/real` | `t/real` |
+
+Three rows split and two of them carry the rule. **`../fake/..` is the
+sharpest**: the first `..` cancels the link's own name logically, putting the
+walk in `t/sub` where a `fake` really is, and the second resolves it
+physically — one operand needing both readings, which is why the two kinds of
+`..` cannot be split into two passes; the four columns that never take the
+first step refuse the row outright. **`deep/../..` is what rules out "a
+leading `..`"**: the first `..` pops a component the operand put there and
+resolves, the second reaches `$PWD` and cancels, and the answer is decided per
+component. `t/sub/fake/deep` with a bare `..` is the row that looks like
+agreement and is not evidence, since the two readings coincide one level down.
+
+A cancellation looks the built name **up** and does not fall back on the
+descriptor the shell is holding: measured the same day in the renamed fixture,
+`cd -P ..` from `d/s` lands in the **impostor** in that column and follows the
+descriptor into `…/e` in bash, zsh and dash. And the refusal names the path the
+cancellation built — `cd -P ../real` says `t/sub/real`, not the operand —
+while an operand that failed on its own components is blamed as written, as
+`cd -P nosuch/..` is.
+
+The issue's own table had `cd -P deep/../..` agreeing with the other columns
+and a later comment had it as `t/sub`; re-measured on both builds it is `t`,
+which is what the issue said and what the rule above produces.
 
 `rcquotes` left last and it is the first of these that is not a semantics
 question at all: it decides how a single-quoted *word is read*, so it moves

@@ -6129,8 +6129,8 @@ type Semantics struct {
 	// the 2012 build and 0 on 1.0.10, and `cd real/..` is 1 on both where
 	// this shell answers 0 — that last one for the same reason it did before
 	// this axis existed, since the retry from the held descriptor arrives
-	// whatever the operand was. Those rows are ksh's alone and are left to
-	// #4628, which is about the same column's `-P`.
+	// whatever the operand was. Those rows are ksh's alone and are not
+	// modeled.
 	//
 	// **The looking is a stat of the component and not a walk through it.**
 	// Measured the same day with a directory at mode 500 and one at mode 000:
@@ -6141,8 +6141,13 @@ type Semantics struct {
 	// unaffected by it.
 	//
 	// It is asked only where a `..` is present, so an ordinary `cd` puts no
-	// question, and it is not asked under `-P` at all: there the whole path is
-	// walked with its `..` in place and the panel is unanimous.
+	// question. **It is asked under `-P` as well**, where it used not to be:
+	// ksh93 cancels a `..` that reaches past the operand into the logical
+	// `$PWD` there exactly as it does without the letter, and bash 5.3, zsh,
+	// dash and BusyBox ash all walk the whole path with its `..` in place.
+	// See Runner.physicalPathCancelingIntoTheDirectoryHeld for that grid,
+	// measured over all five columns, and for why the two kinds of `..` have
+	// to interleave (#4628).
 	//
 	// The `/nosuch/..` row is one mechanism and not a second question, and it
 	// is the row this shell used to answer *both* ways: an absolute operand

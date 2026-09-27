@@ -6,6 +6,7 @@ package interp
 import (
 	"fmt"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -189,7 +190,7 @@ func (r *Runner) listedAssignmentHead(v string, place ListedValuePlace) (head, t
 		return "", "", false
 	}
 	eq := strings.IndexByte(v, '=')
-	if eq <= 0 || !isNameLike(v[:eq]) {
+	if eq <= 0 || !listedNameLike(v[:eq]) {
 		return "", "", false
 	}
 	sep := "="
@@ -358,6 +359,16 @@ func (r *Runner) listedNeedsDollar(v string) bool {
 		return true
 	}
 	if r.sem().ListedNonAsciiIsOrdinary == Yes {
+		if r.sem().ListedNonAsciiIsBareOnlyWhenAlphabetic == Yes &&
+			nonAlphabeticAboveAscii(v) {
+			// The same column narrows *which* characters above ASCII are
+			// ordinary to the ones it calls alphabetic — see
+			// Semantics.ListedNonAsciiIsBareOnlyWhenAlphabetic, which holds
+			// the sweep. A property of the character where the rule below is
+			// a property of what stands in front of it, and both reach the
+			// same form, so both are asked here.
+			return true
+		}
 		if r.sem().ListedNonAsciiTakesTheDollarFormAfterANonName == Yes &&
 			nonAsciiAfterANonName(v) {
 			// One column reaches the form for a character it would otherwise
@@ -442,14 +453,141 @@ func nonAsciiAfterANonName(v string) bool {
 			}
 			continue
 		}
-		// A digit only behind something, which is what makes `9é` reach the
-		// form where `a9é` does not.
-		b := byte(c)
-		if nameChar := isLetter(b) || b == '_' || (isDigit(b) && i > 0); !nameChar {
+		if !listedNameChar(c, i == 0) {
 			name = false
 		}
 	}
 	return false
+}
+
+// listedNameChar reports whether one character may stand in a **name** at the
+// position a listing found it, which is the question three of these rules ask
+// and used to answer three ways.
+//
+// A character above ASCII is one, measured rather than assumed — see
+// listedNameLike, where the rows are — and a digit only behind something,
+// which is what makes `9é` reach the `$'...'` form where `a9é` does not.
+//
+// Not isNameLike's character set, deliberately: that one also answers for
+// arithmetic and for a parameter's name, where what counts as a name is the
+// *parser's* question and a character above ASCII is not one. This is the
+// listing's, which is a question about a value's text (#4830).
+func listedNameChar(c rune, first bool) bool {
+	if c >= utf8.RuneSelf {
+		return listedCharacterIsAlphabetic(c)
+	}
+	b := byte(c)
+	return b == '_' || isLetter(b) || (isDigit(b) && !first)
+}
+
+// listedNameLike is listedNameChar over a whole run of text: whether a
+// listing's rules would call this a name.
+//
+// **A character above ASCII is a name character**, measured 2026-09-27 on
+// ksh93u+ 2012-08-01 from a script file under `env -i PATH=/usr/bin:/bin
+// LC_ALL=en_US.UTF-8` — the locale matters and is stated because the same
+// binary under `LC_ALL=C` spells every one of these out byte by byte and the
+// question cannot be put there at all:
+//
+//	written    listed
+//	v='é=a'    v=é=a      a bare assignment head, so `é` is a name
+//	v='é#a'    v='é#a'    a `#` with a name in front of it, so quoted
+//	v='é9é=a'  v=é9é=a    and a digit behind one is still a name
+//
+// The two rules go opposite ways over the same character, which is what says
+// they are one fact rather than two: a leading `name=` is written bare, and a
+// `#` is left bare only where the text in front of it is *not* a name.
+//
+// The ASCII controls, measured in the same run and all six already agreeing
+// before this predicate existed: `a=b` bare, `=x` and `1=2` quoted, `a#b`
+// quoted, `1#b` and `16#ff` bare.
+//
+// The leading and trailing blanks are trimmed for isNameLike's reason and are
+// left as that function had them.
+func listedNameLike(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	for i, c := range s {
+		if !listedNameChar(c, i == 0) {
+			return false
+		}
+	}
+	return true
+}
+
+// nonAlphabeticAboveAscii reports whether the value holds a character above
+// ASCII that the shell does not call **alphabetic**.
+//
+// The rule one column reaches `$'...'` by for the character itself — see
+// Semantics.ListedNonAsciiIsBareOnlyWhenAlphabetic, where the sweep and the
+// alternatives it rules out are.
+//
+// **Every such character is judged and not only the first**, which is the
+// same shape nonAsciiAfterANonName has and is measured the same way: `x°y` is
+// `$'x\u[b0]y'` and `é°` is `$'\u[e9]\u[b0]'`, where the `é` on its own
+// would have stood bare. One character failing takes the whole value into the
+// form, and then every one of them is spelled out.
+//
+// Asked of inWideClass rather than of unicode.IsLetter directly, because the
+// reading really is the shell's own character class and the two answers must
+// not drift: where that class widens or narrows, this follows it. The class
+// this engine ships is not byte-for-byte the one ksh93u+ ships — that shell's
+// alpha is an older, wider table — and the difference is the class's question
+// rather than the listing's.
+func nonAlphabeticAboveAscii(v string) bool {
+	for _, c := range v {
+		if c >= utf8.RuneSelf && !listedCharacterIsAlphabetic(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// listedCharacterIsAlphabetic is the alphabetic class the listing reads: the
+// Unicode **Alphabetic** derived property — letters, the letter-numbers, and
+// the marks and enclosed letters Other_Alphabetic adds — together with the
+// decimal digits.
+//
+// Measured rather than chosen. A sweep of 683 code points across twenty
+// blocks was listed one character at a time on ksh93u+ 2012-08-01 under
+// `LC_ALL=en_US.UTF-8` and then asked `[[ $v == [[:alpha:]] ]]` in the same
+// run: the two agree on **all 683**, so the reference reads one class for
+// both questions. This predicate reproduces that class on 644 of the 683 and
+// on every character either issue names. What the alternatives cost, over the
+// same sweep: `unicode.IsLetter` alone misses 78 — including `٣`, `Ⅷ` and
+// `Ⓐ`, which are bare there and are three of the rows this is for — the
+// Unicode Alphabetic property without the digits misses 54, `L*` with `Nl`
+// and `Nd` misses 49, and this platform's `iswalpha` in the same locale
+// misses 78.
+//
+// **The 39 that are left are that shell's table's vintage and not a rule.**
+// Thirty of them are characters this predicate calls alphabetic and ksh93u+
+// does not, and they are what Unicode added after the table that binary
+// carries was built: the Greek at U+0370, U+0373, U+0376, U+037C, U+037F,
+// U+03F7, U+03FA and U+03FD, the modifier letters at U+02BA and U+02C6, the
+// Arabic marks at U+0615 and U+064D, the Latin subscripts at U+2090, and
+// U+063F, U+213C, U+214E, U+2184, U+2187 and U+1D7CE. Nine go the other way
+// — the Thai tone marks U+0E48 and U+0E4C and the parenthesized letters at
+// U+249C..U+24B4 are bare there and are not in Other_Alphabetic here — and
+// those are the same fact read from the other end. Reproducing them would
+// mean shipping that binary's own table, which is not something this tree can
+// compute; the sweep that says so is 309 rows wrong before this predicate and
+// 39 after.
+//
+// **Not interp/pattern.go's inWideClass, deliberately.** That function
+// answers `[[:alpha:]]` for a *pattern*, and this engine answers it the way
+// the three columns that agree do — a decision recorded there with ksh93's
+// wider answer beside it in the corpus. The reference reads one class for the
+// pattern and the listing both; this engine reads two, and the listing's is
+// the one measured here. If that class is ever keyed on the dialect, these
+// become one call.
+func listedCharacterIsAlphabetic(c rune) bool {
+	return unicode.IsLetter(c) ||
+		unicode.Is(unicode.Nl, c) ||
+		unicode.Is(unicode.Other_Alphabetic, c) ||
+		unicode.Is(unicode.Nd, c)
 }
 
 // hasStrayByte is strayBytes asked of the whole value, for the question of
@@ -567,7 +705,7 @@ func tildeWouldExpandAt(v string, i int) bool {
 // in front of, or one that opens the value — where a comment would begin.
 func (r *Runner) hashIsAllThatNeedsQuoting(v string) bool {
 	hash := strings.IndexByte(v, '#')
-	if hash <= 0 || isNameLike(v[:hash]) {
+	if hash <= 0 || listedNameLike(v[:hash]) {
 		return false
 	}
 	for i := 0; i < len(v); i++ {

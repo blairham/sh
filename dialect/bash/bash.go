@@ -970,6 +970,11 @@ func Semantics() interp.Semantics {
 	// and `v="a-é"` lists bare (#4807).
 	s.ListedNonAsciiIsSpelledAsACodePoint = interp.No
 	s.ListedNonAsciiTakesTheDollarFormAfterANonName = interp.No
+	// And nothing about the character itself narrows it either: measured
+	// 2026-09-27 on 5.3.20 under `LC_ALL=en_US.UTF-8`, `°`, `€`, `×`, a
+	// non-breaking space, `Ⓐ` and an emoji all list bare, where ksh93 takes
+	// every one but `Ⓐ` into `$'...'` (#4829).
+	s.ListedNonAsciiIsBareOnlyWhenAlphabetic = interp.No
 	// And no bare assignment head: the `=` rule here is the character, not
 	// a prefix, so `x=y=z` is bare rather than `x='y=z'`.
 	s.ListedAssignmentPrefixIsBare = interp.No

@@ -847,6 +847,9 @@ func Semantics() interp.Semantics {
 	// — there is no form here for a character to be taken into.
 	// unanswered ListedNonAsciiIsOrdinary: the same always-quoting style,
 	// and no `$'...'` listing here for the escaped half of the question.
+	// unanswered ListedNonAsciiIsBareOnlyWhenAlphabetic: nothing is bare
+	// here, so there is no narrower set of characters for the question to be
+	// about (#4829).
 	// unanswered ListedAssignmentPrefixIsBare: a bare head is only visible
 	// in a listing that leaves anything bare, and this one leaves nothing.
 	// unanswered OperatorAfterTheSubscriptListingIsBad: `${!name[@]}` is a

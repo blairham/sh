@@ -12808,6 +12808,53 @@ type Semantics struct {
 	// ash quote whatever they are given and are not asked (#4807).
 	ListedNonAsciiTakesTheDollarFormAfterANonName Answer
 
+	// ListedNonAsciiIsBareOnlyWhenAlphabetic leaves a character above ASCII
+	// unquoted only where the shell calls it **alphabetic**, and reaches for
+	// `$'...'` for every other one whatever stands around it.
+	//
+	// ksh93 alone, and it is the property of the *character* where the axis
+	// above is a property of what stands in front of it. Both decide the same
+	// thing, so both are asked in listedNeedsDollar. Measured 2026-09-27 on
+	// `/bin/ksh`, Version AJM 93u+ 2012-08-01, from a script file under `env
+	// -i PATH=/usr/bin:/bin LC_ALL=en_US.UTF-8` — the locale is stated
+	// because the same binary under `LC_ALL=C` spells every character above
+	// ASCII out byte by byte and the question cannot be put there at all:
+	//
+	//	bare      é  µ  å  中  ٣  ʰ  Ⅷ  Ⓐ  α  д  א  ก  Ａ
+	//	$'...'    €  °  ²  ½  ×  U+00A0  U+00AD  U+0301  😀
+	//
+	// **The split is not a Unicode general category**, which the second half
+	// of each row says: `Ⓐ` is `So` and is bare, `°` and `😀` are `So` and
+	// are not, `×` is `Sm` and is not. Nor is it `unicode.IsLetter`, which
+	// fits every row above but `Ⓐ` and `٣`.
+	//
+	// **It is the shell's own `[[:alpha:]]`, measured and not inferred.** A
+	// sweep of 683 code points across twenty blocks — Latin-1, Latin
+	// Extended-A, modifier letters, combining marks, Greek, Cyrillic, Hebrew,
+	// Arabic and its digits, Thai, punctuation, superscripts, currency,
+	// letterlike forms, number forms, arrows, math operators, enclosed
+	// alphanumerics, box drawing, CJK, fullwidth forms and four planes above
+	// the BMP — was listed one character at a time and then asked `[[ $v ==
+	// [[:alpha:]] ]]` in the same run. The two agree on **all 683**. The
+	// nearest alternatives do not: that shell's own `[[:alnum:]]` misses 63,
+	// this platform's `iswalnum` in the same locale misses 63, `iswalpha`
+	// misses 78, Unicode `L*` misses 78 and `L*` with `Nd` misses 63.
+	//
+	// So the reading is `alpha`, and the residue is a question about the
+	// **character class** rather than about the listing: that shell's alpha
+	// is an older table than this engine's, wider in places — U+0660..U+0669
+	// and the Thai digits, the Roman numerals at U+2160, the circled and
+	// parenthesized letters at U+249C — and narrower in others, missing the
+	// letters Unicode added after it was built, such as U+0370 and U+2090.
+	// interp/pattern.go's inWideClass already records that ksh93's alpha is
+	// the wider one; this axis reads that predicate rather than a second copy
+	// of it, so the two answers cannot drift apart.
+	//
+	// bash 5.3.20 and zsh 5.9.2 answer `No`: every character in both rows
+	// above lists bare in each of them, measured in the same run. dash and
+	// BusyBox ash quote whatever they are given and are not asked (#4829).
+	ListedNonAsciiIsBareOnlyWhenAlphabetic Answer
+
 	// ListedAssignmentPrefixIsBare writes a listed value's leading `name=`
 	// without quotes and quotes what follows on its own.
 	//

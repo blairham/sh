@@ -92,47 +92,49 @@ func TestAnUnnamedPipelineStatusIsNotAParameter(t *testing.T) {
 	}
 }
 
-// A removed name is not described, and the record is no exception under the
-// answer that ends it.
+// The removal axis reaches the *description* and not only the read.
 //
-// **Only that answer is asserted here, and the omission is the point.** The
-// other one keeps the producer alive across the removal, and the three unions
-// above still answer "no such parameter" for it — each opens with the
-// `removed` check, in front of anything that could ask a producer. That is
-// right for every other producer in this engine, which is measured rather than
-// assumed: a removed dynamic scalar and a removed dynamic array both stop
-// being parameters under either answer, and so does an ordinary variable. It
-// is wrong for this one name under one answer, and it is #4877 — left alone
-// here because the removal rule is load-bearing for every other name and
-// moving it is not what #4865 is about.
-func TestARemovedRecordIsNotDescribedUnderTheAnswerThatEndsIt(t *testing.T) {
-	r := recordedRunner(t, `false | true; unset P`, "P", func(s *Semantics) {
-		s.UnsetEndsTheProducedPipelineStatus = Yes
-	})
-	if _, ok := r.ParameterAttributes("P"); ok {
-		t.Error("after unset, ParameterAttributes(P) answers, want no such parameter")
-	}
-	if r.ParameterIsNamed("P") {
-		t.Error("after unset, ParameterIsNamed(P) = true, want false")
-	}
-	if slices.Contains(r.ParameterNames(), "P") {
-		t.Error("after unset, P is among ParameterNames(), want it gone")
-	}
-	// The control: with nothing removed, the same runner describes it — so
-	// the three answers above are the removal and not a shell that cannot
-	// describe the record at all.
-	live := recordedRunner(t, `false | true`, "P", func(s *Semantics) {
-		s.UnsetEndsTheProducedPipelineStatus = Yes
-	})
-	if _, ok := live.ParameterAttributes("P"); !ok {
-		t.Error("without the unset, ParameterAttributes(P) reports no such parameter")
-	}
-	// And the neighbors, so that "a removed producer stops being a
-	// parameter" is stated as the engine's rule rather than as this name's.
-	for _, name := range []string{"SCAL", "ARR"} {
-		gone := recordedRunner(t, `unset `+name, "P", nil)
-		if _, ok := gone.ParameterAttributes(name); ok {
-			t.Errorf("after unset, ParameterAttributes(%s) answers, want no such parameter", name)
-		}
+// One answer ends the producer at `unset` and the other keeps it, and until
+// #4877 five separate sites answered "no such parameter" for a removed name in
+// front of anything that could ask. That is right for every other producer
+// here — the rows below assert it in the same runner — and wrong for this one
+// under the answer that keeps it.
+func TestTheRemovalAxisReachesTheDescriptionOfTheRecord(t *testing.T) {
+	for _, tc := range []struct {
+		a    Answer
+		want bool
+	}{
+		{Yes, false},
+		{No, true},
+	} {
+		t.Run(tc.a.String(), func(t *testing.T) {
+			r := recordedRunner(t, `false | true; unset P`, "P", func(s *Semantics) {
+				s.UnsetEndsTheProducedPipelineStatus = tc.a
+			})
+			if _, ok := r.ParameterAttributes("P"); ok != tc.want {
+				t.Errorf("after unset, ParameterAttributes(P) ok = %v, want %v", ok, tc.want)
+			}
+			if got := r.ParameterIsNamed("P"); got != tc.want {
+				t.Errorf("after unset, ParameterIsNamed(P) = %v, want %v", got, tc.want)
+			}
+			if got := slices.Contains(r.ParameterNames(), "P"); got != tc.want {
+				t.Errorf("after unset, P among ParameterNames() = %v, want %v", got, tc.want)
+			}
+			if got := r.DynamicParameter("P"); got != tc.want {
+				t.Errorf("after unset, DynamicParameter(P) = %v, want %v", got, tc.want)
+			}
+			// The controls, in the same runner and under the same answer: a
+			// removed dynamic scalar and a removed dynamic array stop being
+			// parameters whichever way the axis is answered, because the axis
+			// is about one name.
+			for _, name := range []string{"SCAL", "ARR"} {
+				gone := recordedRunner(t, `unset `+name, "P", func(s *Semantics) {
+					s.UnsetEndsTheProducedPipelineStatus = tc.a
+				})
+				if _, ok := gone.ParameterAttributes(name); ok {
+					t.Errorf("after unset, ParameterAttributes(%s) answers, want no such parameter", name)
+				}
+			}
+		})
 	}
 }

@@ -302,7 +302,14 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		producedListsElements = pd.ListsItsElements
 		attributed = true
 	}
-	if r.removed[name] {
+	// The one producer that outlives an `unset`, under the answer that says it
+	// does — asked in front of the removal rather than behind it, because the
+	// removal is what the axis is *about*. Every other producer here really
+	// does end with the name and is left to the block below: `unset RANDOM`
+	// and `unset LINENO` are `declare: … : not found` at 1 in bash 5.3.20 and
+	// here, exactly, which is the control that makes this one name's
+	// exemption a measurement rather than a hole (#4877).
+	if r.removedForDescription(name) {
 		// The name holds nothing — `unset` took the value away, or a
 		// declaration hid it — but the compound attribute a declaration
 		// recorded outlives the value, and it is the store that carries it.

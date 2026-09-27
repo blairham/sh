@@ -53,3 +53,22 @@ func TestThePipelineStatusDescribesItself(t *testing.T) {
 		})
 	}
 }
+
+// And the other answer of the same axis, which is this shell's: `unset` ends
+// the producer here, so the description goes with it.
+//
+// The pair with dialect/bash's TestUnsettingThePipelineStatusLeavesItsDescription
+// is what makes either one evidence about the axis rather than about the
+// mechanism: the same removal, the same record, opposite answers, measured in
+// the two references (#4877).
+func TestUnsettingThePipelineStatusEndsItHere(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `true
+unset pipestatus
+print -r -- "[${(t)pipestatus}][${+pipestatus}][$pipestatus]"
+false | true
+print -r -- "and a later pipeline does not bring it back: [$pipestatus][${+pipestatus}]"`)
+	want := "[][0][]\nand a later pipeline does not bring it back: [][0]\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}

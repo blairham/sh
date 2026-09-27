@@ -245,6 +245,44 @@ func (r *Runner) shadowIsHidden(name string) bool {
 	return r.hideInScope[name]
 }
 
+// tieDescribesTheBinding reports whether the tie a name carries is the
+// *binding* a read reaches, which is what a type query writes `tied` for.
+//
+// The tie is kept per **name** — see Runner.tied — and that is right for the
+// shell's own `PATH`/`path`, which is the name and the binding at once. It is
+// wrong for a local that a hide-in-scope declaration stood in front of: that
+// declaration makes an ordinary parameter which merely happens to be spelled
+// like the shell's, and the pair it was spelled after is not its. Measured on
+// zsh 5.9.2, 2026-09-27, under `-f` from a script file:
+//
+//	f(){ typeset -h path; print ${(t)path} }    scalar-local-hide
+//	f(){ local   -h path; print ${(t)path} }    scalar-local-hide
+//	f(){ private -h path; print ${(t)path} }    scalar-local-hide-special
+//	f(){ private -h HOME; print ${(t)HOME} }    scalar-local-hide-special
+//	f(){ private -h v;    print ${(t)v}    }    scalar-local-hide-special
+//	typeset -h path;      print ${(t)path}      array-tied-hide-special
+//
+// The last row is the one that shapes this rather than the first three. At
+// the top level the letter is an attribute and there is no shadow for it to
+// detach, so the tie is still the binding's and the word still says so — the
+// same "only where a shadow stands" the freeze half records in
+// freezeSurvivesAShadow, and the reason this asks
+// localInTheInnermostScope first. Rows four and five are the controls that
+// make this a statement about the *tie*: the shell's own untied name and an
+// ordinary name are already right and stay right.
+//
+// The value either side of the word was already right and is untouched: the
+// hidden local starts empty and the shell's own `path` is back at the return.
+func (r *Runner) tieDescribesTheBinding(name string) bool {
+	if _, tied := r.tied[name]; !tied {
+		return false
+	}
+	if !r.localInTheInnermostScope(name) {
+		return true
+	}
+	return !r.shadowIsHidden(name)
+}
+
 // hidesItsTie reports whether either half of a tie stands under a hidden
 // shadow.
 //

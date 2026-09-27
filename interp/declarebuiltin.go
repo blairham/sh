@@ -2816,6 +2816,55 @@ func (r *Runner) localCell(name string) bool {
 	return saved
 }
 
+// localInAnyScope reports whether *some* live scope has taken the name over,
+// so the cell being read belongs to a function call rather than to the shell
+// itself — this one or one that is still on the stack below it.
+//
+// This is a different question from localCell's and it has exactly one
+// caller: the word a type query writes. Measured on zsh 5.9.2, 2026-09-27,
+// three frames deep —
+//
+//	inner() { print "inner: ${(t)ht}" }
+//	outer() { inner }
+//	top()   { typeset -a ht=(top level); outer }
+//	top                                        inner: array-local
+//
+// and a true global read the same way is plain `array`, so the word is about
+// whether the binding is any call's and not about whose.
+//
+// **A listing is not this question and must not be given this answer.** In
+// that same callee `typeset -p ht` writes `typeset -g -a ht=( top level )` in
+// the reference — so the shell's own two answers disagree about one binding,
+// and a fix keyed on making them agree would make the listing wrong. That is
+// why this stands beside localCell rather than widening it: localCell is what
+// a *declaration* asks, and a declaration lands in the innermost scope.
+func (r *Runner) localInAnyScope(name string) bool {
+	for i := len(r.scopes) - 1; i >= 0; i-- {
+		sc := r.scopes[i]
+		if sn, sealed := sc.privateSealed[name]; sealed {
+			// This frame is looking *past* an enclosing call's private at
+			// whatever that declaration displaced, so neither this scope nor
+			// the one holding the private describes the binding being read.
+			// Measured on zsh 5.9.2, 2026-09-27, with the module loaded:
+			// `v=9; g(){ print ${(t)v} }; f(){ private v=1; g }; f` is plain
+			// `scalar` there, where the same pair with `local v=1` is
+			// `scalar-local`. The walk therefore resumes outside the holder
+			// rather than stopping, since what the private displaced may be
+			// a *caller's* local and is then local like any other.
+			j := i - 1
+			for j >= 0 && r.scopes[j] != sn.holder {
+				j--
+			}
+			i = j
+			continue
+		}
+		if _, saved := sc.saved[name]; saved {
+			return true
+		}
+	}
+	return false
+}
+
 // inconsistentTypeRefused reports whether a declaration's plain word is
 // refused for landing on a cell that is really holding an array or a keyed
 // table, having said so and ended the script — see

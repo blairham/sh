@@ -64,8 +64,10 @@ const (
 // gap.
 type ParameterAttributes struct {
 	Kind ParameterKind
-	// Local is a name a declaration in the *current* function scope
-	// shadowed, so the cell is that call's and goes away with it.
+	// Local is a name a declaration in *some* live function scope shadowed,
+	// so the cell is that call's and goes away with it. A caller's local
+	// read from a callee is local: the binding the read reaches is still a
+	// call's.
 	Local    bool
 	Exported bool
 	Readonly bool
@@ -129,11 +131,16 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 	}
 	a := ParameterAttributes{
 		Kind: r.parameterKind(name),
-		// Either a declaration in the current scope shadowed the name, or a
+		// Either a declaration in *some* live scope shadowed the name, or a
 		// call opened it and said so — see Runner.MarkLocal. The scope stack
 		// cannot answer for the second, because a produced parameter arrives
 		// and leaves without one being entered.
-		Local: r.localCell(name) || r.localMarked[name],
+		//
+		// Every scope and not the innermost: the word describes the binding a
+		// read reaches, and a caller's local is that binding for every frame
+		// under it. See Runner.localInAnyScope, which also records why a
+		// listing is deliberately left answering something else.
+		Local: r.localInAnyScope(name) || r.localMarked[name],
 		// isExported rather than the table, because the table is a
 		// tri-state and a name the *environment* supplied is spoken for by
 		// neither entry: reading it directly reported `$PATH` as an ordinary
@@ -173,7 +180,7 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		Provided: r.DynamicParameter(name) || r.AbsentParameter(name) ||
 			r.shellOwnParameter(name) || r.privateHere(name),
 	}
-	_, a.Tied = r.tied[name]
+	a.Tied = r.tieDescribesTheBinding(name)
 	if w, ok := r.fieldWidth[name]; ok {
 		// A width a *value* has not taught yet is still the attribute: the
 		// letter is what the name carries, and the number is what a listing

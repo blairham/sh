@@ -1146,6 +1146,20 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 		}
 		o.tilde = true
 	}
+	// And a group further along asking for an anchor, which is a question
+	// about where this *piece* sits in the subject rather than about where
+	// the group stands — the same comparison matchTilde makes for a group at
+	// the front, and asked here for the reason tildeHereAnchors gives.
+	//
+	// Outside the block above because that one is cleared once a front group
+	// has been read, and a pattern may carry both: `~(i)z~(r)ab` is a fold
+	// at the front and an anchor one character along.
+	if o.tildeFold {
+		if left, right := tildeHereAnchors(pattern); (left && base != 0) ||
+			(right && base+len(piece) != len(subject)) {
+			return false, matchReport{}
+		}
+	}
 	w := o.where
 	if w == nil {
 		// A caller that built its options by hand rather than through
@@ -1400,18 +1414,19 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 		// A ksh `~(…)` group is read where it stands, and before splitGroup
 		// for the reason a `(#i)` is read before it: the scan would
 		// otherwise take the group's own parentheses for an alternation.
-		// Only the sense signs and `i` are honored here — see
-		// splitTildeFoldGroup for the rows, and for why a flavor letter is
-		// left as the text it already was.
+		// What the walk does with one is **consume it**, and only `i` changes
+		// anything it carries — see splitTildeHereGroup for what each letter
+		// asks and where the rest of them are answered, and for why a flavor
+		// letter is left as the text it already was.
 		//
 		// Outside the `o.extended` block above because the two dialects that
 		// have a mid-pattern option group are not the same dialect: `(#i)`
 		// is one shell's and behind that shell's option, and this is the
 		// other's and behind the grammar flag that let the `(` into the word.
 		if o.tildeFold {
-			if fold, on, ok := splitTildeFoldGroup(p); ok {
+			if g, ok := splitTildeHereGroup(p); ok {
 				_, rest, _ := splitTildeModifier(p)
-				o = tildeFoldHere(o, fold, on)
+				o = tildeFoldHere(o, g.foldSet, g.fold)
 				pp, p = pp+len(p)-len(rest), rest
 				continue
 			}

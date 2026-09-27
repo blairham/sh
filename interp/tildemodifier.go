@@ -900,12 +900,91 @@ func tildePrefixModifier(pattern string, hasGroup bool) (tildeModifier, bool) {
 // the far end is free and greed lengthens the piece; a suffix trim is pinned
 // at the end, so what greed would lengthen is already fixed and the shell
 // still takes the suffix that begins latest.
+//
+// **The group need not be at the front**, which is #4893's first row:
+// `${v#a~(g)*X}` is `c` there too, so the letter is read where it stands. Each
+// group the walk can consume is read in the order they are written and the
+// last one to mention `g` decides, which is the same rule readTildeModifier
+// has for a letter written twice inside one group — `${v#~(g)a~(-g)*X}` is
+// `bXc`.
+//
+// What a group mid-pattern can ask for is bounded by what stands in front of
+// it, and tildeGreedyReaches is that bound.
 func tildeGreedyTrim(pattern string, prefix bool, o patternOpts) bool {
-	if !prefix {
+	if !prefix || !o.tilde {
 		return false
 	}
-	m, ok := tildePrefixModifier(pattern, o.tilde)
-	return ok && m.greedy
+	greedy := false
+	if m, ok := tildePrefixModifier(pattern, o.tilde); ok {
+		greedy = m.greedy
+	}
+	for i := 1; i < len(pattern); i++ {
+		if pattern[i] == '\\' {
+			i++
+			continue
+		}
+		if pattern[i] != '~' {
+			continue
+		}
+		g, ok := splitTildeHereGroup(pattern[i:])
+		if ok && g.greedySet && tildeGreedyReaches(pattern[:i]) {
+			greedy = g.greedy
+		}
+	}
+	return greedy
+}
+
+// tildeGreedyReaches reports whether a `~(g)` standing behind this much
+// pattern still makes the trim greedy.
+//
+// It does not where a **bare** `*` or `?` stands in front of it, and that is
+// measured rather than reasoned — `g` is "the match takes as much subject as
+// it can from where it begins", and a wildcard already begun has settled how
+// much it took. Measured on ksh93u+ 2012-08-01, 2026-09-27, with `v=aXbXc`,
+// where `${v#*X}` is `bXc` and `${v##*X}` is `c`:
+//
+//	${v#~(g)*X}        c     nothing in front
+//	${v#a~(g)*X}       c     a literal does not stop it
+//	${v#[aX]~(g)*X}    c     nor does a bracket expression
+//	${v#@(a|q)~(g)*X}  c     nor a group, or `+(a)`, `!(q)`, `?(q)`, `*(q)`
+//	${v#a~(g)?*X}      c     and a wildcard *behind* it is inside its reach
+//	${v#?~(g)*X}       bXc   a bare `?` in front stops it
+//	${v#*~(g)X}        bXc   and so does a bare `*`
+//	${v#a*~(g)X}       bXc
+//	${v#*X~(g)}        bXc
+//
+// The `*(q)` and `?(q)` rows are what say the noun is a *wildcard* rather
+// than the character: those two spell a quantifier, the `*` and `?` are the
+// group's and not the subject's, and the trim is greedy on both. A wildcard
+// inside a group's body is left out for the same reason and is a limit rather
+// than a reading — nobody has measured `@(a*)~(g)*X`.
+func tildeGreedyReaches(front string) bool {
+	depth := 0
+	for i := 0; i < len(front); i++ {
+		switch front[i] {
+		case '\\':
+			i++
+		case '[':
+			if end := globBracketEnd(front, i); end >= 0 {
+				i = end
+			}
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case '*', '?':
+			if i+1 < len(front) && front[i+1] == '(' {
+				// The quantifier of a group rather than a wildcard.
+				continue
+			}
+			if depth == 0 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // tildeGlobPattern reports whether a field carries a `~(…)` group that makes

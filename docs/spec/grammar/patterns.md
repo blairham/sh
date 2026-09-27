@@ -2522,12 +2522,72 @@ the other way if the flavor reached backward over the whole pattern.
 ksh's own glob, which is the language the walk is already in, so the group is
 consumed where it stands and `[[ zab == z~(K)a* ]]` matches.
 
-Three shapes are measured and **not** read here, each with its own issue
-rather than an approximation: a flavor group **inside a pattern group**,
+Two shapes are measured and **not** read here, each with its own issue rather
+than an approximation: a flavor group **inside a pattern group**,
 `@(z~(E)a)`, where the text in front is not a glob anybody can translate on
-its own (#4892); `~(g)`, `~(l)` and `~(r)`, which are about the span a match
-takes rather than the language and want plumbing of their own (#4893); and
-`\d` and its kin inside `~(P)`, which RE2 has not (#4894).
+its own (#4892); and `\d` and its kin inside `~(P)`, which RE2 has not
+(#4894).
+
+### `g`, `l` and `r` are read where they stand as well
+
+These three are not flavors and not the fold: `g` makes a prefix trim take
+the longest piece its pattern will match, and `l` and `r` pin the match to an
+end of the subject. They were read at the head of a pattern and nowhere else,
+on the reasoning that a branch cannot change which span a match takes halfway
+along — which is right about the mechanism and was wrong about the shell.
+Measured on ksh93u+ 2012-08-01, 2026-09-27, `-c` under `env -i` with a
+scratch `HOME`:
+
+| probe | ksh93 |
+| --- | --- |
+| `v=aXbXc; ${v#~(g)*X}` *(control)* | `c` |
+| `v=aXbXc; ${v#*X}` *(control)* | `bXc` |
+| `v=aXbXc; ${v#a~(g)*X}` | `c` |
+| `[[ zab == ~(l)zab ]]` *(control)* | yes |
+| `[[ zab == z~(l)ab ]]` | yes |
+| `[[ zab == z~(r)ab ]]` | yes |
+
+The first two controls are a pair rather than one: the greedy row and the
+plain row differ, so the probe can see the letter fire and can see it not
+fire.
+
+What the walk does with such a group is **consume** it; the letters reach
+their answers from outside the walk, and each for its own reason.
+
+`l` and `r` are a question about where the *piece* a surface handed over sits
+in the subject — the comparison `matchTilde` already made for a group at the
+head — so they are asked once for the whole pattern rather than where the
+group stands. A substitution is where `l` has something to refuse, since the
+span it chooses need not start the subject: `v=abcd; ${v/bc/X}` is `aXd`,
+`${v/b~(l)c/X}` is `abcd`, and `${v/b~(-l)c/X}` is `aXd` again. A **suffix**
+trim ignores both there and refuses here, which is a divergence this reading
+inherits from the head group rather than one it introduces: `${v%~(l)d}` is
+`abc` in ksh93u+ and `abcd` here.
+
+`g` reaches a caller outside the matcher, and **what stands in front of the
+group bounds it**. A bare `*` or `?` takes the greed away and a bracket
+expression, a pattern group or a quantifier does not, which is what says the
+noun is a *wildcard* rather than the character. Against `v=aXbXc`, where
+`${v#*X}` is `bXc` and `${v##*X}` is `c`:
+
+| written | ksh93 | |
+| --- | --- | --- |
+| `${v#a~(g)*X}` | `c` | a literal in front does not stop it |
+| `${v#[aX]~(g)*X}` | `c` | nor a bracket expression |
+| `${v#@(a\|q)~(g)*X}` | `c` | nor a pattern group |
+| `${v#?~(g)*X}` | `bXc` | a bare `?` in front does |
+| `${v#*~(g)X}` | `bXc` | and so does a bare `*` |
+| `${v#*(q)~(g)*X}` | `c` | where the same character as a quantifier does not |
+| `${v#@(a*)~(g)*X}` | `c` | and neither does one inside a group's body |
+
+`N` is consumed alongside them and asks for nothing where it stands, which is
+measured rather than an omission: with `za` and `zb` on disk, `z~(N)a` names
+`za` — so the group is read — while `z~(N)z*` is the word it was written as,
+where an `N` that reached the word would have deleted it.
+
+A group holding a letter ksh93 has and this shell does not answer is still
+the ordinary characters it was written with, so `[[ zab == z~(M)ab ]]`
+matches there and does not here. That is its own row rather than this one's.
 
 ### And the group turns what follows it into the flavor's text
 

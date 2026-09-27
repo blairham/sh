@@ -64,6 +64,9 @@ func (r *Runner) childReaped() {
 	if !r.trapsChildDeath() {
 		return
 	}
+	if !r.childConditionCountsThisChild() {
+		return
+	}
 	if r.inSubshell || r.traps != nil || r.forkedForABackgroundJob {
 		// Not the shell at the top, so nothing is recorded: what a subshell
 		// reaps are *its* children, and the one arrival the shell gets for
@@ -116,6 +119,25 @@ func (r *Runner) childReapedByTheShell() {
 		return
 	}
 	r.recordChildDeath()
+}
+
+// childConditionCountsThisChild reports whether a child the shell reaped in
+// the foreground raises the condition at all.
+//
+// Only this path asks it. A **job** raises the condition in every column, so
+// childReapedByTheShell — which is where a `&` job, a coprocess and a process
+// substitution end — never reaches here and never asks; what is in question is
+// the child a foreground external command, a pipeline element, a substitution
+// or a subshell leaves behind. See
+// Semantics.ChildConditionCountsEveryReapedChild for the five columns.
+//
+// Asked after trapsChildDeath rather than before it, for the reason that one
+// is asked at all: this is the path of every external command, and a
+// condition nobody trapped must not pay for an axis — nor, where the axis is
+// unanswered, be refused for a question the script never put.
+func (r *Runner) childConditionCountsThisChild() bool {
+	return r.ask(r.sem().ChildConditionCountsEveryReapedChild,
+		"which reaped children raise the `CHLD` condition")
 }
 
 // trapsChildDeath reports whether anything would run for a reaped child.

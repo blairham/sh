@@ -314,17 +314,38 @@ func (p *Parser) expandSuffixAlias(done map[string]bool) {
 // aliasable reports whether the current token could name an alias that look
 // answers for.
 //
-// Unquoted words only: `"a"` is a command name and not an alias, unanimously.
-// A quoted word is not the same word, which is the rule that lets a script
-// call the real thing past an alias that shadows it. The lookup is by the
-// token's source text, quotes and all, so a table holding `"a"` would match a
-// quoted `"a"` without this — which is how the check is tested.
+// **The lookup is by the token's source text, quotes and all, and that is the
+// whole of the rule.** A quoted word is not the same word — `"a"` does not
+// find the alias `a`, which is how a script reaches the real thing past one
+// that shadows it — but it is not disqualified either: a table holding the
+// three characters `"a"` is found by a written `"a"`.
+//
+// That second half used to be a separate check, `!p.tok.IsQuoted()`, and it
+// was measured wrong. A name may hold a backslash or a quote — one shell in
+// the panel takes such a name and lists it back — and there the written word
+// carries the same characters, so the check refused the one word that could
+// match. Measured 2026-09-26 on zsh 5.9.2, a script file so that a
+// definition is in force when it is used:
+//
+//	alias '\bar=echo BS'; \bar hi      BS hi
+//	alias '"a"=echo Q';    "a" hi      Q hi
+//	alias 'a=echo A';      \a hi       command not found: a
+//	alias 'a=echo A';      "a" hi      command not found: a
+//	alias -g '"G"=world';  echo "G"    world
+//	alias -g 'G=world';    echo "G"    G
+//
+// The last two pairs are the discriminating ones: quoting still removes the
+// alias where the table holds the bare name, so dropping the check does not
+// weaken the escape hatch — it is the *text* that decides, in both
+// directions (#4481). The other shells in the panel refuse such a name at
+// the `alias` builtin, so no column disagrees; there is nothing there to be
+// found.
 //
 // The kind check is belt and braces where a command word stands, and load
 // bearing where a global alias is looked for: that one is asked of every
 // token the lexer hands over, so an operator really does reach here.
 func (p *Parser) aliasable(look Aliases) bool {
-	return look != nil && p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.tok.Text != ""
+	return look != nil && p.tok.Kind == TokWord && p.tok.Text != ""
 }
 
 // spliceAlias lexes an alias value and puts its tokens in front of the input,

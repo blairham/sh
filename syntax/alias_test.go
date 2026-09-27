@@ -115,12 +115,26 @@ func TestAliasExpansion(t *testing.T) {
 			table("a", "echo hit"), `"a" hi`, `"a" hi`,
 		},
 		{
-			// And not even when the table holds that exact spelling. The
-			// lookup uses the word's source text, so without the quoting
-			// check this one would match — which is what makes the check
-			// load-bearing rather than decoration.
-			"a quoted word is not a candidate at all",
-			table(`"a"`, "echo hit"), `"a" hi`, `"a" hi`,
+			// But a table holding that exact spelling **is** found, because
+			// the lookup is the word's source text and nothing else.
+			// Measured on zsh 5.9.2, the one shell in the panel that takes
+			// such a name: `alias '"a"=echo hit'` then `"a" hi` runs it,
+			// where `alias 'a=echo hit'` then `"a" hi` does not (#4481).
+			"a quoted word finds a quoted name",
+			table(`"a"`, "echo hit"), `"a" hi`, `echo hit hi`,
+		},
+		{
+			// And the same the other way round, which is the escape hatch:
+			// a backslash in front of the word is a different word, so the
+			// bare name is not found.
+			"a backslash makes a different word",
+			table("a", "echo hit"), `\a hi`, `\a hi`,
+		},
+		{
+			// And a name written with one is found by a word written with
+			// one. `alias '\bar=echo BS'; \bar hi` is `BS hi` there.
+			"a backslashed name finds a backslashed word",
+			table(`\bar`, "echo BS"), `\bar hi`, `echo BS hi`,
 		},
 		{
 			// Words only. An operator is not a candidate however the table

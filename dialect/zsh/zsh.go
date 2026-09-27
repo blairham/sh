@@ -6670,6 +6670,11 @@ func Apply(r *interp.Runner) {
 	// environment may not supply, and for which of them this shell reads
 	// back (#4866).
 	registerTheStartupValues(r)
+	// And the roster this shell's `trap` takes, under the name a script
+	// walks to install one — see signalsparameter.go, and note that the
+	// middle of it is the `kill -l` this shell already answered correctly
+	// (#4906).
+	registerTheSignalNames(r)
 	// And the four scalar pairs that are one parameter under two names —
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)

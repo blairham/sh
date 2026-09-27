@@ -371,14 +371,22 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// a diagnostic raised inside it names the script rather than the text.
 	keepsCallersLocation := s.eval && !r.EvalTextHasALocationOfItsOwn()
 	if keepsCallersLocation {
-		outerPin, outerEnds := r.linePin, r.linePinEndsAtACall
+		outerPin, outerEnds, outerPinFunc := r.linePin, r.linePinEndsAtACall, r.linePinFuncLine
 		r.linePin = r.lineNow()
+		// The origin that stood when the pin was taken, since the pin is a
+		// location of the *caller's* and a body it reaches into has an
+		// origin of its own that is not comparable with it. See
+		// Runner.linePinFuncLine (#4758).
+		r.linePinFuncLine = r.funcLine
 		// And it stands for everything the text sets going, a call
 		// included, because what the dialect has said is that the text is
 		// not a place: the caller's location is the location of the lot.
 		// See Runner.linePinEndsAtACall.
 		r.linePinEndsAtACall = false
-		defer func() { r.linePin, r.linePinEndsAtACall = outerPin, outerEnds }()
+		defer func() {
+			r.linePin, r.linePinEndsAtACall = outerPin, outerEnds
+			r.linePinFuncLine = outerPinFunc
+		}()
 	}
 	outerBase := r.lineBase
 	r.lineBase = 0

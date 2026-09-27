@@ -2522,11 +2522,53 @@ the other way if the flavor reached backward over the whole pattern.
 ksh's own glob, which is the language the walk is already in, so the group is
 consumed where it stands and `[[ zab == z~(K)a* ]]` matches.
 
-Two shapes are measured and **not** read here, each with its own issue rather
-than an approximation: a flavor group **inside a pattern group**,
-`@(z~(E)a)`, where the text in front is not a glob anybody can translate on
-its own (#4892); and `\d` and its kin inside `~(P)`, which RE2 has not
-(#4894).
+One shape is measured and **not** read here rather than approximated: `\d`
+and its kin inside `~(P)` (#4894).
+
+### And a flavor group inside a pattern group is read too
+
+A group's body is a piece of pattern like any other, so a flavor group in it
+settles the language of that piece. What changes with the position is the
+**extent**: a flavor at the top of a pattern is a *substring* search, because
+that is what ksh93's expressions are, and one inside a pattern group is
+anchored to the span the group takes. Measured on ksh93u+ 2012-08-01,
+2026-09-27:
+
+| probe | ksh93 | |
+| --- | --- | --- |
+| `[[ zza == z~(E)a ]]` *(control)* | yes | at the top it searches |
+| `[[ zza == @(z~(E)a) ]]` | **no** | inside a group it does not |
+| `[[ za == @(z~(E)a) ]]` | yes | |
+| `[[ zXa == @(z~(E)a) ]]` | no | |
+| `[[ zab == @(z~(E)a)b ]]` | yes | so the group took exactly `za` |
+| `[[ zaXb == @(z~(E)a)b ]]` | no | |
+| `[[ zaaq == @(z~(E)a)q ]]` | no | and nothing was swallowed |
+
+The first two are the pair: the same subject and the same flavor answer
+differently with a group around them, which is the whole of the reading.
+`[[ zab == @(z~(E)a*) ]]` is **no** there, which is what says the expression
+is really compiled — `a*` is zero-or-more `a` in an expression and `a` then
+anything in a glob.
+
+The extent is not a choice; it is the matcher's own contract, since every
+caller asks whether the piece it handed over is described whole. So the same
+reading covers an arm of an alternation, a `*(…)`, a `?(…)`, the inside of a
+`!(…)`, a nested group, and the text behind one — `[[ za == @(z)~(E)a ]]`
+matches here and did not before.
+
+**A trim and a substitution are left out**, and that is a refusal to copy
+rather than a gap. With `v=abcd`, ksh93u+ answers `${v#@(a~(E)b)}` with the
+whole value, `${v/@(b~(E)c)/X}` with the whole value, and `${v%@(c~(E)d)}`
+with nothing at all — three answers from one shape, where the ungrouped
+`${v#a~(E)b}` is the span `ab` and agrees with this shell. No reading
+produces all three, so those surfaces answer exactly what they answered
+before, which is the one answer that cannot be a new wrong one.
+
+Two shapes stay out for the reason `globToRE2` gives: what stands in front of
+the group has to be translatable. A **pattern group** in front of the flavor
+is not, so `[[ zaa == @(z)~(E)a ]]` is yes there and no here — the expression
+is anchored where the group stopped instead of joining it — and neither is a
+second `~(…)`, so `[[ zA == @(z~(i)~(E)a) ]]` keeps the answer it had.
 
 ### `g`, `l` and `r` are read where they stand as well
 

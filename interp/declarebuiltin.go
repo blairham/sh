@@ -2849,9 +2849,9 @@ func (r *Runner) localCell(name string) bool {
 	return saved
 }
 
-// localInAnyScope reports whether *some* live scope has taken the name over,
-// so the cell being read belongs to a function call rather than to the shell
-// itself — this one or one that is still on the stack below it.
+// localDescribesTheBinding reports whether *some* live scope has taken the
+// name over, so the cell being read belongs to a function call rather than to
+// the shell itself — this one or one that is still on the stack below it.
 //
 // This is a different question from localCell's and it has exactly one
 // caller: the word a type query writes. Measured on zsh 5.9.2, 2026-09-27,
@@ -2871,19 +2871,18 @@ func (r *Runner) localCell(name string) bool {
 // and a fix keyed on making them agree would make the listing wrong. That is
 // why this stands beside localCell rather than widening it: localCell is what
 // a *declaration* asks, and a declaration lands in the innermost scope.
-func (r *Runner) localInAnyScope(name string) bool {
-	return r.localInAnyScopeSkippingTieMirrors(name, false)
-}
-
-// localInAnyScopeSkippingTieMirrors is the walk both readings of that
-// question share, with the one entry they disagree about as a parameter.
-//
-// One function and not two, because the walk has a rule in it — the step past
-// an enclosing `private` — that is measured, easy to get wrong, and would be
-// the next thing to be fixed in one copy and not the other. The flag is
-// therefore the whole of the difference, and it is read in exactly one place
-// below. See Runner.localDescribesTheBinding for what the true side is for.
-func (r *Runner) localInAnyScopeSkippingTieMirrors(name string, skipTieMirrors bool) bool {
+// **A scope that displaced the name on the *partner's* behalf is not one of
+// them**, which is the last paragraph and the one that is not about scopes at
+// all. A local of one half of one of the shell's own ties displaces the other
+// half with it — see interp/tielocal.go, where that rule and the values that
+// depend on it live — and the word does not call the half nobody named local.
+// Measured 2026-09-27: `f(){ typeset PATH; print ${(t)path} }` is
+// `array-tied-special` in the reference where `f(){ typeset path; … }` is
+// `array-local-tied-special` (#4875). It is a **skip** and not a stop, which
+// is measured too: an enclosing call that really declared the name is still
+// the binding's local, so `f(){ typeset path; g }; g(){ typeset PATH; print
+// ${(t)path} }` is `array-local-tied-special`.
+func (r *Runner) localDescribesTheBinding(name string) bool {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
 		sc := r.scopes[i]
 		if sn, sealed := sc.privateSealed[name]; sealed {
@@ -2904,14 +2903,10 @@ func (r *Runner) localInAnyScopeSkippingTieMirrors(name string, skipTieMirrors b
 			continue
 		}
 		if _, saved := sc.saved[name]; saved {
-			if skipTieMirrors && sc.tieMirrorOnly[name] {
-				// This scope displaced the name only because the other half
-				// of one of the shell's own ties was declared, which is not
-				// a local declaration of *this* name. The walk goes on
-				// outward rather than stopping: a caller that really did
-				// declare it is still the binding's local, measured —
-				// `f(){ typeset path; g }; g(){ typeset PATH; print
-				// ${(t)path} }` is `array-local-tied-special`.
+			if sc.tieMirrorOnly[name] {
+				// The partner's displacement, which is not a declaration of
+				// this name — see the last paragraph above, and
+				// scope.tieMirrorOnly for what writes the entry.
 				continue
 			}
 			return true

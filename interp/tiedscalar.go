@@ -289,6 +289,48 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// and only where there was a scope to undo it in.
 		r.AtFunctionReturn(func() { r.untie(scalar) })
 	}
+	// A **frozen scalar** refuses the tie, and it is the readonly refusal
+	// rather than a fourth tie refusal of its own: the sentence is
+	// `read-only variable: S` with no builtin in the location, which is what
+	// `export x=2` over a frozen name already says here, and the script is
+	// over. Measured 2026-09-25 and again 2026-09-26 on zsh 5.9.2 under `-f`
+	// from a script file — `typeset -r S=v; typeset -T S s` writes
+	// `z.sh:2: read-only variable: S` and nothing after it runs, where this
+	// shell took the line and listed the pair back as `typeset -rT S s=( v )`
+	// (#4503).
+	//
+	// **Behind the shadow**, which is where the measurement puts it and not
+	// where a declaration's other operand checks are. A local tie is a local
+	// declaration, and a local declaration shadows a frozen global rather
+	// than being refused by it: `typeset -r A=v; f(){ typeset -T A a }` is
+	// taken at 0 there, `$A` is empty inside the call and `v` again after it,
+	// and only `typeset -gT` — which takes no shadow — refuses. Asking ahead
+	// of the shadow refused the local form too, which is a row that agreed
+	// before this change and would have stopped agreeing because of it.
+	//
+	// **Last of the refusals** otherwise, which is measured a row at a time
+	// rather than assumed, because every other one of them wins over it:
+	// `typeset -r RO=v; typeset -T RO ro=x` is `second argument of tie must
+	// be array: ro`, `typeset -T RO RO` is `can't tie a variable to itself`,
+	// `typeset -T Z1` is `-T requires names of scalar and array`,
+	// `typeset -T Z2 ':'` is `not valid in this context: :`, and a frozen
+	// *already tied* scalar is `can't tie already tied scalar`.
+	//
+	// The **array** half is not asked, and that is measured too: `typeset -ar
+	// arr=(1 2); typeset -T SS arr` is taken at 0 there, and the pair works
+	// afterwards — `SS=q:r` leaves `arr` holding `q` and `r`, through the
+	// freeze. Only the scalar refuses.
+	//
+	// One row of the four is deliberately left where it was: a refusal
+	// *inside a subshell* ends that subshell at **0** in the reference where
+	// every other readonly refusal there ends it at 1 — `readonly x=1;
+	// (export x=2); print $?` is 1 and `(false; typeset -T S s); print $?` is
+	// 0, measured the same day — and the script's own exit is 1 either way.
+	// A fatality with a status of nobody's is not a rule this engine has, and
+	// the row it replaces was a silent tie of a frozen name.
+	if r.refuseReadonly(scalar, assignedByDeclaration) {
+		return 1
+	}
 	// A tie **starts both names over**: every attribute either name carried
 	// before is dropped and only export survives. Measured 2026-09-25 on zsh
 	// 5.9.2 with `-f`, one letter to a run — `typeset -X S; typeset -T S s;
@@ -437,4 +479,34 @@ func (r *Runner) Tie(scalar, array, sep string) {
 	r.setVar(scalar, "")
 	r.setArray(array, nil)
 	r.mirroring = false
+}
+
+// refuseUntie is `typeset +T`, which is not the tie's undoing but a refusal.
+//
+// The plus form of every other declaration letter takes the attribute off, so
+// this reads as "untie" and is not: the shell that has the letter refuses the
+// spelling outright and says where the answer is. Measured 2026-09-26 on zsh
+// 5.9.2 under `-f` from a script file:
+//
+//	typeset -T SCALAR arr; typeset +T SCALAR   use unset to remove tied
+//	                                           variables, and the script is over
+//	typeset +T v, `v` not tied at all          the same sentence, the same end
+//	typeset +T, with no operands               the *listing* of tied names, at 0
+//
+// The second row is the sharper one: the refusal is about the **option
+// letter** and not about the parameter's state, so there is nothing to look
+// up before saying it. The third is what keeps this off the bare form, which
+// is a listing in both shells and is reached before this.
+//
+// It was accepted here and did nothing, at status 0 — so a script that
+// believed it had untied a pair carried on with the pair still tied (#4598).
+func (r *Runner) refuseUntie(builtin string) int {
+	r.diagf("%s\n", Wording(r.diag().UntieRefused,
+		"use unset to remove tied variables"))
+	fatal, _ := r.nameRules(builtin)
+	if r.ask(fatal, "a refused declaration operand ending the script") {
+		r.status = 1
+		r.fatalQuiet()
+	}
+	return 1
 }

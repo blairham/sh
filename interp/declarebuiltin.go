@@ -1380,6 +1380,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		// builtin: `typeset +T` writes the tied names and no values.
 		return r.tieListing(f.remove)
 	}
+	if f.tie && f.remove && len(args) > 0 {
+		// The plus form **with operands**, which is a refusal and not an
+		// untie — see Runner.refuseUntie. Behind the bare listing above,
+		// which `typeset +T` alone still is, and ahead of the ordinary
+		// declaration loop, which took the line and did nothing.
+		return r.refuseUntie(name)
+	}
 	if f.tie && !f.remove && len(args) > 0 {
 		// The operands of `-T` are not a list of names: they are a scalar,
 		// an array and — where a third is given — the separator. Ahead of

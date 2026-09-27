@@ -254,3 +254,126 @@ print -r -- "reached"`)
 		t.Errorf("through the array = %q (status %d), want %q with 1", out, st, want)
 	}
 }
+
+// A tie over a **frozen scalar** refuses, and the refusal ends the script.
+//
+// It is the readonly refusal rather than a sixth tie refusal: the sentence is
+// `read-only variable: S` with no builtin in the location, which is what
+// `export x=2` over a frozen name already says here. Measured 2026-09-26 on
+// zsh 5.9.2 under `-f` from a script file; this shell took the line and
+// listed the pair back as `typeset -rT S s=( v )` (#4503).
+func TestATieOverAFrozenScalarRefusesAndEndsTheScript(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `typeset -r S=v
+typeset -T S s 2>&1
+print -r -- "st=$?"
+typeset -p S`)
+	want := "zsh:2: read-only variable: S\n"
+	if out != want || st != 1 {
+		t.Errorf("a frozen tie = %q (status %d), want %q with 1", out, st, want)
+	}
+}
+
+// And the three rows that say which name the refusal is about and where it
+// stands among the others.
+func TestWhichHalfOfATieAFreezeRefuses(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{
+			// A *local* tie shadows the frozen global rather than being
+			// refused by it, which is what puts the check behind the shadow.
+			"a local tie over a frozen global is taken",
+			`typeset -r A=v
+			 f() { typeset -T A a; print -r -- "in=$?"; }
+			 f 2>&1
+			 print -r -- "after=$? A=$A"`,
+			"in=0\nafter=0 A=v\n", 0,
+		},
+		{
+			// `-g` takes no shadow, so the freeze is reached.
+			"and the global spelling of the same line is not",
+			`typeset -r B=v
+			 g() { typeset -gT B b; print -r -- "never"; }
+			 g 2>&1
+			 print -r -- "never either"`,
+			"g: read-only variable: B\n", 1,
+		},
+		{
+			// Every other tie refusal wins over the freeze, so the sentence
+			// says which question was asked first.
+			"the array-half refusal comes first",
+			`typeset -r RO=v
+			 typeset -T RO ro=x 2>&1
+			 print -r -- "st=$?"`,
+			"zsh:typeset:2: second argument of tie must be array: ro\nst=1\n", 0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != tc.status {
+				t.Errorf("%s = %q (status %d), want %q with %d", tc.src, out, st, tc.want, tc.status)
+			}
+		})
+	}
+}
+
+// `typeset +T` is not the tie's undoing: it is refused outright, and the
+// refusal names the builtin that *does* remove a tie.
+//
+// The plus form of every other declaration letter takes the attribute off, so
+// this reads as "untie" and is not. It was accepted here and did nothing, at
+// status 0, so a script that believed it had untied a pair carried on with
+// the pair still tied (#4598). Measured 2026-09-26 on zsh 5.9.2 under `-f`.
+func TestThePlusFormOfTheTieLetterIsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		status          int
+	}{
+		{
+			"over a name that is tied",
+			`typeset -T SCALAR arr
+			 SCALAR=a:b
+			 print -r -- "tied=${#arr} $arr[1] $arr[2]"
+			 typeset +T SCALAR 2>&1
+			 print -r -- "never"`,
+			"tied=2 a b\nzsh:typeset:4: use unset to remove tied variables\n", 1,
+		},
+		{
+			// The sharper row: the refusal is about the option letter and
+			// not about the parameter's state, so a name that is not tied
+			// at all earns the same sentence.
+			"and over a name that is not",
+			`print -r -- "before"
+			 typeset +T v 2>&1
+			 print -r -- "never"`,
+			"before\nzsh:typeset:2: use unset to remove tied variables\n", 1,
+		},
+		{
+			// The control, and what keeps the refusal off the bare form:
+			// `typeset +T` with no operands is the listing of tied names.
+			"with no operands it is still the listing",
+			`typeset -T AA aa
+			 typeset +T >/dev/null 2>&1
+			 print -r -- "st=$?"
+			 typeset +T 2>&1 | while IFS= read -r l; do case $l in (AA|aa) print -r -- "$l";; esac; done`,
+			"st=0\nAA\naa\n", 0,
+		},
+		{
+			// And the tie itself still works, which is what says the rows
+			// above are about the spelling rather than about the letter.
+			"the minus form is untouched",
+			`typeset -T BB bb
+			 BB=p:q
+			 print -r -- "n=${#bb} ${bb[1]} ${bb[2]}"`,
+			"n=2 p q\n", 0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st != tc.status {
+				t.Errorf("%s = %q (status %d), want %q with %d", tc.src, out, st, tc.want, tc.status)
+			}
+		})
+	}
+}

@@ -465,8 +465,9 @@ func (c *Runner) ownTables(r *Runner) {
 	c.atFunctionDefinition = slices.Clone(r.atFunctionDefinition)
 	c.freezeAfter = slices.Clone(r.freezeAfter)
 
-	// traps, inheritedIgnored and selfPending are deliberately not here.
-	// inheritTraps builds all three from scratch immediately after this
+	// traps, inheritedIgnored, selfPending and selfHeldForInput are
+	// deliberately not here.
+	// inheritTraps builds all four from scratch immediately after this
 	// runs, because what a subshell starts with is not the parent's table
 	// filtered by this file's rule — it is POSIX's rule about handled and
 	// ignored conditions, which is a behavior and lives with the behavior.

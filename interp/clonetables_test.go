@@ -121,6 +121,7 @@ func seedStacks(r *Runner) {
 	r.aroundFunctionCalls = append(make([]func(*Runner) func(), 0, 4), nil)
 	r.atFunctionDefinition = append(make([]func(*Runner, string), 0, 4), nil)
 	r.selfPending = append(make([]string, 0, 4), "seed")
+	r.selfHeldForInput = append(make([]string, 0, 4), "seed")
 	r.substLevelsOut = append(make([]substLevel, 0, 4), substLevel{})
 	r.trapSnapshot = append(make([]savedTrap, 0, 4), savedTrap{})
 	r.debugHeld = append(make([]debugHeld, 0, 4), debugHeld{})

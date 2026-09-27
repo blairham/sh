@@ -399,6 +399,18 @@ func Dialect() syntax.Dialect {
 	// the substitution in the reference, which is the zsh column the corpus
 	// records for `subst/a-body-that-will-not-parse-stops-the-line`.
 	d.SubstitutionBodyRefusalEndsTheRead = true
+	// And the one shape carved back out of the closer's own carve-out: a body
+	// whose read stopped at the closing parenthesis with an `if` still short
+	// of its `then`. This shell's brace-bodied `if` is what closes the
+	// construct there, so with that option on the parenthesis is the
+	// substitution's and the body waits for the moment it runs — and with the
+	// option off the same body settles the read. `$(if)` parses here and
+	// `$(if true; then)` does not, measured 2026-09-27 under `set -n`; the
+	// whole grid is on the field.
+	//
+	// Off at construction because `shortloops` is **on** by default, which is
+	// the state this places: see setopt.go, where the option is what moves it.
+	d.SubstitutionBodyRefusesAnUnfinishedCondition = false
 	// And a *regular expression's* group is the same construct: a `;`, `<`,
 	// `>` or `&` inside `(…)` stops the group here where the four shells with
 	// `=~` all keep it. Measured 2026-09-27 on zsh 5.9.2 under `set -n` —

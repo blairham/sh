@@ -2608,6 +2608,46 @@ type Dialect struct {
 	// somebody runs the two lines above in the container.
 	SubstitutionBodyRefusalEndsTheRead bool
 
+	// SubstitutionBodyRefusesAnUnfinishedCondition settles a `$( … )` read
+	// whose body stopped at the **closing parenthesis** with an `if` or
+	// `elif` still short of its `then`.
+	//
+	// Every other refusal on the closer leaves the construct closed, which is
+	// what [Lexer.bodyRefusalSettlesTheRead] carves out: the closer is the
+	// token that read was looking for, so finding it there is the body
+	// ending where counting says. This is the one shape that parts from it,
+	// and it parts because an option decides.
+	//
+	// Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+	// `/opt/homebrew/bin/zsh`, `-f` over a script file under `set -n`,
+	// 2026-09-27, the body written as a program of its own and then inside
+	// `v=$( … )`, with that shell's short-body option on and off:
+	//
+	//	body                    alone    $( … )   $( … ) with it off
+	//	if                      refused  parses   refused
+	//	if true                 refused  parses   refused
+	//	if true &&              refused  parses   refused
+	//	if if true              refused  parses   refused
+	//	if true; then :; elif   refused  parses   refused
+	//	if true; then           refused  refused  refused
+	//	if true; then :; else   refused  refused  refused
+	//	if true; then if        refused  refused  refused
+	//	while true; do if       refused  refused  refused
+	//
+	// **The `then` is the line and the nesting does not move it.** The fifth
+	// row and the sixth are the same construct one keyword apart, and the
+	// eighth is an `if` inside a `then` — its own condition unfinished, and
+	// settled all the same, because what decides is the **outermost**
+	// construct. A rule about "an unfinished construct" takes all three the
+	// same way and is wrong about two of them.
+	//
+	// **What it does not reach is the rest of the closer's population.**
+	// `$(for)`, `$(case)`, `$({)`, `$(select)`, `$(repeat)` and `$(echo |)`
+	// are refused with the line in that shell under every mode and are taken
+	// here, which is a defect of the carve-out rather than of this flag — see
+	// #4859, where the grid and what closing it costs are written down.
+	SubstitutionBodyRefusesAnUnfinishedCondition bool
+
 	// TimesIsReserved makes `times` a reserved word rather than a builtin,
 	// so a word after it is a syntax error rather than an argument it
 	// ignores. ksh93 alone, and the only place in the panel where *which*

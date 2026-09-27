@@ -75,7 +75,7 @@ import (
 //     prompt. Written `storeBacked(…)`;
 //   - **recorded**: a name this shell recognizes and remembers and does not
 //     act on. `setopt auto_cd` succeeds, `setopt` then reports `autocd`, and
-//     typing a directory name still does not change directory. 111 of the 185
+//     typing a directory name still does not change directory. 110 of the 185
 //     are this, and they are marked `recorded(…)` below so the distinction can
 //     be read off the table rather than taken on trust.
 //
@@ -220,7 +220,7 @@ import (
 // operand are refused with the option off exactly as with it on. See
 // interp.Runner.RefusesABadPatternWhenGlobbing and #4630.
 //
-// Nothing else about the split moved, and 111 is still most of the table.
+// Nothing else about the split moved, and 110 is still most of the table.
 // The prose said 137 for three conversions after the table said otherwise;
 // TestTheOptionsSomethingReadsAreNotRecordedOnly counts the table and is
 // what these two numbers have to match.
@@ -1768,7 +1768,54 @@ var zshOptions = []zshOption{
 	// meanings rather than this shell's. See shOptionLettersOption, which is
 	// where the two tables are and what was measured about each letter.
 	shOptionLettersOption(),
-	recorded("shortloops", true),
+	{
+		// SHORT_LOOPS: the brace-bodied spellings of the loops and of `if`.
+		//
+		// **What it reaches here is one of them**, and it is the one a
+		// `$( … )` body turns on: with the option on, a body whose read
+		// stopped at the closing parenthesis with an `if` short of its
+		// `then` takes that parenthesis as the substitution's and is left to
+		// the moment it runs; with it off the same body settles the read and
+		// the line is refused.
+		//
+		// Measured on zsh 5.9.2 (aarch64-apple-darwin25.4.0) at
+		// `/opt/homebrew/bin/zsh`, `-f` over a script file under `set -n`,
+		// 2026-09-27, with the option moved on the line before:
+		//
+		//	                           on        off
+		//	v=$(if)                    parses    refused
+		//	v=$(if true)               parses    refused
+		//	v=$(if true; then :; elif) parses    refused
+		//	v=$(if true; then)         refused   refused
+		//	v=$(for)                   refused   refused
+		//
+		// The last two rows are the controls on either side: one is the same
+		// construct a keyword later and the other is a different construct
+		// altogether, and neither moves with the name.
+		//
+		// **The emulations reach it through this option**, which is the
+		// measurement rather than a convenience: `emulate zsh` with the
+		// option off refuses the first three rows and `emulate sh` with it on
+		// takes them. `shortloops` is in emulationAlwaysReset and
+		// emulationDefaults has it off under `sh` and `ksh` and on under
+		// `csh`, all measured before this.
+		//
+		// **What it does not reach yet** is the short bodies themselves —
+		// `while`, `until`, `for i` and `repeat 2` are complete programs in
+		// the reference with this on and refused with it off, and are taken
+		// here in every state. `syntax.Dialect.ShortForm` is what would move
+		// them and it is **wider than this option**: the brace-bodied `if
+		// (( 1 )) { … }` does not move with the name and is refused under
+		// `emulate sh` and taken under `emulate ksh`, so the flag wants
+		// splitting before the option is wired to it. That is #4817's, and
+		// #4887 is where the split is written down.
+		base: "shortloops", def: true,
+		get: shortLoopsOn,
+		set: func(r *interp.Runner, on bool) int {
+			r.SetSubstitutionBodyRefusesAnUnfinishedCondition(!on)
+			return 0
+		},
+	},
 	recorded("shortrepeat", false),
 	{
 		base: "shwordsplit", def: false,
@@ -2849,6 +2896,13 @@ func shOptionLettersOption() zshOption {
 func shGlobOn(r *interp.Runner) bool { return !r.CasePatternListReadAsOneWord() }
 
 func kshGlobOn(r *interp.Runner) bool { return r.BarePatternGroupsOpenInsideAWord() }
+
+// shortLoopsOn reads `shortloops` back off the grammar, the way the two glob
+// names above are read off theirs: the option is what places the reading and
+// the reading is where the state lives.
+func shortLoopsOn(r *interp.Runner) bool {
+	return !r.SubstitutionBodyRefusesAnUnfinishedCondition()
+}
 
 // setBareGroupGrammar writes where a bare pattern group may open, given the
 // two option states.

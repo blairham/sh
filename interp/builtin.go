@@ -3670,7 +3670,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 			// which values are exportable.
 			return r.status
 		}
-		if r.privateSlotRefusesThisOperand(name, declareFlags{export: true}) {
+		if r.fixedSlotRefusesThisOperand(name, declareFlags{export: true}) {
 			// An array literal over a name this call declared **private**
 			// whose slot is not a container. This loop is where `export`
 			// declares when no letter sent it through declareNames, which is
@@ -7313,7 +7313,7 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			status = 1
 			continue
 		}
-		if r.privateSlotRefusesThisOperand(name, f) {
+		if r.fixedSlotRefusesThisOperand(name, f) {
 			// A kind letter aimed at a name this call declared **private**,
 			// whose slot takes the one kind the declaration gave it. Behind
 			// `private`'s own scope refusal, which is measured: `private at;
@@ -7786,7 +7786,7 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 			// where ksh93 leaves `typeset -r -a a` (#3501, #1380).
 			name = n
 		}
-		if r.privateSlotRefusesThisOperand(name, f) {
+		if r.fixedSlotRefusesThisOperand(name, f) {
 			// An array literal over a name this call declared **private**
 			// whose slot is not a container, which this word refuses in its
 			// own sentence exactly as the other three declaration words do.

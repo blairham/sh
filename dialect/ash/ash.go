@@ -267,6 +267,11 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// unanswered KindLetterReplacesTheKind: there is no declaration utility
+	// here to write a kind letter on, so there is no second one for the
+	// question to be about. Measured 2026-09-27 in the digest-pinned image,
+	// `typeset -i q` is `typeset: not found` at 127 and `declare` with it —
+	// TestTypesetIsNotABuiltinHere pins both (#4881).
 	// unanswered ExportContainerLetterNeedsAValue: `export` takes no container
 	// letter here, which Semantics.ExportOptions is the statement of — it is
 	// empty in this dialect, so `export -A` is a bad option and the question has

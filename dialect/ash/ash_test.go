@@ -350,3 +350,21 @@ func TestABackquotedBodyIsNumberedFromOne(t *testing.T) {
 		t.Error("a backquoted body is numbered from one here")
 	}
 }
+
+// TestTypesetIsNotABuiltinHere pins the absence
+// interp.Semantics.KindLetterReplacesTheKind is left unanswered on: with no
+// declaration utility there is no kind letter to write, so the question of
+// what a second one does to the first has no line to be about.
+//
+// Measured 2026-09-27 on BusyBox 1.37.0 in the digest-pinned image,
+// `typeset -i q` is `typeset: not found` at 127 — and `declare` with it,
+// which is the control that says this is the whole family and not one
+// spelling (#4881).
+func TestTypesetIsNotABuiltinHere(t *testing.T) {
+	for _, name := range []string{"typeset", "declare"} {
+		out, st := run(t, name+` -i q; echo st=$?`)
+		if !strings.Contains(out, name+": not found") || !strings.Contains(out, "st=127") {
+			t.Errorf("%s: got %q status %d, want the name unresolved at 127", name, out, st)
+		}
+	}
+}

@@ -357,7 +357,7 @@ func limitReport(r *interp.Runner, row limitResource, hard bool) int {
 	if hard {
 		v = max
 	}
-	fmt.Fprintf(r.Out(), "%-16s%s\n", row.word, limitValue(row.unit, v))
+	_, _ = fmt.Fprintf(r.Out(), "%-16s%s\n", row.word, limitValue(row.unit, v))
 	return 0
 }
 

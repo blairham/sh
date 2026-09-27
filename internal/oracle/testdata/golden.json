@@ -121067,6 +121067,108 @@
         "TimedOut": false
       }
     },
+    "limit/names-a-resource-by-word": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: limit: not found~\u003cshell\u003e: limit: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: limit: command not found~\u003cshell\u003e: line 1: limit: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: limit: command not found~\u003cshell\u003e: line 1: limit: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: limit: command not found~\u003cshell\u003e: limit: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: limit: not found~\u003cshell\u003e: 1: limit: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: limit: not found~\u003cshell\u003e: limit: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "filesize        1MB",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "limit/unlimit-raises-a-soft-limit": {
+      "ash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: limit: not found~\u003cshell\u003e: unlimit: not found~\u003cshell\u003e: limit: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: limit: command not found~\u003cshell\u003e: line 1: unlimit: command not found~\u003cshell\u003e: line 1: limit: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: limit: command not found~\u003cshell\u003e: line 1: unlimit: command not found~\u003cshell\u003e: line 1: limit: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: limit: command not found~\u003cshell\u003e: unlimit: command not found~\u003cshell\u003e: limit: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: limit: not found~\u003cshell\u003e: 1: unlimit: not found~\u003cshell\u003e: 1: limit: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: limit: not found~\u003cshell\u003e: unlimit: not found~\u003cshell\u003e: limit: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "filesize        unlimited",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "local/a-pipeline-elements-local-does-not-shadow-in-the-caller": {
       "ash": {
         "Stdout": "[setbyg]",

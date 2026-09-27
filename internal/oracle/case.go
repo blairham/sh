@@ -4575,6 +4575,16 @@ echo "reached-after st=$?"`,
 		Why:     "how many bytes a block is, asked of the file system rather than of the builtin: one block, six hundred bytes written, and the file is 600 where a block is 1024 and 512 where it is 512. The prior reading of this, taken from bash alone, was that a block is 1024 bytes — true for bash 5.3 and bash 3.2 as `bash`, and false for dash, ksh93, zsh, ash *and the same bash 5.3 called `sh`*, all of which use POSIX's 512. So the unit is argv[0]'s to decide, which is not a shape a one-shell measurement could have found. Written in a subshell whose group carries the redirection, because the shell that reaps a child killed by SIGXFSZ announces it with a process id in the text",
 	},
 	{
+		ID: "limit/names-a-resource-by-word", Category: "traps and exit",
+		Snippet: `limit filesize 1m; limit filesize`,
+		Why:     "`limit` is one shell's second name for the limits `ulimit` addresses by letter, and the two differ in more than the spelling: the resource is a *word* rather than a letter, and the value is written with its own unit — `1MB` where `ulimit -f` writes a count of blocks. Everywhere else the name is not a command at all, which is the row: a script reaching for it is reaching for that one shell. Set before it is read, because a limit's starting value is a property of the machine and a row that printed it would record where it was generated",
+	},
+	{
+		ID: "limit/unlimit-raises-a-soft-limit", Category: "traps and exit",
+		Snippet: `limit filesize 1m; unlimit filesize; limit filesize`,
+		Why:     "`unlimit` is the other half of the same module: it raises a soft limit back to the hard one, which is the only direction a process without privilege can move it. The `limit` line in front of it is what makes the row falsifiable — without something to undo, an `unlimit` that did nothing would print the same thing",
+	},
+	{
 		ID: "ulimit/unlimited-is-a-word", Category: "traps and exit",
 		Snippet: `ulimit -Hf`,
 		Why:     "no limit is printed as `unlimited` rather than as a very large number, in all four — and is read back from that word too, which is what lets a script save and restore one",

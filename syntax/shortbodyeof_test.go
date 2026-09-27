@@ -10,6 +10,7 @@ import "testing"
 func shortFormDialect() Dialect {
 	d := Core()
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.Repeat = true
 	d.ArithCommand = true
 	d.DoubleBracket = true

@@ -18,6 +18,7 @@ import (
 func short() syntax.Dialect {
 	d := syntax.Core()
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.CloseBraceAlwaysReserved = true
 	return d
 }

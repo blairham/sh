@@ -151,6 +151,7 @@ func TestATryAlwaysBlockEndsAHeaderThatWouldNotEndItself(t *testing.T) {
 	t.Parallel()
 	on := tryAlways()
 	on.ShortForm = true
+	on.ShortFormBody = true
 	for _, src := range []string{
 		"if { true; } always { :; } { echo A; }; echo after\n",
 		"if { true; } always { :; } echo A; echo after\n",

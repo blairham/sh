@@ -13,6 +13,7 @@ func TestAConditionThatEndedItselfTakesItsBody(t *testing.T) {
 	t.Parallel()
 	short := Core()
 	short.ShortForm = true
+	short.ShortFormBody = true
 	short.DoubleBracket = true
 	short.ArithCommand = true
 	// `{ echo A }` with no terminator before the brace is a relaxation of
@@ -80,6 +81,7 @@ func TestTheOtherShortForms(t *testing.T) {
 	t.Parallel()
 	d := Core()
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.Repeat = true
 	d.Foreach = true
 	d.AnonymousFunction = true
@@ -151,6 +153,7 @@ func TestTheShortFormsPrintBack(t *testing.T) {
 	t.Parallel()
 	d := Core()
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.Repeat = true
 	d.Foreach = true
 	d.AnonymousFunction = true
@@ -198,6 +201,7 @@ func TestAnArmNotWrittenShortPutsTheRestInTheLongForm(t *testing.T) {
 	t.Parallel()
 	short := Core()
 	short.ShortForm = true
+	short.ShortFormBody = true
 	short.DoubleBracket = true
 	short.ArithCommand = true
 	short.CloseBraceAlwaysReserved = true
@@ -259,6 +263,7 @@ func TestASeparatedShortArmEndsTheWholeIf(t *testing.T) {
 	t.Parallel()
 	short := Core()
 	short.ShortForm = true
+	short.ShortFormBody = true
 	short.DoubleBracket = true
 	short.ArithCommand = true
 	short.CloseBraceAlwaysReserved = true
@@ -288,6 +293,7 @@ func TestABraceBodyTakesNoTerminatorFromWithin(t *testing.T) {
 	t.Parallel()
 	short := Core()
 	short.ShortForm = true
+	short.ShortFormBody = true
 	short.CloseBraceAlwaysReserved = true
 
 	mustFail(t, "for i (a b) { echo $i; } echo end\n", short,
@@ -316,6 +322,7 @@ func TestARedundantFiClosesAShortIfWithNoElse(t *testing.T) {
 	t.Parallel()
 	short := Core()
 	short.ShortForm = true
+	short.ShortFormBody = true
 	short.ForBraceBody = true
 	short.DoubleBracket = true
 	short.ArithCommand = true

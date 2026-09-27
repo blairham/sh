@@ -155,6 +155,14 @@ func Dialect() syntax.Dialect {
 	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
 	// so.
 	d.ShortForm = true
+	// And the two body spellings that are not a brace group — one command, or
+	// none at all. They are a flag of their own because `shortloops` moves
+	// them and leaves the brace group alone: with the option off `while
+	// (( 0 )) { :; }` still parses here and `while (( 0 )) :` does not,
+	// measured 2026-09-27 under `set -n` in all three emulations. On at
+	// construction because the option is on by default; see setopt.go, where
+	// the option is what moves it.
+	d.ShortFormBody = true
 	// And a short body may be empty because a joining operator stands where
 	// it would be: `for i in a b; | cat` pipes the loop rather than refusing
 	// a missing body (#3898). Measured with the rest of the panel on

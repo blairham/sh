@@ -37,6 +37,7 @@ func foreachBodyGrammar(d *Dialect) {
 	// The parenthesized list and the brace body are flags of their own, and
 	// rows below need both.
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.ForBraceBody = true
 }
 

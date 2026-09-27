@@ -199,6 +199,7 @@ func TestABareNegationConditionDoesNotEndAHeader(t *testing.T) {
 	t.Parallel()
 	d := reach(BareNegationAtEitherPlace)
 	d.ShortForm = true
+	d.ShortFormBody = true
 	for _, src := range []string{
 		"if !; then echo T; else echo F; fi\n",
 		"if true; then :; elif !; then echo T; fi\n",

@@ -20,6 +20,7 @@ func loopGlobQuals() Dialect {
 	d := globQuals()
 	d.Select = true
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.Foreach = true
 	return d
 }
@@ -166,6 +167,7 @@ func TestTheParenthesisedItemListReadsTheSameWords(t *testing.T) {
 	// the flag reaches there.
 	off := Core()
 	off.ShortForm = true
+	off.ShortFormBody = true
 	for _, src := range []string{
 		`for x (a (#i)b); do :; done`,
 		`select x (a (#i)b); do :; done`,

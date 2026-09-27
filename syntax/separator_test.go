@@ -135,6 +135,7 @@ func TestAShortBodySTerminatorTerminatesTheLoopToo(t *testing.T) {
 	t.Parallel()
 	d := syntax.Core()
 	d.ShortForm = true
+	d.ShortFormBody = true
 	d.ForBraceBody = true
 	d.CloseBraceAlwaysReserved = true
 	d.ArithCommand = true

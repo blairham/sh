@@ -877,6 +877,24 @@ type Runner struct {
 	// with the fact first-hand there (#1864).
 	StartupFilesSuppressed bool
 
+	// SystemStartupFilesSuppressed says the invocation asked this shell to
+	// skip the files in the machine's own directory and read the person's
+	// own — the narrower escape hatch, for a `/etc` file that is wrong on a
+	// shell whose `~` files are not.
+	//
+	// The front end's to set, for the reason StartupFilesSuppressed above is,
+	// and from the option beside it: Semantics.StartupFileOptions.
+	// SuppressSystem — zsh's `-d` and `--no-globalrcs`.
+	//
+	// A second field rather than a reading of the first, because the two
+	// suppress different files and a shell may be told both: `zsh -f -d`
+	// answers `rcs` off and `globalrcs` off, and `zsh -d` alone answers
+	// `rcs` on. Nothing in this package reads it; the one shell whose option
+	// namespace publishes the fact is zsh, whose `globalrcs` is the name for
+	// it, and which files are actually read is `driver`'s own question with
+	// the invocation first-hand there (#4733).
+	SystemStartupFilesSuppressed bool
+
 	// withdrawnParams holds what a dialect's module selection took out of the
 	// parameter tables, keyed by name, so the name reads as an ordinary unset
 	// one until the selection puts it back. See withdrawnparameter.go.

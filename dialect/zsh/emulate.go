@@ -141,15 +141,41 @@ func currentEmulation(r *interp.Runner) string {
 // about, because this one has already filled it in. The two fields are one
 // shell read at two moments and they have to move together, which is what a
 // second boolean here says and a reading of the first could not.
+//
+// `declaredEmpty` is the fourth, and it is the half of #4654 that #4753 was
+// filed for. A declaration carrying no value — `typeset X`, `declare X`,
+// `integer N`, `local X` — gives the name an empty *value* under `zsh` and
+// leaves it declared and unset under `sh` and `ksh`, so `${X+set}` answers
+// `set` in the first and nothing in the other two.
+//
+// Measured 2026-09-26 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), run `-f`,
+// both ways round: the reference copied to files called `zsh`, `sh` and
+// `ksh` — which is the whole of what differs, and the first letter of argv[0]
+// is what it reads — and `emulate MODE` under its own name, plain and `-R`,
+// which agree. `typeset X; printf '%s' "${X+set}"` is `set`, nothing and
+// nothing across the three, and `typeset X=; printf '%s' "${X+set}"` is `set`
+// under all of them, which is the control that stops the reading being "a
+// declaration never creates the name".
+//
+// **The name does not matter and the mode does**, which is what makes it an
+// axis of the emulation rather than a fact about `HOME`: the row was noticed
+// as `typeset HOME; unset HOME; cd`, where the `unset` here finds a value to
+// remove that the reference never created.
+//
+// csh is on zsh's side of this one, as it is of `redirFatal` and against it on
+// `cdNowhere` — measured in the same run, `emulate -R csh` answers `set`. A
+// single "is this an sh-family mode" boolean standing for all four would be
+// wrong about two of them.
 var emulations = map[string]struct {
-	redirFatal bool
-	cdNowhere  bool
-	fillsHome  bool
+	redirFatal    bool
+	cdNowhere     bool
+	fillsHome     bool
+	declaredEmpty bool
 }{
-	"zsh": {redirFatal: false, cdNowhere: false, fillsHome: true},
-	"sh":  {redirFatal: true, cdNowhere: true, fillsHome: false},
-	"ksh": {redirFatal: true, cdNowhere: true, fillsHome: false},
-	"csh": {redirFatal: false, cdNowhere: true, fillsHome: false},
+	"zsh": {redirFatal: false, cdNowhere: false, fillsHome: true, declaredEmpty: true},
+	"sh":  {redirFatal: true, cdNowhere: true, fillsHome: false, declaredEmpty: false},
+	"ksh": {redirFatal: true, cdNowhere: true, fillsHome: false, declaredEmpty: false},
+	"csh": {redirFatal: false, cdNowhere: true, fillsHome: false, declaredEmpty: true},
 }
 
 // applyEmulation switches the axes and puts back the options this form of
@@ -189,6 +215,13 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.StartupFillsAnAbsentHome
 	}, answer(emulations[mode].fillsHome))
+	// The fourth, and the only one of them a script meets on an ordinary
+	// line rather than at a boundary: whether a declaration with no value on
+	// it gives the name one. See the table above for the measurement and for
+	// the control that keeps it about the declaration and not about the name.
+	setAxis(r, func(s *interp.Semantics) *interp.Answer {
+		return &s.DeclaredNameWithoutValueIsEmpty
+	}, answer(emulations[mode].declaredEmpty))
 	// The recorded names in one write rather than one write each. The store
 	// holds deviations, so dropping a name from it is that option back at the
 	// table's default — and this emulation's default is not always the

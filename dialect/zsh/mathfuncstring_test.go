@@ -124,3 +124,77 @@ func TestMathFunctionStringLetterIsNotAlsoCalledMissing(t *testing.T) {
 		t.Errorf("UnimplementedOptionLetters[functions] = %q, which still claims -s is missing", got)
 	}
 }
+
+// **The argument text need not be an expression**, which is the half a
+// registration alone cannot deliver: the text between a call's parentheses is
+// read when the program is, and the registration that says to take it raw is
+// made by a builtin that runs several lines later.
+//
+// Measured 2026-09-26 on zsh 5.9.2, run `-f` with `env -u FPATH` over a
+// script file (#4752). The controls are the rows above — `sf(2+2)`, `sf(1,2)`
+// and `sf()` all *are* expressions and agreed before this — so what these
+// rows add is the shape that is not one.
+func TestAStringMathFunctionTakesTextThatIsNotAnExpression(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `sf() { print -r -- "n=$# 1=[$1]"; }
+functions -M -s sf
+: $(( sf( a , b c ) ))
+: $(( sf( (a b) c ) ))
+: $(( sf( 5 6 ) ))
+: $(( sf( , ) ))
+print -r -- tail`)
+	want := "n=1 1=[ a , b c ]\n" +
+		"n=1 1=[ (a b) c ]\n" +
+		"n=1 1=[ 5 6 ]\n" +
+		"n=1 1=[ , ]\n" +
+		"tail\n"
+	if out != want || st != 0 {
+		t.Errorf("a string math function's raw text = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// And the same text through a name that is *not* a string registration is
+// still refused — at the call rather than at the read, and the name is
+// answered before the text is weighed at all.
+//
+// Two rows, because they are two different answers to one call. A name
+// nobody registered is `unknown function`, and a registration without the
+// letter reads the text as an expression and fails the way a stored value
+// read as one fails — and the line in front of the call runs in both, which
+// is what says the file was read rather than refused. Measured 2026-09-26 on
+// zsh 5.9.2.
+//
+// The shape that is still a *read* failure — a call whose parenthesis never
+// closes — cannot be asked here, because this harness fails the test on a
+// parse error rather than running the snippet. It is
+// syntax.TestAnUnclosedCallIsRefused, which is the right place for it: the
+// question is the reader's.
+func TestTextThatIsNotAnExpressionIsRefusedAtTheCall(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a name nobody registered",
+			`print -r -- first
+: $(( nosuch( a , b c ) ))
+print -r -- unreached`,
+			"first\nzsh:2: unknown function: nosuch\n",
+		},
+		{
+			"a registration without the letter",
+			`of() { REPLY=$((1)); }
+functions -M of
+print -r -- first
+: $(( of( a , b c ) ))
+print -r -- unreached`,
+			"first\nzsh:4: bad math expression: operator expected at `c '\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want || st == 0 {
+				t.Errorf("got %q (status %d), want %q and a failure", out, st, tc.want)
+			}
+			if strings.Contains(out, "unreached") {
+				t.Errorf("got %q, want the script to have ended at the call", out)
+			}
+		})
+	}
+}

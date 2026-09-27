@@ -97,11 +97,37 @@ func TestWithoutTheFlagACallIsALeftoverParenthesis(t *testing.T) {
 }
 
 // TestAnUnclosedCallIsRefused rather than read to the end of the expression.
+//
+// **The parenthesis is the whole of what a read can refuse here**, and this
+// used to refuse three shapes more. An argument list that will not parse is
+// not a read failure in either column with the construct: measured 2026-09-26
+// from a script file with a `print` on the line in front, `$(( mf(5 6) ))`,
+// `$(( mf(,) ))` and `$(( mf(5,,6) ))` all print that line and then fail at
+// run time with `unknown function: mf` in zsh 5.9.2 — the *name* answering
+// before the argument text is weighed at all — where `$(( mf(5 ))` is `parse
+// error near ...` in the same shell and never reaches the line. Only a reader
+// that keeps the bytes can tell those apart, which is what
+// syntax.ArithCall.ArgumentsAreText is for.
 func TestAnUnclosedCallIsRefused(t *testing.T) {
 	t.Parallel()
-	for _, expr := range []string{"mf(5", "mf(5 6)", "mf(,)", "mf(5,,6)"} {
-		if err := arithErr(expr, mathCall(true)); err == nil {
-			t.Errorf("$((%s)) was read, want a refusal", expr)
+	if err := arithErr("mf(5", mathCall(true)); err == nil {
+		t.Errorf("$((mf(5)) was read, want a refusal")
+	}
+	// And the three that are *not* refused come back as a call carrying its
+	// text and no arguments, which is the positive this instrument owes: a
+	// reader that simply stopped refusing would satisfy the line above and
+	// hand the evaluator nothing to work with.
+	for _, expr := range []string{"mf(5 6)", "mf(,)", "mf(5,,6)", "mf( a , b c )"} {
+		x, ok := arithOf(t, "echo $(( "+expr+" ))", mathCall(true)).(*syntax.ArithCall)
+		if !ok {
+			t.Fatalf("parse %q: not a call node", expr)
+		}
+		if !x.ArgumentsAreText || len(x.Args) != 0 {
+			t.Errorf("parse %q: text %v, %d arguments, want text and none",
+				expr, x.ArgumentsAreText, len(x.Args))
+		}
+		if x.Text != expr {
+			t.Errorf("parse %q: text %q, want the call as written", expr, x.Text)
 		}
 	}
 	// A trailing comma before the `)` is not one of them: measured, `mf(5,)`

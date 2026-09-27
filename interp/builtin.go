@@ -3376,6 +3376,9 @@ func (r *Runner) unsetName(name string) int {
 // Split out rather than reached by recursion so that a tie which *survives*
 // the unset cannot send the removal round again — see unsetName.
 func (r *Runner) unsetOneName(name string) {
+	// Before the removal, because what is recorded is that there *was* a
+	// value here — see interp/shellhome.go.
+	r.noteHomeIsGoing(name)
 	delete(r.Vars, name)
 	// Recorded off rather than deleted, which the tri-state is there for:
 	// deleting the record puts the question back to the environment, and the
@@ -5584,6 +5587,17 @@ func (r *Runner) cdDestination(args []string, old string) (dir string, dash bool
 // set" — and ours said `HOME not set` where bash says nothing at all.
 func (r *Runner) cdHome() (dir string, code int, stop bool) {
 	home, set := r.getVar("HOME")
+	if !set && r.homeWasSet &&
+		r.ask(r.sem().CdRemembersAHomeThatWasUnset, "`cd` after the home directory was unset") {
+		// The shell keeps a home beside the parameter and **empties** it
+		// rather than removing it, so a `HOME` that has been unset is the
+		// same empty destination an inherited `HOME=` is. Measured: the row
+		// below this one is reached only by a shell that has never had one.
+		home, set = "", true
+	}
+	if r.unspecified {
+		return "", 2, true
+	}
 	if !set {
 		code, _ := r.cdNowhere(r.diag().CdHomeNotSet, "cd: HOME not set")
 		// With no HOME there is nowhere to go even for the dialects that

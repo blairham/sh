@@ -2746,6 +2746,10 @@ func (sh Shell) runInput(in source) int {
 	// defaults, so `--emulate sh -x` applied the other way round would have
 	// put out the trace it was given. See Shell.applyEmulation.
 	sh.applyEmulation(r, in)
+	// And the home directory a shell seeds for itself where the environment
+	// handed it none, which the emulation above is what decides — see
+	// interp.Runner.SeedHomeDirectory for why it cannot be done any earlier.
+	r.SeedHomeDirectory()
 	if code, ok := sh.applyOptions(r, in.opts); !ok {
 		return code
 	}

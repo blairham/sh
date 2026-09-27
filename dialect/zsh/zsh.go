@@ -3296,6 +3296,20 @@ func Semantics() interp.Semantics {
 	// the parent spelled it.
 	s.StartupPwdName = interp.StartupPwdNameFromTheKernel
 	s.CdWithoutHomeIsAnError = interp.No
+	// A shell started with no `HOME` at all seeds one from the password entry
+	// of the user the process runs as, and then a `cd` with no operand goes
+	// there. Measured 2026-09-26 on zsh 5.9.2: `env -u HOME zsh -c 'print -r
+	// -- $HOME'` writes the entry and the same line under the name `sh` writes
+	// nothing, which is why this is swapped by the emulation as well — see
+	// dialect/zsh/emulate.go and Semantics.StartupFillsAnAbsentHome (#4654).
+	s.StartupFillsAnAbsentHome = interp.Yes
+	// And once a shell has had a home, removing the parameter leaves it an
+	// empty destination rather than no destination: `HOME=/tmp; unset HOME;
+	// cd` is a silent 0 here and `HOME not set` at 1 in bash and ksh93, where
+	// a shell that has *never* had one says `HOME not set` in every column.
+	// The same answer under every emulation, which is what keeps it off the
+	// table beside cdNowhere. See Semantics.CdRemembersAHomeThatWasUnset.
+	s.CdRemembersAHomeThatWasUnset = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.No
 	// The same as bash, and it is the chunk `B01cd.ztst` ends on. Measured
 	// 2026-09-26 on zsh 5.9.2 (`-f`): with `d` renamed to `e`, `cd .` is 0

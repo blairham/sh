@@ -1829,6 +1829,10 @@ func Semantics() interp.Semantics {
 	// pre-set `reply` untouched. `reply` is zsh's parameter and not one this
 	// shell has ever heard of.
 	s.ReadArrayDefault = interp.ReadArrayDefaultIsAPlainRead
+	// A second operand is read on rather than refused here: `read -A a b`
+	// fills `a` and clears `b` at 0, where the other shell with the letter
+	// declines the line. Measured 2026-09-26 on ksh93u+ 2012-08-01 (#4622).
+	s.ReadArrayTakesOneNameOnly = interp.No
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
 	s.ReadTimeoutKeepsWhatArrived = interp.No

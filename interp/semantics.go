@@ -2363,6 +2363,38 @@ type Semantics struct {
 	// asked — bash's `-a` takes the name as the option's own argument and
 	// the other two have no array letter at all.
 	ReadArrayDefault ReadArrayDefaultStyle
+
+	// ReadArrayTakesOneNameOnly refuses a `read -A` that names a second
+	// operand, where the other shell with the letter reads into the first
+	// and **clears** the rest.
+	//
+	// Both shells spell it `-A`, so the letter cannot carry this the way it
+	// carries the `-a`/`-A` differences — the same reason ReadArrayDefault
+	// above needs an axis. Measured 2026-09-26 with `b=keep c=keep` in
+	// front of each line and `<<<'1 2 3 4'` behind it:
+	//
+	//	                   zsh 5.9.2                       ksh93u+
+	//	read -A a b c      only one array argument         a=(1 2 3 4), b and c
+	//	                   allowed, 1, a=() b=keep c=keep  cleared, 0
+	//	read -A a b        the same refusal                the same, 0
+	//	read -A a          a=(1 2 3 4), 0                  a=(1 2 3 4), 0
+	//
+	// The third row is the control: one name is right in both columns, so
+	// what the axis is about is the *second* operand and nothing else.
+	//
+	// The refusal happens **before the read**, which the first row's `b=keep`
+	// says: it is a line the shell declines rather than a read that fills
+	// what it can and then complains, and the input is left for the next
+	// reader.
+	//
+	// Asked only where a second operand really is there, which is where the
+	// two part company. Diagnostics.ReadOnlyOneArray is the wording.
+	//
+	// unexhibited No: the shell that reads on writes it, and bash, dash and
+	// BusyBox ash cannot be asked — bash's `-a` takes its name as the
+	// option's own argument, so every operand after it is a name to fill in
+	// the ordinary way, and the other two have no array letter at all.
+	ReadArrayTakesOneNameOnly Answer
 	// ReadPartialCountSucceeds decides `read -n N` when the input ends
 	// after some but fewer than N characters: ksh93 calls the read a
 	// success and bash reports 1, both keeping what arrived. Asked only

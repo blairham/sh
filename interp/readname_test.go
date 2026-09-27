@@ -16,6 +16,12 @@ import (
 // cannot see the difference without this — the mutant that filled it anyway
 // survived, because both answers rendered `arr=[]`.
 func arraySemantics(s *Semantics) {
+	// Read on past a second operand rather than refusing the line, which is
+	// what these cases are about: the operands behind the array are the
+	// subject, so the axis that can decline them has to be answered. See
+	// Semantics.ReadArrayTakesOneNameOnly, whose other value is pinned in
+	// dialect/zsh.
+	s.ReadArrayTakesOneNameOnly = No
 	s.ArraysAreSparse = Yes
 	s.ArrayScalarIsTheWholeArray = No
 	s.ArrayLiteralSubscriptIsAKey = No

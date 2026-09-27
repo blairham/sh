@@ -6030,6 +6030,23 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if strings.Contains(opts, "A") {
 		if len(args) > 0 {
 			array, named, args = args[0], true, args[1:]
+			if len(args) > 0 {
+				// A second operand, which is the one place the two shells
+				// with this letter part company: one refuses the line
+				// outright and the other clears the names behind the array.
+				// See Semantics.ReadArrayTakesOneNameOnly, and note that the
+				// refusal comes before the read — nothing is filled, nothing
+				// is cleared, and the input is left for the next reader.
+				if r.ask(r.sem().ReadArrayTakesOneNameOnly,
+					"`read -A` refusing a second operand") {
+					r.diagf("%s\n", Wording(r.diag().ReadOnlyOneArray,
+						"read: only one array argument allowed"))
+					return 1
+				}
+				if r.unspecified {
+					return r.status
+				}
+			}
 		} else {
 			// No name for the letter to apply to, which the two shells with
 			// the `-A` spelling answer differently — so this one question
@@ -6151,10 +6168,10 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		r.settleBackgroundJobBeforeABlockingRead(in)
 	}
 	if query {
-		return r.readQueryInto(next, keys, args)
+		return r.readQueryInto(next, keys, r.readKeyTarget(array, named, args))
 	}
 	if readsKeys {
-		return r.readKeysInto(next, keys, args)
+		return r.readKeysInto(next, keys, r.readKeyTarget(array, named, args))
 	}
 	text, lits, end := readSegment(next, raw, delim, count, exact,
 		r.countsTheLocalesCharacters, r.readCharacterWidth)

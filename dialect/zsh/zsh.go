@@ -2510,6 +2510,11 @@ func Semantics() interp.Semantics {
 	// `REPLY`, and `reply=scalar; read <<<'plain'` leaves `reply` alone and
 	// puts the line in `REPLY`.
 	s.ReadArrayDefault = interp.ReadArrayDefaultIsTheArrayReply
+	// And a *second* operand is a line this shell declines: `read -A a b`
+	// is `only one array argument allowed` at 1 with nothing read, where
+	// the other shell with the letter fills the first name and clears the
+	// rest (#4622).
+	s.ReadArrayTakesOneNameOnly = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.Yes
 	s.ArithLeadingZeroIsOctal = interp.No
@@ -5077,7 +5082,10 @@ func Diagnostics() interp.Diagnostics {
 		// `zsh:functions:1: -Ms: must take a single string argument`, at 1
 		// and with nothing registered. Measured 2026-09-26 on zsh 5.9.2.
 		MathFunctionStringArity: "%s: -Ms: must take a single string argument",
-		ReadNoCoprocess:         "read: -p: no coprocess",
+		// `zsh:read:1: only one array argument allowed`, at 1 and before
+		// the read. Measured 2026-09-26 on zsh 5.9.2.
+		ReadOnlyOneArray: "read: only one array argument allowed",
+		ReadNoCoprocess:  "read: -p: no coprocess",
 		// `zsh:read:1: argument expected: -d` — the letter after the
 		// sentence, unlike everyone else, and status 1 like every other
 		// option complaint here.

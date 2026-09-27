@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/interp"
 )
@@ -407,7 +408,14 @@ func testStyle(r *interp.Runner, ctx context.Context, mode string, args []string
 		// leaves it `no` and reports 1.
 		r.SetVar(args[2], styleBoolWord(found && truthyStyle(values, nil)))
 	case "m":
-		return styleStatus(found && len(values) > 0 && r.MatchPattern(args[2], values[0]))
+		// **Any** value, not the first one. Measured 2026-09-26 on zsh
+		// 5.9.2 with `zstyle :c s array value elements 'with spaces'`:
+		// `-m :c s 'arr*'` is 0, and so are `-m :c s value` and `-m :c s
+		// 'w* *s'` — the second and the fourth value — while `-m :c s v`
+		// and `-m :c s nope` are 1. Reading only element zero made the
+		// first row pass and the other two fail, which is the shape that
+		// reads as "patterns work" (#4602).
+		return styleStatus(found && styleValueMatches(r, args[2], values))
 	case "t", "T":
 		if !found {
 			if mode == "T" {
@@ -445,6 +453,29 @@ func truthyStyle(values, against []string) bool {
 // The styles come out in alphabetical order, which is measured rather than
 // incidental — three set as s3, s1, s2 list as s1, s2, s3 — and the patterns
 // under each are in the specificity order the rest of this file is about.
+//
+// **The values are quoted and the pattern is not**, which is measured and is
+// not what either half reads like. Measured 2026-09-26 on zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `-f` with `env -u FPATH`:
+//
+//	zstyle ':a b:*' st 'v v'    →    st
+//	                                         :a b:* 'v v'
+//
+// so a pattern holding a *space* is written bare here while a value holding
+// one is quoted — where `-L`, which writes a line that has to read back as a
+// command, quotes both. That is the discriminating pair: a reading of "quote
+// what needs it" would quote the pattern too, and this listing is a display
+// rather than a command.
+//
+// The quoting is [quoteStyleWord], which `-L` already used — so the two
+// renderings of one table cannot come to disagree about what needs a quote.
+// This wrote the values raw, and a value holding a space was indistinguishable
+// from two values (#4602).
+//
+// **The indent is the `-e` marker's field**, and it is eight columns either
+// way: `(eval)` and two spaces for a style whose values are a body to run,
+// eight spaces for an ordinary one. Measured in the same run, and found
+// because it is the same line.
 func listStyles(r *interp.Runner) {
 	entries := styleOrder(readStyles(r))
 	var styles []string
@@ -460,7 +491,11 @@ func listStyles(r *interp.Runner) {
 			if e.style != s {
 				continue
 			}
-			_, _ = fmt.Fprintf(r.Out(), "        %s\n", strings.Join(append([]string{e.pattern}, e.values...), " "))
+			words := []string{e.pattern}
+			for _, v := range e.values {
+				words = append(words, quoteStyleWord(v))
+			}
+			_, _ = fmt.Fprintf(r.Out(), "%s%s\n", styleListingIndent(e.eval), strings.Join(words, " "))
 		}
 	}
 }
@@ -482,7 +517,12 @@ func listStyleCommands(r *interp.Runner, args []string) int {
 		if e.eval {
 			words = append(words, "-e")
 		}
-		words = append(words, quoteStyleWord(e.pattern), e.style)
+		// The style's *name* is quoted too, which the values and the
+		// pattern make easy to miss: measured 2026-09-26, `zstyle
+		// $'con\x00text' $'ke\x00y' $'val\x00u' e` comes back with all
+		// three in the escaped form, so every operand of the line this
+		// writes goes through the same speller.
+		words = append(words, quoteStyleWord(e.pattern), quoteStyleWord(e.style))
 		for _, v := range e.values {
 			words = append(words, quoteStyleWord(v))
 		}
@@ -491,19 +531,89 @@ func listStyleCommands(r *interp.Runner, args []string) int {
 	return 0
 }
 
+// styleValueMatches reports whether any of a style's values matches the
+// pattern, which is what `-m` asks.
+func styleValueMatches(r *interp.Runner, pattern string, values []string) bool {
+	for _, v := range values {
+		if r.MatchPattern(pattern, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// styleListingIndent is what stands in front of a pattern's row in the bare
+// listing: the `-e` marker where the style's values are a body to run, and
+// blanks where they are not. Eight columns in both spellings.
+func styleListingIndent(eval bool) string {
+	if eval {
+		return "(eval)  "
+	}
+	return "        "
+}
+
 // styleSafe are the characters a word may be made of and still be printed
 // bare by `-L`. Measured one character at a time, and it is not the same set
 // as the metacharacters the ordering asks about: `~` and `=` are quoted here
 // and sort as exact there, `!` and `%` are bare here.
 const styleSafe = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./:,+@%!-"
 
-// quoteStyleWord spells one word the way `-L` does: bare when it can be, and
-// otherwise in single quotes with any quote of its own broken out.
+// quoteStyleWord spells one word the way `-L` does: bare when it can be, then
+// single quotes with any quote of its own broken out, and `$'…'` where the
+// word holds a byte that single quotes cannot carry back.
+//
+// The third form is not a nicety. A listing is meant to read back as the
+// command that made it, and a raw control byte makes the whole output binary —
+// a NUL ends the word for anything reading the line. Measured 2026-09-26 on
+// zsh 5.9.2 (aarch64-apple-darwin25.4.0), the bytes written out and read back
+// with `od -c`:
+//
+//	value            written as
+//	con<NUL>text     $'con\C-@text'
+//	a<TAB>b          $'a\tb'
+//	c<LF>d           $'c\nd'
+//	e<0x01>f         $'e\C-Af'
+//	g<DEL>h          $'g\C-?h'
+//	has <0x01> sp    $'has \C-A and space'    — the space stays literal
+//	q<0x01>'r        $'q\C-A\'r'
+//	s<0x01>\t        $'s\C-A\\t'
+//
+// So the control vocabulary is the caret pair with `\t` and `\n` named, which
+// is [interp.QuoteControlCaret]'s, and inside the form only the quote and the
+// backslash need anything — the sixth row is what says a space does not, and
+// it is the row a "quote everything that is not safe" reading gets wrong.
 func quoteStyleWord(s string) string {
-	if s != "" && strings.Trim(s, styleSafe) == "" {
+	if q, rendered := interp.QuoteControlCaret(s); rendered {
+		return q
+	}
+	if styleWordIsBare(s) {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// styleWordIsBare reports whether a word may be written without quotes: every
+// character of it either in styleSafe or a **rune** above ASCII.
+//
+// The second clause is measured rather than assumed, and a `styleSafe`
+// membership test alone gets it wrong: `héx` is written bare by the reference
+// where a byte-wise reading quotes it. A high byte that is *not* part of a
+// rune never reaches here — quoteStyleWord has already moved the whole word
+// into the `$'…'` form for it, which is the other half of the same
+// measurement.
+func styleWordIsBare(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r >= utf8.RuneSelf {
+			continue
+		}
+		if !strings.ContainsRune(styleSafe, r) {
+			return false
+		}
+	}
+	return true
 }
 
 // setStyleArray puts a list into an indexed array, which is what `-g` and

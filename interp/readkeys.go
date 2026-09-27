@@ -238,7 +238,10 @@ func (r *Runner) readNoTerminal() int {
 // A leading blank survives too — `read -k 3` over `  x` gives `  x` — which is
 // the same fact from the other side and is what a widget reading a keystroke
 // needs, since a space is a key somebody pressed.
-func (r *Runner) readKeysInto(next func() (byte, int), count int, args []string) int {
+//
+// The name is settled by the caller, because `-A` moves it: see
+// Runner.readKeyTarget.
+func (r *Runner) readKeysInto(next func() (byte, int), count int, name string) int {
 	// Memoized: a read of many characters must not put the same locale
 	// question to the axis machinery once per character.
 	locale, asked := false, false
@@ -250,10 +253,6 @@ func (r *Runner) readKeysInto(next func() (byte, int), count int, args []string)
 	})
 	if r.unspecified {
 		return 2
-	}
-	name := "REPLY"
-	if len(args) > 0 {
-		name = args[0]
 	}
 	if !r.isReadName(name) {
 		if r.unspecified {
@@ -354,8 +353,9 @@ func readQueryAnswer(text string, whole bool) (reply string, status int) {
 //
 // It reads through the same counter `read -k` uses — the letters compose, and
 // `-q -k2` reads two characters before judging them — and then stores the
-// verdict rather than the keys.
-func (r *Runner) readQueryInto(next func() (byte, int), count int, args []string) int {
+// verdict rather than the keys. The name is the caller's for the same reason
+// `read -k`'s is — see Runner.readKeyTarget.
+func (r *Runner) readQueryInto(next func() (byte, int), count int, name string) int {
 	locale, asked := false, false
 	text, whole := readKeysFrom(next, count, func() bool {
 		if !asked {
@@ -365,10 +365,6 @@ func (r *Runner) readQueryInto(next func() (byte, int), count int, args []string
 	})
 	if r.unspecified {
 		return 2
-	}
-	name := "REPLY"
-	if len(args) > 0 {
-		name = args[0]
 	}
 	if !r.isReadName(name) {
 		if r.unspecified {
@@ -385,4 +381,40 @@ func (r *Runner) readQueryInto(next func() (byte, int), count int, args []string
 		return st
 	}
 	return status
+}
+
+// readKeyTarget is the one name `read -k` and `read -q` fill.
+//
+// Three candidates and they are asked in this order: the name `-A` took,
+// which includes the dialect's default array where the letter was written
+// with no operand; then the first ordinary operand; then the shell's own
+// `REPLY`.
+//
+// The `-A` case is the one this exists for. Measured 2026-09-26 on zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `-f` with `env -u FPATH`, each row seeded with
+// `REPLY=S` in front of it:
+//
+//	a=A0;       read -k2 -u0 -A a <<<'xy'   a is `xy`,  REPLY is still S
+//	reply=(R0); read -k2 -u0 -A   <<<'xy'   reply `xy`, REPLY is still S
+//	a=A0;       read -q  -u0 -A a <<<'y'    a is `y`,   REPLY is still S
+//
+// Both halves of each row matter: the named parameter really is written, and
+// `REPLY` — which these two used to write instead — is not touched at all. A
+// script that seeded either one can tell.
+//
+// **What lands there is a scalar**, and that is measured rather than assumed:
+// `${(t)a}` is `scalar` afterwards even when `a` was an array first, and so is
+// `${(t)reply}` after the default form, though `reply` is an array parameter
+// before it. So `-A` moves the *name* these letters fill and does not make the
+// text a list — which is the reading the count refutes: `${#a[@]}` is 2 after
+// reading `xy`, the length of a scalar rather than the count of a one-element
+// array.
+func (r *Runner) readKeyTarget(array string, named bool, args []string) string {
+	switch {
+	case named:
+		return array
+	case len(args) > 0:
+		return args[0]
+	}
+	return "REPLY"
 }

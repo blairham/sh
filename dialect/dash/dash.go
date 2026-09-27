@@ -511,6 +511,9 @@ func Semantics() interp.Semantics {
 	// unanswered ReadArrayDefault: there is no array letter here at all —
 	// no `-a`, no `-A` — and no arrays for one to fill, so the question
 	// cannot be put to this shell.
+	// unanswered ReadArrayTakesOneNameOnly: no array letter at all, so
+	// `read -A` is an unknown option here and the question cannot be put.
+	// Measured 2026-09-26 on dash 0.5.13.
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
 	// unanswered CodePointPastSixBytesIsEncoded: the question comes after a

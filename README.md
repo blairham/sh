@@ -10,11 +10,11 @@ A shell parser and interpreter in Go.
 **Status: early — these are `0.x` tags and they mean it.** The core parser
 and interpreter are in place, and all five dialect binaries grade against a
 panel of the real shells they model. Measured on macOS with
-`make conformance-dialects`, 2026-09-22, 4423 cases each:
+`make conformance-dialects`, 2026-09-27, 4488 cases each:
 
 | our binary | graded against | exact | behavioral |
 | --- | --- | --- | --- |
-| `bash` | bash 5.3.20 | 97% | **100%** |
+| `bash` | bash 5.3.20 | 98% | **100%** |
 | `zsh` | zsh 5.9.2 | 98% | 99% |
 | `dash` | dash | 98% | **100%** |
 | `ksh` | ksh93 AJM 93u+ | 96% | 99% |
@@ -31,7 +31,7 @@ Where the two disagree, the common denominator of the panel decides and the
 difference is written down — `~` after a `HOME` assignment is the worked
 example, in `docs/spec/grammar/expansion.md`. The distance between the two columns is now mostly wording, which it
 was not when this paragraph last said otherwise: in `ksh`, the column that has
-been counted, the 172 non-exact cases split **142 wording to 30 behavioral**,
+been counted, the 171 non-exact cases split **142 wording to 29 behavioral**,
 against 93 to 126 on 2026-09-15. Behavior lands spec-first, per `CLEANROOM.md`.
 
 ## What makes this different
@@ -113,7 +113,7 @@ short.
   option to six different builtins, running a directory, `exit foo` — each
   run once through the real shell and through ours under a matching
   `argv[0]`, compared on stderr and exit status together. Re-measured
-  2026-09-22: byte-identical **20/20 on every one of the five**, 100 of 100,
+  2026-09-27: byte-identical **20/20 on every one of the five**, 100 of 100,
   `ash` included — its reference is a container, and the 16/20 it read on
   2026-09-16 is gone along with the `ksh` and `zsh` misses of that day.
   Twenty common situations is a sample and not a census, and the corpus

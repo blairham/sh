@@ -32,25 +32,30 @@ func withAttributePhrases(s *Semantics) {
 	s.TypesetLocalNeedsKeywordFunction = No
 }
 
-// phraseRun is declRun with the one row the framework itself puts in this
-// listing taken back off.
+// phraseRun is declRun with the two rows nothing in this suite is about taken
+// back off.
 //
 // This suite is the only one that has to care, because it is the only one
 // whose output is over **every name the shell holds**: the test framework
 // hands each Runner a `TMPDIR` of its own so that nothing reaches the real
 // one, and an exported name is exactly what this listing writes. So `export
-// TMPDIR` stood in front of every table below. It is dropped here rather than
-// written into each expectation, and dropping it is checked — a framework
-// that stopped exporting the name would turn this red rather than quietly
-// making every table one row shorter.
+// TMPDIR` stood in front of every table below. `export PWD` is the second and
+// is the shell's own rather than the framework's — every shell in the panel
+// hands the name down, which is what interp/inheritedpwd.go's exportStartupPwd
+// records. Both are dropped here rather than written into each expectation,
+// and dropping each is checked — a startup that stopped exporting either would
+// turn this red rather than quietly making every table one row shorter.
 func phraseRun(t *testing.T, src string, set func(*Semantics)) (string, string, int) {
 	t.Helper()
 	out, errs, st := declRunEnv(t, src, set, Diagnostics{}, nil)
-	const framework = "export TMPDIR\n"
-	if !strings.Contains(out, framework) && !strings.Contains(out, "TMPDIR") {
-		t.Fatalf("the framework no longer exports TMPDIR, so this suite is stripping nothing: %q", out)
+	for _, name := range [...]string{"TMPDIR", "PWD"} {
+		row := "export " + name + "\n"
+		if !strings.Contains(out, row) && !strings.Contains(out, name) {
+			t.Fatalf("%s is no longer exported, so this suite is stripping nothing: %q", name, out)
+		}
+		out = strings.Replace(out, row, "", 1)
 	}
-	return strings.Replace(out, framework, "", 1), errs, st
+	return out, errs, st
 }
 
 // The headline, and the control is in the same run: `plain` is assigned and

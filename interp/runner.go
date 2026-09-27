@@ -11631,6 +11631,10 @@ func (r *Runner) ensurePWD() {
 	if _, ok := r.Vars["PWD"]; ok {
 		return
 	}
+	// The name is exported however it is settled, which is a fact about the
+	// parameter rather than about where its value came from — see
+	// exportStartupPwd.
+	defer r.exportStartupPwd()
 	// Two shells in the panel take a name from the environment rather than
 	// asking the kernel, and which name the shell knows its own directory by
 	// follows from that — see StartupPwdNamePolicy, where the paragraph above

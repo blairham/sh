@@ -73,9 +73,11 @@ func TestAListedNulIsNeverWrittenRaw(t *testing.T) {
 // shells drop the command word for the bare form alone and leave a plain
 // assignment, which no `-p` anywhere writes.
 func TestBareExportAndReadonlyHaveAShapeOfTheirOwn(t *testing.T) {
-	// TMPDIR arrives exported from the harness and would list too; the case
-	// is about the shape of a row rather than about which rows there are.
-	src := "unset TMPDIR\nexport V='a b'\nreadonly R=2\nexport\nreadonly\nexport -p\nreadonly -p"
+	// TMPDIR arrives exported from the harness and PWD is exported by the
+	// startup, as it is in every shell in the panel; both would list too, and
+	// the case is about the shape of a row rather than about which rows there
+	// are. `unset` is what takes the export attribute off a name.
+	src := "unset TMPDIR PWD\nexport V='a b'\nreadonly R=2\nexport\nreadonly\nexport -p\nreadonly -p"
 	out, errs, st := listRun(t, src, func(s *Semantics) {
 		s.ExportListing = DeclareListingCommandWord
 		s.ReadonlyListing = DeclareListingCommandWord

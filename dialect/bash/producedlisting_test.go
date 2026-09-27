@@ -68,7 +68,7 @@ func TestListingAProducedParameterDoesNotChangeWhatAssigningItDoes(t *testing.T)
 // neither the gate nor the cache is modeled here, and both are #2722 (#2518).
 func TestABareListingWritesTheProducedNamesWithNoReading(t *testing.T) {
 	dir := t.TempDir()
-	out, st := runBash(t, dir, "declare -p")
+	out, st := runBash(t, dir, "ord=1\ndeclare -p")
 	if st != 0 {
 		t.Fatalf("declare -p answered %d, want 0: %q", st, out)
 	}
@@ -86,8 +86,12 @@ func TestABareListingWritesTheProducedNamesWithNoReading(t *testing.T) {
 	//
 	// It used to be `OPTIND`, which is no longer ordinary: this shell gives
 	// its own parameters the integer attribute and that one carries it —
-	// `declare -i OPTIND="1"`, measured 2026-09-18 (#3099).
-	if want := regexp.MustCompile(`(?m)^declare -- PWD="`); !want.MatchString(out) {
+	// `declare -i OPTIND="1"`, measured 2026-09-18 (#3099). Then `PWD`, which
+	// is not ordinary either: the startup exports it, as bash 5.3.20 does —
+	// `declare -x PWD="…"` there, measured 2026-09-27 under `env -i` with a
+	// scratch HOME. So the control is a name this snippet assigns, which is
+	// `declare -- ord="1"` in that shell and here.
+	if want := regexp.MustCompile(`(?m)^declare -- ord="1"$`); !want.MatchString(out) {
 		t.Errorf("declare -p = %q, want an ordinary name to keep its value", out)
 	}
 	// And a produced name asked for by hand still carries one, from the same

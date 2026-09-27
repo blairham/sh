@@ -810,6 +810,9 @@ func (r *Runner) tildeModifierOpts(o patternOpts, pattern string) patternOpts {
 		return o
 	}
 	o.tilde = true
+	// Never cleared on the way down, unlike tilde: a group standing in the
+	// middle of the pattern is found by the walk rather than here.
+	o.tildeFold = true
 	body, rest, ok := splitTildeModifier(pattern)
 	if !ok {
 		return o

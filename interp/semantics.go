@@ -3761,12 +3761,20 @@ type Semantics struct {
 	// echo $e$g` is `a b`, the two halves of a group arriving from different
 	// expansions.
 	//
-	// A brace pairs only with one of its **own** provenance. A produced `}`
-	// does not close a written `{` — `e='}'; echo {a,b$e` is `{a,b}` — while
-	// two produced ones do: `e='{}'; echo $e{a,b}` is `{}a {}b`, the empty
-	// produced group failing and the written one behind it still a list. A
-	// produced `{` with nothing of its own to close it is an unmatched brace
-	// and takes the word: `e='{'; echo $e{a,b}` is `{{a,b}`.
+	// Which braces **pair** is not symmetric, and the short form of it — a
+	// brace pairs only with one of its own provenance — is right about a
+	// produced `}` and too strong about a written one. A produced `}` does
+	// not close a written `{`: `e='}'; echo {a,b$e` is `{a,b}`. A **written**
+	// `}` closes either kind: `e='{'; echo ${e}a,b}` is `a b`. Two produced
+	// ones pair as well — `e='{}'; echo $e{a,b}` is `{}a {}b`, the empty
+	// produced group failing and the written one behind it still a list.
+	//
+	// Depth is counted over every unquoted brace whatever produced it, which
+	// is what keeps `e='{'; echo $e{a,b}` the unmatched `{{a,b}` and what
+	// makes `e='{'; echo {a,${e}b}` the unmatched `{a,{b}`. A `}` the pairing
+	// rule will not take spends no depth either, so `e='}'; echo {a,b${e}c}`
+	// is `a b}c` and not `a b`. See interp/bracefields.go's braceClassOf and
+	// interp/brace.go's matchBraceAcrossRead for the tables (#4849).
 	//
 	// A run the script wrote inside quotes is brace syntax in no column, and
 	// the *result* of a quoted expansion is not read either: `echo "{a,b}"`

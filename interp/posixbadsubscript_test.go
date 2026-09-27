@@ -109,3 +109,76 @@ func TestADialectThatNeverGivesUpTheLineIsUnmovedByTheMode(t *testing.T) {
 		}
 	}
 }
+
+// A **substring range** is the second shape the mode does not reach, and it
+// is a second shape rather than the same one: what escapes the mode is the
+// *reader*, not the fact that the text stands inside a parameter expansion.
+//
+// The last two rows are what say so and are the reason this is not one rule
+// with the subscript above. An arithmetic expansion written inside the range
+// is sharpened like any other, which rules out "an expression inside a
+// parameter expansion" — the tidy reading that would have made both shapes
+// one field. Measured 2026-09-27 on bash 5.3.20 and on the 3.2.57 macOS
+// ships, which agree on every range row (#4804).
+func TestPosixModeDoesNotSharpenASubstringRange(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name     string
+		probe    string
+		sharpens bool
+	}{
+		{"an offset that will not evaluate", "echo ${v:1+}", false},
+		{"a length that will not evaluate", "echo ${v:0:1+}", false},
+		{"a list's offset", "echo ${a[@]:1+}", false},
+		{"a list's length", "echo ${a[@]:0:1+}", false},
+		{"a list's negative length, which is refused outright", "echo ${a[@]:1:-1}", false},
+		{"the same range in a store", "x=${v:1+}", false},
+		{"the same range inside a function", "g() { echo ${v:1+}; }\ng", false},
+
+		// The discriminator, and the control. An expression written *in* the
+		// range is an arithmetic expansion of its own and is sharpened, so
+		// what the mode does not reach is the range's own reader rather than
+		// the place the text stands in.
+		{"an arithmetic expansion inside the range", "echo ${v:$((1/0))}", true},
+		{"a division by zero", "echo $((1/0))", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			src := "a=(1 2 3)\nv=abcdef\n" + c.probe + "\necho AFTER\n"
+			inMode, _ := posixExpansionRun(t, src, true, RouteScriptFile, 0)
+			without, _ := posixExpansionRun(t, src, false, RouteScriptFile, 0)
+			if !strings.Contains(without, "AFTER") {
+				t.Fatalf("%q without the mode: got %q, want the next line to run", c.probe, without)
+			}
+			if c.sharpens && strings.Contains(inMode, "AFTER") {
+				t.Errorf("%q in the mode: got %q, want the shell ended", c.probe, inMode)
+			}
+			if !c.sharpens && !strings.Contains(inMode, "AFTER") {
+				t.Errorf("%q in the mode: got %q, want the next line to run", c.probe, inMode)
+			}
+		})
+	}
+}
+
+// And a range gives up **the line and nothing more**, where a bracketed
+// expression gives a command string up whole. That is the second reason the
+// two shapes are two flags: read as one, `echo ${v:1+}` would take a
+// subscript's unwinding.
+func TestASubstringRangeGivesUpOnlyTheLineFromACommandString(t *testing.T) {
+	t.Parallel()
+	for _, posix := range []bool{true, false} {
+		src := "v=abcdef\necho ${v:1+}\necho AFTER\n"
+		out, st := posixExpansionRun(t, src, posix, RouteCommandString, 127)
+		if !strings.Contains(out, "AFTER") {
+			t.Errorf("posix=%v: got %q, want the next line to run", posix, out)
+		}
+		if st != 0 {
+			t.Errorf("posix=%v: status %d, want the next line's own", posix, st)
+		}
+	}
+	// The contrast, in the same call shape: brackets, and nothing after them.
+	out, st := posixExpansionRun(t, "a=(1 2)\necho ${a[1+]}\necho AFTER\n", true, RouteCommandString, 127)
+	if strings.Contains(out, "AFTER") || st != 1 {
+		t.Errorf("a subscript = %q (status %d), want the string given up whole at 1", out, st)
+	}
+}

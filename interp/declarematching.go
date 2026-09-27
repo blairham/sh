@@ -196,6 +196,10 @@ func patternHalves(operands []string) []string {
 // attribute would silently fall off the end of.
 func withoutMatching(f declareFlags) declareFlags {
 	f.matching, f.matchNames, f.remove, f.added = false, false, false, false
+	// And the record of a sign written *alone*, which is the same fact as
+	// `remove` read one way further: it says what the word was, not what a
+	// name carries. See declareFlags.plusAlone.
+	f.plusAlone = false
 	// And the inheritance letter, which is not something a *name* carries:
 	// it says where the binding this declaration makes starts from, and it
 	// leaves no attribute behind for a listing to filter on or for a bare

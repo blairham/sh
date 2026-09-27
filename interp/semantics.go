@@ -33177,19 +33177,42 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 // afterwards. A `.` is the same shape one number further on: it reports 126
 // and the script carries on, measured 2026-09-18 and unmoved by this.
 //
-// Two rows this deliberately does **not** reach, both measured the same day
-// and both currently answered with the ordinary fatal status here: the same
-// refusal inside `( … )` or inside a command substitution leaves **0** in
-// that shell on either route, where every other give-up leaves 1 or 2 through
-// the same boundary. That is what the refusal *leaves behind* rather than
-// which route ended the shell, so it is a separate question and is filed as
-// one.
+// A **subshell** and a command substitution leave the nought too, on either
+// route, and that is what turned this from a statement about the route into
+// a statement about the refusal (#4803). Measured 2026-09-27, each as
+// `( <probe> ); print after=$?` from a script file and from `-c` alike:
+//
+//	( case '[a' in ([a) :;; esac )   after=0
+//	( echo $((1/0)) )                after=1
+//	( : ${x[1+]} )                   after=1
+//	( [[ '[a' == [a ]] )             after=2
+//	( set -u; : $nope )              after=1
+//	( typeset -m '[a' )              after=1
+//	( print -rl -- [a )              after=1
+//	v=$( case '[a' in ([a) :;; esac )  after=0
+//	( eval 'case "[a" in ([a) :;; esac' )  after=1
+//
+// The six controls are what make this the `case` arm's refusal and not the
+// boundary: every other give-up carries its own status across the same
+// boundary unchanged. The `eval` row is the second control and is the one
+// that fixes the shape of the rule — a boundary that **reports** rather than
+// one that copies keeps the ordinary number, so what is nought is what the
+// refusal *wrote* rather than what the boundary made of it. Nested and
+// deeper-framed shapes follow from that and were measured too: a subshell
+// inside a function, a subshell inside a subshell, a command substitution of
+// a function whose body holds the arm, and an arm reached through a function
+// called inside a subshell are all 0.
 func (r *Runner) refusedPatternStatus(surface patternSurface, badStatus int) int {
 	if badStatus != 0 {
 		return badStatus
 	}
-	if surface == patternInACaseArm && r.diag().CasePatternRefusalEndsACommandStringAtNought &&
-		r.Route == RouteCommandString && !r.inSubshell && len(r.borrowed) == 0 {
+	if surface != patternInACaseArm || !r.diag().CasePatternRefusalLeavesNought ||
+		len(r.borrowed) != 0 {
+		return r.fatalStatus()
+	}
+	// What the refusal left, wherever nothing has overwritten it: the two
+	// outermost routes do, and a boundary that copies the shell does not.
+	if r.inSubshell || r.Route == RouteCommandString {
 		return 0
 	}
 	return r.fatalStatus()

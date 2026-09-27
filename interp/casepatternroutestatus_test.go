@@ -52,31 +52,61 @@ func TestARefusedCaseArmPatternMayAnswerByHowTheShellStarted(t *testing.T) {
 	}
 }
 
-// And the answer belongs to the shell that was handed the string rather than
-// to every runner under it: a function is the same shell and keeps it, a
-// subshell and a command substitution are copies and do not, and borrowed text
-// is a boundary of its own and does not either.
+// And the nought is what the **refusal leaves**, not what a route decides: it
+// survives every boundary that copies the shell, and only the two outermost
+// routes overwrite it.
 //
-// The set is the shape. A subshell row alone cannot tell "a boundary drops it"
-// from "only the outermost statement carries it", and the function row is what
-// says the discriminator is the boundary rather than the frame.
-func TestTheCaseArmNoughtBelongsToTheShellHandedTheString(t *testing.T) {
+// Every row is run on both routes, and the pairing is what carries the claim.
+// A subshell row on one route alone cannot tell "a boundary drops it" from
+// "only the outermost statement carries it"; a subshell that answers nought
+// from a *script file*, where the shell itself answers 1, can only be the
+// refusal's own number surviving. The function row is the control on the
+// other side — the same shell, a deeper frame, no boundary — and borrowed
+// text is the row that keeps the rule from being "anything nested": an `eval`
+// **reports** rather than copies, so it keeps the ordinary number, inside a
+// subshell as well as out of one.
+func TestTheCaseArmNoughtIsWhatTheRefusalLeaves(t *testing.T) {
 	for _, c := range []struct {
-		name string
-		src  string
-		want int
+		name             string
+		src              string
+		fromArg, fromFil int
 	}{
-		{"the shell itself", caseArm, 0},
-		{"a function it calls", "f() { " + strings.TrimSuffix(caseArm, "\n") + " }\nf\n", 0},
-		{"a subshell", "( case '[a' in ([a) :;; esac )\n", 1},
-		{"a command substitution", "v=$( case '[a' in ([a) :;; esac )\n", 1},
-		{"borrowed text", "eval 'case \"[a\" in ([a) :;; esac'\n", 1},
+		{"the shell itself", caseArm, 0, 1},
+		{"a function it calls", "f() { " + strings.TrimSuffix(caseArm, "\n") + " }\nf\n", 0, 1},
+		{"a subshell", "( case '[a' in ([a) :;; esac )\n", 0, 0},
+		{"a subshell inside a function", "f() { ( case '[a' in ([a) :;; esac ) }\nf\n", 0, 0},
+		{"a subshell inside a subshell", "( ( case '[a' in ([a) :;; esac ) )\n", 0, 0},
+		{"a command substitution", "v=$( case '[a' in ([a) :;; esac )\n", 0, 0},
+		{"borrowed text", "eval 'case \"[a\" in ([a) :;; esac'\n", 1, 1},
+		{"borrowed text in a subshell", "( eval 'case \"[a\" in ([a) :;; esac' )\n", 1, 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if got := caseArmStatus(t, c.src, RouteCommandString, true); got != c.want {
-				t.Errorf("%q: status = %d, want %d", c.src, got, c.want)
+			if got := caseArmStatus(t, c.src, RouteCommandString, true); got != c.fromArg {
+				t.Errorf("%q from an argument: status = %d, want %d", c.src, got, c.fromArg)
+			}
+			if got := caseArmStatus(t, c.src, RouteScriptFile, true); got != c.fromFil {
+				t.Errorf("%q from a file: status = %d, want %d", c.src, got, c.fromFil)
 			}
 		})
+	}
+}
+
+// And every one of those cells is the dialect's ordinary fatal status with the
+// field off, which is the control that says the field is what decides and not
+// the boundary. Without it the subshell rows above would read the same for a
+// shell that simply lost the status at a boundary.
+func TestWithoutTheFieldEveryBoundaryCarriesTheOrdinaryStatus(t *testing.T) {
+	for _, src := range []string{
+		caseArm,
+		"( case '[a' in ([a) :;; esac )\n",
+		"v=$( case '[a' in ([a) :;; esac )\n",
+		"( ( case '[a' in ([a) :;; esac ) )\n",
+	} {
+		for _, route := range []Route{RouteCommandString, RouteScriptFile} {
+			if got := caseArmStatus(t, src, route, false); got != 1 {
+				t.Errorf("%q on %v with the field off: status = %d, want 1", src, route, got)
+			}
+		}
 	}
 }
 
@@ -117,7 +147,7 @@ func runCaseArm(t *testing.T, buf *strings.Builder, src string, route Route, nou
 	sem.FatalErrorStatusIsOne = Yes
 	sem.UnterminatedBracket = BracketBadPattern
 	sem.UnterminatedBracketAfterASubExpression = BracketBadPattern
-	dg := Diagnostics{CasePatternRefusalEndsACommandStringAtNought: nought}
+	dg := Diagnostics{CasePatternRefusalLeavesNought: nought}
 	dial := syntax.Core()
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh", Route: route,

@@ -1366,14 +1366,18 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// And the trace letters, which narrow the same way and are a
 			// union with each other: measured, with `f` marked `-T` alone,
 			// `functions -t` writes nothing, `functions -T` writes the body
-			// and `functions -tT` writes it too. The plus sign names them
-			// instead, exactly as it does for a marking letter — `functions
-			// +t` is the name of every traced function.
+			// and `functions -tT` writes it too.
+			//
+			// The **sign** is deliberately not read here, though `functions
+			// +t` really does name its functions where `functions -t`
+			// writes them out. It is already names-only by the time this
+			// runs — the plus on the option word is the same plus that
+			// makes a bare `functions +` a list of names — and a second
+			// `namesOnly = true` here passed every case while deciding
+			// nothing. A mutation that deleted it killed no test, which is
+			// how it was found.
 			if written, removed := r.traceLettersWritten(f); written != "" || removed != "" {
 				args, narrowed = r.functionsHoldingATraceMark(written+removed), true
-				if removed != "" {
-					namesOnly = true
-				}
 			}
 			if marked, narrow, plus := r.markedFunctionListing(f); narrow {
 				args, narrowed = marked, true

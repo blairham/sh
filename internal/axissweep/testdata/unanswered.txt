@@ -345,6 +345,7 @@ dash  AliasNameCheckReachesALookup
 dash  AnchoredEmptyReplacementPattern
 dash  AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 dash  ArithDivisionByZeroYieldsAValue
+dash  ArithEmptyBaseDigits
 dash  ArithFloatOverflowIsZero
 dash  ArithIntegerOperatorRefusesFloat
 dash  ArithNegativeExponentIsError

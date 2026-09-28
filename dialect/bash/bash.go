@@ -1955,6 +1955,14 @@ func Semantics() interp.Semantics {
 	// A radix prefix with nothing after it is a finished number worth zero:
 	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, in 5.3 and 3.2 alike.
 	s.ArithEmptyRadixDigitsAreZero = interp.Yes
+	// Refused, which is **5.3's** answer and not 3.2's: `$(( 8# ))` is
+	// `invalid integer constant (error token is "8#")` in 5.3.20 on this
+	// machine and in 5.3.15 in the pinned image — the build this preset
+	// models — where bash 3.2.57 answers 0. This preset is 5.3, so the
+	// corpus's `bash32` column is where the older reading lives, exactly as
+	// it does for the other rows bash changed. See
+	// Semantics.ArithEmptyBaseDigits.
+	s.ArithEmptyBaseDigits = interp.ArithEmptyBaseDigitsRefused
 	// A numeral past the word goes round it. `$(( 10000000000000000000 ))`
 	// is -8446744073709551616 and `$(( 18446744073709551616 ))` is 0 — the
 	// second being the row that says this is modular and not a clamp at the
@@ -4287,6 +4295,10 @@ func Diagnostics() interp.Diagnostics {
 		// bash reserves its generic arithmetic wording for operands that are
 		// not literals, so a bad digit gets a reason of its own.
 		DigitTooGreatForBase: "value too great for base",
+		// The third of bash's three numeral sentences, for a named base with
+		// nothing after its `#`. Measured 2026-09-28 in 5.3.20 and in the
+		// pinned 5.3.15 image alike (#5061).
+		ArithEmptyBaseDigits: "invalid integer constant",
 		// A byte that is no digit in any base is a second sentence here:
 		// `010#5` and `0#5` are `invalid number` where `08#5` and `1@2` are
 		// the one above. See Diagnostics.ArithByteIsNoDigit.

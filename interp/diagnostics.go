@@ -7632,6 +7632,20 @@ type Diagnostics struct {
 	// two differently: `08` is "value too great for base" where a name-shaped
 	// operand is an arithmetic syntax error.
 	DigitTooGreatForBase string
+	// ArithEmptyBaseDigits is the reason when a **named base** carries no
+	// digits after its `#` — `$(( 8# ))` — in a dialect that refuses it.
+	//
+	// A wording of its own because bash gives it one: `invalid integer
+	// constant` there, where a digit the base cannot use is `value too great
+	// for base` and a base outside the range is `invalid arithmetic base`.
+	// Measured 2026-09-28 on `/opt/homebrew/bin/bash` 5.3.20 and in the
+	// pinned `bash:5.3.15` image, from a script file — three spellings, three
+	// sentences, all three wrapped in bash's `(error token is "…")`.
+	//
+	// Empty falls back to InvalidNumber, which is what the columns that have
+	// no special sentence for it use. See Semantics.ArithEmptyBaseDigits for
+	// which columns refuse at all.
+	ArithEmptyBaseDigits string
 	// ArithByteIsNoDigit is the reason a literal holds a byte that is not a
 	// digit in *any* base — the `#` in `010#5`, which is no base marker in a
 	// dialect whose leading zero has already made the text an octal

@@ -406,10 +406,21 @@ func TestTheCallFormNeedsTheParenthesisTouchingTheName(t *testing.T) {
 	}
 }
 
-// TestTheLetterIsExclusive. `-M` with any letter but `-m` is refused; with
-// `-m` the shell does nothing at all, quietly — which is its own answer and
-// not a registration, because registering there is the plausible wrong answer
-// and nothing would say it had happened.
+// TestTheLetterIsExclusive. `-M` composes with `m`, `s` and itself and with
+// nothing else: any other letter this shell spells makes the whole line
+// `invalid option(s)` at 1, and nothing is registered.
+//
+// **This case existed, passed, and was keyed on the wrong noun** (#5073). Its
+// last assertion read `functions -Mt` and grepped for `not implemented yet` —
+// so what it graded was `UnimplementedOptionLetters`, not exclusivity at all.
+// The moment `-t` was implemented the assertion would have started failing for
+// a *correct* shell, and until then `functions -Mu mf 1 1 g` registered `mf`
+// in silence at 0 with nothing to notice.
+//
+// The rows below are the distinction that was missing: a letter this shell
+// **has** is refused by the *set*, with a sentence that names no letter, and a
+// letter it has **not** got is refused **by name**. Measured 2026-09-28 on zsh
+// 5.9.2 over every letter of the alphabet beside `-M`.
 func TestTheLetterIsExclusive(t *testing.T) {
 	for _, word := range []string{"functions -Mm", "functions -mM", "functions -M -m"} {
 		out, st := runZsh(t, t.TempDir(), "g(){ :; }\n"+word+" mf 1 1 g\necho st=$?\nfunctions -M\n")
@@ -417,16 +428,51 @@ func TestTheLetterIsExclusive(t *testing.T) {
 			t.Errorf("%s: output = %q status %d, want nothing done at 0", word, out, st)
 		}
 	}
-	// Any other letter with it makes no registration. `-k` rather than the
-	// `-t` this used to write, because that letter is built now (#5067) and
-	// the row would otherwise be asking whether `-t` is missing rather than
-	// whether `-M` registered.
-	out, _ := runZsh(t, t.TempDir(), "g(){ :; }\nfunctions -Mk mf 1 1 g\nfunctions -M\n")
-	if strings.Contains(out, "functions -M mf") {
-		t.Errorf("output = %q, want no registration from a refused invocation", out)
+	// The companions that do compose, and they register the ordinary thing —
+	// the control that keeps the refusals below about the *other* letters.
+	for _, word := range []string{"functions -Ms", "functions -sM", "functions -MM"} {
+		out, st := runZsh(t, t.TempDir(), "g(){ :; }\n"+word+" mf 1 1 g\necho st=$?\n")
+		if out != "st=0\n" || st != 0 {
+			t.Errorf("%s: output = %q status %d, want the registration to happen", word, out, st)
+		}
 	}
-	if !strings.Contains(out, "not implemented yet") {
-		t.Errorf("output = %q, want the other letter refused by name", out)
+	// A letter this shell spells: the *set* is refused, in a sentence that
+	// names no letter, and nothing is registered. Both orders and the bundle,
+	// because the rule is about the set rather than about where the letter sat.
+	for _, word := range []string{
+		"functions -Mu", "functions -MU", "functions -Mt", "functions -MT",
+		"functions -Mk", "functions -Mz", "functions -MW",
+		"functions -M -u", "functions -u -M", "functions -Mzu", "functions -Muz",
+	} {
+		// The status is taken with `$?` on the next line rather than from
+		// the run: the listing after it succeeds, so a script status would
+		// be 0 however the refusal went — which is the shape that made the
+		// first draft of these rows pass for the wrong reason.
+		out, _ := runZsh(t, t.TempDir(), "g(){ :; }\n"+word+" mf 1 1 g\necho st=$?\nfunctions -M\n")
+		if !strings.Contains(out, "invalid option(s)") {
+			t.Errorf("%s: output = %q, want the set refused", word, out)
+		}
+		if strings.Contains(out, "functions -M mf") {
+			t.Errorf("%s: output = %q, want no registration from a refused invocation", word, out)
+		}
+		if !strings.Contains(out, "st=1") {
+			t.Errorf("%s: output = %q, want the refusal to report 1", word, out)
+		}
+	}
+	// And a letter this shell has **not** got is refused by name instead,
+	// which is the row that says the two refusals are different sentences and
+	// not one. Without it, a rule that refused every non-companion letter
+	// would pass every row above.
+	out, _ := runZsh(t, t.TempDir(), "g(){ :; }\nfunctions -Ma mf 1 1 g\n")
+	if !strings.Contains(out, "bad option: -a") {
+		t.Errorf("output = %q, want a letter this shell has not got refused by name", out)
+	}
+	// `-x` takes a number of its own and is read before the set is judged, so
+	// given that number it composes with `-M` perfectly well. A rule that
+	// swept it in with the refusals would break a spelling that works.
+	out, st := runZsh(t, t.TempDir(), "g(){ :; }\nfunctions -Mx 3 mf 1 1 g\necho st=$?\n")
+	if out != "st=0\n" || st != 0 {
+		t.Errorf("output = %q status %d, want `-x` with its number to register", out, st)
 	}
 	// And a letter that **is** built alongside `-M` still registers
 	// nothing, which is the half the missing letter was standing in for:

@@ -4333,6 +4333,11 @@ func Semantics() interp.Semantics {
 	s.SetValidatesOptionLettersFirst = interp.No
 	s.BadSetOptionNameAtInvocationExitsZero = interp.No
 	s.UnknownConditionOptionIsAStatus = interp.Yes
+	// And a single character given to that operator is the option *letter*
+	// it abbreviates: `set -a; [[ -o a ]]` is 0 here and 1 in the three
+	// other columns with the operator, which is the only shape that can show
+	// it — with the option off both readings answer 1 (#4436).
+	s.ConditionOptionTakesAnOptionLetter = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	// And `break` with no loop around it stops the script here, which is the
 	// opposite way round from the line above: measured, `echo t; break` on

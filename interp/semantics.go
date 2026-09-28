@@ -16770,6 +16770,31 @@ type Semantics struct {
 	// nothing at all and stay in this shell in every column, zsh included.
 	CommandReachesABuiltin Answer
 
+	// ConditionOptionTakesAnOptionLetter reads a **single character** given
+	// to `[[ -o ]]` as the option *letter* it abbreviates, rather than as a
+	// name this shell has never heard of.
+	//
+	// zsh 5.9.2 alone: measured 2026-09-28
+	// (aarch64-apple-darwin25.4.0), `go version -m`: *not a Go executable*,
+	// one character at a time over the letters and the digits. Every one is
+	// answered 0 or 1 except `b c j o z A`, which are `no such option` at 3
+	// exactly as a long name it has never heard of is. bash 5.3.20, bash
+	// 3.2.57 and ksh93u+ answer a plain 1 for every letter.
+	//
+	// **Status alone cannot show this, and it nearly hid a regression.** A
+	// letter that names nothing and a letter naming an option that is *off*
+	// both answer 1, so a grid read off the status agrees with the refusing
+	// reading on almost every row. The discriminating shape is to turn the
+	// option on and ask again — `set -a; [[ -o a ]]` is **1** in bash, which
+	// is what says bash is not reading the letter at all, and 0 in zsh. A
+	// hundred-row grid with every option left off said the two shells agreed.
+	//
+	// And it is a *character*, not a number: `[[ -o 5 ]]` is answered and
+	// `[[ -o 10 ]]`, `[[ -o 07 ]]` and `[[ -o 25 ]]` are all `no such
+	// option`, so the digits that work are letters in that shell's table
+	// rather than indices into it.
+	ConditionOptionTakesAnOptionLetter Answer
+
 	// ExecReachesTheShellsOwnCommands runs the words behind `exec` as an
 	// **ordinary command word list** — this shell's functions and builtins
 	// included — rather than as the name of a program to replace the shell
@@ -29346,6 +29371,9 @@ func PosixSemantics() Semantics {
 		// And POSIX gives `command` a builtin to run: bypassing the function
 		// table is what the utility is for, not bypassing the builtins too.
 		CommandReachesABuiltin: Yes,
+		// And POSIX gives `[[ -o ]]` a *name*: a single character is a name
+		// this shell has never heard of, not a letter.
+		ConditionOptionTakesAnOptionLetter: No,
 		// And POSIX gives `exec` a *program* to replace the shell with, not
 		// one of the shell's own commands: `exec :` is `not found` in four
 		// of the five columns.

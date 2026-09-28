@@ -92,6 +92,52 @@ func TestATildeModifierReads(t *testing.T) {
 		// that it *is* `E`.
 		{`[[ abc == ~(A)abc ]]`, "ksh: ~(A)abc: the ~(A) pattern modifier is not implemented\n", 1},
 		{`[[ abc == ~(M)abc ]]`, "ksh: ~(M)abc: the ~(M) pattern modifier is not implemented\n", 1},
+		// And **wherever the group stands**, not only at the head. A group
+		// further along used to be the characters it was written with, so
+		// the same letter stopped the script in one position and answered a
+		// silent `no` at status 0 in the other — two answers to one
+		// question, and the wrong one was the quiet one (#4914). ksh93u+
+		// matches every row here.
+		{`[[ zab == z~(M)ab ]]`, "ksh: z~(M)ab: the ~(M) pattern modifier is not implemented\n", 1},
+		{`[[ zab == z~(A)ab ]]`, "ksh: z~(A)ab: the ~(A) pattern modifier is not implemented\n", 1},
+		{`[[ zab == z~(a)ab ]]`, "ksh: z~(a)ab: the ~(a) pattern modifier is not implemented\n", 1},
+		{`[[ zab == z~(x)ab ]]`, "ksh: z~(x)ab: the ~(x) pattern modifier is not implemented\n", 1},
+		{
+			`[[ zab == @(z~(M)a)b ]]`,
+			"ksh: @(z~(M)a)b: the ~(M) pattern modifier is not implemented\n", 1,
+		},
+		{
+			`case zab in z~(M)ab) echo yes;; *) echo no;; esac`,
+			"ksh: z~(M)ab: the ~(M) pattern modifier is not implemented\n", 1,
+		},
+		{
+			`v=abcd; printf '[%s]' "${v#a~(M)bc}"`,
+			"ksh: a~(M)bc: the ~(M) pattern modifier is not implemented\n", 1,
+		},
+		// A `~(…)` **behind a flavor** is that engine's own text and not a
+		// group, so nothing there is this shell's to refuse: `[[ zab ==
+		// z~(E)~(M)ab ]]` does not match in ksh93u+ either, and neither does
+		// the subject spelled with the group in it.
+		{`[[ zab == z~(E)~(M)ab ]]`, "", 1},
+		{`[[ 'z~(M)ab' == z~(E)~(M)ab ]]`, "", 1},
+		// An escaped `~` opens no group, and a letter no ksh93 has is not
+		// one this shell declines — both stay the silent non-match they were.
+		{`[[ zab == z\~(M)ab ]]`, "", 1},
+		{`[[ zab == z~(Z)ab ]]`, "", 1},
+		// **Quoting decides it here exactly as it does at the head**, which
+		// is what keeps the scan off text that is not a group: a written
+		// `~(` is read and one that arrived quoted is the characters.
+		{`[[ zab == z"~(M)"ab ]]`, "", 1},
+		{`[[ 'z~(M)ab' == z"~(M)"ab ]]`, "", 0},
+		{`p="z~(M)ab"; [[ zab == "$p" ]]`, "", 1},
+		{
+			`p="z~(M)ab"; [[ zab == $p ]]`,
+			"ksh: z~(M)ab: the ~(M) pattern modifier is not implemented\n", 1,
+		},
+		// The letters that *are* answered still are, in the same position.
+		{`[[ zab == z~(i)AB ]]`, "", 0},
+		{`[[ zab == z~(K)a* ]]`, "", 0},
+		{`[[ zab == z~(N)ab ]]`, "", 0},
 		// The four regular-expression letters are answered now, and each
 		// reads its own language rather than `E`'s: `~(G)a?c` is the literal
 		// `?` that made the refusal above worth having, `~(X)` takes the

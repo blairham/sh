@@ -60,10 +60,11 @@ func TestATildeAnchorGroupInTheMiddleOfAPattern(t *testing.T) {
 		{"and the left anchor refuses it", `v=abcd; printf "[%s]" "${v/b~(l)c/X}"`, "[abcd]"},
 		{"where the sign takes it back", `v=abcd; printf "[%s]" "${v/b~(-l)c/X}"`, "[aXd]"},
 
-		// The letters this shell does not answer are still the characters
-		// they were written with, which is a divergence rather than a
-		// reading and is recorded in tildeFoldGroupLetters' own comment.
-		{"a letter this shell declines", `[[ zab == z~(M)ab ]] && echo YES || echo NO`, "NO"},
+		// A letter ksh93 has and this shell does not is refused **by name**
+		// wherever the group stands, so there is no answer for a row here to
+		// assert: see unhonoredTildeLetter, and dialect/ksh's own test for
+		// the sentence and the status (#4914). A letter no ksh93 has is a
+		// different question and keeps its row above.
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tildeMid(t, tc.src, nil); got != tc.want {
@@ -158,8 +159,13 @@ func TestATildeAnchorGroupInTheMiddleOfAGlob(t *testing.T) {
 		// above answers.
 		{"where one at the front does", `printf "[%s]" ~(N)zz*`, `[]`},
 
-		// A letter this shell declines is still the text it was written as,
-		// which is the glob half of the condition row above.
+		// A letter this shell declines is still the text it was written as
+		// **here**, where the same letter in a condition is refused by name.
+		// That is not the two routes disagreeing: a field whose group stands
+		// anywhere but the head is not made a pattern at all — see
+		// tildeGlobPattern, which asks for a group at the front — so nothing
+		// reaches the matcher for the refusal to be raised from. `~(M)zab`
+		// at the head does reach it and does stop the script.
 		{"a letter this shell declines", `printf "[%s]" z~(M)a`, `[z~(M)a]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

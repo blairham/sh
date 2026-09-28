@@ -35,6 +35,41 @@ func runZsh(t *testing.T, dir, src string) (string, int) {
 	return out, st
 }
 
+// absentProbeParam is a name registered with
+// [interp.Runner.SetAbsentParameter] **for the tests that grade that
+// mechanism**, and for nothing else.
+//
+// Every one of those tests used to name one of `zsh/parameter`'s own absent
+// parameters, and the roster is empty since #4909 — so they would have gone
+// on passing against a shell that had lost the mechanism entirely, which is
+// the shape of green report that says only "there was nothing to look at".
+// A name of the tests' own keeps the grading and takes the roster out of it:
+// what is under test is that a registered absence refuses by name at the
+// expansion that reads it, and that has nothing to do with which names a
+// dialect happens to register today.
+const absentProbeParam = "zshabsentprobe"
+
+// runZshAbsentProbe is runZsh with absentProbeParam registered absent.
+//
+// Built here rather than through [dialecttest.Preset.Combined] because the
+// registration has to land between Apply and the run, which is exactly the
+// window a front end has and that helper closes.
+func runZshAbsentProbe(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	f := preset.Parse(t, src)
+	var buf strings.Builder
+	r := preset.Runner(dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir},
+		Stdout: &buf, Stderr: &buf,
+	})
+	r.SetAbsentParameter(absentProbeParam, "parameter not implemented yet")
+	st, err := r.Run(context.Background(), f)
+	if err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	return buf.String(), st
+}
+
 // runZshPrelude runs src with the dialect's prelude installed the way the front
 // end installs it. See the same helper under dialect/bash for why pasting the
 // prelude on the front of the snippet is a different — and wrong — thing.

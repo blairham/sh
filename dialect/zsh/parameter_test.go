@@ -399,9 +399,14 @@ func TestAProducedAssociationIsReadThroughInsideASubshell(t *testing.T) {
 }
 
 // **An absent parameter refuses by name on every route that reads one**, and
-// the routes are the point: a test of `$modules` alone passes against a
-// shell that loses `${jobstates[x]}`, which is the spelling a plugin manager
+// the routes are the point: a test of a bare `$name` alone passes against a
+// shell that loses `${name[x]}`, which is the spelling a plugin manager
 // actually writes — `${functions[name]}` is 57 of zinit's uses.
+//
+// The name is the tests' own since #4909 emptied the roster — see
+// absentProbeParam, and the note on
+// TestAskingWhetherAnUnimplementedParameterIsThere for why a grid over an
+// empty roster is worse than no grid at all.
 //
 // Each row asserts two things and needs both. That the parameter is *named*,
 // because a status alone passes against the exact bug this exists to prevent:
@@ -411,22 +416,22 @@ func TestAProducedAssociationIsReadThroughInsideASubshell(t *testing.T) {
 // absence looks like from the caller's side.
 func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
 	for _, tc := range []struct{ name, snippet string }{
-		{"a bare name", `print -r -- "[$modules]"`},
-		{"a subscript", `print -r -- "[${modules[zsh/zle]}]"`},
-		{"the whole array", `print -r -- "[${modules[@]}]"`},
-		{"a length", `print -r -- "[${#modules}]"`},
-		{"a flag group", `print -r -- "[${(k)modules}]"`},
-		{"an unquoted word", `print -r -- ${modules[x]}`},
-		{"a condition", `[[ -n $modules ]]`},
+		{"a bare name", `print -r -- "[$zshabsentprobe]"`},
+		{"a subscript", `print -r -- "[${zshabsentprobe[zsh/zle]}]"`},
+		{"the whole array", `print -r -- "[${zshabsentprobe[@]}]"`},
+		{"a length", `print -r -- "[${#zshabsentprobe}]"`},
+		{"a flag group", `print -r -- "[${(k)zshabsentprobe}]"`},
+		{"an unquoted word", `print -r -- ${zshabsentprobe[x]}`},
+		{"a condition", `[[ -n $zshabsentprobe ]]`},
 		// A pattern rather than a value, which is where an empty read is
 		// least visible of all: an unrefused one matches nothing, takes
 		// the `*` branch, and looks exactly like a script whose input did
 		// not match.
-		{"a case pattern", `case x in $modules) print -r -- matched;; *) print -r -- fell-through;; esac`},
+		{"a case pattern", `case x in $zshabsentprobe) print -r -- matched;; *) print -r -- fell-through;; esac`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runZsh(t, t.TempDir(), tc.snippet+"\nprint -r -- UNREACHED")
-			if !strings.Contains(out, "modules: parameter not implemented yet") {
+			out, st := runZshAbsentProbe(t, t.TempDir(), tc.snippet+"\nprint -r -- UNREACHED")
+			if !strings.Contains(out, absentProbeParam+": parameter not implemented yet") {
 				t.Errorf("%s = %q (status %d), want the parameter named", tc.snippet, out, st)
 			}
 			if strings.Contains(out, "[") || strings.Contains(out, "UNREACHED") {
@@ -461,9 +466,9 @@ func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
 // spellings now stop at the diagnostic, because a body fed to a program is
 // expanded in that program's process and a failure there costs the command.
 func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T) {
-	absent, ast := runZsh(t, t.TempDir(), "cat <<E\n[$modules]\nE\n")
-	unset, ust := runZsh(t, t.TempDir(), "set -u\ncat <<E\n[$nosuchvar]\nE\n")
-	if !strings.Contains(absent, "modules: parameter not implemented yet") {
+	absent, ast := runZshAbsentProbe(t, t.TempDir(), "cat <<E\n[$zshabsentprobe]\nE\n")
+	unset, ust := runZshAbsentProbe(t, t.TempDir(), "set -u\ncat <<E\n[$nosuchvar]\nE\n")
+	if !strings.Contains(absent, absentProbeParam+": parameter not implemented yet") {
 		t.Errorf("a here-document reading an absent parameter = %q (status %d), want it named", absent, ast)
 	}
 	if !strings.Contains(unset, "nosuchvar: parameter not set") {
@@ -486,7 +491,7 @@ func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T
 // would be this shell inventing a diagnostic the shell it models does not
 // write, over a spelling that means nothing in either.
 func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `print -r -- "n=$(( modules + 1 ))"`)
+	out, st := runZshAbsentProbe(t, t.TempDir(), `print -r -- "n=$(( zshabsentprobe + 1 ))"`)
 	if want := "n=1\n"; out != want || st != 0 {
 		t.Errorf("arithmetic on an absent parameter = %q (status %d), want %q", out, st, want)
 	}
@@ -500,8 +505,8 @@ func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
 // for, and `${p+x}` answering "no" is an answer where `${p}` answering empty
 // is not.
 func TestAnAbsentParameterYieldsToTheScriptsOwnAnswer(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `print -r -- "default=[${modules-d}]"
-print -r -- "alternate=[${modules+set}]"
+	out, st := runZshAbsentProbe(t, t.TempDir(), `print -r -- "default=[${zshabsentprobe-d}]"
+print -r -- "alternate=[${zshabsentprobe+set}]"
 dirstack=(a b)
 print -r -- "own=[$dirstack] [${dirstack[1]}] [${#dirstack}]"`)
 	want := "default=[d]\nalternate=[]\nown=[a b] [a] [2]\n"
@@ -510,13 +515,21 @@ print -r -- "own=[$dirstack] [${dirstack[1]}] [${#dirstack}]"`)
 	}
 }
 
-// `dirstack` rather than `modules` for the owning half, because owning is
-// exactly what the rest of them no longer allow: every absent name is frozen
-// against a write here as it is in zsh, and
-// `dirstack` is the one the shell being modeled lets a script assign — it is
-// the directory stack, and setting one is what the assignment is for. So the
-// exemption is still reachable and this is where it is reached.
-func TestAnAbsentParameterRefusesAWriteAsAReadOnlyName(t *testing.T) {
+// **The freeze survives the name becoming a view**, which is the row #1604
+// asked for and the one #4909 could most easily have dropped: `$modules` was
+// frozen because a script probing for the module by writing the name had to
+// be stopped, and the same freeze has to be there now that the name answers.
+// Measured on zsh 5.9.2, `modules=(a b c)` is `read-only variable: modules`
+// at 1, fatally, with the module loaded.
+//
+// This was written as an *absent* parameter's refusal and is no longer one —
+// the roster is empty. What it grades is the same three spellings against the
+// same name, and the name is a produced table now.
+//
+// `dirstack` is the exception and is why the sibling test below uses it: it
+// is the one of these the shell being modeled lets a script assign, because
+// assigning it is how a script sets the directory stack.
+func TestAProducedTableRefusesAWriteAsAReadOnlyName(t *testing.T) {
 	for _, src := range []string{
 		`modules=(a b c)`,
 		`modules[1]=q`,
@@ -534,7 +547,13 @@ func TestAnAbsentParameterRefusesAWriteAsAReadOnlyName(t *testing.T) {
 // the shell being modeled answers `unset modules` with a silent 0 on the
 // line after refusing `modules=(a b c)` as read-only. Two answers from one
 // attribute, so the exemption is written down where the difference is.
-func TestAnAbsentParameterMayStillBeUnset(t *testing.T) {
+//
+// Since #4917 the exemption belongs to the **deferral** rather than to the
+// absence: nothing has referred to the name on the line this runs, so the
+// parameter is not in being and the removal takes the registration with it.
+// A `${+modules}` in front of this line makes the same `unset` a refusal, in
+// both shells — see deferredparameters_test.go.
+func TestAProducedTableMayStillBeUnset(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), "unset modules\necho \"st=$?\"")
 	if out != "st=0\n" || st != 0 {
 		t.Errorf("unsetting an absent parameter = %q (status %d), want a silent 0", out, st)
@@ -568,6 +587,7 @@ func TestTheEmptyParametersReadEmptyAndSayNothing(t *testing.T) {
 func TestTheEmptyParametersStayHonest(t *testing.T) {
 	for _, tc := range []struct{ param, waitsFor string }{
 		{"dis_aliases", "disable -a nosuch"},
+		{"dis_builtins", "disable -b nosuch"},
 		{"dis_functions", "disable -f nosuch"},
 		{"dis_functions_source", "disable -f nosuch"},
 		{"dis_galiases", "disable -a nosuch"},
@@ -669,8 +689,9 @@ print -r -- "after=${#galiases}"`)
 // never the sentence.
 func emptyModuleParams() []string {
 	return []string{
-		"dis_aliases", "dis_functions", "dis_functions_source", "dis_galiases",
-		"dis_patchars", "dis_reswords", "dis_saliases",
+		"dis_aliases", "dis_builtins", "dis_functions",
+		"dis_functions_source", "dis_galiases", "dis_patchars",
+		"dis_reswords", "dis_saliases",
 	}
 }
 
@@ -707,10 +728,17 @@ func TestTheProducedParametersStayOutOfASetListing(t *testing.T) {
 // of #1146 and #1152 exists to prevent. Present on the absent side, in the
 // mechanism written to close it (#1137).
 //
-// It is also where the roster shrinks. The day `$modules` is a live view, this
-// fails at the name until it is moved out of absentModuleParams and into
-// implementedModuleParams, which is a great deal better than nobody noticing
-// that a refusal is still registered over something that now works.
+// It is also where the roster shrinks, and it has now shrunk to **nothing**:
+// the last seven left in #4909. So the loop below runs no rows, and a loop
+// with no rows is a test that reports success having looked at nothing —
+// which is the one result that reads exactly like a test that passed.
+//
+// The empty roster is therefore asserted rather than left to be inferred, and
+// the *instrument* is kept alive beside it: `${#nosuchparam}` is a name
+// nothing registers at all, and it must answer `0` at status 0 rather than
+// this sentence. That row is what says the refusal is a registration and not
+// something every unknown name gets — and it is the row that would still fire
+// if somebody put a name back on the roster and broke the wording.
 func TestEveryAbsentParameterRefusesByName(t *testing.T) {
 	for _, name := range absentModuleParams() {
 		t.Run(name, func(t *testing.T) {
@@ -721,6 +749,17 @@ func TestEveryAbsentParameterRefusesByName(t *testing.T) {
 			}
 		})
 	}
+	t.Run("the roster is empty", func(t *testing.T) {
+		if got := absentModuleParams(); len(got) != 0 {
+			t.Errorf("absentModuleParams() = %q, want none — every name zsh/parameter names is answered here", got)
+		}
+	})
+	t.Run("and an unregistered name is not refused", func(t *testing.T) {
+		out, st := runZsh(t, t.TempDir(), `print -r -- "n=${#nosuchparam}"`)
+		if want := "n=0\n"; out != want || st != 0 {
+			t.Errorf("$nosuchparam = %q (status %d), want %q — the refusal is a registration, not the answer for any unknown name", out, st, want)
+		}
+	})
 }
 
 // **And the three rosters account for the module, exactly once each.**
@@ -888,20 +927,22 @@ echo "onpath=[${commands[toolx]:+found}]"`)
 // `parameters[nope]` evaluated to 0 and was silent at status 0, which is the
 // answer this mechanism exists to stop.
 func TestUnsettingAnAbsentParametersElementRefusesByName(t *testing.T) {
-	// `modules` rather than `jobstates`, which this used to ask about, and
-	// `parameters` before that. Each move is the same correction one step
-	// further along: a name this shell now has is no longer an example of one
-	// it has not (#1599, #4760). The mechanism is unchanged and so is the
-	// wording — only the parameter standing in for "absent" moved.
-	out, st := runZsh(t, t.TempDir(), `unset "modules[PATH]" 2>&1
+	// A name of the tests' own rather than `modules`, which this used to ask
+	// about, `jobstates` before that and `parameters` before that. Each move
+	// was the same correction one step further along — a name this shell now
+	// has is no longer an example of one it has not (#1599, #4760) — and
+	// #4909 took the last of them, so there is no dialect name left to move
+	// to. See absentProbeParam. The mechanism is unchanged and so is the
+	// wording.
+	out, st := runZshAbsentProbe(t, t.TempDir(), `unset "zshabsentprobe[PATH]" 2>&1
 echo "known=$?"
-unset "modules[nope]" 2>&1
+unset "zshabsentprobe[nope]" 2>&1
 echo "unknown=$?"
-unset "patchars[1]" 2>&1
+unset "zshabsentprobe[1]" 2>&1
 echo "other=$?"`)
-	want := "zsh:unset:1: modules: parameter not implemented yet\nknown=1\n" +
-		"zsh:unset:3: modules: parameter not implemented yet\nunknown=1\n" +
-		"zsh:unset:5: patchars: parameter not implemented yet\nother=1\n"
+	want := "zsh:unset:1: zshabsentprobe: parameter not implemented yet\nknown=1\n" +
+		"zsh:unset:3: zshabsentprobe: parameter not implemented yet\nunknown=1\n" +
+		"zsh:unset:5: zshabsentprobe: parameter not implemented yet\nother=1\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting an absent parameter's element = %q (status %d), want %q", out, st, want)
 	}
@@ -1012,9 +1053,11 @@ func moduleParams() []string {
 func implementedModuleParams() []string {
 	return []string{
 		"aliases", "builtins", "commands", "dirstack", "funcfiletrace",
-		"funcsourcetrace", "funcstack", "functions", "functrace",
-		"galiases", "history", "jobdirs", "jobstates", "jobtexts",
-		"nameddirs", "options", "parameters", "reswords", "saliases",
+		"funcsourcetrace", "funcstack", "functions", "functions_source",
+		"functrace", "galiases", "history", "historywords", "jobdirs",
+		"jobstates", "jobtexts", "modules", "nameddirs", "options",
+		"parameters", "patchars", "reswords", "saliases", "userdirs",
+		"usergroups",
 	}
 }
 
@@ -1049,10 +1092,7 @@ func implementedModuleParams() []string {
 // job table they report on is the one `jobs` already lists and `jobs -d`
 // already names a directory from, so what was missing was the publication.
 func absentModuleParams() []string {
-	return []string{
-		"dis_builtins", "functions_source", "historywords",
-		"modules", "patchars", "userdirs", "usergroups",
-	}
+	return nil
 }
 
 // `${functions[f]}` and the whole table have to say the same thing about

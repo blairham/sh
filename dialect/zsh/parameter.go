@@ -252,6 +252,16 @@ func registerParameterModule(r *interp.Runner) {
 	// reason the history parameter is: what they view is the shell's job
 	// bookkeeping rather than a table this package keeps. See jobparam.go.
 	registerJobParameters(r)
+	// The six that left the absent roster in #4909, each in a file of its
+	// own because each reports on a different thing: the pattern language,
+	// the module roster, the process's groups, where each function was read
+	// from, the words of the history list, and the users looked up.
+	registerPatternCharacters(r)
+	registerModuleRoster(r)
+	registerUserGroups(r)
+	registerFunctionsSource(r)
+	registerHistoryWords(r)
+	registerUserDirs(r)
 	registerAbsentParameters(r)
 }
 
@@ -287,6 +297,17 @@ var zshEmptyParams = []struct {
 	readonly bool
 }{
 	{name: "dis_aliases", waitsFor: "disable -a"},
+	// The *disabled builtins*, which sat on the absent roster while its
+	// seven siblings sat here — and it belongs here for the identical
+	// reason. A builtin is in this table only once `disable` has taken it
+	// out of the live one, `disable -b` is `bad option` here, so there are
+	// none and the table is empty: the same sentence a real zsh writes with
+	// none disabled. Measured 2026-09-27 on zsh 5.9.2 with `zsh/parameter`
+	// loaded, `${#dis_builtins}` is 0 in a fresh shell there too, and
+	// `${(t)dis_builtins}` is `association-readonly-hide-hideval-special`
+	// — the readonly word `$builtins` carries and `$dis_aliases` does not
+	// (#4909).
+	{name: "dis_builtins", waitsFor: "disable -b", readonly: true},
 	{name: "dis_functions", waitsFor: "disable -f"},
 	{name: "dis_functions_source", waitsFor: "disable -f", readonly: true},
 	// The *disabled* half of the two kinds #2081 added, and they are still
@@ -406,10 +427,16 @@ func refuseEmptyParameterWrite(name, waitsFor string) func(*interp.Runner, strin
 // `~root` here does not expand — but it does not *refuse* either, it stays
 // literal, so there is no line to hold an honesty check against and no way to
 // tell "no users looked up yet" from "this shell cannot look one up".
-var zshAbsentParams = []string{
-	"dis_builtins", "functions_source", "historywords",
-	"modules", "patchars", "userdirs", "usergroups",
-}
+// **The roster is empty**, and the list is kept rather than deleted because
+// what it holds is the shape of a parameter this shell has not got, and the
+// next one to be named by a module will arrive with nothing to join. Its last
+// seven left in #4909, by the four routes above: `dis_builtins` to the empty
+// tables, `modules`, `usergroups` and `functions_source` to views over facts
+// this shell already kept, `patchars` to a measured constant, `historywords`
+// to the list `$history` already publishes, and `userdirs` to a view that is
+// empty because the reference's is — see userdirs.go, where the control that
+// makes that a reading rather than a stub is recorded.
+var zshAbsentParams = []string{}
 
 // registerAbsentParameters makes each of them refuse by name when it is read,
 // and refuse an assignment as the read-only names they are.

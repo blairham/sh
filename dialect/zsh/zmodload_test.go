@@ -86,32 +86,33 @@ print -r -- "complete=$?"`)
 	}
 }
 
-// **`zsh/parameter` loads, and the twenty-eight it has not got are still not
-// there.** This is the whole of #1146 in one shell, and the two halves have to
-// be read together or either one alone is a shell that lies.
+// **`zsh/parameter` loads, and every one of its thirty-three parameters
+// answers.** This was the whole of #1146 in one shell and it was the two
+// halves read together: the module loaded, and the names it had not got
+// refused by name at the expansion that read one rather than reading empty.
 //
-// Five of the thirty-three are implemented (#1060). Ten more are empty and
-// right to be. The other eighteen refuse by name at the expansion that reads
-// one — which is what lets the module load at all, and it is why the second
-// line here is not `n=0`. A shell that loaded the module *and* answered `0`
-// for `$modules` would be exactly the silent success the module rule was
-// written to prevent; a shell that refuses the module over a parameter no
-// script in the file touches stops a plugin manager at its second line.
+// #4909 took the last of those names, so the second half has no rows left
+// here — which is why the assertion below is about the *answers* and not
+// about a refusal. Twenty-five are views, eight are empty and right to be,
+// and none refuses. The refusal mechanism itself is still graded, on a name
+// the tests register: see absentProbeParam.
 //
-// The count is checked with `$functions` rather than assumed, because "the
-// module loads" is worth nothing if the five that made it worth loading
-// stopped answering.
-func TestZmodloadLoadsAModuleWhoseAbsencesRefuseByName(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter 2>&1
+// The counts are checked rather than assumed, because "the module loads" is
+// worth nothing if the five that made it worth loading stopped answering —
+// and `$modules` is the one that says the roster emptied rather than the
+// refusal going quiet: it is 1 in a shell that has loaded nothing else, and
+// 2 on the line after the load.
+func TestZmodloadLoadsAModuleWhoseParametersAllAnswer(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `print -r -- "before=${#modules}"
+zmodload zsh/parameter 2>&1
 print -r -- "st=$?"
 g(){ :; }
 print -r -- "functions=${#functions}"
 print -r -- "galiases=${#galiases}"
 print -r -- "modules=${#modules}"
 print -r -- "after=$?"`)
-	want := "st=0\nfunctions=1\ngaliases=0\n" +
-		"zsh:6: modules: parameter not implemented yet\n"
-	if out != want || st != 1 {
+	want := "before=1\nst=0\nfunctions=1\ngaliases=0\nmodules=2\nafter=0\n"
+	if out != want || st != 0 {
 		t.Errorf("zmodload zsh/parameter = %q (status %d), want %q", out, st, want)
 	}
 }

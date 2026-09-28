@@ -446,6 +446,14 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// dialect answers by the *shape* of the element: `jobs -p | cat`
 		// lists the parent's jobs there and `{ jobs -p; } | cat` does not.
 		sub.inheritJobs(pipelineJobBoundary(p.Cmds[i]))
+		// And whether the element is parentheses, which is a different
+		// question again from the two above: `( … ) | cat` numbers a job it
+		// starts from two and `{ … } | cat` from one, so this is keyed on
+		// the node and not on the element being a subshell at all. See
+		// Runner.runAsItsOwnJob.
+		if _, paren := p.Cmds[i].(*syntax.Subshell); paren {
+			sub.runAsItsOwnJob(r)
+		}
 		// Each element is its own job component, so the copy running it
 		// names it rather than inheriting whatever the shell last ran.
 		sub.killed = p.Cmds[i]

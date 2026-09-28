@@ -91,6 +91,11 @@ func (r *Runner) readFileSubst(ctx context.Context, rd *syntax.Redirect, span sy
 	var out bytes.Buffer
 	sub := r.clone()
 	sub.inheritJobs(jobBoundarySubstitution)
+	// A substitution's body is parentheses too as far as job numbering is
+	// concerned — measured, `$( … )`, a backquoted substitution and
+	// `<( … )` all number a job they start from two. See
+	// Runner.runAsItsOwnJob.
+	sub.runAsItsOwnJob(r)
 	sub.inCommandSubst = true
 	sub.lineBase = r.spanLineBase(span)
 	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {

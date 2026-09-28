@@ -2836,6 +2836,23 @@ type Runner struct {
 	// "inherited" is a property of the whole table and no row has to carry
 	// one.
 	jobsInherited bool
+	// ownJobsStartAtTwo says this shell is a `( … )` subshell in the one
+	// dialect that makes one a job of its own, so the jobs it starts are
+	// numbered from two rather than from one, and
+	// inheritedCurrentJob/inheritedPreviousJob are the numbers the parent's
+	// `+` and `-` were on at the fork.
+	//
+	// **The marks are carried as numbers and never moved**, which is the
+	// whole of the measurement: a subshell does not make its own job the
+	// current one, so a mark shows up only where a number coincides. Zero in
+	// the two number fields is "the parent had none".
+	//
+	// Set at the clone rather than in inheritJobs, because it holds for a
+	// subshell whose parent had no job at all — where inheritJobs has
+	// nothing to decide and returns before the axis. See
+	// Runner.runAsItsOwnJob and Semantics.SubshellIsAJobInItsOwnTable.
+	ownJobsStartAtTwo                         bool
+	inheritedCurrentJob, inheritedPreviousJob int
 	// jobOrder is the order jobs became *notable*, oldest first: a job is
 	// appended when it enters the table and again, moved to the end, every
 	// time it stops. It is not the table's order, which is slot order, and

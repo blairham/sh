@@ -4129,6 +4129,10 @@ func Semantics() interp.Semantics {
 	// recorded the opposite for this shell and it does not reproduce —
 	// re-measured on zsh 5.9.2 with `-f`, this column agrees with bash.
 	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
+	// A `( … )` is a job of its own here, so its jobs are numbered from two
+	// and never take the `+`. Measured — see the axis for the grid and the
+	// four columns that say one (#5021).
+	s.SubshellIsAJobInItsOwnTable = interp.Yes
 	s.JobsListFinishedJobs = interp.No
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
 	// Off by default, and the one column in the panel where a script can

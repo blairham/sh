@@ -10171,6 +10171,68 @@ type Semantics struct {
 	// majority standing in.
 	StoppedJobTakesTheCurrentJobMarker Answer
 
+	// SubshellIsAJobInItsOwnTable makes a `( … )` subshell hold a job number
+	// of its own, so the jobs it starts are numbered from **two** — and its
+	// own jobs never take the `+`, so the current and previous marks stay on
+	// whatever *numbers* the parent's were on at the fork.
+	//
+	// The two halves are one answer because one mechanism produces both:
+	// nothing in the subshell moves the marker, so a mark appears only where
+	// a job's number coincides with an inherited one. A shell that numbered
+	// from two and still marked its own job would be wrong on every row
+	// below, and so would one that never marked and numbered from one.
+	//
+	// Measured 2026-09-28, `sleep 3 &` … in the parent and then
+	// `( sleep 2 & print ${(kv)jobstates} )`, each row a fresh run, pids
+	// masked, 3–5 repeats each and stable:
+	//
+	//	parent jobs  its +/- are on  subshell's job  zsh 5.9.2
+	//	0            —               2               running::P
+	//	1            1               2               running::P
+	//	2            2 / 1           2               running:+:P
+	//	3            3 / 2           2               running:-:P
+	//	4            4 / 3           2               running::P
+	//
+	// The third, fourth and fifth rows were **predicted from the rule and
+	// then measured**, as were two more with three jobs started inside the
+	// subshell — `2 +, 3 ·, 4 ·` under a parent of two and `2 -, 3 +, 4 ·`
+	// under a parent of three. All five came back as predicted, which is what
+	// says the marks are read off inherited numbers rather than cleared.
+	//
+	// The panel is six to one and zsh is the one. `sleep 3 & ( sleep 2 & jobs )`:
+	//
+	//	bash 5.3.20  [1]+        ksh93        [1] +
+	//	bash 3.2.57  [1]+        dash         [1] +
+	//	zsh 5.9.2    **[2]**, unmarked
+	//	BusyBox ash  [1]+        (alpine@sha256:28bd5fe8b56d… , the pinned digest)
+	//
+	// ash is measured rather than derived from dash, which is the column this
+	// tree has had wrong before by reasoning about it instead of running it.
+	//
+	// So the unanswered value is the answer the other six give, and is what this
+	// tree did before the axis existed. Read rather than `ask`ed, as
+	// StoppedJobTakesTheCurrentJobMarker is and for the same reason: numbering
+	// a job is not the place to refuse a script over a disagreement.
+	//
+	// **It is keyed on a real `( … )`**, not on "a subshell" and not on "a
+	// compound". Measured the same day, the boundaries that number from two
+	// are `( … )`, `( … ) | cat`, `$( … )`, a backquoted substitution,
+	// `<( … )` and `( … ) &` — while `{ … } | cat` and `{ … } &` number from
+	// one. A rule written against the clone would have been wrong on the last
+	// two, and one written against the compound wrong on the same two.
+	//
+	// **What this does not model**: a compound command *also* holds a job
+	// number while it runs and frees it afterwards, which is the mechanism
+	// underneath the number two. Measured: `sleep 3 &` then
+	// `{ sleep 2 & print … ; }` numbers the new job **3**, a job started after
+	// the group ends takes 2 back, and `( f )` where `f` backgrounds one
+	// numbers it **3** rather than 2 because the function call holds a slot
+	// inside the subshell. Modeling that would move job numbering for every
+	// compound command in the shell and its pipeline-element row does not yet
+	// resolve, so it is recorded here and left alone — a subshell containing a
+	// compound is the case this answer is knowingly wrong about (#5021).
+	SubshellIsAJobInItsOwnTable Answer
+
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`
 	// listing. True in bash and zsh; dash prints an empty column there and
 	// ksh93 a placeholder.

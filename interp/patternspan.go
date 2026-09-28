@@ -236,6 +236,12 @@ func patternEdgeLiterals(p string, o patternOpts) (head, tail string, ok bool) {
 	if strings.ContainsAny(p, bypassOperators) || strings.Contains(p, "(#") {
 		return "", "", false
 	}
+	// The prepared tables are not this scan's: it is asked about rewritten
+	// patterns too, where an offset means something else. The one reader
+	// below that could consult them is splitCountedGroup, and it is handed a
+	// pattern position that may not be the one the table was built for. See
+	// firstArmedGroup, which drops them for the same reason.
+	o.where = nil
 	// lit is the run in hand: the head while nothing has stopped it yet, and
 	// from the last stopper onwards the tail. Written out rather than sliced
 	// off the pattern because an escape is two bytes of pattern for one of
@@ -254,6 +260,33 @@ func patternEdgeLiterals(p string, o patternOpts) (head, tail string, ok bool) {
 			lit = append(lit, p[i+1])
 			i += 2
 			continue
+		}
+		if o.counted && c == '{' {
+			if g, ok := splitCountedGroup(p[i:], i, &o); ok && g.counts {
+				// A repetition count in front of a group. `{` and `}` are
+				// **not** in spanStoppers — braces are a phase that has
+				// finished by the time a pattern reaches here — so without
+				// this the count's own five characters join the run and the
+				// scan comes back demanding a subject that starts with
+				// `{2,3}`. `s=aaaX; ${s#{2,3}(a)}` is `aX` in the reference
+				// and was the untouched value here, every candidate piece
+				// having been skipped before the matcher saw one.
+				//
+				// The run in hand ends here exactly as it would at the `(`,
+				// which the loop reaches on the next turn and which is a
+				// stopper. What the count's braces are not is *characters*,
+				// and that is the whole of the difference.
+				//
+				// Only where the brace **is** a count. `{z,y}(a)` matches
+				// its own text in that shell, so a piece really does have to
+				// start with `{z,y}` and the run is right to claim it.
+				if !headDone {
+					head, headDone = string(lit), true
+				}
+				lit = lit[:0]
+				i += g.lead
+				continue
+			}
 		}
 		if strings.IndexByte(spanStoppers, c) >= 0 {
 			if c == '#' && o.extended {

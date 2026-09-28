@@ -857,6 +857,26 @@ type patternOpts struct {
 	// reading beside the two above rather than a widening of either. See
 	// splitCountedGroup and syntax.Dialect.CountedPatternGroup.
 	counted bool
+	// operandParens says a bare `(` opens a group on **this surface** even
+	// where a count is what let it into the text, so noBareGroup is not
+	// armed here.
+	//
+	// The parameter-expansion operand is that surface and it is the only
+	// one. A written bare group at the top of a pattern is a syntax error
+	// in a word and in a condition in the dialect that has counts —
+	// `[[ ab == a(b) ]]` — and is read in an operand: `s=ab; ${s#a(b)}` is
+	// empty on ksh93u+, where `s='a(b)'; ${s#a(b)}` is unchanged. So the
+	// parenthesis has a door of its own there and does not need the count's.
+	//
+	// Measured 2026-09-27, and the pair is what says it is the surface
+	// rather than the brace:
+	//
+	//	s='{z,y}a';    ${s#{z,y}(a)}   empty — the group is read
+	//	s='{z,y}(a)';  ${s#{z,y}(a)}   unchanged
+	//	[[ '{z,y}(a)' == {z,y}(a) ]]   matches — and there it is not
+	//
+	// The same text, the same brace, two surfaces and two answers.
+	operandParens bool
 	// noBareGroup says a `(` with no quantifier in front of it is an
 	// ordinary character here, whatever `quantified` says.
 	//
@@ -1579,9 +1599,10 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 		// in front of it.
 		if g, ok := splitCountedGroup(p, pp, &o); ok {
 			// From here on a bare `(` in this branch is a character: the
-			// count is the only way one reached the word at all. See
-			// patternOpts.noBareGroup.
-			o.noBareGroup = true
+			// count is the only way one reached the word at all — except on
+			// the one surface where a parenthesis has a door of its own.
+			// See patternOpts.noBareGroup and patternOpts.operandParens.
+			o.noBareGroup = !o.operandParens
 			if !g.counts {
 				// The brace is not a count, so the `{…}` and the `(`
 				// behind it are ordinary characters and the group is not
@@ -1597,7 +1618,18 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 				// pattern: a `?`, a `*`, a bracket or a group *inside*
 				// these parentheses keeps its meaning, which the three
 				// rows at splitCountedGroup measure.
-				for n := g.lead + 1; n > 0; {
+				//
+				// The parenthesis goes with them on every surface but the
+				// operand, where it opens a group of its own and is left
+				// for splitGroup to read: `s='{z,y}a'; ${s#{z,y}(a)}` is
+				// empty on ksh93u+ and `s='{z,y}(a)'; ${s#{z,y}(a)}` is
+				// unchanged, which is the opposite of the answer the same
+				// text gets in a condition. See patternOpts.operandParens.
+				spend := g.lead
+				if !o.operandParens {
+					spend++
+				}
+				for n := spend; n > 0; {
 					if s == "" {
 						return false
 					}

@@ -112,10 +112,15 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 			// **operand**, which is the skip's opposite: the skip read it as
 			// the option it spells and did that option's work.
 			if r.ask(r.sem().LoneDashIsAnOption, "a lone `-` given to a builtin") {
-				// separated for the same reason `--` sets it, and measured
-				// rather than reasoned: `alias - -L` and `alias -- -L` are
-				// one answer in that shell, silent at 1.
-				return args[1:], opts, optArg, true, 0
+				// Not `separated`, which is the `--` *was written* flag and
+				// is deliberately left alone: the one dialect that eats the
+				// dash answers Semantics.AliasOptionEndsTheLookup no, and
+				// the one that answers it yes does not eat the dash, so no
+				// column can tell the two settings apart. A mutation that
+				// flipped it killed nothing, which is what said so. Measured
+				// on the reference all the same — `alias - a`, `alias -- a`
+				// and `alias a` are one answer there, `a=b` at 0.
+				return args[1:], opts, optArg, false, 0
 			}
 			if r.unspecified {
 				return nil, opts, optArg, false, 2

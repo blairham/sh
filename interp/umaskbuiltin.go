@@ -39,9 +39,29 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 		letters = "Sp"
 	}
 	symbolic, prefixed := false, false
-	for len(args) > 0 && strings.HasPrefix(args[0], "-") && args[0] != "-" {
+	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
 		if args[0] == "--" {
 			args = args[1:]
+			break
+		}
+		if args[0] == "-" {
+			// A lone `-`, which one dialect eats and the rest hand on as a
+			// mask to parse. It had been hard-coded here as an operand, and
+			// `umask -` was then a mask nobody could read: silent at 0 where
+			// the reference writes `022`, the bare listing it is left with
+			// once the word is eaten. See Runner.ReadALoneDash, which is the
+			// one place this question is asked now.
+			reading := r.ReadALoneDash()
+			if reading == LoneDashUnanswered {
+				return 2
+			}
+			if reading == LoneDashEndsTheOptions {
+				args = args[1:]
+			}
+			// Either way the scan stops here: eaten, the options have ended;
+			// left alone, the word is the mask and this loop must not read
+			// past it. A `break` inside the switch above would have left the
+			// switch and not the loop, which is the trap this shape avoids.
 			break
 		}
 		// A bundle, because bash reads one: `umask -pS` and `umask -Sp` both

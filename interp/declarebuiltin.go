@@ -462,7 +462,14 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				}
 				break
 			}
-			pending = 0
+			// A number a letter was still waiting for is not cleared here,
+			// because the scan is about to end and nothing reads it again.
+			// It is not silently dropped either: measured, `typeset -F - 3
+			// x=1.5` is `not an identifier: 3` in zsh 5.9.2 and here, so the
+			// word after the sign is an operand rather than the precision
+			// `-F` was waiting for — which is the same thing "the options
+			// end" says everywhere else on this builtin.
+			//
 			// A sign *word* does not change the sign of a letter already
 			// written, which is measured in the two columns that read one as
 			// an option word at all: `typeset -a + q` is `array-local` in
@@ -498,7 +505,31 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				// being one question means.
 				f.functionOff = f.remove
 			}
-			continue
+			// **And the sign ends the option scan**, which is the half #5040
+			// is about. It had been read as an option word and then skipped,
+			// and the two readings agree wherever nothing but operands
+			// follows it — which is every shape the axis was first measured
+			// from. They part on an option word *behind* the sign, and there
+			// the reference makes it an operand:
+			//
+			//	typeset - -r x=1   zsh 5.9.2  not valid in this context: -r
+			//	                   ksh93u+    typeset: -r: invalid variable name
+			//	typeset + -r x=1   the same in both
+			//	typeset -a - -x q  the same in both, so it ends a scan that
+			//	                   has already read letters
+			//
+			// bash is the third column and never arrives, because a bare sign
+			// is a *name* there — which is what the axis above has just
+			// asked. So **no column separates "taken" from "ends"**: every
+			// dialect that reads the sign as an option word also stops
+			// reading options at it, and one answer serves both.
+			//
+			// `f.endedOptions` is deliberately *not* set. That field is
+			// `--`'s alone and the one thing that reads it is the `-M`
+			// mapping name; whether a sign does the same for `-M` is
+			// unmeasured, so the scan stops here without claiming it.
+			i++
+			break
 		}
 		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
 			if pending != 0 && isAllDigits(a) {

@@ -4320,6 +4320,25 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 		fromEnd = true
 		args = args[1:]
 	}
+	if len(args) > 0 && args[0] == "-" {
+		// A lone `-`, which one dialect eats and the rest hand on as a
+		// count. Nothing asked before #5040, so the dash reached the
+		// arithmetic and `shift -` was `arithmetic expression: -` at 2 where
+		// the reference shifts one — the count having been eaten along with
+		// the word, leaving `shift` its bare form. Measured: `shift - 2`
+		// there shifts two, so what follows really is the count and not an
+		// operand the marker would have protected.
+		//
+		// Before the `--` arm below and not folded into it, because the two
+		// are different questions with different answers in the same shell:
+		// bash takes the marker and reads a lone dash as a count.
+		switch r.ReadALoneDash() {
+		case LoneDashUnanswered:
+			return r.status
+		case LoneDashEndsTheOptions:
+			args = args[1:]
+		}
+	}
 	if len(args) > 0 && args[0] == "--" {
 		// The end-of-options marker, and only the first one: what follows is
 		// the count however it is spelled, so `shift -- -1` is a negative

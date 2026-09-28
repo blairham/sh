@@ -83,11 +83,25 @@ func hashTableOptions(r *interp.Runner, builtin string, args []string) ([]string
 	// twice. `--` hands back what follows it, and the rest return.
 	if len(args) > 0 {
 		a := args[0]
-		if len(a) < 2 || a[0] != '-' {
+		if a == "" || a[0] != '-' {
 			return args, 0
 		}
 		if a == "--" {
 			return args[1:], 0
+		}
+		if a == "-" {
+			// A lone `-`, eaten in this dialect and an operand elsewhere.
+			// The guard above used to be `len(a) < 2`, which handed it to the
+			// operands unasked — so `enable - -f x` named the dash as a table
+			// element and wrote a complaint the reference never writes
+			// (#5040). See interp.Runner.ReadALoneDash.
+			switch r.ReadALoneDash() {
+			case interp.LoneDashUnanswered:
+				return nil, 2
+			case interp.LoneDashEndsTheOptions:
+				return args[1:], 0
+			}
+			return args, 0
 		}
 		switch a {
 		case "-a", "-f", "-m", "-r", "-s":

@@ -326,7 +326,7 @@ func (r *Runner) parameterExists(name string) bool {
 // plainly there. TestTheTwoReadingsOfParameterNamesAgree is what holds them
 // together.
 func (r *Runner) ParameterIsNamed(name string) bool {
-	if name == "" || r.removedForDescription(name) {
+	if name == "" || r.removedForDescription(name) || r.engineOwns(name) {
 		return false
 	}
 	if _, ok := r.Vars[name]; ok {
@@ -357,7 +357,8 @@ func (r *Runner) ParameterNames() []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(name string) {
-		if name == "" || seen[name] || r.removedForDescription(name) {
+		if name == "" || seen[name] || r.removedForDescription(name) ||
+			r.engineOwns(name) {
 			return
 		}
 		seen[name] = true

@@ -2786,7 +2786,7 @@ func (r *Runner) parameterNames() []string {
 	// everything, the same standing this codebase gives an escaped ordinary
 	// character. It is the *rule* that is being written down.
 	add := func(name string) {
-		if seen[name] || r.removed[name] {
+		if seen[name] || r.removed[name] || r.engineOwns(name) {
 			return
 		}
 		seen[name] = true

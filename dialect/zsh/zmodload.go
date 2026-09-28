@@ -122,7 +122,14 @@ import (
 // zmodloadStore is the set of modules a script has loaded, kept as an
 // indexed array under a name no script can reach — the way `zstyle` and
 // `emulate` keep theirs, which is also what gives a subshell its own copy.
-const zmodloadStore = ".zsh.zmodload"
+const zmodloadStore = zshEngineStorePrefix + "zmodload"
+
+// zshEngineStorePrefix is what every one of this dialect's stores is named
+// under, and the whole of what keeps them out of a listing: see
+// interp.Runner.SetEngineOwnedPrefix, called from Apply. A leading `.` is not
+// an identifier, so no script can write a name under it and no script's name
+// can land under it by accident (#5014).
+const zshEngineStorePrefix = ".zsh."
 
 // zmodloadAlwaysLoaded is the module a fresh shell already has **whether or
 // not it has an editor**, which is the part of the answer that does not move.

@@ -423,6 +423,14 @@ func (r *Runner) tieDescribesTheBinding(name string) bool {
 	if !tied {
 		return false
 	}
+	if t.wordless {
+		// A join the shell maintains between two of its own specials, which
+		// mirrors exactly as a tie does and carries none of the word:
+		// `${(t)WATCH}` is `scalar-special` in zsh 5.9.2 where `${(t)PATH}`
+		// is `scalar-tied-export-special`, measured in one run. See the
+		// `wordless` field in interp/tiedscalar.go (#4907).
+		return false
+	}
 	if !r.tieHalfShadowedInItsScope(t, name) {
 		// Nothing of this half is displaced, so the tie is the binding's
 		// whatever has happened to the other name.

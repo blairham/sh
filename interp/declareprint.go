@@ -264,6 +264,17 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 	d.precision = r.floatPrecision[name]
 	d.width, d.hasWidth = r.fieldWidth[name]
 	d.tied, d.hasTie = r.tieOf(name)
+	if d.hasTie && d.tied.wordless {
+		// A join the shell maintains between two of its own specials, which
+		// every listing describes as though the two names were unrelated:
+		// `${(t)WATCH}` is `scalar-special` where `${(t)PATH}` is
+		// `scalar-tied-export-special`, and `typeset +T` names neither half
+		// of the pair. See the `wordless` field (#4907).
+		//
+		// Cleared here rather than asked at each of the three readers, so
+		// that a listing added later cannot be the one that writes the word.
+		d.hasTie, d.tied = false, tie{}
+	}
 	// Which of the two things `-H` is here. The attribute is recorded the
 	// same way for both readings — see interp/declarehide.go — and this is
 	// where the dialect is asked what it stands for, once, for every listing

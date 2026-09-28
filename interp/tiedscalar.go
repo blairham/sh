@@ -60,6 +60,32 @@ type tie struct {
 	// what left a real startup with an empty `$path` nothing would refill
 	// (#1631). See unsetName.
 	special bool
+	// wordless says the join is one the shell maintains between a pair of
+	// its **own specials** rather than a tie, which changes nothing about
+	// how the two halves move together and everything about what a listing
+	// calls them.
+	//
+	// It is a second field beside `special` and not a reading of it, because
+	// the panel has both kinds of shell-installed join and they describe
+	// differently. Measured 2026-09-27 on zsh 5.9.2 under `-f` from a script
+	// file, in one run:
+	//
+	//	${(t)PATH}    scalar-tied-export-special
+	//	${(t)path}    array-tied-special
+	//	${(t)WATCH}   scalar-special
+	//	${(t)watch}   array-special
+	//
+	// and the second pair really is joined, in the same shell:
+	// `watch=(a b)` makes `$WATCH` `a:b`, and `WATCH=cc` makes `$watch` one
+	// element. So the join is not what the word turns on — `typeset +T`
+	// lists the eight tied pairs and `ZSH_EVAL_CONTEXT`, and names neither
+	// half of this one — which is the measurement #4907 asked for before any
+	// code, and the answer is that `tied` marks the **tie table** rather
+	// than the behavior a tie produces.
+	//
+	// So a pair here is joined and untied: it mirrors, it does not carry the
+	// word, and no tie listing walks it.
+	wordless bool
 	// depth is how many scopes were on the stack when the tie was made, so a
 	// scope *deeper* than that can be told from the one the declaration
 	// itself took — see tieShadowedInItsScope.
@@ -449,7 +475,15 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 // halves sort first.
 func (r *Runner) tieListing(namesOnly bool) int {
 	seen := make(map[string]bool, len(r.tied))
-	for name := range r.tied {
+	for name, t := range r.tied {
+		if t.wordless {
+			// A pair the shell maintains between two of its own specials is
+			// not in the tie table as far as any listing is concerned:
+			// measured 2026-09-27, `typeset +T` in zsh 5.9.2 names the eight
+			// tied pairs and `ZSH_EVAL_CONTEXT`, and neither `WATCH` nor
+			// `watch`. See the `wordless` field (#4907).
+			continue
+		}
 		seen[name] = true
 	}
 	for _, name := range sortedNames(seen) {
@@ -522,6 +556,40 @@ func (r *Runner) Tie(scalar, array, sep string) {
 // A dialect calls this before it registers the producers, and neither half
 // can be assigned afterwards anyway: the one pair in the panel that needs it
 // is readonly on both halves. See dialect/zsh/evalcontext.go.
+// PairNames joins two of the shell's **own** specials the way a tie joins
+// two names, and gives the join no name of its own.
+//
+// For a dialect whose shell maintains such a pair: see the `wordless` field
+// for the measurement that says the two mechanisms are two. Nothing is
+// seeded, because both halves of the one pair in the panel start empty and a
+// stored value is what shadows anything a dialect registers over the name
+// afterwards — the same reason [Runner.TieProduced] seeds nothing.
+//
+// `special` with it, which is measured rather than carried over from Tie: an
+// `unset` of either half of this pair does **not** dissolve the pairing in
+// the reference — `unset watch; watch=(q r)` writes `$WATCH` again, exactly
+// as `unset path; path=(/q)` writes `$PATH`. What it does do is leave the
+// *other* half standing where a tie takes both names away, and that half is
+// not modeled here; see dialect/zsh/watchpair.go, where the row is written
+// down.
+func (r *Runner) PairNames(scalar, array, sep string) {
+	if sep == "" {
+		sep = defaultTieSeparator
+	}
+	r.tieNames(tie{scalar: scalar, array: array, sep: sep, special: true, wordless: true})
+	// Both halves laid down empty, which is the pair's own measurement and
+	// not Tie's seeding copied over: `${+WATCH}` and `${+watch}` are both 1
+	// in a fresh zsh 5.9.2 and `$WATCH` is empty with `${#watch}` at 0 — so
+	// the parameter is there and holds nothing, which a registration alone
+	// would not have said. The mirror is held off for the reason
+	// declareTie holds it off: an empty scalar splits into one field and a
+	// declaration splits nothing.
+	r.mirroring = true
+	r.setVar(scalar, "")
+	r.setArray(array, nil)
+	r.mirroring = false
+}
+
 func (r *Runner) TieProduced(scalar, array, sep string) {
 	if sep == "" {
 		sep = defaultTieSeparator

@@ -86,6 +86,14 @@ var zshDeferredParameters = []string{
 	"zsh_scheduled_events",
 	"termcap",
 	"terminfo",
+	// And the one pair no module names at all: `$WATCH` and `$watch`, which
+	// this shell joins for itself. A bare `typeset` in a shell that has
+	// referred to nothing writes `undefined WATCH` and `undefined watch`
+	// among its forty such rows, and `typeset -p WATCH` as the first
+	// statement of a script is nothing at 0 — the same route every name
+	// above was measured through. See watchpair.go (#4907).
+	"WATCH",
+	"watch",
 	// And the directory stack, which is not a module parameter at all and
 	// behaves identically: `typeset -p dirstack` is nothing at 0 in a fresh
 	// shell, still nothing after a `cd` that fills the stack, and a row once

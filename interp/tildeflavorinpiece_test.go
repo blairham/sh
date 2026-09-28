@@ -61,14 +61,13 @@ func TestATildeFlavorGroupInsideAPatternGroup(t *testing.T) {
 		{"a star in front of it", `[[ zaXXa == @(z*~(E)a) ]] && echo YES || echo NO`, "YES"},
 		{"and the star may take nothing", `[[ za == @(z*~(E)a) ]] && echo YES || echo NO`, "YES"},
 
-		// **A pattern group in *front* of a flavor keeps the answer it
-		// had**, and these two are the limit rather than the reading: what
-		// stands in front has no translation here, so the expression is
-		// anchored where the group stopped instead of being searched. The
-		// first row is the one that improves; the second is what says the
-		// shape is not closed.
+		// **A pattern group in *front* of a flavor is translated too**, so
+		// the whole is one searched expression rather than one anchored
+		// where the group stopped (#4920). The third row is what says the
+		// group is still read: a subject the arm does not describe misses.
 		{"a group in front, span contiguous", `[[ za == @(z)~(E)a ]] && echo YES || echo NO`, "YES"},
-		{"a group in front, span not", `[[ zaa == @(z)~(E)a ]] && echo YES || echo NO`, "NO"},
+		{"a group in front, span not", `[[ zaa == @(z)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"and the group's arm still decides", `[[ zXa == @(z)~(E)a ]] && echo YES || echo NO`, "NO"},
 
 		// **A fold the branch arrived with reaches the expression**, and the
 		// pair is what says so: the same pattern without the fold at the

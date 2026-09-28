@@ -2717,11 +2717,68 @@ with nothing at all — three answers from one shape, where the ungrouped
 produces all three, so those surfaces answer exactly what they answered
 before, which is the one answer that cannot be a new wrong one.
 
-Two shapes stay out for the reason `globToRE2` gives: what stands in front of
-the group has to be translatable. A **pattern group** in front of the flavor
-is not, so `[[ zaa == @(z)~(E)a ]]` is yes there and no here — the expression
-is anchored where the group stopped instead of joining it — and neither is a
-second `~(…)`, so `[[ zA == @(z~(i)~(E)a) ]]` keeps the answer it had.
+### The glob in front may hold a group, and a second `~(…)`
+
+`globToRE2` carries `*`, `?`, a bracket expression and literal text. It also
+carries a **quantified pattern group** and a second `~(…)`, which it used to
+refuse — and a refusal there is not a narrower reading: the expression ends
+up anchored where the group stopped instead of being searched with it, which
+is a plausible `no` at status 0.
+
+`@(…)`, `?(…)`, `*(…)` and `+(…)` are a group and a bound, so each becomes a
+non-capturing group carrying the quantifier the letter stands for, with every
+arm translated by the same function. The rows are the searched shape — a
+subject that carries the expression somewhere other than where the group's
+own match stopped:
+
+| written | ksh93 | |
+| --- | --- | --- |
+| `[[ zza == z~(E)a ]]` *(control)* | yes | a flavor searches |
+| `[[ zXa == @(z)~(E)a ]]` *(control)* | no | and the arm is read |
+| `[[ zaa == @(z)~(E)a ]]` | yes | |
+| `[[ zzaa == @(z)~(E)a ]]` | yes | |
+| `[[ zaa == ?(z)~(E)a ]]` | yes | |
+| `[[ zaa == *(z)~(E)a ]]` | yes | |
+| `[[ zaa == +(z)~(E)a ]]` | yes | |
+| `[[ a == @(zq)~(E)a ]]` | no | the **empty** subject is what |
+| `[[ a == +(zq)~(E)a ]]` | no | separates the four bounds |
+| `[[ a == ?(zq)~(E)a ]]` | yes | |
+| `[[ a == *(zq)~(E)a ]]` | yes | |
+| `[[ zqa == +(zq)~(E)a ]]` | yes | and each of them takes one |
+
+`@` against `+`, and `?` against `*`, are **not** separable at this position,
+and that is a limit rather than an omission: the whole expression is
+searched, so a subject holding two repetitions holds one as well and
+`[[ zqzqa == @(zq)~(E)a ]]` matches there. The bounds written are the ones
+the walk already reads for the same four letters.
+
+A second `~(…)` becomes an **inline flag** written where the group stands,
+and only the fold is written:
+
+| written | ksh93 | |
+| --- | --- | --- |
+| `[[ zqa == z~(i)q~(E)a ]]` *(control)* | yes | the group is read |
+| `[[ zqA == zq~(E)a ]]` *(control)* | no | and without one nothing folds |
+| `[[ zQA == z~(i)q~(E)a ]]` | yes | it reaches the glob behind it |
+| `[[ zqA == z~(i)q~(E)A ]]` | yes | and the expression behind that |
+| `[[ zQa == ~(i)zq~(E)a ]]` | yes | |
+| `[[ zQa == ~(i)z~(-i)q~(E)a ]]` | **no** | from where the group stands |
+| `[[ zqa == ~(i)z~(-i)q~(E)a ]]` | yes | |
+
+The last pair is what says an inline flag is the right shape: a flag on the
+whole compile reaches the same two places and cannot be turned off halfway
+along. `l`, `r` and `g` are answered outside the matcher and `K`, `p`, `s`,
+`N` and an empty group ask nothing of a glob that is about to become an
+expression, so none of them writes a flag — and every one of those is
+measured as not changing this position's answer on a row that is
+non-discriminating on purpose, `[[ Xzqa == z~(l)q~(E)a ]]` and
+`[[ Xzqa == zq~(E)a ]]` both being yes.
+
+**Two shapes stay refused.** `!(…)` is a complement and RE2 has none, so
+`[[ za == !(z)~(E)a ]]` is yes there and no here. A `{n,m}(…)` count is a
+construct this matcher does not answer anywhere — `{2}(z)a` is a parse error
+here, group or no group, where ksh93u+ matches `zza` — so carrying it in
+front of a flavor would be inventing a reading for it.
 
 ### `g`, `l` and `r` are read where they stand as well
 

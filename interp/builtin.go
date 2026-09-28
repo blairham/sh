@@ -7682,6 +7682,24 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// the `readonly`/`export` site which has no shadow to take: a
 		// declaration that really did make a new binding writes a cell
 		// holding nothing, and that is the case the gate's own doc exempts.
+		//
+		// **It cannot be observed to matter here, and that is measured**:
+		// the shadow above has already replaced the cell by the time this
+		// asks, so wherever `fresh` is true `compoundCell` is false and the
+		// gate returns at its first line either way. A mutant passing a
+		// constant `false` survives the whole of interp and dialect and
+		// agrees with the reference on `local -a v=(1 2)` over an outer
+		// array, over an outer association, and from inside a named
+		// function. It is passed anyway because the argument is the *shared*
+		// gate's, four other callers answer it for real, and a constant at
+		// this one site would be a difference between the five that the next
+		// reader has to re-derive. Recorded so that reader does not go
+		// looking for the row that would kill it.
+		//
+		// Its **position** is free for the same reason: moved ahead of the
+		// compound mark above, all sixty-four grid rows still agree. It sits
+		// behind the mark because that is the order the other four words ask
+		// in, not because anything measured requires it.
 		if hasValue && r.inconsistentTypeRefused(name, fresh, f) {
 			return r.status
 		}

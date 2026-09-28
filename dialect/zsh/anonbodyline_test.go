@@ -109,6 +109,36 @@ func TestTheBodysLineReachesTheTraceAndTheDiagnostic(t *testing.T) {
 	}
 }
 
+// The **definition's own line does not move with the numbering**, and this is
+// the row that says the two are separate facts rather than one written twice.
+//
+// `$funcsourcetrace` reports where the function was defined, which is the
+// construct's line for every spelling: 3 for the unbracketed body, 3 for the
+// bracketed one, 3 for a body written two lines below the header, and 3 for a
+// call made from inside another function. A change that moved the frame's
+// line along with the body's numbering would answer 0 for the first of those
+// and pass every other row in this file.
+//
+// Only the line is read here. The file half of that trace names the shell
+// where the reference names the script, for both spellings alike, and that is
+// a fault of its own rather than anything this measures.
+func TestTheDefinitionsOwnLineDoesNotMoveWithIt(t *testing.T) {
+	const read = `print -r -- "D=${funcsourcetrace[1]##*:}"`
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src string }{
+		{"an unbracketed body", "\n\n() " + read + "\n"},
+		{"a bracketed one", "\n\n() { " + read + " }\n"},
+		{"a body two lines below the header", "\n\n()\n\n" + read + "\n"},
+		{"and a call made inside a function", "f() {\n\n() " + read + "\n}\nf\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if out, st := runZsh(t, dir, tc.src); out != "D=3\n" || st != 0 {
+				t.Errorf("out %q status %d, want %q at 0", out, st, "D=3\n")
+			}
+		})
+	}
+}
+
 // It is the **caller's** numbering that is kept, and not the script's.
 //
 // The two agree for every call made at the top level, which is where a grid

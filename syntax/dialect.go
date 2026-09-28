@@ -5807,6 +5807,58 @@ type Dialect struct {
 	// command in zsh 5.9.2 and here alike.
 	UnterminatedPatternGroupIsAWord bool
 
+	// UnterminatedExpansionOperandIsAValue ends a `${` that ran out of input
+	// **at the end of the input** and runs the command it was part of, where
+	// without it the expansion is refused and nothing runs.
+	//
+	// Only once an operand has begun. Before that the expansion is refused in
+	// every column, and that half is what fixes the noun: it is not "input
+	// that ran out inside an expansion is a value", it is that an operand
+	// consumes to the end of the input and so no character can be unexpected.
+	// See Lexer.braceOperandHasBegun.
+	//
+	// Measured 2026-09-28, `-c` under `env -i PATH=/usr/bin:/bin` with a
+	// scratch `HOME`, each probe followed by `; echo AFTER` so that whether
+	// anything ran is half the answer. `s=abc`:
+	//
+	//	probe            ksh93u+           bash 5.3.20 / zsh 5.9.2 / dash
+	//	echo "${s        refused           refused
+	//	echo "${#s       refused           refused
+	//	echo "${s#       abc, no AFTER     refused
+	//	echo "${s#x      abc, no AFTER     refused
+	//	echo "${s%x      abc, no AFTER     refused
+	//	echo "${s%%x     abc, no AFTER     refused
+	//	echo "${s/x      abc, no AFTER     refused
+	//	echo "${s/x/y    abc, no AFTER     refused
+	//	echo "${s:-x     abc, no AFTER     refused
+	//	echo "${s:=x     abc, no AFTER     refused
+	//	echo ${s#{}      abc, no AFTER     refused by zsh, run by bash and dash
+	//
+	// The first two rows are the control that makes the rest readable: the
+	// same run-out with no operator is refused there too, so a row that runs
+	// is an operand swallowing the rest of the line and not a shell that
+	// declines to notice the end of its input. `echo "abc` is `abc; echo
+	// AFTER` in every column, which is the other control — an unterminated
+	// **quote** was already a word everywhere and is not what these rows are
+	// about.
+	//
+	// **Quoting is not the noun either**, and `echo ${s#{}` is the row that
+	// says so: unquoted, and the shell still runs it. Nor is the *brace* —
+	// six of the rows above hold no `{` at all, and the flag is consulted for
+	// every operator rather than for the one #4936 gave a bare brace a way to
+	// open.
+	//
+	// What reaches the command is the whole remainder as the operand, so
+	// `a=x; echo "[${a/x/{y}]"` writes `[{y}]; echo AFTER` as text there: the
+	// replacement is everything after the second `/`. That is the sharpest
+	// row and the one that says the input was consumed rather than discarded.
+	//
+	// The **interactive** route is not this flag's question and is left alone:
+	// `Lexer.ranOut` still records that the input ended inside a `${`, so a
+	// prompt asks for more rather than running a line the person is still
+	// typing. Every row above is `-c`. See #4973.
+	UnterminatedExpansionOperandIsAValue bool
+
 	// PatternTopLevelAlternation reads a `|` standing outside every group and
 	// bracket as an alternation of the whole pattern — `a|b` matching `a` or
 	// `b` rather than the three characters.

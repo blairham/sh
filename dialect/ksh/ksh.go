@@ -609,6 +609,12 @@ func Dialect() syntax.Dialect {
 	// this shell's alone: `{2,3}(a)` matches `a` two or three times. See
 	// syntax.Dialect.CountedPatternGroup (#4931).
 	d.CountedPatternGroup = true
+	// And an expansion whose operand has begun and then ran out of input ends
+	// at the end of the input and runs, where bash, zsh and dash all refuse
+	// the script: `s=abc; echo "${s#x"` writes `abc` here and is a refusal
+	// there. See syntax.Dialect.UnterminatedExpansionOperandIsAValue, which
+	// carries the eleven rows and the two controls (#4973).
+	d.UnterminatedExpansionOperandIsAValue = true
 	// And a `|` standing outside every group is an alternation of the whole
 	// pattern, **however it arrived** — which is a different reading from
 	// the one zsh has, not a wider setting of the same one (#2528).

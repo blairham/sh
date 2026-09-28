@@ -463,6 +463,49 @@ separate from the unquoted one rather than a widening of it: unquoted, a
 column that nests does so for *every* operand, and inside quotes only for a
 pattern.
 
+### And an operand that runs out of input is a value there, not a refusal
+
+The residue of that change, and it turns out to be far wider than the brace.
+When a `${` reaches the end of the input with a level still open, one column
+**runs the command it built** — the operand swallowed the rest of the line —
+and the other three refuse the script.
+
+Measured 2026-09-28, `-c` under `env -i PATH=/usr/bin:/bin` with a scratch
+`HOME`, each probe followed by `; echo AFTER` so that whether anything ran is
+half the answer. `s=abc`:
+
+| written | ksh93u+ | bash 5.3.20 / zsh 5.9.2 / dash 0.5.12 |
+| --- | --- | --- |
+| `echo "${s` *(control)* | refused | refused |
+| `echo "${#s` *(control)* | refused | refused |
+| `echo "${s#` | `abc`, no `AFTER` | refused |
+| `echo "${s#x` | `abc`, no `AFTER` | refused |
+| `echo "${s%x` | `abc`, no `AFTER` | refused |
+| `echo "${s%%x` | `abc`, no `AFTER` | refused |
+| `echo "${s/x` | `abc`, no `AFTER` | refused |
+| `echo "${s/x/y` | `abc`, no `AFTER` | refused |
+| `echo "${s:-x` | `abc`, no `AFTER` | refused |
+| `echo "${s:=x` | `abc`, no `AFTER` | refused |
+| `echo ${s#{}` | `abc`, no `AFTER` | refused by zsh, run by bash and dash |
+
+**The noun is the operand and not the brace, and not the quoting.** Six of
+those rows hold no `{` at all, and the last is unquoted. What the first two
+rows fix is the other half: the same run-out with no operator is refused in
+every column, so a row that runs is an operand consuming to the end of the
+input — and once it does, no character can be unexpected. `echo "abc` is
+`abc; echo AFTER` everywhere and is the other control: an unterminated
+**quote** was already a word and is not what these rows are about.
+
+`a=x; echo "[${a/x/{y}]"` is the sharpest of them, and it is the row that
+says the input was consumed rather than discarded: the reference writes
+`[{y}]; echo AFTER` as text, the whole remainder having become the
+replacement.
+
+`Dialect.UnterminatedExpansionOperandIsAValue` is the flag. The
+**interactive** route is not its question: `Lexer.ranOut` still records that
+the input ended inside a `${`, so a prompt asks for more rather than running
+a line somebody is still typing, and every row above is `-c`.
+
 ### A second reading that runs off the end blames the brace
 
 The re-read can want a division that does not exist: a word the parse

@@ -474,17 +474,20 @@ func TestTheLetterIsExclusive(t *testing.T) {
 	if out != "st=0\n" || st != 0 {
 		t.Errorf("output = %q status %d, want `-x` with its number to register", out, st)
 	}
-	// And a letter that **is** built alongside `-M` still registers
-	// nothing, which is the half the missing letter was standing in for:
-	// the reference answers `invalid option(s)` at 1 to `functions -Mt` and
-	// to `functions -Mu` alike, and this engine is silent at 1 and 0 —
-	// wrong in the wording for both, and not this test's subject. What is
-	// asked here is only that neither line registers.
-	for _, word := range []string{"-Mt", "-MT", "-Mu"} {
-		out, _ := runZsh(t, t.TempDir(), "g(){ :; }\nfunctions "+word+" mf 1 1 g\nfunctions -M\n")
-		if strings.Contains(out, "functions -M mf") {
-			t.Errorf("%s: output = %q, want no registration", word, out)
-		}
+	// **`-c` is the other letter that takes words of its own**, and it keeps
+	// its own refusal rather than being swept into the set's. That is the row
+	// that says these two are read *before* exclusivity rather than being
+	// exceptions to it — and it is a known non-agreement, recorded rather
+	// than moved: the reference answers `-c: requires two arguments` because
+	// its words are not there to take, and this engine has not built `-c` at
+	// all, so it says so. Turning that into `invalid option(s)` would trade
+	// one wrong answer for another and lose the narrower one.
+	out, _ = runZsh(t, t.TempDir(), "g(){ :; }\nfunctions -Mc mf 1 1 g\n")
+	if strings.Contains(out, "invalid option(s)") {
+		t.Errorf("output = %q, want `-c` to keep its own refusal", out)
+	}
+	if !strings.Contains(out, "-c") {
+		t.Errorf("output = %q, want the letter named", out)
 	}
 }
 

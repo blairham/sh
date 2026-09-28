@@ -7660,6 +7660,34 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			r.assignFailed = true
 			continue
 		}
+		// A plain word over a name really holding an array, which is the
+		// same refusal `typeset`, `declare`, `readonly` and `export` already
+		// make and which this word was the one not making (#5074).
+		//
+		// **The rule is keyed on the word doing the second declaration**,
+		// which is what a grid over the *first* word cannot see. Holding the
+		// first fixed and moving the second is what found it:
+		//
+		//	typeset -a v; typeset v=x 	refused	<- has the gate
+		//	local   -a v; typeset v=x 	refused	<- has the gate
+		//	typeset -a v; local   v=x 	taken  	<- no gate
+		//	local   -a v; local   v=x 	taken  	<- no gate
+		//
+		// It is not about `private`, which is how the issue was first framed
+		// and which its own controls disproved: the rows with no `private`
+		// anywhere refuse identically, and so do the rows with no
+		// `zsh/param/private` loaded at all.
+		//
+		// `fresh` is the loop's own answer rather than a constant, unlike
+		// the `readonly`/`export` site which has no shadow to take: a
+		// declaration that really did make a new binding writes a cell
+		// holding nothing, and that is the case the gate's own doc exempts.
+		if hasValue && r.inconsistentTypeRefused(name, fresh, f) {
+			return r.status
+		}
+		if r.unspecified {
+			return r.status
+		}
 		if f.readonly && f.readonlyOff {
 			// `local +r y` after this same call's `local -r y=1`, which is
 			// the one shape that reaches this with a freeze still standing:

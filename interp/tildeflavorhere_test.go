@@ -103,8 +103,8 @@ func TestATildeFlavorGroupInTheMiddleOfAPattern(t *testing.T) {
 			`[[ zqa == @(zq~(E)a) ]] && echo YES || echo NO`, "YES",
 		},
 		{
-			"nor is a prefix holding a second group claimed",
-			`[[ zqa == z~(i)q~(E)a ]] && echo YES || echo NO`, "NO",
+			"a prefix holding a second group is read",
+			`[[ zqa == z~(i)q~(E)a ]] && echo YES || echo NO`, "YES",
 		},
 		{
 			"with the same pattern at the head as the control",
@@ -157,6 +157,120 @@ func TestATildeFlavorGroupOnTheOtherSurfaces(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tildeMid(t, tc.src, func(r *Runner) { r.Dir = dir })
 			if got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// A **quantified pattern group** in front of a `~(…)` flavor group is
+// translated into the expression rather than refused.
+//
+// The group and its bound are what `@`, `?`, `*` and `+` spell — #4939's
+// rule — and RE2 has all four, so each becomes a non-capturing group carrying
+// the quantifier the letter stands for. `!(…)` is a complement and RE2 has
+// none, a `{n,m}(…)` count is a construct this matcher does not answer
+// anywhere, and both stay refused.
+//
+// Every row is against the flavor's own reading: the whole is a **substring
+// search**, so what these measure is a subject that carries the expression
+// somewhere other than at the position the group's match stopped.
+func TestAPatternGroupInFrontOfATildeFlavorGroup(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The controls. The first says a flavor at the head searches, and
+		// the second that the group in front is really read rather than
+		// every row answering yes.
+		{"a flavor searches", `[[ zza == z~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"and the group is read", `[[ zXa == @(z)~(E)a ]] && echo YES || echo NO`, "NO"},
+
+		// The shape the whole thing is about: the subject carries the
+		// expression past where the group's own match stopped.
+		{"a group and a searched tail", `[[ zaa == @(z)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"and more subject in front", `[[ zzaa == @(z)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"a nought-or-one group", `[[ zaa == ?(z)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"a nought-or-more group", `[[ zaa == *(z)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"a one-or-more group", `[[ zaa == +(z)~(E)a ]] && echo YES || echo NO`, "YES"},
+
+		// The **empty** subject is the one row that separates the four
+		// bounds, since a substring search finds a repetition wherever it
+		// sits and cannot tell one from more.
+		{"exactly one needs one", `[[ a == @(zq)~(E)a ]] && echo YES || echo NO`, "NO"},
+		{"one or more needs one", `[[ a == +(zq)~(E)a ]] && echo YES || echo NO`, "NO"},
+		{"nought or one needs none", `[[ a == ?(zq)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"nought or more needs none", `[[ a == *(zq)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"and each of the four takes one", `[[ zqa == +(zq)~(E)a ]] && echo YES || echo NO`, "YES"},
+
+		// The arms, and a glob inside an arm — each is a pair, so neither
+		// answer reads as the pattern failing for some other reason.
+		{"an arm matches", `[[ zaa == @(z|y)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"the other arm too", `[[ yaa == @(z|y)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"and neither arm", `[[ qaa == @(z|y)~(E)a ]] && echo YES || echo NO`, "NO"},
+		{"a wildcard inside an arm", `[[ zXaa == @(z?)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"a period inside an arm is literal", `[[ zXaa == @(z.)~(E)a ]] && echo YES || echo NO`, "NO"},
+		{"and matches itself", `[[ 'z.aa' == @(z.)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"a star inside an arm", `[[ zXYaa == @(z*)~(E)a ]] && echo YES || echo NO`, "YES"},
+		{
+			"a bracket beside an arm",
+			`[[ zXaa == @([xX]z|z?)~(E)a ]] && echo YES || echo NO`, "YES",
+		},
+
+		// **What is still refused, and each row is the answer it had.** A
+		// complement has no RE2 spelling and a count is a construct this
+		// matcher does not answer at all — `[[ zza == {2}(z)a ]]` does not
+		// match here either, group or no group, so translating the count in
+		// front of a flavor would be inventing a reading for it.
+		{"a complement is not carried", `[[ za == !(z)~(E)a ]] && echo YES || echo NO`, "NO"},
+		// A `{n,m}(…)` count does not reach this translation either, and it
+		// is a **parse error** here rather than a pattern: `{2}(z)a` is
+		// `1:14: "(" unexpected`, group or no group, so there is nothing
+		// for a row to assert and nothing for globToRE2 to carry. ksh93u+
+		// matches `[[ zza == {2}(z)a ]]`; that is its own gap.
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tildeMid(t, tc.src, nil); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// A second `~(…)` group standing in the glob in front of a flavor group is an
+// **inline flag**, written where the group stands.
+//
+// Only the fold is written. `l`, `r` and `g` are answered outside the matcher
+// and `K`, `p`, `s`, `N` and an empty group ask nothing of a glob that is
+// about to become an expression — and every one of those is measured as not
+// changing this position's answer, on a row that is non-discriminating on
+// purpose. See globTildeFlags.
+func TestASecondTildeGroupInFrontOfAFlavorGroup(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The controls: the group is read at all, and without it nothing
+		// folds.
+		{"the group is read", `[[ zqa == z~(i)q~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"and without one nothing folds", `[[ zqA == zq~(E)a ]] && echo YES || echo NO`, "NO"},
+
+		// The pair that says the flag is inline: it reaches the glob behind
+		// it and the expression behind that.
+		{"the fold reaches the glob", `[[ zQA == z~(i)q~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"and the expression", `[[ zqA == z~(i)q~(E)A ]] && echo YES || echo NO`, "YES"},
+
+		// And the row a flag on the whole compile could not answer: the
+		// sense sign turns the fold off **from where the group stands**.
+		{"a head fold reaches the tail", `[[ zQa == ~(i)zq~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"and the sign takes it back", `[[ zQa == ~(i)z~(-i)q~(E)a ]] && echo YES || echo NO`, "NO"},
+		{
+			"with the unfolded subject as the control",
+			`[[ zqa == ~(i)z~(-i)q~(E)a ]] && echo YES || echo NO`, "YES",
+		},
+
+		// A group that asks nothing of this position contributes no flag and
+		// does not stop the translation.
+		{"a group naming the glob", `[[ zqa == z~(K)q~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"an empty group", `[[ zqa == z~()q~(E)a ]] && echo YES || echo NO`, "YES"},
+		{"an anchor letter", `[[ zqa == z~(l)q~(E)a ]] && echo YES || echo NO`, "YES"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tildeMid(t, tc.src, nil); got != tc.want {
 				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
 			}
 		})

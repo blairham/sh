@@ -3,7 +3,11 @@
 
 package zsh
 
-import "github.com/blairham/sh/interp"
+import (
+	"strings"
+
+	"github.com/blairham/sh/interp"
+)
 
 // The parameters that do not exist until their module is loaded.
 //
@@ -60,9 +64,9 @@ import "github.com/blairham/sh/interp"
 // builtin half is a row of its own and is left where it is rather than
 // changed in passing.
 //
-// An **unload** is the other row left alone: `zmodload -u zsh/datetime` takes
-// the parameters away again there, where they stay here. That is the same
-// question read backwards and it is not what this issue measured.
+// An **unload** is the same question read backwards, and it is answered now:
+// `zmodload -u zsh/datetime` takes the parameters away again, which is
+// releaseGatedParameters below (#5025).
 var zshGatedParameters = map[string][]string{
 	"zsh/langinfo": {"langinfo"},
 	"zsh/mapfile":  {"mapfile"},
@@ -123,8 +127,83 @@ func zshGatedParameterModule(name string) string {
 // Idempotent, because a second `zmodload zsh/datetime` is not an error in
 // either shell and re-running a registration must not be one either: every
 // call below is a write to a table keyed by the name.
+// **Nothing here puts back a withdrawal an unload made**, deliberately, and
+// it is the same economy gatedbuiltins.go records for the builtin half:
+// zmodloadEnforce is the other writer of the withdrawn state and a plain
+// `zmodload` widens the selection to every feature the module names, so a
+// load after an unload comes back by the road `-F +p:name` already took. An
+// un-withdrawal written here as well passed every row with it removed, which
+// is what a second writer of one state looks like.
 func installGatedParameters(r *interp.Runner, module string) {
 	if install := zshGatedParameterInstallers[module]; install != nil {
 		install(r)
+	}
+}
+
+// gatedParametersTheModuleOwns is the names an unload takes away and a load
+// brings back: the module's gated parameters that the module also **declares**
+// as features of its own.
+//
+// **Both halves are needed and `zsh/watch` is what says so.** Measured
+// 2026-09-28 on `/opt/homebrew/bin/zsh` — zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `go version -m` says *not a Go executable* for
+// it — `-f` from a script file under `env -i PATH=/usr/bin:/bin TERM=dumb`
+// with a scratch `HOME`, each module loaded and immediately unloaded:
+//
+//	                    ${+…} after      ${(t)…} while loaded
+//	langinfo            0                association-hide-hideval-special
+//	mapfile             0                association-hide-hideval-special
+//	sysparams errnos    0                association-readonly-hide-hideval-…
+//	epochtime           0                array-readonly-hide-hideval-special
+//	EPOCHSECONDS        0                integer-readonly-hide-hideval-special
+//	EPOCHREALTIME       0                (the same)
+//	WATCHFMT LOGCHECK   **1**            scalar / integer
+//	watch WATCH         **1**            array-special / scalar-special
+//
+// So a row asserting "everything the module brought goes" would be wrong for
+// `zsh/watch`, and what decides is not "is it in use" — nothing referred to
+// any of these — but **whose name it is**. `WATCHFMT` and `LOGCHECK` are
+// ordinary parameters the module assigns a default to, and `watch` and
+// `WATCH` are the shell's own specials, present in a fresh shell at
+// `${+watch}` of 1 before any module is loaded. Neither kind is the module's
+// to take back; the seven with `hide-hideval-special` are.
+//
+// Read off the two tables rather than listed a third time, which is what
+// makes `zsh/watch` fall out rather than be carved out: it is in
+// zshGatedParameters for `WATCHFMT` and `LOGCHECK`, it declares `p:WATCH` and
+// `p:watch` in zmodloadFeatures, and the two lists are **disjoint** — so the
+// intersection is empty and nothing is withdrawn.
+func gatedParametersTheModuleOwns(module string) []string {
+	gated := zshGatedParameters[module]
+	if len(gated) == 0 {
+		return nil
+	}
+	var out []string
+	for _, feature := range zmodloadFeatures[module] {
+		name, ok := strings.CutPrefix(feature, "p:")
+		if !ok {
+			continue
+		}
+		for _, g := range gated {
+			if g == name {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
+}
+
+// releaseGatedParameters is installGatedParameters read backwards, and is
+// what an unload does beyond saying it unloaded.
+//
+// Withdrawn rather than unregistered, for the reason the builtin half is:
+// [interp.Runner.SetParameterWithdrawn] keeps what it took, so a later load
+// needs nothing to have been remembered elsewhere. The name then reads as one
+// this shell has not got — `${+langinfo}` of 0 and `typeset -p langinfo` is
+// `no such variable: langinfo` at 1, which is exactly a fresh shell's answer
+// and exactly the reference's after the unload.
+func releaseGatedParameters(r *interp.Runner, module string) {
+	for _, name := range gatedParametersTheModuleOwns(module) {
+		r.SetParameterWithdrawn(name, true)
 	}
 }

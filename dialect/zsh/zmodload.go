@@ -829,18 +829,33 @@ func zmodloadRelease(r *interp.Runner, module string) {
 			r.SetBuiltinWithdrawn(name, withdrawn[f])
 		}
 	}
+	// And the other roster, through the same rule: a parameter this shell has
+	// only because the module brought it goes back to not being there. The
+	// builtin half above and this one are one piece of bookkeeping read twice,
+	// which is why they are in one function — a module half-unloaded is a
+	// state neither shell has (#5025).
+	releaseGatedParameters(r, module)
 }
 
 // zmodloadWithdrawnAtStart is the features a module provides whose names this
-// runner registers **withdrawn** — the plain spellings of a builtin that is
-// an ordinary command on every machine, which a script gets only by asking
-// for the module (#1670).
+// runner registers **withdrawn**, which is the state an unload puts them back
+// into.
 //
-// Derived from the module's own registration rather than listed here, so the
-// day a tenth file operation is added it is in both places at once.
+// Two rosters, and they are two because the reasons are: the plain spellings
+// of a builtin that is an ordinary command on every machine, which a script
+// gets only by asking for the module (#1670), and the module builtins that do
+// not exist at all in a fresh shell (#4997). Both are derived from the tables
+// that write the startup state rather than listed again here, so the day a
+// tenth file operation is added it is in both places at once — and the second
+// roster is why this function had to be read again: #5029 *moved* the startup
+// state, and a release that restores "the way this runner was built" from a
+// stale roster restores a state that is no longer it (#5025).
 func zmodloadWithdrawnAtStart(module string) map[string]bool {
 	out := map[string]bool{}
 	for _, name := range zshWithdrawnPlainNames(module) {
+		out["b:"+name] = true
+	}
+	for _, name := range zshGatedBuiltins[module] {
 		out["b:"+name] = true
 	}
 	return out

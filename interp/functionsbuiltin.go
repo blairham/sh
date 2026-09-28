@@ -116,6 +116,25 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 		case mathLetterWithMatching:
 			// Measured: the two letters together do nothing at all, quietly.
 			return 0
+		case mathLetterMixed:
+			// **The letter is exclusive**, and a letter this shell *has*
+			// beside it makes the whole line `invalid option(s)` at 1 with
+			// nothing registered. Before this the set fell through to the
+			// option parser, which has no complaint about a letter it
+			// accepts — so `functions -Mu mf 1 1 g` registered `mf` in
+			// silence at 0 (#5073).
+			//
+			// Only for a letter this dialect spells. One it has not got is
+			// refused **by name** further down — `functions -Ma …` is `bad
+			// option: -a` in the reference, not `invalid option(s)` — and
+			// that is the fall-through this branch deliberately leaves in
+			// place. See mathLetterMixed for the alphabet it was measured
+			// over and for the two letters that never reach the set at all.
+			if refusal := r.diag().MarkingUnderPlusRefusal; refusal != "" &&
+				len(operands) == 1 && r.functionsSpellsLetter(operands[0]) {
+				r.diagf("%s: %s\n", r.builtinComplaintName(name), refusal)
+				return 1
+			}
 		}
 	}
 	args, f, code := r.parseDeclareFlags(name, args, r.sem().FunctionsOptions)
@@ -327,3 +346,53 @@ func (r *Runner) functionNamesMatching(patterns []string) []string {
 	}
 	return out
 }
+
+// functionsSpellsLetter reports whether this dialect's `functions` has the
+// letter at all, however it answers it.
+//
+// **Both tables, and that pairing is the point.** A letter lives in the
+// accepted set or in the unimplemented one, and a rule that read only the
+// first would call a letter this shell merely has not built yet "a letter
+// nobody has" — which is what `-Mt` did before the trace mark was
+// implemented, and is exactly how the case that looked like it was checking
+// exclusivity came to be graded on the implementation status instead (#5073).
+//
+// So the question is *does this shell spell it*, not *does this shell do it*.
+// A letter that moves from one table to the other must not change the answer
+// here, and there is a row for that.
+func (r *Runner) functionsSpellsLetter(letter string) bool {
+	if letter == "" || strings.Contains(functionsLettersReadFirst, letter) {
+		return false
+	}
+	if strings.Contains(r.sem().FunctionsOptions, letter) {
+		return true
+	}
+	return strings.Contains(r.diag().UnimplementedOptionLetters["functions"], letter)
+}
+
+// functionsLettersReadFirst are the `functions` letters that take words of
+// their own, and so are read — and can refuse — **before** the letter set is
+// judged for exclusivity.
+//
+// They are not exceptions to the exclusivity rule; they never reach it.
+// Measured 2026-09-28 on zsh 5.9.2 over every letter of the alphabet beside
+// `-M`, these two are the only ones that answer with anything but `bad
+// option`, `invalid option(s)` or silence:
+//
+//	functions -Mx mf 1 1 g     number expected after -x, 1
+//	functions -Mx 3 mf 1 1 g   **0, and mf is registered**
+//	functions -Mc mf 1 1 g     -c: requires two arguments, 1
+//	functions -M -c a b mf …   the same — its words are not there to take
+//
+// The second row is the one that settles `x`: given its number the letter
+// composes with `-M` perfectly well, so a rule that refused it would have been
+// wrong about a spelling that works. `x` is already taken off the words above
+// this, before the set is read at all.
+//
+// `c` copies a function and wants two names — `functions -c a b` is `no such
+// function: a` here — and this engine has not built it. Its own refusal is
+// what a line naming it still gets, which is narrower and more useful than
+// `invalid option(s)`: **the row is left exactly where it was rather than
+// moved from one wrong answer to another**, and it is recorded on #5073 as a
+// non-agreement with its cause rather than quietly swept into this rule.
+const functionsLettersReadFirst = "xc"

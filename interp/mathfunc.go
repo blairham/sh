@@ -606,9 +606,35 @@ const (
 	// registration, because registering there is the plausible wrong answer
 	// and it is silent.
 	mathLetterWithMatching
-	// mathLetterMixed is `-M` with any other letter, which the shell refuses
-	// outright as `invalid option(s)`. Not this path: the letters go to the
-	// option parser, which refuses the other letter by name.
+	// mathLetterMixed is `-M` with a letter it does not compose with, which
+	// the shell refuses outright as `invalid option(s)` — a complaint that
+	// names no letter, because what is wrong is the *set*.
+	//
+	// **The doc here used to say "not this path: the letters go to the option
+	// parser, which refuses the other letter by name", and that was an
+	// argument rather than a measurement.** It is right only for a letter
+	// this shell has not got: `functions -Ma …` really is `bad option: -a` in
+	// the reference. For a letter it *has*, the reference says `invalid
+	// option(s)` and registers nothing, where falling through registered the
+	// math function in silence at 0 (#5073).
+	//
+	// Measured 2026-09-28 on zsh 5.9.2, `g(){ : }` then
+	// `functions -M<letter> mf 1 1 g`, every letter of the alphabet in both
+	// cases:
+	//
+	//	-Mm -Ms -MM          0, and the registration is the ordinary one
+	//	-Mk -Mt -Mu -Mz      invalid option(s), 1, nothing registered
+	//	-MT -MU -MW          the same
+	//	-Ma … (not a letter) bad option: -a, 1 — the letter is named
+	//	-Mx                  number expected after -x, 1
+	//	-Mc                  -c: requires two arguments, 1
+	//
+	// The order is the same one read twice: a letter the shell has not got is
+	// refused by name first, then a letter that **takes an argument** is read
+	// and can refuse for its own reason, and only then is the set judged. So
+	// the last two rows are not exceptions to exclusivity — they never reach
+	// it. See mathFunctionLetter, where `x` has already been taken off the
+	// words by the time the set is read.
 	mathLetterMixed
 )
 
@@ -651,7 +677,10 @@ func mathFunctionLetter(args []string) (remove, stringArg bool, rest []string, v
 				verdict = mathLetterWithMatching
 			}
 		default:
-			return false, false, nil, mathLetterMixed
+			// The letter that made the set wrong, carried out so the caller
+			// can tell a letter this shell *has* — `invalid option(s)` —
+			// from one it has not, which is refused by name further down.
+			return false, false, []string{string(c)}, mathLetterMixed
 		}
 	}
 	return sign == '+', stringArg, args[i:], verdict

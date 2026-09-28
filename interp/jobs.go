@@ -2500,14 +2500,6 @@ func (r *Runner) nextJobNumber() int {
 // only cleanup this list needs: a marker names a job a script can still
 // reach, and nothing else keeps these pointers alive.
 func (r *Runner) becomeCurrentJob(j *Job) {
-	if r.ownJobsStartAtTwo {
-		// A subshell does not move the marker. Measured: with the parent's
-		// `+` on job 1, every job the subshell starts reads unmarked, and
-		// with the parent's on job 2 the subshell's first job — which is
-		// number 2 — reads `+` without anything here having put it there.
-		// See Runner.pickMarkedJob, which reads the inherited numbers.
-		return
-	}
 	kept := r.jobOrder[:0]
 	for _, other := range r.jobOrder {
 		if other != j && slices.Contains(r.jobs, other) {
@@ -2545,6 +2537,14 @@ func (r *Runner) becomeCurrentJob(j *Job) {
 // `fg %+` after a ^Z resumes a different job in the two camps.
 func (r *Runner) markedJobs() (current, previous *Job) {
 	if r.ownJobsStartAtTwo {
+		// **This is the only place a subshell's marks are decided**, and
+		// deliberately so. An early return in becomeCurrentJob saying the
+		// same thing was written first and was dead code — the order it
+		// guarded is read by pickMarkedJob and nothing reaches that from
+		// here — so it could not fail, and a mutation that deleted it killed
+		// nothing. Two places implementing one rule is one place for them to
+		// disagree; this branch is the rule.
+		//
 		// A subshell never moved the marker, so the two are the *numbers*
 		// the parent's were on and each is looked up on its own. They are
 		// independent here and not below: the `-` is "the runner-up" in a

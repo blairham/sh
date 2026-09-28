@@ -2938,10 +2938,29 @@ have bought a second alphabet and the same answer. A **matched** field takes
 its text from the filesystem rather than from the pattern, so there is
 nothing in it to leak.
 
+The other two families reach this surface by the same route. A **control
+escape** names one character, so it names no ordinary file: in a directory
+holding `anb`, `echo ~(K)a\nb` is `~(K)anb` and `echo a\nb` is `anb`. And a
+**zero-width** escape consumes nothing, which is the sharpest evidence that
+what survives is the glob's own backslash rather than text — in a directory
+holding `ab` and `abb`:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `echo ~(K)ab\b` | `ab` — a boundary at the end |
+| `echo ab\b` | `abb` — where the letter names the longer name |
+| `echo ~(K)a\bb` | `~(K)abb` — no boundary between two letters |
+| `echo ~(K)a\Bb` | `ab` — its complement holds there |
+| `echo ~(K)ab\z` | `ab` |
+| `echo ~(K)a\bb*` | `~(K)abb*` — the star stays live and the backslash goes |
+
 Which words are touched is the same question `Runner.patternOf` asks of a
 pattern operand and by the same reader: a word carrying no `~(K)` group
 anywhere reads every escape exactly as it did, so the other five columns are
-unmoved.
+unmoved. That gate is load-bearing rather than tidy — widen it and a field
+in a column with a narrower escape set reads the surviving backslash as a
+character of its own, so `echo a\db*` becomes a glob for a name with a
+backslash in it. It is pinned there rather than here, for that reason.
 
 #### And a second family of eight, which are single characters
 

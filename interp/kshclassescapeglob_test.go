@@ -33,6 +33,12 @@ func TestAKshClassEscapeSurvivesAFieldsQuoteRemoval(t *testing.T) {
 		}
 	}
 	empty := t.TempDir()
+	zw := t.TempDir()
+	for _, n := range []string{"ab", "abb"} {
+		if err := os.WriteFile(filepath.Join(zw, n), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	for _, tc := range []struct {
 		name, dir, src, want string
@@ -66,6 +72,22 @@ func TestAKshClassEscapeSurvivesAFieldsQuoteRemoval(t *testing.T) {
 		// so the escape behind it is the letter and the field spells a name.
 		{"a quoted group is characters", empty, `printf "[%s]" "~(K)"a\db`, `[~(K)adb]`},
 		{"an escaped one too", empty, `printf "[%s]" \~\(K\)a\db`, `[~(K)adb]`},
+
+		// The **zero-width** family reaches this surface by the same route
+		// and is the sharpest evidence that what is kept is the glob's own
+		// backslash: `\b` consumes nothing, so a field that read it as the
+		// letter would match a *longer* name. Both directions are here —
+		// the boundary holding where the letter would not match and
+		// declining where it would.
+		{"a boundary at the end", zw, `printf "[%s]" ~(K)ab\b`, `[ab]`},
+		{"where the letter names the longer name", zw, `printf "[%s]" ab\b`, `[abb]`},
+		{"and none between two letters", zw, `printf "[%s]" ~(K)a\bb`, `[~(K)abb]`},
+		{"its complement holding there", zw, `printf "[%s]" ~(K)a\Bb`, `[ab]`},
+		{"the end anchor", zw, `printf "[%s]" ~(K)ab\z`, `[ab]`},
+		{"where the letter names nothing", zw, `printf "[%s]" ab\z`, `[abz]`},
+		// An unmatched field keeps its live star and loses its backslash,
+		// which is the two halves of the representation in one row.
+		{"an unmatched one keeps its star", zw, `printf "[%s]" ~(K)a\bb*`, `[~(K)abb*]`},
 
 		// And a **matched** field takes its text from the filesystem rather
 		// than from the pattern, so there is nothing in it to leak — a

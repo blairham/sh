@@ -237,3 +237,34 @@ func (r *Runner) terminal() (*os.File, bool) {
 	}
 	return nil, false
 }
+
+// terminalTestArithmetic is `-t`'s operand read as an arithmetic expression,
+// in the one dialect that reads it that way.
+//
+// The second result is whether this answered at all: a dialect that has not
+// taken the axis is left to terminalTest and the literal descriptor it always
+// read. The third is the dialect's worded complaint about text that would not
+// read as an expression, and it is handed back rather than written here
+// because the three surfaces that have `-t` do not end the same way — see
+// Semantics.TerminalTestOperandIsArithmetic.
+//
+// **The reading is conditionOperand**, which is the one `[[ 1 -eq x ]]` gets.
+// Not a second evaluator beside it: the complaint this produces for
+// `[[ -t / ]]` is byte-for-byte the one the comparison produces for
+// `[[ 1 -eq / ]]` in the reference, which is what says it is one route rather
+// than two that agree.
+//
+// The value is used as the descriptor with no further reading. The width
+// question terminalTest asks is not asked again, and that is a gap rather
+// than an answer: what a dialect with this axis does with an expression
+// evaluating past a machine int is unmeasured.
+func (r *Runner) terminalTestArithmetic(operand string) (answer, handled bool, failure string) {
+	if r.sem().TerminalTestOperandIsArithmetic != Yes {
+		return false, false, ""
+	}
+	fd, msg := r.conditionOperand(operand)
+	if msg != "" {
+		return false, true, msg
+	}
+	return r.descriptorIsTerminal(fd), true, ""
+}

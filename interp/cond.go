@@ -318,6 +318,12 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		// Whether this shell's descriptor is a terminal — the same question
 		// `test -t` asks and the same answer, through the same helper. An
 		// operand that is not a number is a question of its own first.
+		if on, handled, failure := r.terminalTestArithmetic(s); handled {
+			if failure != "" {
+				return false, r.condArithFailed(r.diag().arithConstructFailure("[[", failure))
+			}
+			return on, nil
+		}
 		on, isNumber := r.terminalTest(s)
 		if !isNumber &&
 			r.ask(r.sem().TerminalTestRequiresANumber, "`[[ -t x ]]` refusing a non-number") {

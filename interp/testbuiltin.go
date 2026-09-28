@@ -113,6 +113,11 @@ func (r *Runner) runTestForm(name string, form testForm, args []string) int {
 	if errors.Is(err, errTestRegexDoesNotCompile) {
 		return 2
 	}
+	if errors.Is(err, errTerminalTestOperandReported) {
+		// Already written, as the shell and not as this builtin, and the
+		// script is already ending. See terminalTestArithmeticFailed.
+		return 1
+	}
 	if err != nil {
 		var te *testError
 		if errors.As(err, &te) && r.diag().TestRefusalCountsTheWordsBetweenConnectives {
@@ -1063,6 +1068,20 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		// Whether this shell's descriptor is a terminal, asked of the shell's
 		// own table — see descriptorIsTerminal. An operand that is not a
 		// number is a question of its own first.
+		//
+		// The arithmetic reading is asked here and worded exactly as it is
+		// inside `[[ ]]`, which is measured rather than shared for tidiness:
+		// `test -t /` and `[ -t / ]` are the same fatal math complaint as
+		// `[[ -t / ]]` in the one shell that has it, with no builtin name in
+		// front — where `test 1 -eq /` in that shell is the builtin's own
+		// `integer expression expected` at 2 and the script runs on. See
+		// Semantics.TerminalTestOperandIsArithmetic.
+		if on, handled, failure := r.terminalTestArithmetic(operand); handled {
+			if failure != "" {
+				return false, r.terminalTestArithmeticFailed(failure)
+			}
+			return on, nil
+		}
 		on, isNumber := r.terminalTest(operand)
 		if !isNumber &&
 			r.ask(r.sem().TerminalTestRequiresANumber, "`test -t x` refusing a non-number") {
@@ -1650,4 +1669,35 @@ func (r *Runner) hasTestBinaryOperator(op string) bool {
 		return o == TestStringOrderBoth || o == TestStringOrderGreaterOnly
 	}
 	return false
+}
+
+// errTerminalTestOperandReported is a `-t` operand the arithmetic could not
+// read, in the dialect that reads one that way: the complaint is already
+// written and the status is 1.
+//
+// A sentinel rather than a testError kind because nothing further is worded
+// from it — the builtin's name is deliberately *not* added, which is the whole
+// difference between this and errArithmeticOperand next door.
+var errTerminalTestOperandReported = errors.New("terminal test operand reported")
+
+// terminalTestArithmeticFailed writes the complaint and says how `test -t` and
+// `[ -t ]` end over it.
+//
+// **As the shell rather than as the builtin, and fatally**, which is measured
+// and is the pair that makes this its own route: `test -t /` and `[ -t / ]` in
+// zsh 5.9.2 write `bad math expression: operand expected at `/'` with neither
+// `test:` nor `[:` in the location, end the script, and exit 1 — where
+// `test 1 -eq /` in the same shell writes `test:1: integer expression
+// expected: /`, keeps the builtin's name, reports 2 and runs on.
+//
+// So the arithmetic `-t` operand does not share errArithmeticOperand's
+// route, and the construct named to arithConstructFailure is the builtin's
+// own — which the one dialect that takes this axis shows for neither, so
+// *which* construct a shell would name here is unmeasured.
+func (r *Runner) terminalTestArithmeticFailed(failure string) error {
+	r.DiagnoseAsTheShellf("%s\n", r.diag().arithConstructFailure("", failure))
+	if r.ask(r.sem().ConditionArithmeticErrorIsFatal, "an unreadable `-t` operand") {
+		r.abandonOverArithmetic()
+	}
+	return errTerminalTestOperandReported
 }

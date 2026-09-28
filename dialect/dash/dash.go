@@ -1949,6 +1949,11 @@ func Semantics() interp.Semantics {
 	// command's status here as everywhere.
 	s.StartupFileReturnCarriesItsArgument = interp.Yes
 	s.LoneDashIsAnOption = interp.No
+	// `-t`'s operand is a number this shell could not read rather than an
+	// expression it evaluated: measured in dash 0.5.12, `x=0; [ -t x ]`
+	// leaves `x=0` and complains `[: Illegal number: x` at 2, and the script
+	// runs on (#5058).
+	s.TerminalTestOperandIsArithmetic = interp.No
 	// And a lone `+` is a name to `export` and `readonly` here as well —
 	// measured 2026-09-12, `export +` is `export: +: bad variable name` at
 	// 2. There is no `typeset` in this shell for the other half of the

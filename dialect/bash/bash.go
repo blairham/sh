@@ -2204,6 +2204,13 @@ func Semantics() interp.Semantics {
 	s.UmaskHasTheReusableLetter = interp.Yes
 	s.SetHasThePrivilegedLetter = interp.Yes
 	s.TestHasTheFileExistsLetter = interp.Yes
+	// `-t`'s operand is not read as an arithmetic expression here: measured,
+	// `x=0; [[ -t x++ ]]` leaves `x=0` and complains `[[: x++: integer
+	// expected` at 2, where the one column that evaluates it leaves `x=1` and
+	// says nothing. What this shell does is refuse anything that is not a
+	// literal number — see TerminalTestRequiresANumber, which is that half
+	// (#5058).
+	s.TerminalTestOperandIsArithmetic = interp.No
 	s.TestHasTheShellOptionOperator = interp.Yes
 	s.TestHasTheModifiedSinceReadOperator = interp.Yes
 	// And both ordering operators, which is the answer POSIX's XSI option

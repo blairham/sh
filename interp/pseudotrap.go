@@ -573,6 +573,13 @@ func (r *Runner) fireDebugTrap(ctx context.Context, entering bool) {
 		"the DEBUG trap firing again on entering a function") {
 		return
 	}
+	if r.beforeDebugTrap != nil {
+		// A dialect with a parameter naming the command the action fired
+		// for writes it here, because here is where the firing is: the
+		// parameter is an ordinary variable in that shell and only a
+		// *firing* moves it. See Runner.SetBeforeDebugTrap.
+		r.beforeDebugTrap(r)
+	}
 	r.inDebugTrap = true
 	acted := r.runPseudoTrapBody(ctx, "DEBUG", *body, r.status)
 	r.inDebugTrap = false

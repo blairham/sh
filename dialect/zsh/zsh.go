@@ -6302,6 +6302,7 @@ func Apply(r *interp.Runner) {
 	// How zsh scripts actually change options, and how they change shells.
 	// See setopt.go and emulate.go.
 	registerSetopt(r)
+	registerDebugCommand(r)
 	registerZcompile(r)
 	registerCompctl(r)
 	// And the new completion system's own two, which are what a `zle -C`

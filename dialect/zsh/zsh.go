@@ -1570,7 +1570,7 @@ func Semantics() interp.Semantics {
 	// where `V=1 :` and `V=1 shift 0` do not. See
 	// interp.Semantics.BuiltinsKeepingAnAssignmentPrefix for the rows and for
 	// why this is not the specialness axis (#3313).
-	s.BuiltinsKeepingAnAssignmentPrefix = "alias hash"
+	s.BuiltinsKeepingAnAssignmentPrefix = "alias hash builtin exec"
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
 	s.AliasListingQuotesTheName = interp.Yes

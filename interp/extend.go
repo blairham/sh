@@ -177,6 +177,35 @@ func (r *Runner) builtinKeepsAnAssignmentPrefix(name string) bool {
 	return nameInRoster(r.sem().BuiltinsKeepingAnAssignmentPrefix, name)
 }
 
+// prefixRosterName is the word the roster above is asked about: the command
+// that **actually runs**, not the first word of the command line.
+//
+// The two part company behind a transparent precommand modifier, and the
+// roster holds two of those. `V=1 builtin` keeps the value and
+// `V=1 builtin echo hi` does not, so asking about `builtin` either way would
+// be right once and wrong once; what decides is what is left behind it.
+//
+// The walk stops at a modifier that **stops the scan**, because the word
+// behind such a modifier is a command name and not a modifier at all:
+// `V=1 command builtin` drops the value in zsh 5.9.2 and reports
+// `command not found: builtin`, so `builtin` there is an external that was
+// looked for and not the builtin the roster names.
+//
+// A runner with no modifier table walks nowhere, which is every column but
+// one.
+func (r *Runner) prefixRosterName(argv []string) string {
+	if len(argv) == 0 {
+		return ""
+	}
+	for i := 0; i+1 < len(argv); i++ {
+		m, ok := r.precommands[argv[i]]
+		if !ok || m != PrecommandTransparent && m != PrecommandRedirectionForm {
+			return argv[i]
+		}
+	}
+	return argv[len(argv)-1]
+}
+
 // nameInRoster reports whether a space-separated roster holds this name.
 //
 // Written out rather than strings.Fields + a loop because it is asked on

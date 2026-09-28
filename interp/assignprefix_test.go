@@ -574,3 +574,96 @@ a=4 f; echo "[${a-U}]"`, keeping())
 	// as the expectation would pin it. Left out rather than skipped, so
 	// nothing here claims to cover it.
 }
+
+// A precommand modifier on the roster keeps an assignment prefix, and the
+// roster is asked about **the command that runs** rather than about the first
+// word of the command line.
+//
+// The two part company behind a transparent modifier, and that is the whole
+// of why `argv[0]` is the wrong question: `V=1 builtin` keeps the value and
+// `V=1 builtin echo hi` does not (#5048).
+func TestTheRosterIsAskedAboutTheCommandThatRuns(t *testing.T) {
+	setup := func(r *Runner) {
+		r.Semantics.BuiltinsKeepingAnAssignmentPrefix = "alias builtin exec"
+		// The roster is a *second* question and the two come apart in the
+		// column that has it: that shell answers this one no and keeps
+		// `alias` and `hash` anyway. Answered here so the rows below are
+		// about the roster alone and not about POSIX's specialness.
+		r.Semantics.AssignmentPrefixPersistsOnSpecialBuiltin = No
+		r.SetPrecommand("builtin", PrecommandTransparent)
+		r.SetPrecommand("exec", PrecommandRedirectionForm)
+		r.SetPrecommand("command", PrecommandStopsTheScan)
+		r.SetPrecommand("noglob", PrecommandNoGlob)
+	}
+	for _, tc := range []struct {
+		name, src string
+		keeps     bool
+	}{
+		{"a modifier on the roster with nothing behind it", `v=1 builtin; echo "v=[$v]"`, true},
+		{"and the other one", `v=1 exec; echo "v=[$v]"`, true},
+		{"doubled, which is still the roster's word", `v=1 builtin builtin; echo "v=[$v]"`, true},
+		{"and behind a modifier the scan takes away", `v=1 noglob builtin; echo "v=[$v]"`, true},
+		// The discriminating rows: the first word is on the roster and the
+		// command that runs is not.
+		{"a command behind it is what decides", `v=1 builtin echo hi; echo "v=[$v]"`, false},
+		{"including a modifier that is not on the roster", `v=1 builtin command; echo "v=[$v]"`, false},
+		// And the walk stops at a modifier that stops the scan, because the
+		// word behind such a one is a command name and not a modifier.
+		{"the walk stops where the scan does", `v=1 command builtin; echo "v=[$v]"`, false},
+		// Controls: a builtin that is not on the roster, and a bare
+		// assignment, which keeps for a different reason entirely.
+		{"a builtin off the roster", `v=1 :; echo "v=[$v]"`, false},
+		{"a bare assignment", `v=1; echo "v=[$v]"`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, setup)
+			want := "v=[]"
+			if tc.keeps {
+				want = "v=[1]"
+			}
+			if !strings.Contains(out, want) {
+				t.Errorf("%s = %q, want %q in it", tc.src, out, want)
+			}
+		})
+	}
+}
+
+// TestAPrefixSendsACommandlessRedirectionDownTheAssignmentsRoad: the same
+// predicate as the refusal, with the prefix choosing which road.
+//
+// `builtin >f` is `redirection with no command`; `v=1 builtin >f` is the bare
+// assignment's own road — nothing runs and the name persists. Measured rather
+// than inferred from the refusal's absence: `$_` is left *empty* there, which
+// is what a bare `v=1` leaves, where a `command` that had run would leave the
+// previous command's last argument.
+func TestAPrefixSendsACommandlessRedirectionDownTheAssignmentsRoad(t *testing.T) {
+	setup := func(r *Runner) {
+		r.SetPrecommand("builtin", PrecommandTransparent)
+		r.SetPrecommand("exec", PrecommandRedirectionForm)
+		r.SetPrecommand("command", PrecommandStopsTheScan)
+		r.SetPrecommand("noglob", PrecommandNoGlob)
+	}
+	for _, tc := range []struct {
+		name, src, want string
+	}{
+		{"a modifier that stays", `v=1 builtin >f; echo "v=[$v]"`, "v=[1]"},
+		{"one that stops the scan, which no roster holds", `v=1 command >f; echo "v=[$v]"`, "v=[1]"},
+		{"and one the scan takes away", `v=1 noglob >f; echo "v=[$v]"`, "v=[1]"},
+		// The control: with no prefix the same line is refused, which is
+		// what says the prefix is choosing a road and not merely surviving.
+		{"the control: no prefix is a refusal", `builtin >f; echo after`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, setup)
+			if tc.want == "" {
+				if st == 0 || strings.Contains(out, "after") {
+					t.Errorf("%s = %q (status %d), want a refusal", tc.src, out, st)
+				}
+				return
+			}
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("%s = %q, want %q in it", tc.src, out, tc.want)
+			}
+		})
+	}
+}

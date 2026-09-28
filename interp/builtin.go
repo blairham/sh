@@ -4659,6 +4659,35 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 	forced := 0
 	for len(args) > 0 {
 		a := args[0]
+		if a == "-" && r.ask(r.sem().LoneDashIsAnOption, "a lone `-` given to a builtin") {
+			// A lone `-` **ends** the options here, where the three other
+			// columns pass it on as an operand. `echo` has its own reader
+			// rather than the shared one, so it had never asked — and the
+			// same shell's `print`, which does ask, ate the word, which is
+			// what made the gap visible (#5026).
+			//
+			// Measured 2026-09-28 on zsh 5.9.2 (aarch64-apple-darwin25.4.0),
+			// `go version -m`: *not a Go executable*, from script files under
+			// `env -i PATH=/usr/bin:/bin`:
+			//
+			//	echo - hi        hi
+			//	echo - -n hi     -n hi         the discriminating row
+			//	echo -n - hi     hi, no newline
+			//	echo - - hi      - hi
+			//	echo -en - hi    hi, no newline
+			//	echo -           a newline alone
+			//	print - hi       hi            the control: the same shell
+			//	echo -- hi       -- hi         …and `--` is not this
+			//	printf - hi      -             …nor does a builtin without
+			//	                               the axis take it
+			//
+			// The second row is what says the dash **ended** the scan rather
+			// than being skipped over: a reading where the word is merely
+			// dropped would print `hi` with no newline, having read the `-n`
+			// behind it.
+			args = args[1:]
+			break
+		}
 		if len(a) < 2 || a[0] != '-' || strings.ContainsFunc(a[1:], func(c rune) bool {
 			return !strings.ContainsRune(letters, c)
 		}) {

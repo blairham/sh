@@ -90,9 +90,37 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 			// which they then reject as an invalid identifier — and an
 			// option in zsh, which eats it and leaves the builtin with one
 			// operand fewer.
+			//
+			// **It ends the options**, exactly as `--` does, rather than
+			// being skipped over with the scan carrying on. The two readings
+			// agree wherever nothing but operands follows the dash, which is
+			// every row the axis was first measured from — `export -` lists
+			// and `unset - v` unsets under either one. What tells them apart
+			// is an option *behind* the dash, and it moves every builtin
+			// that has one. Measured 2026-09-28 on zsh 5.9.2
+			// (aarch64-apple-darwin25.4.0), `go version -m`: *not a Go
+			// executable*, from script files under `env -i`:
+			//
+			//	v=1; unset - -v v        -v: invalid parameter name
+			//	read - -r x              not an identifier: -r
+			//	hash - -r                no such command: -r
+			//	jobs - -l                job not found: -l
+			//	unalias - -m 'x*'        no such hash table element: -m
+			//	alias a=b; alias - -L    1, and silent — as `alias -- -L` is
+			//
+			// Every one of those is the dash-word behind it read as an
+			// **operand**, which is the skip's opposite: the skip read it as
+			// the option it spells and did that option's work.
 			if r.ask(r.sem().LoneDashIsAnOption, "a lone `-` given to a builtin") {
-				args = args[1:]
-				continue
+				// Not `separated`, which is the `--` *was written* flag and
+				// is deliberately left alone: the one dialect that eats the
+				// dash answers Semantics.AliasOptionEndsTheLookup no, and
+				// the one that answers it yes does not eat the dash, so no
+				// column can tell the two settings apart. A mutation that
+				// flipped it killed nothing, which is what said so. Measured
+				// on the reference all the same — `alias - a`, `alias -- a`
+				// and `alias a` are one answer there, `a=b` at 0.
+				return args[1:], opts, optArg, false, 0
 			}
 			if r.unspecified {
 				return nil, opts, optArg, false, 2

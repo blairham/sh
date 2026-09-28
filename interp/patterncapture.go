@@ -170,6 +170,13 @@ type matchWhere struct {
 	// arms is each group body's split into alternatives, by where the body
 	// starts. See armsOf.
 	arms map[int]armSplit
+	// base is where the piece of the last trial began. The memo's key is a
+	// position rather than a piece, so a zero-width assertion — the one
+	// reading whose answer is not a function of the position alone — makes
+	// two trials of a trim that reach the same position from different
+	// starts into two different questions. matchPatternIn drops the memo
+	// when this moves and the pattern carries one; nothing else reads it.
+	base int
 	// pattern and subject are what dead's answers are *about*, and what
 	// says when they have to be thrown away.
 	//

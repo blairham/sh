@@ -2604,10 +2604,39 @@ in the subject — the comparison `matchTilde` already made for a group at the
 head — so they are asked once for the whole pattern rather than where the
 group stands. A substitution is where `l` has something to refuse, since the
 span it chooses need not start the subject: `v=abcd; ${v/bc/X}` is `aXd`,
-`${v/b~(l)c/X}` is `abcd`, and `${v/b~(-l)c/X}` is `aXd` again. A **suffix**
-trim ignores both there and refuses here, which is a divergence this reading
-inherits from the head group rather than one it introduces: `${v%~(l)d}` is
-`abc` in ksh93u+ and `abcd` here.
+`${v/b~(l)c/X}` is `abcd`, and `${v/b~(-l)c/X}` is `aXd` again.
+
+**One operator does not read `l` at all, and it is the operator that decides
+rather than the end the trim is pinned to.** A suffix trial hands the matcher
+a piece that begins wherever it begins, so `l` has something to refuse at
+every trial but the whole value — and `${v%…}` refuses none of them while
+`${v%%…}` refuses all of them. With `v=abcd` unless the row says otherwise:
+
+| written | ksh93 | |
+| --- | --- | --- |
+| `${v%d}` *(control)* | `abc` | the trim with no group |
+| `${v%~(r)d}` *(control)* | `abc` | and the anchor a suffix trial holds |
+| `${v%~(l)d}` | `abc` | so `l` was not read |
+| `${v%~(l)cd}` | `ab` | |
+| `${v%~(l)?cd}` | `a` | nor on a wildcard |
+| `${v%b~(l)cd}` | `a` | nor written mid-pattern |
+| `${v%%d}` *(control)* | `abc` | the doubled trim with no group |
+| `${v%%~(l)d}` | `abcd` | and **there** it is read |
+| `${v%%~(l)cd}` | `abcd` | |
+| `${v%%~(l)*d}` | empty | the one piece that begins the subject |
+| `v=xyxy; ${v%~(l)xy}` | `xy` | and a second value says the same |
+| `v=xyxy; ${v%%~(l)xy}` | `xyxy` | |
+
+The `%%` rows are the pair that rules out "a suffix trim never reads `l`":
+the same pattern on the same value answers differently with the operator
+doubled, on two values. `${v%%~(l)*d}` is the row that says `%%` is really
+reading the anchor rather than failing for some other reason — there the
+piece does begin the subject, the anchor holds, and the whole value goes.
+
+A **prefix** trim is not the mirror image of this: `r` is read by both of its
+spellings there, `${v#~(r)a}` and `${v##~(r)a}` each leaving `abcd` alone. So
+there is one operator here and not two, and why that shell reads `l` on one
+of a pair and not on the other is not measured — only that it does.
 
 `g` reaches a caller outside the matcher, and **what stands in front of the
 group bounds it**. A bare `*` or `?` takes the greed away and a bracket

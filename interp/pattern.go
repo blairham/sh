@@ -795,8 +795,17 @@ type patternOpts struct {
 	// whole string, so the same pattern answers a condition and a
 	// substitution's span differently. Every other question in this matcher
 	// is about the piece it was handed and cannot tell the two apart.
-	whole   bool
-	bracket BracketPolicy
+	whole bool
+	// tildeLeftUnread says the surface does not read the `~(l)` anchor at
+	// all, so a piece that does not begin the subject is still a match.
+	//
+	// One surface asks for it and it is the *operator* that decides, not the
+	// end the trim is pinned to: a **shortest** suffix trim ignores `l` and
+	// the doubled spelling of the same trim honors it. Measured on ksh93u+
+	// 2012-08-01, 2026-09-27, `v=abcd` unless another value is shown — see
+	// trimSpan for the pairs and for what they rule out.
+	tildeLeftUnread bool
+	bracket         BracketPolicy
 	// emptyBracket says a bracket the POSIX reading leaves unterminated is
 	// re-read with the `]` written first as its terminator, so `[]` is a set
 	// with no members and `[!]` matches any one character. See
@@ -1212,7 +1221,7 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 	// has been read, and a pattern may carry both: `~(i)z~(r)ab` is a fold
 	// at the front and an anchor one character along.
 	if o.tildeFold {
-		if left, right := tildeHereAnchors(pattern); (left && base != 0) ||
+		if left, right := tildeHereAnchors(pattern); (left && !o.tildeLeftUnread && base != 0) ||
 			(right && base+len(piece) != len(subject)) {
 			return false, matchReport{}
 		}

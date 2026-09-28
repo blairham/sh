@@ -5562,6 +5562,50 @@ func trimTakesLongest(op syntax.ParamOp) bool {
 	return op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
 }
 
+// trimLeavesTildeLeftUnread is the one operator that does not read a ksh93
+// `~(l)` anchor: `%`, the **shortest** suffix trim.
+//
+// `l` pins a match to the start of the subject, and a suffix trial hands the
+// matcher a piece that begins wherever it begins — so on a suffix trim the
+// anchor has something to refuse at every trial but the whole value. ksh93u+
+// refuses none of them on `%` and all of them on `%%`, which is measured
+// rather than reasoned: the reading is keyed on the **operator** and not on
+// the end the trim is pinned to.
+//
+// Measured on ksh93u+ 2012-08-01, 2026-09-27, `-c` under `env -i` with a
+// scratch `HOME`, `v=abcd` unless the row says otherwise:
+//
+//	${v%d}          abc    (control) the trim without a group
+//	${v%~(r)d}      abc    (control) and the anchor a suffix trial holds
+//	${v%~(l)d}      abc    so `l` was not read
+//	${v%~(l)cd}     ab
+//	${v%~(l)?cd}    a      nor on a wildcard
+//	${v%b~(l)cd}    a      nor written mid-pattern
+//	${v%%d}         abc    (control) the doubled trim without a group
+//	${v%%~(l)d}     abcd   and **there** it is read
+//	${v%%~(l)cd}    abcd
+//	${v%%~(l)*d}    empty  the one piece that begins the subject
+//	v=xyxy          ${v%~(l)xy} is xy and ${v%%~(l)xy} is xyxy
+//
+// The `%%` rows are the pair that says this is not "a suffix trim never reads
+// `l`": the same pattern on the same value answers differently with the
+// operator doubled, on two values, so the operator is what the rule is keyed
+// on. `${v%%~(l)*d}` is the third of them and is the row that says `%%` is
+// really reading the anchor rather than failing for some other reason — there
+// the piece does begin the subject, the anchor holds, and the whole value
+// goes.
+//
+// A **prefix** trim is not the mirror image of this and is left alone: `r`
+// really is read by both spellings there — `${v#~(r)a}` and `${v##~(r)a}` are
+// each `abcd` — so there is one operator here and not two.
+//
+// Why ksh93u+ reads `l` on one of a pair of operators and not on the other is
+// not measured; only that it does, on five spellings of the pattern and two
+// values.
+func trimLeavesTildeLeftUnread(op syntax.ParamOp) bool {
+	return op == syntax.ParamTrimSuffix
+}
+
 // trimSpan is the piece of the value a trim's pattern took: where it begins,
 // where it ends, and whether the pattern matched at all.
 //
@@ -5579,6 +5623,7 @@ func trimTakesLongest(op syntax.ParamOp) bool {
 func trimSpan(value, pattern string, op syntax.ParamOp, o patternOpts, arm armOrder,
 	search bool,
 ) (int, int, matchReport, bool) {
+	o.tildeLeftUnread = trimLeavesTildeLeftUnread(op)
 	lo, hi, m, ok := spanByLength(value, pattern, op, o, search)
 	if !ok || !writtenArmReaches(op, search) || !arm.reaches() {
 		return lo, hi, m, ok

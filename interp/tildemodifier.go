@@ -781,11 +781,16 @@ func skipBracketExpression(pattern string, i int) int {
 // the same rule the zsh `(#s)` and `(#e)` assertions follow and for the same
 // reason: a trim hands over a prefix of the subject, and "the match is at the
 // start" is a question about where that prefix sits.
+//
+// One operator does not ask about `l` at all — `${v%…}`, the shortest suffix
+// trim, where the doubled `${v%%…}` does. See trimLeavesTildeLeftUnread,
+// which has the rows and the pair that says the reading is keyed on the
+// operator rather than on the end the trim is pinned to.
 func matchTilde(m tildeModifier, pattern, piece, subject string, base int, o patternOpts) (bool, matchReport) {
 	if m.flavor == tildeNever {
 		return false, matchReport{}
 	}
-	if m.left && base != 0 {
+	if m.left && !o.tildeLeftUnread && base != 0 {
 		return false, matchReport{}
 	}
 	if m.right && base+len(piece) != len(subject) {

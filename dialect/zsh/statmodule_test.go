@@ -41,7 +41,7 @@ func statTree(t *testing.T) string {
 // answering 0 costs nothing to fake; a `zstat` that reports six bytes, a mode
 // of `-rw-------` and the same mode as `0100600` is doing the system call.
 func TestZstatReportsTheElementsOfAFile(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat -A a -- f
+	out, st := runZshWithStat(t, statTree(t), `zstat -A a -- f
 print -r -- "n=$#a"
 zstat +size -- f
 zstat -s +mode -- f
@@ -57,7 +57,7 @@ zstat +nlink -- f`)
 // A whole listing names each element in a column seven wide, which is the
 // width of the longest of them.
 func TestZstatWritesAWholeListingInAColumn(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat -- f`)
+	out, st := runZshWithStat(t, statTree(t), `zstat -- f`)
 	if st != 0 {
 		t.Fatalf("zstat status %d, output %q", st, out)
 	}
@@ -67,7 +67,7 @@ func TestZstatWritesAWholeListingInAColumn(t *testing.T) {
 // The names of the fourteen, which `-l` answers without looking at a file at
 // all — to standard output, or into the array `-A` names.
 func TestZstatDashLListsTheElementNames(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat -l
+	out, st := runZshWithStat(t, statTree(t), `zstat -l
 zstat -l -A names
 print -r -- "n=$#names first=$names[1] last=$names[-1]"`)
 	want := "device inode mode nlink uid gid rdev size atime mtime ctime blksize blocks link\n" +
@@ -82,7 +82,7 @@ print -r -- "n=$#names first=$names[1] last=$names[-1]"`)
 // name is shown when no element was selected, and the same two letters do the
 // same for it.
 func TestZstatShowsNamesAndTypesWhenThereIsSomethingToTellApart(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat +size -- f
+	out, st := runZshWithStat(t, statTree(t), `zstat +size -- f
 zstat +size -- f g
 zstat -N +size -- f g
 zstat -n +size -- f
@@ -97,7 +97,7 @@ zstat -n -t +size -- f`)
 // An element may be shortened to any unique leading part, and `m` is not one:
 // `mode` and `mtime` both begin with it.
 func TestZstatResolvesAShortenedElementOrSaysWhyItCannot(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat +si -- f
+	out, st := runZshWithStat(t, statTree(t), `zstat +si -- f
 print -r -- "short=$?"
 zstat +m -- f 2>&1
 print -r -- "ambiguous=$?"
@@ -116,7 +116,7 @@ print -r -- "unknown=$?"`)
 // stat +mtime -- $dirs || return` reads the array only when every name in the
 // list was answered.
 func TestZstatLeavesTheArrayAloneWhenAFileFails(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat -A a +mtime -- f nosuch 2>&1
+	out, st := runZshWithStat(t, statTree(t), `zstat -A a +mtime -- f nosuch 2>&1
 print -r -- "st=$? n=$#a"`)
 	want := "zsh:zstat:1: nosuch: no such file or directory\nst=1 n=0\n"
 	if out != want || st != 0 {
@@ -128,7 +128,7 @@ print -r -- "st=$? n=$#a"`)
 // from `ls`, and the `link` element is the one that makes the difference
 // visible. Selecting it turns `-L` on by itself.
 func TestZstatFollowsALinkUnlessTheQuestionIsAboutTheLink(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat +size -- l
+	out, st := runZshWithStat(t, statTree(t), `zstat +size -- l
 zstat -L +size -- l
 zstat -L +link -- l
 zstat +link -- l
@@ -141,7 +141,7 @@ print -r -- "empty=[$(zstat -L +link -- f)]"`)
 
 // `-H` fills an association, and one file is all it will take.
 func TestZstatFillsAnAssociationForOneFile(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat -H h -- f
+	out, st := runZshWithStat(t, statTree(t), `zstat -H h -- f
 print -r -- "size=$h[size] mode=$h[mode] link=[$h[link]]"
 zstat -H h2 -n +size -- f
 print -r -- "name=$h2[name] size=$h2[size]"
@@ -158,7 +158,7 @@ print -r -- "two=$?"`)
 // `-f` asks about a descriptor this shell has open rather than about a name,
 // and refuses a list of names beside it.
 func TestZstatReadsADescriptorInsteadOfANameWithDashF(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `exec 7< f
+	out, st := runZshWithStat(t, statTree(t), `exec 7< f
 zstat -f 7 +size
 print -r -- "st=$?"
 zstat -f 7 +size f 2>&1
@@ -175,7 +175,7 @@ print -r -- "closed=$?"`)
 
 // What the command says when it was given nothing it can use.
 func TestZstatRefusesWhatItCannotRead(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `zstat 2>&1
+	out, st := runZshWithStat(t, statTree(t), `zstat 2>&1
 print -r -- "none=$?"
 zstat -Q f 2>&1
 print -r -- "letter=$?"
@@ -196,7 +196,7 @@ print -r -- "both=$?"`)
 // `-F` and `-g` are two of the things that ask — the format language being the
 // one `strftime` speaks here, so `%s` comes back as the number it started as.
 func TestZstatWritesATimeAsWordsWhenAskedTo(t *testing.T) {
-	out, st := runZsh(t, statTree(t), `raw=$(zstat +mtime -- f)
+	out, st := runZshWithStat(t, statTree(t), `raw=$(zstat +mtime -- f)
 same=$(zstat -F '%s' +mtime -- f)
 print -r -- "same=$(( raw == same ))"
 gmt=$(zstat -g -F '%Y-%m-%d' +mtime -- f)
@@ -205,4 +205,14 @@ print -r -- "shape=$(( ${#gmt} == 10 ))"`)
 	if out != want || st != 0 {
 		t.Errorf("zstat times = %q (status %d), want %q", out, st, want)
 	}
+}
+
+// runZshWithStat is runZsh with `zsh/stat` loaded, which is where these
+// builtins are: `zstat` does not exist until the module is loaded (#4997).
+//
+// One helper rather than a `zmodload` pasted onto every snippet in the file,
+// so that a row added later cannot forget it.
+func runZshWithStat(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	return runZsh(t, dir, "zmodload zsh/stat; "+src)
 }

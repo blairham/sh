@@ -42,7 +42,7 @@ func TestFlockExcludesAnotherProcessUntilItIsUnlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 	systemDeadline(t, "zsystem flock against a second process", func() {
-		out, st := runZsh(t, dir, `zsystem flock -f h `+path+`
+		out, st := runZshWithSystem(t, dir, `zsystem flock -f h `+path+`
 print -r -- "took=$?"
 lockprobe `+path+`
 print -r -- "while-held=$?"
@@ -69,7 +69,7 @@ func TestAReadLockSharesAndStillExcludesAWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 	systemDeadline(t, "zsystem flock -r", func() {
-		out, st := runZsh(t, dir, `zsystem flock -r -f h `+path+`
+		out, st := runZshWithSystem(t, dir, `zsystem flock -r -f h `+path+`
 print -r -- "took=$?"
 lockprobe `+path+`
 print -r -- "writer=$?"`)
@@ -79,7 +79,7 @@ print -r -- "writer=$?"`)
 		}
 	})
 	systemDeadline(t, "a second reader", func() {
-		out, st := runZsh(t, dir, `zsystem flock -r -f a `+path+`
+		out, st := runZshWithSystem(t, dir, `zsystem flock -r -f a `+path+`
 zsystem flock -r -t 0 -f b `+path+`
 print -r -- "second-reader=$?"`)
 		if want := "second-reader=0\n"; out != want || st != 0 {
@@ -108,7 +108,7 @@ func TestFlockUnderContentionWaitsAndSaysSoThreeWays(t *testing.T) {
 	const holdFor = 1500 * time.Millisecond
 	started := time.Now()
 	systemDeadline(t, "zsystem flock under contention", func() {
-		out, st, errs := runZshSplit(t, dir, `sysopen -r -u fd <(lockhold `+path+` `+
+		out, st, errs := runZshSplitWithSystem(t, dir, `sysopen -r -u fd <(lockhold `+path+` `+
 			strconv.Itoa(int(holdFor/time.Millisecond))+`)
 sysread -i $fd -t 5 v
 print -r -- "holder=$? [$v]"
@@ -150,7 +150,7 @@ func TestFlockWithNoTimeoutBlocksUntilTheHolderLetsGo(t *testing.T) {
 	const holdFor = 1200 * time.Millisecond
 	started := time.Now()
 	systemDeadline(t, "zsystem flock with no timeout", func() {
-		out, st := runZsh(t, dir, `sysopen -r -u fd <(lockhold `+path+` `+
+		out, st := runZshWithSystem(t, dir, `sysopen -r -u fd <(lockhold `+path+` `+
 			strconv.Itoa(int(holdFor/time.Millisecond))+`)
 sysread -i $fd -t 5 v
 print -r -- "holder=$? [$v]"
@@ -182,7 +182,7 @@ print -r -- "blocked=$?"`)
 // `zsystem supports` with the name it meant to pass left empty gets an answer
 // no ordinary failure produces.
 func TestZsystemSupportsAnswersForWhatWasBuilt(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), `zsystem supports flock
+	out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `zsystem supports flock
 print -r -- "flock=$?"
 zsystem supports supports
 print -r -- "supports=$?"
@@ -219,7 +219,7 @@ print -r -- "two=$?"`)
 // was to be opened for, which is already more than `flock:` would add.
 func TestWhatZsystemRefuses(t *testing.T) {
 	dir := t.TempDir()
-	out, st, errs := runZshSplit(t, dir, `zsystem
+	out, st, errs := runZshSplitWithSystem(t, dir, `zsystem
 print -r -- "none=$?"
 zsystem bogus
 print -r -- "subcommand=$?"

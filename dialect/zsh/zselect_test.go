@@ -30,7 +30,7 @@ import (
 // The two lines above it are here as well, because the whole of #1768 is that
 // they are three consecutive lines and the first two are `|| return`.
 func TestTheProbeAPromptWorkerGuardsOnPasses(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), `zmodload zsh/zselect || { print -r -- "module=failed"; return }
+	out, st, errs := runZshSplitWithZselect(t, t.TempDir(), `zmodload zsh/zselect || { print -r -- "module=failed"; return }
 print -r -- "module=$?"
 ! { zselect -t0 || (( $? != 1 )) } || { print -r -- "probe=failed"; return }
 print -r -- "probe=ok"`)
@@ -51,7 +51,7 @@ func TestZselectTimesOutInHundredthsOfASecond(t *testing.T) {
 	dir := t.TempDir()
 	systemDeadline(t, "zselect -t", func() {
 		started := time.Now()
-		out, st := runZsh(t, dir, "zselect -t 30\nprint -r -- \"st=$?\"")
+		out, st := runZshWithZselect(t, dir, "zselect -t 30\nprint -r -- \"st=$?\"")
 		waited := time.Since(started)
 		if want := "st=1\n"; out != want || st != 0 {
 			t.Errorf("zselect -t 30 = %q (status %d), want %q", out, st, want)
@@ -69,7 +69,7 @@ func TestZselectTimesOutInHundredthsOfASecond(t *testing.T) {
 	})
 	systemDeadline(t, "zselect -t 0", func() {
 		started := time.Now()
-		out, st := runZsh(t, dir, "zselect -t 0\nprint -r -- \"st=$?\"")
+		out, st := runZshWithZselect(t, dir, "zselect -t 0\nprint -r -- \"st=$?\"")
 		if want := "st=1\n"; out != want || st != 0 {
 			t.Errorf("zselect -t 0 = %q (status %d), want %q", out, st, want)
 		}
@@ -92,7 +92,7 @@ func TestZselectBlocksUntilADescriptorIsReadable(t *testing.T) {
 	const delay = 700 * time.Millisecond
 	systemDeadline(t, "zselect on a descriptor", func() {
 		started := time.Now()
-		out, st := runZsh(t, dir, `sysopen -r -u fd <(delaywrite unused 700)
+		out, st := runZshWithZselect(t, dir, `sysopen -r -u fd <(delaywrite unused 700)
 zselect -r $fd
 print -r -- "st=$? reply=($reply) named=$(( $reply[2] == fd )) shape=$#reply"`)
 		waited := time.Since(started)
@@ -125,7 +125,7 @@ func TestZselectAnswersInReplyAndInTheNamedParameters(t *testing.T) {
 	// buffers rather than descriptors, so `zselect -w 1` there asks about
 	// something the kernel has never heard of and is right to answer nothing.
 	open := "sysopen -w -o creat,trunc -u 7 a\nsysopen -w -o creat,trunc -u 8 b\n"
-	out, st := runZsh(t, dir, open+`zselect -w 7 -w 8 -t 0
+	out, st := runZshWithZselect(t, dir, open+`zselect -w 7 -w 8 -t 0
 print -r -- "reply=($reply)"
 zselect -a mine -w 8 -t 0
 print -r -- "mine=($mine)"
@@ -152,7 +152,7 @@ print -r -- "both=(${(kv)both})"`)
 // holding a stale answer that it now has a fresh one, at the status that says
 // there was nothing to have.
 func TestZselectLeavesTheAnswerAloneWhenNothingIsReady(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `reply=(old answer)
+	out, st := runZshWithZselect(t, t.TempDir(), `reply=(old answer)
 mine=(other answer)
 zselect -r 0 -t 0
 print -r -- "st=$? reply=($reply)"
@@ -173,7 +173,7 @@ print -r -- "st=$? mine=($mine)"`)
 // That is also what a stray operand gets, and it is why the last two lines are
 // in the same case as the first.
 func TestWhatZselectRefuses(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), `zselect -q 3 -t 0
+	out, st, errs := runZshSplitWithZselect(t, t.TempDir(), `zselect -q 3 -t 0
 print -r -- "letter=$?"
 zselect -t
 print -r -- "novalue=$?"
@@ -205,7 +205,7 @@ print -r -- "garbage=$?"`)
 // was not in the feature table at all — and the theme's `|| return` on that
 // line is the first of the two guards the worker's body stops at.
 func TestTheZselectModuleLoadsAndNamesItsOneBuiltin(t *testing.T) {
-	out, st, _ := runZshSplit(t, t.TempDir(), `zmodload zsh/zselect
+	out, st, _ := runZshSplitWithZselect(t, t.TempDir(), `zmodload zsh/zselect
 print -r -- "plain=$?"
 zmodload -F zsh/zselect b:zselect
 print -r -- "named=$?"
@@ -216,4 +216,20 @@ print -r -- "invented=$?"`)
 	if out != want || st != 0 {
 		t.Errorf("the module = %q (status %d), want %q", out, st, want)
 	}
+}
+
+// runZshWithZselect is runZsh with `zsh/zselect` loaded, which is where these
+// builtins are: `zselect` does not exist until the module is loaded (#4997).
+//
+// One helper rather than a `zmodload` pasted onto every snippet in the file,
+// so that a row added later cannot forget it.
+func runZshWithZselect(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	return runZsh(t, dir, "zmodload zsh/zselect zsh/system; "+src)
+}
+
+// runZshSplitWithZselect is the same for the split-output helper.
+func runZshSplitWithZselect(t *testing.T, dir, src string) (string, int, string) {
+	t.Helper()
+	return runZshSplit(t, dir, "zmodload zsh/zselect zsh/system; "+src)
 }

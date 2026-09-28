@@ -6969,4 +6969,11 @@ func Apply(r *interp.Runner) {
 	// -f` here; this shell writes nothing into the environment, so the
 	// exported arrangement is the shown one.
 	r.SetFunctionLayout(FunctionLayout(), FunctionLayout())
+	// And, **last**, the builtins a module has to be loaded for: they are
+	// registered above like every other one and taken out of the table here,
+	// so that the registration stays where the builtin is written and this
+	// is the only line that knows which of them wait. Ordering is the whole
+	// of why it is here rather than beside each: a withdrawal written before
+	// a registration is undone by it. See gatedbuiltins.go (#4997).
+	withdrawGatedBuiltins(r)
 }

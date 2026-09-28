@@ -36,7 +36,7 @@ func splitLines(text string) []string {
 // own bookkeeping.
 func TestSysseekMovesTheDescriptorFromEachOrigin(t *testing.T) {
 	dir := t.TempDir()
-	out, st := runZsh(t, dir, `print -n 'hello world' > f
+	out, st := runZshWithSystem(t, dir, `print -n 'hello world' > f
 sysopen -r -u 7 f
 sysread -i 7 -s 5 a
 sysseek -u 7 0
@@ -70,7 +70,7 @@ print -r -- "from-end=[$tail]"`)
 // before the start of a file is not.
 func TestWhatSysseekRefuses(t *testing.T) {
 	dir := t.TempDir()
-	out, st, errs := runZshSplit(t, dir, `print -n 'hello world' > f
+	out, st, errs := runZshSplitWithSystem(t, dir, `print -n 'hello world' > f
 sysopen -r -u 7 f
 sysseek -u 7 -1
 print -r -- "before-the-start=$?"
@@ -113,7 +113,7 @@ print -r -- "letter=$?"`)
 // A name and its number give the same sentence, which is what says the lookup
 // went through `$errnos` rather than through a table of its own.
 func TestSyserrorWritesThePlatformsSentence(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), `syserror 2
+	out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `syserror 2
 print -r -- "number=$?"
 syserror ENOENT
 print -r -- "name=$?"
@@ -146,7 +146,7 @@ print -r -- "lowercase=$?"`)
 // `errno 0` is what a shell passing the runtime's answer through would print,
 // and it is neither a sentence nor an admission that there is none.
 func TestSyserrorAnswersForTheNumbersWithNoName(t *testing.T) {
-	out, _, errs := runZshSplit(t, t.TempDir(), `syserror 0
+	out, _, errs := runZshSplitWithSystem(t, t.TempDir(), `syserror 0
 syserror 9999
 print -r -- "st=$?"`)
 	if want := "st=0\n"; out != want {
@@ -175,7 +175,7 @@ print -r -- "st=$?"`)
 // A script that has put a number in `ERRNO` still gets that number's
 // sentence, which is byte-identical to zsh.
 func TestSyserrorWithNoOperandReportsTheLastNumber(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), `syserror 0
+	out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `syserror 0
 syserror
 print -r -- "bare=$?"
 ERRNO=13
@@ -212,7 +212,7 @@ print -r -- "set=$?"`)
 // builtin needs no such thing, which is the row that says the two read
 // different things.
 func TestAFailedCallLeavesItsNumber(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), `cd /no/such/directory 2>/dev/null
+	out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `cd /no/such/directory 2>/dev/null
 syserror
 print -r -- "before=[$ERRNO]"
 ERRNO=0

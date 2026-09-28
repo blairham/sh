@@ -344,6 +344,11 @@ func Dialect() syntax.Dialect {
 	// then expanded, where bash 5.3, bash 3.2 and dash answer the single
 	// field `[{a,q.z}]`.
 	d.BareBraceNestsInExpansion = true
+	// And inside double quotes as well, in a *pattern* operand alone:
+	// `s=x{y}z; echo "[${s#x{y}}]"` is `[z]` here and `[}z}]` in the four
+	// other columns, while a word operand stops at the first `}` in all five.
+	// See syntax.Dialect.BareBraceNestsInAQuotedPatternOperand (#4936).
+	d.BareBraceNestsInAQuotedPatternOperand = true
 	// A line continuation inside `${ }` is removed only once a name has
 	// begun: `${x\⏎}` is the value and `${\⏎x}`, `${#\⏎x}`, `${1\⏎}` and
 	// `${@\⏎}` are ``syntax error at line 1: `\' unexpected`` here, where the

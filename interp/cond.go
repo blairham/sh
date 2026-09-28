@@ -229,7 +229,7 @@ func (r *Runner) namedCondition(x *syntax.CondUnknown) (ok, answered bool, err e
 	// operand with everything the script quoted turned into letters. Which
 	// of the two the matcher gets is the dialect's answer about quoting, and
 	// it is the same answer, because this is the same operator.
-	text, literal := r.condRegexOperand(x.Words[0])
+	text, literal, digitClass := r.condRegexOperand(x.Words[0])
 	if r.condOperandDidNotExpand() {
 		return false, true, errCondOperandFailed
 	}
@@ -238,7 +238,7 @@ func (r *Runner) namedCondition(x *syntax.CondUnknown) (ok, answered bool, err e
 	if x.Words[0].IsQuoted() && r.regexQuotingIsLiteral() {
 		pat = literal
 	}
-	ok, err = r.regexMatch(pat, left)
+	ok, err = r.regexMatch(pat, left, digitClass)
 	return ok, true, err
 }
 
@@ -458,7 +458,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// The control that says the escaping still happens where it should
 		// is the row a quote is *about*: `[[ axb =~ "a.b" ]]` is 1 and
 		// `[[ a.b =~ "a.b" ]]` is 0, in bash and here alike.
-		text, literal := r.condRegexOperand(x.Y)
+		text, literal, digitClass := r.condRegexOperand(x.Y)
 		if r.condOperandDidNotExpand() {
 			return false, errCondOperandFailed
 		}
@@ -475,7 +475,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		if x.Y.IsQuoted() && r.regexQuotingIsLiteral() {
 			pat = literal
 		}
-		return r.regexMatch(pat, left)
+		return r.regexMatch(pat, left, digitClass)
 	}
 
 	if pattern {
@@ -627,19 +627,37 @@ func (r *Runner) condOperandText(w *syntax.Word) string {
 // one difference that matters — a dialect can re-read an expansion's result
 // as a *pattern*, and no dialect re-reads one as an expression, so there is
 // no axis in the middle of this one.
-func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string) {
+func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitClass bool) {
 	if r.condWordQualifies(w) {
 		// A word that ends in a glob qualifier group has already matched
 		// against the filesystem, so what comes back is a path and not
 		// something a quote could have divided. See interp/condqualifier.go.
 		t := syntax.UnmarkArithValue(r.condGlobbedOperand(w))
-		return t, t
+		return t, t, false
 	}
 	var b strings.Builder
 	text = r.wordTextNoSplit(w, func(s syntax.Span, part string) string {
-		if regexSpanIsLive(s) {
+		switch {
+		case regexSpanIsLive(s):
+			// A `\d` the operand arrived with rather than one the script
+			// wrote is the same escape and reaches the same engine, which
+			// is measured: `r='za\db'; [[ za1b =~ $r ]]` matches in ksh93u+
+			// and not in the other three columns, exactly as the written
+			// spelling does.
+			if !digitClass && regexHoldsDigitEscape(part) && r.regexReadsDigitClass() {
+				digitClass = true
+			}
 			b.WriteString(part)
-		} else {
+		case r.regexKeepsClassEscape(s, part):
+			// The backslash is the **engine's** in this dialect, so the pair
+			// reaches it as it was written rather than as the letter quote
+			// removal would otherwise take. Both readings keep it, because
+			// both are handed to the same engine — see
+			// Semantics.RegexDigitClassEscape.
+			digitClass = true
+			b.WriteString(`\` + part)
+			return `\` + part
+		default:
 			// **Marked rather than escaped.** A backslash in front of a
 			// quoted character is the right spelling everywhere but inside a
 			// bracket expression, where a backslash is an ordinary member and
@@ -651,7 +669,58 @@ func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string) {
 		}
 		return part
 	})
-	return text, b.String()
+	return text, b.String(), digitClass
+}
+
+// regexKeepsClassEscape reports whether this span of a `=~` operand is a
+// backslash the **engine** reads rather than a quote the shell takes.
+//
+// One letter pair and one quoting. `\d` is a digit class in ksh93's own
+// regular expression library and the letter `d` in every other column, so
+// this is which library the operator reaches — see
+// Semantics.RegexDigitClassEscape, which has the rows and the controls.
+//
+// **Backslash-quoted and nothing else**, which is measured rather than
+// tidy: `[[ za1b =~ "za\db" ]]` and `[[ zadb =~ "za\db" ]]` are *both* no in
+// ksh93u+, so a double-quoted spelling is the two characters it was written
+// with and keeps the reading it had here.
+//
+// The axis is asked only for the two letters it is about, so a condition
+// carrying any other escape never reaches a dialect that left it unanswered.
+func (r *Runner) regexKeepsClassEscape(s syntax.Span, part string) bool {
+	if s.Kind != syntax.Literal || s.Quoting != syntax.BackslashQuoted ||
+		(part != "d" && part != "D") {
+		return false
+	}
+	return r.regexReadsDigitClass()
+}
+
+// regexReadsDigitClass is the axis, asked in the one wording both halves of
+// it use. See Semantics.RegexDigitClassEscape.
+func (r *Runner) regexReadsDigitClass() bool {
+	return r.ask(r.sem().RegexDigitClassEscape, "a `\\d` in a =~ operand naming a digit class")
+}
+
+// regexHoldsDigitEscape reports whether this text carries a `\d` or a `\D`,
+// which is the only thing Semantics.RegexDigitClassEscape can change — so an
+// operand without one never asks it.
+//
+// A backslash behind another backslash is a literal backslash and the letter
+// behind *that* is an ordinary letter, which is the reading unsupportedERE's
+// scan already makes and for the same reason: `\\d` is not an escape, and a
+// dialect that left the axis unanswered must not be refused for having
+// written one.
+func regexHoldsDigitEscape(text string) bool {
+	for i := 0; i < len(text); i++ {
+		if text[i] != '\\' || i+1 >= len(text) {
+			continue
+		}
+		if c := text[i+1]; c == 'd' || c == 'D' {
+			return true
+		}
+		i++
+	}
+	return false
 }
 
 // markQuotedRegex writes a quoted span of a `=~` operand with every character
@@ -914,7 +983,7 @@ func procSubSource(s syntax.Span) string {
 // expression pat, with the captures recorded the way the dialect names them.
 // Shared by the conditional and by the `[[` that is a command, which differ
 // in what a quoted pattern means and in nothing past that.
-func (r *Runner) regexMatch(pat, left string) (bool, error) {
+func (r *Runner) regexMatch(pat, left string, digitClass bool) (bool, error) {
 	// An empty right operand is where the engine underneath shows
 	// through. POSIX ERE, which the shells that refuse this are built
 	// on, has no empty expression; Go's regexp compiles `` happily and
@@ -953,7 +1022,7 @@ func (r *Runner) regexMatch(pat, left string) (bool, error) {
 	err := validERE(pat)
 	expr := pat
 	if err == nil {
-		expr, err = asERE(pat)
+		expr, err = asERE(pat, digitClass)
 	}
 	if err != nil {
 		// The pattern as the script wrote it and never the rewrite, which is

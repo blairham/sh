@@ -316,16 +316,16 @@ func skipEREBracket(pat string, at int) int {
 // rewrite with the guard bypassed and requiring the two to agree.
 const ereRewriteTriggers = "[\\*+?{\x00"
 
-func asERE(pat string) (string, error) {
+func asERE(pat string, digitClass bool) (string, error) {
 	if !strings.ContainsAny(pat, ereRewriteTriggers) {
 		return pat, nil
 	}
-	return rewriteERE(pat)
+	return rewriteERE(pat, digitClass)
 }
 
 // rewriteERE is asERE with the guard taken off, so that the guard can be
 // tested against what it gates rather than against a restatement of itself.
-func rewriteERE(pat string) (string, error) {
+func rewriteERE(pat string, digitClass bool) (string, error) {
 	var b strings.Builder
 	// Where the atom now being written began in the *output*, and whether what
 	// was written last was a repetition operator. A second operator behind the
@@ -368,7 +368,7 @@ func rewriteERE(pat string) (string, error) {
 		case pat[i] == '\\' && i+1 < len(pat):
 			atomAt, afterRepeat = b.Len(), false
 			_, w := utf8.DecodeRuneInString(pat[i+1:])
-			b.WriteString(escapedOrdinary(pat[i+1 : i+1+w]))
+			b.WriteString(escapedOrdinary(pat[i+1:i+1+w], digitClass))
 			i += 1 + w
 		case pat[i] == '[':
 			atomAt, afterRepeat = b.Len(), false
@@ -587,7 +587,7 @@ func escapeBracketMember(s string) string {
 //
 // Every other character keeps its backslash. `\.`, `\*`, `\[` and their
 // siblings mean the character in both, which is what the escape is for.
-func escapedOrdinary(ch string) string {
+func escapedOrdinary(ch string, digitClass bool) string {
 	if len(ch) != 1 {
 		return `\` + ch
 	}
@@ -597,6 +597,14 @@ func escapedOrdinary(ch string) string {
 		if strings.IndexByte("bBsSwW", c) >= 0 {
 			// The six the two libraries disagree about, and the six RE2
 			// reads the way the one the suite is graded against does.
+			return `\` + ch
+		}
+		if digitClass && (c == 'd' || c == 'D') {
+			// The **seventh and eighth**, and the one place a dialect
+			// decides: ksh93's `=~` reaches that shell's own regular
+			// expression library, where `\d` is a digit class, and the other
+			// three columns read the letter. RE2 reads the pair the way
+			// ksh93 does. See Semantics.RegexDigitClassEscape.
 			return `\` + ch
 		}
 		return ch

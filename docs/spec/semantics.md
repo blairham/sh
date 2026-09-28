@@ -9322,6 +9322,52 @@ this change and is only visible through it in one case: where zsh refuses a
 bare `|`, we refuse it too and say something else. The behavior matches; the
 wording does not.
 
+## `\d` is a digit class in one column and the letter in the rest
+
+POSIX EREs have no `\d`, and a backslash before an ordinary character is
+undefined there, so which reading a shell gives it is a fact about **which
+engine the operator reaches**. ksh93 has its own regular expression library
+and the other three are on the C library's.
+
+Measured 2026-09-27, `-c` under `env -i` with a scratch `HOME`, against
+`/bin/ksh` `Version AJM 93u+ 2012-08-01`, `/opt/homebrew/bin/bash` 5.3.20,
+`/opt/homebrew/bin/zsh` 5.9.2 and BusyBox ash 1.38.0. **Every row is a pair**,
+because a class reading and a literal reading agree on half of all subjects:
+
+| written | ksh93 | bash | zsh | ash |
+| --- | --- | --- | --- | --- |
+| `[[ za1b =~ za[0-9]b ]]` *(control)* | yes | yes | yes | yes |
+| `[[ za1b =~ za\db ]]` | **yes** | no | no | no |
+| `[[ zadb =~ za\db ]]` | **no** | yes | yes | yes |
+| `[[ za1b =~ za\Db ]]` | no | no | no | no |
+| `[[ zadb =~ za\Db ]]` | **yes** | no | no | no |
+
+The control says the operator reaches an engine in every column, so the four
+rows below it are the one escape. The same four answer the same way through a
+variable — `r='za\db'; [[ za1b =~ $r ]]` — in all four columns, and that is
+the spelling that makes the split the **engine's** rather than the shell's
+quote removal: no backslash is taken from a value on the way in.
+
+That is `RegexDigitClassEscape`, asked only for an operand carrying a `\d` or
+a `\D`, and it reaches two places because a written escape has to survive
+quote removal before an engine can read it: the operand keeps the backslash
+rather than marking the letter as the script's own, and the rewrite hands the
+pair through.
+
+**A double-quoted operand is not this row.** `[[ za1b =~ "za\db" ]]` and
+`[[ zadb =~ "za\db" ]]` are *both* no in ksh93u+ — the two characters stand
+for themselves there — so that spelling keeps the reading it had and is a
+separate question about what a double-quoted backslash means to this operator.
+
+**And only those two letters.** `\s`, `\S`, `\w` and `\W` are classes in
+ksh93, in RE2 and in glibc alike, so they are handed to the engine in every
+dialect and there is nothing for an axis to decide. What still parts ksh93
+from us on those is a *written* one: `[[ za1b =~ za\wb ]]` matches there and
+does not here, because quote removal takes the backslash before the engine is
+reached. That is a question about the operand's quoting rather than about the
+escape's meaning, and it takes `\.`, `\+` and `\{` with it — none of them
+moved here.
+
 ## What `=~` captured
 
 A successful match is worth more than its status: the whole match and every

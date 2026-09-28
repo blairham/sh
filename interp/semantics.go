@@ -8768,6 +8768,50 @@ type Semantics struct {
 	// (#3279).
 	EmptyRegexOperandIsAnError Answer
 
+	// RegexDigitClassEscape reads a written `\d` in a `=~` operand as the
+	// **digit class**, and `\D` as its complement, where the other columns
+	// read the letter.
+	//
+	// POSIX EREs have no such escape and leave a backslash before an ordinary
+	// character undefined, so this is a fact about which engine the operator
+	// reaches rather than about the grammar: ksh93 has its own regular
+	// expression library and the rest are on the C library's.
+	//
+	// Measured 2026-09-27, `-c` under `env -i` with a scratch `HOME`, each
+	// row as a **pair** because a class reading and a literal reading agree
+	// on half of all subjects — a row asserting only that `za\db` matches
+	// `za1b` would pass for a shell reading `\d` as the letter and handed a
+	// subject with a `d` in it:
+	//
+	//	                             ksh93u+  bash 5.3.20  zsh 5.9.2  BusyBox 1.38.0
+	//	[[ za1b =~ za[0-9]b ]] (ctrl) yes      yes          yes        yes
+	//	[[ za1b =~ za\db ]]           yes      no           no         no
+	//	[[ zadb =~ za\db ]]           no       yes          yes        yes
+	//	[[ za1b =~ za\Db ]]           no       no           no         no
+	//	[[ zadb =~ za\Db ]]           yes      no           no         no
+	//
+	// The control says the operator reaches an engine in every column, so the
+	// four rows below it are the one escape. The same four answer the same
+	// way through a variable — `r='za\db'; [[ za1b =~ $r ]]` — in all four
+	// columns, which is what says the split is the engine's rather than the
+	// shell's quote removal.
+	//
+	// It reaches **two** places, because a written `\d` has to survive quote
+	// removal before an engine can read it: Runner.condRegexOperand keeps the
+	// backslash on a backslash-quoted `d` rather than marking the letter as
+	// the script's own, and escapedOrdinary hands the pair through to the
+	// engine. Both are gated on this one axis, since they are one fact.
+	//
+	// Asked only for an operand that carries a `\d` or a `\D`, so a
+	// condition with no such escape in it never reaches a dialect that left
+	// the axis unanswered.
+	//
+	// **Only those two letters.** `\s`, `\S`, `\w` and `\W` are read as
+	// classes by ksh93 *and* by RE2 *and* by glibc, and are already handed to
+	// the engine for every dialect by escapedOrdinary's own table; the
+	// disagreement measured here is `d` and `D` alone.
+	RegexDigitClassEscape Answer
+
 	// LastPipelineElementInCurrentShell runs the last command of a pipeline
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
 	LastPipelineElementInCurrentShell Answer
@@ -28491,6 +28535,11 @@ func PosixSemantics() Semantics {
 		// a vote, and reads it the way bash and zsh do. dash and ash never
 		// reach it — neither has the operator.
 		EmptyRegexOperandIsAnError: Yes,
+		// POSIX's ERE has no `\d`, and a backslash before an ordinary
+		// character is undefined there, so the base reads the text: the
+		// escape names the letter. bash, zsh and BusyBox ash are all
+		// measured on that side of it and ksh93 alone is not.
+		RegexDigitClassEscape: No,
 		// POSIX has no `=~` at all, so what a failed one does to a record
 		// it does not describe is nobody's to infer — and neither is
 		// whether a group that took no part keeps its number. Both are

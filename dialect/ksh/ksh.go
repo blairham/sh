@@ -706,6 +706,16 @@ func Semantics() interp.Semantics {
 	// and no match, so an unbalanced bracket does fail — the empty pattern
 	// simply is not one of the failures (#2043).
 	s.EmptyRegexOperandIsAnError = interp.No
+	// The one shell whose `=~` reaches its **own** regular expression
+	// library rather than the C library's, which is visible on one escape:
+	// `\d` is a digit class there and the letter `d` in bash 5.3.20, zsh
+	// 5.9.2 and BusyBox ash 1.38.0. Measured 2026-09-27 as a pair, since a
+	// class reading and a literal reading agree on half of all subjects —
+	// `[[ za1b =~ za\db ]]` is a match here and not there, and
+	// `[[ zadb =~ za\db ]]` the other way round, with
+	// `[[ za1b =~ za[0-9]b ]]` as the control that says every column reaches
+	// an engine at all (#4932).
+	s.RegexDigitClassEscape = interp.Yes
 	// A failed `=~` leaves the record of the last match alone here, and a
 	// group that took no part is left out of it entirely, so the groups
 	// after it move down a place: `[[ abcd =~ (b)(z)?(c) ]]` is three

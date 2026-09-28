@@ -94,7 +94,10 @@ import (
 // slower than zsh and wrong.
 
 // registerMapfileModule installs `$mapfile`, which is the whole module.
-func registerMapfileModule(r *interp.Runner) {
+// Run by `zmodload zsh/mapfile` rather than at startup — see
+// gatedparameters.go: the module declares no autoloadable parameter, so
+// `${+mapfile}` is 0 in a fresh shell there (#4922).
+func registerMapfileParameter(r *interp.Runner) {
 	// The roster, which is a directory listing. Reached by `${(k)mapfile}`,
 	// `${(v)mapfile}`, `${#mapfile}` and `${(kv)mapfile}`.
 	r.SetDynamicAssoc("mapfile", mapfileView)

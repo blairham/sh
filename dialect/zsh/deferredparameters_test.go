@@ -99,14 +99,25 @@ func TestAParameterArrivesOnItsFirstReference(t *testing.T) {
 			"typeset w=1\nst=1\n",
 		},
 		{
-			// And the second control, in the other direction: a name this
-			// shell registers that a bare reference has not got at all is
-			// deliberately *not* deferred, so it still lists and still
-			// refuses. Measured — `typeset -p sysparams` is `no such
-			// variable` at 1 in the reference, which is neither state this
-			// mechanism models.
+			// And the second control, in the other direction: a name whose
+			// module declares no autoloadable parameter is deliberately
+			// *not* deferred, because it is not there at all. `typeset -p
+			// sysparams` is `no such variable` at 1 in the reference, which
+			// is neither state this mechanism models — it is the gate, and
+			// #4922 closed it. Before that this row read `typeset -Ar
+			// sysparams` at 0, which was the gap written down rather than
+			// the reference's answer.
 			"a parameter of a module with no autoloadable name is not deferred",
 			`typeset -p sysparams; print -r -- "st=$?"`,
+			"zsh:typeset:1: no such variable: sysparams\nst=1\n",
+		},
+		{
+			// And it is deferred by neither route after the load, which is
+			// the pair that keeps the two mechanisms apart: the parameter is
+			// there and its row is written, where a *deferred* name still
+			// writes nothing until something refers to it.
+			"and after the load it is there and lists",
+			`zmodload zsh/system; typeset -p sysparams; print -r -- "st=$?"`,
 			"typeset -Ar sysparams\nst=0\n",
 		},
 	} {

@@ -47,6 +47,20 @@ import (
 // is: a clock that was read once is wrong from the instant afterwards, and
 // silently — the caller still gets a number.
 func registerDatetimeModule(r *interp.Runner) {
+	// The formatter, which is not gated: this shell registers every module
+	// builtin at startup. See gatedparameters.go, where the split between
+	// the two halves is argued.
+	r.Register("strftime", strftimeBuiltin)
+}
+
+// registerDatetimeParameters installs the module's three clock reads.
+//
+// Run by `zmodload zsh/datetime` rather than at startup — see
+// gatedparameters.go: the module declares no autoloadable parameter, so
+// `${+EPOCHSECONDS}` is 0 in a fresh shell there, and `EPOCHSECONDS` and
+// `EPOCHREALTIME` were measured beside `epochtime` rather than assumed to
+// follow it (#4922).
+func registerDatetimeParameters(r *interp.Runner) {
 	r.SetDynamic("EPOCHSECONDS", func(rr *interp.Runner) string {
 		return strconv.FormatInt(rr.Now().Unix(), 10)
 	})
@@ -91,7 +105,6 @@ func registerDatetimeModule(r *interp.Runner) {
 	// type the name has (#2451).
 	r.SetDynamicDeclaration("EPOCHSECONDS", interp.ProducedDeclaration{Integer: true})
 	r.SetDynamicDeclaration("EPOCHREALTIME", interp.ProducedDeclaration{Float: true})
-	r.Register("strftime", strftimeBuiltin)
 }
 
 // epochRealtimeDigits is how many places `$EPOCHREALTIME` carries.

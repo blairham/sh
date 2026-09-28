@@ -32,6 +32,11 @@ var datetimeEpoch = time.Unix(1788698096, 123456789)
 // everything the shell wrote.
 func runZshAt(t *testing.T, at time.Time, src string) (string, int) {
 	t.Helper()
+	// The module's three parameters do not exist until it is loaded —
+	// `${+EPOCHSECONDS}` is 0 in a fresh zsh 5.9.2 — so every case here opens
+	// with the load, on the same line so that a `zsh:N:` goes on naming the
+	// line the case wrote. See dialect/zsh/gatedparameters.go (#4922).
+	src = "zmodload zsh/datetime; " + src
 	f, err := syntax.Parse(src, zsh.Dialect())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -89,7 +94,11 @@ func TestTheClockParameters(t *testing.T) {
 // silently — the caller still gets a number.
 func TestTheClockParametersAreAViewAndNotASnapshot(t *testing.T) {
 	at := datetimeEpoch
-	f, err := syntax.Parse(`echo $EPOCHSECONDS; echo $EPOCHSECONDS`, zsh.Dialect())
+	// The load first, because the parameter does not exist until the module
+	// is loaded — see gatedparameters.go (#4922). This case builds its own
+	// runner rather than going through runZshAt, so it carries the line
+	// itself.
+	f, err := syntax.Parse(`zmodload zsh/datetime; echo $EPOCHSECONDS; echo $EPOCHSECONDS`, zsh.Dialect())
 	if err != nil {
 		t.Fatal(err)
 	}

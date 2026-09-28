@@ -87,7 +87,7 @@ func TestEveryProducedParameterCarriesTheHidingLetters(t *testing.T) {
 		{"errnos", "array-readonly-hide-hideval-special"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			src := `print -r -- "${(t)` + tc.name + `}"`
+			src := gatedModuleOf(tc.name) + `print -r -- "${(t)` + tc.name + `}"`
 			out, st := runZsh(t, dir, src)
 			if out != tc.want+"\n" || st != 0 {
 				t.Errorf("${(t)%s} = %q (status %d), want %q", tc.name, out, st, tc.want+"\n")

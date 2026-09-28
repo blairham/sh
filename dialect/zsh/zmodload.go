@@ -364,8 +364,17 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 		// `dirstack is not implemented yet` the moment the parameter started
 		// working, which is the gate reading "unregistered" as "missing"
 		// (#4592).
+		//
+		// The fourth arm is a parameter whose module has not been loaded
+		// yet, which is the one kind that is genuinely not registered and
+		// is still not missing: `$langinfo` does not exist until `zmodload
+		// zsh/langinfo`, and the `zmodload` that would bring it is exactly
+		// the command this test is about to answer. Without it the gate
+		// closed on the module that opens it — `langinfo is not implemented
+		// yet` from the load itself. See gatedparameters.go (#4922).
 		return r.DynamicParameter(name) || r.ParameterWithdrawn(name) ||
-			(name != "" && name == r.Semantics.PushedDirectoriesParameter)
+			(name != "" && name == r.Semantics.PushedDirectoriesParameter) ||
+			zshGatedParameterModule(name) != ""
 	case "f":
 		return r.KnownMathFunction(name)
 	case "c":
@@ -1798,6 +1807,12 @@ func zshWithdrawnPlainNames(module string) []string {
 // writes its row. That split is not materialization and is #4864's, so what
 // is modeled here is the arrival and nothing else.
 func zmodloadRefersToItsParameters(r *interp.Runner, module string) {
+	// And, before any of that, the parameters that do not exist at all until
+	// this load: a module whose own declaration names no autoloadable
+	// parameter brings its names into being here rather than at startup.
+	// Ahead of the arrival below because a name that is not registered has
+	// nothing to arrive — see gatedparameters.go (#4922).
+	installGatedParameters(r, module)
 	for _, feature := range zmodloadFeatures[module] {
 		if name, ok := strings.CutPrefix(feature, "p:"); ok {
 			r.ReferToParameter(name)

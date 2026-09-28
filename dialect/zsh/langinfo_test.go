@@ -31,9 +31,19 @@ import (
 // asserted as the whole line it is rather than as a substring.
 func langInfo(t *testing.T, src string) string {
 	t.Helper()
-	out, _, errs := runZshSplit(t, t.TempDir(), src)
+	out, _, errs := runZshSplit(t, t.TempDir(), loadLangInfo+src)
 	return out + errs
 }
+
+// loadLangInfo is the line every case here now opens with, because the
+// parameter does not exist until the module is loaded — `${+langinfo}` is 0
+// and `typeset -p langinfo` is `no such variable` at 1 in a fresh zsh 5.9.2,
+// which is the state #4922 modeled.
+//
+// On the **same line** as the snippet rather than above it, so that every
+// `zsh:N:` in this file goes on naming the line the case wrote. A prefix that
+// added a line would have moved thirty diagnostics and called it a fix.
+const loadLangInfo = "zmodload zsh/langinfo; "
 
 // TestTheCodesetIsTheOneKeyAnsweredUnderEveryLocale is the key #1618 quotes
 // and the only one a real plugin tree reads: every use of this parameter on

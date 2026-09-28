@@ -3321,6 +3321,11 @@ type Runner struct {
 	// overflow is not a diagnostic anyone can act on, and in a library it
 	// takes the embedder down with it. See interp/reevalflag.go.
 	reevalDepth int
+	// beforeDebugTrap runs just before a DEBUG action does, for a dialect
+	// that writes a parameter naming the command it fired for. Installed
+	// through SetBeforeDebugTrap; see extend.go.
+	beforeDebugTrap func(*Runner)
+
 	// dollarZeroSwitch is a dialect's run-time override of
 	// Semantics.DollarZeroNames — the reading a script has moved the shell
 	// to. Installed through SetDollarZeroScopeSwitch; see extend.go.

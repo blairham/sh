@@ -1544,6 +1544,22 @@ func (r *Runner) SetOptionNamespace(lookup func(r *Runner, name string) (on, kno
 // Reporting `false` means "the script has not moved it", and the preset
 // answers — so a dialect can install one switch and leave every other reading
 // alone.
+// SetBeforeDebugTrap installs a callback that runs immediately before a DEBUG
+// action does, for a dialect with a parameter naming the command the action
+// fired for.
+//
+// **A callback at the firing rather than a dynamic parameter**, and the two
+// are told apart by two rows rather than by taste. In the shell this exists
+// for the parameter is an ordinary variable that only a *firing* writes:
+// before any DEBUG trap has fired it is **empty** even though commands have
+// run, and an assignment to it **sticks** until the next firing overwrites
+// it. A dynamic producer answers on every read and can do neither.
+//
+// The callback is handed the runner to write on, the way a builtin is, for
+// the reason SetOptionNamespace gives: a subshell is a cloned runner that
+// keeps this field.
+func (r *Runner) SetBeforeDebugTrap(before func(*Runner)) { r.beforeDebugTrap = before }
+
 func (r *Runner) SetDollarZeroScopeSwitch(scope func(r *Runner) (DollarZeroScope, bool)) {
 	r.dollarZeroSwitch = scope
 }

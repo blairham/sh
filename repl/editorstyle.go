@@ -47,6 +47,19 @@ type EditorStyle struct {
 	// told nothing does.
 	ListQuery string
 
+	// ListQueryThresholdParameter is the shell parameter that says how many
+	// matches it takes before the question above is asked, or the empty
+	// string where the threshold is not a parameter a script can set.
+	//
+	// zsh's is `$LISTMAX` and bash's is a readline variable rather than a
+	// shell parameter, so only one of the two names anything here — and a
+	// front end that names nothing keeps the built-in count, which is a
+	// hundred in both shells that ask.
+	//
+	// Read **live**, on the keystroke that found the matches, because it is
+	// a parameter a person sets at the prompt. See editor.listThreshold.
+	ListQueryThresholdParameter string
+
 	// BracketedPaste asks the terminal to wrap pasted text in markers, for
 	// the length of each line read.
 	//

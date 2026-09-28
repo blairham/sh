@@ -2501,6 +2501,10 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		interrupt:       s.Editor.Interrupt,
 		listQuery:       s.Editor.ListQuery,
 		listQueryEchoes: s.Editor.ListQueryEchoesTheKey,
+		// And the threshold that question turns on, where this dialect
+		// keeps one in a parameter. Read on the keystroke rather than taken
+		// here, because a person sets it at the prompt.
+		listThreshold: s.listQueryThreshold(),
 		// Whether the matches are drawn on the keystroke that found them
 		// ambiguous. Read through the option rather than taken as a value,
 		// because it is one a person turns off at the prompt.
@@ -2576,5 +2580,35 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// may be a file the session was started with, and its size is not the
 		// screen's.
 		width: func() int { return terminalWidth(s.inFile()) },
+		// And how tall it is, which one completion question turns on. See
+		// editor.listQueryAsks.
+		height: func() int { return terminalHeight(s.inFile()) },
+	}
+}
+
+// listQueryThreshold is the live reading of the parameter that says how many
+// matches it takes before the editor asks rather than printing.
+//
+// A closure rather than a number, for the reason the key bindings are one:
+// `LISTMAX=5` typed at the prompt takes effect on the next completion, and a
+// value read once at startup would have been the value an rc file left.
+//
+// Nil where the dialect names no such parameter, which is every dialect but
+// one — see EditorStyle.ListQueryThresholdParameter.
+func (s *Shell) listQueryThreshold() func() (int, bool) {
+	name := s.Editor.ListQueryThresholdParameter
+	if name == "" || s.Runner == nil {
+		return nil
+	}
+	return func() (int, bool) {
+		value, ok := s.Runner.GetVar(name)
+		if !ok {
+			return 0, false
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil {
+			return 0, false
+		}
+		return n, true
 	}
 }

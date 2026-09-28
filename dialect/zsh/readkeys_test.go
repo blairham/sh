@@ -53,8 +53,13 @@ print -r -- "st=$? [$v]"
 // The letters this shell still has not got are still refused by name, and `-k`
 // leaving the list must not have taken one of them with it.
 //
-// `-z`, `-c` and `-l` are all about the line editor, which is exactly why
-// removing one letter from a string of them is easy to overshoot.
+// `-c` and `-l` are both about the line editor, which is exactly why removing
+// one letter from a string of them is easy to overshoot.
+//
+// **`-e`, `-E` and `-z` have all left this list** (#4963, #4966): the first
+// two are the echo pair and the third reads the editor buffer stack, whose
+// producer is `print -z` and which a script can reach with no editor running
+// at all. Their rows are in readecho_test.go and editorbuffer_test.go.
 //
 // `-q` has left this list, and left it the way `-k` did — into ReadOptions,
 // with the behavior behind it and its own tests in readquery_test.go. **`-e`
@@ -64,7 +69,7 @@ print -r -- "st=$? [$v]"
 // is worth keeping is that taking two letters out of `qeEzcl` by hand is
 // exactly how one of the other three would go missing.
 func TestTheOtherTerminalLettersAreStillRefused(t *testing.T) {
-	for _, letter := range []string{"z", "c", "l"} {
+	for _, letter := range []string{"c", "l"} {
 		out, st := runZsh(t, t.TempDir(), "read -"+letter+" v\n")
 		want := "zsh:read:1: -" + letter + " is not implemented yet\n"
 		// Status 2 and not 1: an option this shell has not got stops the
@@ -74,8 +79,8 @@ func TestTheOtherTerminalLettersAreStillRefused(t *testing.T) {
 			t.Errorf("-%s = %q status %d, want %q at 2", letter, out, st, want)
 		}
 	}
-	// And the two that left do not: the sentence is gone and the letter
-	// works. Asserted here rather than only in readecho_test.go, because a
+	// And the three that left do not: the sentence is gone and each letter
+	// works. Asserted here rather than only in their own files, because a
 	// roster that shrank is the thing this test is about and "the letter is
 	// no longer named" is only half of why it was taken out.
 	for _, letter := range []string{"e", "E"} {
@@ -83,6 +88,10 @@ func TestTheOtherTerminalLettersAreStillRefused(t *testing.T) {
 		if want := "\n"; out != want || st != 1 {
 			t.Errorf("-%s = %q status %d, want %q at 1 — the echo pair is implemented", letter, out, st, want)
 		}
+	}
+	out, st := runZsh(t, t.TempDir(), "read -z v\nprint -r -- \"st=$?\"\n")
+	if want := "st=1\n"; out != want || st != 0 {
+		t.Errorf("-z = %q status %d, want %q — the editor buffer stack is implemented", out, st, want)
 	}
 }
 

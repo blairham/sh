@@ -2655,12 +2655,17 @@ func Semantics() interp.Semantics {
 	// ReadEchoLettersWriteTheValues below, where the measurement is, and
 	// note that they left UnimplementedOptionLetters in the same change —
 	// the two tables move together (#4963).
-	s.ReadOptions = "rsnpAd:t:u:k#qeE"
-	// And what they mean, which is the half a letter in the accepted set
-	// does not say. Yes: measured 2026-09-28 under `-f`, `printf '  a   b
-	// c  \n' | read -E x y` writes `a` and `b   c` and assigns both, the
-	// same line under `-e` writes them and leaves `${+x}${+y}` at `00`, and
-	// `read -eE x` and `read -Ee x` both leave `x` unset.
+	//
+	// `-z` is the third letter that left it, and reads no input at all: it
+	// takes one entry off the editor buffer stack, which `print -z` fills.
+	// See editorbuffer.go (#4966).
+	s.ReadOptions = "rsnpAd:t:u:k#qeEz"
+	// And what the echo pair means, which is the half a letter in the
+	// accepted set does not say. Yes: measured 2026-09-28 under `-f`,
+	// `printf '  a   b   c  \n' | read -E x y` writes `a` and `b   c` and
+	// assigns both, the same line under `-e` writes them and leaves
+	// `${+x}${+y}` at `00`, and `read -eE x` and `read -Ee x` both leave
+	// `x` unset.
 	s.ReadEchoLettersWriteTheValues = interp.Yes
 	// `unset -m` reads its operands as patterns, which is this shell's
 	// alone; `-n` is not here, and that is measured rather than an
@@ -5408,12 +5413,15 @@ func Diagnostics() interp.Diagnostics {
 			// set and still named here is refused as missing while it works,
 			// and a letter in neither is `bad option` for something zsh has.
 			//
-			// **`-e` and `-E` have left this list** (#4963): they are the
-			// echo pair and are implemented, in ReadOptions above and in
-			// Semantics.ReadEchoLettersWriteTheValues. A letter in the
-			// accepted set and still named here is refused as missing while
-			// it works, which is why the two tables move together.
-			"read": "zcl",
+			// **`-e`, `-E` and `-z` have all left this list** (#4963,
+			// #4966): the first two are the echo pair and the third reads
+			// the editor buffer stack, and all three are implemented — in
+			// ReadOptions above, in
+			// Semantics.ReadEchoLettersWriteTheValues and in
+			// editorbuffer.go. A letter in the accepted set and still named
+			// here is refused as missing while it works, which is why the
+			// two tables move together.
+			"read": "cl",
 			// typeset's letters this engine does not hold: the float
 			// format (-E), the key read (-k) and tracing (-t).
 			// `-H`, `-U`, `-T`, `-h` and `-m` have left this list — they are
@@ -6500,6 +6508,10 @@ func Apply(r *interp.Runner) {
 	// spelling: different letters, a different escape set and different
 	// wordings, all measured side by side. See print.go.
 	registerPrint(r)
+	// And the stack `print -z` pushes onto, which `read -z` takes off. The
+	// storage is this dialect's and the pop is the core's — see
+	// editorbuffer.go and interp.Runner.SetEditorBufferPop.
+	registerEditorBuffer(r)
 	// And the same escape set, reached from the other end: the `(p)`
 	// expansion flag reads the argument of a `j` or `s` behind it the way
 	// `print` reads an operand, so `${(pj:\n:)a}` joins on a real newline.

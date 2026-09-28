@@ -33807,6 +33807,9 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 	// arm and an element filter each ask whether the pattern describes the
 	// string, and none of them is choosing how much of it a match takes.
 	o.whole = true
+	// A whole-subject surface reads a `~(K)` group and its escapes, which is
+	// what #4961 closed. See patternOpts.tildeGlobRead.
+	o.tildeGlobRead = true
 	if condition && patternHasAnOperator(pattern, o) {
 		// The record one dialect keeps of what its last match matched, which
 		// is the condition's and never the `case`'s — and never a comparison

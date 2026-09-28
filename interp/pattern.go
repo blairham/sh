@@ -816,6 +816,36 @@ type patternOpts struct {
 	// `~(K)` group asks for it and nothing else does — see kshClassEscapes
 	// for the six and for why the letter rather than the language decides.
 	classEscapes bool
+	// tildeGlobRead says a `~(K)` group is read **on this surface** at all.
+	// Where it is false the group is ordinary characters and the pattern it
+	// prefixes matches whatever that text matches, which is usually nothing.
+	//
+	// One dialect's, and the shape is a quirk rather than a design — it is
+	// recorded because it is measured, not because it is explicable.
+	// Measured 2026-09-28 against `/bin/ksh` `Version AJM 93u+ 2012-08-01`,
+	// `-c` under `env -i PATH=/usr/bin:/bin` with a scratch `HOME`, `v=xab`:
+	//
+	//	${v#~(K)x}    xab   the group is **not** read
+	//	${v##~(K)x}   xab
+	//	${v%%~(K)b}   xab
+	//	${v/~(K)x/Q}  xab
+	//	${v%~(K)b}    xa    and on this one it **is**
+	//	${v#x}        ab    the controls: the trims work
+	//	${v%b}        xa
+	//
+	// So `%` is the one span-choosing operator that reads it, and `%%` — the
+	// same anchor with the other length preference — does not.
+	//
+	// **It is the `K` letter and not the group.** `~(i)`, `~(E)` and `~(g)`
+	// are each read on `#` and on `%` alike there, and this shell already
+	// agrees on all six of those rows: `${v#~(i)x}` is `ab` and
+	// `${v%~(i)b}` is `xa`. So nothing here may turn a tilde group off in
+	// general, only the one letter.
+	//
+	// It also gates [patternOpts.classEscapes], which was gated on `whole`
+	// while pathname expansion and `%` were the two surfaces that read the
+	// group without reading its escapes.
+	tildeGlobRead bool
 	// tildeLeftUnread says the surface does not read the `~(l)` anchor at
 	// all, so a piece that does not begin the subject is still a match.
 	//
@@ -1267,11 +1297,21 @@ func matchPattern(pattern, s string, o patternOpts) bool {
 func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bool, matchReport) {
 	if o.tilde {
 		if body, rest, ok := splitTildeModifier(pattern); ok {
+			m, _ := readTildeModifier(body)
+			if m.classes && !o.tildeGlobRead {
+				// A `~(K)` group this surface does not read. The text is
+				// ordinary characters, so the walk below is handed the
+				// pattern with the group still on it — which is what makes
+				// `${v#~(K)x}` leave `xab` alone. See
+				// patternOpts.tildeGlobRead, and note that only this letter
+				// is declined: `~(i)` and the rest are read here as before.
+				o.tilde = false
+				return matchPatternIn(pattern, piece, subject, base, o)
+			}
 			// Read once and not again: the prefix is off the pattern now, so
 			// a `~(K)` that falls back to this matcher cannot loop on its
 			// own group.
 			o.tilde = false
-			m, _ := readTildeModifier(body)
 			return matchTilde(m, rest, piece, subject, base, o)
 		}
 		// And one standing further along, which settles the whole match the
@@ -1580,7 +1620,15 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 		// is one shell's and behind that shell's option, and this is the
 		// other's and behind the grammar flag that let the `(` into the word.
 		if o.tildeFold {
-			if g, ok := splitTildeHereGroup(p); ok {
+			if g, ok := splitTildeHereGroup(p); ok && !(g.classes && !o.tildeGlobRead) {
+				// The `ok && !…` is the surface asking whether it reads a
+				// `~(K)` group at all. Where it does not, the group is left
+				// standing and the walk below spends it as ordinary
+				// characters — which is what makes `${v#~(K)x}` leave its
+				// value alone. Only that letter is declined: `~(i)` and the
+				// rest are consumed here on every surface, which is measured
+				// (`${v#~(i)[0-9]}` trims in both columns). See
+				// patternOpts.tildeGlobRead.
 				_, rest, _ := splitTildeModifier(p)
 				o = tildeFoldHere(o, g.foldSet, g.fold)
 				// `K` is read where it stands too, and that is measured:
@@ -3253,11 +3301,16 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		topGroup:          r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(false),
 		quantified:        r.readsQuantifiedGroups(false),
 		counted:           r.lang().CountedPatternGroup,
-		numericRange:      r.lang().NumericRangePattern,
-		escapes:           r.sem().PatternEscapeReaches,
-		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),
-		classes:           r.patternClasses(pattern),
-		collating:         r.collatingElements(pattern),
+		// Pathname expansion reads a `~(K)` group and its escapes:
+		// `~(K)a\db` names `a1b` in that shell. The parameter-expansion
+		// operand turns this off again and `%` turns it back on — see
+		// operandPatternOpts and trimWith.
+		tildeGlobRead: true,
+		numericRange:  r.lang().NumericRangePattern,
+		escapes:       r.sem().PatternEscapeReaches,
+		bracketMember: r.bracketEscapeIsOnlyAMember(pattern),
+		classes:       r.patternClasses(pattern),
+		collating:     r.collatingElements(pattern),
 		// The bracket axis above is deliberately not resolved on this path
 		// and this one is, because the two are not the same question here.
 		// A bare `[` reaching pathname expansion or a trim is literal in

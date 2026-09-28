@@ -2788,11 +2788,49 @@ being a class in either reading:
 | `${v%~(K)[0-9]}` over `1abc1` | `1abc` | and `%` alone does read it |
 | `${v#~(i)[0-9]}` over `1abc1` | `abc1` | with another letter as the control |
 
-So those surfaces answer exactly what they answered before the classes were
-read, which is the one answer that cannot be a new wrong one. `${v%…}` is
-left out with them, and closing it needs the group's own divergence closed
-first rather than the escape's. Pathname expansion is a second row of the
-same kind: `~(K)a\db` names `a1b` there and `adb` here, before and after.
+#### Which surface reads the group, and the escapes with it
+
+The escapes follow the **group**, and which surfaces read a `~(K)` group is a
+quirk of that shell rather than a rule. Measured 2026-09-28, `v=xab` and
+`v=1abc1`:
+
+| probe | ksh93u+ | with the control beside it |
+| --- | --- | --- |
+| `${v#~(K)x}` | `xab` — not read | `${v#x}` is `ab` |
+| `${v##~(K)x}` | `xab` — not read | |
+| `${v%%~(K)b}` | `xab` — not read | `${v%b}` is `xa` |
+| `${v/~(K)x/Q}` | `xab` — not read | `${v/x/Q}` is `Qab` |
+| `${v%~(K)b}` | **`xa`** — read | |
+| `${v%~(K)[0-9]}` | `1abc` — read | `${v%[0-9]}` is `1abc` |
+| `${v%~(K)\d}` | `1abc` — and its escapes with it | |
+
+So `%` is the one span-choosing operator that reads it, and `%%` — the same
+anchor with the other length preference — does not. Each "not read" row has a
+control showing the same trim works without the group, so it is the group
+being left standing rather than the operator failing.
+
+**It is the `K` letter and not the group.** `~(i)`, `~(E)` and `~(g)` are
+each read on `#` and on `%` alike — `${v#~(i)[0-9]}` is `abc1` and
+`${v%~(i)b}` is `xa` — so nothing may turn a tilde group off in general.
+
+The escapes were gated on the whole-subject surfaces while `%` and pathname
+expansion read the group without reading them; they are gated on the group
+now, which is what closes `${v%~(K)\d}`.
+
+**The two candidate-skipping readers needed no teaching**, which is worth
+recording because it looks as though they would. `patternSpanBytes` and
+`patternEdgeLiterals` both take `\d` for two bytes of pattern and one literal
+`d`, and a trim that skipped candidates on their advice while reading the
+classes would miss matches in silence. It cannot arise: a pattern only turns
+the classes on by carrying a `~(K)` group, `~` is in both readers' bail-out
+sets, and both are handed the whole pattern with the group still on it. That
+is pinned by a test rather than left to hold by luck.
+
+Pathname expansion is the row still open: `~(K)a\db` names `a1b` there and
+`adb` here. It is a third mechanism — a field's quote removal, not a pattern
+operand's — and the backslash is gone before any pattern is built. The
+reference drops it from an unmatched field too, printing `~(K)adb`, so the
+fix is a marked representation rather than a surviving backslash.
 
 #### And a second family of eight, which are single characters
 

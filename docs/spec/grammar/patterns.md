@@ -1392,6 +1392,64 @@ parenthesis rather than every brace in the word, and a parenthesis rather
 than any character: the trailing `{x,y}` expands, and `{1,2}` in front of a
 quantifier is an ordinary list.
 
+### It is the pattern language and not one surface
+
+The count is read wherever a pattern stands: a `case` arm, a condition, and
+the three parameter-expansion operators that take one. Measured 2026-09-27
+on `/bin/ksh` `Version AJM 93u+ 2012-08-01`, each probe from `-c` under
+`env -i PATH=/usr/bin:/bin`:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `case aaa in {2,3}(a))` | matches |
+| `[[ aaa == {2,3}(a) ]]` | matches |
+| `[[ aa == {2,3}(a) ]]` | matches |
+| `[[ a == {2,3}(a) ]]` | **no** — one is too few |
+| `[[ aaaa == {2,3}(a) ]]` | **no** — and four too many |
+| `[[ aaa == a{1,2}(a) ]]` | matches — mid-pattern |
+| `s=aaaX; "[${s#{2,3}(a)}]"` | `[aX]` — shortest, so two |
+| `s=aaaX; "[${s##{2,3}(a)}]"` | `[X]` — longest, so three |
+| `s=aaaX; "[${s%{1,2}(a)X}]"` | `[aa]` |
+| `s=aaaX; "[${s%%{1,2}(a)X}]"` | `[a]` |
+| `s=abababX; "[${s//{2}(ab)/-}]"` | `[-abX]` |
+
+The third and fourth rows are the ones that make it a **count** rather than
+a repetition: a row that only asked whether `aaa` matched would pass for
+`+(a)`.
+
+The operand rows need the braces around the count to reach the pattern at
+all, which is *grammar/parameter-expansion.md*'s **And whether a `{ … }`
+inside the word is balanced there**; and they need the analysis that skips
+candidate pieces to know that the count's braces are not characters of the
+subject. Written as characters, a prefix trim asks for a value beginning
+`{2,3}` and every candidate is skipped before the matcher sees one — the
+value comes back untouched, which reads exactly like a pattern that did not
+match.
+
+**One thing does not combine.** A `~(…)` flavor group does not turn the
+count into an extended-regular-expression repetition:
+`[[ aaa == ~(E){2,3}(a) ]]` does not match.
+
+### And a bare `(` behind a count is the surface's answer
+
+The rule above — that a parenthesis a count let in is a *character* — is a
+rule about a **word and a condition**, and the operand answers it the other
+way:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `s='{z,y}a'; "[${s#{z,y}(a)}]"` | `[]` — the group is read |
+| `s='{z,y}(a)'; "[${s#{z,y}(a)}]"` | `[{z,y}(a)]` — and not its own text |
+| `[[ '{z,y}(a)' == {z,y}(a) ]]` | matches — where it is |
+| `[[ '{z,y}a' == {z,y}(a) ]]` | **no** |
+
+The same three characters, two surfaces, two answers. What separates them
+has nothing to do with the brace: a written bare group at the top of a
+pattern is a syntax error in a word and in a condition — `[[ ab == a(b) ]]`
+— and is read in an operand, which `s=ab; "[${s#a(b)}]"` says with no brace
+in it at all, being `[]` where `s='a(b)'` leaves the value alone. So the
+parenthesis has a door of its own there and does not need the count's.
+
 ### Where this shell is stricter than the reference
 
 Two shapes are refused here that ksh93 reads, and both are the

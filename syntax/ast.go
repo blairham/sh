@@ -827,6 +827,32 @@ func (c *SelectClause) commandNode() {}
 // inside one is local, `$#` counts the words after the body, and a `return`
 // leaves it. Only the *name* is missing, which is why its own frame reports
 // one the shell invents.
+//
+// # The two spellings are two productions
+//
+// `()` and `function` reach this one node and run through one path in the
+// interpreter. **In the reference they are different productions**, and three
+// issues in a row turned on which of the two was written — not on the body,
+// not on the words, not on where any of it stood:
+//
+//   - the words and redirections behind the body interleave under `()` and do
+//     not under `function` (#5079);
+//   - `function` alone takes the next command as a body where `()` does not
+//     (#5078);
+//   - an unbracketed body keeps the caller's line numbering under `()` and is
+//     renumbered under `function` (#5080).
+//
+// Each was found by writing the row again with the header word changed and
+// measuring it, and each would otherwise have shipped correct for one
+// spelling and backwards for the other. So: **anything measured on one
+// spelling is unmeasured on the other until a row says otherwise**, and a
+// grid over this node wants the header as an axis before it wants anything
+// else.
+//
+// They do agree about some things, and the agreements are worth stating
+// rather than assuming too: the frame's invented name, the file that frame
+// reports (#5084), and the numbering of a body written in brackets are the
+// same under both.
 type AnonFunc struct {
 	Body Command
 	// Args are the words after the body, which become the positional

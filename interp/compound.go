@@ -1265,9 +1265,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// library, not the script — and the line offset the text it was read
 	// from was running at, which its body goes on being numbered from when
 	// it is called later. See funcOrigin.
-	r.recordFunctionOrigin(c.Name, funcOrigin{
-		file: r.currentFile(), lineBase: r.lineBase, text: r.runText,
-	})
+	r.recordFunctionOrigin(c.Name, r.originHere())
 	// And whatever a dialect wants told about a definition, which is a
 	// different question from where it came from: one shell marks every
 	// function defined inside an emulation so that the emulation is
@@ -1639,24 +1637,49 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 // check and the recursion bound. The file the body is remembered as coming
 // from is the implementation's too, because that is where its lines are.
 func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name string, args []string) error {
-	return r.callFuncNumberedFrom(ctx, fn, name, args, nil)
+	return r.callFuncInPlace(ctx, fn, name, args, nil)
 }
 
-// callFuncNumberedFrom is callFuncAs with the line the body's own numbering
-// is measured against given rather than taken from the definition.
+// inPlaceCall is what a call knows about a body that no function table holds.
 //
-// One construct needs them apart. A nameless function whose body was written
-// **without brackets** is not renumbered: `() print -r -- "$LINENO"` on line 2
-// answers 2 where `() { print -r -- "$LINENO" }` answers 0, measured
+// A nameless function is defined and run in one place, so the two things
+// every other call looks up by name — where the body was written, and what
+// its own lines are counted from — are facts about the moment instead. They
+// travel together because they are one answer taken at one instant, and a
+// call that carried the origin without the numbering would report a file the
+// lines do not belong to.
+type inPlaceCall struct {
+	// origin is where the body was written, which the table would have
+	// answered for a name. See Runner.originHere.
+	origin funcOrigin
+	// numberFrom is the line the body's own numbering is measured against,
+	// where that is not the definition's. Nil is the definition's, which is
+	// every bracketed body. See interp/anonfunc.go for the spelling that
+	// sets it and why only one of the two does.
+	numberFrom *int
+}
+
+// callFuncInPlace is callFuncAs for a body the function table does not hold:
+// the origin and the body's own numbering are given rather than looked up.
+//
+// One construct needs them. A nameless function is defined and run where it
+// stands, so its frame reports the file the construct was written in and not
+// the shell's own name (#5084); and the spelling whose body was written
+// **without brackets** is not renumbered — `() print -r -- "$LINENO"` on
+// line 2 answers 2 where `() { print -r -- "$LINENO" }` answers 0, measured
 // 2026-09-28 on zsh 5.9.2 (#5080). The definition's own line is still the
 // construct's — the frame reports it, and `$funcsourcetrace` reads it back —
-// so this moves the *numbering* and leaves that alone, which is why they are
-// two values here and one everywhere else.
+// so the numbering moves and that does not, which is why they are two values
+// here and one everywhere else.
 //
-// nil is "the definition's", which is every other call.
-func (r *Runner) callFuncNumberedFrom(ctx context.Context, fn *syntax.FuncDecl, name string,
-	args []string, numberFrom *int,
+// nil is "look both up", which is every other call.
+func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name string,
+	args []string, inPlace *inPlaceCall,
 ) error {
+	var numberFrom *int
+	if inPlace != nil {
+		numberFrom = inPlace.numberFrom
+	}
 	// The bound a script may have moved, asked before the shell's own: a
 	// script that set one is asking for a refusal well short of the ceiling
 	// below, and the two say different things and give up different amounts of
@@ -1712,9 +1735,16 @@ func (r *Runner) callFuncNumberedFrom(ctx context.Context, fn *syntax.FuncDecl, 
 	// parsing it, so that the line named is the line the *file* has: see
 	// funcOrigin.wrapperLines, and the offset below, which moves with it.
 	origin := r.funcOrigins[fn.Name]
+	if inPlace != nil {
+		// A body with no name to look up. See inPlaceCall.
+		origin = inPlace.origin
+	}
 	defLine := origin.definitionLine(int(fn.Pos().Line))
 	r.pushFrame(Frame{
-		File: r.functionFile(fn.Name), Name: name, Keyword: fn.Keyword,
+		// The origin's own file rather than a second lookup of the same
+		// field: the two were `r.funcOrigins[name].file` spelled twice, and
+		// a call that answers its origin for itself needs them to be one.
+		File: origin.file, Name: name, Keyword: fn.Keyword,
 		FuncLine: defLine, outerParams: saved,
 	})
 	defer r.popFrame()
@@ -1773,7 +1803,7 @@ func (r *Runner) callFuncNumberedFrom(ctx context.Context, fn *syntax.FuncDecl, 
 		// A body the shell does not renumber. Only this field moves: the
 		// frame pushed above keeps the definition's line, which is what
 		// `$funcsourcetrace` reports and what the reference reports there
-		// for both spellings alike. See callFuncNumberedFrom.
+		// for both spellings alike. See callFuncInPlace.
 		r.funcLine = *numberFrom
 	}
 	// And a line pinned by the *text* the call was written in does not reach

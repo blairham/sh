@@ -2741,6 +2741,20 @@ func (c *FuncDecl) prependRedirs(xs []*Redirect) {
 
 func (c *SimpleCmd) addRedir(x *Redirect) { c.Redirs = append(c.Redirs, x) }
 
+// prependRedirs on a simple command, which it had no need of until a body
+// could stand behind redirections that are not its own.
+//
+// A redirection in front of an ordinary command is read by that command's own
+// reader, so [Parser.compoundBehindRedirections] was only ever handed
+// compounds — every one of which embeds [redirs] and answers this through it.
+// `function >f print -r -- A` is the first shape that hands it a simple
+// command, and without this the assertion there simply misses and the
+// redirections are **dropped in silence**: the body ran, `A` reached the
+// terminal and the file was never opened (#5079).
+func (c *SimpleCmd) prependRedirs(xs []*Redirect) {
+	c.Redirs = append(append(make([]*Redirect, 0, len(xs)+len(c.Redirs)), xs...), c.Redirs...)
+}
+
 // addRedir on a definition reaches its body, which is where the parser
 // already puts a written one: `f() { :; } 2>&1` reads the redirection as the
 // body compound's, and the definition itself has no list to hold it.
@@ -3978,6 +3992,14 @@ func (p *Parser) compoundBehindRedirections(leading []*Redirect) Command {
 		}
 		return nil
 	}
+	// A miss here **drops every leading redirection without a word**, which
+	// is what a simple command did until it was given the method: the body
+	// ran, its output reached the terminal and the file was never opened
+	// (#5079). Two command nodes hold no redirection list of their own — a
+	// definition, which forwards this to its body, and a coprocess, which
+	// the reader in front of this refuses behind a redirection. So the
+	// assertion cannot miss today, and this note is here because the way it
+	// fails is silent rather than loud.
 	if h, ok := cmd.(interface{ prependRedirs([]*Redirect) }); ok {
 		h.prependRedirs(leading)
 	}
@@ -5469,12 +5491,82 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 		// closing token, so a redirection after it is one of its own words
 		// and the shell reads it that way — `() print A 2>err` leaves `err`
 		// empty and puts both lines on the terminal, measured the same day.
-		fn.Redirs, g.Redirs = g.Redirs, nil
+		//
+		// And only the ones written **behind** the body. One written in
+		// front of it is the *body's*, measured the same way and answering
+		// in the other direction: `() 2>e { print A }` leaves the call's own
+		// trace line on the terminal and puts only the body's in the file,
+		// where `() { print A } 2>e` puts both in it (#5079). Both kinds
+		// arrive on this one list — a leading redirection is prepended to
+		// the compound it stands in front of, which is this group — so they
+		// are told apart by where they were written, which is the only thing
+		// that distinguishes them by then.
+		behind := g.Redirs[:0:0]
+		kept := g.Redirs[:0:0]
+		for _, r := range g.Redirs {
+			if r.Pos().Offset > g.Start.Offset {
+				behind = append(behind, r)
+			} else {
+				kept = append(kept, r)
+			}
+		}
+		fn.Redirs, g.Redirs = behind, kept
 	}
-	for p.tok.Kind == TokWord && !p.atStopWord() {
-		fn.Args = append(fn.Args, p.word())
-	}
+	p.readAnonCallWords(fn)
 	return fn
+}
+
+// readAnonCallWords reads what stands behind a nameless function's body: the
+// words that become the call's positional parameters, and — for one of the two
+// headers — the redirections written among them.
+//
+// **The two headers do not agree, and that is the whole of this function.**
+// Measured 2026-09-28 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`; `go version -m`
+// reports *not a Go executable*), script files under `env -i
+// PATH=/usr/bin:/bin` with a scratch HOME and standard input on the null
+// device, with `() { print -r -- "[$*]" }` and the same body behind
+// `function`:
+//
+//	written              	`()`         	`function`
+//	body a >f b          	`[a b]`      	parse error at `b`
+//	body a b >f          	`[a b]`      	`[a b]`
+//	body >f a b          	`[a b]`      	parse error at `a`
+//
+// So the parenthesised header reads its words the way a *simple command* reads
+// its own — words and redirections in any order — and the keyword header takes
+// words alone, with the redirections behind them being the ordinary trailing
+// ones any compound command carries. A word after a redirection is a refusal
+// there, and it is left where it stands for the statement around this to
+// report, which names it exactly as the reference does.
+//
+// The grid is two by two rather than a list because the rule is keyed on the
+// **header**, and nothing else in these rows varies: the body is the same
+// text, the words are the same words, and only the word that opened the
+// construct moves. A row of `()` spellings alone agrees with a rule that says
+// "words and redirections always interleave", which is wrong in half the
+// grammar.
+func (p *Parser) readAnonCallWords(fn *AnonFunc) {
+	for {
+		if p.tok.Kind == TokWord && !p.atStopWord() {
+			if fn.Keyword && len(fn.Redirs) > 0 {
+				// A redirection has already been read behind the body, so
+				// the word list is over and this word stands after a
+				// complete command.
+				return
+			}
+			fn.Args = append(fn.Args, p.word())
+			continue
+		}
+		if !fn.Keyword && (p.tok.Kind.IsRedirect() || p.at(TokIONumber)) {
+			r := p.parseRedirect()
+			if r == nil {
+				return
+			}
+			fn.Redirs = append(fn.Redirs, r)
+			continue
+		}
+		return
+	}
 }
 
 // funcKeywordName reads one name after the `function` keyword and consumes it.
@@ -5575,12 +5667,70 @@ func (p *Parser) impliedAnonBody(keyword Token) Command {
 	return &AnonFunc{Keyword: true, Body: body, Start: keyword.Pos}
 }
 
+// anonBodyBehindRedirections reads `function >f body`: the keyword, one or
+// more redirections, and a body behind them on the same command. nil is "no
+// body stood there", which leaves the redirections to the bare form.
+//
+// A redirection **ends the name list**, and what follows it is a body rather
+// than another name. That is the measurement, and it is the one row that
+// cannot be guessed from the spelling: measured 2026-09-28 on zsh 5.9.2 with
+// `foo` already defined, `function foo` makes `foo` a *name* and swallows the
+// next line as its body, while `function >f foo` **runs** `foo` and defines
+// nothing — `${#functions}` is 1 either side.
+//
+//	function >f { print -r -- A }	`f` holds `A`
+//	function >f print -r -- A    	`f` holds `A`
+//	function >f ( print -r -- A )	`f` holds `A`
+//	function >f foo              	runs foo, defines nothing
+//
+// On the same command, which is what the token does the bounding of rather
+// than a count of lines: a separator between the redirection and the body is a
+// token of its own, so `function >f` over `{ print -r -- A }` and
+// `function >f; { print -r -- A }` both leave `p.tok` at a newline or a `;`
+// and fall to the bare reading — measured, both write `A` to the terminal and
+// leave `f` empty.
+//
+// The redirections go **in front of the body** rather than on the call, which
+// is the same fact readAnonCallWords records from the other side: one written
+// before the body is the body's. `function 2>e { print A }` leaves the call's
+// own trace line on the terminal and puts only the body's in the file.
+func (p *Parser) anonBodyBehindRedirections(keyword Token, leading []*Redirect) Command {
+	if len(leading) == 0 || !p.dialect.AnonymousFunction {
+		return nil
+	}
+	if !p.at(TokLeftParen) && (p.tok.Kind != TokWord || p.atStopWord()) {
+		return nil
+	}
+	fn := &AnonFunc{Keyword: true, Start: keyword.Pos}
+	p.funcBody = true
+	fn.Body = p.compoundBehindRedirections(leading)
+	if fn.Body == nil {
+		return fn
+	}
+	p.readAnonCallWords(fn)
+	return fn
+}
+
 func (p *Parser) parseFuncKeyword() Command {
 	keyword := p.tok
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
 	if p.dialect.BareFunctionKeyword && p.bareFunctionKeywordStandsHere() {
 		if anon := p.impliedAnonBody(keyword); anon != nil {
+			return anon
+		}
+		// Redirections written after the keyword, which belong to whichever
+		// of the two readings below turns out to be the one: a body's, where
+		// one stands behind them, and the bare form's where none does.
+		var leading []*Redirect
+		for p.tok.Kind.IsRedirect() || p.at(TokIONumber) {
+			r := p.parseRedirect()
+			if r == nil {
+				break
+			}
+			leading = append(leading, r)
+		}
+		if anon := p.anonBodyBehindRedirections(keyword, leading); anon != nil {
 			return anon
 		}
 		// The keyword and nothing else: an anonymous function whose body is
@@ -5596,6 +5746,7 @@ func (p *Parser) parseFuncKeyword() Command {
 		// it, and this form has no body to read them with.
 		anon := &AnonFunc{Keyword: true, Bare: true, Start: keyword.Pos}
 		anon.Body = &Group{Start: keyword.End, Stop: keyword.End}
+		anon.Redirs = leading
 		return p.withRedirs(anon)
 	}
 	if p.tok.Kind != TokWord {

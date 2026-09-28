@@ -298,6 +298,38 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 			"-T requires names of scalar and array"))
 		return 1
 	}
+	// And a **fourth** operand, which is the other end of the same sentence:
+	// `-T` takes a scalar, an array and at most a separator, so a list longer
+	// than three is refused before anything in it is read.
+	//
+	// **First of the refusals**, which is the opposite of where the readonly
+	// one stands and is measured a row at a time for the same reason. Every
+	// other operand refusal loses to it once there are four operands:
+	// `typeset -T A A b c` is this and not `can't tie a variable to itself`,
+	// `typeset -T A ':' b c` and `typeset -T ':' a b c` are this and not `not
+	// valid in this context`, `typeset -T A a=v b c` is this and not `second
+	// argument of tie must be array`, and `typeset -r RO=v; typeset -T RO ro
+	// x y` is this and not `read-only variable`. Each of those four is the
+	// winner at *three* operands, where there is no count to refuse.
+	//
+	// Reported and run on, like the two name refusals and unlike the frozen
+	// scalar: `typeset -T A a b c; print $?` writes the sentence and then `1`,
+	// and the pair is not made — `typeset -p A a` afterwards is `no such
+	// variable` for both. Measured 2026-09-28 on zsh 5.9.2 under `-f` from a
+	// script file, and under every word that reaches here: `declare`,
+	// `export` and `readonly` each write their own name in the location
+	// (#5100).
+	//
+	// **The count is not disturbed by the operand reordering** this engine
+	// does — the parser lifts an array literal out and appends its bare name,
+	// which permutes the list without changing its length — so this row is
+	// right for `typeset -T A a=(1 2) b c` as well, and does not wait on
+	// #5096. That is why the two are separate changes.
+	if len(args) > 3 {
+		r.diagf("%s\n", Wording(r.diag().TieTakesThreeOperands,
+			"too many arguments for -T"))
+		return 1
+	}
 	// The scalar may carry a value — `typeset -T R=x:y r` is measured to
 	// leave `r` holding `x` and `y` — and the array may carry an array
 	// literal, which reaches the name by the ordinary assignment path and

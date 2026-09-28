@@ -1413,12 +1413,22 @@ func (r *Runner) binaryTest(form testForm, left, op, right string) (bool, error,
 			got := r.matchPatternR(right, left, patternInACondition)
 			return got == (op != "!="), nil, true
 		case "=~":
-			// Never a class escape: the words were expanded and had their
-			// quotes removed before the builtin was called, so a written
-			// `\d` has already lost its backslash and there is nothing
-			// left for the dialect to hand the engine. The same reason the
-			// `=` arm above gives for a pattern.
-			ok, err := r.regexMatch(right, left, false)
+			// **The engine's question and never quote removal's.** The words
+			// were expanded and had their quotes removed before the builtin
+			// was called, so a *written* `\d` has already lost its backslash
+			// and no dialect answer could put it back — that is the reason
+			// the `=` arm above gives for a pattern, and it is right about
+			// the written spelling.
+			//
+			// It is not right about a **produced** one, which was the bug:
+			// `r='za\db'; [[ za1b =~ $r ]]` hands the builtin a word that
+			// still holds the backslash, because nothing quoted it. Whether
+			// the engine then reads `\d` as a digit class is the dialect's
+			// to answer, and BusyBox v1.37.0's engine does — measured, and
+			// the row this was hardcoded `false` for. See
+			// Semantics.RegexDigitClassEscape, which is that engine question
+			// alone now.
+			ok, err := r.regexMatch(right, left, r.regexReadsDigitClass())
 			if err != nil {
 				return false, errTestRegexDoesNotCompile, true
 			}

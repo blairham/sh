@@ -127,10 +127,15 @@ func TestAWrittenBackslashEitherReachesTheEngineOrDoesNot(t *testing.T) {
 // the wide one covers them where it says yes — so `\d` reads as a class under
 // either, and under neither it is the letter.
 //
-// This is the pair that says the two axes are not one: `d` is the only letter
-// they can disagree about, and the row that separates them is a column
-// answering the narrow one Yes while the wide one is No, which is what ksh93
-// looked like between #4932 and #4976.
+// The two are not one question with two names, and the rows below are how
+// they divide the work: a **written** `\d` needs both — the backslash has to
+// survive quote removal *and* the engine has to read it — while a `\d` that
+// arrived **through a variable** needs only the narrow one, there being no
+// quoting for the wide one to be about.
+//
+// The combination Yes-narrow-No-wide is not hypothetical: it is BusyBox
+// v1.37.0, whose engine has the class and whose quote removal eats the
+// backslash all the same.
 func TestTheDigitClassAxisIsStillItsOwnQuestion(t *testing.T) {
 	run := func(src string, wide, narrow Answer) string {
 		t.Helper()
@@ -152,13 +157,25 @@ func TestTheDigitClassAxisIsStillItsOwnQuestion(t *testing.T) {
 		wide, narrow  Answer
 		digit, letter string
 	}{
+		// **Two gates and a written `\d` needs both.** The wide axis gets
+		// the pair past quote removal and the narrow one decides what the
+		// engine reads it as, so three of these four rows are the letter and
+		// only the pair of Yes is the class.
 		{"neither", No, No, "no", "match"},
-		{"the narrow one alone", No, Yes, "match", "no"},
-		// **Two gates and both are needed.** The wide axis gets the pair
-		// past quote removal; what the engine then does with `\d` is the
-		// narrow axis's, and with it No the rewrite normalizes the pair back
-		// to the letter. So the wide one alone is the letter, which is the
-		// row that says these are two facts rather than one with a synonym.
+		// The narrow one alone is **BusyBox v1.37.0's** pair of answers —
+		// its engine reads the class and its quote removal still eats a
+		// written backslash — and that column is why the combination has to
+		// be expressible at all (#4991).
+		//
+		// **The row itself is this road's, not that shell's**, and the
+		// distinction is worth keeping: BusyBox reaches `=~` through the
+		// `[[` *builtin*, so it never runs the code this test drives. What
+		// it measures is the factoring — a written `\d` needs both gates —
+		// and dialect/ash/regexdigitclass_test.go is where that shell's own
+		// rows are. This row used to read `match` because the narrow axis
+		// governed quote removal too, which is what made the column
+		// inexpressible.
+		{"the narrow one alone", No, Yes, "no", "match"},
 		{"the wide one alone", Yes, No, "no", "match"},
 		{"both", Yes, Yes, "match", "no"},
 	} {

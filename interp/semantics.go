@@ -8889,7 +8889,7 @@ type Semantics struct {
 	// `za1b` would pass for a shell reading `\d` as the letter and handed a
 	// subject with a `d` in it:
 	//
-	//	                             ksh93u+  bash 5.3.20  zsh 5.9.2  BusyBox 1.38.0
+	//	                             ksh93u+  bash 5.3.20  zsh 5.9.2  BusyBox 1.37.0
 	//	[[ za1b =~ za[0-9]b ]] (ctrl) yes      yes          yes        yes
 	//	[[ za1b =~ za\db ]]           yes      no           no         no
 	//	[[ zadb =~ za\db ]]           no       yes          yes        yes
@@ -8897,16 +8897,24 @@ type Semantics struct {
 	//	[[ zadb =~ za\Db ]]           yes      no           no         no
 	//
 	// The control says the operator reaches an engine in every column, so the
-	// four rows below it are the one escape. The same four answer the same
-	// way through a variable — `r='za\db'; [[ za1b =~ $r ]]` — in all four
-	// columns, which is what says the split is the engine's rather than the
-	// shell's quote removal.
+	// four rows below it are the one escape.
 	//
-	// It reaches **two** places, because a written `\d` has to survive quote
-	// removal before an engine can read it: Runner.condRegexOperand keeps the
-	// backslash on a backslash-quoted `d` rather than marking the letter as
-	// the script's own, and escapedOrdinary hands the pair through to the
-	// engine. Both are gated on this one axis, since they are one fact.
+	// **This is the engine's question and nothing else**, which is a
+	// correction: the note here used to claim the variable spelling answered
+	// the same way in every column with the operator, and BusyBox does not.
+	// Measured 2026-09-28 at the digest internal/oracle pins, its engine
+	// reads the class and only quote removal hides it from the written
+	// spelling — `r='za\db'; [[ za1b =~ $r ]]` matches there while
+	// `[[ za1b =~ za\db ]]` does not (#4991). The written column above is
+	// unchanged and was never the part that was wrong.
+	//
+	// So the axis reaches the places that hand text to an **engine** —
+	// escapedOrdinary through the digitClass flag, on the keyword `[[ ]]`
+	// road and on the builtin one both — and it no longer reaches quote
+	// removal at all. That half is [RegexKeepsAWrittenBackslash], which asks
+	// whether a *written* backslash survives to be read, and a column can
+	// answer the two differently: BusyBox answers this Yes and that No, and
+	// its two spellings part exactly there.
 	//
 	// Asked only for an operand that carries a `\d` or a `\D`, so a
 	// condition with no such escape in it never reaches a dialect that left

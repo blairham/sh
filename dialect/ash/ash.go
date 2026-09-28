@@ -503,6 +503,13 @@ func Semantics() interp.Semantics {
 	// the preset's `Yes` — the refusal — because nothing asked (#3248's
 	// class).
 	s.EmptyRegexOperandIsAnError = interp.No
+	// This shell's `=~` engine reads `\d` as a digit class, which is visible
+	// only through a variable: a *written* backslash is taken off by quote
+	// removal before the engine sees it, so `[[ za1b =~ za\db ]]` is the
+	// letter here and `r='za\db'; [[ za1b =~ $r ]]` is the class. The
+	// second half is RegexKeepsAWrittenBackslash, which stays No.
+	// See interp.Semantics.RegexDigitClassEscape (#4991).
+	s.RegexDigitClassEscape = interp.Yes
 	// unanswered RegexMatchSurvivesAFailedMatch,
 	// RegexMatchOmitsGroupsThatDidNotMatch,
 	// PatternMatchWritesTheMatchRecord: there is no `=~` here — the

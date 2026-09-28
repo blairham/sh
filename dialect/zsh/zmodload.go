@@ -198,6 +198,19 @@ var zmodloadFeatures = map[string][]string{
 	// langinfo.go, where the one key answered under every locale and the
 	// fifty-four answered only in the C locale are separated out.
 	"zsh/langinfo": {"p:langinfo"},
+	// The pair whose **reference** loads the module — see watchpair.go, and
+	// loadWatchModuleOnAReference for the grid that says it is a reference
+	// and not a write.
+	//
+	// The reference names a third feature this shell has not: measured
+	// 2026-09-28, `zmodload zsh/watch; zmodload -lF zsh/watch` there is
+	// `+b:log`, `+p:WATCH`, `+p:watch`. `log` is the builtin that writes the
+	// watch report, and there is no login watch here for it to report — so
+	// it is left out rather than listed and refused, which is what a `b:`
+	// feature this shell does not hold would make the whole load do. The
+	// same run says the **auto**-load brings only the parameters anyway:
+	// after `watch=(a b)` the listing is `-b:log`, `+p:WATCH`, `+p:watch`.
+	"zsh/watch": {"p:WATCH", "p:watch"},
 	// Two parameters over the tables `zle` and `bindkey` already keep. See
 	// zleparameter.go, and #1618 for the plugin that would not load at all
 	// while this module refused.
@@ -372,9 +385,23 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 		// the command this test is about to answer. Without it the gate
 		// closed on the module that opens it — `langinfo is not implemented
 		// yet` from the load itself. See gatedparameters.go (#4922).
+		//
+		// The fifth is a parameter the **shell itself maintains**, which
+		// nothing above recognizes: it is not a producer, it has not been
+		// withdrawn, and its module is not gated — `$WATCH` and `$watch` are
+		// the two, and they are `zsh/watch`'s own features. Without it
+		// `zmodload zsh/watch` refused with `WATCH and watch are not
+		// implemented yet`, which is the gate reading "has not arrived" as
+		// "is not here" — the same shape the fourth arm was added for.
+		//
+		// The **mark** and not the deferral, and that is measured rather
+		// than tidier: the first load refers to the module's parameters, so
+		// a deferral test says yes once and no afterwards, and a second
+		// `zmodload zsh/watch` is a silent 0 in the reference where it
+		// refused here. See interp.Runner.ShellOwnParameter (#4998).
 		return r.DynamicParameter(name) || r.ParameterWithdrawn(name) ||
 			(name != "" && name == r.Semantics.PushedDirectoriesParameter) ||
-			zshGatedParameterModule(name) != ""
+			zshGatedParameterModule(name) != "" || r.ShellOwnParameter(name)
 	case "f":
 		return r.KnownMathFunction(name)
 	case "c":

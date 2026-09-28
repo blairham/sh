@@ -1147,6 +1147,10 @@ type Runner struct {
 	// interp/deferredparam.go.
 	deferredParams map[string]bool
 
+	// onParameterArrival is what a dialect wants run the first time one of
+	// those names is referred to. See SetParameterArrival.
+	onParameterArrival map[string]func(*Runner)
+
 	// readonlyByDeclaration are the deferred names a **script** froze, as
 	// against the ones this shell registered frozen.
 	//

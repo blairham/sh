@@ -68,6 +68,11 @@ var zshGatedParameters = map[string][]string{
 	"zsh/mapfile":  {"mapfile"},
 	"zsh/system":   {"sysparams", "errnos"},
 	"zsh/datetime": {"epochtime", "EPOCHSECONDS", "EPOCHREALTIME"},
+	// And the module with a **second** way in, which is why it is here and
+	// not only in watchpair.go: a reference to either half of
+	// `$WATCH`/`$watch` loads `zsh/watch`, and the module brings these two
+	// with it. See registerWatchModuleParameters (#4998).
+	"zsh/watch": {"WATCHFMT", "LOGCHECK"},
 }
 
 // zshGatedParameterInstallers is the other half of the table above: what to
@@ -88,6 +93,7 @@ var zshGatedParameterInstallers = map[string]func(*interp.Runner){
 	"zsh/mapfile":  registerMapfileParameter,
 	"zsh/system":   registerSystemParameters,
 	"zsh/datetime": registerDatetimeParameters,
+	"zsh/watch":    registerWatchModuleParameters,
 }
 
 // zshGatedParameterModule is the module a name waits for, or the empty string

@@ -83,4 +83,70 @@ func registerWatchPair(r *interp.Runner) {
 	// it there — `scalar-special` and `array-special` — and nothing else.
 	r.MarkShellOwnParameter("WATCH")
 	r.MarkShellOwnParameter("watch")
+	// And the module the pair belongs to, which a reference to either half
+	// loads — see loadWatchModuleOnAReference for the grid and for the
+	// control that says it is a reference and not a write.
+	r.SetParameterArrival("WATCH", loadWatchModuleOnAReference)
+	r.SetParameterArrival("watch", loadWatchModuleOnAReference)
+}
+
+// registerWatchModuleParameters installs `$WATCHFMT` and `$LOGCHECK`, the two
+// `zsh/watch` brings besides the pair above.
+//
+// Measured 2026-09-28 on zsh 5.9.2 under `-f` from a script file with `env -i
+// PATH=/usr/bin:/bin TERM=dumb` and a scratch `HOME`, after `zmodload
+// zsh/watch`:
+//
+//	${(t)WATCHFMT}   scalar    $WATCHFMT   %n has %a %l from %m.
+//	${(t)LOGCHECK}   integer   $LOGCHECK   60
+//	typeset -p WATCHFMT   typeset WATCHFMT='%n has %a %l from %m.'
+//	typeset -p LOGCHECK   typeset -i LOGCHECK=60
+//
+// Neither word carries `special` or either hiding letter, and both names are
+// writable — `WATCHFMT=x` and `LOGCHECK=5` are taken at 0 — so they are
+// ordinary parameters the module lays down rather than views of anything.
+//
+// **Neither has a reader here**, which is worth saying in advance: there is no
+// login watch in this shell, so what is modeled is the arrival and the values
+// and not the feature.
+func registerWatchModuleParameters(r *interp.Runner) {
+	r.SetVar("WATCHFMT", "%n has %a %l from %m.")
+	r.SetVar("LOGCHECK", "60")
+	r.MarkInteger("LOGCHECK")
+}
+
+// loadWatchModuleOnAReference is the second route into that installer: in the
+// shell being modeled, **a reference to either half of the pair loads the
+// module**.
+//
+// The issue reported a *write* as the trigger. It is a reference, and the
+// difference is measurable — measured 2026-09-28 by asking `zmodload -e
+// zsh/watch` after one line, with the probe naming neither `WATCHFMT` nor
+// `LOGCHECK`, because a probe that named them would be asking the module to
+// arrive in order to find out whether it had:
+//
+//	(nothing)                1, not loaded
+//	: ${+watch}              0, loaded      — a set test is a reference
+//	: ${+WATCH}              0, loaded
+//	print -r -- "$watch"     0, loaded      — so is a plain read
+//	watch=(a b)              0, loaded      — and so is a write
+//	WATCH=cc                 0, loaded
+//	: ${+WATCHFMT}           1, not loaded  — the module's *other* names are not
+//	: ${+LOGCHECK}           1, not loaded
+//	typeset -p WATCH         0 at 0, not loaded
+//	unset watch              not loaded
+//
+// The last four rows are the control and they are what makes this a rule about
+// a **reference** rather than about the name appearing anywhere: a listing and
+// an `unset` mention `WATCH` and load nothing, which is the same line the
+// deferral roster draws — see interp.Runner.referredToParameter, whose own
+// comment says a listing must not be the thing that brings a name in.
+func loadWatchModuleOnAReference(r *interp.Runner) {
+	// Recorded as loaded as well as installed, because `zmodload -e
+	// zsh/watch` is what the measurement above was taken with: the module is
+	// **0** on the line after the reference and 1 before it, so a shell that
+	// installed the two parameters and said the module was absent would be
+	// wrong about the thing the probe asked.
+	zmodloadSetLoaded(r, "zsh/watch", true)
+	installGatedParameters(r, "zsh/watch")
 }

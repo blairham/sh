@@ -19,9 +19,10 @@ import (
 // fails, and adding one here without a reason in ownTables reads as the
 // deliberate act it has to be.
 var sharedTables = map[string]string{
-	"preludeFuncs":      "written only while the prelude is sourced and never deleted from, so no subshell can change it",
-	"optionLetterNames": "the dialect's `set` option letters, handed in whole by Apply and never written to afterwards — the same terms optionLists is on, one field kind along",
-	"dialectCompgen":    "the `compgen -A` actions a dialect registered with SetCompgenAction, written at setup and never again — a script can ask compgen for one but has no way to add, replace or remove one",
+	"preludeFuncs":       "written only while the prelude is sourced and never deleted from, so no subshell can change it",
+	"optionLetterNames":  "the dialect's `set` option letters, handed in whole by Apply and never written to afterwards — the same terms optionLists is on, one field kind along",
+	"dialectCompgen":     "the `compgen -A` actions a dialect registered with SetCompgenAction, written at setup and never again — a script can ask compgen for one but has no way to add, replace or remove one",
+	"onParameterArrival": "what a dialect wants run when a deferred name is first referred to, registered by SetParameterArrival at setup and never again — a script can trigger one but has no way to add, replace or remove one",
 }
 
 // sharedStacks names every slice a clone is allowed to share with its parent,
@@ -319,6 +320,7 @@ func seedTables(r *Runner) {
 	r.absentElements = map[string]string{"seed": "v"}
 	r.absentParams = map[string]string{"seed": "v"}
 	r.deferredParams = map[string]bool{"seed": true}
+	r.onParameterArrival = map[string]func(*Runner){"seed": func(*Runner) {}}
 	r.readonlyByDeclaration = map[string]bool{"seed": true}
 	r.removedShellOwn = map[string]bool{"seed": true}
 	r.conditionAnswers = map[string]ConditionAnswer{

@@ -523,8 +523,16 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// `TTYIDLE=-1` and `ZSH_SUBSHELL=0` beside `ARGC=0`, and a bare
 		// `typeset` writes `integer 10 readonly` rows for all four (#4904,
 		// and dialect/zsh/counters.go).
+		// `ZSH_EVAL_CONTEXT` and `zsh_eval_context` are on this side for
+		// the same reason and arrived the same way: measured 2026-09-27 on
+		// zsh 5.9.2 in one run, a bare `readonly` writes
+		// `ZSH_EVAL_CONTEXT=cmdarg` and `zsh_eval_context=( cmdarg )`
+		// beside `ARGC=0`, and `readonly -p` writes no row for either
+		// (#4908, and dialect/zsh/evalcontext.go). The word here is
+		// `toplevel` rather than `cmdarg` because this harness is not the
+		// command-string route.
 		"ARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nHISTCMD=0\nLINENO=1\nPPID=" + ppid +
-		"\nR=2\nTTYIDLE=-1\nZSH_SUBSHELL=0\n" +
+		"\nR=2\nTTYIDLE=-1\nZSH_EVAL_CONTEXT=toplevel\nZSH_SUBSHELL=0\n" +
 		// And none of the module tables, which is measured and is the whole
 		// of what this run has to say about them: a bare `readonly` in a zsh
 		// 5.9.2 that has referred to none of them writes `ARGC`, `LINENO`,
@@ -545,6 +553,11 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// a bare `readonly` writes `status=0` and `readonly -p` writes no
 		// row for the name (#4866, and dialect/zsh/laststatus.go).
 		"epochtime\nerrnos\nlanginfo\nstatus=0\nsysparams\n" +
+		// The array half of the eval-context tie sorts here, after every
+		// upper-case name and among the lower-case ones — the same place
+		// `zsh_eval_context=( cmdarg )` lands in the reference's own bare
+		// `readonly`, measured in the run above.
+		"zsh_eval_context=( toplevel )\n" +
 		"export LOGNAME=pinned\nexport OLDPWD=" + dir + "\nexport PWD=" + dir +
 		"\nexport -i10 SHLVL=1\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's

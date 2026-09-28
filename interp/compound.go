@@ -1643,6 +1643,10 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 		r.status = 1
 		return nil
 	}
+	// A body is one entry on the stack of what the shell is inside, pushed
+	// after both refusals so that a call which never happens is not recorded
+	// as one. See interp/evalcontext.go.
+	defer r.enterEvalContext(EvalContextFunctionBody)()
 	// Where the call was made, for the line the shell is back at once it
 	// returns. Read before anything moves into the body.
 	calledAt := r.line

@@ -507,6 +507,28 @@ func (r *Runner) Tie(scalar, array, sep string) {
 	r.mirroring = false
 }
 
+// TieProduced is [Runner.Tie] for a pair whose value is **produced** rather
+// than stored: the names are tied and nothing is seeded.
+//
+// The seeding is the whole of the difference and it is not an optimization.
+// Tie lays a value down — the scalar's, split into the array, or an empty
+// pair where the scalar had nothing — and a stored value is exactly what
+// shadows a producer: `r.setArray(array, nil)` left this shell answering
+// `${(j:,:)zsh_eval_context}` with nothing while the scalar half, which was
+// never written over, answered correctly. Two halves of one parameter
+// disagreeing is the shape that is hard to see, because the half a probe
+// reads first looks right.
+//
+// A dialect calls this before it registers the producers, and neither half
+// can be assigned afterwards anyway: the one pair in the panel that needs it
+// is readonly on both halves. See dialect/zsh/evalcontext.go.
+func (r *Runner) TieProduced(scalar, array, sep string) {
+	if sep == "" {
+		sep = defaultTieSeparator
+	}
+	r.tieNames(tie{scalar: scalar, array: array, sep: sep, special: true})
+}
+
 // refuseUntie is `typeset +T`, which is not the tie's undoing but a refusal.
 //
 // The plus form of every other declaration letter takes the attribute off, so

@@ -355,6 +355,17 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// them. See Runner.tracePrefixDepth.
 	r.indirection++
 	defer func() { r.indirection-- }()
+	// And one entry on the stack of what the shell is inside, which is a
+	// different record from the call stack: a sourced file is a frame there
+	// too and `eval`'s text is not, and the dialect with a parameter for
+	// this distinguishes them by name. Read off the same field a diagnostic
+	// names the text by, so the two cannot drift apart — see the sourced
+	// struct's `eval`, and interp/evalcontext.go.
+	inside := EvalContextSourcedFile
+	if s.eval {
+		inside = EvalContextEval
+	}
+	defer r.enterEvalContext(inside)()
 	// And an execution unit, so a bare `exit` or `return` in the text
 	// reports what the text has run rather than what the caller left behind.
 	// Both routes here are units in the column that keeps the register:

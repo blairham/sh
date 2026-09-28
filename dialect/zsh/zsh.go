@@ -6719,6 +6719,11 @@ func Apply(r *interp.Runner) {
 	// environment may not supply, and for which of them this shell reads
 	// back (#4866).
 	registerTheStartupValues(r)
+	// And the pair that says what the shell is currently **inside**, over a
+	// stack the core keeps — see evalcontext.go for the fifteen rows it was
+	// measured in, and for the five shapes that deliberately push nothing
+	// (#4908).
+	registerTheEvalContext(r)
 	// And the one of those values that is a **bound** rather than a knob
 	// with no reader: the parameter, the bound being that parameter, the
 	// sentence that names it, and the refusal ending the script are one

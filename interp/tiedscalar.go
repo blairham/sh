@@ -130,7 +130,7 @@ func (r *Runner) untie(name string) {
 // assignment can be written and neither knows who called it.
 func (r *Runner) mirrorScalarToArray(name, value string) {
 	t, ok := r.tied[name]
-	if !ok || t.scalar != name || r.mirroring || r.tieDetached(t) {
+	if !ok || t.scalar != name || r.mirroring || r.tieDetached(t) || r.pairHalfWasRemoved(t, t.array) {
 		return
 	}
 	r.mirroring = true
@@ -147,7 +147,7 @@ func (r *Runner) mirrorScalarToArray(name, value string) {
 // every element, on every write to every array in the shell.
 func (r *Runner) mirrorArrayToScalar(name string, a Array) {
 	t, ok := r.tied[name]
-	if !ok || t.array != name || r.mirroring || r.tieDetached(t) {
+	if !ok || t.array != name || r.mirroring || r.tieDetached(t) || r.pairHalfWasRemoved(t, t.scalar) {
 		return
 	}
 	r.mirroring = true
@@ -625,4 +625,46 @@ func (r *Runner) refuseUntie(builtin string) int {
 		r.fatalQuiet()
 	}
 	return 1
+}
+
+// pairHalfWasRemoved reports whether the half a mirror is about to write has
+// been taken away by an `unset`, which is a state only a **wordless** pair can
+// be in — see the unset branch in interp/builtin.go.
+//
+// The mirror writes into a half that still exists and does nothing where the
+// half is gone, which is the one sentence the four cells of the measurement
+// come to. On zsh 5.9.2, from a pair holding `(a b)`, one shell per row:
+//
+//	unset watch;  WATCH=x:y      ${+watch} 0 — the array does not come back
+//	unset watch;  watch=(q r)    ${+watch} 1, $WATCH `q:r` — writing the half
+//	                             that was removed re-creates it, and the
+//	                             surviving half takes the mirror
+//	unset WATCH;  WATCH=x:y      ${+WATCH} 1, $watch `x y` — the same, the
+//	                             other way round
+//	unset WATCH;  watch=(q r)    ${+WATCH} 0 — the scalar does not come back
+//
+// The grid varies **which half was removed** and **which half is written**,
+// which is the pair of nouns the rule is keyed on: a reading that mirrored
+// unconditionally gets rows one and four wrong, and one that stopped
+// mirroring altogether gets rows two and three wrong.
+// **Only the wordless kind**, and that is the control rather than a
+// narrowing: both halves of a *worded* tie go away together, and the pairing
+// is kept so that a write to either re-makes it — measured, `unset path;
+// PATH=/y` splits into `path` again in the reference and in this shell, and
+// a gate that asked "is the other half removed" without asking which kind of
+// tie this is left `${+path}` at 0.
+func (r *Runner) pairHalfWasRemoved(t tie, name string) bool {
+	return t.wordless && r.removed[name] && !r.nameIsSet(name)
+}
+
+// pairHalfKeepsItsMark reports whether this name is a half of a wordless pair
+// that the shell still owns, so that its removal must not take the mark with
+// it.
+//
+// Only the wordless kind, and only while the name is actually owned: a tie a
+// script made with `typeset -T` is not the shell's own in either half, and
+// both halves of one go away together anyway.
+func (r *Runner) pairHalfKeepsItsMark(name string) bool {
+	t, tied := r.tieOf(name)
+	return tied && t.wordless && r.shellOwn[name]
 }

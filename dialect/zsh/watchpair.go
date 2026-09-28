@@ -60,20 +60,22 @@ import "github.com/blairham/sh/interp"
 // `unset watch`, writing `watch` reaches `$WATCH` again and writing `WATCH`
 // does not bring `watch` back.
 //
-// This engine's `unset` of either half of a pair removes **both** names,
-// because half a tie is not a state it has — see the tie branch in
-// interp/builtin.go, where that is measured for `typeset -T` and for the
-// shell's own eight, both of which agree with this shell. So here the same
-// two lines give `${+WATCH}` of 0 against 1, and a `WATCH=x:y` afterwards
-// re-makes the pair rather than writing a lone scalar.
+// **Modeled since #4999**, and the fear that kept it out of #4907 turned out
+// to be misplaced: it is not a change to what `unset` means for every pair in
+// the engine. A tie and this pair are two different joins, and the `wordless`
+// field already told them apart — `interp.Runner.PairNames` has exactly one
+// user and the tie table has the other nine. The tie branch in
+// interp/builtin.go still removes both halves of a tie, which is what the
+// reference does for `typeset -T SCA sca` and for the shell's own eight, and
+// dialect/zsh/watchunset_test.go carries those six rows as the control beside
+// the four that moved.
 //
-// That row is **left where it was found** rather than fixed in passing, and
-// it is written down rather than left to be discovered. It is a change to
-// what `unset` means for every pair in the engine, measured for the other
-// nine against a shell that agrees with this one about them, and a pair that
-// is half-removed is a state nothing else here can currently be in. What a
-// script sees on every line before the `unset` is the join, and the join is
-// right.
+// The surviving half is **emptied** and keeps `special`, and the join is then
+// live only into a half that is still there: after `unset watch`, writing
+// `watch` re-creates it and reaches `$WATCH`, and writing `WATCH` does not
+// bring `watch` back. Four cells, varying which half was removed and which is
+// then written, because those are the two nouns the rule is keyed on — see
+// interp.Runner.pairHalfWasRemoved.
 func registerWatchPair(r *interp.Runner) {
 	r.PairNames("WATCH", "watch", ":")
 	// The shell's own, which is the `special` word in `${(t)…}` and is what

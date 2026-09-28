@@ -60,6 +60,48 @@ type EditorStyle struct {
 	// a parameter a person sets at the prompt. See editor.listThreshold.
 	ListQueryThresholdParameter string
 
+	// KeySequenceWaitParameter is the shell parameter holding how long the
+	// line editor waits for the rest of a multi-character key sequence before
+	// deciding the one it has is complete, **in hundredths of a second**, or
+	// the empty string where the wait is not a parameter a script can set.
+	//
+	// zsh's is `$KEYTIMEOUT`, default 40. bash's is `keyseq-timeout`, a
+	// readline variable in milliseconds rather than a shell parameter, so
+	// only one of the two names anything here — and **a front end that names
+	// nothing waits no time at all**, which is what every dialect did before
+	// this and is why the field is a name and not a duration.
+	//
+	// Measured 2026-09-28 through a pseudo-terminal against zsh 5.9.2, in vi
+	// mode with `echo hello` typed, an Escape, a gap, and then `[D` — the
+	// tail of a left arrow. Waited through, the three bytes are the arrow and
+	// the line is unchanged; given up on, the Escape was the mode switch and
+	// `D` kills to the end of the line:
+	//
+	//	KEYTIMEOUT  gap     line runs as
+	//	40          0.05s   echo hello
+	//	40          1.00s   echo hell
+	//	200         1.00s   echo hello
+	//	1           0.05s   echo hell
+	//	200         3.00s   echo hell
+	//	1000        4.00s   echo hello
+	//
+	// **Rows two and three hold the gap still and move only the parameter,
+	// and so do rows one and four.** That is the pair that says the number is
+	// read, rather than that some fixed timer exists — a grid that varied
+	// only the gap would agree with a hard-coded four tenths on every row.
+	//
+	// **Zero does not mean "no wait".** It and every negative wait
+	// *indefinitely*, measured: `KEYTIMEOUT=0` with a four-second gap still
+	// reads the arrow, and so does `KEYTIMEOUT=-5`. A value that is not a
+	// number is zero for the same reason — the reference declares the name
+	// `integer`, so the assignment stores 0 — and waits indefinitely too. The
+	// obvious reading of zero is the opposite of the measured one, which is
+	// why the rows are here.
+	//
+	// Read **live**, on the keystroke, because it is a parameter a person
+	// sets at the prompt. See Shell.keySequenceWait.
+	KeySequenceWaitParameter string
+
 	// BracketedPaste asks the terminal to wrap pasted text in markers, for
 	// the length of each line read.
 	//

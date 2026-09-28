@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -275,6 +276,14 @@ type editor struct {
 	// same reason. Nil where the dialect has no such parameter, which keeps
 	// the built-in count. See confirmList and EditorStyle.ListQueryThresholdParameter.
 	listThreshold func() (int, bool)
+
+	// keyWait is how long to wait for the rest of a multi-character key
+	// sequence, and whether to wait indefinitely — read fresh on the key for
+	// the reason listThreshold is read fresh on the completion. Nil where the
+	// dialect names no such parameter, and then nothing is waited for at all,
+	// which is what every dialect did before there was a wait. See
+	// escapeIsTheModeSwitch and EditorStyle.KeySequenceWaitParameter.
+	keyWait func() (time.Duration, bool)
 
 	// bindings is what a person rebound, asked fresh for every key because
 	// `bindkey` is a command run at the prompt as well as in an rc file. Nil,

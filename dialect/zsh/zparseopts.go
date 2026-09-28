@@ -6,6 +6,7 @@ package zsh
 import (
 	"context"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/interp"
 )
@@ -557,6 +558,22 @@ func zparseoptsRun(
 	return code
 }
 
+// zparseoptsBadOption is what `-F` names when a word holds an option no
+// description covers: the first letter left undescribed, with one `-`, or the
+// whole word where it is a long option.
+//
+// text is the tail of the word still to be read, so its first rune is that
+// letter — which is what makes a cluster name its own offender rather than
+// the word around it. A word whose text has run out cannot reach here, and
+// answers the word for want of anything better rather than an empty `-`.
+func zparseoptsBadOption(word, text string) string {
+	if strings.HasPrefix(word, "--") || text == "" {
+		return word
+	}
+	r, _ := utf8.DecodeRuneInString(text)
+	return "-" + string(r)
+}
+
 // zparseoptsWord matches one command-line word, which may hold several
 // options: `-ab` is two when both are flags.
 //
@@ -574,10 +591,29 @@ func zparseoptsWord(
 		idx := zparseoptsLongest(specs, text)
 		if idx < 0 {
 			if opts.strict {
-				// `-F` names the whole word as written, measured: the
-				// complaint is about `-z` and not about the letter left of
-				// it.
-				r.Diagnosef("bad option: %s\n", word)
+				// `-F` names the **first letter no description covers**,
+				// spelled with one `-`, rather than the word it was written
+				// in — a short word is a sequence of options and only one of
+				// them is the bad one. `text` is what is left of the word
+				// after the letters that *were* described, so the first rune
+				// of it is that letter.
+				//
+				// Measured 2026-09-28 on zsh 5.9.2, and the second row is
+				// the one that fixes the rule:
+				//
+				//	-- -xy  …-F -a o a    bad option: -x
+				//	-- -xy  …-F -a o x    bad option: -y   ← x is described,
+				//	                                         so the letter
+				//	                                         after it is named
+				//	-- -ab  …-F -a o a    bad option: -b
+				//	-- -x   …-F -a o a    bad option: -x   unchanged: one
+				//	                                         letter is its own
+				//	                                         cluster
+				//
+				// A **long** option is one name and is still named whole —
+				// `--xy` is `bad option: --xy` in both shells — so the word
+				// decides that and not the letter (#5024).
+				r.Diagnosef("bad option: %s\n", zparseoptsBadOption(word, text))
 			}
 			return nil, at, true
 		}

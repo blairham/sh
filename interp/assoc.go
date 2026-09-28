@@ -214,6 +214,14 @@ func (r *Runner) setAssocElem(name, key, value string) {
 func (r *Runner) setAssocElemAs(name, key, value string, kind ElementKind) {
 	name = r.namespaceWriteName(name)
 	name = r.throughNameref(name)
+	if r.refuseFrozenTableElement(name, key) {
+		// A produced table whose elements are frozen, which refuses under
+		// the **key's** name. Ahead of the writer, because such a table has
+		// none: the refusal is what stands in its place, and reaching the
+		// stored table below is the shadowing this file's own doc warns
+		// about. See Runner.MarkProducedTableFrozenByKey.
+		return
+	}
 	if write, ok := r.dynamicAssocWriters[name]; ok {
 		write(r, key, value, true)
 		return
@@ -306,6 +314,13 @@ func (r *Runner) declareAssocKey(name, key string) {
 // and a delete from a table that is not the answer would do nothing and say
 // nothing.
 func (r *Runner) unsetAssocElem(name, key string) {
+	if r.refuseFrozenTableElement(name, key) {
+		// The same refusal the element *write* earns, and measured as the
+		// same one: `unset 'langinfo[CODESET]'` is `read-only variable:
+		// CODESET` in zsh 5.9.2, word for word what `langinfo[CODESET]=xx`
+		// says. See Runner.MarkProducedTableFrozenByKey.
+		return
+	}
 	if write, ok := r.dynamicAssocWriters[name]; ok {
 		write(r, key, "", false)
 		return
@@ -828,6 +843,13 @@ func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo, r
 	// stored table's does. See tableLiteralPairsOff for what the refusal must
 	// leave standing.
 	if !r.tableLiteralPairsOff(parsed) {
+		return
+	}
+	if r.producedTableDiscardsAWholeWrite(name) {
+		// A produced table whose elements are frozen and whose table-level
+		// writes are taken and do nothing. Reported as success with nothing
+		// written, which is the reference's own answer and not a refusal
+		// phrased quietly. See Runner.MarkProducedTableFrozenByKey.
 		return
 	}
 	_, produced := r.DynamicAssocs[name]

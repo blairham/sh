@@ -4332,6 +4332,10 @@ type Runner struct {
 	// unsetRefused names refuse `unset` and nothing else — see
 	// Runner.RefuseUnset.
 	unsetRefused map[string]bool
+	// tableFrozenByKey names produced associations whose elements are frozen
+	// while the table itself is not — see
+	// Runner.MarkProducedTableFrozenByKey.
+	tableFrozenByKey map[string]bool
 	// freezing is the names the declaration now running is assigning to as
 	// operands, and freezeAfter is the ones whose `-r` is waiting for those
 	// assignments to land. `declare -ar A=(x y)` carries the value and the
@@ -11406,6 +11410,19 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 			fatal = r.sem().ReadonlyReassignmentBySpecialBuiltinFatal
 		}
 	}
+	return r.refuseWithTheReadonlySentence(name, form, fatal)
+}
+
+// refuseWithTheReadonlySentence writes the refusal a frozen name earns and
+// settles what it costs, having been told which of the fatality answers above
+// applies.
+//
+// Taken out of refuseReadonly for the one caller that reaches this without
+// consulting r.readonly at all: a produced table whose **elements** are frozen
+// refuses with this sentence under the key's name rather than the parameter's,
+// and every other thing about the refusal — the wording, the status, the line
+// it gives up — is this one. See Runner.MarkProducedTableFrozenByKey.
+func (r *Runner) refuseWithTheReadonlySentence(name string, form assignForm, fatal Answer) bool {
 	if r.ask(fatal, "a readonly reassignment being fatal") {
 		r.reportReadonlyRefusal(name, form, true)
 		return true

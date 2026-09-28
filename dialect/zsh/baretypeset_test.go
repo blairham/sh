@@ -119,7 +119,11 @@ func TestABareListingWritesAProducedParametersAttributesAndNotItsValue(t *testin
 		"array readonly errnos\n",
 		"array readonly keymaps\n",
 		"array readonly epochtime\n",
-		"association readonly langinfo\n",
+		// Without the `readonly` word its neighbors carry, which is the
+		// row that had been graded against this shell rather than against
+		// the reference: `association langinfo` is what zsh 5.9.2 writes
+		// here, re-measured 2026-09-28 (#4996).
+		"association langinfo\n",
 		"association readonly widgets\n",
 		"association readonly sysparams\n",
 		"association readonly builtins\n",

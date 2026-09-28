@@ -73,29 +73,57 @@ import "github.com/blairham/sh/interp"
 // tables with five separate locales behind them, and a shell can legitimately
 // be answered for four categories and refused for the fifth.
 //
-// # It is live, and it is readonly — which is half a divergence
+// # It is frozen by key, which is not the same as readonly
 //
-// Readonly is this shell's answer and not quite zsh's, and the difference is
-// worth writing down because it looks like a wording one and is not entirely.
-// zsh refuses `langinfo[CODESET]=x` — as `read-only variable: CODESET`,
-// naming the *key* where it names the parameter for `$terminfo` — and yet its
-// own `$parameters[langinfo]` does not carry the readonly attribute, where
-// `$parameters[terminfo]` does. So there is nothing consistent to copy. This
-// shell marks it readonly, which is what every other produced table in the
-// dialect does, refuses with the parameter's name, and reports the attribute
-// in `$parameters`; a script is refused either way and told which parameter
-// refused it.
+// This used to say that readonly was "half a divergence" — that zsh refuses
+// `langinfo[CODESET]=x` while its own `$parameters[langinfo]` carries no
+// readonly attribute, that there was therefore "nothing consistent to copy",
+// and that marking it readonly was the nearest thing. **There is something
+// consistent to copy, and the inconsistency was in the reading rather than in
+// the reference.** The freeze there is on the *elements* and not on the
+// parameter, and every row falls out of that one sentence: the refusal names
+// the key because the key is what is frozen, the attribute is absent because
+// the parameter is not, and a write to the table as a whole is taken because
+// there is nothing on the table to refuse it.
+//
+// Measured 2026-09-28 on `/opt/homebrew/bin/zsh`, zsh 5.9.2
+// (aarch64-apple-darwin25.4.0) — `go version -m` says *not a Go executable*
+// for it and `github.com/blairham/sh/cmd/zsh` for ours — `-f` from a script
+// file under `env -i PATH=/usr/bin:/bin TERM=dumb` with a scratch `HOME` and
+// `ZDOTDIR`, one shell per row with `zmodload zsh/langinfo` on the line above:
+//
+//	                          reference              here, before #4996
+//	${(t)langinfo}            association-hide-…     association-readonly-hide-…
+//	typeset -p langinfo       typeset -A langinfo    typeset -Ar langinfo
+//	bare `typeset` listing    association langinfo   association readonly langinfo
+//	langinfo[CODESET]=xx      read-only: CODESET     read-only: langinfo
+//	unset 'langinfo[CODESET]' read-only: CODESET     read-only: langinfo
+//	langinfo=(A 1)            taken, 0, 55 keys      read-only: langinfo
+//	unset langinfo            taken, 0, ${+…} is 1   read-only: langinfo
+//
+// So it was not one word out of place: three of the seven rows were a refusal
+// where the reference writes to the shell and carries on. The mechanism is
+// [interp.Runner.MarkProducedTableFrozenByKey], which is where the grid's
+// controls are — `$sysparams` on one side of it refusing everything by the
+// parameter's name, `$aliases` on the other taking everything.
+//
+// `$terminfo` is the row that keeps this from becoming "a module association
+// is not readonly": it is `association-readonly-hide-hideval-special` in the
+// reference and `terminfo[cols]=x` there names the *parameter*. Both of these
+// parameters are a locale-ish table a module provides and they are in
+// different states, which is why the mark is per name.
 //
 // # It is live
 //
 // Live because the locale is a variable and variables move: measured,
 // `zmodload zsh/langinfo; export LC_ALL=C; print $langinfo[CODESET]` is
 // `US-ASCII` in one shell that started under UTF-8, so a table filled in once
-// would be a snapshot of the shell's first instant. Readonly because
-// `langinfo[CODESET]=x` is `read-only variable` there — and hidden with it,
-// for the reason parameter.go and terminfo.go give: readonly is an attribute,
-// an attribute puts the name in the tables a listing walks, and a listing
-// would otherwise write fifty-five assignments somebody could source back.
+// would be a snapshot of the shell's first instant. Hidden for the reason
+// parameter.go and terminfo.go give: a name a listing walks would otherwise
+// have fifty-five assignments written for it that somebody could source back.
+// **Hiding is its own mark here and does not ride on readonly** — that is
+// `hideModuleParameter` below, and it is why dropping the freeze's attribute
+// left the listing quiet.
 //
 // # One divergence, and it is a key nobody has
 //
@@ -120,7 +148,15 @@ func registerLangInfoParameter(r *interp.Runner) {
 	// actually in — a script told the first would go looking for a to-do in
 	// this repository, and the second is the fact it can act on.
 	r.SetAbsentElements("langinfo", "no locale data for this locale")
-	r.MarkReadonly("langinfo")
+	// Frozen by **key** rather than readonly, which is what the reference
+	// has and what this tree's own note in dialect/zsh/moduleparam.go had
+	// already written down: `${(t)langinfo}` there is
+	// `association-hide-hideval-special`, with no `readonly` in it, and yet
+	// `langinfo[CODESET]=xx` is refused. The freeze is on the elements and
+	// the table-level writes are taken and discarded — see
+	// interp.Runner.MarkProducedTableFrozenByKey for the grid and for the
+	// two neighboring shapes that make it a third state (#4996).
+	r.MarkProducedTableFrozenByKey("langinfo")
 	hideModuleParameter(r, "langinfo")
 }
 

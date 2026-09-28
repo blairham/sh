@@ -3256,6 +3256,14 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 // not the runner's, and a removal that happened must not overwrite a refusal
 // that came before it.
 func (r *Runner) unsetName(name string) int {
+	if r.producedTableDiscardsAWholeWrite(name) {
+		// A produced table whose `unset` is taken and does nothing: the
+		// parameter is still there afterwards, still holds its keys, and the
+		// status is 0. Ahead of everything, because every line below this
+		// one is part of taking a name away. See
+		// Runner.MarkProducedTableFrozenByKey.
+		return 0
+	}
 	// An `unset` **through** a reference with nothing to point at, which is
 	// the one route of the three that does not end the script: the sentence
 	// is written, the status is 1, and the next line runs. Measured — and

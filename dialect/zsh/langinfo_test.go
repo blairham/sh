@@ -16,10 +16,11 @@ import (
 // says so at the expansion. langinfo.go records why that trade is the right
 // way round, and the cases below assert it as the whole line it is.
 //
-// One wording differs from zsh and is left differing: a write to a key is
-// `read-only variable: langinfo` here and `read-only variable: CODESET` there
-// — zsh names the key for this parameter and the parameter for `$terminfo`,
-// and naming the parameter is what every produced table in this dialect does.
+// The wording of the write refusal used to differ and no longer does: a write
+// to a key is `read-only variable: CODESET` in both now. zsh names the key for
+// this parameter and the parameter for `$terminfo`, and that is not a wording
+// choice — it is the freeze being on the elements here and on the parameter
+// there. See TestLangInfoIsFrozenByKeyAndNotReadonly below (#4996).
 //
 // The locale is set by a plain shell assignment in the snippet rather than
 // through the process's environment, so nothing here reads or writes the
@@ -240,25 +241,135 @@ func TestLangInfoIsAViewAndNotASnapshot(t *testing.T) {
 	}
 }
 
-// TestLangInfoIsReadonlyAndHidden: zsh refuses `langinfo[CODESET]=x` and
-// `unset langinfo` alike, and `typeset -p langinfo` writes the bare name with
-// no values.
+// TestLangInfoIsFrozenByKeyAndNotReadonly: the whole of what `$langinfo`
+// refuses and what it takes, which is a third thing beside readonly and
+// writable.
 //
-// The second half is not decoration. Readonly is an attribute, an attribute
-// puts the name in the tables a listing walks, and a listing would otherwise
-// write fifty-five assignments somebody could source back — at which point the
-// view has become a stored table that never says it stopped tracking.
-func TestLangInfoIsReadonlyAndHidden(t *testing.T) {
+// This test used to be `TestLangInfoIsReadonlyAndHidden` and asserted three
+// rows, all three of them this shell's own behavior rather than the
+// reference's: the refusal naming the parameter, `unset langinfo` refused at
+// all, and `typeset -Ar`. #4996 was filed against the third — the `r` — on the
+// strength of a note in moduleparam.go, and re-measuring the parameter turned
+// up the other two beside it.
+//
+// Measured 2026-09-28 on `/opt/homebrew/bin/zsh`, zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `go version -m` says *not a Go executable* for
+// it; `-f` from a script file under `env -i PATH=/usr/bin:/bin TERM=dumb` with
+// a scratch `HOME`, one shell per row. The element rows are **fatal** there —
+// the line after them does not run — which is why each of them ends in a
+// `print` that must not appear.
+//
+// Two shapes are deliberately not rows, because the reference has no answer to
+// copy: `langinfo+=(B 2)` aborts at status 134 there and `langinfo=()`
+// segfaults at 139, both reproduced twice under this same harness. A crash is
+// not a behavior, so this shell gives them the table-level answer as the
+// nearest defined neighbor and the choice is recorded rather than graded.
+func TestLangInfoIsFrozenByKeyAndNotReadonly(t *testing.T) {
 	for _, c := range []struct{ name, src, want string }{
-		{"an element assignment", "langinfo[CODESET]=x", "zsh:1: read-only variable: langinfo\n"},
-		{"unset", "unset langinfo", "zsh:1: read-only variable: langinfo\n"},
-		{"the listing has no values", "typeset -p langinfo", "typeset -Ar langinfo\n"},
+		// The elements are frozen, and the refusal names the **key**.
+		{
+			"an element assignment", "langinfo[CODESET]=x; print -r -- unreached",
+			"zsh:1: read-only variable: CODESET\n",
+		},
+		{
+			"an element unset", "unset 'langinfo[CODESET]'; print -r -- unreached",
+			"zsh:1: read-only variable: CODESET\n",
+		},
+		// The parameter is not, so the three writes that aim at the table
+		// as a whole are taken, do nothing, and say nothing.
+		{
+			"a whole-table assignment", `langinfo=(A 1); print -r -- "st=$? n=${#langinfo} c=$langinfo[CODESET]"`,
+			"st=0 n=55 c=US-ASCII\n",
+		},
+		{
+			"a keyed whole-table assignment", `langinfo=([A]=1); print -r -- "st=$? n=${#langinfo} c=$langinfo[CODESET]"`,
+			"st=0 n=55 c=US-ASCII\n",
+		},
+		{
+			"unset", `unset langinfo; print -r -- "st=$? plus=${+langinfo} c=$langinfo[CODESET]"`,
+			"st=0 plus=1 c=US-ASCII\n",
+		},
+		// And the parameter says so: no `r`, and no values either, because
+		// hiding is its own mark and never rode on the freeze.
+		{"the listing has no values and no r", "typeset -p langinfo", "typeset -A langinfo\n"},
+		// The row that keeps "no readonly attribute" from meaning "cannot
+		// have one". A script's own `-r` lands on the parameter, and *then*
+		// the refusal names the parameter rather than the key — the two
+		// freezes compose, and they are on different things.
+		{
+			"a script may freeze it itself", `typeset -r langinfo` + "\n" +
+				`print -r -- "t=${(t)langinfo}"` + "\n" +
+				`langinfo[CODESET]=x; print -r -- unreached`,
+			"t=association-readonly-hide-hideval-special\nzsh:3: read-only variable: langinfo\n",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := langInfo(t, c.src); got != c.want {
 				t.Errorf("output = %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// The freeze comes off under a hidden shadow, with the producer and not
+// separately from it — the row the frozen-by-key path got wrong first.
+//
+// `$langinfo` carries `hide`, so a plain `local langinfo` is already a hidden
+// shadow: the producer is suspended for the scope and the name inside it is an
+// ordinary parameter a script declared, with nothing of the shell's left to
+// refuse. Asking the mark alone rather than the mark *and* the producer made
+// `local -A langinfo; langinfo[A]=1` `read-only variable: A`, which is the
+// same shape #2586 had to fix for `local EPOCHSECONDS=5`.
+//
+// The third row is the one that makes this a pair rather than a thaw. `local
+// +h` asks for the second view back, the producer returns, and the freeze
+// returns with it — and it is the row where this shell was *already* wrong
+// before #4996 in the other direction, refusing by the parameter's name where
+// the reference names the key. Measured 2026-09-28 on zsh 5.9.2 under the
+// harness above.
+func TestAHiddenShadowLiftsTheFreezeAndPlusHPutsItBack(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"a shadow takes an element write",
+			`f() { local -A langinfo; langinfo[A]=1; print -r -- "in=[$langinfo[A]]"; }` + "\n" +
+				`f` + "\n" + `print -r -- "out=[$langinfo[CODESET]] n=${#langinfo}"`,
+			"in=[1]\nout=[US-ASCII] n=55\n",
+		},
+		{
+			"and the shadow is an ordinary parameter",
+			`f() { local langinfo; print -r -- "in=[$langinfo] t=[${(t)langinfo}]"; }` + "\n" + `f`,
+			"in=[] t=[scalar-local]\n",
+		},
+		{
+			"+h puts the producer and the freeze back",
+			`f() { local +h langinfo; langinfo[A]=1; print -r -- unreached; }` + "\n" + `f`,
+			"f: read-only variable: A\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := langInfo(t, c.src); got != c.want {
+				t.Errorf("output = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// The control for every row above, and the reason `$langinfo` needs a state of
+// its own rather than "a produced table this shell stopped freezing".
+//
+// `$terminfo` is the same shape from the outside — an association a module
+// provides, holding a table about the machine the shell is on — and it is in
+// the *other* state: `association-readonly-hide-hideval-special` there, with
+// the refusal naming the parameter. Measured in the same run on zsh 5.9.2.
+// Without this, dropping the freeze from every produced table would pass the
+// grid above.
+func TestTerminfoIsStillReadonlyAndRefusesByTheParametersName(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		`zmodload zsh/terminfo; print -r -- "${(t)terminfo}"`+"\n"+
+			`terminfo[cols]=x; print -r -- unreached`)
+	want := "association-readonly-hide-hideval-special\nzsh:2: read-only variable: terminfo\n"
+	if out != want || st != 1 {
+		t.Errorf("output = %q (status %d), want %q at 1", out, st, want)
 	}
 }
 

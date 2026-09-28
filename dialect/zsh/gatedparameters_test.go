@@ -29,7 +29,11 @@ import (
 // only after a load agrees with a shell that gates nothing.
 func TestAModuleParameterDoesNotExistUntilItsModuleLoads(t *testing.T) {
 	for _, tc := range []struct{ name, module, typeWord, listed string }{
-		{"langinfo", "zsh/langinfo", "association-readonly-hide-hideval-special", "typeset -Ar langinfo"},
+		// Not readonly, where every other association a module brings here
+		// is: the freeze on `$langinfo` is on its elements and the
+		// parameter carries no attribute at all. Re-measured 2026-09-28
+		// and #4996 moved the row; see langinfo.go for the grid.
+		{"langinfo", "zsh/langinfo", "association-hide-hideval-special", "typeset -A langinfo"},
 		{"mapfile", "zsh/mapfile", "association-hide-hideval-special", "typeset -A mapfile"},
 		{"sysparams", "zsh/system", "association-readonly-hide-hideval-special", "typeset -Ar sysparams"},
 		{"errnos", "zsh/system", "array-readonly-hide-hideval-special", "typeset -ar errnos"},

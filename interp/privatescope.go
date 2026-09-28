@@ -285,7 +285,8 @@ func (r *Runner) unsealPrivateNames(sc *scope) {
 	for name, sn := range sc.privateSealed {
 		now := r.captureBinding(name)
 		writeBindingToScope(sn.holder, name, now)
-		if !exposedNothing[name] && bindingIsAbsent(now) {
+		if !exposedNothing[name] && bindingIsAbsent(now) &&
+			r.privateDisplacedTheShellsOwn(sn.holder, name) {
 			// The frame **unset** the name the seal exposed, and that takes
 			// the private with it rather than leaving it standing underneath.
 			// Measured 2026-09-27 on zsh 5.9.2:
@@ -314,11 +315,56 @@ func (r *Runner) unsealPrivateNames(sc *scope) {
 			// control, where the private is dropped and `in-f=[]` comes back
 			// for a line that measures `in-f=[1]`. A rule written as "the
 			// name is absent now" alone loses it the same way.
+			//
+			// **And conditioned on what the private displaced**, which the
+			// measurement above could not see because it was taken at the
+			// script's own level — where the shell's own name and the
+			// innermost enclosing binding are the same thing. One frame out
+			// they part, and so do the two readings (#5093). See
+			// Runner.privateDisplacedTheShellsOwn.
 			continue
 		}
 		r.installBinding(name, sn.held)
 	}
 	sc.privateSealed = nil
+}
+
+// privateDisplacedTheShellsOwn reports whether the private declaration held
+// in this scope shadowed the **shell's own** name rather than a local of a
+// call below it.
+//
+// It is what decides whether an `unset` in a callee takes the private with
+// it. The rule above was measured at the script's own level, where the two
+// are the same thing and nothing could tell them apart; one frame out they
+// part, and the reference keeps the private. Measured 2026-09-28 on zsh
+// 5.9.2, with `(){ private v=inner; (){ unset v }; print "[$v]" }` as the
+// body and only what stands over it moving:
+//
+//	typeset v=top at the script's level, body one frame in 	`[]`      	taken
+//	typeset v=top inside the enclosing function            	`[inner]` 	kept
+//	typeset v=top at the script's level, body there too    	`[]`      	taken
+//	no v at all, either depth                              	`[inner]` 	kept
+//
+// **The first and second rows are the whole of it, and they are the same
+// depth.** A rule written as "one frame in keeps it" passes the second and
+// fails the first, which is why the depth reading is not the one here: what
+// moves the answer is whether the name the private pushed aside belonged to
+// the shell or to a call.
+//
+// Walked from the outside in rather than asked of the holder alone, because
+// the question is about everything *below* the declaration: the first scope
+// that shadowed this name owns what the private displaced, and reaching the
+// holder without finding one means the shell did.
+func (r *Runner) privateDisplacedTheShellsOwn(holder *scope, name string) bool {
+	for _, sc := range r.scopes {
+		if sc == holder {
+			return true
+		}
+		if sc.shadows(name) {
+			return false
+		}
+	}
+	return true
 }
 
 // privateExportedEnvironment is the entries a `private -x` name puts into a

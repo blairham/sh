@@ -9549,9 +9549,29 @@ func (r *Runner) environ() []string {
 		}
 		if _, own := r.Vars[k]; own {
 			// Assigned since it was inherited, and the assignment supersedes
-			// what came in rather than joining it below. Handing a child the
-			// same name twice is not a tidiness question: the stale entry is
-			// the *first* of the two, and execve leaves it that way.
+			// what came in rather than joining it below.
+			//
+			// **Which of two entries for one name a child sees depends on
+			// who hands them over, and this line used to say the wrong one.**
+			// It said the first of the two survives, "and execve leaves it
+			// that way". Measured 2026-09-28, the same two entries by both
+			// routes:
+			//
+			//	syscall.Exec directly 	the child's `env` lists **both**
+			//	os/exec, which is this 	the child's `env` lists `v=last`
+			//
+			// The raw syscall passes the list through and a reader of it —
+			// `getenv` — answers the first; `os/exec` deduplicates before
+			// the call and keeps the **last**. This shell goes through
+			// os/exec, so a duplicate here would have handed a child the
+			// *newer* value, not the stale one the sentence warned about.
+			//
+			// The line below is right either way and is why the question
+			// stays academic: writing one entry per name is correct under
+			// both readings, and it is the only thing anything here depends
+			// on. The sentence is corrected rather than deleted because a
+			// wrong one about a thing nothing depends on is exactly how a
+			// false justification survives — see #5078.
 			continue
 		}
 		if live, bound := r.producedOptionList(k); bound {

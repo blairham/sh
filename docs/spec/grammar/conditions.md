@@ -919,6 +919,43 @@ arrives with no quoting for a backslash to be taken off.
 A **double-quoted** backslash is a third question again, with a different
 answer in each of the four columns, and neither axis here is asked about one.
 
+### The engine's classes and quote removal are two questions
+
+`\d` is a digit class in ksh93's own regular expression library and in
+BusyBox's, and the letter in the bash columns and in zsh. That is the
+**engine's** question. Whether a written backslash survives to reach the
+engine is quote removal's, and it is the section above.
+
+A column can answer the two differently, and one does. Measured 2026-09-28
+against BusyBox **v1.37.0**, the `/bin/ash` of
+`alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`
+on `linux/arm64`:
+
+| probe | BusyBox 1.37.0 |
+| --- | --- |
+| `[[ za1b =~ za[0-9]b ]]` *(control)* | yes |
+| `[[ zadb =~ za[0-9]b ]]` *(control)* | no |
+| `[[ za1b =~ za\db ]]` *(written)* | **no** |
+| `[[ zadb =~ za\db ]]` *(written)* | **yes** |
+| `r='za\db'; [[ za1b =~ $r ]]` | **yes** |
+| `r='za\db'; [[ zadb =~ $r ]]` | **no** |
+| `r='za\Db'; [[ zaXb =~ $r ]]` | yes |
+| `r='za\wb'; [[ za1b =~ $r ]]` *(control)* | yes |
+
+The two spellings give opposite answers: the engine reads the class, and a
+*written* backslash never reaches it because quote removal takes it first.
+Every other column agrees with itself across the two spellings, which is why
+the split was invisible until this one was measured.
+
+The last control is the sharp one. `\w` already reaches the engine in every
+dialect, and this column already agreed on it — so the engine here is not
+short of classes, and `d` and `D` were the two being withheld from it.
+
+So `RegexDigitClassEscape` is the engine's question alone — BusyBox and
+ksh93 yes, the bash columns and zsh no, dash vacuous — and a **written**
+`\d` needs *both* it and `RegexKeepsAWrittenBackslash`, which is why ksh93
+reads the class in both spellings and BusyBox only in one.
+
 ### And a double-quoted backslash is a third question again
 
 The section above is a **backslash-quoted** span. A backslash written inside

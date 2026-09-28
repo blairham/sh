@@ -691,19 +691,17 @@ func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitCl
 // regexKeepsWrittenBackslash reports whether this span of a `=~` operand is a
 // backslash the **engine** reads rather than a quote the shell takes.
 //
-// Two axes and one quoting. The wide one is
-// Semantics.RegexKeepsAWrittenBackslash — *a written backslash belongs to the
-// engine* — and where it is answered the character behind it does not matter.
-// The narrow one is Semantics.RegexDigitClassEscape, which is about `\d` and
-// `\D` alone and is still asked where the wide one says no: `\d` is a digit
-// class in ksh93's own regular expression library and the letter `d` in every
-// other column, and that fact is true of the variable spelling too, where no
-// quote removal happens at all.
+// **One axis, and it is Semantics.RegexKeepsAWrittenBackslash.** Whether a
+// written backslash survives quote removal is this function's whole question,
+// and the character behind it does not matter.
 //
-// Asking the wide one first is what keeps the narrow one narrow. A column
-// that hands every pair through has already answered for `d` and `D`, so
-// reaching the second question would be asking a dialect about a letter when
-// it has just said the letter does not decide.
+// Semantics.RegexDigitClassEscape used to be asked here too, for `d` and `D`
+// alone, and is not any more: it is the *engine's* question — whether `\d`
+// names a digit class once the engine has it — and a column can answer the
+// two differently. BusyBox v1.37.0 is that column: its engine reads the
+// class and its quote removal still eats a written backslash, so it answers
+// that axis Yes and this one No, and asking it here would have made its
+// written `za\db` a class it is not (#4991).
 //
 // **Backslash-quoted and nothing else**, which is measured rather than tidy:
 // a double-quoted `"za\db"` is a different question with a different answer
@@ -717,10 +715,7 @@ func (r *Runner) regexKeepsWrittenBackslash(s syntax.Span, part string) bool {
 	if s.Kind != syntax.Literal || s.Quoting != syntax.BackslashQuoted {
 		return false
 	}
-	if r.regexKeepsEveryWrittenBackslash() {
-		return true
-	}
-	return (part == "d" || part == "D") && r.regexReadsDigitClass()
+	return r.regexKeepsEveryWrittenBackslash()
 }
 
 // regexDoubleQuotedBackslashStands reports whether a backslash written inside

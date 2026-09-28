@@ -406,6 +406,63 @@ one already-cut word's internal division belongs to the run. Recorded by
 `core/a-quoted-brace-in-a-word-operand-does-not-move-a-statement-boundary`
 (#2604).
 
+### And whether a `{ … }` inside the word is balanced there
+
+The same scan, one construct over: a `{` written **inside** a quoted
+expansion's word, and whether the expansion ends at the `}` that balances it
+or at the first one it meets.
+
+Unquoted, two columns balance it and three stop at the first `}`, which is
+`Dialect.BareBraceNestsInExpansion` and is recorded there. Inside double
+quotes the split is different and narrower, and it is **the kind of the
+operand** again rather than the shell.
+
+Measured 2026-09-27 from `-c` under `env -i PATH=/usr/bin:/bin` on `/bin/ksh`
+`Version AJM 93u+ 2012-08-01`, `/opt/homebrew/bin/bash` 5.3.20, `/bin/bash`
+3.2.57, `/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash` — `go version -m` says
+*not a Go executable* for each:
+
+| probe | ksh93u+ | the other four |
+| --- | --- | --- |
+| `s=x{y}z; echo "[${s#x{y}}]"` | **`[z]`** | `[}z}]` |
+| `s=x{y}z; echo "[${s##x{y}}]"` | **`[z]`** | `[}z}]` |
+| `s=a{b}c; echo "[${s%{b}c}]"` | **`[a]`** | `[a{b}cc}]` |
+| `s=a{b}c; echo "[${s%%{b}c}]"` | **`[a]`** | `[a{b}cc}]` |
+| `s=x{y}z; echo "[${s/{y}/-}]"` | **`[x-z]`** | `[x}z/-}]` — dash has no `/` |
+| `u=; echo "[${u:-x{y}z}]"` | `[x{yz}]` | `[x{yz}]` |
+| `u=; echo "[${u-x{y}z}]"` | `[z}]` | `[z}]` |
+| `u=; echo "[${u:+x{y}z}]"` | `[z}]` | `[z}]` |
+
+The last three rows are what make it the operand kind: the column that
+balances in the five above them stops at the first `}` in all three, exactly
+as the other four do. A **word** operand inside quotes is unanimous across
+the panel.
+
+**The `[}z}]` shape is the tell** and is worth reading once: the expansion
+stopped at the brace's `}`, the `z` behind it came out of the expansion as
+text, and the word's own `}` was then written as another character.
+
+Two controls say it is the brace and nothing broader:
+
+| probe | ksh93u+ | the other four |
+| --- | --- | --- |
+| `s=aXb; echo "[${s#a[X]}]"` | `[b]` | `[b]` |
+| `s=aXb; echo "[${s#{a,q}X}]"` | **`[aXb]`** | `[aXbX}]` |
+
+A **bracket expression** in the same position is balanced in every column
+already, so a pattern operand is not simply left unscanned. And the second
+row is not brace *expansion* arriving: that reaches inside `${…}` in no
+column, so `{a,q}` there is literal pattern text matching nothing — and the
+balancing column still balances it. Which is the same thing
+`BareBraceNestsInExpansion`'s own panel says about the unquoted reading, by
+the same argument: `${u:-a{b}c}` has no comma in it and splits the columns
+identically.
+
+`Dialect.BareBraceNestsInAQuotedPatternOperand` is the flag, and it is
+separate from the unquoted one rather than a widening of it: unquoted, a
+column that nests does so for *every* operand, and inside quotes only for a
+pattern.
+
 ### A second reading that runs off the end blames the brace
 
 The re-read can want a division that does not exist: a word the parse

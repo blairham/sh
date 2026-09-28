@@ -4344,12 +4344,61 @@ type Dialect struct {
 	// word, and a core that swallowed it would be reading a word nobody
 	// wrote.
 	//
-	// Only unquoted. In double quotes all seven stop at the first `}` and the
-	// flag is not consulted — see the note in scanBraces, and #1586, which
-	// settled that half. The `${ cmd;}` command form keeps its own rule for
-	// a third reason again: its body is a program, so a `{ … }` block
-	// written in one has to balance the way the program's braces do.
+	// Only unquoted. In double quotes a **word** operand stops at the first
+	// `}` in every column, which is what #1586 settled; a *pattern* operand
+	// does not, in one column, and that is the flag below rather than this
+	// one. This note used to say all seven stopped there and it was too
+	// wide by the six rows [BareBraceNestsInAQuotedPatternOperand] carries.
+	//
+	// The `${ cmd;}` command form keeps its own rule for a third reason
+	// again: its body is a program, so a `{ … }` block written in one has to
+	// balance the way the program's braces do.
 	BareBraceNestsInExpansion bool
+
+	// BareBraceNestsInAQuotedPatternOperand is the same nesting inside
+	// **double quotes**, and only in an operand that is a pattern — the
+	// operand of `#`, `##`, `%`, `%%` or `/`, which is what
+	// [Lexer.braceOperandIsAPattern] answers.
+	//
+	// Separate from the field above rather than a widening of it, because
+	// the two are not the same rule seen through a quote: unquoted, the
+	// column that nests does so for *every* operand, and inside quotes only
+	// for a pattern. A single flag would have to be read with the operand
+	// kind attached, which is the shape [QuoteProtectsTheClosingBrace]
+	// already has for a different question about the same two operands.
+	//
+	// Measured 2026-09-27 from `-c` under `env -i PATH=/usr/bin:/bin` on
+	// `/bin/ksh` `Version AJM 93u+ 2012-08-01`, `/opt/homebrew/bin/bash`
+	// 5.3.20, `/bin/bash` 3.2.57, `/opt/homebrew/bin/zsh` 5.9.2 and
+	// `/bin/dash` — `go version -m` says *not a Go executable* for each:
+	//
+	//	probe                        ksh93u+  the other four
+	//	s=x{y}z; "[${s#x{y}}]"       [z]      [}z}]
+	//	s=x{y}z; "[${s##x{y}}]"      [z]      [}z}]
+	//	s=a{b}c; "[${s%{b}c}]"       [a]      [a{b}cc}]
+	//	s=a{b}c; "[${s%%{b}c}]"      [a]      [a{b}cc}]
+	//	s=x{y}z; "[${s/{y}/-}]"      [x-z]    [x}z/-}]  — dash has no `/`
+	//	u=;      "[${u:-x{y}z}]"     [x{yz}]  [x{yz}]   — a *word* operand
+	//	u=;      "[${u-x{y}z}]"      [z}]     [z}]
+	//	u=;      "[${u:+x{y}z}]"     [z}]     [z}]
+	//
+	// The last three rows are what make this the operand kind rather than
+	// the shell: the same column that balances in the five above them stops
+	// at the first `}` in all three, exactly as the other four do.
+	//
+	// **The `[}z}]` shape is the tell** and it is worth reading once: the
+	// expansion stopped at the brace's `}`, the `z` behind it came out as
+	// text, and the word's own `}` was then written as another character.
+	//
+	// Two controls say it is the brace and nothing broader. A bracket
+	// expression in the same position is balanced in every column already —
+	// `s=aXb; "[${s#a[X]}]"` is `[b]` for all five — so a pattern operand is
+	// not simply unscanned; and `s=aXb; "[${s#{a,q}X}]"` is `[aXb]` in the
+	// column that balances against `[aXbX}]` in the rest, although brace
+	// *expansion* reaches inside `${…}` in no column at all. So this is the
+	// scan and not what a group would have produced, which is the same thing
+	// the field above says about its own panel.
+	BareBraceNestsInAQuotedPatternOperand bool
 
 	// QuoteProtectsTheClosingBrace says which of a `${ … }` operand's kinds a
 	// single quote written inside **double quotes** protects the closing brace

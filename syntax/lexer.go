@@ -5899,7 +5899,18 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			// that opens a level there is only ever the one a `$` brought
 			// with it.
 			//
-			// Quoting is half of the difference and it is measured.
+			// Quoting is half of the difference and it is measured — but it
+			// is not the *whole* of it, and the paragraph below used to say
+			// it was. One column balances inside double quotes too, in an
+			// operand that is a **pattern**: `s=x{y}z; echo "[${s#x{y}}]"`
+			// is `[z]` on ksh93u+ and `[}z}]` in the four others. That is
+			// Dialect.BareBraceNestsInAQuotedPatternOperand, asked with the
+			// same operand kind Lexer.quoteProtectsTheBrace reads for a
+			// different question about the same two operands (#4936).
+			//
+			// A *word* operand inside quotes stops at the first `}` in every
+			// column, including that one, which is the half #1586 settled
+			// and is what the rows below are about.
 			// `printf "[%s]" ${u:-{a,q}.z}` is `[a.z][q.z]` in zsh 5.9.2 —
 			// two fields, so the operand ran to `.z` and the group was
 			// expanded — and the same line in quotes is the single field
@@ -5928,7 +5939,9 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 			// makes `${ echo {a,b};}` run off the end of the input in the
 			// column that has it, since the `}` of the group is mid-word and
 			// closes nothing.
-			nests := brace || (q != DoubleQuoted && l.dialect.BareBraceNestsInExpansion)
+			nests := brace || (q != DoubleQuoted && l.dialect.BareBraceNestsInExpansion) ||
+				(q == DoubleQuoted && l.dialect.BareBraceNestsInAQuotedPatternOperand &&
+					l.braceOperandIsAPattern(l.src[bodies[len(bodies)-1]:l.off]))
 			if tokenStart[len(tokenStart)-1] {
 				nests = l.atBraceTokenStart(body, wordParen)
 			}

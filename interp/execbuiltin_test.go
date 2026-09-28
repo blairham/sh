@@ -570,3 +570,115 @@ func slicesContain(all []string, want string) bool {
 	}
 	return false
 }
+
+// TestExecBundlesItsOptionLetters: the letters bundle, and `a` takes **the
+// rest of its own word** when there is one and the next word otherwise.
+//
+// This read one letter per word and required `-a`'s value to be a word of its
+// own, so every bundled spelling was `bad option` at 1. See
+// Runner.execOptions for the measured grid — the whole panel bundles, so this
+// is a shape rather than a dialect's answer (#5031).
+func TestExecBundlesItsOptionLetters(t *testing.T) {
+	dir := t.TempDir()
+	execArgv := func(t *testing.T, src string, prefixes Answer) (argv []string, out string, st int) {
+		t.Helper()
+		out, st, _ = execRun(t, dir, src, func(r *Runner) {
+			r.Semantics.ExecTakesTheLoginLetter = Yes
+			r.Semantics.ExecTakesTheEmptyEnvironmentLetter = Yes
+			r.Semantics.ExecLoginPrefixesTheGivenName = prefixes
+			r.ReplaceProcess = func(_ string, a, _ []string, _ []*os.File) error {
+				argv = a
+				return os.ErrPermission
+			}
+		})
+		return argv, out, st
+	}
+	for _, tc := range []struct{ name, src, want string }{
+		// The controls: each letter as its own word already worked, which
+		// is what says the letters themselves are right and only the shape
+		// was wrong.
+		{"a name of its own", `exec -a zz /bin/echo hi`, "zz"},
+		{"with the clearing letter in front", `exec -c -a zz /bin/echo hi`, "zz"},
+		{"and with the login letter in front", `exec -l -a zz /bin/echo hi`, "zz"},
+		// Attached, bundled, and both.
+		{"the value attached to its letter", `exec -azz /bin/echo hi`, "zz"},
+		{"the letters bundled", `exec -la zz /bin/echo hi`, "zz"},
+		{"bundled with the value attached", `exec -lazz /bin/echo hi`, "zz"},
+		{"a bundle of the other two", `exec -lc /bin/echo hi`, "-/bin/echo"},
+		{"repeated letters are still letters", `exec -ll /bin/echo hi`, "-/bin/echo"},
+		// A value that is itself a dash-word, either way it arrives.
+		{"an attached value that looks like an option", `exec -a-x /bin/echo hi`, "-x"},
+		{"and a separate one", `exec -a -x /bin/echo hi`, "-x"},
+		// An empty name is a name: the letter was written, which an empty
+		// string cannot say for itself.
+		{"an empty name is still a name", `exec -a "" /bin/echo hi`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			argv, out, st := execArgv(t, tc.src, No)
+			if len(argv) == 0 {
+				t.Fatalf("%s: nothing was replaced: %q status %d", tc.src, out, st)
+			}
+			if argv[0] != tc.want {
+				t.Errorf("%s: argv[0] = %q, want %q", tc.src, argv[0], tc.want)
+			}
+		})
+	}
+
+	// The discriminating row, and the reason this is one rule rather than
+	// two. `-al zz` is **not** a usage error: `a` takes the rest of its
+	// word, which is the single letter `l`, so argv[0] becomes `l` and the
+	// *next* word is the command. A reading where `-a` merely allowed an
+	// attached value would make `-al` a bundle of two letters and would run
+	// `/bin/echo`; a reading where the letters simply bundled would make
+	// `-al` legal and leave `-a` wanting a word.
+	t.Run("a takes the rest of its word even when it spells a letter", func(t *testing.T) {
+		argv, _, _ := execArgv(t, `exec -al /bin/echo hi`, No)
+		if len(argv) == 0 || argv[0] != "l" {
+			t.Fatalf("argv = %q, want the name `l` and `/bin/echo` as the command", argv)
+		}
+		if len(argv) < 2 || argv[1] != "hi" {
+			t.Errorf("argv = %q, want the word behind the value to be the command", argv)
+		}
+	})
+	// And from the other side: the `z` after `la` is the value, not a third
+	// letter.
+	t.Run("and the trailing letter of a bundle is the value", func(t *testing.T) {
+		argv, _, _ := execArgv(t, `exec -laz /bin/echo hi`, No)
+		if len(argv) == 0 || argv[0] != "z" {
+			t.Errorf("argv = %q, want the name `z`", argv)
+		}
+	})
+
+	// A letter the bundle does not have is named as the **letter**, not as
+	// the word it stood in: bash writes `exec: -x: invalid option` for
+	// `exec -lx`, and `exec: --: invalid option` for `exec -l-a`.
+	for _, tc := range []struct{ src, want string }{
+		{`exec -lx /bin/echo hi`, "-x"},
+		{`exec -xl /bin/echo hi`, "-x"},
+		{`exec -l-a zz /bin/echo hi`, "--"},
+		{`exec --a zz /bin/echo hi`, "--"},
+	} {
+		argv, out, st := execArgv(t, tc.src, No)
+		if argv != nil {
+			t.Errorf("%s: replaced the process with %q", tc.src, argv)
+		}
+		if st == 0 || !strings.Contains(out, tc.want+": invalid option") {
+			t.Errorf("%s: %q status %d, want %q named as the bad option", tc.src, out, st, tc.want)
+		}
+	}
+
+	// `--` still ends the options, and is still the only word that does.
+	// The pair: the letter in front of it is read, and the identical letter
+	// behind it is the command's name.
+	argv, _, _ := execArgv(t, `exec -l -- /bin/echo hi`, No)
+	if len(argv) == 0 || argv[0] != "-/bin/echo" {
+		t.Errorf("argv = %q, want the letter in front of the separator read", argv)
+	}
+	argv, out, st := execArgv(t, `exec -- -l /bin/echo hi`, No)
+	if argv != nil {
+		t.Errorf("behind the separator: replaced the process with %q", argv)
+	}
+	if st == 0 || !strings.Contains(out, "-l") {
+		t.Errorf("behind the separator: %q status %d, want `-l` looked up as a command", out, st)
+	}
+}

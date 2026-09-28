@@ -3087,6 +3087,12 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecFailureOnAPathnameRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	// And the words behind it are an ordinary command word list here, so a
+	// builtin, a function or a precommand modifier standing in front of
+	// either is reached rather than looked for on PATH: `exec :` is silent
+	// and ends the shell, and `exec builtin echo hi` writes `hi`. The other
+	// four columns answer both with `exec: …: not found` (#5047).
+	s.ExecReachesTheShellsOwnCommands = interp.Yes
 	// Both letters, and `-a` wins over `-l` in either order.
 	s.ExecTakesTheLoginLetter = interp.Yes
 	s.ExecTakesTheEmptyEnvironmentLetter = interp.Yes

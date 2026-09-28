@@ -93,6 +93,8 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 		return r.refuseOption("command", a, "vp")
 	}
 	if len(args) == 0 {
+		// The same as `builtin` with nothing behind it: nothing ran.
+		r.ranNoCommand = true
 		return 0
 	}
 	if defaultPath && r.restricted {
@@ -212,6 +214,9 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 		}
 	}
 	if len(args) == 0 {
+		// A modifier with nothing behind it runs nothing, which the `exec`
+		// road has to be able to see — see Runner.execThroughThisShell.
+		r.ranNoCommand = true
 		return 0
 	}
 	fn, ok := r.lookupBuiltin(args[0])
@@ -228,6 +233,11 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 		// would be a line nothing could ever observe.
 		r.inBuiltin = ""
 		r.diagf("%s\n", Wording(r.diag().NotABuiltin, "builtin: %s: not a shell builtin", args[0]))
+		// Nothing ran, which one caller has to be able to tell from a
+		// command that ran and failed: an `exec` in front of this leaves the
+		// shell standing here and ends it everywhere else. See
+		// Runner.execThroughThisShell.
+		r.ranNoCommand = true
 		return 1
 	}
 	// And the *name* is the one that ran, not this wrapper's. The dialect

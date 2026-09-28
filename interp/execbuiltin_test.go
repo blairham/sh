@@ -682,3 +682,59 @@ func TestExecBundlesItsOptionLetters(t *testing.T) {
 		t.Errorf("behind the separator: %q status %d, want `-l` looked up as a command", out, st)
 	}
 }
+
+// TestExecReachesTheShellsOwnCommands: the words behind `exec` are an
+// **ordinary command word list** in the dialect that reads them that way — a
+// function, a builtin, or a precommand modifier standing in front of either —
+// and the shell ends with that command's status.
+//
+// The rows that discriminate are the builtins with **no external of the same
+// name**. `exec echo hi` prints `hi` under either reading, because `/bin/echo`
+// exists and the replacement road finds it; so do `exec true` and `exec
+// false`. A grid made of those says nothing at all (#5047).
+func TestExecReachesTheShellsOwnCommands(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		ended           bool
+	}{
+		{"a builtin with no external twin", `exec :; echo after`, "", true},
+		{"and one that writes", `exec eval 'echo E'; echo after`, "E", true},
+		{"a modifier in front of a builtin", `exec builtin echo hi; echo after`, "hi\n", true},
+		{"and a doubled one", `exec builtin builtin echo hi; echo after`, "hi\n", true},
+		{"exec in front of itself", `exec exec echo hi; echo after`, "hi\n", true},
+		{"a function, which is reached first", `f(){ echo F; }; exec f; echo after`, "F\n", true},
+		// The shell ends whatever the command did, which is the half that
+		// is measured rather than assumed.
+		{"the shell ends after a command that failed", `exec false; echo after`, "", true},
+		// …and the one row that leaves it standing: a prefix builtin that
+		// reached nothing, so nothing ran.
+		{"a modifier that reached nothing leaves it standing", `exec builtin; echo after`, "after\n", false},
+		{"including one given a name it has not got", `exec builtin nosuchbuiltin; echo after`, "after\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, func(r *Runner) {
+				r.Semantics.ExecReachesTheShellsOwnCommands = Yes
+				r.SetPrecommand("builtin", PrecommandTransparent)
+				r.SetPrecommand("exec", PrecommandRedirectionForm)
+			})
+			if tc.ended && strings.Contains(out, "after") {
+				t.Errorf("%s = %q, want the shell to have ended", tc.src, out)
+			}
+			if !strings.Contains(out, strings.TrimSuffix(tc.want, "\n")) {
+				t.Errorf("%s = %q, want %q in it", tc.src, out, tc.want)
+			}
+		})
+	}
+
+	// The control that makes the rest readable: with the dialect answering
+	// no, every one of those words is a name to look up on PATH, which is
+	// what the other four columns do.
+	for _, src := range []string{`exec :; echo after`, `exec builtin echo hi; echo after`} {
+		out, _ := run(t, src, func(r *Runner) {
+			r.Semantics.ExecReachesTheShellsOwnCommands = No
+		})
+		if strings.Contains(out, "hi") {
+			t.Errorf("answering no: %s = %q, want the word looked up rather than run", src, out)
+		}
+	}
+}

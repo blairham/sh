@@ -500,6 +500,14 @@ type Runner struct {
 	// other and the prefix is two frames up by then.
 	localUnderCommandPrefix bool
 
+	// ranNoCommand says the builtin that just returned is a *prefix* builtin
+	// that reached nothing — `builtin` with no operand or with a name it has
+	// not got, `command` with no operand, `exec` with none. Read by
+	// Runner.execThroughThisShell and by nothing else: an `exec` in front of
+	// such a word leaves this shell standing, where every other row on that
+	// road ends it.
+	ranNoCommand bool
+
 	// dashPrecommand is the `-` modifier this command was written with: a
 	// dash on the front of an external command's argv[0], and no option scan
 	// for the modifiers standing behind it. See PrecommandDash.

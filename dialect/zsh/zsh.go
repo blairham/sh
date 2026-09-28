@@ -2425,6 +2425,7 @@ func Semantics() interp.Semantics {
 	s.ArithBaseZeroReadsTheDigitsAsWritten = interp.Yes
 	// `$(( 0x ))` is 0 and `$(( 0x+1 ))` is 1, as in bash.
 	s.ArithEmptyRadixDigitsAreZero = interp.Yes
+	s.ArithEmptyBaseDigits = interp.ArithEmptyBaseDigitsZero
 	// The one column that reads part of an over-large numeral and says so,
 	// on stderr, with the script carrying on:
 	// `$(( 10000000000000000000 ))` writes `number truncated after 19

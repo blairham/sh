@@ -208,6 +208,14 @@ func Semantics() interp.Semantics {
 	// nested subshell running a command named `1+1`, since this shell has no
 	// arithmetic command either (#3364).
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// **Not dash's answer, and that is the point.** BusyBox ash has named
+	// bases where dash has none, so the two split on what `8#` comes to:
+	// measured 2026-09-28 in `alpine:3.20`, `$(( 8#7 ))` is 7 and `$(( 8# ))`
+	// is **0** here, where dash refuses the whole construct with
+	// `arithmetic expression: expecting EOF`. Deriving this column from its
+	// neighbor would have left the axis unanswered for a shell that reaches
+	// it every time. See Semantics.ArithEmptyBaseDigits (#5061).
+	s.ArithEmptyBaseDigits = interp.ArithEmptyBaseDigitsZero
 	// The boundary between two elements of an unquoted list is itself a
 	// delimiter of the splitting rule, counting as IFS whitespace — this
 	// shell and dash against the other four. **Measured in the container and

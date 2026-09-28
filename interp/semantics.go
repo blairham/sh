@@ -23625,6 +23625,74 @@ type Semantics struct {
 	// separate row the panel answers differently again (bash 5.3 refuses it
 	// where bash 3.2 answers zero), and is not this axis.
 	ArithEmptyRadixDigitsAreZero Answer
+	// ArithEmptyBaseDigits is what `8#` — a **named base** with no digits
+	// after it — comes to. It is the sibling of
+	// [Semantics.ArithEmptyRadixDigitsAreZero] one spelling over, and it is a
+	// policy rather than an Answer because the panel splits three ways.
+	//
+	// Measured 2026-09-28 from script files under `env -i
+	// PATH=/usr/bin:/bin` with a scratch `HOME` and stdin at `/dev/null`.
+	// References: `/opt/homebrew/bin/zsh` — zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0); `/opt/homebrew/bin/bash` — 5.3.20;
+	// `/bin/bash` — 3.2.57; `/bin/ksh` — `Version AJM 93u+ 2012-08-01`, which
+	// is the panel's own ksh93 lookup. `go version -m` says *not a Go
+	// executable* for each.
+	//
+	//	              8#        16#      8#+1     8#7   0x
+	//	zsh 5.9.2     0         0        1        7     0
+	//	bash 5.3      refused   refused  refused  7     0
+	//	bash 3.2      0         0        1        7     0
+	//	ksh93u+       refused   0        refused  7     refused
+	//	BusyBox ash   0         0        1        7     refused
+	//
+	// **The `0x` column is the control**, and it is what says the table is
+	// measuring what it claims to: it reproduces
+	// ArithEmptyRadixDigitsAreZero's own recorded answers — zero in zsh, bash
+	// 5.3 and bash 3.2, refused in ksh93, BusyBox ash and dash. `8#7` is the
+	// second control — the same spelling with digits in it, which every
+	// column but dash takes — so a reading that had broken named bases
+	// generally would show there and in none of the rows above.
+	//
+	// # ksh93 is not one answer, and deriving it would have got four bases
+	// wrong
+	//
+	//	2# 3# 8# 9#             arithmetic syntax error
+	//	10# 11# 16# 36# 64#     0
+	//
+	// That reads as a digit count until one probe separates the two readings:
+	// `010#` **refuses** while `10#` succeeds. So it is not how the base is
+	// written — ksh93 reads *the base itself* as a C integer constant, in
+	// which `010` is eight and `02` is two, and the rule is one sentence: **a
+	// bare `#` is refused below base ten and is zero at ten or above.**
+	//
+	// An axis written from "ksh93 refuses it, like `0x`" would be wrong for
+	// four of those nine bases, and wrong in the direction that reads as
+	// agreement — `16#` is the spelling anyone reaches for first.
+	//
+	// **The two readings are indistinguishable here, and that is stated
+	// rather than left to be discovered.** Every base that reaches this axis
+	// is two through nine written with one digit, or ten through sixty-four
+	// written with two — a three-character base is not a named base in ksh93
+	// at all (ArithBaseIsAtMostTwoDigits), so `010#` is refused before the
+	// empty digit run is ever asked about. The predicates `base < 10` and
+	// `one digit` therefore agree on the whole reachable domain, and a mutant
+	// swapping one for the other survives every test in the tree. The
+	// formulation kept is the one the reference's own behavior supports;
+	// nothing here can falsify the other, which is the honest standing for
+	// it.
+	//
+	// **ash is measured and not derived from dash**, which is the trap this
+	// row nearly walked into. The two are neighbors on every other question
+	// about arithmetic and they split here: BusyBox ash has named bases and
+	// answers zero, where dash has no named bases at all. Measured in
+	// `alpine:3.20` — one `docker run`, which is the whole cost of not
+	// guessing.
+	//
+	// unpinned dash: the construct does not exist there. `$(( 8#7 ))` is
+	// `arithmetic expression: expecting EOF: " 8#7 "`, so dash has no named
+	// base to ask the question of and an answer here would be a value
+	// nothing could reach. See TestDashHasNoNamedBaseToAskAbout.
+	ArithEmptyBaseDigits ArithEmptyBaseDigitsPolicy
 	// ArithValuesAreCarriedInAFloat keeps every arithmetic value in a
 	// floating-point carrier rather than in the machine word, which ksh93
 	// does and no other column on the panel does.
@@ -30934,6 +31002,40 @@ func (r *Runner) floatHalf() PrintfFloatHalfPolicy {
 		r.unspecified = true
 	}
 	return p
+}
+
+// ArithEmptyBaseDigitsPolicy is what a named base with no digits after it
+// comes to. See [Semantics.ArithEmptyBaseDigits] for the measured table and
+// for the probe that separates ksh93's reading from a digit count.
+type ArithEmptyBaseDigitsPolicy uint8
+
+const (
+	// ArithEmptyBaseDigitsUnspecified is no answer, and is refused like any
+	// other.
+	ArithEmptyBaseDigitsUnspecified ArithEmptyBaseDigitsPolicy = iota
+	// ArithEmptyBaseDigitsZero reads the empty digit run as the value zero,
+	// whatever the base: zsh and bash 3.2.
+	ArithEmptyBaseDigitsZero
+	// ArithEmptyBaseDigitsRefused refuses it, whatever the base: bash 5.3,
+	// which words it `invalid integer constant`.
+	ArithEmptyBaseDigitsRefused
+	// ArithEmptyBaseDigitsZeroAtTenOrAbove is zero when the base is ten or
+	// more and refused below that: ksh93. The name states the whole rule
+	// because the rule is the reading — see the axis's own comment for the
+	// `010#` probe that rules out a digit count.
+	ArithEmptyBaseDigitsZeroAtTenOrAbove
+)
+
+func (p ArithEmptyBaseDigitsPolicy) String() string {
+	switch p {
+	case ArithEmptyBaseDigitsZero:
+		return "zero"
+	case ArithEmptyBaseDigitsRefused:
+		return "refused"
+	case ArithEmptyBaseDigitsZeroAtTenOrAbove:
+		return "zero at ten or above"
+	}
+	return "unspecified"
 }
 
 // PrintfCountAttributePolicy is which parameters a `%n` gives the integer

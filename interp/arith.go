@@ -2990,6 +2990,27 @@ func (r *Runner) parseNum(s string) (int, error) {
 			return 0, arithError{msg: Wording(r.diag().ArithInvalidBase,
 				"invalid base: %[1]s", strconv.Itoa(b)), token: s, badNumeral: true}
 		}
+		if rest == "" {
+			// A named base with nothing after it — `8#`. Three readings on
+			// the panel and one of them is keyed on the base, so this is a
+			// policy rather than a yes-or-no. See
+			// Semantics.ArithEmptyBaseDigits.
+			v, refuse := r.emptyBaseDigits(b)
+			if refuse {
+				// Worded through the dialect, and **not** `complete` — the
+				// flag suppresses the token wrapper, which is what puts
+				// `8# : ` in front of ksh93's sentence and `(error token is
+				// "8#")` behind bash's. The neighboring bad-digit refusal
+				// does not set it either, which is why that one was already
+				// byte-identical in both columns.
+				w := r.diag().ArithEmptyBaseDigits
+				if w == "" {
+					w = r.wordInvalidNumber(s)
+				}
+				return 0, arithError{msg: w, token: s, badNumeral: true}
+			}
+			return v, nil
+		}
 		digits, base = rest, b
 		var bad bool
 		if n, bad = parseBaseDigits(digits, base); bad {
@@ -3146,6 +3167,32 @@ func allDecimalDigits(s string) bool {
 		}
 	}
 	return true
+}
+
+// emptyBaseDigits resolves what `<base>#` with nothing after it comes to,
+// and reports whether the numeral is refused instead.
+//
+// The base is passed in because one column's answer depends on it: ksh93 is
+// zero at ten or above and a refusal below that, which is the reading the
+// `010#` probe in the axis's own comment pins. Nothing else on the panel
+// looks at the base at all.
+func (r *Runner) emptyBaseDigits(base int) (int, bool) {
+	switch r.sem().ArithEmptyBaseDigits {
+	case ArithEmptyBaseDigitsZero:
+		return 0, false
+	case ArithEmptyBaseDigitsRefused:
+		return 0, true
+	case ArithEmptyBaseDigitsZeroAtTenOrAbove:
+		return 0, base < 10
+	}
+	// Unanswered, which is refused like any other unanswered axis — and
+	// asked here rather than at the top so that a dialect which never meets
+	// the spelling is never questioned about it.
+	r.errf("%s\n", r.diag().Report(r.name(), r.line,
+		r.unanswered("a named base with no digits after it")))
+	r.status = 2
+	r.unspecified = true
+	return 0, true
 }
 
 // parseRadixDigits reads the digits after a radix prefix, where an empty run

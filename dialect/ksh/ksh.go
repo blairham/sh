@@ -2153,6 +2153,7 @@ func Semantics() interp.Semantics {
 	s.ArithBaseZeroReadsTheDigitsAsWritten = interp.No
 	// And a radix prefix wants a digit after it: `$(( 0x ))` is refused.
 	s.ArithEmptyRadixDigitsAreZero = interp.No
+	s.ArithEmptyBaseDigits = interp.ArithEmptyBaseDigitsZeroAtTenOrAbove
 	// And a third site with a third answer: `let` reads *every* numeral in
 	// its word in decimal, so `let "x=1+010"` is 11 where the same text
 	// stored in a name is 9 and written as a literal is 9.

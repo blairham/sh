@@ -7660,6 +7660,52 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			r.assignFailed = true
 			continue
 		}
+		// A plain word over a name really holding an array, which is the
+		// same refusal `typeset`, `declare`, `readonly` and `export` already
+		// make and which this word was the one not making (#5074).
+		//
+		// **The rule is keyed on the word doing the second declaration**,
+		// which is what a grid over the *first* word cannot see. Holding the
+		// first fixed and moving the second is what found it:
+		//
+		//	typeset -a v; typeset v=x 	refused	<- has the gate
+		//	local   -a v; typeset v=x 	refused	<- has the gate
+		//	typeset -a v; local   v=x 	taken  	<- no gate
+		//	local   -a v; local   v=x 	taken  	<- no gate
+		//
+		// It is not about `private`, which is how the issue was first framed
+		// and which its own controls disproved: the rows with no `private`
+		// anywhere refuse identically, and so do the rows with no
+		// `zsh/param/private` loaded at all.
+		//
+		// `fresh` is the loop's own answer rather than a constant, unlike
+		// the `readonly`/`export` site which has no shadow to take: a
+		// declaration that really did make a new binding writes a cell
+		// holding nothing, and that is the case the gate's own doc exempts.
+		//
+		// **It cannot be observed to matter here, and that is measured**:
+		// the shadow above has already replaced the cell by the time this
+		// asks, so wherever `fresh` is true `compoundCell` is false and the
+		// gate returns at its first line either way. A mutant passing a
+		// constant `false` survives the whole of interp and dialect and
+		// agrees with the reference on `local -a v=(1 2)` over an outer
+		// array, over an outer association, and from inside a named
+		// function. It is passed anyway because the argument is the *shared*
+		// gate's, four other callers answer it for real, and a constant at
+		// this one site would be a difference between the five that the next
+		// reader has to re-derive. Recorded so that reader does not go
+		// looking for the row that would kill it.
+		//
+		// Its **position** is free for the same reason: moved ahead of the
+		// compound mark above, all sixty-four grid rows still agree. It sits
+		// behind the mark because that is the order the other four words ask
+		// in, not because anything measured requires it.
+		if hasValue && r.inconsistentTypeRefused(name, fresh, f) {
+			return r.status
+		}
+		if r.unspecified {
+			return r.status
+		}
 		if f.readonly && f.readonlyOff {
 			// `local +r y` after this same call's `local -r y=1`, which is
 			// the one shape that reaches this with a freeze still standing:

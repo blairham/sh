@@ -103,15 +103,15 @@ func TestTheNamesThatKeepTheExportKeepIt(t *testing.T) {
 func TestTheEntryItselfStillReachesAChild(t *testing.T) {
 	const read = `/usr/bin/env | /usr/bin/grep -a '^IFS=' | /usr/bin/od -c | /usr/bin/head -1`
 	for _, tc := range []struct{ name, src, want string }{
-		{"as inherited", read, `0000000    I   F   S   =   Z   Z  \n`},
-		{"an assignment does not reach it", "IFS=x; " + read, `0000000    I   F   S   =   Z   Z  \n`},
-		{"unset does not reach it", "unset IFS; " + read, `0000000    I   F   S   =   Z   Z  \n`},
+		{"as inherited", read, `0000000 I F S = Z Z \n`},
+		{"an assignment does not reach it", "IFS=x; " + read, `0000000 I F S = Z Z \n`},
+		{"unset does not reach it", "unset IFS; " + read, `0000000 I F S = Z Z \n`},
 		// And `export` is the one thing that does, which is also the row
 		// that says the NUL in this value has to be cut: the shell's own
 		// `$IFS` is ` \t\n\0` in both shells, and handing four bytes to
 		// `execve` made **every** command fail to start here.
-		{"export supersedes it, cut at the NUL", "export IFS; " + read, `0000000    I   F   S   =      \t  \n`},
-		{"an assignment then export sends the assignment", "IFS=x; export IFS; " + read, `0000000    I   F   S   =   x  \n`},
+		{"export supersedes it, cut at the NUL", "export IFS; " + read, `0000000 I F S = \t \n`},
+		{"an assignment then export sends the assignment", "IFS=x; export IFS; " + read, `0000000 I F S = x \n`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			base := dialecttest.Base{Dir: t.TempDir(), Env: []string{"PATH=/usr/bin:/bin", "IFS=ZZ"}}
@@ -119,9 +119,17 @@ func TestTheEntryItselfStillReachesAChild(t *testing.T) {
 			if err != nil {
 				t.Fatalf("run: %v", err)
 			}
-			if got := strings.TrimRight(out, " \n"); got != strings.TrimRight(tc.want, " \n") {
+			// `od`'s own column widths differ between the BSD one on a
+			// Mac and the GNU one on the Linux runner — one leading space
+			// against two — so the run of spaces is not part of the
+			// assertion. The bytes are.
+			if got := spacedOnce(out); got != spacedOnce(tc.want) {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})
 	}
 }
+
+// spacedOnce collapses every run of whitespace to one space, so a row asserts
+// the bytes `od` printed rather than the width it printed them at.
+func spacedOnce(s string) string { return strings.Join(strings.Fields(s), " ") }

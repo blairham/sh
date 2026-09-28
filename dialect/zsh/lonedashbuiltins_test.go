@@ -54,6 +54,55 @@ func TestALoneDashEndsTheOptionsOfABuiltinWithItsOwnReader(t *testing.T) {
 			status:  1,
 		},
 		{
+			// The declaration pair reads the sign through
+			// SignAloneIsAnOptionWord rather than the lone-dash axis, and the
+			// panel says the two halves are one answer there too: zsh and
+			// ksh93 both take the sign and both end the options at it, while
+			// bash never arrives because a bare sign is a *name* there. So
+			// `-r` behind the dash is an operand, and not a valid one.
+			name:   "typeset ends its options at a bare sign",
+			src:    `typeset - -r x=1`,
+			want:   []string{"not valid in this context: -r"},
+			status: 1,
+		},
+		{
+			// The plus spelling is the same answer, measured in both columns
+			// that take it — which is why one field serves both.
+			name:   "and at a bare plus",
+			src:    `typeset + -r x=1`,
+			want:   []string{"not valid in this context: -r"},
+			status: 1,
+		},
+		{
+			// And it ends a scan that has already read letters, so this is a
+			// stop and not a special case of the first word.
+			name:   "even after letters have been read",
+			src:    `typeset -a - -x q`,
+			want:   []string{"not valid in this context: -x"},
+			status: 1,
+		},
+		{
+			name:   "readonly the same",
+			src:    `readonly - -p`,
+			want:   []string{"not valid in this context: -p"},
+			status: 1,
+		},
+		{
+			name:   "and export, which reads the sign on its own axis",
+			src:    `export - -p`,
+			want:   []string{"not valid in this context: -p"},
+			status: 1,
+		},
+		{
+			// The control that keeps the rows above about the *sign*: with
+			// nothing but an assignment behind it the declaration still
+			// happens, which is what "ends the options" has to leave alone.
+			name:   "while an assignment behind the sign is still declared",
+			src:    `typeset - x=1; print -r -- "x=$x"`,
+			want:   []string{"x=1"},
+			status: 0,
+		},
+		{
 			name:    "whence takes the name behind the dash",
 			src:     `whence - echo`,
 			want:    []string{"echo"},

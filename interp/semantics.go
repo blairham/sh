@@ -33728,6 +33728,12 @@ const (
 func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 	condition := surface == patternInACondition
 	o := patternOpts{
+		// A `case` arm reads a bare `(` behind a pattern group as a group
+		// where a condition and a word read the characters, which is that
+		// shell disagreeing with itself rather than one rule: `case ab in
+		// @(a)(b))` matches and `[[ ab == @(a)(b) ]]` does not. See
+		// patternOpts.armParens for the four surfaces measured in pairs.
+		armParens:    surface == patternInACaseArm,
 		caret:        r.caretNegates(pattern),
 		group:        r.lang().PatternAlternation,
 		topGroup:     r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(condition),

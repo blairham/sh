@@ -3113,6 +3113,18 @@ func (l *Lexer) scanWord(start Pos) Token {
 			// `case x in (#i<a)b)` being refused under all of them.
 			flush()
 			spans = append(spans, l.scanGroupSpans()...)
+			// And a balanced run standing **immediately** behind it is the
+			// word's too, in the one dialect that says so. A loop because
+			// the rule is adjacency repeated: a run behind a run chains, and
+			// one character between them ends the word. See
+			// [Dialect.ParenRunAfterPatternGroupIsText] for the rows and for
+			// what the run is adjacent *to* — the construct and not the
+			// byte, which is why this stands here rather than as another
+			// case in opensPatternGroup.
+			for l.dialect.ParenRunAfterPatternGroupIsText &&
+				l.err == nil && l.peek() == '(' {
+				spans = append(spans, l.scanGroupSpans()...)
+			}
 
 		case l.startsProcSubstFile():
 			// The temp-file spelling, which is one dialect's. It is here

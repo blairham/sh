@@ -609,6 +609,13 @@ func Dialect() syntax.Dialect {
 	// this shell's alone: `{2,3}(a)` matches `a` two or three times. See
 	// syntax.Dialect.CountedPatternGroup (#4931).
 	d.CountedPatternGroup = true
+	// And a balanced `( … )` run standing immediately behind a pattern group
+	// stays in the word, where it ends the word in bash and dash alike:
+	// `echo A@(a)(b)B` writes `A@(a)(b)B` here and is
+	// ``syntax error near unexpected token `('`` there. See
+	// syntax.Dialect.ParenRunAfterPatternGroupIsText, which carries the rows
+	// and the two that bound it (#4972).
+	d.ParenRunAfterPatternGroupIsText = true
 	// And an expansion whose operand has begun and then ran out of input ends
 	// at the end of the input and runs, where bash, zsh and dash all refuse
 	// the script: `s=abc; echo "${s#x"` writes `abc` here and is a refusal

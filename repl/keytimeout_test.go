@@ -147,7 +147,7 @@ func TestTheEscapeQuestionWaitsForTheRestOfTheSequence(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { r.Close(); w.Close() })
+		t.Cleanup(func() { _, _ = r.Close(), w.Close() })
 		return r, w
 	}
 	editorOver := func(r *os.File, wait func() (time.Duration, bool)) *editor {
@@ -171,7 +171,7 @@ func TestTheEscapeQuestionWaitsForTheRestOfTheSequence(t *testing.T) {
 		e := editorOver(r, func() (time.Duration, bool) { return 3 * time.Second, false })
 		go func() {
 			time.Sleep(50 * time.Millisecond)
-			w.Write([]byte("["))
+			_, _ = w.Write([]byte("["))
 		}()
 		start := time.Now()
 		if e.escapeIsTheModeSwitch() {
@@ -189,7 +189,7 @@ func TestTheEscapeQuestionWaitsForTheRestOfTheSequence(t *testing.T) {
 		e := editorOver(r, nil)
 		go func() {
 			time.Sleep(200 * time.Millisecond)
-			w.Write([]byte("["))
+			_, _ = w.Write([]byte("["))
 		}()
 		start := time.Now()
 		if !e.escapeIsTheModeSwitch() {
@@ -208,7 +208,7 @@ func TestTheEscapeQuestionWaitsForTheRestOfTheSequence(t *testing.T) {
 		e := editorOver(r, func() (time.Duration, bool) { return 0, true })
 		go func() {
 			time.Sleep(250 * time.Millisecond)
-			w.Write([]byte("["))
+			_, _ = w.Write([]byte("["))
 		}()
 		if e.escapeIsTheModeSwitch() {
 			t.Errorf("an unbounded wait gave up before the byte arrived")

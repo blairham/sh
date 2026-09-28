@@ -648,13 +648,21 @@ func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitCl
 				digitClass = true
 			}
 			b.WriteString(part)
-		case r.regexKeepsClassEscape(s, part):
+		case r.regexKeepsWrittenBackslash(s, part):
 			// The backslash is the **engine's** in this dialect, so the pair
 			// reaches it as it was written rather than as the letter quote
 			// removal would otherwise take. Both readings keep it, because
 			// both are handed to the same engine — see
+			// Semantics.RegexKeepsAWrittenBackslash and, for the two letters
+			// that were the narrow case of it,
 			// Semantics.RegexDigitClassEscape.
-			digitClass = true
+			if regexHoldsDigitEscape(`\`+part) && r.regexReadsDigitClass() {
+				// Asked for its own two letters rather than set for every
+				// pair: a column could hand the backslash through without
+				// reading `\d` as a class, and escapedOrdinary is the half
+				// that decides what the engine does with those two.
+				digitClass = true
+			}
 			b.WriteString(`\` + part)
 			return `\` + part
 		default:
@@ -672,27 +680,46 @@ func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitCl
 	return text, b.String(), digitClass
 }
 
-// regexKeepsClassEscape reports whether this span of a `=~` operand is a
+// regexKeepsWrittenBackslash reports whether this span of a `=~` operand is a
 // backslash the **engine** reads rather than a quote the shell takes.
 //
-// One letter pair and one quoting. `\d` is a digit class in ksh93's own
-// regular expression library and the letter `d` in every other column, so
-// this is which library the operator reaches — see
-// Semantics.RegexDigitClassEscape, which has the rows and the controls.
+// Two axes and one quoting. The wide one is
+// Semantics.RegexKeepsAWrittenBackslash — *a written backslash belongs to the
+// engine* — and where it is answered the character behind it does not matter.
+// The narrow one is Semantics.RegexDigitClassEscape, which is about `\d` and
+// `\D` alone and is still asked where the wide one says no: `\d` is a digit
+// class in ksh93's own regular expression library and the letter `d` in every
+// other column, and that fact is true of the variable spelling too, where no
+// quote removal happens at all.
 //
-// **Backslash-quoted and nothing else**, which is measured rather than
-// tidy: `[[ za1b =~ "za\db" ]]` and `[[ zadb =~ "za\db" ]]` are *both* no in
-// ksh93u+, so a double-quoted spelling is the two characters it was written
-// with and keeps the reading it had here.
+// Asking the wide one first is what keeps the narrow one narrow. A column
+// that hands every pair through has already answered for `d` and `D`, so
+// reaching the second question would be asking a dialect about a letter when
+// it has just said the letter does not decide.
 //
-// The axis is asked only for the two letters it is about, so a condition
-// carrying any other escape never reaches a dialect that left it unanswered.
-func (r *Runner) regexKeepsClassEscape(s syntax.Span, part string) bool {
-	if s.Kind != syntax.Literal || s.Quoting != syntax.BackslashQuoted ||
-		(part != "d" && part != "D") {
+// **Backslash-quoted and nothing else**, which is measured rather than tidy:
+// a double-quoted `"za\db"` is a different question with a different answer
+// in each of the four columns, and neither axis here is asked about one.
+// `[[ zadb =~ "za\db" ]]` is no in ksh93u+ and in bash 5.3.20, yes in zsh
+// 5.9.2, and no in BusyBox v1.37.0 for a third reason — there the pair
+// reaches the engine and `\d` is a digit class, so `[[ za1b =~ "za\db" ]]`
+// is the row that matches. Four columns and three readings, none of them
+// this one.
+func (r *Runner) regexKeepsWrittenBackslash(s syntax.Span, part string) bool {
+	if s.Kind != syntax.Literal || s.Quoting != syntax.BackslashQuoted {
 		return false
 	}
-	return r.regexReadsDigitClass()
+	if r.regexKeepsEveryWrittenBackslash() {
+		return true
+	}
+	return (part == "d" || part == "D") && r.regexReadsDigitClass()
+}
+
+// regexKeepsEveryWrittenBackslash is the wide axis. See
+// Semantics.RegexKeepsAWrittenBackslash.
+func (r *Runner) regexKeepsEveryWrittenBackslash() bool {
+	return r.ask(r.sem().RegexKeepsAWrittenBackslash,
+		"a written backslash in a =~ operand belonging to the engine")
 }
 
 // regexReadsDigitClass is the axis, asked in the one wording both halves of

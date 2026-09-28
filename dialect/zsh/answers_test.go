@@ -97,6 +97,11 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.Yes},
 		{"RegexQuotingMakesLiteral", s.RegexQuotingMakesLiteral, interp.No},
+		// A written backslash in a `=~` operand comes off here and the
+		// character behind it keeps its regex meaning, so `[[ axb =~ a\.b ]]`
+		// matches where it does not in ksh93 or bash. See
+		// interp.Semantics.RegexKeepsAWrittenBackslash.
+		{"RegexKeepsAWrittenBackslash", s.RegexKeepsAWrittenBackslash, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.Yes},
 		{"EmptyAssociativeKeyIsAnError", s.EmptyAssociativeKeyIsAnError, interp.No},

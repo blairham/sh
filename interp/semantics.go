@@ -8918,6 +8918,85 @@ type Semantics struct {
 	// disagreement measured here is `d` and `D` alone.
 	RegexDigitClassEscape Answer
 
+	// RegexKeepsAWrittenBackslash hands a **backslash-quoted** character in a
+	// `=~` operand to the engine with its backslash, rather than taking the
+	// backslash off as quote removal otherwise would.
+	//
+	// It is the wider statement [RegexDigitClassEscape] above is the narrow
+	// case of, and the two are separate because they are different claims.
+	// That one says *`\d` names a digit class*, which is a fact about which
+	// library the operator reaches and is true of the variable spelling too.
+	// This one says *a written backslash belongs to the engine*, which is
+	// a fact about quote removal and is true of no spelling but the written
+	// one.
+	//
+	// Measured 2026-09-28, `-c` under `env -i PATH=/usr/bin:/bin` with a
+	// scratch `HOME`, across **the whole panel**. `/bin/ksh`
+	// `Version AJM 93u+ 2012-08-01`, `/opt/homebrew/bin/bash` 5.3.20, that
+	// same binary under the name `sh`, `/bin/bash` 3.2.57 and
+	// `/opt/homebrew/bin/zsh` 5.9.2 — `go version -m` says *not a Go
+	// executable* for each — and BusyBox v1.37.0, the `/bin/ash` of
+	// `alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`
+	// on `linux/arm64`, which is the digest internal/oracle pins.
+	//
+	// **dash is the seventh column and has no `=~` at all** — `[[` is not a
+	// command there — so it holds this vacuously, which is what the zero
+	// value means. The three bash columns answer every row below
+	// identically, 5.3.20 and 3.2.57 and the `sh` name alike, so the
+	// compatibility level that takes [RegexQuotingMakesLiteral] back does
+	// not reach this.
+	//
+	// **Every row is a pair**, because keeping the backslash and dropping it
+	// agree on half of all subjects:
+	//
+	//	                            ksh93u+  the 3 bash  zsh 5.9.2  BusyBox
+	//	[[ axb =~ a.b ]]    (ctrl)   yes      yes         yes        yes
+	//	[[ axb =~ a\.b ]]            no       no          yes        yes
+	//	[[ 'a.b' =~ a\.b ]]          yes      yes         yes        yes
+	//	[[ ab =~ a\+b ]]             no       no          yes        yes
+	//	[[ 'a+b' =~ a\+b ]]          yes      yes         no         no
+	//	[[ aab =~ a\{2\}b ]]         no       no          yes        yes
+	//	[[ 'a{2}b' =~ a\{2\}b ]]     yes      yes         no         no
+	//	[[ zawb =~ za\wb ]] (ctrl)   yes      yes         yes        yes
+	//	[[ za1b =~ za\wb ]]          yes      no          no         no
+	//	[[ 'za b' =~ za\sb ]]        yes      no          no         no
+	//	[[ 'za.b' =~ za\Wb ]]        yes      no          no         no
+	//
+	// The first control says the operator reaches an engine in every column.
+	// The second says the *letter* is read in every column when it is bare,
+	// so the three rows under it are about the backslash and not about `w`.
+	//
+	// **ksh93 is alone, and the columns that are not ksh93 are not unanimous
+	// either**, which is why this is a fact about one shell rather than a bug
+	// in ours. The two metacharacter rows split bash from zsh and BusyBox:
+	// the bash columns reach ksh93's answer there by marking a quoted
+	// character literal — see [RegexQuotingMakesLiteral], Yes in bash and No
+	// in ksh93 — so those two agree on `a\.b` for two different reasons and
+	// part on `za\wb`, where a class is a class only if the backslash
+	// survived. zsh and BusyBox drop the backslash and let the character keep
+	// its regex meaning, which is what a shell with no rule of its own does
+	// and is the answer the POSIX vector carries.
+	//
+	// Asked only for an operand that actually carries a backslash-quoted
+	// span, so nothing without one reaches a dialect that left it
+	// unanswered.
+	//
+	// **`\d` and `\D` are two gates and this is only the first of them.**
+	// Getting the pair past quote removal is what this axis decides; what the
+	// engine then reads it as is [RegexDigitClassEscape]'s, and
+	// escapedOrdinary normalizes `\d` back to the letter where that one says
+	// no. So a column answering Yes here and No there reads `\d` as the
+	// letter, which is what keeps the two from being one question with two
+	// names — and it is why widening this axis in place of that one would
+	// have been wrong even though ksh93 answers both Yes.
+	//
+	// The pair of controls that says the reading did not move is
+	// `[[ za1b =~ za\db ]]` and `[[ zadb =~ za\db ]]`, yes and no in ksh93
+	// before this axis existed and after it. The **variable** spelling is
+	// that other axis's alone and this one cannot reach it: `r='za\db'`
+	// arrives with no quoting for a backslash to be taken off.
+	RegexKeepsAWrittenBackslash Answer
+
 	// LastPipelineElementInCurrentShell runs the last command of a pipeline
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
 	LastPipelineElementInCurrentShell Answer
@@ -28680,6 +28759,10 @@ func PosixSemantics() Semantics {
 		// escape names the letter. bash, zsh and BusyBox ash are all
 		// measured on that side of it and ksh93 alone is not.
 		RegexDigitClassEscape: No,
+		// A written backslash is the shell's and comes off, which is what a
+		// column with no rule of its own does — zsh 5.9.2 and BusyBox
+		// v1.37.0 both, measured. See RegexKeepsAWrittenBackslash.
+		RegexKeepsAWrittenBackslash: No,
 		// POSIX has no `=~` at all, so what a failed one does to a record
 		// it does not describe is nobody's to infer — and neither is
 		// whether a group that took no part keeps its number. Both are

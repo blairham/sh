@@ -182,7 +182,9 @@ print -r -- "after=[$ARGC] ${(t)ARGC}"`)
 // brings the freeze back with the producer: `EPOCHSECONDS` is readonly there,
 // so the declaration's own value is refused rather than taken.
 func TestThePlusHideFormPutsAModuleParameterBack(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter
+	// `zsh/datetime` beside `zsh/parameter`, because `$EPOCHSECONDS` does not
+	// exist until its own module is loaded — see gatedparameters.go (#4922).
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter zsh/datetime
 f() { local +h parameters; print -r -- "kind=${(t)parameters}"; }
 f
 g() { local +h EPOCHSECONDS=5; print -r -- "never"; }

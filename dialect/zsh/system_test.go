@@ -27,10 +27,20 @@ import (
 // not hold the module shut, which is zmodload.go's rule and is asserted below
 // rather than left to be inferred.
 
-// sysParam runs src and returns everything it wrote.
+// sysParam runs src and returns everything it wrote, with `zsh/system`
+// loaded.
+//
+// The load is the line a script reading these two parameters writes, and it
+// is what brings them into being: the module declares no autoloadable
+// parameter, so `typeset -p sysparams` is `no such variable: sysparams` at 1
+// in a fresh zsh 5.9.2 and this shell had them from startup. See
+// gatedparameters.go (#4922).
+//
+// On the **same line** as the snippet rather than above it, so that every
+// `zsh:N:` in this file goes on naming the line the case wrote.
 func sysParam(t *testing.T, src string) string {
 	t.Helper()
-	out, _, errs := runZshSplit(t, t.TempDir(), src)
+	out, _, errs := runZshSplit(t, t.TempDir(), "zmodload zsh/system; "+src)
 	return out + errs
 }
 

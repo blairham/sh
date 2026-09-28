@@ -199,7 +199,7 @@ func TestUnsetAcrossEveryProducedParameter(t *testing.T) {
 			// Nothing has referred to the name, so there is no parameter to
 			// refuse the removal: silent 0 for every row, refused column
 			// included.
-			out, st := runZsh(t, dir, "unset "+tc.name+`; print "st=$?"`)
+			out, st := runZsh(t, dir, gatedModuleOf(tc.name)+"unset "+tc.name+`; print "st=$?"`)
 			want, wantStatus := "st=0\n", 0
 			if tc.ours && tc.refused {
 				want, wantStatus = "zsh:1: read-only variable: "+tc.name+"\n", 1
@@ -210,7 +210,7 @@ func TestUnsetAcrossEveryProducedParameter(t *testing.T) {
 			}
 			// And with the lightest reference there is in front of it, the
 			// freeze is there and the column splits.
-			out, st = runZsh(t, dir, ": ${+"+tc.name+"}\nunset "+tc.name+`; print "st=$?"`)
+			out, st = runZsh(t, dir, gatedModuleOf(tc.name)+": ${+"+tc.name+"}\nunset "+tc.name+`; print "st=$?"`)
 			want, wantStatus = "st=0\n", 0
 			if tc.refused {
 				want, wantStatus = "zsh:2: read-only variable: "+tc.name+"\n", 1

@@ -139,8 +139,13 @@ import (
 // rather than an error. That -1 is the shape of the whole function: it does
 // not refuse, it reports.
 
-// registerSystemModule installs `$sysparams`, `$errnos` and `systell`.
-func registerSystemModule(r *interp.Runner) {
+// registerSystemParameters installs `$sysparams` and `$errnos`.
+//
+// Run by `zmodload zsh/system` rather than at startup — see
+// gatedparameters.go: the module declares no autoloadable parameter, so
+// `typeset -p sysparams` is `no such variable: sysparams` at 1 in a fresh
+// shell there (#4922).
+func registerSystemParameters(r *interp.Runner) {
 	r.SetDynamicAssoc("sysparams", sysparamsView)
 	// Readonly and hidden together, the pair every produced table in this
 	// dialect needs: zsh answers `sysparams[pid]=5` with `read-only
@@ -152,6 +157,13 @@ func registerSystemModule(r *interp.Runner) {
 	r.SetDynamicArray("errnos", errnosView)
 	r.MarkReadonly("errnos")
 	hideModuleParameter(r, "errnos")
+}
+
+// registerSystemModule installs the module's math function and its six
+// builtins, which are **not** gated: this shell registers every module
+// builtin at startup and the parameter half is the half a script cannot be
+// told about. See gatedparameters.go.
+func registerSystemModule(r *interp.Runner) {
 	r.RegisterMathFunction("systell", 1, 1, mathSystell)
 	// And the module's six builtins: the three that move bytes, the file
 	// lock, and the two that close it. See systemio.go, systemlock.go and

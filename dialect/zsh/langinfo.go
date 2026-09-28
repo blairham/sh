@@ -106,8 +106,13 @@ import "github.com/blairham/sh/interp"
 // mechanism and it is the same shape: the set test is exempt, so a script that
 // asks before reading is answered.
 
-// registerLangInfoModule installs `$langinfo`.
-func registerLangInfoModule(r *interp.Runner) {
+// registerLangInfoParameter installs `$langinfo`.
+//
+// Run by `zmodload zsh/langinfo` rather than at startup: the module declares
+// no autoloadable parameter, so the name does not exist until the module is
+// loaded — `${+langinfo}` is 0 and `typeset -p langinfo` is `no such
+// variable` at 1 in a fresh shell there. See gatedparameters.go (#4922).
+func registerLangInfoParameter(r *interp.Runner) {
 	r.SetDynamicAssoc("langinfo", langInfoView)
 	// The sentence a key with no answer gets. "For this locale" rather than
 	// "not implemented yet": the key is implemented, and what is missing is

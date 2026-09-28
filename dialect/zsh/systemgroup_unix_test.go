@@ -172,6 +172,10 @@ func assertBodyGroup(t *testing.T, out string) {
 // on its standard input and exits at end of file, which is the whole contract.
 func runZshAnchored(t *testing.T, src string) string {
 	t.Helper()
+	// `$sysparams` does not exist until `zsh/system` is loaded, which is what
+	// a script reading it writes — see gatedparameters.go (#4922). On the
+	// same line so that a `zsh:N:` goes on naming the case's own line.
+	src = "zmodload zsh/system; " + src
 	anchor, err := exec.LookPath("cat")
 	if err != nil {
 		t.Fatalf("no placeholder program on this machine: %v", err)

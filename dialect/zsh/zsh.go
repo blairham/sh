@@ -6385,7 +6385,9 @@ func Apply(r *interp.Runner) {
 	registerSocketModule(r)
 	// And `zsh/mapfile`'s one: the filesystem as an association, where a key
 	// is a path and the value is that file's bytes. See mapfile.go.
-	registerMapfileModule(r)
+	// Its parameter is **not** installed here: the module declares no
+	// autoloadable name, so `${+mapfile}` is 0 until `zmodload zsh/mapfile`.
+	// See gatedparameters.go (#4922).
 	// And `fc`'s three file letters over a history list this dialect keeps,
 	// which is what `print -s` fills. The core `fc` stays the answer for
 	// every other letter — this registration replaces it and delegates. See
@@ -6399,7 +6401,8 @@ func Apply(r *interp.Runner) {
 	// And `zsh/langinfo`'s one: the locale's own vocabulary, answered from
 	// the variables that name the locale rather than from a fixed table. See
 	// langinfo.go.
-	registerLangInfoModule(r)
+	// And the same for `zsh/langinfo`'s one, which is gated the same way.
+	// See gatedparameters.go.
 	// And `zsh/zleparameter`'s two: the line editor's widgets and keymaps,
 	// read off the tables `zle` and `bindkey` already keep. See
 	// zleparameter.go.

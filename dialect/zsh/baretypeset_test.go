@@ -103,7 +103,14 @@ func TestABareListingWritesAProducedParametersAttributesAndNotItsValue(t *testin
 	// A bare `typeset` in a shell that has referred to nothing writes
 	// `undefined keymaps` for them, in the reference and here, and that row
 	// is the pair below. See interp/deferredparam.go (#4923).
-	out, st := runZsh(t, t.TempDir(), `: ${#keymaps} ${#widgets} ${#builtins}
+	// And the module parameters are **loaded** first, which is the other
+	// half of "with the modules loaded" and which this had no way to say
+	// either: `$errnos`, `$langinfo`, `$epochtime` and the two clock scalars
+	// do not exist until `zmodload` brings them, so the rows below were
+	// being graded in a state the reference cannot be in. See
+	// gatedparameters.go (#4922).
+	out, st := runZsh(t, t.TempDir(), `zmodload zsh/system zsh/langinfo zsh/datetime
+		: ${#keymaps} ${#widgets} ${#builtins}
 		typeset`)
 	if st != 0 {
 		t.Fatalf("status = %d, out %q", st, out)
@@ -145,15 +152,19 @@ func TestABareListingWritesAProducedParametersAttributesAndNotItsValue(t *testin
 		"undefined keymaps\n",
 		"undefined widgets\n",
 		"undefined builtins\n",
-		// And the control that says the deferral is per name rather than
-		// per module: these two are registered by modules that declare no
-		// autoloadable parameter, so they are there from the start and
-		// list with their attributes in the same run.
-		"array readonly errnos\n",
-		"association readonly langinfo\n",
 	} {
 		if !containsLine(unprimed, want) {
 			t.Errorf("unprimed = %q, want the whole line %q", unprimed, want)
+		}
+	}
+	// And the control that says the deferral is per name: the module
+	// parameters are in a **third** state and write no row at all here,
+	// where the three above write one with a word in it. Nothing has loaded
+	// their modules, so they are not waiting on a reference — they are not
+	// there. See gatedparameters.go.
+	for _, never := range []string{"errnos", "langinfo", "epochtime", "EPOCHSECONDS", "sysparams"} {
+		if strings.Contains(unprimed, never) {
+			t.Errorf("unprimed = %q, want no %q in it — its module has not been loaded", unprimed, never)
 		}
 	}
 }

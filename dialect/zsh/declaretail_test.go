@@ -46,11 +46,20 @@ func TestTypesetCapitalFIsTakenInSilence(t *testing.T) {
 		// `typeset -F`, and nothing else. The rows here used to expect not
 		// one byte, from a build where the parameter carried no float
 		// attribute to be selected by (#2451).
-		{"a bare listing, which is what a state capture writes", "declare -F", "EPOCHREALTIME\n"},
-		{"the same under the other name", "typeset -F", "EPOCHREALTIME\n"},
+		//
+		// **"with `zsh/datetime` loaded" is now a line in the case**, which
+		// it was not and had to be: the parameter does not exist until the
+		// module is loaded, so these rows were graded in a state the
+		// reference cannot be in and the one that names the module was the
+		// one they claimed to measure. See gatedparameters.go (#4922).
+		{"a bare listing, which is what a state capture writes", "zmodload zsh/datetime\ndeclare -F", "EPOCHREALTIME\n"},
+		{"the same under the other name", "zmodload zsh/datetime\ntypeset -F", "EPOCHREALTIME\n"},
 		{"with a function's name, which is what it means elsewhere", "f() { :; }\ndeclare -F f", ""},
 		{"with a name that is nothing at all", "declare -F nosuch", ""},
-		{"a listing with functions already defined", "f() { :; }\ng() { :; }\ndeclare -F", "EPOCHREALTIME\n"},
+		{"a listing with functions already defined", "zmodload zsh/datetime\nf() { :; }\ng() { :; }\ndeclare -F", "EPOCHREALTIME\n"},
+		// And the row the module makes: with nothing loaded there is no
+		// float in the shell at all, in the reference and here.
+		{"and with the module unloaded there is no float at all", "declare -F", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st, errs := runZshSplit(t, t.TempDir(), c.src)
@@ -72,7 +81,7 @@ func TestTypesetCapitalFIsTakenInSilence(t *testing.T) {
 // listing — which writes the whole variable table and is the one answer
 // worse than the refusal this replaced.
 func TestTypesetCapitalFIsNotTheBareWord(t *testing.T) {
-	out, st, errs := runZshSplit(t, t.TempDir(), "marked=here\ndeclare -F")
+	out, st, errs := runZshSplit(t, t.TempDir(), "zmodload zsh/datetime\nmarked=here\ndeclare -F")
 	// The shell's own float and nothing the script wrote — measured, real
 	// zsh writes the same one name here — where the bare word below writes
 	// the whole table.
@@ -531,7 +540,7 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// (#4908, and dialect/zsh/evalcontext.go). The word here is
 		// `toplevel` rather than `cmdarg` because this harness is not the
 		// command-string route.
-		"ARGC=0\nEPOCHREALTIME\nEPOCHSECONDS\nHISTCMD=0\nLINENO=1\nPPID=" + ppid +
+		"ARGC=0\nHISTCMD=0\nLINENO=1\nPPID=" + ppid +
 		"\nR=2\nTTYIDLE=-1\nZSH_EVAL_CONTEXT=toplevel\nZSH_SUBSHELL=0\n" +
 		// And none of the module tables, which is measured and is the whole
 		// of what this run has to say about them: a bare `readonly` in a zsh
@@ -543,16 +552,22 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// bare `typeset` two lines later in the same shell, which writes
 		// every one of them.
 		//
-		// `epochtime`, `errnos`, `langinfo` and `sysparams` stay, and they
-		// are the four this shell registers that a bare reference has not
-		// got at all: their modules declare no autoloadable parameter, so
-		// deferring them would have been modeling the wrong state.
+		// **And none of the module parameters either**, which is a second
+		// row and the one this listing used to get wrong. `epochtime`,
+		// `errnos`, `langinfo`, `sysparams`, `EPOCHREALTIME` and
+		// `EPOCHSECONDS` were written here, because this shell registered
+		// them at startup where the reference has them only after their
+		// module is loaded — their modules declare no autoloadable
+		// parameter, so they are not waiting on a reference, they are not
+		// there. Nothing in this run loads a module, so nothing in this run
+		// writes them; the rows that do load one are in
+		// gatedparameters_test.go (#4922).
 		//
 		// `status` is on this side and not on the other, for the reason
 		// `ARGC` beside it is: measured 2026-09-27 on zsh 5.9.2 in one run,
 		// a bare `readonly` writes `status=0` and `readonly -p` writes no
 		// row for the name (#4866, and dialect/zsh/laststatus.go).
-		"epochtime\nerrnos\nlanginfo\nstatus=0\nsysparams\n" +
+		"status=0\n" +
 		// The array half of the eval-context tie sorts here, after every
 		// upper-case name and among the lower-case ones — the same place
 		// `zsh_eval_context=( cmdarg )` lands in the reference's own bare
@@ -560,20 +575,17 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		"zsh_eval_context=( toplevel )\n" +
 		"export LOGNAME=pinned\nexport OLDPWD=" + dir + "\nexport PWD=" + dir +
 		"\nexport -i10 SHLVL=1\nexport V='a b'\n" +
-		// The kind letters beside the readonly one, measured: real zsh's
-		// `readonly -p` writes `typeset -Fr EPOCHREALTIME` and
-		// `typeset -ir EPOCHSECONDS` (#2451).
 		// No `ARGC` row on this side, and it is on the other: measured
 		// 2026-09-12 in one run of zsh 5.9.2, a bare `readonly` writes
 		// `ARGC=0` and `readonly -p` writes no row for the name at all,
 		// which is ProducedDeclaration.Silent and is asked of the `-p`
 		// *word* rather than of the shape that came back (#2518).
-		"typeset -Fr EPOCHREALTIME\ntypeset -ir EPOCHSECONDS\n" +
-		"typeset -r R=2\n" +
-		// And the same four here, for the same reason: `readonly -p` writes
-		// no row for a name waiting on its first reference either.
-		"typeset -ar epochtime\ntypeset -ar errnos\n" +
-		"typeset -Ar langinfo\ntypeset -Ar sysparams\n"
+		//
+		// The six module rows that used to be here went with the six above
+		// and for the same reason — the kind letters `readonly -p` writes
+		// for them are measured in gatedparameters_test.go, in a shell that
+		// has loaded the module.
+		"typeset -r R=2\n"
 	if st != 0 || out != want {
 		t.Errorf("got %q status %d, want %q at 0", out, st, want)
 	}

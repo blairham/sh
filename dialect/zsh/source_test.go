@@ -70,6 +70,32 @@ func runZshAbsentProbe(t *testing.T, dir, src string) (string, int) {
 	return buf.String(), st
 }
 
+// gatedModuleOf is the `zmodload` a name needs in front of it before it
+// exists, ready to sit on the same line as the snippet — and the empty string
+// for every other name.
+//
+// Seven names are in this state and thirty-eight are not, which is why this
+// is a lookup rather than a line every grid gets: a parameter registered at
+// startup and waiting for its first reference would be *brought in* by a
+// load, and a grid that loaded every module would have measured the wrong
+// state for all thirty-eight. See dialect/zsh/gatedparameters.go (#4922).
+//
+// On the same line, so that a `zsh:N:` in an expected diagnostic goes on
+// naming the line the case wrote.
+func gatedModuleOf(name string) string {
+	for module, names := range map[string][]string{
+		"zsh/langinfo": {"langinfo"},
+		"zsh/mapfile":  {"mapfile"},
+		"zsh/system":   {"sysparams", "errnos"},
+		"zsh/datetime": {"epochtime", "EPOCHSECONDS", "EPOCHREALTIME"},
+	} {
+		if slices.Contains(names, name) {
+			return "zmodload " + module + "; "
+		}
+	}
+	return ""
+}
+
 // runZshPrelude runs src with the dialect's prelude installed the way the front
 // end installs it. See the same helper under dialect/bash for why pasting the
 // prelude on the front of the snippet is a different — and wrong — thing.

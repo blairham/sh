@@ -254,6 +254,11 @@ func (c *Runner) ownTables(r *Runner) {
 	// subshell in bash 5.3.20.
 	c.readonlyFuncs = maps.Clone(r.readonlyFuncs)
 	c.tracedFuncs = maps.Clone(r.tracedFuncs)
+	// The other trace mark, which is a table of its own for the reason
+	// interp/functiontrace.go gives. Copied rather than shared for the same
+	// reason the one above it is: a subshell that marks a function must not
+	// mark it in the shell it came from.
+	c.funcTraceMarks = maps.Clone(r.funcTraceMarks)
 	c.aliases = maps.Clone(r.aliases)
 	c.suffixAliases = maps.Clone(r.suffixAliases)
 	// And the names one dialect remembers having named, which is owned

@@ -355,6 +355,7 @@ func seedTables(r *Runner) {
 	r.exportedFuncs = map[string]bool{"seed": true}
 	r.readonlyFuncs = map[string]bool{"seed": true}
 	r.tracedFuncs = map[string]bool{"seed": true}
+	r.funcTraceMarks = map[string]string{"seed": "t"}
 	r.extraOptions = map[string]bool{"seed": true}
 	r.negatedOptions = map[string]string{"seed": "noseed"}
 	r.immovableOptions = map[string]bool{"seed": true}

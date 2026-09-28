@@ -821,6 +821,12 @@ func Semantics() interp.Semantics {
 	// status left behind for a following operand to overwrite or keep
 	// (#2373).
 	s.UnsetOptions = "vf"
+
+	// A call does not put the trace back here: measured 2026-09-28, `f() {
+	// set -x; }; f; echo after` traces `echo after` in /bin/dash from a script file under `env -i PATH=/usr/bin:/bin`. One column in the
+	// panel restores it and this is not that column — see
+	// Semantics.FunctionCallRestoresTheTrace.
+	s.FunctionCallRestoresTheTrace = interp.No
 	// `readonly` keeps POSIX's single letter: measured 2026-09-12,
 	// `readonly -a zz` is `readonly: Illegal option -a` and, this being a
 	// special builtin, it ends the shell. `-A`, `-f` and `-n` are refused

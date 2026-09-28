@@ -73,13 +73,17 @@ func TestLocalStillRefusesTheLettersItHasNoAttributeFor(t *testing.T) {
 	if out, st := runZsh(t, dir, `typeset -t x=1; typeset -p x`); out != "typeset -t x=1\n" || st != 0 {
 		t.Errorf("typeset -t x=1 = %q (status %d), want the declaration listed back at 0", out, st)
 	}
-	// The function half is not, and it is refused by name under every word
-	// that reaches it — with an operand and without one, since a letter that
-	// is really missing has no listing to write either.
-	for _, src := range []string{`f(){ :; }; typeset -ft f`, `f(){ :; }; typeset -ft`} {
-		out, st := runZsh(t, dir, src)
-		if !strings.Contains(out, "-t is not implemented yet") || st == 0 {
-			t.Errorf("%s = %q (status %d), want it refused by name", src, out, st)
-		}
+	// The function half is built too now, and it is a different record
+	// under the same letter: `typeset -ft f` marks `f` for tracing and
+	// `typeset -ft` with no operands is the listing of what holds the mark
+	// (#5067, and dialect/zsh/functiontrace_test.go). Kept here because
+	// this is the file that says the two halves are separate — a reading
+	// that let the variable attribute answer for the function one would
+	// list `x` under `typeset -ft`.
+	if out, st := runZsh(t, dir, `f(){ print A; }; typeset -ft f; f`); out != "+f:0> print A\nA\n" || st != 0 {
+		t.Errorf("typeset -ft f = %q (status %d), want the traced body", out, st)
+	}
+	if out, st := runZsh(t, dir, `typeset -t x=1; f(){ :; }; typeset -ft`); out != "" || st != 0 {
+		t.Errorf("typeset -ft = %q (status %d), want nothing: the variable's letter is not the function's", out, st)
 	}
 }

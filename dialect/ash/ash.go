@@ -854,6 +854,12 @@ func Semantics() interp.Semantics {
 	// status left behind for a following operand to overwrite or keep
 	// (#2373).
 	s.UnsetOptions = "vf"
+
+	// A call does not put the trace back here: measured 2026-09-28, `f() {
+	// set -x; }; f; echo after` traces `echo after` in busybox 1.38.0 `sh`, in the `busybox:latest` image. One column in the
+	// panel restores it and this is not that column — see
+	// Semantics.FunctionCallRestoresTheTrace.
+	s.FunctionCallRestoresTheTrace = interp.No
 	// `readonly` keeps POSIX's single letter. Measured 2026-09-12,
 	// BusyBox v1.37.0: `readonly -a zz` is `readonly: line 0: illegal
 	// option -a`, and so are `-A` and `-f`. There is no `typeset` here at

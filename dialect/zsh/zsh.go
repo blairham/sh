@@ -148,6 +148,11 @@ func Dialect() syntax.Dialect {
 	// brace group close without a terminator — and what makes `echo }` a
 	// syntax error rather than a brace on the output.
 	d.CloseBraceAlwaysReserved = true
+	// The lexical half of the same rule, which `ignoreclosebraces` keeps
+	// after taking the reserved reading away: a `}` that ends a word ends it,
+	// so `print a}` is two arguments under that option rather than one. See
+	// syntax.Dialect.CloseBraceEndsAWord (#5011).
+	d.CloseBraceEndsAWord = true
 
 	// The other half of the same reserved-word rule: a bare `{` where a
 	// command may begin is the word by itself, so `a(){print A}` is a

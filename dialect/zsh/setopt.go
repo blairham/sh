@@ -3023,6 +3023,27 @@ func shortLoopsOn(r *interp.Runner) bool {
 //	x=a}                      parses   parses   parses   parses
 //	echo {a,b}                parses   parses   parses   parses
 //
+// **Parsing is not the whole of the third row, and the part it hides is the
+// third reading.** `echo A}` takes under both names and prints two different
+// things: `A}` under `ignorebraces`, where the brace is an ordinary character
+// in the middle of a word, and `A }` under `ignoreclosebraces`, where it still
+// *ends* the word and is then an ordinary word of its own. So the closing name
+// takes the reserved reading and leaves the lexing, which is a third field —
+// syntax.Dialect.CloseBraceEndsAWord — and not a second state of the second.
+// Measured the same way 2026-09-28, each line `eval`ed so the option is in
+// force when the text is read:
+//
+//	                          neither  IB       ICB      both
+//	print a}                  refused  a}       a }      a}
+//	print a }                 refused  a }      a }      a }
+//	print }a                  }a       }a       }a       }a
+//	print a}b                 a}b      a}b      a}b      a}b
+//
+// The first row is the discriminator: a wiring that reads the lexing off the
+// reserved flag prints `a}` under `ignoreclosebraces`, and with it loses every
+// alias a `}` follows — `alias CLOSE='};'` in `$({ OPEN print bye; CLOSE})` is
+// the reference's own D08cmdsubst asking exactly that (#5011).
+//
 // **The last two rows of the moving set are the discriminators, and they
 // point opposite ways.** `{print A; }` is the *opening* reading alone, which
 // `ICB` leaves standing; `{print A}` needs both readings at once, so it
@@ -3032,8 +3053,10 @@ func shortLoopsOn(r *interp.Runner) bool {
 // whichever synonym it picks.
 func setBraceGrammar(r *interp.Runner, ignoreBraces, ignoreCloseBraces bool) {
 	// The closing reading is off when **either** name is on, written the way
-	// De Morgan has it because the linter asks for that spelling.
-	r.SetBraceReservedWordReadings(!ignoreBraces, !ignoreBraces && !ignoreCloseBraces)
+	// De Morgan has it because the linter asks for that spelling. The lexical
+	// reading under it follows the *opening* name alone: `ignoreclosebraces`
+	// leaves it standing, which is the whole of `print a}` being `a }` there.
+	r.SetBraceReservedWordReadings(!ignoreBraces, !ignoreBraces && !ignoreCloseBraces, !ignoreBraces)
 }
 
 // braceExpansionIgnored reads `ignorebraces` back, which is the substrate's

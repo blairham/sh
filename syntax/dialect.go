@@ -6327,6 +6327,37 @@ type Dialect struct {
 	// arguments — `echo x=}` — are the parse error.
 	CloseBraceAlwaysReserved bool
 
+	// CloseBraceEndsAWord is the *lexical* half of the rule above on its own:
+	// a `}` that ends a word ends it, whether or not the brace is then the
+	// reserved word that closes a group.
+	//
+	// [Dialect.CloseBraceAlwaysReserved] implies this one and a dialect that
+	// sets it need not set this as well. It exists because zsh has an option
+	// that takes the *reserved* reading away and leaves the lexing standing —
+	// `ignoreclosebraces`, which its own manual describes as letting `}` be an
+	// argument while still closing a group "in appropriate contexts", meaning
+	// where a command may begin. Measured 2026-09-28 on `/opt/homebrew/bin/zsh`
+	// — `zsh 5.9.2 (aarch64-apple-darwin25.4.0)`, `go version -m` says *not a
+	// Go executable* — each line `eval`ed so the option is in force when the
+	// text is read:
+	//
+	//	                  neither          ignorebraces  ignoreclosebraces
+	//	print a}          parse error      a}            a }
+	//	print a }         parse error      a }           a }
+	//	print }a          }a               }a            }a
+	//	print a}b         a}b              a}b           a}b
+	//	{print A}         A                {print: not   parse error near `}'
+	//	                                   found
+	//
+	// **The first row is the whole of it.** Under `ignorebraces` the brace is
+	// an ordinary character and `a}` is one word; under `ignoreclosebraces` it
+	// still ends the word — two arguments reach `print` — and is then an
+	// ordinary word rather than a group's closer. A wiring that reads the
+	// lexing off the reserved flag gets `a }` wrong, and with it every alias
+	// whose name a `}` follows: `alias CLOSE='};'` in `$({ OPEN print bye;
+	// CLOSE})` is the reference's own suite asking exactly that (#5011).
+	CloseBraceEndsAWord bool
+
 	// OpenBraceNeedsNoBlank makes a bare `{` where a command may begin the
 	// reserved word on its own, however the text runs on after it.
 	//

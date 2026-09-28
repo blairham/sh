@@ -15,14 +15,19 @@ package interp
 // than written through, and the front end's run loop reads the rest of the
 // program with whatever it finds.
 //
-// # Two readings and one setter
+// # Three readings and one setter
 //
-// The opening half — `{print A}` being a group rather than a word — and the
-// closing half — `}` ending the word it ends — are two fields of
-// syntax.Dialect, and the option that moves them moves both. They are written
-// through one setter because a caller has to read the pair to know what the
-// grammar becomes, and two setters would take two copies of the dialect to
-// arrive at one answer.
+// The opening half — `{print A}` being a group rather than a word — the
+// closing half — a `}` standing where a word may stand being the reserved
+// word — and the lexical half under it — a `}` that ends a word ending it —
+// are three fields of syntax.Dialect, and the option that moves the first two
+// moves all three. They are written through one setter because a caller has
+// to read the set to know what the grammar becomes, and three setters would
+// take three copies of the dialect to arrive at one answer.
+//
+// The third is not the second spelled differently: `ignoreclosebraces` takes
+// the reserved reading away and leaves the lexing, so `print a}` is `a }`
+// there and `a}` under `ignorebraces` (#5011).
 //
 // They are **not** one field, because a second name in the same dialect's
 // option namespace takes the closing half alone. Measured against
@@ -38,15 +43,21 @@ package interp
 // So the third row is the one that parts them: the closing name leaves the
 // opening reading alone.
 
-// BraceReservedWordReadings reports the two readings a bare brace has: whether
-// a `{` where a command may begin is the reserved word however the text runs
-// on after it, and whether a `}` is reserved wherever a word may stand rather
-// than only where a command may begin.
-func (r *Runner) BraceReservedWordReadings() (open, closing bool) {
+// BraceReservedWordReadings reports the three readings a bare brace has:
+// whether a `{` where a command may begin is the reserved word however the
+// text runs on after it, whether a `}` is reserved wherever a word may stand
+// rather than only where a command may begin, and whether a `}` that ends a
+// word ends it at all.
+//
+// The third is the lexical half of the second and outlives it: one option
+// takes the reserved reading away and leaves the lexing, so `print a}` is two
+// arguments there rather than one. See [Dialect.CloseBraceEndsAWord].
+func (r *Runner) BraceReservedWordReadings() (open, closing, endsWord bool) {
 	// One axis per lang call: the value it hands back is shared and carries
 	// no adjustment, so a caller may read a field off it and nothing else.
 	// See TestNothingReadsAnAdjustedAxisOffLang.
-	return r.lang().OpenBraceNeedsNoBlank, r.lang().CloseBraceAlwaysReserved
+	return r.lang().OpenBraceNeedsNoBlank, r.lang().CloseBraceAlwaysReserved,
+		r.lang().CloseBraceEndsAWord
 }
 
 // SetBraceReservedWordReadings moves them, for a dialect whose option
@@ -55,12 +66,14 @@ func (r *Runner) BraceReservedWordReadings() (open, closing bool) {
 // The dialect is copied and replaced rather than written through: the pointer
 // is shared with every subshell cloned from this runner, and a script must not
 // change the grammar of the shell that spawned it.
-func (r *Runner) SetBraceReservedWordReadings(open, closing bool) {
+func (r *Runner) SetBraceReservedWordReadings(open, closing, endsWord bool) {
 	d := r.dialect()
-	if d.OpenBraceNeedsNoBlank == open && d.CloseBraceAlwaysReserved == closing {
+	if d.OpenBraceNeedsNoBlank == open && d.CloseBraceAlwaysReserved == closing &&
+		d.CloseBraceEndsAWord == endsWord {
 		return
 	}
 	d.OpenBraceNeedsNoBlank = open
 	d.CloseBraceAlwaysReserved = closing
+	d.CloseBraceEndsAWord = endsWord
 	r.Dialect = &d
 }

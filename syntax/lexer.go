@@ -2770,7 +2770,10 @@ func (l *Lexer) openBraceIsAWordOfItsOwn() bool {
 // being an ordinary character everywhere but zsh — so a refusal here was this
 // preset alone against the whole panel (#3898).
 func (l *Lexer) closeBraceIsAWordOfItsOwn() bool {
-	if !l.dialect.CloseBraceAlwaysReserved {
+	// The reserved reading implies the lexical one, and the lexical one
+	// stands without it — see [Dialect.CloseBraceEndsAWord], which zsh's
+	// `ignoreclosebraces` leaves on while taking the other away.
+	if !l.dialect.CloseBraceAlwaysReserved && !l.dialect.CloseBraceEndsAWord {
 		return false
 	}
 	if l.off+1 < len(l.src) && !l.isWordEnd(l.src[l.off+1]) {

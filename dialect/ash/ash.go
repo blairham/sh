@@ -674,6 +674,9 @@ func Semantics() interp.Semantics {
 	// unanswered ReadArrayTakesOneNameOnly: the same absence as dash's —
 	// BusyBox has no array letter under `read`. Measured 2026-09-26 in the
 	// pinned alpine image, BusyBox v1.37.0.
+	// unanswered ReadEchoLettersWriteTheValues: the comment above this block
+	// already records that `-e` is refused here, and `-E` with it, so
+	// neither letter exists for the question to be about.
 	s.ReadOptions = "rsd:p:t:n:u:"
 	// `unset` has the two POSIX letters and calls anything else illegal:
 	// `unset -q x` is `illegal option -q`.

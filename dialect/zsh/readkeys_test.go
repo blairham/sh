@@ -53,17 +53,20 @@ print -r -- "st=$? [$v]"
 // The letters this shell still has not got are still refused by name, and `-k`
 // leaving the list must not have taken one of them with it.
 //
-// `-e`, `-E`, `-z`, `-c` and `-l` are all about a terminal or the line editor
-// too, which is exactly why removing one letter from a string of them is easy
-// to overshoot.
+// `-z`, `-c` and `-l` are all about a terminal or the line editor too, which
+// is exactly why removing one letter from a string of them is easy to
+// overshoot.
 //
 // `-q` has left this list, and left it the way `-k` did — into ReadOptions,
-// with the behavior behind it and its own tests in readquery_test.go. It is
-// the sixth letter this row used to name, and the reason the row is worth
-// keeping is that removing one letter from `qeEzcl` by hand is exactly how
-// one of the other five would go missing.
+// with the behavior behind it and its own tests in readquery_test.go. `-e`
+// and `-E` left it the same way in #4963: they are not the line editor's
+// letters in this shell at all but the ones that write the values a read
+// produced, and readecholetters_test.go is where they are graded now. Three
+// letters have gone out of `qeEzcl` one at a time, which is the whole reason
+// this row is worth keeping — each departure is the moment one of the others
+// could have gone missing with it.
 func TestTheOtherTerminalLettersAreStillRefused(t *testing.T) {
-	for _, letter := range []string{"e", "E", "z", "c", "l"} {
+	for _, letter := range []string{"z", "c", "l"} {
 		out, st := runZsh(t, t.TempDir(), "read -"+letter+" v\n")
 		want := "zsh:read:1: -" + letter + " is not implemented yet\n"
 		// Status 2 and not 1: an option this shell has not got stops the

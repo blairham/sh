@@ -217,6 +217,7 @@ ash   PrintfTimeOperandIsADateString
 ash   ProducedParameterListing
 ash   ReadArrayDefault
 ash   ReadArrayTakesOneNameOnly
+ash   ReadEchoLettersWriteTheValues
 ash   ReadExactCountKeepsPartial
 ash   ReadPartialCountSucceeds
 ash   ReadonlyAttributeCanBeRemoved
@@ -550,6 +551,7 @@ dash  QuitResetRestoresTheDefault
 dash  ReadArrayDefault
 dash  ReadArrayTakesOneNameOnly
 dash  ReadCountJudgesTheNamesAfterTheFirst
+dash  ReadEchoLettersWriteTheValues
 dash  ReadExactCountKeepsPartial
 dash  ReadPartialCountSucceeds
 dash  ReadTimeoutBoundsReadability
@@ -671,6 +673,7 @@ ksh   MixedTableLiteral
 ksh   NegatedTestRecordsThePostNegationStatus
 ksh   PrintfReportsAMissingHexDigit
 ksh   QuitResetRestoresTheDefault
+ksh   ReadEchoLettersWriteTheValues
 ksh   ReadonlyRecordsTheCompoundAttribute
 ksh   ReadonlyReferenceLetter
 ksh   SelectAssumesUnboundedWidth

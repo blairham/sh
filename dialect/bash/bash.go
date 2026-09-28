@@ -1388,6 +1388,13 @@ func Semantics() interp.Semantics {
 	// `-a` and takes its name as the option's own argument, so every operand
 	// after it is an ordinary name to fill and there is no second array
 	// operand to judge. Measured 2026-09-26 on bash 5.3.
+	// `-e` and `-E` are this shell's *editor* letters, not zsh's echoing
+	// pair: off a terminal they change nothing at all. Measured 2026-09-22 —
+	// `printf x | read -e -i pre -r l` sets l to `x`, seed and all, and
+	// `read -e x </dev/null` reports 1 with x cleared exactly as `read x`
+	// does. So the answer is No rather than an absence: the letters are here
+	// and they do not write the values (#4963).
+	s.ReadEchoLettersWriteTheValues = interp.No
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.Yes

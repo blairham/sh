@@ -2627,7 +2627,13 @@ func Semantics() interp.Semantics {
 	// `invalid option`, ksh93u+ `unknown option` and dash `Illegal option`,
 	// all at 2, so nothing here needs an axis. interp/readkeys.go carries the
 	// rest of what was measured.
-	s.ReadOptions = "rsnpAd:t:u:k#q"
+	//
+	// `-e` and `-E` are this shell's alone and are not bash's editor pair:
+	// they **echo the values the read produced**, one per line, on standard
+	// output, and `-e` assigns none of them. See
+	// interp.Semantics.ReadEchoLettersWriteTheValues for the rows (#4963).
+	s.ReadOptions = "rsnpAd:t:u:k#qeE"
+	s.ReadEchoLettersWriteTheValues = interp.Yes
 	// `unset -m` reads its operands as patterns, which is this shell's
 	// alone; `-n` is not here, and that is measured rather than an
 	// omission — `unset -n x` is `bad option: -n` in zsh 5.9.2 where bash
@@ -5357,8 +5363,8 @@ func Diagnostics() interp.Diagnostics {
 			// letter named here while the accepted set spells it is either a
 			// wrong refusal or, as here, a line nothing reads.
 			"hash": "fL",
-			// read's letters about a terminal or the line editor —
-			// -e/-E echoing, -z and the zle pair -c/-l. The -p
+			// read's letters about a terminal or the line editor — `-z`
+			// and the zle pair -c/-l. The -p
 			// coprocess is implemented as its measured refusal — see
 			// ReadNoCoprocess. zsh's read also says nothing at all about a
 			// dead -u descriptor and reports 1, which is why no
@@ -5373,7 +5379,13 @@ func Diagnostics() interp.Diagnostics {
 			// two tables move together on purpose: a letter in the accepted
 			// set and still named here is refused as missing while it works,
 			// and a letter in neither is `bad option` for something zsh has.
-			"read": "eEzcl",
+			//
+			// **`-e` and `-E` have left this list** (#4963): they echo the
+			// values the read produced and `-e` assigns none of them, which
+			// is ReadOptions above and ReadEchoLettersWriteTheValues. The two
+			// tables move together, so a letter named here while the accepted
+			// set spells it would be refused as missing while it works.
+			"read": "zcl",
 			// typeset's letters this engine does not hold: the float
 			// format (-E), the key read (-k) and tracing (-t).
 			// `-H`, `-U`, `-T`, `-h` and `-m` have left this list — they are

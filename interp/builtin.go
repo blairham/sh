@@ -5979,8 +5979,32 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// nothing in every shell that has the letter, terminal or none, and
 	// skipping the word instead once let a password echo (#321).
 
-	// -e, -E and -i are parsed and do nothing, which is not the same as
-	// ignoring them. All three are about a *line editor*: -e opens one, -E
+	// -e and -E are one column's *echo* letters and another's editor
+	// letters, so what they do is an axis rather than a letter. Where they
+	// echo, the values this read produced are written to standard output one
+	// per line and `-e` writes none of them to the names — asked here, in
+	// front of the read, so a dialect that answers No reaches the note below
+	// unchanged, and asked only where one of the two letters was written.
+	//
+	// The reading is at each place a value is settled rather than here: what
+	// is echoed is the *values*, so there is nothing to write until the split
+	// has happened. See Semantics.ReadEchoLettersWriteTheValues.
+	echo, echoOnly := false, false
+	if strings.ContainsAny(opts, "eE") {
+		if r.ask(r.sem().ReadEchoLettersWriteTheValues,
+			"`read -e` and `-E` writing the values they read") {
+			// `-e` beats `-E` where both are written, measured: `read -eE x`
+			// echoes and leaves x unset.
+			echo, echoOnly = true, strings.ContainsRune(opts, 'e')
+		}
+		if r.unspecified {
+			return 2
+		}
+	}
+
+	// -e, -E and -i are parsed and do nothing in the columns above answering
+	// No, which is not the same as ignoring them. All three are about a *line
+	// editor* there: -e opens one, -E
 	// opens one with the shell's default completion on it, and -i is the
 	// text it opens with. So they have an effect only where there is a
 	// terminal and an editor on it, and this runner's `read` never opens
@@ -6538,6 +6562,15 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
+		// The elements are the values here, one line each: measured,
+		// `printf 'a b c\n' | read -E -A r` writes three lines and fills
+		// three elements.
+		if echo {
+			r.readEcho(fields)
+			if echoOnly {
+				return r.readRefusedOrStatus(refused, status, badName, bad)
+			}
+		}
 		if !r.readMayWrite(array) {
 			if r.ctl == controlExit {
 				return r.status
@@ -6597,7 +6630,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// the splitter found more fields than there are names — so `at` is longer
 	// than `args` — or the tail answer carried a count that was equal, which
 	// leaves `at` exactly as long.
-	for i, name := range args[:fill] {
+	// Two passes, because the echo letters write the values *before* any of
+	// them is assigned and a name with no field still gets its line: the
+	// list has to exist whole before the first write. One pass with the
+	// echo inside it would be the same output for every case but the one
+	// that matters — a refused write partway along.
+	values := make([]string, 0, fill)
+	for i := range args[:fill] {
 		var v string
 		switch {
 		case i >= len(fields):
@@ -6627,11 +6666,37 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				return 2
 			}
 		}
-		if st, stop := r.readFill(name, v, fill-i-1, defaulted, &refused); stop {
+		values = append(values, v)
+	}
+	if echo {
+		r.readEcho(values)
+		if echoOnly {
+			// Nothing is written, so nothing can be refused: measured,
+			// `typeset -r x=orig; read -e x` is silence at 0 with `orig`
+			// still there, where a write would have been the frozen-name
+			// complaint. And a name that had a value keeps it — `-e` does
+			// not clear, which every other failed read here does.
+			return r.readRefusedOrStatus(refused, status, badName, bad)
+		}
+	}
+	for i, name := range args[:fill] {
+		if st, stop := r.readFill(name, values[i], fill-i-1, defaulted, &refused); stop {
 			return st
 		}
 	}
 	return r.readRefusedOrStatus(refused, status, badName, bad)
+}
+
+// readEcho writes the values a `read` produced, one per line, which is what
+// the echo letters of Semantics.ReadEchoLettersWriteTheValues are for.
+//
+// Standard output, measured: `read -e x 2>/dev/null` still shows the line and
+// `read -e x 1>/dev/null` shows nothing. Through printf, so a failed write
+// reaches the status the way every other builtin's does.
+func (r *Runner) readEcho(values []string) {
+	for _, v := range values {
+		r.printf("%s\n", v)
+	}
 }
 
 // readRefusedOrStatus folds a refusal the builtin went on past into the

@@ -2470,6 +2470,58 @@ type Semantics struct {
 	// option's own argument, so every operand after it is a name to fill in
 	// the ordinary way, and the other two have no array letter at all.
 	ReadArrayTakesOneNameOnly Answer
+
+	// ReadEchoLettersWriteTheValues makes `read -e` and `read -E` write the
+	// values the read produced to standard output, one per line — and `-e`
+	// write none of them to the names.
+	//
+	// The letters are in two columns and they are **not the same letters**,
+	// which is what makes this an axis rather than a letter. In bash both are
+	// about a line *editor*: `-e` opens one and `-E` opens one with the
+	// shell's default completion, so off a terminal the pair does nothing at
+	// all and is parsed and dropped — see the note in biRead, and #4170 for
+	// what refusing them by name cost. In zsh the pair is about echoing and
+	// it works on a pipe.
+	//
+	// Measured 2026-09-27 on zsh 5.9.2 with `-f`, one probe a line:
+	//
+	//	printf '  a   b   c  \n' | read -E x y   "a\nb   c\n", x=a y=b   c
+	//	printf '  a   b   c  \n' | read -e x y   the same two lines, x and y unset
+	//	printf 'a b c\n'         | read -E -A r  "a\nb\nc\n", r=(a b c)
+	//	printf 'a\n'             | read -E x y z "a\n\n\n" — a line per name
+	//	printf '  a  b  \n'      | read -E       "a  b\n", REPLY the record whole
+	//	printf 'a\n'   x=keep;     read -e x     "a\n", x is still `keep`
+	//	printf 'a\n'   typeset -r x=orig
+	//	                           read -e x     "a\n", 0, x is still `orig`
+	//	printf ''      | read -e x               "\n", 1
+	//	printf 'a\n'   | read -eE x             "a\n", x unset — `-e` wins
+	//
+	// Four of those rows are the ones that decide how it may be written, and
+	// each rules out a reading the others would let through:
+	//
+	//   - **The values, not the record.** `read -E x y` writes *two* lines, so
+	//     what is echoed is the fields as they would be assigned and not the
+	//     line as it was read. The bare-name row is the same rule seen from
+	//     the other side: with no name the record goes to the shell's own one
+	//     whole, and that whole record is the one value echoed.
+	//   - **A name with no field still gets its line**, so the count is the
+	//     names' and not the fields'.
+	//   - **`-e` leaves a name as it was** rather than clearing it, which is
+	//     the opposite of what every other failed or partial `read` here does.
+	//   - **`-e` attempts no write at all**: a readonly name is not a refusal,
+	//     it is silence at 0, so the letter is not "assign and discard".
+	//
+	// `-e` wins over `-E` where both are written, which is why one axis
+	// carries both: they are one letter pair with one meaning, and a dialect
+	// that echoes assigns from `-E` alone.
+	//
+	// Asked only where one of the two letters is written, so a No leaves the
+	// pair exactly as the columns that open an editor already have it.
+	//
+	// unexhibited No: the letters reach bash's `read` as an editor's and
+	// answer the same off a terminal, which is every `read` the corpus runs;
+	// ksh93, dash and BusyBox ash have no such letters at all.
+	ReadEchoLettersWriteTheValues Answer
 	// ReadPartialCountSucceeds decides `read -n N` when the input ends
 	// after some but fewer than N characters: ksh93 calls the read a
 	// success and bash reports 1, both keeping what arrived. Asked only

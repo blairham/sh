@@ -1988,6 +1988,10 @@ func Semantics() interp.Semantics {
 	// fills `a` and clears `b` at 0, where the other shell with the letter
 	// declines the line. Measured 2026-09-26 on ksh93u+ 2012-08-01 (#4622).
 	s.ReadArrayTakesOneNameOnly = interp.No
+	// unanswered ReadEchoLettersWriteTheValues: there is no `-e` and no `-E`
+	// under `read` here — both are `read: -e: unknown option` — so the
+	// question cannot be put to this shell. Measured 2026-09-27 on ksh93u+
+	// 2012-08-01.
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
 	s.ReadTimeoutKeepsWhatArrived = interp.No

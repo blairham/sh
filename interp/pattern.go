@@ -904,6 +904,38 @@ type patternOpts struct {
 	// true of `f @(a)(b)` with no count anywhere in it, so that refusal is
 	// a lexer gap of its own and not this flag's.
 	noBareGroup bool
+	// armParens says a bare `(` opens a group on **this surface** even behind
+	// a pattern group, so noBareGroup is not armed here either.
+	//
+	// A `case` arm is that surface and the parameter-expansion operand is the
+	// other; a word and a condition are on the far side of it. What a run
+	// standing behind a pattern group *means* is where ksh93 disagrees with
+	// itself, and this is that disagreement written down rather than smoothed
+	// over. Measured 2026-09-28 against /bin/ksh `Version AJM 93u+
+	// 2012-08-01`, in a directory holding `ab`, `a(b)` and `a()`:
+	//
+	//	                                    reads
+	//	printf "[%s]" @(a)(b)       a(b)    text
+	//	[[ "a(b)" == @(a)(b) ]]     yes     text
+	//	[[ ab == @(a)(b) ]]         no
+	//	case ab in @(a)(b))         HIT     a group
+	//	case "a(b)" in @(a)(b))     MISS
+	//	v=ab;     ${v#@(a)(b)}      empty   a group
+	//	v='a(b)'; ${v#@(a)(b)}      a(b)
+	//
+	// Each surface is a **pair** on purpose: one subject the text reading
+	// matches and one the group reading does, so a row cannot agree for the
+	// other reading's reason. The quoted spelling is the control that says
+	// quoting still literalises where a group is read —
+	// `v=ab; ${v#@(a)"(b)"}` is `ab` and `v='a(b)'; …` is empty.
+	//
+	// The control that ties all four surfaces together is that a bare run
+	// with **no** group in front of it is a syntax error in a word and in a
+	// condition — `[[ ab == a(b) ]]` — so it is the group in front that
+	// licenses the run at all, and then each surface reads what it licensed
+	// its own way. See syntax.Dialect.ParenRunAfterPatternGroupIsText, which
+	// is the lexical half (#4972).
+	armParens bool
 	// topGroup reads a `|` standing outside every group and bracket as an
 	// alternation of the whole pattern, which one dialect does and only for
 	// a bar that arrived live — see matchTopLevel. Separate from group for
@@ -1649,6 +1681,25 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			if quant != 0 {
 				lead = 1
 			}
+			// From here on a bare `(` in this branch is a character on the
+			// surfaces that read one that way, exactly as it is once a
+			// *count* has been read. The lexer only lets a bare run into a
+			// word behind a group at all — see
+			// [syntax.Dialect.ParenRunAfterPatternGroupIsText] — so the two
+			// doors a parenthesis has are a count and a group, and this is
+			// the second of them. patternOpts.armParens has the grid and
+			// says which surfaces are on which side (#4972).
+			//
+			// **`!o.group` is the whole of what keeps this off the other
+			// dialect**, and it is not a tidiness guard: this branch is
+			// every dialect's, where the count's identical line is reached
+			// only through splitCountedGroup. Where a bare `(` opens a group
+			// *anywhere*, a second group behind the first is still a group —
+			// arming it there turned
+			// `(#b)[[:blank:]]#([![:blank:]=]##)[[:blank:]]#[=][[:blank:]]#(*)`
+			// into a pattern whose last group was three characters, which is
+			// the prompt line #1585 and #1217 are both about.
+			o.noBareGroup = !o.group && !o.operandParens && !o.armParens
 			return matchGroup(body, pp, lead, quant, rest, pp+len(p)-len(rest), s, at, o)
 		}
 		if lo, hi, rest, ok := splitNumericRange(p, &o); ok {

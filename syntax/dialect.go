@@ -5811,6 +5811,65 @@ type Dialect struct {
 	// command in zsh 5.9.2 and here alike.
 	UnterminatedPatternGroupIsAWord bool
 
+	// ParenRunAfterPatternGroupIsText keeps a balanced `( … )` run standing
+	// immediately behind a pattern group inside the word, where without it the
+	// `(` ends the word and the parser reports it unexpected.
+	//
+	// One shell's, and the other four answer for three different reasons.
+	// Measured 2026-09-28 with `echo A@(a)(b)B`, `-c` under `env -i`:
+	//
+	//	ksh93u+ 2012-08-01              A@(a)(b)B
+	//	bash 5.3.20, extglob on and off syntax error near unexpected token `('
+	//	dash 0.5.12                    Syntax error: "(" unexpected
+	//	BusyBox ash 1.38.0             syntax error: unexpected "("
+	//	zsh 5.9.2                      no matches found: A@(a)(b)B
+	//
+	// ash refuses the *quantified* spelling too — `echo A@(a)@(b)B` is the
+	// same error there — so its row is about having no extended patterns at
+	// all rather than about the run behind one.
+	//
+	// zsh's column is a **different construct wearing the same characters**:
+	// a bare `(` opens a group anywhere in a word there, so that row is no
+	// evidence for this one and the flag is off for it.
+	//
+	// # What the run has to be adjacent to
+	//
+	// The **construct**, not the byte before the `(`, and that was measured
+	// rather than reasoned. Holding "the byte before the `(` is a `)`" fixed
+	// and varying what produced it, in ksh93u+:
+	//
+	//	f @(a)(b)        1 | [@(a)(b)]   a pattern group
+	//	f $(echo a)(b)   refused        a command substitution
+	//	f "@(a)"(b)      refused        a quoted run
+	//	f $((1))(b)      refused        an arithmetic expansion
+	//	f \)(b)          refused        an escaped `)`
+	//	f 'x)'(b)        refused        a single-quoted `)`
+	//
+	// Five spellings put a `)` immediately in front of the `(` and only the
+	// group licenses it.
+	//
+	// # And it is adjacency, repeated
+	//
+	//	f @(a)(b)(c)     1 | [@(a)(b)(c)]  a run behind a run chains
+	//	f @(a)((b))      1 | [@(a)((b))]   balanced rather than shallow
+	//	f @(a)()         1 | [@(a)()]      and may be empty
+	//	f @(a)x(b)       refused          one character between them ends it
+	//	f @(a)(b)x(c)    refused          including after a run
+	//	f @(a)@(b)       1 | [@(a)@(b)]    (control) a quantifier needs no run
+	//
+	// The two refusals bound it: the word ends at a `(` that is not adjacent
+	// to a run this reading has already taken, so the rule cannot be "a word
+	// holding a group never ends at a `(`". The control says the word was not
+	// ending because a *group* ended.
+	//
+	// What the run then **means** is not this flag's question and is not one
+	// answer: it is text in a condition and in a word, and a group in a
+	// `case` arm and in a parameter-expansion operand. See
+	// interp/patternOpts.noBareGroup and patternOpts.armParens, where that
+	// grid is. This flag is the lexical half — whether the word ends — and
+	// nothing more. See #4972.
+	ParenRunAfterPatternGroupIsText bool
+
 	// UnterminatedExpansionOperandIsAValue ends a `${` that ran out of input
 	// **at the end of the input** and runs the command it was part of, where
 	// without it the expansion is refused and nothing runs.

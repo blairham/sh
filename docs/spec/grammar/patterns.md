@@ -1363,6 +1363,80 @@ the only reason one can be seen at that depth is the count that let it in.
 Inside a group it is a group again, which is the fourth row of the table
 before this one.
 
+### A run standing behind a group belongs to the word
+
+The same question one construct over, and it has the same shape: a `(` that
+follows a `)` ends the word in every other reading. `echo A@(a)(b)B` is
+``syntax error near unexpected token `('`` on bash 5.3.20 with `extglob` on
+and off, `Syntax error: "(" unexpected` on dash, and `no matches found:
+A@(a)(b)B` on zsh 5.9.2 — that last being that shell's own bare group again,
+a different construct wearing the same characters.
+
+**It is the construct in front and not the byte**, and five spellings put a
+`)` immediately before the `(` to say so:
+
+| probe | ksh93u+ | |
+| --- | --- | --- |
+| `f @(a)(b)` | `1 \| [@(a)(b)]` | a pattern group |
+| `f $(echo a)(b)` | refused | a command substitution |
+| `f "@(a)"(b)` | refused | a quoted run |
+| `f $((1))(b)` | refused | an arithmetic expansion |
+| `f \)(b)` | refused | an escaped `)` |
+| `f 'x)'(b)` | refused | a single-quoted `)` |
+
+And it is adjacency **repeated**, which is what makes a run behind a run
+chain without making a word that holds a group unable to end at a `(`:
+
+| probe | ksh93u+ | |
+| --- | --- | --- |
+| `f @(a)(b)(c)` | `1 \| [@(a)(b)(c)]` | a run behind a run |
+| `f @(a)((b))` | `1 \| [@(a)((b))]` | balanced rather than shallow |
+| `f @(a)()` | `1 \| [@(a)()]` | and may be empty |
+| `f @(a)x(b)` | refused | one character between them ends it |
+| `f @(a)(b)x(c)` | refused | including after a run |
+| `f @(a)(b)x` | `1 \| [@(a)(b)x]` | while text behind it is ordinary |
+| `f @(a)@(b)` | `1 \| [@(a)@(b)]` | *(control)* a quantifier needs no run |
+| `f {2,3}(a)(b)` | `1 \| [{2,3}(a)(b)]` | the counted spelling too |
+
+`Dialect.ParenRunAfterPatternGroupIsText` is the flag, and it is the
+**lexical** half only.
+
+### And what the run means is four surfaces and two answers
+
+This is where that shell disagrees with itself, and the disagreement is
+reproduced rather than rounded off. Every surface is a **pair**: one subject
+the text reading matches and one the group reading does. Without the pair a
+row says nothing, because `@(a)(b)` comes back as the word it was written
+with under *either* reading — there because `(b)` is text and no file is
+called `a(b)`, here because a group reading finds no `ab`. In a directory
+holding `ab`, `a(b)`, `a()`, `a((b))`, `a(b)(c)` and `abc`:
+
+| surface | probe | ksh93u+ | reads |
+| --- | --- | --- | --- |
+| a word | `printf "[%s]" @(a)(b)` | `[a(b)]` | the characters |
+| | `printf "[%s]" @(a)@(b)` *(control)* | `[ab]` | |
+| a condition | `[[ "a(b)" == @(a)(b) ]]` | yes | the characters |
+| | `[[ ab == @(a)(b) ]]` | no | |
+| a `case` arm | `case ab in @(a)(b))` | HIT | **a group** |
+| | `case "a(b)" in @(a)(b))` | MISS | |
+| an operand | `v=ab; ${v#@(a)(b)}` | empty | **a group** |
+| | `v='a(b)'; ${v#@(a)(b)}` | `a(b)` | |
+
+The alternation spelling sharpens the `case` rows, since a run read as text
+has no arms at all: `case ac in @(a)(b|c))` is HIT and `case ad in …` is
+MISS, where `[[ ab == @(a)(b|c) ]]` is no and `[[ 'a(b|c)' == … ]]` is yes.
+And the operand's quoted spelling is the control that says quoting still
+literalises where a group is read — `v=ab; ${v#@(a)"(b)"}` is `ab`.
+
+`patternOpts.armParens` carries the surface answer and joins
+`patternOpts.operandParens`, which the count already needed. The control
+tying all four together is the one the count's own section ends on: a bare
+run with **no** group in front of it is a syntax error in a word and in a
+condition — `[[ ab == a(b) ]]` — so it is the construct in front that
+licenses the run, and each surface then reads what it licensed its own way.
+Inside a group a bare parenthesis is a group again on every surface, which
+`@(a|(b))` matching `b` is the control for.
+
 ### Which brace, and which parenthesis
 
 Four keys, each with a row that is the only thing separating it from a

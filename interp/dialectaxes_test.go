@@ -588,6 +588,32 @@ func TestALocalInheritingTheExportAttributeIsAnAxis(t *testing.T) {
 	if _, st := axisRun(t, `export FOO=bar; f() { local FOO=baz; }; f`, func(*Semantics) {}); st != 2 {
 		t.Errorf("status %d, want the unanswered axis refused", st)
 	}
+	// A **tie** asks the same question and reaches it by another road: its
+	// halves do not go through the declaration loop above, so the ask and
+	// the refusal it can return are written out a second time in
+	// Runner.declareTie. Both halves are asked, and the array half over an
+	// exported global of its own name is the one that made this an issue
+	// (#5098).
+	letters := func(s *Semantics) {
+		s.LocalOptions += "T"
+		s.DeclareOptions += "T"
+		// And the other two questions a valueless declaration inside a `()`
+		// function reaches on the way, answered so these rows are about the
+		// one above them and not about whichever refusal came first.
+		s.TypesetLocalNeedsKeywordFunction = No
+		s.DeclaredNameWithoutValueIsEmpty = Yes
+	}
+	if _, st := axisRun(t, `export outer=bar; f() { local -T OUTER outer; }; f`, letters); st != 2 {
+		t.Errorf("status %d, want the tie to refuse the unanswered axis", st)
+	}
+	// Answered, the same line is taken — which is what says the row above
+	// is about the question and not about the letter.
+	if _, st := axisRun(t, `export outer=bar; f() { local -T OUTER outer; }; f`, func(s *Semantics) {
+		letters(s)
+		s.LocalInheritsTheExportAttribute = No
+	}); st != 0 {
+		t.Errorf("status %d, want the answered axis taken", st)
+	}
 }
 
 // The three readings of a body that is shaped like a numeric range and holds

@@ -105,10 +105,72 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 			return nil
 		}
 		r.traceAnonymousCall(name, args)
-		return r.callFunc(ctx, &syntax.FuncDecl{
+		decl := &syntax.FuncDecl{
 			Name: name, Keyword: c.Keyword, Body: c.Body, Start: c.Start,
-		}, args)
+		}
+		return r.callFuncNumberedFrom(ctx, decl, name, args, r.anonBodyNumberedFrom(c))
 	})
+}
+
+// anonBodyNumberedFrom is the line a nameless function's body is numbered
+// from, or nil where that is the construct's own — which is what every other
+// call in the shell uses.
+//
+// **A body written without brackets is not renumbered.** Measured 2026-09-28
+// on zsh 5.9.2 (`/opt/homebrew/bin/zsh`; `go version -m` reports *not a Go
+// executable*), script files under `env -i PATH=/usr/bin:/bin` with a scratch
+// HOME and standard input on the null device, the construct on line 2:
+//
+//	() print -r -- "$LINENO"  	2      	() { print -r -- "$LINENO" }  	0
+//	setopt xtrace; () print A 	+(anon):2>	the braced spelling       	+(anon):0>
+//	() nosuchcmd-xyz          	(anon):2:	the braced spelling       	(anon):
+//	() (( 1/0 ))              	(anon):2:	the braced spelling       	(anon):
+//
+// Three readers, one number: `$LINENO`, the `%i` of a trace prefix, and the
+// line a diagnostic names. All three are `Runner.funcLine` subtracted from the
+// line in hand, and all three move together, which is why this moves that one
+// field and not the frame beside it.
+//
+// **The caller's numbering, and not the script's.** The two part company as
+// soon as the call is made from inside anything: `() { () print A }` traces
+// the inner body at `+(anon):0>` and `f() { () print A }` at `+f:0>` — nought
+// in both, because nought is what the enclosing frame calls that line. So
+// this is the frame's own origin carried on rather than a zero written here,
+// which a grid of top-level calls alone cannot tell apart, every row of it
+// being made where the two agree.
+//
+// The body's distance from the header is added to it, because the two are not
+// the same where the body stands on a later line: `()` over three blank lines
+// and then `print` answers the **header's** line on the reference and not the
+// body's, so the number to report is the header's and this difference is what
+// makes it come out.
+//
+// **Only the parenthesised header.** The keyword's own non-bracketed body is
+// renumbered like a bracketed one: `function >f print A` traces `+(anon):0>`
+// where `() print A` on the same line traces `+(anon):2>`, measured the same
+// day. Same body, same line, and only the word that opened the construct
+// moves.
+//
+// **And only a body with no statement list of its own.** A brace group and a
+// subshell are the bracketed spellings and are renumbered, which the rows
+// above are the control for. Between them sit the compound commands written
+// without brackets, and those are *half* renumbered: `() for i in a; do print
+// $i; done` traces its own `i=a` at the caller's line and the `print` inside
+// its `do` list at nought, so one call would need two numberings and this
+// gives it one. They are left where they were — writing the caller's line for
+// neither — rather than fixed in one direction and broken in the other. See
+// #5080 for the row that remains.
+func (r *Runner) anonBodyNumberedFrom(c *syntax.AnonFunc) *int {
+	if c.Keyword {
+		return nil
+	}
+	switch c.Body.(type) {
+	case *syntax.SimpleCmd, *syntax.TestClause, *syntax.ArithCmdClause:
+	default:
+		return nil
+	}
+	from := r.funcLine + int(c.Body.Pos().Line) - int(c.Start.Line)
+	return &from
 }
 
 // anonymousFunctionName is what a nameless function's frame reports, the

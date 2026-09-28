@@ -1639,6 +1639,24 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 // check and the recursion bound. The file the body is remembered as coming
 // from is the implementation's too, because that is where its lines are.
 func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name string, args []string) error {
+	return r.callFuncNumberedFrom(ctx, fn, name, args, nil)
+}
+
+// callFuncNumberedFrom is callFuncAs with the line the body's own numbering
+// is measured against given rather than taken from the definition.
+//
+// One construct needs them apart. A nameless function whose body was written
+// **without brackets** is not renumbered: `() print -r -- "$LINENO"` on line 2
+// answers 2 where `() { print -r -- "$LINENO" }` answers 0, measured
+// 2026-09-28 on zsh 5.9.2 (#5080). The definition's own line is still the
+// construct's — the frame reports it, and `$funcsourcetrace` reads it back —
+// so this moves the *numbering* and leaves that alone, which is why they are
+// two values here and one everywhere else.
+//
+// nil is "the definition's", which is every other call.
+func (r *Runner) callFuncNumberedFrom(ctx context.Context, fn *syntax.FuncDecl, name string,
+	args []string, numberFrom *int,
+) error {
 	// The bound a script may have moved, asked before the shell's own: a
 	// script that set one is asking for a refusal well short of the ceiling
 	// below, and the two say different things and give up different amounts of
@@ -1751,6 +1769,13 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// above carries the same line, for the dialect that reports it per frame
 	// rather than only for the one running.
 	r.funcLine = defLine
+	if numberFrom != nil {
+		// A body the shell does not renumber. Only this field moves: the
+		// frame pushed above keeps the definition's line, which is what
+		// `$funcsourcetrace` reports and what the reference reports there
+		// for both spellings alike. See callFuncNumberedFrom.
+		r.funcLine = *numberFrom
+	}
 	// And a line pinned by the *text* the call was written in does not reach
 	// the body, whose lines are its own: a trap body reports the line it
 	// fired on, and a function it calls reports its own. See
@@ -1783,11 +1808,19 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	// `eval`'s text from one there was no offset in force to record, so the
 	// origin holds nothing and this is the zero it always was.
 	savedBase, savedText := r.lineBase, r.runText
-	r.lineBase = origin.bodyLineBase()
-	// And the text the body was read from, on the same terms: a function
-	// defined in a sourced file quotes that file however it is called. See
-	// runningText.
-	r.runText = origin.text
+	if numberFrom == nil {
+		r.lineBase = origin.bodyLineBase()
+		// And the text the body was read from, on the same terms: a
+		// function defined in a sourced file quotes that file however it is
+		// called. See runningText.
+		r.runText = origin.text
+	}
+	// A body that keeps the caller's numbering keeps the **whole** of it,
+	// offset and text included. Moving only funcLine left the one call made
+	// from inside borrowed text answering one line short: `$(() print -r --
+	// $LINENO)` written on line 2 is 2 on the reference, which is what the
+	// substitution itself answers there, and was 1 here because the offset
+	// the substitution was running under had been reset underneath it.
 	defer func() { r.lineBase, r.runText = savedBase, savedText }()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and

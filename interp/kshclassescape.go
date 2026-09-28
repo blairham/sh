@@ -88,8 +88,90 @@ func matchKshClassEscape(letter byte, u string) bool {
 	return false
 }
 
+// kshGlobControlEscape is the character one of ksh93's glob **control**
+// escapes names, and whether the letter is one of them.
+//
+// Not to be read against [kshControlEscape] in interp/printfquote.go, which
+// is the other direction and another surface: that one is how `printf %q`
+// *writes* a byte, and its note that this shell "has no `\v`" is about that
+// spelling. A `~(K)` glob reads `\v` as a vertical tab all the same, which is
+// measured below — two surfaces, two answers, no contradiction.
+//
+// A table of its own beside [kshClassEscapes] rather than eight more entries
+// in it, because it is a different shape: a class names a *set* and consumes
+// whatever unit is in it, and one of these names exactly one character and
+// consumes that character or nothing.
+//
+// Measured 2026-09-28 against /bin/ksh `Version AJM 93u+ 2012-08-01`, each
+// probe from a script file under `env -i PATH=/usr/bin:/bin` with a scratch
+// `HOME`, **each letter as a pair** — a control reading and a letter reading
+// agree on half of all subjects, so a row saying only that `z~(K)a\nb` fails
+// to match `zanb` would pass for a pattern that matched nothing at all:
+//
+//	letter   `[[ zanb == z~(K)a\nb ]]`   the letter   what it names
+//	\n        no                          LF           newline
+//	\t        no                          TAB          tab
+//	\r        no                          CR           carriage return
+//	\f        no                          FF           form feed
+//	\v        no                          VT           vertical tab
+//	\a        no                          BEL          alert
+//	\e        no                          ESC          escape
+//	\E        no                          ESC          the same character
+//
+// The "what it names" column is a row of its own for each letter — the
+// subject built with `$'za\nb'` and matched against the same pattern, yes in
+// every one.
+//
+// **Two letters are deliberately not here**, and both were measured rather
+// than passed over:
+//
+//   - `\0` is the **letter** `0` — `[[ za0b == z~(K)a\0b ]]` is yes there —
+//     so it is not a numeric escape in this reading.
+//   - `\b` matches **neither**. Not the letter `b`, not a backspace, not a
+//     zero-width anything: `zabb`, `$'za\bb'`, `zab` and `$'za\b'` are all no
+//     against `z~(K)a\bb`, while `$'za\bb'` against `z~(K)a?b` is yes, which
+//     is the control that says the subject is one matchable character wide.
+//     This column already answers no to every one of those, so it is not a
+//     divergence — it is a letter neither shell has a use for, and writing a
+//     guess for it is exactly where a table agrees with the reference for the
+//     wrong reason.
+//
+// The escapes are ASCII, so one names one **byte** where a class takes a
+// whole unit. A multi-byte character can equal none of them.
+func kshGlobControlEscape(c byte) (byte, bool) {
+	switch c {
+	case 'n':
+		return '\n', true
+	case 't':
+		return '\t', true
+	case 'r':
+		return '\r', true
+	case 'f':
+		return '\f', true
+	case 'v':
+		return '\v', true
+	case 'a':
+		return '\a', true
+	case 'e', 'E':
+		// Both spell escape, measured: `$'\e'` and `$'\E'` are both byte 27
+		// there, and both patterns match a subject holding one.
+		return 0x1b, true
+	}
+	return 0, false
+}
+
+// kshGlobEscape reports whether the character behind a backslash is one the
+// `~(K)` reading gives a meaning to at all — either of the two families.
+func kshGlobEscape(c byte) bool {
+	if kshClassEscape(c) {
+		return true
+	}
+	_, ok := kshGlobControlEscape(c)
+	return ok
+}
+
 // kshClassEscapeSpan reports whether this span is a backslash the script
-// wrote in front of one of the six class letters.
+// wrote in front of a letter either family names.
 //
 // The span kind is the whole of the reading, exactly as it is for
 // tildeKeepsBackslash: a backslash written in front of a character is its own
@@ -97,7 +179,7 @@ func matchKshClassEscape(letter byte, u string) bool {
 // visible here and invisible one step later.
 func kshClassEscapeSpan(s syntax.Span) bool {
 	return s.Kind == syntax.Literal && s.Quoting == syntax.BackslashQuoted &&
-		len(s.Value) == 1 && kshClassEscape(s.Value[0])
+		len(s.Value) == 1 && kshGlobEscape(s.Value[0])
 }
 
 // tildeGlobClasses reports whether any span of the word carries a `~(K)`

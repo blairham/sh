@@ -2630,9 +2630,44 @@ measured rather than an omission: with `za` and `zb` on disk, `z~(N)a` names
 `za` — so the group is read — while `z~(N)z*` is the word it was written as,
 where an `N` that reached the word would have deleted it.
 
-A group holding a letter ksh93 has and this shell does not answer is still
-the ordinary characters it was written with, so `[[ zab == z~(M)ab ]]`
-matches there and does not here. That is its own row rather than this one's.
+A group holding a letter ksh93 has and this shell does not answer is
+**refused by name**, wherever the group stands. That reading was a head
+group's alone for a while, and the two positions then disagreed about a
+question this repository had already settled: `~(M)zab` stopped the script
+and `z~(M)ab` answered a silent `no` at status 0, which is the same wrong
+answer with the refusal missing. ksh93u+ matches on every letter it has, so
+the pattern that reads `no` here is a pattern that means something else
+there.
+
+Measured a letter at a time over `ABEFGKLMNOPSUVXaglimprsx` with
+`[[ zab == z~(L)ab ]]`: that shell matches on every one of them, this shell
+answers `E F G K L N P V X g i l p r s` and refuses the nine left —
+`A B M O S U a m x`. Consuming them instead would be the *other* wrong
+answer: ksh93u+ matches because it knows what `M` asks for and we do not, so
+taking the letter and dropping it would agree on this probe and diverge on
+whatever probe separates `M` from nothing.
+
+| written | ksh93u+ | ours |
+| --- | --- | --- |
+| `[[ zab == z~(i)ab ]]` *(control)* | yes | yes |
+| `[[ zab == z~(Z)ab ]]` *(control)* | no | no — a letter no shell has |
+| `[[ zab == z~(M)ab ]]` | yes | refused by name, status 1 |
+| `[[ zab == @(z~(M)a)b ]]` | yes | refused — inside a group too |
+| `case zab in z~(M)ab)` | matches | refused |
+| `v=abcd; ${v#a~(M)bc}` | `d` | refused |
+| `[[ zab == z~(E)~(M)ab ]]` | no | no — **not** refused |
+
+The last row is what bounds the scan: a `~(…)` behind a **flavor** is that
+engine's own text rather than a group, so nothing in that tail is this
+shell's to refuse. `[[ 'z~(M)ab' == z~(E)~(M)ab ]]` does not match there
+either, which says the text is being read as an expression and not as the
+characters.
+
+Pathname expansion is the one surface the refusal does not reach, and that
+is a gap in a different place: a field whose group stands anywhere but the
+head is not made a pattern at all, so `f z~(M)a` is the six characters it
+was written as and nothing reaches the matcher. A group at the head does
+reach it, and `f ~(M)zab` stops the script.
 
 ### And the group turns what follows it into the flavor's text
 

@@ -832,17 +832,20 @@ func (r *Runner) tildeModifierOpts(o patternOpts, pattern string) patternOpts {
 	// Never cleared on the way down, unlike tilde: a group standing in the
 	// middle of the pattern is found by the walk rather than here.
 	o.tildeFold = true
-	body, rest, ok := splitTildeModifier(pattern)
-	if !ok {
-		return o
-	}
-	m, unhonored := readTildeModifier(body)
-	if unhonored != 0 {
+	// A letter that shell has and this one does not, in **any** group the
+	// pattern carries rather than only in one at the head. See
+	// unhonoredTildeLetter for why the position cannot decide it.
+	if unhonored := unhonoredTildeLetter(pattern); unhonored != 0 {
 		r.diagf("%s: the ~(%c) pattern modifier is not implemented\n", pattern, unhonored)
 		r.status = 1
 		r.stopTheShell()
 		return o
 	}
+	body, rest, ok := splitTildeModifier(pattern)
+	if !ok {
+		return o
+	}
+	m, _ := readTildeModifier(body)
 	// The same refusal for a construct rather than a letter, and in the same
 	// place on purpose: this is the one route a `~(…)` pattern takes to the
 	// matcher, so a second scan somewhere nearer the compile would be a
@@ -854,6 +857,68 @@ func (r *Runner) tildeModifierOpts(o patternOpts, pattern string) patternOpts {
 		r.stopTheShell()
 	}
 	return o
+}
+
+// unhonoredTildeLetter is the first letter ksh93 has and this shell does not,
+// in any `~(…)` group the pattern carries, and 0 for a pattern whose every
+// group is one this shell can answer.
+//
+// **The position cannot decide this.** A group at the head is refused by name
+// and one further along was the four or more characters it was written with,
+// so `[[ zab == ~(M)zab ]]` stopped the script and `[[ zab == z~(M)ab ]]`
+// answered a silent `no` at status 0 — two answers to one question, and the
+// wrong one is the quiet one. ksh93u+ matches on every letter it has, so the
+// pattern that reads `no` here is a pattern that means something else there.
+//
+// Measured 2026-09-27 against /bin/ksh `Version AJM 93u+ 2012-08-01`, `-c`
+// under `env -i` with a scratch `HOME`, one letter at a time over
+// `ABEFGKLMNOPSUVXaglimprsx`: that shell matches `[[ zab == z~(L)ab ]]` on
+// every one of them, and this shell matches on `E F G K L N P V X g i l p r
+// s` and refuses the nine left — `A B M O S U a m x`.
+//
+// **Consuming them instead would be the other wrong answer.** ksh93u+ matches
+// because it knows what `M` asks for and this shell does not, so taking the
+// letter and dropping it agrees on this probe and diverges on whatever probe
+// separates `M` from nothing. That is the reading #3186 settled for a head
+// group, and this is the same reading one position further along.
+//
+// The scan **stops at a flavor group**, which is measured rather than tidy: a
+// `~(…)` behind one is that engine's own text and not a group at all.
+// `[[ zab == z~(E)~(M)ab ]]` does not match there, and neither does
+// `[[ 'z~(M)ab' == z~(E)~(M)ab ]]` — so nothing in that tail is this shell's
+// to refuse. A group **inside a pattern group** is read where it stands and
+// is reached: `[[ zab == @(z~(M)a)b ]]` matches in ksh93u+.
+//
+// A letter no ksh93 has is not unhonored and is left where it is. `~(Z)` is a
+// pattern that reads and cannot match, which both columns already answer the
+// same way.
+func unhonoredTildeLetter(pattern string) byte {
+	if strings.IndexByte(pattern, '~') < 0 {
+		return 0
+	}
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] == '\\' {
+			i++
+			continue
+		}
+		if pattern[i] != '~' {
+			continue
+		}
+		body, _, ok := splitTildeModifier(pattern[i:])
+		if !ok {
+			continue
+		}
+		m, unhonored := readTildeModifier(body)
+		if unhonored != 0 {
+			return unhonored
+		}
+		if m.flavor != tildeGlob && m.flavor != tildeNever {
+			// A flavor names the language the rest of the pattern is written
+			// in, so what follows it is that engine's text.
+			return 0
+		}
+	}
+	return 0
 }
 
 // tildePrefixModifier reads a `~(…)` prefix off the front of a pattern, for a

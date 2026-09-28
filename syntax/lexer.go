@@ -3879,7 +3879,17 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []
 		case c == '\\' && l.peekAt(1) == '\n':
 			l.advance()
 			l.advance()
-		case c == '\\' && escapes.covers(l.peekAt(1)):
+		case c == '\\' && l.off+1 < len(l.src) && escapes.covers(l.peekAt(1)):
+			// The bound is the escape set's: the widest of the three covers
+			// **anything**, and `peekAt` past the end answers with a zero
+			// byte that `covers` then takes — so a run ending in a backslash
+			// advanced twice past the end and panicked. Reachable only once
+			// an operand can end at the end of the input, which is
+			// [Dialect.UnterminatedExpansionOperandIsAValue]: the operand
+			// `u-"A\` is handed back to this scanner with nothing behind its
+			// backslash. Found by TestNoDialectCombinationPanics, which is
+			// what that sweep is for. A trailing backslash falls to the
+			// default below and is the character it is.
 			l.advance()
 			if b.Len() == 0 {
 				litPos = l.pos()
@@ -5717,6 +5727,16 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut("${")
+			if l.dialect.UnterminatedExpansionOperandIsAValue &&
+				l.braceOperandHasBegun(l.src[bodies[len(bodies)-1]:l.off]) {
+				// One dialect runs the command it built rather than refusing
+				// the script: an operand consumes to the end of the input, so
+				// the expansion ends here and what it swallowed is its
+				// operand. `ranOut` is still recorded above, so a prompt asks
+				// for more input rather than running a half-typed line. See
+				// [Dialect.UnterminatedExpansionOperandIsAValue].
+				break
+			}
 			if q == DoubleQuoted && !l.inRawBody {
 				// The `${` began inside a double quote, and three of the
 				// panel blame the quote for the whole thing — the fourth
@@ -7703,7 +7723,14 @@ func (l *Lexer) quoteProtectsTheBrace(body string) bool {
 // for itself, and a pattern is read on its own terms. `${x:1:2}` is on the
 // word side of it, measured in the one column that answers rather than
 // refusing the arithmetic.
-func (l *Lexer) braceOperandIsAPattern(body string) bool {
+// braceOperandStart is where an operand would begin in a level's text: past
+// the prefix run, past the name, and past a subscript the name carries.
+//
+// One function for the two questions asked of it — whether the operand is a
+// *pattern* and whether there is an operand at all — because they differ only
+// in what they do with the byte it points at, and a second copy of the name
+// scan is how the two would come to disagree about where a name ends.
+func (l *Lexer) braceOperandStart(body string) int {
 	i := 0
 	// The same prefix run braceNameStop counts, and for the same reason:
 	// `${#x}` operates on a name and `${#}` is a parameter in its own right,
@@ -7723,6 +7750,22 @@ func (l *Lexer) braceOperandIsAPattern(body string) bool {
 			i += j + 1
 		}
 	}
+	return i
+}
+
+// braceOperandHasBegun reports whether an operator has been read, so that what
+// follows it is an operand rather than the rest of a name.
+//
+// It is the test [Dialect.UnterminatedExpansionOperandIsAValue] is asked
+// under, and the grid is in that flag's own comment: the shell that runs an
+// unterminated expansion runs it only once an operand has begun, and refuses
+// `${x` and `${#x` where a name is all it has.
+func (l *Lexer) braceOperandHasBegun(body string) bool {
+	return l.braceOperandStart(body) < len(body)
+}
+
+func (l *Lexer) braceOperandIsAPattern(body string) bool {
+	i := l.braceOperandStart(body)
 	if i >= len(body) {
 		return false
 	}

@@ -112,6 +112,28 @@ func fcPushLetter(args []string) (push, pop, appendOnPop bool, rest []string, fo
 
 // fcPush is `fc -p [file [hist [save]]]`.
 func fcPush(r *interp.Runner, appendOnPop bool, rest []string) int {
+	// **The two sizes are checked before anything is pushed**, and that order
+	// is measured rather than tidy: a refused `fc -p` leaves the history, the
+	// size and the save count exactly as they were. Measured 2026-09-28 on
+	// zsh 5.9.2, with three entries in the list and `HISTSIZE=SAVEHIST=100`:
+	//
+	//	fc -p /dev/null a 0   fc: HISTSIZE must be an integer   1
+	//	                      and the list, HISTSIZE and SAVEHIST all unmoved
+	//
+	// Before this the words were stored unread, so `a` became a HISTSIZE of
+	// **one** and the push went ahead — the list emptied, the sizes moved and
+	// the status was 0. That is the one assertion `B06fc.ztst` turns on
+	// (#4436).
+	if len(rest) > 1 {
+		if code := fcPushSizeRefused(r, "HISTSIZE", rest[1]); code != 0 {
+			return code
+		}
+	}
+	if len(rest) > 2 {
+		if code := fcPushSizeRefused(r, "SAVEHIST", rest[2]); code != 0 {
+			return code
+		}
+	}
 	depth := fcPushedDepth(r)
 	level := strconv.Itoa(depth)
 	// The list and the size it is running under, saved together: the sizes
@@ -192,4 +214,30 @@ func fcPushedDepth(r *interp.Runner) int {
 		return 0
 	}
 	return n
+}
+
+// fcPushSizeRefused refuses one of `fc -p`'s two size words when it is not an
+// integer, and says which of the two it was.
+//
+// **Each word names its own parameter**, which is what says this is two checks
+// and not one: measured, `fc -p /dev/null a 0` is `HISTSIZE must be an
+// integer` and `fc -p /dev/null 0 a` is `SAVEHIST must be an integer`. The
+// first bad word decides, so `fc -p /dev/null a b` names HISTSIZE alone.
+//
+// What counts as an integer is the decimal reading and nothing wider:
+// `10`, `-1` and `010` are taken, and `1.5`, `0x10` and `1e2` are all refused
+// — the last two being the rows that say it is not "does this start like a
+// number" and not a shell arithmetic evaluation either.
+//
+// An **empty** word is taken, which is measured and is why the check is not
+// simply "parses as an integer": `fc -p /dev/null ” 0` is 0 in the reference.
+func fcPushSizeRefused(r *interp.Runner, name, written string) int {
+	if written == "" {
+		return 0
+	}
+	if _, err := strconv.Atoi(written); err != nil {
+		r.Diagnosef("%s must be an integer\n", name)
+		return 1
+	}
+	return 0
 }

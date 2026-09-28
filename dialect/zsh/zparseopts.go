@@ -130,6 +130,15 @@ func registerZparseopts(r *interp.Runner) {
 }
 
 func zparseoptsBuiltin(r *interp.Runner, _ context.Context, args []string) int {
+	if zparseoptsHasNoArguments(args) {
+		// Nothing at all, or the end-of-options marker alone. A different
+		// sentence from the one below and the order matters: this is asked
+		// of the **words as the builtin received them**, before the letters
+		// are read and before the trailing dash below is dropped. See
+		// zparseoptsHasNoArguments (#5008).
+		r.Diagnosef("not enough arguments\n")
+		return 1
+	}
 	opts, rest, code := zparseoptsOptions(r, args)
 	if code != 0 {
 		return code
@@ -837,4 +846,64 @@ func zparseoptsElems(target zparseoptsSpec, option, value string, has bool) []st
 	default:
 		return []string{option, value}
 	}
+}
+
+// zparseoptsHasNoArguments reports the call that gets `not enough arguments`
+// rather than `missing option descriptions`.
+//
+// Two sentences for what reads like one condition, and the issue that filed
+// this said in as many words that it was filing the rows without a rule
+// because three readings die on them. Measured 2026-09-28 on zsh 5.9.2 under
+// `-f` from a script file, fourteen calls in one run:
+//
+//	zparseopts          not enough arguments          1
+//	zparseopts --       not enough arguments          1
+//	zparseopts -        (silence)                     0
+//	zparseopts -D       missing option descriptions   1
+//	zparseopts -a o     missing option descriptions   1
+//	zparseopts -D --    (silence)                     0
+//
+// So it is neither "nothing was left after the letters" — `-D` and `-a o`
+// leave nothing and get the other sentence — nor "no letter was given", since
+// `--` and `-` give none and answer differently, nor "the list was empty",
+// since `--` is not empty and answers as if it were.
+//
+// What every row fits is a question asked of the words **as they arrived**:
+// nothing at all, or the end-of-options marker and nothing else. It is asked
+// before the letters are read for that reason.
+//
+// # What is deliberately not modeled, and why the rule is this narrow
+//
+// Seven more rows disagree and they are one cluster: a `-` or `--` that ends
+// the letters makes an otherwise-empty description list a **success** rather
+// than `missing option descriptions`.
+//
+//	zparseopts -           0      zparseopts -a o -    0
+//	zparseopts -D -        0      zparseopts -a o --   0
+//	zparseopts -D --       0      zparseopts -- -      0
+//	                              zparseopts -- --     0
+//
+// "A trailing dash is dropped" fits all seven and is wrong, which is why it
+// is not here: it also makes `zparseopts - -` a success, and that row is
+// `no default array defined: -` — a spec `-` refused for having no array to
+// go in. This shell already answers that row, and a rule that fixed seven by
+// breaking one it had right is not an improvement.
+//
+// Two further measurements say the cluster is not about terminators at all
+// and that no short rule covers it. `zparseopts -- -D o=arr` is **0** with
+// `-D` reaching neither the letters nor the descriptions — where
+// `zparseopts - -D o=arr` is `no default array defined: -D`, so the two
+// markers are not the same marker. And `zparseopts -- - -` is refused at `-`
+// while `zparseopts -- -` is silent, so it is not "a dash after a marker is
+// ignored" either. Three readings die on those rows the way the issue's own
+// three died on its five, and the honest answer is to leave them measured and
+// unmodeled rather than to ship the fourth (#5008).
+func zparseoptsHasNoArguments(args []string) bool {
+	switch len(args) {
+	case 0:
+		return true
+	case 1:
+		return args[0] == "--"
+	}
+	return false
 }

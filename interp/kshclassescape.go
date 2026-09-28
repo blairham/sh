@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -42,11 +43,7 @@ const kshClassEscapes = "dDwWsS"
 // kshClassEscape reports whether the character behind a backslash names one
 // of those six classes.
 func kshClassEscape(c byte) bool {
-	switch c {
-	case 'd', 'D', 'w', 'W', 's', 'S':
-		return true
-	}
-	return false
+	return strings.IndexByte(kshClassEscapes, c) >= 0
 }
 
 // matchKshClassEscape reports whether the unit u is in the class the letter

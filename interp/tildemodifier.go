@@ -183,6 +183,12 @@ type tildeModifier struct {
 	// null is `N`: a pattern that names nothing deletes the word rather than
 	// standing as the text it was written as. See Runner.tildeGlobPattern.
 	null bool
+	// classes is `K`: a written `\d` is a **digit class** in the glob that
+	// letter names, and `\D`, `\w`, `\W`, `\s` and `\S` are the five
+	// beside it. `p` and `s` name the same glob and do **not** read them,
+	// which is what makes this the letter's rather than the language's. See
+	// kshClassEscape.
+	classes bool
 }
 
 // kshTildeLetters are the letters ksh93 accepts inside a `~(…)` group.
@@ -234,7 +240,13 @@ func readTildeModifier(body string) (m tildeModifier, unhonored byte) {
 			m.flavor = tildeBRE
 		case 'F', 'L':
 			m.flavor = tildeLiteral
-		case 'K', 'p', 's':
+		case 'K':
+			m.flavor, m.classes = tildeGlob, true
+		case 'p', 's':
+			// The same glob **without** the class reading, and a letter that
+			// does not take one back: `[[ za1b == z~(K)a~(p)\db ]]` matches
+			// in ksh93u+, so `p` names the language and says nothing about
+			// the escapes. See kshClassEscapes.
 			m.flavor = tildeGlob
 		case 'g':
 			m.greedy = on
@@ -254,6 +266,14 @@ func readTildeModifier(body string) (m tildeModifier, unhonored byte) {
 			}
 			return m, c
 		}
+	}
+	if m.flavor != tildeGlob {
+		// A flavor letter written behind `K` takes the language with it, so
+		// the glob's class escapes go too: `~(KE)` is an expression, and an
+		// expression's backslashes are its own. The letter written *last*
+		// decides, which is the same rule the flavor itself follows —
+		// `~(EK)` is the glob and reads them.
+		m.classes = false
 	}
 	return m, 0
 }
@@ -814,6 +834,7 @@ func matchTilde(m tildeModifier, pattern, piece, subject string, base int, o pat
 		// and patternOpts.foldClass has the table (#2716).
 		o.fold = o.fold || m.fold
 		o.foldClass = o.foldClass || m.fold
+		o.classEscapes = o.classEscapes || (m.classes && o.whole)
 		return matchPatternIn(pattern, piece, subject, base, o)
 	}
 	x, ok := m.tildeRegexAfter(o.tildePrefix, pattern, o.whole)

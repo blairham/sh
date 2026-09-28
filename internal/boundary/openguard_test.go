@@ -175,6 +175,14 @@ var exempt = map[string]string{
 		"bit decide. Behind the same ActionStat consultation as stat, and that consultation " +
 		"names the *directory*, so a rule written against the name a script used still " +
 		"matches (#1492).",
+	"interp.pathAccessible": "accesscheck_unix.go's access(2), which is what `-r`, `-w` and " +
+		"`-x` ask: may this process reach the path. Behind the same ActionStat consultation " +
+		"as stat, and behind it *once* — the one caller has already put the path through " +
+		"Runner.stat for the existence half of the same test, so a hidden path fails there " +
+		"with ENOENT and never reaches the kernel here. Consulting again would record two " +
+		"stat events for one `[ -w x ]` where `[ -f x ]` records one. It reads no content " +
+		"and returns a yes or no about permission, which the mode bits answer wrongly in " +
+		"both directions (#5049).",
 	"interp.lstat":    "fsgate.go's own os.Lstat, behind the same ActionStat consultation as stat.",
 	"interp.readLink": "fsgate.go's own os.Readlink, behind the same ActionStat consultation as stat.",
 	"interp.dirEntries": "fsgate.go's own listing, behind ActionReadDir. The gated path opens the " +

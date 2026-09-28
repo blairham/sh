@@ -92,6 +92,43 @@ func statEntering(dir string) error {
 	return err
 }
 
+// accessible asks whether this process may read, write or execute a path,
+// which is what `-r`, `-w` and `-x` ask and what a stat of the path does not
+// answer.
+//
+// **It does not ask the gate, and that is the one thing to know about it.**
+// Its caller has already put the path through [Runner.stat] — the existence
+// half of the same test — and a denied path fails there with ENOENT, so the
+// probe is refused before this is reached. Asking again would record *two*
+// stat events for one `[ -w x ]` where `[ -f x ]` records one, which
+// TestAProbeIsAnEvent pins for the `-f` spelling and its neighbor below
+// pins for this one. An unreachable second gate is also a branch no test
+// could fail, which is the standing this tree gives such code.
+//
+// **The mode bits are not this question and are wrong in both directions.**
+// Measured 2026-09-28 against `/opt/homebrew/bin/zsh` — zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `go version -m` says *not a Go executable*
+// for it — from a script file under `env -i PATH=/usr/bin:/bin` with a
+// scratch `HOME` and stdin at `/dev/null`, both shells reporting `id -u` of
+// 501:
+//
+//	                                        mode bits  zsh 5.9.2
+//	[[ -w /etc ]]     drwxr-xr-x root       yes        no
+//	[[ -w / ]]        drwxr-xr-x root       yes        no
+//	[[ -r /etc/…passwd ]]  -rw------- root  yes        no
+//	[[ -x /var/root ]]     drwxr-x--- root  yes        no
+//	a file at mode 400 with an ACL granting
+//	  this user write                       no         **yes**
+//
+// The last row is the one that says this is not "a path somebody else owns
+// answers no": the file is *this* user's, its mode has no `w` in it at all,
+// and both the kernel and the reference call it writable because an ACL says
+// so. A fix keyed on ownership gets that backwards, and a fix that answered
+// no for everything unowned would pass the four rows above it (#5049).
+func (r *Runner) accessible(path string, mode uint32) bool {
+	return pathAccessible(path, mode)
+}
+
 // lstat is os.Lstat through the gate: the same question about the link
 // itself, so it is the same action to the policy.
 func (r *Runner) lstat(path string) (os.FileInfo, error) {

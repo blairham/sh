@@ -5,6 +5,7 @@ package repl
 
 import (
 	"slices"
+	"time"
 	"unicode"
 
 	"github.com/blairham/sh/internal/fdset"
@@ -99,26 +100,37 @@ func (e *editor) viEditing() bool { return e.vi != nil && e.vi() }
 // **This is the one question a vi command mode asks that an emacs one does
 // not, and both real shells answer it with a timer.** Escape is the mode
 // switch and also the first byte of every arrow key, so something has to tell
-// them apart. Measured under a pty: with `\e[D` typed as one burst both shells
-// move the cursor left, and with a 1.2-second pause after the Escape both
-// shells leave insert mode and then read `[` and `D` as two command-mode keys
-// — `D` deleting to the end of the line. bash calls the wait `keyseq-timeout`
-// and defaults it to half a second; zsh calls it `KEYTIMEOUT` and defaults it
-// to four tenths.
+// them apart. bash calls the wait `keyseq-timeout` and defaults it to half a
+// second; zsh calls it `KEYTIMEOUT` and defaults it to four tenths.
 //
-// This asks whether a byte is *there*, and waits no time at all for one. A
-// terminal writes an escape sequence in a single write, so the bytes after the
-// Escape have already been delivered by the time this is asked; a person
-// pressing Escape delivers one byte and nothing follows it. That needs no
-// number to be invented — and there is no honest one to invent, since the two
-// shells that have the wait disagree about its length. What it costs is a
-// sequence split across two writes by something slow in between, which is what
-// the shells' timers cover and this does not; #1427 filed it.
+// Until #4995 this asked only whether a byte was *there*, and waited no time
+// at all for one. The argument in place was that a terminal writes an escape
+// sequence in a single write, so the bytes after the Escape have already been
+// delivered by the time this is asked — and that there was no honest number to
+// invent, since the two shells that have the wait disagree about its length.
+// The second half of that is what turned out to be answerable: **the parameter
+// is the number**, and the first half is only true of a sequence that arrives
+// whole. Measured, a gap of fifty milliseconds between the Escape and the `[D`
+// behind it is enough for the reference to still read the arrow and for this
+// editor, before the wait, to have already changed mode.
+//
+// The length is the dialect's, read live off the parameter, and **a dialect
+// that names no parameter waits no time at all** — which is exactly what this
+// did before, so nothing inherits a wait by default. Zero and every negative
+// wait *indefinitely*, which is measured and is the opposite of the obvious
+// reading; the grid is on EditorStyle.KeySequenceWaitParameter.
 //
 // Two sources, because input reaches this editor two ways and asking only the
 // kernel would miss the commoner one: bytes already taken off the terminal sit
 // in e.held, where fdset cannot see them — the same split inputPending exists
-// for, and the same mistake serveDescriptors documents having made once.
+// for, and the same mistake serveDescriptors documents having made once. A
+// byte already in hand answers at once and is never waited on.
+//
+// **The override layer's own ambiguity is not this, and is unchanged.** Bind
+// both `^X` and `^X^T` and matchBinding still runs `^X` the moment it arrives
+// rather than waiting to see which was meant. That is a second place a wait
+// belongs and it is not measured here, so it is not claimed; this is the
+// Escape, which is the one #1427 and vi.go named.
 func (e *editor) escapeIsTheModeSwitch() bool {
 	if e.inputPending() {
 		return false
@@ -130,7 +142,41 @@ func (e *editor) escapeIsTheModeSwitch() bool {
 	if fd < 0 {
 		return true
 	}
-	return !fdset.ReadableNow(fd)
+	wait, forever := e.keySequenceWait()
+	if forever {
+		// No deadline at all, which is what zero and every negative mean.
+		// A nil timeout is fdset.Ready's own spelling of "forever", and the
+		// way out is the same one the reference has: a key — ^C included —
+		// makes the descriptor readable and ends the wait.
+		ready, _, _, err := fdset.Ready([]int{fd}, nil, nil, nil)
+		return err != nil || len(ready) == 0
+	}
+	if wait <= 0 {
+		// No wait was asked for, so the question is the one this asked
+		// before there was a wait: is a byte there now.
+		return !fdset.ReadableNow(fd)
+	}
+	ready, asked := fdset.ReadableWithin(fd, wait)
+	if !asked {
+		// The question could not be put. The honest fallback is the one
+		// ReadableNow takes for the same case — go ahead — which here means
+		// treating the Escape as the mode switch, because a mode switch is
+		// recoverable by pressing `i` and a swallowed Escape is not.
+		return true
+	}
+	return !ready
+}
+
+// keySequenceWait is how long this editor waits for the rest of a key
+// sequence, and whether it waits indefinitely.
+//
+// Nil is a session whose dialect names no such parameter — every dialect but
+// one — and it waits no time, which is what they all did before #4995.
+func (e *editor) keySequenceWait() (time.Duration, bool) {
+	if e.keyWait == nil {
+		return 0, false
+	}
+	return e.keyWait()
 }
 
 // enterViCommand leaves insert mode.

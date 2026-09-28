@@ -27,6 +27,7 @@ func EditorStyle() repl.EditorStyle {
 		// every negative asks whatever the size. See
 		// repl.editor.listQueryAsks, where the grid is (#4993).
 		ListQueryThresholdParameter: "LISTMAX",
+		KeySequenceWaitParameter:    "KEYTIMEOUT",
 		ListQueryEchoesTheKey:       true,
 		// Measured 2026-09-14 through a pseudo-terminal: this shell writes
 		// `\e[?2004h` after the prompt and `\e[?2004l\r` after the line it

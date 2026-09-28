@@ -2522,6 +2522,10 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// keeps one in a parameter. Read on the keystroke rather than taken
 		// here, because a person sets it at the prompt.
 		listThreshold: s.listQueryThreshold(),
+		// And how long a half-typed key sequence is waited on, where this
+		// dialect keeps that in a parameter. Read on the keystroke for the
+		// same reason the threshold above is.
+		keyWait: s.keySequenceWait(),
 		// Whether the matches are drawn on the keystroke that found them
 		// ambiguous. Read through the option rather than taken as a value,
 		// because it is one a person turns off at the prompt.
@@ -2627,5 +2631,45 @@ func (s *Shell) listQueryThreshold() func() (int, bool) {
 			return 0, false
 		}
 		return n, true
+	}
+}
+
+// keySequenceWait is the live reading of the parameter that says how long the
+// editor waits for the rest of a multi-character key sequence.
+//
+// The second result is **wait indefinitely**, which is what the reference does
+// for zero and for every negative — measured, and the opposite of the obvious
+// reading. See EditorStyle.KeySequenceWaitParameter, which carries the grid.
+//
+// A closure rather than a number, for the reason listQueryThreshold above is
+// one: `KEYTIMEOUT=200` typed at the prompt takes effect on the next key, and
+// a value read once at startup would have been the value an rc file left.
+//
+// Nil where the dialect names no such parameter, which is every dialect but
+// one, and **a nil wait waits no time at all** — the behavior every dialect
+// that ignores this already had, so nothing inherits a new default.
+func (s *Shell) keySequenceWait() func() (time.Duration, bool) {
+	name := s.Editor.KeySequenceWaitParameter
+	if name == "" || s.Runner == nil {
+		return nil
+	}
+	return func() (time.Duration, bool) {
+		value, ok := s.Runner.GetVar(name)
+		if !ok {
+			// An unset parameter is not the same as one holding zero: the
+			// dialect named it and the session has not got it, so there is
+			// no instruction to follow and the editor waits no time.
+			return 0, false
+		}
+		// A value that is not a number is zero, which is the reference's own
+		// arithmetic: it declares the name `integer`, so the assignment
+		// stores 0 — and zero waits indefinitely.
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || n <= 0 {
+			return 0, true
+		}
+		// Hundredths of a second, which is the unit the grid measured: 200
+		// waits through a one-second gap and not through a three-second one.
+		return time.Duration(n) * 10 * time.Millisecond, false
 	}
 }

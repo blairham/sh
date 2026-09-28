@@ -284,6 +284,11 @@ func (c *Runner) ownTables(r *Runner) {
 	// names out of: those are cloned below, so a withdrawal that stayed
 	// shared would put a name back into the wrong shell's tables.
 	c.withdrawnParams = maps.Clone(r.withdrawnParams)
+	// And the third kind, which a module selection moves exactly as it moves
+	// the other two: `( zmodload -F zsh/mathfunc -f:sqrt )` is the
+	// subshell's, and the parent still has the function afterwards. See
+	// withdrawnmathfunc.go.
+	c.withdrawnMathFuncs = maps.Clone(r.withdrawnMathFuncs)
 
 	// The extension points. An embedder registers these before a run and a
 	// dialect's Apply is the usual caller, so nothing a *script* does writes

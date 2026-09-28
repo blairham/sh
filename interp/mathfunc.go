@@ -252,6 +252,12 @@ func mathFuncSpec(name string, fn mathFunc) string {
 // list is weighed at all.
 func (r *Runner) evalMathFunc(x *syntax.ArithCall) (arithNum, error) {
 	fn, ok := r.mathFuncs[x.Name]
+	if ok && r.MathFunctionWithdrawn(x.Name) {
+		// A name the shell has and a module selection is not offering. It
+		// answers exactly as a name nobody registered does, which is the
+		// measured row — see withdrawnmathfunc.go.
+		ok = false
+	}
 	if !ok {
 		return intNum(0), arithError{
 			msg: Wording(r.diag().MathFunctionUnknown, "unknown function: %[1]s",

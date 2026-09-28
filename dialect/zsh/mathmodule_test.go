@@ -21,9 +21,18 @@ import (
 // with the wrong precision, or dropped the trailing point, fails.
 
 // mathValueOf evaluates one expression and returns what it printed.
+// The `zmodload` is load-bearing and was added by #5060, which gated these
+// forty-seven names: without it every row here reads `unknown function`,
+// because a fresh shell has none of them. That is the same rule the gate
+// itself is graded by — **a row has to set the state it is asking about** —
+// arriving from the other side: this table was written when the functions
+// stood from startup, so it never had to say which state it was in, and the
+// day the gate landed every row of it was measuring the gate instead of the
+// arithmetic.
 func mathValueOf(t *testing.T, expr string) string {
 	t.Helper()
-	out, _, errs := runZshSplit(t, t.TempDir(), "print -r -- $(( "+expr+" ))")
+	out, _, errs := runZshSplit(t, t.TempDir(),
+		"zmodload zsh/mathfunc\nprint -r -- $(( "+expr+" ))")
 	return out + errs
 }
 
@@ -188,7 +197,11 @@ func TestTheOperandCountIsCheckedAndTheCallQuotedBack(t *testing.T) {
 	} {
 		t.Run(expr, func(t *testing.T) {
 			got := mathValueOf(t, expr)
-			want := "zsh:1: wrong number of arguments: " + expr + "\n"
+			// Line **2**, because mathValueOf loads the module on line 1
+			// since #5060 gated these names. Measured against the reference
+			// in the same shape rather than adjusted to fit: `zmodload
+			// zsh/mathfunc` then the expression is `:2:` in zsh 5.9.2 too.
+			want := "zsh:2: wrong number of arguments: " + expr + "\n"
 			if got != want {
 				t.Errorf("$(( %s )) = %q, want %q", expr, got, want)
 			}
@@ -211,7 +224,8 @@ func TestTheOperandCountIsCheckedAndTheCallQuotedBack(t *testing.T) {
 // giving -0.09989929199214842 — exactly one less, in range, and wrong.
 func TestRand48IsDeterministicFromItsSeedVariable(t *testing.T) {
 	out, _, errs := runZshSplit(t, t.TempDir(),
-		"seed=000000000001\n"+
+		"zmodload zsh/mathfunc\n"+
+			"seed=000000000001\n"+
 			"print -r -- $(( rand48(seed) ))\n"+
 			"print -r -- $seed\n"+
 			"print -r -- $(( rand48(seed) ))\n"+
@@ -249,7 +263,8 @@ func TestRand48IsDeterministicFromItsSeedVariable(t *testing.T) {
 // in 10,000 it replaces.
 func TestRand48ReseedsRatherThanRefusingAVariableItCannotRead(t *testing.T) {
 	out, _, errs := runZshSplit(t, t.TempDir(),
-		"seed=zzz\n"+
+		"zmodload zsh/mathfunc\n"+
+			"seed=zzz\n"+
 			"v=$(( rand48(seed) ))\n"+
 			`(( v > 0 && v < 1 )) && print -r -- in-range`+"\n"+
 			"setopt extendedglob\n"+
@@ -284,7 +299,8 @@ func TestRand48ASmallDrawIsSpelledInScientificNotation(t *testing.T) {
 	} {
 		t.Run(c.seed, func(t *testing.T) {
 			out, _, errs := runZshSplit(t, t.TempDir(),
-				"seed="+c.seed+"\n"+
+				"zmodload zsh/mathfunc\n"+
+					"seed="+c.seed+"\n"+
 					"v=$(( rand48(seed) ))\n"+
 					"print -r -- $v\n"+
 					`(( v > 0 && v < 1 )) && print -r -- in-range`+"\n"+
@@ -300,7 +316,8 @@ func TestRand48ASmallDrawIsSpelledInScientificNotation(t *testing.T) {
 // something, so two calls in one shell differ.
 func TestRand48WithoutAnOperandKeepsItsOwnState(t *testing.T) {
 	out, _, errs := runZshSplit(t, t.TempDir(),
-		"a=$(( rand48() ))\nb=$(( rand48() ))\n"+
+		"zmodload zsh/mathfunc\n"+
+			"a=$(( rand48() ))\nb=$(( rand48() ))\n"+
 			`[[ $a != $b ]] && print -r -- moved`+"\n")
 	if got, want := out+errs, "moved\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)

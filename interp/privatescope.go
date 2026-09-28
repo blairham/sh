@@ -321,6 +321,84 @@ func (r *Runner) unsealPrivateNames(sc *scope) {
 	sc.privateSealed = nil
 }
 
+// privateExportedEnvironment is the entries a `private -x` name puts into a
+// child's environment while the declaring call is still on the stack, keyed
+// by name.
+//
+// **The hiding and the export are one mechanism here and two rules in the
+// shell being modeled**, which is the whole of #5091. sealPrivateNames takes
+// the private binding out of the runner's tables for the length of a callee's
+// frame — that is how the name becomes invisible to the callee — and the
+// environment a child receives is built from those same tables, so taking it
+// out took it out of both. The reference hides the *parameter* and keeps the
+// *environment entry*:
+//
+//	inner(){ <shell> -fc 'print A $v' }
+//	(){ private -x v=q; inner }        	`A q` there, `A` here
+//	inner(){ print -r -- "$+v" }
+//	(){ private -x v=q; inner }        	`0` in both — the hiding is right
+//
+// So this reads the seal back rather than changing it: what the callee can
+// *see* is untouched, and only what its children inherit is put back.
+//
+// **The outermost seal, not the innermost.** A second frame in seals again,
+// and what that seal holds is the binding the first one installed — the outer
+// name, not the private. Walking from the outside in takes the seal whose
+// held binding is the private's own, which is sound because a second
+// `private` of a name already declared is refused, so there is never more
+// than one on the stack. Measured: with the child two frames in, the
+// reference still hands it the private's value.
+//
+// **It beats an outer exported name and loses to one the frame declared
+// itself.** Measured 2026-09-28 on zsh 5.9.2:
+//
+//	typeset -x v=outer; (){ private -x v=q; inner }  	the child sees `v=q`
+//	inner(){ local -x v=own; … }                     	the child sees `v=own`
+//	inner(){ unset v; … }                            	the child sees `v=q`
+//
+// The first two are what the callers of this skip on, and the third falls out
+// of reading the seal rather than the tables: an `unset` in the callee writes
+// the tables the seal exposed and leaves the held binding alone.
+func (r *Runner) privateExportedEnvironment() map[string]string {
+	if !r.privateDeclared || len(r.scopes) == 0 {
+		return nil
+	}
+	var out map[string]string
+	for i := range r.scopes {
+		for name, sn := range r.scopes[i].privateSealed {
+			if _, seen := out[name]; seen {
+				// An inner seal of the same name, holding what an outer one
+				// installed rather than the private itself.
+				continue
+			}
+			if !sn.held.exportedSaid || !sn.held.exported {
+				continue
+			}
+			if sn.held.removed || !sn.held.valueExists {
+				continue
+			}
+			if sn.held.arrayExists || sn.held.assocExists {
+				// A compound has no environment representation, which is a
+				// question of its own and not this one's. See
+				// Semantics.ExportedCompoundReachesAChildAsItsFirstValue.
+				continue
+			}
+			if r.localInTheInnermostScope(name) {
+				// The frame declared the name itself, and its own binding is
+				// what a child gets — written by the ordinary pass over the
+				// runner's tables, which is why this says nothing here
+				// rather than writing a second entry.
+				continue
+			}
+			if out == nil {
+				out = map[string]string{}
+			}
+			out[name] = sn.held.value
+		}
+	}
+	return out
+}
+
 // refusePrivateDeclaration reports whether this `private` declaration is
 // refused, having said so.
 //

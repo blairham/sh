@@ -9481,6 +9481,13 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 func (r *Runner) environ() []string {
 	base := r.Env
 	out := make([]string, 0, len(base)+len(r.Vars))
+	// What a `private -x` name puts there while its declaring call is on the
+	// stack. Taken first because the two passes below must both step over
+	// these names: the entry belongs to the declaring frame and supersedes
+	// both an inherited one and an outer binding of the same spelling, and a
+	// duplicate written ahead of it would be the one a child sees. See
+	// Runner.privateExportedEnvironment (#5091).
+	private := r.privateExportedEnvironment()
 	// The bound option records this loop wrote, so the pass at the end does
 	// not write one of them a second time — see exportedOptionLists.
 	var writtenLists map[string]bool
@@ -9490,6 +9497,9 @@ func (r *Runner) environ() []string {
 			// Nothing to key on, so nothing can supersede or hide it; it is
 			// passed along as written rather than dropped.
 			out = append(out, kv)
+			continue
+		}
+		if _, held := private[k]; held {
 			continue
 		}
 		if r.envNotAdopted[k] {
@@ -9578,6 +9588,9 @@ func (r *Runner) environ() []string {
 	// there is nothing but a string to carry them in.
 	out = append(out, r.functionEnviron()...)
 	for k, v := range r.Vars {
+		if _, held := private[k]; held {
+			continue
+		}
 		// Only exported names reach a command's environment; the rest are
 		// the shell's own.
 		if !r.isExported(k) {
@@ -9649,6 +9662,12 @@ func (r *Runner) environ() []string {
 	// a child's environment with the value the shell reads for it, and this
 	// shell put none of the three there.
 	out = append(out, r.exportedProducedParameters(writtenLists)...)
+	// And the `private -x` names the seal took out of the tables above, which
+	// no walk over them can reach for exactly that reason. See
+	// Runner.privateExportedEnvironment.
+	for k, v := range private {
+		out = append(out, k+"="+v)
+	}
 	return endEachEntryAtItsFirstNUL(out)
 }
 

@@ -43,6 +43,12 @@ func TestAConditionOptionMayBeALetter(t *testing.T) {
 		{`[[ -o 10 ]]; print "st=$?"`, "zsh:1: no such option: 10\nst=3"},
 		{`[[ -o 07 ]]; print "st=$?"`, "zsh:1: no such option: 07\nst=3"},
 		{`[[ -o 25 ]]; print "st=$?"`, "zsh:1: no such option: 25\nst=3"},
+		// A letter this shell records as naming *nothing* is still known,
+		// so it answers false rather than complaining. `s` is that letter —
+		// the table carries it as taken and moving nothing — and without
+		// this row the branch that says so is untested: a mutation removing
+		// it killed nothing until this was added.
+		{`[[ -o s ]]; print "st=$?"`, "st=1"},
 		// And a word that is not a letter is refused exactly as before.
 		{`[[ -o aa ]]; print "st=$?"`, "zsh:1: no such option: aa\nst=3"},
 		{`[[ -o zzznosuch ]]; print "st=$?"`, "zsh:1: no such option: zzznosuch\nst=3"},

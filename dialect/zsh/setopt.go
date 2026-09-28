@@ -968,12 +968,9 @@ var zshOptions = []zshOption{
 	// rather than in emulategrammar.go, which may not name a field an option
 	// name already owns.
 	//
-	// **`ignoreclosebraces` takes the closing half on its own**, measured in
-	// the same run: `setopt ignoreclosebraces` refuses `{ echo A }` and takes
-	// `echo A}` while leaving `{print A; }` alone. It is still `recorded`
-	// here, and it is not this row's to wire — no emulation moves it, so it
-	// has no entry in emulationDefaults and nothing about `emulate` reaches
-	// it (#4945).
+	// **`ignoreclosebraces` takes the closing half on its own**, which is
+	// why the two are composed in setBraceGrammar rather than written
+	// separately — see the table there (#4945).
 	{
 		base: "ignorebraces", def: false,
 		get: func(r *interp.Runner) bool { on, _ := r.NamedOption("braceexpand"); return !on },
@@ -981,14 +978,24 @@ var zshOptions = []zshOption{
 			if st := r.ApplyNamedOption("braceexpand", !on); st != 0 {
 				return st
 			}
-			// Both readings, because this name moves both. The closing one
-			// has a second owner in zsh's namespace and the opening one has
-			// none — see the table above.
-			r.SetBraceReservedWordReadings(!on, !on)
+			setBraceGrammar(r, on, closeBracesIgnored(r))
 			return 0
 		},
 	},
-	recorded("ignoreclosebraces", false),
+	// IGNORE_CLOSE_BRACES: the closing half of the pair above, on its own.
+	//
+	// Implemented rather than recorded since #4945, and its state lives in
+	// the recorded store all the same — see closeBracesIgnored for why the
+	// grammar cannot be read back for it.
+	{
+		base: "ignoreclosebraces", def: false,
+		get: closeBracesIgnored,
+		set: func(r *interp.Runner, on bool) int {
+			setRecordedDeviation(r, "ignoreclosebraces", on)
+			setBraceGrammar(r, braceExpansionIgnored(r), on)
+			return 0
+		},
+	},
 	recorded("ignoreeof", false),
 	recorded("incappendhistory", false),
 	recorded("incappendhistorytime", false),
@@ -2992,6 +2999,62 @@ func kshGlobOn(r *interp.Runner) bool { return r.BarePatternGroupsOpenInsideAWor
 // this is the one that was here first.
 func shortLoopsOn(r *interp.Runner) bool {
 	return !r.SubstitutionBodyRefusesAnUnfinishedCondition()
+}
+
+// setBraceGrammar writes the two readings a bare brace has, given the two
+// option states that reach them.
+//
+// The composition is the measurement and is stated once here rather than in
+// each option's setter: `ignorebraces` takes **both** readings away and
+// `ignoreclosebraces` takes the closing one, so the closing reading is off
+// when either name is on and the opening one follows the first name alone.
+// Measured on `/opt/homebrew/bin/zsh` — `zsh 5.9.2
+// (aarch64-apple-darwin25.4.0)` — `-f` over a script file under `set -n`,
+// 2026-09-28, the names moved on the line after `emulate zsh`:
+//
+//	                          neither  IB       ICB      both
+//	{ echo A }                parses   refused  refused  refused
+//	{ echo A}                 parses   refused  refused  refused
+//	echo A}                   refused  parses   parses   parses
+//	case x in x) echo o;; }   parses   refused  refused  refused
+//	{print A; }               parses   refused  parses   refused
+//	{print A}                 parses   parses   refused  parses
+//	echo A\}                  parses   parses   parses   parses
+//	x=a}                      parses   parses   parses   parses
+//	echo {a,b}                parses   parses   parses   parses
+//
+// **The last two rows of the moving set are the discriminators, and they
+// point opposite ways.** `{print A; }` is the *opening* reading alone, which
+// `ICB` leaves standing; `{print A}` needs both readings at once, so it
+// parses under `IB` — which takes both away and leaves three ordinary words —
+// and is refused under `ICB`, which opens a group nothing then closes. A
+// wiring that made the two names synonyms gets one of those two backwards
+// whichever synonym it picks.
+func setBraceGrammar(r *interp.Runner, ignoreBraces, ignoreCloseBraces bool) {
+	// The closing reading is off when **either** name is on, written the way
+	// De Morgan has it because the linter asks for that spelling.
+	r.SetBraceReservedWordReadings(!ignoreBraces, !ignoreBraces && !ignoreCloseBraces)
+}
+
+// braceExpansionIgnored reads `ignorebraces` back, which is the substrate's
+// `braceexpand` inverted — the same derivation the option's own entry makes.
+func braceExpansionIgnored(r *interp.Runner) bool {
+	on, _ := r.NamedOption("braceexpand")
+	return !on
+}
+
+// closeBracesIgnored reads `ignoreclosebraces` back **off the recorded
+// store** rather than off the grammar it moves.
+//
+// Derived, it could not be read back at all: with both names on the two
+// grammar fields are in exactly the state `ignorebraces` alone leaves them, so
+// nothing in the dialect could say which of the two an `unsetopt ignorebraces`
+// should leave behind. Measured, it leaves this one — `setopt ignorebraces
+// ignoreclosebraces; unsetopt ignorebraces` refuses `{ echo A }` and takes
+// `echo A}`, which is the closing reading still gone — and that row is the
+// whole reason the state is kept beside the name.
+func closeBracesIgnored(r *interp.Runner) bool {
+	return recordedDeviates(r, "ignoreclosebraces")
 }
 
 // setBareGroupGrammar writes where a bare pattern group may open, given the

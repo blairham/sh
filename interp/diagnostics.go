@@ -332,16 +332,20 @@ type Diagnostics struct {
 	// `time` keyword's report, and the empty string where the dialect has no
 	// such variable.
 	//
-	// `TIMEFORMAT` in bash and ksh93, read every time the keyword runs and
-	// written in the vocabulary timeFormatReport implements: `%%`, `%P`, and
-	// `%[p][l]` before `R`, `U` or `S`. Empty in dash, which has no variable
-	// at all, and empty in zsh — which does have one, `TIMEFMT`, in a
-	// *different* vocabulary with different directives, so pointing this
-	// field at the name would render zsh's format with bash's reader. Naming
-	// what is missing rather than claiming zsh has nothing: that column keeps
-	// its per-command layout and ignores the variable, which is what it did
-	// before this field existed.
+	// `TIMEFORMAT` in bash and ksh93 and `TIMEFMT` in zsh, read every time
+	// the keyword runs. Empty in dash, which has no variable at all.
+	//
+	// **Which vocabulary it is written in is TimeFormatVerbs**, and that
+	// field is not a refinement of this one: the two share `%%` and `%P` and
+	// nothing else, `%U` means the same thing in both and renders
+	// differently, and the digit that is a precision in one is literal text
+	// in the other. This field stood empty for zsh until #4910 for exactly
+	// that reason — pointing it at the name alone would have rendered that
+	// shell's format with the other's reader.
 	TimeFormatVariable string
+	// TimeFormatVerbs is which vocabulary TimeFormatVariable's value is
+	// written in. Zero is the one bash and ksh93 share.
+	TimeFormatVerbs TimeFormatVerbs
 	// TimeFormatBadDirective is what a `%` followed by a character no
 	// directive uses says. Two verbs: %[1]s the variable's name and %[2]s
 	// the offending character.

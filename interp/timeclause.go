@@ -200,6 +200,35 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 // which `-p` selects identically in both shells that read the flag.
 func (r *Runner) reportTime(d Diagnostics, posix bool, elapsed time.Duration, user, sys time.Duration, timing *pipelineTiming) {
 	var b strings.Builder
+	if format, ok := r.timeFormat(); ok && !posix && d.TimeFormatVerbs == TimeFormatVerbsElapsedWithUnits {
+		// The other vocabulary, and a **line per pipeline element** rather
+		// than one report for the clause: the column that reads this one
+		// has the per-command layout, and the format replaces that layout's
+		// line rather than the whole thing. Measured 2026-09-27 on zsh
+		// 5.9.2 with `TIMEFMT='[%J|%*E]'`: `time sleep 0.02 | cat` writes
+		// two lines and `time ( sleep 0.02 | cat )` writes one, which is
+		// the same element count the default layout writes.
+		//
+		// `%J` is the element as written, which is the field the default
+		// line already puts first — so the default value of that variable
+		// renders byte for byte what perCommandLine does, and this path
+		// being the one a fresh shell takes changes no output at all.
+		if timing != nil {
+			for i := range timing.elems {
+				e := &timing.elems[i]
+				if !e.cpu.sawExternal {
+					// Nothing forked for this element, and the shell this
+					// layout was measured from prints nothing for one of
+					// those — measured again with a format set, `time :`
+					// writes a bare newline and no line of its own.
+					continue
+				}
+				b.WriteString(timeFormatWithUnits(format, e.text, e.wall, e.cpu.user, e.cpu.sys) + "\n")
+			}
+		}
+		_, _ = fmt.Fprint(r.stderr(), b.String())
+		return
+	}
 	if format, ok := r.timeFormat(); ok && !posix {
 		// A format the script named. `-p` is not one of the things it may
 		// override: measured, `TIMEFORMAT='X %R'; time -p sleep 0` prints
@@ -260,10 +289,25 @@ func (r *Runner) reportBareTime(d Diagnostics) {
 		// per-command shape. The measured shell divides by its own age;
 		// a Runner has no age, so the elapsed column reports the only
 		// interval this construct has — its own, which is next to none.
-		b.WriteString(perCommandLine("shell", self.user, self.system, 0))
-		b.WriteString(perCommandLine("children", children.user, children.system, 0))
+		//
+		// Through the format where the dialect has one, with the label
+		// where `%J` goes: measured 2026-09-27 on zsh 5.9.2,
+		// `TIMEFMT='[%J|%*E]'` before a bare `time` writes `[shell|…]` and
+		// `[children|…]`, so the two lines are the same line this layout
+		// already writes and not a shape of their own.
+		b.WriteString(r.bareTimeLine(d, "shell", self.user, self.system))
+		b.WriteString(r.bareTimeLine(d, "children", children.user, children.system))
 	}
 	_, _ = fmt.Fprint(r.stderr(), b.String())
+}
+
+// bareTimeLine is one of a bare `time`'s two lines, through the dialect's
+// format where it has one in the vocabulary that reads `%J`.
+func (r *Runner) bareTimeLine(d Diagnostics, label string, user, sys time.Duration) string {
+	if format, ok := r.timeFormat(); ok && d.TimeFormatVerbs == TimeFormatVerbsElapsedWithUnits {
+		return timeFormatWithUnits(format, label, 0, user, sys) + "\n"
+	}
+	return perCommandLine(label, user, sys, 0)
 }
 
 // perCommandLine is one line of the per-command layout: the element as

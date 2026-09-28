@@ -111,7 +111,10 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 			// Every one of those is the dash-word behind it read as an
 			// **operand**, which is the skip's opposite: the skip read it as
 			// the option it spells and did that option's work.
-			if r.ask(r.sem().LoneDashIsAnOption, "a lone `-` given to a builtin") {
+			switch r.ReadALoneDash() {
+			case LoneDashUnanswered:
+				return nil, opts, optArg, false, 2
+			case LoneDashEndsTheOptions:
 				// Not `separated`, which is the `--` *was written* flag and
 				// is deliberately left alone: the one dialect that eats the
 				// dash answers Semantics.AliasOptionEndsTheLookup no, and
@@ -121,9 +124,6 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 				// on the reference all the same — `alias - a`, `alias -- a`
 				// and `alias a` are one answer there, `a=b` at 0.
 				return args[1:], opts, optArg, false, 0
-			}
-			if r.unspecified {
-				return nil, opts, optArg, false, 2
 			}
 			break
 		}
@@ -504,4 +504,73 @@ func isDashNumber(a string) bool {
 		}
 	}
 	return true
+}
+
+// LoneDashReading is what a builtin's own option reader does with a `-`
+// written on its own.
+//
+// Three outcomes rather than a bool, because the third is not a behavior: a
+// dialect that has not answered has already had the complaint written and its
+// status set, and the builtin's job is to stop.
+type LoneDashReading uint8
+
+const (
+	// LoneDashIsAnOperand passes the word on, which is what every dialect
+	// but one does.
+	LoneDashIsAnOperand LoneDashReading = iota
+
+	// LoneDashEndsTheOptions eats the word **and stops reading options**, so
+	// everything after it is an operand however it is spelled.
+	//
+	// The two halves of that are one answer and not two. "Eaten and skipped"
+	// and "eaten and the options end" agree wherever nothing but operands
+	// follows the dash, which is every shape this axis was first measured
+	// from — and it is why six builtins here went on reading options past it
+	// for as long as they did (#5040). They part on an option word *behind*
+	// the dash, and there the reference makes it an operand:
+	//
+	//	enable - -f x    no such hash table element: -f, then x
+	//	type - -a echo   -a not found, then echo is a shell builtin
+	//	setopt - -x      no such option: -x — where `setopt -x` is taken
+	//	whence - echo    echo, at 0
+	//	umask -          022, the bare listing, with nothing left to read
+	//	shift -          shifts one, with no count left to read
+	LoneDashEndsTheOptions
+
+	// LoneDashUnanswered is a dialect that has not said. The complaint is
+	// written and the status set by the time this comes back, so the builtin
+	// returns rather than choosing.
+	LoneDashUnanswered
+)
+
+// ReadALoneDash answers the lone-dash question for a builtin whose option
+// reader is its own.
+//
+// **One place asks, and every reader consults it.** The five hand-rolled
+// readers this exists for each hard-coded the answer — `a[0] != '-'`,
+// `args[0] != "-"`, `len(word) < 2` — which is the same rule written five
+// times and therefore five places for it to be wrong. It was wrong in all of
+// them, and the shared reader above had been right since #5026.
+//
+// Exported for the same reason BuiltinOptions is: a dialect's own builtin has
+// to read options the way the substrate's do, and the answer is the dialect's
+// and not the builtin's.
+//
+// **Not every hand-rolled reader should ask**, and the ones that do not are
+// measured rather than overlooked. `exec` and `source`/`.` keep their own test
+// because a lone `-` really is an operand there — a command and a file name —
+// and both already agree with the reference: `source - ./f` is
+// `no such file or directory: -` at 127 in zsh 5.9.2 and here. ksh's `whence`
+// and `print` keep theirs because that dialect answers the axis *no*, and both
+// agree with ksh93 as they stand — `whence - echo` writes `echo` at 1 and
+// `print - -n x` writes `-n x`. Folding those onto this would change nothing
+// and is left for a change that has a reason of its own.
+func (r *Runner) ReadALoneDash() LoneDashReading {
+	if r.ask(r.sem().LoneDashIsAnOption, "a lone `-` given to a builtin") {
+		return LoneDashEndsTheOptions
+	}
+	if r.unspecified {
+		return LoneDashUnanswered
+	}
+	return LoneDashIsAnOperand
 }

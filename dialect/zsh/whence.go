@@ -169,10 +169,30 @@ func whenceNames(r *interp.Runner, ctx context.Context, names []string, m whence
 // distinguishable.
 func whenceOptions(r *interp.Runner, args []string, offered string, m whenceMode) (names []string, mode whenceMode, code int) {
 	rest := args
-	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && rest[0] != "-" {
+	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") {
 		word := rest[0]
 		rest = rest[1:]
 		if word == "--" {
+			break
+		}
+		if word == "-" {
+			// A lone `-`, eaten here and an operand elsewhere. It had been
+			// hard-coded as an operand in the loop condition, so
+			// `whence - echo` looked the dash up, found nothing, and
+			// reported 1 where the reference writes `echo` at 0 (#5040).
+			// See interp.Runner.ReadALoneDash.
+			reading := r.ReadALoneDash()
+			if reading == interp.LoneDashUnanswered {
+				return nil, m, 2
+			}
+			if reading != interp.LoneDashEndsTheOptions {
+				// An operand after all, so it goes back — the word was taken
+				// off `rest` at the top of the loop before anything knew
+				// which it was.
+				rest = append([]string{word}, rest...)
+			}
+			// And the scan stops either way. A `break` inside a switch would
+			// have left the switch and not the loop.
 			break
 		}
 		for _, letter := range word[1:] {

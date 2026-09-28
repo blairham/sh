@@ -2776,6 +2776,31 @@ func setoptBuiltin(setting bool) interp.Builtin {
 			listZshOptions(r, setting)
 			return 0
 		}
+		// A lone `-`, eaten in this dialect. It is the only option *word*
+		// this builtin has — every other argument is an option **name** —
+		// so it is read here rather than in a scan: `setopt - -x` is one
+		// complaint about `-x` in the reference where this made two, having
+		// looked the dash up as an option name of its own (#5040).
+		//
+		// Only the first word, which is what "ends the options" means: past
+		// it every word is a name however it is spelled, and a second `-`
+		// would be a name too. See interp.Runner.ReadALoneDash.
+		if args[0] == "-" {
+			switch r.ReadALoneDash() {
+			case interp.LoneDashUnanswered:
+				return 2
+			case interp.LoneDashEndsTheOptions:
+				args = args[1:]
+				if len(args) == 0 {
+					// **And it does not become the bare command.** That was
+					// the guess, and it is wrong: measured, `setopt` alone
+					// lists the options and `setopt -` is silent at 0, as is
+					// `unsetopt -`. Eating a word does not put the builtin
+					// back in the state of never having been given one.
+					return 0
+				}
+			}
+		}
 		status := 0
 		for _, arg := range args {
 			if code := setOption(r, arg, setting); code != 0 {

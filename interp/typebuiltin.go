@@ -181,9 +181,15 @@ func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code i
 	// Asked only where there is a `--` to decide about. `type ls` is the
 	// same in all four, and refusing it over a question nothing turned on
 	// would be refusing to answer.
-	if len(args) == 0 || len(args[0]) < 2 || args[0][0] != '-' {
+	if len(args) == 0 || args[0] == "" || args[0][0] != '-' {
 		return args, m, 0
 	}
+	// A lone `-` is an option word in one dialect and an operand in the rest,
+	// and it reaches the shared reader below, which is where that is
+	// answered. The guard above used to be `len(args[0]) < 2`, which sent it
+	// to the operands before anything asked — so `type - -a echo` looked `-`
+	// up as a name and wrote `- not found` in front of the reference's
+	// answer (#5040). See Runner.ReadALoneDash.
 	if !r.ask(r.sem().TypeEndsOptionsWithDashDash, "`type --` ending the options") {
 		if r.unspecified {
 			return nil, m, 2

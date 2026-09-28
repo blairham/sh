@@ -235,16 +235,26 @@ func tildeHereAnchors(pattern string) (left, right bool) {
 // which costs one measured row and needs the group's own divergence closed
 // first.
 //
-// **Lifting this gate needs two more readers taught first**, and they are
-// named here because nothing else would say so: patternSpanBytes and
-// patternEdgeLiterals read a pattern to skip pieces a trim could not match,
-// and both take `\d` for two bytes of pattern and one literal `d`. A class
-// takes a *unit* and names no character, so a trim reading the classes with
-// those two unchanged would require a `d` at an edge the pattern never asked
-// for and would miss matches in silence. They are left alone rather than
-// written against a surface that cannot reach them.
+// **The gate was lifted in #4978 and the two readers needed no teaching**,
+// which is worth writing down because the note here previously said they
+// did. patternSpanBytes and patternEdgeLiterals read a pattern to skip
+// pieces a trim could not match, and both take `\d` for two bytes of pattern
+// and one literal `d` — so a trim reading the classes with those two
+// unchanged would require a `d` at an edge the pattern never asked for and
+// would miss matches in silence.
+//
+// It cannot arise. A pattern only turns the classes on by carrying a `~(K)`
+// group, and `~` is in **both** of those readers' bail-out sets — in
+// bypassOperators for the edge literals and in spanStoppers for the span
+// bound — and both are handed the whole pattern with the group still on it.
+// So a pattern that could confuse them stops them first, in every case.
+//
+// That is an invariant rather than a coincidence worth relying on silently,
+// so TestTheSpanReadersDeclineATildeGroup pins it: narrow either bail-out
+// set and the trims that read a class escape start skipping candidates, and
+// the failure would be silent.
 func tildeClassesHere(o patternOpts, set, on bool) patternOpts {
-	if set && o.whole {
+	if set && o.tildeGlobRead {
 		o.classEscapes = on
 	}
 	return o

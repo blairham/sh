@@ -115,12 +115,12 @@ func TestATildeGlobGroupReadsTheClassEscapes(t *testing.T) {
 // A surface that **chooses a span** does not read the group at all, so it
 // does not read the classes either.
 //
-// That is a refusal to copy rather than a gap: ksh93u+ does not read a
-// `~(K)` group on three of the four such operators — it is the *group* it
-// declines rather than the escape — so reading the classes there would trade
-// one wrong answer for a second. Measured 2026-09-27, with the bracket rows
-// as the discriminating ones, since a bracket expression is a class either
-// way:
+// ksh93u+ does not read a `~(K)` group on three of the four such operators —
+// it is the *group* it declines rather than the escape — so the escapes
+// follow the group. #4961 read them on the whole-subject surfaces only and
+// left this, and #4978 closed it by gating both on the surface. Measured
+// 2026-09-27, with the bracket rows as the discriminating ones, since a
+// bracket expression is a class either way:
 //
 //	${v#~(K)x}        xab     where ${v#x} is ab
 //	${v/~(K)x/Q}      xab     where ${v/x/Q} is Qab
@@ -128,13 +128,18 @@ func TestATildeGlobGroupReadsTheClassEscapes(t *testing.T) {
 //	${v%~(K)[0-9]}    1abc    and `%` alone does read it
 //	${v#~(i)[0-9]}    abc1    with another letter as the control
 //
-// `${v%…}` is the one measured row left open, and closing it needs the
-// group's own divergence closed first rather than the escape's.
-func TestASpanChoosingSurfaceDoesNotReadTheClassEscapes(t *testing.T) {
+// **`${v%…}` was the one row left open and #4978 closed it**, along with the
+// group's own divergence that this test used to pin. The rows below are the
+// reference's now rather than a mixture of its answers and ours, and three of
+// them moved: `${v%~(K)\d}` reads the class because `%` reads the group, and
+// the two rows at the bottom stopped trimming because the other operators do
+// not read it. See patternOpts.tildeGlobRead.
+func TestASpanChoosingSurfaceReadsTheClassEscapesOnlyWhereItReadsTheGroup(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{"a prefix trim", `v=1abc1; printf "[%s]" "${v#~(K)\d}"`, "[1abc1]"},
 		{"the longest prefix trim", `v=1abc1; printf "[%s]" "${v##~(K)\d}"`, "[1abc1]"},
-		{"a suffix trim", `v=1abc1; printf "[%s]" "${v%~(K)\d}"`, "[1abc1]"},
+		// `%` is the one that reads the group, so it reads the escape too.
+		{"a suffix trim", `v=1abc1; printf "[%s]" "${v%~(K)\d}"`, "[1abc]"},
 		{"the longest suffix trim", `v=1abc1; printf "[%s]" "${v%%~(K)\d}"`, "[1abc1]"},
 		{"a substitution", `v=1abc1; printf "[%s]" "${v/~(K)\d/X}"`, "[1abc1]"},
 		{"a global one", `v=1abc1; printf "[%s]" "${v//~(K)\d/X}"`, "[1abc1]"},
@@ -145,14 +150,13 @@ func TestASpanChoosingSurfaceDoesNotReadTheClassEscapes(t *testing.T) {
 		{"a prefix trim with no group", `v=dabc; printf "[%s]" "${v#\d}"`, "[abc]"},
 		{"a substitution with no group", `v=adb; printf "[%s]" "${v/\d/X}"`, "[aXb]"},
 
-		// **And the group's own divergence, pinned rather than claimed.**
-		// A `~(K)` group at the head of one of these patterns is read here
-		// and makes the pattern fail to match there: `${v#~(K)\d}` on
-		// `dabc` is `abc` here and `dabc` in ksh93u+. That is the row the
-		// paragraph above is about, and it is unchanged by this reading —
-		// which is the point, since the escape must not make it worse.
-		{"a group a trim reads here", `v=dabc; printf "[%s]" "${v#~(K)\d}"`, "[abc]"},
-		{"and a substitution too", `v=adb; printf "[%s]" "${v/~(K)\d/X}"`, "[aXb]"},
+		// **The group's own divergence, closed.** These two read the group
+		// here and did not there, so the trim happened and the reference's
+		// did not. Both now leave the value alone, which is the reference's
+		// answer — and the controls one line up are what say the operators
+		// still work.
+		{"a group a prefix trim declines", `v=dabc; printf "[%s]" "${v#~(K)\d}"`, "[dabc]"},
+		{"and a substitution too", `v=adb; printf "[%s]" "${v/~(K)\d/X}"`, "[adb]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tildeMid(t, tc.src, nil); got != tc.want {

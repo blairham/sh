@@ -834,7 +834,7 @@ func matchTilde(m tildeModifier, pattern, piece, subject string, base int, o pat
 		// and patternOpts.foldClass has the table (#2716).
 		o.fold = o.fold || m.fold
 		o.foldClass = o.foldClass || m.fold
-		o.classEscapes = o.classEscapes || (m.classes && o.whole)
+		o.classEscapes = o.classEscapes || (m.classes && o.tildeGlobRead)
 		return matchPatternIn(pattern, piece, subject, base, o)
 	}
 	x, ok := m.tildeRegexAfter(o.tildePrefix, pattern, o.whole)

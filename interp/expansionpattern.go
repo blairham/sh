@@ -81,6 +81,11 @@ func (r *Runner) operandPatternOpts(pattern string, bad *bool, subjects ...strin
 	// at all, so a count is not the only door it has here. See
 	// patternOpts.operandParens.
 	o.operandParens = true
+	// And a `~(K)` group is **not** read on a parameter-expansion operand,
+	// with one exception the caller turns back on: `${v#~(K)x}` leaves the
+	// value alone in that shell where `${v%~(K)x}` trims. See
+	// patternOpts.tildeGlobRead and Runner.trimWith.
+	o.tildeGlobRead = false
 	// A group nothing closes is the same "will not compile" arriving by the
 	// other scan, and it is eager for the identical reason — measured on zsh
 	// 5.9.2 (`-f -c`, 2026-09-26), `v=zzz; ${v#a(b}` is `bad pattern: a(b` at

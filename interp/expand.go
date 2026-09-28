@@ -5270,6 +5270,11 @@ func (r *Runner) trimWith(value, pattern string, e *syntax.ParamExpr) string {
 		// shell refused to take.
 		return value
 	}
+	// The one span-choosing operator that reads a `~(K)` group. `%%` is the
+	// same anchor with the other length preference and does not, and neither
+	// does either prefix trim — which is a quirk of that shell rather than a
+	// rule, and is measured at patternOpts.tildeGlobRead.
+	o.tildeGlobRead = e.Op == syntax.ParamTrimSuffix
 	out, m := trim(value, pattern, e.Op, r.recordingPatternOpts(o, pattern),
 		r.armOrder(), searchingFlag(e))
 	if r.metABadExpansionPattern(bad, pattern) {

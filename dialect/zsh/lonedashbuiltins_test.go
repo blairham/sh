@@ -4,8 +4,14 @@
 package zsh_test
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // A lone `-` ends a builtin's option scan, in the builtins whose option
@@ -146,6 +152,72 @@ func TestTheOptionLettersBehindNoDashAreUnmoved(t *testing.T) {
 			}
 			if st != tc.status {
 				t.Errorf("status = %d, want %d", st, tc.status)
+			}
+		})
+	}
+}
+
+// And the readers ask rather than assume: with the axis answered **no** the
+// dash is an operand again, and with it unanswered the line is refused.
+//
+// **This is the half the rows above cannot reach**, and a mutation said so.
+// Disabling `whence`'s dash arm entirely killed nothing, because with the
+// arm gone the word still falls through the letter loop with no letters in it
+// and is swallowed by accident — the right answer for this dialect, reached
+// without asking anything. Only a dialect that answers differently can tell
+// "eaten because the answer said so" from "eaten because nothing looked".
+func TestTheLoneDashReadersAskRatherThanAssume(t *testing.T) {
+	run := func(t *testing.T, src string, answer interp.Answer) (string, int) {
+		t.Helper()
+		f, err := syntax.Parse(src+"\n", zsh.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		sem, dg, dl := zsh.Semantics(), zsh.Diagnostics(), zsh.Dialect()
+		sem.LoneDashIsAnOption = answer
+		r := &interp.Runner{
+			Semantics: &sem, Diagnostics: &dg,
+			Stdout: &out, Stderr: &out,
+			Name: "zsh", Dialect: &dl,
+		}
+		zsh.Apply(r)
+		status, err := r.Run(context.Background(), f)
+		if err != nil {
+			t.Fatalf("run %q: %v", src, err)
+		}
+		return out.String(), status
+	}
+	for _, tc := range []struct {
+		name, src, wantNo string
+		wantNoStatus      int
+	}{
+		// `whence` says nothing about a name it cannot find — measured, a
+		// bare `whence -` is silent at 1 — so the dash being a name shows in
+		// the **status** and nowhere else. A row written against the text
+		// would have passed with the dash eaten, which is the whole reason
+		// this one is here.
+		{"whence looks the dash up", `whence - echo`, "echo", 1},
+		{"enable names the dash as a table element", `enable - -f x`, "no such hash table element: -", 1},
+		{"setopt names the dash as an option", `setopt - -x`, "no such option: -", 1},
+		{"shift reads the dash as a count", `shift -`, "-", 2},
+	} {
+		t.Run(tc.name+", answered no", func(t *testing.T) {
+			out, st := run(t, tc.src, interp.No)
+			if !strings.Contains(out, tc.wantNo) {
+				t.Errorf("out = %q, want it to contain %q", out, tc.wantNo)
+			}
+			if st != tc.wantNoStatus {
+				t.Errorf("status = %d, want %d", st, tc.wantNoStatus)
+			}
+		})
+		t.Run(tc.name+", unanswered", func(t *testing.T) {
+			out, st := run(t, tc.src, interp.Unspecified)
+			if !strings.Contains(out, "a lone `-` given to a builtin") {
+				t.Errorf("out = %q, want the unanswered axis named", out)
+			}
+			if st != 2 {
+				t.Errorf("status = %d, want 2", st)
 			}
 		})
 	}

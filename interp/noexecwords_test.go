@@ -201,3 +201,112 @@ func TestAnUnrunWordsRefusalInAForkCostsThisShellNothing(t *testing.T) {
 		})
 	}
 }
+
+// unrunArrayGrammar is the grammar the two shapes below need: an array
+// literal whose first element decides whether the `[sub]=` heads are
+// subscripts, and an unbraced `$name[…]` subscript.
+func unrunArrayGrammar(d *syntax.Dialect) {
+	unrunGrammar(d)
+	d.ArraySubscript = true
+	d.ArrayLiteralShapeFollowsTheFirstElement = true
+	d.BareSubscript = true
+}
+
+// unrunArraySem answers the axis and the two the shapes below reach: arrays
+// are indexed from **one**, so a written `[0]` is below the first element,
+// and an unbraced `[…]` is a subscript.
+func unrunArraySem(a Answer) Semantics {
+	s := unrunSem(a)
+	s.ArrayBaseIsZero = No
+	s.BareSubscriptIsASubscript = Yes
+	return s
+}
+
+func unrunArrayRun(t *testing.T, a Answer, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, "set -n\n"+src, unrunArrayGrammar, withSem(unrunArraySem(a)))
+}
+
+// The fourth shape: a `[` an unbraced `$name` never closed. It needs no value
+// to answer — the brackets are a subscript and this one does not terminate.
+func TestAnUnrunCommandsUnclosedBareSubscriptIsRead(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"a bracket at the end of the word", "printf x $a[\n"},
+		{"a bracket the word never closes", "printf x $a[1 2]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := unrunArrayRun(t, Yes, tc.src)
+			if !strings.Contains(out, "subscript") || st != 1 {
+				t.Errorf("Yes: out %q status %d, want the refusal at 1", out, st)
+			}
+			if out, st := unrunArrayRun(t, No, tc.src); out != "" || st != 0 {
+				t.Errorf("No: out %q status %d, want silence at 0", out, st)
+			}
+		})
+	}
+}
+
+// The fifth: an array literal's subscript, which is the one thing this mode
+// **evaluates**. A command of nothing but assignments has them read; a
+// command word in front of them takes the reading away.
+func TestAnUnrunAssignmentsLiteralSubscriptIsRead(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		refused   bool
+	}{
+		{"below the first element", "a=([0]=x)\n", true},
+		{"below it, with a line in front", "true; a=([0]=x)\n", true},
+		{"an unset name is zero", "a=([q]=y)\n", true},
+		{"an expression that will not evaluate", "a=([1/0]=y)\n", true},
+		// The controls. A subscript that lands is silent, and so is every
+		// literal whose assignment is a command's prefix rather than the
+		// whole of it.
+		{"at the first element", "a=([1]=x)\n", false},
+		{"quotes come off the subscript", "a=([\"1\"]=y)\n", false},
+		{"a bare literal names no subscript", "a=(x y)\n", false},
+		{"a prefix to a command word", "a=([0]=x) true\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := unrunArrayRun(t, Yes, tc.src)
+			switch {
+			case tc.refused && st != 1:
+				t.Errorf("out %q status %d, want a refusal at 1", out, st)
+			case tc.refused && out == "":
+				t.Error("refused in silence, want the dialect's sentence")
+			case !tc.refused && (out != "" || st != 0):
+				t.Errorf("out %q status %d, want silence at 0", out, st)
+			}
+			if !tc.refused {
+				return
+			}
+			if out, st := unrunArrayRun(t, No, tc.src); out != "" || st != 0 {
+				t.Errorf("No: out %q status %d, want silence at 0", out, st)
+			}
+		})
+	}
+}
+
+// And nothing in the literal is expanded to reach that subscript: no
+// substitution runs, and a parameter between the brackets contributes
+// nothing — set or not, since nothing set it.
+func TestReadingAnUnrunLiteralsSubscriptExpandsNothing(t *testing.T) {
+	// A parameter in the subscript is not expanded, so the text is **empty**
+	// — the wording names no subscript at all. Never the parameter's value,
+	// and never the name between the brackets either, which is what a reading
+	// that took every span of the word would have left behind.
+	for _, src := range []string{
+		"q=3; a=([$q]=y)\n",
+		"a=([$q]=y)\n",
+		"a=([$(echo 0)]=y)\n",
+	} {
+		out, st := unrunArrayRun(t, Yes, src)
+		if st != 1 || !strings.Contains(out, "a[]") {
+			t.Errorf("%q: out %q status %d, want `a[]` refused at 1", src, out, st)
+		}
+	}
+	// And a value in the literal is not expanded at all: a subscript that
+	// lands leaves the whole element untouched.
+	if out, st := unrunArrayRun(t, Yes, "a=([1]=$(echo RAN >&2))\n"); out != "" || st != 0 {
+		t.Errorf("out %q status %d, want silence at 0 with nothing run", out, st)
+	}
+}

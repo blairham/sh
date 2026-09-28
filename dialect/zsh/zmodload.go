@@ -939,6 +939,10 @@ type zmodloadOpts struct {
 	silent   bool // -s: no complaint about a module that will not load
 	quietIf  bool // -i: no complaint about one already in the state asked for
 	depends  bool // -d: the dependency table rather than the module itself
+	// param is `-P name`: the array a feature listing is put into instead of
+	// being written. Empty for every call that did not spell the letter.
+	// See zmodloadFeatureParameter.
+	param string
 }
 
 // zmodloadLetters are the letters implemented here, and
@@ -952,11 +956,16 @@ type zmodloadOpts struct {
 // a record this builtin can keep whether or not a module can be dlopened, and
 // zmodloadDepends is the whole of it.
 //
+// **`-P` has left it too** (#4969) and is in neither set, because it takes an
+// argument: it is read by its own arm of the option loop, the way a letter
+// with an operand has to be. It is where a feature listing goes rather than a
+// second listing — see zmodloadFeatureParameter.
+//
 // Anything outside both sets is `bad option: -q` and 1, measured against
 // twenty-two letters zsh does not have.
 const (
 	zmodloadLetters       = "eulLFsid"
-	zmodloadUnimplemented = "aAbcfImpPR"
+	zmodloadUnimplemented = "aAbcfImpR"
 )
 
 func registerZmodload(r *interp.Runner) {
@@ -966,6 +975,9 @@ func registerZmodload(r *interp.Runner) {
 func zmodloadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	opts, rest, code := zmodloadOptions(r, args)
 	if code != 0 {
+		return code
+	}
+	if code := zmodloadFeatureParameterRefusal(r, opts); code != 0 {
 		return code
 	}
 	switch {
@@ -1039,6 +1051,20 @@ func zmodloadOptions(r *interp.Runner, args []string) (opts zmodloadOpts, rest [
 		for i := 1; i < len(word); i++ {
 			letter := word[i]
 			switch {
+			case letter == 'P':
+				// The array a listing goes into, whose name may ride the
+				// letter or be the next word: measured, `-PA` and `-P A`
+				// both fill `A`.
+				name := word[i+1:]
+				if name == "" {
+					if len(rest) == 0 {
+						r.Diagnosef("argument expected: -P\n")
+						return opts, nil, 1
+					}
+					name, rest = rest[0], rest[1:]
+				}
+				opts.param = name
+				i = len(word)
 			case strings.IndexByte(zmodloadLetters, letter) >= 0:
 				setZmodloadLetter(&opts, letter)
 			case strings.IndexByte(zmodloadUnimplemented, letter) >= 0:
@@ -1686,10 +1712,19 @@ func zmodloadFeatureListing(r *interp.Runner, opts zmodloadOpts, module string, 
 	}
 	if opts.commands {
 		line := "zmodload -F " + module
+		var words []string
 		for _, f := range features {
 			if on[f] && (len(filters) == 0 || containsWord(filters, f)) {
 				line += " " + f
+				words = append(words, f)
 			}
+		}
+		if zmodloadFeatureParameterFill(r, opts, words) {
+			// `-P` with `-L`: the words this command line carries after the
+			// module name, which is the listing without its signs and
+			// without the disabled features. See
+			// zmodloadFeatureParameterRefusal.
+			return 0
 		}
 		// With a newline, which zsh writes only when the last feature in the
 		// module's list happens to be one of the enabled ones — measured
@@ -1699,15 +1734,24 @@ func zmodloadFeatureListing(r *interp.Runner, opts zmodloadOpts, module string, 
 		zmodloadPrintf(r, "%s\n", line)
 		return 0
 	}
+	var lines []string
 	for _, f := range features {
 		if len(filters) > 0 && !containsWord(filters, f) {
 			continue
 		}
+		sign := "-"
 		if on[f] {
-			zmodloadPrintf(r, "+%s\n", f)
-			continue
+			sign = "+"
 		}
-		zmodloadPrintf(r, "-%s\n", f)
+		lines = append(lines, sign+f)
+	}
+	if zmodloadFeatureParameterFill(r, opts, lines) {
+		// `-P` with `-l`: the signed names, which is exactly what this
+		// listing writes one to a line.
+		return 0
+	}
+	for _, line := range lines {
+		zmodloadPrintf(r, "%s\n", line)
 	}
 	return 0
 }
@@ -1818,4 +1862,84 @@ func zmodloadRefersToItsParameters(r *interp.Runner, module string) {
 			r.ReferToParameter(name)
 		}
 	}
+}
+
+// `-P name` is **where a feature listing goes**: the features fill that array
+// instead of being written to standard output.
+//
+// It is a redirection of a listing that already exists rather than a second
+// format, which is what the two refusals say — the letter means nothing
+// without the listing it redirects, and it says so twice, in a measured
+// order. Measured 2026-09-28 on zsh 5.9.2 under `-f` from a script file:
+//
+//	zmodload -P p zsh/zutil       -P is only allowed with -F          1
+//	zmodload -L -P p              -P is only allowed with -F          1
+//	zmodload -F -P p zsh/zutil    -P can only be used with -l or -L   1
+//
+// `-F` is asked about first, so `-L -P p` — which has one of the two the
+// second sentence names — still reports the first. Both are status 1.
+//
+// **The array is the listing's own words, and the two listings differ.**
+// After `zmodload zsh/zutil`:
+//
+//	zmodload -F -l -P p zsh/zutil   p=(+b:zformat +b:zparseopts +b:zregexparse +b:zstyle)
+//	zmodload -F -L -P q zsh/zutil   q=(b:zformat b:zparseopts b:zregexparse b:zstyle)
+//
+// `-l` puts the signed feature names, which is exactly what it writes one to a
+// line. `-L` puts the words its command line carries **after the module
+// name** — so the signs are off and a *disabled* feature is not there at all:
+// with `-F zsh/zutil -b:zstyle` first, `-l` gives four elements with a `-` on
+// the last and `-L` gives three. So this is the same split the two listings
+// already have, read through the array rather than through the output.
+//
+// The array is replaced wholesale, an operand after the module still filters
+// it, and a module that is not loaded is the listing's own refusal with the
+// array left alone.
+func zmodloadFeatureParameterRefusal(r *interp.Runner, opts zmodloadOpts) int {
+	if opts.param == "" {
+		return 0
+	}
+	if !opts.features {
+		r.Diagnosef("-P is only allowed with -F\n")
+		return 1
+	}
+	if !opts.list && !opts.commands {
+		r.Diagnosef("-P can only be used with -l or -L\n")
+		return 1
+	}
+	if !isIdentifier(opts.param) {
+		// A name nothing may be stored under, and the one complaint this
+		// builtin makes that carries **no builtin name** and ends the
+		// script. Measured 2026-09-28: `zmodload -F -l -P 1bad zsh/zutil` is
+		// `z.zsh:7: not an identifier: 1bad` — the bare location the
+		// assignment machinery uses rather than the `z.zsh:zmodload:7:`
+		// every other refusal here carries — and nothing after it runs.
+		//
+		// The fatality is the half a `$?` cannot see and is the half that
+		// matters: a script that wrote a bad name and carried on would go
+		// on to read an array nothing filled. It is reproduced.
+		//
+		// **The bare location is not**, and that is recorded rather than
+		// left to be found: every complaint a registered builtin makes here
+		// is located at the builtin, so this one reads
+		// `z.zsh:zmodload:7: not an identifier: 1bad`. Writing a line with
+		// no builtin name in it is not something a dialect can ask for —
+		// there is no seam for it — and inventing one for a single refusal
+		// would be a second location machinery beside the one every other
+		// sentence in this file goes through.
+		r.RefuseBuiltinUsagef("", "not an identifier: %s\n", opts.param)
+		return r.ExitStatus()
+	}
+	return 0
+}
+
+// zmodloadFeatureParameterFill puts a listing's lines into the array `-P`
+// named, and reports whether it did — false for a call that never wrote the
+// letter, which is every other call.
+func zmodloadFeatureParameterFill(r *interp.Runner, opts zmodloadOpts, words []string) bool {
+	if opts.param == "" {
+		return false
+	}
+	r.SetArray(opts.param, words)
+	return true
 }

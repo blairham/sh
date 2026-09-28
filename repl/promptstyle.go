@@ -109,6 +109,7 @@ const (
 	FieldNonPrintingStart = interp.FieldNonPrintingStart
 	FieldNonPrintingEnd   = interp.FieldNonPrintingEnd
 	FieldCountedColumn    = interp.FieldCountedColumn
+	FieldShellLevel       = interp.FieldShellLevel
 )
 
 // Every question a conditional escape asks.

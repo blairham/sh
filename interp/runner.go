@@ -7295,8 +7295,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// Where in argv the declaration operands land, for the trace. See
 	// Runner.declarationOperands.
 	var operandAt []int
+	// How much of argv had been built when each of the command's words was
+	// reached, which is what puts an array-literal operand back at the index
+	// it was written at. See interp/operandwrittenorder.go.
+	argvBefore := make([]int, 0, len(c.Args))
 	var lexedAt, sourceClosedAt []string
 	for i, w := range c.Args {
+		argvBefore = append(argvBefore, len(argv))
 		if r.expandErr || r.ctl == controlExit {
 			// The command is abandoned at its first failed expansion rather
 			// than diagnosing every word that would fail. Unanimous in the
@@ -7570,22 +7575,35 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	r.operandWasRejoined = false
 	defer func() { r.operandWasRejoined = savedRejoined }()
 	rejoins := len(argv) > 0 && r.rejoinsArrayOperand(argv[0])
+	// The operands go back **where they were written** rather than onto the
+	// end, because the list is read by position in two places that look
+	// unrelated — the trace and `-T`'s scalar/array/separator — and a list in
+	// the wrong order is wrong in both. See interp/operandwrittenorder.go,
+	// which is also where the two are written down. `wordsEnd` is argv's
+	// length before any of them were put back, which is what the indices are
+	// computed against; `inserted` carries the shift, and the assigns arrive
+	// in source order so the shift is the whole of it.
+	wordsEnd, inserted := len(argv), 0
 	for _, a := range c.Assigns {
 		if a.Operand {
+			at := writtenOperandIndex(c.Args, argvBefore, wordsEnd, a) + inserted
 			if rejoins {
 				// Not a declaration this shell performs: the utility reads
 				// the assignment itself, so what it is handed is the text.
 				// See interp/rejoinedoperand.go.
 				r.operandWasRejoined = true
-				argv = append(argv, r.rejoinedArrayOperand(a)...)
+				words := r.rejoinedArrayOperand(a)
+				argv = slices.Insert(argv, at, words...)
+				inserted += len(words)
 				continue
 			}
 			// Where the bare name lands is recorded with it, because `set -x`
 			// has to put something else in that position and the expanded
 			// word cannot say which operand it came from. See
 			// interp/xtracearrayoperand.go.
-			r.arrayOperands = append(r.arrayOperands, arrayOperand{assign: a, at: len(argv)})
-			argv = append(argv, r.arrayOperandName(a))
+			r.arrayOperands = append(r.arrayOperands, arrayOperand{assign: a, at: at})
+			argv = slices.Insert(argv, at, r.arrayOperandName(a))
+			inserted++
 		}
 	}
 	// A command whose expansion failed, or depended on an axis no dialect

@@ -1826,16 +1826,39 @@ func (p *printer) simple(c *SimpleCmd) {
 		sep()
 		p.assign(a)
 	}
+	// The operands go **between** the words, where they were written, rather
+	// than after all of them. Printing them at the end is a permutation of
+	// the command, and it is the same permutation this engine used to build
+	// a utility's argument list with — see interp/operandwrittenorder.go,
+	// which is where the two other surfaces of it are written down.
+	//
+	// `let a=(5+3)x y` is what caught it: printed as `let x y a=(5+3)` it is
+	// a different program, and the round-trip property said so as soon as the
+	// runtime stopped making the same mistake (#5096).
+	//
+	// A position decides, and a tree built by hand rather than parsed has
+	// none: `w.Pos().After(a.Pos())` is false when both are zero, so an
+	// unpositioned operand falls to the end, which is exactly where this
+	// printed it before.
+	operands := make([]*Assign, 0, len(c.Assigns))
+	for _, a := range c.Assigns {
+		if a.Operand {
+			operands = append(operands, a)
+		}
+	}
+	next := 0
 	for _, w := range c.Args {
+		for next < len(operands) && w.Pos().After(operands[next].Pos()) {
+			sep()
+			p.assign(operands[next])
+			next++
+		}
 		sep()
 		p.word(w)
 	}
-	for _, a := range c.Assigns {
-		if !a.Operand {
-			continue
-		}
+	for ; next < len(operands); next++ {
 		sep()
-		p.assign(a)
+		p.assign(operands[next])
 	}
 	// A command that is nothing but redirections has no word for the blank
 	// to separate them from — see Layout.BlankBeforeAWordlessRedirection,

@@ -98,7 +98,10 @@ func TestSetCDoesNotClobberPositionalParameters(t *testing.T) {
 func TestIndirectionReadsTheNamedVariable(t *testing.T) {
 	// `${!x}` is grammar the core does not have, and what it means is the
 	// IndirectionYieldsName axis — both named here.
-	indirect := func(d *syntax.Dialect) { d.ParamIndirection = true }
+	indirect := func(d *syntax.Dialect) {
+		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
+	}
 	sem := permissive()
 	sem.IndirectionYieldsName = No
 	if got, _ := runGrammar(t, `x=y; y=V; printf "[%s]" "${!x}"`, indirect, withSem(sem)); got != "[V]" {

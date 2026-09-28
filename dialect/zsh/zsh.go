@@ -23,6 +23,16 @@ func Dialect() syntax.Dialect {
 	// what made the failure `no matches found`, which points a
 	// person at globbing rather than at arithmetic (#900).
 	d.DollarBracketArith = true
+	// `${!name}` is refused **past the parse** here, which is where this
+	// shell refuses every other expansion it cannot read: measured with
+	// `set -n`, `echo "${!x}"` is `bad substitution` and
+	// `{ echo "${!x}"; }` is silent at 0, exactly as `${9nope}` is in both
+	// positions. Without this the refusal ended the parse and a `${!x}` in
+	// a branch nothing takes was a dead script. See
+	// syntax.Dialect.IndirectionRefusedAtExpansion, and
+	// emulateindirection.go for the mode that gives the construct a meaning
+	// rather than a refusal.
+	d.IndirectionRefusedAtExpansion = true
 	// `in` is an ordinary command name here, where bash, dash and ksh93 all
 	// refuse it wherever a command may begin. Measured 2026-09-22: `in` on
 	// its own and `echo | in` are both `command not found` and `in() { :; }`
@@ -931,6 +941,18 @@ func Semantics() interp.Semantics {
 	// `zsh:1: exec format error: empty` at 126 here and `hi` at 0 in the
 	// other six columns — the same for a `#!` followed only by blanks. See
 	// TestAnEmptyInterpreterLineIsRefused.
+	// `${!name}` — the one construct this shell's grammar has not and a
+	// **mode** gives it. `emulate ksh` turns on syntax.Dialect.ParamIndirection
+	// (see emulateindirection.go) and what the sigil then means is zsh's own
+	// `(k)`: the subscript, not the thing the value names. Answered here
+	// rather than in the emulation table because it cannot be reached in any
+	// other state — the shell's own mode and `emulate sh` refuse the
+	// construct at the parse, so there is no mode for the answer to be wrong
+	// in and nothing for an `emulate zsh` to restore. See
+	// interp.Semantics.IndirectionIsTheSubscriptFlag, where the twenty rows
+	// are.
+	s.IndirectionIsTheSubscriptFlag = interp.Yes
+
 	s.EmptyInterpreterLineIsNotAScript = interp.Yes
 	// And a line naming a word with no slash in it is looked up on PATH:
 	// `printf '#!cat\necho hi\n' > tstcmd; chmod +x tstcmd; tstcmd` prints

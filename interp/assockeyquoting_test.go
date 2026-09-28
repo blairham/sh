@@ -58,6 +58,7 @@ func TestADollarSingleQuotedSubscriptDecodesItsEscapes(t *testing.T) {
 		sem.SubscriptIsAQuotingContext = Yes
 		out, st := runGrammar(t, tc.src, func(d *syntax.Dialect) {
 			d.ParamIndirection = true
+			d.ParamIndirectionPrefixListing = true
 			d.DollarSingleQuote = true
 		}, withSem(sem))
 		if strings.TrimSpace(out) != tc.want {

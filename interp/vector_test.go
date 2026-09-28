@@ -50,6 +50,14 @@ func testSemantics() Semantics {
 	// on the way to something else need an answer rather than a refusal.
 	s.RedirectsUseEveryTarget = No
 
+	// What `${!x}` means, at the answer the two shells that have the
+	// construct natively share: the `!` is an indirection and not zsh's `(k)`
+	// subscript flag. Every suite here that writes `${!a[@]}` on its way to
+	// something about *arrays* reaches it, and the suite that is about the
+	// third answer sets it itself — see interp/indirectsubscriptflag_test.go
+	// (#4957).
+	s.IndirectionIsTheSubscriptFlag = No
+
 	// Whether a frozen name in an assignment prefix is refused before its own
 	// value is evaluated, at the answer four of the five columns give — the
 	// value runs and its failure is what is written. Every suite here that

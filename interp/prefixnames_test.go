@@ -20,6 +20,7 @@ func runIndirect(t *testing.T, src string, setup func(*Runner)) string {
 	t.Helper()
 	d := syntax.Core()
 	d.ParamIndirection = true
+	d.ParamIndirectionPrefixListing = true
 	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)

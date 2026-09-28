@@ -26,6 +26,7 @@ func runNamerefLetters(t *testing.T, src string) (string, int) {
 	sem := namerefAimSemantics()
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 	}, func(r *Runner) { r.Semantics = &sem })
 }
 

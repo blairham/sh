@@ -28,6 +28,7 @@ func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// `${!x}` and `${!prefix*}` — the param/ indirection cases.
 	d.ParamIndirection = true
+	d.ParamIndirectionPrefixListing = true
 	// `$+v`, `$=v`, `$~v` and `$^a` — the flag sigils written without the
 	// braces. One of the seven columns reads them as expansions and the other
 	// six as text, and the corpus records both answers, so the grammar that

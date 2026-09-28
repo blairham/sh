@@ -270,9 +270,11 @@ func TestAnOperatorOnAnIndirectListMapsOverTheElements(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := listSem()
 			sem.IndirectionYieldsName = No
+			sem.IndirectionIsTheSubscriptFlag = No
 			sem.SubstringOfPositionalsSlicesTheList = Yes
 			out, _ := runGrammar(t, countFields+setup+tc.src, func(d *syntax.Dialect) {
 				d.ParamIndirection = true
+				d.ParamIndirectionPrefixListing = true
 				d.ParamCaseChange = true
 				d.ParamTransformations = true
 			}, func(r *Runner) { r.Semantics = &sem })
@@ -293,8 +295,10 @@ func TestTheIndirectListRewriteStaysWhereItWas(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := listSem()
 			sem.IndirectionYieldsName = No
+			sem.IndirectionIsTheSubscriptFlag = No
 			out, _ := runGrammar(t, countFields+tc.src, func(d *syntax.Dialect) {
 				d.ParamIndirection = true
+				d.ParamIndirectionPrefixListing = true
 			}, func(r *Runner) { r.Semantics = &sem })
 			if out != tc.want {
 				t.Errorf("got %q, want %q", out, tc.want)

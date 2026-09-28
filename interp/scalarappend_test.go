@@ -127,7 +127,10 @@ func TestAppendingALiteralToAnArrayIsUnchanged(t *testing.T) {
 // passes every other test here and drops the value a script was started with.
 func TestAppendingALiteralToAnInheritedScalarKeepsIt(t *testing.T) {
 	out, _ := runGrammar(t, `a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
-		func(d *syntax.Dialect) { d.ParamIndirection = true },
+		func(d *syntax.Dialect) {
+			d.ParamIndirection = true
+			d.ParamIndirectionPrefixListing = true
+		},
 		func(r *Runner) { r.Env = append(r.Env, "a=1") })
 	if got := strings.TrimSpace(out); got != "[1][2] n=2" {
 		t.Errorf("got %q, want the inherited value kept as the first element", got)
@@ -137,7 +140,10 @@ func TestAppendingALiteralToAnInheritedScalarKeepsIt(t *testing.T) {
 	// the append. Measured `a=1 sh -c 'unset a; a+=(2)'` -- one element in
 	// every column.
 	out, _ = runGrammar(t, `unset a; a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
-		func(d *syntax.Dialect) { d.ParamIndirection = true },
+		func(d *syntax.Dialect) {
+			d.ParamIndirection = true
+			d.ParamIndirectionPrefixListing = true
+		},
 		func(r *Runner) { r.Env = append(r.Env, "a=1") })
 	if got := strings.TrimSpace(out); got != "[2] n=1" {
 		t.Errorf("after unset: got %q, want the inherited value gone", got)

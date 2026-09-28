@@ -874,6 +874,15 @@ scan:
 		if !p.dialect.ParamIndirection {
 			// Refused rather than guessed: ksh93 accepts this and means
 			// something else, so a dialect without it cannot pretend.
+			if p.dialect.IndirectionRefusedAtExpansion {
+				// Carried past the parse instead of ending it, which is
+				// what every other unreadable expansion in this grammar
+				// does — measured with `set -n`, where `{ echo "${!x}"; }`
+				// is silent and `echo "${!x}"` is not. See
+				// [Dialect.IndirectionRefusedAtExpansion].
+				e.Bad, e.Src = true, src
+				return e
+			}
 			p.failKind(ErrBadSubstitution, "${!name} is not available in this dialect")
 			return e
 		}
@@ -985,7 +994,7 @@ scan:
 	// `${!name@}` and `${!name*}` are the names beginning with name, not a
 	// value at all. Only after `!`, and only when the whole rest is the one
 	// character — `${!name@U}` is an operator on an indirection and not this.
-	if e.Indirect && (s == "@" || s == "*") {
+	if e.Indirect && p.dialect.ParamIndirectionPrefixListing && (s == "@" || s == "*") {
 		e.Prefix = s[0]
 		return e
 	}
@@ -1084,8 +1093,9 @@ scan:
 	// The prefix form again, now that a subscript and a member path have been
 	// taken off: `${!a[1].@}` reaches here with the `@` alone left, where
 	// `${!a@}` reached the test above with it. One rule, asked at both places
-	// a name can end.
-	if e.Indirect && (s == "@" || s == "*") {
+	// a name can end — the dialect flag included, or the spelling would be
+	// half there for the shell that has the indirection and not this.
+	if e.Indirect && p.dialect.ParamIndirectionPrefixListing && (s == "@" || s == "*") {
 		e.Prefix = s[0]
 		return e
 	}

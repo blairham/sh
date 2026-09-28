@@ -230,6 +230,7 @@ func TestPrefixNamesNeedIndirection(t *testing.T) {
 	t.Parallel()
 	ind := Core()
 	ind.ParamIndirection = true
+	ind.ParamIndirectionPrefixListing = true
 
 	for _, tc := range []struct {
 		src    string

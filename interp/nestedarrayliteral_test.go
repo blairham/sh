@@ -39,6 +39,7 @@ func nestedLiteralRun(t *testing.T, src string) (string, int) {
 		d.ArrayLiteralShapeFollowsTheFirstElement = true
 		d.SubscriptSpansSeparators = true
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 	}, withSem(sem))
 }
 

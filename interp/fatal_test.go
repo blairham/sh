@@ -194,7 +194,10 @@ func TestCoreRefusesTheNewAxes(t *testing.T) {
 // Together they express three answers with two binary questions.
 func TestIndirectionMeaningIsAnAxis(t *testing.T) {
 	const src = `x=y; y=V; printf "[%s]" "${!x}"`
-	indirect := func(d *syntax.Dialect) { d.ParamIndirection = true }
+	indirect := func(d *syntax.Dialect) {
+		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
+	}
 	name := permissive()
 	name.IndirectionYieldsName = Yes
 	if got, _ := runGrammar(t, src, indirect, withSem(name)); got != "[x]" {

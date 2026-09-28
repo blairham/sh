@@ -267,6 +267,11 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// unanswered IndirectionIsTheSubscriptFlag: no `${!name}` here either. The
+	// corpus records BusyBox answering `syntax error: bad substitution` at 2
+	// for `x=y; y=V; printf "[%s]" "${!x}"` — its wording for a parse failure,
+	// so the construct is refused before any reading of the sigil could be
+	// asked for (#4957).
 	// unanswered KindLetterReplacesTheKind: there is no declaration utility
 	// here to write a kind letter on, so there is no second one for the
 	// question to be about. Measured 2026-09-27 in the digest-pinned image,

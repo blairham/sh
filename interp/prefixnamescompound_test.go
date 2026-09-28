@@ -32,6 +32,7 @@ func prefixCompoundRun(t *testing.T, src string, set func(*Semantics)) (string, 
 	t.Helper()
 	d := syntax.Core()
 	d.ParamIndirection = true
+	d.ParamIndirectionPrefixListing = true
 	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)

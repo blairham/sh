@@ -75,13 +75,30 @@ func TestGrammar(t *testing.T) {
 		// time: `if false; then echo ${x^^}; fi; echo ok` prints ok in zsh,
 		// so the refusal cannot live in the grammar.
 		{`echo ${x^^}`, true},
-		{`echo ${!x}`, false},
+		// `${!name}` is the same shape as the row above it and was recorded
+		// here as a *parse* refusal until #4957, which is the claim `set -n`
+		// falsified: measured 2026-09-28 on zsh 5.9.2, `set -n; echo
+		// "${!x}"` is `bad substitution` and `set -n; { echo "${!x}"; }` is
+		// silent at 0 — the same pair of answers `${9nope}` gives, and a
+		// parse refusal would have refused both. So the line parses and the
+		// refusal is the expansion's. See
+		// syntax.Dialect.IndirectionRefusedAtExpansion.
+		{`echo ${!x}`, true},
 		// The array form is the one scripts reach for — iterating an array by
 		// index — and it takes a name and a subscript where the scalar takes
-		// only a name. zsh refuses both, and refuses them at *parse* time, so
-		// nothing after the line runs. Its own spelling is `${(k)a}`.
-		{`echo ${!a[@]}`, false},
-		{`echo ${!a[*]}`, false},
+		// only a name. Its own spelling in this mode is `${(k)a}`, and
+		// `emulate ksh` gives `${!a[@]}` a meaning rather than a refusal —
+		// see dialect/zsh/emulateindirection.go.
+		{`echo ${!a[@]}`, true},
+		{`echo ${!a[*]}`, true},
+		// The prefix listing is the spelling **no mode** of this shell has,
+		// and it is refused where these two are read: measured 2026-09-28,
+		// `emulate ksh` answers `${!ZQ_@}` with a bad substitution in the
+		// same script that reads `${!x}`. It parses, and the refusal is the
+		// expansion's like every other one here — `set -n` refuses it at the
+		// top level and is silent on `{ echo ${!ZQ_@}; }`, in this shell and
+		// in the reference.
+		{`echo ${!ZQ_@}`, true},
 		{`function f() { echo x; }`, true},
 		{`a=(x y)`, true},
 		// Short loops. Measured 2026-09-05 against zsh 5.9.2; the other four

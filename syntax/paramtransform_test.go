@@ -113,6 +113,7 @@ func TestTransformLeavesThePrefixListingAlone(t *testing.T) {
 	t.Parallel()
 	d := transformDialect()
 	d.ParamIndirection = true
+	d.ParamIndirectionPrefixListing = true
 
 	f, err := Parse(`echo "${!FOO_@}"`, d)
 	if err != nil {

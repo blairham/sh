@@ -64,6 +64,13 @@ func permissive() Semantics {
 	// raise, at bash's answers, which is the floor these suites assert
 	// against. The tests that are *about* them set both sides themselves —
 	// see exportedcompound_test.go (#1380).
+	// What `${!x}` means, at the answer the two shells that have the
+	// construct natively share: the `!` is an indirection and not zsh's `(k)`
+	// subscript flag. Every suite here that prints `${!a[@]}` on its way to
+	// something about *arrays* needs it answered, and the suite that is
+	// about the third answer sets it itself — see
+	// interp/indirectsubscriptflag_test.go (#4957).
+	s.IndirectionIsTheSubscriptFlag = No
 	s.ExportedCompoundReachesAChildAsItsFirstValue = No
 	s.SubscriptedOperandCarriesTheAttributes = Yes
 	// The reach a negative subscript makes past an array's first element, at

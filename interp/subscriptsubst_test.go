@@ -18,6 +18,7 @@ func runSubscriptSubst(t *testing.T, src string) (string, int) {
 		d.ParamSubstitution = true
 		d.ParamSubstring = true
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 	}, nil)
 }
 

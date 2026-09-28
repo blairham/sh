@@ -18,6 +18,7 @@ func runArray(t *testing.T, src string) (string, int) {
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamCaseChange = true
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 	}, nil)
 }
 

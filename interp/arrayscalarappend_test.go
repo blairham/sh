@@ -33,6 +33,7 @@ func runScalarAppend(t *testing.T, sem Semantics, src string) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 	}, withSem(sem))
 }
 

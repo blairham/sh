@@ -149,6 +149,7 @@ ash   IgnoredNamesFollowTheParameter
 ash   IgnoredNamesMatchTheLastComponent
 ash   IgnoredNamesValueIsOnePattern
 ash   ImmovableOptionsSetAtInvocation
+ash   IndirectionIsTheSubscriptFlag
 ash   IndirectionYieldsName
 ash   InheritedValueSurvivesADeclaredType
 ash   IntegerAssignmentReadsALeadingZeroAsDecimal
@@ -482,6 +483,7 @@ dash  IgnoredNamesFollowTheParameter
 dash  IgnoredNamesMatchTheLastComponent
 dash  IgnoredNamesValueIsOnePattern
 dash  ImmovableOptionsSetAtInvocation
+dash  IndirectionIsTheSubscriptFlag
 dash  IndirectionYieldsName
 dash  InheritedValueSurvivesADeclaredType
 dash  IntegerAssignmentReadsALeadingZeroAsDecimal

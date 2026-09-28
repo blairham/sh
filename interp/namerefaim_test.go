@@ -21,6 +21,9 @@ import (
 // carrying-on answer so a case can assert on the line behind the refusal.
 func namerefAimSemantics() Semantics {
 	sem := PosixSemantics()
+	// The `!` is an indirection here and not zsh's `(k)` subscript flag,
+	// which is the answer the two shells with the construct share.
+	sem.IndirectionIsTheSubscriptFlag = No
 	sem.DeclareOptions = "aAfFgilnprux"
 	sem.UnsetOptions = "vfn"
 	sem.NamerefCycleIsRefused = No
@@ -67,6 +70,7 @@ func runNamerefWith(t *testing.T, sem Semantics, src string) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 		d.Herestring = true
 		d.ArrayLiteral = true
 	}, func(r *Runner) { r.Semantics = &sem })

@@ -14,7 +14,10 @@ import (
 // withKeyListing turns on the grammar for `${!name[@]}`, which is how a script
 // asks a table for its keys. Named for the construct rather than for a shell,
 // as every grammar switch in these tests is.
-func withKeyListing(d *syntax.Dialect) { d.ParamIndirection = true }
+func withKeyListing(d *syntax.Dialect) {
+	d.ParamIndirection = true
+	d.ParamIndirectionPrefixListing = true
+}
 
 // The order a keyed table lists in — #1758, filed as "this shell lists by key
 // where the shell it models keeps insertion order, so the first-value axis is

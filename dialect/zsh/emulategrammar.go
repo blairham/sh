@@ -84,9 +84,16 @@ type grammarAxis struct {
 
 // emulationGrammar is the per-mode grammar table.
 //
-// Empty. See the file comment: the seam is #4815 and every field behind it is
-// measured by a row of its own.
-var emulationGrammar []grammarAxis
+// **One axis**, and the epic's other rows all landed on option names instead
+// — which is what the file comment above said would be the common case and
+// which turned out to be true of every family but this one. `${!name}` is
+// here because nothing in the option namespace moves it: `emulate zsh; setopt
+// ksharrays` still answers `bad substitution`, and the whole of
+// `${(k)options}` was tried a name and a state at a time in both directions.
+// See emulateindirection.go.
+var emulationGrammar = []grammarAxis{
+	paramIndirectionAxis(),
+}
 
 // grammarFlag is the ordinary shape of an axis — one bool field of
 // `syntax.Dialect`, with the answer each mode holds for it.

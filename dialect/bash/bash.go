@@ -175,6 +175,10 @@ func Dialect() syntax.Dialect {
 	// expansion is reached.
 	d.ParamTransformations = true
 	d.ParamIndirection = true
+	// And the prefix spelling, which this column and ksh93 have and the
+	// third reader of `${!x}` has not — see
+	// syntax.Dialect.ParamIndirectionPrefixListing.
+	d.ParamIndirectionPrefixListing = true
 	// And where that indirection begins: the specials bash indirects *through*
 	// — `${!#}` is `$3` and `${!@}` complains about the value of `$@` rather
 	// than about a name — plus a digit, which is an ordinary positional here,
@@ -1643,6 +1647,11 @@ func Semantics() interp.Semantics {
 	// a pattern here — so there is no chain for a reading to be about.
 	// Measured 2026-09-15 (#2830).
 	s.IndirectionYieldsName = interp.No
+	// And not the third answer either: the `!` here is the indirection it
+	// looks like, never zsh's `(k)` subscript flag. See
+	// interp.Semantics.IndirectionIsTheSubscriptFlag, whose grid is the one
+	// shell that means that by it.
+	s.IndirectionIsTheSubscriptFlag = interp.No
 	// And an operator written after `${!name[@]}` puts the `!` back to being
 	// that indirection: the listing is the bare form only. Measured
 	// 2026-09-14 on a script file, under `-c` and on standard input alike —

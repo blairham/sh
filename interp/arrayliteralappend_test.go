@@ -206,7 +206,10 @@ func TestAKeyedLiteralAppendKeepsTheScalar(t *testing.T) {
 		{`typeset -A a=([k]=v); a+=([1]=Z); echo "keys=${!a[@]} n=${#a[@]}"`, "keys=1 k n=2"},
 		{`typeset -A a; a+=([1]=Z); echo "keys=${!a[@]} n=${#a[@]}"`, "keys=1 n=1"},
 	} {
-		out, st := runGrammar(t, c.src, func(d *syntax.Dialect) { d.ParamIndirection = true }, withSem(sem))
+		out, st := runGrammar(t, c.src, func(d *syntax.Dialect) {
+			d.ParamIndirection = true
+			d.ParamIndirectionPrefixListing = true
+		}, withSem(sem))
 		if strings.TrimSpace(out) != c.want {
 			t.Errorf("%s gave %q, want %q", c.src, strings.TrimSpace(out), c.want)
 		}
@@ -249,7 +252,10 @@ func TestAKeyedLiteralAppendFollowsTheTableDeclarationAnswer(t *testing.T) {
 	sem.ArrayLiteralSubscriptIsAKey = Yes
 	sem.ScalarUnderATableDeclaration = ScalarUnderACompoundDiscardsIt
 	src := `a=one; a+=([1]=Z); echo "keys=${!a[@]} n=${#a[@]}"`
-	out, st := runGrammar(t, src, func(d *syntax.Dialect) { d.ParamIndirection = true }, withSem(sem))
+	out, st := runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
+	}, withSem(sem))
 	if strings.TrimSpace(out) != "keys=1 n=1" {
 		t.Errorf("got %q, want the scalar discarded under the discarding answer", strings.TrimSpace(out))
 	}

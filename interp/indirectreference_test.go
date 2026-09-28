@@ -24,6 +24,7 @@ func runIndirectRef(t *testing.T, src string) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 		d.ParamBangNameContinues = "0123456789#?@*["
 	}, nil)
 }
@@ -236,6 +237,7 @@ func TestAnIndirectionsRefusalWearsTheSigilOnlyWhereItIndirects(t *testing.T) {
 			sem.IndirectionYieldsName = tc.yield
 			out, _ := runGrammar(t, tc.src, func(d *syntax.Dialect) {
 				d.ParamIndirection = true
+				d.ParamIndirectionPrefixListing = true
 			}, withSem(sem))
 			if !strings.Contains(out, tc.want) {
 				t.Errorf("got %q, want %q in it", out, tc.want)

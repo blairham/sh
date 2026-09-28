@@ -146,7 +146,10 @@ func TestTheAxisDoesNotReachAnIndirection(t *testing.T) {
 	sem := permissive()
 	sem.LastBackgroundPid = LastBackgroundPidUnset
 	sem.IndirectionYieldsName = No
-	enable := func(d *syntax.Dialect) { d.ParamIndirection = true }
+	enable := func(d *syntax.Dialect) {
+		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
+	}
 	if got, st := runGrammar(t, `y=hello; x=y; echo "[${!x}]"`, enable, withSem(sem)); got != "[hello]\n" || st != 0 {
 		t.Errorf("an indirection through a set name: got %q/%d, want %q/0", got, st, "[hello]\n")
 	}

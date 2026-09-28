@@ -129,6 +129,9 @@ type globQualifiers struct {
 	// allowNoMatch is `N`: a pattern that matched nothing is no error and
 	// the word is deleted, which is `null_glob` for one pattern.
 	allowNoMatch bool
+	// rng is `[n,m]`: which of the matches to keep, by position. It is the
+	// one qualifier that is not about a file — see interp/globrange.go.
+	rng globRange
 	// modifiers is the history-style modifier text a `:` in the list opens,
 	// applied to every name the pattern reported. Empty where the list has
 	// no `:` in it, which is every list that is only qualifiers.
@@ -203,6 +206,16 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			q.modifiers = list[i:]
 			q.sections = append(q.sections, section)
 			return q, "", true
+		case '[':
+			// The position range, which is not a file attribute: it keeps
+			// the n-th through m-th of the names the pattern produced. See
+			// interp/globrange.go, where the pipeline position is measured.
+			rng, n, diag := readGlobRange(list[i:])
+			if diag != "" {
+				return q, diag, false
+			}
+			i += n
+			q.rng = rng
 		case 'N':
 			q.allowNoMatch = true
 		case 'D':

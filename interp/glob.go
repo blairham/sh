@@ -1659,6 +1659,28 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		// empty directory — which is no match at all.
 		return missed()
 	}
+	if quals.rng.set {
+		// The position range, last of all: after the qualifiers, after the
+		// modifiers and after the sort, because the positions are into the
+		// order the pattern finally reports. And **past the refusal above**,
+		// which is measured — a range that selects nothing is not "no
+		// matches found". See interp/globrange.go.
+		from, to, ok := r.globRangeBounds(quals.rng)
+		if !ok {
+			return nil, false
+		}
+		out = selectGlobRange(out, from, to)
+		if len(out) == 0 {
+			// **Deleted rather than refused**, which is the row that says a
+			// range emptying the list is not a pattern matching nothing:
+			// `*([0])`, `*([9])` and `*([4,2])` are each nothing at status 0
+			// in a directory where the pattern matched five names, and
+			// `zzz*([1])` in the same directory is `no matches found` and
+			// ends the script. So this is `N`'s answer rather than
+			// missed()'s.
+			return nil, true
+		}
+	}
 	return out, false
 }
 

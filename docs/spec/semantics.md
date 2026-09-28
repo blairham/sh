@@ -735,8 +735,8 @@ an operand the builtin read.
 
 ## A command word that is exactly `-`
 
-zsh throws it away and runs the rest of the command. Six columns look it up
-and report 127.
+zsh runs the rest of the command **with a dash on the front of its argv[0]**.
+Six columns look the word up and report 127.
 
 Measured 2026-09-16 over the whole panel, with zsh and BusyBox re-measured
 2026-09-18: script files under `env -i` with a scratch `HOME` and no startup
@@ -752,29 +752,95 @@ whole of the answer.
 | BusyBox ash 1.37.0 | `-: not found`, 127 | 127 | 127 | 127 | 127 |
 | **zsh 5.9.2** | **`hi`, 0** | **`two`, 0** | `--: command not found`, 127 | **0, silent** | **`four`, 0** |
 
-`Semantics.LoneDashInCommandPositionIsDiscarded`. The `--` column is the
-control: two dashes is an ordinary command name there as everywhere else, so
-this is the word being *exactly* one dash rather than a leading one. Quoting
-does not protect it and neither does arriving through an expansion, which is
-why it is asked after the word has been expanded rather than on the text.
+The `--` column is the control: two dashes is an ordinary command name there
+as everywhere else, so this is the word being *exactly* one dash rather than a
+leading one. Quoting does not protect it and neither does arriving through an
+expansion, which is why it is read after the word has been expanded rather
+than off the text.
 
-Three rows past the issue's own table, each of which narrows what "discarded"
-means:
+The dialect spells it by naming the word a **precommand modifier** — one
+`interp.SetPrecommand("-", interp.PrecommandDash)` beside `noglob`, `builtin`
+and `exec` — rather than by an axis of its own. It had one,
+`LoneDashInCommandPositionIsDiscarded`, and the name was the bug: nothing in
+the table above can tell a discard from a modifier, because `echo hi` prints
+`hi` under either reading.
+
+### It is a modifier, and what it modifies is argv[0]
+
+Measured 2026-09-28 the same way, against `/opt/homebrew/bin/zsh` — zsh 5.9.2
+(aarch64-apple-darwin25.4.0), `go version -m`: *not a Go executable*. Every
+row runs `/bin/sh -c 'printf "[%s]" "$0"'`, which is the one thing the grid
+above never varied:
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `/bin/sh …` *(control)* | `[/bin/sh]` |
+| `- /bin/sh …` | `[-/bin/sh]` |
+| `- sh …` | `[-sh]` |
+| `- - /bin/sh …` | `[-/bin/sh]` |
+| `- - - /bin/sh …` | `[-/bin/sh]` |
+| `- command /bin/sh …` | `[-/bin/sh]` |
+| `- exec /bin/sh …` | `[-/bin/sh]` |
+| `noglob - /bin/sh …` | `[-/bin/sh]` |
+| `- noglob /bin/sh …` | `[-/bin/sh]` |
+| `exec - /bin/sh …` | `[-/bin/sh]` |
+
+The doubled row says the dash is a property of the **invocation** rather than
+a character prepended once per modifier: `- -` gives one dash, not two. The
+`- sh` row says it goes on the word as written and not on the path PATH
+resolved it to. The last two say a modifier may stand on either side of it.
+
+It reaches an external command alone: `- f` where `f` is a function reports
+`$0` as `f`, and `- :` runs the builtin with nothing to dash.
+
+### And it switches off the option scan of every modifier behind it
+
+| written | zsh 5.9.2 |
+| --- | --- |
+| `exec -l /bin/sh …` *(control)* | `[-/bin/sh]` |
+| `exec -a zz /bin/sh …` *(control)* | `[zz]` |
+| `command -p /bin/sh …` *(control)* | `[/bin/sh]` |
+| `noglob exec -l /bin/sh …` *(control)* | `[-/bin/sh]` |
+| `- exec -l /bin/sh …` | `command not found: -l`, 127 |
+| `- exec -a zz /bin/sh …` | `command not found: -a`, 127 |
+| `- command -p /bin/sh …` | `command not found: -p`, 127 |
+| `- exec -- /bin/sh …` | `command not found: --`, 127 |
+| `noglob - exec -l /bin/sh …` | `command not found: -l`, 127 |
+| `exec - exec -l /bin/sh …` | `command not found: -l`, 127 |
+| `exec -l exec -a zz /bin/sh …` | `[zz]` |
+
+`command not found: -l` rather than a usage error is what says the word became
+the **command name**: the scan did not run at all, rather than running and
+refusing. The four controls are what make this one rule and not four — each
+letter reads perfectly well on its own, and `noglob exec -l` still reads it,
+so it is this word and not "a modifier in front of a modifier".
+
+**The noun is the word `-`, not the dash it asks for.** The last row is the
+discriminating case: `exec -l` asks for the same dash on argv[0] and leaves
+the scan behind it reading options normally, while `exec -` refuses. What
+decides is which of the two spellings arrived, not what either of them did.
+
+It reaches the modifiers alone. An ordinary builtin behind the dash reads its
+own options as it always did — `- echo -n hi` writes `hi` with no newline, and
+`- print -n hi` the same.
+
+### A word that was taken away is not the same state as no word
 
 | probe | zsh 5.9.2 |
 | --- | --- |
 | `- v=1 echo hi` | `command not found: v=1`, 127 |
 | `v=1 -` | 0, and `v` is `1` afterwards |
 | `- >f` | `redirection with no command`, and the script ends |
+| `noglob >f` | `redirection with no command`, and the script ends |
+| `>f` *(control)* | 0, and the file is made |
 
 So the word after the dash is a **command word** and not a prefix — the
 assignments were read before the dash and nothing re-reads them. With nothing
 left, what is left is the assignments, and they persist exactly as `v=1`
 written on its own does. And a redirection has no command to belong to, which
 is **not** the state `>f` written with no word at all is in: that runs this
-shell's null command and succeeds. A word that was written and discarded is a
-different state from no word, and that is why the discard is asked *after* the
-null-command substitution rather than before it.
+shell's null command and succeeds. The refusal is the *scan having taken a
+word*, which is why `noglob` answers it the same way.
 
 ### It is not the option question, and the wrong reading survives probing
 
@@ -787,10 +853,10 @@ is asked.
 The two are hard to tell apart from outside. `eval - echo hi` prints `hi` in
 zsh, which reads as "`eval` ate the `-`" — but `eval "- echo hi"`, one
 argument, prints `hi` too, and `eval - -- echo hi` reports `--` as the
-command. Both are explained by the text `- echo hi` running with the `-`
-discarded, and neither is explained by an option. A probe that only ever
-writes the dash as a separate word in front of another word cannot tell them
-apart; the one-argument form is the shape that can.
+command. Both are explained by the text `- echo hi` running with the modifier
+read off the front, and neither is explained by an option. A probe that only
+ever writes the dash as a separate word in front of another word cannot tell
+them apart; the one-argument form is the shape that can.
 
 ## `rehash` and `unhash`: a name that was missing, not a behavior
 

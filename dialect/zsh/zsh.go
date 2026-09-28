@@ -1571,11 +1571,6 @@ func Semantics() interp.Semantics {
 	// interp.Semantics.BuiltinsKeepingAnAssignmentPrefix for the rows and for
 	// why this is not the specialness axis (#3313).
 	s.BuiltinsKeepingAnAssignmentPrefix = "alias hash"
-	// And a command word that expanded to exactly `-` is thrown away here,
-	// where the other six columns look it up and report 127. Not the same
-	// question as LoneDashIsAnOption below, which this shell also answers
-	// yes: that one is a dash-word a builtin was handed (#3236).
-	s.LoneDashInCommandPositionIsDiscarded = interp.Yes
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
 	s.AliasListingQuotesTheName = interp.Yes
@@ -6896,6 +6891,14 @@ func Apply(r *interp.Runner) {
 	// interp/equalscontextposition.go.
 	r.SetCommandWordModifier("command")
 	r.SetCommandWordModifier("nocorrect")
+	// A command word that expanded to exactly `-` belongs to this family,
+	// where the other six columns look it up and report 127. It is a
+	// modifier and not a word thrown away — it puts a dash on the front of
+	// the command's argv[0] and switches off the option scan of every
+	// modifier behind it. Not the same question as LoneDashIsAnOption, which
+	// this shell also answers yes: that one is a dash-word a builtin was
+	// handed (#3236, #5018, #5028).
+	r.SetPrecommand("-", interp.PrecommandDash)
 	r.SetPrecommand("noglob", interp.PrecommandNoGlob)
 	r.SetPrecommand("builtin", interp.PrecommandTransparent)
 	r.SetPrecommand("exec", interp.PrecommandTransparent)

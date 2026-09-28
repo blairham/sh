@@ -25636,17 +25636,6 @@ type Semantics struct {
 	// fact and needs nothing here.
 	BuiltinsKeepingAnAssignmentPrefix string
 
-	// LoneDashInCommandPositionIsDiscarded throws away a command word that
-	// expanded to exactly `-` and runs whatever follows it.
-	//
-	// zsh 5.9.2 alone against six: bash 5.3.20, that binary as `sh`, bash
-	// 3.2.57, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 all
-	// answer `- echo hi` with `command not found` at 127 and carry on. See
-	// interp/lonedashcommand.go for the rows and for why it is not
-	// LoneDashIsAnOption, which is the same shell's answer to a different
-	// question (#3236).
-	LoneDashInCommandPositionIsDiscarded Answer
-
 	// BadOptionToSpecialBuiltinFatal ends the script when a special builtin is
 	// given an option it does not have. True in dash and ksh93, which is the
 	// POSIX rule that a special builtin's failure is fatal; bash and zsh
@@ -29227,11 +29216,6 @@ func PosixSemantics() Semantics {
 		// deliberately did not use it. Four of the five columns agree, and
 		// this is the safe direction of the two.
 		DefaultPathSearchIsRemembered: No,
-		// And a command word is a command name whatever it is spelled: POSIX
-		// gives `-` no meaning there, and six of the seven columns report it
-		// as a command that was not found. zsh throws the word away and says
-		// so in its own preset.
-		LoneDashInCommandPositionIsDiscarded: No,
 		// And POSIX gives `command` a builtin to run: bypassing the function
 		// table is what the utility is for, not bypassing the builtins too.
 		CommandReachesABuiltin: Yes,

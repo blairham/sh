@@ -61,7 +61,11 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	// with a letter no panel shell owns — `-x` is a real ksh93 option, and
 	// the first measurement read ksh93 off it, wrongly.
 	verbose, sentence, defaultPath := false, false, false
-	for len(args) > 0 {
+	// A `-` modifier in front of this one switches the option scan off, so
+	// the first dash-word is the command's name. See PrecommandDash —
+	// `- command -p /bin/sh -c '…'` is `command not found: -p` at 127 in
+	// zsh 5.9.2, where `command -p /bin/sh -c '…'` runs it.
+	for len(args) > 0 && !r.dashPrecommand {
 		a := args[0]
 		if len(a) < 2 || a[0] != '-' {
 			break

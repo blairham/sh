@@ -173,7 +173,7 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 					value = a[i+1:]
 					break
 				}
-				if len(args) > 1 && isANumber(args[1]) {
+				if len(args) > 1 && beginsWithADigit(args[1]) {
 					value, args = args[1], args[1:]
 					break
 				}
@@ -232,13 +232,31 @@ func optionLetter(known string, c byte) (takes optionArgument, ok bool) {
 	return argNone, true
 }
 
-// isANumber is what makes the *next word* a count rather than the name to read
-// into: measured, `read -k x v` reads one character into `x` rather than
-// complaining about a number, so a word that is not a number was never the
-// argument. Empty is not one — allDigits alone answers true for it, which is
-// right where it is used to tell a positional parameter from a name and wrong
-// here.
-func isANumber(s string) bool { return s != "" && allDigits(s) }
+// beginsWithADigit is what makes the *next word* this letter's number rather
+// than the name to read into.
+//
+// **The test is the first character and not the whole word**, and the two part
+// company on a word that starts numeric and is not a number. Measured
+// 2026-09-28 on zsh 5.9.2, `read` being the one builtin in the tree whose
+// optstring has this shape:
+//
+//	read -k x v     one character into `x` — never the argument
+//	read -k .5 v    the same; `.5` is a name
+//	read -k -1 v    the same
+//	read -k 007 v   seven characters — the argument
+//	read -k 0.5 v   **number expected after -k: 0.5** — taken, then refused
+//	read -t 0.5 v   the timeout — taken, and a decimal is fine for this letter
+//
+// The last two are the rows a whole-word test gets wrong, and it gets them
+// wrong in opposite directions: `-k 0.5` is a refusal this shell answered by
+// reading `0.5` as a *name*, and `-t 0.5` is a timeout it did the same to. So
+// the word is taken when it looks like a number, and whether it *is* one is
+// the letter's own question afterwards — `-k` wants an integer and `-t` takes
+// a decimal, and neither of those is a property of the optstring.
+//
+// It was `s != "" && allDigits(s)` until #4436's `B04read` row, and the doc
+// there stated the weaker rule the `x` row proves. `x` agrees under both.
+func beginsWithADigit(s string) bool { return s != "" && s[0] >= '0' && s[0] <= '9' }
 
 // optionNeedsArgument is an argument-taking letter whose bundle ended the
 // argument list. Every shell refuses it the way it refuses an option it does

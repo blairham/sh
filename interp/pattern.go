@@ -1620,9 +1620,10 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 		// is one shell's and behind that shell's option, and this is the
 		// other's and behind the grammar flag that let the `(` into the word.
 		if o.tildeFold {
-			if g, ok := splitTildeHereGroup(p); ok && !(g.classes && !o.tildeGlobRead) {
-				// The `ok && !…` is the surface asking whether it reads a
-				// `~(K)` group at all. Where it does not, the group is left
+			if g, ok := splitTildeHereGroup(p); ok && (!g.classes || o.tildeGlobRead) {
+				// The second half is the surface asking whether it reads a
+				// `~(K)` group at all — `g.classes` is that letter and
+				// nothing else. Where it does not, the group is left
 				// standing and the walk below spends it as ordinary
 				// characters — which is what makes `${v#~(K)x}` leave its
 				// value alone. Only that letter is declined: `~(i)` and the

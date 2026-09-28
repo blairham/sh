@@ -14,12 +14,20 @@ import (
 // thing to pin is that they cannot part: the getter reads one of them, and a
 // setter that moved two would make it answer for a dialect that does not
 // exist.
+//
+// The third of the three is CasePatternListMayBeEmpty since #4817, and the
+// field it replaced — CasePatternMayBeEmpty, an *alternative* written as
+// nothing — is asserted below to stay where it was. The option does not move
+// it, and a setter that did refused two corpus snippets under `emulate sh`
+// and `emulate ksh` that the reference takes.
 func TestTheCasePatternListReadingMovesAsOne(t *testing.T) {
 	for _, on := range []bool{true, false} {
 		d := syntax.Core()
 		d.CasePatternListSpansBlanks = !on
 		d.CasePatternListSpansNewlines = !on
-		d.CasePatternMayBeEmpty = !on
+		d.CasePatternListMayBeEmpty = !on
+		// The neighbor, held at a value the setter must not reach.
+		d.CasePatternMayBeEmpty = true
 		// testrunner:bare — nothing here runs a line; the subject is the
 		// dialect pointer, and a directory of its own would only hide that.
 		r := &interp.Runner{Dialect: &d}
@@ -29,10 +37,13 @@ func TestTheCasePatternListReadingMovesAsOne(t *testing.T) {
 		got := *r.Dialect
 		if got.CasePatternListSpansBlanks != on ||
 			got.CasePatternListSpansNewlines != on ||
-			got.CasePatternMayBeEmpty != on {
-			t.Errorf("setting the reading to %v left blanks=%v newlines=%v empty=%v",
+			got.CasePatternListMayBeEmpty != on {
+			t.Errorf("setting the reading to %v left blanks=%v newlines=%v empty list=%v",
 				on, got.CasePatternListSpansBlanks, got.CasePatternListSpansNewlines,
-				got.CasePatternMayBeEmpty)
+				got.CasePatternListMayBeEmpty)
+		}
+		if !got.CasePatternMayBeEmpty {
+			t.Error("the setter reached the empty *alternative*, which this option does not move")
 		}
 		if r.CasePatternListReadAsOneWord() != on {
 			t.Errorf("the reading answers %v after being set to %v",
@@ -52,7 +63,7 @@ func TestSettingTheCasePatternListReadingItAlreadyHasSwapsNothing(t *testing.T) 
 	d := syntax.Core()
 	d.CasePatternListSpansBlanks = true
 	d.CasePatternListSpansNewlines = true
-	d.CasePatternMayBeEmpty = true
+	d.CasePatternListMayBeEmpty = true
 	// testrunner:bare — the subject is the dialect pointer and nothing runs.
 	r := &interp.Runner{Dialect: &d}
 	shared := r.Dialect
@@ -70,13 +81,13 @@ func TestAPartlyMovedCasePatternListReadingIsCompleted(t *testing.T) {
 	d := syntax.Core()
 	d.CasePatternListSpansBlanks = true
 	d.CasePatternListSpansNewlines = false
-	d.CasePatternMayBeEmpty = false
+	d.CasePatternListMayBeEmpty = false
 	// testrunner:bare — the subject is the dialect pointer and nothing runs.
 	r := &interp.Runner{Dialect: &d}
 
 	r.SetCasePatternListReadAsOneWord(true)
-	if got := *r.Dialect; !got.CasePatternListSpansNewlines || !got.CasePatternMayBeEmpty {
-		t.Errorf("a dialect holding one of the three was left holding one: newlines=%v empty=%v",
-			got.CasePatternListSpansNewlines, got.CasePatternMayBeEmpty)
+	if got := *r.Dialect; !got.CasePatternListSpansNewlines || !got.CasePatternListMayBeEmpty {
+		t.Errorf("a dialect holding one of the three was left holding one: newlines=%v empty list=%v",
+			got.CasePatternListSpansNewlines, got.CasePatternListMayBeEmpty)
 	}
 }

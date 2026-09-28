@@ -1698,7 +1698,42 @@ type Dialect struct {
 	// construct at all — `@(|a)b` matches `b` in bash and ksh93 alike — so
 	// what divides the panel here is only whether the pattern *list* may
 	// have such an alternative written into it.
+	//
+	// **The wholly empty list is [Dialect.CasePatternListMayBeEmpty]**, and
+	// it was part of this flag until #4817. The two parted because the
+	// dialect that has them moves one and not the other; the measurement is
+	// under that field.
 	CasePatternMayBeEmpty bool
+
+	// CasePatternListMayBeEmpty lets a `case` arm's parenthesized pattern
+	// list be written as nothing at all: `( )`, which then matches only the
+	// empty string.
+	//
+	// It was part of [Dialect.CasePatternMayBeEmpty] until the pair was
+	// measured apart. The dialect that has both carries an option — the one
+	// that also decides whether a blank inside the list is a character of a
+	// pattern, see [Dialect.CasePatternListSpansBlanks] — and it takes this
+	// reading away and leaves the empty *alternative* standing. Measured on
+	// `/opt/homebrew/bin/zsh` — `zsh 5.9.2 (aarch64-apple-darwin25.4.0)` —
+	// `-f` over a script file under `set -n`, 2026-09-27, with `shglob`
+	// moved on the line after an `emulate`:
+	//
+	//	                                        off      on
+	//	case "" in ( ) echo em;; esac           parses   refused
+	//	case "a b" in (a b) echo m;; esac       parses   refused
+	//	case a in (a|b|) echo t;; esac          parses   parses
+	//	case "" in (|https|git) echo e;; esac   parses   parses
+	//	case a in (|a) echo e;; esac            parses   parses
+	//	case a in (a||b) echo e;; esac          parses   parses
+	//	case a in (|) echo e;; esac             parses   parses
+	//	case a in (||) echo e;; esac            parses   parses
+	//
+	// The `(|)` row is the one that says the noun is the *list* and not the
+	// emptiness: it holds two empty alternatives and nothing else, and it
+	// survives the option that refuses `( )`. A field that moved both
+	// refuses six of these eight under `emulate sh` and `emulate ksh`, where
+	// the reference takes them (#4817).
+	CasePatternListMayBeEmpty bool
 
 	// CaseTerminatorIsAPatternAfterTheHeader makes `esac` an ordinary word
 	// where the *first* arm's pattern list begins, so a `case` whose subject
@@ -2372,6 +2407,11 @@ type Dialect struct {
 	// a function whose extra names went nowhere, which is a lenience rather
 	// than a construct, and the ksh dialect keeps refusing the line here.
 	//
+	// **The keyword spelling's list is [Dialect.FunctionKeywordNameList]**,
+	// and they are two fields because one of them moves on its own: the
+	// dialect that has both carries an option taking the parenthesized list
+	// away and leaving the keyword's. This flag is the parenthesized one.
+	//
 	// **Names are taken greedily**, exactly as [Dialect.ForMultipleNames]
 	// takes a loop's: every word after the first is another name until the
 	// body begins at `{` or at the `()` of the hybrid form, and a reserved
@@ -2437,6 +2477,35 @@ type Dialect struct {
 	// leaves it out. Printed twice, a formatted file redirects twice (#1838).
 	FunctionMultipleNames bool
 
+	// FunctionKeywordNameList lets the `function` keyword's name be followed
+	// by more words, each of which is another name for the same body:
+	// `function a b { … }` defines both and answers each call with its own
+	// `$0`.
+	//
+	// It is the keyword half of [Dialect.FunctionMultipleNames], and the two
+	// are separate fields because the dialect that has both moves them apart.
+	// Measured on `/opt/homebrew/bin/zsh` — `zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0)` — `-f` over a script file under `set -n`,
+	// 2026-09-27, with `multifuncdef` moved on the line after an `emulate`:
+	//
+	//	                                 on       off
+	//	a b () { echo "[$0]"; }          parses   refused
+	//	echo hi () { printf x; }         parses   refused
+	//	a b >out () { echo "[$0]"; }     parses   refused
+	//	function a b { echo "[$0]"; }    parses   parses
+	//	function a a { echo "[$0]"; }    parses   parses
+	//	a () { echo "[$0]"; }            parses   parses
+	//
+	// The last two rows are the controls — one name is not this question in
+	// either spelling — and the two `function` rows are the split: the
+	// keyword's list survives the option that takes the other one away, in
+	// all three emulations alike.
+	//
+	// A dialect that wrote both from one flag refuses `function a b { … }`
+	// under `emulate sh` and `emulate ksh`, where the reference defines two
+	// functions (#4817).
+	FunctionKeywordNameList bool
+
 	// FunctionKeywordReferenceList lets the `function` keyword's name be
 	// followed by more words, which are **taken and discarded**: only the
 	// first word is a function, and the rest name nothing.
@@ -2493,18 +2562,54 @@ type Dialect struct {
 	// the `af1` after the `;` is the *body* rather than a call — which is
 	// the other half of this flag.
 	//
-	// **The separator half is why the two are one flag.** A `;` between the
-	// names and the body is taken there — `function a; echo B` defines `a`
-	// with body `echo B`, so `echo B` never runs where it stands — and
-	// without reading it, a bodyless declaration would swallow the separator
-	// and run the next command instead of binding it. Newlines already stand
-	// there in every dialect, and the `;` joins them. The body is absent
-	// exactly when no command follows: `function a b` at the end of the
-	// input, before a `}`, a `fi` or a `done`, before `&&` and before a `|`.
+	// **The separator is [Dialect.FunctionKeywordSeparatorBeforeBody]**, and
+	// it was half of this flag until #4817. A `;` between the names and the
+	// body is taken here — `function a; echo B` defines `a` with body
+	// `echo B`, so `echo B` never runs where it stands — and without reading
+	// it, a bodyless declaration would swallow the separator and run the next
+	// command instead of binding it. Newlines already stand there in every
+	// dialect, and the `;` joins them. The body is absent exactly when no
+	// command follows: `function a b` at the end of the input, before a `}`,
+	// a `fi` or a `done`, before `&&` and before a `|`.
+	//
+	// The two parted because the dialect that has them carries an option
+	// moving one and not the other: with `multifuncdef`'s neighbor
+	// `shortloops` off, `function a` is refused and `function a; { echo B; }`
+	// still parses, so the separator outlives the optional body. The
+	// measurement is under [Dialect.FunctionKeywordSeparatorBeforeBody].
 	//
 	// How far a body that is not a brace group reaches is a flag of its own:
 	// [Dialect.FunctionKeywordBodyIsAnAndOrList], below.
 	FunctionKeywordBodyIsOptional bool
+
+	// FunctionKeywordSeparatorBeforeBody lets a `;` stand between a
+	// `function` keyword's name list and its body.
+	//
+	// It was the separator half of [Dialect.FunctionKeywordBodyIsOptional]
+	// and is its own field because the dialect that has both moves them
+	// apart. Measured on `/opt/homebrew/bin/zsh` — `zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0)` — `-f` over a script file under `set -n`,
+	// 2026-09-27, with `shortloops` moved on the line after an `emulate`:
+	//
+	//	                                    on       off
+	//	function a; { echo B; }             parses   parses
+	//	function a                          parses   refused
+	//	function a; echo B                  parses   refused
+	//	function a; ( echo B )              parses   refused
+	//	function a; if true; then :; fi     parses   refused
+	//	function a { echo B; }              parses   parses
+	//
+	// The first row is this flag on its own: the separator is still read with
+	// the option off, where the bodyless declaration under it is not. The
+	// rows after it are the body's question and land on
+	// [Dialect.FunctionKeywordBodyMustBeBraceGroup] — every body but a brace
+	// group goes, compound or not — which is why "the body must be
+	// compound" is the wrong sentence for this shell's option.
+	//
+	// The other dialect with the keyword refuses the separator outright:
+	// ksh93 answers `` `;' unexpected `` for `function a b; { print hi; }`,
+	// which is why this is not simply always on.
+	FunctionKeywordSeparatorBeforeBody bool
 
 	// FunctionKeywordBodyIsAnAndOrList makes a `function` keyword's body
 	// reach to the end of the and-or list where the body is not a brace

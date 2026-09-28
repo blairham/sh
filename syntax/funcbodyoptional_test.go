@@ -15,6 +15,7 @@ import "testing"
 func optionalFuncBody() Dialect {
 	d := manyFuncNames()
 	d.FunctionKeywordBodyIsOptional = true
+	d.FunctionKeywordSeparatorBeforeBody = true
 	d.EmptyCompoundBody = true
 	return d
 }

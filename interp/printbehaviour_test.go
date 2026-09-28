@@ -164,10 +164,12 @@ func corpusGrammar() syntax.Dialect {
 	// before the parentheses the words are a command's arguments with a `(`
 	// behind them.
 	d.FunctionMultipleNames = true
+	d.FunctionKeywordNameList = true
 	// And a name list that ends without a body, plus the `;` that may stand
 	// between the names and a body it does have. Two cases, one of them
 	// inside an `eval` where the printer never reaches it.
 	d.FunctionKeywordBodyIsOptional = true
+	d.FunctionKeywordSeparatorBeforeBody = true
 	d.MultiDigitFdNumber = true
 	d.ParamCaseChange = true
 	// `<(cmd)`. Three cases are written with it — the ones about `sysopen`,

@@ -116,6 +116,7 @@ func TestTheParenAlreadyReadMayBeClosedByAPendingToken(t *testing.T) {
 	d := syntax.Core()
 	d.AnonymousFunction = true
 	d.FunctionMultipleNames = true
+	d.FunctionKeywordNameList = true
 
 	t.Run("an anonymous function's empty parameter list", func(t *testing.T) {
 		got := parsedIn(t, d, table("af", "()"), "af { echo hi; }")

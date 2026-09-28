@@ -34,6 +34,29 @@ package interp
 // So a runner that wrote the whole family from this one name would refuse
 // four spellings the shell takes with the option off, which is what
 // [syntax.Dialect.ShortFormBody] exists to keep apart.
+//
+// # And the `function` keyword's body, which is the same question elsewhere
+//
+// The same name decides whether the `function` keyword's body may be written
+// as one command or left out, and there the answer is sharper than "one
+// command": with the option off, **only a brace group** will do. Measured in
+// the same run, the option moved on the line after an `emulate`:
+//
+//	                                    on       off
+//	function a; { echo B; }             parses   parses
+//	function a { echo B; }              parses   parses
+//	function a                          parses   refused
+//	function a; echo B                  parses   refused
+//	function a; ( echo B )              parses   refused
+//	function a; if true; then :; fi     parses   refused
+//	f() echo hi                         parses   parses
+//
+// The last row is the control and it is the one that says this is the
+// keyword's question: the parenthesized spelling keeps its one-command body
+// in every state, so a runner that wrote both from this name would refuse a
+// definition the shell takes. The first row is the other control: the
+// separator survives, which is why
+// [syntax.Dialect.FunctionKeywordSeparatorBeforeBody] is a field of its own.
 
 // ShortFormBodyIsOneCommandOrNone reports whether a body standing where
 // `do … done` would may be written as a single command, or left out
@@ -57,5 +80,35 @@ func (r *Runner) SetShortFormBodyIsOneCommandOrNone(on bool) {
 		return
 	}
 	d.ShortFormBody = on
+	r.Dialect = &d
+}
+
+// FunctionKeywordBodyIsOneCommandOrNone reports whether the `function`
+// keyword's body may be written as a single command, or left out altogether.
+//
+// It is two fields of syntax.Dialect rather than one because the shell states
+// the narrow answer twice over: with it off the body is refused unless it is a
+// brace group, and a declaration with no body at all is refused as well. They
+// are written through one setter because they are one measured answer — see
+// the table above.
+func (r *Runner) FunctionKeywordBodyIsOneCommandOrNone() bool {
+	// One axis per lang call — see TestNothingReadsAnAdjustedAxisOffLang.
+	return r.lang().FunctionKeywordBodyIsOptional &&
+		!r.lang().FunctionKeywordBodyMustBeBraceGroup
+}
+
+// SetFunctionKeywordBodyIsOneCommandOrNone moves it, for a dialect whose
+// option namespace has a name for the reading.
+//
+// The dialect is copied and replaced rather than written through: the pointer
+// is shared with every subshell cloned from this runner, and a script must not
+// change the grammar of the shell that spawned it.
+func (r *Runner) SetFunctionKeywordBodyIsOneCommandOrNone(on bool) {
+	d := r.dialect()
+	if d.FunctionKeywordBodyIsOptional == on && d.FunctionKeywordBodyMustBeBraceGroup == !on {
+		return
+	}
+	d.FunctionKeywordBodyIsOptional = on
+	d.FunctionKeywordBodyMustBeBraceGroup = !on
 	r.Dialect = &d
 }

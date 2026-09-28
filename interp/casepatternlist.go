@@ -29,6 +29,10 @@ package interp
 //	case "a b" in (a b) echo m;; esac       parses      refused
 //	case a in (a<newline>|b) …              parses      refused
 //	case "" in ( ) echo em;; esac           parses      refused
+//	  and the alternative written as nothing, which does not move:
+//	case a in (a|b|) echo t;; esac          parses      parses
+//	case "" in (|https|git) echo e;; esac   parses      parses
+//	case a in (|) echo e;; esac             parses      parses
 //
 // **The neighboring reading does not move, and that is the control**: `case
 // x; in a) :;; esac` parses with the option on and off alike, so this is not
@@ -36,6 +40,15 @@ package interp
 // with it — syntax.Dialect.CaseHeaderSpansSeparators — is deliberately not
 // here. A group of fields moved on one measurement that never varied the thing
 // it was keyed on is the shape this package has been caught by before.
+//
+// **And it caught this one anyway.** The three used to include
+// syntax.Dialect.CasePatternMayBeEmpty, which is an *alternative* written as
+// nothing and not a list written as nothing — the rows above had varied only
+// `( )`, so the measurement never asked the question the field's name states.
+// The option leaves `(a|b|)` and `(|https|git)` standing in every mode, and
+// moving them refused two corpus snippets under `emulate sh` and `emulate ksh`
+// that the reference takes. The field the option does move is
+// syntax.Dialect.CasePatternListMayBeEmpty, which is the whole list (#4817).
 
 // CasePatternListReadAsOneWord reports whether this runner reads a `case`
 // arm's parenthesized pattern list as one word.
@@ -57,11 +70,11 @@ func (r *Runner) SetCasePatternListReadAsOneWord(on bool) {
 	d := r.dialect()
 	if d.CasePatternListSpansBlanks == on &&
 		d.CasePatternListSpansNewlines == on &&
-		d.CasePatternMayBeEmpty == on {
+		d.CasePatternListMayBeEmpty == on {
 		return
 	}
 	d.CasePatternListSpansBlanks = on
 	d.CasePatternListSpansNewlines = on
-	d.CasePatternMayBeEmpty = on
+	d.CasePatternListMayBeEmpty = on
 	r.Dialect = &d
 }

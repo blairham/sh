@@ -105,6 +105,7 @@ func Dialect() syntax.Dialect {
 	// all of those, so the grammar that has to *read* every case is the one
 	// that takes the construct, as above.
 	d.FunctionMultipleNames = true
+	d.FunctionKeywordNameList = true
 	// `function a b` with no body, and the `;` that may stand between a name
 	// list and the body it does have. One of the seven declares each name
 	// with an empty body and the other six refuse the line — dash alone by
@@ -120,6 +121,7 @@ func Dialect() syntax.Dialect {
 	// flag stays off — one of the seven takes them and the corpus keeps the
 	// refusal, which is the one place this dialect is not the widest reading.
 	d.FunctionKeywordBodyIsOptional = true
+	d.FunctionKeywordSeparatorBeforeBody = true
 	// `'a b'() { … }` — the POSIX form's name read as any word, which one of
 	// the seven defines and four refuse where the definition runs rather than
 	// while reading it; ash reads it in silence and defines nothing, the same

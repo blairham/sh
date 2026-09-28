@@ -24,6 +24,16 @@ func emptyAlt() syntax.Dialect {
 	return d
 }
 
+// emptyList is the core with the *list's* flag on and the alternative's off.
+// They are two fields since #4817, because the dialect that has both carries
+// an option — `shglob` — that takes this one away and leaves the other
+// standing. See [syntax.Dialect.CasePatternListMayBeEmpty].
+func emptyList() syntax.Dialect {
+	d := syntax.Core()
+	d.CasePatternListMayBeEmpty = true
+	return d
+}
+
 // casePatterns returns the arm's patterns as written, with an alternative that
 // was written as nothing coming back as the empty string.
 func casePatterns(t *testing.T, src string, d syntax.Dialect) []string {
@@ -87,11 +97,14 @@ func TestTheWholeListMayBeWrittenAsNothingInsideTheArmsParens(t *testing.T) {
 		"case a in ( ) echo m;; esac",
 		"case a in (  ) echo m;; esac",
 	} {
-		got := casePatterns(t, src, emptyAlt())
+		got := casePatterns(t, src, emptyList())
 		if want := ""; strings.Join(got, ",") != want {
-			t.Errorf("%q: patterns = %q, want one empty alternative", src, got)
+			t.Errorf("%q: patterns = %q, want one empty list", src, got)
 		}
 		mustFailHere(t, src, syntax.Core(), "without the flag")
+		// And the alternative's flag is not this one: a dialect with only
+		// that refuses the line, which is the whole of why they parted.
+		mustFailHere(t, src, emptyAlt(), "with only the alternative's flag")
 	}
 }
 
@@ -99,7 +112,7 @@ func TestTheWholeListMayBeWrittenAsNothingInsideTheArmsParens(t *testing.T) {
 // hold an empty list, and the shell that accepts every line above refuses it.
 func TestAPatternListMayNotBeEmptyWithoutTheArmsParens(t *testing.T) {
 	t.Parallel()
-	mustFailHere(t, "case a in ) echo m;; esac", emptyAlt(), "no parens to hold an empty list")
+	mustFailHere(t, "case a in ) echo m;; esac", emptyList(), "no parens to hold an empty list")
 }
 
 // `()` is refused there, and not for the emptiness: the pair is one token to
@@ -112,7 +125,7 @@ func TestAPatternListMayNotBeEmptyWithoutTheArmsParens(t *testing.T) {
 // this parser named the `)' alone (#1111).
 func TestEmptyParensDoNotOpenAnArm(t *testing.T) {
 	t.Parallel()
-	d := emptyAlt()
+	d := emptyList()
 	d.EmptyParensAreOneToken = true
 	for _, src := range []string{
 		"case a in () echo m;; esac",
@@ -132,8 +145,39 @@ func TestEmptyParensDoNotOpenAnArm(t *testing.T) {
 	}
 	// Without the pair being one token the `(` opens an arm as it always
 	// did, and the empty list above is what stands inside it.
-	if got := casePatterns(t, "case a in () echo m;; esac", emptyAlt()); strings.Join(got, ",") != "" {
-		t.Errorf("without the flag: patterns = %q, want one empty alternative", got)
+	if got := casePatterns(t, "case a in () echo m;; esac", emptyList()); strings.Join(got, ",") != "" {
+		t.Errorf("without the flag: patterns = %q, want one empty list", got)
+	}
+}
+
+// The two flags are independent, which is the pair's own row.
+//
+// The dialect that has both carries `shglob`, and that name moves the list's
+// flag alone: measured on zsh 5.9.2, `case "" in ( ) …` is refused with the
+// option on and `case a in (a|b|) …`, `case "" in (|https|git) …` and
+// `case a in (|) …` all parse in every state. A single field wrote both until
+// #4817 and refused those three under `emulate sh` and `emulate ksh`, where
+// the reference takes them.
+func TestTheEmptyAlternativeAndTheEmptyListAreTwoFlags(t *testing.T) {
+	t.Parallel()
+	// The alternative's flag alone: `|` with nothing beside it parses, and a
+	// list with nothing in it does not.
+	for _, src := range []string{
+		"case a in (a|b|) echo m;; esac",
+		"case a in (|a) echo m;; esac",
+		"case a in (|) echo m;; esac",
+	} {
+		if _, err := syntax.Parse(src, emptyAlt()); err != nil {
+			t.Errorf("%q with the alternative's flag: %v", src, err)
+		}
+		mustFailHere(t, src, emptyList(), "with only the list's flag")
+	}
+	// And `(|)` is the row that tells the two apart by hand: it holds two
+	// alternatives written as nothing and no list written as nothing, so a
+	// reading keyed on "is there anything between the parentheses" calls it
+	// an empty list and gets it wrong.
+	if got := casePatterns(t, "case a in (|) echo m;; esac", emptyAlt()); len(got) != 2 {
+		t.Errorf("(|) gave %d patterns, want 2 — two alternatives, neither of them the list", len(got))
 	}
 }
 

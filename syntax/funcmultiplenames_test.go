@@ -13,6 +13,7 @@ import "testing"
 func manyFuncNames() Dialect {
 	d := Core()
 	d.FunctionMultipleNames = true
+	d.FunctionKeywordNameList = true
 	d.FunctionKeywordParens = true
 	return d
 }
@@ -22,6 +23,7 @@ func manyFuncNames() Dialect {
 func oneFuncName() Dialect {
 	d := manyFuncNames()
 	d.FunctionMultipleNames = false
+	d.FunctionKeywordNameList = false
 	return d
 }
 

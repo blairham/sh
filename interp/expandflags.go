@@ -1611,6 +1611,29 @@ func (r *Runner) refusePromptEscape(src, c string) (string, bool) {
 // promptUnitName is `%N`: the name of the function, sourced file or script
 // being read — the function's *name* where `%x` stays its defining file.
 func (r *Runner) promptUnitName() string {
+	// Text an `eval` is running is a unit of its own and is named for
+	// itself, ahead of the frame it was called from — the same rule, read
+	// through the same pair of fields, that a diagnostic's location already
+	// keeps. See Runner.locationNameAndLine, where the eval question is
+	// asked first for the same reason.
+	//
+	// Measured 2026-09-28 on zsh 5.9.2, and the second row is the control
+	// that says the rule is about the *text* rather than about depth:
+	//
+	//	eval 'print -P %N'                     (eval)
+	//	f() { print -P %N }; eval 'f'          f       — entering a function
+	//	                                               leaves the eval behind
+	//	f() { eval 'print -P %N' }; f          (eval)  — and an eval inside
+	//	                                               one wins over it
+	//
+	// It reaches the **trace prefix** as well as a written prompt, because
+	// this dialect's default PS4 is `+%N:%i>` and is drawn through this
+	// table: `setopt xtrace; eval true` is `+(eval):1> true` there and was
+	// `+zsh:1> true` here (#5017).
+	if d := r.diag(); d.LocationNamesTheEvalText && d.EvalSourceName != "" &&
+		r.locationIsInsideEvalText() {
+		return d.EvalSourceName
+	}
 	if len(r.frames) > 0 {
 		f := r.frames[len(r.frames)-1]
 		if f.Name != "" && f.Name != sourceFrameName {

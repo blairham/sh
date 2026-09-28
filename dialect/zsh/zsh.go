@@ -5350,7 +5350,16 @@ func Diagnostics() interp.Diagnostics {
 		// Before this it rode UnimplementedOptionLetters and said `-t is not
 		// implemented yet`, which is this implementation confessing to
 		// something the shell itself refuses (#1716).
-		ImmovableOptionLetters: map[string]string{"set": "t"},
+		//
+		// **And it no longer rides here either** (#5057). `t` is now a row of
+		// setLetterOptions naming `singlecommand`, and that is the same route
+		// `-i` and `-Z` already took: the name refuses the same way, so the
+		// letter does. Measured with the entry deleted — `set -t` is the same
+		// sentence and status, `zsh -t script` still takes the option at
+		// invocation and still writes `t` in `$-`, and all thirty-six letter
+		// rows and twelve controls are unmoved. A letter in two tables is one
+		// place for them to disagree, and a mutation that deleted this one
+		// killed nothing, which is how it was found.
 		// History expansion's three complaints, and zsh words all three
 		// unlike anybody else — measured 2026-09-15 through a
 		// pseudo-terminal. The reference goes at the *end* and loses the `!`

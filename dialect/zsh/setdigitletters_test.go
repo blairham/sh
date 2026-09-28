@@ -47,6 +47,14 @@ func TestTheTwelveSetLettersThisShellHadNoRowFor(t *testing.T) {
 			"and norcs, which is why `zsh -f` answers `[[ -o f ]]` with 0",
 			`set -f; [[ -o rcs ]]; echo "o=$? [$-]"`, "o=1 [569Xf]",
 		},
+		// **The condition asked of the letter itself**, which is a different
+		// reader from the two rows either side of it. Deleting the `f` row
+		// from the table killed nothing until this row existed: `set -f` is a
+		// letter the substrate already takes and `$-` already had `f` through
+		// Semantics.SetFLetterOption, so both of those went on agreeing with
+		// the reference while `[[ -o f ]]` was refused.
+		{"and the condition asks the letter too", `set -f; [[ -o f ]]; echo "o=$?"`, "o=0"},
+		{"which is refused by nobody now", `[[ -o f ]]; echo "o=$?"`, "o=1"},
 		// The three that are on at startup, where the letter has to be taken
 		// *away*. These are the rows `$-` could not answer before: the string
 		// carried `569` unconditionally, so no script could shift them.

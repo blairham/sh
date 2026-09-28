@@ -377,19 +377,17 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// `f(){ typeset -T S s; print "[$S]" }` is `[]` there and was `[v]`
 		// here (#5095).
 		//
-		// Only the halves this line gives no value to, which is what a
-		// declaration with nothing to assign means: a scalar written
-		// `-T S=x s` is about to be set, and an array literal reaches its
-		// name by the ordinary assignment path.
+		// Every half this line makes a new cell for, and **not** only the
+		// ones it gives no value to. A half that is about to be assigned
+		// could be skipped and was, until a mutant dropping the test
+		// survived: both values are written below this point, so emptying
+		// first changes nothing for them. One condition rather than two,
+		// because the second could not be graded.
 		for _, half := range []struct {
 			name  string
 			fresh bool
-			given bool
-		}{
-			{scalar, scalarFresh, hasValue},
-			{array, arrayFresh, r.declarationCarriesAnArrayLiteral(array)},
-		} {
-			if !half.fresh || half.given {
+		}{{scalar, scalarFresh}, {array, arrayFresh}} {
+			if !half.fresh {
 				continue
 			}
 			r.declareEmpty(half.name, half.fresh, f.export || f.readonly,

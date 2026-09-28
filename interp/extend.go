@@ -1903,6 +1903,62 @@ func (r *Runner) DialectOption(name string) (on, known bool) {
 // through the dialect's namespace where it has one, and through the `set -o`
 // names otherwise.
 func (r *Runner) conditionOption(name string) (on, known bool) {
+	if on, known := r.conditionOptionByName(name); known {
+		return on, known
+	}
+	// **A single character is an option *letter*, and it names the option it
+	// abbreviates.** Measured 2026-09-28 on zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0), `go version -m`: *not a Go executable*,
+	// one character at a time over the letters and digits: every one is
+	// answered 0 or 1 except `b c j o z A`, which are `no such option` at 3
+	// exactly as a long name it has never heard of is.
+	//
+	// **Status alone cannot show this and nearly hid it.** A letter that
+	// names nothing and a letter naming an option that is off both answer 1,
+	// so a grid read off the status agrees with the refusing reading on
+	// every row but the handful that happen to be on. What separates them is
+	// moving the option and asking again: `setopt allexport; [[ -o a ]]` is
+	// 0 and `[[ ! -o a ]]` flips with it, so the letter is a lookup and not
+	// a shrug.
+	//
+	// Asked after the name, because a name is what the operator is
+	// documented to take and a one-character *name* must win if a dialect
+	// ever has one.
+	rs := []rune(name)
+	if len(rs) != 1 {
+		return false, false
+	}
+	// **Read rather than asked**, and gated on the dialect rather than on
+	// the letter tables being present: bash installs letter tables too, and
+	// without this gate `set -a; [[ -o a ]]` answered 0 there where bash
+	// answers 1. That row is the only kind that can show it — with the
+	// option off, both readings answer 1 — and a grid of a hundred rows with
+	// every option left off reported no difference at all.
+	if r.sem().ConditionOptionTakesAnOptionLetter != Yes {
+		return false, false
+	}
+	if strings.ContainsRune(r.refusedOptionLetters, rs[0]) {
+		// A letter this shell has no meaning for at all, ahead of every
+		// table for the reason Runner.setLetters gives.
+		return false, false
+	}
+	if spelled, ok := r.optionLetterNames[rs[0]]; ok {
+		if spelled == "" {
+			// Taken, and it names nothing — the measurement rather than a
+			// gap. It is *known*, so the operator answers false rather than
+			// complaining.
+			return false, true
+		}
+		return r.conditionOptionByName(spelled)
+	}
+	if spelled, ok := setLetterNames[rs[0]]; ok {
+		return r.conditionOptionByName(spelled)
+	}
+	return false, false
+}
+
+// conditionOptionByName is the name half of the lookup above.
+func (r *Runner) conditionOptionByName(name string) (on, known bool) {
 	if r.optionNamespace != nil {
 		return r.optionNamespace(r, name)
 	}

@@ -233,6 +233,65 @@ func (r *Runner) tieSeparatorWord(sep string) string {
 // `-U` goes to both names, where it deduplicates whichever of them a script
 // writes — see interp/tiedunique.go, which is the whole of that letter on a
 // tie and the reason it is not a property of the pair.
+// tieDeclaration answers the shapes the `-T` letter has of its own, for every
+// declaration word that carries the letter. ok is false where the line is not
+// a tie at all and the caller's ordinary loop should have it.
+//
+// **Folded rather than copied**, which is #5074's lesson one letter along.
+// There, `local` was the one word whose loop did not carry the
+// inconsistent-type refusal, because the refusal had been written at each
+// word's own site and `local`'s was the site that never got one. Here the
+// same word was the one that never reached the tie: `typeset -T IN in=(a b)`
+// and `declare -T` tie, `local -T` declared two ordinary names and left them
+// untied, measured 2026-09-28 on zsh 5.9.2 (#5095). The three shapes live
+// here so that a third word with the letter cannot be given two of them.
+//
+//	-T with no operands 	the listing of every tie, both halves of each
+//	+T with operands    	a refusal — `use unset to remove tied variables`
+//	-T with operands    	the declaration itself
+//
+// The sign picks the listing's shape as it does everywhere else on these
+// builtins: `+T` alone writes the tied names and no values.
+func (r *Runner) tieDeclaration(word string, args []string, f declareFlags,
+	wordTakesAScope bool,
+) (int, bool) {
+	if !f.tie {
+		return 0, false
+	}
+	if len(args) == 0 {
+		// A tie is the one attribute whose *listing* is how a script finds
+		// the pairs at all, which is why this filter is built where every
+		// other attribute letter's is not.
+		return r.tieListing(f.remove), true
+	}
+	if f.remove {
+		// The plus form **with operands**, which is a refusal and not an
+		// untie — see Runner.refuseUntie.
+		return r.refuseUntie(word), true
+	}
+	// The export letter asks for `-g` as well, under the words that answer
+	// yes to it — and a tie is a declaration like any other. Measured
+	// 2026-09-28 on zsh 5.9.2, `f(){ typeset -xT A a=(x y) }` leaves `$A` as
+	// `x:y` after the call and `${(t)A}` without `local` in it, where the
+	// same line without the letter is gone on return.
+	//
+	// **Asked here and of the caller**, because the exemption that used to
+	// carry this was structural: exportLetterDeclaresAGlobal's own doc says
+	// `local` never comes through it since biLocal has a loop of its own.
+	// Both words reach this helper now, so the loop no longer says which
+	// word is which and the caller does. `local -xT` stays local, measured
+	// the same day.
+	if !f.global && !wordTakesAScope && len(args) > 0 {
+		scalar, _, _ := strings.Cut(args[0], "=")
+		if r.exportLetterDeclaresAGlobal(scalar, f) {
+			f.global = true
+		}
+	}
+	// The operands of `-T` are not a list of names: they are a scalar, an
+	// array and — where a third is given — the separator.
+	return r.declareTie(word, args, f), true
+}
+
 func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	if len(args) < 2 {
 		r.diagf("%s\n", Wording(r.diag().TiedNamesRequired,
@@ -305,10 +364,38 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// measured — `typeset -T L1 l1` inside a function leaves `$L1` unset
 	// after it and `${+l1}` 0.
 	if !f.global {
-		r.shadowTypeset(scalar)
-		r.shadowTypeset(array)
+		scalarFresh, _ := r.shadowTypeset(scalar)
+		arrayFresh, _ := r.shadowTypeset(array)
 		if r.unspecified {
 			return r.status
+		}
+		// **A shadow makes a new cell; it does not empty the one the name
+		// was reading.** Every other declaration word does that for itself
+		// through declareEmpty, and this path did not — so a local tie over
+		// an outer `S=v` read `v` inside the call where the reference reads
+		// nothing. Measured 2026-09-28 on zsh 5.9.2, `S=v` then
+		// `f(){ typeset -T S s; print "[$S]" }` is `[]` there and was `[v]`
+		// here (#5095).
+		//
+		// Only the halves this line gives no value to, which is what a
+		// declaration with nothing to assign means: a scalar written
+		// `-T S=x s` is about to be set, and an array literal reaches its
+		// name by the ordinary assignment path.
+		for _, half := range []struct {
+			name  string
+			fresh bool
+			given bool
+		}{
+			{scalar, scalarFresh, hasValue},
+			{array, arrayFresh, r.declarationCarriesAnArrayLiteral(array)},
+		} {
+			if !half.fresh || half.given {
+				continue
+			}
+			r.declareEmpty(half.name, half.fresh, f.export || f.readonly,
+				withoutMatching(f) != (declareFlags{}),
+				f.leavesAnAttribute(),
+				f.inherit || r.LocalInheritsTheOuterValue(), false)
 		}
 		// The tie itself is not in the variable tables, so the scope's
 		// save-and-restore does not carry it. Undone by hand on the way out,

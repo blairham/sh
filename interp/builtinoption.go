@@ -557,14 +557,27 @@ const (
 // and not the builtin's.
 //
 // **Not every hand-rolled reader should ask**, and the ones that do not are
-// measured rather than overlooked. `exec` and `source`/`.` keep their own test
-// because a lone `-` really is an operand there — a command and a file name —
-// and both already agree with the reference: `source - ./f` is
-// `no such file or directory: -` at 127 in zsh 5.9.2 and here. ksh's `whence`
-// and `print` keep theirs because that dialect answers the axis *no*, and both
-// agree with ksh93 as they stand — `whence - echo` writes `echo` at 1 and
-// `print - -n x` writes `-n x`. Folding those onto this would change nothing
-// and is left for a change that has a reason of its own.
+// measured rather than argued about — the first draft of this paragraph
+// explained `exec` away and was wrong.
+//
+//   - `source` and `.` keep their own test, and there the dash really is an
+//     operand: `source - ./f` is `no such file or directory: -` at 127 in zsh
+//     5.9.2 and here, the dash having been read as the file name.
+//   - `exec` keeps its own test for a different reason, and **not** because
+//     the dash is an operand there — it is not. `exec - /bin/echo X` prints
+//     `X` in both, so nothing tried to run a command called `-`. The word is
+//     left in place deliberately and is then read as the **precommand
+//     modifier**, which is a separate question with a dialect answer of its
+//     own. One line tells them apart, and it is the line lonedashcommand.go
+//     names: `exec - /bin/sh -c 'echo $0'` writes `-/bin/sh` in zsh 5.9.2 and
+//     here — the *dashed* argv[0], which an eaten option could not produce
+//     and which `- /bin/sh -c …` with no `exec` produces identically.
+//   - ksh's `whence` and `print` keep theirs because that dialect answers this
+//     axis *no*, and both agree with ksh93 as they stand: `whence - echo`
+//     writes `echo` at 1 and `print - -n x` writes `-n x`.
+//
+// Folding those onto this would change nothing measured, so it is left for a
+// change with a reason of its own.
 func (r *Runner) ReadALoneDash() LoneDashReading {
 	if r.ask(r.sem().LoneDashIsAnOption, "a lone `-` given to a builtin") {
 		return LoneDashEndsTheOptions

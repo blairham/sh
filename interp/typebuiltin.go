@@ -184,12 +184,27 @@ func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code i
 	if len(args) == 0 || args[0] == "" || args[0][0] != '-' {
 		return args, m, 0
 	}
-	// A lone `-` is an option word in one dialect and an operand in the rest,
-	// and it reaches the shared reader below, which is where that is
-	// answered. The guard above used to be `len(args[0]) < 2`, which sent it
-	// to the operands before anything asked — so `type - -a echo` looked `-`
-	// up as a name and wrote `- not found` in front of the reference's
-	// answer (#5040). See Runner.ReadALoneDash.
+	if args[0] == "-" {
+		// A lone `-` is an option word in one dialect and an operand in the
+		// rest. The guard above used to be `len(args[0]) < 2`, which sent it
+		// to the operands before anything asked — so `type - -a echo` looked
+		// the dash up as a name and wrote `- not found` in front of the
+		// reference's answer (#5040).
+		//
+		// **Answered here and not below**, which is the point of the branch.
+		// The question under it is `type --`, and a lone `-` is not `--`: a
+		// core with no dialect chosen would have been refused over an axis
+		// about a word it had not written, naming `type --` in a complaint
+		// about `-`. It is TypeOptions' own reader that knows this word, so
+		// it is asked directly. See Runner.ReadALoneDash.
+		switch r.ReadALoneDash() {
+		case LoneDashUnanswered:
+			return nil, m, 2
+		case LoneDashEndsTheOptions:
+			return args[1:], m, 0
+		}
+		return args, m, 0
+	}
 	if !r.ask(r.sem().TypeEndsOptionsWithDashDash, "`type --` ending the options") {
 		if r.unspecified {
 			return nil, m, 2

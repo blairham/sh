@@ -726,14 +726,20 @@ func zmodloadEnabled(r *interp.Runner, module string) []string {
 }
 
 // zmodloadNarrow records which of a module's features are on.
+//
+// What was on is read **before** the store is written, because the
+// enforcement below is a transition — see zmodloadEnforce, where the rows
+// are. Reading it afterwards would say every feature had always been in the
+// state it is now being put into, which is the same as not asking.
 func zmodloadNarrow(r *interp.Runner, module string, features []string) {
+	was := zmodloadEnabled(r, module)
 	selected, _ := r.GetAssoc(zmodloadFeatureStore)
 	if selected == nil {
 		selected = map[string]string{}
 	}
 	selected[module] = strings.Join(features, " ")
 	r.SetAssoc(zmodloadFeatureStore, selected)
-	zmodloadEnforce(r, module, features)
+	zmodloadEnforce(r, module, was, features)
 }
 
 // zmodloadEnforce makes the *table* agree with the selection: a builtin the
@@ -778,14 +784,58 @@ func zmodloadNarrow(r *interp.Runner, module string, features []string) {
 // A `c:` or `f:` feature is left alone, for the reason each was left alone
 // when the module was built: a condition has no registry to withdraw from,
 // and no module in the table names a math function beside anything else.
-func zmodloadEnforce(r *interp.Runner, module string, selected []string) {
+//
+// # A feature is withdrawn on the way *off*, not for being off
+//
+// The rule is a transition and not a state, which is why `was` is here at all
+// — and getting that wrong took names away that the module had never brought.
+// A name that is present before its module is loaded is that shell's
+// **autoloadable stub**, the distinction #4997 turns on; a selection that
+// never had the feature on has not replaced the stub, so there is nothing for
+// it to take. Measured 2026-09-28 on `/opt/homebrew/bin/zsh` — zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `go version -m` says *not a Go executable*
+// for it — `-f` from a script file under `env -i PATH=/usr/bin:/bin
+// TERM=dumb` with a scratch `HOME`, one shell per row:
+//
+//	                                                      zsh   before
+//	-F zsh/zutil b:zstyle          whence -w zparseopts    b     none
+//	-F zsh/zutil b:zstyle
+//	  -F zsh/zutil -b:zformat      whence -w zformat       b     none
+//	-F zsh/parameter p:funcstack   ${+functions}           1     0
+//	-F zsh/zleparameter p:keymaps  ${+widgets}             1     0
+//
+//	zmodload zsh/zutil
+//	  -F zsh/zutil -b:zparseopts   whence -w zparseopts    none  none
+//	zmodload zsh/parameter
+//	  -F zsh/parameter -p:functions ${+functions}          0     0
+//
+// **The second row is the one that says it is a transition rather than "the
+// module is not loaded".** The module *is* loaded there, narrowed to one
+// feature, and `-b:zformat` names a feature that was already off — so nothing
+// moves. The last two rows are the controls and they are the same spellings
+// over a feature that really was on.
+//
+// A gated name needs no exemption and gets none: `strftime` and `zf_mkdir`
+// are registered withdrawn at startup, so a selection that leaves them off
+// leaves them exactly as they were, which is the answer both shells give
+// (#5045).
+func zmodloadEnforce(r *interp.Runner, module string, was, selected []string) {
 	on := make(map[string]bool, len(selected))
 	for _, f := range selected {
 		on[f] = true
 	}
+	before := make(map[string]bool, len(was))
+	for _, f := range was {
+		before[f] = true
+	}
 	for _, f := range zmodloadFeatures[module] {
 		kind, name, ok := strings.Cut(f, ":")
 		if !ok {
+			continue
+		}
+		// Off and staying off is not a withdrawal. Only the two edges are:
+		// on puts the name back, and on-to-off takes it away.
+		if !on[f] && !before[f] {
 			continue
 		}
 		switch kind {
@@ -869,6 +919,11 @@ func zmodloadWithdrawnAtStart(module string) map[string]bool {
 // module that is already loaded narrowed. An unload does not call this — see
 // zmodloadUnload for why one rule is enough.
 func zmodloadWiden(r *interp.Runner, module string) int {
+	// Before anything is forgotten, for the reason zmodloadNarrow reads it
+	// first: the enforcement is a transition. A module that is not loaded yet
+	// has nothing on, so a first whole load is every feature going *on* and
+	// no withdrawal at all.
+	was := zmodloadEnabled(r, module)
 	selected, ok := r.GetAssoc(zmodloadFeatureStore)
 	if !ok {
 		// Nothing has been narrowed, so there is no selection to forget —
@@ -877,7 +932,7 @@ func zmodloadWiden(r *interp.Runner, module string) int {
 		// from `zsh/stat`), and a plain load is precisely what switches them
 		// on, so the enforcement is the work here rather than the bookkeeping
 		// (#1670).
-		zmodloadEnforce(r, module, zmodloadFeatures[module])
+		zmodloadEnforce(r, module, was, zmodloadFeatures[module])
 		return 0
 	}
 	// A producer the script has taken the name of cannot go back, and the
@@ -890,7 +945,7 @@ func zmodloadWiden(r *interp.Runner, module string) int {
 	}
 	delete(selected, module)
 	r.SetAssoc(zmodloadFeatureStore, selected)
-	zmodloadEnforce(r, module, zmodloadFeatures[module])
+	zmodloadEnforce(r, module, was, zmodloadFeatures[module])
 	return 0
 }
 

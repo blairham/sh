@@ -1697,6 +1697,13 @@ func (a *arithParser) numberInItsOwnBase() {
 	case a.dial.ArithBinaryLiteral && (a.hasPrefixAt("0b") || a.hasPrefixAt("0B")):
 		a.off += 2
 		base = 2
+	case a.dial.ArithLeadingZeroNamesOctalDigits && a.hasPrefixAt("0"):
+		// A leading zero names the base here too, which is the third way a
+		// numeral can carry its own. Not consumed, unlike the two prefixes
+		// above: the `0` is a digit of the number as well as the thing that
+		// says what base it is in, so `$(( 010 ))` is three octal digits and
+		// eight. See Dialect.ArithLeadingZeroNamesOctalDigits.
+		base = 8
 	}
 	a.digitsIn(base)
 	if base != 10 {

@@ -4407,6 +4407,10 @@ type Runner struct {
 	// value — see markReadonly and applyDeferredFreeze.
 	freezing    map[string]bool
 	freezeAfter []string
+	// declarationArgvLen is how long the current declaration's word list is,
+	// so that a builtin can map its own operands back onto it. Zero where no
+	// declaration is running. See Runner.tieOperandIsAnArrayLiteral.
+	declarationArgvLen int
 	// literalOperands is the subset of those names whose operand is an
 	// *array literal* rather than a plain word. The declaration builtin
 	// cannot see the shape for itself — the parser keeps the assignment
@@ -8606,6 +8610,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// z=(1 2)` is refused in the same words as `typeset -i z=(1 2)`.
 		outerLiterals := r.literalOperands
 		r.literalOperands = arrayLiteralOperands(c)
+		// How long the command's word list is, so that a builtin reading its
+		// operands **by position** can find them in it: the operands are its
+		// tail, and `args` has neither the utility's own word nor its
+		// letters. See Runner.tieOperandIsAnArrayLiteral, which is the one
+		// reader — and which needs the position rather than the name.
+		outerArgvLen := r.declarationArgvLen
+		r.declarationArgvLen = len(argv)
 		outerCompounds := r.compoundOperands
 		r.compoundOperands = compoundLiteralOperands(c)
 		outerCompoundUnset := r.compoundOperandUnset
@@ -8747,6 +8758,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
+		r.declarationArgvLen = outerArgvLen
 		r.compoundOperands = outerCompounds
 		r.compoundOperandUnset = outerCompoundUnset
 		r.indexedLetterHere = outerIndexed

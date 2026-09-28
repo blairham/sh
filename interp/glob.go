@@ -478,8 +478,8 @@ func fieldUnitAt(s string, i int) (unit string, live bool, width int) {
 // quantifier being a metacharacter in its own right — which is why the gap
 // showed up as three of the five quantifiers rather than as the construct
 // (#1042).
-func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, extendedOperators bool,
-	slashLeavesABracket func() bool, emptyBracketCompiles bool,
+func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, extendedOperators,
+	counted bool, slashLeavesABracket func() bool, emptyBracketCompiles bool,
 ) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\\' {
@@ -513,6 +513,18 @@ func hasUnescapedMeta(s string, numericRange, patternGroup, extendedPattern, ext
 				return true
 			}
 			continue
+		}
+		if counted && s[i] == '{' && countsAGroupAt(s, i) {
+			// A repetition count in front of a group — one dialect's, and
+			// a reading of its own: the `(` behind the `}` is not counted
+			// by either branch above, because no quantifier stands in
+			// front of it and this dialect has no bare groups.
+			//
+			// Only a brace that *is* a count answers yes. `echo {z,y}(a)`
+			// prints itself on ksh93u+ rather than reaching the
+			// filesystem, which is the same thing this says: there is no
+			// metacharacter in it.
+			return true
 		}
 		if s[i] == '(' && patternGroup {
 			if closesGroup(s, i) {
@@ -615,6 +627,26 @@ func quantifiesAGroup(s string, i int) bool {
 		return true
 	}
 	return false
+}
+
+// countsAGroupAt reports whether a repetition count stands at s[i] with a
+// group closing behind it — `{2,3}(a)` — which is what makes the field a
+// pattern in the one dialect that reads them.
+//
+// The scan is the escaped field, as every scan in this family is, and that
+// is what keeps the *provenance* rule without a second test for it: a `(`
+// an expansion produced arrives marked, so the byte behind the `}` is a
+// backslash and no count is found. `g='{2,3}(a)'; f $g` is the two words
+// `2(a)` and `3(a)` on ksh93u+, and this is one of the places that holds.
+func countsAGroupAt(s string, i int) bool {
+	end := strings.IndexByte(s[i:], '}')
+	if end < 2 || i+end+1 >= len(s) || s[i+end+1] != '(' {
+		return false
+	}
+	if _, ok := countBound(s[i+1 : i+end]); !ok {
+		return false
+	}
+	return closesGroup(s, i+end+1)
 }
 
 // closesGroup reports whether the group opening at i is closed.
@@ -881,8 +913,8 @@ func (r *Runner) describesRatherThanSpells(s string) bool {
 	}
 	if hasUnescapedMeta(s, r.lang().NumericRangePattern,
 		r.lang().PatternAlternation, r.lang().ExtendedPattern,
-		r.MatchOption(ExtendedPatternOperators), r.slashLeavesABracket,
-		r.emptyBracketCompiles()) {
+		r.MatchOption(ExtendedPatternOperators), r.lang().CountedPatternGroup,
+		r.slashLeavesABracket, r.emptyBracketCompiles()) {
 		return true
 	}
 	// Only one of the two readings reaches the filesystem. ksh93 expands

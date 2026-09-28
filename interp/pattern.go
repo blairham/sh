@@ -823,6 +823,38 @@ type patternOpts struct {
 	// reads it as an extended pattern.
 	group      bool
 	quantified bool
+	// counted says a `{n,m}` written in front of a group is its repetition
+	// count rather than ordinary characters — one dialect's, and a third
+	// reading beside the two above rather than a widening of either. See
+	// splitCountedGroup and syntax.Dialect.CountedPatternGroup.
+	counted bool
+	// noBareGroup says a `(` with no quantifier in front of it is an
+	// ordinary character here, whatever `quantified` says.
+	//
+	// It is set once a counted group has been read and never cleared for
+	// the rest of that branch, because a count is the **only** door a bare
+	// parenthesis has into a word in the dialect that has one:
+	// `[[ ab == a(b) ]]` is a syntax error on ksh93u+, so a written bare
+	// group at the top of a pattern is not a thing that shell has, and
+	// every parenthesis that arrives behind a count is text. Measured
+	// 2026-09-27:
+	//
+	//	[[ '{z,y}(a(b))' == {z,y}(a(b))  ]]   matches — the inner one too
+	//	[[ '{z,y}(ab)'   == {z,y}(a(b))  ]]   no
+	//	[[ '{z,y}(ab)'   == {z,y}(a@(b)) ]]   matches — a *quantified* one
+	//	                                      inside is still a group
+	//
+	// The arms of a group are the exception and matchGroupTimes clears it
+	// for them, which is measured on both spellings: `@(a|(b))` matches `b`
+	// in that shell and `{1}(a(b))` matches `ab`, so a bare group inside a
+	// group is one however the group in front of it was written.
+	//
+	// The row that would say what happens **behind** the group —
+	// `f {2,3}(a)(b)`, which is `1 | [{2,3}(a)(b)]` there — cannot be asked
+	// here yet: a `(` straight after a `)` ends the word, and the same is
+	// true of `f @(a)(b)` with no count anywhere in it, so that refusal is
+	// a lexer gap of its own and not this flag's.
+	noBareGroup bool
 	// topGroup reads a `|` standing outside every group and bracket as an
 	// alternation of the whole pattern, which one dialect does and only for
 	// a bar that arrived live — see matchTopLevel. Separate from group for
@@ -1506,8 +1538,52 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 				continue
 			}
 		}
+		// A repetition count written in front of a group, read before
+		// splitGroup for the reason the two above it are: the scan would
+		// otherwise reach the `(` with the brace already spent as five
+		// ordinary characters, and read the group as though nothing stood
+		// in front of it.
+		if g, ok := splitCountedGroup(p, pp, &o); ok {
+			// From here on a bare `(` in this branch is a character: the
+			// count is the only way one reached the word at all. See
+			// patternOpts.noBareGroup.
+			o.noBareGroup = true
+			if !g.counts {
+				// The brace is not a count, so the `{…}` and the `(`
+				// behind it are ordinary characters and the group is not
+				// read: `[[ '{z,y}a' == {z,y}(a) ]]` does not match on
+				// ksh93u+ where `[[ '{z,y}(a)' == {z,y}(a) ]]` does. The
+				// `)` further on becomes a character the same way — by
+				// nothing having opened a group for it. See #4933, the row
+				// that catches a reading keyed on whether the contents are
+				// a number.
+				//
+				// Spending them one unit at a time rather than comparing
+				// the run, because the rest of the pattern is still a
+				// pattern: a `?`, a `*`, a bracket or a group *inside*
+				// these parentheses keeps its meaning, which the three
+				// rows at splitCountedGroup measure.
+				for n := g.lead + 1; n > 0; {
+					if s == "" {
+						return false
+					}
+					pw, sw, ok := o.eqPatternHere(p, s)
+					if !ok {
+						return false
+					}
+					p, s, pp, at, n = p[pw:], s[sw:], pp+pw, at+sw, n-pw
+				}
+				continue
+			}
+			return matchGroupTimes(g.body, pp, g.lead, 0, g.bound, true,
+				g.rest, pp+len(p)-len(g.rest), s, at, o)
+		}
 		if body, quant, rest, ok := splitGroup(p, pp, &o); ok {
-			return matchGroup(body, pp, quant, rest, pp+len(p)-len(rest), s, at, o)
+			lead := 0
+			if quant != 0 {
+				lead = 1
+			}
+			return matchGroup(body, pp, lead, quant, rest, pp+len(p)-len(rest), s, at, o)
 		}
 		if lo, hi, rest, ok := splitNumericRange(p, &o); ok {
 			return matchNumericRange(lo, hi, rest, pp+len(p)-len(rest), s, at, o)
@@ -1819,6 +1895,16 @@ func patternReachScan(p string, pp int, o *patternOpts) int {
 			return unboundedReach
 		case o.quantified && (c == '+' || c == '!') && i+1 < len(p) && p[i+1] == '(':
 			return unboundedReach
+		case o.counted && c == '{':
+			// A written count in front of a group. Its reach is the
+			// group's times the ceiling, and a ceiling may be absent —
+			// so the honest bound is none. Conservative on purpose: this
+			// only ever *stops* a search early, so an answer that is too
+			// large costs work and an answer that is too small costs a
+			// match.
+			if g, ok := splitCountedGroup(p[i:], pp+i, o); ok && g.counts {
+				return unboundedReach
+			}
 		}
 		i++
 	}
@@ -1902,6 +1988,10 @@ func splitGroup(p string, pp int, o *patternOpts) (body string, quant byte, rest
 		case '@', '?', '+', '*', '!':
 			quant, i = p[0], 1
 		}
+	}
+	if quant == 0 && o.noBareGroup {
+		// A parenthesis a count let into the word. See patternOpts.
+		return "", 0, "", false
 	}
 	if quant == 0 {
 		// A bare `(`. The dialect with bare groups takes one anywhere; the
@@ -2030,8 +2120,8 @@ func alternativesAt(body string, at int, emptyCompiles bool) (arms []string, off
 // Every arm is tried against every split of the subject, because a group that
 // matches more than one length can only be resolved by what comes after it:
 // `+(a)b` against `aab` needs the group to stop before the b.
-func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, at int, o patternOpts) bool {
-	return matchGroupTimes(body, gp, quant, boundOf(quant), true, rest, rp, s, at, o)
+func matchGroup(body string, gp, lead int, quant byte, rest string, rp int, s string, at int, o patternOpts) bool {
+	return matchGroupTimes(body, gp, lead, quant, boundOf(quant), true, rest, rp, s, at, o)
 }
 
 // matchGroupTimes is matchGroup with how many repetitions of the group are
@@ -2048,14 +2138,21 @@ func matchGroup(body string, gp int, quant byte, rest string, rp int, s string, 
 // line above the recursion — so asking again inside it is a repeat of a call
 // that has just failed. It was asked twice before this, for `*`, and the
 // answer was the same both times.
-func matchGroupTimes(body string, gp int, quant byte, b repeatBound, first bool, rest string, rp int, s string, at int, o patternOpts) bool {
-	// The body opens one byte past the `(`, or two past it when a quantifier
-	// stands in front of one.
-	bp := gp + 1
-	if quant != 0 {
-		bp = gp + 2
-	}
+func matchGroupTimes(body string, gp, lead int, quant byte, b repeatBound, first bool, rest string, rp int, s string, at int, o patternOpts) bool {
+	// The body opens one byte past the `(`, and lead is whatever stands in
+	// front of that parenthesis: nought for a bare group, one for a
+	// quantifier, and the width of the braces for a written count. Derived
+	// from `quant != 0` until a count could be five characters wide — a
+	// group's own position is what a capture is numbered by, so an arm that
+	// thinks it starts five bytes early reports the wrong span.
+	bp := gp + lead + 1
 	arms, armAt := o.where.armsOf(body, bp, o.emptyBracket)
+	// Inside a group a bare `(` is a group again, in both dialects that
+	// have groups at all: `@(a|(b))` matches `b` on ksh93u+. Only the arms
+	// get this — what follows the group is the branch the count was read
+	// in. See patternOpts.noBareGroup.
+	armOpts := o
+	armOpts.noBareGroup = false
 	// `!(…)` is the odd one: it matches any text the arms do *not*, so it is
 	// answered by asking the ordinary question and inverting it rather than
 	// by trying the arms one at a time.
@@ -2068,7 +2165,7 @@ func matchGroupTimes(body string, gp int, quant byte, b repeatBound, first bool,
 		}
 		for i := lo; i <= hi; i++ {
 			mark := o.where.caps.mark()
-			if !matchesAnyArm(arms, armAt, s[:i], at, o) && matchHere(rest, s[i:], rp, at+i, o) {
+			if !matchesAnyArm(arms, armAt, s[:i], at, armOpts) && matchHere(rest, s[i:], rp, at+i, o) {
 				// The text the negation consumed is what the group matched,
 				// and a surface that records every group wants it: measured
 				// 2026-09-19, `[[ abcd == a!(z)cd ]]` records `abcd` and then
@@ -2125,6 +2222,12 @@ func matchGroupTimes(body string, gp int, quant byte, b repeatBound, first bool,
 	// repetition eats the difference out of. `+(a)b` against `aab` is the
 	// row that says so — bounding it left one `a` for `b` to match and the
 	// pattern stopped matching.
+	if !b.mayTakeARepetition() {
+		// The ceiling is nought, so the group may not take even one. Only a
+		// written count reaches this: `{0,0}(a)` matches the empty subject
+		// on the branch above and `a` on no branch at all.
+		return false
+	}
 	floor := 0
 	if !repeat {
 		floor = splitFloor(rest, s, rp, &o)
@@ -2138,18 +2241,27 @@ func matchGroupTimes(body string, gp int, quant byte, b repeatBound, first bool,
 		// patternReach.
 		for i := splitCeiling(a, s, armAt[k], &o); i >= floor; i-- {
 			mark := o.where.caps.mark()
-			if !matchHere(a, s[:i], armAt[k], at, o) {
+			if !matchHere(a, s[:i], armAt[k], at, armOpts) {
 				o.where.caps.rollback(mark)
 				continue
 			}
-			if matchHere(rest, s[i:], rp, at+i, o) {
+			// What is left of the bound once this repetition has matched,
+			// and whether the rest of the pattern may start here is *its*
+			// question rather than b's. Written as an unconditional attempt
+			// until a floor above one could exist: `{2}(a)` against `a`
+			// matched one repetition and then handed the empty remainder to
+			// an empty rest, which is every quantifier's right and no
+			// count's. The four spellings all leave a floor of nought here,
+			// so nothing that existed before this moves.
+			after := b.afterOne()
+			if after.mayStopHere() && matchHere(rest, s[i:], rp, at+i, o) {
 				o.where.caps.record(gp, at, at+i)
 				return true
 			}
 			// A repetition has to consume something, or the recursion
 			// would not terminate.
 			if repeat && i > 0 &&
-				matchGroupTimes(body, gp, quant, b.afterOne(), false, rest, rp, s[i:], at+i, o) {
+				matchGroupTimes(body, gp, lead, quant, after, false, rest, rp, s[i:], at+i, o) {
 				o.where.caps.record(gp, at, at+i)
 				return true
 			}
@@ -3029,6 +3141,7 @@ func (r *Runner) patternOpts(pattern string, subjects ...string) patternOpts {
 		group:             r.lang().PatternAlternation,
 		topGroup:          r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(false),
 		quantified:        r.readsQuantifiedGroups(false),
+		counted:           r.lang().CountedPatternGroup,
 		numericRange:      r.lang().NumericRangePattern,
 		escapes:           r.sem().PatternEscapeReaches,
 		bracketMember:     r.bracketEscapeIsOnlyAMember(pattern),

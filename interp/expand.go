@@ -3085,7 +3085,7 @@ func hasLiveByteOf(esc, set string) bool {
 func (r *Runner) resultReadsAsPattern(esc string) bool {
 	if hasUnescapedMeta(esc, r.lang().NumericRangePattern, r.lang().PatternAlternation,
 		r.lang().ExtendedPattern, r.MatchOption(ExtendedPatternOperators),
-		r.slashLeavesABracket, r.emptyBracketCompiles()) {
+		r.lang().CountedPatternGroup, r.slashLeavesABracket, r.emptyBracketCompiles()) {
 		return true
 	}
 	// The second gap of the same shape, and #1331 is the one that opened it.

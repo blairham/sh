@@ -1264,6 +1264,156 @@ an unpartnered `[` can take into the group. Pinned:
 `pat/a-bracket-expression-inside-a-quantified-group` and
 `pat/a-bracket-expression-outside-a-group-does-not-protect`.
 
+## A count written in front of a group is a fifth quantifier
+
+    {n,m}(pattern)   the group, repeated between n and m times
+
+One dialect has it. `{2,3}(a)` matches `a` twice or three times, and the
+count is a **fifth value of the same rule** the four quantifier characters
+are four values of — `?` is nought-to-one, `@` is one-to-one, `+` is
+one-upward and `*` is nought-upward — rather than a second mechanism beside
+them.
+
+Measured 2026-09-27 on `/bin/ksh` `Version AJM 93u+ 2012-08-01` under
+`env -i PATH=/usr/bin:/bin`, over `[[ $s == p ]]`:
+
+|           | `""` | `a` | `aa` | `aaa` | `aaaa` |
+| --- | --- | --- | --- | --- | --- |
+| `{2,3}(a)` | no | no | **yes** | **yes** | no |
+| `{2}(a)`   | no | no | **yes** | no | no |
+| `{2,}(a)`  | no | no | **yes** | **yes** | **yes** |
+| `{,2}(a)`  | **yes** | **yes** | **yes** | no | no |
+| `{,}(a)`   | **yes** | **yes** | **yes** | **yes** | **yes** |
+| `{0,0}(a)` | **yes** | no | no | no | no |
+| `{3,2}(a)` | no | no | no | no | no |
+
+An omitted lower bound is nought and an omitted upper one is no ceiling, so
+`{,}(…)` is `*(…)` written with braces. A ceiling **under** the floor is
+satisfied by no number of repetitions and the group then matches nothing,
+which is an answer rather than a refusal — the whole condition stands.
+
+The count is read wherever a pattern stands: `[[ aaa == a{1,2}(a) ]]` is
+mid-pattern and matches, `case aaa in {2,3}(a))` matches, and a directory
+holding `a`, `aa`, `aaa` and `aaaa` answers `echo {2,3}(a)` with `aa aaa`.
+
+A group under a count is a group like any other: an alternation inside it is
+one (`[[ abab == {2}(a|ab|b) ]]`), a bare parenthesis inside it opens a
+nested group (`[[ ab == {1}(a(b)) ]]`, the same answer `@(a|(b))` gives),
+and a count nests inside a group and inside another count
+(`[[ aaaa == {2,3}({2}(a)) ]]`).
+
+The ceiling is read into a signed 32-bit integer there and one past it is
+not a count at all: `[[ aa == {2,2147483647}(a) ]]` matches and
+`[[ aa == {2,2147483648}(a) ]]` does not.
+
+### It reaches the lexer, and the `}` is the whole of the test
+
+A `(` behind a `}` ends the word in every other reading, so this is a
+grammar rule before it is a pattern one: `echo A{2,3}(a)B` is
+``syntax error near unexpected token `('`` on bash 5.3.20 with `extglob` on
+*and* off, `Syntax error: "(" unexpected` on dash, and on zsh 5.9.2 it is
+`no matches found: A2(a)B` — the brace read as an ordinary list and the
+`(a)` as that shell's own bare group, which is a different construct wearing
+the same characters.
+
+**What the brace holds decides nothing about whether the parenthesis is
+taken.** A brace whose contents are not a count at all is read here too:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `echo A{2,3}(a)B` | `A{2,3}(a)B` — read, matched nothing |
+| `echo A{,}(a)B` | `A{,}(a)B` — a count with both ends omitted |
+| `echo A{z,y}(a)B` | `A{z,y}(a)B` — **not** a count, and still read |
+| `echo A{}(a)B` | ``syntax error … `(' unexpected`` — an *empty* brace |
+
+So a brace with anything between its halves takes the parenthesis and an
+empty one does not. Why the first three then match nothing is the matcher's
+question and the section below answers it.
+
+### A count that is not a count leaves ordinary characters
+
+Where the brace does not hold a count the braces and **the parentheses**
+stop being syntax, and the text matches itself:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `[[ '{z,y}(a)' == {z,y}(a) ]]` | matches — the text, entire |
+| `[[ '{z,y}a' == {z,y}(a) ]]` | no — so the group is not read either |
+| `[[ '{z,y}(a\|b)' == {z,y}(a\|b) ]]` | matches — nor is the bar |
+| `[[ '{a}(b)' == {a}(b) ]]` | matches |
+| `[[ '{-1,2}(a)' == {-1,2}(a) ]]` | matches — a sign is not a count |
+| `[[ '{2,3,4}(a)' == {2,3,4}(a) ]]` | matches — nor are three sides |
+
+**It is not quoted, though**, and that is the row that separates "the
+parentheses stop being syntax" from "the run goes literal" — the two agree
+on every line above:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `[[ '{z,y}(ab)' == {z,y}(a?) ]]` | matches — the `?` is live |
+| `[[ '{z,y}(ab)' == {z,y}(a*) ]]` | matches |
+| `[[ '{z,y}(abb)' == {z,y}(a+(b)) ]]` | matches — a *quantified* group inside is one |
+| `[[ '{z,y}(a(b))' == {z,y}(a(b)) ]]` | matches — a **bare** one is text |
+| `[[ '{z,y}(ab)' == {z,y}(a(b)) ]]` | no |
+
+The last two are the pair. A bare parenthesis at the top of a pattern is not
+a group in this dialect at all — `[[ ab == a(b) ]]` is a syntax error there
+— so a parenthesis that reached the word behind a count is a character, and
+the only reason one can be seen at that depth is the count that let it in.
+Inside a group it is a group again, which is the fourth row of the table
+before this one.
+
+### Which brace, and which parenthesis
+
+Four keys, each with a row that is the only thing separating it from a
+neighbor. Same run, in a directory holding `a`, `aa`, `aaa` and `aaaa`,
+with `f(){ printf '%d |' $#; for x in "$@"; do printf ' [%s]' "$x"; done; printf '\n'; }`:
+
+| probe | ksh93u+ | what it keys |
+| --- | --- | --- |
+| `f {z,y}a` | `2 \| [za] [ya]` | the control: the same list, no `(` behind it |
+| `g='{2,3}(a)'; f $g` | `2 \| [2(a)] [3(a)]` | the brace must be **written** |
+| `f "{2,3}"(a)` | ``syntax error … `(' unexpected`` | and **unquoted** |
+| `f {2,3}\(a\)` | `2 \| [2(a)] [3(a)]` | the `(` must be **written and unescaped** |
+| `f {z,y}"(a)"` | `2 \| [z(a)] [y(a)]` | a quoted `(` leaves the list alone |
+| `g='a(b'; f {z,y}$g` | `2 \| [za(b] [ya(b]` | the `(` must be the **next character** |
+| `f {2,3}x(a)` | ``syntax error … `(' unexpected`` | with nothing between |
+| `f {2,3}(a){x,y}` | `2 \| [{2,3}(a)x] [{2,3}(a)y]` | only the brace **in front of** the `(` |
+| `f {1,2}@(a)` | `2 \| [1@(a)] [2@(a)]` | and only in front of a `(` |
+
+The third row is worth its own sentence. **A quoted brace does not fall back
+to being a list — it makes the `(` unexpected**, which is the same refusal a
+shell without the construct gives. Any implementation that answers "is this
+brace a count" with "no, so expand it" gets that row wrong while getting the
+two above it right.
+
+The last two rows are what say it is the brace immediately in front of the
+parenthesis rather than every brace in the word, and a parenthesis rather
+than any character: the trailing `{x,y}` expands, and `{1,2}` in front of a
+quantifier is an ordinary list.
+
+### Where this shell is stricter than the reference
+
+Two shapes are refused here that ksh93 reads, and both are the
+written-brace key above being narrower there than here:
+
+| probe | ksh93u+ | here |
+| --- | --- | --- |
+| `f "{2,3"}(a)` | `1 \| [{2,3}(a)]` | ``syntax error … `(' unexpected`` |
+| `f "{"2,3}(a)` | `1 \| [{2,3}(a)]` | the same refusal |
+
+That shell asks only whether the character before the `(` is an unquoted
+`}`; this one asks whether that `}` closes a brace it can see, and a `{`
+inside quotes is not one. Its answer in both rows is the word entire, so the
+difference is a refusal rather than a wrong answer — and the alternative is
+worse than either: admitting them sends the quoted `{2,3}` to the matcher
+escaped while the `(a)` arrives live, and the word comes back as `{2,3}a`,
+which is a third answer neither column gives.
+
+`v='{2,3}'; f ${v}(a)` is the third of the same family and is `2 | [aa] [aaa]`
+there. It belongs with the produced-text rules rather than here: the count
+is not in the script at all.
+
 ## A numeric range is one dialect's, and it reaches the lexer
 
     <->      any number

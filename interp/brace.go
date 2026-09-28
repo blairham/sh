@@ -111,6 +111,20 @@ func (r *Runner) braceWords(w *syntax.Word, endpoints bool) []*syntax.Word {
 			return []*syntax.Word{w}
 		}
 		close, matched := matchBraceAcrossRead(w.Spans, open, scan, braceClassOf(w.Spans[open.span], scan))
+		if matched && r.braceIsAGroupsCount(w.Spans, open, close) {
+			// The brace is a pattern group's repetition count, so it is not
+			// a list and does not expand. The scan carries on behind the
+			// *group*: the count binds to the one group in front of it and
+			// a second brace further along the word is a list as usual,
+			// while a brace inside the group's body is not one at all. See
+			// braceIsAGroupsCount and groupEndAfter.
+			from = groupEndAfter(w.Spans, next(close))
+			if !before(close, from) {
+				// A group nothing closes, so there is nowhere to resume.
+				return []*syntax.Word{w}
+			}
+			continue
+		}
 		if matched {
 			alts, ok, abandoned := r.alternativesAcross(w, open, close, endpoints)
 			if abandoned {

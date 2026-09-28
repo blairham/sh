@@ -19884,6 +19884,40 @@ type Semantics struct {
 	// `bad option` it already is.
 	HashReadsOperandsAsPatterns Answer
 
+	// HashReportsEachEntry makes `hash -v` write every entry the call
+	// touched, in the same shape the bare listing writes, over whichever of
+	// the builtin's two tables the rest of the call named.
+	//
+	// zsh alone, and the same enumeration HashReadsOperandsAsPatterns
+	// records names it: `hash` there takes `-d`, `-f`, `-m`, `-r`, `-v` and
+	// `-L`, and `-v` is a bad option in every other column.
+	//
+	// **It reports what the call touched and not what the call added**, which
+	// is the reading a "verbose" letter invites and is wrong. Measured
+	// 2026-09-27 on zsh 5.9.2 with `-f`:
+	//
+	//	hash -v ls              ls=/bin/ls     a search, remembered
+	//	hash -v ls cat          both, one line each
+	//	hash -v foo=/bin/ls     foo=/bin/ls    the assignment form
+	//	hash -v ls; hash -v ls  twice — an entry already there still prints
+	//	hash -dv a=/tmp b=/var  a=/tmp, b=/var   the named-directory table
+	//	hash -d a=/tmp
+	//	hash -dv a              a=/tmp         a *query* prints as well
+	//	hash -dv nosuchname     no such directory name: nosuchname, 1
+	//	hash -v nosuchcommand   no such command: nosuchcommand, 1
+	//	hash -v                 the bare listing, unchanged
+	//	hash ls; hash -rv       nothing — the table was emptied first
+	//
+	// The query row is what settles it: `hash -dv a` adds nothing and still
+	// writes the entry, so the letter is about the operands the call
+	// answered. The two failing rows are the other half — an operand that
+	// resolves to nothing writes the ordinary complaint and no entry, so the
+	// letter never invents a line for a call that did not succeed.
+	//
+	// Asked only when the call spells `-v`, so a No leaves `hash -v` as the
+	// `bad option` it already is in the columns without the letter.
+	HashReportsEachEntry Answer
+
 	// HashClearRefusesOperands makes `hash -r` with anything beside it a
 	// count error rather than "clear the table, then do that as well".
 	//
@@ -29210,6 +29244,9 @@ func PosixSemantics() Semantics {
 		// reason every extension is.
 		HashDefinesAnEntryFromAnAssignment: No,
 		HashReadsOperandsAsPatterns:        No,
+		// And no letter that reports each entry as it is answered: `hash -v`
+		// is one shell's extension too, and off here for the same reason.
+		HashReportsEachEntry: No,
 		// POSIX's `hash -r` "shall forget all remembered locations" and the
 		// same sentence goes on to describe the operands, so the standard's
 		// reading is that a call may do both. The majority of the panel

@@ -123,7 +123,8 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 	case strings.ContainsRune(opts, 'd'):
 		if r.ask(r.sem().HashDefinesANamedDirectory, "`hash -d` naming a directory") {
 			return r.hashNamedDirs(args, strings.ContainsRune(opts, 'L'),
-				strings.ContainsRune(opts, 'r'), strings.ContainsRune(opts, 'm'))
+				strings.ContainsRune(opts, 'r'), strings.ContainsRune(opts, 'm'),
+				strings.ContainsRune(opts, 'v'))
 		}
 		if r.unspecified {
 			return r.status
@@ -148,6 +149,12 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 		r.printCommandHash(strings.ContainsRune(opts, 'l'))
 		return 0
 	}
+	// `-v` reports each operand the call answered, in the listing's own
+	// shape. Read here rather than passed down because the two tables print
+	// through different helpers and this is the one place that knows which
+	// table the call is about — see Semantics.HashReportsEachEntry for what
+	// "answered" was measured to mean.
+	verbose := strings.ContainsRune(opts, 'v')
 	status := 0
 	for _, name := range args {
 		// `name=value` is an entry written straight into the table in the one
@@ -160,6 +167,9 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 			if r.ask(r.sem().HashDefinesAnEntryFromAnAssignment,
 				"`hash name=value` writing the command table") {
 				r.putHashedCommand(entry, path, 0)
+				if verbose {
+					r.printHashEntry(entry)
+				}
 				continue
 			}
 			if r.unspecified {
@@ -201,6 +211,9 @@ func biHash(r *Runner, _ context.Context, args []string) int {
 				// run puts the count back to 0 in the one dialect that shows
 				// it.
 				r.putHashedCommand(name, path, 0)
+				if verbose {
+					r.printHashEntry(name)
+				}
 				continue
 			}
 		}
@@ -258,6 +271,7 @@ func (r *Runner) hashOptionLetters(args []string) string {
 		{"d", r.hashLetterD(), "`hash -d`"},
 		{"t", r.sem().HashReportsThePath, "`hash -t`"},
 		{"m", r.sem().HashReadsOperandsAsPatterns, "`hash -m`"},
+		{"v", r.sem().HashReportsEachEntry, "`hash -v`"},
 	} {
 		if !hashLetterSpelled(args, o.spelling[0]) {
 			continue
@@ -442,7 +456,15 @@ func (r *Runner) hashLetterD() Answer {
 //
 // `-r` with an operand is `too many arguments` there, and the table is left
 // alone — so the clearing and the defining are not two things one call may do.
-func (r *Runner) hashNamedDirs(args []string, asCommands, clear, patterns bool) int {
+//
+// verbose is `-v`, which reports each operand this call answered — a define or
+// a query that found one.
+//
+// **Its shape is the plain one whatever `-L` says**, and that is measured
+// rather than inherited from the listing beside it: on zsh 5.9.2, `hash -dvL
+// a=/tmp` writes `a=/tmp` while `hash -dL` with no operand writes `hash -d
+// a=/tmp`. So `-L` shapes a *listing* and the per-operand report is not one.
+func (r *Runner) hashNamedDirs(args []string, asCommands, clear, patterns, verbose bool) int {
 	if patterns {
 		// The operands are patterns and the command is a listing, whatever
 		// they look like: measured, `hash -dm foo=/tmp` adds nothing and
@@ -485,6 +507,13 @@ func (r *Runner) hashNamedDirs(args []string, asCommands, clear, patterns bool) 
 				r.diagf("%s\n", Wording(r.diag().HashNamedDirNotFound,
 					"hash: no such directory name: %[1]s", name))
 				status = 1
+				continue
+			}
+			// A query that found one is an operand this call answered, so
+			// `-v` reports it: measured, `hash -d a=/tmp; hash -dv a` writes
+			// `a=/tmp` although nothing was added.
+			if verbose {
+				r.printNamedDir(name, false)
 			}
 			continue
 		}
@@ -497,6 +526,9 @@ func (r *Runner) hashNamedDirs(args []string, asCommands, clear, patterns bool) 
 			continue
 		}
 		r.putNamedDir(name, dir)
+		if verbose {
+			r.printNamedDir(name, false)
+		}
 	}
 	return status
 }

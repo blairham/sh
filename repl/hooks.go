@@ -215,6 +215,9 @@ func (s Shell) fireBeforePrompt(ctx context.Context, continuing bool) {
 	}
 	s.fireHook(ctx, s.Hooks.BeforePrompt)
 	s.fireEvaluated(ctx, s.Hooks.BeforePromptVariable)
+	// And the look at the mailbox, after them: measured, with a `precmd`
+	// defined its output comes first at every prompt. See mailcheck.go.
+	s.checkMail()
 }
 
 // fireEvaluated runs the chain a *variable* holds: bash's `PROMPT_COMMAND`.

@@ -128,3 +128,19 @@ func EditorStyle() repl.EditorStyle {
 // gives the variable this value, and a script that reassigns it moves the
 // class with it.
 const wordCharacters = "*?_-.[]~=/&;!#$%^(){}<>"
+
+// MailStyle is the mailbox check this shell makes between prompts.
+//
+// Measured 2026-09-28 through a pseudo-terminal against zsh 5.9.2 — `zsh -f
+// -i` under `env -i PATH=/usr/bin:/bin TERM=xterm` with a scratch `HOME` —
+// driving a real session and growing the file between commands. See
+// repl.MailStyle, where the rows are and where the `cat` that stops the
+// reports is (#4994).
+func MailStyle() repl.MailStyle {
+	return repl.MailStyle{
+		File:     "MAIL",
+		Path:     "MAILPATH",
+		Interval: "MAILCHECK",
+		Message:  "You have new mail.",
+	}
+}

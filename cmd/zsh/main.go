@@ -66,6 +66,7 @@ func shell() driver.Shell {
 		DescriptorReady:    zsh.DescriptorReady,
 		HistoryStyle:       zsh.HistoryStyle(),
 		HookStyle:          zsh.HookStyle(),
+		MailStyle:          zsh.MailStyle(),
 	}
 }
 

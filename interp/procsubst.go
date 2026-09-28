@@ -75,7 +75,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		return "", false
 	}
 	if kind == syntax.ProcSubstFile {
-		return r.procSubToFile(ctx, f)
+		return r.procSubToFile(ctx, f, span)
 	}
 	// Counted before anything can fail, on the box every shell in the tree
 	// shares. Nothing in the run reads it — the number is not in the path any
@@ -98,7 +98,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// which the two other places an open of this path can happen consult.
 	action := r.act(Action{Kind: ActionOpen, Path: ends.path, Write: kind != syntax.ProcSubstOut})
 
-	sub, releaseFds := r.substRunner(kind)
+	sub, releaseFds := r.substRunner(span)
 	// Including this substitution's own end, which is the one the nesting is
 	// about and the one substRunner cannot see: procSubs does not hold this
 	// pipe until the entry below is made.
@@ -113,13 +113,6 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		// them and read as an accident to whoever arrives next.
 		sub.Stdout = bodyWriter(r.Stdout)
 	}
-	// The body is parsed on its own and counts from one, and the script it
-	// was written in did not start there: `cat <(echo $LINENO)` on line 3 is
-	// 3 in bash 5.3.20, zsh 5.9.2 and ksh93u+, and was 1 here in every
-	// dialect. The same offset a command substitution's body carries — see
-	// Runner.lineBase.
-	sub.lineBase = r.spanLineBase(span)
-
 	// The end this shell keeps is counted rather than closed on the body's
 	// return, and the count starts at one for the body itself. What else can
 	// join it, and why the body is not always the last, is in substEnd.
@@ -274,8 +267,25 @@ func (r *Runner) substBody(span syntax.Span) (*syntax.File, bool) {
 // is the sharpest of them — #1830 is three weeks old — and a file-writing
 // body that had been given its own clone would have taken the terminal again
 // with nothing to say so.
-func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
+func (r *Runner) substRunner(span syntax.Span) (*Runner, func()) {
+	kind := span.Kind
 	sub := r.clone()
+	// The body is parsed on its own and counts from one, and the script it
+	// was written in did not start there: `cat <(echo $LINENO)` on line 3 is
+	// 3 in bash 5.3.20, zsh 5.9.2 and ksh93u+, and was 1 here in every
+	// dialect. The same offset a command substitution's body carries — see
+	// Runner.lineBase.
+	//
+	// **Here rather than at the two call sites**, which is what #5085 was:
+	// the pipe spellings set it and the file spelling did not, so
+	// `cat =(print -r -- $LINENO)` on line 2 answered 1 where `<( … )` on
+	// the same line answered 2. It is not only `$LINENO` — a diagnostic from
+	// the body names the line, and a function *defined* in there records it
+	// as its origin, so the one missing assignment moved three readings at
+	// once. This helper exists because the spellings must not be fixable
+	// apart (#1933) and the offset is the second thing to have been fixed
+	// apart in it.
+	sub.lineBase = r.spanLineBase(span)
 	// A substitution's body is not handed the enclosing commands' ends,
 	// which clone gave it: the body of a second `>(cmd)` holding the first
 	// one's writing end in every command it runs is the `tee >(cat)` hang
@@ -469,7 +479,7 @@ func (r *Runner) substStdin() io.Reader {
 // all status 0 there, the last one after printing its diagnostic. A word
 // expands to a path or it fails to expand at all, and a command that ran and
 // failed still wrote the file it was given.
-func (r *Runner) procSubToFile(ctx context.Context, body *syntax.File) (string, bool) {
+func (r *Runner) procSubToFile(ctx context.Context, body *syntax.File, span syntax.Span) (string, bool) {
 	path, f, err := r.newSubstFile()
 	if err != nil {
 		r.diagf("%v\n", err)
@@ -485,7 +495,7 @@ func (r *Runner) procSubToFile(ctx context.Context, body *syntax.File) (string, 
 	r.procSubs = append(r.procSubs, procSubPipe{path: path, file: true, ident: ident})
 	action := r.act(Action{Kind: ActionOpen, Path: path, Write: true})
 
-	sub, releaseFds := r.substRunner(syntax.ProcSubstFile)
+	sub, releaseFds := r.substRunner(span)
 	defer releaseFds()
 	sub.Stdout = f
 	sub.emit(ctx, Event{Kind: EventAccess, Action: action})

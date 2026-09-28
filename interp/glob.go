@@ -1596,6 +1596,18 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		if len(dirs) == 0 {
 			return missed()
 		}
+		// The `[n,m]` subscripts after the tests and apart from them,
+		// because the two empty a list for different reasons: what the tests
+		// left empty is a pattern that matched nothing, and what a subscript
+		// empties is a selection that came to nothing. Measured — `*([9])`
+		// in a directory with six matches writes no word at status 0, where
+		// `zz*([1])` is the ordinary `no matches found`.
+		if len(quals.picks) > 0 {
+			dirs = pickRanges(dirs, quals.picks)
+			if len(dirs) == 0 {
+				return nil, true
+			}
+		}
 	}
 
 	// And the other reading of the same parameter: the whole word the

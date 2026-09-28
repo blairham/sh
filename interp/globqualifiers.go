@@ -133,6 +133,59 @@ type globQualifiers struct {
 	// applied to every name the pattern reported. Empty where the list has
 	// no `:` in it, which is every list that is only qualifiers.
 	modifiers string
+	// ranges is the `[n,m]` subscripts the list carried, in the order they
+	// were written. They are not tests and cannot be: every qualifier beside
+	// them asks something of one file, and this one asks *where in the match
+	// list* a file is — so it is settled after the walk rather than during
+	// it, and two of them compose (`*([1,3][2])` is the second of the first
+	// three). See globRange, and keepQualified for where they land.
+	ranges []globRange
+	// picks is ranges with the arithmetic done, filled by fieldQualifiers.
+	// The parser has no Runner and a subscript is an *expression* — `*([i])`
+	// and `*([1+1])` both name the second match — so the two halves are
+	// necessarily in different places.
+	picks []globPick
+}
+
+// globRange is one `[…]` subscript as written: the expressions either side of
+// its comma, unevaluated.
+//
+// Measured on zsh 5.9.2, 2026-09-28, in a directory whose matches sort to
+// `a b c d dir e`:
+//
+//	*([2,4])       b c d        the n-th through the m-th
+//	*([1])         a            one expression is one element
+//	*([-1])        e            a negative counts from the end
+//	*([2,-1])      b c d dir e
+//	*([-2,-1])     dir e
+//	*([0])         (nothing)    and an empty selection is *not* an error:
+//	*([9])         (nothing)      status 0, the word simply goes
+//	*([3,99])      c d dir e    the far end is clamped
+//	*([0,3])       a b c        and so is the near one
+//	*([4,2])       (nothing)    a reversed range selects nothing
+//	*(^.[1,2])     dir          the tests run first, then the pick
+//	*([1,3][2])    b            two subscripts compose, left to right
+//	*([i]) i=2     b            the subscript is arithmetic
+//	*([1+1])       b
+//	*([ 2 , 3 ])   b c          and spaces in it are the evaluator's
+//
+// The empty-selection row is the one that shapes the code: a *pattern* that
+// matches nothing is `no matches found`, and a pattern whose matches a
+// subscript then empties is silence at 0. So this cannot be written as a test
+// that every file fails.
+type globRange struct {
+	// from and to are the two expressions, as written. to is empty and
+	// single is true where the subscript held no comma.
+	from, to string
+	single   bool
+}
+
+// globPick is a globRange with its arithmetic done: the two positions, still
+// as written, so that a negative is resolved against the list that is there
+// when the pick is applied rather than against one measured earlier.
+type globPick struct {
+	from, to int
+	single   bool
 }
 
 // globTest is one qualifier that asks something of a file: which question,
@@ -203,6 +256,20 @@ func parseGlobQualifiers(list string) (globQualifiers, string, bool) {
 			q.modifiers = list[i:]
 			q.sections = append(q.sections, section)
 			return q, "", true
+		case '[':
+			// Not a file attribute at all: a position in the match list. The
+			// text is kept rather than evaluated, because this function has
+			// no Runner and `*([i])` names an element by a *parameter*.
+			end := strings.IndexByte(list[i:], ']')
+			if end < 0 {
+				// zsh's own sentence for a subscript that never closes,
+				// measured: `*([1,2)` is `invalid subscript` at 1.
+				return q, "invalid subscript", false
+			}
+			text := list[i : i+end]
+			i += end + 1
+			from, to, comma := strings.Cut(text, ",")
+			q.ranges = append(q.ranges, globRange{from: from, to: to, single: !comma})
 		case 'N':
 			q.allowNoMatch = true
 		case 'D':
@@ -465,7 +532,64 @@ func (r *Runner) fieldQualifiers(field string) (pattern string, q globQualifiers
 		r.fatal("%s\n", diag)
 		return "", globQualifiers{}, true, false
 	}
+	// The subscripts, evaluated here because they are *expressions* and the
+	// parser above has no Runner to resolve a name against. A refusal is the
+	// evaluator's own — measured, `*([1,])` is `bad math expression: empty
+	// string` in the reference, which is the sentence its arithmetic gives
+	// any empty expression rather than anything this qualifier says.
+	for _, sel := range q.ranges {
+		pick, ok := r.globRangePick(sel)
+		if !ok {
+			return "", globQualifiers{}, true, false
+		}
+		q.picks = append(q.picks, pick)
+	}
 	return pattern, q, true, true
+}
+
+// globRangePick evaluates one `[…]` subscript. ok is false where the
+// expression was refused, the diagnostic already written.
+func (r *Runner) globRangePick(sel globRange) (globPick, bool) {
+	from, ok := r.globRangeIndex(sel.from)
+	if !ok {
+		return globPick{}, false
+	}
+	if sel.single {
+		return globPick{from: from, to: from, single: true}, true
+	}
+	to, ok := r.globRangeIndex(sel.to)
+	if !ok {
+		return globPick{}, false
+	}
+	return globPick{from: from, to: to}, true
+}
+
+// globRangeIndex is one side of a subscript, read as arithmetic.
+//
+// Through arithTreeRead rather than arithTree, for the reason a subscript
+// already has: the word reached this point expanded, and reading it as an
+// expression a second time would run what the first pass produced.
+func (r *Runner) globRangeIndex(text string) (int, bool) {
+	// An empty or blank side is the empty-subscript question and not a
+	// zero: measured, `*([1,])` is `bad math expression: empty string` in
+	// the reference where `$(( ))` there is 0. Through the reader the
+	// expansion's own subscripts use, so the two spellings cannot drift
+	// apart — see Runner.emptySubscriptText.
+	if err := r.emptySubscriptText(text); err != nil {
+		r.fatal("%s\n", err)
+		return 0, false
+	}
+	tree, err := r.arithTreeRead(text)
+	if err != nil {
+		r.fatal("%s\n", err)
+		return 0, false
+	}
+	n, err := r.evalArith(tree)
+	if err != nil {
+		r.fatal("%s\n", err)
+		return 0, false
+	}
+	return n, true
 }
 
 // keepQualified narrows a match list to the files the qualifiers admit.
@@ -487,6 +611,50 @@ func (r *Runner) keepQualified(paths []string, q globQualifiers) []string {
 		}
 	}
 	return kept
+}
+
+// pickRanges applies the `[n,m]` subscripts, in the order they were written.
+//
+// Kept apart from keepQualified and called after it, because the two empty a
+// list for different reasons and the caller has to tell them apart: a list the
+// *tests* emptied is `no matches found`, and a list a subscript emptied is
+// silence at status 0. See globRange for both rows.
+func pickRanges(names []string, picks []globPick) []string {
+	for _, pick := range picks {
+		names = globPicked(names, pick)
+	}
+	return names
+}
+
+// globPicked is one `[n,m]` over a match list.
+//
+// One-based, with a negative counting from the end and both ends clamped to
+// the list — see globRange for the rows. An empty result is a list of no
+// names and never an error: a pattern that matched nothing is the shell's
+// `no matches found`, and a subscript that empties what it matched is not.
+func globPicked(names []string, pick globPick) []string {
+	n := len(names)
+	resolve := func(v int) int {
+		if v < 0 {
+			return n + 1 + v
+		}
+		return v
+	}
+	from := resolve(pick.from)
+	to := from
+	if !pick.single {
+		to = resolve(pick.to)
+	}
+	if from < 1 {
+		from = 1
+	}
+	if to > n {
+		to = n
+	}
+	if from > to || from > n || to < 1 {
+		return nil
+	}
+	return names[from-1 : to]
 }
 
 // now is the clock this file's tests are asked against, through the Runner so

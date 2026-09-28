@@ -1061,7 +1061,6 @@ func Semantics() interp.Semantics {
 	// A command word that is exactly `-` is a command name here and is
 	// reported as one: `- echo hi` is `command not found` at 127 and the
 	// script carries on. zsh is the column that throws the word away (#3236).
-	s.LoneDashInCommandPositionIsDiscarded = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteWhenNeededDollar
 	s.AliasListingQuotesTheName = interp.No

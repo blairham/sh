@@ -70,7 +70,18 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	// and dash takes none, so a leading `-a` is a command called "-a" there.
 	// The axis is asked before the lookup, because which word is the command
 	// depends on the answer.
-	argv, flags, code := r.execOptions(argv)
+	// The `-` modifier asks for exactly what `-l` asks for, and it asks for
+	// it *here* rather than at the external-command door: `exec` is the one
+	// builtin that stands in front of a command, so `- exec /bin/sh -c '…'`
+	// hands over `-/bin/sh`. Which of it and `-a` wins is then the question
+	// Runner.execArgv already answers for the letter — measured, `exec -a yy
+	// - /bin/sh -c '…'` writes `[yy]` in zsh 5.9.2, exactly as `exec -l -a
+	// yy` does there.
+	var flags execFlags
+	if r.dashPrecommand {
+		flags.login = true
+	}
+	argv, flags, code := r.execOptions(argv, flags)
 	if code != 0 {
 		return code
 	}
@@ -454,8 +465,16 @@ func orElse(preferred, fallback string) string {
 //
 // It returns the remaining words, the argv[0] override if one was given, and a
 // status if the words could not be read at all.
-func (r *Runner) execOptions(argv []string) (rest []string, flags execFlags, code int) {
+func (r *Runner) execOptions(argv []string, flags execFlags) (rest []string, _ execFlags, code int) {
 	if len(argv) == 0 || !strings.HasPrefix(argv[0], "-") || argv[0] == "-" {
+		return argv, flags, 0
+	}
+	if r.dashPrecommand {
+		// A `-` modifier in front of this one switched the option scan off
+		// entirely, so the dash-word is the command's name. See
+		// PrecommandDash — `- exec -l /bin/sh -c '…'` is `command not found:
+		// -l` at 127 in zsh 5.9.2, which is a *name* that was not there and
+		// not a usage error.
 		return argv, flags, 0
 	}
 	if !r.ask(r.sem().ExecTakesOptions, "`exec` taking options of its own") {

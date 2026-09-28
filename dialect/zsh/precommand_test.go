@@ -172,3 +172,113 @@ func TestNocorrectRefusesWhatMayNotFollowIt(t *testing.T) {
 		t.Errorf("nocorrect echo hi: %v", err)
 	}
 }
+
+// The `-` modifier: the command runs with a dash on the front of its argv[0],
+// and every modifier behind it stops reading its own options.
+//
+// Measured 2026-09-28 against /opt/homebrew/bin/zsh — zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `go version -m`: *not a Go executable* — from
+// script files under `env -i PATH=/usr/bin:/bin` with a scratch HOME. It was
+// read as a word to **throw away** until then, and every row that reached the
+// command through `echo` agreed with that reading, because `echo hi` prints
+// `hi` under either one (#5018, #5028).
+//
+// The rows here run `/bin/sh`, which the scratch PATH does not hold and does
+// not need to: the name is written with a slash in it.
+func TestTheDashModifierNamesTheCommandWithADash(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// The control, and then the one line that separates a modifier from
+		// a discard.
+		{`/bin/sh -c 'echo "[$0]"'`, "[/bin/sh]"},
+		{`- /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		// One dash however many words were written, which says it is a
+		// property of the invocation rather than a character per modifier.
+		{`- - /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		{`- - - /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		// A modifier may stand on either side of it, and `exec` is the
+		// builtin that stands in front of a command.
+		{`noglob - /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		{`- noglob /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		{`- exec /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		{`exec - /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		{`noglob exec - /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		// `command` stops the scan and the dash still reaches the command
+		// behind it.
+		{`- command /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		// It reaches an external command alone: a function is named by
+		// itself, and a builtin has nothing to dash.
+		{`f() { echo "[$0]"; }; - f`, "[f]"},
+		{`- :; echo "st=$?"`, "st=0"},
+		// And an ordinary builtin behind it reads its own options.
+		{`- echo -n hi; echo "|"`, "hi|"},
+		{`- print -n hi; echo "|"`, "hi|"},
+	} {
+		out, _ := runZsh(t, t.TempDir(), tc.src)
+		if strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
+// TestTheDashModifierStopsTheOptionScanBehindIt: a dash-word behind it becomes
+// the **command name**, which `command not found: -l` says and a usage error
+// would not.
+//
+// The controls are what make this one rule and not four: each letter reads
+// perfectly well on its own, and the same `exec -l` behind a *different*
+// modifier still reads it — so it is this word and not "a modifier in front of
+// a modifier".
+func TestTheDashModifierStopsTheOptionScanBehindIt(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`exec -l /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		{`exec -a zz /bin/sh -c 'echo "[$0]"'`, "[zz]"},
+		{`command -p /bin/sh -c 'echo "[$0]"'`, "[/bin/sh]"},
+		{`noglob exec -l /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
+		{`- exec -l /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -l"},
+		{`- exec -a zz /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -a"},
+		{`- exec -l -a zz /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -l"},
+		{`- exec -c /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -c"},
+		{`- exec -- /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: --"},
+		{`- command -p /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -p"},
+		{`- command -v ls`, "zsh:1: command not found: -v"},
+		// Wherever in the scan the word stood, and however far behind it the
+		// modifier is.
+		{`- - exec -l /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -l"},
+		{`noglob - exec -l /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -l"},
+		{`- noglob exec -l /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -l"},
+		{`- builtin exec -l /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -l"},
+		{`builtin - exec -l /bin/sh -c 'echo "[$0]"'`, "zsh:1: command not found: -l"},
+		// The discriminating pair for the noun: `exec -l` asks for exactly
+		// the dash the modifier asks for and the letters behind it are still
+		// read, and the identical letters behind a `-` are not read at all.
+		{`exec -l -a zz /bin/sh -c 'echo "[$0]"'`, "[zz]"},
+	} {
+		out, _ := runZsh(t, t.TempDir(), tc.src)
+		if strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
+// TestAModifierTakenAwayLeavesARedirectionWithNoCommand: a word that was
+// written and taken away is not the same state as no word at all, and the
+// redirection is what tells them apart.
+func TestAModifierTakenAwayLeavesARedirectionWithNoCommand(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`NULLCMD=:; - >f; echo after`, "zsh:1: redirection with no command"},
+		{`NULLCMD=:; noglob >f; echo after`, "zsh:1: redirection with no command"},
+		// The control: with no word at all the null command runs and the
+		// script carries on. The hook is named here because the harness
+		// starts with none, and with none the two sides are the same
+		// refusal — which is a control that cannot fail.
+		{`NULLCMD=:; >f; echo after`, "after"},
+		// And with nothing to redirect there is nothing to refuse — the
+		// assignments in front of it persist, as they do for `v=1` alone.
+		{`v=1 -; echo "st=$? v=[$v]"`, "st=0 v=[1]"},
+	} {
+		out, _ := runZsh(t, t.TempDir(), tc.src)
+		if strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}

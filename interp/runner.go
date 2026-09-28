@@ -500,6 +500,11 @@ type Runner struct {
 	// other and the prefix is two frames up by then.
 	localUnderCommandPrefix bool
 
+	// dashPrecommand is the `-` modifier this command was written with: a
+	// dash on the front of an external command's argv[0], and no option scan
+	// for the modifiers standing behind it. See PrecommandDash.
+	dashPrecommand bool
+
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
 	procSubs []procSubPipe
@@ -7199,6 +7204,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// precommand.go for the family and what was measured about each of them.
 	scanning := len(r.precommands) > 0
 	noglob := false
+	// The `-` modifier, which the command carries all the way to its argv[0]
+	// rather than spending here. See PrecommandDash.
+	dash := false
+	// Whether the scan *took a word away*, which is not the same question as
+	// whether the command has any words left. See takenModifier below.
+	takenModifier := false
 	// The words `set -k` takes out of the argument list and puts in front of
 	// the command, in the order they were written. Collected here and applied
 	// below by rewriting the command, so that from the moment one is promoted
@@ -7343,7 +7354,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// Taken away, and not matched itself: the modifier is a
 				// word of the command line and the scan reads it before
 				// anything is a pattern.
-				noglob = true
+				noglob, takenModifier = true, true
+				fields = fields[1:]
+				continue
+			}
+			if m == PrecommandDash {
+				// Taken away too, and what it asks for is carried below:
+				// a dash on the command's argv[0], and no option scan for
+				// the modifiers behind it.
+				dash, takenModifier = true, true
 				fields = fields[1:]
 				continue
 			}
@@ -7369,6 +7388,30 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// The operand positions belong to this command alone: a command
 	// substitution in one of the values has already run, with a set of its
 	// own, and whatever ran before this command must come back afterwards.
+	// The dash belongs to this command alone, and it is written rather than
+	// pushed: a command that carries none clears it, so a function called
+	// behind a dash does not hand it to the commands in its body. Measured —
+	// `f() { /bin/sh -c '"'"'printf "[%s]" "$0"'"'"'; }; - f` writes
+	// `[/bin/sh]` there, with the dash spent on the function's own argv[0],
+	// which is a name and not a path.
+	// A modifier was written and what it stood in front of is not there.
+	//
+	// **A word that was written and taken away is not the same state as no
+	// word at all**, and the redirection is what makes the two tell apart:
+	// `>f` alone runs the dialect's null command at 0 and makes the file,
+	// while `- >f` and `noglob >f` are `redirection with no command` at 1 and
+	// make nothing. Measured 2026-09-28 on zsh 5.9.2, the one column with
+	// modifiers at all. Asked before the null command below rather than
+	// after, which is the same ordering the discard this replaced was written
+	// with and for the same reason.
+	if takenModifier && len(argv) == 0 && len(c.Redirs) > 0 {
+		r.fatal("%s\n", Wording(r.diag().RedirectionWithNoCommand,
+			"redirection with no command"))
+		return nil
+	}
+	savedDash := r.dashPrecommand
+	r.dashPrecommand = dash
+	defer func() { r.dashPrecommand = savedDash }()
 	savedOperands := r.declarationOperands
 	r.declarationOperands = operandAt
 	defer func() { r.declarationOperands = savedOperands }()
@@ -7488,18 +7531,6 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		case hooked:
 			argv = []string{name}
 		}
-	}
-
-	// A command word that came out of expansion as exactly `-` is thrown
-	// away in one dialect and the rest of the command runs. Here rather than
-	// with the null command above, and that order is measured: `>f` alone
-	// runs the null command there, while `- >f` is `redirection with no
-	// command` — so a word that was written and discarded is not the same
-	// state as no word at all. See Runner.discardLoneDashCommandWords.
-	if r.discardLoneDashCommandWords(&argv) && len(argv) == 0 && len(c.Redirs) > 0 {
-		r.fatal("%s\n", Wording(r.diag().RedirectionWithNoCommand,
-			"redirection with no command"))
-		return nil
 	}
 
 	// `$_` moves to this command's last expanded argument before it runs,
@@ -8956,7 +8987,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// same environment this one is.
 	name, env := r.namedByTheEnvironment(argv[0], env)
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
-	cmd.Args[0] = name
+	cmd.Args[0] = r.dashed(name)
 	ownGroup := (r.bg != nil && r.monitor) ||
 		(r.bg == nil && r.monitor && r.Terminal && r.WaitForCommand != nil)
 	if ownGroup {

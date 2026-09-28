@@ -22,7 +22,7 @@ import "github.com/blairham/sh/syntax"
 //	command    builtin      stops the scan: what follows is an external name
 //	builtin    builtin      transparent — the scan carries on past it
 //	exec       builtin      transparent
-//	-          builtin      transparent (not modeled: `-` is about argv[0])
+//	-          builtin      the dash — see PrecommandDash
 //
 // The three shared names are ordinary builtins here and stay that way. What
 // this table adds is only what a *scan* of the leading words has to know, and
@@ -52,6 +52,74 @@ const (
 	// builtin with work of its own to do — and a modifier may stand behind
 	// it.
 	PrecommandTransparent
+	// PrecommandDash runs the command with a `-` on the front of its argv[0],
+	// and is taken away. The word is exactly `-`.
+	//
+	// **It is a modifier and not a word thrown away**, which is the whole of
+	// #5018 and is one line to see: `- /bin/sh -c 'printf "[%s]" "$0"'`
+	// writes `[-/bin/sh]` in zsh 5.9.2 where a discard would write
+	// `[/bin/sh]`. Every probe that reaches the command through `echo`
+	// agrees with the discard, because `echo hi` prints `hi` either way — a
+	// grid keyed on *how the dash arrives* can be seven rows wide and never
+	// vary whether argv[0] is observable at all.
+	//
+	// Measured 2026-09-28 from script files under `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME, against /opt/homebrew/bin/zsh — zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0), `go version -m`: *not a Go executable*.
+	// Every row runs `/bin/sh -c 'printf "[%s]" "$0"'`:
+	//
+	//	/bin/sh …           [/bin/sh]    the control
+	//	- /bin/sh …         [-/bin/sh]
+	//	- sh …              [-sh]        the word as written, not the path
+	//	- - /bin/sh …       [-/bin/sh]   one dash however many were written
+	//	- - - /bin/sh …     [-/bin/sh]
+	//	- command /bin/sh … [-/bin/sh]
+	//	- exec /bin/sh …    [-/bin/sh]
+	//	noglob - /bin/sh …  [-/bin/sh]
+	//	- noglob /bin/sh …  [-/bin/sh]   a modifier behind it is still read
+	//	exec - /bin/sh …    [-/bin/sh]   and it is read behind one
+	//
+	// The doubled row is what says the dash is a property of the invocation
+	// rather than a character prepended per modifier, and the `- sh` row is
+	// what says it goes on the word and not on what PATH resolved it to.
+	//
+	// It reaches an external command alone. `- f` where `f` is a function
+	// reports `$0` as `f`, and `- :` runs the builtin with nothing to dash.
+	//
+	// **And it switches off the option scan of every modifier behind it**,
+	// which is #5028 and is a second fact rather than a consequence of the
+	// first. The same rows:
+	//
+	//	exec -l /bin/sh …            [-/bin/sh]               the control
+	//	exec -a zz /bin/sh …         [zz]                     …
+	//	command -p /bin/sh …         [/bin/sh]                …
+	//	noglob exec -l /bin/sh …     [-/bin/sh]               …
+	//	- exec -l /bin/sh …          command not found: -l, 127
+	//	- exec -a zz /bin/sh …       command not found: -a, 127
+	//	- command -p /bin/sh …       command not found: -p, 127
+	//	- exec -- /bin/sh …          command not found: --, 127
+	//	noglob - exec -l /bin/sh …   command not found: -l, 127
+	//	exec - exec -l /bin/sh …     command not found: -l, 127
+	//	exec -l exec -a zz /bin/sh … [zz]
+	//
+	// `command not found: -l` rather than a usage error is what says the
+	// word became the *command name*: the option scan did not run at all,
+	// rather than running and refusing. The four controls are what make it
+	// one rule and not four — each letter reads perfectly well on its own,
+	// and `noglob exec -l` still reads it, so it is this word and not "a
+	// modifier in front of a modifier".
+	//
+	// **The noun is the word `-` and not the dash it asks for**, which the
+	// last row is the discriminating case for: `exec -l` asks for the same
+	// dash on argv[0] and leaves the scan behind it reading options
+	// normally. Written the other way round, `exec - exec -l` refuses —
+	// so what decides is which of the two spellings arrived, not what
+	// either of them did.
+	//
+	// It reaches only the modifiers. An ordinary builtin behind the dash
+	// reads its own options as it always did: `- echo -n hi` writes `hi`
+	// with no newline, and `- print -n hi` the same.
+	PrecommandDash
 )
 
 // SetPrecommand makes a word a precommand modifier for this runner. A dialect
@@ -115,7 +183,7 @@ func (r *Runner) globFieldsUnlessSuppressed(fields []string, suppressed bool) []
 // command, so the word that names it is still the command's name.
 func (r *Runner) afterPrecommands(args []*syntax.Word) []*syntax.Word {
 	for len(args) > 0 {
-		if m, ok := r.precommands[literalName(args[0])]; !ok || m != PrecommandNoGlob {
+		if m, ok := r.precommands[literalName(args[0])]; !ok || m == PrecommandTransparent {
 			return args
 		}
 		args = args[1:]

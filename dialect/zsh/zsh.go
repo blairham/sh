@@ -6714,6 +6714,12 @@ func Apply(r *interp.Runner) {
 	// change because three of them alone are a wrong answer where an absent
 	// parameter is merely a missing one — see funcnesting.go (#4905).
 	boundFunctionNesting(r)
+	// And the names whose parameter here is **not** the environment's entry
+	// of that name, which is what keeps the `export` the environment brought
+	// off a value the shell supplies itself — see envnotadopted.go for the
+	// sweep, and for why this is a table rather than the rule `special`
+	// would have been (#4940).
+	markTheEntriesThisShellDoesNotAdopt(r)
 	// And the roster this shell's `trap` takes, under the name a script
 	// walks to install one — see signalsparameter.go, and note that the
 	// middle of it is the `kill -l` this shell already answered correctly

@@ -130,6 +130,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.unique = maps.Clone(r.unique)
 	c.shellOwn = maps.Clone(r.shellOwn)
 	c.notShellOwn = maps.Clone(r.notShellOwn)
+	c.envNotAdopted = maps.Clone(r.envNotAdopted)
 	c.scopeFixed = maps.Clone(r.scopeFixed)
 	c.kindFixed = maps.Clone(r.kindFixed)
 	c.traced = maps.Clone(r.traced)

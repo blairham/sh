@@ -183,3 +183,18 @@ func TestTheClosingNameIsNotRecordedOnly(t *testing.T) {
 		t.Error("cannot be moved, so `setopt ignoreclosebraces` would refuse")
 	}
 }
+
+// TestThePresetCarriesAllThreeBraceReadings: the third reading is masked by
+// the second in the preset's own state — the reserved reading implies the
+// lexing — so a preset that left it off would still parse every line above
+// correctly until an option moved. This is the row that reads it directly,
+// and it is here because a mutant that cleared the preset line survived
+// everything else in this package.
+func TestThePresetCarriesAllThreeBraceReadings(t *testing.T) {
+	r := caseListRunner(t)
+	open, closing, endsWord := r.BraceReservedWordReadings()
+	if !open || !closing || !endsWord {
+		t.Errorf("open=%v closing=%v endsWord=%v, want all three of this shell's brace readings",
+			open, closing, endsWord)
+	}
+}

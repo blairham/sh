@@ -6554,6 +6554,32 @@ first and left `echo }` printing a brace. This one was in the axes table as
 measured and had never been built: the parser rejected `{ echo hi }`, which
 is a valid zsh script.
 
+### And a lexical half under it, which an option can leave standing
+
+`ignoreclosebraces` takes the *reserved* reading away and keeps the brace
+ending the word it ends, so the two halves are not one flag either.
+Measured 2026-09-28 on zsh 5.9.2, each line `eval`ed so the option is in
+force when the text is read:
+
+| probe | neither | `ignorebraces` | `ignoreclosebraces` |
+| --- | --- | --- | --- |
+| `print a}` | error | `a}` | **`a }`** |
+| `print a}b` | `a}b` | `a}b` | `a}b` |
+| `{print A}` | `A` | `{print` not found | error near `` `}' `` |
+
+The first row is the whole of it: under the name that makes a brace an
+ordinary character the word is one, and under the name that only takes the
+reserved reading it is two. Grammar flag: `CloseBraceEndsAWord`, which
+`CloseBraceAlwaysReserved` implies and which outlives it.
+
+Refusal alone cannot see this, which is why it survived the option's own
+nine rows — all of them graded on whether a line parses — and showed up
+instead as an alias that stopped expanding: a name is looked up by the
+word, so `alias CLOSE='};'` in `$({ OPEN print bye; CLOSE})` is `bye`
+in zsh and was a parse error here. That line is the reference's own
+`D08cmdsubst.ztst`, and it is the whole of that file's twelve differing
+lines (#5011).
+
 ## A reserved word inside a brace group
 
 `{ echo a; do :; done; }` fails everywhere, and every shell in the panel

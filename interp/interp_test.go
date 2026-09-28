@@ -975,11 +975,22 @@ func TestShiftOptionWordsAreThreeReadings(t *testing.T) {
 		{"any refuses the letters", ShiftOptionWordsAny, `shift -x; echo "st=$?"`, "sh: shift: bad option: -x\nst=2"},
 		{"any refuses the digits too", ShiftOptionWordsAny, `set -- a b c; shift -1; echo "st=$? n=$#"`, "sh: shift: bad option: -1\nst=2 n=3"},
 		{"any refuses a zero the same way", ShiftOptionWordsAny, `set -- a b c; shift -0; echo "st=$? n=$#"`, "sh: shift: bad option: -0\nst=2 n=3"},
-		{"a lone dash is never an option", ShiftOptionWordsAny, `shift -; echo "st=$?"`, "sh: shift: -: numeric argument required\nst=2"},
+		// Still a count even under the policy that refuses every dash word,
+		// which is what makes the lone dash a question of its own: the
+		// dialects with this policy answer LoneDashIsAnOption `No`, and this
+		// row is that pairing.
+		{"a lone dash is never one of these options", ShiftOptionWordsAny, `shift -; echo "st=$?"`, "sh: shift: -: numeric argument required\nst=2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := CoreSemantics()
 			sem.ShiftOptionWords = tc.policy
+			// Answered because this test is not about it: a lone `-` is a
+			// *separate* axis from which dash words are options, and since
+			// #5040 `shift` asks it. Every dialect in the tree answers it —
+			// four `No` and zsh `Yes` — so the unanswered refusal is the
+			// core's alone, and leaving it unanswered here would test that
+			// refusal instead of the policy in tc.
+			sem.LoneDashIsAnOption = No
 			sem.ShiftCountIsArithmetic = No
 			sem.ShiftNegativeIsOutOfRange = Yes
 			sem.ShiftPastEndFatal = No

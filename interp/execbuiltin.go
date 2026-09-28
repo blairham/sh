@@ -463,6 +463,40 @@ func orElse(preferred, fallback string) string {
 // "exec: -a: not found" in dash. So in dash a leading dash-word is the command
 // and must not be eaten here.
 //
+// **The letters bundle, and `a` takes the rest of its own word when there is
+// one and the next word otherwise.** This read one letter per word and
+// required `-a`'s value to be a word of its own, so every bundled spelling was
+// `bad option` at 1. Measured 2026-09-28 from script files under `env -i
+// PATH=/usr/bin:/bin` with a scratch HOME, each row running `/bin/sh -c
+// 'printf "[%s]" "$0"'`, against `/opt/homebrew/bin/zsh` — zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `go version -m`: *not a Go executable* — and
+// the rest of the panel beside it:
+//
+//	written        bash 5.3.20  bash 3.2.57  ksh93u+       zsh 5.9.2
+//	-a zz          [zz]         [zz]         [zz]          [zz]      control
+//	-azz           [zz]         [zz]         [zz]          [zz]
+//	-la zz         [-zz]        [-zz]        no -l         [zz]
+//	-lazz          [-zz]        [-zz]        no -l         [zz]
+//	-laz           [-z]         [-z]         no -l         [z]
+//	-ca zz         [zz]         [zz]         [zz]          [zz]
+//	-al zz         zz: not found (all four)
+//	-a-x           [-x]         [-x]         [-x]          [-x]
+//	-a -l          [-l]         [-l]         [-l]          [-l]
+//	-a ""          []           []           []            []
+//
+// The `-al zz` row is the discriminating one and it is why this is one rule
+// rather than two: `a` takes the rest of its word, which is the single letter
+// `l`, so argv[0] becomes `l` and the *next* word `zz` is the command — which
+// is then not found. A reading where `-a` merely allowed an attached value
+// would make `-al` a bundle of two letters and would run the command; a
+// reading where the letters simply bundled would make `-al` legal and leave
+// `-a` wanting a word. Only "`a` consumes the rest of its word" explains it,
+// and `-laz` confirms it from the other side — the `z` after `la` is the
+// value and not a third letter.
+//
+// dash is untouched by all of it: it has no options here, so a leading
+// dash-word is the command in that column and the loop is never entered.
+//
 // It returns the remaining words, the argv[0] override if one was given, and a
 // status if the words could not be read at all.
 func (r *Runner) execOptions(argv []string, flags execFlags) (rest []string, _ execFlags, code int) {
@@ -483,30 +517,43 @@ func (r *Runner) execOptions(argv []string, flags execFlags) (rest []string, _ e
 		return argv, flags, 0
 	}
 	for len(argv) > 0 && strings.HasPrefix(argv[0], "-") && argv[0] != "-" {
-		switch argv[0] {
-		case "--":
+		if argv[0] == "--" {
 			return argv[1:], flags, 0
-		case "-a":
-			if len(argv) < 2 {
-				r.diagf("exec: -a: %s\n", "option requires an argument")
-				return nil, flags, 2
-			}
-			flags.argv0, argv = argv[1], argv[2:]
-			continue
-		case "-l":
-			if !r.ask(r.sem().ExecTakesTheLoginLetter, "`exec -l`") {
-				return nil, flags, r.execBadOption(argv[0])
-			}
-			flags.login = true
-		case "-c":
-			if !r.ask(r.sem().ExecTakesTheEmptyEnvironmentLetter, "`exec -c`") {
-				return nil, flags, r.execBadOption(argv[0])
-			}
-			flags.clearEnv = true
-		default:
-			return nil, flags, r.execBadOption(argv[0])
 		}
+		word := argv[0]
 		argv = argv[1:]
+		for i := 1; i < len(word); i++ {
+			switch word[i] {
+			case 'a':
+				// **`a` takes the rest of its own word when there is one and
+				// the next word otherwise**, which is what makes `-al zz` a
+				// name of `l` and a command of `zz` rather than a bundle of
+				// two letters. See the doc comment's grid.
+				if i+1 < len(word) {
+					flags.argv0, flags.argv0Set = word[i+1:], true
+					// The letter took the remainder, so the bundle is spent.
+					i = len(word)
+					continue
+				}
+				if len(argv) == 0 {
+					r.diagf("exec: -a: %s\n", "option requires an argument")
+					return nil, flags, 2
+				}
+				flags.argv0, flags.argv0Set, argv = argv[0], true, argv[1:]
+			case 'l':
+				if !r.ask(r.sem().ExecTakesTheLoginLetter, "`exec -l`") {
+					return nil, flags, r.execBadOption(word[i])
+				}
+				flags.login = true
+			case 'c':
+				if !r.ask(r.sem().ExecTakesTheEmptyEnvironmentLetter, "`exec -c`") {
+					return nil, flags, r.execBadOption(word[i])
+				}
+				flags.clearEnv = true
+			default:
+				return nil, flags, r.execBadOption(word[i])
+			}
+		}
 	}
 	return argv, flags, 0
 }
@@ -519,11 +566,18 @@ func (r *Runner) execOptions(argv []string, flags execFlags) (rest []string, _ e
 // It replaced a sentence of this package's own that three dialects printed
 // and none of them writes (#3056): ksh93 says `exec: -l: unknown option` and
 // then its usage line, and the script stops there.
-func (r *Runner) execBadOption(opt string) int {
+// The **letter** and not the word it stood in, which every column that has
+// the letters names that way: `exec -lx cmd` is `exec: -x: invalid option` in
+// bash 5.3.20 and bash 3.2.57 and `unknown exec flag -x` in zsh 5.9.2, and
+// ksh93u+ names the first letter it has not got out of `-la`. The dash is put
+// back on here so the one character reads as the option it spells — bash
+// writes `exec: --: invalid option` for `exec -l-a`, which is this same rule
+// with the letter itself being a dash.
+func (r *Runner) execBadOption(letter byte) int {
 	if r.unspecified {
 		return r.status
 	}
-	return r.badBuiltinOption("exec", opt)
+	return r.badBuiltinOption("exec", "-"+string(letter))
 }
 
 // execFlags is what `exec`'s own options asked for, gathered rather than
@@ -532,6 +586,12 @@ func (r *Runner) execBadOption(opt string) int {
 type execFlags struct {
 	// argv0 is `-a name`, the name the replacement finds in argv[0].
 	argv0 string
+	// argv0Set says the letter was written, which an empty value cannot say
+	// for itself. `exec -a "" cmd` hands the command an **empty** argv[0] in
+	// bash 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01 and zsh 5.9.2 — all four
+	// columns that have the letter — where reading "no name given" off the
+	// empty string handed over the word that was typed.
+	argv0Set bool
 	// login is `-l`, which marks the argv[0] as a login shell's.
 	login bool
 	// clearEnv is `-c`, which hands the replacement no environment.
@@ -557,13 +617,13 @@ type execFlags struct {
 func (r *Runner) execArgv(argv []string, flags execFlags, base string) []string {
 	name := base
 	switch {
-	case flags.argv0 != "" && flags.login:
+	case flags.argv0Set && flags.login:
 		if r.ask(r.sem().ExecLoginPrefixesTheGivenName, "`exec -l -a name`") {
 			name = "-" + flags.argv0
 		} else {
 			name = flags.argv0
 		}
-	case flags.argv0 != "":
+	case flags.argv0Set:
 		name = flags.argv0
 	case flags.login:
 		name = "-" + name

@@ -25,6 +25,41 @@ import (
 //	echo =nosuchcmd     nosuchcmd not found      1
 //	: ${(P)::=y}        not an identifier:       1
 //	echo ${9nope}       bad substitution         1
+//	printf x $a[        invalid subscript        1
+//	a=([0]=x)           bad subscript for direct array assignment: 0   1
+//
+// The fourth is the [ a word never closed, which is a **shape** like the three
+// above it — see Runner.unreadBareSubscript, which raises it without reading
+// any value. The fifth is not: an array literal's subscript is **evaluated**,
+// which is the one place this mode computes anything.
+//
+// **The fifth row is an assignment, and it is read only where the command is
+// nothing but assignments.** Measured the same way, 2026-09-27:
+//
+//	a=([0]=x)                 1, bad subscript for direct array assignment: 0
+//	echo one; a=([0]=x)       1, the same
+//	a=([0]=x) extra           0, silent — a prefix to a command word
+//	typeset a=([0]=x)         0, silent — the same, the word being a utility
+//	a=([2]=y)                 0, silent — 2 is not below the first element
+//	{ a=([0]=x); }            0, silent — the compound rule above
+//
+// **What is evaluated, and what is not.** The subscript's arithmetic is, and
+// nothing else in the literal is expanded at all:
+//
+//	a=([1/0]=y)               1, division by zero
+//	a=([q]=y)                 1, ... : q     — an unset name is 0
+//	a=(["1"]=y)               0             — the quotes come off
+//	a=([$q]=y)                1, ... :      — the parameter is NOT expanded
+//	q=3; a=([$q]=y)           1, ... :        and not even when it is set
+//	a=([`echo 0`]=y)          1, ... :      — nor is a substitution run
+//	a=([2]=$(touch M))        0             — and no value is expanded: the
+//	                                          file is not created
+//
+// So the subscript is its **literal text**, quote removal and no more, handed
+// to the same arithmetic the run-time path uses. And the placement is against
+// an **empty** array rather than the store: `a=(x y z)` before the `set -n`
+// leaves `a=([-1]=q)` refused all the same, where three elements in hand would
+// have put -1 at position 2.
 //
 // **And it is a property of the position, not of the construct.** The same
 // word, moved:
@@ -135,6 +170,92 @@ func (r *Runner) readWordsWithoutRunning(c *syntax.SimpleCmd) {
 			return
 		}
 	}
+	if !unrunAssignsCouldRefuse(c) {
+		return
+	}
+	for _, as := range c.Assigns {
+		if r.readAssignWithoutRunning(as) {
+			return
+		}
+	}
+}
+
+// readAssignWithoutRunning is the array literal's half: the subscripts of
+// `a=([sub]=value …)` are evaluated where the dialect places a value by them,
+// and the first one that lands below the first element ends the shell.
+//
+// Nothing else about the literal is touched — no value is expanded, no
+// substitution is run, and no store is written. See the file's own table for
+// the rows that say so, and for the two that say the placement is against an
+// empty array rather than against whatever the name held.
+func (r *Runner) readAssignWithoutRunning(as *syntax.Assign) bool {
+	if as == nil || !as.IsArray || as.Members != nil {
+		return false
+	}
+	if !r.literalShapeReadsSubscripts(as.Elems) {
+		// The `[sub]=` head is an ordinary word here, so there is no
+		// subscript to evaluate and nothing to refuse.
+		return false
+	}
+	for _, el := range as.Elems {
+		if el == nil || el.Word == nil {
+			continue
+		}
+		sub, _, _, ok := syntax.ElementSubscript(el.Word)
+		if !ok {
+			continue
+		}
+		if r.unrunRefusal(func() { r.placeLiteralSubscriptWithoutRunning(as.Name, sub) }) {
+			return true
+		}
+	}
+	return false
+}
+
+// placeLiteralSubscriptWithoutRunning evaluates one element's subscript and
+// reports what placing a value by it would report.
+//
+// The text is the subscript's **literal spans** and nothing else, which is
+// the measured reading: `["1"]` is 1 with the quotes off, and `[$q]`,
+// `[$(…)]` and a backquoted one are all empty, set or not.
+func (r *Runner) placeLiteralSubscriptWithoutRunning(name string, sub *syntax.Word) {
+	text := literalSpansOnly(sub)
+	idx, err := r.subscriptValue(text)
+	if err != nil {
+		r.failedSubscript("%s\n", r.subscriptFailure(text, err))
+		return
+	}
+	// An empty array, which is what the store holds for a name nothing has
+	// assigned — and, measured, what the reference places against even when
+	// the name was filled before the `set -n`.
+	if _, ok := r.elemPos(Array{}, idx); ok {
+		return
+	}
+	wording := r.diag().BadArrayLiteralSubscript
+	if wording == "" {
+		wording = r.diag().BadArraySubscript
+	}
+	r.failedSubscript("%s\n", Wording(wording,
+		"%[1]s[%[2]s]: bad array subscript", name, text, ""))
+}
+
+// literalSpansOnly is a word's literal text with every span that would need a
+// value, a process or the filesystem left out.
+//
+// Quoting is not one of those, so a quoted span contributes its characters:
+// `["1"]=y` is the subscript 1. An expansion contributes nothing at all,
+// which is measured rather than a simplification — see the file's table.
+func literalSpansOnly(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, s := range w.Spans {
+		if s.Kind == syntax.Literal {
+			b.WriteString(s.Value)
+		}
+	}
+	return b.String()
 }
 
 // unrunWordsCouldRefuse reports whether any word of this command carries one
@@ -153,7 +274,37 @@ func unrunWordsCouldRefuse(c *syntax.SimpleCmd) bool {
 			return true
 		}
 		for i := range w.Spans {
-			if e := w.Spans[i].Param; e != nil && (unrunBadShape(e) || unrunNameFlagShape(e)) {
+			e := w.Spans[i].Param
+			if e == nil {
+				continue
+			}
+			if unrunBadShape(e) || unrunNameFlagShape(e) || e.BareIndexUnclosed {
+				return true
+			}
+		}
+	}
+	return unrunAssignsCouldRefuse(c)
+}
+
+// unrunAssignsCouldRefuse is the assignment half, and it is where the
+// **prefix rule** is stated: a command word in front of the assignments makes
+// them that command's environment, and an environment is not read.
+//
+// Measured — `a=([0]=x)` alone refuses, `a=([0]=x) extra` and `typeset
+// a=([0]=x)` are silent at 0. One function rather than the same test written
+// beside each of its two callers: the guard and the reading have to agree
+// about which commands are in scope, and two copies are how they would come
+// to disagree.
+func unrunAssignsCouldRefuse(c *syntax.SimpleCmd) bool {
+	if len(c.Args) > 0 {
+		return false
+	}
+	for _, as := range c.Assigns {
+		if as == nil || !as.IsArray || as.Members != nil {
+			continue
+		}
+		for _, el := range as.Elems {
+			if el != nil && el.Word != nil && syntax.SubscriptedElement(el.Word) {
 				return true
 			}
 		}
@@ -210,6 +361,14 @@ func (r *Runner) readWordWithoutRunning(w *syntax.Word) bool {
 		}
 		if unrunNameFlagShape(e) &&
 			r.unrunRefusal(func() { r.assignableParamName(e.Name) }) {
+			return true
+		}
+		// The `[` an unbraced `$name` never closed, which the same seam
+		// answers at run time and which needs no value to answer: the
+		// brackets are either a subscript, and this one does not terminate,
+		// or they are text. See Runner.unreadBareSubscript.
+		if e.BareIndexUnclosed &&
+			r.unrunRefusal(func() { r.unreadBareSubscript(w.Spans[i]) }) {
 			return true
 		}
 	}

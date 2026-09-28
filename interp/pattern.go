@@ -816,6 +816,21 @@ type patternOpts struct {
 	// `~(K)` group asks for it and nothing else does — see kshClassEscapes
 	// for the six and for why the letter rather than the language decides.
 	classEscapes bool
+	// pieceBase and pieceEnd are where the piece being matched begins and
+	// ends in the subject, both absolute, so that a zero-width assertion can
+	// ask about the piece's edges rather than the whole value's.
+	//
+	// **The piece and not the subject**, which is measured rather than
+	// assumed and is the opposite of what it first looked like. On the
+	// whole-subject surfaces the two are the same and no row can tell them
+	// apart; a `%` trim is where they part, and ksh93 asks about the piece:
+	// `v=aab; ${v%~(K)\bab}` is `a` there — the piece `ab` begins at a
+	// position the *subject* has a word character in front of, so a
+	// subject-relative boundary would not hold and nothing would be trimmed.
+	// `v=ab; ${v%~(K)\Bb}` is the same fact read the other way: no trim,
+	// because the piece's front is a boundary and `\B` wants one that is
+	// not. See kshZeroWidthHolds.
+	pieceBase, pieceEnd int
 	// tildeGlobRead says a `~(K)` group is read **on this surface** at all.
 	// Where it is false the group is ordinary characters and the pattern it
 	// prefixes matches whatever that text matches, which is usually nothing.
@@ -1379,6 +1394,11 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 		o.where = w
 	}
 	w.total, w.caps = len(subject), newCaptures(w.plan)
+	// Where this piece sits in the subject, for the zero-width escapes. Set
+	// on every entry rather than once: matchPatternIn is re-entered for a
+	// group this surface declines, and a stale pair would answer about the
+	// piece before it.
+	o.pieceBase, o.pieceEnd = base, base+len(piece)
 	// The captures are this trial's and are always replaced. The memo is
 	// about the pattern and the subject, so it survives a trial and is
 	// dropped only when one of those changes — see matchWhere.
@@ -1395,6 +1415,24 @@ func matchPatternIn(pattern, piece, subject string, base int, o patternOpts) (bo
 			// what prepare works out is about the subject.
 			w.prepare(pattern, o.emptyBracket)
 		}
+	}
+	// And the memo is dropped again when the **base** moves under a pattern
+	// that carries a zero-width escape, which is the one thing in this
+	// language whose answer is not a function of the position alone.
+	//
+	// It is the aliasing tildeHereAnchors names from the other side: the
+	// memo is keyed on a position, and two trials of a suffix trim reach the
+	// same position from different starts — `${v%\bab}` against `aab` asks
+	// about offset 1 with the piece beginning there and again with the piece
+	// beginning at 0, and `\b` answers those two differently. Everything
+	// else the key leaves out is a fact about the pattern or the subject, so
+	// this is the only escape that needs it. See kshZeroWidthHolds.
+	if base != w.base {
+		if patternHasZeroWidthEscape(pattern) {
+			w.asked, w.deadWide = 0, nil
+			w.dead.reset()
+		}
+		w.base = base
 	}
 	if !matchTopLevel(pattern, piece, base, o) {
 		return false, matchReport{}
@@ -1864,6 +1902,18 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 				return s == "\\"
 			}
 			if o.classEscapes {
+				if letter, ok := kshGlobZeroWidth(p[1]); ok {
+					// And three consume **nothing**: they ask about the
+					// position rather than about a character. See
+					// kshGlobZeroWidth. Nothing but `pp` and `p` moves —
+					// `s` and `at` are exactly where they were, which is
+					// what zero-width means.
+					if !kshZeroWidthHolds(letter, &o, o.where.subject, at, o.pieceBase, o.pieceEnd) {
+						return false
+					}
+					p, pp = p[2:], pp+2
+					continue
+				}
 				if c, ok := kshGlobControlEscape(p[1]); ok {
 					// Under one dialect's `~(K)`, eight letters name a
 					// **control character** rather than themselves. One

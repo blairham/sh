@@ -2953,24 +2953,113 @@ answers.
 
 #### A third shape again: `\b`, `\B` and `\z` are zero-width
 
-Not read here yet, and recorded so the next reader does not take the family
-above for the whole language. `\b` is a **word boundary**, `\B` its
-complement and `\z` an anchor — each consumes no text at all, which is why
-none of them belongs in either table:
+`\b` is a **word boundary**, `\B` its complement and `\z` the end. Each
+consumes no text at all, which is why none of them belongs in either table
+above: a class names a set and takes a unit, a control escape names one
+character and takes one byte, and these take nothing and ask about the
+*position*.
 
-| probe | ksh93u+ | here |
+Measured 2026-09-28 against `/bin/ksh` `Version AJM 93u+ 2012-08-01`
+(`go version -m` says *not a Go executable*), each probe from a script file
+under `env -i PATH=/usr/bin:/bin` with a scratch `HOME`. **Each letter is a
+pair**, because an assertion that held everywhere and one that held nowhere
+would each agree with half of these:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `[[ zab == z~(K)ab\b ]]` | matches — a boundary after the last letter |
+| `[[ 'za b' == z~(K)a\b?b ]]` | matches — one before a space |
+| `[[ 'za.b' == z~(K)a\b.b ]]` | matches — and one before a period |
+| `[[ zab == z~(K)a\bb ]]` | **no** — two word characters have none between them |
+| `[[ zabb == z~(K)a\bb ]]` | **no** — so it is not the letter |
+| `[[ $'za\bb' == z~(K)a\bb ]]` | **no** — nor a backspace |
+| `[[ zab == z~(K)a\Bb ]]` | matches — the complement, on the same subject |
+| `[[ zaBb == z~(K)a\Bb ]]` | **no** — nor is it the letter |
+| `[[ zaXb == z~(K)a\Bb ]]` | **no** |
+| `[[ zazb == z~(K)a\zb ]]` | **no** — `\z` is not the letter `z` |
+| `[[ ab == ~(K)ab\z ]]` | matches — it is the end |
+| `[[ abz == ~(K)ab\z ]]` | **no** |
+
+The `\b` and `\B` rows are the subject `zab` **answered oppositely**, which
+is what says they are complements rather than two spellings of "matches
+nothing". `[[ $'za\bb' == z~(K)a?b ]]` matches here and there, and is the
+control that says a backspace subject is one matchable character wide — so
+the sixth row is `\b` declining it rather than the subject being
+unreachable. `[[ zaqb == z~(K)a\qb ]]` matches in both columns, and is the
+control for a letter **neither** family names.
+
+`[[ zab == z~(K)\bab ]]` does not match and `[[ zab == z~(K)\Bab ]]` does,
+which is the pair that says the group is read **where it stands**: text in
+front of it is outside it, so the position there is between `z` and `a` and
+neither is the front of anything.
+
+##### The front of the piece is a boundary whatever stands at it
+
+The back is not, and the asymmetry is measured rather than assumed:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `[[ '.' == ~(K)\b. ]]` | matches — a period on both sides of the position |
+| `[[ '.' == ~(K)\B. ]]` | **no** |
+| `[[ '.' == ~(K).\b ]]` | **no** — the *back* after a period is not one |
+| `[[ a == ~(K)a\b ]]` | matches — and after a letter it is |
+| `[[ '' == ~(K)\b ]]` | matches — an empty subject is all front |
+| `[[ '' == ~(K)\B ]]` | **no** |
+
+So the back follows the ordinary rule with the absent character counting as
+a non-word one, and the front does not follow it at all.
+
+##### It is the piece and not the whole value
+
+`${v%…}` is the one span-choosing surface that reads a `~(K)` group — see
+*A `~(K)` group is read on the surfaces that read it* — and it is where the
+two readings part:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `v=aab; ${v%~(K)\bab}` | `a` — the piece `ab` starts where the *subject* has an `a` in front of it |
+| `v=aab; ${v%~(K)\Bab}` | `aab` |
+| `v=ab; ${v%~(K)\bb}` | `a` — the same fact one character over |
+| `v=ab; ${v%~(K)\Bb}` | `ab` |
+| `v=..b; ${v%~(K)\b.b}` | `.` — a period at the front *and* one in front of it |
+| `v=..b; ${v%~(K)\B.b}` | `..b` |
+| `v=ab; ${v%~(K)a\bb}` | `ab` — inside the piece both readings agree |
+| `v=ab; ${v%~(K)a\Bb}` | empty |
+| `v=abc; ${v#~(K)\bab}` | `abc` — a prefix trim declines the group entirely |
+
+The fifth row is the sharpest: the piece begins at a period and has a period
+in front of it, so neither a subject-relative reading nor one counting the
+absent character as a non-word one would trim.
+
+What `\z` anchors to is **not** separated by any row here. The one surface
+that chooses a span and reads the group is a suffix trim, whose piece always
+ends where the subject does. It is written as the piece's end for the same
+reason `\b` is asked of the piece — one rule for the family — and recorded
+as undecided rather than measured.
+
+##### One unit ahead, one byte behind
+
+The two sides of a boundary are read differently, and only the locale says
+so. The character *at* the position is one unit, exactly as a class escape
+takes one; the one *behind* it is read as a single **byte**, so the trailing
+byte of a multi-byte character is not a word character even where the
+character is. With `é` two bytes and one character:
+
+| probe | `C` | `en_US.UTF-8` |
 | --- | --- | --- |
-| `[[ zab == z~(K)ab\b ]]` | matches — a boundary at the end | no |
-| `[[ 'za b' == z~(K)a\b?b ]]` | matches — one before a space | no |
-| `[[ 'za.b' == z~(K)a\b.b ]]` | matches | no |
-| `[[ zabb == z~(K)a\bb ]]` | **no** — so it is not the letter | matches |
-| `[[ zab == z~(K)a\Bb ]]` | matches — a *non*-boundary | no |
-| `[[ zaBb == z~(K)a\Bb ]]` | **no** | matches |
-| `[[ zazb == z~(K)a\zb ]]` | **no** | matches |
+| `[[ 'aéb' == ~(K)a\béb ]]` | matches | **no** |
+| `[[ 'aéb' == ~(K)a\Béb ]]` | no | **matches** |
+| `[[ 'aéb' == ~(K)aé\bb ]]` | matches | matches |
+| `[[ 'éé' == ~(K)é\bé ]]` | no | **matches** |
+| `[[ '.é' == ~(K).\bé ]]` | no | **matches** |
+| `[[ 'é' == ~(K)é\B ]]` | matches | matches |
 
-`[[ $'za\bb' == z~(K)a?b ]]` matches in both columns, which is the control
-that says a backspace subject is one matchable character wide — so the fourth
-row is `\b` declining it rather than the subject being unreachable.
+The first two rows fix the side *ahead*: `é` is a letter, and it is one unit
+only where a unit is a character. The third and sixth fix the side *behind*
+— reading it as a character too would make `é` a word character under
+`en_US.UTF-8` and answer both of them the other way, while leaving the first
+two right. A probe that varied only the locale and only looked ahead would
+confirm the wrong rule.
 
 A flavor letter written behind `K` takes the language with it and the class
 escapes go too, since an expression's backslashes are its own:

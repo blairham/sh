@@ -57,6 +57,50 @@ func (r *Runner) FunctionIsListed(name string) bool {
 	return ok && !r.speaksForTheShell(fn)
 }
 
+// FunctionSourceFile is the file a function's body was read from, or the
+// empty string for one whose definition route had no file to name.
+//
+// The raw record and **not** Runner.functionDefinitionFile, whose fallback is
+// the shell's own name: this is asked by a dialect's `$functions_source`,
+// where the empty answer is a measured value rather than a gap. zsh 5.9.2,
+// 2026-09-27, `autoload -Uz af` and then `${functions_source[af]}` is the
+// empty string with the key present, and the file once the body has been
+// read. A fallback here would have written a path where that shell writes
+// nothing.
+func (r *Runner) FunctionSourceFile(name string) string {
+	if file := r.functionFile(name); file != "" {
+		return file
+	}
+	if r.Route == RouteCommandString {
+		// The one route with no file that still answers, and it answers
+		// with the **shell's own name** rather than with its path.
+		// Measured 2026-09-27 on zsh 5.9.2, three routes over the same
+		// definition, `${functions_source[f]}` behind each:
+		//
+		//	zsh -f -c 'f(){ : }; …'      zsh            and `$0` is the path
+		//	zsh -f < a file of lines     (empty)
+		//	zsh -f script.zsh            script.zsh
+		//
+		// So it is not `$0` and it is not "whatever the shell was called",
+		// which is what a fallback to Runner.Name would have written: it is
+		// the diagnostic name, the same one every message from a `-c` shell
+		// carries. Standard input has no answer at all, which is why this
+		// is asked of the route rather than written as a general fallback
+		// the way functionDefinitionFile's is.
+		return r.name()
+	}
+	return ""
+}
+
+// ShellWords cuts one string into the words the lexer would read it as, with
+// their quoting left on — the split behind zsh's `${(z)…}`.
+//
+// Exported for a dialect that needs the same cut somewhere other than an
+// expansion flag: `$historywords` is every history entry read this way, and a
+// second splitter written beside this one would be a second answer to "what
+// are this line's words".
+func (r *Runner) ShellWords(s string) []string { return r.splitShellWords(s, "") }
+
 // FunctionBodyText is a function's body as a listing writes it, without the
 // header line and without the braces around it.
 //

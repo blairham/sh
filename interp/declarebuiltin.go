@@ -5441,6 +5441,21 @@ func (r *Runner) declaredNameHolds(name string) bool {
 	if _, ok := r.Vars[name]; ok {
 		return true
 	}
+	if r.DynamicParameter(name) {
+		// A **produced** parameter holds something too, and the stored
+		// tables above are exactly where it is not. Measured 2026-09-28 on
+		// zsh 5.9.2 under `-f` from a script file, each name referred to
+		// once first so that it is there to be listed:
+		//
+		//	typeset funcstack      funcstack=(  )
+		//	typeset aliases        aliases=( [run-help]=man … )
+		//	typeset mapfile        mapfile=( [f1]='' … )
+		//	typeset EPOCHSECONDS   EPOCHSECONDS=1790573781
+		//
+		// Without this a valueless declaration naming one of them wrote
+		// nothing at all, where the reference writes the row (#5000).
+		return true
+	}
 	_, ok := r.inheritedValue(name)
 	return ok
 }

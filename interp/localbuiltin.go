@@ -233,15 +233,33 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 // That is BareLocalListsEveryParameter's row with the attribute words left
 // off, and it is deliberately the same value renderer, so a kind added to one
 // listing cannot be spelled differently by the other.
+//
+// # A hidden name is written **with** its value here, which it was not
+//
+// `hideval` withholds a value from a listing that *walks* the table and not
+// from one that was asked for the name. Measured 2026-09-28 on zsh 5.9.2
+// under `-f` from a script file, `typeset -H h=hv` on the line before:
+//
+//	typeset h        h=hv     asked by name
+//	typeset + h      h=hv     the sign is not a letter
+//	typeset -m h     h=hv     already recorded, in interp/declarematching.go
+//	typeset -p h     typeset h    — by name, and still withheld
+//	typeset          h            — the walk
+//	typeset +        h            — the walk
+//
+// **The last three are the control and they are what makes this one row
+// rather than a policy**: two forms that already agreed here keep agreeing,
+// and `-p` is by name too, so "asked for the name" is not the whole of the
+// rule — the `-p` word withholds and the bare word does not.
+//
+// The hazard this was left standing for is real and is measured not to be
+// one: the reference writes the **values** of a produced parameter asked for
+// by name, `typeset mapfile` writing every file in the working directory and
+// `typeset langinfo` a fifty-five key table. That is what that shell does, so
+// there is nothing here to hold back (#5000).
 func (r *Runner) listStandingDeclaration(name string) {
 	d, ok := r.declarationOf(name)
 	if !ok {
-		return
-	}
-	if d.hidden {
-		// The attributes speak and the value does not, which is what `-H`
-		// does to every other listing this engine writes.
-		r.printf("%s\n", d.name)
 		return
 	}
 	r.printf("%s=%s\n", d.name, r.listedDeclarationValue(d))

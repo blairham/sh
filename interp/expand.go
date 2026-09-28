@@ -217,6 +217,14 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	// program whose own words are read on their own terms, and the span this
 	// word is in is what they come back to.
 	defer func(prev bool) { r.braceStopsGlob = prev }(r.braceStopsGlob)
+	// And whether a written class escape in this word survives quote removal
+	// as one. Asked of the whole word here, exactly as Runner.patternOf asks
+	// it of a pattern operand: the two are the same question about the same
+	// spans, and the field path had no answer for it at all — so
+	// `echo ~(K)a\db` globbed for `adb` where that shell globs for `a1b`.
+	// See interp/kshclassescape.go.
+	defer func(prev bool) { r.tildeGlobClassWord = prev }(r.tildeGlobClassWord)
+	r.tildeGlobClassWord = tildeGlobClasses(w.Spans, r.lang().TildeGroup)
 
 	// Whether an expansion has already failed on this word. Every shell in
 	// the panel abandons the word at the first failure rather than going on
@@ -2796,6 +2804,22 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		// what decides whether text is a pattern at all.
 		if unquoted {
 			return s.Value, false
+		}
+		if r.tildeGlobClassWord && kshClassEscapeSpan(s) {
+			// A backslash the script wrote in front of a class letter, in a
+			// word that carries a `~(K)` group: the pair is the glob's own
+			// and has to reach the matcher as it was written.
+			//
+			// **Written as a backslash and not as a mark**, which is the
+			// decision #5012 is about. The obvious objection is that a
+			// surviving backslash reaches the output of a field that matches
+			// nothing — but globUnescape is what puts such a field back, and
+			// it strips a backslash from in front of whatever follows it. So
+			// the byte is a quoting mark on the way out as much as on the way
+			// in, and `echo ~(K)a\db` in an empty directory prints
+			// `~(K)adb` here and there alike. A mark of its own would buy a
+			// second alphabet and the same answer.
+			return "\\" + s.Value, false
 		}
 		return globEscape(s.Value), false
 	case syntax.ParamExp:

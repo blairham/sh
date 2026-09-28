@@ -4230,6 +4230,14 @@ type Runner struct {
 	// and saved and restored around each word so that a substitution's own
 	// words are read on their own terms. See interp/braceglobstop.go.
 	braceStopsGlob bool
+	// tildeGlobClassWord says the word being expanded into fields carries a
+	// `~(K)` group, which is what makes a written `\d` in it a class escape
+	// rather than the letter. Per word rather than per span, for the reason
+	// tildeGlobClasses gives: *where* the group stands is the matcher's
+	// question, and all this decides is which words keep the backslash at
+	// all. Saved and restored around each word, like braceStopsGlob beside
+	// it. See interp/kshclassescape.go.
+	tildeGlobClassWord bool
 
 	// globSuspended is pathname expansion switched off for one nested
 	// expansion, from the inside: the contexts where a word substitutes as

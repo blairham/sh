@@ -718,20 +718,24 @@ func (r *Runner) prefixReachesTheReplacement(env []string) []string {
 // is how `exec /bin/sh -c …` still replaces the process. So this is a door in
 // front of the existing one rather than a fork in it.
 func (r *Runner) execThroughThisShell(ctx context.Context, argv []string) (status int, ran bool) {
-	// **The lookup comes first and the axis second**, which is not a style
-	// choice: a word this shell has no command for takes the replacement
-	// road under either answer, so asking about it would refuse every
-	// `exec /usr/bin/true` in a core with no dialect chosen — a question
-	// posed where the two answers agree. See the same rule in
-	// Runner.namedByTheEnvironment, which is only consulted when the name is
-	// actually there.
+	// **Read rather than asked**, which is the narrower of the two and is
+	// deliberate. An unanswered axis ordinarily refuses, so that nobody
+	// silently gets one shell's answer — but the word this fires on is
+	// `exec <a name this shell has>`, which is `exec echo`, and refusing
+	// that would make a core with no dialect chosen complain about a line it
+	// has always run. Guessing here is not silent in the way that rule
+	// guards against: the guess is the POSIX road, it is what four of the
+	// five columns do and what PosixSemantics answers, and a script that
+	// wants the fifth names that dialect. See the 108 other sites that read
+	// an axis this way.
+	if r.sem().ExecReachesTheShellsOwnCommands != Yes {
+		return 0, false
+	}
 	fn, isFunc := r.funcs[r.namespaceFuncLookup(argv[0])]
 	builtin, isBuiltin := r.lookupBuiltin(argv[0])
 	if !isFunc && !isBuiltin {
-		return 0, false
-	}
-	if !r.ask(r.sem().ExecReachesTheShellsOwnCommands,
-		"`exec` reading the words behind it as this shell's own command") {
+		// A word this shell has no command for takes the replacement road
+		// under either answer.
 		return 0, false
 	}
 	// Cleared before rather than after, so that what is read below is this

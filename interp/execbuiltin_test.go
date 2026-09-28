@@ -726,18 +726,17 @@ func TestExecReachesTheShellsOwnCommands(t *testing.T) {
 		})
 	}
 
-	// **The axis is asked after the lookup, and a word this shell has no
-	// command for must not reach it at all.** Both answers send such a word
-	// down the replacement road, so a shell with no dialect chosen has to
-	// run it rather than refuse a question whose answers agree. Asserted
-	// with the axis left *unspecified*, which is the only setting that can
-	// tell the two orders apart: asked first, this is a refusal naming the
-	// axis; asked second, the word is simply run.
-	out, _ := run(t, `exec /usr/bin/true; echo after`, func(r *Runner) {
+	// **An unanswered axis takes the POSIX road rather than refusing.** The
+	// word this fires on is `exec <a name this shell has>`, which is
+	// `exec echo`, and a core with no dialect chosen has always run that
+	// line. The guess is not silent in the way the refusing read guards
+	// against: it is what four of the five columns do, and a script that
+	// wants the fifth names that dialect.
+	out, _ := run(t, `exec echo hi; echo after`, func(r *Runner) {
 		r.Semantics.ExecReachesTheShellsOwnCommands = Unspecified
 	})
-	if strings.Contains(out, "reading the words behind it") {
-		t.Errorf("an external under an unanswered axis = %q, want it run rather than refused", out)
+	if strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("an unanswered axis = %q, want the POSIX road rather than a refusal", out)
 	}
 
 	// The control that makes the rest readable: with the dialect answering

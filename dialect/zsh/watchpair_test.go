@@ -85,9 +85,17 @@ func TestTheWatchPairIsJoinedAndNotTied(t *testing.T) {
 			"[undefined WATCH]\n[undefined watch]\n",
 		},
 		{
+			// The pattern anchors the name, which it did not need to until
+			// #4998: a read of the pair loads `zsh/watch`, and this shell's
+			// own record of the loaded modules is a parameter whose *value*
+			// then holds the string `watch`. That record is visible to a
+			// bare `typeset` here and to nothing at all in the reference,
+			// which is a divergence of its own and is filed rather than
+			// worked around — see #5014. What this row is about is the
+			// pair's listing, so it asks for lines that *name* `watch`.
 			"which a read takes them out of",
 			`: ${#watch}
-			 typeset | while IFS= read -r l; do case $l in (*watch*) print -r -- "[$l]";; esac; done`,
+			 typeset | while IFS= read -r l; do case $l in (*[' ']watch=*) print -r -- "[$l]";; esac; done`,
 			"[array watch=(  )]\n",
 		},
 		{

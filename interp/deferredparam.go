@@ -125,6 +125,28 @@ func (r *Runner) referredToParameter(name string) {
 		return
 	}
 	delete(r.deferredParams, name)
+	if arrive := r.onParameterArrival[name]; arrive != nil {
+		arrive(r)
+	}
+}
+
+// SetParameterArrival says what else a dialect wants done the first time a
+// deferred name is referred to.
+//
+// One user and it is what the seam was added for: in the shell being modeled,
+// a reference to either half of `$WATCH`/`$watch` **loads `zsh/watch`**, and
+// the module brings two more parameters with it. So the arrival of one name is
+// the arrival of a module, which is a fact about that dialect and not
+// something the core could derive.
+//
+// Behind the removal from the roster above rather than in front of it, so that
+// an arrival which refers to a name — the module's own registration does — is
+// not the same arrival over again.
+func (r *Runner) SetParameterArrival(name string, arrive func(*Runner)) {
+	if r.onParameterArrival == nil {
+		r.onParameterArrival = map[string]func(*Runner){}
+	}
+	r.onParameterArrival[name] = arrive
 }
 
 // deferredParameterListingWord is what a bare declaration listing writes in

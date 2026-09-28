@@ -34,6 +34,17 @@ func (r *Runner) MarkShellOwnParameter(name string) {
 	r.shellOwn[name] = true
 }
 
+// ShellOwnParameter reports whether this name is one the shell itself
+// maintains, which is the mark above read back.
+//
+// For a dialect asking whether it *has* a name at all — a module's feature
+// gate is the one caller, and the question it is really asking is "would a
+// script find this parameter here", to which a name the shell owns is yes
+// whether or not anything has referred to it yet. See
+// dialect/zsh/zmodload.go, where a deferred `$WATCH` read as missing and shut
+// the gate on the module that owns it.
+func (r *Runner) ShellOwnParameter(name string) bool { return r.shellOwn[name] }
+
 // MarkParameterNotTheShellsOwn says a **produced** name is not the shell's
 // own after all, which is the one case [ParameterAttributes.Provided] gets
 // wrong by deriving the fact from a shape.

@@ -217,8 +217,29 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		}
 		return 0
 	case opts.editor:
-		// A line editor that is not running: the operands are consumed and
-		// nothing is written.
+		// The editor buffer stack, which is a script-visible thing with or
+		// without an editor running: nothing is written and the operands
+		// become one entry for `read -z` to take off. This was a no-op —
+		// right about the writing and wrong about the stack, which is the
+		// half a `read -z` has a producer for. See editorbuffer.go (#4966).
+		//
+		// The same join the history side above uses, and for the same reason
+		// stated there: a space between the operands whatever else was asked
+		// for, and no terminator, so an entry never ends in a newline of its
+		// own.
+		entry, ok, _, refused := printJoined(r, opts, rest, " ")
+		if !ok {
+			return 1
+		}
+		if refused {
+			// Reported before the entry joins the stack, which is the order
+			// the writing road and the history road both have.
+			r.RefuseCodePoint()
+		}
+		pushEditorBuffer(r, entry)
+		if refused {
+			return r.ExitStatus()
+		}
 		return 0
 	}
 	if opts.hasFormat {

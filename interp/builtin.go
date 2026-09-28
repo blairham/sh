@@ -6265,6 +6265,35 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 	}
 
+	// `-z` does not read the shell's input at all: it takes one entry off the
+	// editor buffer stack and reads *that*, leaving the stream for the next
+	// reader. So the substitution is of the **source** and nothing else —
+	// every rule below is the one an ordinary `read` follows, which is what
+	// the measurement says: the entry is split on IFS, the last name takes
+	// its remainder, `-r` decides the escapes, and `-E` echoes the values.
+	//
+	// An empty stack is a source at end of input, which is the measured
+	// answer rather than a special case: `read -z l` with nothing pushed
+	// leaves `l` cleared and *present* at status 1 — exactly what a plain
+	// `read` at end of input does. See interp/editorbuffer.go.
+	//
+	// It rides the letter rather than an axis for the reason `-q` beside it
+	// does: no other shell in the panel has a `read -z` at all. Measured
+	// 2026-09-28 — `invalid option` on bash 5.3.20, `unknown option` on
+	// ksh93u+, `Illegal option -z` on dash, each at 2 (#4966).
+	buffered := strings.Contains(opts, "z")
+	if buffered {
+		entry, popped := r.popEditorBuffer()
+		text := ""
+		if popped {
+			// The delimiter the rest of this builtin is looking for. An
+			// entry never carries one of its own — measured, `print -z`
+			// joins its operands with a space and adds no terminator — so
+			// the newline is what turns a popped entry into a record.
+			text = entry + "\n"
+		}
+		in = strings.NewReader(text)
+	}
 	next := directByteSource(in)
 	switch {
 	case timed && timeout == 0:
@@ -6362,6 +6391,20 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				status = 0
 			}
 		}
+	}
+	if buffered && named {
+		// `read -z` into an **array** reports 1 whatever it read, which is
+		// measured and is not the empty-stack answer wearing another shape:
+		// with two entries pushed, `read -z -A arr` fills `arr` from the
+		// newest and still answers 1, and the second entry is still there
+		// for the next read — which also answers 1. Measured 2026-09-28 on
+		// zsh 5.9.2, four rows, against `read -z l m` on the same stack
+		// answering 0.
+		//
+		// So it is the letter and the array together rather than anything
+		// about what was found, and it is written here rather than folded
+		// into the switch above because `end` is not what decides it.
+		status = 1
 	}
 
 	if len(args) == 0 && array == "" {

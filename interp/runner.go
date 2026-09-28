@@ -1129,6 +1129,12 @@ type Runner struct {
 	// dialect fills it in through SetAbsentParameter — see absentparam.go.
 	absentParams map[string]string
 
+	// editorBufferPop is the dialect's way of taking one entry off the
+	// editor buffer stack, which is what `read -z` reads instead of the
+	// shell's input. Nil for a dialect with no such stack, which is every
+	// one of them but zsh. See interp/editorbuffer.go.
+	editorBufferPop func(*Runner) (string, bool)
+
 	// deferredParams are the registered parameters the shell brings into
 	// being on the script's first reference to one, to the fact that nothing
 	// has referred to it yet.

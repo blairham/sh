@@ -4,37 +4,53 @@
 package repl
 
 import (
-	"os"
+	"context"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/blairham/sh/internal/boundary"
 )
 
 // The **mail check**: the look at a mailbox between prompts that says when
-// something has arrived and not been read.
+// something has arrived and nobody has read it.
 //
 // Measured 2026-09-28 through a pseudo-terminal against zsh 5.9.2 — `zsh -f
-// -i` under `env -i PATH=/usr/bin:/bin TERM=xterm` with a scratch `HOME`,
-// `MAILCHECK=1` and `MAIL` naming a file, driving a real session and growing
-// the file between commands:
+// -i` under `env -i PATH=/usr/bin:/bin TERM=dumb` with a scratch `HOME`,
+// `MAILCHECK=1` and `MAIL` naming a file, driving a real session and setting
+// the file's two times between commands. Each row is a fresh session.
 //
-//	echo A                              →  You have new mail.
-//	echo B                              →  You have new mail.
-//	cat "$MAIL" >/dev/null               (nothing)
-//	echo C                              →  (silence)
-//	echo D                              →  (silence)
+// The announcement is a **conjunction of three**, and each row below holds
+// two of them still and moves the third:
 //
-// **The read is what stops it**, and that is the row that settles the
-// condition. A rule of "the file changed since the last check" reports once
-// and then stops whether or not anybody read it; this reports at every check
-// until the file is read, and `cat` — which moves nothing but the access
-// time — is what ends it. So the question is the classic one: is the file's
-// **modification time past its access time**, with something in it.
+//	grow once, then four prompts          →  one report, then silence
+//	grow again at the fifth               →  a second report
+//	fresh mtime with a NEWER atime        →  silence
+//	fresh mtime with atime EQUAL to it    →  a report
+//	mail already in the box at startup    →  silence, however new its mtime
+//	MAILCHECK=0                           →  silence, however the file grows
 //
-// Two more rows bound it. `MAILCHECK=0` reports nothing at all, however the
-// file grows, so the interval is also the off switch. And with a `precmd`
-// defined, `PRECMD` is written **before** the sentence at every prompt, so
-// the check runs after the prompt hooks rather than in front of them.
+// So: **bytes in the file, an access time that is not past the modification
+// time, and a modification since the previous check.** The third conjunct is
+// the one a short grid misses, and the first row is what catches it — nothing
+// read the file between those four prompts, and the reports stopped anyway.
+//
+// **An earlier reading of this had only the first two**, on a grid of `echo`,
+// `echo`, `cat`, `echo`, `echo`: it reported at every prompt until the `cat`
+// and then stopped, and the reference agreed on every row of it. It agreed
+// because silence after a `cat` is equally what "nothing has changed since
+// the last check" produces, so that grid could not tell the two rules apart —
+// the `cat` never had to be the thing that stopped it. A **second growth** is
+// what separates them, and against it the two-conjunct rule reports three
+// times where the reference reports twice.
+//
+// The equality cell is measured rather than assumed, because the two spellings
+// of "not read since it arrived" part exactly there: a box whose two times are
+// the same instant **is** announced, so the test is `atime <= mtime`.
+//
+// The baseline is the session, not the epoch. Mail sitting unread in the box
+// when the shell starts is never announced — the first check establishes what
+// "since" means rather than reporting everything older than it.
 type MailStyle struct {
 	// File is the parameter naming one mailbox — zsh's and bash's `$MAIL`.
 	// Empty is a dialect with no mail check, which is what every dialect had
@@ -65,12 +81,18 @@ type MailStyle struct {
 // mailState is what the session remembers between checks: when it last
 // looked. A pointer for the reason hookState is one — Shell is copied by
 // value and a check made once has to stay made.
+//
+// It is the interval's clock and the "since" of the change test at once,
+// which is not a saving but the measured shape: a session announces a box
+// that changed since it last **looked**, so one field answers both. Set to
+// the session's start by Run, which is why mail already sitting in the box
+// when the shell starts is never announced.
 type mailState struct {
 	last time.Time
 }
 
 // checkMail looks at the mailboxes if enough time has passed, and writes the
-// message for each one holding mail nobody has read.
+// message for each one that has grown since the last look and not been read.
 //
 // Called after the prompt hooks, which is measured rather than chosen: with a
 // `precmd` defined, that function's output comes first at every prompt.
@@ -86,7 +108,7 @@ type mailState struct {
 // The interval is read **live**, the way every other prompt-time parameter
 // here is: `MAILCHECK=0` typed at the prompt turns the check off from the next
 // prompt on, and a value read at startup would be the one an rc file left.
-func (s Shell) checkMail() {
+func (s Shell) checkMail(ctx context.Context) {
 	if s.Mail.Message == "" || s.Mail.Interval == "" || s.mail == nil {
 		return
 	}
@@ -95,14 +117,19 @@ func (s Shell) checkMail() {
 		return
 	}
 	now := time.Now()
-	if !s.mail.last.IsZero() && now.Sub(s.mail.last) < every {
+	if now.Sub(s.mail.last) < every {
 		return
 	}
+	// What "since" means for this look, taken before the clock is moved on.
 	// The clock moves whether or not anything is written, so a mailbox that
-	// is not there costs one look per interval rather than one per prompt.
+	// is not there costs one look per interval rather than one per prompt —
+	// and a box that grew between two checks is reported about once, at the
+	// first check past the growth, rather than at every prompt after it.
+	since := s.mail.last
 	s.mail.last = now
+	bound := boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}
 	for _, box := range s.mailboxes() {
-		if !mailIsUnread(box.path) {
+		if !mailIsUnread(ctx, bound, box.path, since) {
 			continue
 		}
 		message := box.message
@@ -181,14 +208,27 @@ func (s Shell) mailboxes() []mailbox {
 	return out
 }
 
-// mailIsUnread reports a mailbox holding something nobody has read since it
-// arrived: the modification time past the access time, with bytes in it.
+// mailIsUnread reports a mailbox worth announcing at this look: bytes in it,
+// an access time that is not past its modification time, and a modification
+// since the previous look.
 //
-// The size test is not decoration. An empty mailbox that something touched
-// has a modification time past its access time and no mail in it, and every
-// shell that reports is quiet about one.
-func mailIsUnread(path string) bool {
-	info, err := os.Stat(path)
+// All three are measured and all three are load-bearing. The size test is not
+// decoration — an empty box something touched has a new modification time and
+// no mail in it, and every shell that reports is quiet about one. The access
+// test is `<=` rather than `<` because a box whose two times are the same
+// instant is announced. And `since` is the conjunct an earlier reading of this
+// left out, which made it report at every prompt rather than once per arrival;
+// see the grid above.
+//
+// The probe goes through [boundary.Boundary.Stat] rather than to the os
+// package, because `$MAIL` and `$MAILPATH` are variables a line at the prompt
+// can set: the path is one whoever the policy is about chose, which is this
+// tree's own rule for what is inside the boundary and is the same argument
+// `$HISTFILE` already makes next door in history.go. A refused probe answers
+// exactly as an absent mailbox does — silence — which is what that seam
+// promises and is the answer a mail check wants anyway.
+func mailIsUnread(ctx context.Context, bound boundary.Boundary, path string, since time.Time) bool {
+	info, err := bound.Stat(ctx, path)
 	if err != nil || info.Size() == 0 {
 		return false
 	}
@@ -196,5 +236,6 @@ func mailIsUnread(path string) bool {
 	if !ok {
 		return false
 	}
-	return info.ModTime().After(access)
+	mod := info.ModTime()
+	return !access.After(mod) && mod.After(since)
 }

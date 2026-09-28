@@ -4,28 +4,34 @@
 package repl
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/interp"
 )
 
-// A mailbox holds unread mail when its modification time is past its access
-// time and there is something in it.
+// A mailbox is announced when three things hold at once: bytes in it, an
+// access time not past its modification time, and a modification since the
+// session's previous look.
 //
-// **The condition is what the pty grid settled**, and it is the one thing a
-// simpler rule gets wrong: "the file changed since the last check" reports
-// once and then stops whether or not anybody read it, where the reference
-// reports at every check until the file is **read**. `cat` — which moves
-// nothing but the access time — is what ends the reports, measured against
-// zsh 5.9.2 through a pseudo-terminal.
+// **The third conjunct is the one a short grid misses.** Measured through a
+// pseudo-terminal against zsh 5.9.2: grow the mailbox once and the reference
+// reports at the next prompt and is silent at the four after it, with nothing
+// having read the file — grow it a second time and a second report follows.
+// An earlier reading of this had only the first two conjuncts and reported at
+// every prompt until the box was read; it agreed with the reference on a grid
+// of `echo`, `echo`, `cat`, `echo`, `echo` because silence after a `cat` is
+// equally what "nothing changed since the last check" produces. A **second
+// growth** is what tells the two rules apart.
 //
 // The rows here are that condition asked directly, because a pty grid cannot
-// hold a file's two times apart: touching a file to make one probe changes
-// the other.
-func TestAMailboxIsUnreadWhenItsChangeIsNewerThanItsRead(t *testing.T) {
+// hold a file's two times apart: touching a file to make one probe changes the
+// other.
+func TestAMailboxIsAnnouncedWhenItGrewSinceTheLastLookAndNobodyReadIt(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, body string, mod, access time.Time) string {
 		path := filepath.Join(dir, name)
@@ -37,37 +43,60 @@ func TestAMailboxIsUnreadWhenItsChangeIsNewerThanItsRead(t *testing.T) {
 		}
 		return path
 	}
-	old := time.Now().Add(-time.Hour)
-	recent := time.Now().Add(-time.Minute)
+	var (
+		ancient  = time.Now().Add(-2 * time.Hour)
+		lastLook = time.Now().Add(-30 * time.Minute)
+		old      = time.Now().Add(-time.Hour)
+		recent   = time.Now().Add(-time.Minute)
+	)
 	for _, tc := range []struct {
-		name string
-		path string
-		want bool
+		name  string
+		path  string
+		since time.Time
+		want  bool
 	}{
 		{
-			"mail arrived and nobody read it",
-			write("unread", "mail\n", recent, old), true,
+			"mail arrived since the last look and nobody read it",
+			write("unread", "mail\n", recent, old), lastLook, true,
 		},
 		{
-			// The read is what stops it, which is the row the whole
-			// condition turns on.
-			"and once it is read it is not reported",
-			write("read", "mail\n", old, recent), false,
+			// The conjunct the pty grid's second growth settled: the same
+			// unread box, looked at again with nothing having changed.
+			"and the same box at the next look is not announced again",
+			write("again", "mail\n", recent, old), time.Now(), false,
+		},
+		{
+			// A fresh arrival read before the look comes round.
+			"mail that arrived and was read is not announced",
+			write("read", "mail\n", recent, time.Now()), lastLook, false,
+		},
+		{
+			// Measured: a box whose two times are the same instant **is**
+			// announced, so the access test is `<=` and not `<`.
+			"a box read at the very instant it grew is still announced",
+			write("equal", "mail\n", recent, recent), lastLook, true,
 		},
 		{
 			// An empty mailbox something touched has the same two times in
 			// the same order and no mail in it. Every shell that reports is
 			// quiet about one, so the size is a test and not decoration.
 			"an empty mailbox is not mail however new it is",
-			write("empty", "", recent, old), false,
+			write("empty", "", recent, old), lastLook, false,
+		},
+		{
+			// Measured: mail already in the box when the shell starts is
+			// never announced, because the first look is the baseline.
+			"mail that was already there when the session began is not announced",
+			write("preexisting", "mail\n", ancient, ancient.Add(-time.Minute)), lastLook, false,
 		},
 		{
 			"and a mailbox that is not there is not mail either",
-			filepath.Join(dir, "absent"), false,
+			filepath.Join(dir, "absent"), lastLook, false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := mailIsUnread(tc.path); got != tc.want {
+			got := mailIsUnread(context.Background(), boundary.Boundary{}, tc.path, tc.since)
+			if got != tc.want {
 				t.Errorf("mailIsUnread(%s) = %v, want %v", tc.name, got, tc.want)
 			}
 		})

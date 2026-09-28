@@ -322,6 +322,14 @@ type Shell struct {
 	// it may not change.
 	Hooks HookStyle
 
+	// Mail is the mailbox check this dialect makes between prompts, and what
+	// it says about one holding unread mail. The zero value makes no check at
+	// all, which is what every dialect had before this one and is why the
+	// fields are parameter *names* rather than a flag: a dialect that names
+	// none of them watches nothing by having said nothing. See mailcheck.go,
+	// which carries the measurement of the condition and the interval.
+	Mail MailStyle
+
 	// StartLine is called once before each new line is read, and not before a
 	// continuation of one already begun.
 	//
@@ -498,11 +506,8 @@ type Shell struct {
 	// fire, so it says it once. Set by Run, beside counts and for the same
 	// reason: a Shell is copied by value and a notice given by a copy has to
 	// count for the session.
-	// Mail is the mailbox check made between prompts, which is one dialect's
-	// and no other's. The zero value makes none. See mailcheck.go.
-	Mail MailStyle
-
 	hooks *hookState
+
 	// mail is when this session last looked at its mailboxes. A pointer for
 	// the reason hooks is one: Shell is copied by value and a check made
 	// once has to stay made. See mailcheck.go.
@@ -575,7 +580,10 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	}
 	s.counts = &counts{history: len(earlier)}
 	s.hooks = &hookState{reported: map[string]bool{}, themeReported: map[string]bool{}}
-	s.mail = &mailState{}
+	// The mail check's baseline is the session's start, not the epoch:
+	// measured, mail already sitting unread in the box when the shell starts
+	// is never announced. See mailcheck.go.
+	s.mail = &mailState{last: time.Now()}
 	// Where this session records a command and what came of it. Opened here
 	// rather than in either loop so the two cannot disagree about whether a
 	// session keeps blocks, which is the mistake beforeReading already

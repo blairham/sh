@@ -150,6 +150,13 @@ type Diagnostics struct {
 	// TieSecondMustBeArray is a scalar value on the array half:
 	// `typeset -T S s=plain`.
 	TieSecondMustBeArray string
+	// TieTakesThreeOperands is a **fourth** operand to `-T`, which takes a
+	// scalar, an array and at most a separator: `typeset -T A a b c`.
+	//
+	// It is the first thing the letter asks and it wins over every other
+	// refusal here, which is measured rather than assumed — see
+	// Runner.declareTie (#5100).
+	TieTakesThreeOperands string
 	// UntieRefused is what the *plus* form of the letter says: `typeset +T
 	// SCALAR` is not the tie's undoing but a refusal naming the builtin that
 	// is. See Runner.refuseUntie.

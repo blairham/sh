@@ -148,6 +148,11 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	defer sub.collectBodies()()
 	sub.inheritJobs(jobBoundarySubstitution)
 	sub.inCommandSubst = true
+	// And one entry on the stack of what the shell is inside. Pushed onto
+	// the clone rather than entered and left on this runner: the body runs
+	// in that clone and the entry goes away with it, so there is no pop to
+	// miss. See interp/evalcontext.go.
+	sub.pushEvalContext(EvalContextCommandSubstitution)
 	// Its arrays are a view of the caller's rather than a fork's copy, which
 	// is the reading an explicit `( … )` gets too — see
 	// Runner.unsetEmptiesAnUnwrittenArray, where the contexts that do not

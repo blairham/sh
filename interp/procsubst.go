@@ -289,6 +289,20 @@ func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	// release is recorded. See Runner.releasedSubstFds (#4119).
 	sub.releasedSubstFds = r.bodyReleasedFds()
 	sub.inheritJobs(jobBoundarySubstitution)
+	// And one entry on the stack of what the shell is inside, which is a
+	// **different** entry for each of the three spellings: the shell being
+	// modeled has a word apiece, measured 2026-09-27, so the kind this
+	// helper was already given decides it. Pushed onto the clone for the
+	// reason a command substitution's is — the body runs there and the
+	// entry ends with it. See interp/evalcontext.go.
+	switch kind {
+	case syntax.ProcSubstIn:
+		sub.pushEvalContext(EvalContextProcessSubstitutionRead)
+	case syntax.ProcSubstOut:
+		sub.pushEvalContext(EvalContextProcessSubstitutionWrite)
+	case syntax.ProcSubstFile:
+		sub.pushEvalContext(EvalContextTempFileSubstitution)
+	}
 	// **Which input the body reads is one question, asked once.** `<(cmd)`
 	// and `=(cmd)` keep what this chooses; `>(cmd)` replaces it in procSub
 	// with the reading end of its own pipe, which is what that spelling *is*

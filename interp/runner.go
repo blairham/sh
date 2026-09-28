@@ -4547,6 +4547,10 @@ type Runner struct {
 	// stays off the parameter. See Runner.MarkEnvironmentEntryNotAdopted,
 	// which is where the measurement is.
 	envNotAdopted map[string]bool
+	// evalContexts is what the shell is currently inside, innermost last,
+	// with the route's own entry left out — see interp/evalcontext.go, and
+	// Runner.EvalContextStack, which puts it back.
+	evalContexts []EvalContext
 	// notShellOwn names the produced parameters that are **not** the shell's
 	// own, which is the one case ParameterAttributes.Provided gets wrong by
 	// deriving it from a shape. See interp/shellownparameter.go.
@@ -6259,6 +6263,11 @@ func (r *Runner) fireExitHook(ctx context.Context) {
 // when the trap is set and refuses one that will not parse.
 func (r *Runner) runTrapBody(ctx context.Context, cond, body string) {
 	defer r.enterTrapBody(cond)()
+	// And one entry on the stack of what the shell is inside, which an
+	// action's own body carries and a function it calls carries on top of —
+	// measured, a trap action calling `f` reads two words. See
+	// interp/evalcontext.go.
+	defer r.enterEvalContext(EvalContextTrap)()
 	// And the body is the text that runs, at the offset just settled, so a
 	// refusal inside it quotes the body and never the lines of the script it
 	// interrupted — measured on bash 5.3.20, `exit trap: line 1:

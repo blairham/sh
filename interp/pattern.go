@@ -1763,20 +1763,50 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			if len(p) < 2 {
 				return s == "\\"
 			}
-			if o.classEscapes && kshClassEscape(p[1]) {
-				// Except under one dialect's `~(K)`, where six of them name
-				// a **character class** instead. One unit, exactly as a `?`
-				// and a bracket expression take one — see
-				// matchKshClassEscape for the pair that fixes that.
-				if s == "" || o.periodHere(s, at) {
-					return false
+			if o.classEscapes {
+				if c, ok := kshGlobControlEscape(p[1]); ok {
+					// Under one dialect's `~(K)`, eight letters name a
+					// **control character** rather than themselves. One
+					// byte and not one unit, which is the difference from
+					// the class below it: every one of them is ASCII, so a
+					// multi-byte character can equal none of them and
+					// taking a whole unit would consume text the escape
+					// never named. See kshGlobControlEscape.
+					//
+					// No leading-period question. A class can match a `.`
+					// and has to be asked; a control escape names one
+					// character and it is not that one, so the comparison
+					// answers it.
+					//
+					// **Advancing by one byte rather than by `unitWidth` is
+					// an equivalent mutant**, and it is written down so the
+					// next reader does not go looking for the row that would
+					// kill it: the comparison above has already established
+					// that the first byte is an ASCII control character, and
+					// a unit beginning with an ASCII byte is one byte wide
+					// in every locale. The mutant was run and survives. The
+					// byte form is kept for what it *says* — this family
+					// names a byte and the one below it names a unit.
+					if s == "" || s[0] != c {
+						return false
+					}
+					p, s, pp, at = p[2:], s[1:], pp+2, at+1
+					continue
 				}
-				w := o.unitWidth(s)
-				if !matchKshClassEscape(p[1], s[:w]) {
-					return false
+				if kshClassEscape(p[1]) {
+					// And six name a **character class**. One unit, exactly
+					// as a `?` and a bracket expression take one — see
+					// matchKshClassEscape for the pair that fixes that.
+					if s == "" || o.periodHere(s, at) {
+						return false
+					}
+					w := o.unitWidth(s)
+					if !matchKshClassEscape(p[1], s[:w]) {
+						return false
+					}
+					p, s, pp, at = p[2:], s[w:], pp+2, at+w
+					continue
 				}
-				p, s, pp, at = p[2:], s[w:], pp+2, at+w
-				continue
 			}
 			if !o.escapeReaches(p[1]) {
 				// The escape does not reach this character in this

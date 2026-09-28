@@ -2794,10 +2794,71 @@ left out with them, and closing it needs the group's own divergence closed
 first rather than the escape's. Pathname expansion is a second row of the
 same kind: `~(K)a\db` names `a1b` there and `adb` here, before and after.
 
-One escape inside a `~(K)` pattern is left where it was, measured and not
-modeled: `[[ zanb == z~(K)a\nb ]]` does not match there and does here, so
-`\n` means something in that glob that is neither the letter nor one of the
-six.
+#### And a second family of eight, which are single characters
+
+`\n` is not one of the six and is not the letter either: it is the newline.
+So are seven more, and the family is a **different shape** from the classes —
+a class names a set and takes whatever unit is in it, one of these names
+exactly one character.
+
+Measured 2026-09-28 against `/bin/ksh` `Version AJM 93u+ 2012-08-01`, each
+probe from a script file under `env -i PATH=/usr/bin:/bin` with a scratch
+`HOME`. **Every letter is a pair**, because a control reading and a letter
+reading agree on half of all subjects — a row saying only that `z~(K)a\nb`
+fails to match `zanb` would pass for a pattern matching nothing at all:
+
+| escape | `[[ zanb == z~(K)a\nb ]]` | the character it names |
+| --- | --- | --- |
+| `\n` | no | newline |
+| `\t` | no | tab |
+| `\r` | no | carriage return |
+| `\f` | no | form feed |
+| `\v` | no | vertical tab |
+| `\a` | no | alert |
+| `\e` | no | escape |
+| `\E` | no | escape, the same character |
+
+The right column is a row of its own for each letter: the subject built with
+`$'za\nb'` and matched against the same pattern, yes in every one. `\e` and
+`\E` are the same byte, 27, which was measured rather than assumed.
+
+Three controls bound it. With no group the escape is the shell's, so
+`[[ zanb == za\nb ]]` matches and `[[ $'za\nb' == za\nb ]]` does not. With
+nothing between the `a` and the `b`, `[[ zab == z~(K)a\nb ]]` does not match,
+so the escape stands for a character rather than for nothing. And the letter
+decides, not the language: `~(p)` names the same glob and reads `\n` as the
+letter.
+
+**Two letters are deliberately not in the family**, and each was measured
+rather than passed over. `\0` is the letter — `[[ za0b == z~(K)a\0b ]]`
+matches — so this is not "every escape a C string has". And a letter neither
+family names stays the letter: `[[ zaqb == z~(K)a\qb ]]` matches.
+
+This is also the one place `~(K)`'s reading and `printf %q`'s disagree about
+`\v`: that builtin has no `\v` spelling in this shell and writes `\x0b`, and
+the glob reads `\v` as a vertical tab all the same. Two surfaces, two
+answers.
+
+#### A third shape again: `\b`, `\B` and `\z` are zero-width
+
+Not read here yet, and recorded so the next reader does not take the family
+above for the whole language. `\b` is a **word boundary**, `\B` its
+complement and `\z` an anchor — each consumes no text at all, which is why
+none of them belongs in either table:
+
+| probe | ksh93u+ | here |
+| --- | --- | --- |
+| `[[ zab == z~(K)ab\b ]]` | matches — a boundary at the end | no |
+| `[[ 'za b' == z~(K)a\b?b ]]` | matches — one before a space | no |
+| `[[ 'za.b' == z~(K)a\b.b ]]` | matches | no |
+| `[[ zabb == z~(K)a\bb ]]` | **no** — so it is not the letter | matches |
+| `[[ zab == z~(K)a\Bb ]]` | matches — a *non*-boundary | no |
+| `[[ zaBb == z~(K)a\Bb ]]` | **no** | matches |
+| `[[ zazb == z~(K)a\zb ]]` | **no** | matches |
+
+`[[ $'za\bb' == z~(K)a?b ]]` matches in both columns, which is the control
+that says a backspace subject is one matchable character wide — so the fourth
+row is `\b` declining it rather than the subject being unreachable.
 
 A flavor letter written behind `K` takes the language with it and the class
 escapes go too, since an expression's backslashes are its own:

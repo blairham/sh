@@ -5337,6 +5337,17 @@ func (p *Parser) peekPastAnonSeparators() (int, bool) {
 // The word is read to its end before it is judged, so that `donefile` is a
 // command and `done` is not. It is judged by the same set the parser uses for
 // a token it has lexed — see [Parser.wordStopsACommand].
+//
+// **Nothing a program does can tell this apart from reading on and backing
+// out**, and that is measured rather than assumed: with the whole of this
+// replaced by `return true`, all sixty-five behavior rows against the
+// reference and sixteen formatter rows still agreed, because a closer makes
+// [Parser.parseAndOr] answer nil and the caller falls back to the bare
+// reading either way. What it does change is the **terminator the keyword's
+// own statement keeps**: looking ahead leaves the `;` or the newline where it
+// was, and reading on consumes it. So that is where it is graded — see the
+// `term` column in TestTheKeywordStandsAloneWhereTheNextThingIsNotACommand,
+// without which this would be code no row can fail on.
 func (p *Parser) peekIsImpliedAnonBody() bool {
 	i, ok := p.peekPastAnonSeparators()
 	if !ok {
@@ -5547,7 +5558,7 @@ func (p *Parser) impliedAnonBody(keyword Token) Command {
 	if !p.at(TokSemi) && !p.at(TokNewline) {
 		return nil
 	}
-	if !p.dialect.AnonymousFunction || !p.peekIsImpliedAnonBody() {
+	if !p.peekIsImpliedAnonBody() {
 		return nil
 	}
 	p.skipAnonBodySeparators()

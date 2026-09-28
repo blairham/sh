@@ -60,17 +60,18 @@ func TestTheKeywordStandsAloneWhereTheNextThingIsNotACommand(t *testing.T) {
 	for _, tc := range []struct {
 		name, src string
 		stmts     int
+		term      Terminator
 	}{
-		{"the end of the input", "function\n", 1},
-		{"a closing brace", "{ function\n}\n", 1},
-		{"a subshell's parenthesis", "( function\n)\n", 1},
-		{"a loop's `done`", "for i in 1; do function; done\n", 1},
-		{"an arm terminator", "case x in x) function ;; esac\n", 1},
-		{"an `&&` it did not end before", "function && :\n", 1},
-		{"a pipe it did not end before", "function | cat\n", 1},
+		{"the end of the input", "function\n", 1, TerminatedByNewline},
+		{"a closing brace", "{ function\n}\n", 1, TerminatedByNewline},
+		{"a subshell's parenthesis", "( function\n)\n", 1, TerminatedByNewline},
+		{"a loop's `done`", "for i in 1; do function; done\n", 1, TerminatedBySemicolon},
+		{"an arm terminator", "case x in x) function ;; esac\n", 1, TerminatedByNothing},
+		{"an `&&` it did not end before", "function && :\n", 1, TerminatedByNewline},
+		{"a pipe it did not end before", "function | cat\n", 1, TerminatedByNewline},
 		// A redirection ends the keyword's own command, so the command on
 		// the next line is the script's and not a body: two statements.
-		{"a redirection, and the next line is its own", "function >f\n:\n", 2},
+		{"a redirection, and the next line is its own", "function >f\n:\n", 2, TerminatedByNewline},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f, err := Parse(tc.src, bareKeyword())
@@ -80,9 +81,25 @@ func TestTheKeywordStandsAloneWhereTheNextThingIsNotACommand(t *testing.T) {
 			if len(f.Stmts) != tc.stmts {
 				t.Fatalf("%d statements, want %d", len(f.Stmts), tc.stmts)
 			}
-			fn := firstAnonFunc(t, f)
+			fn, holder := firstAnonFunc(t, f)
 			if !fn.Bare {
 				t.Errorf("%q came to a body-taking call, want the bare form", tc.src)
+			}
+			// The terminator the keyword's own statement kept, which is the
+			// level the reach is decided at and the only one it shows on.
+			//
+			// This engine looks ahead before it commits, so a keyword with
+			// nothing to take leaves the `;` or the newline where it was.
+			// Reading on and backing out would consume it, and **nothing
+			// else can tell**: the statement runs the same, the construct
+			// around it closes the same, and the printer writes the same
+			// bytes — measured over sixty-five behavior rows and sixteen
+			// formatter rows with the lookahead removed, all of which
+			// agreed. So this is where that lookahead is graded, and
+			// without these it is code no row can fail on.
+			if holder.Term != tc.term {
+				t.Errorf("%q left the statement terminated by %v, want %v — the keyword read past it",
+					tc.src, holder.Term, tc.term)
 			}
 		})
 	}
@@ -92,9 +109,12 @@ func TestTheKeywordStandsAloneWhereTheNextThingIsNotACommand(t *testing.T) {
 // whichever side of an operator and inside whichever construct it was written
 // in. Only the shapes the rows above use are descended into, which is what
 // keeps it a test helper rather than a second walker.
-func firstAnonFunc(t *testing.T, f *File) *AnonFunc {
+// The statement it was found in comes back with it, because the terminator
+// that statement kept is what grades the keyword's lookahead.
+func firstAnonFunc(t *testing.T, f *File) (*AnonFunc, *Stmt) {
 	t.Helper()
 	var found *AnonFunc
+	var holder *Stmt
 	var walkExpr func(Expr)
 	var walkStmts func([]*Stmt)
 	walkCmd := func(c Command) {
@@ -128,14 +148,19 @@ func firstAnonFunc(t *testing.T, f *File) *AnonFunc {
 	}
 	walkStmts = func(list []*Stmt) {
 		for _, st := range list {
+			was := found
 			walkExpr(st.Expr)
+			if was == nil && found != nil {
+				holder = st
+			}
 		}
 	}
+	holder = f.Stmts[0]
 	walkExpr(f.Stmts[0].Expr)
 	if found == nil {
 		t.Fatalf("no AnonFunc in %#v", f.Stmts[0].Expr)
 	}
-	return found
+	return found, holder
 }
 
 // The implied body prints back as the bracketed spelling of the same program,

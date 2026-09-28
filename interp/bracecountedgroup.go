@@ -32,9 +32,11 @@ import "github.com/blairham/sh/syntax"
 //     behind it was written. This is the row that says the look-ahead is
 //     something a written brace *gains* rather than something the word is
 //     re-scanned for (#4934).
-//   - the `(` is **written and unquoted**: `f {z,y}"(a)"` is
+//   - the `(` is **unquoted**, however it arrived: `f {z,y}"(a)"` is
 //     `2 | [z(a)] [y(a)]` and `f {2,3}\(a\)` is `2 | [2(a)] [3(a)]`, so a
-//     quoted or escaped parenthesis leaves the list alone.
+//     quoted or escaped parenthesis leaves the list alone, and
+//     `g='(a)'; f {2,3}"$g"` is `2 | [2(a)] [3(a)]` for the same reason a
+//     quoted expansion produces no brace syntax either.
 //   - the `(` is the **next character**: `g='a(b'; f {z,y}$g` is
 //     `2 | [za(b] [ya(b]`, and `f {2,3}(a){x,y}` is
 //     `2 | [{2,3}(a)x] [{2,3}(a)y]` — only the brace standing in front of the
@@ -62,7 +64,7 @@ func (r *Runner) braceIsAGroupsCount(spans []syntax.Span, open, close cursor) bo
 	if !before(next(open), close) {
 		return false
 	}
-	return writtenParenAt(spans, next(close))
+	return liveParenAt(spans, next(close))
 }
 
 // groupEndAfter is the cursor just past the `)` closing the group that opens
@@ -110,14 +112,49 @@ func groupEndAfter(spans []syntax.Span, c cursor) cursor {
 	return c
 }
 
-// writtenParenAt reports whether the word's next character from c is a `(`
-// the script wrote outside quotes.
+// liveParenAt reports whether the word's next character from c is an
+// unquoted `(` — one the script wrote, or one an expansion produced.
+//
+// **The produced half is the whole of #4934 and it is not symmetric with the
+// brace.** A `{` an expansion produced is never a count, and a `(` one
+// produced is one all the same, so provenance is asked about the brace and
+// not about the parenthesis. Measured 2026-09-27 on `/bin/ksh`
+// `Version AJM 93u+ 2012-08-01`, in the directory of #4927's panel:
+//
+//	g=x;     f {2,3}$g     2 | [2x] [3x]      the brace expands
+//	g='(a)'; f {2,3}$g     2 | [aa] [aaa]     the same written brace does not
+//	f {2,3}$(echo '(a)')   2 | [aa] [aaa]     so it is not a variable-only path
+//	g='(a)'; f {z,y}$g     1 | [{z,y}(a)]     and a count that is not one
+//	                                          leaves the word entire
+//	g='{2,3}(a)'; f $g     2 | [2(a)] [3(a)]  a produced *brace* is a list
+//	g='(a)'; f {2,3}"$g"   2 | [2(a)] [3(a)]  and a quoted expansion
+//	                                          produces no `(` either
+//
+// The first two rows are the whole of it: the same written `{2,3}`, expanded
+// in one and suppressed in the other, and the only difference is what `$g`
+// holds.
+//
+// **Nothing here runs an expansion or looks at a word twice**, which is what
+// a row like the third one seems to demand. It does not, because ksh93 is
+// also the column that finds a word's braces in the *fields* it expanded to
+// rather than in the word the parse cut — `Semantics.BraceScanReadsProducedText`
+// and the road at [Runner.expandFieldsThenBraces] — so on that road the
+// produced text is already there to be read when this is asked, and the
+// substitution has run exactly once. `n=0; f {2,3}$(n=1; echo '(a)'; echo x >&2)`
+// prints its `x` once in the reference and once here.
+//
+// That the parenthesis then *is* a group rather than text is
+// `Semantics.BraceFreesProducedGroupSyntax`, which ksh93 already answered
+// Yes and which reads the same written brace one stage later. The two have
+// to agree: a brace suppressed in front of a parenthesis that then went
+// literal would be a third answer neither column gives.
 //
 // Spans are walked rather than indexed because a cursor one past the end of
 // one span is the front of the next, and because a span may carry no text at
-// all: `{2$g}(a)` puts the `}` and the `(` in one literal and `{2,3}${g}(a)`
-// would not.
-func writtenParenAt(spans []syntax.Span, c cursor) bool {
+// all: an empty run standing between the `}` and the `(` — which is what
+// `g='(a)'; e=; f {2,3}$e$g` writes — still suppresses the brace there,
+// so it must not hide the parenthesis.
+func liveParenAt(spans []syntax.Span, c cursor) bool {
 	for i := c.span; i < len(spans); i++ {
 		off := 0
 		if i == c.span {
@@ -126,7 +163,8 @@ func writtenParenAt(spans []syntax.Span, c cursor) bool {
 		if off >= len(spans[i].Value) {
 			continue
 		}
-		return braceable(spans[i]) && spans[i].Value[off] == '('
+		return (braceable(spans[i]) || producedRun(spans[i])) &&
+			spans[i].Value[off] == '('
 	}
 	return false
 }

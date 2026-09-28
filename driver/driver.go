@@ -115,6 +115,11 @@ type Shell struct {
 	// is three of the four.
 	HookStyle repl.HookStyle
 
+	// MailStyle is the mailbox check this dialect makes between prompts, and
+	// what it says about one holding unread mail. The zero value makes no
+	// check, which is every dialect but one. See repl.MailStyle.
+	MailStyle repl.MailStyle
+
 	// Highlighter colors the line as an interactive session types it. Nil is
 	// every dialect binary, because measured, no real shell colors a line as
 	// it is typed.

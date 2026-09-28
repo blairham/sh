@@ -1289,6 +1289,15 @@ func Semantics() interp.Semantics {
 	// 5.3.20: `read -a <<<'a b'` is `read: -a: option requires an argument`
 	// at 2, with no `REPLY` afterwards.
 	s.ReadOptions = "rseEa:d:i:n:N:p:t:u:"
+	// And `-e` and `-E` are the **line editor** here, not zsh's echo: `-e`
+	// reads the line through readline and `-E` reads it with the shell's
+	// default completion bound, and off a terminal both do nothing at all.
+	// Measured 2026-09-28, `bash --norc -c 'printf "  a   b   c  \n" |
+	// { read -E x y; declare -p x y; }'` writes not one byte before the
+	// declarations, where zsh 5.9.2 writes `a` and `b   c`. So the letters
+	// stay in the set above and this is the No that keeps them doing
+	// nothing (#4963).
+	s.ReadEchoLettersWriteTheValues = interp.No
 	// `-n` unsets through a name reference. bash 3.2 does not have it —
 	// `unset -n x` is an invalid option there and under `--posix` — so
 	// this is 5.3's set, which is the binary the panel measures.

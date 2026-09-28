@@ -1891,6 +1891,10 @@ func Semantics() interp.Semantics {
 	// is not in this grammar, so the letter always answers `no query
 	// process` and 1, the variables untouched. A short -n is a success
 	// here; a short -N reports 1 and leaves the variable empty.
+	// unanswered ReadEchoLettersWriteTheValues: neither letter is in the set
+	// above, so the axis has no site here. Measured 2026-09-28 on ksh93u+
+	// 2012-08-01, `read -e v` and `read -E v` are both `unknown option`
+	// with the usage line after them, at 2 (#4963).
 	s.ReadOptions = "rspAd:n:N:t:u:"
 	// ksh93 takes `-n` and refuses `-m`, with its own usage line after it.
 	s.UnsetOptions = "vfn"

@@ -533,6 +533,10 @@ func Semantics() interp.Semantics {
 	// unanswered ReadArrayTakesOneNameOnly: no array letter at all, so
 	// `read -A` is an unknown option here and the question cannot be put.
 	// Measured 2026-09-26 on dash 0.5.13.
+	// unanswered ReadEchoLettersWriteTheValues: neither letter is in the set
+	// above, so the axis has no site here. Measured 2026-09-28 on dash
+	// 0.5.12, `read -e v` and `read -E v` are both `Illegal option` at 2
+	// (#4963).
 	s.ReadOptions = "rp:"
 	// dash has the two POSIX letters and calls anything else illegal.
 	// unanswered CodePointPastSixBytesIsEncoded: the question comes after a

@@ -5927,6 +5927,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		return code
 	}
 	raw := strings.Contains(opts, "r")
+	// And what this dialect's `-e` and `-E` mean, which is a question only a
+	// call that spelled one of them puts. See interp/readecho.go.
+	echo := r.readEchoLetters(opts)
+	if r.unspecified {
+		return r.status
+	}
 
 	// Whether the name being filled is the shell's own REPLY rather than one
 	// the script wrote, and whether a freeze refused a write the builtin went
@@ -6480,7 +6486,13 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// five characters in x and nothing in y, measured in both shells
 		// with the letter.
 		if array != "" {
-			if !r.readMayWrite(array) {
+			elems := exactElems(text)
+			switch {
+			case !echo.elements(r, elems):
+				// `read -e`: the elements were written and the array is
+				// left as it was — and the freeze below is never asked,
+				// because there is no write to refuse.
+			case !r.readMayWrite(array):
 				if r.ctl == controlExit {
 					return r.status
 				}
@@ -6488,12 +6500,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 					return r.readFrozenStatus(len(args[:fill]), !defaulted)
 				}
 				refused = true
-			} else {
-				r.setArray(array, exactElems(text))
+			default:
+				r.setArray(array, elems)
 			}
 			if clearRest {
 				for i, name := range args[:fill] {
-					if st, stop := r.readFill(name, "", fill-i-1, defaulted, &refused); stop {
+					if st, stop := r.readFill(name, "", fill-i-1, defaulted, &refused, echo); stop {
 						return st
 					}
 				}
@@ -6505,7 +6517,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			if i == 0 {
 				v = text
 			}
-			if st, stop := r.readFill(name, v, fill-i-1, defaulted, &refused); stop {
+			if st, stop := r.readFill(name, v, fill-i-1, defaulted, &refused, echo); stop {
 				return st
 			}
 		}
@@ -6538,7 +6550,11 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		if !r.readMayWrite(array) {
+		switch {
+		case !echo.elements(r, fields):
+			// See the same three-way above: `-e` writes the elements and
+			// assigns none of them, and asks nothing about the freeze.
+		case !r.readMayWrite(array):
 			if r.ctl == controlExit {
 				return r.status
 			}
@@ -6546,12 +6562,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				return r.readFrozenStatus(len(args[:fill]), !defaulted)
 			}
 			refused = true
-		} else {
+		default:
 			r.setArray(array, fields)
 		}
 		if clearRest {
 			for i, name := range args[:fill] {
-				if st, stop := r.readFill(name, "", fill-i-1, defaulted, &refused); stop {
+				if st, stop := r.readFill(name, "", fill-i-1, defaulted, &refused, echo); stop {
 					return st
 				}
 			}
@@ -6627,7 +6643,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 				return 2
 			}
 		}
-		if st, stop := r.readFill(name, v, fill-i-1, defaulted, &refused); stop {
+		if st, stop := r.readFill(name, v, fill-i-1, defaulted, &refused, echo); stop {
 			return st
 		}
 	}
@@ -6655,7 +6671,14 @@ func (r *Runner) readRefusedOrStatus(refused bool, status int, badName string, b
 // left is how many names are still to come, which decides the status in the
 // one column that parts "I stopped early" from "a write failed"; written says
 // the name is one the script wrote rather than the shell's own REPLY.
-func (r *Runner) readFill(name, value string, left int, defaulted bool, refused *bool) (int, bool) {
+func (r *Runner) readFill(name, value string, left int, defaulted bool, refused *bool, echo readEcho) (int, bool) {
+	if !echo.value(r, value) {
+		// `read -e`: the value was written to standard output and is not
+		// written to the name. The write is never *attempted*, which is the
+		// measured difference and not a shortcut — a frozen name is silent
+		// at 0 under `-e` and `read-only variable` under `-E`.
+		return 0, false
+	}
 	if r.readMayWrite(name) {
 		if st, refused := r.storeThroughOperand(name, value); refused {
 			// The subscript would not evaluate, so nothing was written and

@@ -53,17 +53,18 @@ print -r -- "st=$? [$v]"
 // The letters this shell still has not got are still refused by name, and `-k`
 // leaving the list must not have taken one of them with it.
 //
-// `-e`, `-E`, `-z`, `-c` and `-l` are all about a terminal or the line editor
-// too, which is exactly why removing one letter from a string of them is easy
-// to overshoot.
+// `-z`, `-c` and `-l` are all about the line editor, which is exactly why
+// removing one letter from a string of them is easy to overshoot.
 //
 // `-q` has left this list, and left it the way `-k` did — into ReadOptions,
-// with the behavior behind it and its own tests in readquery_test.go. It is
-// the sixth letter this row used to name, and the reason the row is worth
-// keeping is that removing one letter from `qeEzcl` by hand is exactly how
-// one of the other five would go missing.
+// with the behavior behind it and its own tests in readquery_test.go. **`-e`
+// and `-E` have left it the same way** (#4963): they are not about a terminal
+// at all here, they are the echo pair, and their rows are in
+// readecho_test.go. They were the two this row named first, and the reason it
+// is worth keeping is that taking two letters out of `qeEzcl` by hand is
+// exactly how one of the other three would go missing.
 func TestTheOtherTerminalLettersAreStillRefused(t *testing.T) {
-	for _, letter := range []string{"e", "E", "z", "c", "l"} {
+	for _, letter := range []string{"z", "c", "l"} {
 		out, st := runZsh(t, t.TempDir(), "read -"+letter+" v\n")
 		want := "zsh:read:1: -" + letter + " is not implemented yet\n"
 		// Status 2 and not 1: an option this shell has not got stops the
@@ -71,6 +72,16 @@ func TestTheOtherTerminalLettersAreStillRefused(t *testing.T) {
 		// terminal are ordinary failures at 1.
 		if out != want || st != 2 {
 			t.Errorf("-%s = %q status %d, want %q at 2", letter, out, st, want)
+		}
+	}
+	// And the two that left do not: the sentence is gone and the letter
+	// works. Asserted here rather than only in readecho_test.go, because a
+	// roster that shrank is the thing this test is about and "the letter is
+	// no longer named" is only half of why it was taken out.
+	for _, letter := range []string{"e", "E"} {
+		out, st := runZsh(t, t.TempDir(), "read -"+letter+" v\n")
+		if want := "\n"; out != want || st != 1 {
+			t.Errorf("-%s = %q status %d, want %q at 1 — the echo pair is implemented", letter, out, st, want)
 		}
 	}
 }

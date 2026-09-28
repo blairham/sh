@@ -2579,6 +2579,47 @@ func registerSetopt(r *interp.Runner) {
 //     is what produces that, because those two names already refuse the same
 //     way when `set -o` asks for them.
 var setLetterOptions = map[rune]string{
+	// **The ten digits and `f` and `t`**, which were the twelve letters this
+	// table had no row for (#5057). Every one of them was refused here as
+	// `no such option` through `[[ -o <letter> ]]` and `bad option` through
+	// `set`, while `set -o <name>` already took and moved the option behind
+	// it — the same shape the thirty above were found in.
+	//
+	// Measured 2026-09-28 on zsh 5.9.2, and the mapping was found by a probe
+	// that does not ask `[[ -o ]]` at all: toggle every name in `$options`
+	// and watch which letter of `$-` moves. That matters, because the
+	// `[[ -o ]]` toggle the issue used resolved nine of the twelve and went
+	// silent on `3`, `6` and `t` — a silence about *which* option, not about
+	// whether the letter is real. `$-` answers all three.
+	//
+	// Each letter was then confirmed through all three readers a letter has:
+	// `[[ -o <letter> ]]` moves with the name in both directions, `set -<l>`
+	// turns it on and `set +<l>` off, and `$-` grows and loses the letter to
+	// match.
+	'0': "correct",
+	'1': "printexitvalue",
+	// **Three of them name a negative**, exactly as `-F` names `noglob`:
+	// `badpattern` and `nomatch` are on by default, and the letter is on when
+	// the option is *off*. Measured — with `badpattern` on, `[[ -o 2 ]]` is
+	// 1, and `unsetopt badpattern` makes it 0.
+	'2': "nobadpattern",
+	'3': "nonomatch",
+	'4': "globdots",
+	'5': "notify",
+	'6': "bgnice",
+	'7': "ignoreeof",
+	'8': "markdirs",
+	'9': "autolist",
+	// `norcs` is the third negative, and it is why `zsh -f` answers
+	// `[[ -o f ]]` with 0: `-f` suppressed the startup files, so `rcs` is off
+	// and the letter that names its absence is on.
+	'f': "norcs",
+	// `singlecommand`, which this shell will not let a script change: `set -t`
+	// is `can't change option: -t` and stops the script. That refusal is
+	// ImmovableOptionLetters' and stays there; what the row here adds is the
+	// other two readers — `[[ -o t ]]` answers instead of refusing, and `$-`
+	// carries the letter when the shell was started `-t`.
+	't': "singlecommand",
 	'd': "noglobalrcs",
 	'g': "histignorespace",
 	// Two letters the substrate's own table already reached, and they are

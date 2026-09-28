@@ -674,6 +674,14 @@ func (r *Runner) condRegexOperand(w *syntax.Word) (text, literal string, digitCl
 			// character is the script's own wherever it lands, and nothing
 			// reaches the engine holding one. See condRegexMark (#4173).
 			markQuotedRegex(&b, part)
+			if r.regexDoubleQuotedBackslashStands(s, part) {
+				// The backslash is a **character** in this dialect rather
+				// than a quote the shell takes, so what the engine is
+				// handed is an escaped one. What stands behind it keeps
+				// whatever it meant — see
+				// Semantics.RegexDoubleQuotedBackslashStands.
+				return strings.ReplaceAll(part, `\`, `\\`)
+			}
 		}
 		return part
 	})
@@ -713,6 +721,34 @@ func (r *Runner) regexKeepsWrittenBackslash(s syntax.Span, part string) bool {
 		return true
 	}
 	return (part == "d" || part == "D") && r.regexReadsDigitClass()
+}
+
+// regexDoubleQuotedBackslashStands reports whether a backslash written inside
+// **double quotes** in a `=~` operand is a character of its own rather than a
+// quote the shell takes off.
+//
+// A different span from [Runner.regexKeepsWrittenBackslash]'s and a different
+// answer, which is measured: a backslash-quoted `a\.b` and a double-quoted
+// `"a\.b"` are two constructs, and no column reads them alike.
+//
+// Asked only for a double-quoted run that actually holds a backslash, so an
+// operand without one never reaches a dialect that left the axis unanswered.
+//
+// **The quoting test is defensive and no row can kill it**, which is written
+// down so the next reader does not go looking for one. A backslash-quoted
+// span arrives with the backslash in its [syntax.Quoting] rather than in its
+// text, so `part` holds the bare character and the `Contains` guard below
+// already declines it; and the one span where it would not — a
+// backslash-quoted backslash — is taken by regexKeepsWrittenBackslash above
+// in every dialect that answers this Yes. The test says which span this axis
+// is about, and that is what it is for.
+func (r *Runner) regexDoubleQuotedBackslashStands(s syntax.Span, part string) bool {
+	if s.Kind != syntax.Literal || s.Quoting != syntax.DoubleQuoted ||
+		!strings.Contains(part, `\`) {
+		return false
+	}
+	return r.ask(r.sem().RegexDoubleQuotedBackslashStands,
+		"a double-quoted backslash in a =~ operand standing for itself")
 }
 
 // regexKeepsEveryWrittenBackslash is the wide axis. See

@@ -8997,6 +8997,62 @@ type Semantics struct {
 	// arrives with no quoting for a backslash to be taken off.
 	RegexKeepsAWrittenBackslash Answer
 
+	// RegexDoubleQuotedBackslashStands makes a backslash written inside
+	// **double quotes** in a `=~` operand a character of its own — a literal
+	// backslash the engine is handed — rather than a quote the shell takes
+	// off.
+	//
+	// A different span from [RegexKeepsAWrittenBackslash]'s and a different
+	// answer. `a\.b` and `"a\.b"` are two constructs and no column reads
+	// them alike, so widening that axis to cover this one would have been a
+	// third claim neither of them makes.
+	//
+	// **What stands behind the backslash keeps whatever it meant**, which is
+	// the half that is easy to state wrongly: the pair is not two literal
+	// characters. `"a\+b"` is a literal backslash with a `+` *quantifying
+	// it*, so it matches one or more backslashes and not `a+b` at all, and
+	// `"a\.b"` is a literal backslash followed by any character. The rows
+	// that separate that from "both characters literal" are the `+` ones,
+	// and without them the two readings agree everywhere.
+	//
+	// Measured 2026-09-28, `-c` under `env -i PATH=/usr/bin:/bin` with a
+	// scratch `HOME`, across the whole panel — `/bin/ksh`
+	// `Version AJM 93u+ 2012-08-01`, `/opt/homebrew/bin/bash` 5.3.20, that
+	// binary as `sh`, `/bin/bash` 3.2.57, `/opt/homebrew/bin/zsh` 5.9.2, and
+	// BusyBox v1.37.0 from the digest internal/oracle pins. dash is the
+	// seventh column and has no `=~`.
+	//
+	//	                            ksh93u+  the 3 bash  zsh 5.9.2  BusyBox
+	//	[[ axb =~ "a.b" ]]  (ctrl)   yes      no          yes        yes
+	//	[[ axb =~ "a\.b" ]]          no       no          no         no
+	//	[[ 'a.b' =~ "a\.b" ]]        no       no          yes        no
+	//	[[ 'a\.b' =~ "a\.b" ]]       yes      yes         no         no
+	//	[[ 'a+b' =~ "a\+b" ]]        no       no          yes        no
+	//	[[ 'a\+b' =~ "a\+b" ]]       no       yes         no         no
+	//	[[ 'a\b' =~ "a\+b" ]]        yes      no          no         no
+	//	[[ za1b =~ "za\db" ]]        no       no          no         yes
+	//	[[ zadb =~ "za\db" ]]        no       no          yes        no
+	//	[[ 'za\db' =~ "za\db" ]]     yes      yes         no         no
+	//
+	// The first control is the one that separates the columns' *mechanisms*:
+	// bash makes the whole quoted run literal — [RegexQuotingMakesLiteral],
+	// Yes there and No in ksh93 — so a `.` inside quotes is text there and a
+	// live `.` here. Everything bash answers below follows from that axis
+	// rather than from this one, which is why it holds this at No.
+	//
+	// Rows six and seven are the pair that says the character behind the
+	// backslash is **live** in ksh93 and literal in bash: `a\+b` matches its
+	// own text under bash's reading and one-or-more-backslashes under this
+	// one, and only the second matches `a\b`.
+	//
+	// The last three rows put all four readings side by side on one operand.
+	// ksh93 keeps the backslash as a character; bash makes both characters
+	// text; zsh drops the backslash and leaves a literal `d`; and BusyBox
+	// hands the pair to an engine that reads `\d` as a digit class — which
+	// is the reading the zero value already produces, and the reason this is
+	// an [Answer] rather than a set of four.
+	RegexDoubleQuotedBackslashStands Answer
+
 	// LastPipelineElementInCurrentShell runs the last command of a pipeline
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
 	LastPipelineElementInCurrentShell Answer
@@ -28763,6 +28819,11 @@ func PosixSemantics() Semantics {
 		// column with no rule of its own does — zsh 5.9.2 and BusyBox
 		// v1.37.0 both, measured. See RegexKeepsAWrittenBackslash.
 		RegexKeepsAWrittenBackslash: No,
+		// A backslash written inside double quotes is a quote the shell
+		// takes off, which is zsh 5.9.2's reading and BusyBox v1.37.0's
+		// alike — what parts those two is what their engines then do with
+		// the character. See RegexDoubleQuotedBackslashStands.
+		RegexDoubleQuotedBackslashStands: No,
 		// POSIX has no `=~` at all, so what a failed one does to a record
 		// it does not describe is nobody's to infer — and neither is
 		// whether a group that took no part keeps its number. Both are

@@ -919,6 +919,59 @@ arrives with no quoting for a backslash to be taken off.
 A **double-quoted** backslash is a third question again, with a different
 answer in each of the four columns, and neither axis here is asked about one.
 
+### And a double-quoted backslash is a third question again
+
+The section above is a **backslash-quoted** span. A backslash written inside
+**double quotes** is a different construct, and no column reads the two
+alike.
+
+Same run as above — ksh93u+ 2012-08-01, the three bash columns, zsh 5.9.2 and
+BusyBox v1.37.0; dash has no `=~`:
+
+| probe | ksh93u+ | the three bash | zsh 5.9.2 | BusyBox |
+| --- | --- | --- | --- | --- |
+| `[[ axb =~ "a.b" ]]` *(control)* | yes | **no** | yes | yes |
+| `[[ axb =~ "a\.b" ]]` | no | no | no | no |
+| `[[ 'a.b' =~ "a\.b" ]]` | no | no | **yes** | no |
+| `[[ 'a\.b' =~ "a\.b" ]]` | **yes** | **yes** | no | no |
+| `[[ 'a+b' =~ "a\+b" ]]` | no | no | **yes** | no |
+| `[[ 'a\+b' =~ "a\+b" ]]` | no | **yes** | no | no |
+| `[[ 'a\b' =~ "a\+b" ]]` | **yes** | no | no | no |
+| `[[ za1b =~ "za\db" ]]` | no | no | no | **yes** |
+| `[[ zadb =~ "za\db" ]]` | no | no | **yes** | no |
+| `[[ 'za\db' =~ "za\db" ]]` | **yes** | **yes** | no | no |
+
+**The control is what separates the mechanisms.** A `.` inside quotes is
+text in bash — that is the whole-run reading of the section above this one —
+and live in the other three. Everything bash answers below follows from that
+rather than from this question, which is why it is a different axis.
+
+The last three rows put all four readings on one operand: ksh93 keeps the
+backslash as a **character**, bash makes both characters text, zsh drops the
+backslash and leaves a literal `d`, and BusyBox hands the pair to an engine
+that reads `\d` as a digit class.
+
+**What stands behind the backslash keeps whatever it meant**, and this is the
+half that is easy to state wrongly — "a literal backslash and a literal
+character" is right for `d` and wrong for `+`. Rows six and seven are the
+pair that says so, and four more rows measured on ksh93u+ say it outright:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `[[ 'a\b' =~ "a\+b" ]]` | matches — one backslash |
+| `[[ 'a\\b' =~ "a\+b" ]]` | matches — two |
+| `[[ 'a\\\b' =~ "a\+b" ]]` | matches — three |
+| `[[ 'a+b' =~ "a\+b" ]]` | **no** |
+| `[[ 'a\xb' =~ "a\.b" ]]` | matches — a backslash, then any character |
+| `[[ azb =~ "a\.b" ]]` | **no** |
+
+So `"a\+b"` is *one or more backslashes* and `"a\.b"` is *a backslash then
+anything*: the backslash is escaped and the character behind it is not.
+
+Semantics axis: `RegexDoubleQuotedBackslashStands` — ksh93 yes, everything
+else no. The whole-run reading wins over it where a column has both, so bash
+could not show a Yes here even if it held one.
+
 **The match is leftmost-longest.** POSIX defines a regular expression match
 that way, and Go's `regexp` prefers the leftmost match the first alternative
 reaches instead. The status is the same either way and the recorded match is

@@ -742,6 +742,12 @@ func Semantics() interp.Semantics {
 	// `a\.b` is a literal dot rather than a live one. See
 	// syntax — interp.Semantics.RegexKeepsAWrittenBackslash (#4976).
 	s.RegexKeepsAWrittenBackslash = interp.Yes
+	// And a backslash written inside **double quotes** is a character of its
+	// own here rather than a quote: `[[ 'za\db' =~ "za\db" ]]` is the only
+	// one of the three subjects that matches. What stands behind it keeps
+	// its regex meaning, so `"a\+b"` is one or more backslashes. See
+	// interp.Semantics.RegexDoubleQuotedBackslashStands (#4977).
+	s.RegexDoubleQuotedBackslashStands = interp.Yes
 	// A failed `=~` leaves the record of the last match alone here, and a
 	// group that took no part is left out of it entirely, so the groups
 	// after it move down a place: `[[ abcd =~ (b)(z)?(c) ]]` is three

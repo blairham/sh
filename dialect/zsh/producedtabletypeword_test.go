@@ -68,6 +68,15 @@ func TestEveryProducedParameterCarriesTheHidingLetters(t *testing.T) {
 		{"dis_functions", "association-hide-hideval-special"},
 		{"nameddirs", "association-hide-hideval-special"},
 		{"mapfile", "association-hide-hideval-special"},
+		// The row this grid did not have, and whose absence is what let
+		// `$langinfo` sit at `association-readonly-…` here while the note
+		// in moduleparam.go two files away recorded the right word (#4996).
+		// It is **not** the odd one out for being a module's: `mapfile`
+		// above it and `sysparams` below it come from modules too, and one
+		// of them carries the readonly letter. The elements are frozen and
+		// the parameter is not — see langinfo.go and
+		// interp.Runner.MarkProducedTableFrozenByKey.
+		{"langinfo", "association-hide-hideval-special"},
 		{"parameters", "association-readonly-hide-hideval-special"},
 		{"builtins", "association-readonly-hide-hideval-special"},
 		{"history", "association-readonly-hide-hideval-special"},

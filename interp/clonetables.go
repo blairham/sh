@@ -296,6 +296,12 @@ func (c *Runner) ownTables(r *Runner) {
 	// And the names among them `unset` may not take away, which a dialect
 	// registers beside the producer.
 	c.unsetRefused = maps.Clone(r.unsetRefused)
+	// And the names whose *elements* are frozen while the parameter is not,
+	// registered at the same moment and by the same dialect — see
+	// Runner.MarkProducedTableFrozenByKey. Owned rather than shared for the
+	// producer's own reason: a subshell that registered a table of its own
+	// under a name the parent had frozen would otherwise refuse writes to it.
+	c.tableFrozenByKey = maps.Clone(r.tableFrozenByKey)
 	c.DynamicAssocs = maps.Clone(r.DynamicAssocs)
 	c.dynamicAssocElements = maps.Clone(r.dynamicAssocElements)
 	c.dynamicAssocWriters = maps.Clone(r.dynamicAssocWriters)

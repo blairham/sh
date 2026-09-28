@@ -854,6 +854,71 @@ does for a pattern. This shell asked the *word* whether anything in it was
 quoted and escaped the whole expanded value, so one quote anywhere turned
 every metacharacter in the operand into a letter (#4173).
 
+### A written backslash belongs to the engine in one column
+
+The rows above are bash's, where a quoted character is marked literal. One
+column does something else with a **backslash-quoted** one: it hands the
+backslash to its own regular expression library rather than taking it off
+during quote removal. So a metacharacter behind one is text *and* a letter
+behind one can be a class, which no other reading produces together.
+
+Measured 2026-09-28, `-c` under `env -i PATH=/usr/bin:/bin` with a scratch
+`HOME`, across the whole panel. `/bin/ksh` `Version AJM 93u+ 2012-08-01`,
+`/opt/homebrew/bin/bash` 5.3.20, that same binary under the name `sh`,
+`/bin/bash` 3.2.57 and `/opt/homebrew/bin/zsh` 5.9.2 — `go version -m` says
+*not a Go executable* for each — and BusyBox v1.37.0, the `/bin/ash` of
+`alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b`
+on `linux/arm64`, which is the digest `internal/oracle` pins.
+
+**dash is the seventh column and has no `=~` at all** — `[[` is not a command
+there — so it holds this vacuously. The three bash columns answer every row
+below identically, so the compatibility level that takes the quoting rule
+back does not reach this one.
+
+**Every row is a pair**, because keeping the backslash and dropping it agree
+on half of all subjects:
+
+| probe | ksh93u+ | the three bash | zsh 5.9.2 | BusyBox |
+| --- | --- | --- | --- | --- |
+| `[[ axb =~ a.b ]]` *(control)* | yes | yes | yes | yes |
+| `[[ axb =~ a\.b ]]` | no | no | **yes** | **yes** |
+| `[[ 'a.b' =~ a\.b ]]` | yes | yes | yes | yes |
+| `[[ ab =~ a\+b ]]` | no | no | **yes** | **yes** |
+| `[[ 'a+b' =~ a\+b ]]` | yes | yes | **no** | **no** |
+| `[[ aab =~ a\{2\}b ]]` | no | no | **yes** | **yes** |
+| `[[ 'a{2}b' =~ a\{2\}b ]]` | yes | yes | **no** | **no** |
+| `[[ zawb =~ za\wb ]]` *(control)* | yes | yes | yes | yes |
+| `[[ za1b =~ za\wb ]]` | **yes** | no | no | no |
+| `[[ 'za b' =~ za\sb ]]` | **yes** | no | no | no |
+| `[[ 'za.b' =~ za\Wb ]]` | **yes** | no | no | no |
+
+The first control says the operator reaches an engine in every column. The
+second says the *letter* is read in every column when it stands bare, so the
+three rows under it are about the backslash and not about `w`.
+
+**The columns that are not ksh93 are not unanimous either**, and that is what
+makes this one fact rather than a bug. The bash columns reach ksh93's answer
+on the metacharacter rows by marking the quoted character literal — the
+section above — so those two agree there for two different reasons and part
+on `za\wb`, where a class is a class only if the backslash survived. zsh and
+BusyBox drop the backslash and let the character keep its regex meaning,
+which is what a shell with no rule of its own does.
+
+Semantics axis: `RegexKeepsAWrittenBackslash` — ksh93 yes, the other three
+no. It is asked only for an operand that carries a backslash-quoted span.
+
+**It is two gates and `\d` needs both.** Getting the pair past quote removal
+is this axis; what the engine then reads `\d` as is
+`RegexDigitClassEscape`, and the rewrite normalizes the pair back to the
+letter where that one says no. A column answering this yes and that no reads
+`\d` as the letter — which is why widening that axis in place of adding this
+one would have been wrong, even though ksh93 answers both yes. The variable
+spelling is that axis's alone and this one cannot reach it: `r='za\db'`
+arrives with no quoting for a backslash to be taken off.
+
+A **double-quoted** backslash is a third question again, with a different
+answer in each of the four columns, and neither axis here is asked about one.
+
 **The match is leftmost-longest.** POSIX defines a regular expression match
 that way, and Go's `regexp` prefers the leftmost match the first alternative
 reaches instead. The status is the same either way and the recorded match is

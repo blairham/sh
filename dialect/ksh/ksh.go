@@ -725,6 +725,13 @@ func Semantics() interp.Semantics {
 	// `[[ za1b =~ za[0-9]b ]]` as the control that says every column reaches
 	// an engine at all (#4932).
 	s.RegexDigitClassEscape = interp.Yes
+	// And the wider fact that one is the narrow case of: a written backslash
+	// in a `=~` operand belongs to this shell's own regular expression
+	// library rather than coming off during quote removal, so `za\wb` is a
+	// class here where it is the letter `w` in the other three columns and
+	// `a\.b` is a literal dot rather than a live one. See
+	// syntax — interp.Semantics.RegexKeepsAWrittenBackslash (#4976).
+	s.RegexKeepsAWrittenBackslash = interp.Yes
 	// A failed `=~` leaves the record of the last match alone here, and a
 	// group that took no part is left out of it entirely, so the groups
 	// after it move down a place: `[[ abcd =~ (b)(z)?(c) ]]` is three

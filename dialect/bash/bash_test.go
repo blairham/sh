@@ -111,6 +111,13 @@ func TestSemantics(t *testing.T) {
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"RegexQuotingMakesLiteral", s.RegexQuotingMakesLiteral, interp.Yes},
+		// And **not** the wider one beside it. This column reaches ksh93's
+		// answer on `[[ axb =~ a\.b ]]` by marking the quoted character
+		// literal rather than by handing the backslash to an engine, which
+		// is what `[[ za1b =~ za\wb ]]` parts them on: a class is a class
+		// only where the backslash survived. See
+		// interp.Semantics.RegexKeepsAWrittenBackslash.
+		{"RegexKeepsAWrittenBackslash", s.RegexKeepsAWrittenBackslash, interp.No},
 		// The file comparisons: a missing file counts as older, and a -t
 		// operand that is not a number draws the integer complaint.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.Yes},

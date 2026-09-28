@@ -6097,9 +6097,22 @@ func Diagnostics() interp.Diagnostics {
 		// forked, labeled with the element as written, and nothing for one
 		// that did not — `time true` prints nothing at all here. A bare
 		// `time` reports a `shell` and a `children` line in the same shape.
-		TimeLayout:   interp.TimePerCommand,
-		TimeBare:     interp.TimeBareShellAndChildren,
-		PathNotFound: "no such file or directory: %[1]s",
+		TimeLayout: interp.TimePerCommand,
+		// And the variable that shapes that layout's line, which this
+		// column has and which stood empty here until #4910: the value was
+		// supplied by #4912 and nothing read it, so a script setting
+		// `TIMEFMT='%*E'` got the default layout here and its own there.
+		//
+		// The name alone would have been wrong. This shell's format is a
+		// **different vocabulary** from the one `TIMEFORMAT` is written in
+		// — they share `%%` and `%P` and nothing else, `%U` means the same
+		// thing in both and renders differently, and the digit that is a
+		// precision there is literal text here — so the verbs are named
+		// beside the variable. See interp/timeformatunits.go for the sweep.
+		TimeFormatVariable: "TIMEFMT",
+		TimeFormatVerbs:    interp.TimeFormatVerbsElapsedWithUnits,
+		TimeBare:           interp.TimeBareShellAndChildren,
+		PathNotFound:       "no such file or directory: %[1]s",
 		// zsh lowercases every strerror string it quotes, where the other
 		// three print the C string as it comes.
 		// zsh names the builtin that is speaking between its own name and the

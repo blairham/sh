@@ -87,15 +87,21 @@ import (
 //
 //   - `SAVEHIST` is read — see fcSaveHistOn — and zero is what unset already
 //     meant, so this changes no save.
-//   - `TIMEFMT` holds the format this shell already writes: `time sleep 0` is
-//     byte-identical to the reference's in the same run. What is not here is
-//     the format being *read back* from the name.
+//   - `TIMEFMT` **is** read back since #4910 — the per-command line is
+//     rendered through it, in the vocabulary of its own that
+//     interp/timeformatunits.go implements.
 //   - `TMPPREFIX` is a value only, deliberately: `=(cmd)` resolves its scratch
 //     through `TMPDIR` and interp/procsubst.go argues that choice in place.
 //   - `KEYTIMEOUT`, `LISTMAX` and `MAILCHECK` are line-editor and mail knobs
-//     this shell has no reader for yet.
+//     this shell has no reader for yet, and each is a **feature** rather than
+//     a read-back: the key-sequence wait this shell deliberately does not
+//     make is #1427, nothing asks before listing a completion, and there is
+//     no mail check at all. Measured 2026-09-27, none of the three has a
+//     scripted surface in the reference either — a non-interactive shell
+//     that sets all three behaves identically with and without them — so
+//     none can be graded by a corpus case.
 //
-// The read-back and those three readers are #4910. `FUNCNEST` is here with
+// Those three readers are the rest of #4910. `FUNCNEST` is here with
 // its reader rather than without one, which is what #4905 asked for: the
 // reference's bound *is* that parameter, and a name that looks like a bound a
 // script can move while moving nothing is worse than an absent one. See

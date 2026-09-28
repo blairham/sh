@@ -98,3 +98,77 @@ func TestALoneDashEndsTheUmaskOptions(t *testing.T) {
 		}
 	})
 }
+
+// `type` answers a lone `-` on the lone-dash axis, and not on the one about
+// `--`.
+//
+// The two are different words and different questions, and they agree in the
+// dialect this was written for — zsh answers both `Yes` — which is exactly why
+// a grid built from that dialect cannot tell them apart. Mutation said so:
+// deleting the branch that answers the dash killed nothing, because the dash
+// then fell through to the `--` question and on to the shared reader, which
+// got the right answer for the wrong reason.
+//
+// The rows that part them hold the dash fixed and move the *other* axis.
+func TestTypeAnswersALoneDashOnItsOwnAxis(t *testing.T) {
+	run := func(t *testing.T, lone, dashdash Answer) (string, int) {
+		t.Helper()
+		var buf bytes.Buffer
+		sem := CoreSemantics()
+		sem.LoneDashIsAnOption = lone
+		sem.TypeEndsOptionsWithDashDash = dashdash
+		sem.TypeOptions = "afpsSw"
+		// Answered so the run says nothing about it: `type` looks a name up
+		// on PATH, and an unanswered axis on that road would put its own
+		// complaint in the output these rows read.
+		sem.EmptyPathIsTheCurrentDirectory = No
+		r := newTestRunner(t, &Runner{
+			Stdout: &buf, Stderr: &buf,
+			Semantics: &sem, Diagnostics: &Diagnostics{},
+			Dir: t.TempDir(), Name: "testsh",
+		})
+		f, err := syntax.Parse(`type - -a echo`, syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		st, err := r.Run(context.Background(), f)
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		return buf.String(), st
+	}
+	// A dialect that ends nothing at `--` still eats a lone dash, because the
+	// dash was never the `--` question. The dash is gone, so `-a` is a name.
+	t.Run("the dash is eaten although `--` ends nothing here", func(t *testing.T) {
+		out, _ := run(t, Yes, No)
+		if strings.Contains(out, "type: -: not found") {
+			t.Errorf("out = %q, want the dash eaten rather than looked up", out)
+		}
+		if !strings.Contains(out, "type: -a: not found") {
+			t.Errorf("out = %q, want `-a` read as a name", out)
+		}
+	})
+	// And the other way: a dialect that ends the options at `--` still leaves
+	// a lone dash alone when the lone-dash axis says so.
+	t.Run("and left alone although `--` does end the options here", func(t *testing.T) {
+		out, _ := run(t, No, Yes)
+		if !strings.Contains(out, "type: -: not found") {
+			t.Errorf("out = %q, want the dash looked up as a name", out)
+		}
+	})
+	// **And the refusal names the axis it actually asked.** Unanswered, the
+	// complaint is about the lone dash and not about `type --`, which is a
+	// word the script never wrote.
+	t.Run("an unanswered lone dash names the lone dash", func(t *testing.T) {
+		out, st := run(t, Unspecified, Yes)
+		if !strings.Contains(out, "a lone `-` given to a builtin") {
+			t.Errorf("out = %q, want the lone-dash axis named", out)
+		}
+		if strings.Contains(out, "`type --`") {
+			t.Errorf("out = %q, want the `--` axis NOT named", out)
+		}
+		if st != 2 {
+			t.Errorf("status = %d, want 2", st)
+		}
+	})
+}

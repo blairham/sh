@@ -21,7 +21,8 @@ import "github.com/blairham/sh/syntax"
 //	nocorrect  reserved     grammar — see syntax.Dialect.ReservedPrecommands
 //	command    builtin      stops the scan: what follows is an external name
 //	builtin    builtin      transparent — the scan carries on past it
-//	exec       builtin      transparent
+//	exec       builtin      transparent, and its own no-command form is the
+//	                        redirection form — see PrecommandRedirectionForm
 //	-          builtin      the dash — see PrecommandDash
 //
 // The three shared names are ordinary builtins here and stay that way. What
@@ -52,6 +53,59 @@ const (
 	// builtin with work of its own to do — and a modifier may stand behind
 	// it.
 	PrecommandTransparent
+	// PrecommandStopsTheScan is a word the scan reads and then stops at:
+	// it stays in the command, and a modifier written *behind* it is an
+	// ordinary word.
+	//
+	// It changes no behavior this package did not already have — a word the
+	// table does not hold stops the scan too, which is how `command` was
+	// modeled before it was named. What naming it adds is that the scan
+	// **knows a modifier was there**, which is the whole of what
+	// PrecommandRedirectionForm below needs: `command >f` is `redirection
+	// with no command` in zsh 5.9.2 and `>f` alone runs the null command, and
+	// a scan that cannot tell the two apart answers both the same way.
+	//
+	// Measured 2026-09-28, which is also what says the stop is real:
+	// `command builtin >f` is `command not found: builtin` at 127, so the
+	// word behind it was looked up on the filesystem rather than read as the
+	// modifier it spells.
+	PrecommandStopsTheScan
+	// PrecommandRedirectionForm is a transparent modifier whose own
+	// no-command form is defined: with nothing behind it the command is not
+	// commandless, it is that builtin doing its other job.
+	//
+	// One word in the family has it, and it is `exec`, whose redirection form
+	// is what every shell in the panel uses to keep a redirection open. So
+	// `exec >f` is silent at 0 where `builtin >f` and `command >f` are
+	// `redirection with no command` — and the property travels along the
+	// chain rather than attaching to the last word, measured 2026-09-28 on
+	// zsh 5.9.2:
+	//
+	//	>f                    0, and the file is made   the control
+	//	noglob >f             redirection with no command
+	//	- >f                  redirection with no command
+	//	builtin >f            redirection with no command
+	//	command >f            redirection with no command
+	//	builtin command >f    redirection with no command
+	//	noglob builtin >f     redirection with no command
+	//	builtin - >f          redirection with no command
+	//	builtin <f            redirection with no command   any redirection
+	//	exec >f               silent, and the redirection is kept
+	//	exec builtin >f       silent            — wherever in the chain
+	//	builtin exec >f       silent            — …it stands
+	//	exec exec >f          silent
+	//	nocorrect >f          0, and the file is made
+	//	v=1 builtin >f        0, and the file is made
+	//
+	// The `nocorrect` row is the discriminating one for the noun, and it is
+	// why the rule is keyed on a **builtin** modifier rather than on "a
+	// modifier word was written": `nocorrect` is grammar — see
+	// syntax.Dialect.ReservedPrecommands — so the parser takes it and what
+	// reaches the command is a bare redirection, which is the control's own
+	// case. The `v=1` row is the other exclusion and is not this rule's: an
+	// assignment prefix takes a command off the null-command route in every
+	// dialect, which Runner.nullCommand already says.
+	PrecommandRedirectionForm
 	// PrecommandDash runs the command with a `-` on the front of its argv[0],
 	// and is taken away. The word is exactly `-`.
 	//
@@ -183,7 +237,9 @@ func (r *Runner) globFieldsUnlessSuppressed(fields []string, suppressed bool) []
 // command, so the word that names it is still the command's name.
 func (r *Runner) afterPrecommands(args []*syntax.Word) []*syntax.Word {
 	for len(args) > 0 {
-		if m, ok := r.precommands[literalName(args[0])]; !ok || m == PrecommandTransparent {
+		m, ok := r.precommands[literalName(args[0])]
+		if !ok || m == PrecommandTransparent ||
+			m == PrecommandStopsTheScan || m == PrecommandRedirectionForm {
 			return args
 		}
 		args = args[1:]

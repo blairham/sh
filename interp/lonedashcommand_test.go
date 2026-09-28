@@ -24,7 +24,8 @@ func withDash(r *Runner) {
 	r.SetPrecommand("-", PrecommandDash)
 	r.SetPrecommand("noglob", PrecommandNoGlob)
 	r.SetPrecommand("builtin", PrecommandTransparent)
-	r.SetPrecommand("exec", PrecommandTransparent)
+	r.SetPrecommand("exec", PrecommandRedirectionForm)
+	r.SetPrecommand("command", PrecommandStopsTheScan)
 }
 
 // A command word that is exactly `-` is a **precommand modifier**: the
@@ -204,21 +205,43 @@ func TestALoneDashIsAModifierAndNotAName(t *testing.T) {
 	}
 }
 
-// TestAModifierTakenAwayIsNotTheSameStateAsNoWordAtAll: a redirection with
-// nothing left in front of it.
+// TestAModifierWithNothingToRunIsNotTheSameStateAsNoWordAtAll: a redirection
+// with nothing left in front of it.
 //
 // `>f` written with no word at all opens its files, runs nothing and
-// succeeds; `- >f` and `noglob >f` are `redirection with no command` and end
-// the script. So the question is whether the scan **took a word**, and the
-// control is what tells the two apart — a status alone cannot.
-func TestAModifierTakenAwayIsNotTheSameStateAsNoWordAtAll(t *testing.T) {
+// succeeds; `noglob >f`, `- >f`, `builtin >f` and `command >f` are
+// `redirection with no command` and end the script. So the question is
+// whether a **modifier was written**, and the control is what tells the two
+// apart — a status alone cannot.
+//
+// **Whether the modifier was taken away or kept is not the question**, which
+// is where this was first written too narrowly: `noglob` is taken and
+// `builtin` stays, and both leave nothing to run.
+func TestAModifierWithNothingToRunIsNotTheSameStateAsNoWordAtAll(t *testing.T) {
 	for _, tc := range []struct {
 		name, src string
 		refused   bool
 	}{
-		{"the dash", `- >f; echo after`, true},
-		{"and any other taken modifier", `noglob >f; echo after`, true},
+		{"a modifier the scan took", `- >f; echo after`, true},
+		{"and any other taken one", `noglob >f; echo after`, true},
+		{"one that stays is no different", `builtin >f; echo after`, true},
+		{"nor is one that stops the scan", `command >f; echo after`, true},
+		{"two of them are still none", `builtin command >f; echo after`, true},
+		{"and an input redirection is a redirection", `builtin <f; echo after`, true},
+		// The control: with no word at all the command opens its files,
+		// runs nothing and carries on.
 		{"the control: no word at all", `>f; echo after`, false},
+		// The word whose own no-command form is defined, wherever in the
+		// chain it stands.
+		// `exec >f` keeps the redirection, so `after` lands in the file
+		// rather than on the output — which is the whole of why it is not
+		// commandless. Read back out to say so.
+		{"the redirection form is not commandless", `exec >f; echo after; exec >&2; cat f`, false},
+		{"and it carries along the chain", `builtin exec >f; echo after; exec >&2; cat f`, false},
+		// An assignment prefix takes the command off this route, exactly as
+		// it takes one off the null command's.
+		{"an assignment prefix takes it off the route", `v=1 noglob >f; echo after`, false},
+		{"and the same for one the scan took", `v=1 - >f; echo after`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := run(t, tc.src, withDash)

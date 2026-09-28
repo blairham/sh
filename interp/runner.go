@@ -7223,9 +7223,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// The `-` modifier, which the command carries all the way to its argv[0]
 	// rather than spending here. See PrecommandDash.
 	dash := false
-	// Whether the scan *took a word away*, which is not the same question as
-	// whether the command has any words left. See takenModifier below.
-	takenModifier := false
+	// Whether the scan *read a modifier at all*, taken away or kept, and
+	// whether one of them was the word whose own no-command form is defined.
+	// Neither is the same question as whether the command has any words left.
+	// See the refusal below.
+	sawModifier, sawRedirectionForm := false, false
+	// How many of the words in argv the scan itself put there. A command
+	// whose only words are modifiers has nothing to run; one with a word
+	// behind them has.
+	modifierWords := 0
 	// The words `set -k` takes out of the argument list and puts in front of
 	// the command, in the order they were written. Collected here and applied
 	// below by rewriting the command, so that from the moment one is promoted
@@ -7370,7 +7376,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// Taken away, and not matched itself: the modifier is a
 				// word of the command line and the scan reads it before
 				// anything is a pattern.
-				noglob, takenModifier = true, true
+				noglob, sawModifier = true, true
 				fields = fields[1:]
 				continue
 			}
@@ -7378,14 +7384,27 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// Taken away too, and what it asks for is carried below:
 				// a dash on the command's argv[0], and no option scan for
 				// the modifiers behind it.
-				dash, takenModifier = true, true
+				dash, sawModifier = true, true
 				fields = fields[1:]
 				continue
 			}
-			// Transparent: it stays — it is a builtin with work of its own
-			// — and the scan carries on, so a modifier may stand behind it.
+			// It stays — it is a builtin with work of its own — and the
+			// scan carries on past a transparent one, so a modifier may
+			// stand behind it.
+			sawModifier = true
+			if m == PrecommandRedirectionForm {
+				sawRedirectionForm = true
+			}
 			argv = append(argv, r.globFieldsUnlessSuppressed(fields[:1], noglob)...)
+			modifierWords++
 			fields = fields[1:]
+			if m == PrecommandStopsTheScan {
+				// What follows is a command name and not a modifier, which
+				// is measured: `command builtin >f` looks `builtin` up on
+				// the filesystem and reports 127.
+				scanning = false
+				break
+			}
 		}
 		argv = append(argv, r.globFieldsUnlessSuppressed(fields, noglob)...)
 		if appendOperand && len(argv) == operandStart+1 {
@@ -7412,15 +7431,35 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// which is a name and not a path.
 	// A modifier was written and what it stood in front of is not there.
 	//
-	// **A word that was written and taken away is not the same state as no
-	// word at all**, and the redirection is what makes the two tell apart:
-	// `>f` alone runs the dialect's null command at 0 and makes the file,
-	// while `- >f` and `noglob >f` are `redirection with no command` at 1 and
-	// make nothing. Measured 2026-09-28 on zsh 5.9.2, the one column with
-	// modifiers at all. Asked before the null command below rather than
-	// after, which is the same ordering the discard this replaced was written
-	// with and for the same reason.
-	if takenModifier && len(argv) == 0 && len(c.Redirs) > 0 {
+	// **A word that was written is not the same state as no word at all**,
+	// and the redirection is what makes the two tell apart: `>f` alone runs
+	// the dialect's null command at 0 and makes the file, while `noglob >f`,
+	// `- >f`, `builtin >f` and `command >f` are `redirection with no command`
+	// at 1 and make nothing. Measured 2026-09-28 on zsh 5.9.2, the one column
+	// with modifiers at all — see PrecommandRedirectionForm for the grid and
+	// for the two rows that are *not* this: `nocorrect >f`, which the grammar
+	// takes so that a bare redirection is what reaches the command, and
+	// `v=1 builtin >f`, which an assignment prefix takes off the route.
+	//
+	// **Whether the modifier was taken away or kept is not the question**,
+	// which is where this was first written too narrowly: `noglob` is taken
+	// and `builtin` stays, and both are commandless. What decides is whether
+	// anything is left *to run* — so the test is the word count against the
+	// modifiers' own, not against zero.
+	//
+	// **And an assignment prefix takes the command off this route**, exactly
+	// as it takes one off the null command's — `v=1 builtin >f` and
+	// `v=1 noglob >f` are 0 with `v` set afterwards, where the same lines
+	// without the prefix are refused. Runner.nullCommand already says this
+	// for its own route and says why: a command with a prefix is a command.
+	// It was missing here, so the narrower form of this rule refused
+	// `v=1 noglob >f` and `v=1 - >f` — a wrong answer this package shipped.
+	//
+	// Asked before the null command below rather than after, which is the
+	// same ordering the discard this replaced was written with and for the
+	// same reason.
+	if sawModifier && !sawRedirectionForm && len(c.Assigns) == 0 &&
+		len(argv) == modifierWords && len(c.Redirs) > 0 {
 		r.fatal("%s\n", Wording(r.diag().RedirectionWithNoCommand,
 			"redirection with no command"))
 		return nil

@@ -6909,7 +6909,16 @@ func Apply(r *interp.Runner) {
 	r.SetPrecommand("-", interp.PrecommandDash)
 	r.SetPrecommand("noglob", interp.PrecommandNoGlob)
 	r.SetPrecommand("builtin", interp.PrecommandTransparent)
-	r.SetPrecommand("exec", interp.PrecommandTransparent)
+	// `exec`'s own no-command form is the redirection form, so it is the one
+	// word in the family that leaves a redirection something to belong to:
+	// `exec >f` is silent at 0 where `builtin >f` and `command >f` are
+	// `redirection with no command`.
+	r.SetPrecommand("exec", interp.PrecommandRedirectionForm)
+	// `command` stops the scan — what follows it is a command name and not a
+	// modifier, measured: `command builtin >f` reports 127 for `builtin`.
+	// Naming it changes no lookup this shell did not already do; what it adds
+	// is that the scan knows a modifier stood there.
+	r.SetPrecommand("command", interp.PrecommandStopsTheScan)
 	// `integer` is `typeset` with the type already decided, and it is one of
 	// the two shells that has the word — `add-zsh-hook` declares integers
 	// before it does anything else, so a startup file that installs a

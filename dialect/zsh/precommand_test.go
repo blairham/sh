@@ -260,21 +260,83 @@ func TestTheDashModifierStopsTheOptionScanBehindIt(t *testing.T) {
 	}
 }
 
-// TestAModifierTakenAwayLeavesARedirectionWithNoCommand: a word that was
-// written and taken away is not the same state as no word at all, and the
-// redirection is what tells them apart.
-func TestAModifierTakenAwayLeavesARedirectionWithNoCommand(t *testing.T) {
+// TestAModifierWithNothingToRunLeavesARedirectionWithNoCommand: a word that
+// was written is not the same state as no word at all, and the redirection is
+// what tells them apart.
+//
+// Measured 2026-09-28 against /opt/homebrew/bin/zsh — zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `go version -m`: *not a Go executable*.
+// Whether the modifier was **taken away or kept** is not the question, which
+// is where this was first written too narrowly: `noglob` is taken and
+// `builtin` stays, and both leave nothing to run.
+//
+// Two rows are not this rule and are the discriminating ones. `nocorrect` is
+// grammar rather than a builtin, so the parser takes it and a bare
+// redirection is what reaches the command — the control's own case. And an
+// assignment prefix takes a command off the route in every dialect, which is
+// the same clause the null command already carries.
+func TestAModifierWithNothingToRunLeavesARedirectionWithNoCommand(t *testing.T) {
+	const refused = "zsh:1: redirection with no command"
 	for _, tc := range []struct{ src, want string }{
-		{`NULLCMD=:; - >f; echo after`, "zsh:1: redirection with no command"},
-		{`NULLCMD=:; noglob >f; echo after`, "zsh:1: redirection with no command"},
+		{`NULLCMD=:; noglob >f; print after`, refused},
+		{`NULLCMD=:; - >f; print after`, refused},
+		{`NULLCMD=:; builtin >f; print after`, refused},
+		{`NULLCMD=:; command >f; print after`, refused},
+		{`NULLCMD=:; builtin command >f; print after`, refused},
+		{`NULLCMD=:; noglob builtin >f; print after`, refused},
+		{`NULLCMD=:; builtin - >f; print after`, refused},
+		// Any redirection, not only an output one.
+		{`NULLCMD=:; builtin <f; print after`, refused},
 		// The control: with no word at all the null command runs and the
-		// script carries on. The hook is named here because the harness
-		// starts with none, and with none the two sides are the same
-		// refusal — which is a control that cannot fail.
-		{`NULLCMD=:; >f; echo after`, "after"},
+		// script carries on. The hook is named because the harness starts
+		// with none, and with none the two sides are the same refusal —
+		// which is a control that cannot fail.
+		{`NULLCMD=:; >f; print after`, "after"},
+		// `nocorrect` is the grammar's, so it never reaches the command.
+		{`NULLCMD=:; nocorrect >f; print after`, "after"},
+		// An assignment prefix takes it off the route, and persists.
+		{`NULLCMD=:; v=1 noglob >f; print "after v=$v"`, "after v=1"},
+		{`NULLCMD=:; v=1 - >f; print "after v=$v"`, "after v=1"},
 		// And with nothing to redirect there is nothing to refuse — the
 		// assignments in front of it persist, as they do for `v=1` alone.
-		{`v=1 -; echo "st=$? v=[$v]"`, "st=0 v=[1]"},
+		{`v=1 -; print "st=$? v=[$v]"`, "st=0 v=[1]"},
+	} {
+		out, _ := runZsh(t, t.TempDir(), tc.src)
+		if strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
+// TestTheRedirectionFormIsNotCommandless: `exec` is the one word in the family
+// whose own no-command form is defined, so a chain holding it leaves the
+// redirection something to belong to — wherever in the chain it stands.
+func TestTheRedirectionFormIsNotCommandless(t *testing.T) {
+	for _, src := range []string{
+		`NULLCMD=:; exec >f; print after; exec >&2; read -r x <f; print -r -- $x`,
+		`NULLCMD=:; builtin exec >f; print after; exec >&2; read -r x <f; print -r -- $x`,
+	} {
+		out, _ := runZsh(t, t.TempDir(), src)
+		if strings.TrimSpace(out) != "after" {
+			t.Errorf("%s = %q, want the redirection kept and %q read back", src, out, "after")
+		}
+	}
+}
+
+// TestCommandStopsTheScan: the word behind `command` is a command name and not
+// a modifier, which naming it in the table must not change.
+func TestCommandStopsTheScan(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		// Looked up on the filesystem rather than read as the modifier it
+		// spells — the scratch PATH holds neither.
+		{`NULLCMD=:; command builtin >f`, "zsh:1: command not found: builtin"},
+		{`command noglob echo a[b]c`, "zsh:1: no matches found: a[b]c"},
+		// And the ordinary uses are untouched. `command` reaches only an
+		// external here — see Semantics.CommandReachesABuiltin — so the
+		// scratch PATH not holding `echo` is what this row reads.
+		{`command echo hi`, "zsh:1: command not found: echo"},
+		{`command -v echo`, "echo"},
+		{`command; echo st=$?`, "st=0"},
 	} {
 		out, _ := runZsh(t, t.TempDir(), tc.src)
 		if strings.TrimSpace(out) != tc.want {

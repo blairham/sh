@@ -71,11 +71,14 @@ func TestTheKeywordAloneIsAnAnonymousFunctionWithNoBody(t *testing.T) {
 // measured on [Dialect.BareFunctionKeyword]; these rows are the flag's half
 // of it, so they name tokens rather than a shell.
 func TestWhereTheBareKeywordStands(t *testing.T) {
+	// `function; echo after` is deliberately **not** here: the keyword does
+	// not stand alone there, it takes the `echo` as its body. See
+	// TestTheKeywordTakesTheNextCommandAsItsBody in impliedanonbody_test.go,
+	// where that row lives now — it sat in this list until #5078.
 	for _, src := range []string{
 		"function\n",
 		"function",
 		"function;\n",
-		"function; echo after\n",
 		"function | cat\n",
 		"echo a | function\n",
 		"function && echo after\n",

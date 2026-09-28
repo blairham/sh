@@ -748,21 +748,34 @@ func (p *Parser) atStopWord() bool {
 	if p.tok.Kind != TokWord || p.tok.IsQuoted() {
 		return false
 	}
+	return p.wordStopsACommand(p.tok.Literal())
+}
+
+// wordStopsACommand is atStopWord's question asked of text rather than of the
+// token the parser is holding.
+//
+// Split out because the bare `function` keyword has to ask it of a word it has
+// not lexed yet — see [Parser.peekIsImpliedAnonBody], which decides whether
+// what follows the keyword is a command it can take as a body or the word that
+// closes the construct around it. Folded rather than copied: a second reader of
+// this set would be a second place for the two dialect answers below to go
+// stale.
+func (p *Parser) wordStopsACommand(w string) bool {
 	// `end` closes a `foreach`, and it is reserved wherever a command may
 	// begin rather than only inside one: measured, `end` alone and
 	// `end() { :; }` are both parse errors in the shell that has the loop,
 	// while `echo end` and `end=5` are not. So it is a stop word for that
 	// dialect and an ordinary word for the other four.
-	if p.dialect.Foreach && p.tok.Literal() == "end" {
+	if p.dialect.Foreach && w == "end" {
 		return true
 	}
 	// `in` is the mirror image: reserved where a command may begin in every
 	// dialect but the one that takes it back. See
 	// Dialect.InStandsAsACommandName for the panel.
-	if p.tok.Literal() == "in" {
+	if w == "in" {
 		return !p.dialect.InStandsAsACommandName
 	}
-	return stopWords[p.tok.Literal()]
+	return stopWords[w]
 }
 
 // atListEnd reports whether the current token closes the list the parser is
@@ -5275,6 +5288,17 @@ func (p *Parser) failProcSubstOutOfPlace(pos Pos, opener string) {
 // newlines, a plain `;`, a line continuation and a comment, and stops at the
 // first thing that is none of them (#3778).
 func (p *Parser) peekIsAnonBody() bool {
+	i, ok := p.peekPastAnonSeparators()
+	return ok && (p.lex.src[i] == '{' || p.lex.src[i] == '(')
+}
+
+// peekPastAnonSeparators finds the first byte after the keyword that is not a
+// separator, a comment or a joined line, and reports where it stands.
+//
+// ok is false where the input ran out with nothing after the keyword, and
+// where an arm terminator ended the command the keyword is in rather than
+// separating it from the next one.
+func (p *Parser) peekPastAnonSeparators() (int, bool) {
 	src, i := p.lex.src, p.lex.off
 	for i < len(src) {
 		switch c := src[i]; {
@@ -5282,9 +5306,7 @@ func (p *Parser) peekIsAnonBody() bool {
 			i++
 		case c == ';':
 			if i+1 < len(src) && (src[i+1] == ';' || src[i+1] == '&' || src[i+1] == '|') {
-				// An arm terminator, which ends the command the keyword is
-				// in rather than separating it from the next one.
-				return false
+				return 0, false
 			}
 			i++
 		case c == '\\' && i+1 < len(src) && src[i+1] == '\n':
@@ -5294,8 +5316,53 @@ func (p *Parser) peekIsAnonBody() bool {
 				i++
 			}
 		default:
-			return c == '{' || c == '('
+			return i, true
 		}
+	}
+	return 0, false
+}
+
+// peekIsImpliedAnonBody reports whether an ordinary command stands after the
+// keyword, where a nameless function may take it as a body it was given no
+// brackets for.
+//
+// The bracketed spellings are [Parser.peekIsAnonBody]'s and are decided before
+// this is asked, so what is left here is every other way a command can begin —
+// and the whole of the question is which bytes are *not* one. A closing brace
+// or parenthesis ends the construct around the keyword; an operator continues
+// the command the keyword is already in, and the shell gives that one no body;
+// and a word the grammar reserves closes a loop, an `if` or a `case` rather
+// than beginning anything.
+//
+// The word is read to its end before it is judged, so that `donefile` is a
+// command and `done` is not. It is judged by the same set the parser uses for
+// a token it has lexed — see [Parser.wordStopsACommand].
+func (p *Parser) peekIsImpliedAnonBody() bool {
+	i, ok := p.peekPastAnonSeparators()
+	if !ok {
+		return false
+	}
+	src := p.lex.src
+	switch src[i] {
+	case '}', ')', '&', '|':
+		return false
+	}
+	j := i
+	for j < len(src) && !endsAPeekedWord(src[j]) {
+		j++
+	}
+	return !p.wordStopsACommand(src[i:j])
+}
+
+// endsAPeekedWord reports whether a byte ends the word
+// [Parser.peekIsImpliedAnonBody] is reading. Deliberately generous: every
+// byte here ends a word in every dialect, and one that does not is harmless,
+// because the only thing the word is compared against is a set of reserved
+// words that hold none of these.
+func endsAPeekedWord(c byte) bool {
+	switch c {
+	case ' ', '\t', '\n', ';', '&', '|', '(', ')', '<', '>':
+		return true
 	}
 	return false
 }
@@ -5442,11 +5509,69 @@ func (p *Parser) funcKeywordName() (FuncName, bool) {
 	return n, true
 }
 
+// impliedAnonBody reads the command a nameless function was given no brackets
+// for, and returns the call it makes. nil is "the keyword stands alone", which
+// is the caller's other reading.
+//
+// The keyword with no name takes the **next complete command** as its body,
+// and that command is a call: measured 2026-09-28 on zsh 5.9.2, `function` on
+// its own line with `print -r -- "$0"` under it answers `(anon)`, a `typeset`
+// there does not outlive the line, and `$#` inside it is the call's 0 rather
+// than the script's count.
+//
+//	function          	$0 is `(anon)`, so the command ran *inside* the call
+//	typeset y=2       	gone on the next line, so the body has a scope
+//	set -- p q; $#    	0 in the body against 2 in the script
+//
+// **A whole and-or list, not one pipeline.** `function` over
+// `typeset y=1 && print -r -- "[$y]"` writes `[1]` and leaves nothing behind,
+// so both halves are inside one call — which is why this reads an and-or and
+// not a command. The bracketed spelling is the other way round and is not
+// touched here: `() print A && print B` puts only the first inside, measured
+// the same day.
+//
+// **Only where the keyword ended its own command.** A redirection, a pipe or
+// an `&&` after the keyword leaves it nothing to take — `function >f` with
+// `print A` under it writes `A` to the terminal and leaves `f` empty, and
+// `function && print -r -- "$0"` answers the script's name. So the terminator
+// is required to be a `;` or a newline, and the rest of the reach comes from
+// the peek: a closing brace, a `)`, an arm terminator, the end of input and
+// every reserved word leave the keyword standing alone.
+//
+// The body is held as a group of one statement, which is the same tree the
+// bracketed spelling of the same program builds. That is measured rather than
+// assumed: `function { typeset y=1 && print -r -- "[$y]" }` writes the same
+// bytes as the two lines above it, so the brackets this form leaves out add
+// nothing for the tree to record.
+func (p *Parser) impliedAnonBody(keyword Token) Command {
+	if !p.at(TokSemi) && !p.at(TokNewline) {
+		return nil
+	}
+	if !p.dialect.AnonymousFunction || !p.peekIsImpliedAnonBody() {
+		return nil
+	}
+	p.skipAnonBodySeparators()
+	// An and-or rather than a whole statement, so that the terminator is
+	// left for the statement this call is part of to read. What `&` would
+	// have backgrounded is the call and not the body, which is the one
+	// place the two readings part and is why it is said here rather than
+	// left to be inferred.
+	expr := p.parseAndOr()
+	if expr == nil {
+		return nil
+	}
+	body := &Group{List: []*Stmt{{Expr: expr}}, Start: expr.Pos(), Stop: expr.End()}
+	return &AnonFunc{Keyword: true, Body: body, Start: keyword.Pos}
+}
+
 func (p *Parser) parseFuncKeyword() Command {
 	keyword := p.tok
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
 	if p.dialect.BareFunctionKeyword && p.bareFunctionKeywordStandsHere() {
+		if anon := p.impliedAnonBody(keyword); anon != nil {
+			return anon
+		}
 		// The keyword and nothing else: an anonymous function whose body is
 		// empty, which runs where it stands. The body is an empty group
 		// rather than a nil one for the reason the optional-body branch

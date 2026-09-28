@@ -102,29 +102,40 @@ func TestWhatEndsTheKeywordsCommandStopsTheReach(t *testing.T) {
 	}
 }
 
-// A word after the keyword is still a name, however many lines later a brace
-// group turns up.
+// A word under the keyword is a *command* and not a name, and a brace group
+// after that word is a refusal.
 //
-// The second discriminator, and the one that says the reach is a *body*
+// The second discriminator, and the one that says the reach is a **body**
 // position rather than a license to skip ahead: the reference refuses
-// `function` ⏎ `foo { … }` on the `}`, because `foo` was read as the command
-// it looks like and not as this declaration's name.
-func TestAWordAfterTheKeywordIsStillANameAndNotASkippedSeparator(t *testing.T) {
+// `function` ⏎ `foo { … }` on the `}`. `foo` was read as the command it looks
+// like, and the brace group has nowhere to go behind it — which is a different
+// sentence from "`foo` is this declaration's name", and the difference is what
+// #5078 turned on. A word under the keyword *is* taken, as the body; it is the
+// group behind it that cannot be.
+func TestAWordUnderTheKeywordIsACommandAndAGroupBehindItIsARefusal(t *testing.T) {
 	if _, err := Parse("function\nfoo { :; }\n", bareKeyword()); err == nil {
 		t.Error("`function` then `foo { :; }` parsed, want a refusal")
 	}
-	// And the keyword with an ordinary command under it is the bare form,
-	// which is the reading this change must not have taken away.
+	// And the keyword with an ordinary command under it is **one** command:
+	// the call and its body. This asserted two statements and a bare node
+	// until #5078, which is the reading the reference does not have.
 	f, err := Parse("function\n:\n", bareKeyword())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if len(f.Stmts) != 2 {
-		t.Fatalf("%d statements, want 2: the keyword stands alone and the command is its own", len(f.Stmts))
+	if len(f.Stmts) != 1 {
+		t.Fatalf("%d statements, want 1: the command under the keyword is its body", len(f.Stmts))
 	}
 	fn, ok := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*AnonFunc)
-	if !ok || !fn.Bare {
-		t.Errorf("first statement came to %T, want a bare AnonFunc", f.Stmts[0].Expr.(*Pipeline).Cmds[0])
+	if !ok {
+		t.Fatalf("came to %T, want an AnonFunc", f.Stmts[0].Expr.(*Pipeline).Cmds[0])
+	}
+	if fn.Bare {
+		t.Error("Bare is true, so the command under the keyword was left standing on its own")
+	}
+	g, ok := fn.Body.(*Group)
+	if !ok || len(g.List) != 1 {
+		t.Errorf("body came to %T, want a group of one statement", fn.Body)
 	}
 }
 

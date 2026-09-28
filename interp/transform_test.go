@@ -29,6 +29,7 @@ func runTransform(t *testing.T, src string) (string, int) {
 		d.ParamCaseChange = true
 		// One row reaches a transformation through `${!p…}`.
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 	}, nil)
 }
 

@@ -22,6 +22,7 @@ func runIndirectSource(t *testing.T, src string) (string, int) {
 	sem.FatalErrorStatusIsOne = Yes
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 		// A digit carries the name on after `${!`, which is what makes the
 		// positional the *source* of an indirection rather than making the
 		// `!` the parameter. See syntax.Dialect.ParamBangNameContinues.

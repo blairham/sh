@@ -30,6 +30,7 @@ func runIndirectCircular(t *testing.T, src string) (string, int) {
 	sem.IndirectionYieldsName = No
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 	}, func(r *Runner) {
 		r.Semantics = &sem
 		r.Diagnostics = &Diagnostics{

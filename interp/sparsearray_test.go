@@ -76,6 +76,7 @@ func TestTheGapQuestionIsAskedOnlyWhereThereIsOne(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			out, _ := run(t, tc.src, func(r *Runner) {
 				sem := CoreSemantics()
+				sem.IndirectionIsTheSubscriptFlag = No
 				// Every other array axis answered, so a refusal here is
 				// about the gap and not about the base or the scalar view.
 				sem.ArrayBaseIsZero = Yes
@@ -116,6 +117,7 @@ func TestTheScalarViewIsTheLowestSubscript(t *testing.T) {
 func TestUnsettingUsesTheDialectsOwnSubscript(t *testing.T) {
 	out, st := run(t, `a=(p q r); unset "a[2]"; echo "[${a[@]}]"`, func(r *Runner) {
 		sem := CoreSemantics()
+		sem.IndirectionIsTheSubscriptFlag = No
 		sem.ArraysAreSparse = No
 		sem.UnsetTakesASubscript = Yes
 		// Counted from one, so `a[2]` is the middle element and not the last.
@@ -138,12 +140,14 @@ func arrays(t *testing.T, src string, sparse Answer) string {
 	t.Helper()
 	d := syntax.Core()
 	d.ParamIndirection = true
+	d.ParamIndirectionPrefixListing = true
 	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var out bytes.Buffer
 	sem := CoreSemantics()
+	sem.IndirectionIsTheSubscriptFlag = No
 	sem.ArraysAreSparse = sparse
 	sem.ArrayBaseIsZero = Yes
 	sem.ArrayScalarIsTheWholeArray = No

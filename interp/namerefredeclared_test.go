@@ -41,6 +41,7 @@ func runNamerefRedeclared(t *testing.T, src string) (string, int) {
 	sem.ValuelessDeclarationHidesTheOuterValue = Yes
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 	}, func(r *Runner) { r.Semantics = &sem })
 }
 

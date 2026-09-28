@@ -122,7 +122,10 @@ func runSplitPairedLiteral(t *testing.T, src string) (string, int) {
 	sem := testSemantics()
 	sem.BareElementsInATableLiteralMustPairOff = Yes
 	sem.BareElementsInATableLiteralAreEachOneValue = No
-	return runGrammar(t, src, func(d *syntax.Dialect) { d.ParamIndirection = true },
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
+	},
 		func(r *Runner) { r.Semantics = &sem })
 }
 
@@ -130,6 +133,9 @@ func runPairedLiteral(t *testing.T, axis Answer, src string) (string, int) {
 	t.Helper()
 	sem := testSemantics()
 	sem.BareElementsInATableLiteralMustPairOff = axis
-	return runGrammar(t, src, func(d *syntax.Dialect) { d.ParamIndirection = true },
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
+	},
 		func(r *Runner) { r.Semantics = &sem })
 }

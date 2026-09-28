@@ -132,6 +132,7 @@ func TestIndirectSubscriptYieldsTheKeys(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			d := syntax.Core()
 			d.ParamIndirection = true
+			d.ParamIndirectionPrefixListing = true
 			f, err := syntax.Parse(c.src, d)
 			if err != nil {
 				t.Fatalf("parse %q: %v", c.src, err)

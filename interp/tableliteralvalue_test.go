@@ -68,6 +68,9 @@ func runKeyedLiteral(t *testing.T, axis Answer, src string) (string, int) {
 	t.Helper()
 	sem := testSemantics()
 	sem.BareElementsInATableLiteralAreEachOneValue = axis
-	return runGrammar(t, src, func(d *syntax.Dialect) { d.ParamIndirection = true },
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
+	},
 		func(r *Runner) { r.Semantics = &sem })
 }

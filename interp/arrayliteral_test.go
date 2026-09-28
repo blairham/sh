@@ -103,7 +103,10 @@ func TestALiteralSubscriptInheritsTheBase(t *testing.T) {
 	if out, _ := run(t, src, withSem(vectors[1])); out != "[x][y][z]" {
 		t.Errorf("one-based gave %q, want three elements", out)
 	}
-	indices := func(d *syntax.Dialect) { d.ParamIndirection = true }
+	indices := func(d *syntax.Dialect) {
+		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
+	}
 	if out, _ := runGrammar(t, `a=(x [3]=y z); echo "${!a[@]}"`, indices, withSem(vectors[1])); strings.TrimSpace(out) != "1 3 4" {
 		t.Errorf("one-based subscripts are %q, want the subscripts as written", strings.TrimSpace(out))
 	}

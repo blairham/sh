@@ -158,6 +158,10 @@ func Dialect() syntax.Dialect {
 	// that answers zsh (#930).
 	d.ProcessSubstitutionOnlyWhereACommandTakesAWord = true
 	d.ParamIndirection = true
+	// And the prefix spelling: `${!ZQ_@}` is `ZQ_a ZQ_b` here, measured
+	// beside bash in the corpus. See
+	// syntax.Dialect.ParamIndirectionPrefixListing.
+	d.ParamIndirectionPrefixListing = true
 	// And it begins at a name and nowhere else, which is why
 	// ParamBangNameContinues is left empty here rather than given bash's set:
 	// letters, `_` and this dialect's dotted names are the whole of what
@@ -2126,6 +2130,11 @@ func Semantics() interp.Semantics {
 	s.LetReadsALeadingZeroAsDecimal = interp.Yes
 	s.ArithmeticAssignmentDeclaresANumber = interp.No
 	s.IndirectionYieldsName = interp.Yes
+	// And not the third answer: this shell yields the *name* and the one
+	// that reads the `!` as a subscript flag is zsh under `emulate ksh`,
+	// which is a different shell wearing this one's name. See
+	// interp.Semantics.IndirectionIsTheSubscriptFlag.
+	s.IndirectionIsTheSubscriptFlag = interp.No
 	// And an operator after `${!name[@]}` is a bad substitution here rather
 	// than either reading: measured 2026-09-14, `${!w[@]#H}`, `${!w[@]:1:2}`,
 	// `${!w[@]/L/x}` and `${!w[@]+SET}` all end the script at 1 where the

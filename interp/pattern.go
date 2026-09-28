@@ -527,7 +527,7 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		// parameter followed by the brackets as text — here as much as in a
 		// word, since a `case` arm and a condition read the same spans. See
 		// baresubscript.go.
-		s, tail := r.unreadBareSubscript(s)
+		s, tail := r.unreadBareSubscript(r.indirectionReadAsTheSubscriptFlag(s))
 		// A `-` or `+` word that is what the expansion came to is part of
 		// the *pattern* being built, not a value pasted into it. See
 		// substitutedWordPattern.

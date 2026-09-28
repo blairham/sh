@@ -1807,7 +1807,7 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, l
 	// are read off the node, and a node still carrying a subscript nothing
 	// is going to read would be answered as `$a[@]` rather than as `$a`
 	// followed by three characters. See baresubscript.go.
-	s, tail := r.unreadBareSubscript(s)
+	s, tail := r.unreadBareSubscript(r.indirectionReadAsTheSubscriptFlag(s))
 	if parts, ok := r.expandAtList(s, sp, head); ok {
 		marks := listMarks{nulls: r.listNulls, edges: r.listEdges}
 		r.listNulls, r.listEdges = nil, listEdges{}
@@ -2802,7 +2802,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		// An unbraced subscript the run does not read as one leaves the
 		// parameter behind and hands the brackets back as text. See
 		// baresubscript.go.
-		s, tail := r.unreadBareSubscript(s)
+		s, tail := r.unreadBareSubscript(r.indirectionReadAsTheSubscriptFlag(s))
 		v := r.expandParam(s.Param)
 		text, split := r.expansionResult(v, unquoted, r.globSubstAnswer(s),
 			splitFlagAnswer(s, sp, r.sem().SplitParamExpansion),

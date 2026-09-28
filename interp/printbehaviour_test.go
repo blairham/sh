@@ -181,6 +181,7 @@ func corpusGrammar() syntax.Dialect {
 	// core reads the `=` as an ordinary character and stops at the `(`.
 	d.ProcessSubstitutionToFile = true
 	d.ParamIndirection = true
+	d.ParamIndirectionPrefixListing = true
 	d.ParamTransformations = true
 	d.PipeBothStreams = true
 	d.RegexTakesAlternation = true

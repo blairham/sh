@@ -3519,6 +3519,78 @@ type Semantics struct {
 	// binary table could not express; this is the shape that expresses it.
 	IndirectionYieldsName Answer
 
+	// IndirectionIsTheSubscriptFlag reads the `!` of `${!name}` as zsh's
+	// **`(k)` expansion flag** — "give me the subscript" — rather than as an
+	// indirection or as the name.
+	//
+	// It is the third answer to the question
+	// [Semantics.IndirectionYieldsName] has two of, and it arrives from a
+	// place neither of those came from: zsh's own grammar has no `${!…}` at
+	// all, and `emulate ksh` gives it one. So an emulation is a grammar
+	// **vector** rather than a narrowing, and the construct it adds means
+	// something the two shells that have it natively do not mean (#4814).
+	//
+	// # One sentence, and it was measured as one
+	//
+	// Every row below is `${!X}` beside `${(k)X}`, both written in the same
+	// script, on `/opt/homebrew/bin/zsh` — `zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0)` — run `-f` over a script file whose first
+	// line is `emulate ksh`, 2026-09-28. With `s=SVAL`, `SVAL=DEEP`, `n=s`,
+	// `a=(zero one two)`, `typeset -A m; m[ka]=va; m[kb]=vb`,
+	// `typeset -A w; w[k]=tgt; tgt=HELLO`, `typeset -a c; c[0]=x; c[2]=z`:
+	//
+	//	written         ${!X}           ${(k)X}
+	//	s               SVAL            SVAL
+	//	n               s               s
+	//	empty           ''              ''
+	//	nosuch          ''              ''
+	//	a               zero            zero
+	//	m               ''              ''
+	//	a[0]            0               0
+	//	a[1]            1               1
+	//	a[9]            9               9
+	//	a[-1]           3               3
+	//	a[1+1]          2               2
+	//	m[ka]           ka              ka
+	//	m[zz]           ''              ''
+	//	a[*]            zero one two    zero one two
+	//	m[*]            ka kb           ka kb
+	//	c[*]            x  z            x  z
+	//	w[@]#H          k               k
+	//	w[@]:1:2        ''              ''
+	//	m[zz]-MIS       MIS             MIS
+	//	a[9]-MIS        9               9
+	//
+	// Twenty rows, twenty agreements, over a grid that varies the parameter's
+	// **kind** (scalar, indexed array, table, unset), the **subscript**
+	// (none, a specific one, out of range, negative, arithmetic, `[@]`,
+	// `[*]`) and the **operator** (a trim, a slice, a `-` word). The rule is
+	// one sentence and the grid varies the noun it is keyed on.
+	//
+	// **And the grid is not "everything is the plain expansion".** That is
+	// the control, and eight rows carry it: `${a[0]}` is `zero` where
+	// `${!a[0]}` is `0`, `${m[ka]}` is `va` where `${!m[ka]}` is `ka`, and
+	// `${m[*]}` is `va vb` where `${!m[*]}` is `ka kb`. Three more say the
+	// reading is not the *subscript listing* either: `${!a[*]}` is the
+	// array's **values**, because zsh's manual says `(k)` has no effect on an
+	// ordinary array, and `${!w[@]#H}` applies the trim to the listing where
+	// bash re-reads the `!` as an indirection and answers `ELLO`.
+	//
+	// # What it costs to implement, which is nothing
+	//
+	// The flag is already here and already right: `${(k)a[2]}`, `${(k)a[9]}`,
+	// `${(k)a}`, `${(k)a[@]}`, `${(k)m[ka]}`, `${(k)m[zz]}`, `${(k)m[@]}` and
+	// `${(k)m}` all agree with the reference in the shell's own mode. So the
+	// answer is a **rewrite** of the node rather than a second reading of the
+	// construct — see [Runner.indirectionReadAsTheSubscriptFlag]. Four
+	// switches keyed on the shapes above would have been four places for the
+	// flag and the sigil to come to disagree.
+	//
+	// Asked wherever an indirection stands, which is the disagreement: the
+	// two shells that have `${!…}` natively answer No and mean it, and no
+	// dialect without the construct is ever asked.
+	IndirectionIsTheSubscriptFlag Answer
+
 	// OperatorAfterTheSubscriptListingIsBad refuses `${!name[@]}` with any
 	// operator written after it, rather than reading the `!` as an ordinary
 	// indirection again.

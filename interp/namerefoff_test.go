@@ -23,6 +23,7 @@ func runNamerefOff(t *testing.T, src string) (string, int) {
 	sem.ReadonlyReassignmentBySpecialBuiltinFatal = No
 	return runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 		d.Herestring = true
 	}, func(r *Runner) { r.Semantics = &sem })
 }

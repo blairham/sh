@@ -23,6 +23,7 @@ func runNamespace(t *testing.T, src string) (string, int) {
 		// and is why every row below sets both.
 		d.DottedName = true
 		d.ParamIndirection = true
+		d.ParamIndirectionPrefixListing = true
 		d.ArrayLiteral = true
 		d.ArraySubscript = true
 		d.DeclarationUtilities = map[string]bool{"typeset": true}

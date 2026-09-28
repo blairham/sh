@@ -27,6 +27,7 @@ func runUnaimedIndirection(t *testing.T, abandons Answer, dg Diagnostics) func(s
 		sem.IndirectionYieldsName = No
 		return runGrammar(t, src, func(d *syntax.Dialect) {
 			d.ParamIndirection = true
+			d.ParamIndirectionPrefixListing = true
 		}, func(r *Runner) {
 			s := sem
 			r.Semantics = &s
@@ -99,6 +100,7 @@ echo after`)
 		sem.IndirectionYieldsName = Yes
 		return runGrammar(t, src, func(d *syntax.Dialect) {
 			d.ParamIndirection = true
+			d.ParamIndirectionPrefixListing = true
 		}, func(r *Runner) {
 			r.Semantics = &sem
 			r.Diagnostics = &Diagnostics{IndirectionUnaimedReference: "%[1]s: no reference name"}

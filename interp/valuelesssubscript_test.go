@@ -307,7 +307,10 @@ func TestADeclaredTableKeyIsAnOrdinaryKeyEverywhereElse(t *testing.T) {
 			// `${!m[@]}` needs a grammar the strict core does not offer and
 			// the keys are half of what this row is checking.
 			out, st := runGrammar(t, "typeset -A m\n"+c.src+"\n"+probe,
-				func(d *syntax.Dialect) { d.ParamIndirection = true },
+				func(d *syntax.Dialect) {
+					d.ParamIndirection = true
+					d.ParamIndirectionPrefixListing = true
+				},
 				func(r *Runner) {
 					sem := permissive()
 					valuelessSubSemantics(&sem)

@@ -94,6 +94,11 @@ func Semantics() interp.Semantics {
 	// 0 — the parentheses nest and the word inside them is a command name
 	// (#3364).
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// unanswered IndirectionIsTheSubscriptFlag: there is no `${!name}` here for
+	// the sigil to mean anything by. Measured 2026-09-28 on `/bin/dash`,
+	// `x=y; y=V; printf "[%s]" "${!x}"` is `Bad substitution` at 2, so the
+	// expansion never reaches a reading — the axis is the third answer to a
+	// question this shell does not put (#4957).
 	// unanswered KindLetterReplacesTheKind: there is no declaration utility
 	// here to write a kind letter on, so there is no second one for the
 	// question to be about. Measured 2026-09-27, `typeset -i q` is `typeset:

@@ -335,6 +335,7 @@ func TestTheNameYieldingIndirectionRefusesOnlyAnAbsentName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, func(d *syntax.Dialect) {
 				d.ParamIndirection = true
+				d.ParamIndirectionPrefixListing = true
 			}, func(r *Runner) {
 				sem := *r.Semantics
 				elementAxes(&sem)

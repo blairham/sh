@@ -4575,6 +4575,74 @@ type Dialect struct {
 	// it.
 	ParamIndirection bool
 
+	// ParamIndirectionPrefixListing enables `${!name@}` and `${!name*}`, the
+	// spelling that yields the **names** beginning with `name` rather than a
+	// value. It rides on [Dialect.ParamIndirection], which is what makes the
+	// `!` an indirection in the first place.
+	//
+	// A flag of its own because the three columns that read `${!x}` do not
+	// agree about it. bash and ksh93 have both; the third reads `${!x}` and
+	// refuses this — measured on `/opt/homebrew/bin/zsh`, `zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0)`, from a script file whose first line is
+	// `emulate ksh`:
+	//
+	//	ZQ_a=1; ZQ_b=2; echo ${!ZQ_@}    bad substitution
+	//	echo "[${!ZQNOSUCH_@}]"          bad substitution
+	//	x=y; y=V; echo "${!x}"           y
+	//	typeset -A m; m[k]=v
+	//	echo "${!m[@]}"                  k
+	//
+	// The last two rows are the control: the same mode reads the indirection
+	// and the subscript listing in the same script that refuses the prefix
+	// form, so this is the *spelling* and not the sigil. `emulate zsh` and
+	// `emulate sh` refuse all four, which is [Dialect.ParamIndirection]
+	// being off there rather than anything this flag says.
+	//
+	// The corpus records the other two columns: `${!ZQ_@}` is `ZQ_a ZQ_b` in
+	// bash 5.3, bash 3.2, bash-as-`sh` and ksh93u+, and a bad substitution in
+	// dash, BusyBox ash and zsh (#4957).
+	ParamIndirectionPrefixListing bool
+
+	// IndirectionRefusedAtExpansion carries the refusal of a `${!name}` this
+	// dialect cannot read **past the parse** instead of ending it: the
+	// expansion is read as unreadable and complains where it would have been
+	// expanded, so a `${!x}` in a branch nothing takes costs nothing.
+	//
+	// The same deferral [Dialect.FlagGroupRefusedAtExpansion] makes, and the
+	// same one every other unreadable expansion in this grammar already
+	// makes — see the `Bad` sites in paramexp.go. `${!name}` was the outlier,
+	// ending the parse where its neighbors are carried.
+	//
+	// Measured with `set -n`, which is what tells a parse refusal from an
+	// expansion-time one: a construct the *parser* refuses is refused
+	// wherever it stands, and one the expander refuses is refused only where
+	// the shell reads the words. On `/opt/homebrew/bin/zsh` 5.9.2, from a
+	// script file, 2026-09-28:
+	//
+	//	                                  emulate zsh   emulate sh
+	//	echo "${!x}"                      1, bad subst  1, bad subst
+	//	{ echo "${!x}"; }                 0, silent     0, silent
+	//	if true; then echo "${!x}"; fi    0, silent     0, silent
+	//	echo "${9nope}"                   1, bad subst  1, bad subst
+	//	{ echo "${9nope}"; }              0, silent     0, silent
+	//
+	// The `${9nope}` rows are the control and they are the whole argument:
+	// an expansion this grammar has always deferred answers every position
+	// exactly as `${!x}` does, so the two are the same kind of refusal and
+	// `${!x}` was being reported in the wrong place.
+	//
+	// **dash defers it too and is deliberately left alone.** `/bin/dash`
+	// answers `set -n; echo "${!x}"` at 0 where this shell's dash column
+	// answers 2, and at *run* time the two agree exactly — `Bad
+	// substitution` at 2. That column is not this issue's and moving it
+	// would be an unmeasured change to a row that passes; recorded here
+	// rather than taken (#4974).
+	//
+	// BusyBox ash is the column that really does refuse at the parse:
+	// `syntax error: bad substitution`, which is its wording for a parse
+	// failure and not for an expansion.
+	IndirectionRefusedAtExpansion bool
+
 	// ParamBangNameContinues lists the characters that carry a *name* on when
 	// they stand immediately after `${!`, so the expansion is an indirection
 	// rather than the parameter `!` with an operator behind it.

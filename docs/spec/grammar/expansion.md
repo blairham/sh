@@ -265,9 +265,57 @@ expansion produced is never a count, however the parenthesis behind it was
 written, so the look-ahead is something a **written** brace gains rather
 than something the word is re-scanned for.
 
-The remaining row of the panel — a `(` the *expansion* produces behind a
-written brace — is a separate rule, because brace expansion runs before
-parameter expansion and so the brace pass cannot see it.
+#### And a parenthesis the expansion produced is one all the same
+
+Provenance is asked about the **brace** and not about the parenthesis, and
+that asymmetry is the whole of it:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `g=x; f {2,3}$g` | `2 \| [2x] [3x]` — the brace expands |
+| `g='(a)'; f {2,3}$g` | `2 \| [aa] [aaa]` — the same written brace does **not** |
+| `f {2,3}$(echo '(a)')` | `2 \| [aa] [aaa]` — not a variable-only path |
+| `g='(a)'; f {z,y}$g` | `1 \| [{z,y}(a)]` — and a count that is not one still suppresses |
+| `g='{2,3}(a)'; f $g` | `2 \| [2(a)] [3(a)]` — a produced **brace** is a list |
+| `g='(a)'; f {2,3}"$g"` | `2 \| [2(a)] [3(a)]` — a quoted expansion produces no `(` |
+
+The first two rows are the whole of it: the same written `{2,3}`, expanded
+in one and suppressed in the other, and the only thing that differs is what
+`$g` holds. Brace expansion runs **before** parameter expansion, so nothing
+about the word the parse cut tells them apart.
+
+**This needs no second look at the word and runs no expansion twice**, which
+is what it seems to demand, because it is the same shell that finds a word's
+braces in the *fields it expanded to* rather than in the word the parse cut —
+`Semantics.BraceScanReadsProducedText`, the road described in the section
+above. On that road the produced text is already there when the brace scan
+asks, and the substitution has run exactly once:
+`n=0; f {2,3}$(n=1; echo '(a)'; echo x >&2)` prints its `x` once.
+
+A reading that re-ran the brace pass over the finished word instead would
+get row five wrong, which is why that row is in the table: a brace an
+expansion produced is never a count, however the parenthesis behind it was
+written.
+
+That the parenthesis then **is** a group rather than text is
+`Semantics.BraceFreesProducedGroupSyntax`, which reads the same written
+brace one stage later and which this shell's column already answered Yes.
+The two have to agree: a brace suppressed in front of a parenthesis that
+then went literal would be a third answer neither column gives.
+
+Three separate places a produced character reaches, and the brace's own
+provenance is what decides between them:
+
+| probe | ksh93u+ | |
+| --- | --- | --- |
+| `g='a,b'; f {$g}` | `2 \| [a] [b]` | produced **contents** of a written brace are still a list |
+| `g=',3'; f {2$g}(a)` | `2 \| [aa] [aaa]` | produced contents of a written **count** are still a count |
+| `g='a,b'; f {2,3}($g)` | `1 \| [{2,3}(a,b)]` | a produced group **body** is read as one |
+
+The test is the **character** and not a group that closes, which two rows
+say: `g='(a'; f {2,3}$g` is `1 | [{2,3}(a]` — suppressed although nothing
+closes — and `g='x(a)'; f {2,3}$g` is `2 | [2x(a)] [3x(a)]`, because the
+produced text does not *begin* with one.
 
 ### Where the braces are found, on the output side
 

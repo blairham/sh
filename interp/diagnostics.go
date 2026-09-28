@@ -150,6 +150,16 @@ type Diagnostics struct {
 	// TieSecondMustBeArray is a scalar value on the array half:
 	// `typeset -T S s=plain`.
 	TieSecondMustBeArray string
+	// TieFirstMustBeScalar is an **array literal** on the scalar half:
+	// `typeset -T A=(1 2) a`. TieOnlyOneOperandWithAValue is a value on both
+	// halves at once, `typeset -T A=v a=(x y)`, and is the one refusal here
+	// that is fatal. TieThirdMustBeJoinCharacter is a value on the separator,
+	// `typeset -T A a c=v`. The three are what each position may **hold**,
+	// beside TieTakesThreeOperands for how many there may be and
+	// TieSecondMustBeArray for the half that is not a literal (#5103).
+	TieFirstMustBeScalar        string
+	TieOnlyOneOperandWithAValue string
+	TieThirdMustBeJoinCharacter string
 	// TieTakesThreeOperands is a **fourth** operand to `-T`, which takes a
 	// scalar, an array and at most a separator: `typeset -T A a b c`.
 	//

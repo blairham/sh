@@ -333,34 +333,49 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// The scalar may carry a value — `typeset -T R=x:y r` is measured to
 	// leave `r` holding `x` and `y` — and the array may carry an array
 	// literal, which reaches the name by the ordinary assignment path and
-	// so arrives here as a bare word. A *scalar* value on the array half is
-	// the one shape refused, in the shell's own words: `typeset -T S s=plain`
-	// is `second argument of tie must be array: s`.
+	// so arrives here as a bare word.
 	scalar, value, hasValue := strings.Cut(args[0], "=")
 	array := args[1]
+	fatal, takes := r.nameRules(builtin)
+	// **What each operand may hold**, three rules and the order they were
+	// measured in. The three positions take three different kinds of thing —
+	// a scalar, an array and a join character — and each has a sentence of
+	// its own for an operand carrying something the position does not take.
+	//
+	// The order below is this shell's and was measured a pair at a time,
+	// because no two of them can be read off each other. Written as a chain,
+	// with the line that settles each link:
+	//
+	//	too many arguments      	typeset -T A=v a=(1) b=(2) c=(3)
+	//	first must be scalar    	typeset -T A=(1) a=v
+	//	second must be array    	typeset -T A A=v a=(1)
+	//	can't tie to itself     	typeset -T A=v A=(1)
+	//	only one may have value 	typeset -T A=v a=(1) b=(2)
+	//	third must be join char 	typeset -T ':' a=(1) b=(2)
+	//	not valid in this context	typeset -T ':' a
+	//	read-only variable      	typeset -r RO=v; typeset -T RO ro b=(2)
+	//
+	// Each row is refused by the rule *above* it in the reference, so each
+	// pair of neighbors is pinned by one line. Measured 2026-09-28 on zsh
+	// 5.9.2 under `-f` from a script file (#5103).
+	//
+	// **An array literal on the scalar half** is the first of the three, and
+	// it wins over everything but the count — over the array half's own
+	// refusal, over a name tied to itself, and over a name that is not a
+	// name at all. Reported and run on: `typeset -T A=(1) a; print -r next`
+	// writes the sentence and then `next`, and neither name exists after it.
+	if r.tieOperandIsAnArrayLiteral(args, 0) {
+		r.diagf("%s\n", Wording(r.diag().TieFirstMustBeScalar,
+			"first argument of tie must be scalar: %s", scalar))
+		return 1
+	}
+	// A *scalar* value on the array half, in the shell's own words:
+	// `typeset -T S s=plain` is `second argument of tie must be array: s`.
 	if strings.Contains(array, "=") {
 		name, _, _ := strings.Cut(array, "=")
 		r.diagf("%s\n", Wording(r.diag().TieSecondMustBeArray,
 			"second argument of tie must be array: %s", name))
 		return 1
-	}
-	// Both halves must be names, and the check earns its place twice over.
-	// It is what this shell says to `typeset -T A ':'` — `not valid in this
-	// context: :`, measured — and it is what keeps a *reordered* operand
-	// list from tying something nobody wrote: the parser lifts an array
-	// literal out of the arguments and appends its bare name at the end, so
-	// `typeset -T R r=(a b) ':'` reaches here as `R`, `:`, `r` and a
-	// positional reading would tie `R` to `:`. Refusing the non-name is the
-	// honest answer to a spelling this engine cannot see in order.
-	fatal, takes := r.nameRules(builtin)
-	for _, n := range []string{scalar, array} {
-		if r.isBuiltinName(builtin, n, takes) {
-			continue
-		}
-		if r.unspecified {
-			return 2
-		}
-		return r.badBuiltinName(builtin, n, n, fatal)
 	}
 	sep := defaultTieSeparator
 	if len(args) > 2 {
@@ -381,6 +396,62 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 			r.fatalQuiet()
 		}
 		return 1
+	}
+	// **Only one half may carry a value.** The scalar's is written with an
+	// `=` and the array's is an array literal the parser lifted out, so the
+	// two are read differently and the rule is that both were written at
+	// once: `typeset -T A=v a=(x y)`. An empty value on either side counts —
+	// `typeset -T A= a=(x y)` and `typeset -T A=v a=()` are both this — and
+	// only one of them is not, which is the control: `typeset -T A=v a` and
+	// `typeset -T A a=(x y)` are taken at 0 and leave `$A` as `v` and `x:y`.
+	//
+	// **Fatal**, which is not what the two neighbors above it do and is
+	// measured rather than assumed: `typeset -T A=v a=(x y); print next`
+	// writes the sentence and nothing else, where `typeset -T A=(1) a` and
+	// `typeset -T A a=(1) b=(2)` both run the next command. It is fatal
+	// inside a function and inside a subshell too, and `2>/dev/null` leaves
+	// the status at 1 with no output.
+	if hasValue && r.tieOperandIsAnArrayLiteral(args, 1) {
+		r.diagf("%s\n", Wording(r.diag().TieOnlyOneOperandWithAValue,
+			"only one tied parameter can have value: %s", scalar))
+		if r.ask(fatal, "a refused declaration operand ending the script") {
+			r.status = 1
+			r.fatalQuiet()
+		}
+		return 1
+	}
+	// **The separator may not carry a value.** It is the one operand that is
+	// not a name, so what is refused here is the `=`: `typeset -T A a c=v`
+	// and `typeset -T A a=(1) b=(2)` are both this, and so is
+	// `typeset -T A a a=(1)` — where the literal is the *third* operand and
+	// the array half is the bare word of the same name, which is why this
+	// asks the position rather than the name. The controls say nothing about
+	// the separator's shape is being refused: `typeset -T A a ab`,
+	// `typeset -T A a '::'` and `typeset -T A a ''` are all taken at 0 in
+	// both shells, so a join character is not required to be one character
+	// and may be none.
+	//
+	// Reported and run on, and ahead of the name checks below: `typeset -T
+	// ':' a=(1) b=(2)` is this and not `not valid in this context: :`.
+	if len(args) > 2 &&
+		(strings.Contains(args[2], "=") || r.tieOperandIsAnArrayLiteral(args, 2)) {
+		r.diagf("%s\n", Wording(r.diag().TieThirdMustBeJoinCharacter,
+			"third argument of tie must be join character"))
+		return 1
+	}
+	// Both halves must be names. **Behind the refusals above**, which is
+	// measured: `typeset -T ':' ':'` is `can't tie a variable to itself: :`
+	// rather than `not valid in this context: :`, and the two rules about
+	// what an operand may hold win over it as well. What it answers on its
+	// own is `typeset -T ':' a` and `typeset -T A ':'`.
+	for _, n := range []string{scalar, array} {
+		if r.isBuiltinName(builtin, n, takes) {
+			continue
+		}
+		if r.unspecified {
+			return 2
+		}
+		return r.badBuiltinName(builtin, n, n, fatal)
 	}
 	if t, already := r.tieOf(scalar); already && t.array != array {
 		// Tying the same pair again is silence and 0 — measured — so only a

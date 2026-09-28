@@ -3354,20 +3354,75 @@ func (r *Runner) unsetName(name string) int {
 		// The two names are removed here rather than by recursing, because
 		// the recursion was standing on the untie: with the tie left in
 		// place the second call would find it and come straight back.
-		if !t.special {
-			r.untie(name)
-		}
+		//
+		// **A pair the shell maintains between two of its own specials is
+		// the one kind that comes apart**, and it is the `wordless` field
+		// that says so — see interp/tiedscalar.go and Runner.PairNames.
+		// Measured 2026-09-28 on zsh 5.9.2 under `-f` from a script file,
+		// from a pair holding `(a b)`, one shell per row:
+		//
+		//	unset watch    ${+WATCH} 1, ${+watch} 0, $WATCH empty,
+		//	               ${(t)WATCH} still scalar-special
+		//	unset WATCH    ${+WATCH} 0, ${+watch} 1, $watch emptied,
+		//	               ${(t)watch} still array-special
+		//
+		// The nine **worded** ties are the control and they agree with the
+		// branch above in both shells: `typeset -T SCA sca; unset SCA`
+		// leaves `${+sca}` at 0 there, and so does `unset PATH` for `path`.
+		// So this is not a change to what `unset` means for a tie; it is
+		// the one join that is not one (#4999).
 		other := t.scalar
 		if name == t.scalar {
 			other = t.array
 		}
-		r.unsetOneName(other)
+		if t.wordless {
+			// The half that stays is **emptied** rather than left holding
+			// what the pair held, which is the row a set test alone cannot
+			// see: measured, `watch=(a b); unset watch` leaves `$WATCH`
+			// empty at `${+WATCH}` of 1, and `unset WATCH` leaves
+			// `${#watch}` at 0. Written through the mirror guard, because
+			// the half being removed is about to go and a mirror into it
+			// would put the emptied value back on a name nothing should
+			// have.
+			// And only where the other half is still there: a script that
+			// takes both halves away one line at a time ends with neither,
+			// which is what `${+WATCH}` and `${+watch}` both being 0 after
+			// `unset watch; unset WATCH` says. Without this the second
+			// `unset` wrote an empty value onto the half the first had
+			// already removed and brought it back.
+			if r.nameIsSet(other) {
+				was := r.mirroring
+				r.mirroring = true
+				if other == t.scalar {
+					r.setVar(other, "")
+				} else {
+					r.setArray(other, nil)
+				}
+				r.mirroring = was
+			}
+		} else {
+			if !t.special {
+				r.untie(name)
+			}
+			r.unsetOneName(other)
+		}
 	}
 	// Read before the removal, which is what clears the record: it says
 	// whether an earlier `unset` in this call had already left the name
 	// declared, and the placeholder's one letter turns on it.
 	again := r.unsetLeftItDeclared[name]
+	// A half of a **wordless** pair keeps the shell's-own mark across its own
+	// removal, which is what a later write to it needs: measured, `watch=(a
+	// b); unset WATCH; WATCH=x:y` leaves `${(t)WATCH}` at `scalar-special`
+	// there, where a name the shell no longer owns comes back a plain
+	// `scalar`. The mark is what the word is read off, and the removal is
+	// what drops it — see the `shellOwn` deletion in unsetOneName's own
+	// branch above (#4999).
+	ownAgain := r.pairHalfKeepsItsMark(name)
 	r.unsetOneName(name)
+	if ownAgain {
+		r.MarkShellOwnParameter(name)
+	}
 	// And a local of the scope that is *running* is left declared where the
 	// column says so — the value and the letters go, the shadow stays, and
 	// the name is still a row in a listing. After the removal, because the

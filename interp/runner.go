@@ -7458,11 +7458,27 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// Asked before the null command below rather than after, which is the
 	// same ordering the discard this replaced was written with and for the
 	// same reason.
-	if sawModifier && !sawRedirectionForm && len(c.Assigns) == 0 &&
+	if sawModifier && !sawRedirectionForm &&
 		len(argv) == modifierWords && len(c.Redirs) > 0 {
-		r.fatal("%s\n", Wording(r.diag().RedirectionWithNoCommand,
-			"redirection with no command"))
-		return nil
+		if len(c.Assigns) == 0 {
+			r.fatal("%s\n", Wording(r.diag().RedirectionWithNoCommand,
+				"redirection with no command"))
+			return nil
+		}
+		// **The same predicate, and the prefix chooses which road.** With
+		// assignments in front of it the command is not refused — it is the
+		// bare assignment's own road, so nothing runs and the names persist.
+		// That is measured rather than inferred from the refusal's absence:
+		// `print MARK; v=1 command >f; print "_=[$_] v=[$v]"` writes
+		// `_=[] v=[1]` in zsh 5.9.2, and `_=[]` is what a *bare* `v=1`
+		// leaves — where a `command` that had run would leave `_=[MARK]`,
+		// which is what the same line without the redirection does.
+		//
+		// Emptied here rather than left for the roster below, because the
+		// roster is about which builtin ran and on this road none did:
+		// `v=1 command >f` keeps the value while `v=1 command` drops it, and
+		// `command` is not on any roster.
+		argv = nil
 	}
 	savedDash := r.dashPrecommand
 	r.dashPrecommand = dash
@@ -8387,7 +8403,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			fresh := false
 			persists := r.prefixPersistsAtThisBuiltin(argv[0], kind)
 			if !persists &&
-				!r.builtinKeepsAnAssignmentPrefix(argv[0]) &&
+				!r.builtinKeepsAnAssignmentPrefix(r.prefixRosterName(argv)) &&
 				r.subscriptedPrefixTakenBack(a) {
 				// The second reason a prefix is not taken back, and it is a
 				// *different* one: one dialect keeps what stands in front of

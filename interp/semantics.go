@@ -25621,14 +25621,32 @@ type Semantics struct {
 	// `alias` on that roster for a reason the panel does not support
 	// (#3313).
 	//
-	// Two rows are measured and deliberately not here. `V=1 builtin` keeps
-	// the value and `V=1 builtin true` does not, which is a command with no
-	// command word rather than a fact about `builtin`: the modifier is taken
-	// away and what is left is an assignment on its own, which persists in
-	// every column. And under `emulate sh` the same `V=1 alias` drops the
-	// value, so this belongs to the shell's own emulation rather than to the
-	// builtin — which is what SetPosixMode would move if that mode is ever
-	// asked to.
+	// **`builtin` and `exec` are on the roster, and the reading that kept
+	// them off it was wrong.** This used to say they were "a command with no
+	// command word rather than a fact about `builtin`" — the modifier taken
+	// away and a bare assignment left behind. `command` is what disproves
+	// it: it is a precommand modifier too, `V=1 command` is a command with no
+	// command word by exactly the same argument, and it **drops** the value.
+	// Measured 2026-09-28 over every builtin this shell has, each run inside
+	// a `{ … }` so that a listing's own output is redirected and the command
+	// itself carries no redirection:
+	//
+	//	V=1 alias      V=[1]      V=1 command    V=[UNSET]
+	//	V=1 hash       V=[1]      V=1 :          V=[UNSET]
+	//	V=1 builtin    V=[1]      V=1 export     V=[UNSET]
+	//	V=1 exec       V=[1]      V=1 typeset    V=[UNSET]
+	//	                          …and the other thirty
+	//
+	// `alias` and `hash` are not precommand modifiers at all, so no reading
+	// of the scan can produce this set; it is a roster, and these two belong
+	// on it. See Runner.prefixRosterName for *which* word is asked about,
+	// which is the second half and is not `argv[0]`: `V=1 builtin echo hi`
+	// drops the value, because what ran is `echo`.
+	//
+	// One row is measured and deliberately not here. Under `emulate sh` the
+	// same `V=1 alias` drops the value, so this belongs to the shell's own
+	// emulation rather than to the builtin — which is what SetPosixMode would
+	// move if that mode is ever asked to.
 	//
 	// Empty everywhere else. ksh93 keeps a prefix in front of `alias` too
 	// and reaches it through SpecialBuiltinsBeyondPosix, which names `alias`

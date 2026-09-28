@@ -2900,11 +2900,67 @@ the classes on by carrying a `~(K)` group, `~` is in both readers' bail-out
 sets, and both are handed the whole pattern with the group still on it. That
 is pinned by a test rather than left to hold by luck.
 
-Pathname expansion is the row still open: `~(K)a\db` names `a1b` there and
-`adb` here. It is a third mechanism — a field's quote removal, not a pattern
-operand's — and the backslash is gone before any pattern is built. The
-reference drops it from an unmatched field too, printing `~(K)adb`, so the
-fix is a marked representation rather than a surviving backslash.
+##### Pathname expansion is a third mechanism, and it is read now
+
+Not a third surface: `patternOpts.tildeGlobRead` was already true for the
+walk and `classEscapes` already armed by the time the matcher ran. What
+reached the matcher was the pattern `~(K)adb`, with the **backslash already
+gone** — removed during *field* construction rather than pattern
+construction. A backslash-quoted span becomes field text through
+`globEscape` in `Runner.expandSpan`, where the lexer has already folded the
+backslash into the span's `Quoting` and the value is the bare letter;
+`Runner.patternOf` has the matching rule for a pattern *operand*
+(`kshClassEscapeSpan`) and a field had no equivalent. In a directory holding
+`a1b` and `adb`:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `echo ~(K)a\db` | `a1b` |
+| `echo a\db` | `adb` — the control: the escape is the letter with no group |
+| `echo ~(K)a\Db` | `adb` |
+| `echo ~(K)a\wb` | `a1b adb` |
+
+**The backslash survives into the field and is removed again with the
+quoting**, which is the decision this row was waiting on. A representation
+that survived quote removal as *text* would reach the output of a field that
+matches nothing, and the reference prints no backslash there:
+
+| probe, in an empty directory | ksh93u+ |
+| --- | --- |
+| `echo ~(K)a\db` | `~(K)adb` |
+| `echo zz~(K)a\db` | `zz~(K)adb` |
+| `echo "~(K)"a\db` | `~(K)adb` — a quoted group is characters |
+
+`globUnescape` is what puts an unmatched field back, and it strips a
+backslash from in front of whatever follows it — so the byte is a quoting
+mark on the way out as much as on the way in, and a mark of its own would
+have bought a second alphabet and the same answer. A **matched** field takes
+its text from the filesystem rather than from the pattern, so there is
+nothing in it to leak.
+
+The other two families reach this surface by the same route. A **control
+escape** names one character, so it names no ordinary file: in a directory
+holding `anb`, `echo ~(K)a\nb` is `~(K)anb` and `echo a\nb` is `anb`. And a
+**zero-width** escape consumes nothing, which is the sharpest evidence that
+what survives is the glob's own backslash rather than text — in a directory
+holding `ab` and `abb`:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `echo ~(K)ab\b` | `ab` — a boundary at the end |
+| `echo ab\b` | `abb` — where the letter names the longer name |
+| `echo ~(K)a\bb` | `~(K)abb` — no boundary between two letters |
+| `echo ~(K)a\Bb` | `ab` — its complement holds there |
+| `echo ~(K)ab\z` | `ab` |
+| `echo ~(K)a\bb*` | `~(K)abb*` — the star stays live and the backslash goes |
+
+Which words are touched is the same question `Runner.patternOf` asks of a
+pattern operand and by the same reader: a word carrying no `~(K)` group
+anywhere reads every escape exactly as it did, so the other five columns are
+unmoved. That gate is load-bearing rather than tidy — widen it and a field
+in a column with a narrower escape set reads the surviving backslash as a
+character of its own, so `echo a\db*` becomes a glob for a name with a
+backslash in it. It is pinned there rather than here, for that reason.
 
 #### And a second family of eight, which are single characters
 

@@ -71,7 +71,14 @@ func TestGrammarTakesWhatWasMeasured(t *testing.T) {
 		{`for ((i=0;i<2;i++)); do :; done`, false, "no C-style for"},
 		{`select x in a; do break; done`, false, "no select"},
 		{`cat <<< hello`, false, "no herestring"},
-		{`echo ${!v}`, false, "no indirection"},
+		// Parses, and is refused where it is expanded. The wording is what
+		// makes this row worth a sentence: BusyBox 1.38.0 answers
+		// `syntax error: bad substitution`, which reads like a parse
+		// failure — and it answers `${9nope}` with the same sentence, an
+		// expansion every column defers. Under `set -n` both are silent at
+		// 0. Measured 2026-09-28; see
+		// syntax.Dialect.IndirectionRefusedAtExpansion (#4974).
+		{`echo ${!v}`, true, "indirection is refused at expansion, not at the parse"},
 		{`echo hi |& cat`, false, "no |&"},
 		{`case a in a) :;;& b) :;; esac`, false, "no ;;&"},
 	} {

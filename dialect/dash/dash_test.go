@@ -43,10 +43,20 @@ func TestGrammar(t *testing.T) {
 	}{
 		{`a=(x y)`, false},
 		{`function f { echo x; }`, false},
-		{`echo ${!x}`, false},
-		// The array form too, which dash refuses twice over: it has no
-		// indirection and no arrays either.
-		{`echo ${!a[@]}`, false},
+		// `${!x}` **parses** and is refused where it is expanded, which is
+		// where this shell refuses every other expansion it cannot read.
+		// Measured 2026-09-28 on `/bin/dash` 0.5.12 from a script file:
+		// `set -n; echo "${!x}"` is silent at 0, in a group and inside an
+		// `if` too, and `${9nope}` — an expansion nobody disputes is
+		// deferred — answers identically. At run time both are
+		// `Bad substitution` at 2. See
+		// syntax.Dialect.IndirectionRefusedAtExpansion and
+		// TestIndirectionIsRefusedPastTheParse (#4974).
+		{`echo ${!x}`, true},
+		// The array form reads the same way. dash has no arrays either, and
+		// that refusal is the *subscript's* rather than the indirection's —
+		// it arrives at expansion too.
+		{`echo ${!a[@]}`, true},
 		// Not a syntax error: with the construct absent, `[[` is a command
 		// name and this parses. Real dash agrees, and fails at runtime with
 		// "[[: not found" and status 127 — the same trap as `&>`, where a

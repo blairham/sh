@@ -4631,16 +4631,20 @@ type Dialect struct {
 	// exactly as `${!x}` does, so the two are the same kind of refusal and
 	// `${!x}` was being reported in the wrong place.
 	//
-	// **dash defers it too and is deliberately left alone.** `/bin/dash`
-	// answers `set -n; echo "${!x}"` at 0 where this shell's dash column
-	// answers 2, and at *run* time the two agree exactly — `Bad
-	// substitution` at 2. That column is not this issue's and moving it
-	// would be an unmeasured change to a row that passes; recorded here
-	// rather than taken (#4974).
+	// **dash and BusyBox ash defer it as well**, and both are on now (#4974).
+	// `/bin/dash` 0.5.12 and BusyBox 1.38.0 each answer
+	// `set -n; echo "${!x}"` at 0 and silent, in a group and inside an `if`
+	// too, while agreeing with this shell exactly at run time.
 	//
-	// BusyBox ash is the column that really does refuse at the parse:
-	// `syntax error: bad substitution`, which is its wording for a parse
-	// failure and not for an expansion.
+	// **ash's wording is not evidence about the place**, and this comment
+	// said it was. It answers `syntax error: bad substitution`, which reads
+	// like a parse failure — and it answers `${9nope}` with the *same
+	// sentence*, an expansion every column in the panel defers. Under
+	// `set -n` both are silent at 0 there, so the sentence is that shell's
+	// wording for an unreadable expansion rather than a statement about
+	// when it was refused. The control is what falsifies the reading: an
+	// expectation drawn from a recorded message rather than from a run, and
+	// one run settles it.
 	IndirectionRefusedAtExpansion bool
 
 	// ParamBangNameContinues lists the characters that carry a *name* on when

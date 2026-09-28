@@ -20,6 +20,28 @@ func Dialect() syntax.Dialect {
 	// `ABC` document — and one that joined after text does not. bash and zsh
 	// take both and ksh93 neither (#2430).
 	d.HeredocDelimiterAcrossAContinuation = syntax.HeredocDelimiterAfterALeadingContinuation
+	// `${!name}` is refused **past the parse** rather than ending it, which
+	// is where this shell refuses every other expansion it cannot read.
+	// Measured 2026-09-28 from a script file under `env -i`, with `set -n`
+	// as the instrument that tells the two apart — a construct the *parser*
+	// refuses is refused wherever it stands, one the expander refuses only
+	// where the words are read:
+	//
+	//	                                  expanded        set -n
+	//	"${!x}"                           bad subst, 2    silent, 0
+	//	{ "${!x}"; }                      bad subst, 2    silent, 0
+	//	if :; then "${!x}"; fi            bad subst, 2    silent, 0
+	//	"${9nope}"              (control) bad subst, 2    silent, 0
+	//	{ "${9nope}"; }         (control) bad subst, 2    silent, 0
+	//	"${x                    (control) —               refused, 2
+	//
+	// The `${9nope}` rows are the control and they are the whole argument:
+	// an expansion every column defers answers each position exactly as
+	// `${!x}` does. The unterminated row is the other one, and it is what
+	// says a silent cell is this shell declining to refuse rather than
+	// `set -n` being unable to report a parse failure at all.
+	// See syntax.Dialect.IndirectionRefusedAtExpansion (#4974).
+	d.IndirectionRefusedAtExpansion = true
 	// The unquoted part of a here-document's delimiter is plain text, so no
 	// substitution is scanned there: a `$(` leaves the `(` where no word may
 	// have one, and a backquote does not protect a blank. A quoted run in a

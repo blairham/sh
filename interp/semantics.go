@@ -14404,6 +14404,62 @@ type Semantics struct {
 	// this field's.
 	FunctionsOptions string
 
+	// FunctionTraceLetters names the letters that mark a **function** for
+	// tracing: a call to a marked name runs its body with the `xtrace`
+	// option on and gives the option back at the return.
+	//
+	// Not [FunctionAttributeLetters]' `t`, which is a different shell's
+	// different feature under the same letter — there the mark decides which
+	// traps a call inherits and is listed back as a `declare -ft NAME` row.
+	// Here it is the trace, and the listing writes it inside the body. The
+	// two are separate fields because a shell that read one for the other
+	// would hand a traced function the wrong shell's traps; see
+	// interp/functiontrace.go for the measurement that separates them.
+	//
+	// Measured 2026-09-28 on zsh 5.9.2: `functions -t f` and `functions -T
+	// f` both trace, `typeset -ft f` and `declare -ft f` are the same line
+	// under the declaration's name, and `local -ft f` is `bad option: -f`
+	// there — so the letters ride whichever words spell a function line and
+	// need no list of their own.
+	//
+	// Empty — every column but one — is a shell with no such mark, which
+	// never reaches the table or the listing.
+	FunctionTraceLetters string
+
+	// FunctionTraceLettersBoundToTheBody is the subset of
+	// [FunctionTraceLetters] whose trace stops at the body it is on.
+	//
+	// The letters are otherwise the same mark: both turn the option on for
+	// the call. The difference is what a function the body *calls* starts
+	// with — measured 2026-09-28 on zsh 5.9.2 with `g` unmarked, `functions
+	// -t f` traces g's body where `functions -T f` traces only the line in
+	// `f` that calls it. A name holding its own mark traces wherever it is
+	// called from, so this bounds the inheritance and not the mark.
+	//
+	// A name holding letters from both sets is bound: `functions -t f;
+	// functions -T f` leaves g untraced, and so does the pair written the
+	// other way round.
+	FunctionTraceLettersBoundToTheBody string
+
+	// FunctionCallRestoresTheTrace says whether a function call saves the
+	// `xtrace` option and puts it back at the return.
+	//
+	// One column does and three do not, and it is one option rather than all
+	// of them: measured 2026-09-28 from script files, `f() { set -x }; f;
+	// print after` leaves `after` **untraced** in zsh 5.9.2 and traced in
+	// bash 5.3, dash and ksh93, while `f() { setopt extendedglob }; f` leaves
+	// that option on in zsh afterwards. So this is not `localoptions` and not
+	// a general rule about options — it is the trace alone.
+	//
+	// It is what makes a traced function's mark need no restore of its own:
+	// the mark turns the option on at the entry and this rule takes it off
+	// again, which is why `set +x` inside a marked call does not survive it
+	// either. See Semantics.FunctionTraceLetters.
+	//
+	// Read rather than asked, so a core with no dialect goes on behaving as
+	// the three columns that do not restore.
+	FunctionCallRestoresTheTrace Answer
+
 	// UnfunctionOptions is the same for `unfunction`, whose set is one
 	// letter: measured, zsh takes `-m` and refuses every other letter of the
 	// alphabet in both cases as a bad option — including the `-f` that is

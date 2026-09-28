@@ -1253,6 +1253,10 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
 	r.funcs[c.Name] = c
+	// A definition replaces the body, and the trace mark belonged to the
+	// body: measured on zsh 5.9.2, `functions -t f; f() { print B }; f`
+	// writes a bare `B`. See interp/functiontrace.go.
+	r.forgetFunctionTrace(c.Name)
 	// And whether the dialect defined it or the script did, which decides
 	// whose voice its diagnostics carry — see prelude.go.
 	r.preludeDefined(c.Name, c)
@@ -1893,6 +1897,36 @@ func (r *Runner) callFuncAs(ctx context.Context, fn *syntax.FuncDecl, name strin
 	wasMarked := r.xtraceByMark
 	r.xtraceByMark = r.tracesFunction(name, fn.Keyword)
 	defer func() { r.xtraceByMark = wasMarked }()
+	// And the *other* trace mark, which is a different shell's and behaves
+	// the other way round: it turns the real `xtrace` option on rather than
+	// carrying a flag beside it, and what a marked body calls is traced too
+	// unless the letter says otherwise. See interp/functiontrace.go, and
+	// Runner.funcTraceMarks for why the two tables are not one.
+	//
+	// The option is saved and put back for **every** call in the column that
+	// restores it, marked or not — that is the general rule the mark leans
+	// on, and it is why `set +x` inside a traced body does not outlive the
+	// call. A column that does not restore only saves where this call is
+	// about to change the option, so an ordinary `f() { set -x }` goes on
+	// leaving the trace on there.
+	mode := r.functionTraceMarkMode(name)
+	boundOutside := r.xtraceBoundToTheBody
+	if r.functionCallRestoresTheTrace() || mode != functionTraceUnmarked || boundOutside {
+		wasTracing := r.xtrace
+		defer func() { r.xtrace = wasTracing }()
+	}
+	switch {
+	case mode != functionTraceUnmarked:
+		r.xtrace = true
+	case boundOutside:
+		// The caller's mark said its trace stops at its own body, and this
+		// is the body it stops before. A name holding a mark of its own
+		// never gets here, which is measured: `-T f` calling `g` calling a
+		// `-t h` traces h.
+		r.xtrace = false
+	}
+	r.xtraceBoundToTheBody = mode == functionTraceBodyAlone
+	defer func() { r.xtraceBoundToTheBody = boundOutside }()
 	// And the body itself is never a head, in any column, however it is
 	// written — measured, though the column that writes a head for a `{ }`
 	// standing on its own writes none here. See Runner.suppressedHead.

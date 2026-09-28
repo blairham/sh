@@ -641,7 +641,19 @@ type Runner struct {
 	// back; whether a marked function then runs with the trace on is
 	// Runner.SetTracedFunctions' answer and that dialect has not filled it
 	// in, so this is the listing's record alone (#3051).
-	tracedFuncs                        map[string]bool
+	tracedFuncs map[string]bool
+	// funcTraceMarks are the letters each function holds of
+	// Semantics.FunctionTraceLetters — the *other* trace mark, the one that
+	// turns the `xtrace` option on for a call rather than deciding which
+	// traps it inherits. Deliberately not tracedFuncs above: the two letters
+	// look alike and mean different shells' different things. See
+	// interp/functiontrace.go.
+	funcTraceMarks map[string]string
+	// xtraceBoundToTheBody is set for the length of a call whose mark says
+	// the trace stops at this body, so that entering a function it calls
+	// turns the option back off. See
+	// Semantics.FunctionTraceLettersBoundToTheBody.
+	xtraceBoundToTheBody               bool
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string
 	// undefinedFunctions is the dialect's answer to "has this function's body

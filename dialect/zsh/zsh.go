@@ -4684,7 +4684,26 @@ func Semantics() interp.Semantics {
 	// Semantics.FunctionLettersThatMarkUndefined, which already named them
 	// for the declaration word, and Diagnostics.MarkingLettersUnderPlus for
 	// the half of `-u` this shell refuses.
-	s.FunctionsOptions = "mMuUxs"
+	s.FunctionsOptions = "mMuUxstT"
+	// `t` and `T` mark a function for tracing — see
+	// Semantics.FunctionTraceLetters. They are in FunctionsOptions above
+	// because this word spells them and in the declaration's own set
+	// already, `typeset -ft f` and `declare -ft f` being the same line under
+	// another name; `local -ft f` is `bad option: -f` in this shell, so
+	// LocalOptions needs nothing.
+	s.FunctionTraceLetters = "tT"
+	// `-T` is the bounded one: measured 2026-09-28 on zsh 5.9.2, `functions
+	// -T f` traces the line in `f` that calls `g` and leaves g's body
+	// silent, where `functions -t f` traces g's body too.
+	s.FunctionTraceLettersBoundToTheBody = "T"
+	// And the rule the mark leans on, which is this column's alone: the
+	// trace option is saved across a call and put back at the return.
+	// Measured 2026-09-28 from script files under `env -i`, `f() { set -x };
+	// f; print after` leaves `after` untraced here and traced in bash 5.3,
+	// dash and /bin/ksh — and `f() { setopt extendedglob }; f` leaves *that*
+	// option on afterwards here, so it is the trace alone and not
+	// `localoptions`.
+	s.FunctionCallRestoresTheTrace = interp.Yes
 	// `unfunction`'s whole set, and it really is one letter: every other
 	// letter of the alphabet is a bad option there in both cases, the `-f`
 	// this name stands for included.
@@ -5383,11 +5402,13 @@ func Diagnostics() interp.Diagnostics {
 		// as missing on a `-f` line alone, which is the narrowest true
 		// statement: `typeset -t v=1` is a declaration here and only
 		// `typeset -ft f` and the bare `typeset -ft` are refused.
-		UnimplementedOptionLettersOnAFunctionLine: map[string]string{
-			"typeset": "t",
-			"declare": "t",
-			"local":   "t",
-		},
+		// Empty, and the emptiness is the measurement: the `t` that was
+		// here for all three words is built now (#5067), and there is no
+		// other letter this shell spells on a function line and this engine
+		// does not. The field stays named in this literal's shape by its
+		// absence — a letter that joins it later goes back here rather than
+		// into UnimplementedOptionLetters, which would refuse it on a
+		// variable line too.
 		UnimplementedOptionLetters: map[string]string{
 			// **`set` has left this table entirely**, and the emptiness is
 			// the measurement. zsh gives a single letter to far more of its
@@ -5555,7 +5576,10 @@ func Diagnostics() interp.Diagnostics {
 			// it too: it is the string form of `-M`, and on a line without
 			// `-M` it is a letter that decides nothing and is taken in
 			// silence, which is what that shell does with it (#4443).
-			"functions": "cktzTW",
+			// `-t` and `-T` have left this list: they mark a function for
+			// tracing and are implemented, in FunctionTraceLetters above
+			// (#5067).
+			"functions": "ckzW",
 		},
 		// `u` alone, and that is the measurement rather than an omission:
 		// `functions +u` and `typeset +fu` are `invalid option(s)` at 1
@@ -5563,7 +5587,13 @@ func Diagnostics() interp.Diagnostics {
 		// both letters mark. So the refused set is strictly narrower than
 		// Semantics.FunctionLettersThatMarkUndefined and cannot be derived
 		// from it (#1996).
-		MarkingLettersUnderPlus: "u",
+		// The line a listing writes inside a traced function's body —
+		// measured 2026-09-28 on zsh 5.9.2, `functions -t f; functions`
+		// writes `f () {`, then this, then the statements. The same text for
+		// `-t` and for `-T`; the listing does not say which letter marked
+		// it. See Diagnostics.TracedFunctionListingLine.
+		TracedFunctionListingLine: "# traced",
+		MarkingLettersUnderPlus:   "u",
 		// `functions`' own wording and not `autoload`'s `bad option: -Q`,
 		// because the line never reached a marking: `zsh:functions:1:
 		// invalid option(s)` and `zsh:typeset:1: invalid option(s)`, each

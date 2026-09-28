@@ -1577,6 +1577,31 @@ type Diagnostics struct {
 	// has nothing missing to refuse.
 	UnimplementedOptionLettersOnAFunctionLine map[string]string
 
+	// TracedFunctionListingLine is the line a listing writes **inside** the
+	// body of a function marked for tracing — see
+	// Semantics.FunctionTraceLetters for the mark.
+	//
+	// Inside rather than after, which is what keeps it out of
+	// [Runner.functionAttributeLine]: measured 2026-09-28 on zsh 5.9.2,
+	// `f() { print A }; functions -t f; functions` writes
+	//
+	//	f () {
+	//		# traced
+	//		print A
+	//	}
+	//
+	// where the one other shell with a trace mark writes a `declare -ft f`
+	// row under the closing brace instead. The line takes the listing's own
+	// indent, so `functions -x2` writes it with two spaces, and the same
+	// text goes in for both letters — `-T` is not said differently.
+	//
+	// It is not in the `functions` **parameter**: `${functions[f]}` is the
+	// body without it in the same run, which is why this is the listing's
+	// wording and not something the printer puts in the tree.
+	//
+	// Empty — every column but one — writes no such line.
+	TracedFunctionListingLine string
+
 	// VariableOnlyLettersOnAFunctionLine are letters a declaration builtin
 	// refuses when the same line also names **functions** — `-f`, or `-F`
 	// where that is the function listing — with operands: `NAME: -X: invalid

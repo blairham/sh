@@ -20,7 +20,25 @@ func bounded() func(*Runner) {
 			FunctionNestingLimit: "%[1]s: maximum function nesting level exceeded (%[2]d)",
 		}
 		r.Diagnostics = &dg
-		r.SetFunctionNestingParameter("FUNCNEST")
+		r.SetFunctionNesting(FunctionNesting{Parameter: "FUNCNEST"})
+	}
+}
+
+// boundedZshWise is the same parameter read the other column's way: a stored
+// zero is a bound, and the refusal ends the script.
+func boundedZshWise() func(*Runner) {
+	return func(r *Runner) {
+		sem := permissive()
+		r.Semantics = &sem
+		dg := Diagnostics{
+			FunctionNestingLimit: "%[1]s: maximum nested function level reached; increase FUNCNEST?",
+		}
+		r.Diagnostics = &dg
+		r.SetFunctionNesting(FunctionNesting{
+			Parameter:            "FUNCNEST",
+			ZeroIsABound:         true,
+			RefusalEndsTheScript: true,
+		})
 	}
 }
 
@@ -104,5 +122,69 @@ func TestNoParameterMeansNoBoundOfTheScripts(t *testing.T) {
 	})
 	if got := strings.TrimSpace(out); got != "st=7 d=6" {
 		t.Errorf("got %q, want the function's own base case", got)
+	}
+}
+
+// TestZeroIsABoundWhereTheDialectSaysSo — the one row the two columns that
+// read this parameter part over.
+//
+// Measured 2026-09-27, script files under `env -i PATH=/usr/bin:/bin`, the
+// same recursion in both: zsh 5.9.2 refuses the *first* call at
+// `FUNCNEST=0` where bash 5.3.20 runs to the function's own base case. The
+// bash rows are the suite above, which is what makes this a pair rather
+// than an assertion about one shell.
+//
+// A negative is the control and it is in here on purpose: both columns read
+// it as no bound, so a change that made zero a bound by making every
+// unreadable value one would fail this row.
+func TestZeroIsABoundWhereTheDialectSaysSo(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"zero admits no call at all",
+			boundJunk("0"),
+			"f: maximum nested function level reached; increase FUNCNEST?",
+		},
+		// An empty value and a word reach this through the *integer*
+		// attribute in the shell being modeled, which stores 0 for both
+		// before the bound is ever read. Written here as the stored value,
+		// because this is the core's question and the attribute is the
+		// dialect's.
+		{"a negative is still no bound", boundJunk("-2"), "st=7 d=6"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, boundedZshWise())
+			got := strings.TrimSpace(strings.ReplaceAll(out, "sh: ", ""))
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTheRefusalEndsTheScriptWhereTheDialectSaysSo — the fourth fact of
+// #4905, and the one a parameter with the right letters would still get
+// wrong.
+//
+// Measured 2026-09-27 in one run, `echo AFTER` on the line after the call:
+// zsh 5.9.2 never reaches it and leaves at 1, where bash 5.3.20 runs it. The
+// `||` is refused in both, which is what says this is the give-up growing
+// rather than a different refusal.
+func TestTheRefusalEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	src := "f() { f; }\nFUNCNEST=2\nf || echo or\necho AFTER"
+	out, st := run(t, src, boundedZshWise())
+	got := strings.TrimSpace(strings.ReplaceAll(out, "sh: ", ""))
+	want := "f: maximum nested function level reached; increase FUNCNEST?"
+	if got != want {
+		t.Errorf("got %q, want %q — the next line must not run", got, want)
+	}
+	if st != 1 {
+		t.Errorf("status = %d, want 1", st)
+	}
+	// The control: the same source under the column that gives up the line
+	// alone reaches the `echo`, so this test is not passing because the
+	// runner stops at any refusal.
+	out, _ = run(t, src, bounded())
+	if !strings.Contains(out, "AFTER") {
+		t.Errorf("got %q, want the next line to run where the dialect gives up the line alone", out)
 	}
 }

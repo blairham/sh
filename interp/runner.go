@@ -2414,10 +2414,22 @@ type Runner struct {
 	// this field is for the shell that has the sentence and takes it away. See
 	// Runner.ReportsLoopControlOutsideALoop.
 	loopControlQuiet bool
-	// funcNestParam is the parameter a script writes to move the bound on
-	// function nesting, or empty in a shell whose bound is its own. See
-	// Runner.SetFunctionNestingParameter.
-	funcNestParam string
+	// locationNamesInstead puts a name where the location's own would have
+	// gone, for a message about a construct the shell is *about* to enter
+	// rather than one it is in. Empty for every other message, which is all
+	// but one of them, and set only around the write it belongs to — see
+	// Runner.refuseFunctionNesting, which is the only site.
+	//
+	// The narrower sibling of Runner.dotFailureFile: that one names a file
+	// where the script's name would have gone and this one names a function
+	// where the *frame*'s name would have, so it wins over the function rule
+	// and over the current-file rule alike.
+	locationNamesInstead string
+	// funcNest is what the dialect says about the bound on function
+	// nesting: the parameter a script moves it with, whether a stored zero
+	// is a bound, and whether the refusal ends the script. The zero value
+	// is a shell whose bound is its own. See Runner.SetFunctionNesting.
+	funcNest FunctionNesting
 	// fdVarClosedWithTheCommand takes back a `{name}` descriptor when the
 	// command carrying the redirection ends — bash's `varredir_close`, which
 	// is **off** by default there and is the only name any shell in the panel
@@ -4794,8 +4806,23 @@ type Runner struct {
 	actionIDs *atomic.Uint64
 }
 
-// maxDepth bounds nested function calls.
-const maxDepth = 256
+// maxDepth bounds nested function calls: the substrate's own ceiling, which
+// no script can reach for and none can move.
+//
+// **It has to sit above the highest bound any dialect starts with**, or the
+// ceiling speaks first and that dialect's bound is dead. zsh 5.9.2 starts
+// `FUNCNEST` at 500 — measured 2026-09-27, `typeset -i10 FUNCNEST=500` in a
+// fresh `zsh -f` — and at 256 this shell answered a runaway with its own
+// `too deeply nested` at 256 rather than the refusal the reference writes at
+// 500, which is half of what #4905 was filed on.
+//
+// The number is otherwise arbitrary and is not a measurement of any shell:
+// what it guards is the Go stack, and a shell recursion is a handful of Go
+// frames, so the room between it and 500 costs nothing until something
+// actually runs away. It is still reached by the one case a dialect's
+// parameter deliberately does not bound — a negative `FUNCNEST`, which zsh
+// answers with a segmentation fault and this shell answers with a sentence.
+const maxDepth = 1024
 
 // clone copies the state for a subshell, so nothing it does escapes.
 func (r *Runner) clone() *Runner {
@@ -5248,7 +5275,20 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 		return d.EvalSourceName, at, false
 	}
 	if functionCounts && d.LocationNamesTheFunction && r.locationIsInsideAFunctionBody() {
+		if r.locationNamesInstead != "" {
+			// One message names a function that has not been entered where
+			// the one the shell is inside would have gone. See
+			// Runner.locationNamesInstead.
+			return r.locationNamesInstead, at - r.functionLineOrigin(), true
+		}
 		return r.inFunc, at - r.functionLineOrigin(), true
+	}
+	if r.locationNamesInstead != "" {
+		// The same override where no function rule applied, so the line
+		// stays the caller's rather than becoming an offset into a body the
+		// shell never entered — which is exactly what the one message this
+		// exists for was measured writing.
+		return r.locationNamesInstead, at, false
 	}
 	name = r.name()
 	if r.dotFailureFile != "" {

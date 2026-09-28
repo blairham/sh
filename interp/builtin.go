@@ -7442,8 +7442,25 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	// Ahead of the bare listing below, because `local -T` with no operands
 	// is the *tie* listing and not this word's own: measured, it writes the
 	// same table `typeset -T` does.
-	if code, isTie := r.tieDeclaration(word, args, f, true); isTie {
-		return code
+	// **Not under `-p`**, where the letter filters a listing instead of
+	// declaring — the same gate biDeclare takes, and for the same measured
+	// reason: `local -pT A` is `typeset -T A a=( x y )` in the reference and
+	// was this word's tie refusal here. The plus form with operands keeps the
+	// tie route, because `local +pT A` is `use unset to remove tied
+	// variables` there (#5101).
+	if !f.print || (f.remove && len(args) > 0) {
+		if code, isTie := r.tieDeclaration(word, args, f, true); isTie {
+			return code
+		}
+	}
+	// And the filtered listing, which is `declare -p`'s and not this word's:
+	// `local -pT` writes the tie table in `-p`'s form, global pairs included,
+	// so it is not narrowed to the running call. Ahead of the bare listing
+	// below, which would otherwise take it. See Runner.filteredPrintListing.
+	if len(args) == 0 {
+		if code, answered := r.filteredPrintListing(f); answered {
+			return code
+		}
 	}
 	if len(r.scopes) > 0 && (len(args) == 0 || f.print) {
 		// Bare `local` is a listing, and the shells do not agree what of —

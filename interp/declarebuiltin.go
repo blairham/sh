@@ -1502,11 +1502,21 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		}
 	}
 
-	if code, isTie := r.tieDeclaration(name, args, f, false); isTie {
-		// Ahead of `-p` because `typeset -pT` with names is not a shape any
-		// shell measured has, and behind the bare listing above because
-		// `typeset -T` alone *is* a listing there.
-		return code
+	// **Not under `-p`**, where the letter is a *filter* on a listing and not
+	// a declaration at all. The comment that stood here said `typeset -pT`
+	// with names "is not a shape any shell measured has"; it is one, and it is
+	// the listing `typeset -p` gives those names — see tieUnderThePrintLetter
+	// for the rows. Still behind the bare listing above, because `typeset -T`
+	// alone is a listing of its own (#5101).
+	//
+	// The **plus** form keeps the tie route: `typeset +pT A` is `use unset to
+	// remove tied variables` in the reference, the same refusal `typeset +T A`
+	// gets, so the sign wins over the print letter and that row was already
+	// right.
+	if !f.print || (f.remove && len(args) > 0) {
+		if code, isTie := r.tieDeclaration(name, args, f, false); isTie {
+			return code
+		}
 	}
 	if f.print {
 		if len(args) == 0 && f.attributeLetterWritten() {
@@ -1543,18 +1553,8 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			// of them — bash writes `declare -- p1="plain"` at 0 for a name
 			// carrying no integer attribute — so the operand form is left to
 			// declarePrint below, which already answers it.
-			keep, answered := r.attributeFilter(f)
-			if !answered {
-				return r.status
-			}
-			if keep == nil {
-				// A letter this dialect spells and this engine records
-				// nothing for. It is still an attribute to select on and no
-				// name carries it, so the listing is empty rather than whole
-				// — the same answer declarationListing gives.
-				return 0
-			}
-			return r.declarePrintFiltered(nil, r.sem().DeclareListing, true, keep, true)
+			code, _ := r.filteredPrintListing(f)
+			return code
 		}
 		// The operands of this listing are its own to perform first, in the
 		// two columns that perform them: `typeset -p s=5` declares and shows

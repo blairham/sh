@@ -158,6 +158,21 @@ func TestTheKeywordTakesABodyBehindARedirection(t *testing.T) {
 			}
 		})
 	}
+	// The other bound: a word that **closes the construct around it** is
+	// not a body either, and the keyword stands alone in front of it. These
+	// four are the whole of what the stop-word half of that test does —
+	// without it each one is read as a body and the parse fails on the word
+	// that was going to end the construct.
+	for _, src := range []string{
+		"{ function >f }\n",
+		"for i in 1; do function >f done\n",
+		"if true; then function >f fi\n",
+		"case x in x) function >f esac\n",
+	} {
+		if _, err := Parse(src, bareKeyword()); err != nil {
+			t.Errorf("%q was refused (%v), want the keyword standing alone in front of the word", src, err)
+		}
+	}
 	// And the bound. A separator between the redirection and the body is a
 	// token of its own, so the keyword stands alone and keeps the
 	// redirection for itself — which is the null-command reading, and a

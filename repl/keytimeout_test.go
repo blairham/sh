@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -121,4 +122,132 @@ func TestTheKeySequenceWaitNeedsARunnerToReadFrom(t *testing.T) {
 	if read := s.keySequenceWait(); read != nil {
 		t.Errorf("a session with no Runner was given a reader anyway")
 	}
+}
+
+// The wait itself, over a real pipe: the question `escapeIsTheModeSwitch`
+// asks, with a descriptor that does or does not get a byte in time.
+//
+// **This is the half the parameter table above cannot reach.** That table
+// grades the reading of `$KEYTIMEOUT` and would go on passing with the number
+// read and thrown away; these rows grade the wiring, by putting a descriptor
+// under the editor and watching whether the answer changes with when the byte
+// arrives. The pty differential in the commit message is the same question
+// asked of a whole shell; this is it asked of the one function.
+//
+// The bounds are deliberately loose. What is being pinned is *that* the wait
+// happens and roughly how long, not the scheduler's accuracy: a row that
+// failed because a runner was busy for forty milliseconds would be a worse
+// test than no row at all.
+func TestTheEscapeQuestionWaitsForTheRestOfTheSequence(t *testing.T) {
+	// escapeIsTheModeSwitch is true when the Escape stands alone, and false
+	// when something follows it inside the wait.
+	newPipe := func(t *testing.T) (*os.File, *os.File) {
+		t.Helper()
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { r.Close(); w.Close() })
+		return r, w
+	}
+	editorOver := func(r *os.File, wait func() (time.Duration, bool)) *editor {
+		return &editor{inFd: func() int { return int(r.Fd()) }, keyWait: wait}
+	}
+
+	t.Run("nothing follows within the wait, so the Escape is the mode switch", func(t *testing.T) {
+		r, _ := newPipe(t)
+		e := editorOver(r, func() (time.Duration, bool) { return 150 * time.Millisecond, false })
+		start := time.Now()
+		if !e.escapeIsTheModeSwitch() {
+			t.Errorf("an Escape with nothing behind it did not switch mode")
+		}
+		if elapsed := time.Since(start); elapsed < 100*time.Millisecond {
+			t.Errorf("the question took %v, which is less than the wait it was given", elapsed)
+		}
+	})
+
+	t.Run("a byte arrives inside the wait, so the Escape begins a sequence", func(t *testing.T) {
+		r, w := newPipe(t)
+		e := editorOver(r, func() (time.Duration, bool) { return 3 * time.Second, false })
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			w.Write([]byte("["))
+		}()
+		start := time.Now()
+		if e.escapeIsTheModeSwitch() {
+			t.Errorf("an Escape with a byte behind it switched mode anyway")
+		}
+		if elapsed := time.Since(start); elapsed > 2*time.Second {
+			t.Errorf("the question waited %v after the byte had arrived", elapsed)
+		}
+	})
+
+	t.Run("a dialect that names no parameter waits no time at all", func(t *testing.T) {
+		// The zero value, and the row that says nothing inherits a wait: the
+		// byte below arrives long after this has already answered.
+		r, w := newPipe(t)
+		e := editorOver(r, nil)
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			w.Write([]byte("["))
+		}()
+		start := time.Now()
+		if !e.escapeIsTheModeSwitch() {
+			t.Errorf("an editor with no wait waited for the byte anyway")
+		}
+		if elapsed := time.Since(start); elapsed > 150*time.Millisecond {
+			t.Errorf("an editor with no wait took %v", elapsed)
+		}
+	})
+
+	t.Run("zero waits indefinitely, so a late byte is still the sequence", func(t *testing.T) {
+		// `KEYTIMEOUT=0` — measured to wait past a four-second gap. A
+		// quarter of a second is enough to tell it from every bounded row
+		// above without making the suite wait for one.
+		r, w := newPipe(t)
+		e := editorOver(r, func() (time.Duration, bool) { return 0, true })
+		go func() {
+			time.Sleep(250 * time.Millisecond)
+			w.Write([]byte("["))
+		}()
+		if e.escapeIsTheModeSwitch() {
+			t.Errorf("an unbounded wait gave up before the byte arrived")
+		}
+	})
+
+	t.Run("a descriptor the question cannot be put about switches mode", func(t *testing.T) {
+		// A descriptor past what a descriptor set can name. The honest
+		// fallback is the one ReadableNow takes for the same case — go
+		// ahead — which here means treating the Escape as the mode switch,
+		// because a mode switch is recoverable by pressing `i` and a
+		// swallowed Escape is not.
+		e := &editor{
+			inFd:    func() int { return 1 << 20 },
+			keyWait: func() (time.Duration, bool) { return 3 * time.Second, false },
+		}
+		start := time.Now()
+		if !e.escapeIsTheModeSwitch() {
+			t.Errorf("a descriptor nothing could be asked about began a sequence")
+		}
+		if elapsed := time.Since(start); elapsed > time.Second {
+			t.Errorf("a descriptor nothing could be asked about was waited on for %v", elapsed)
+		}
+	})
+
+	t.Run("a byte already in hand is never waited on", func(t *testing.T) {
+		// inputPending answers first: bytes taken off the terminal sit where
+		// the kernel cannot see them, which is the split this function has
+		// always had.
+		r, _ := newPipe(t)
+		e := editorOver(r, func() (time.Duration, bool) { return 3 * time.Second, false })
+		e.held[0] = byte(0x5b)
+		e.heldLen = 1
+		start := time.Now()
+		if e.escapeIsTheModeSwitch() {
+			t.Errorf("an Escape with a byte already in hand switched mode")
+		}
+		if elapsed := time.Since(start); elapsed > time.Second {
+			t.Errorf("a byte already in hand was waited on for %v", elapsed)
+		}
+	})
 }

@@ -309,7 +309,37 @@ func (r *Runner) elementDeclarationRefused(base, sub string, f declareFlags, sha
 		}
 		return true
 	}
-	if shadows && !f.global && len(r.scopes) > 0 &&
+	// **Only where a local would have to be made.** The question the axis
+	// asks is whether a subscripted operand may *create* the local, and a
+	// name this call has already declared local is not that question: the
+	// element goes into the local that is already standing, exactly as a bare
+	// `array[1]=a` statement would put it there.
+	//
+	// Measured 2026-09-28 on zsh 5.9.2 under `-f` from a script file:
+	// `f(){ local -a array; typeset array[1]=a array[2]=b; print $array }` is
+	// `a b` there and was this refusal here. The controls are what make it a
+	// rule about the **local** rather than about the element, and they are
+	// the rows that already agreed:
+	//
+	//	f(){ typeset array[1]=a }                	refused, both
+	//	array=(1 2); f(){ typeset array[1]=X }   	refused, both — a global
+	//	                                          	is not a local of this call
+	//	g(){ typeset array[1]=a }
+	//	f(){ local -a array; g }                 	refused, both — the local
+	//	                                          	belongs to the caller
+	//	typeset array[1]=a                       	taken, both — no scope at all
+	//
+	// So the refusal turns on one thing: whether *this* call has the name.
+	// localCell is that question and is the same one shadowTypeset asks
+	// before taking a second copy of a name a function declared twice.
+	//
+	// The **innermost** scope and not any live one, which the third row above
+	// pins: a callee refuses over its caller's local. A brace group is not a
+	// scope and does not change the answer — `f(){ local -a array; { typeset
+	// array[1]=a } }` is `a` in the reference — and a subshell carries the
+	// scopes it was forked with, so the element lands inside it and the outer
+	// call sees nothing, which is the subshell and not this rule (#5106).
+	if shadows && !f.global && len(r.scopes) > 0 && !r.localCell(base) &&
 		!r.ask(r.sem().SubscriptedOperandTakesALocalDeclaration,
 			"a declaration of one array element making the array local") {
 		if !r.unspecified {

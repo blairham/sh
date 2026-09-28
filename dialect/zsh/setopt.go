@@ -1395,6 +1395,14 @@ var zshOptions = []zshOption{
 		},
 		set: func(r *interp.Runner, on bool) int {
 			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.ArithLeadingZeroIsOctal }, answer(on))
+			// And the lexical half, which is where the numeral *ends*. The
+			// two are read in different places — the evaluator and the
+			// parser — and moving only the first left them disagreeing:
+			// `08` was read whole in base ten and handed to a converter
+			// that wanted octal, which refused the lot where the reference
+			// had already stopped at the `8`. See
+			// interp.Runner.SetArithLeadingZeroNamesOctalDigits (#4436).
+			r.SetArithLeadingZeroNamesOctalDigits(on)
 			return 0
 		},
 	},

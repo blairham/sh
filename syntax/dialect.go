@@ -4866,6 +4866,45 @@ type Dialect struct {
 	// with the rest left standing.
 	ArithNumeralEndsAtABadDigit bool
 
+	// ArithLeadingZeroNamesOctalDigits makes a leading `0` name the numeral's
+	// base for the reader above, so the numeral ends at the first digit
+	// **eight** cannot use rather than at the first digit ten cannot.
+	//
+	// The **lexical** half of the option one dialect spells `octalzeroes`,
+	// and it is separate from Semantics.ArithLeadingZeroIsOctal for the same
+	// reason [Dialect.CloseBraceEndsAWord] is separate from its reserved
+	// half: where a numeral *ends* is a question about how text is lexed, the
+	// value it comes to is a question about what the digits mean, and one
+	// dialect switches both at run time with one name.
+	//
+	// Without it the two halves disagree and the numeral is refused whole.
+	// Measured 2026-09-28 on `/opt/homebrew/bin/zsh` — zsh 5.9.2
+	// (aarch64-apple-darwin25.4.0), `go version -m` says *not a Go
+	// executable* for it — `-f` over a script file under
+	// `env -i PATH=/usr/bin:/bin TERM=dumb` with a scratch `HOME` and stdin
+	// at `/dev/null`, the option set on the line above:
+	//
+	//	                  zsh 5.9.2                          before
+	//	$(( 08 ))         operator expected at `8 '          invalid number: 08
+	//	$(( 09 ))         operator expected at `9 '          invalid number: 09
+	//	$(( 0778 ))       operator expected at `8 '          invalid number: 0778
+	//	$(( 1 + 08 ))     operator expected at `8 '          invalid number: 08
+	//	$(( 08 + 1 ))     operator expected at `8 + 1 '      invalid number: 08
+	//	v=08 under -i     operator expected at `8'           invalid number: 08
+	//
+	// **The fifth row is the one that says it is where the numeral ends and
+	// not how the refusal is worded.** The quoted text is the *rest of the
+	// expression* — `8 + 1`, not `8` — so the reader stopped after the `0`
+	// and handed everything from the bad digit on to the parser, which is
+	// two tokens where this shell had one.
+	//
+	// The controls hold still on both sides: `$(( 010 ))` is 8 and
+	// `$(( 0777 ))` is 511 with the option on, `$(( 0x18 ))` is 24 because a
+	// radix prefix names its own base, and `$(( 08 ))` is **8** with the
+	// option off, where a leading zero names nothing and ten can use the
+	// digit (#4436).
+	ArithLeadingZeroNamesOctalDigits bool
+
 	// ArithDigitSeparator makes an underscore inside a numeral a **digit
 	// separator**: it is skipped, and the numeral reads as though it were
 	// not there. zsh alone.

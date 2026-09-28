@@ -596,6 +596,10 @@ func Dialect() syntax.Dialect {
 	d.ExtendedPattern = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
+	// And a repetition count written in braces in front of a group, which is
+	// this shell's alone: `{2,3}(a)` matches `a` two or three times. See
+	// syntax.Dialect.CountedPatternGroup (#4931).
+	d.CountedPatternGroup = true
 	// And a `|` standing outside every group is an alternation of the whole
 	// pattern, **however it arrived** — which is a different reading from
 	// the one zsh has, not a wider setting of the same one (#2528).

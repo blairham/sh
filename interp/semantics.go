@@ -33457,6 +33457,7 @@ func (r *Runner) matchPatternR(pattern, s string, surface patternSurface) bool {
 		group:        r.lang().PatternAlternation,
 		topGroup:     r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(condition),
 		quantified:   r.readsQuantifiedGroups(condition),
+		counted:      r.lang().CountedPatternGroup,
 		numericRange: r.lang().NumericRangePattern,
 		// The run-time option folds exactly the two consumers this function
 		// serves — `case` and the *pattern* operators of `[[ ]]` — and

@@ -2339,6 +2339,16 @@ func (l *Lexer) opensPatternGroup() bool {
 	if !extended || l.off == 0 {
 		return false
 	}
+	if l.dialect.CountedPatternGroup && l.src[l.off-1] == '}' &&
+		l.writtenBraceEndsAt(l.off-1) {
+		// A repetition count written in front of the group. The `}` is the
+		// whole of the test and the brace's contents are not asked about
+		// here at all: `{z,y}(a)` is read exactly as `{2,3}(a)` is, and what
+		// separates them is what each then *matches*, which is the matcher's
+		// question. See [Dialect.CountedPatternGroup], and #4933 for the row
+		// that says a count which is not a count still gets this far.
+		return true
+	}
 	switch l.src[l.off-1] {
 	case '@', '?', '+', '*', '!':
 		// A *quantified* group may be empty, and an empty one is not the
@@ -4894,6 +4904,85 @@ func (l *Lexer) patternCharacterBefore(i int) bool {
 			j = k
 		case '*', '?', '[', '{', '~':
 			return true
+		}
+	}
+	return false
+}
+
+// writtenBraceEndsAt reports whether src[i] is a `}` that closes a **written
+// unquoted** brace of the word being read, with at least one character
+// between the two halves.
+//
+// It is what lets a `(` straight behind it into the word — see
+// [Dialect.CountedPatternGroup] — and every clause of that sentence is a
+// measured row of #4931 rather than a guess:
+//
+//   - **written**: `g='{2,3}(a)'; f $g` yields the two words `2(a)` and
+//     `3(a)` on ksh93u+, so a brace an expansion produced is an ordinary
+//     list and the parenthesis behind it is ordinary text.
+//   - **unquoted**: `f "{2,3}"(a)` is the parenthesis reported unexpected
+//     there, the same refusal a shell without the construct gives.
+//   - **the brace's own `}`**: `v='{2,3}'; f $v(a)` is that refusal too, so
+//     it is the brace and not merely a `}` standing in the word.
+//   - **non-empty**: `echo A{}(a)B` is the refusal and `echo A{,}(a)B` is
+//     not, which is why the width test below is `>` and not `>=`.
+//
+// A scan of the source rather than a bit the word scanner carries, for the
+// reason [Lexer.patternCharacterBefore] above gives: the question is about
+// text already read, one dialect asks it, and a flag threaded through every
+// literal path would be a cost the other five pay for it.
+//
+// `${…}` is tracked so that its `}` is not mistaken for a brace list's —
+// that is the third row above. A `}` inside a `$( … )` is not distinguished,
+// which would need a second scanner here for shapes no column asks about.
+//
+// **Two shapes are refused here that the reference reads**, and both are the
+// written-brace key being stricter than that shell's. `f "{2,3"}(a)` and
+// `f "{"2,3}(a)` are each `1 | [{2,3}(a)]` there — the word entire, the
+// brace having been quoted and so not a count — and are the parenthesis
+// reported unexpected here, because the `}` closes no brace this scan can
+// see. A refusal rather than a wrong answer, and taking the quote skip out
+// to admit them is worse than either: the `{2,3}` then arrives at the
+// matcher escaped while the `(a)` does not, and the word comes back as
+// `{2,3}a`. `v='{2,3}'; f ${v}(a)` is the third of the same family and
+// belongs to #4934, where text a later pass produced is the subject.
+func (l *Lexer) writtenBraceEndsAt(i int) bool {
+	if !l.wordStart.IsValid() || i >= len(l.src) || l.src[i] != '}' {
+		return false
+	}
+	from := int(l.wordStart.Offset)
+	if i < from {
+		return false
+	}
+	// The offset of each `{` still open, with -1 standing for a `${`, which
+	// closes with the same character and is not brace syntax.
+	var open []int
+	for j := from; j <= i; j++ {
+		switch c := l.src[j]; {
+		case c == '\\':
+			j++
+		case c == '\'' || c == '"':
+			k := skipQuotedFrom(l.src, j)
+			if k == j {
+				// A quote nothing closes: the word is unfinished and there
+				// is no written brace in it to answer about.
+				return false
+			}
+			j = k
+		case c == '$' && j+1 <= i && l.src[j+1] == '{':
+			open = append(open, -1)
+			j++
+		case c == '{':
+			open = append(open, j)
+		case c == '}':
+			if len(open) == 0 {
+				continue
+			}
+			top := open[len(open)-1]
+			open = open[:len(open)-1]
+			if j == i {
+				return top >= 0 && j > top+1
+			}
 		}
 	}
 	return false

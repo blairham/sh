@@ -5086,6 +5086,42 @@ type Dialect struct {
 	// with neither leaves both false.
 	ExtendedPatternInCondition bool
 
+	// CountedPatternGroup enables `{n,m}(pattern)`: a repetition count
+	// written in braces in front of a pattern group, matching the group
+	// between n and m times. It is ksh93's alone.
+	//
+	// **It is a grammar flag before it is a pattern one**, which is why it
+	// lives here beside [Dialect.ExtendedPattern] rather than only in the
+	// matcher. The parenthesis is what needs letting into the word: without
+	// this the `(` after the `}` ends the word and the parser reports it
+	// unexpected, so nothing a matcher could do would ever see the text.
+	//
+	// The `}` decides it and the brace's contents do not. Measured
+	// 2026-09-27 on `/bin/ksh` `Version AJM 93u+ 2012-08-01`, each probe
+	// under `env -i PATH=/usr/bin:/bin`:
+	//
+	//	echo A{2,3}(a)B      A{2,3}(a)B      read, and matched nothing
+	//	echo A{,}(a)B        A{,}(a)B        a count with both ends omitted
+	//	echo A{z,y}(a)B      A{z,y}(a)B      not a count, and still read
+	//	echo A{}(a)B         `(' unexpected  an *empty* brace is not one
+	//
+	// So a brace with anything at all between its halves takes the `(`, and
+	// an empty one does not — which is the whole of what this flag asks. Why
+	// the text then matches nothing is the matcher's question and is
+	// answered there.
+	//
+	// The brace must be **written and unquoted**: `f "{2,3}"(a)` is
+	// ``syntax error … `(' unexpected`` in that shell, the same refusal a
+	// shell without this gives, because a quoted brace is not brace syntax
+	// and so has no `}` for the parenthesis to stand behind.
+	//
+	// bash 5.3.20 refuses `echo A{2,3}(a)B` with `extglob` on or off, dash
+	// refuses it, and zsh 5.9.2 reads the brace as an ordinary list and the
+	// `(a)` as its own bare group — `no matches found: A2(a)B`. One column,
+	// which is why this is a flag of its own and not a widening of
+	// [Dialect.ExtendedPattern].
+	CountedPatternGroup bool
+
 	// CompletionConditions enables the four completion-context tests —
 	// `[[ -prefix … ]]`, `[[ -suffix … ]]`, `[[ -after … ]]` and
 	// `[[ -between … … ]]` — as conditions whose operator stands in front of

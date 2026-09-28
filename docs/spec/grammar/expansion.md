@@ -212,6 +212,63 @@ reads the commas in it: `e=a,b; echo {"$e"}` is `a b` in ksh93. So a field's
 runs carry four classes rather than two: written, written-and-quoted,
 produced, and produced-by-a-quoted-expansion.
 
+### A brace in front of a `(` is not a list in one dialect
+
+ksh93 spells a pattern group's repetition count in braces —
+`{2,3}(a)` — so a `{…}` standing immediately in front of an unquoted `(`
+is that count rather than a list, and the brace pass leaves it alone.
+The full construct is in *grammar/patterns.md*; what belongs here is what
+it does to brace expansion.
+
+Measured 2026-09-27 on `/bin/ksh` `Version AJM 93u+ 2012-08-01`, each case
+under `env -i PATH=/usr/bin:/bin` in a directory of its own holding `a`,
+`aa`, `aaa` and `aaaa`, with
+`f(){ printf '%d |' $#; for x in "$@"; do printf ' [%s]' "$x"; done; printf '\n'; }`:
+
+| probe | ksh93u+ |
+| --- | --- |
+| `f {z,y}a` | `2 \| [za] [ya]` — the control, the same list |
+| `f {z,y}(a)` | `1 \| [{z,y}(a)]` — one character on, it does not expand |
+| `f {2,3}(a)` | `2 \| [aa] [aaa]` |
+| `f {2,3}(a){x,y}` | `2 \| [{2,3}(a)x] [{2,3}(a)y]` |
+
+**The discriminator is the character after the `}` and nothing about the
+brace.** Row two is the whole of it: `{z,y}` is a perfectly good list — the
+control one line above expands exactly that list — and in front of a `(` it
+is not one. An implementation that asked "does this brace hold a count"
+would expand it, and two fields is what a brace list looks like.
+
+Row four is what scopes it to the brace **in front of** the parenthesis: the
+trailing `{x,y}` is a list as usual, so the scan carries on behind the group
+rather than abandoning the word. It carries on behind the *group* and not
+behind the `}`, because a brace inside the group's body is not a list there
+either — `f {2,3}(a{x,y})` is a refusal in that shell, and the nearest
+answer a scan without grounds to refuse can give is the word entire.
+
+The written-brace key is the one
+`Semantics.BraceStopsFieldSplitting`,
+`Semantics.BraceMakesAProducedStarOrBracketText` and
+`Semantics.BraceFreesProducedGroupSyntax` already read, and this construct
+is spelled with a `{` too, so it has to say how the scan tells them apart:
+**the character after the `}`**, and nothing about the brace itself.
+
+Three things have to hold and each has a row:
+
+| probe | ksh93u+ | what it keys |
+| --- | --- | --- |
+| `g='{2,3}(a)'; f $g` | `2 \| [2(a)] [3(a)]` | the `{` must be **written** |
+| `f {z,y}"(a)"` | `2 \| [z(a)] [y(a)]` | the `(` must be **unquoted** |
+| `g='a(b'; f {z,y}$g` | `2 \| [za(b] [ya(b]` | and the **next character** |
+
+The first is the one that matters for the rules above it: a brace an
+expansion produced is never a count, however the parenthesis behind it was
+written, so the look-ahead is something a **written** brace gains rather
+than something the word is re-scanned for.
+
+The remaining row of the panel — a `(` the *expansion* produces behind a
+written brace — is a separate rule, because brace expansion runs before
+parameter expansion and so the brace pass cannot see it.
+
 ### Where the braces are found, on the output side
 
 The section above is about a group's **body**. This one is about the whole

@@ -68,6 +68,16 @@ func (b repeatBound) mayStopHere() bool { return b.lo <= 0 }
 // The ceiling counts the repetition in hand, so one is the last of them.
 func (b repeatBound) mayRepeat() bool { return b.hi < 0 || b.hi > 1 }
 
+// mayTakeARepetition reports whether the group may match one repetition
+// here at all. A ceiling of nought forbids even the first.
+//
+// Also reachable only from a written count, and the row that needs it is
+// `{0,0}(a)`: it matches the empty subject and not `a`, so "the group need
+// not be here" and "the group may be here" are two answers rather than one.
+// The four quantifiers all have a ceiling of one or none, so this was
+// vacuously true for every bound that existed before.
+func (b repeatBound) mayTakeARepetition() bool { return b.hi != 0 }
+
 // afterOne is what is left of the bound once one repetition has matched.
 //
 // The floor cannot go below nought — a group that has had all it needs still

@@ -188,9 +188,24 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 	// any: they are the expression's there rather than this matcher's. See
 	// tildeKeepsBackslash for which of them the reading reaches.
 	flavor := r.tildeRegexFlavor(spans)
+	// Whether the word carries a `~(K)` group at all, which is what makes a
+	// written `\d` worth keeping the backslash on. **Where** the group
+	// stands is the walk's question and not this one — the reading is
+	// positional, and the walk turns it on as it consumes the group — so
+	// this only narrows which words are touched: a word with no such group
+	// reads every escape exactly as it did. See kshClassEscapes.
+	classes := tildeGlobClasses(spans, r.lang().TildeGroup)
 	for i, s := range spans {
 		r.expandingSpan = i
 		if tildeKeepsBackslash(flavor, s) {
+			b.WriteByte('\\')
+			b.WriteString(s.Value)
+			continue
+		}
+		if classes && kshClassEscapeSpan(s) {
+			// The backslash is the glob's own here, so the pair reaches the
+			// matcher as it was written rather than as the letter quote
+			// removal would otherwise take.
 			b.WriteByte('\\')
 			b.WriteString(s.Value)
 			continue
@@ -796,6 +811,11 @@ type patternOpts struct {
 	// substitution's span differently. Every other question in this matcher
 	// is about the piece it was handed and cannot tell the two apart.
 	whole bool
+	// classEscapes reads a written `\d` as a **digit class** rather than as
+	// the letter, and the five escapes beside it likewise. One dialect's
+	// `~(K)` group asks for it and nothing else does — see kshClassEscapes
+	// for the six and for why the letter rather than the language decides.
+	classEscapes bool
 	// tildeLeftUnread says the surface does not read the `~(l)` anchor at
 	// all, so a piece that does not begin the subject is still a match.
 	//
@@ -1543,6 +1563,11 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			if g, ok := splitTildeHereGroup(p); ok {
 				_, rest, _ := splitTildeModifier(p)
 				o = tildeFoldHere(o, g.foldSet, g.fold)
+				// `K` is read where it stands too, and that is measured:
+				// `[[ za1b == za\db~(K) ]]` is no in ksh93u+ while
+				// `[[ za1b == z~(K)a\db ]]` is yes, so a group behind the
+				// escape does not reach it. See kshClassEscapes.
+				o = tildeClassesHere(o, g.classesSet, g.classes)
 				pp, p = pp+len(p)-len(rest), rest
 				continue
 			}
@@ -1705,6 +1730,21 @@ func matchBranch(p, s string, pp, at int, o patternOpts) bool {
 			// An escaped metacharacter is an ordinary character.
 			if len(p) < 2 {
 				return s == "\\"
+			}
+			if o.classEscapes && kshClassEscape(p[1]) {
+				// Except under one dialect's `~(K)`, where six of them name
+				// a **character class** instead. One unit, exactly as a `?`
+				// and a bracket expression take one — see
+				// matchKshClassEscape for the pair that fixes that.
+				if s == "" || o.periodHere(s, at) {
+					return false
+				}
+				w := o.unitWidth(s)
+				if !matchKshClassEscape(p[1], s[:w]) {
+					return false
+				}
+				p, s, pp, at = p[2:], s[w:], pp+2, at+w
+				continue
 			}
 			if !o.escapeReaches(p[1]) {
 				// The escape does not reach this character in this

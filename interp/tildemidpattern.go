@@ -70,6 +70,15 @@ type tildeHereGroup struct {
 	right     bool
 	greedySet bool
 	greedy    bool
+	// classesSet and classes carry `K`, which is the letter that makes a
+	// written `\d` a digit class where `p` and `s` name the same glob and
+	// leave the escape as the letter. Paired rather than a plain bool so the
+	// reading is turned on **where the group stands** rather than for the
+	// whole pattern, which is measured: `[[ za1b == za\db~(K) ]]` does not
+	// match in ksh93u+. Nothing takes it back again —
+	// `[[ za1b == z~(K)a~(p)\db ]]` matches there. See kshClassEscapes.
+	classesSet bool
+	classes    bool
 }
 
 // splitTildeHereGroup peels a `~(…)` group off the front of p when the group
@@ -136,6 +145,8 @@ func splitTildeHereGroup(p string) (g tildeHereGroup, ok bool) {
 			g.right = sense
 		case 'g':
 			g.greedySet, g.greedy = true, sense
+		case 'K':
+			g.classesSet, g.classes = true, true
 		}
 	}
 	return g, true
@@ -195,6 +206,50 @@ func tildeHereAnchors(pattern string) (left, right bool) {
 // matches `A` and `~(i)[a-z]` matches it too, so the group reaches a bracket
 // and a class where `nocasematch` reaches only one of them. See matchTilde,
 // which does the same thing for a group at the front.
+// tildeClassesHere turns the `~(K)` class reading on for the rest of the
+// branch, and is the mid-pattern half of what matchTilde does for a group at
+// the front.
+//
+// **Only where the caller is asking about a whole subject**, which is a
+// refusal to copy rather than a gap. That shell does not read a `~(K)` group
+// at all on three of the four surfaces that choose a span, and it is the
+// *group* it does not read rather than the escape — measured 2026-09-27,
+// `v=xab` and `v=1abc1`:
+//
+//	${v#~(K)x}        xab     where ${v#x} is ab
+//	${v/~(K)x/Q}      xab     where ${v/x/Q} is Qab
+//	${v%%~(K)[0-9]}   1abc1   where ${v%%[0-9]} is 1abc
+//	${v%~(K)[0-9]}    1abc    and ${v%…} alone does read it
+//	${v#~(i)[0-9]}    abc1    with another letter as the control
+//
+// The bracket rows are the discriminating ones: a bracket expression is a
+// class in either reading, so a row that does not trim is a row where the
+// *pattern* did not match rather than one where an escape read differently.
+// The last two are the pair that says this is `K` and one operator rather
+// than trims at large.
+//
+// Reading the classes on a surface whose group that shell does not read at
+// all would trade one wrong answer for a second, so those surfaces answer
+// exactly what they answered before this existed — the same posture
+// matchTildeFlavorInPiece takes for a trim. `${v%…}` is left out with them,
+// which costs one measured row and needs the group's own divergence closed
+// first.
+//
+// **Lifting this gate needs two more readers taught first**, and they are
+// named here because nothing else would say so: patternSpanBytes and
+// patternEdgeLiterals read a pattern to skip pieces a trim could not match,
+// and both take `\d` for two bytes of pattern and one literal `d`. A class
+// takes a *unit* and names no character, so a trim reading the classes with
+// those two unchanged would require a `d` at an edge the pattern never asked
+// for and would miss matches in silence. They are left alone rather than
+// written against a surface that cannot reach them.
+func tildeClassesHere(o patternOpts, set, on bool) patternOpts {
+	if set && o.whole {
+		o.classEscapes = on
+	}
+	return o
+}
+
 func tildeFoldHere(o patternOpts, fold, on bool) patternOpts {
 	if !fold {
 		return o

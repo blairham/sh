@@ -2672,6 +2672,82 @@ the other way if the flavor reached backward over the whole pattern.
 ksh's own glob, which is the language the walk is already in, so the group is
 consumed where it stands and `[[ zab == z~(K)a* ]]` matches.
 
+### `~(K)` is also the letter that makes a backslash a class
+
+`K` is the one of the three that gives ksh's own glob six **character class**
+escapes. `p` and `s` name the same glob and do not, which is what says the
+reading is the letter's and not the language's. Every letter is a pair,
+because a class reading and a literal reading agree on half of all subjects:
+
+| written | ksh93 | |
+| --- | --- | --- |
+| `[[ za1b == za\db ]]` *(control)* | no | with no group the escape is the shell's |
+| `[[ zadb == za\db ]]` *(control)* | yes | so `\d` is the letter |
+| `[[ za1b == z~(K)a\db ]]` | yes | |
+| `[[ zadb == z~(K)a\db ]]` | no | |
+| `[[ zadb == z~(K)a\Db ]]` | yes | and `[[ za1b == … ]]` is no |
+| `[[ za_b == z~(K)a\wb ]]` | yes | and `[[ 'za-b' == … ]]` is no |
+| `[[ 'za.b' == z~(K)a\Wb ]]` | yes | and `[[ za1b == … ]]` is no |
+| `[[ 'za b' == z~(K)a\sb ]]` | yes | and `[[ za1b == … ]]` is no |
+| `[[ za1b == z~(K)a\Sb ]]` | yes | and `[[ 'za b' == … ]]` is no |
+| `[[ za1b == z~(p)a\db ]]` | **no** | the same glob by another letter |
+| `[[ za1b == z~(i)a\db ]]` | no | nor the fold |
+| `[[ za1b == z~()a\db ]]` | no | nor an empty group |
+| `[[ za1b == z~(K)a~(p)\db ]]` | yes | and nothing takes it back |
+| `[[ za1b == z~(-K)a\db ]]` | yes | nor does the sign |
+| `[[ za1b == ~(K)za\db ]]` | yes | read at the head |
+| `[[ za1b == za\db~(K) ]]` | **no** | and **not** behind the escape |
+| `[[ zadb == za\db~(K) ]]` | yes | where the letter still matches |
+
+The last three are what make it positional rather than a flag on the pattern.
+
+**The class takes one unit and is asked of the character**, and the locale is
+what separates the three readings a `é` admits. Measured with `LC_ALL` unset
+and again at `en_US.UTF-8`:
+
+| written | C locale | `en_US.UTF-8` |
+| --- | --- | --- |
+| `[[ 'zaéb' == z~(K)a\Db ]]` | no | **yes** |
+| `[[ 'zaéb' == z~(K)a\Wb ]]` | no | no |
+
+Matching one *byte* answers the first row no under both, since two bytes do
+not fit the one position. Matching one unit and asking about its first byte
+answers the *second* row yes under UTF-8, `0xC3` being no word character
+where the character is a letter. Only a unit whose class is asked of the
+character answers all four.
+
+**A surface that chooses a span reads none of it**, and that is a refusal to
+copy rather than a gap: ksh93 does not read a `~(K)` group at all on three of
+the four such operators, and it is the **group** it declines rather than the
+escape. The bracket rows are the discriminating ones, a bracket expression
+being a class in either reading:
+
+| written | ksh93 | |
+| --- | --- | --- |
+| `${v#~(K)x}` over `xab` | `xab` | where `${v#x}` is `ab` |
+| `${v/~(K)x/Q}` over `xab` | `xab` | where `${v/x/Q}` is `Qab` |
+| `${v%%~(K)[0-9]}` over `1abc1` | `1abc1` | where `${v%%[0-9]}` is `1abc` |
+| `${v%~(K)[0-9]}` over `1abc1` | `1abc` | and `%` alone does read it |
+| `${v#~(i)[0-9]}` over `1abc1` | `abc1` | with another letter as the control |
+
+So those surfaces answer exactly what they answered before the classes were
+read, which is the one answer that cannot be a new wrong one. `${v%…}` is
+left out with them, and closing it needs the group's own divergence closed
+first rather than the escape's. Pathname expansion is a second row of the
+same kind: `~(K)a\db` names `a1b` there and `adb` here, before and after.
+
+One escape inside a `~(K)` pattern is left where it was, measured and not
+modeled: `[[ zanb == z~(K)a\nb ]]` does not match there and does here, so
+`\n` means something in that glob that is neither the letter nor one of the
+six.
+
+A flavor letter written behind `K` takes the language with it and the class
+escapes go too, since an expression's backslashes are its own:
+`[[ abc == ~(KE)a.c ]]` matches and `[[ abc == ~(EK)a.c ]]` does not, so the
+*last* language letter decides — and `[[ za1b == ~(EK)za\db ]]` matches
+while `[[ zadb == ~(EK)za\db ]]` does not, the glob's classes coming back
+with it.
+
 Every shape measured here is read. `\d` and its kin inside an extended
 flavor were the last one left out and are read now — see *Which letters an
 extended flavor's backslash keeps* below, which also corrects what that gap

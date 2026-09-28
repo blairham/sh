@@ -61,7 +61,9 @@ func TestTheHonoredTildeLettersRead(t *testing.T) {
 		want tildeModifier
 	}{
 		{"", tildeModifier{}},
-		{"K", tildeModifier{flavor: tildeGlob}},
+		// `K` names the glob **and** gives it the six class escapes, which
+		// `p` and `s` do not — see kshClassEscapes.
+		{"K", tildeModifier{flavor: tildeGlob, classes: true}},
 		{"E", tildeModifier{flavor: tildeERE}},
 		{"F", tildeModifier{flavor: tildeLiteral}},
 		{"L", tildeModifier{flavor: tildeLiteral}},
@@ -88,7 +90,7 @@ func TestTheHonoredTildeLettersRead(t *testing.T) {
 		// costs nothing to say and is what a `-` before one would otherwise
 		// be read as changing.
 		{"KE", tildeModifier{flavor: tildeERE}},
-		{"EK", tildeModifier{flavor: tildeGlob}},
+		{"EK", tildeModifier{flavor: tildeGlob, classes: true}},
 	} {
 		got, unhonored := readTildeModifier(c.body)
 		if unhonored != 0 {

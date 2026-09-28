@@ -26,7 +26,17 @@ var caseListRows = []struct {
 }{
 	{"a blank inside the list", "case 'a b' in (a b) echo m;; esac\n", true},
 	{"a newline inside the list", "case a in (a\n|b) echo m;; esac\n", true},
-	{"an alternative written as nothing", "case '' in ( ) echo em;; (*) echo star;; esac\n", true},
+	{"the whole list written as nothing", "case '' in ( ) echo em;; (*) echo star;; esac\n", true},
+	// The row above was called "an alternative written as nothing" until
+	// #4817, and the name was the bug: `( )` is a *list* with nothing in it,
+	// and the four rows below are alternatives written as nothing, which the
+	// option does not move. Measured in the same run, accepted with the
+	// option on and off alike — and the last of them is the one that says so
+	// loudest, holding two empty alternatives and no list at all.
+	{"a trailing empty alternative", "case a in (a|b|) echo t;; esac\n", false},
+	{"a leading empty alternative", "case '' in (|https|git) echo e;; esac\n", false},
+	{"an empty alternative in the middle", "case a in (a||b) echo e;; esac\n", false},
+	{"nothing but empty alternatives", "case a in (|) echo e;; esac\n", false},
 	// The control, and the reason this option is keyed on the pattern list
 	// rather than on "the header is read the standard's way": the `;` in a
 	// header is the neighboring zsh-alone reading and the option does not

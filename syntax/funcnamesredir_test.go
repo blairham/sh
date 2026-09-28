@@ -18,6 +18,7 @@ import "testing"
 func namesWithRedirs() Dialect {
 	d := Core()
 	d.FunctionMultipleNames = true
+	d.FunctionKeywordNameList = true
 	d.EmptyParensAreOneToken = true
 	d.FunctionNameIsAnyWord = true
 	return d
@@ -120,6 +121,7 @@ func TestWithoutTheNameListTheRedirectedParenIsRefused(t *testing.T) {
 	t.Parallel()
 	d := namesWithRedirs()
 	d.FunctionMultipleNames = false
+	d.FunctionKeywordNameList = false
 	// The other five shells' reading, which is also this parser's before the
 	// route existed: the `(` after a redirection's target opens nothing.
 	refuses(t, d, `a b >out () { echo X; }`)

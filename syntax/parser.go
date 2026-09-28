@@ -5486,8 +5486,10 @@ func (p *Parser) parseFuncKeyword() Command {
 	// the words stop at the body's `{`, at the `()` of the hybrid form, at a
 	// stop word and at anything that is not a word at all, and a word that
 	// opens a construct is a name like any other — see
-	// [Dialect.FunctionMultipleNames], where the readings are measured.
-	for p.dialect.FunctionMultipleNames &&
+	// [Dialect.FunctionKeywordNameList], where the readings are measured, and
+	// [Dialect.FunctionMultipleNames] for the parenthesized spelling's own
+	// list, which an option moves without moving this one.
+	for p.dialect.FunctionKeywordNameList &&
 		p.at(TokWord) && !p.atStopWord() && !p.atWord("{") {
 		also, ok := p.funcKeywordName()
 		if !ok {
@@ -5521,18 +5523,28 @@ func (p *Parser) parseFuncKeyword() Command {
 			p.next()
 		}
 	}
-	// Where the body is optional a separator may stand in front of it, and
-	// the position the names ended at is kept: it is where an absent body is
-	// recorded as being. See [Dialect.FunctionKeywordBodyIsOptional].
+	// A separator may stand in front of the body where the dialect reads one
+	// there, and the position the names ended at is kept: it is where an
+	// absent body is recorded as being. See
+	// [Dialect.FunctionKeywordSeparatorBeforeBody] and
+	// [Dialect.FunctionKeywordBodyIsOptional] — two flags, because the shell
+	// that has them keeps the separator in a state that takes the bodyless
+	// declaration away.
 	afterNames := p.tok.Pos
 	p.skipNewlines()
-	if p.dialect.FunctionKeywordBodyIsOptional {
+	if p.dialect.FunctionKeywordSeparatorBeforeBody {
 		for p.err == nil && p.at(TokSemi) {
 			p.next()
 			p.skipNewlines()
 		}
 	}
 	body := p.tok
+	// Whether the body was *written* as a brace group, which is not a
+	// question the parsed command can answer: an and-or list is handed back
+	// wrapped in a [Group] because [FuncDecl.Body] is one command — see
+	// [Parser.funcKeywordBody] — so a dialect that wants the braces would
+	// have read `function a; echo X && echo Y` as one and taken it.
+	bracedBody := p.atWord("{")
 	p.funcBody = true
 	if fn.Body = p.funcKeywordBody(); fn.Body == nil {
 		if p.dialect.FunctionKeywordBodyIsOptional && p.err == nil {
@@ -5547,7 +5559,7 @@ func (p *Parser) parseFuncKeyword() Command {
 		p.failUnexpectedAt(body, "", false)
 		return fn
 	}
-	if !p.funcKeywordBodyIsTakenHere(fn.Body) {
+	if !p.funcKeywordBodyIsTakenHere(fn.Body, bracedBody) {
 		p.failUnexpectedAt(body, "", false)
 	}
 	return fn
@@ -5592,10 +5604,10 @@ func (p *Parser) funcKeywordBody() Command {
 // wants one after the parentheses too, and the shell that wants a brace group
 // after the keyword takes a bare simple command after the parentheses. See
 // [Dialect.FunctionKeywordBodyMustBeBraceGroup].
-func (p *Parser) funcKeywordBodyIsTakenHere(body Command) bool {
+func (p *Parser) funcKeywordBodyIsTakenHere(body Command, braced bool) bool {
 	if p.dialect.FunctionKeywordBodyMustBeBraceGroup {
 		_, isGroup := body.(*Group)
-		return isGroup
+		return isGroup && braced
 	}
 	if p.dialect.FuncBodyMustBeCompound {
 		_, isSimple := body.(*SimpleCmd)
@@ -7436,10 +7448,27 @@ func (p *Parser) parseCase() Command {
 // header — and whether they are interchangeable is that dialect's own answer:
 // ksh93 pairs `{` with `}` and `in` with `esac`, while zsh takes either closer
 // after either opener. See Dialect.CaseBraceBody.
+//
+// **The `}` closer is the reserved word**, so the dialect that can take that
+// reading away takes this closer with it and keeps the `{` opener. Measured on
+// zsh 5.9.2 with the option that moves it — see
+// [Dialect.CloseBraceAlwaysReserved] — `-f` over a script file:
+//
+//	                                        reserved   not
+//	case x { x) echo hit;; }                parses     refused
+//	case x in x) echo one;; }               parses     refused
+//	case x { x) echo hit;; esac             parses     parses
+//	case x in x) echo one;; esac            parses     parses
+//
+// The third row is what says the opener is a separate question: `case x { …
+// esac` runs the arm in both states. The dialect that *pairs* the two words
+// has no such reading to lose — its `}` is the closer because the opener was a
+// `{`, not because a brace is reserved — which is why the gate is on this
+// branch alone.
 func (p *Parser) atCaseEnd(braced bool) bool {
 	switch p.dialect.CaseBraceBody {
 	case CaseBraceBodyMixesWithTheKeyword:
-		return p.atWord("esac") || p.atWord("}")
+		return p.atWord("esac") || (p.dialect.CloseBraceAlwaysReserved && p.atWord("}"))
 	case CaseBraceBodyPairsWithItsOpener:
 		if braced {
 			return p.atWord("}")
@@ -7466,7 +7495,10 @@ func (p *Parser) atCaseEnd(braced bool) bool {
 // nowhere for an empty list to be written and `case a in ) …` is refused.
 func (p *Parser) casePatterns(it *CaseItem, parenthesized bool) bool {
 	empty := p.dialect.CasePatternMayBeEmpty
-	if empty && parenthesized && p.at(TokRightParen) {
+	// The whole list written as nothing is a separate answer from an
+	// alternative written as nothing, and one dialect moves them apart — see
+	// [Dialect.CasePatternListMayBeEmpty].
+	if p.dialect.CasePatternListMayBeEmpty && parenthesized && p.at(TokRightParen) {
 		it.Patterns = append(it.Patterns, p.emptyPattern())
 		return true
 	}

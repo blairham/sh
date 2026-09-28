@@ -944,7 +944,50 @@ var zshOptions = []zshOption{
 	// run-time switch beside its BraceExpansion axis, and this name is that
 	// switch under zsh's spelling — inverted, because zsh names the state
 	// that stops the expansion where the substrate names the expansion.
-	setOptBacked("ignorebraces", false, "braceexpand", true),
+	//
+	// **And it reaches the grammar, which is the half that was missing.**
+	// The name does not only stop brace expansion: it takes away the two
+	// readings that make a bare brace a reserved word, so `{ echo A }` stops
+	// parsing and `echo A}` starts. Measured on `/opt/homebrew/bin/zsh` —
+	// `zsh 5.9.2 (aarch64-apple-darwin25.4.0)` — `-f` over a script file
+	// under `set -n`, 2026-09-27, the option moved on the line after an
+	// `emulate`:
+	//
+	//	                 on        off
+	//	{ echo A }       refused   parses
+	//	{ echo A}        refused   parses
+	//	echo A}          parses    refused
+	//	{print A; }      refused   parses
+	//	echo A\}         parses    parses
+	//	x=a}             parses    parses
+	//
+	// **All three emulations answer every one of those rows alike**, so the
+	// option is the whole of what decides and the mode reaches them only
+	// through it — `emulate sh` sets the name on and `emulate ksh` puts it
+	// back off, both in emulationDefaults above. That is why this is here
+	// rather than in emulategrammar.go, which may not name a field an option
+	// name already owns.
+	//
+	// **`ignoreclosebraces` takes the closing half on its own**, measured in
+	// the same run: `setopt ignoreclosebraces` refuses `{ echo A }` and takes
+	// `echo A}` while leaving `{print A; }` alone. It is still `recorded`
+	// here, and it is not this row's to wire — no emulation moves it, so it
+	// has no entry in emulationDefaults and nothing about `emulate` reaches
+	// it (#4945).
+	{
+		base: "ignorebraces", def: false,
+		get: func(r *interp.Runner) bool { on, _ := r.NamedOption("braceexpand"); return !on },
+		set: func(r *interp.Runner, on bool) int {
+			if st := r.ApplyNamedOption("braceexpand", !on); st != 0 {
+				return st
+			}
+			// Both readings, because this name moves both. The closing one
+			// has a second owner in zsh's namespace and the opening one has
+			// none — see the table above.
+			r.SetBraceReservedWordReadings(!on, !on)
+			return 0
+		},
+	},
 	recorded("ignoreclosebraces", false),
 	recorded("ignoreeof", false),
 	recorded("incappendhistory", false),
@@ -1204,7 +1247,22 @@ var zshOptions = []zshOption{
 	// measurement.
 	monitorOption(),
 	recorded("multibyte", true),
-	recorded("multifuncdef", true),
+	// MULTI_FUNC_DEF: whether a definition's header may carry more than one
+	// name, `a b () { … }` defining both. Implemented rather than recorded
+	// since #4817 — the name reaches the grammar, and it is how the
+	// emulations reach it: `emulate sh` and `emulate ksh` both reset it off,
+	// in emulationDefaults above, and `emulate zsh` puts it back. Measured a
+	// mode at a time; the table is at interp.Runner.SetFunctionDefinitionTakesANameList,
+	// and all three emulations answer every row of it alike, which is what
+	// says the option is the whole of what decides.
+	{
+		base: "multifuncdef", def: true,
+		get: (*interp.Runner).FunctionDefinitionTakesANameList,
+		set: func(r *interp.Runner, on bool) int {
+			r.SetFunctionDefinitionTakesANameList(on)
+			return 0
+		},
+	},
 	{
 		// zsh's MULTIOS, and one switch over both directions: a stream
 		// redirected twice writes to both files and reads from both, and
@@ -1833,6 +1891,14 @@ var zshOptions = []zshOption{
 		set: func(r *interp.Runner, on bool) int {
 			r.SetSubstitutionBodyRefusesAnUnfinishedCondition(!on)
 			r.SetShortFormBodyIsOneCommandOrNone(on)
+			// And the `function` keyword's body, which is the same question
+			// in the one place it is not a loop's: with the name off, only a
+			// brace group will do and a bodyless declaration is refused.
+			// Measured with the rest of the table — see
+			// interp.Runner.SetFunctionKeywordBodyIsOneCommandOrNone, whose
+			// controls are the separator, which survives, and the
+			// parenthesized spelling, which keeps its one-command body.
+			r.SetFunctionKeywordBodyIsOneCommandOrNone(on)
 			return 0
 		},
 	},

@@ -19,6 +19,7 @@ func keywordAndOrBody() Dialect {
 	d.FunctionKeyword = true
 	d.FunctionKeywordParens = true
 	d.FunctionKeywordBodyIsOptional = true
+	d.FunctionKeywordSeparatorBeforeBody = true
 	d.FunctionKeywordBodyIsAnAndOrList = true
 	return d
 }
@@ -68,7 +69,7 @@ func TestABodyThatIsNotABraceGroupTakesTheAndOrList(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			d := d
 			if tc.name == "a name list sharing the reach" {
-				d.FunctionMultipleNames = true
+				d.FunctionKeywordNameList = true
 			}
 			parsesTo(t, d, tc.src, tc.want)
 		})

@@ -441,6 +441,10 @@ func Dialect() syntax.Dialect {
 	// matches one of those schemes or none at all. `~/.zi/bin/lib/zsh/install.zsh`
 	// is written that way and the other four shells refuse the line.
 	d.CasePatternMayBeEmpty = true
+	// And the whole list written as nothing, which is a separate answer: the
+	// option that takes this one away leaves the empty alternative standing.
+	// See syntax.Dialect.CasePatternListMayBeEmpty.
+	d.CasePatternListMayBeEmpty = true
 	// And inside the arm's parentheses the `|` is only ever the separator:
 	// `(a|&b)` is blamed on the `&` there where every other shell with the
 	// operator blames `|&` (#1111).
@@ -572,12 +576,19 @@ func Dialect() syntax.Dialect {
 	// syntax.Dialect.FunctionMultipleNames has the six answers, and the
 	// construct is what an Oh-My-Zsh clipboard library ends with (#1680).
 	d.FunctionMultipleNames = true
+	// And the keyword spelling's own list, which the option that moves the
+	// one above leaves alone — see syntax.Dialect.FunctionKeywordNameList.
+	d.FunctionKeywordNameList = true
 	// And a name list with no body after it, plus the `;` that may stand
 	// between the names and a body it does have — see
 	// syntax.Dialect.FunctionKeywordBodyIsOptional for the run that says a
 	// bodyless declaration defines an empty function rather than an autoload
 	// stub, and that `function a; echo B` binds `echo B` as the body (#1686).
 	d.FunctionKeywordBodyIsOptional = true
+	// And the separator in front of a body, which the option that takes the
+	// bodyless declaration away leaves standing — see
+	// syntax.Dialect.FunctionKeywordSeparatorBeforeBody.
+	d.FunctionKeywordSeparatorBeforeBody = true
 	// And a body that is not a brace group reaches to the end of the and-or
 	// list: `function a; echo X && echo Y` binds both, where
 	// `function a { echo X; } && echo Y` binds only the group. See

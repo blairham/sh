@@ -395,6 +395,28 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 				f.leavesAnAttribute(),
 				f.inherit || r.LocalInheritsTheOuterValue(), false)
 		}
+		// And the **export attribute**, which the shadow deliberately does
+		// not take off: whether a local inherits it is the dialect's answer
+		// and localExportAttribute asks it. The ordinary declaration loop
+		// asks; this path did not, so a local tie over an exported global of
+		// the same name kept the attribute — `export outer=old` then
+		// `f(){ local -xT OUTER outer; outer=(i n) }` left `${(t)outer}` as
+		// `array-local-tied-export` where the reference says
+		// `array-local-tied`, and listed the half as `local -axT` rather
+		// than `typeset -aT` (#5098).
+		//
+		// **The letter belongs to the scalar and not to the pair**, which is
+		// what the two calls say: `-xT` exports the scalar the script named
+		// and leaves the array half an ordinary local, so only the scalar
+		// counts the letter as its own. Measured the same day — with no
+		// exported global in the way, the array half is `array-local-tied`
+		// under `-xT` already, so nothing here is giving it the letter; this
+		// is only about what it inherits.
+		r.localExportAttribute(scalar, f.export)
+		r.localExportAttribute(array, false)
+		if r.unspecified {
+			return r.status
+		}
 		// The tie itself is not in the variable tables, so the scope's
 		// save-and-restore does not carry it. Undone by hand on the way out,
 		// and only where there was a scope to undo it in.

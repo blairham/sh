@@ -490,18 +490,26 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 // a value that is made up on each read is not state a listing could carry.
 func (r *Runner) declarableNames() []string {
 	seen := map[string]bool{}
+	// Collected through a gate rather than added directly, so the engine's
+	// own state is left out of every walk below it at once — see
+	// Runner.engineOwns, and #5014 for the eight routes that had it.
+	hold := func(name string) {
+		if !r.engineOwns(name) {
+			seen[name] = true
+		}
+	}
 	for name := range r.Vars {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.Arrays {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.AssocArrays {
-		seen[name] = true
+		hold(name)
 	}
 	for name, on := range r.exported {
 		if on {
-			seen[name] = true
+			hold(name)
 		}
 	}
 	for name := range r.readonly {
@@ -514,31 +522,31 @@ func (r *Runner) declarableNames() []string {
 			// Semantics.RestrictedFreezeIsAReadonly.
 			continue
 		}
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.integer {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.floatPrecision {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.fieldWidth {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.lowered {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.uppered {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.hidden {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.unique {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.traced {
-		seen[name] = true
+		hold(name)
 	}
 	for name := range r.declaredBare {
 		// A name with no value and no attribute is in none of the tables
@@ -553,7 +561,7 @@ func (r *Runner) declarableNames() []string {
 		// }` in the dash dialect complained about a name nobody had asked
 		// about.
 		if r.bareDeclarationListed(name) {
-			seen[name] = true
+			hold(name)
 		}
 	}
 	for name := range r.unsetLeftItDeclared {
@@ -563,7 +571,7 @@ func (r *Runner) declarableNames() []string {
 		// `declare -- v`, and so does a bare `local`. Asked through the
 		// same gate, so a dialect with no row for it collects nothing.
 		if r.bareDeclarationListed(name) {
-			seen[name] = true
+			hold(name)
 		}
 	}
 	for name := range r.nameref {
@@ -576,11 +584,11 @@ func (r *Runner) declarableNames() []string {
 		// 5.3.20 writes `declare -n r="v"` for `v=1; declare -n r=v` whether
 		// or not `r` held a value before the line, and this shell wrote it
 		// only in the second case.
-		seen[name] = true
+		hold(name)
 	}
 	for name, on := range r.compoundVariable {
 		if on {
-			seen[name] = true
+			hold(name)
 		}
 	}
 	for k := range r.inheritedEnv {

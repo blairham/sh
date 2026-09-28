@@ -6240,6 +6240,14 @@ func Diagnostics() interp.Diagnostics {
 // simply searched the current directory for both would agree with the first
 // and break the second. See where the name is registered below.
 func Apply(r *interp.Runner) {
+	// Everything this shell keeps under `.zsh.` is its own state and not a
+	// parameter of the shell being emulated — the loaded module set, the
+	// `zstyle` table, the scheduled events, the line editor's buffer and
+	// twenty more. They live in the parameter tables because that is what a
+	// subshell copies; the reference keeps the same facts where no script can
+	// see them, so no listing here writes a row for one. See
+	// interp.Runner.SetEngineOwnedPrefix, where the routes are (#5014).
+	r.SetEngineOwnedPrefix(zshEngineStorePrefix)
 	// This shell has an `enable`, but a different one: it works on hash
 	// tables and takes none of bash's options — `enable -n` is a bad option
 	// there. Claiming a bash-shaped one would be worse than not having it.

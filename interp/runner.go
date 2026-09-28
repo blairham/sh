@@ -4306,6 +4306,10 @@ type Runner struct {
 	// when a dialect has named it, because nothing else can read it.
 	pipeStatus     []int
 	pipeStatusName string
+	// engineOwnedPrefix is the prefix a dialect keeps its *own* state under,
+	// in the parameter tables because that is what a subshell copies. No
+	// listing a script can reach walks past it — see engineowned.go.
+	engineOwnedPrefix string
 	// conditionAnswers is the conditional operators a dialect has said what
 	// it means by, keyed by the operator as it is written — see
 	// conditionanswer.go. Empty in the core, which has the grammar for none

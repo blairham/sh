@@ -1207,12 +1207,19 @@ func (r *Runner) fileTest(op, operand string) bool {
 		return err == nil && info.IsDir()
 	case "-s":
 		return err == nil && info.Size() > 0
-	case "-r":
-		return err == nil && info.Mode().Perm()&0o400 != 0
-	case "-w":
-		return err == nil && info.Mode().Perm()&0o200 != 0
-	case "-x":
-		return err == nil && info.Mode().Perm()&0o100 != 0
+	case "-r", "-w", "-x":
+		// Asked of the kernel rather than read off the mode bits, which are
+		// a different question and answer it wrongly in both directions —
+		// see Runner.accessible, where the measured rows are. The stat above
+		// still gates the path and still decides whether it is there at all;
+		// what changes is that "may this process" is put to access(2)
+		// instead of being computed from the owner's three bits (#5049).
+		if err != nil {
+			return false
+		}
+		return r.accessible(path, map[string]uint32{
+			"-r": accessRead, "-w": accessWrite, "-x": accessExecute,
+		}[op])
 	case "-b":
 		return err == nil && info.Mode()&os.ModeDevice != 0 && info.Mode()&os.ModeCharDevice == 0
 	case "-c":

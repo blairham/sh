@@ -66,7 +66,7 @@ func TestAShellWithNoTraceLettersIsUntouched(t *testing.T) {
 // the same feature under them.
 func TestTheTraceLettersAreTheDialectsOwn(t *testing.T) {
 	s := traceSem()
-	s.DeclareOptions, s.FunctionsOptions = "aAfFgilprxvV", "mvV"
+	s.DeclareOptions, s.FunctionsOptions = "aAfFgilprxtvV", "mvV"
 	s.FunctionTraceLetters, s.FunctionTraceLettersBoundToTheBody = "vV", "V"
 	out, _ := run(t, "g(){ echo G; }\nf(){ g; }\nfunctions -v f\nf\n", withTraceLetters(s))
 	if !strings.Contains(out, "+ echo G") {
@@ -114,5 +114,44 @@ func TestTheMarkBelongsToTheBody(t *testing.T) {
 		if strings.Contains(out, "+") {
 			t.Errorf("%q kept its mark across a redefinition: %q", src, out)
 		}
+	}
+}
+
+// The trace mark and the *attribute* mark are two tables, and neither
+// answers for the other.
+//
+// This is the row that would have caught the tempting fold: bash's `declare
+// -ft` means which traps a call inherits and is listed back as a `declare
+// -ft NAME` row, where this mark means the trace and is written inside the
+// body. The letters are given different spellings here on purpose — sharing
+// one would ask whether a dialect may name a letter twice, which is a
+// different question from whether the two records are the same map.
+func TestTheTraceMarkIsNotTheAttributeTable(t *testing.T) {
+	s := traceSem()
+	s.DeclareOptions, s.FunctionsOptions = "aAfFgilprxtvV", "mvV"
+	s.FunctionTraceLetters, s.FunctionTraceLettersBoundToTheBody = "vV", "V"
+	s.FunctionAttributeLetters = "t"
+	// The attribute is recorded and listed back under its own letter. This
+	// comes first because it is the positive control: without it the two
+	// cases below would pass against a shell where `-t` does nothing at
+	// all.
+	out, _ := run(t, "f(){ echo A; }\ntypeset -ft f\ntypeset -fp f\n", withTraceLetters(s))
+	if !strings.Contains(out, "declare -ft f") {
+		t.Fatalf("the attribute letter recorded nothing, so this case tests nothing: %q", out)
+	}
+	// And it does not trace.
+	out, _ = run(t, "f(){ echo A; }\ntypeset -ft f\nf\n", withTraceLetters(s))
+	if strings.Contains(out, "+ echo A") {
+		t.Errorf("the attribute letter traced the body: %q", out)
+	}
+	// The trace mark traces and writes nothing into the attribute listing.
+	out, _ = run(t, "f(){ echo A; }\nfunctions -v f\nf\n", withTraceLetters(s))
+	if !strings.Contains(out, "+ echo A") {
+		t.Fatalf("the trace letter did not trace, so this case tests nothing: %q", out)
+	}
+	out, _ = run(t, "f(){ echo A; }\nfunctions -v f\ntypeset -fp f\n", withTraceLetters(s))
+	if strings.Contains(out, "declare -f") && strings.Contains(out, "f\n") &&
+		strings.Contains(out, "declare -ft") {
+		t.Errorf("the trace mark wrote itself into the attribute table: %q", out)
 	}
 }

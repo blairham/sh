@@ -161,11 +161,12 @@ func splitTildeHereGroup(p string) (g tildeHereGroup, ok bool) {
 //	${v#a~(r)bc}    abcd    and refuses where it does not
 //	${v/a~(r)bc/X}  abcd    the same refusal in a substitution
 //
-// **A suffix trim ignores both there and refuses here**, which is a divergence
-// this change inherits rather than one it introduces: `${v%~(l)d}` is `abc` in
-// ksh93u+ and `abcd` here, and the front group has answered it that way since
-// the letters were first read. The rows are the same for a mid-pattern group
-// because it is the same comparison, which is the point of asking it here.
+// **A shortest suffix trim does not read `l` at all**, and the caller is what
+// knows that: `${v%~(l)d}` is `abc` there where `${v%%~(l)d}` leaves `abcd`
+// alone, so the reading is the operator's. patternOpts.tildeLeftUnread
+// carries it and trimLeavesTildeLeftUnread has the rows. The check is made in
+// one place for a front group and a mid-pattern one alike, which is the point
+// of asking it here: the two cannot drift.
 func tildeHereAnchors(pattern string) (left, right bool) {
 	if strings.IndexByte(pattern, '~') < 0 {
 		return false, false

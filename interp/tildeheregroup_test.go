@@ -170,3 +170,62 @@ func TestATildeAnchorGroupInTheMiddleOfAGlob(t *testing.T) {
 		})
 	}
 }
+
+// The **shortest suffix trim** does not read `~(l)` at all, where the doubled
+// spelling of the same trim does.
+//
+// `l` pins a match to the start of the subject and a suffix trial hands the
+// matcher a piece that begins wherever it begins, so on a suffix trim the
+// anchor has something to refuse at every trial but the whole value. ksh93u+
+// 2012-08-01 refuses none of them on `%` and all of them on `%%`, measured
+// 2026-09-27 — see trimLeavesTildeLeftUnread, which argues why the rule is
+// keyed on the operator.
+//
+// The `%%` rows are the pair rather than a repetition: the same pattern on
+// the same value answers differently with the operator doubled, so a shell
+// that had simply stopped reading `l` on any suffix trim fails half of this.
+func TestAShortestSuffixTrimDoesNotReadTheLeftTildeAnchor(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// The controls: the trim without a group, and the anchor a suffix
+		// trial holds by construction.
+		{"a suffix trim", `v=abcd; printf "[%s]" "${v%d}"`, "[abc]"},
+		{"the right anchor holds", `v=abcd; printf "[%s]" "${v%~(r)d}"`, "[abc]"},
+
+		// `%` does not read `l`, however the pattern is written.
+		{"one character", `v=abcd; printf "[%s]" "${v%~(l)d}"`, "[abc]"},
+		{"two", `v=abcd; printf "[%s]" "${v%~(l)cd}"`, "[ab]"},
+		{"a wildcard", `v=abcd; printf "[%s]" "${v%~(l)?cd}"`, "[a]"},
+		{"written mid-pattern", `v=abcd; printf "[%s]" "${v%b~(l)cd}"`, "[a]"},
+		{"and a piece that does start the subject", `v=abcd; printf "[%s]" "${v%~(l)abcd}"`, "[]"},
+
+		// `%%` does, which is what says this is the operator's reading and
+		// not "a suffix trim never reads `l`".
+		{"the doubled trim without a group", `v=abcd; printf "[%s]" "${v%%d}"`, "[abc]"},
+		{"and with one", `v=abcd; printf "[%s]" "${v%%~(l)d}"`, "[abcd]"},
+		{"two characters", `v=abcd; printf "[%s]" "${v%%~(l)cd}"`, "[abcd]"},
+		{
+			"the one piece that does begin the subject",
+			`v=abcd; printf "[%s]" "${v%%~(l)*d}"`, "[]",
+		},
+
+		// A second value, so the pair is not one subject's accident.
+		{"a repeated value", `v=xyxy; printf "[%s]" "${v%~(l)xy}"`, "[xy]"},
+		{"and doubled over it", `v=xyxy; printf "[%s]" "${v%%~(l)xy}"`, "[xyxy]"},
+
+		// A **prefix** trim is not the mirror image and is left alone: `r`
+		// is read by both of its spellings.
+		{"a prefix trim reads the right anchor", `v=abcd; printf "[%s]" "${v#~(r)a}"`, "[abcd]"},
+		{"and so does the doubled one", `v=abcd; printf "[%s]" "${v##~(r)a}"`, "[abcd]"},
+
+		// And a substitution still reads `l`, which is the surface a blanket
+		// removal would have broken.
+		{"a substitution refuses", `v=abcd; printf "[%s]" "${v/~(l)bc/X}"`, "[abcd]"},
+		{"and takes a span that starts it", `v=abcd; printf "[%s]" "${v/~(l)ab/X}"`, "[Xcd]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tildeMid(t, tc.src, nil); got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}

@@ -105,7 +105,14 @@ const printLetters = "rRnlNmoOiszSpufPD"
 // for it, and the table that lookup needs is the one `hash -d` already writes
 // (#4444). A letter in both lists is refused as missing while it works, and a
 // letter in neither is `bad option` for something this shell has.
-const printUnimplemented = "acCbvxX"
+//
+// **`-C` has left it too** (#4967): it takes a number and lays the operands
+// out in that many columns, filled down. It is not in printLetters either,
+// because it is one of the three letters that take an argument — see the
+// `f`/`u`/`C` arm of the option reader. `-a` and `-c` are the other two
+// column layouts and stay here: they are the *across* fill and the
+// terminal-width one, and neither is this letter.
+const printUnimplemented = "acbvxX"
 
 // registerPrint installs the builtin.
 func registerPrint(r *interp.Runner) {
@@ -114,6 +121,10 @@ func registerPrint(r *interp.Runner) {
 
 // printOptions is what the option words asked for.
 type printOptions struct {
+	// columns is `-C n`: how many columns the operands are laid out in,
+	// filled down. Zero is no layout at all, which is every `print` that
+	// did not write the letter. See printcolumns.go.
+	columns   int
 	raw       bool
 	echoMode  bool
 	noTerm    bool
@@ -230,6 +241,12 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return 1
 	}
 	text, ok, refused := printText(r, opts, rest)
+	if opts.columns > 0 {
+		// The column layout, which replaces the join rather than decorating
+		// it: `-l` and `-N`'s separators do not reach it and `-n` takes no
+		// terminator off it. See printcolumns.go.
+		text, ok, refused = printColumnLines(r, opts, rest)
+	}
 	if !ok {
 		return 1
 	}
@@ -478,7 +495,7 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 				// as letters and stops on the space after them (#1708).
 			case letter == 'e' && echoWord:
 				opts.raw = false
-			case letter == 'f' || letter == 'u':
+			case letter == 'f' || letter == 'u' || letter == 'C':
 				arg, more, ok := printOptionArgument(r, letter, letters[i+1:], rest)
 				if !ok {
 					return nil, 1
@@ -551,6 +568,11 @@ func applyPrintArgument(r *interp.Runner, letter byte, arg string, opts *printOp
 	if letter == 'f' {
 		opts.format, opts.hasFormat = arg, true
 		return -1
+	}
+	if letter == 'C' {
+		// How many columns, and the two refusals it can make. See
+		// printcolumns.go.
+		return printColumnCount(r, arg, opts)
 	}
 	fd, err := strconv.Atoi(arg)
 	if err != nil {

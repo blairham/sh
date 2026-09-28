@@ -76,3 +76,14 @@ func displayColumns(v string) int {
 	}
 	return n
 }
+
+// DisplayColumns is [displayColumns] for a dialect: how wide a terminal draws
+// a string, in the same table every other width question in this engine is
+// answered from.
+//
+// Exported because a dialect's own layout needs the same answer and a second
+// width table beside this one is how the two would come to disagree about a
+// wide character. zsh's `print -C` is the caller — see
+// dialect/zsh/printcolumns.go, where the control characters are taken out
+// first, which is that layout's own rule and not this table's.
+func DisplayColumns(v string) int { return displayColumns(v) }

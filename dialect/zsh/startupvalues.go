@@ -28,6 +28,7 @@ import (
 // in the same run:
 //
 //	name            ${(t)}          typeset -p                     here, before
+//	FUNCNEST        integer-special typeset -i10 FUNCNEST=500      no such name
 //	KEYTIMEOUT      integer         typeset -i KEYTIMEOUT=40       no such name
 //	LISTMAX         integer         typeset -i LISTMAX=100         no such name
 //	MAILCHECK       integer         typeset -i MAILCHECK=60        no such name
@@ -94,11 +95,11 @@ import (
 //   - `KEYTIMEOUT`, `LISTMAX` and `MAILCHECK` are line-editor and mail knobs
 //     this shell has no reader for yet.
 //
-// The read-back and those three readers are #4910. `FUNCNEST` was in this
-// group and is deliberately not here: the reference's bound *is* that
-// parameter, this shell's bound is its own and answers with different words,
-// and a name that looks like a bound a script can move while moving nothing is
-// worse than an absent one (#4905).
+// The read-back and those three readers are #4910. `FUNCNEST` is here with
+// its reader rather than without one, which is what #4905 asked for: the
+// reference's bound *is* that parameter, and a name that looks like a bound a
+// script can move while moving nothing is worse than an absent one. See
+// funcnesting.go for the bound, the sentence and what the refusal costs.
 //
 // The other twenty-five names of #4866's ledger are filed as the jobs they
 // are rather than carried here: the nine identity values (#4903), the three
@@ -179,6 +180,12 @@ type startupInteger struct {
 }
 
 var startupIntegers = [...]startupInteger{
+	// The bound on function nesting, and the one name in this table that is
+	// a **bound** rather than a knob: the parameter, the bound being it, the
+	// sentence that names it and the refusal ending the script arrive
+	// together in funcnesting.go, which is what #4905 asked for and why this
+	// row was held back from #4912.
+	{name: "FUNCNEST", value: 500, base: 10, shellsOwn: true},
 	{name: "KEYTIMEOUT", value: 40, base: 0, shellsOwn: false},
 	{name: "LISTMAX", value: 100, base: 0, shellsOwn: false},
 	{name: "MAILCHECK", value: 60, base: 0, shellsOwn: false},

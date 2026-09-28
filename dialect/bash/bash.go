@@ -5027,9 +5027,12 @@ func Apply(r *interp.Runner) {
 	// the core's and the name is this shell's; ksh93 has the bound and no name
 	// for it, and dash has neither. Measured 2026-09-23 on 5.3.20 — a positive
 	// integer only, so `FUNCNEST=0`, an empty value and `FUNCNEST=abc` are all
-	// "no bound of the script's own". See
-	// interp.Runner.SetFunctionNestingParameter.
-	r.SetFunctionNestingParameter("FUNCNEST")
+	// "no bound of the script's own", which is the other answer to
+	// interp.FunctionNesting.ZeroIsABound and is where zsh parts from this.
+	// The refusal gives up the input line and the next one runs, which is
+	// the other answer to RefusalEndsTheScript. See
+	// interp.Runner.SetFunctionNesting.
+	r.SetFunctionNesting(interp.FunctionNesting{Parameter: "FUNCNEST"})
 	// The long names of the options that are on, as a readonly produced
 	// variable bound to the option state in both directions. The core keeps
 	// the state and this names it; the other three leave the name an ordinary

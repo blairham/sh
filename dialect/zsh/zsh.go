@@ -5626,6 +5626,19 @@ func Diagnostics() interp.Diagnostics {
 		ArithError:          "%[2]s",
 		ArithInvalidBase:    "invalid base (must be 2 to 36 inclusive): %[1]s",
 		ArithRecursionLimit: "math recursion limit exceeded: %[1]s",
+		// A call the shell will not enter because `$FUNCNEST` of them are
+		// already active. **The sentence names the parameter and not the
+		// number**, which is the whole of why it is worth having the
+		// parameter behind it: a shell that grew the wording without the
+		// name a script can move would be telling the reader to increase
+		// something it does not read. Measured 2026-09-27 on 5.9.2 with a
+		// runaway recursion, at the default bound and at `FUNCNEST=5`
+		// alike — the count is never in it. **Nor is the function's name**:
+		// that goes in the location, which is
+		// interp.FunctionNesting.RefusalNamesTheCalleeInTheLocation and is
+		// why this format takes no verb where bash's takes two. See
+		// funcnesting.go for the bound and for what the refusal costs.
+		FunctionNestingLimit: "maximum nested function level reached; increase FUNCNEST?",
 		// And it is the name the expression was written with, not the one the
 		// bound stopped on: `a=b; b=a` is blamed on `a` here and on `b` in the
 		// two shells above.
@@ -6695,6 +6708,12 @@ func Apply(r *interp.Runner) {
 	// environment may not supply, and for which of them this shell reads
 	// back (#4866).
 	registerTheStartupValues(r)
+	// And the one of those values that is a **bound** rather than a knob
+	// with no reader: the parameter, the bound being that parameter, the
+	// sentence that names it, and the refusal ending the script are one
+	// change because three of them alone are a wrong answer where an absent
+	// parameter is merely a missing one — see funcnesting.go (#4905).
+	boundFunctionNesting(r)
 	// And the roster this shell's `trap` takes, under the name a script
 	// walks to install one — see signalsparameter.go, and note that the
 	// middle of it is the `kill -l` this shell already answered correctly

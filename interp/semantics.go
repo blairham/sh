@@ -2004,6 +2004,40 @@ type Semantics struct {
 	// coprocess as the source in ksh93 and zsh. Empty means `r`, the one
 	// letter POSIX gives the builtin.
 	ReadOptions string
+	// ReadEchoLettersWriteTheValues says what this dialect's `-e` and `-E`
+	// letters on `read` are **for**, which the two shells that have them do
+	// not agree about at all.
+	//
+	// bash's pair opens a line editor: `-e` reads the line through readline
+	// and `-E` reads it with the shell's default completion bound, and both
+	// do nothing whatever off a terminal. zsh's pair is about **echoing**,
+	// and it works on a pipe: the values that would be assigned are written
+	// to standard output, one line per name, and `-e` writes none of them to
+	// the names. Measured 2026-09-28 on zsh 5.9.2 and bash 5.3.20, `-f` and
+	// `--norc`, `printf '  a   b   c  \n' | read -E x y`:
+	//
+	//	zsh     `a` and `b   c` on standard output, x=a and y=`b   c`
+	//	bash    nothing written, x=a and y=`b   c`
+	//
+	// Three details of the zsh reading are load-bearing and each was
+	// measured rather than derived from the sentence. The echo is the
+	// **split values** and not the record — `read -E x y` writes two lines,
+	// and the last name's line is its remainder — so it is one line per
+	// *name* and one per element under `-A`. A name with no field still gets
+	// its line: `printf 'a\n' | read -E x y z` writes `a` and two empty
+	// lines. And `-e` leaves a name **as it was** rather than clearing it:
+	// `x=keep; read -e x` leaves `keep`, and `${+x}` on a name that had
+	// nothing is 0 afterwards.
+	//
+	// The suppression is a write that is never attempted rather than one
+	// that is undone, which is the row that says so: `typeset -r fz=keep;
+	// read -E fz` is `read-only variable: fz` and `read -e fz` is **silent
+	// at 0**, in the same shell.
+	//
+	// Asked only where a call spells one of the two letters, so a dialect
+	// whose `read` has neither is never asked and bash is asked only by a
+	// line that wrote one. See interp/readecho.go.
+	ReadEchoLettersWriteTheValues Answer
 	// UnsetOptions is the same question asked of `unset`, spelled the same
 	// way. The letters split three ways and no two dialects have the same
 	// set: `-v` and `-f` are unanimous, `-n` is bash 5.3's and ksh93's — and

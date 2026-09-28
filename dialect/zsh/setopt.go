@@ -2516,6 +2516,12 @@ func registerSetopt(r *interp.Runner) {
 	// listed every `set -o` row and performed every `set -o name` against
 	// the shell that spawned the subshell (#1855).
 	r.SetOptionNamespace(conditionOption)
+	// `functionargzero` decides what `$0` answers, and it is a *state* rather
+	// than this shell's fixed reading: the preset is the default, on, and a
+	// script may turn it off. Installed here beside the namespace because it
+	// reads the same option store and must answer about the runner it is
+	// handed rather than this one — a subshell keeps the field (#1855).
+	r.SetDollarZeroScopeSwitch(dollarZeroScope)
 	// And the same namespace by its other name. zsh's `set -o` is `setopt`
 	// under a POSIX spelling rather than a table of its own — measured,
 	// `set -o autocd` then `setopt` reports `autocd`, and `setopt autocd`
@@ -3131,4 +3137,37 @@ func setBareGroupGrammar(r *interp.Runner, shGlob, kshGlob bool) {
 	// either name says — measured, `b[(r)y]=Q` is a parse error with `shglob`
 	// alone and `${b[(r)y]}` still runs the search in that state.
 	r.SetCommandWordSubscriptHasAFlagGroup(!shGlob || kshGlob)
+}
+
+// dollarZeroScope is what `$0` answers here, once `functionargzero` has been
+// taken into account.
+//
+// **The option reaches every frame and not only a function's**, which is
+// measured rather than read off its name. Measured 2026-09-28 against
+// /opt/homebrew/bin/zsh — zsh 5.9.2 (aarch64-apple-darwin25.4.0), `go version
+// -m`: *not a Go executable* — each row run with the option on, off, and left
+// at its default:
+//
+//	f() { print $0 }                       f        → the script, off
+//	function f { print $0 }                f        → the script, off
+//	() { print $0 }                        (anon)   → the script, off
+//	g(){ print $0 }; f(){ g }; f           g        → the script, off
+//	f() { eval 'print $0' }; f             f        → the script, off
+//	f() { ( print $0 ) }; f                f        → the script, off
+//	. ./inc.sh                             ./inc.sh → the script, off
+//	f() { . ./inc.sh }; f                  ./inc.sh → the script, off
+//	print $0 at the top level              the script either way — the control
+//
+// The two sourcing rows are the ones that settle the noun: the option is
+// spelled `function`argzero, and a rule keyed on that word would have left a
+// sourced file naming itself. It does not.
+//
+// Every row with the option **on** agrees with the preset, and so does every
+// row with it left alone, because it is on by default — which is why a grid
+// that never turned it off showed nothing at all.
+func dollarZeroScope(r *interp.Runner) (interp.DollarZeroScope, bool) {
+	if o, inverted, ok := resolveOptionName("functionargzero"); ok && o.get(r) == inverted {
+		return interp.DollarZeroIsTheShellsOwnName, true
+	}
+	return 0, false
 }

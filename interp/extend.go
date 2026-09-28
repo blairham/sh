@@ -1520,6 +1520,34 @@ func (r *Runner) SetOptionNamespace(lookup func(r *Runner, name string) (on, kno
 	r.optionNamespace = lookup
 }
 
+// SetDollarZeroScopeSwitch installs a run-time override of
+// Semantics.DollarZeroNames, for the dialect whose `$0` reading a script can
+// move while it runs.
+//
+// The preset stays the shell's **default** and this says what the script has
+// since done with it. One dialect has the switch — zsh's `functionargzero`,
+// on by default — and turning it off puts `$0` back to the shell's own name.
+//
+// **It reaches every frame and not only a function's**, which is measured
+// rather than taken from the option's name: with it off, `$0` is the shell's
+// own name inside a `name()` function, a `function name` one, an anonymous
+// function, a nested call, an `eval` inside a function, a subshell inside one
+// — and inside a **sourced file**, which the word "function" in the option's
+// name does not suggest. A rule keyed on that word would have left sourcing
+// alone and been wrong on two of the eight rows that move.
+//
+// The lookup is handed the runner to answer *about*, the way a builtin is,
+// for the reason SetOptionNamespace gives: a subshell is a cloned runner that
+// keeps this field, so a closure over the installing runner answers for the
+// shell that spawned the subshell.
+//
+// Reporting `false` means "the script has not moved it", and the preset
+// answers — so a dialect can install one switch and leave every other reading
+// alone.
+func (r *Runner) SetDollarZeroScopeSwitch(scope func(r *Runner) (DollarZeroScope, bool)) {
+	r.dollarZeroSwitch = scope
+}
+
 // ListedOption is one row of a dialect's own `set -o` listing: the spelling
 // this shell prints for the name, and whether that spelling is in effect.
 //

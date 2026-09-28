@@ -5366,6 +5366,33 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 		}
 		return fn
 	}
+	if g, ok := fn.Body.(*Group); ok && len(g.Redirs) > 0 {
+		// A redirection written after the closing brace is the **call's**,
+		// not the body's, and the body is what read it: `{ … }` standing as
+		// a command takes its own trailing redirections, and the brace group
+		// standing here is parsed by that same reader.
+		//
+		// The difference is measured, twice over, on zsh 5.9.2 2026-09-28
+		// under `env -i PATH=/usr/bin:/bin` with standard input on the null
+		// device:
+		//
+		//	() { print A } 2>err   	both trace lines land in `err`, and the
+		//	                       	first of them is the *call's* — written
+		//	                       	before the frame is pushed
+		//	() { print A } >/no/f  	`f.zsh:2: no such file or directory`,
+		//	                       	naming the line rather than `(anon)`
+		//
+		// Either one alone says the file is opened outside the frame. Left
+		// on the group, the call's own line went to the terminal while the
+		// body's went to the file, and a failed open was reported against a
+		// function the shell had not entered.
+		//
+		// Only the brace spelling: a body that is a *simple command* has no
+		// closing token, so a redirection after it is one of its own words
+		// and the shell reads it that way — `() print A 2>err` leaves `err`
+		// empty and puts both lines on the terminal, measured the same day.
+		fn.Redirs, g.Redirs = g.Redirs, nil
+	}
 	for p.tok.Kind == TokWord && !p.atStopWord() {
 		fn.Args = append(fn.Args, p.word())
 	}

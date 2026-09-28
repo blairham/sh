@@ -162,7 +162,12 @@ func TestPrintRefusals(t *testing.T) {
 		{`print -a x`, "zsh:print:1: -a is not implemented yet\n", 1},
 		{`print -b x`, "zsh:print:1: -b is not implemented yet\n", 1},
 		{`print -c x`, "zsh:print:1: -c is not implemented yet\n", 1},
-		{`print -C 2 x`, "zsh:print:1: -C is not implemented yet\n", 1},
+		// `-C` has left this list (#4967): it lays the operands out in that
+		// many columns, filled down, and its rows are in
+		// printcolumns_test.go. `-a` and `-c` stay — they are the *across*
+		// fill and the terminal-width one, and neither is that letter.
+		{`print -a 2 x`, "zsh:print:1: -a is not implemented yet\n", 1},
+		{`print -c 2 x`, "zsh:print:1: -c is not implemented yet\n", 1},
 		// `-P` has left this list — it is implemented, and what it refuses
 		// is a prompt *escape* by name rather than the letter. See
 		// printprompt_test.go.

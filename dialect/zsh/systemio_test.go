@@ -68,7 +68,7 @@ func systemDeadline(t *testing.T, what string, body func()) {
 // thing worth pinning: a worker reading a substitution has to read to the end.
 func TestSysopenReadsAProcessSubstitutionThroughACloseOnExecDescriptor(t *testing.T) {
 	systemDeadline(t, "sysopen on a process substitution", func() {
-		out, st := runZsh(t, t.TempDir(), `sysopen -r -o cloexec -u fd <(print -n one; print -n two) || { print -r -- failed; return }
+		out, st := runZshWithSystem(t, t.TempDir(), `sysopen -r -o cloexec -u fd <(print -n one; print -n two) || { print -r -- failed; return }
 print -r -- "open=$? usable=$(( fd > 2 ))"
 buf=
 while sysread -i $fd chunk; do buf=$buf$chunk; done
@@ -102,7 +102,7 @@ func TestSysopenCloexecKeepsADescriptorFromAChild(t *testing.T) {
 	}
 	dir := t.TempDir()
 	systemDeadline(t, "sysopen -o cloexec", func() {
-		out, st := runZsh(t, dir, `sysopen -w -o creat,trunc,cloexec -u 7 kept
+		out, st := runZshWithSystem(t, dir, `sysopen -w -o creat,trunc,cloexec -u 7 kept
 sysopen -w -o creat,trunc -u 8 given
 `+sh+` -c 'echo x >&7' 2>/dev/null
 print -r -- "closed-in-child=$(( $? != 0 ))"
@@ -130,7 +130,7 @@ exec 7>&- 8>&-`)
 func TestSysopenDirectionLettersDecideTheMode(t *testing.T) {
 	dir := t.TempDir()
 	systemDeadline(t, "sysopen direction letters", func() {
-		out, st := runZsh(t, dir, `print -r -- abcdef > f
+		out, st := runZshWithSystem(t, dir, `print -r -- abcdef > f
 sysopen -u ro f
 read -u $ro line
 print -r -- "default-reads=$? [$line]"
@@ -162,7 +162,7 @@ print -r -- "appended=[$line]"`)
 func TestSysopenWriteDoesNotTruncateWithoutTheFlag(t *testing.T) {
 	dir := t.TempDir()
 	systemDeadline(t, "sysopen truncation", func() {
-		_, st := runZsh(t, dir, `print -r -- abcdef > plain
+		_, st := runZshWithSystem(t, dir, `print -r -- abcdef > plain
 print -r -- abcdef > cut
 sysopen -w -u a plain
 exec {a}>&-
@@ -186,7 +186,7 @@ exec {b}>&-`)
 // 0, so the guard a script wrote it as claims a lock somebody else holds.
 func TestSysopenExclusiveCreatesAndRefusesWhatIsThere(t *testing.T) {
 	systemDeadline(t, "sysopen -o excl", func() {
-		out, st, errs := runZshSplit(t, t.TempDir(), `sysopen -w -o excl -u a fresh
+		out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `sysopen -w -o excl -u a fresh
 print -r -- "fresh=$? made=$([ -f fresh ] && print yes)"
 sysopen -w -o excl -u b fresh
 print -r -- "again=$?"`)
@@ -206,7 +206,7 @@ print -r -- "again=$?"`)
 // accident.
 func TestSysopenModeAppliesToACreatedFile(t *testing.T) {
 	systemDeadline(t, "sysopen -m", func() {
-		out, st, errs := runZshSplit(t, t.TempDir(), `sysopen -w -o creat -m 604 -u a odd
+		out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `sysopen -w -o creat -m 604 -u a odd
 zmodload zsh/stat
 zstat -s +mode -- odd
 sysopen -w -o creat -m zz -u b bad
@@ -226,7 +226,7 @@ print -r -- "invalid=$?"`)
 // through what it left behind rather than by the status.
 func TestSysopenPutsTheDescriptorWhereTheCallerAsked(t *testing.T) {
 	systemDeadline(t, "sysopen -u forms", func() {
-		out, st, errs := runZshSplit(t, t.TempDir(), `print -n hello > f
+		out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `print -n hello > f
 sysopen -r -u named f
 sysread -i $named a
 print -r -- "named=[$a]"
@@ -271,7 +271,7 @@ func TestSysreadSeparatesTheTimeoutFromTheEndOfInput(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = hold.Close() })
 	systemDeadline(t, "sysread statuses", func() {
-		out, st, _ := runZshSplit(t, dir, `sysopen -r -u q quiet
+		out, st, _ := runZshSplitWithSystem(t, dir, `sysopen -r -u q quiet
 sysread -t 0 -i $q a
 print -r -- "nothing-waiting=$?"
 sysread -t 0.2 -i $q b
@@ -298,7 +298,7 @@ print -r -- "usage=$?"`)
 // everything" passes at the status.
 func TestSysreadTakesOneReadAndLeavesTheRest(t *testing.T) {
 	systemDeadline(t, "sysread bounds", func() {
-		out, st := runZsh(t, t.TempDir(), `print -r -- one > f
+		out, st := runZshWithSystem(t, t.TempDir(), `print -r -- one > f
 print -r -- two >> f
 sysopen -r -u fd f
 sysread -s 3 -c n -i $fd a
@@ -336,7 +336,7 @@ func TestSysreadReturnsWhatIsThereRatherThanFillingTheBuffer(t *testing.T) {
 		t.Fatalf("write to the fifo: %v", err)
 	}
 	systemDeadline(t, "sysread on a stream that stays open", func() {
-		out, st := runZsh(t, dir, `sysopen -r -u fd trickle
+		out, st := runZshWithSystem(t, dir, `sysopen -r -u fd trickle
 sysread -s 100 -c n -i $fd a
 print -r -- "st=$? n=$n a=[$a]"`)
 		want := "st=0 n=2 a=[hi]\n"
@@ -351,7 +351,7 @@ print -r -- "st=$? n=$n a=[$a]"`)
 // well leaves a caller's parameter holding data it has already passed on.
 func TestSysreadWithAnOutputDescriptorLeavesTheParameterAlone(t *testing.T) {
 	systemDeadline(t, "sysread -o", func() {
-		out, st := runZsh(t, t.TempDir(),
+		out, st := runZshWithSystem(t, t.TempDir(),
 			`print -n hello | { sysread -c n -o 1 buf; print -r -- "|st=$? n=$n buf=[$buf] REPLY=[$REPLY]" }`)
 		want := "hello|st=0 n=5 buf=[] REPLY=[]\n"
 		if out != want || st != 0 {
@@ -366,7 +366,7 @@ func TestSysreadWithAnOutputDescriptorLeavesTheParameterAlone(t *testing.T) {
 func TestSyswriteWritesEveryByteAndReportsARefusalInTheStatusAlone(t *testing.T) {
 	dir := t.TempDir()
 	systemDeadline(t, "syswrite", func() {
-		out, st, errs := runZshSplit(t, dir, `sysopen -w -o creat,trunc -u fd f
+		out, st, errs := runZshSplitWithSystem(t, dir, `sysopen -w -o creat,trunc -u fd f
 syswrite -c n -o $fd $'a\nb\n'
 print -r -- "wrote=$? n=$n"
 exec {fd}>&-
@@ -421,7 +421,7 @@ func TestSyswriteKeepsWritingUntilEveryByteHasGone(t *testing.T) {
 		drained <- got
 	}()
 	systemDeadline(t, "syswrite of a quarter of a megabyte", func() {
-		out, st := runZsh(t, dir, `s=x
+		out, st := runZshWithSystem(t, dir, `s=x
 repeat 18 s=$s$s
 sysopen -w -u fd wide
 syswrite -c n -o $fd $s
@@ -454,7 +454,7 @@ print -r -- "st=$? n=$n len=$#s"`)
 func TestTheSystemBuiltinsRefuseWhatIsNotAnOptionAndTakeTheSpellingsThatAre(t *testing.T) {
 	dir := t.TempDir()
 	systemDeadline(t, "system option refusals", func() {
-		out, st, errs := runZshSplit(t, dir, `print -r -- abcdef > f
+		out, st, errs := runZshSplitWithSystem(t, dir, `print -r -- abcdef > f
 sysopen -q -u v f
 print -r -- "letter=$?"
 sysopen -m
@@ -502,7 +502,7 @@ print -r -- "writeletter=$?"`)
 // all would pass every guard a script writes and prove nothing, which is the
 // same accepting-and-inert failure in the loader rather than in the module.
 func TestEveryFeatureOfTheSystemModuleAnswersUnderF(t *testing.T) {
-	out, _, _ := runZshSplit(t, t.TempDir(), `zmodload zsh/system
+	out, _, _ := runZshSplitWithSystem(t, t.TempDir(), `zmodload zsh/system
 print -r -- "plain=$?"
 zmodload -F zsh/system b:sysopen b:sysread b:syswrite
 print -r -- "have=$?"
@@ -537,7 +537,7 @@ print -r -- "invented=$?"`)
 // does not reach — a range names a span of characters.
 func TestSysreadAssignsThroughASubscriptedDestination(t *testing.T) {
 	systemDeadline(t, "sysread destinations", func() {
-		out, st, errs := runZshSplit(t, t.TempDir(), `buf=xy
+		out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `buf=xy
 print -n Z | { sysread 'buf[$#buf+1]' }
 print -n W | { sysread 'buf[$#buf+1]' }
 print -r -- "scalar=[$buf]"
@@ -583,7 +583,7 @@ func TestSysreadRefusesADestinationThatIsNotAName(t *testing.T) {
 			`buf[\]`,    // an escaped bracket, so the subscript never ends
 			"buf[1]x",   // anything after the closing bracket
 		} {
-			out, st, errs := runZshSplit(t, t.TempDir(), `buf=xy
+			out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `buf=xy
 print -n hi | { sysread '`+name+`' }
 print -r -- "name=$? buf=[$buf]"`)
 			if want := "name=1 buf=[xy]\n"; out != want || st != 0 {
@@ -613,7 +613,7 @@ print -r -- "unreached=$?"`, "zsh:2: bad math expression: operand expected at en
 print -n Z | { sysread 'buf[1]' }
 print -r -- "unreached=$?"`, "zsh:2: read-only variable: buf\n"},
 		} {
-			out, st, errs := runZshSplit(t, t.TempDir(), tc.src)
+			out, st, errs := runZshSplitWithSystem(t, t.TempDir(), tc.src)
 			if out != "" || st != 1 {
 				t.Errorf("%s = %q (status %d), want the script given up at 1", tc.src, out, st)
 			}
@@ -636,7 +636,7 @@ print -r -- "unreached=$?"`, "zsh:2: read-only variable: buf\n"},
 // two-digit number is a string of four, and an array would be neither.
 func TestSysopenPutsTheDescriptorThroughTheSameStore(t *testing.T) {
 	systemDeadline(t, "sysopen destinations", func() {
-		out, st, errs := runZshSplit(t, t.TempDir(), `s=abc
+		out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `s=abc
 sysopen -u 's[2]' -r /dev/null
 print -r -- "scalar=$? len=${#s}"
 typeset -A h
@@ -656,7 +656,7 @@ print -r -- "shape=$?"`)
 	// used to be nothing at all — the silent half of a wrong answer, since the
 	// next command read a descriptor the shell never put anywhere.
 	systemDeadline(t, "sysopen bad subscript", func() {
-		out, st, errs := runZshSplit(t, t.TempDir(), `sysopen -u 'g[1+]' -r /dev/null
+		out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `sysopen -u 'g[1+]' -r /dev/null
 print -r -- "unreached=$?"`)
 		if out != "" || st != 1 {
 			t.Errorf("sysopen 'g[1+]' = %q (status %d), want the script given up at 1", out, st)
@@ -675,4 +675,21 @@ func readBackForTest(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(b)
+}
+
+// runZshWithSystem is runZsh with `zsh/system` loaded, which is where these
+// builtins are: `sysopen`, `sysread`, `syswrite`, `sysseek`, `syserror` and
+// `zsystem` do not exist until the module is loaded (#4997).
+//
+// One helper rather than a `zmodload` pasted onto every snippet in the file,
+// so that a row added later cannot forget it.
+func runZshWithSystem(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	return runZsh(t, dir, "zmodload zsh/system; "+src)
+}
+
+// runZshSplitWithSystem is the same for the split-output helper.
+func runZshSplitWithSystem(t *testing.T, dir, src string) (string, int, string) {
+	t.Helper()
+	return runZshSplit(t, dir, "zmodload zsh/system; "+src)
 }

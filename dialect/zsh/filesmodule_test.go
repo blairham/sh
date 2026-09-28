@@ -33,7 +33,7 @@ func filesTree(t *testing.T) string {
 // file at its new name and a `zf_rm -f` that takes it away again are the
 // module.
 func TestZfMvMovesAndZfRmRemoves(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_mv -f -- a moved
+	out, st := runZshWithFiles(t, filesTree(t), `zf_mv -f -- a moved
 print -r -- "mv=$? a=$([[ -e a ]] && print yes || print no) moved=$([[ -e moved ]] && print yes || print no)"
 zf_rm -f -- moved
 print -r -- "rm=$? moved=$([[ -e moved ]] && print yes || print no)"`)
@@ -48,7 +48,7 @@ print -r -- "rm=$? moved=$([[ -e moved ]] && print yes || print no)"`)
 // got as far as creating the file. Without it the same line is a diagnostic
 // and a status.
 func TestZfRmDashFIsSilentAboutWhatWasNeverThere(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_rm nosuch 2>&1
+	out, st := runZshWithFiles(t, filesTree(t), `zf_rm nosuch 2>&1
 print -r -- "plain=$?"
 zf_rm -f nosuch 2>&1
 print -r -- "forced=$?"
@@ -68,7 +68,7 @@ print -r -- "forced-none=$?"`)
 // A directory is refused until `-r` asks for it, and then everything below it
 // goes before it does.
 func TestZfRmDescendsOnlyWhenAskedTo(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_mkdir -p tree/under
+	out, st := runZshWithFiles(t, filesTree(t), `zf_mkdir -p tree/under
 zf_mv -f -- a tree/under/deep
 zf_rm tree 2>&1
 print -r -- "plain=$?"
@@ -84,7 +84,7 @@ print -r -- "recursive=$? left=$([[ -e tree ]] && print yes || print no)"`)
 // `mkdir` and `rmdir`, including the mode that survives the umask and the two
 // sentences each of them has for a name it cannot use.
 func TestZfMkdirAndZfRmdir(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_mkdir made
+	out, st := runZshWithFiles(t, filesTree(t), `zf_mkdir made
 print -r -- "made=$?"
 zf_mkdir made 2>&1
 print -r -- "again=$?"
@@ -123,7 +123,7 @@ print -r -- "none=$?"`)
 // `-f` says so. A symbolic link holds the text it was given rather than where
 // that text resolved to, which is what makes a relative link relative.
 func TestZfLnLinksAndWillNotReplaceByDefault(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_ln -s a link
+	out, st := runZshWithFiles(t, filesTree(t), `zf_ln -s a link
 print -r -- "made=$? points=$(zstat -L +link link)"
 zf_ln -s a link 2>&1
 print -r -- "again=$?"
@@ -149,7 +149,7 @@ print -r -- "none=$?"`)
 // Several sources and a directory to put them in, and the refusal when the
 // last operand is not one.
 func TestZfMvAndZfLnTakeADirectoryForTheirLastOperand(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_mkdir into
+	out, st := runZshWithFiles(t, filesTree(t), `zf_mkdir into
 zf_mv a b into
 print -r -- "moved=$? a=$([[ -e into/a ]] && print yes || print no) b=$([[ -e into/b ]] && print yes || print no)"
 zf_mv into/a into/b into/a 2>&1
@@ -167,7 +167,7 @@ print -r -- "one=$?"`)
 // The mode `chmod` takes is octal and nothing else, and `-R` reaches
 // everything under a directory.
 func TestZfChmodTakesAnOctalModeAndReachesDownWithDashR(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_chmod 640 a
+	out, st := runZshWithFiles(t, filesTree(t), `zf_chmod 640 a
 zstat -s +mode a
 zf_chmod u+x a 2>&1
 print -r -- "symbolic=$?"
@@ -280,7 +280,7 @@ print -r -- "typo=$?"`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runZsh(t, filesParanoidCopy(t, dir), tc.src)
+			out, st := runZshWithFiles(t, filesParanoidCopy(t, dir), tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 			}
@@ -307,7 +307,7 @@ func TestARemovalNeverAsksAboutASymbolicLink(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	out, st := runZsh(t, dir, `zf_rm live dangling
+	out, st := runZshWithFiles(t, dir, `zf_rm live dangling
 print -r -- "st=$? live=$([[ -L live ]] && print yes || print no) dangling=$([[ -L dangling ]] && print yes || print no)"`)
 	if want := "st=0 live=no dangling=no\n"; out != want || st != 0 {
 		t.Errorf("removing links = %q (status %d), want %q", out, st, want)
@@ -315,7 +315,7 @@ print -r -- "st=$? live=$([[ -L live ]] && print yes || print no) dangling=$([[ 
 	// The control: the file the live link pointed at is unwritable and *is*
 	// asked about, so the row above is about links and not about the query
 	// having been taken out.
-	out, _ = runZsh(t, dir, "zf_rm target </dev/null 2>&1")
+	out, _ = runZshWithFiles(t, dir, "zf_rm target </dev/null 2>&1")
 	if !strings.Contains(out, "overriding mode 0444") {
 		t.Errorf("removing the file itself = %q, want the query about its mode", out)
 	}
@@ -396,7 +396,7 @@ func filesParanoidCopy(t *testing.T, from string) string {
 // `chown` and `chgrp` name what they could not find, and `sync` takes nothing
 // at all.
 func TestZfChownAndZfChgrpAndZfSync(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_chown nosuchuser a 2>&1
+	out, st := runZshWithFiles(t, filesTree(t), `zf_chown nosuchuser a 2>&1
 print -r -- "user=$?"
 zf_chgrp nosuchgroup a 2>&1
 print -r -- "group=$?"
@@ -421,7 +421,7 @@ print -r -- "extra=$?"`)
 // `cd`. A builtin that reached for the process's would move and unlink files
 // beside whatever program embedded this shell.
 func TestTheFileBuiltinsFollowTheShellsOwnDirectory(t *testing.T) {
-	out, st := runZsh(t, filesTree(t), `zf_mkdir -p sub
+	out, st := runZshWithFiles(t, filesTree(t), `zf_mkdir -p sub
 zf_mv -f -- a sub/inner
 cd sub
 zf_mv -f -- inner renamed
@@ -457,7 +457,7 @@ func TestZfRmAsksBeforeRemovingWhatItCannotWrite(t *testing.T) {
 	if err := os.Chmod(filepath.Join(dir, "a"), 0o400); err != nil {
 		t.Fatal(err)
 	}
-	out, st := runZsh(t, dir, `print n | zf_rm a 2>&1
+	out, st := runZshWithFiles(t, dir, `print n | zf_rm a 2>&1
 print -r -- "refused=$? a=$([[ -e a ]] && print yes || print no)"
 print y | zf_rm a 2>&1
 print -r -- "agreed=$? a=$([[ -e a ]] && print yes || print no)"
@@ -472,4 +472,14 @@ print -r -- "forced=$? b=$([[ -e b ]] && print yes || print no)"`)
 	if out != want || st != 0 {
 		t.Errorf("the query = %q (status %d), want %q", out, st, want)
 	}
+}
+
+// runZshWithFiles is runZsh with `zsh/files` loaded, which is where these
+// builtins are: the nine `zf_` builtins do not exist until the module is loaded (#4997).
+//
+// One helper rather than a `zmodload` pasted onto every snippet in the file,
+// so that a row added later cannot forget it.
+func runZshWithFiles(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	return runZsh(t, dir, "zmodload zsh/files zsh/stat; "+src)
 }

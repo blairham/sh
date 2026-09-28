@@ -21813,6 +21813,62 @@ type Semantics struct {
 	// absent.
 	TerminalTestRequiresANumber Answer
 
+	// TerminalTestOperandIsArithmetic reads `-t`'s operand as an arithmetic
+	// **expression** rather than as a literal descriptor number, in every
+	// construct that has the operator: `[[ -t x ]]`, `[ -t x ]` and
+	// `test -t x` alike. An expression that will not parse ends the script
+	// with the dialect's math complaint.
+	//
+	// A third answer beside TerminalTestRequiresANumber above, and not a
+	// re-spelling of it: that one is about *refusing* a non-number, this one
+	// about evaluating it. The three sides of the question, measured
+	// 2026-09-28 with `[[ -t / ]]; echo st=$?; echo after`:
+	//
+	//	bash 5.3.20  [[: /: integer expected   2, and carries on
+	//	bash 3.2.57  silent                    1, and carries on
+	//	ksh93u+      silent                    1, and carries on
+	//	zsh 5.9.2    bad math expression       ends the script
+	//
+	// dash and BusyBox ash have no `[[ ]]`, so they are measured on the
+	// operator's other surface — `[ -t / ]`, which the four above answer the
+	// same way there as they do inside the brackets:
+	//
+	//	dash 0.5.12  [: Illegal number: /     2, and carries on
+	//	BusyBox ash  ash: /: out of range     2, and carries on
+	//
+	// ash in the pinned digest rather than derived from dash, which is the
+	// column this tree has had wrong before by reasoning about it.
+	//
+	// **`[[ -t abc ]]` is where the first and the last part company.** bash
+	// 5.3 complains about it and zsh is silent at 1, because `abc` is a
+	// perfectly good expression naming an unset parameter, which is zero —
+	// so a rule of "refuse what is not a literal number" is bash's and not
+	// this one. `[[ -t 1+1 ]]` is the same shape.
+	//
+	// **The operand is evaluated, side effects and all**, which is what says
+	// this is arithmetic rather than a laxer number parser. Measured, and it
+	// needs no terminal, which is why it is the row this axis is pinned on:
+	//
+	//	x=0; [[ -t x++ ]]   zsh 5.9.2                        x=1
+	//	                    bash 5.3.20, bash 3.2.57, ksh93u+  x=0
+	//	x=0; [ -t x ]       dash 0.5.12, BusyBox ash           x=0
+	//
+	// **It is the operator's answer and not `[[ ]]`'s.** `[ -t / ]` and
+	// `test -t /` are the same fatal math complaint in that shell, worded
+	// identically and with no builtin name in front — where `test 1 -eq /`
+	// in the same shell is `test:1: integer expression expected: /` at 2 and
+	// the script runs on. So `-t` does not share
+	// TestBuiltinComparisonOperandsAreArithmetic's route, and a fix that put
+	// it there would have worded two of the three surfaces wrongly.
+	//
+	// Read rather than `ask`ed: a dialect that has not answered reads the
+	// operand as the literal descriptor it always did, which is what the
+	// other five measured columns do — bash 5.3.20, bash 3.2.57, ksh93u+,
+	// dash 0.5.12 and BusyBox ash — and what this tree did before the axis.
+	// All six are answered, so the unanswered value stands for a dialect
+	// nobody has measured rather than for any of them (#5058).
+	TerminalTestOperandIsArithmetic Answer
+
 	// BareTerminalTestIsDescriptorOne reads a lone `-t` — `[ -t ]` and
 	// `test -t`, where the one-argument rule would make it a non-empty
 	// string and so unconditionally true — as `-t 1` instead. ksh93 and zsh;

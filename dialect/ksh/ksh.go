@@ -1512,6 +1512,10 @@ func Semantics() interp.Semantics {
 	// rather than dash's and bash's integer complaint.
 	s.MissingFileIsOlder = interp.Yes
 	s.TerminalTestRequiresANumber = interp.No
+	// And not as an arithmetic expression either: measured,
+	// `x=0; [[ -t x++ ]]` leaves `x=0` here and `[[ -t / ]]` is a silent 1
+	// the script runs on from (#5058).
+	s.TerminalTestOperandIsArithmetic = interp.No
 	// A `-t` descriptor is read at the width of a C `int` — `[ -t 4294967296 ]`
 	// asks about descriptor 0 — and -1, which is where every conversion too
 	// wide to hold lands, holds whatever the shell is holding.

@@ -2078,6 +2078,11 @@ func Semantics() interp.Semantics {
 	s.StdinProgramReadInBlocks = true
 	s.StdinOptionNamesTheOperands = interp.No
 	s.LoneDashIsAnOption = interp.No
+	// The same, measured in the pinned digest rather than derived from dash:
+	// `x=0; [ -t x ]` leaves `x=0` and complains `ash: x: out of range` at 2,
+	// so the operand is read as a number and refused rather than evaluated
+	// (#5058).
+	s.TerminalTestOperandIsArithmetic = interp.No
 	// A lone `+` is a name to `export`: `export +` is `+: bad variable name`.
 	s.SignAloneIsAnOptionWordToExport = interp.No
 	s.ReadTrailingEscapedSeparator = interp.ReadTrailingEscapedSeparatorTrimmed

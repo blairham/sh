@@ -118,6 +118,12 @@ func TestSemantics(t *testing.T) {
 		// only where the backslash survived. See
 		// interp.Semantics.RegexKeepsAWrittenBackslash.
 		{"RegexKeepsAWrittenBackslash", s.RegexKeepsAWrittenBackslash, interp.No},
+		// Nor this one. A backslash inside double quotes is text here
+		// because the **whole quoted run** is, which is the axis above
+		// rather than this one — and that reading wins over it, so the
+		// value could not show through even if it were Yes. See
+		// interp.Semantics.RegexDoubleQuotedBackslashStands.
+		{"RegexDoubleQuotedBackslashStands", s.RegexDoubleQuotedBackslashStands, interp.No},
 		// The file comparisons: a missing file counts as older, and a -t
 		// operand that is not a number draws the integer complaint.
 		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.Yes},

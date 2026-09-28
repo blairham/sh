@@ -102,6 +102,11 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// matches where it does not in ksh93 or bash. See
 		// interp.Semantics.RegexKeepsAWrittenBackslash.
 		{"RegexKeepsAWrittenBackslash", s.RegexKeepsAWrittenBackslash, interp.No},
+		// A backslash inside double quotes is a quote here and comes off,
+		// leaving a literal character: `[[ zadb =~ "za\db" ]]` matches
+		// where it does not in ksh93. See
+		// interp.Semantics.RegexDoubleQuotedBackslashStands.
+		{"RegexDoubleQuotedBackslashStands", s.RegexDoubleQuotedBackslashStands, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"EmptyParamSubscriptIsAnError", s.EmptyParamSubscriptIsAnError, interp.Yes},
 		{"EmptyAssociativeKeyIsAnError", s.EmptyAssociativeKeyIsAnError, interp.No},

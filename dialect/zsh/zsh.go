@@ -2675,7 +2675,7 @@ func Semantics() interp.Semantics {
 	// `-z` is the third letter that left it, and reads no input at all: it
 	// takes one entry off the editor buffer stack, which `print -z` fills.
 	// See editorbuffer.go (#4966).
-	s.ReadOptions = "rsnpAd:t:u:k#qeEz"
+	s.ReadOptions = "rsnpAd:t#u:k#qeEz"
 	// And what the echo pair means, which is the half a letter in the
 	// accepted set does not say. Yes: measured 2026-09-28 under `-f`,
 	// `printf '  a   b   c  \n' | read -E x y` writes `a` and `b   c` and

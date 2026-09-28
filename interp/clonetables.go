@@ -91,6 +91,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.assigned = maps.Clone(r.assigned)
 	c.absentParams = maps.Clone(r.absentParams)
 	c.deferredParams = maps.Clone(r.deferredParams)
+	c.readonlyByDeclaration = maps.Clone(r.readonlyByDeclaration)
 	c.removedShellOwn = maps.Clone(r.removedShellOwn)
 	c.declaredEmpty = maps.Clone(r.declaredEmpty)
 	c.declaredOnlyCompound = maps.Clone(r.declaredOnlyCompound)

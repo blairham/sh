@@ -318,6 +318,7 @@ func seedTables(r *Runner) {
 	r.absentElements = map[string]string{"seed": "v"}
 	r.absentParams = map[string]string{"seed": "v"}
 	r.deferredParams = map[string]bool{"seed": true}
+	r.readonlyByDeclaration = map[string]bool{"seed": true}
 	r.removedShellOwn = map[string]bool{"seed": true}
 	r.conditionAnswers = map[string]ConditionAnswer{
 		"seed": func(*Runner, context.Context, string, []string) (bool, bool) { return false, false },

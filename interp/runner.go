@@ -1141,6 +1141,19 @@ type Runner struct {
 	// interp/deferredparam.go.
 	deferredParams map[string]bool
 
+	// readonlyByDeclaration are the deferred names a **script** froze, as
+	// against the ones this shell registered frozen.
+	//
+	// Every module table is registered readonly, so r.readonly cannot tell
+	// the two apart, and one listing needs them apart: a bare `typeset`
+	// writes `undefined funcstack` for a name nothing has touched and
+	// `undefined readonly funcstack` after a `readonly funcstack` that left
+	// it just as undefined. Written where a declaration freezes a name that
+	// is deferred at that moment — the dialect's own registrations all run
+	// before the roster is installed, so none of them reaches this. See
+	// interp/deferredparam.go.
+	readonlyByDeclaration map[string]bool
+
 	// removedShellOwn are the parameters of the shell's own that an `unset`
 	// has taken away, in the dialect whose listing still knows the name.
 	//

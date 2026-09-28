@@ -165,18 +165,19 @@ func TestAnExplicitModuleLoadIsAReference(t *testing.T) {
 }
 
 // And the listing forms split, which is measured and is why the skip is in
-// three of the five loops rather than in the name's own record.
+// some of the loops rather than in the name's own record.
 //
 // Measured 2026-09-27 on zsh 5.9.2 in one shell that has referred to none of
-// them: a bare `typeset` writes every module table (under a word this shell
-// has no concept of, which is a gap of its own), `set` writes each bare name,
-// and `readonly`, a whole-table `typeset +` and every `-p` form write none.
+// them: a bare `typeset` and a whole-table `typeset +` write every module
+// table, `set` writes each bare name, and `readonly` and every `-p` form
+// write none.
 //
-// The **named** `typeset + funcstack` is deliberately not a row here: the
-// reference writes `funcstack` at 0 for it and this shell writes nothing,
-// which it did before this change too — the hiding letter takes it out of
-// that form. A separate gap, and putting it here would have made this test
-// look like the thing that caused it.
+// **What the two forms that write such a name write** is a separate question
+// and is in deferredlisting_test.go — `undefined funcstack` rather than the
+// registered attributes, and the bare name for `typeset + funcstack`
+// (#4923, #4924). The row below said the whole-table plus wrote *nothing*
+// for it, which was a probe grepping that listing for `^funcstack$`: the
+// line is there and an anchored bare name is exactly what cannot see it.
 func TestTheListingFormsSplitOverADeferredParameter(t *testing.T) {
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -191,7 +192,11 @@ func TestTheListingFormsSplitOverADeferredParameter(t *testing.T) {
 			"done\n",
 		},
 		{
-			"and the whole-table name listing writes nothing",
+			// Written as the name alone, which is the row the reference
+			// does not have: the line it writes is `undefined funcstack`,
+			// and this is the anchored pattern that used to read that as
+			// silence. See deferredlisting_test.go for the row itself.
+			"and the whole-table name listing writes no bare name",
 			`typeset + | while IFS= read -r l; do case $l in (funcstack) print -r -- "[$l]";; esac; done
 			 print -r -- "done"`,
 			"done\n",

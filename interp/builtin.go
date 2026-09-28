@@ -7564,6 +7564,17 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		default:
+			if r.deferredNameListsAsAnOperand(name, declarationCarriesNoLetters(f), redeclared) {
+				// And the deferred name's bare row under this word too,
+				// which is not a copy of the branch in biDeclare but the
+				// same question asked in the loop this builtin keeps of its
+				// own: `local funcstack` at the top level writes `funcstack`
+				// and inside a function writes nothing, in the reference and
+				// here, because there the declaration really does make the
+				// binding. See Runner.deferredNameListsAsAnOperand.
+				r.printf("%s\n", name)
+				continue
+			}
 			if r.valuelessDeclarationLists(name, f, redeclared) {
 				// The same listing under the other word, on a name this
 				// scope has already made local: `f(){ local s=1; local s; }`

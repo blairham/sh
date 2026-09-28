@@ -7432,6 +7432,19 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	// `local -P + v` is reached, and ahead of every operand below because the
 	// answer is the line's. See Runner.signAloneIsNotAPrivateDeclaration.
 	r.signAloneIsNotAPrivateDeclaration(args, f)
+	// The `-T` letter's own shapes, which this word carries and did not act
+	// on: `local -T A a` declared two ordinary names and left them untied.
+	// Answered through the same helper `typeset` and `declare` reach, which
+	// is where the locality comes from for free — a tie takes a shadow
+	// unless `-g` is written, so the word that never takes one needs nothing
+	// of its own here. See Runner.tieDeclaration (#5095).
+	//
+	// Ahead of the bare listing below, because `local -T` with no operands
+	// is the *tie* listing and not this word's own: measured, it writes the
+	// same table `typeset -T` does.
+	if code, isTie := r.tieDeclaration(word, args, f, true); isTie {
+		return code
+	}
 	if len(r.scopes) > 0 && (len(args) == 0 || f.print) {
 		// Bare `local` is a listing, and the shells do not agree what of —
 		// see BareLocalListingForm. `local -p` is the same listing spelled

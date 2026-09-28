@@ -1502,32 +1502,11 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 		}
 	}
 
-	if f.tie && len(args) == 0 {
-		// `typeset -T` with nothing to tie lists the ties there are, both
-		// halves of each — measured, and it is the only filtered listing
-		// this builtin has: every other attribute letter with no names is a
-		// filter this engine does not build. This one is built because a
-		// tie is the one attribute whose *listing* is how a script finds the
-		// pairs at all.
-		//
-		// The sign picks the shape here as it does everywhere else on this
-		// builtin: `typeset +T` writes the tied names and no values.
-		return r.tieListing(f.remove)
-	}
-	if f.tie && f.remove && len(args) > 0 {
-		// The plus form **with operands**, which is a refusal and not an
-		// untie — see Runner.refuseUntie. Behind the bare listing above,
-		// which `typeset +T` alone still is, and ahead of the ordinary
-		// declaration loop, which took the line and did nothing.
-		return r.refuseUntie(name)
-	}
-	if f.tie && !f.remove && len(args) > 0 {
-		// The operands of `-T` are not a list of names: they are a scalar,
-		// an array and — where a third is given — the separator. Ahead of
-		// `-p` because `typeset -pT` with names is not a shape any shell
-		// measured has, and behind the bare listing because `typeset -T`
-		// alone *is* a listing there.
-		return r.declareTie(name, args, f)
+	if code, isTie := r.tieDeclaration(name, args, f, false); isTie {
+		// Ahead of `-p` because `typeset -pT` with names is not a shape any
+		// shell measured has, and behind the bare listing above because
+		// `typeset -T` alone *is* a listing there.
+		return code
 	}
 	if f.print {
 		if len(args) == 0 && f.attributeLetterWritten() {
@@ -3175,9 +3154,11 @@ func (r *Runner) compoundCell(name string) bool {
 //     typeset -x m; }` leaves the caller's m alone there, so the letter says
 //     where a declaration lands and not what it does to a name already here.
 //
-// `local` never comes through here, which is the fourth condition and is
-// structural rather than a test: biLocal has its own loop, and the shell that
-// answers yes exempts that word by name.
+// `local` never comes through here **from the ordinary loop**, which was the
+// fourth condition and was structural rather than a test: biLocal has its own
+// loop, and the shell that answers yes exempts that word by name. Since #5095
+// both words reach one tie helper, so for that construct the exemption is a
+// test — see Runner.tieTakesAGlobal, which is the only other caller.
 func (r *Runner) exportLetterDeclaresAGlobal(name string, f declareFlags) bool {
 	if !f.export || len(r.scopes) == 0 {
 		return false

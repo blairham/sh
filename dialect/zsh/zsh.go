@@ -1405,7 +1405,23 @@ func Semantics() interp.Semantics {
 	// Both are the whole string by byte with nothing else to explain, which
 	// is why writing the byte order out in full is the same claim the rows
 	// make and not a wider one.
-	s.DollarDashLetterOrder = "569" +
+	//
+	// **The digits were `569` and are now all ten** (#5057). The same
+	// correction as the paragraph above, and found the same way: the ten
+	// digit letters were refused when this was written, so a string naming
+	// only the three this shell starts with left the other seven to keep
+	// their produced place — and they came out *after* the letters, where
+	// zsh puts every digit in front. Measured 2026-09-28 on one binary:
+	//
+	//	set -8 -0 -3 -T -y -1            0135689TXfy
+	//	set -9 +9 -7 -2 -B -w -4         24567BXfw
+	//	set -0 -1 -2 -3 -4 -7 -8         0123456789Xf
+	//
+	// The last row is the one that settles it: all ten digits, in order,
+	// ahead of `X` and `f`. It is plain ASCII — digits, then upper, then
+	// lower — and the second row also shows a letter taken back out (`+9`)
+	// leaving no gap behind it.
+	s.DollarDashLetterOrder = "0123456789" +
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
 		"abcdefghijklmnopqrstuvwxyz"
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other
@@ -5334,7 +5350,16 @@ func Diagnostics() interp.Diagnostics {
 		// Before this it rode UnimplementedOptionLetters and said `-t is not
 		// implemented yet`, which is this implementation confessing to
 		// something the shell itself refuses (#1716).
-		ImmovableOptionLetters: map[string]string{"set": "t"},
+		//
+		// **And it no longer rides here either** (#5057). `t` is now a row of
+		// setLetterOptions naming `singlecommand`, and that is the same route
+		// `-i` and `-Z` already took: the name refuses the same way, so the
+		// letter does. Measured with the entry deleted — `set -t` is the same
+		// sentence and status, `zsh -t script` still takes the option at
+		// invocation and still writes `t` in `$-`, and all thirty-six letter
+		// rows and twelve controls are unmoved. A letter in two tables is one
+		// place for them to disagree, and a mutation that deleted this one
+		// killed nothing, which is how it was found.
 		// History expansion's three complaints, and zsh words all three
 		// unlike anybody else — measured 2026-09-15 through a
 		// pseudo-terminal. The reference goes at the *end* and loses the `!`

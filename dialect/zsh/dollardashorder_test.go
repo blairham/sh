@@ -43,8 +43,22 @@ import (
 //
 // Both are the whole string by byte and nothing else, so writing the byte
 // order out in full says what the rows say rather than more.
+//
+// **The digits were `569` and are now all ten** (#5057), which is this same
+// correction a third time. The sentence above already said "the digits lead";
+// what it pinned was the three this shell starts with, because the other
+// seven were refused letters when it was written. A letter the order does not
+// name keeps its produced place, so they came out *behind* the capitals.
+// Measured 2026-09-28 on one binary:
+//
+//	set -8 -0 -3 -T -y -1       0135689TXfy
+//	set -9 +9 -7 -2 -B -w -4    24567BXfw
+//	set -0 -1 -2 -3 -4 -7 -8    0123456789Xf
+//
+// The last row is what settles it — all ten digits in order, ahead of `X` and
+// `f` — and the middle one shows a letter taken back out leaving no gap.
 func TestDollarDashLetterOrder(t *testing.T) {
-	want := "569" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ" + "abcdefghijklmnopqrstuvwxyz"
+	want := "0123456789" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ" + "abcdefghijklmnopqrstuvwxyz"
 	if got := zsh.Semantics().DollarDashLetterOrder; got != want {
 		t.Errorf("DollarDashLetterOrder = %q, want %q", got, want)
 	}

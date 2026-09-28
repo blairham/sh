@@ -121,22 +121,74 @@ func zshGatedParameterModule(name string) string {
 	return ""
 }
 
-// installGatedParameters brings a module's parameters into being, and is what
-// a load does beyond saying it loaded.
+// installGatedParameters brings into being the module's parameters **that the
+// selection holds**, and is what a load does beyond saying it loaded.
 //
 // Idempotent, because a second `zmodload zsh/datetime` is not an error in
 // either shell and re-running a registration must not be one either: every
 // call below is a write to a table keyed by the name.
+//
+// # The installer is keyed on the module and the selection is per feature
+//
+// That mismatch is the whole of #5043. `registerSystemParameters` brings
+// `sysparams` and `errnos` together and `registerDatetimeParameters` brings
+// all three of its own — there is no spelling that brings one without the
+// other — so a narrowed `-F` installed the module's whole roster. Measured
+// 2026-09-28 on `/opt/homebrew/bin/zsh` — zsh 5.9.2
+// (aarch64-apple-darwin25.4.0), `go version -m` says *not a Go executable*
+// for it — `-f` from a script file under `env -i PATH=/usr/bin:/bin
+// TERM=dumb` with a scratch `HOME`:
+//
+//	                                        zsh 5.9.2   before
+//	-F zsh/system p:sysparams
+//	  ${+sysparams} ${+errnos}              1 0         1 1
+//	-F zsh/datetime b:strftime
+//	  ${+EPOCHSECONDS} ${+epochtime} …      0 0 0       1 1 1
+//
+// The second row is the sharper one: the selection names a **builtin** and no
+// parameter at all, and all three of the module's parameters arrived.
+//
+// So the roster is made to agree with the selection here, right after the
+// installer runs. zmodloadEnforce says the same sentence about the same state
+// and cannot say it for these names, because it runs **before** the install
+// on both load routes — and a withdrawal recorded in front of a registration
+// captures nothing, which is what left the name reading as *taken* and made
+// `zmodload -F zsh/datetime b:strftime; zmodload zsh/datetime` refuse the
+// widening with `Can't add module parameter`. One root, three rows.
+//
 // **Nothing here puts back a withdrawal an unload made**, deliberately, and
 // it is the same economy gatedbuiltins.go records for the builtin half:
 // zmodloadEnforce is the other writer of the withdrawn state and a plain
 // `zmodload` widens the selection to every feature the module names, so a
-// load after an unload comes back by the road `-F +p:name` already took. An
-// un-withdrawal written here as well passed every row with it removed, which
-// is what a second writer of one state looks like.
+// load after an unload comes back by the road `-F +p:name` already took. What
+// is written below is narrower than that and is not a second writer of it: it
+// is the same answer for the names that road cannot reach, asked at the only
+// moment they exist.
 func installGatedParameters(r *interp.Runner, module string) {
-	if install := zshGatedParameterInstallers[module]; install != nil {
-		install(r)
+	install := zshGatedParameterInstallers[module]
+	if install == nil {
+		return
+	}
+	install(r)
+	on := make(map[string]bool)
+	for _, feature := range zmodloadEnabled(r, module) {
+		on[feature] = true
+	}
+	for _, name := range gatedParametersTheModuleOwns(module) {
+		// **Cleared before it is written**, and the two lines are not one
+		// line twice. A withdrawal zmodloadEnforce recorded ran *in front of*
+		// the registration above, so what it captured was an empty set of
+		// producers — and the installer then wrote real ones straight over a
+		// name the record still calls withdrawn. Writing `true` again would
+		// find the record already there and return, leaving the producers
+		// standing, which is the whole of why setting the state here did
+		// nothing until the clear was in front of it.
+		//
+		// Clearing is safe over a live registration:
+		// interp.Runner.SetParameterWithdrawn puts back only what it took,
+		// and it took nothing.
+		r.SetParameterWithdrawn(name, false)
+		r.SetParameterWithdrawn(name, !on["p:"+name])
 	}
 }
 

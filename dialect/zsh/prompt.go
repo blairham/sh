@@ -112,6 +112,13 @@ func PromptStyle() interp.PromptStyle {
 			// and the column one along, and `%{a%Gb%}` is one column where
 			// `%{ab%}` is none.
 			'G': interp.FieldCountedColumn,
+			// The shell level, which is the *same fact* the `L` test letter
+			// below asks about — one letter, one question, two spellings.
+			// Measured 2026-09-27 on zsh 5.9.2 with `-f`: `print -P '%L'`
+			// draws `3` where `print $SHLVL` draws `3`, and `SHLVL=42;
+			// print -P '%L'` draws `42`, so the escape reads the parameter
+			// rather than counting shells of its own (#4965).
+			'L': interp.FieldShellLevel,
 		},
 		// The ternary. Measured letter by letter against zsh 5.9.2, one
 		// probe per letter, with the count swept across the range each of

@@ -763,6 +763,24 @@ const (
 	// terminal reads and never a column, which is exactly the distinction
 	// this code exists to cross.
 	FieldCountedColumn
+	// FieldShellLevel is how deep this shell is nested in others — `$SHLVL`,
+	// which zsh spells `%L` in a prompt.
+	//
+	// The same fact [ConditionShellLevel] tests, and read the same way: the
+	// *parameter*, not a count of this code's own. Measured 2026-09-27 on
+	// zsh 5.9.2 with `-f`, and the second row is what settles it —
+	// `SHLVL=42; print -P '%L'` draws 42, so an assignment moves the escape
+	// and the escape is not counting shells for itself.
+	//
+	// One measured edge is not modeled, and it belongs to the parameter
+	// rather than to this row: `unset SHLVL; print -P '%L'` still draws the
+	// real level there, because zsh's `SHLVL` is a special parameter tied to
+	// an integer the shell keeps and unsetting unbinds the name without
+	// clearing the integer. Here the parameter is the only copy, so an unset
+	// one draws nought — which is what [ConditionShellLevel] has always
+	// answered for `%(L.…)` and is a property of the tying, not of the
+	// escape.
+	FieldShellLevel
 )
 
 // PromptColor is which half of the screen a color code paints.
@@ -1962,6 +1980,12 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		return itoa(n), true
 	case FieldExitStatus:
 		return itoa(r.ExitStatus()), true
+	case FieldShellLevel:
+		// Through promptNumber and back, rather than the parameter's own
+		// text: it is the one reader [ConditionShellLevel] uses for the same
+		// fact, so a value the shell would not count as a number draws
+		// nought in both places instead of being written out in one of them.
+		return itoa(promptNumber(r.promptVar("SHLVL"))), true
 	case FieldHistoryNumber:
 		// The list is a fact a Runner has — a script can fill it with `fc
 		// -R` or `history -r` — so this is answered where the dialect said

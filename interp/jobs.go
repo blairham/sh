@@ -935,7 +935,39 @@ func (r *Runner) announceJob(job *Job) {
 // monitor on its own — see Semantics.MonitorAloneAnnouncesAJob, which is the
 // same seam canResume reads one notice over and which the panel divides
 // differently. Read and not asked, for the reason the axis gives.
+//
+// **A subshell has nobody to tell, and that is unanimous.** The prompt belongs
+// to the shell that owns the terminal; a body a real shell would have forked
+// draws none and announces nothing, however loudly the shell around it would
+// have. Measured 2026-09-28 through a pseudo-terminal, `( sleep 2 & )` typed
+// at an interactive prompt with no other job running, counting `[n] pid`
+// lines:
+//
+//	bash 5.3.20  0    ksh93  0    zsh 5.9.2  0
+//	bash 3.2.57  0    dash   0    ours       1
+//
+// and the same four boundaries all answer 0 in the reference where this
+// answered 1 in every one of them: `( … )`, `$( … )`, `<( … )` and a compound
+// pipeline element. Five columns to nothing is not an axis, so this is read
+// off the clone's own flag rather than added to the vector.
+//
+// It is [Runner.inSubshell] and not a shape, because every one of those four
+// boundaries is a clone and none of them announced — the noun is *being a
+// copy*, not being parentheses. It is also not JobControl: that flag is the
+// front end's and a clone inherits it, which is exactly how the second
+// announcement got out (#5021).
+//
+// **This says nothing about the job's number or its markers**, which is the
+// other half of #5021 and is a different mechanism — a compound command holds
+// a job number while it runs, so `( sleep 2 & )` numbers its job 2 in zsh and
+// `( f )` where `f` backgrounds one numbers it 3. That is measured on the
+// issue and deliberately not implemented here: it moves job numbering for
+// every compound command in the shell, and the pipeline-element row does not
+// yet resolve.
 func (r *Runner) canAnnounce() bool {
+	if r.inSubshell {
+		return false
+	}
 	return r.JobControl || (r.monitor && r.sem().MonitorAloneAnnouncesAJob == Yes)
 }
 

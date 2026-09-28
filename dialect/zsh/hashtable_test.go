@@ -151,20 +151,27 @@ print -r -- "dirs=$?"`)
 	}
 }
 
-// The letter is no longer named as missing, and the letters this shell still
-// has not got are — so a script can go on telling the two apart. `-t` is the
-// third wording: zsh has no `-t` for `hash` at all, which is why it is `bad
-// option` and 1 rather than the bad-option status the other two carry.
+// The letters that have landed are no longer named as missing, and the ones
+// this shell still has not got are — so a script can go on telling the two
+// apart. `-t` is the third wording: zsh has no `-t` for `hash` at all, which
+// is why it is `bad option` and 1 rather than the bad-option status the other
+// two carry.
+//
+// `-v` was the middle row until #4964 and is now a working listing at 0; `-L`
+// took its place, which is the pairing doing its job rather than the test
+// being weakened — a letter leaves this row on the change that implements it
+// and the row has to hold a letter that is really still absent, or it is
+// three assertions about nothing.
 func TestHashStillNamesTheLettersItHasNotGot(t *testing.T) {
 	dir := t.TempDir()
 	out, st := runZshHash(t, dir, `hash -f 2>&1
 print -r -- "f=$?"
-hash -v 2>&1
-print -r -- "v=$?"
+hash -L 2>&1
+print -r -- "L=$?"
 hash -t zzc 2>&1
 print -r -- "t=$?"`)
 	want := "zsh:hash:1: -f is not implemented yet\nf=2\n" +
-		"zsh:hash:3: -v is not implemented yet\nv=2\n" +
+		"zsh:hash:3: -L is not implemented yet\nL=2\n" +
 		"zsh:hash:5: bad option: -t\nt=1\n"
 	if out != want || st != 0 {
 		t.Errorf("the refused letters = %q (status %d), want %q", out, st, want)

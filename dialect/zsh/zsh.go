@@ -2310,6 +2310,12 @@ func Semantics() interp.Semantics {
 	// letters and shapes only this shell has; see the axes for the columns.
 	s.HashDefinesAnEntryFromAnAssignment = interp.Yes
 	s.HashReadsOperandsAsPatterns = interp.Yes
+	// And `-v` reports each operand the call answered, over either table, in
+	// the listing's own shape — a letter only this shell has as well.
+	// Measured 2026-09-27; see the axis for the rows, and note that a *query*
+	// prints too, which is what makes it "answered" rather than "added"
+	// (#4964).
+	s.HashReportsEachEntry = interp.Yes
 	// And `-r` here is the whole of the call rather than a first half of
 	// one: an operand beside it is `too many arguments` at 1 and the table
 	// is left standing, where every other column clears and then hashes the
@@ -5336,7 +5342,21 @@ func Diagnostics() interp.Diagnostics {
 			// Semantics.HashReadsOperandsAsPatterns. A letter in the accepted
 			// set and still named here is refused as missing while it works,
 			// which is why the two tables move together.
-			"hash": "dfvL",
+			//
+			// **`-v` has left it the same way** (#4964): it reports each
+			// operand the call answered, in
+			// Semantics.HashReportsEachEntry.
+			//
+			// **`-d` left it in the same change, and it was dead text rather
+			// than a refusal.** hashOptionLetters adds the letter behind
+			// HashDefinesANamedDirectory, which this shell answers Yes, so
+			// the accepted set has always won and `hash -d a=/tmp` has always
+			// worked — the entry here said "zsh has this and we have not"
+			// about a letter that was implemented. That is exactly the drift
+			// the comment above warns about, read from the other side: a
+			// letter named here while the accepted set spells it is either a
+			// wrong refusal or, as here, a line nothing reads.
+			"hash": "fL",
 			// read's letters about a terminal or the line editor —
 			// -e/-E echoing, -z and the zle pair -c/-l. The -p
 			// coprocess is implemented as its measured refusal — see

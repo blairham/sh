@@ -63,6 +63,21 @@ type funcOrigin struct {
 	text runningText
 }
 
+// originHere is where a definition read at this moment came from: the file the
+// shell is in, the offset the text it is reading was running at, and that text
+// itself.
+//
+// Two callers, and they are the two ways a body comes to exist. A declaration
+// records this and the table answers with it whenever the name is called
+// later. A **nameless** function has no name to record under and no later:
+// it is defined and run in one place, so its call asks this directly and
+// there is nothing to remember. Spelled once because the two answers have to
+// be the same answer — a nameless function's frame reports the file its
+// declaration would have reported had it been given a name.
+func (r *Runner) originHere() funcOrigin {
+	return funcOrigin{file: r.currentFile(), lineBase: r.lineBase, text: r.runText}
+}
+
 // recordFunctionOrigin is the one write to the table, so that a new way of
 // defining a function cannot quietly skip it.
 //

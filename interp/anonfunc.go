@@ -80,10 +80,10 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 		// function is given: `function <nosuchfile` says `(anon)` and not
 		// the line it stands on, which is the shell telling us the frame is
 		// pushed before the files are opened.
-		return r.callFunc(ctx, &syntax.FuncDecl{
+		return r.callFuncInPlace(ctx, &syntax.FuncDecl{
 			Name: r.anonymousFunctionName(), Keyword: c.Keyword,
 			Body: empty, Start: c.Start,
-		}, nil)
+		}, r.anonymousFunctionName(), nil, &inPlaceCall{origin: r.originHere()})
 	}
 	return r.withRedirsOfABracketedCommand(ctx, c.Redirs, func() error {
 		name := r.anonymousFunctionName()
@@ -108,7 +108,9 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 		decl := &syntax.FuncDecl{
 			Name: name, Keyword: c.Keyword, Body: c.Body, Start: c.Start,
 		}
-		return r.callFuncNumberedFrom(ctx, decl, name, args, r.anonBodyNumberedFrom(c))
+		return r.callFuncInPlace(ctx, decl, name, args, &inPlaceCall{
+			origin: r.originHere(), numberFrom: r.anonBodyNumberedFrom(c),
+		})
 	})
 }
 

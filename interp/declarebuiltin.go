@@ -2228,6 +2228,22 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				return r.status
 			}
 		default:
+			if r.deferredNameListsAsAnOperand(name, declarationCarriesNoLetters(f), redeclared) {
+				// A parameter waiting on its first reference, named as the
+				// operand of a line that carries no letters: the bare name
+				// is written and nothing else happens to it. Ahead of the
+				// listing below because that one asks whether the name
+				// *holds* something, and this one has no cell to hold with
+				// — see Runner.deferredNameListsAsAnOperand, where the ten
+				// shapes are measured.
+				//
+				// The operand ends here, which is the half of the row that
+				// is not the printing: a `declareEmpty` behind it would put
+				// a stored cell under the name and turn the next listing of
+				// it into an ordinary one.
+				r.printf("%s\n", name)
+				continue
+			}
 			if r.valuelessDeclarationLists(name, f, redeclared) {
 				// Said back and nothing more: the value is unchanged, which
 				// is why this does not return — the branch below still runs
@@ -4346,6 +4362,18 @@ func functionNameNeedsQuotes(c rune) bool {
 // applyDeferredFreeze. `declare -ar A=(x y)` is one command, and the value it
 // carries cannot be refused by the attribute it carries beside it.
 func (r *Runner) markReadonly(name string) {
+	if r.DeferredParameter(name) {
+		// A freeze the script asked for over a name that is still waiting
+		// on its first reference, which is the one route by which one of
+		// these names carries a `readonly` word a listing has to write. The
+		// dialect's own registrations run before the deferral roster is
+		// installed, so this is never reached by one — see
+		// Runner.readonlyByDeclaration and Runner.deferredParameterRow.
+		if r.readonlyByDeclaration == nil {
+			r.readonlyByDeclaration = map[string]bool{}
+		}
+		r.readonlyByDeclaration[name] = true
+	}
 	// The declaration is freezing a name its own command's prefix is holding,
 	// in the column where that keeps the prefix's value for the shell. Ahead
 	// of the deferred freeze below, because the keeping is about this command

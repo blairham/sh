@@ -278,11 +278,7 @@ func (r *Runner) listStandingDeclaration(name string) {
 //   - the name **holds** something. `unset u; typeset u` prints nothing,
 //     which is the control that says this is not "one operand means list".
 func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, redeclared bool) bool {
-	letters := f
-	// A bare `+` is an option word carrying no letters — see the sign branch
-	// in parseDeclareFlags — so what it leaves behind is not a letter either.
-	letters.remove, letters.plusAlone = false, false
-	if (letters != (declareFlags{}) && !f.onlyAConflictedWidth()) || !redeclared || !r.declaredNameHolds(name) {
+	if !declarationCarriesNoLetters(f) || !redeclared || !r.declaredNameHolds(name) {
 		return false
 	}
 	if r.freezing[name] {
@@ -296,6 +292,26 @@ func (r *Runner) valuelessDeclarationLists(name string, f declareFlags, redeclar
 	}
 	return r.ask(r.sem().ValuelessDeclarationOfAHeldNameListsIt,
 		"a valueless declaration writing back a name that already holds something")
+}
+
+// declarationCarriesNoLetters reports whether a declaration line wrote no
+// attribute letter at all, which is the condition both listings a valueless
+// operand can produce are asked under — the name written back with its value
+// above, and the bare name a deferred parameter writes in
+// Runner.deferredNameListsAsAnOperand.
+//
+// A bare `+` or `-` is an option word carrying no letters — see the sign
+// branch in parseDeclareFlags — so what it leaves behind is not a letter
+// either: `v=hi; typeset + v` and `v=hi; typeset - v` both write `v=hi` on
+// zsh 5.9.2, exactly as `typeset v` does.
+//
+// One function for the two callers rather than the test written twice, which
+// is the shape a second helper omitting what the first carries takes in this
+// tree: a letter added to declareFlags has to reach both listings or neither.
+func declarationCarriesNoLetters(f declareFlags) bool {
+	letters := f
+	letters.remove, letters.plusAlone = false, false
+	return letters == (declareFlags{}) || f.onlyAConflictedWidth()
 }
 
 // innermostLocalNames is the set of names the running function made local,
@@ -532,6 +548,27 @@ func (r *Runner) everyParameterListing() int {
 	defer r.walkingTheWholeTable()()
 	for _, name := range names {
 		d, _ := r.listedDeclarationOf(name, produced[name], listing)
+		if r.DeferredParameter(name) {
+			// A registered parameter nothing has referred to yet, which
+			// this form writes with a kind word of its own and no value:
+			// `undefined funcstack`. See deferredParameterRow, and
+			// interp/deferredparam.go for the state (#4923).
+			//
+			// This is the one whole-table listing that writes such a name at
+			// all, which is what separates it from the four that pass over
+			// it: `typeset -p`, `export -p`, `readonly -p`, a bare
+			// `readonly` and a whole-table `typeset +` write nothing for
+			// `funcstack` in zsh 5.9.2 and this form writes a row. Measured
+			// 2026-09-27 in a shell that has referred to nothing, where a
+			// bare `typeset` writes forty such rows and `: ${#funcstack}`
+			// on the line before turns that one into `array readonly
+			// funcstack`.
+			//
+			// A read of the state and never a reference to the parameter,
+			// for the reason every other listing here declines to be one.
+			r.printf("%s\n", r.deferredParameterRow(d, locals[name]))
+			continue
+		}
 		r.printf("%s\n", r.attributeWordDeclaration(d, locals[name]))
 	}
 	return 0

@@ -97,7 +97,14 @@ func containsLine(out, line string) bool {
 // in its own nanoseconds, which is a test that fails for no reason anybody
 // can act on (#1618).
 func TestABareListingWritesAProducedParametersAttributesAndNotItsValue(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `typeset`)
+	// The three deferred names below are **read first**, which is the state
+	// this test's own measurement was taken in — "with the modules loaded"
+	// — and which it had no way to reach before the deferral was modeled.
+	// A bare `typeset` in a shell that has referred to nothing writes
+	// `undefined keymaps` for them, in the reference and here, and that row
+	// is the pair below. See interp/deferredparam.go (#4923).
+	out, st := runZsh(t, t.TempDir(), `: ${#keymaps} ${#widgets} ${#builtins}
+		typeset`)
 	if st != 0 {
 		t.Fatalf("status = %d, out %q", st, out)
 	}
@@ -124,6 +131,29 @@ func TestABareListingWritesAProducedParametersAttributesAndNotItsValue(t *testin
 	for _, never := range []string{"errnos=", "langinfo=", "widgets=", "epochtime=", "EPOCHSECONDS="} {
 		if strings.Contains(out, never) {
 			t.Errorf("out = %q, want no %q in it — a produced value is not state a listing carries", out, never)
+		}
+	}
+	// And the other half of the pair, in a shell that has read nothing: the
+	// same three names carry no kind and no freeze there, because the
+	// parameter is not in being yet. Without this the read above reads as
+	// tidiness rather than as the state it selects.
+	unprimed, st := runZsh(t, t.TempDir(), `typeset`)
+	if st != 0 {
+		t.Fatalf("status = %d, out %q", st, unprimed)
+	}
+	for _, want := range []string{
+		"undefined keymaps\n",
+		"undefined widgets\n",
+		"undefined builtins\n",
+		// And the control that says the deferral is per name rather than
+		// per module: these two are registered by modules that declare no
+		// autoloadable parameter, so they are there from the start and
+		// list with their attributes in the same run.
+		"array readonly errnos\n",
+		"association readonly langinfo\n",
+	} {
+		if !containsLine(unprimed, want) {
+			t.Errorf("unprimed = %q, want the whole line %q", unprimed, want)
 		}
 	}
 }

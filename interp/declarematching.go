@@ -520,6 +520,21 @@ func (r *Runner) declarationNameListing(names []string) int {
 	locals := r.innermostLocalNames()
 	for _, name := range names {
 		d, _ := r.declarationOf(name)
+		if r.DeferredParameter(name) {
+			// The same row the bare listing writes for a parameter nothing
+			// has referred to, which is what "the attribute words and the
+			// name" means for one: `undefined funcstack`. See
+			// Runner.deferredParameterRow.
+			//
+			// This form was written down as one that passes such a name over
+			// — a probe that grepped a whole-table `typeset +` for
+			// `^funcstack$` found nothing and the absence was recorded as
+			// the answer. It is there and it is spelled `undefined
+			// funcstack`, which is exactly what a grep anchored on the bare
+			// name cannot see (#4924).
+			r.printf("%s\n", r.deferredParameterRow(d, locals[name]))
+			continue
+		}
 		r.printf("%s\n", r.attributeWordHead(d, locals[name])+name)
 	}
 	return 0

@@ -587,3 +587,42 @@ func TestZparseoptsTakesEachArrayLetterOnce(t *testing.T) {
 		want:    "st=0 o=1\n",
 	}})
 }
+
+// `-F` names the **first letter no description covers**, with one `-`, and
+// not the word that letter was written in — #5024.
+//
+// Measured 2026-09-28 on zsh 5.9.2 with `-f`. The second row is the one that
+// fixes the rule rather than merely exhibiting it: with `x` described, the
+// complaint names `-y`, which rules out "name the first letter" and leaves
+// only "name the first letter that is not described".
+//
+// The last two rows are controls for the two shapes that must not move: a
+// single letter is its own cluster and was already right, and a **long**
+// option is one name and is still named whole.
+func TestZparseoptsStrictNamesTheLetterAndNotTheWord(t *testing.T) {
+	runZparseoptsCases(t, []zparseoptsCase{{
+		name:    "the-first-letter-of-a-cluster",
+		snippet: `set -- -xy; zparseopts -F -a o a; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: bad option: -x\nst=1\n",
+	}, {
+		name:    "the-first-letter-no-description-covers",
+		snippet: `set -- -xy; zparseopts -F -a o x; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: bad option: -y\nst=1\n",
+	}, {
+		name:    "past-a-described-letter",
+		snippet: `set -- -ab; zparseopts -F -a o a; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: bad option: -b\nst=1\n",
+	}, {
+		name:    "and-only-the-first-of-several",
+		snippet: `set -- -xyz; zparseopts -F -a o a; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: bad option: -x\nst=1\n",
+	}, {
+		name:    "a-single-letter-is-its-own-cluster",
+		snippet: `set -- -x; zparseopts -F -a o a; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: bad option: -x\nst=1\n",
+	}, {
+		name:    "a-long-option-is-named-whole",
+		snippet: `set -- --xy; zparseopts -F -a o a; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: bad option: --xy\nst=1\n",
+	}})
+}

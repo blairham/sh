@@ -6429,6 +6429,12 @@ func Apply(r *interp.Runner) {
 	// than a property of the function that installed each name — see
 	// deferredparameters.go for the route it was taken by and for the five
 	// names it deliberately leaves out.
+	// And the one pair this shell joins that is not a tie: `$WATCH` and
+	// `$watch` are one parameter in two kinds, joined on `:`, and the
+	// reference describes neither half with the word `tied`. See
+	// watchpair.go, where the measurement that separates the join from the
+	// word is. Ahead of the deferral roster, which names both halves.
+	registerWatchPair(r)
 	registerDeferredParameters(r)
 	// This shell's richer `echo`, and not ksh93's builtin of the same
 	// spelling: different letters, a different escape set and different

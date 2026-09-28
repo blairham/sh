@@ -116,6 +116,7 @@ type zparseoptsOpts struct {
 	keep     bool   // -K
 	alias    bool   // -M
 	array    string // -a
+	hasArray bool
 	assoc    string // -A
 	hasAssoc bool
 }
@@ -188,9 +189,34 @@ func zparseoptsOptions(r *interp.Runner, args []string) (opts zparseoptsOpts, re
 				}
 				name, rest = rest[0], rest[1:]
 			}
+			// Each letter may be given once, and a second one is a refusal
+			// rather than a last-one-wins. Measured 2026-09-28 on zsh 5.9.2
+			// with `-f`, with `-x` in the positional parameters:
+			//
+			//	zparseopts -a o -a p x   default array given more than once, 1
+			//	zparseopts -A h -A g x   associative array …more than once, 1
+			//	zparseopts -a o -A h x   accepted, in either order
+			//
+			// The status is the half that reaches a script: taking the
+			// second name quietly filled `p` and reported 0, so a line that
+			// wrote the letter twice put its options in the name it did not
+			// mean and said nothing (#5006).
+			//
+			// Before anything is read from the descriptions, which is where
+			// the refusal is visible: `zparseopts -a o -a p` with no
+			// descriptions at all is this sentence rather than the missing
+			// ones.
 			if letter == 'a' {
-				opts.array = name
+				if opts.hasArray {
+					r.Diagnosef("default array given more than once\n")
+					return opts, nil, 1
+				}
+				opts.array, opts.hasArray = name, true
 			} else {
+				if opts.hasAssoc {
+					r.Diagnosef("associative array given more than once\n")
+					return opts, nil, 1
+				}
 				opts.assoc, opts.hasAssoc = name, true
 			}
 			continue

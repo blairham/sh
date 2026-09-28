@@ -547,3 +547,43 @@ whence -w zparseopts zformat zstyle zregexparse`)
 		t.Errorf("zutil feature answer = %q (status %d), want %q", out, st, want)
 	}
 }
+
+// Each array letter may be given **once**, and a second one is a refusal with
+// a sentence of its own rather than a last-one-wins — #5006.
+//
+// Measured 2026-09-28 on zsh 5.9.2 with `-f`. The status is the half that
+// reaches a script: taking the second name quietly filled it and reported 0,
+// so a line that wrote the letter twice by accident put its options in the
+// name it did not mean and nothing was said.
+//
+// The two accepting rows are the controls and they are not decoration: `-a`
+// and `-A` **together** are right in either order, so a check that refused a
+// second array *letter* rather than a second use of the same one would pass
+// the two refusals and fail these.
+func TestZparseoptsTakesEachArrayLetterOnce(t *testing.T) {
+	runZparseoptsCases(t, []zparseoptsCase{{
+		name:    "a-repeated-default-array-is-refused",
+		snippet: `set -- -x; zparseopts -a o -a p x; echo "st=$? o=${#o} p=${#p}"`,
+		want:    "zsh:zparseopts:1: default array given more than once\nst=1 o=0 p=0\n",
+	}, {
+		name:    "a-repeated-associative-array-is-refused",
+		snippet: `set -- -x; zparseopts -A h -A g x; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: associative array given more than once\nst=1\n",
+	}, {
+		name:    "and-before-the-descriptions-are-read-at-all",
+		snippet: `zparseopts -a o -a p; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: default array given more than once\nst=1\n",
+	}, {
+		name:    "the-attached-spelling-counts-as-the-letter",
+		snippet: `set -- -x; zparseopts -a o -ap x; echo "st=$?"`,
+		want:    "zsh:zparseopts:1: default array given more than once\nst=1\n",
+	}, {
+		name:    "the-two-letters-together-are-accepted",
+		snippet: `set -- -x; zparseopts -a o -A h x; echo "st=$? o=${#o}"`,
+		want:    "st=0 o=1\n",
+	}, {
+		name:    "in-either-order",
+		snippet: `set -- -x; zparseopts -A h -a o x; echo "st=$? o=${#o}"`,
+		want:    "st=0 o=1\n",
+	}})
+}

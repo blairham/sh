@@ -32,14 +32,22 @@ func TestTheFastPathIsOnlyTakenWhenTheRewriteWouldDoNothing(t *testing.T) {
 			// The slow path is taken; nothing is being skipped.
 			return
 		}
-		got, err := rewriteERE(pat)
-		if err != nil {
-			t.Errorf("%q: the guard skipped a pattern the rewrite refuses: %v", pat, err)
-			return
-		}
-		if got != pat {
-			t.Errorf("%q: the guard skipped a rewrite that would have written %q —\n"+
-				"a character that reaches the rewrite is missing from ereRewriteTriggers", pat, got)
+		// **Both values of the dialect's escape reading**, because a
+		// parameter the guard never varies is a parameter the guard does
+		// not cover: `\d` is a digit class in one column and the letter in
+		// the others, and either way the rewrite has to be reachable. See
+		// Semantics.RegexDigitClassEscape.
+		for _, digitClass := range []bool{false, true} {
+			got, err := rewriteERE(pat, digitClass)
+			if err != nil {
+				t.Errorf("%q: the guard skipped a pattern the rewrite refuses: %v", pat, err)
+				return
+			}
+			if got != pat {
+				t.Errorf("%q: the guard skipped a rewrite that would have written %q —\n"+
+					"a character that reaches the rewrite is missing from ereRewriteTriggers",
+					pat, got)
+			}
 		}
 	}
 
@@ -70,7 +78,7 @@ func TestTheFastPathIsOnlyTakenWhenTheRewriteWouldDoNothing(t *testing.T) {
 			if !strings.ContainsAny(tc.pat, ereRewriteTriggers) {
 				t.Fatalf("%q: the guard's set does not admit this construct at all", tc.pat)
 			}
-			got, err := rewriteERE(tc.pat)
+			got, err := rewriteERE(tc.pat, false)
 			switch {
 			case tc.rewrites && err == nil && got == tc.pat:
 				t.Errorf("%q: the rewrite left it alone, so this row proves nothing", tc.pat)

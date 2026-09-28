@@ -1413,7 +1413,12 @@ func (r *Runner) binaryTest(form testForm, left, op, right string) (bool, error,
 			got := r.matchPatternR(right, left, patternInACondition)
 			return got == (op != "!="), nil, true
 		case "=~":
-			ok, err := r.regexMatch(right, left)
+			// Never a class escape: the words were expanded and had their
+			// quotes removed before the builtin was called, so a written
+			// `\d` has already lost its backslash and there is nothing
+			// left for the dialect to hand the engine. The same reason the
+			// `=` arm above gives for a pattern.
+			ok, err := r.regexMatch(right, left, false)
 			if err != nil {
 				return false, errTestRegexDoesNotCompile, true
 			}

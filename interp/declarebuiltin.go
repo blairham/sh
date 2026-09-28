@@ -462,7 +462,14 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 				}
 				break
 			}
-			pending = 0
+			// A number a letter was still waiting for is not cleared here,
+			// because the scan is about to end and nothing reads it again.
+			// It is not silently dropped either: measured, `typeset -F - 3
+			// x=1.5` is `not an identifier: 3` in zsh 5.9.2 and here, so the
+			// word after the sign is an operand rather than the precision
+			// `-F` was waiting for — which is the same thing "the options
+			// end" says everywhere else on this builtin.
+			//
 			// A sign *word* does not change the sign of a letter already
 			// written, which is measured in the two columns that read one as
 			// an option word at all: `typeset -a + q` is `array-local` in

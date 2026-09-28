@@ -34,11 +34,22 @@ func TestAnEmptyBaseIsZeroAtTenOrAbove(t *testing.T) {
 		// count*, which is the wrong rule.
 		{"10#", "0\n"},
 		{"16#", "0\n"},
-		// **The probe that separates the two readings.** `010#` is base ten
-		// written with a leading zero and it refuses, while `10#` above
-		// succeeds — so the base itself is read as a C integer constant, in
-		// which `010` is eight. Without this row the column could be written
-		// as "a one-digit base refuses" and every other row would agree.
+		// `010#` refuses, and **it is not this axis that refuses it** — which
+		// is worth saying because the row looks like the discriminator and is
+		// not. A base of more than two characters is not a named base in this
+		// shell at all (Semantics.ArithBaseIsAtMostTwoDigits), so the text
+		// never reaches the empty-digit question. It is kept because the
+		// *answer* is the reference's and a change that started reading
+		// three-character bases would move it.
+		//
+		// **Nothing here can separate "below ten" from "one digit"**, and no
+		// test could: every base that reaches this axis is two through nine
+		// with one digit, or ten through sixty-four with two, so the two
+		// predicates agree on the whole reachable domain. The formulation in
+		// the axis is the one ksh93's own behavior supports — `010#` is base
+		// *eight* to that shell, because it reads the base as a C constant —
+		// and a mutant swapping it for the digit count survives this file on
+		// purpose rather than through a gap.
 		{"010#", "ksh:  010# : arithmetic syntax error\n"},
 		// The control: digits in the same spelling, unmoved.
 		{"8#7", "7\n"},

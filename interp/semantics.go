@@ -23669,6 +23669,18 @@ type Semantics struct {
 	// four of those nine bases, and wrong in the direction that reads as
 	// agreement — `16#` is the spelling anyone reaches for first.
 	//
+	// **The two readings are indistinguishable here, and that is stated
+	// rather than left to be discovered.** Every base that reaches this axis
+	// is two through nine written with one digit, or ten through sixty-four
+	// written with two — a three-character base is not a named base in ksh93
+	// at all (ArithBaseIsAtMostTwoDigits), so `010#` is refused before the
+	// empty digit run is ever asked about. The predicates `base < 10` and
+	// `one digit` therefore agree on the whole reachable domain, and a mutant
+	// swapping one for the other survives every test in the tree. The
+	// formulation kept is the one the reference's own behavior supports;
+	// nothing here can falsify the other, which is the honest standing for
+	// it.
+	//
 	// **ash is measured and not derived from dash**, which is the trap this
 	// row nearly walked into. The two are neighbors on every other question
 	// about arithmetic and they split here: BusyBox ash has named bases and

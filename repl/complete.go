@@ -441,11 +441,13 @@ func (s shellCompleter) resolve(path string) string {
 }
 
 // listQueryThreshold is how many matches it takes before a shell asks rather
-// than printing.
+// than printing, where the dialect keeps no parameter for it.
 //
 // A hundred, measured in both shells that ask, and it is the count reaching
 // it rather than passing it: ninety-nine print and a hundred ask. The same
-// number in both, so it is not a dialect's answer — what to *say* is.
+// number in both, so it is not a dialect's answer — what to *say* is, and in
+// one of the two **how many** is a parameter a script can set. See
+// editor.listQueryAsks.
 const listQueryThreshold = 100
 
 // confirmList asks before printing a large number of matches, and reports
@@ -460,7 +462,7 @@ const listQueryThreshold = 100
 // redrawn afterwards either way. It is the one place the editor reads a key
 // in the middle of drawing.
 func (e *editor) confirmList(matches []Candidate, prompt drawnPrompt) bool {
-	if e.listQuery == "" || len(matches) < listQueryThreshold {
+	if e.listQuery == "" || !e.listQueryAsks(matches) {
 		return true
 	}
 	e.endLine(prompt, "")
@@ -579,5 +581,58 @@ func (e *editor) ringsFor(did completionOutcome, listing bool) bool {
 		return e.bellsOnAPartialCompletion
 	default:
 		return e.listsMatches || !listing
+	}
+}
+
+// listQueryAsks reports whether this many matches is enough to ask about.
+//
+// Where the dialect keeps the threshold in a parameter — zsh's `$LISTMAX` —
+// it is read **live**, and it has three readings rather than one. Measured
+// 2026-09-28 through a pseudo-terminal against zsh 5.9.2, `zsh -f -i` on a
+// terminal of 80 columns, completing `ls alpha<TAB>` in a directory of five
+// files that list in one row, and `ls beta<TAB>` in one of three hundred that
+// list in thirty-eight:
+//
+//	LISTMAX   5 matches, 1 row      300 matches, 38 rows
+//	2         asks                  —
+//	5         asks                  —
+//	6         silent                —
+//	0         silent                asks
+//	-1        asks                  —
+//	-2        asks                  —
+//	-10       asks                  —
+//	400       —                     silent
+//
+// So a positive number is a count and the comparison is **at** it rather than
+// past it — five matches and `LISTMAX=5` asks, `LISTMAX=6` does not, which is
+// the same "reaching it rather than passing it" the constant above records.
+// Zero asks only when the listing would not fit the screen. And **every**
+// negative asks, whatever the listing's size: `-10` asks about a one-row
+// listing, which is what rules out the reading where a negative is a number
+// of rows to compare against.
+//
+// The boundary of the zero reading is not measured and is not claimed: what
+// the two rows above bracket is one row on a twenty-four row terminal not
+// asking and thirty-eight rows on the same terminal asking. "More rows than
+// the terminal has" is the shape taken; the exact cell it turns over at would
+// need a listing built to the terminal's height.
+func (e *editor) listQueryAsks(matches []Candidate) bool {
+	n, ok := 0, false
+	if e.listThreshold != nil {
+		n, ok = e.listThreshold()
+	}
+	if !ok {
+		// No parameter, or one holding something that is not a number: the
+		// built-in count, which is what a dialect with no such parameter
+		// always gets.
+		return len(matches) >= listQueryThreshold
+	}
+	switch {
+	case n < 0:
+		return true
+	case n == 0:
+		return len(listingRows(matches, e.cols())) > e.rows()
+	default:
+		return len(matches) >= n
 	}
 }

@@ -53,3 +53,22 @@ func terminalWidth(f *os.File) int {
 	}
 	return cols
 }
+
+// terminalHeight is terminalWidth's sibling: how many rows the terminal has,
+// or [tty.FallbackRows] where it will not say.
+//
+// One caller and one question — whether a completion listing would fit the
+// screen, which is what `LISTMAX=0` asks. See editor.listQueryAsks, where the
+// two measured rows that bracket it are.
+//
+// The same fallback reasoning the width has: there is a screen and something
+// has to go on it, so a guess beats a refusal. A listing judged against a
+// zero would be "taller than the screen" whatever it held, which is the
+// answer that asks about every listing there is.
+func terminalHeight(f *os.File) int {
+	rows, _ := terminalSize(f)
+	if rows <= 0 && tty.IsTerminal(f) {
+		return tty.FallbackRows
+	}
+	return rows
+}

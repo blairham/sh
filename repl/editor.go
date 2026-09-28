@@ -269,6 +269,12 @@ type editor struct {
 	listQuery       string
 	listQueryEchoes bool
 	listQueryStrict bool
+	// listThreshold is how many matches it takes before the question is
+	// asked, read fresh on every completion because it is a parameter a
+	// person sets at the prompt — the same shape `bindings` has and for the
+	// same reason. Nil where the dialect has no such parameter, which keeps
+	// the built-in count. See confirmList and EditorStyle.ListQueryThresholdParameter.
+	listThreshold func() (int, bool)
 
 	// bindings is what a person rebound, asked fresh for every key because
 	// `bindkey` is a command run at the prompt as well as in an rc file. Nil,
@@ -334,6 +340,10 @@ type editor struct {
 	// screen row the last draw left the cursor on, counted from the row the
 	// prompt starts in — 0 until the line is long enough to wrap.
 	width func() int
+	// height is how many rows it has, asked the same way and for one
+	// question: whether a completion listing would fit the screen, which is
+	// what `LISTMAX=0` asks. See editor.listQueryAsks.
+	height func() int
 
 	// transient answers what the prompt collapses to once the line has been
 	// accepted, or "" for a prompt that stays as it was drawn. Nil is the
@@ -1066,6 +1076,14 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		row:    curRow, col: curCol,
 		endRow: endRow, endCol: endCol,
 	}
+}
+
+// rows is the terminal's height, or 0 when there is nothing to ask.
+func (e *editor) rows() int {
+	if e.height == nil {
+		return 0
+	}
+	return e.height()
 }
 
 // cols is the terminal's width, or 0 when there is nothing to ask.

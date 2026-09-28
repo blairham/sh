@@ -18,8 +18,16 @@ func EditorStyle() repl.EditorStyle {
 		// echoes the key it read, and treats the first key it is given as
 		// the answer — `n`, `q` and `x` all decline alike, with no bell and
 		// no second asking.
-		ListQuery:             "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? ",
-		ListQueryEchoesTheKey: true,
+		ListQuery: "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? ",
+		// And how many matches it takes, which in this shell is a parameter
+		// a person sets at the prompt rather than a number built in.
+		// Measured 2026-09-28 through a pseudo-terminal against zsh 5.9.2 —
+		// five matches in one row and `LISTMAX=5` asks, `LISTMAX=6` does
+		// not, `LISTMAX=0` asks only about a listing that will not fit, and
+		// every negative asks whatever the size. See
+		// repl.editor.listQueryAsks, where the grid is (#4993).
+		ListQueryThresholdParameter: "LISTMAX",
+		ListQueryEchoesTheKey:       true,
 		// Measured 2026-09-14 through a pseudo-terminal: this shell writes
 		// `\e[?2004h` after the prompt and `\e[?2004l\r` after the line it
 		// read, and draws a paste that arrives in reverse video until the

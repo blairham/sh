@@ -25,52 +25,58 @@ func runZshOnPath(t *testing.T, dir, src string) (string, int) {
 	return out, st
 }
 
-// The `function` keyword standing entirely alone is a command here: an
-// anonymous function with no body, which runs nothing and leaves the status
-// it found. Six other columns refuse it — see
-// syntax.Dialect.BareFunctionKeyword for the panel.
+// The `function` keyword with **nothing left for it to take** is a command
+// here: an anonymous function with no body, which runs nothing and leaves 0.
+// Six other columns refuse it — see syntax.Dialect.BareFunctionKeyword for the
+// panel.
 //
-// Measured 2026-09-19 on zsh 5.9.2, from a script file under `env -i
-// PATH=/usr/bin:/bin LC_ALL=C` with standard input on the null device.
+// Measured 2026-09-28 on zsh 5.9.2 (`/opt/homebrew/bin/zsh`; `go version -m`
+// reports *not a Go executable*, so the reference is that shell and not
+// another build of this one), from script files under
+// `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME and standard input
+// on the null device.
 //
-// The status rows are what say the body is absent rather than empty, and they
-// are the discriminating half: `false; function` leaves 1 behind where
-// `false; function { }` and `false; () { }` both leave 0. A reading that gave
-// the keyword an empty brace group would pass every parse row here and answer
-// the wrong status on all three.
-func TestTheKeywordAloneRunsNothingHere(t *testing.T) {
+// **Every row here is on a route where the keyword has nothing to take**, and
+// that is the whole of what #5078 changed about this file. The keyword takes
+// the next command in its list as a *body* — see
+// TestTheKeywordTakesTheNextCommandAsItsBody — so a row written as
+// `function; printf …` is not this construct at all: the `printf` is the body,
+// and the row grades the call rather than the bare form. Six rows here were
+// written that way and all six passed, because a body that prints what the
+// script would have printed anyway is invisible in the output.
+//
+// **The status claim those rows carried was false.** This file used to say the
+// status rows were "the discriminating half: `false; function` leaves 1 behind
+// where `false; function { }` leaves 0". It leaves 1 in *that spelling*
+// because the `printf` reading `$?` is the body and `$?` is still the `false`'s
+// — both readings print 1, so the probe cannot fail. Asked on a route that
+// genuinely reaches the bare form, the reference answers **0**, exactly as the
+// empty brace body does. The rows below are those routes.
+func TestTheKeywordWithNothingToTakeRunsNothingHere(t *testing.T) {
 	if !zsh.Dialect().BareFunctionKeyword {
 		t.Fatal("BareFunctionKeyword is off, so the keyword needs a name here")
 	}
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
-		{"it runs and is silent", `function; printf "st=%d" $?`, "st=0"},
-		{"and leaves the status it found", `false; function; printf "st=%d" $?`, "st=1"},
-		{"a newline behind it says the same", "false\nfunction\n" + `printf "st=%d" $?`, "st=1"},
-		{"before the end of the input", "false\nfunction\n" + `printf "st=%d" $?`, "st=1"},
-		{"it defines nothing", `function; printf "n=%d" ${#functions}`, "n=0"},
+		// A closing brace, a `)`, a `done`, an arm terminator, an operator
+		// and the end of input: six ways for the keyword to have nothing
+		// under it, and 0 on every one.
+		{"a closing brace is not a command", `false; { function }; printf "st=%d" $?`, "st=0"},
+		{"nor is a subshell's parenthesis", `false; ( function ); printf "st=%d" $?`, "st=0"},
+		{"nor is a loop's `done`", `false; for i in 1; do function; done; printf "st=%d" $?`, "st=0"},
+		{"nor is an arm terminator", `false; case x in x) function ;; esac; printf "st=%d" $?`, "st=0"},
+		{"an operator leaves it nothing to take", `false; function && printf "st=%d" $?`, "st=0"},
+		{"and so does a pipe", `false; function | cat; printf "st=%d" $?`, "st=0"},
+		{"the end of the input leaves it nothing", `printf "[%s]" "$(false; function)"`, "[]"},
 
-		// An empty brace group is a different command: a call whose body ran
-		// to the end, which is a success.
-		{"a written empty body is a call", `false; function { }; printf "st=%d" $?`, "st=0"},
-		{"and so is the other spelling of one", `false; () { }; printf "st=%d" $?`, "st=0"},
-
-		// Where it may stand. Each of these is a place a command ends.
-		{"before a semicolon", `function; printf a`, "a"},
-		{"inside a brace group", `{ function }; printf a`, "a"},
-		{"inside a subshell", `( function ); printf a`, "a"},
-		{"as an and-or's right-hand side", `true && function; printf "st=%d" $?`, "st=0"},
-		{"and its left one", `false || function; printf "st=%d" $?`, "st=1"},
-		// Either side of a pipe, and what a bare keyword on the reading
-		// side does with what was written to it is the same nothing: the
-		// output is dropped rather than passed on.
-		{"on either side of a pipe", `printf a | function; function | printf b`, "b"},
-		{"in a case arm", `case x in x) function ;; esac; printf a`, "a"},
-		{"in a loop body", `for i in 1; do function; done; printf a`, "a"},
-		{"and inside a substitution", `printf "[%s]" "$(function)"`, "[]"},
+		// The empty brace group answers the same 0, which is what says the
+		// status is not what tells the two apart. What does is the
+		// redirection — see the null-command rows below.
+		{"a written empty body answers the same", `false; function { }; printf "st=%d" $?`, "st=0"},
+		{"and so does the other spelling of one", `false; () { }; printf "st=%d" $?`, "st=0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if out, st := runZsh(t, dir, tc.src); out != tc.want || st != 0 {
+			if out, st := runZshOnPath(t, dir, tc.src); out != tc.want || st != 0 {
 				t.Errorf("out %q status %d, want %q at 0", out, st, tc.want)
 			}
 		})

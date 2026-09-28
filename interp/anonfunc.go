@@ -24,14 +24,35 @@ const anonFuncName = "(anon)"
 
 func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 	if c.Bare {
-		// The keyword standing alone is not a call with an empty body: it
-		// runs nothing at all. The status is therefore the one it found —
-		// `false; function; echo $?` prints 1 where `false; function { };
-		// echo $?` prints 0, measured 2026-09-19 — and a redirection written
-		// after it is a redirection with no command, null command and all:
-		// `echo hi | function > f` puts `hi` in the file. Both fall out of
-		// running the empty simple command rather than of a rule of its own,
-		// which is what says the two are one construct.
+		// The keyword with nothing after it for it to take: no name, no
+		// parameter list, no brackets, and no command in front of it in the
+		// list. It runs nothing, and it leaves **0** behind for having run
+		// nothing.
+		//
+		// The status used to be the one it found, and the measurement
+		// written here for that was `false; function; echo $?` printing 1
+		// against `false; function { }; echo $?` printing 0. **That probe
+		// cannot fail.** The keyword takes the next command as its body —
+		// see syntax.Parser.impliedAnonBody — so `echo $?` was the body, and
+		// `$?` inside it is still the 1 the `false` left. Both readings
+		// print 1, and it was quoted as the reason for the reading it cannot
+		// distinguish (#5078).
+		//
+		// Measured 2026-09-28 on zsh 5.9.2 over routes that genuinely reach
+		// this branch, because the keyword has nothing to take on any of
+		// them:
+		//
+		//	false; { function ⏎ }; print $?          	0
+		//	false; { function { } ⏎ }; print $?      	0
+		//	for i in 1; do false; function; done; $? 	0
+		//	`false` then `function` as the last line 	exit 0
+		//
+		// So it answers 0, exactly as the empty brace body does, and this
+		// left 1 on all four. The status is the only thing the two spellings
+		// agree on: a redirection written after the bare keyword is a
+		// redirection with no command, null command and all — `print hi |
+		// function > f` puts `hi` in the file, where `function { } > f` runs
+		// an empty body and drops it.
 		//
 		// The empty command is only reached where there is something to
 		// redirect: with no redirection at all there is nothing for it to
@@ -49,6 +70,7 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 		// both in the file.
 		r.traceAnonymousCall(r.anonymousFunctionName(), nil)
 		if len(c.Redirs) == 0 {
+			r.status = 0
 			return nil
 		}
 		empty := &syntax.SimpleCmd{Start: c.Pos(), Stop: c.End()}

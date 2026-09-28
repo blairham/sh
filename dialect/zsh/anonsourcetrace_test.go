@@ -18,30 +18,57 @@ import "testing"
 // another build of this one), script files under `env -i PATH=/usr/bin:/bin`
 // with a scratch HOME and standard input on the null device.
 //
-// The rows ask the shell to compare the two entries rather than asserting the
-// file's name, because the name a harness gives a script is the harness's and
-// not a fact about the shell. What is under test is that the nameless frame
-// answers **the same file a named one answers in the same script**, and that
-// is the whole of the fault: one said the script and the other said `zsh`.
+// **Every row sources a file**, and that is not decoration. The fallback
+// answers the shell's own name, which in a script run by hand is plainly not
+// the script — and in this harness is the *same string* the script is called
+// by, so a row written at the top level passes whether the fault is there or
+// not. I wrote three such rows first and the control mutant walked straight
+// through all three. A sourced file has a name of its own that nothing else
+// can coincide with, and it is the only shape here that can fail.
 func TestANamelessFunctionsFrameNamesTheFileItWasWrittenIn(t *testing.T) {
-	const file = "${funcsourcetrace[1]%:*}"
-	const pre = "f() { print -r -- \"" + file + "\" }\nnamed=$(f)\nanon=$("
-	const post = ")\n[[ $named == $anon ]] && print same || print \"differ: $named vs $anon\"\n"
+	const read = `print -r -- "[${funcsourcetrace[1]}]"`
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, call string }{
-		{"an unbracketed body", `() print -r -- "` + file + `"`},
-		{"a bracketed one", `() { print -r -- "` + file + `" }`},
+		{"an unbracketed body", `() ` + read},
+		{"a bracketed one", `() { ` + read + ` }`},
 		// The keyword spelling answers the same, which is worth a row of
 		// its own: three issues running turned on which header was written,
 		// and this is one of the places the two agree. See the note on
 		// syntax.AnonFunc.
-		{"and the keyword header", `function { print -r -- "` + file + `" }`},
+		{"and the keyword header", `function { ` + read + ` }`},
+		// The named function in the same position, which answered the
+		// library all along — so what the rows above grade is the nameless
+		// call and not the sourcing.
+		{"where a named one already did", `g() { ` + read + ` }` + "\n" + `g`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if out, st := runZsh(t, dir, pre+tc.call+post); out != "same\n" || st != 0 {
-				t.Errorf("out %q status %d, want %q at 0", out, st, "same\n")
+			src := "print -l '" + tc.call + "' > lib.zsh\n. ./lib.zsh\n"
+			if out, st := runZsh(t, dir, src); out != "[./lib.zsh:1]\n" || st != 0 {
+				t.Errorf("out %q status %d, want %q at 0", out, st, "[./lib.zsh:1]\n")
 			}
 		})
+	}
+}
+
+// The keyword standing entirely alone has a frame too, and it answers the same.
+//
+// It runs no body, so nothing inside it can be asked — except that a
+// redirection written after it is a redirection with **no command**, and the
+// null command runs in that frame. Naming a function as `NULLCMD` is what
+// reaches in and reads the trace back.
+//
+// Without this the bare branch was the one place a nameless call still
+// answered the shell's name, and no other row in this file could see it: the
+// branch builds its own call and would have been left behind by a fix written
+// only where the body is.
+func TestTheBareKeywordsFrameNamesTheFileToo(t *testing.T) {
+	const lib = `f() { print -r -- "[${funcsourcetrace[2]}]" }` + "\n" +
+		"NULLCMD=f\n" + "function >out\n"
+	const src = "print -l '" + lib + "' > lib.zsh\n. ./lib.zsh\n" +
+		`print -r -- "got: $(<out)"` + "\n"
+	dir := t.TempDir()
+	if out, st := runZsh(t, dir, src); out != "got: [./lib.zsh:3]\n" || st != 0 {
+		t.Errorf("out %q status %d, want %q at 0", out, st, "got: [./lib.zsh:3]\n")
 	}
 }
 

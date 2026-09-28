@@ -130,6 +130,17 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 		}
 		return code
 	}
+	if written, removed := r.traceLettersWritten(f); (written != "" || removed != "") && matching {
+		// A pattern line that *marks* rather than lists: measured on zsh
+		// 5.9.2, `functions -tm 'f*'` writes nothing, answers 0 and leaves
+		// `f` traced. So the trace letters take the line here too, and the
+		// pattern picks the names instead of naming them.
+		//
+		// Ahead of the listing below rather than inside it, because the two
+		// readings of `-m` are a listing and a selection and only one of
+		// them writes anything.
+		return r.setFunctionTraceMarks(r.functionNamesMatching(args), written, removed)
+	}
 	if matching {
 		return r.functionsMatching(args, false)
 	}
@@ -292,4 +303,27 @@ func (r *Runner) functionsIndentLetter(name string, args []string) (rest []strin
 		indent, found = n, true
 	}
 	return out, indent, found, 0
+}
+
+// functionNamesMatching is the names these patterns pick out of the function
+// table, for a line whose `-m` selects rather than lists.
+//
+// The same walk functionsMatching writes from, without the writing: one
+// pattern at a time over the script's own functions, so a name two patterns
+// reach is picked twice — which costs nothing where the caller is setting a
+// record rather than printing.
+func (r *Runner) functionNamesMatching(patterns []string) []string {
+	var out []string
+	for _, pattern := range patterns {
+		if r.refusedSelectionPattern(pattern) {
+			continue
+		}
+		o := r.patternOpts(pattern)
+		for _, name := range r.scriptFuncNames() {
+			if matchPattern(pattern, name, o) {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
 }

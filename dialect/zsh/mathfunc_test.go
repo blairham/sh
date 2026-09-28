@@ -417,13 +417,28 @@ func TestTheLetterIsExclusive(t *testing.T) {
 			t.Errorf("%s: output = %q status %d, want nothing done at 0", word, out, st)
 		}
 	}
-	// Any other letter with it is refused, and no registration is made.
-	out, _ := runZsh(t, t.TempDir(), "g(){ :; }\nfunctions -Mt mf 1 1 g\nfunctions -M\n")
+	// Any other letter with it makes no registration. `-k` rather than the
+	// `-t` this used to write, because that letter is built now (#5067) and
+	// the row would otherwise be asking whether `-t` is missing rather than
+	// whether `-M` registered.
+	out, _ := runZsh(t, t.TempDir(), "g(){ :; }\nfunctions -Mk mf 1 1 g\nfunctions -M\n")
 	if strings.Contains(out, "functions -M mf") {
 		t.Errorf("output = %q, want no registration from a refused invocation", out)
 	}
 	if !strings.Contains(out, "not implemented yet") {
 		t.Errorf("output = %q, want the other letter refused by name", out)
+	}
+	// And a letter that **is** built alongside `-M` still registers
+	// nothing, which is the half the missing letter was standing in for:
+	// the reference answers `invalid option(s)` at 1 to `functions -Mt` and
+	// to `functions -Mu` alike, and this engine is silent at 1 and 0 —
+	// wrong in the wording for both, and not this test's subject. What is
+	// asked here is only that neither line registers.
+	for _, word := range []string{"-Mt", "-MT", "-Mu"} {
+		out, _ := runZsh(t, t.TempDir(), "g(){ :; }\nfunctions "+word+" mf 1 1 g\nfunctions -M\n")
+		if strings.Contains(out, "functions -M mf") {
+			t.Errorf("%s: output = %q, want no registration", word, out)
+		}
 	}
 }
 

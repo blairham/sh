@@ -2490,6 +2490,7 @@ func (r *Runner) removeFunctionQuietly(name string) {
 	delete(r.funcs, name)
 	delete(r.funcOrigins, name)
 	delete(r.exportedFuncs, name)
+	r.forgetFunctionTrace(name)
 	if prelude := r.preludeFuncs[name]; prelude != nil {
 		r.funcs[name] = prelude
 	}

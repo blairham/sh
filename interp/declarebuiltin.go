@@ -1250,6 +1250,24 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 			return r.declareMatching(name, args, f)
 		}
 	}
+	if (f.function || f.funcNames) && len(args) > 0 {
+		// The *trace* mark, which is a record on a name that already exists
+		// rather than a stub for one that does not, and which takes the
+		// whole line: `functions -t f` writes no listing, and so does
+		// `typeset -ft f`.
+		//
+		// Ahead of the marking branch below and returning, which is
+		// measured rather than a simplification: `functions -tu f` over a
+		// *defined* `f` leaves `functions -u` empty and `functions -t`
+		// holding it, so the autoload half of that line records nothing for
+		// this branch to be stealing.
+		//
+		// The status is its own — `functions -t f nosuch` is 1 for the name
+		// that is not a function. See interp/functiontrace.go.
+		if written, removed := r.traceLettersWritten(f); written != "" || removed != "" {
+			return r.setFunctionTraceMarks(args, written, removed)
+		}
+	}
 	if f.function && len(args) > 0 && r.markingLetters(f.letters) {
 		// Not a listing at all: this line *makes* the names functions whose
 		// bodies are read the first time they are called. See
@@ -1344,6 +1362,22 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				// -a` and `declare -F -i` are each silent at 0 with functions
 				// defined, where `declare -F +i` is the whole listing.
 				args, narrowed = nil, true
+			}
+			// And the trace letters, which narrow the same way and are a
+			// union with each other: measured, with `f` marked `-T` alone,
+			// `functions -t` writes nothing, `functions -T` writes the body
+			// and `functions -tT` writes it too.
+			//
+			// The **sign** is deliberately not read here, though `functions
+			// +t` really does name its functions where `functions -t`
+			// writes them out. It is already names-only by the time this
+			// runs — the plus on the option word is the same plus that
+			// makes a bare `functions +` a list of names — and a second
+			// `namesOnly = true` here passed every case while deciding
+			// nothing. A mutation that deleted it killed no test, which is
+			// how it was found.
+			if written, removed := r.traceLettersWritten(f); written != "" || removed != "" {
+				args, narrowed = r.functionsHoldingATraceMark(written+removed), true
 			}
 			if marked, narrow, plus := r.markedFunctionListing(f); narrow {
 				args, narrowed = marked, true
@@ -4253,6 +4287,7 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 		}
 	}
 	body := syntax.PrintWith(fn.Body, r.functionLayout)
+	body = r.tracedFunctionBody(name, body)
 	if text, ok := r.undefinedFunction(name); ok {
 		// A function whose body has not been read yet does not print its
 		// tree: what stands between the braces is the shell saying what the

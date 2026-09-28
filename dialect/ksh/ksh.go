@@ -4048,6 +4048,13 @@ func Semantics() interp.Semantics {
 	// (#2192). ksh93u+ answers the usage line for `-F`, `-m` and `-M`,
 	// which is what an unimplemented letter gets here too.
 	s.FunctionsOptions = "fMptu"
+
+	// A call does not put the trace back here: measured 2026-09-28 from a
+	// script file under `env -i PATH=/usr/bin:/bin`, `f() { set -x; }; f;
+	// echo after` traces `echo after` in /bin/ksh, `Version AJM 93u+ 2012-08-01`. One column in the panel
+	// restores it and this is not that column — see
+	// Semantics.FunctionCallRestoresTheTrace.
+	s.FunctionCallRestoresTheTrace = interp.No
 	// `integer` is the same declaration under a second name, and this shell
 	// hands it typeset's whole letter grammar — measured 2026-09-06, every
 	// letter typeset takes is either accepted by `integer` or refused by it

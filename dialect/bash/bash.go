@@ -3385,6 +3385,13 @@ func Semantics() interp.Semantics {
 	// RETURN traps, which `set -o functrace` asks for wholesale — is not
 	// built, so the mark is recorded and listed and read by nothing.
 	s.FunctionAttributeLetters = "rtx"
+
+	// A call does not put the trace back here: measured 2026-09-28 from a
+	// script file under `env -i PATH=/usr/bin:/bin`, `f() { set -x; }; f;
+	// echo after` traces `echo after` in bash 5.3.20 and bash 3.2.57. One column in the panel
+	// restores it and this is not that column — see
+	// Semantics.FunctionCallRestoresTheTrace.
+	s.FunctionCallRestoresTheTrace = interp.No
 	// `export -n V` takes the attribute off and leaves V set: measured, the
 	// name keeps its value in the shell and stops reaching a child. bash is
 	// the only shell in the panel with the letter.

@@ -164,6 +164,15 @@ func registerFcHistory(r *interp.Runner) {
 		if letter, rest, found := fcFileLetter(args); found {
 			return fcFile(r, letter, rest)
 		}
+		if push, pop, appendOnPop, rest, found := fcPushLetter(args); found {
+			// Pushing and popping the history list, which the core has no
+			// notion of because the list is this dialect's. See fcpush.go.
+			if pop {
+				return fcPop(r)
+			}
+			_ = push
+			return fcPush(r, appendOnPop, rest)
+		}
 		return core(r, ctx, args)
 	})
 }

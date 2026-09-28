@@ -43,6 +43,8 @@ func biExec(r *Runner, ctx context.Context, args []string) int {
 		// the panel, so the redirection form clears a failure the way an
 		// empty eval does.
 		r.keepRedirs = true
+		// And nothing ran, which an `exec` in front of this one has to see.
+		r.ranNoCommand = true
 		return 0
 	}
 	return r.replaceSelf(ctx, args)
@@ -89,6 +91,14 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// Every option and no command, which is the redirection form again.
 		r.keepRedirs = true
 		return 0
+	}
+	// **The words behind `exec` may be this shell's own command**, in the one
+	// dialect that reads them that way: a function, a builtin, or a
+	// precommand modifier standing in front of either. Asked before the
+	// lookup, because which road the words take is the whole of the answer.
+	// See Semantics.ExecReachesTheShellsOwnCommands.
+	if status, ran := r.execThroughThisShell(ctx, argv); ran {
+		return status
 	}
 	return r.replaceSelfWith(ctx, argv, flags)
 }
@@ -693,4 +703,93 @@ func (r *Runner) prefixReachesTheReplacement(env []string) []string {
 		env = append(env, entry)
 	}
 	return env
+}
+
+// execThroughThisShell runs `exec`'s words as this shell's own command, where
+// the dialect reads them that way, and reports whether it did.
+//
+// The lookup is the ordinary one and in the ordinary order — a function
+// first, then a builtin — because that is what "an ordinary command word
+// list" means. What is *not* ordinary is the ending: the shell stops
+// afterwards, with the command's status, because that is what `exec` asked
+// for and it is the half that makes this `exec` rather than a plain call.
+//
+// A word that is neither is left alone and takes the replacement road, which
+// is how `exec /bin/sh -c …` still replaces the process. So this is a door in
+// front of the existing one rather than a fork in it.
+func (r *Runner) execThroughThisShell(ctx context.Context, argv []string) (status int, ran bool) {
+	// **Read rather than asked**, which is the narrower of the two and is
+	// deliberate. An unanswered axis ordinarily refuses, so that nobody
+	// silently gets one shell's answer — but the word this fires on is
+	// `exec <a name this shell has>`, which is `exec echo`, and refusing
+	// that would make a core with no dialect chosen complain about a line it
+	// has always run. Guessing here is not silent in the way that rule
+	// guards against: the guess is the POSIX road, it is what four of the
+	// five columns do and what PosixSemantics answers, and a script that
+	// wants the fifth names that dialect. See the 108 other sites that read
+	// an axis this way.
+	if r.sem().ExecReachesTheShellsOwnCommands != Yes {
+		return 0, false
+	}
+	fn, isFunc := r.funcs[r.namespaceFuncLookup(argv[0])]
+	builtin, isBuiltin := r.lookupBuiltin(argv[0])
+	if !isFunc && !isBuiltin {
+		// A word this shell has no command for takes the replacement road
+		// under either answer.
+		return 0, false
+	}
+	// Cleared before rather than after, so that what is read below is this
+	// call's own answer and not one a command earlier in the script left
+	// behind.
+	r.ranNoCommand = false
+	switch {
+	case isFunc:
+		if err := r.callFunc(ctx, fn, argv[1:]); err != nil {
+			// A function that ended the shell by its own route — `exit`,
+			// or a refusal that abandons the script — has already said so,
+			// and there is nothing for this to add.
+			return r.status, true
+		}
+		status = r.status
+	default:
+		// The builtin that runs names *itself* in a diagnostic's location,
+		// not the `exec` that reached it: measured, `exec shift` is
+		// `zsh:shift:1: shift count must be <= $#` and not `zsh:exec:1:`.
+		// The same bracket the ordinary builtin route keeps, for the same
+		// reason — see biBuiltin, which does it one door along.
+		outer := r.inBuiltin
+		r.inBuiltin = argv[0]
+		status = builtin(r, ctx, argv[1:])
+		r.inBuiltin = outer
+	}
+	if r.ranNoCommand {
+		// A prefix builtin reached nothing, so **nothing ran** — and the
+		// shell that was going to be replaced is still here. Measured
+		// 2026-09-28 on zsh 5.9.2:
+		//
+		//	exec builtin nosuchb    `no such builtin: nosuchb`, then `st=1`
+		//	exec builtin            silent, then `st=0`
+		//	exec command            silent, then `st=0`
+		//	exec exec               silent, then `st=0`
+		//
+		// Every other row on this road ends the script, and they are not
+		// the gentle ones: a bad option, a refused `shift`, a `break`
+		// outside a loop and a name PATH did not have all end it. So the
+		// noun is **whether a command ran**, not whether one succeeded.
+		//
+		// And an `exec` that reached no command is the **redirection form**,
+		// so what it was written with is kept: `exec builtin >f` and
+		// `exec command >f` are silent there and the file takes everything
+		// the script writes afterwards, exactly as a bare `exec >f` does.
+		r.keepRedirs = true
+		r.status = status
+		return status, true
+	}
+	r.status = status
+	// The EXIT trap does not run, for the reason replaceSelfWith gives: the
+	// trap died with the process the exec replaced, and standing in for that
+	// replacement means saying so.
+	r.exitTrap = nil
+	r.stopTheShell()
+	return status, true
 }

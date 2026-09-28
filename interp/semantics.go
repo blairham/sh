@@ -16770,6 +16770,53 @@ type Semantics struct {
 	// nothing at all and stay in this shell in every column, zsh included.
 	CommandReachesABuiltin Answer
 
+	// ExecReachesTheShellsOwnCommands runs the words behind `exec` as an
+	// **ordinary command word list** — this shell's functions and builtins
+	// included — rather than as the name of a program to replace the shell
+	// with. The shell then ends with that command's status.
+	//
+	// zsh 5.9.2 alone against four: bash 5.3.20, bash 3.2.57, ksh93u+
+	// 2012-08-01 and dash 0.5.12 all answer `exec :` with `exec: :: not
+	// found`, and `exec builtin echo hi` with `exec: builtin: not found`.
+	// Measured 2026-09-28 from script files under `env -i
+	// PATH=/usr/bin:/bin` with a scratch HOME and stdin at /dev/null.
+	//
+	// **The rows that discriminate are the builtins with no external of the
+	// same name.** `exec echo hi` prints `hi` in all five and says nothing
+	// about this axis, because `/bin/echo` exists and the external route
+	// finds it; so do `exec true` and `exec false`. What separates the
+	// columns is a word this shell has and the filesystem does not:
+	//
+	//	exec :              silent, and the shell ends
+	//	exec print -n hi    `hi`, and the shell ends
+	//	exec typeset v=1    silent, and the shell ends
+	//	exec unset v        silent, and the shell ends
+	//	exec shift          `shift count must be <= $#`, and the shell ends
+	//	exec break          `not in while, until, select, or repeat loop`, …
+	//	exec eval 'echo E'  `E`, and the shell ends
+	//	exec . /dev/null    silent, and the shell ends
+	//	exec unset -q       `unset:1: bad option: -q`, and the shell ends
+	//
+	// A **function** is reached too, and before the builtin table, exactly as
+	// anywhere else: `f(){ echo F; }; exec f` writes `F` and ends the shell.
+	//
+	// And a modifier behind it is read as a modifier rather than looked up:
+	// `exec builtin echo hi` is `hi`, `exec exec echo hi` is `hi`, and
+	// `exec noglob echo a[b]c` writes the three characters. Those are the
+	// rows this field was filed for (#5047) and they are the same fact as
+	// the ones above, which is why there is one field and not two: the words
+	// behind `exec` are an ordinary command, and a precommand modifier is
+	// an ordinary command's first word.
+	//
+	// **The shell ends whatever the command did**, which is measured rather
+	// than assumed — a bad option, a refused `shift`, a `break` outside a
+	// loop and a command that was not found all end it. The one row that
+	// leaves the shell running is `builtin` failing its *own* lookup —
+	// `exec builtin nosuchb` is `no such builtin: nosuchb` at 1 and the
+	// script carries on — because nothing was ever run. See
+	// Runner.builtinLookupFailed.
+	ExecReachesTheShellsOwnCommands Answer
+
 	// FatalErrorEndsAtTheCommandWord puts a **boundary** at the `command`,
 	// so a fatal error raised anywhere inside the builtin it ran unwinds as
 	// far as that word and no further.
@@ -29299,6 +29346,10 @@ func PosixSemantics() Semantics {
 		// And POSIX gives `command` a builtin to run: bypassing the function
 		// table is what the utility is for, not bypassing the builtins too.
 		CommandReachesABuiltin: Yes,
+		// And POSIX gives `exec` a *program* to replace the shell with, not
+		// one of the shell's own commands: `exec :` is `not found` in four
+		// of the five columns.
+		ExecReachesTheShellsOwnCommands: No,
 		// POSIX gives the word one job — the special properties of the
 		// builtin it *names* do not apply — and says nothing about an
 		// error raised deeper than that. So the core takes the narrow

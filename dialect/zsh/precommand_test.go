@@ -51,7 +51,13 @@ func TestNoglobSwitchesTheMatchOffForTheWordsBehindIt(t *testing.T) {
 		// Semantics.CommandReachesABuiltin — which is why it is `echo` that
 		// is missing rather than `echo` that ran.
 		{`noglob command echo a[b]c`, "zsh:1: command not found: echo"},
-		{`exec noglob echo a[b]c`, "zsh:1: command not found: echo"},
+		// `exec` reaches this shell's own commands here, so the builtin
+		// `echo` is what runs and the scratch PATH is not consulted — the
+		// modifier is still what stopped the match. Measured 2026-09-28:
+		// `exec noglob echo a[b]c` writes the three characters in zsh
+		// 5.9.2, where before #5047 we reported `command not found: echo`
+		// from the replacement road (#5047).
+		{`exec noglob echo a[b]c`, "a[b]c"},
 		{`command noglob echo a[b]c`, "zsh:1: no matches found: a[b]c"},
 		// A builtin rather than grammar: quoting does not take it away and
 		// an expansion can produce it. Both are the opposite of `nocorrect`

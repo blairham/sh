@@ -9482,11 +9482,20 @@ func (r *Runner) environ() []string {
 	base := r.Env
 	out := make([]string, 0, len(base)+len(r.Vars))
 	// What a `private -x` name puts there while its declaring call is on the
-	// stack. Taken first because the two passes below must both step over
-	// these names: the entry belongs to the declaring frame and supersedes
-	// both an inherited one and an outer binding of the same spelling, and a
-	// duplicate written ahead of it would be the one a child sees. See
-	// Runner.privateExportedEnvironment (#5091).
+	// stack. The entry belongs to the declaring frame and supersedes both an
+	// inherited one and an outer binding of the same spelling, so the two
+	// passes below step over these names and the entry is written once at
+	// the end. See Runner.privateExportedEnvironment (#5091).
+	//
+	// **The two skips cannot be observed to matter, and what makes them
+	// inert is worth knowing**: `os/exec` deduplicates the list it is handed
+	// and keeps the **last** occurrence of each key, so an entry appended
+	// behind a duplicate wins anyway. Mutants removing either skip survive
+	// the whole of interp and dialect and leave `grep -c` at one. They stay
+	// because the note a few lines down says the opposite — that a child
+	// sees the *first* of two, which is true of the syscall and not of what
+	// this program hands it — and a list with no duplicates in it is right
+	// under either belief.
 	private := r.privateExportedEnvironment()
 	// The bound option records this loop wrote, so the pass at the end does
 	// not write one of them a second time — see exportedOptionLists.

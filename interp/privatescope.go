@@ -375,6 +375,11 @@ func (r *Runner) privateExportedEnvironment() map[string]string {
 				continue
 			}
 			if sn.held.removed || !sn.held.valueExists {
+				// A shape no row reaches: unsetting a private takes the
+				// declaration with it, so a seal is never holding a removed
+				// binding, and a mutant dropping this survives. It guards
+				// the map against writing `name=` for a binding that has no
+				// value rather than any choice about the construct.
 				continue
 			}
 			if sn.held.arrayExists || sn.held.assocExists {

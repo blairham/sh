@@ -3,7 +3,11 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/blairham/sh/internal/dialecttest"
+)
 
 // showV is a child command that prints the environment entry for `v`, or a
 // word when there is none. An absolute path, so the rows need nothing on
@@ -116,12 +120,58 @@ func TestWhatThePrivateExportBeatsAndLosesTo(t *testing.T) {
 			"and it stops when the declaring call returns",
 			mod + "(){ private -x v=q }\n" + showV, "none",
 		},
+		// The declaring call unsetting its own private takes the entry with
+		// it, which is the held binding being read rather than remembered.
+		{
+			"the declarer unsetting it takes the entry too",
+			mod + "inner(){ " + showV + " }\n(){ private -x v=q; unset v; inner }", "none",
+		},
+		// Two frames in **with an outer exported name underneath**, which is
+		// the row that says the *outermost* seal is the one read: the second
+		// seal holds what the first installed, and that is the outer name.
+		// With one body between the child and the declaration the two
+		// readings agree, so this needs the depth and the outer name at once.
+		{
+			"two frames in, over an outer exported name",
+			mod + "typeset -x v=outer\ndeep(){ " + showV + " }\ninner(){ deep }\n" +
+				"(){ private -x v=q; inner }", "v=q",
+		},
+		// And exactly one entry, which is what says the passes over the
+		// runner's tables step past the name rather than writing a second.
+		{
+			"and it is written once",
+			mod + "typeset -x v=outer\n" +
+				`inner(){ print -r -- "n=$(/usr/bin/env | /usr/bin/grep -c "^v=")" }` + "\n" +
+				"(){ private -x v=q; inner }", "n=1",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if out, st := runZsh(t, dir, tc.src+"\n"); out != tc.want+"\n" || st != 0 {
 				t.Errorf("out %q status %d, want %q at 0", out, st, tc.want+"\n")
 			}
 		})
+	}
+}
+
+// A name the shell **inherited** rather than assigned is answered by the
+// first pass over the environment it was handed, which the second pass never
+// sees — so the private has to step past that one too.
+//
+// The runner is given the name in its environment rather than assigning it,
+// because an assignment moves it into the shell's own table and the row would
+// then be the one above wearing a different spelling.
+func TestAPrivateExportBeatsAnInheritedName(t *testing.T) {
+	const src = "zmodload zsh/param/private\n" +
+		"inner(){ " + showV + " }\n(){ private -x v=q; inner }\n"
+	dir := t.TempDir()
+	out, st, err := preset.Combined(t, dialecttest.Base{
+		Dir: dir, Vars: map[string]string{"PATH": dir}, Env: []string{"v=inherited"},
+	}, src)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if out != "v=q\n" || st != 0 {
+		t.Errorf("out %q status %d, want %q at 0", out, st, "v=q\n")
 	}
 }
 

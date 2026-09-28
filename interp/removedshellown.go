@@ -122,6 +122,18 @@ func (r *Runner) removedShellOwnIsStillAName(name string) bool {
 // second reason the question is put before the name is taken away rather than
 // after. `unset pipestatus; typeset -p pipestatus` is nothing at 0 in zsh
 // 5.9.2, and was `no such variable` here.
+//
+// **And less the names a dialect has said outright are not its own**, which
+// is the same correction [Runner.ParameterAttributes] makes to the word: a
+// produced name is a shape and not a statement, and three of this dialect's
+// are produced for reasons the shell being modeled does not share. The two
+// discriminating pairs above are exactly those names — `LOGNAME` beside
+// `HOME` and `TTY` beside `PS1` — so without the correction the rule this
+// file states would have been keyed on the wrong thing by the very names it
+// is measured against. See [Runner.MarkParameterNotTheShellsOwn].
 func (r *Runner) wasTheShellsOwnParameter(name string) bool {
+	if r.notShellOwn[name] {
+		return false
+	}
 	return r.shellOwn[name] || r.DynamicParameter(name) || r.AbsentParameter(name)
 }

@@ -502,15 +502,20 @@ func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
 // where the three are measured side by side.
 func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	dir := t.TempDir()
+	// `LOGNAME` is pinned by the script rather than left to the machine, and
+	// that is not tidiness: the shell exports the name itself since #4903, so
+	// a listing that took the fallback would be asserting whoever ran the
+	// test — a row that passes because it agrees with the maintainer's own
+	// login. Measured 2026-09-27, zsh 5.9.2 lists it in a bare `export` too.
 	out, st := runZsh(t, dir,
-		`export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
+		`LOGNAME=pinned; export V='a b'; readonly R=2; export; readonly; export -p; readonly -p`)
 	// The parent this process has, which is what the shell answers `$PPID`
 	// with — a number rather than a constant, since the row is the machine's.
 	ppid := strconv.Itoa(os.Getppid())
 	// `LINENO=1` sits between them because this shell's LINENO is read-only,
 	// which is measured: zsh 5.9.2's own bare `readonly` writes `ARGC=0` and
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
-	want := "OLDPWD=" + dir + "\nPWD=" + dir + "\nSHLVL=1\nV='a b'\n" +
+	want := "LOGNAME=pinned\nOLDPWD=" + dir + "\nPWD=" + dir + "\nSHLVL=1\nV='a b'\n" +
 		// `HISTCMD`, `TTYIDLE` and `ZSH_SUBSHELL` are on this side for the
 		// same reason `ARGC` is, and they arrive in this listing with the
 		// change that gave them a parameter at all: measured 2026-09-27 on
@@ -540,7 +545,7 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 		// a bare `readonly` writes `status=0` and `readonly -p` writes no
 		// row for the name (#4866, and dialect/zsh/laststatus.go).
 		"epochtime\nerrnos\nlanginfo\nstatus=0\nsysparams\n" +
-		"export OLDPWD=" + dir + "\nexport PWD=" + dir +
+		"export LOGNAME=pinned\nexport OLDPWD=" + dir + "\nexport PWD=" + dir +
 		"\nexport -i10 SHLVL=1\nexport V='a b'\n" +
 		// The kind letters beside the readonly one, measured: real zsh's
 		// `readonly -p` writes `typeset -Fr EPOCHREALTIME` and

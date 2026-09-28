@@ -4516,6 +4516,10 @@ type Runner struct {
 	// interp/shellownparameter.go, and ParameterAttributes.Provided, which
 	// is what reads it.
 	shellOwn map[string]bool
+	// notShellOwn names the produced parameters that are **not** the shell's
+	// own, which is the one case ParameterAttributes.Provided gets wrong by
+	// deriving it from a shape. See interp/shellownparameter.go.
+	notShellOwn map[string]bool
 	// scopeFixed names the parameters whose binding the shell holds itself,
 	// so that a declaration asking to move one into a function's scope is
 	// refused. Only one word in the panel asks for that — see

@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -6539,7 +6540,15 @@ func Apply(r *interp.Runner) {
 	// this was the only asker the drawer grew a lookup of its own that read
 	// `$USER` — which is empty under `env -i` and names the wrong person under
 	// `env USER=someone-else`. One question, every asker.
-	r.SetPromptUserFunc(interp.LoginName)
+	//
+	// Asked **once for three readers** since #4903: `%n` here, and the
+	// `$USERNAME` and `$LOGNAME` parameters registered below. sync.OnceValue
+	// rather than three closures, so a session that draws a prompt and reads
+	// both names pays for one lookup — SetPromptUserFunc wraps what it is
+	// given in exactly this, so handing it the shared question changes
+	// nothing about the escape.
+	loginName := sync.OnceValue(interp.LoginName)
+	r.SetPromptUserFunc(loginName)
 	// The machine's name, for `%m` and `%M`, from the same place — but by a
 	// different road, because this shell puts it in a *parameter* first.
 	//
@@ -6696,6 +6705,11 @@ func Apply(r *interp.Runner) {
 	// idle. See counters.go, and note that the second one is the name a
 	// probe's own apparatus changes (#4904).
 	registerTheCounters(r)
+	// And the nine that say what machine this is, which build and which
+	// session — see identityvalues.go for the one of the nine whose value
+	// the environment wins, and buildtriple.go for the platform table
+	// (#4903).
+	registerTheIdentityValues(r, loginName)
 	// And the four scalar pairs that are one parameter under two names —
 	// see promptnames.go, and the theme that could not draw without them.
 	registerPromptNames(r)

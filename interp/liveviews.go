@@ -296,6 +296,27 @@ func (r *Runner) MarkInteger(name string) {
 	r.integer[name] = true
 }
 
+// MarkExported puts the export attribute on a name, which is what `export`
+// does — so the name reaches a child's environment and a listing writes it
+// with the export word.
+//
+// For a dialect whose *own* parameter carries it. Measured 2026-09-27 on zsh
+// 5.9.2 under `-f` from a script file: `${(t)LOGNAME}` is `scalar-export` in
+// a shell started with `env -i`, so the shell exports the name rather than
+// merely passing on one it was handed — and this shell had no way to say so
+// about a name it makes itself.
+//
+// The attribute table and not a listing's word, deliberately, which is the
+// same split MarkInteger draws: the export really does change what a child
+// sees, and [Runner.SetDynamicDeclaration] would only have changed how the
+// name describes itself.
+func (r *Runner) MarkExported(name string) {
+	if r.exported == nil {
+		r.exported = map[string]bool{}
+	}
+	r.exported[name] = true
+}
+
 // MarkHidden keeps a name's *value* out of the listings, which is what
 // `typeset -H` does.
 //

@@ -3321,6 +3321,11 @@ type Runner struct {
 	// overflow is not a diagnostic anyone can act on, and in a library it
 	// takes the embedder down with it. See interp/reevalflag.go.
 	reevalDepth int
+	// dollarZeroSwitch is a dialect's run-time override of
+	// Semantics.DollarZeroNames — the reading a script has moved the shell
+	// to. Installed through SetDollarZeroScopeSwitch; see extend.go.
+	dollarZeroSwitch func(r *Runner) (DollarZeroScope, bool)
+
 	// optionNamespace is the wider set of names `[[ -o name ]]` reads, for a
 	// dialect that has one. Nil in a shell whose option names are its
 	// `set -o` names and nothing more, which is where `[[ -o ]]` falls back

@@ -34896,6 +34896,19 @@ func (s DollarZeroScope) String() string {
 // dollarZeroScope resolves the axis, reporting where no dialect has chosen.
 func (r *Runner) dollarZeroScope() DollarZeroScope {
 	p := r.sem().DollarZeroNames
+	// **A script can switch this while it runs, in the dialect that has a
+	// name for it.** The preset is the shell's default and not a constant:
+	// zsh's `functionargzero` is on by default and `unsetopt functionargzero`
+	// puts `$0` back to the shell's own name. See
+	// Runner.SetDollarZeroScopeSwitch.
+	//
+	// Read before the unanswered check below, so a dialect that installs a
+	// switch never reaches the refusal.
+	if r.dollarZeroSwitch != nil {
+		if scoped, ok := r.dollarZeroSwitch(r); ok {
+			return scoped
+		}
+	}
 	if p == DollarZeroScopeUnspecified {
 		r.diagf("%s\n", r.unanswered("$0 naming the function or sourced file it is inside"))
 		r.status = 2

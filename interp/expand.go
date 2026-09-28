@@ -2819,6 +2819,17 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 			// in, and `echo ~(K)a\db` in an empty directory prints
 			// `~(K)adb` here and there alike. A mark of its own would buy a
 			// second alphabet and the same answer.
+			//
+			// **Narrowing kshClassEscapeSpan to the letters the two
+			// families name is an equivalent mutant on this surface**, and
+			// it is written down so the next reader does not go looking for
+			// the row that would kill it. A backslash in front of a letter
+			// neither family names reads as that letter anyway — this
+			// glob's escape set reaches every byte — and globUnescape
+			// strips it from an unmatched field either way, so
+			// `~(K)a\qb` names `aqb` with the check and without it. The
+			// check is load-bearing for Runner.patternOf, which is the
+			// other reader, and it is kept here for what it *says*.
 			return "\\" + s.Value, false
 		}
 		return globEscape(s.Value), false

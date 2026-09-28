@@ -6514,6 +6514,12 @@ func Apply(r *interp.Runner) {
 	// And `zsh/mathfunc`'s forty-seven, which are the C math library under
 	// names arithmetic can call. See mathmodule.go.
 	registerMathFuncModule(r)
+	// And taken straight back out, because a fresh shell has none of them:
+	// `$(( sqrt(4) ))` is `unknown function: sqrt` until the module is
+	// loaded. Registered first and withdrawn after, which is what lets
+	// `zmodload zsh/mathfunc` see the features it is about to offer — see
+	// gatedmathfuncs.go and interp.Runner.SetMathFunctionWithdrawn (#5060).
+	withdrawGatedMathFuncs(r)
 	// And, after every one of them, which of the parameters they registered
 	// are still waiting for the script's first reference. Last rather than
 	// beside each registration, because it is one measured roster rather

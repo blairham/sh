@@ -4735,7 +4735,12 @@ type Runner struct {
 	// call, each naming a shell function to run. mathOrder is the order they
 	// arrived in, because the listing walks it backwards. See mathfunc.go.
 	mathFuncs map[string]mathFunc
-	mathOrder []string
+	// withdrawnMathFuncs are the names a dialect's module selection has taken
+	// out of mathFuncs. The registration is kept — see
+	// withdrawnmathfunc.go — so putting one back needs nothing remembered
+	// elsewhere.
+	withdrawnMathFuncs map[string]bool
+	mathOrder          []string
 	// lastArith is the value of the last arithmetic expression this shell
 	// evaluated, anywhere.
 	//

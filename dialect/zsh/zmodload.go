@@ -781,9 +781,11 @@ func zmodloadNarrow(r *interp.Runner, module string, features []string) {
 // would refuse by name, which is a diagnostic where the shell being copied is
 // silent. See interp.Runner.SetParameterWithdrawn.
 //
-// A `c:` or `f:` feature is left alone, for the reason each was left alone
-// when the module was built: a condition has no registry to withdraw from,
-// and no module in the table names a math function beside anything else.
+// A `c:` feature is left alone, for the reason it was left alone when the
+// module was built: a condition has no registry to withdraw from. An `f:`
+// feature is **not** left alone any more — it was, while the forty-seven
+// stood from startup and there was nothing for a selection to take; once
+// #5060 gated them the selection has to move them like the other two kinds.
 //
 // # A feature is withdrawn on the way *off*, not for being off
 //
@@ -843,6 +845,12 @@ func zmodloadEnforce(r *interp.Runner, module string, was, selected []string) {
 			r.SetBuiltinWithdrawn(name, !on[f])
 		case "p":
 			r.SetParameterWithdrawn(name, !on[f])
+		case "f":
+			// The third kind, and it joined the other two when startup
+			// began withdrawing them: a math function the selection leaves
+			// off is `unknown function` inside the expression that called
+			// it. See gatedmathfuncs.go (#5060).
+			r.SetMathFunctionWithdrawn(name, !on[f])
 		}
 	}
 }
@@ -879,12 +887,13 @@ func zmodloadRelease(r *interp.Runner, module string) {
 			r.SetBuiltinWithdrawn(name, withdrawn[f])
 		}
 	}
-	// And the other roster, through the same rule: a parameter this shell has
-	// only because the module brought it goes back to not being there. The
-	// builtin half above and this one are one piece of bookkeeping read twice,
-	// which is why they are in one function — a module half-unloaded is a
-	// state neither shell has (#5025).
+	// And the other rosters, through the same rule: a parameter or a math
+	// function this shell has only because the module brought it goes back to
+	// not being there. The three are one piece of bookkeeping read three
+	// times, which is why they are in one function — a module half-unloaded
+	// is a state neither shell has (#5025, #5060).
 	releaseGatedParameters(r, module)
+	releaseGatedMathFuncs(r, module)
 }
 
 // zmodloadWithdrawnAtStart is the features a module provides whose names this

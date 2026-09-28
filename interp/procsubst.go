@@ -289,6 +289,11 @@ func (r *Runner) substRunner(kind syntax.SpanKind) (*Runner, func()) {
 	// release is recorded. See Runner.releasedSubstFds (#4119).
 	sub.releasedSubstFds = r.bodyReleasedFds()
 	sub.inheritJobs(jobBoundarySubstitution)
+	// A substitution's body is parentheses too as far as job numbering is
+	// concerned — measured, `$( … )`, a backquoted substitution and
+	// `<( … )` all number a job they start from two. See
+	// Runner.runAsItsOwnJob.
+	sub.runAsItsOwnJob(r)
 	// And one entry on the stack of what the shell is inside, which is a
 	// **different** entry for each of the three spellings: the shell being
 	// modeled has a word apiece, measured 2026-09-27, so the kind this

@@ -269,3 +269,35 @@ func (r *Runner) refuseAJobThisShellDidNotStart(name string) int {
 		"%[1]s: can't manipulate jobs in subshell", name))
 	return orDefault(d.JobsNotManipulableInASubshellStatus, 1)
 }
+
+// runAsItsOwnJob arms the one dialect's reading of a `( … )`: the subshell
+// holds a job number itself, so the jobs it starts are numbered from two, and
+// it never moves the current-job marker — the `+` and `-` stay on the numbers
+// the parent's were on.
+//
+// Called on the *clone*, with the runner it was cloned from, and called
+// unconditionally rather than from inheritJobs: it holds for a subshell whose
+// parent had no job at all, which is exactly the case inheritJobs returns
+// early on. Measured, `( sleep 2 & print ${(kv)jobstates} )` in a shell with
+// no other job numbers that job 2.
+//
+// Only where the body really is parentheses. The boundaries that number from
+// two are `( … )`, `( … ) | cat`, `$( … )`, a backquoted substitution,
+// `<( … )` and `( … ) &`; `{ … } | cat` and `{ … } &` number from one. See
+// Semantics.SubshellIsAJobInItsOwnTable, which carries both grids.
+func (r *Runner) runAsItsOwnJob(parent *Runner) {
+	if parent.sem().SubshellIsAJobInItsOwnTable != Yes {
+		return
+	}
+	r.ownJobsStartAtTwo = true
+	// The marks, as numbers. Taken from the parent because the rows
+	// themselves may be about to go: which job was current is a fact about
+	// the fork, and it outlives the table it was read from.
+	current, previous := parent.markedJobs()
+	if current != nil {
+		r.inheritedCurrentJob = current.num
+	}
+	if previous != nil {
+		r.inheritedPreviousJob = previous.num
+	}
+}

@@ -148,6 +148,10 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// process substitution do not. See Runner.unsetEmptiesAnUnwrittenArray.
 		sub.arraysAreAView = !r.forkedForABackgroundJob
 		sub.inheritJobs(jobBoundaryCompound)
+		// And the parentheses are a job of their own in one dialect, so the
+		// jobs this body starts are numbered from two and never take the
+		// `+`. See Runner.runAsItsOwnJob.
+		sub.runAsItsOwnJob(r)
 		// The group a real shell's fork would have given these parentheses,
 		// for a body that asks which process it is. Its lifetime is the
 		// body's own run: the caller joins here before carrying on, so there

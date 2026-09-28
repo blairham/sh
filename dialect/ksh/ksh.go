@@ -3523,6 +3523,10 @@ func Semantics() interp.Semantics {
 	// background jobs, `kill -TSTP %1` moves the `+` onto the older one
 	// here too — so what differs is only whether a later `&` takes it back.
 	s.StoppedJobTakesTheCurrentJobMarker = interp.No
+	// A subshell's first job is `[1]` and takes the `+`, measured with
+	// `sleep 3 & ( sleep 2 & jobs )` — the answer three of the four columns
+	// give, zsh being the one that does not.
+	s.SubshellIsAJobInItsOwnTable = interp.No
 	s.JobsListFinishedJobs = interp.Yes
 	// A `&` job is reaped under the monitor and nowhere else, so with no
 	// monitor the listing goes on saying the job is running — after a

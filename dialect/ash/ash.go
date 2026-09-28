@@ -1808,7 +1808,10 @@ func Semantics() interp.Semantics {
 	// A `jobs` listing keeps a job that has already ended, and shows the
 	// `&`-started command's own text.
 	s.JobsListNewestFirst = interp.Yes
-	// StoppedJobTakesTheCurrentJobMarker is deliberately left unanswered.
+	// SubshellIsAJobInItsOwnTable is left unanswered for the reason below,
+	// and the unanswered value is the answer the other three columns give.
+	//
+	//  StoppedJobTakesTheCurrentJobMarker is deliberately left unanswered.
 	// The measurement wants a ^Z at a pseudo-terminal, which is exactly what
 	// the container this shell was measured in could not give it, so there
 	// is nothing recorded to put here — and the package comment above says

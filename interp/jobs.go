@@ -715,6 +715,13 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		sub.subshellDepth = r.subshellDepth
 	}
 	sub.inheritJobs(jobBoundaryBackground)
+	// And `( … ) &` numbers a job its body starts from two where `{ … } &`
+	// numbers one, measured — the same node test the pipeline makes, and
+	// theForkIsTheParentheses is already that test. See
+	// Runner.runAsItsOwnJob.
+	if theForkIsTheParentheses(st) {
+		sub.runAsItsOwnJob(r)
+	}
 	// The fork a background job is, which a `( … )` standing as its body does
 	// not fork again: measured 2026-09-17, ksh93u+'s `a=(1 2 3); ( unset
 	// "a[1]"; echo "[${a[*]}]" ) &` prints `[1 3]` where the same subshell in
@@ -935,7 +942,48 @@ func (r *Runner) announceJob(job *Job) {
 // monitor on its own — see Semantics.MonitorAloneAnnouncesAJob, which is the
 // same seam canResume reads one notice over and which the panel divides
 // differently. Read and not asked, for the reason the axis gives.
+//
+// **A subshell has nobody to tell, and that is unanimous.** The prompt belongs
+// to the shell that owns the terminal; a body a real shell would have forked
+// draws none and announces nothing, however loudly the shell around it would
+// have. Measured 2026-09-28 through a pseudo-terminal, `( sleep 2 & )` typed
+// at an interactive prompt with no other job running, counting `[n] pid`
+// lines:
+//
+//	bash 5.3.20  0    ksh93  0    zsh 5.9.2  0    ours  1
+//	bash 3.2.57  0    dash   0
+//
+// **BusyBox ash is silent on the question rather than agreeing**, and that
+// difference is the whole of why it is named. Run in the pinned digest
+// (alpine@sha256:28bd5fe8b56d…) through the same driver it writes no
+// announcement for a subshell's job — and none for a plain `sleep 3 &` at the
+// prompt either, which is the control. An instrument reading zero on the case
+// *and* on the control has measured nothing about the case, so ash is recorded
+// as a column that never announces rather than as a sixth zero.
+//
+// The same four boundaries all answer 0 in the reference where this answered 1
+// in every one of them: `( … )`, `$( … )`, `<( … )` and a compound pipeline
+// element. Five columns to nothing, with a sixth that never announces at all,
+// is not an axis — so this is read off the clone's own flag rather than added
+// to the vector.
+//
+// It is [Runner.inSubshell] and not a shape, because every one of those four
+// boundaries is a clone and none of them announced — the noun is *being a
+// copy*, not being parentheses. It is also not JobControl: that flag is the
+// front end's and a clone inherits it, which is exactly how the second
+// announcement got out (#5021).
+//
+// **This says nothing about the job's number or its markers**, which is the
+// other half of #5021 and is a different mechanism — a compound command holds
+// a job number while it runs, so `( sleep 2 & )` numbers its job 2 in zsh and
+// `( f )` where `f` backgrounds one numbers it 3. That is measured on the
+// issue and deliberately not implemented here: it moves job numbering for
+// every compound command in the shell, and the pipeline-element row does not
+// yet resolve.
 func (r *Runner) canAnnounce() bool {
+	if r.inSubshell {
+		return false
+	}
 	return r.JobControl || (r.monitor && r.sem().MonitorAloneAnnouncesAJob == Yes)
 }
 
@@ -2401,9 +2449,32 @@ func (r *Runner) nextJobNumber() int {
 			high = j.num
 		}
 	}
-	lowest := 1
+	// Where this table's numbers begin. One ordinarily; two in a `( … )`
+	// subshell of the dialect that makes one a job of its own, which holds
+	// number one itself. See Semantics.SubshellIsAJobInItsOwnTable.
+	floor := 1
+	if r.ownJobsStartAtTwo {
+		floor = 2
+	}
+	lowest := floor
 	for taken[lowest] {
 		lowest++
+	}
+	// **The hole test is relative to the floor**, and that is not a detail:
+	// with the floor at two and an empty table, `high` is zero and the
+	// comparison below would read "there is a hole at one" — which there is
+	// not, because one is not a slot this table has. It would then put the
+	// question to NextJobNumberRefillsAHole, and the answer that says *no*
+	// hands back `high+1`, which is one. A first job in an empty subshell
+	// would be numbered one in a shell that does not refill holes and two in
+	// one that does, for a table with no hole in it either way.
+	//
+	// It was written that way first, and against the reference it *agreed* —
+	// because the dialect this floor exists for is one that refills holes, so
+	// the wrong branch returned the right number. The row that caught it was
+	// a unit test with the hole axis left unanswered.
+	if high < floor-1 {
+		high = floor - 1
 	}
 	if lowest == high+1 {
 		// No hole, so the two rules agree and there is nothing to ask.
@@ -2465,6 +2536,24 @@ func (r *Runner) becomeCurrentJob(j *Job) {
 // same two jobs the listing marks — so this is not a cosmetic column: a
 // `fg %+` after a ^Z resumes a different job in the two camps.
 func (r *Runner) markedJobs() (current, previous *Job) {
+	if r.ownJobsStartAtTwo {
+		// **This is the only place a subshell's marks are decided**, and
+		// deliberately so. An early return in becomeCurrentJob saying the
+		// same thing was written first and was dead code — the order it
+		// guarded is read by pickMarkedJob and nothing reaches that from
+		// here — so it could not fail, and a mutation that deleted it killed
+		// nothing. Two places implementing one rule is one place for them to
+		// disagree; this branch is the rule.
+		//
+		// A subshell never moved the marker, so the two are the *numbers*
+		// the parent's were on and each is looked up on its own. They are
+		// independent here and not below: the `-` is "the runner-up" in a
+		// shell that chooses, and an inherited number that names nothing
+		// must not take the other one's lookup with it. Measured — a parent
+		// of three jobs leaves its `+` on 3 and its `-` on 2, and the
+		// subshell's job 2 reads `-` although no job 3 is there to be found.
+		return r.jobByNumber(r.inheritedCurrentJob), r.jobByNumber(r.inheritedPreviousJob)
+	}
 	current = r.pickMarkedJob(nil)
 	if current != nil {
 		previous = r.pickMarkedJob(current)
@@ -2493,6 +2582,24 @@ func (r *Runner) pickMarkedJob(skip *Job) *Job {
 		}
 	}
 	return newest
+}
+
+// jobByNumber is the job holding a number, or nil where nothing does.
+//
+// For the inherited marks of a subshell that never moved them: the number is
+// a fact about the parent's table and the job it names may simply not be in
+// this one, which is the ordinary case rather than an error. See
+// Semantics.SubshellIsAJobInItsOwnTable.
+func (r *Runner) jobByNumber(num int) *Job {
+	if num == 0 {
+		return nil
+	}
+	for _, j := range r.jobs {
+		if j.num == num {
+			return j
+		}
+	}
+	return nil
 }
 
 // currentJob is the job `%%`, `%+` and a bare `fg` name, or nil where this

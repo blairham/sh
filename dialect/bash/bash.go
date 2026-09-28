@@ -3306,6 +3306,10 @@ func Semantics() interp.Semantics {
 	// stopped job current, the first its runner-up, and the background job
 	// unmarked at all, which no reading of the table's order produces.
 	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
+	// A subshell's first job is `[1]` and takes the `+`, measured with
+	// `sleep 3 & ( sleep 2 & jobs )` — the answer three of the four columns
+	// give, zsh being the one that does not.
+	s.SubshellIsAJobInItsOwnTable = interp.No
 	s.JobsListFinishedJobs = interp.Yes
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
 	// A notice never names the pid here and there is no option that asks

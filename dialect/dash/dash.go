@@ -1809,6 +1809,10 @@ func Semantics() interp.Semantics {
 	// shell will not resolve `%+` or `%-` at all — both are `No current
 	// job` — so the listing is the whole of the evidence here.
 	s.StoppedJobTakesTheCurrentJobMarker = interp.Yes
+	// A subshell's first job is `[1]` and takes the `+`, measured with
+	// `sleep 3 & ( sleep 2 & jobs )` — the answer three of the four columns
+	// give, zsh being the one that does not.
+	s.SubshellIsAJobInItsOwnTable = interp.No
 	s.JobsListFinishedJobs = interp.Yes
 	s.EndedJobIsListedAsRunningWithoutTheMonitor = interp.No
 	// No pid in a notice: measured 2026-09-25 on a pseudo-terminal under

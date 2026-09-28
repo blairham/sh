@@ -147,6 +147,11 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// for the measurement.
 	defer sub.collectBodies()()
 	sub.inheritJobs(jobBoundarySubstitution)
+	// A substitution's body is parentheses too as far as job numbering is
+	// concerned — measured, `$( … )`, a backquoted substitution and
+	// `<( … )` all number a job they start from two. See
+	// Runner.runAsItsOwnJob.
+	sub.runAsItsOwnJob(r)
 	sub.inCommandSubst = true
 	// And one entry on the stack of what the shell is inside. Pushed onto
 	// the clone rather than entered and left on this runner: the body runs

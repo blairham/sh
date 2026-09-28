@@ -265,6 +265,7 @@ ash   SubscriptedOperandTakesALocalDeclaration
 ash   SubscriptedOperandTakesTheContainerAttribute
 ash   SubscriptedOperandTakesTheIntegerAttribute
 ash   SubscriptedPrefixIsTakenBack
+ash   SubshellIsAJobInItsOwnTable
 ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
 ash   TableUnderAnArrayLiteralDeclaration

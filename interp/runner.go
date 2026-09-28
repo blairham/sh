@@ -4541,6 +4541,12 @@ type Runner struct {
 	// interp/shellownparameter.go, and ParameterAttributes.Provided, which
 	// is what reads it.
 	shellOwn map[string]bool
+	// envNotAdopted names the parameters whose entry in the environment this
+	// shell **did not take over**: the value is the shell's own, the entry
+	// goes to a child as it arrived, and the export the environment brought
+	// stays off the parameter. See Runner.MarkEnvironmentEntryNotAdopted,
+	// which is where the measurement is.
+	envNotAdopted map[string]bool
 	// notShellOwn names the produced parameters that are **not** the shell's
 	// own, which is the one case ParameterAttributes.Provided gets wrong by
 	// deriving it from a shape. See interp/shellownparameter.go.
@@ -9313,6 +9319,31 @@ func (r *Runner) environ() []string {
 			out = append(out, kv)
 			continue
 		}
+		if r.envNotAdopted[k] {
+			// The shell never took this entry over, so it goes to a child
+			// **as written** — before the removal and export questions
+			// below, because neither of them is about it: the parameter of
+			// that name is a separate thing the shell maintains itself.
+			//
+			// Measured 2026-09-27 on zsh 5.9.2, a script run `-f` under
+			// `env -i PATH=/usr/bin:/bin IFS=ZZ UID=QQ` with
+			// `/usr/bin/env` as the child:
+			//
+			//	as inherited             IFS=ZZ  UID=QQ
+			//	after IFS=x              IFS=ZZ  UID=QQ
+			//	after unset IFS          IFS=ZZ  UID=QQ
+			//	after export IFS         IFS=<the shell's own>
+			//	after export UID         UID=501
+			//
+			// So an assignment does not reach it and neither does `unset`;
+			// only an explicit `export` makes the shell's own value
+			// supersede it, which is the one case that falls through here
+			// to be written by the pass over Runner.Vars below.
+			if on, spoken := r.exported[k]; !spoken || !on {
+				out = append(out, kv)
+			}
+			continue
+		}
 		if r.removed[k] {
 			// A name the shell unset does not reach a command either: the
 			// child would otherwise see what the parent cannot.
@@ -9445,7 +9476,32 @@ func (r *Runner) environ() []string {
 	// a child's environment with the value the shell reads for it, and this
 	// shell put none of the three there.
 	out = append(out, r.exportedProducedParameters(writtenLists)...)
-	return out
+	return endEachEntryAtItsFirstNUL(out)
+}
+
+// endEachEntryAtItsFirstNUL cuts every entry where a NUL byte falls, because
+// an environment entry is a **C string** and the kernel reads it as one.
+//
+// Not tidiness and not defensive: `$IFS` holds a NUL in two of the shells in
+// the panel — measured 2026-09-27, `print -rn -- "$IFS" | od -c` is
+// ` \t \n \0` in zsh 5.9.2 and here — so a shell started under `env IFS=x`
+// that then ran `export IFS` handed a child four bytes it cannot pass on.
+// Go refuses the whole `execve` for it, so **every command failed to start**
+// with `exec: environment variable contains NUL` where the reference ran them
+// with `IFS= \t\n` in the environment: the C string ends at the NUL and the
+// rest of the value never left the shell.
+//
+// Done once over the finished list rather than at the dozen appends above,
+// which is the only place it can be done without a site forgetting it — and
+// the scan is over entries that are nearly all NUL-free, so it allocates
+// nothing for them.
+func endEachEntryAtItsFirstNUL(env []string) []string {
+	for i, kv := range env {
+		if cut := strings.IndexByte(kv, 0); cut >= 0 {
+			env[i] = kv[:cut]
+		}
+	}
+	return env
 }
 
 // producedScalar answers with the live value of a produced scalar parameter,
@@ -9714,6 +9770,14 @@ func (r *Runner) isExported(name string) bool {
 		return on
 	}
 	if r.removed[name] {
+		return false
+	}
+	if r.envNotAdopted[name] {
+		// The name was in the environment and this parameter is not that
+		// entry, so being supplied does not export it. Third state and not
+		// a third table: the entry is still there and still reaches a
+		// child — see environ — and what it does not do is put the export
+		// attribute on the shell's own parameter.
 		return false
 	}
 	_, born := r.bornWith(name)

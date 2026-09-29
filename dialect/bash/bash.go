@@ -2928,6 +2928,13 @@ func Semantics() interp.Semantics {
 	// the number *above* the one it moved from, because the destination is
 	// chosen before the source is given up.
 	s.FdMove = interp.FdMoveDuplicatesThenCloses
+	// A frozen name does not stop the close of the descriptor it holds here:
+	// measured 2026-09-29 on 5.3.20, a script file, `exec {m}>f; readonly m;
+	// exec {m}>&-; echo "after=$?"` closes it in silence at 0, where zsh and
+	// ksh93 refuse. The close reads the name rather than writing it, which is
+	// what makes this a question at all — see
+	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
+	s.ReadonlyFdVariableRefusesAClose = interp.No
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No

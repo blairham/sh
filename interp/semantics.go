@@ -21094,6 +21094,33 @@ type Semantics struct {
 	// with nothing behind it reaches here.
 	FdVariableFailedCloseIsReported Answer
 
+	// ReadonlyFdVariableRefusesAClose refuses `exec {name}>&-` when the name
+	// holding the descriptor is frozen.
+	//
+	// The close reads the name and does not write it — a successful `exec
+	// {m}>&-` leaves `m` holding the number it held, measured — so nothing
+	// about the operation requires the name to be writable, and the columns
+	// duly split. Measured 2026-09-29, script files, `exec {m}>f; readonly m;
+	// exec {m}>&-; echo "after=$?"`:
+	//
+	//	zsh 5.9.2     refused, `can't close file descriptor from readonly
+	//	              parameter m`, after=1, the descriptor still open
+	//	ksh93u+       refused, `m: is read only`, and the script ends there
+	//	bash 5.3.20   closed, silent, after=0
+	//
+	// bash 3.2 and dash have no `{name}` redirection at all, so they answer
+	// nothing here rather than No.
+	//
+	// The wording is Diagnostics.FdVariableReadonlyClose and is separate,
+	// because the two columns that refuse say different things and one of
+	// them ends the shell over it. **Asked only when the name is frozen**,
+	// which is the rare case: an ordinary `{m}>&-` never reaches the axis, so
+	// a Semantics with no answer here still closes descriptors.
+	//
+	// The core has no answer. A `{name}` redirection is not POSIX, and the
+	// two columns that have both it and an opinion disagree.
+	ReadonlyFdVariableRefusesAClose Answer
+
 	// FdNumberBoundedByOpenFileLimit refuses a redirection whose descriptor
 	// number is at or above the process's soft limit on open files. bash and
 	// ksh93 do; dash and zsh accept the number and let whatever comes next

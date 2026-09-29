@@ -4172,6 +4172,16 @@ func Semantics() interp.Semantics {
 	// redirects itself.
 	s.ExecOpenedFdReachesACommand = interp.No
 	s.FdVariableBadCloseIsAnError = interp.No
+	// A frozen name refuses the close of the descriptor it holds, as in zsh
+	// and unlike bash, which closes it and says nothing. Measured 2026-09-29,
+	// a script file: `exec {m}>f; readonly m; exec {m}>&-` is `m: is read
+	// only` and the script ends there. The words are this shell's ordinary
+	// readonly refusal rather than a sentence about the descriptor — which
+	// is the difference from zsh, and the reason the wording is a field
+	// rather than something the refusal could derive: see
+	// interp.Diagnostics.FdVariableReadonlyClose, set below, and
+	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
+	s.ReadonlyFdVariableRefusesAClose = interp.Yes
 	// And a number the process cannot hold is refused, as it is in bash and
 	// unlike dash and zsh — in this shell's own words and quoting a different
 	// errno: with `ulimit -n 6`, `exec 8>f` is `bad file unit number [Invalid
@@ -4201,6 +4211,15 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	d := interp.Diagnostics{
+		// The refusal a frozen name draws when a `{name}>&-` would close the
+		// descriptor it holds. This shell reaches for its ordinary readonly
+		// sentence rather than one about the descriptor, which is what tells
+		// it from zsh's `can't close file descriptor from readonly parameter`
+		// at the same site. Measured 2026-09-29, a script file: `exec {m}>f;
+		// readonly m; exec {m}>&-` is `m: is read only` and the script ends
+		// there. There is no opening counterpart because the open reaches the
+		// store, which already says this.
+		FdVariableReadonlyClose: "%[1]s: is read only",
 		// The sentence for a refused `typeset +A` or `+a` names the letter set
 		// rather than the variable, which is why the verb is left unused:
 		// measured 2026-09-23, `typeset -A a; a[x]=1; typeset +A a` is

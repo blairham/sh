@@ -297,6 +297,11 @@ func Semantics() interp.Semantics {
 	s.CommandKeepsASpecialBuiltinsPrefix = interp.No
 	s.AssignmentPrefixPersistsAfterAFunction = interp.No
 	s.PrefixToAFunctionIsExported = interp.Yes
+	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
+	// redirection here at all, so there is no close through a name for a
+	// frozen name to refuse. Measured 2026-09-29, a script file: `exec
+	// {m}>f` is `exec: {m}: not found` at 127, which is `{m}` taken as the
+	// command word.
 	// unanswered IndirectionIsTheSubscriptFlag: no `${!name}` here either. The
 	// corpus records BusyBox answering `syntax error: bad substitution` at 2
 	// for `x=y; y=V; printf "[%s]" "${!x}"` — its wording for a parse failure,

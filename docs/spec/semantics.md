@@ -25399,6 +25399,38 @@ it — two of the three that have the grammar; ksh93 takes it back with
 the command's other redirections, so the number the variable holds is
 already dead.
 
+**`ReadonlyFdVariableRefusesAClose`** — bash no · dash — · ksh93 yes · zsh yes
+
+Refuses `exec {name}>&-` when the name holding the descriptor is frozen.
+Measured 2026-09-29, script files, `exec {m}>f; readonly m; exec {m}>&-;
+echo "after=$?"`: zsh writes `can't close file descriptor from readonly
+parameter m` and leaves 1 with the descriptor still open, ksh93u+ writes
+`m: is read only` and ends the script there, and bash 5.3.20 closes it in
+silence at 0. dash and bash 3.2 have no `{name}` token, so they answer
+nothing here rather than no.
+
+**The close does not write the name**, which is what makes this a question
+at all. A successful `exec {m}>&-` leaves `m` holding the number it held —
+measured in every column that has the form — so nothing about the operation
+requires the name to be writable, and a shell is free to read a frozen name
+and act on it. Two do not, and they disagree about what to say: the wording
+is `Diagnostics.FdVariableReadonlyClose`, and ksh93 reaches for its ordinary
+readonly sentence where zsh has one about the descriptor.
+
+The axis is asked **only when the name is frozen**, which is the rare case.
+An ordinary `{m}>&-` never consults it, so a `Semantics` that leaves it
+unanswered still closes descriptors.
+
+The opening half is not an axis, because every column refuses it: `readonly
+m; echo x {m}>f` is 1 in all three, with the command not run. What differs
+is only the sentence, and that is
+`Diagnostics.FdVariableReadonlyOpen` — zsh's `can't allocate file descriptor
+to readonly parameter m` **replaces** the store's own refusal, where bash
+writes `m: readonly variable` and adds `m: cannot assign fd to variable`, and
+ksh93 writes the generic one alone. So the preposition is the whole of zsh's
+rule: a number goes *to* a frozen name and is taken *from* one, and neither
+can happen.
+
 **`FirstAllocatedDescriptor`** — bash from ten · dash from ten · ksh93 from
 ten · zsh **from eleven**
 

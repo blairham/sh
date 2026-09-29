@@ -2526,6 +2526,11 @@ func Semantics() interp.Semantics {
 	// refusal in the other six. See
 	// Semantics.TestReadsOneExpressionOffTheOperands for the seam that makes
 	// it a rule rather than a leniency, and #2959.
+	// unanswered TestNegationBeforeAnOperatorIsAnOperand: this shell reads
+	// one expression off the front of the operands, so the grammar that
+	// question sits in is never reached here. Measured all the same —
+	// `test ! -a ! -a !` is 2 and `test x -a !` is 2 in 93u+ — and both are
+	// the front reading refusing, not the parser placing the `!`.
 	s.TestReadsOneExpressionOffTheOperands = interp.Yes
 	// And `>` alone: `test b '<' a` here is `test: <: unknown operator` at 2
 	// while `test b '>' a` is 0, which is the split the enum exists for.

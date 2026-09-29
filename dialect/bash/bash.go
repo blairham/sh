@@ -2264,6 +2264,7 @@ func Semantics() interp.Semantics {
 	// recursive reading predicts: `[ ! ! -n x ]` is 0 here and 1 in the one
 	// column that drops the outer negation. Measured 2026-09-19 (#3700).
 	s.TestFourWordsNegateANegationOnce = interp.No
+	s.TestNegationBeforeAnOperatorIsAnOperand = interp.No
 	// And at three words the connective is read before a leading `!`. The
 	// probe that says so names a file that **exists**, because this shell
 	// has a unary `-a`: `[ -a / ]` is 0, so negating it first would give 1,

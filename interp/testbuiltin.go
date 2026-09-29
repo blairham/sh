@@ -774,12 +774,48 @@ func (p *testParser) andExpr() (bool, error) {
 }
 
 func (p *testParser) notExpr() (bool, error) {
-	if p.more() && p.peek() == "!" {
+	if p.more() && p.peek() == "!" && !p.negationIsAnOperand() {
 		p.pos++
 		v, err := p.notExpr()
 		return !v, err
 	}
 	return p.primary()
+}
+
+// negationIsAnOperand reports whether the `!` in hand is the string `!`
+// rather than the operator, which one column reads it as wherever an
+// **operator** follows it.
+//
+// The lookahead is what keeps the axis off the common path. A `!` in front of
+// an ordinary word or a unary operator negates in every column, and asking
+// there would report an unanswered axis to a strict-core shell over a
+// question the panel agrees about — so `! x`, `! -n x -a y` and
+// `! x = y -a z` never reach the ask. Only `! -a …`, `! = …` and a trailing
+// `!` do, which is exactly where the columns part. See
+// Semantics.TestNegationBeforeAnOperatorIsAnOperand.
+//
+// A `!` with **nothing** behind it is the same question: `x -a !` is 0 in
+// every column but ksh93, which is the string reading, where a negation over
+// a missing operand is a refusal.
+func (p *testParser) negationIsAnOperand() bool {
+	if p.pos+1 < len(p.args) && !p.r.wordIsATestOperator(p.form, p.args[p.pos+1]) {
+		// An ordinary word or a unary operator follows, so the two readings
+		// agree and nothing is asked.
+		return false
+	}
+	return p.r.ask(p.r.sem().TestNegationBeforeAnOperatorIsAnOperand,
+		"a `test` `!` standing in front of an operator read as the string `!`")
+}
+
+// wordIsATestOperator reports whether a word is one of the operators that
+// would leave a `!` in front of it with nothing to negate: a binary operator
+// or one of the two connectives.
+//
+// A *unary* operator is deliberately not here, and that is the measurement
+// rather than an omission: `! -n x -a y` is 1 in every column, so the `!`
+// negates the file test and the two readings do not part there.
+func (r *Runner) wordIsATestOperator(form testForm, word string) bool {
+	return word == form.and || word == form.or || r.testBinaryOperatorWord(form, word)
 }
 
 func (p *testParser) primary() (bool, error) {

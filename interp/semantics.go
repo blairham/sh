@@ -16484,6 +16484,54 @@ type Semantics struct {
 	// Yes there, so the argument counts are never reached (#3700).
 	TestFourWordsNegateANegationOnce Answer
 
+	// TestNegationBeforeAnOperatorIsAnOperand reads a `!` that stands where
+	// a primary belongs and is followed by an **operator** as the string
+	// `!` rather than as a negation.
+	//
+	// Only in the grammar, which is the reading five or more operands
+	// reach. The fixed-arity readings above already place a `!` by the
+	// counts — `[ ! = ! ]` is a string comparison in every column — and this
+	// is the same placement carried into the parser, where nothing was
+	// doing it.
+	//
+	// Measured 2026-09-29, script files, `env -i PATH=/usr/bin:/bin
+	// LC_ALL=C`. bash 5.3.20 and 3.2.57 on macOS, ksh93u+ 2012-08-01,
+	// dash 0.5.12, BusyBox 1.37.0 ash in `alpine@sha256:28bd5fe8b5…` — the
+	// container run rather than dash's answer carried over, and the two
+	// part on the first row:
+	//
+	//	                    bash5  bash3  ksh93  dash  ash  zsh
+	//	! -a ! -a !           2      2      2     2     2    0
+	//	! -o ! -o !           2      2      2     2     2    0
+	//	! = ! -a x            2      2      2     2     2    0
+	//	! != y -a x           2      2      2     2     2    0
+	//	! ! -a ! -a !         2      2      2     2     2    1
+	//	! -a "" -a y          0      0      0     2     2    1
+	//	x -a ! -a y           0      0      0     2     2    0
+	//	x -a ! = y            2      2      2     2     2    1
+	//	x -a ! -a ! -a y      0      0      0     2     2    0
+	//	! -a ! -a ! -a !      0      0      0     2     2    0
+	//
+	// **The rows bash answers `0` are not this rule** and that is the whole
+	// reason the axis is written to zsh alone. `-a` is a *unary file test*
+	// in bash — `test -a /etc` is 0 there and `argument expected` in zsh —
+	// so bash reaches those by negating a file test, and the two mechanisms
+	// agree on every row where the operand after `-a` is an ordinary word.
+	// They part where the operand is itself `!`. A rule read off the bash
+	// column would have been keyed on the wrong noun and would still have
+	// matched nine of the ten rows above.
+	//
+	// The unanimous rows are the bound, and none of them is asked: a `!`
+	// in front of an ordinary word or a unary operator negates in every
+	// column — `! x` is 1, `! -n x -a y` is 1, `! x = y -a z` is 0 — and a
+	// `!` taken as a binary operator's *right* operand is a string in every
+	// column too, `x = ! -a y` being 1. So the question is put only where
+	// the word after the `!` is an operator or there is no word after it.
+	//
+	// ksh93 cannot be asked: TestReadsOneExpressionOffTheOperands is Yes
+	// there, so the grammar this sits in is never reached (#3700).
+	TestNegationBeforeAnOperatorIsAnOperand Answer
+
 	// TestThreeWordsNegateBeforeAConnective reads a three-word `test` whose
 	// first word is `!` as a **negation of the other two**, ahead of the
 	// reading that takes the middle word as a connective over two strings.

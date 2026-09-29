@@ -22,6 +22,12 @@ import (
 // Trailing newlines are removed, which is the rule that makes `x=$(pwd)`
 // usable at all.
 func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
+	// A substitution that runs where it stands writes trace lines of its own,
+	// so a reading body forked before it is let go first — the same release
+	// the file spelling takes, and for the same reason. Measured: `:
+	// <(print A) "$(print B)"` is `print A`, `print B`, then the command's
+	// line in the reference. See interp/procsubtracestart.go.
+	r.releasePreviousBodyTrace()
 	// A substitution written into a subscript runs once for the whole
 	// expansion, however many of the readers of those brackets ask for their
 	// text. The two roads to a subscript — the rendered text and the text

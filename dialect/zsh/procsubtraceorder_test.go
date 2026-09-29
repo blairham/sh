@@ -77,6 +77,13 @@ func TestAReadingSubstitutionsBodyTracesInOrder(t *testing.T) {
 			"a reading body before a file one", ": <(print A) =(print B)\nsleep 0\n",
 			"@ print A\n@ print B\n@ : FD TMP\n@ sleep 0\n",
 		},
+		// And a command substitution, for the same reason and with the same
+		// release.
+		{
+			"a reading body before a command substitution",
+			`: <(print A) "$(print B)"` + "\nsleep 0\n",
+			"@ print A\n@ print B\n@ : FD B\n@ sleep 0\n",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := procSubTrace(t, dir, tc.src)
@@ -146,5 +153,69 @@ func TestHoldingABodyCannotHoldTheCommandUp(t *testing.T) {
 				t.Fatal("the command did not run on: a held body was never let go")
 			}
 		})
+	}
+}
+
+// **The hold cannot be proven by a single run**, and this is the row that
+// proves it anyway.
+//
+// Removing the hold — letting a body run the moment it is forked and keeping
+// only the waits — passes every row above, every time, on an idle machine: the
+// order it produces is the *same* order, because the parent still waits for the
+// body at each release point. What the hold removes is a **race**, and a race
+// that is currently being won is invisible to one run.
+//
+// It is not invisible to two hundred. Measured 2026-09-29: with the hold taken
+// out, the one-body row fails inside a `-count=200` run of this package; with it
+// in, two hundred runs pass. So the repetition is the instrument, and it is
+// cheap — the whole loop is well under a second, because each iteration is one
+// short script.
+//
+// Without this, the mutant that deletes the hold survives, and what ships is a
+// bias that looks like an ordering until somebody's machine is busy.
+func TestTheOrderHoldsOverManyRuns(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{"one body", ": <(print A)\nsleep 0\n", "@ : FD\n@ print A\n@ sleep 0\n"},
+		{
+			"two bodies", ": <(print A) <(print B)\nsleep 0\n",
+			"@ print A\n@ : FD FD\n@ print B\n@ sleep 0\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for i := 0; i < 200; i++ {
+				if got := procSubTrace(t, dir, tc.src); got != tc.want {
+					t.Fatalf("run %d of 200 gave\n%swant\n%s", i+1, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// A body the command itself reads, which is what says the release point is
+// **before** the redirections rather than after them.
+//
+// `.` opens the path its operand names and reads it, so a body still held when
+// the command runs would leave the shell reading a pipe nobody is writing. That
+// is the deadlock the earlier reading of this issue said made holding
+// impossible; it is real, and it is why the release is taken at the command's
+// own trace line and not at removeProcSubs.
+//
+// The mutant that moves the release back to removeProcSubs hangs here, which is
+// the only row in the package that can tell it from the real thing.
+func TestACommandThatReadsItsOwnSubstitution(t *testing.T) {
+	dir := t.TempDir()
+	done := make(chan string, 1)
+	go func() {
+		out, _ := runZsh(t, dir, "PS4='@ '\nsetopt xtrace\n. <(print -r -- \":\")\nprint -r -- past\n")
+		done <- out
+	}()
+	select {
+	case out := <-done:
+		if !strings.Contains(out, "past") {
+			t.Errorf("out %q, want the command to have run on", out)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("the shell never finished reading its own substitution: the body was still held")
 	}
 }

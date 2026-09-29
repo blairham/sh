@@ -352,6 +352,12 @@ func printWriteFailed(r *interp.Runner, fd int, named bool, err error) int {
 		r.Diagnosef("bad mode on fd %d\n", fd)
 		return 1
 	}
+	// Not this builtin's sentence, and not nothing either: the shell has one
+	// for a write to a stream something *else* closed, and swallowing the
+	// error here is what kept it from being said. `echo` and `printf` record
+	// the failure and get it; `print` handled the error itself and dropped it.
+	// See interp.Runner.BuiltinWriteFailed.
+	r.BuiltinWriteFailed(err)
 	return 0
 }
 

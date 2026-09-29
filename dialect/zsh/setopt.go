@@ -1622,6 +1622,34 @@ var zshOptions = []zshOption{
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.DotMissingFileFatal
 			}, answer(on))
+			// And a sixth, read **backwards**: with the option on, a
+			// `[[ -o name ]]` whose name this shell does not have is the
+			// plain silent false the other columns give rather than this
+			// shell's own complaint and third status.
+			//
+			// Measured 2026-09-29 on zsh 5.9.2, each probe in a subshell of
+			// its own so the option state cannot leak between them:
+			//
+			//	                            posixbuiltins on   off
+			//	[[ -o invalidoption ]]       1, silent         3, `no such option`
+			//	[[ ! -o invalidoption ]]     0                 3
+			//	[[ -o invalidoption || … ]]  0                 0
+			//	[[ -o invalidoption && … ]]  1                 3
+			//
+			// The last two rows are why this is the existing axis rather
+			// than a status of its own: with the option on the value
+			// combines like any other false, and with it off the third
+			// status passes through `!` and `&&` untouched. That is exactly
+			// what Semantics.UnknownConditionOptionIsAStatus already says,
+			// so the option turns it off rather than adding a rule beside
+			// it.
+			//
+			// A *known* name is untouched in either state — `[[ -o xtrace ]]`
+			// is 1 and silent both ways — which is the control that keeps
+			// this to the name the shell does not have.
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.UnknownConditionOptionIsAStatus
+			}, answer(!on))
 			return 0
 		},
 	},

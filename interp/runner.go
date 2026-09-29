@@ -8148,9 +8148,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// `%prep() { echo defined; }; %prep` is the `fg` refusal in both columns
 	// that have the reading and never the function. See
 	// Semantics.JobSpecCommandWord.
-	if spec, refused := r.jobSpecCommandWord(c, argv); refused {
-		return nil
-	} else if spec {
+	if r.jobSpecCommandWord(c, argv) {
 		r.status = r.runJobSpecWord(ctx, argv, "fg")
 		return nil
 	}

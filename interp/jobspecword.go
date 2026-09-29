@@ -136,32 +136,36 @@ func writtenJobSpecWord(c *syntax.SimpleCmd) bool {
 // no answer runs every script that never writes a `%` command word, and
 // refuses exactly the one that does — which is the measurement the axis is
 // about.
-// The second result is whether *this* question refused, and it is separate
-// from r.unspecified on purpose. That field carries whatever the command has
-// already refused over — a frozen prefix, a bad subscript — and a caller that
-// read it here would abandon the command for somebody else's refusal.
-// Measured by a test that does exactly that: a bare Semantics refusing the
-// frozen-prefix axis went from "say so and run the command anyway" to "say so
-// and run nothing", because this site read the shared flag instead of its own
+// **The caller must not read r.unspecified to decide whether this refused.**
+// That field carries whatever the command has already refused over — a frozen
+// prefix, a bad subscript — so a site that reads it here abandons the command
+// for somebody else's refusal. The first draft did exactly that, and a bare
+// Semantics refusing the frozen-prefix axis went from "say so and run the
+// command anyway" to "say so and run nothing".
+//
+// Nor does this need to tell its caller that it refused. A refusal sets the
+// shared flag, and the command is already abandoned downstream on it: an
+// early return here made no difference to any output, measured, and a mutant
+// that removed it was equivalent. So there is nothing to return but the
 // answer.
-func (r *Runner) jobSpecCommandWord(c *syntax.SimpleCmd, argv []string) (spec, refused bool) {
+func (r *Runner) jobSpecCommandWord(c *syntax.SimpleCmd, argv []string) bool {
 	written := writtenJobSpecWord(c)
 	expanded := len(argv) > 0 && strings.HasPrefix(argv[0], "%")
 	if !written && !expanded {
-		return false, false
+		return false
 	}
 	switch r.sem().JobSpecCommandWord {
 	case JobSpecCommandWordAsWritten:
-		return written, false
+		return written
 	case JobSpecCommandWordAfterExpansion:
-		return expanded, false
+		return expanded
 	case JobSpecCommandWordIsNotOne:
-		return false, false
+		return false
 	}
 	r.diagf("%s\n", r.unanswered("a command word beginning with % being a job specification"))
 	r.status = 2
 	r.unspecified = true
-	return false, true
+	return false
 }
 
 // runJobSpecWord hands the command's words to the resumer the reading names.

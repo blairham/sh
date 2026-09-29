@@ -516,6 +516,12 @@ type Runner struct {
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
 	procSubs []procSubPipe
+	// bodyTraceStart is set on a *substitution body's* runner and on every
+	// clone it makes: the hold it waits on before its first command, and the
+	// mark its first trace line sets. Nil on the shell's own runner, which is
+	// what keeps the shell's own tracing from answering for a body. See
+	// interp/procsubtracestart.go.
+	bodyTraceStart *bodyTraceStart
 	// enclosingProcSubs are the substitutions of the commands this one runs
 	// inside — a function call's `f <(cmd)`, or the command a subshell,
 	// pipeline element or command substitution was cloned from. Handed to a
@@ -8018,6 +8024,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.expandPrefixTraceValues(c.Assigns)
 		r.tracePrefixAndCommand(c, argv)
 	}
+
+	// **The command's own line is written; the last body may run.** This is
+	// the second of the two release points the measured order asks for, and
+	// its position is the whole of why holding a body is safe: it is before
+	// the redirections are applied, so nothing has opened this pipe and
+	// nothing can be waiting to read it. See interp/procsubtracestart.go.
+	r.releaseHeldBodyTraces()
 
 	// And whether the command is one this shell runs itself, which decides
 	// where a here-document body is expanded — see heredocprocess.go.

@@ -149,9 +149,25 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	}
 	keep.opened(ends.shell)
 
+	// The body forked before this one is released here, which is the first of
+	// the two points the measured order asks for. Before the signal for *this*
+	// body is made, so that a command with one substitution releases nothing.
+	// See interp/procsubtracestart.go.
+	began := r.newBodyTraceStart(kind != syntax.ProcSubstOut)
+	if began != nil {
+		r.releasePreviousBodyTrace()
+	}
+	sub.bodyTraceStart = began
+
 	job := r.procSubJob()
 	status := internalErrorStatus
 	r.spawn(func() {
+		// Held until the parent has reached a point where letting this body
+		// run cannot race the order its lines arrive in — and, just as
+		// importantly, cannot deadlock: the release is taken before the
+		// command's redirections are applied, so nothing has opened or read
+		// this pipe yet.
+		began.wait()
 		// Through the clone, which this goroutine owns: the record of
 		// the open that the gate already allowed.
 		sub.emit(ctx, Event{Kind: EventAccess, Action: action})
@@ -178,6 +194,10 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 		// backgrounded holds this same end and outlives the return. See
 		// substEnd.
 		keep.letGo()
+		// A body that traced nothing has still begun and ended, and nobody
+		// may be left waiting for a line that is not coming — an empty body
+		// is the shape.
+		began.mark()
 		// And the copies of the table this body was given, on the same
 		// terms and released by the same hand — see ownDescriptors.
 		releaseFds()
@@ -201,7 +221,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	ident, _ := ends.child.Stat()
 	r.procSubs = append(r.procSubs, procSubPipe{
 		path: ends.path, real: ends.real, fd: ends.fd, ident: ident, hold: ends.child,
-		body: body, captured: captured, keep: keep,
+		body: body, captured: captured, keep: keep, began: began,
 	})
 	return ends.path, true
 }
@@ -490,6 +510,14 @@ func (r *Runner) substStdin() io.Reader {
 // expands to a path or it fails to expand at all, and a command that ran and
 // failed still wrote the file it was given.
 func (r *Runner) procSubToFile(ctx context.Context, body *syntax.File, span syntax.Span) (string, bool) {
+	// This spelling runs its body where it stands, so a reading body forked
+	// before it must be let go first or its lines would arrive behind ones
+	// written after it. The same release the next *pipe* body's fork takes,
+	// and it is a release point for the same reason: something else is about
+	// to write trace lines. Measured — `: <(print A) =(print B)` is
+	// `print A`, `print B`, then the command's line in the reference. See
+	// interp/procsubtracestart.go.
+	r.releasePreviousBodyTrace()
 	path, f, err := r.newSubstFile()
 	if err != nil {
 		r.diagf("%v\n", err)
@@ -743,6 +771,10 @@ func (r *Runner) tempHome() string {
 // owns, and that goes away with it.
 type procSubPipe struct {
 	path string
+	// began is this body's hold and its first command, for the order its
+	// trace lines arrive in — nil wherever nothing can observe it. See
+	// interp/procsubtracestart.go.
+	began *bodyTraceStart
 	// fd is the number path is made of: where the end this substitution was
 	// handed to finds it, in the table childFiles builds for a command. The
 	// same number as hold's own outside a substitution body, and a borrowed
@@ -937,6 +969,11 @@ func (r *Runner) takeProcSubs() []procSubPipe {
 // for its own descriptor to be closed is a shell that has stopped.
 func (r *Runner) removeProcSubs(pipes []procSubPipe) {
 	for _, p := range pipes {
+		// The backstop. A command that never reached its own trace line — an
+		// expansion that failed, a prefix that refused — has a body still
+		// held, and a held body never ends. Nothing is waited for that was
+		// already let go, so the ordinary path costs nothing here.
+		p.began.letGoAndAwait()
 		if p.hold != nil {
 			_ = p.hold.Close()
 		}

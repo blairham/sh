@@ -8538,7 +8538,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			fresh := false
 			persists := r.prefixPersistsAtThisBuiltin(argv[0], kind)
 			if !persists &&
-				!r.builtinKeepsAnAssignmentPrefix(r.prefixRosterName(argv)) &&
+				!r.rosterKeepsThisPrefix(argv, c.Redirs) &&
 				r.subscriptedPrefixTakenBack(a) {
 				// The second reason a prefix is not taken back, and it is a
 				// *different* one: one dialect keeps what stands in front of

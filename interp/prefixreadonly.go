@@ -86,6 +86,18 @@ func (r *Runner) prefixCommandOf(argv []string) prefixCommand {
 				// — it is a builtin as well as a modifier — so the builtin
 				// lookup above shadowed the look-through and the prefix was
 				// read as standing in front of `builtin` itself.
+				//
+				// **The kind test is narrower than anything a script can
+				// see today, and deliberately so.** Widening it to "any
+				// precommand" is an equivalent mutant: `command` is caught
+				// by the branch above before this one is reached, `noglob`
+				// and `-` are taken away before the scan runs, and `exec`
+				// with a command behind it replaces the shell, so there is
+				// nothing left to observe. Measured — `exec :`, `exec true`,
+				// `- :`, `- true`, `command -- :` and `noglob exec :` are
+				// unchanged either way. The test stays because it states
+				// which kind this is for, and the next modifier registered
+				// with a different kind should not inherit it silently.
 				argv = argv[1:]
 				continue
 			}

@@ -170,3 +170,22 @@ func TestAFailedRetryKeepsTheRefusalsWording(t *testing.T) {
 		t.Errorf("stderr %q, want the refusal's own wording", errs)
 	}
 }
+
+// The option reports itself, which is a claim of its own and not a
+// consequence of the behavior: a mutant that broke only the *reporting* —
+// leaving `setopt clobberempty` working and `[[ -o clobberempty ]]` answering
+// false — survived every row above, because none of them asked.
+//
+// `setopt` and `unsetopt` both have to be visible, since a name this shell
+// says it does not have is as wrong as one it says it has.
+func TestTheOptionReportsItself(t *testing.T) {
+	out, st, _ := runZshSplit(t, t.TempDir(),
+		"if [[ -o clobberempty ]]; then print -r -- on; else print -r -- off; fi\n"+
+			"setopt clobberempty\n"+
+			"if [[ -o clobberempty ]]; then print -r -- on; else print -r -- off; fi\n"+
+			"unsetopt clobberempty\n"+
+			"if [[ -o clobberempty ]]; then print -r -- on; else print -r -- off; fi\n")
+	if out != "off\non\noff\n" || st != 0 {
+		t.Errorf("out %q status %d, want off/on/off at 0", out, st)
+	}
+}

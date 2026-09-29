@@ -8142,6 +8142,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		return nil
 	}
 
+	// A command word beginning with `%` is a job specification in three of
+	// the panel's columns, and it is one *here* — before the function lookup
+	// below — because it beats a function of the same name: measured,
+	// `%prep() { echo defined; }; %prep` is the `fg` refusal in both columns
+	// that have the reading and never the function. See
+	// Semantics.JobSpecCommandWord.
+	if r.jobSpecCommandWord(c, argv) {
+		r.status = r.runJobSpecWord(ctx, argv, "fg")
+		return nil
+	}
+
 	if prefixFollows {
 		// ksh93 writes the assignment once the redirections are open and the
 		// value has expanded, which is why this stands here and not beside

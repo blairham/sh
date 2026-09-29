@@ -115,6 +115,12 @@ func Semantics() interp.Semantics {
 	// 2026-09-18, `echo "[$( (( 1+1 )) )]"` is `1+1: not found` and `[]` at
 	// 0 — the parentheses nest and the word inside them is a command name
 	// (#3364).
+	// A command word beginning with `%` is an ordinary command name here,
+	// looked up and not found: measured 2026-09-29, `%prep` is `%prep: not
+	// found` at 127, where bash and zsh run `fg` on it. See
+	// interp.Semantics.JobSpecCommandWord.
+	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
+
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
 	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
 	// redirection here at all, so there is no close through a name for a

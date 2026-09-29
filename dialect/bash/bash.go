@@ -2928,6 +2928,15 @@ func Semantics() interp.Semantics {
 	// the number *above* the one it moved from, because the destination is
 	// chosen before the source is given up.
 	s.FdMove = interp.FdMoveDuplicatesThenCloses
+	// A command word beginning with `%` is a job specification here too, and
+	// this shell asks it of the **name the lookup is about to use** rather
+	// than of the word the script wrote: `"%prep"`, `\%prep`, a parameter
+	// holding the text and even `command %prep` are all job specs, where zsh
+	// takes only an unquoted, unescaped leading `%`. Measured 2026-09-29 on
+	// 5.3.20; nothing in the plain `%prep` row can tell the two readings
+	// apart, which is why the axis is a form. See
+	// interp.Semantics.JobSpecCommandWord.
+	s.JobSpecCommandWord = interp.JobSpecCommandWordAfterExpansion
 	// A frozen name does not stop the close of the descriptor it holds here:
 	// measured 2026-09-29 on 5.3.20, a script file, `exec {m}>f; readonly m;
 	// exec {m}>&-; echo "after=$?"` closes it in silence at 0, where zsh and

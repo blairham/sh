@@ -312,6 +312,9 @@ func Semantics() interp.Semantics {
 	// This shell has no braces to expand and no `-B` either, so the letter
 	// is refused as the invalid option it is rather than asked about.
 	s.SetBTurnsOffBraceExpansion = interp.No
+	// unanswered BraceRangeStepPadsTheRange: the same, and for the same
+	// reason as the line above — `echo {1..5..01}` is the word itself here,
+	// so no step is ever read and none of its zeros can pad anything.
 	// The panel's only shell with no multibyte decoder: `s=héllo; echo
 	// ${#s}` is 6 here in every locale, where bash, ksh93 and zsh answer 6
 	// under `LC_ALL=C` and 5 under a UTF-8 one. Measured 2026-09-05 across

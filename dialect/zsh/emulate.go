@@ -91,21 +91,35 @@ func currentEmulation(r *interp.Runner) string {
 // emulations is the modes this shell knows, and the one axis an emulation
 // moves that has no option name over it.
 //
-// It held five fields until #2549 and holds one. Four of them —
-// `shwordsplit`, `nomatch`, `ksharrays` and `posixbuiltins` — are names in
-// the option table, and the table now knows each emulation's own default for
-// every name it holds, so a second copy here could only drift from it. What
-// is left is `redirFatal`: `emulate sh` and `emulate ksh` make a failed
-// redirection on a special builtin end the script where `emulate zsh` leaves
-// it a complaint the script runs past. That is the same switch bash's
-// `set -o posix` throws, measured in a second binary, which is what says the
-// axis belongs to the mode rather than to either shell — and zsh spells it
-// with no option, so nothing in the table can carry it.
+// It held five fields until #2549, then one, and now none of the original
+// five. Four of them — `shwordsplit`, `nomatch`, `ksharrays` and
+// `posixbuiltins` — became names in the option table, which knows each
+// emulation's own default for every name it holds, so a second copy here
+// could only drift from it.
 //
-// csh's value is zsh's, which is measured rather than assumed: the four names
-// above all read the same under `emulate -R csh` as under `emulate -R zsh`,
-// so the mode that "changes nothing this shell can speak about" is a mode
-// that agrees with zsh rather than a mode to skip.
+// **`redirFatal` was the fifth, and it went the same way in #4436.** It said
+// `emulate sh` and `emulate ksh` make a failed redirection on a special
+// builtin end the script where `emulate zsh` leaves it a complaint the
+// script runs past — true, and keyed on the wrong thing. The sentence that
+// justified keeping it here was *"zsh spells it with no option, so nothing
+// in the table can carry it"*, and that is false: `posixbuiltins` is the
+// option, and it carries this exactly as it carries the four other axes it
+// moves — including the failed `.` beside it, which is the same rule about
+// the same kind of builtin and stops the same suite file two chunks later.
+//
+// Four emulations agreeing is what hid it, because each mode's
+// `posixbuiltins` default happens to equal its old `redirFatal` value in all
+// four rows — breadth along an axis that was never the key. The pair that
+// separates them holds the emulation fixed and moves only the option, and
+// was measured 2026-09-29 on zsh 5.9.2:
+//
+//	emulate sh                           the script ends, 1
+//	emulate sh; unsetopt posixbuiltins   `after`, 0
+//	emulate csh                          `after`, 0
+//	emulate csh; setopt posixbuiltins    the script ends, 1
+//
+// So the mode was never the key; the option was, and the mode only set it.
+// See the `posixbuiltins` entry in setopt.go.
 //
 // `cdNowhere` is the second, and it arrived with the *name* (#4640). `cd`
 // with no operand and no `HOME` writes `HOME not set` and exits 1 under
@@ -115,10 +129,11 @@ func currentEmulation(r *interp.Runner) string {
 // two routes to the same mode agreeing, which is what says the mode carries
 // it rather than the name.
 //
-// csh parts from zsh here where it agreed with it on redirFatal, which is
-// the reason this is a second field rather than a reading of the first: `csh`
-// is not "the mode that changes nothing this shell can speak about" on every
-// axis, and one boolean standing for both would have made it so.
+// csh parts from zsh here where it agreed with it on the redirection rule
+// that used to sit beside this, which is the reason this is a field of its
+// own rather than a reading of an sh-family boolean: `csh` is not "the mode
+// that changes nothing this shell can speak about" on every axis, and one
+// boolean standing for several would have made it so.
 //
 // What this field does **not** model is a shell that once had a `HOME` and
 // unset it. Measured in the same run: with the reference called `sh` and
@@ -162,20 +177,18 @@ func currentEmulation(r *interp.Runner) string {
 // as `typeset HOME; unset HOME; cd`, where the `unset` here finds a value to
 // remove that the reference never created.
 //
-// csh is on zsh's side of this one, as it is of `redirFatal` and against it on
-// `cdNowhere` — measured in the same run, `emulate -R csh` answers `set`. A
-// single "is this an sh-family mode" boolean standing for all four would be
-// wrong about two of them.
+// csh is on zsh's side of this one and against it on `cdNowhere` — measured
+// in the same run, `emulate -R csh` answers `set`. A single "is this an
+// sh-family mode" boolean standing for all of them would be wrong about two.
 var emulations = map[string]struct {
-	redirFatal    bool
 	cdNowhere     bool
 	fillsHome     bool
 	declaredEmpty bool
 }{
-	"zsh": {redirFatal: false, cdNowhere: false, fillsHome: true, declaredEmpty: true},
-	"sh":  {redirFatal: true, cdNowhere: true, fillsHome: false, declaredEmpty: false},
-	"ksh": {redirFatal: true, cdNowhere: true, fillsHome: false, declaredEmpty: false},
-	"csh": {redirFatal: false, cdNowhere: true, fillsHome: false, declaredEmpty: true},
+	"zsh": {cdNowhere: false, fillsHome: true, declaredEmpty: true},
+	"sh":  {cdNowhere: true, fillsHome: false, declaredEmpty: false},
+	"ksh": {cdNowhere: true, fillsHome: false, declaredEmpty: false},
+	"csh": {cdNowhere: true, fillsHome: false, declaredEmpty: true},
 }
 
 // applyEmulation switches the axes and puts back the options this form of
@@ -185,30 +198,21 @@ var emulations = map[string]struct {
 // strict is the `-R` form, which widens the set from 81 names to 176 and is
 // the only thing the letter does here.
 func applyEmulation(r *interp.Runner, mode string, strict bool) {
-	// The one axis with no option name over it, so the option table cannot
-	// carry it and this is where it is placed. The other four this used to
-	// swap here — `shwordsplit`, `nomatch`, `ksharrays` and `posixbuiltins` —
-	// are ordinary rows of the table now, because the table knows each
+	// The first of the axes with no option name over it. The five that used
+	// to be swapped here — `shwordsplit`, `nomatch`, `ksharrays`,
+	// `posixbuiltins` and the redirection rule `posixbuiltins` carries — are
+	// ordinary rows of the option table now, because the table knows each
 	// emulation's own default for them and the swap knew only sh-ness. See
 	// emulationDefaults.
 	//
-	// And it runs for `csh` too. It used to be skipped there on the reading
-	// that csh changes nothing this shell can speak about; measured
-	// 2026-09-13, csh's value for all four of those names is zsh's, so the
-	// skip and the swap agree and the skip was a special case standing for
-	// nothing. Leaving it in would now mean csh alone kept whatever the
-	// script had set, which is the one reading nothing measures.
-	setAxis(r, func(s *interp.Semantics) *interp.Answer {
-		return &s.RedirectErrorOnSpecialBuiltinFatal
-	}, answer(emulations[mode].redirFatal))
-	// The second axis with no option name over it. `cd` with nowhere to go
-	// is an error in the three sh-family modes and a silent 0 in zsh's own,
-	// which is why a binary called `sh` has to reach it: nothing else in this
-	// shell moves with the name.
+	// `cd` with no operand and no `HOME` writes `HOME not set` and exits 1
+	// in the three sh-family modes and is a silent 0 in zsh's own, which is
+	// why a binary called `sh` has to reach it: nothing else in this shell
+	// moves with the name.
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.CdWithoutHomeIsAnError
 	}, answer(emulations[mode].cdNowhere))
-	// The third, and the one that has to be in place before the shell reads
+	// The second, and the one that has to be in place before the shell reads
 	// its `HOME` for the first time: a startup that seeds one is a startup,
 	// and an emulation taken from argv[0] is applied before anything runs.
 	// See interp/shellhome.go.

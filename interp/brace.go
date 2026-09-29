@@ -785,10 +785,45 @@ func (r *Runner) numericRange(lo, hi, stepText string, hasStep bool) ([]string, 
 			return nil, braceNotARange
 		}
 	}
+	// A step written with leading zeros pads in one of the two columns that
+	// pad at all. Asked before the endpoint question and only where the step
+	// carries them, so a range whose step is written plainly reaches nothing
+	// new. See Semantics.BraceRangeStepPadsTheRange.
+	stepPads := false
+	if hasStep && paddedEndpoint(stepText) {
+		stepPads = r.askBrace(r.sem().BraceRangeStepPadsTheRange,
+			"a written step's leading zeros padding the range")
+		if r.unspecified {
+			return nil, braceNotARange
+		}
+	}
 	width := 0
-	if paddedEndpoint(lo) || paddedEndpoint(hi) {
+	paddedEnds := paddedEndpoint(lo) || paddedEndpoint(hi)
+	if paddedEnds || stepPads {
 		if r.askBrace(r.sem().BraceRangePadsToEndpointWidth, "an endpoint's leading zeros padding the range") {
-			width = max(len(lo), len(hi))
+			// **Either the endpoints or the step, not the wider of them.**
+			// A padded endpoint settles the width outright and the step is
+			// not consulted at all: measured, `{01..3..0005}` is `01` and
+			// not `0001`, where taking the maximum would have widened it to
+			// the step. The step supplies the width only when neither
+			// endpoint carries zeros — `{1..3..0005}` is `0001`.
+			//
+			// The two readings agree wherever the step is no wider than the
+			// endpoints, which is every row of D09brace and most of a grid
+			// written without this pair in mind.
+			switch {
+			case paddedEnds:
+				width = max(len(lo), len(hi))
+			case stepPads:
+				// The step as **written**, sign and all: `{5..1..-02}` is
+				// three characters wide and comes back `001 003 005`.
+				//
+				// Named rather than left to a `default`, so that the branch
+				// says which condition it is the answer to: the outer guard
+				// already implies it, and a reader should not have to go
+				// back up to find that out.
+				width = len(stepText)
+			}
 		} else if r.unspecified {
 			return nil, braceNotARange
 		}

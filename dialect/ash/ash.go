@@ -645,6 +645,10 @@ func Semantics() interp.Semantics {
 	// No braces to expand and no `-B` to turn them off: `set -B` is `illegal
 	// option -B` and ends the script.
 	s.SetBTurnsOffBraceExpansion = interp.No
+	// unanswered BraceRangeStepPadsTheRange: with no braces to expand there
+	// is no range to write a step in. Measured in the pinned alpine image —
+	// `echo {1..5..01}` is the six characters `{1..5..01}` — which is the
+	// word standing, not a step being read.
 	// Nor the `-h` POSIX names: `set -h` is refused the same way.
 	s.SetHasTheHLetter = interp.No
 	// unanswered CommandTrackingStartsOn: BusyBox ash has no command tracking

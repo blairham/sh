@@ -3972,6 +3972,38 @@ type Semantics struct {
 	// and only in a dialect whose braces expand at all — dash never reaches
 	// it.
 	BraceRangePadsToEndpointWidth Answer
+
+	// BraceRangeStepPadsTheRange lets the leading zeros of a written
+	// **step** turn a range on to padding, and count towards its width, the
+	// way an endpoint's do.
+	//
+	// A question of its own rather than part of the axis above, because the
+	// two shells that pad at all answer them differently. Measured
+	// 2026-09-29 on zsh 5.9.2 and bash 5.3.20, `echo` from a script file:
+	//
+	//	                bash 5.3     zsh 5.9.2
+	//	{1..5..01}      1 2 3 4 5    01 02 03 04 05
+	//	{4..-4..02}     4 2 0 -2 -4  04 02 00 -2 -4
+	//	{4..-4..002}    the same     004 002 000 -02 -04
+	//	{1..2..01000}   1            00001
+	//	{5..1..-02}     5 3 1        001 003 005
+	//	{01..10..02}    01 03 …      01 03 …        (the endpoint pads both)
+	//	{01..3..100}    01           01             (an unpadded step is not
+	//	                                             a width in either)
+	//
+	// The last two rows are the bound. An endpoint's zeros pad in both
+	// columns whatever the step looks like, and a step written *without*
+	// leading zeros never contributes a width in either — so what this axis
+	// moves is exactly a step written with them, and nothing else.
+	//
+	// `{5..1..-02}` is the row that says the width is the step **as
+	// written**, sign and all: three characters, so `1` comes back `001`.
+	//
+	// bash 3.2 and ksh93 cannot be asked. Neither pads at all — `{01..10}`
+	// is `1 2 … 10` in both — and bash 3.2 has no `..step` to write zeros
+	// in, leaving `{1..5..01}` unexpanded. BusyBox ash and dash expand no
+	// braces of this kind.
+	BraceRangeStepPadsTheRange Answer
 	// BraceRangeStepSignHonored takes a written step's sign at its word:
 	// the walk leaves the first endpoint in the direction the sign says, so
 	// a sign pointing away from the far endpoint ends the range after one

@@ -2933,6 +2933,7 @@ func Semantics() interp.Semantics {
 	// `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards rather than the
 	// `10 6 2` swapped endpoints would give.
 	s.BraceRangePadsToEndpointWidth = interp.Yes
+	s.BraceRangeStepPadsTheRange = interp.Yes
 	s.BraceRangeStepSignHonored = interp.No
 	s.BraceRangeNegativeStepReverses = interp.Yes
 	// And the endpoints are read after the expansions in them: `n=3;

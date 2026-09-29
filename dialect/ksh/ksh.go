@@ -2243,6 +2243,7 @@ func Semantics() interp.Semantics {
 	// is `10` alone and `{1..10..-3}` is `1`. A negative step that agrees
 	// with the endpoints keeps their order: `{3..1..-1}` is `3 2 1`.
 	s.BraceRangePadsToEndpointWidth = interp.No
+	s.BraceRangeStepPadsTheRange = interp.No
 	s.BraceRangeStepSignHonored = interp.Yes
 	s.BraceRangeNegativeStepReverses = interp.No
 	// It agrees with zsh on the one thing bash does not do at all: a

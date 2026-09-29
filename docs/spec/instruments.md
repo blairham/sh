@@ -19,7 +19,7 @@ follows is the catalog of shapes that rule does not by itself catch.
 
 ---
 
-## 1. The four nothings a mutation harness must be able to say
+## 1. The four nothings a mutation harness must be able to say, and one that is not
 
 A mutation row reads `KILLED` or `SURVIVED`, and **four different kinds of
 nothing all render as one of those two**. Each needs a column, because each
@@ -37,6 +37,29 @@ All four print `F=0`. Only the third is a finding.
 A harness must therefore report **how much it looked at**, not only what it
 found. A baseline row — the unmutated tree, which must read `RAN>0` and `F=0`
 — is what proves the other three columns mean anything.
+
+### And one thing that is not nothing: the binary died
+
+A fifth outcome reads as `SURVIVED` and is the opposite of one — the mutant
+was detected, and detected as loudly as possible. **The test binary
+crashed.**
+
+A mutant that dropped a `-0x80` from a recursive call made the recursion
+unbounded. `go test` printed a stack trace, exited non-zero, and printed
+`FAIL` for the package — but **no `--- FAIL:` line**, because no test got far
+enough to fail. A harness that greps for `--- FAIL` scores that as a
+survivor, which is exactly backwards: nothing could be more killed.
+
+> **`FAILED` and `KILLED` are not the same column.** A package that exits
+> non-zero with no `--- FAIL:` line died rather than failed; count it as a
+> kill and say which it was, because "a test caught this" and "this brought
+> the process down" call for different repairs.
+
+The distinction matters beyond the bookkeeping. A crash means the mutant
+found a **reachable unbounded path**, so the thing the original code was
+doing to prevent it — here subtracting the offset before recursing — is
+load-bearing in a way no assertion states. That is worth a comment, and it
+is worth knowing it was a crash rather than a diff.
 
 ### The APPLIED column and formatters
 

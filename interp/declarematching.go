@@ -286,7 +286,7 @@ func (f DeclarationFilterForm) String() string {
 func (f declareFlags) attributeLetterWritten() bool {
 	return f.integer || f.float || f.readonly || f.export || f.array ||
 		f.assoc || f.lower || f.upper || f.unique || f.hidden ||
-		f.traced || f.nameref
+		f.traced || f.nameref || f.tie
 }
 
 // attributeFilter is the test the attribute letters make of a declaration, or
@@ -338,6 +338,12 @@ func (r *Runner) attributeFilter(f declareFlags) (func(declaration) bool, bool) 
 	// it, which is the bare listing and is what the arm below this one
 	// already gives it.
 	add(f.nameref, func(d declaration) bool { return d.isNameref }, &attrs)
+	// The tie letter selects the same way, and under `-p` that is the only
+	// thing it does: `typeset -pT` is the tied names in `typeset -p`'s own
+	// form, which is byte-identical to `typeset -p` filtered to the rows
+	// carrying `-T` — measured 2026-09-29 on zsh 5.9.2. Both halves of every
+	// pair are selected, because both carry the tie (#5101).
+	add(f.tie, func(d declaration) bool { return d.hasTie }, &attrs)
 	switch len(kinds) + len(attrs) {
 	case 0:
 		return nil, true

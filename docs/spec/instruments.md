@@ -211,6 +211,30 @@ knowing that is what makes the others meaningful.
 
 ---
 
+### A one-element case can separate two mechanisms a grid cannot
+
+The cheapest discriminating probe is often **smaller** than the case under
+test rather than a wider grid of it.
+
+A brace character range over unprintable characters came back as their
+printable forms — `{$'\x01'..$'\x02'}` yields `^A ^B`. Two mechanisms fit
+that: the *range* renders them, or `print` does. A wider range cannot tell
+those apart, because both produce the same thing for every multi-element
+case. The pair that settles it is one row each and one of them has a single
+element:
+
+	$'\x01'                  the raw byte          -> not print
+	{$'\x7f'..$'\x7f'}      ^?                    -> the range renders
+
+A range of one element still goes through the range code and produces one
+word, so it isolates the rendering from everything a range does with more
+than one endpoint.
+
+> **Before widening a grid, ask whether a smaller case separates the
+> hypotheses.** Breadth distinguishes rules that disagree about *inputs*; a
+> degenerate case distinguishes rules that disagree about *which stage* is
+> responsible.
+
 ## 5. Probes that the subject reaches
 
 - **Do not report through a channel the command under test can move.** A probe
@@ -415,6 +439,28 @@ This is section 1 again from a third direction: the tool must distinguish "I
 read the input and found none" from "I could not read the input". Neither
 `grep -c` nor `awk` distinguishes those in its output, so the distinction has
 to come from the exit status or from removing the failure mode.
+
+### The variant that does not fail at all
+
+A filter that **tidies** its input is as dangerous as one that chokes on it,
+and harder to notice, because the output still looks like data.
+
+The same 8-bit range was first read through `od -c | tr -s ' '`. Nothing
+failed: `od` rendered every byte, `tr` squeezed the runs of spaces, and the
+result was a tidy line of tokens. But `od -c` separates its own output with
+spaces *and* renders a literal space byte as a lone space — so squeezing them
+made the real separator indistinguishable from the formatting. A three-word
+result read as one word for several minutes, which inverted the conclusion:
+the question was whether a brace range had expanded at all.
+
+> **Ask what your filter normalises, and whether the thing under test is made
+> of it.** Spacing, case, trailing newlines, quoting, colour: each is noise in
+> most measurements and the subject in some. `od -An -tx1` fixed this one by
+> not having a format whose separator collides with the data.
+
+The general form is worse than a crash because a crash is reported. Here the
+pipeline exited 0, printed something plausible, and the loss happened in the
+one stage nobody thinks of as part of the instrument.
 
 ## 13. Where these came from
 

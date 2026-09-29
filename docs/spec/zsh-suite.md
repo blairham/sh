@@ -175,20 +175,10 @@ front can only move chunks up.
 
 ### Three things the table cannot say on its own
 
-**Nine files have a reference that fails its own chunks here**, so the
-reference's run is not a clean denominator and `ref` is its *successful*
-count rather than its total: `D07multibyte` 51 of 53, `V14system` 14 of 16,
-`V09datetime` 14 of 16, `D06subscript` 36 of 37, `D01prompt` 15 of 16,
-`D04parameter` 244 of 246, `E02xtrace` 5 of 6, `E03posix` **10 of 18**, and
-`V06parameter` **0 of 1**. Where the reference fails, the chunk is outside
-what this layout can grade at all.
-
-**`V06parameter` is excluded, and the instrument is why.** Its `ref` is 0:
-the reference stops at its own first chunk because `zsh/parameter` will not
-`dlopen` from `./Modules` in this layout. This shell gets *further* than the
-reference does, which is why its `unreached` is negative and why the 51-line
-figure it used to carry measured nothing. That is not instability in our
-column — it is the driver, and no amount of work on this shell moves it.
+**The `ref` column is what the reference's own driver gets through
+*successfully*, not what the file contains.** Nine of these thirty files have
+a reference that fails its own chunks here, which is a large enough fact to
+have its own section below — read it before treating `ref` as a target.
 
 **`V10private`'s last chunk is an entire other file.** It re-runs all 79
 chunks of `B02typeset.ztst` under `zsh/param/private`, and this shell is at
@@ -200,6 +190,61 @@ needs that said beside it, because the count cannot show it.
 **And two rows are settled declines rather than work**: `V07pcre` (#4737) and
 `V02zregexparse` (#4761). They are in the table because they are in the
 denominator, not because anybody should pick them up.
+
+## Part of this suite is ungradeable here, and it is nine files
+
+`V06parameter`'s `dlopen` failure is not a special case. It is the visible end
+of a class, and the class is larger than one file: **among the thirty failing
+files, nine have a reference that fails its own chunks in this layout.**
+Measured at `ac43cb67a`, the same runs the table above comes from.
+
+| file | reference passes | of | ungradeable |
+|---|---:|---:|---:|
+| `E03posix` | 10 | 18 | **8** |
+| `D07multibyte` | 51 | 53 | 2 |
+| `V14system` | 14 | 16 | 2 |
+| `V09datetime` | 14 | 16 | 2 |
+| `D04parameter` | 244 | 246 | 2 |
+| `D06subscript` | 36 | 37 | 1 |
+| `D01prompt` | 15 | 16 | 1 |
+| `E02xtrace` | 5 | 6 | 1 |
+| `V06parameter` | 0 | 1 | 1 |
+
+Twenty chunks of 1233, and eight of the twenty are `E03posix` alone. The
+reference runs 1233 chunks across these files and passes 1213 of them.
+
+**Why it matters more than twenty chunks sounds like.** A `ref` column read as
+"what zsh can do" over-counts the target, and that is precisely how the old
+bar of 58 came about: a number taken from what was not *obviously* excluded
+rather than from what had been measured. The same reading applied per file
+would put work on rows where no amount of work on this shell changes the
+answer.
+
+**`V06parameter` is the sharpest case and the only one where the sign flips.**
+Its reference passes **0 of 1**: the reference stops at its own first chunk
+because `zsh/parameter` will not `dlopen` from `./Modules` in this layout. So
+this shell gets *further* than the reference does, its `unreached` is
+**negative**, and the 51-line figure it used to carry measured nothing at all.
+That is not instability in our column — it is the driver.
+
+**The cause is the same one the refusal-agreements have**, and it is worth
+saying in one place: the fetch unpacks `Test/` and not the distribution, so a
+file reaching for a built module, the function library, or `./Modules` fails
+under *both* shells. Where that takes the whole file, it lands in the thirteen
+refusal-agreements. Where it takes some chunks and not others — `E03posix`,
+eight of eighteen — the file still scores, and the part that cannot be graded
+hides inside a number that looks like a measurement.
+
+**What would move it**, and neither is work on this shell: unpack the
+distribution rather than `Test/`, or build the modules these files load. Until
+one of those happens, `ref` is the honest denominator and the file's own chunk
+count is not.
+
+**Only the thirty failing files were swept for this.** The thirty-four strict
+files and the thirteen refusal-agreements have not been checked the same way,
+so the count is nine *of those thirty* and the true figure across all
+sixty-five is unmeasured. Stated rather than extrapolated, because a number
+produced by assuming the rest are clean is the shape this section is about.
 
 ## What the reachable target is
 

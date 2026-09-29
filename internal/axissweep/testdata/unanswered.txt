@@ -223,6 +223,7 @@ ash   ReadExactCountKeepsPartial
 ash   ReadPartialCountSucceeds
 ash   ReadonlyAttributeCanBeRemoved
 ash   ReadonlyElement
+ash   ReadonlyFdVariableRefusesAClose
 ash   ReadonlyRecordsTheCompoundAttribute
 ash   RegexMatchOmitsGroupsThatDidNotMatch
 ash   RegexMatchSurvivesAFailedMatch
@@ -563,6 +564,7 @@ dash  ReadTimeoutKeepsWhatArrived
 dash  ReadZeroTimeout
 dash  ReadonlyAttributeCanBeRemoved
 dash  ReadonlyElement
+dash  ReadonlyFdVariableRefusesAClose
 dash  ReadonlyRecordsTheCompoundAttribute
 dash  ReadonlyReferenceLetter
 dash  RegexMatchOmitsGroupsThatDidNotMatch

@@ -116,6 +116,11 @@ func Semantics() interp.Semantics {
 	// 0 — the parentheses nest and the word inside them is a command name
 	// (#3364).
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
+	// redirection here at all, so there is no close through a name for a
+	// frozen name to refuse. Measured 2026-09-29, a script file: `exec
+	// {m}>f` is `exec: {m}: not found` at 127, which is `{m}` taken as the
+	// command word.
 	// unanswered IndirectionIsTheSubscriptFlag: there is no `${!name}` here for
 	// the sigil to mean anything by. Measured 2026-09-28 on `/bin/dash`,
 	// `x=y; y=V; printf "[%s]" "${!x}"` is `Bad substitution` at 2, so the

@@ -495,6 +495,33 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 			if fdVar != "" {
 				if name == "-" {
+					// A frozen name refuses the close outright in two of the
+					// columns that have this form, and bash closes it in
+					// silence. Asked only when the name *is* frozen, which is
+					// the rare case — see
+					// Semantics.ReadonlyFdVariableRefusesAClose — so an
+					// ordinary close never reaches the axis and a Semantics
+					// with no answer here still closes descriptors.
+					//
+					// Nothing about the close writes the name: a successful
+					// `exec {m}>&-` leaves `m` holding the number it held,
+					// measured. So this is the attribute refusing an
+					// operation rather than an assignment being refused, and
+					// it cannot be folded into the store's check above.
+					if r.readonly[fdVar] &&
+						r.ask(r.sem().ReadonlyFdVariableRefusesAClose,
+							"a frozen name refusing the close of the descriptor it holds") {
+						if w := r.diag().FdVariableReadonlyClose; w != "" {
+							r.diagf("%s\n", fmt.Sprintf(w, fdVar))
+						}
+						r.status = 1
+						r.redirErr = true
+						return closers, nil
+					}
+					if r.unspecified {
+						r.redirErr = true
+						return closers, nil
+					}
 					// `exec {name}>&-` closes the descriptor the variable
 					// holds. The close is for keeps — this path never joins
 					// the save — so the pipe or file behind it really ends,
@@ -2508,6 +2535,21 @@ func (r *Runner) setFdVar(ref, value string) bool {
 	// refusal belongs to the redirection and the transfer is not the
 	// redirection's to carry.
 	outerCtl, outerDepth := r.ctl, r.ctlDepth
+	// One dialect refuses a frozen name here in its own words and does not
+	// write the store's — so the check has to come *before* the store speaks
+	// rather than after, and the sentence replaces rather than follows. See
+	// Diagnostics.FdVariableReadonlyOpen for the three columns' wordings.
+	if w := r.diag().FdVariableReadonlyOpen; w != "" && r.readonly[ref] {
+		r.diagf("%s\n", fmt.Sprintf(w, ref))
+		// The status and the failure mark are the store's on the path below,
+		// and leaving here without them made the refusal quieter than it
+		// looks: the sentence still printed and the script ended at 0, where
+		// the reference ends at 1. Caught by re-diffing the row the change
+		// was aimed at rather than the file's total.
+		r.assignFailed = true
+		r.status = 1
+		return false
+	}
 	r.fdVarSpeaker, r.assignFailed = r.redirForCommandWord, false
 	_, refused := r.storeThroughOperand(ref, value)
 	failed := refused || r.assignFailed || r.ctl == controlExit

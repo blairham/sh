@@ -4897,6 +4897,14 @@ func Semantics() interp.Semantics {
 	// The one column that says so when a close through a variable finds
 	// nothing open — see interp.Semantics.FdVariableFailedCloseIsReported.
 	s.FdVariableFailedCloseIsReported = interp.Yes
+	// And a frozen name refuses the close outright, where bash closes it and
+	// says nothing. The close reads the name rather than writing it — a
+	// successful one leaves the number in place — so this is a rule about
+	// the name's attribute and not a consequence of the assignment;
+	// `A04redirect.ztst` stops on it under `Error closing file descriptor
+	// using readonly variable`. See
+	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
+	s.ReadonlyFdVariableRefusesAClose = interp.Yes
 	s.FdNumberBoundedByOpenFileLimit = interp.No
 	// No descriptor-number ceiling of this shell's own (#3210), and `read
 	// -t` takes no argument here at all, so the word after it is an operand
@@ -5844,6 +5852,16 @@ func Diagnostics() interp.Diagnostics {
 		JobsNotManipulableInASubshell: "can't manipulate jobs in subshell",
 		FdVariableWithoutADescriptor:  "parameter %[1]s does not contain a file descriptor",
 		FdVariableFailedClose:         "failed to close file descriptor %[1]d: %[2]s",
+		// The two refusals a frozen name draws at a `{name}` redirection.
+		// This shell names the *redirection* rather than the assignment, and
+		// the preposition carries which direction could not happen — a number
+		// cannot go **to** a readonly parameter, and cannot be taken **from**
+		// one. Measured 2026-09-29, script files; the generic `read-only
+		// variable:` is not written at either site, which is why the open
+		// wording replaces the store's sentence rather than following it the
+		// way bash's `cannot assign fd to variable` does.
+		FdVariableReadonlyOpen:  "can't allocate file descriptor to readonly parameter %[1]s",
+		FdVariableReadonlyClose: "can't close file descriptor from readonly parameter %[1]s",
 		// `mkdir dir; v=$(<dir)` — the read after a successful open, which
 		// this shell alone words. The name is the word as it expanded, not
 		// the path the working directory made of it (#1778).

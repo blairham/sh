@@ -1906,6 +1906,49 @@ type Diagnostics struct {
 	// a wording: the command does not run in bash either way (#3491).
 	CannotAssignFdToVariable string
 
+	// FdVariableReadonlyOpen is one shell's refusal when the name a `{name}>f`
+	// would put a descriptor in is frozen. One verb: the name.
+	//
+	// It **replaces** the store's own sentence rather than following it,
+	// which is what makes it a field of its own rather than a second
+	// CannotAssignFdToVariable. Measured 2026-09-29, script files, `readonly
+	// m; echo x {m}>f`:
+	//
+	//	zsh 5.9.2     can't allocate file descriptor to readonly parameter m
+	//	bash 5.3.20   m: readonly variable    and then    m: cannot assign fd
+	//	              to variable
+	//	ksh93u+       m: is read only
+	//
+	// So bash writes the generic refusal and adds a line, and zsh writes one
+	// sentence that mentions neither "readonly variable" nor the assignment:
+	// it names the *redirection* as what could not be done. ksh93 has the
+	// generic one alone. All three leave 1 and none runs the command.
+	//
+	// Empty leaves the store to speak, which is what bash, ksh93 and the core
+	// do — so this field being set is the only thing that suppresses the
+	// generic line, and a dialect that wants both keeps this empty and sets
+	// CannotAssignFdToVariable instead.
+	FdVariableReadonlyOpen string
+
+	// FdVariableReadonlyClose is the same refusal on the other side: `exec
+	// {name}>&-` closing the descriptor a frozen name holds. One verb: the
+	// name.
+	//
+	// Whether the close is refused at all is a different question and is
+	// Semantics.ReadonlyFdVariableRefusesAClose — bash 5.3.20 closes it and
+	// says nothing, where zsh and ksh93 refuse. This is only what the two
+	// that refuse *say*. Measured the same day, `exec {m}>f; readonly m; exec
+	// {m}>&-`:
+	//
+	//	zsh 5.9.2     can't close file descriptor from readonly parameter m
+	//	ksh93u+       m: is read only
+	//
+	// Note the preposition, which is the whole reason this is not the field
+	// above with a different subject: zsh says *to* a readonly parameter when
+	// it cannot put a number in one and *from* a readonly parameter when it
+	// cannot take one out. Empty leaves the refusal silent.
+	FdVariableReadonlyClose string
+
 	// ArithErrorNamesTheBuiltin puts the name of the builtin that raised an
 	// arithmetic complaint in front of the sentence.
 	//

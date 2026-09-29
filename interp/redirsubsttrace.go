@@ -46,7 +46,14 @@ func discardedTrace(*Runner) io.Writer { return io.Discard }
 //
 // Read in substRunner, where the body's runner is built. A body whose trace is
 // discarded hands that on to every runner it clones, so a substitution nested
-// inside a redirection's body is silent too — unmeasured on the reference, and
-// the reading that follows from the sink being the body's rather than the
-// line's.
+// inside a redirection's body is silent too — **measured**, not inferred:
+// `read v < <(: <(print INNER))` writes no `INNER` line in the reference or
+// here.
+//
+// That is also why the mark itself is cleared for the body rather than carried
+// into it. Carrying it changes nothing that can be seen — the only path where
+// it is set already has the discarding sink, and the nested row above is the
+// one that would have shown a difference — so the two spellings are equivalent
+// and this is the one that says what the field means: an expansion is running
+// now and it is a redirection's target.
 func (r *Runner) bodyTraceIsDiscarded() bool { return r.redirectTargetWord }

@@ -113,6 +113,20 @@ func TestOneCommandDecidesItByPlaceAndNotDirection(t *testing.T) {
 	}
 }
 
+// A substitution nested **inside** a silenced body is silent too, which is the
+// row that says the sink travels with the body rather than being decided again
+// for each substitution.
+func TestASubstitutionInsideASilencedBodyIsSilentToo(t *testing.T) {
+	dir := t.TempDir()
+	got := strings.Join(tracedLines(t, dir, "read v < <(: <(print INNER))\n:\n"), "\n")
+	if strings.Contains(got, "INNER") {
+		t.Errorf("traced %q, want the nested body silent as well", got)
+	}
+	if !strings.Contains(got, "@ read v") {
+		t.Errorf("traced %q, want the command itself still traced", got)
+	}
+}
+
 // The option is **on** inside a silenced body, which is what makes this a
 // question about where the lines go rather than about the option: a body that
 // asks answers `ON`, and one that traces its own line by hand is heard.

@@ -41,6 +41,10 @@ func TestTheIndentLetterBelongsToEveryNameThatPrintsABody(t *testing.T) {
 			"a nested body", "f(){ if true; then print hi; fi }\nwhich -x2 f\n",
 			"f () {\n  if true\n  then\n    print hi\n  fi\n}\n",
 		},
+		// Bundled with another letter, which says the reader takes the
+		// letter out of a word rather than matching one.
+		{"bundled after another", fn + "which -ax2 f\n", "f () {\n  print hi\n}\n"},
+		{"and under whence, bundled with -f", fn + "whence -fx2 f\n", "f () {\n  print hi\n}\n"},
 		// The control: with no letter the body keeps the tab it had.
 		{"no letter is a tab", fn + "which f\n", "f () {\n\tprint hi\n}\n"},
 	} {
@@ -83,4 +87,29 @@ func TestTheIndentLetterNeedsANumber(t *testing.T) {
 			t.Errorf("out %q err %q status %d, want %q at 1", out, errs, st, want)
 		}
 	})
+}
+
+// **The arrangement is for the length of one command**, which is the half a
+// caller can get wrong without any row noticing: setting the indent and not
+// putting it back leaves every later listing in the shell wearing it.
+//
+// Measured: `which -x2 f; which f` writes the body indented by two and then the
+// body indented by a tab, in the reference and here. The second listing is the
+// whole of the test — the first is there to set the trap.
+func TestTheIndentDoesNotOutliveItsCommand(t *testing.T) {
+	dir := t.TempDir()
+	const fn = "f(){ print hi }\n"
+	const two = "f () {\n  print hi\n}\n"
+	const tab = "f () {\n\tprint hi\n}\n"
+	for _, tc := range []struct{ name, src, want string }{
+		{"the same name twice", fn + "which -x2 f\nwhich f\n", two + tab},
+		{"and across the names", fn + "which -x2 f\nfunctions f\n", two + tab},
+		{"the other way round", fn + "functions -x2 f\nwhich f\n", two + tab},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if out, st := runZsh(t, dir, tc.src); out != tc.want || st != 0 {
+				t.Errorf("out %q status %d, want %q at 0", out, st, tc.want)
+			}
+		})
+	}
 }

@@ -212,3 +212,78 @@ func TestADeclinedRangeKeepsTheBytesItWasWritten(t *testing.T) {
 		t.Errorf("= % x, which holds U+FFFD's encoding — the body was converted before it was refused", out)
 	}
 }
+
+// `no_multibyte` makes a byte above ASCII a character of its own, so a
+// character range counts from one byte to the next.
+//
+// This is the reading `D09brace.ztst`'s last chunk needs, and it is what the
+// option means rather than something this construct arranges: the axis it
+// sets is asked by a string's length, a pattern's units and a subscript's as
+// well. Nothing moves until a script turns the option off, because the
+// default is the answer every dialect already carried.
+//
+// Measured 2026-09-29 on zsh 5.9.2, `print -rn` under `setopt no_multibyte`.
+// The third row is the one that says the byte is read as the code point it
+// numbers: `0xa0` comes back as U+00A0, encoded for the output, rather than
+// as an escape.
+func TestNoMultibyteMakesAByteACharacterInARange(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, probe, want string }{
+		{"two C1 bytes", `{$'\x80'..$'\x81'}`, `\M-^@ \M-^A`},
+		{"across the boundary", `{$'\x7e'..$'\x80'}`, "~ ^? " + `\M-^@`},
+		{"two printable Latin-1 bytes", `{$'\xa0'..$'\xa1'}`, "\u00a0 \u00a1"},
+		{"one byte", `{$'\xff'..$'\xff'}`, "\u00ff"},
+		// **A two-byte sequence is two characters here, so these are not
+		// two-character ranges at all** and the word stands. These rows are
+		// why the byte shape test counts bytes: `\xc3\xa9..a` is five
+		// characters and four *runes*, so a rune-counting length test would
+		// take it for a range and read its endpoints from the wrong
+		// positions. A mutant that made that swap survived until these rows
+		// existed.
+		{"a two-byte sequence and a letter", `{$'\xc3\xa9'..a}`, "{é..a}"},
+		{"a letter and a two-byte sequence", `{a..$'\xc3\xa9'}`, "{a..é}"},
+		{"two two-byte sequences", `{$'\xc3\xa9'..$'\xc3\xa9'}`, "{é..é}"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out, st, errs := runZshUTF8(t,
+				"setopt no_multibyte\nprint -rn -- "+tc.probe+"\n")
+			if out != tc.want || st != 0 {
+				t.Errorf("no_multibyte, print -rn -- %s = %q (status %d, stderr %q), want %q",
+					tc.probe, out, st, errs, tc.want)
+			}
+		})
+	}
+}
+
+// And with the option left alone the same words decline, which is the pair
+// that says the option is what moved them rather than the change that added
+// the byte reading.
+func TestTheSameRangesDeclineWithMultibyteLeftOn(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ probe, want string }{
+		{`{$'\x80'..$'\x81'}`, "{\x80..\x81}"},
+		{`{$'\x7e'..$'\x80'}`, "{~..\x80}"},
+		{`{$'\xa0'..$'\xa1'}`, "{\xa0..\xa1}"},
+	} {
+		out, _, _ := runZshUTF8(t, "print -rn -- "+tc.probe+"\n")
+		if out != tc.want {
+			t.Errorf("multibyte on, print -rn -- %s = %q, want %q", tc.probe, out, tc.want)
+		}
+	}
+}
+
+// The option is read off its axis, so it stays inside a subshell and inside
+// the `localoptions` the suite chunk wraps it in — which is how that chunk
+// puts the two readings in one file.
+func TestNoMultibyteStaysWhereItIsPut(t *testing.T) {
+	t.Parallel()
+	src := "() {\n  setopt localoptions no_multibyte\n" +
+		"  print -rn -- {$'\\x80'..$'\\x81'}\n}\n" +
+		"print -rn -- ' then '\nprint -rn -- {$'\\x80'..$'\\x81'}\n"
+	out, _, _ := runZshUTF8(t, src)
+	want := `\M-^@ \M-^A` + " then " + "{\x80..\x81}"
+	if out != want {
+		t.Errorf("= %q, want %q", out, want)
+	}
+}

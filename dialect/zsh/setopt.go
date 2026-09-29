@@ -1368,7 +1368,35 @@ var zshOptions = []zshOption{
 	// panel, and TestSetoptMonitorNeedsATerminalAndNotAPrompt for the
 	// measurement.
 	monitorOption(),
-	recorded("multibyte", true),
+	{
+		// MULTIBYTE: whether a character is the locale's or a byte. On by
+		// default, and turning it off is what makes a byte above ASCII a
+		// character of its own — which is the reading
+		// `D09brace.ztst`'s last chunk needs:
+		// `setopt no_multibyte; echo {$'\x80'..$'\x81'}` counts from one
+		// byte to the next.
+		//
+		// [interp.Semantics.MultibyteEncodingIsHonored] read straight: the
+		// option on is that axis answering Yes. Read off the axis rather
+		// than a stored bit, so `(setopt no_multibyte)` and the
+		// `localoptions` the chunk uses both stay where they are put.
+		//
+		// **The axis reaches further than this one construct** — a string's
+		// length, a pattern's units and a subscript's all ask it — which is
+		// the option's own meaning and not a side effect. Nothing moves
+		// until a script turns it off, because the default is the answer
+		// every dialect already carried.
+		base: "multibyte", def: true,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.MultibyteEncodingIsHonored == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.MultibyteEncodingIsHonored
+			}, answer(on))
+			return 0
+		},
+	},
 	// MULTI_FUNC_DEF: whether a definition's header may carry more than one
 	// name, `a b () { … }` defining both. Implemented rather than recorded
 	// since #4817 — the name reaches the grammar, and it is how the

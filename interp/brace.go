@@ -1071,6 +1071,22 @@ func niceRangeChar(c rune) string {
 	return string(c)
 }
 
+// byteRangeEndpoints is charRangeEndpoints where a character is a byte: the
+// body is four bytes with the two dots in the middle, and each end is the
+// code point its byte numbers.
+//
+// A function of its own rather than a branch, because the shape test has to
+// count **bytes** and the one above counts runes — written as one, a body of
+// four runes and a body of four bytes would take whichever test the caller
+// happened to reach, and the two differ for exactly the input this reading
+// exists for.
+func byteRangeEndpoints(body string) (lo, hi rune, ok bool) {
+	if len(body) != 4 || body[1] != '.' || body[2] != '.' {
+		return 0, 0, false
+	}
+	return rune(body[0]), rune(body[3]), true
+}
+
 // charRangeEndpoints reads a body spelled as exactly one character, `..`, and
 // one more character. Counting the characters rather than cutting at the
 // first `..` is what the measurements say: `{....}` is the range from `.` to
@@ -1083,7 +1099,20 @@ func niceRangeChar(c rune) string {
 // two bytes each and neither is one character.
 func (r *Runner) charRangeEndpoints(body string) (lo, hi rune, ok bool) {
 	if !isASCII(body) && !r.patternCountsCharacters(body) {
-		return 0, 0, false
+		// A shell that does not count the locale's characters counts bytes,
+		// and a byte above ASCII is then an endpoint of its own rather than
+		// a reason to decline. Measured 2026-09-29 on zsh 5.9.2 under
+		// `setopt no_multibyte`, `print -rn`:
+		//
+		//	{$'\x80'..$'\x81'}   \M-^@ \M-^A
+		//	{$'\x7e'..$'\x80'}   ~ ^? \M-^@
+		//	{$'\xa0'..$'\xa1'}   the two Latin-1 characters
+		//
+		// The byte is read as the code point it numbers, which is what the
+		// third row measures: 0xa0 comes back as U+00A0, encoded for the
+		// output. The escape forms the first two rows show are
+		// niceRangeChar's and not this function's.
+		return byteRangeEndpoints(body)
 	}
 	if !utf8.ValidString(body) {
 		// A byte the encoding cannot decode is not a character to count

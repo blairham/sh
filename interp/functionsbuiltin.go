@@ -77,19 +77,12 @@ func biFunctions(r *Runner, _ context.Context, args []string) int {
 	// so a scan that has not taken it cannot tell an operand from an
 	// argument. See Runner.functionsIndentLetter.
 	if strings.ContainsRune(r.sem().FunctionsOptions, 'x') {
-		rest, indent, found, code := r.functionsIndentLetter(name, args)
+		rest, restore, code := r.FunctionBodyIndentOption(name, args)
 		if code != 0 {
 			return code
 		}
-		if found {
-			args = rest
-			// The listing's own arrangement for the length of this call:
-			// what `-x` moves is how one level of structure is written, and
-			// the printer already knows where the levels are.
-			saved := r.functionLayout.Indent
-			r.functionLayout.Indent = strings.Repeat(" ", indent)
-			defer func() { r.functionLayout.Indent = saved }()
-		}
+		defer restore()
+		args = rest
 	}
 	// Read before the flags rather than out of them: `-m` is not one of the
 	// declaration's attributes and putting a case for it in

@@ -30,6 +30,49 @@ import (
 // rather than two: the two shells that have this reading agree about it down
 // to the ordering of the redirection it stands for.
 func TestPipeBothStreamsCarriesStandardErrorIntoThePipe(t *testing.T) {
+	// **`setopt nomultios` is in the script and not only in the comment.**
+	// The measurement above was taken with it — deliberately, to isolate the
+	// ordering question — and the script ran without it, which made the
+	// expectation a `nomultios` answer graded against a `multios` run. It
+	// passed only while this shell did not join a pipe to a redirection: the
+	// third block is empty with the option off and carries both lines with
+	// it on, in the reference as much as here. See
+	// TestPipeBothStreamsUnderMultios for the other half, measured fresh.
+	const src = `setopt nomultios
+f() { echo O; echo E >&2; }
+echo "-- plain"; f |& while read l; do echo "<$l>"; done
+echo "-- after 2>/dev/null"; f 2>/dev/null |& while read l; do echo "<$l>"; done
+echo "-- after >/dev/null"; f >/dev/null |& while read l; do echo "<$l>"; done
+g() { echo E >&2; return 7; }
+g |& cat > /dev/null; echo "st=$? ps=${pipestatus[*]}"
+`
+	const want = `-- plain
+<O>
+<E>
+-- after 2>/dev/null
+<O>
+<E>
+-- after >/dev/null
+st=0 ps=7 0
+`
+	out, st := answersRun(t, src)
+	if out != want || st != 0 {
+		t.Errorf("got status %d and\n%s\nwant status 0 and\n%s", st, out, want)
+	}
+}
+
+// And the same script with MULTIOS on, which is this shell's default and was
+// the state the test above was actually running in.
+//
+// `f >/dev/null |& …` carries both lines into the pipe here, because the
+// redirection **joins** the stream the element already has rather than
+// replacing it — `/dev/null` and the pipe both. That is the whole difference
+// between the two blocks, and having them side by side is what keeps the
+// option's effect visible instead of hidden in a comment.
+//
+// Measured 2026-09-29 on zsh 5.9.2, the same script with and without the
+// `setopt` line; only the third block moves.
+func TestPipeBothStreamsUnderMultios(t *testing.T) {
 	const src = `f() { echo O; echo E >&2; }
 echo "-- plain"; f |& while read l; do echo "<$l>"; done
 echo "-- after 2>/dev/null"; f 2>/dev/null |& while read l; do echo "<$l>"; done
@@ -44,6 +87,8 @@ g |& cat > /dev/null; echo "st=$? ps=${pipestatus[*]}"
 <O>
 <E>
 -- after >/dev/null
+<O>
+<E>
 st=0 ps=7 0
 `
 	out, st := answersRun(t, src)

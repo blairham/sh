@@ -492,6 +492,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		if writers[i] != nil {
 			// A pipe end is this element's alone, so it needs no guard.
 			sub.Stdout = writers[i]
+			sub.pipeMultio.out = writers[i]
+		}
+		if readers[i] != nil {
+			sub.pipeMultio.in = readers[i]
 		}
 		if timing != nil {
 			// The element's externals bill its own slot, wherever inside
@@ -611,6 +615,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			savedShellIn := r.shellStdin
 			defer func() {
 				r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr
+				// Cleared whether or not the element took it: an element
+				// that ran no redirection list at all would otherwise leave
+				// the reading end for whatever the shell does next.
+				r.pipeMultio = pipeAsAMultioTarget{}
 				r.elemCPU = savedCPU
 				// Put back with the streams, and for a sharper reason than
 				// tidiness: this element runs on the shell itself, so a
@@ -624,6 +632,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			if readers[i] != nil {
 				r.shellStdin = r.stdin()
 				r.Stdin = readers[i]
+				// The last element's standard *output* is the pipeline's
+				// own rather than a pipe, so only the reading end is a
+				// target here. Put back with the streams by the defer
+				// above, which is why it is set after them.
+				r.pipeMultio.in = readers[i]
 			}
 			r.Stdout, r.Stderr = sharedOut, sharedErr
 			if timing != nil {

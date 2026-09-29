@@ -3015,6 +3015,17 @@ type Runner struct {
 	// the second, and only on a command that runs in the shell, so the
 	// distinction has to reach the place that knows which command it was.
 	badDupTarget bool
+	// pipeMultio is the pipe end this command is a pipeline element on, for
+	// the dialect that joins a redirection to a stream rather than replacing
+	// it. Taken by the first redirection list the element runs and cleared
+	// there, so only the element's own list joins. See
+	// interp/pipemultio.go.
+	pipeMultio pipeAsAMultioTarget
+
+	// pipeMultioOwn is the same ends once the dispatcher has decided which
+	// command they belong to. See Runner.ownPipeMultio.
+	pipeMultioOwn pipeAsAMultioTarget
+
 	// writeFailed records a builtin's output write that failed — into a
 	// descriptor closed with `>&-`, most plainly. The write already
 	// happened and went nowhere, so there is nothing to retry; the question
@@ -6996,6 +7007,13 @@ func (r *Runner) negationInverts() bool {
 }
 
 func (r *Runner) command(ctx context.Context, c syntax.Command) error {
+	// The pipe this command may be a pipeline element on belongs to *this*
+	// command's redirection list and to no command inside it. Moved here
+	// rather than taken by the list itself, because a group or a function
+	// body with no redirections runs no list at all — see
+	// Runner.ownPipeMultio.
+	r.ownPipeMultio()
+	defer func() { r.pipeMultioOwn = pipeAsAMultioTarget{} }()
 	// A DEBUG firing this command holds until it has run is flushed here, on
 	// the way back out — see Runner.debugAfterScope for why the slot is the
 	// command's and not the runner's. Installed only in the one state that

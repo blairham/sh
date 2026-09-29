@@ -2438,6 +2438,60 @@ is the `%?string` job spec rather than a pattern; and bash's reading reaches
 inside `command` and does not reach a pipeline element, where zsh's does
 neither and does both respectively.
 
+## The pipe is one more target of a MULTIOS redirection
+
+The dialect that sends a stream to every target it was redirected to counts
+the **pipe** among them. Measured 2026-09-29 on zsh 5.9.2, script files:
+
+```
+print one >foo | cat            `one` through the pipe, and `foo` holds it
+print one >foo >baz | cat       through the pipe and both files
+print seed >foo
+print one >>foo | cat           appends, and still through the pipe
+cat a | cat <b                  the pipe first, then `b`
+cat <a <b                       `a` then `b`, as it always did
+```
+
+`unsetopt multios` puts the replacing behavior back on both sides, which is
+what makes this the existing axis rather than a new rule: the pipe end goes
+into the same two maps `>foo >bar` and `<a <b` already use, and
+`RedirectsUseEveryTarget` still decides. There is no second mechanism and no
+second flag.
+
+**Only the element's own redirection list joins.** A redirection on a command
+*inside* a brace group, a subshell or a function replaces the pipe as it
+always did — `{ print one >foo } | cat` writes `foo` and nothing reaches
+`cat` — while the group's *own* list joins: `{ print one } >foo | cat` does
+both. The boundary is the command dispatcher and not the redirection list,
+because a group or a function body with no redirections of its own runs no
+list at all, so a rule written on the list lets the first command inside the
+group take the pipe.
+
+**The axis is read here rather than asked.** `print one >foo | cat` is not an
+ambiguous thing to have written: every column does something with it and only
+one of them joins, so a vector that has not answered the axis must go on
+writing the file rather than refusing by name. Seeding the maps before
+checking turned an ordinary pipeline into a refusal in the core, which is the
+axis being consulted away from the disagreement.
+
+## `$NULLCMD` authorizes a redirection with no command; `$READNULLCMD` only picks one
+
+The two parameters are not symmetric, and the order they are read in decides
+a row. Measured 2026-09-29 on zsh 5.9.2:
+
+```
+unset NULLCMD; READNULLCMD=cat; <f     redirection with no command, 1
+NULLCMD=;      READNULLCMD=cat; <f     the same
+NULLCMD=:;     READNULLCMD=cat; <f     reads the file
+NULLCMD=:;     unset READNULLCMD; <f   0, nothing written
+```
+
+So emptying the **writer** disables the construct outright, on the reading
+side as much as the writing one, and emptying the **reader** falls back to
+the writer. Reading the reader first — which is the shape the route naturally
+suggests, since the reading form is the special case — makes the first row
+succeed.
+
 ## `jobs -n` is a filter on what the shell has already said
 
 Measured 2026-09-17 from a script file under `env -i PATH=/usr/bin:/bin` with

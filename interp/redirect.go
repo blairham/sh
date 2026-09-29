@@ -87,6 +87,28 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	// descriptor read from twice arrives as both sources in the order they
 	// were written, rather than as the last one alone.
 	sources := map[int]io.Reader{}
+	// The pipe this command is an element of is one more target on the side
+	// it occupies, so it goes in the maps before the list is walked and the
+	// first redirection joins it rather than replacing it. Taken rather than
+	// read, so that a command inside a group or a function finds it gone and
+	// keeps the ordinary reading. See interp/pipemultio.go for the
+	// measurements and for why this needs no branch of its own.
+	//
+	// **Read rather than asked.** Seeding makes the next redirection of that
+	// descriptor consult RedirectsUseEveryTarget, and `echo one >foo | cat`
+	// is not an ambiguous thing to have written — every column does
+	// something with it, and only one of them joins. Asking there turned a
+	// bare Semantics from "the file, as before" into a refusal by name for
+	// an ordinary pipeline, which is the axis being asked away from the
+	// disagreement. So the ends go in only where the answer is already Yes.
+	if pipe := r.takePipeMultio(); r.sem().RedirectsUseEveryTarget == Yes {
+		if pipe.out != nil {
+			opened[1] = pipe.out
+		}
+		if pipe.in != nil {
+			sources[0] = pipe.in
+		}
+	}
 	// Saved streams are restored when the command finishes, which is why the
 	// caller closes what comes back rather than this doing it.
 	savedOut, savedIn, savedErr := r.Stdout, r.Stdin, r.Stderr

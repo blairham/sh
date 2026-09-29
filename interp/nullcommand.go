@@ -29,6 +29,20 @@ func (r *Runner) nullCommand(c *syntax.SimpleCmd) (name string, hooked bool) {
 	if len(c.Assigns) != 0 {
 		return "", false
 	}
+	// **The writing parameter authorizes the construct on both sides**, and
+	// the reading one only chooses what runs once it has. With `NULLCMD`
+	// unset or emptied, `<f` is `redirection with no command` at 1 even
+	// with `READNULLCMD` pointed at something that works — measured
+	// 2026-09-29 on zsh 5.9.2, `unset NULLCMD; READNULLCMD=cat; <out1` and
+	// the same with `NULLCMD=`, both refused, where `NULLCMD=:;
+	// READNULLCMD=cat; <out1` reads the file. Reading the parameter after
+	// the route had already been chosen made that row succeed here, which
+	// is what `A04redirect.ztst` stops on under `READNULLCMD with NULLCMD
+	// unset`.
+	null := firstValue(r.getVar(r.sem().NullCommandVariable))
+	if null == "" {
+		return "", true
+	}
 	if v := r.sem().ReadNullCommandVariable; v != "" && readNullCommand(c) {
 		if name := firstValue(r.getVar(v)); name != "" {
 			return name, true
@@ -36,7 +50,7 @@ func (r *Runner) nullCommand(c *syntax.SimpleCmd) (name string, hooked bool) {
 		// Emptied or unset, which falls back rather than refusing: a script
 		// that clears the reader gets the writer's command instead.
 	}
-	return firstValue(r.getVar(r.sem().NullCommandVariable)), true
+	return null, true
 }
 
 // readNullCommand reports whether the command's redirections are the single

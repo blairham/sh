@@ -6,6 +6,7 @@ package zsh_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
@@ -142,5 +143,72 @@ func TestTheLocaleDependentEscapesAreNotModeledHere(t *testing.T) {
 					tc.probe, out, tc.ours, tc.reference)
 			}
 		})
+	}
+}
+
+// A byte the encoding cannot decode is not a character to count from, so a
+// character range whose body holds one **declines**: the word is left exactly
+// as it was written.
+//
+// Measured 2026-09-29 on zsh 5.9.2 in a UTF-8 locale. Every row is the word
+// back unchanged, and the last is the control that says it is *undecodable*
+// and not merely non-ASCII — two bytes that do decode are a character and
+// the range counts from it.
+func TestAnUndecodableRangeBodyLeavesTheWordAlone(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, probe, want string }{
+		{"both endpoints undecodable", `{$'\x80'..$'\x81'}`, "{\x80..\x81}"},
+		{"one element, undecodable", `{$'\x80'..$'\x80'}`, "{\x80..\x80}"},
+		{"the high endpoint", `{$'\x7e'..$'\x80'}`, "{~..\x80}"},
+		{"a letter and a stray byte", `{a..$'\xff'}`, "{a..\xff}"},
+		{"the low endpoint", `{$'\x80'..a}`, "{\x80..a}"},
+		// The control: `\xc3\xa9` is `é`, which decodes, so the range counts
+		// and comes back as that character.
+		{"a decodable two-byte character", `{$'\xc3\xa9'..$'\xc3\xa9'}`, "é"},
+		// And the sharper control: **a U+FFFD the script wrote** is a
+		// perfectly decodable character and the range counts from it, in
+		// both shells. So the rule is "the body could not be decoded" and
+		// not "the body holds a replacement character" — a check made after
+		// the conversion cannot tell those apart, and would decline this
+		// row. It is the same confusion the byte-versus-rune search in
+		// TestADeclinedRangeKeepsTheBytesItWasWritten is about.
+		{"a written replacement character", `{$'\uFFFD'..$'\uFFFD'}`, "�"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out, st, errs := runZshUTF8(t, "print -rn -- "+tc.probe+"\n")
+			if out != tc.want || st != 0 {
+				t.Errorf("print -rn -- %s = %q (status %d, stderr %q), want %q",
+					tc.probe, out, st, errs, tc.want)
+			}
+		})
+	}
+}
+
+// And the word that comes back holds the **original bytes**, which is the
+// half a decline could still get wrong: a range that declined after
+// converting its body would hand back U+FFFD where the script wrote a byte,
+// and the word would look like a decline while carrying a character nobody
+// wrote.
+//
+// That was the bug: `[]rune` maps an undecodable byte to U+FFFD and the
+// length test that follows then passes, so `{$'\x80'..$'\x81'}` became a
+// one-element range of U+FFFD. Asserted on the bytes rather than by eye,
+// because U+FFFD and a stray byte render alike.
+func TestADeclinedRangeKeepsTheBytesItWasWritten(t *testing.T) {
+	t.Parallel()
+	out, _, _ := runZshUTF8(t, "print -rn -- {$'\\x80'..$'\\x81'}\n")
+	want := []byte{'{', 0x80, '.', '.', 0x81, '}'}
+	if out != string(want) {
+		t.Errorf("= % x, want % x", out, want)
+	}
+	// A **byte** search for U+FFFD's encoding, not `strings.ContainsRune`.
+	// That function iterates runes, and Go decodes an undecodable byte *as*
+	// utf8.RuneError — so it answers true for the very input this row is
+	// built from and cannot tell a replacement character from a stray byte.
+	// It reported a failure on correct output when this test was first
+	// written.
+	if strings.Contains(out, "\uFFFD") {
+		t.Errorf("= % x, which holds U+FFFD's encoding — the body was converted before it was refused", out)
 	}
 }

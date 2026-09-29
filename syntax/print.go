@@ -2195,6 +2195,13 @@ func (p *printer) dup(rd *Redirect) {
 // zsh takes it off both. A word that is not a plain number is never the
 // default — `{fd}>out` carries a name and `$n>out` carries an expansion, and
 // neither is a descriptor this printer may reason about.
+//
+// **There is no quoting check here**, and that is measured rather than
+// overlooked: `"1">out` is a command *word* followed by a redirection with
+// no descriptor at all, so `N` is only ever set from an unquoted digit run
+// and a quoted one cannot reach this. The guard that used to be here was
+// unreachable, and the mutant that deleted it changed nothing — which is
+// how it was found.
 func (p *printer) omitsDefaultDescriptor(rd *Redirect) bool {
 	switch p.layout.RedirectDescriptor {
 	case RedirectDescriptorOmitted:
@@ -2206,7 +2213,7 @@ func (p *printer) omitsDefaultDescriptor(rd *Redirect) bool {
 	default:
 		return false
 	}
-	if rd.N == nil || rd.N.IsQuoted() {
+	if rd.N == nil {
 		return false
 	}
 	return rd.N.Literal() == defaultDescriptorOf(rd.Op)

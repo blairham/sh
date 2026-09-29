@@ -33,7 +33,11 @@ import (
 // reports *not a Go executable*), script files under `env -i
 // PATH=/usr/bin:/bin` with a scratch HOME and standard input on the null
 // device.
-var procSubFd = regexp.MustCompile(`/dev/fd/[0-9]+`)
+// Both spellings, because the path a pipe is published under is the platform's:
+// darwin names it `/dev/fd/N` and Linux `/proc/self/fd/N`. A normalizer written
+// for one of them passes at home and fails every row on the other leg, which is
+// how this was found.
+var procSubFd = regexp.MustCompile(`(?:/dev/fd|/proc/self/fd)/[0-9]+`)
 
 // procSubTrace is the `@ `-prefixed lines of a run's standard error. This
 // harness has no PATH, so `sleep 0` is traced and then not found; the

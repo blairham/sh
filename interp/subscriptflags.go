@@ -560,6 +560,22 @@ func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.Subscr
 	if search == 'k' || search == 'K' {
 		return r.assocKeyFlag(e, a, g)
 	}
+	found := r.assocSearchKeys(e, a, g, search)
+	return assocSearchWords(e, a, found, search == 'i' || search == 'I')
+}
+
+// assocSearchKeys is the walk itself: the keys a table search matched, in the
+// order the table lists them.
+//
+// Split out from searchAssoc because two callers need different halves of the
+// same walk. The expansion wants what the letters *substitute* — a key, a
+// value, or nothing — and `[[ -v ]]` wants only whether anything **matched**,
+// which is not a question the substituted text can answer: measured 2026-09-29
+// on zsh 5.9.2 with `typeset -A m=(key val blank ”)`, `[[ -v 'm[(r)]' ]]` is
+// **set** and `[[ -v 'm[(r)zz]' ]]` is unset, and both substitute the empty
+// string. Reading set-ness off the value would have made the first of those
+// unset, and every other row in that table would still have agreed.
+func (r *Runner) assocSearchKeys(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags, search byte) []string {
 	matches := r.subscriptMatcher(g, false)
 	byKey := search == 'i' || search == 'I'
 	every := search == 'I' || search == 'R'
@@ -577,7 +593,7 @@ func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.Subscr
 			break
 		}
 	}
-	return assocSearchWords(e, a, found, byKey)
+	return found
 }
 
 // assocKeyFlag is `(k)` and `(K)` over a table, which is the one place the
@@ -1232,4 +1248,88 @@ func (r *Runner) subscriptArith(w *syntax.Word, s syntax.Span) (string, bool) {
 		r.holdBraceFanWork(s.Pos, v)
 	}
 	return v, ok
+}
+
+// searchSubscriptIsSet answers `[[ -v a[(i)w] ]]`, where the subscript is a
+// **search** rather than an index, and reports whether it answered at all.
+//
+// This is the one place the set-ness test parts company with the conditional
+// expansion that otherwise decides it — see Runner.elementIsSet, whose comment
+// says why every other operand shape is paramSource's. Measured 2026-09-29 on
+// zsh 5.9.2 over a script file, `arr=(a b c d)`, four rows of twelve where
+// `${...+SET}` and `[[ -v ... ]]` disagree:
+//
+//	                ${x+SET}   [[ -v x ]]
+//	arr[(i)a]       SET        set
+//	arr[(i)d]       SET        **unset**
+//	arr[(i)x]       SET        **unset**
+//	arr[(I)x]       SET        set
+//	m[(i)nope]      SET        **unset**
+//	m[(r)zz]        SET        **unset**
+//
+// Two rules, and which applies turns on what the letter names.
+//
+// **`(r)` and `(R)` name a value, and a table names one under every letter**,
+// so the question is whether the search **matched**. Not whether it
+// substituted anything: with `typeset -A m=(key val blank ”)`,
+// `[[ -v 'm[(r)]' ]]` is *set* and `[[ -v 'm[(r)zz]' ]]` is unset, and both
+// substitute the empty string. See assocSearchKeys.
+//
+// **`(i)` and `(I)` over an ordered array name an index, and that index is
+// tested as a *zero-based* offset** — which is one off from the subscript it
+// would be written as, and is the reference's own reading rather than a
+// simplification here. Measured across four array lengths:
+//
+//	arr=(a b c d)   (i)a=1 set   (i)c=3 set   (i)d=4 unset   (i)x=5 unset
+//	one=(z)         (i)z=1 unset              (I)q=0 set
+//	six=(p…u)       (i)t=5 set                (i)u=6 unset
+//	none=()         (i)z=1 unset              (I)z=0 unset
+//
+// So an array of four has its last element found by `(i)` and reported unset,
+// while the index a *failed* backward search names — zero — is reported set.
+// The base is what says this is an offset and not an ordinary subscript:
+// under `setopt KSH_ARRAYS` the same array answers set for `(i)a`=0 through
+// `(i)d`=3 and unset for `(i)x`=4, so the set indices are `0..len-1` in both
+// bases where an ordinary subscript's range moves with the base. `arr[4]`
+// alone is set in that same script, which is the row that keeps the two
+// readings apart.
+func (r *Runner) searchSubscriptIsSet(e *syntax.ParamExpr) (set, answered bool) {
+	if e.IndexFlags == nil {
+		return false, false
+	}
+	search, ok := r.subscriptSearch(e)
+	if !ok || search == 0 {
+		// Refused by name, or a group that selects nothing — the ordinary
+		// reading answers, as it does for the expansion.
+		return false, false
+	}
+	if search == 'k' || search == 'K' {
+		// A lookup rather than a search — see assocKeyFlag — and already the
+		// plain key question: `${m[(k)nope]}` and `[[ -v 'm[(k)nope]' ]]`
+		// agree, so the ordinary reading answers.
+		//
+		// **Read before orderedSearchLetter and not after**, which is the
+		// whole reason this is its own statement: that mapping folds `k` onto
+		// `r`, so a guard below it can never fire and `[[ -v 'm[(k)key]' ]]`
+		// would search the table's *values* for the text `key` and report the
+		// key unset.
+		return false, false
+	}
+	search = orderedSearchLetter(search)
+	if a, isAssoc := r.assocFor(e.Name); isAssoc {
+		return len(r.assocSearchKeys(e, a, e.IndexFlags, search)) > 0, true
+	}
+	elems, scalar, held := r.subscriptTarget(e)
+	if !held || scalar {
+		// A scalar has no elements to name whatever the subscript does with
+		// its characters, which Runner.scalarHasNoElements has already
+		// answered, and a name holding nothing is unset under either reading.
+		return false, false
+	}
+	at := r.searchIndex(e.IndexFlags, search, subscriptSource{name: e.Name, elems: elems})
+	if search == 'i' || search == 'I' {
+		return at >= 0 && at < len(elems), true
+	}
+	pos := at - r.arrayBase()
+	return pos >= 0 && pos < len(elems), true
 }

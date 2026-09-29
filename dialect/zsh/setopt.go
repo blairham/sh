@@ -1454,7 +1454,58 @@ var zshOptions = []zshOption{
 		// than POSIX mode at large. See Semantics.GetoptsErrorEndsTheWord
 		// and zsh's own B10getopts test (#4474).
 		//
-		// All three read off their axis rather than off a stored bit, which
+		// The fourth: a failed redirection on a **special** builtin ends a
+		// non-interactive shell. Measured 2026-09-29 on zsh 5.9.2, a script
+		// file with standard input on the null device, reading the three
+		// fields apart because the status is what carries this and the
+		// message is the same either way:
+		//
+		//	setopt posixbuiltins; exec 3< ./no/x; print after
+		//	    no `after`, status 1
+		//	exec 3< ./no/x; print after
+		//	    `after`, status 0 — same sentence on standard error
+		//
+		// It is the builtin's *kind* that decides, not `exec`: `:`,
+		// `readonly` and `eval` end the script alike, while `print`, `true`
+		// and an external command carry on with the option on. A failure
+		// inside a subshell ends the subshell and not the script.
+		//
+		// **The option is the key, and not sh-ness.** The emulation table
+		// used to carry this as a field of its own, on the reading that it
+		// was an axis with no option name over it, and four emulations
+		// agreeing hid the difference because each mode's `posixbuiltins`
+		// default happens to match its old `redirFatal` value. The pair
+		// that separates them holds the emulation fixed and moves only the
+		// option:
+		//
+		//	emulate sh                           no `after`, 1
+		//	emulate sh; unsetopt posixbuiltins   `after`, 0
+		//	emulate csh                          `after`, 0
+		//	emulate csh; setopt posixbuiltins    no `after`, 1
+		//
+		// So it is an ordinary row of this table, and the swap in
+		// applyEmulation that used to set it is gone. See
+		// Semantics.RedirectErrorOnSpecialBuiltinFatal and #4436's
+		// A04redirect chunk "failed exec redir, POSIX_BUILTINS".
+		//
+		// The fifth, and the same rule with a different failure: `.` cannot
+		// read its file. It is a special builtin, so POSIX ends the shell
+		// over it, and this option is the door here as it is for the
+		// redirection above. Measured 2026-09-29 on zsh 5.9.2:
+		//
+		//	. ./no/x; print after                     `after`, 0
+		//	setopt posixbuiltins; . ./no/x; print after   the script ends, 1
+		//
+		// and the deciding pair is the same one, holding the emulation
+		// fixed: `emulate sh; unsetopt posixbuiltins` carries on, and
+		// `emulate csh; setopt posixbuiltins` ends the script. It is a
+		// second axis rather than a reading of the first because the two
+		// part elsewhere — BusyBox ash ends its script over a failed `.`
+		// and not over a failed redirection. See
+		// Semantics.DotMissingFileFatal, and the `failed dot,
+		// POSIX_BUILTINS` row of A04redirect.
+		//
+		// All five read off their axis rather than off a stored bit, which
 		// is what makes `(setopt posixbuiltins)` stay in the subshell — the
 		// same arrangement `shwordsplit` and `globsubst` use. The state is
 		// reported from the first of the two because a shell invoked as `sh`
@@ -1473,6 +1524,12 @@ var zshOptions = []zshOption{
 			}, answer(on))
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.GetoptsErrorEndsTheWord
+			}, answer(on))
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.RedirectErrorOnSpecialBuiltinFatal
+			}, answer(on))
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.DotMissingFileFatal
 			}, answer(on))
 			return 0
 		},

@@ -77,20 +77,49 @@ func (r *Runner) openThroughNoclobber(ctx context.Context, a *Action, path strin
 	// that is not there, and the refusal the exclusive create already made
 	// stands.
 	st, serr := r.stat(path)
-	if serr != nil || st.Mode().IsRegular() {
+	if serr != nil {
 		return f, false, err
 	}
 	exists := err
+	if st.Mode().IsRegular() {
+		if !r.clobberEmpty || st.Size() != 0 {
+			return f, false, err
+		}
+		// One shell has a second option that narrows the first: an existing
+		// regular file with **nothing in it** may be truncated after all,
+		// because there is nothing to lose. Only the exclusion is dropped —
+		// the truncation stays, and is a no-op on a file of this size unless
+		// something wrote to it between the two opens, which is exactly when
+		// it should not be one. See Runner.SetClobbersAnEmptyFile.
+		//
+		// The retry then goes through the **same tail** as the one below,
+		// because a second open that fails is the same situation whichever
+		// branch reached it: measured, `chmod 000` on the empty file makes
+		// this shell say `file exists` and not `permission denied`, which
+		// is Diagnostics.NoclobberRefusalCoversAFailedOpen doing exactly
+		// what it does for a device that will not open.
+		f, err = r.openGated(ctx, a, path, flags&^os.O_EXCL)
+		return r.noclobberRetried(f, err, exists)
+	}
 	// Without the exclusion, and without the truncation either. A file that
 	// is not regular has nothing to truncate, and dropping the flag means a
 	// name that *became* a regular one between the two opens is not emptied
 	// by a shell that had already decided it was a device.
 	f, err = r.openGated(ctx, a, path, flags&^(os.O_EXCL|os.O_TRUNC|os.O_CREATE))
+	return r.noclobberRetried(f, err, exists)
+}
+
+// noclobberRetried settles what a second open reports, and is shared by the
+// two branches above so that they cannot drift: a device that would not open
+// and an empty file that may not be written are the same situation reached
+// two ways.
+//
+// One dialect words every one of these as the option's own refusal, so the
+// second open's reason is dropped and the first one's stands. A gate's
+// refusal is never reworded: it is not the open's answer and the script is
+// not being told about a file.
+func (r *Runner) noclobberRetried(f *os.File, err, exists error) (*os.File, bool, error) {
 	if err != nil && !errors.Is(err, errRefused) && r.diag().NoclobberRefusalCoversAFailedOpen {
-		// One dialect words every one of these as the option's own refusal,
-		// so the second open's reason is dropped and the first one's stands.
-		// A gate's refusal is never reworded: it is not the open's answer
-		// and the script is not being told about a file.
 		return f, true, exists
 	}
 	return f, true, err

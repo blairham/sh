@@ -2812,8 +2812,16 @@ type Runner struct {
 	// writer, and childFiles, which is the only reader.
 	cloexecFds map[int]bool
 	// outputClosedByThisCommand says the redirection list now in effect for
-	// this command closed the stream its output goes to — `echo hi >&-` and
-	// not `exec 1>&-; echo hi`.
+	// this command **put fd 1 where it is** — `echo hi >&-` and not `exec
+	// 1>&-; echo hi`.
+	//
+	// A close is not the only way a command's own redirection can leave the
+	// stream unwritable, which is why this is every assignment rather than
+	// the close alone: `print foo 1<file` and `print foo 1>&3` with 3 opened
+	// for reading are both silent in the reference and both reach a failed
+	// write. Read with the errno at the reporting site — only EBADF is
+	// silenced, so a command that redirected its output to a file and then
+	// failed to write it for some other reason still says so.
 	//
 	// One dialect needs the distinction to word a failed write: it says
 	// `write error: bad file descriptor` for a write to a stream something

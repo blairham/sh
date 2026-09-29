@@ -646,6 +646,31 @@ func mergesStderr(c Command) bool {
 	return len(rs) > 0 && rs[len(rs)-1].PipeBoth
 }
 
+// Redirections are the redirections written on a command, or nil for a kind
+// of command that cannot carry any.
+//
+// Exported because a *definition's* redirections are part of what the
+// function is, and a caller outside this package has to be able to ask: one
+// shell's `$functions` value keeps the braces when there are any, because
+// they follow the closing one and there would otherwise be nowhere for them
+// to go. See interp.Runner.FunctionBodyText.
+//
+// A definition delegates to its body, which is where the parser puts them —
+// the same hand-off mergesStderr makes, for the same reason.
+func Redirections(c Command) []*Redirect {
+	if f, ok := c.(*FuncDecl); ok {
+		if f.Body == nil {
+			return nil
+		}
+		return Redirections(f.Body)
+	}
+	h, ok := c.(interface{ redirList() []*Redirect })
+	if !ok {
+		return nil
+	}
+	return h.redirList()
+}
+
 // Subshell is `( list )`, which runs in a child shell so its assignments do
 // not escape.
 type Subshell struct {

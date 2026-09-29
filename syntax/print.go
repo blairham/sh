@@ -366,6 +366,37 @@ type Layout struct {
 	// bash 5.3.20 through `declare -f`.
 	HereDocumentWordSingleQuoted bool
 
+	// RedirectDescriptor is what a written-back redirection does with the
+	// descriptor on its left when that descriptor is the operator's own
+	// default — `1` for the writing operators, `0` for the reading ones.
+	//
+	// Three columns and three answers, measured 2026-09-29 by defining a
+	// function and asking each shell to print it back:
+	//
+	//	written     zsh 5.9.2   bash 5.3.20   ksh93u+
+	//	>&2         >&2         1>&2          >&2
+	//	1>&2        >&2         1>&2          1>&2
+	//	<&3         <&3         0<&3          <&3
+	//	1>out       > out       > out         1>out
+	//	>out        > out       > out         >out
+	//
+	// So they disagree on two independent things and no single verb covers
+	// them: bash **adds** the default to a duplication and **drops** it from
+	// a file redirection, zsh drops it from both, and ksh93 says back
+	// exactly what was written in either. That is why this is a named form
+	// rather than a bool — a "normalize descriptors" switch would have to be
+	// on and off at once for bash.
+	//
+	// **Before #4436 this printer had one unconditional rule, measured on
+	// bash, applied to every column — and it was not bash's either.** The
+	// duplication half was bash's and the file half was not, so the tree
+	// printed `1>&2` for zsh, which drops it, and `1> out` for bash, which
+	// does not. ksh93 came out right by accident of the same mixture. A
+	// single column's measurement had been generalised to a panel, and it
+	// survived because the two columns it was wrong about were wrong in
+	// ways nothing had a row for. The table above is the row.
+	RedirectDescriptor RedirectDescriptorForm
+
 	// CoprocessDefaultName is written where a coprocess over a **compound**
 	// command was given no name of its own, and is empty where the name is
 	// left out.
@@ -2001,7 +2032,7 @@ func (p *printer) redirsAfter(rs []*Redirect, blank bool) {
 			p.dup(rd)
 			continue
 		}
-		if rd.N != nil {
+		if p.writesTheDescriptor(rd) {
 			p.word(rd.N)
 		}
 		p.str(rd.Op.String())
@@ -2118,17 +2149,29 @@ func heredocDelimiterNeedsABlank(op Kind, delim string) bool {
 // and both come back written as they were.
 func (p *printer) dup(rd *Redirect) {
 	op := rd.Op
-	// A close is written the same way whichever operator asked for it, which
-	// is the one case where the operator itself changes: `<&-` comes back as
-	// `0>&-`. Measured rather than reasoned — it is a normalization, and
-	// both spellings close the same descriptor.
-	closing := explicitDupTarget(rd.Word) && rd.Word.Literal() == "-"
+	// One arrangement writes a close the same way whichever operator asked
+	// for it, which is the one case where the operator itself changes:
+	// `<&-` comes back as `0>&-` there. Measured rather than reasoned — it
+	// is a normalization, and both spellings close the same descriptor.
+	//
+	// **It travels with the descriptor form**, because it is the same
+	// shell's habit: bash rewrites the operator and writes the descriptor
+	// out, while zsh and ksh93 leave `<&-` alone. Measured 2026-09-29 by
+	// printing a function back — `read v <&-` is `read v 0>&-` in bash
+	// 5.3.20 and `read v <&-` in zsh 5.9.2 and ksh93u+.
+	closing := p.layout.RedirectDescriptor == RedirectDescriptorWrittenOnDuplications &&
+		explicitDupTarget(rd.Word) && rd.Word.Literal() == "-"
 	if closing {
 		op = TokGreatAmp
 	}
 	switch {
-	case rd.N != nil:
+	case p.writesTheDescriptor(rd):
 		p.word(rd.N)
+	case rd.N != nil:
+		// Left off: this arrangement drops a default descriptor wherever it
+		// stands, and the script having written it does not make it stay.
+	case p.layout.RedirectDescriptor != RedirectDescriptorWrittenOnDuplications:
+		// Only one arrangement writes a descriptor nobody wrote.
 	case !explicitDupTarget(rd.Word):
 	case rd.Op == TokLessAmp:
 		// The descriptor is the one the operator as *written* names, even
@@ -2140,6 +2183,57 @@ func (p *printer) dup(rd *Redirect) {
 	}
 	p.str(op.String())
 	p.word(rd.Word)
+}
+
+// writesTheDescriptor reports whether this redirection's left operand is
+// printed: it has one, and this arrangement does not leave a default off.
+//
+// The two arrangements that drop one do not drop the same ones, which is the
+// whole reason the form is named rather than a bool: bash takes a default off
+// a redirection that names a *file* and writes one onto a duplication, and
+// zsh takes it off both. A word that is not a plain number is never the
+// default — `{fd}>out` carries a name and `$n>out` carries an expansion, and
+// neither is a descriptor this printer may reason about.
+//
+// **There is no quoting check here**, and that is measured rather than
+// overlooked: `"1">out` is a command *word* followed by a redirection with
+// no descriptor at all, so `N` is only ever set from an unquoted digit run
+// and a quoted one cannot reach this. The guard that used to be here was
+// unreachable, and the mutant that deleted it changed nothing — which is
+// how it was found.
+func (p *printer) writesTheDescriptor(rd *Redirect) bool {
+	// **The one place that asks whether there is a descriptor at all**, so
+	// that no caller repeats the test and none of them can disagree with
+	// this about what the answer means. It was the other way round until a
+	// mutant deleted a nil check and nothing failed: both callers were
+	// testing it themselves, which left the check here unreachable.
+	if rd.N == nil {
+		return false
+	}
+	switch p.layout.RedirectDescriptor {
+	case RedirectDescriptorOmitted:
+	case RedirectDescriptorWrittenOnDuplications:
+		// Files only: a duplication goes the other way in this arrangement.
+		if rd.Op == TokLessAmp || rd.Op == TokGreatAmp {
+			return true
+		}
+	default:
+		return true
+	}
+	return rd.N.Literal() != defaultDescriptorOf(rd.Op)
+}
+
+// defaultDescriptorOf is the descriptor an operator acts on when none is
+// written in front of it: standard input for the reading operators and
+// standard output for the rest. `<>` opens for both and defaults to the
+// reading one, which is measured rather than reasoned — `0<>f` comes back
+// `<> f` in the shell that drops defaults.
+func defaultDescriptorOf(k Kind) string {
+	switch k {
+	case TokLess, TokLessAmp, TokDLess, TokDLessDash, TokTLess, TokLessHash, TokLessGreat:
+		return "0"
+	}
+	return "1"
 }
 
 // explicitDupTarget reports whether a dup names a descriptor the reader can
@@ -2905,3 +2999,25 @@ func seekExpr(w *Word) string {
 	}
 	return w.Literal()
 }
+
+// RedirectDescriptorForm is what a written-back redirection does with a
+// descriptor on its left that is the operator's own default. See
+// [Layout.RedirectDescriptor] for the measurement.
+type RedirectDescriptorForm uint8
+
+const (
+	// RedirectDescriptorAsWritten says back exactly what the script wrote,
+	// which is ksh93's answer and the conservative one for an embedder that
+	// has not chosen: a printer that neither adds nor removes cannot be
+	// wrong about a descriptor nobody asked it to think about.
+	RedirectDescriptorAsWritten RedirectDescriptorForm = iota
+	// RedirectDescriptorWrittenOnDuplications is bash's pair of answers:
+	// the default descriptor is written out in front of `>&` and `<&`, and
+	// taken off a redirection that names a file. `echo x >&2` comes back
+	// `echo x 1>&2` and `echo x 1>out` comes back `echo x > out`.
+	RedirectDescriptorWrittenOnDuplications
+	// RedirectDescriptorOmitted is zsh's single answer: a descriptor equal
+	// to the operator's default is left off wherever it appears, whether
+	// the script wrote it or not. `1>&2` comes back `>&2`.
+	RedirectDescriptorOmitted
+)

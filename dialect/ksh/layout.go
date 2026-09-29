@@ -38,5 +38,14 @@ func FunctionLayout() syntax.Layout {
 		// b; }` stays on one line and a body written over three lines keeps
 		// its newlines.
 		Lines: false,
+		// RedirectDescriptor is left at its zero value **on purpose**, not
+		// by omission: as-written is this shell's own answer. Measured
+		// 2026-09-29 on ksh93u+ with `typeset -f`, and the rows that say so
+		// are the ones where the other two columns change something —
+		// `>&2` stays `>&2` where bash writes `1>&2` and `1>&2` stays
+		// `1>&2` where zsh drops the `1`, `1>out` keeps its descriptor
+		// where both of the others take it off, and `<&-` keeps the
+		// operator it was written with where bash rewrites it to `0>&-`.
+		// See dialect/ksh/redirdescriptorlisting_test.go.
 	}
 }

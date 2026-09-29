@@ -68,9 +68,10 @@ func ExportedFunctionLayout() syntax.Layout {
 
 func common() syntax.Layout {
 	return syntax.Layout{
-		Lines:             true,
-		Separator:         ";",
-		KeywordTerminator: ";",
+		RedirectDescriptor: syntax.RedirectDescriptorWrittenOnDuplications,
+		Lines:              true,
+		Separator:          ";",
+		KeywordTerminator:  ";",
 		// `then` keeps the line of its `if`, and so does the `do` of a loop
 		// over a command — but not the `do` of a loop over words, which
 		// takes a line of its own. Three answers rather than one, and this

@@ -313,3 +313,52 @@ n_zz=0
 $(( n_zz += 5 ))
 END
 printf 'n=[%s]\n' "$n_zz"
+
+# The same family spelled with the ampersand **last**, which is zsh's alone
+# on this panel: bash, ksh93, dash and BusyBox ash all refuse `>>&`, `>&|`,
+# `>>&|` and `>>&!` outright, and read `>&!f` as a `>&` onto a file called
+# `!f`. Measured 2026-09-29; the operators arrived with
+# syntax.Dialect.ReversedAmpersandRedirect and had no case anywhere in the
+# tree until this section.
+printf 'seeded\n' > ra
+{ printf 'out\n'; printf 'err\n' >&2; } >>& ra
+printf 'append both, ampersand last:\n'
+cat ra
+
+# The marked forms, under noclobber, which is the only cell where an override
+# decides anything.
+setopt noclobber
+printf 'gone\n' > rb
+{ printf 'out\n'; printf 'err\n' >&2; } >&| rb
+printf 'truncate both, clobbering:\n'
+cat rb
+printf 'gone\n' > rc
+{ printf 'out\n'; printf 'err\n' >&2; } >&! rc
+printf 'bang, truncating:\n'
+cat rc
+{ printf 'out\n'; printf 'err\n' >&2; } >>&| rd
+printf 'append both onto a file that was not there:\n'
+cat rd
+{ printf 'out\n'; printf 'err\n' >&2; } >>&! re
+printf 'bang, appending, creating:\n'
+cat re
+
+# And the unmarked spellings still answer to noclobber, which is what makes
+# the four above about the override rather than about the option being off.
+printf 'kept\n' > rf
+( { printf 'out\n'; } >& rf ) 2> /dev/null
+printf 'truncating refused -> %s\n' "$?"
+cat rf
+( { printf 'out\n'; } >>& rg ) 2> /dev/null
+printf 'creating append refused -> %s\n' "$?"
+printf 'rg is there -> %s\n' "$([ -e rg ] && printf yes || printf no)"
+unsetopt noclobber
+
+# The target is a **name** in every one of them, even where it looks like a
+# descriptor: `>&2` duplicates and `>&-` closes, while these write files.
+printf 'x\n' >>& 2
+printf 'the file called 2 holds: [%s]\n' "$(cat ./2)"
+printf 'y\n' >>& -
+printf 'the file called - holds: [%s]\n' "$(cat ./-)"
+printf 'z\n' >&| 3
+printf 'the file called 3 holds: [%s]\n' "$(cat ./3)"

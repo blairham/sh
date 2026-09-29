@@ -1721,9 +1721,11 @@ func (l *Lexer) fdVariableSubscript(open int) (int, bool) {
 // operators, longest first. Longest match wins, so the order is the algorithm
 // and not merely tidiness: `>>` must be found before `>`.
 var operators = []Kind{
-	TokAmpDGreatClobber, TokAmpDGreatBang, // 4 bytes
+	TokAmpDGreatClobber, TokAmpDGreatBang,
+	TokDGreatAmpClobber, TokDGreatAmpBang, // 4 bytes
 	TokDSemiAmp, TokTLess, TokAmpDGreat, TokDLessDash,
-	TokDGreatClobber, TokDGreatBang, TokAmpGreatClobber, TokAmpGreatBang, // 3 bytes
+	TokDGreatClobber, TokDGreatBang, TokAmpGreatClobber, TokAmpGreatBang,
+	TokDGreatAmp, TokGreatAmpClobber, TokGreatAmpBang, // 3 bytes
 	TokAndAnd, TokOrOr, TokDSemi, TokSemiAmp, TokDGreat, TokLessAmp, TokGreatAmp,
 	TokLessGreat, TokClobber, TokClobberBang, TokDLess, TokAmpGreat,
 	TokAmpBang, TokAmpPipe, TokPipeAmp, TokSemiPipe, TokGreatSemi,
@@ -1770,6 +1772,17 @@ func (l *Lexer) enabled(k Kind) bool {
 		// it, and the fallback that matters is `&` then `>|` rather than a
 		// four-byte operator nobody wrote.
 		return l.dialect.ClobberOverrideMarker && l.dialect.AmpersandRedirect
+	case TokDGreatAmp:
+		return l.dialect.ReversedAmpersandRedirect
+	case TokGreatAmpClobber, TokGreatAmpBang, TokDGreatAmpClobber, TokDGreatAmpBang:
+		// The same pairing as the four above, and for the same reason: a
+		// marker is a marker *on* an operator, so it needs the family that
+		// supplies one. `>&` is core, but a marker after it is not a marker
+		// on the duplication — it forces the file reading, measured: `>&|2`
+		// and `>&!2` both write a file named `2` where `>&2` duplicates the
+		// descriptor. So the marked spellings belong to the family flag
+		// rather than to `>&` being lexable.
+		return l.dialect.ClobberOverrideMarker && l.dialect.ReversedAmpersandRedirect
 	}
 	return true
 }

@@ -70,6 +70,18 @@ const (
 	TokAmpGreatBang     // &>!
 	TokAmpDGreatClobber // &>>|
 	TokAmpDGreatBang    // &>>!
+	// The same four operators written with the ampersand *after* the `>`
+	// rather than before it, plus the appending base they hang off. One
+	// dialect spells both-streams twice over and the two spellings are the
+	// same operator measured row for row; see
+	// [Dialect.ReversedAmpersandRedirect]. `>&` itself is not here because
+	// it is core — it is POSIX duplication, and whether a word that is not a
+	// number makes it a write to a file is interp's GreatAmpTarget.
+	TokDGreatAmp        // >>&   both streams, appending
+	TokGreatAmpClobber  // >&|
+	TokGreatAmpBang     // >&!
+	TokDGreatAmpClobber // >>&|
+	TokDGreatAmpBang    // >>&!
 	TokDLess            // <<
 	TokDLessDash        // <<-
 	TokTLess            // <<<  herestring
@@ -107,6 +119,8 @@ var text = map[Kind]string{
 	TokDGreatClobber: ">>|", TokDGreatBang: ">>!",
 	TokAmpGreatClobber: "&>|", TokAmpGreatBang: "&>!",
 	TokAmpDGreatClobber: "&>>|", TokAmpDGreatBang: "&>>!",
+	TokDGreatAmp: ">>&", TokGreatAmpClobber: ">&|", TokGreatAmpBang: ">&!",
+	TokDGreatAmpClobber: ">>&|", TokDGreatAmpBang: ">>&!",
 	TokDLess: "<<", TokDLessDash: "<<-",
 	TokTLess: "<<<", TokAmpGreat: "&>", TokAmpDGreat: "&>>",
 	TokGreatSemi: ">;",
@@ -142,6 +156,8 @@ func (k Kind) IsRedirect() bool {
 	case TokLess, TokGreat, TokDGreat, TokLessAmp, TokGreatAmp, TokLessGreat, TokClobber,
 		TokClobberBang, TokDGreatClobber, TokDGreatBang,
 		TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang,
+		TokDGreatAmp, TokGreatAmpClobber, TokGreatAmpBang,
+		TokDGreatAmpClobber, TokDGreatAmpBang,
 		TokDLess, TokDLessDash, TokTLess, TokAmpGreat, TokAmpDGreat,
 		TokGreatSemi, TokLessHash, TokGreatHash:
 		return true

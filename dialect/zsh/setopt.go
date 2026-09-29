@@ -612,7 +612,42 @@ var zshOptions = []zshOption{
 	checkJobsOption(),
 	checkRunningJobsOption(),
 	setOptBacked("clobber", true, "noclobber", true),
-	recorded("clobberempty", false),
+	{
+		// CLOBBER_EMPTY narrows NO_CLOBBER: a plain `>` may truncate an
+		// existing regular file that has **nothing in it**.
+		//
+		// Measured 2026-09-29 on zsh 5.9.2, the status and the file's
+		// contents reported on standard error because the row under test
+		// redirects standard output at the very file it is about:
+		//
+		//	                       noclobber   noclobber + clobberempty
+		//	file is empty          refused     truncated, status 0
+		//	file has bytes in it   refused     refused
+		//	file does not exist    created     created
+		//
+		// **It is meaningless without the option it narrows**, which is why
+		// the rows that set it alone are controls rather than evidence:
+		// with `noclobber` off a plain `>` truncates whatever is there, so
+		// no row with this option alone can tell the switch working from
+		// the switch missing.
+		//
+		// The boundary is the **size**, and only for a regular file: with
+		// both options on a directory is still refused, while a device and
+		// a fifo are still allowed — and those two were already allowed by
+		// `noclobber` alone, so they say nothing about this one. A symlink
+		// follows what it points at. `>|` and `>>` are untouched, being the
+		// override and a different operator, and `&>` follows `>`.
+		//
+		// The substrate carries it rather than a semantics axis: five of
+		// the panel have no option to answer with, so there is no
+		// disagreement to settle. See interp.Runner.SetClobbersAnEmptyFile.
+		base: "clobberempty", def: false,
+		get: func(r *interp.Runner) bool { return r.ClobbersAnEmptyFile() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetClobbersAnEmptyFile(on)
+			return 0
+		},
+	},
 	recorded("combiningchars", false),
 	recorded("completealiases", false),
 	recorded("completeinword", false),

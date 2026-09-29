@@ -4273,6 +4273,9 @@ type Runner struct {
 	callTested int
 	// noclobber is `set -C`: a plain `>` will not truncate an existing file.
 	noclobber bool
+	// clobberEmpty narrows that: an existing regular file with nothing in it
+	// may be truncated. See Runner.SetClobbersAnEmptyFile.
+	clobberEmpty bool
 	// noglob is `set -f`: pathname expansion does not happen. Only pathname
 	// expansion — a `case` pattern still matches, because that is matching
 	// and not expansion.

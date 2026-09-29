@@ -8722,6 +8722,26 @@ type Diagnostics struct {
 	// even after `exec` parked one, and a close on a group or a function call
 	// does not silence the commands inside.
 	//
+	// **And it is the ownership, not the errno.** Every row above is a closed
+	// descriptor, so they cannot tell "my own redirection" from "EBADF", and
+	// this was keyed on the errno for a while on the strength of them. The
+	// two part on a stream that is open and refuses the write anyway, which
+	// needs `/dev/full` and an unread fifo and so was measured 2026-09-29 on
+	// zsh 5.9 under Linux (`alpine:3.20`, `apk add zsh`, script files with
+	// standard error kept apart):
+	//
+	//	print foo > /dev/full        zsh:print:1: write error: no space left…
+	//	exec 1>/dev/full; print foo  that, and then zsh:2: write error: …
+	//	print foo >&9, fifo unread   zsh:print:1: write error: broken pipe
+	//	exec 1>&9; print foo, ditto  that, and then zsh:1: write error: …
+	//
+	// Three errnos now, and this sentence is absent on every row the command
+	// redirected for itself and present on every row it inherited. What the
+	// errno moves is the *first* sentence and the status — zsh names the
+	// builtin and leaves 1 for ENOSPC and EPIPE and neither for EBADF, which
+	// is BuiltinWriteErrorFailsTheCommand's business and is still answered No
+	// here.
+	//
 	// Emitted before BuiltinWriteErrorFailsTheCommand is asked, which is the
 	// whole reason it is a second field. zsh answers that axis No and returns
 	// before BuiltinWriteError is reached; moving the emission in front of

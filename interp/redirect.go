@@ -161,11 +161,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				savedIn = closedFd{}
 			}
 		case 1:
-			r.Stdout = closedFd{}
-			// The same note dupFd's close carries: one dialect stays quiet
-			// about a failed write exactly when the command that wrote
-			// closed the stream itself.
-			r.outputClosedByThisCommand = true
+			r.redirectStdout(closedFd{})
 			if forKeeps {
 				savedOut = closedFd{}
 			}
@@ -361,14 +357,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// which is the axis that already decides it.
 				w := readOnlyStream{Reader: held}
 				if hfd == 1 {
-					r.Stdout = w
-					// And it is *this command's own* redirection that made
-					// the stream unwritable, which is the question the one
-					// dialect that words a failed write asks — measured, it
-					// says nothing when the writing command wrote the
-					// redirection itself and complains when something else
-					// did. See Runner.outputClosedByThisCommand.
-					r.outputClosedByThisCommand = true
+					r.redirectStdout(w)
 				} else {
 					r.Stderr = w
 				}
@@ -977,7 +966,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			case 0:
 				r.Stdin = r.eachSource(0, f, sources)
 			case 1:
-				r.Stdout = r.eachTarget(1, f, opened)
+				r.redirectStdout(r.eachTarget(1, f, opened))
 			case 2:
 				r.Stderr = r.eachTarget(2, f, opened)
 			default:
@@ -2038,11 +2027,7 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 			r.Stderr = closedFd{}
 		case 1:
 			dropped = r.Stdout
-			r.Stdout = closedFd{}
-			// Recorded, because one dialect stays quiet about a failed write
-			// exactly when the command that wrote closed the stream itself.
-			// See Runner.outputClosedByThisCommand.
-			r.outputClosedByThisCommand = true
+			r.redirectStdout(closedFd{})
 		default:
 			// Closing a descriptor that was never open is not an error in
 			// any shell measured, so neither is deleting a missing entry.
@@ -2107,7 +2092,7 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 		if fd == 2 {
 			r.Stderr = w
 		} else {
-			r.Stdout = w
+			r.redirectStdout(w)
 		}
 	default:
 		r.setFd(fd, src)
@@ -2249,6 +2234,18 @@ func (r *Runner) setFd(fd int, v any) {
 // inherited ignore and not an inherited handler, so a handled SIGPIPE outside
 // the pipeline leaves the writer inside it dying exactly as an untrapped one
 // does. That is measured too.
+// redirectStdout points this command's standard output somewhere and records
+// that the command's own redirection list is what put it there.
+//
+// Every assignment of fd 1 in this file goes through it, which is the whole
+// point: the question one dialect asks about a failed write is *who wrote the
+// redirection*, and a site that assigned the field directly would answer it
+// wrongly by omission. See Runner.outputClosedByThisCommand.
+func (r *Runner) redirectStdout(w io.Writer) {
+	r.Stdout = w
+	r.outputClosedByThisCommand = true
+}
+
 func (r *Runner) builtinWriteStatus(name string, st int) int {
 	err := r.writeFailed
 	r.writeFailed = nil
@@ -2296,8 +2293,19 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 	// reason this is a second wording. zsh answers the closed-descriptor axis
 	// No and would otherwise never reach BuiltinWriteError; it still says
 	// something on every route but one, and the route it stays quiet on is
-	// the one where the writing command's own redirections closed the stream.
-	// See Diagnostics.InheritedClosedStreamWriteError for the measurements.
+	// the one where the writing command's own redirections aimed the stream.
+	//
+	// **Whose redirection it was, and not which errno came back.** The two
+	// were indistinguishable while every measured row was a closed
+	// descriptor; they part on a stream that is open and refuses anyway.
+	// Measured on zsh 5.9 under Linux, where `/dev/full` and an unread fifo
+	// supply the other two errnos: `print foo > /dev/full` and a write into
+	// a broken pipe the command redirected to itself each draw the builtin's
+	// own sentence and *not* this one, exactly as `print foo >&-` draws
+	// neither, while `exec 1>/dev/full` and `exec 1>&9` before the command
+	// draw both. See Diagnostics.InheritedClosedStreamWriteError for the
+	// measurements and TestTheSilenceIsForTheOwnerOfTheRedirectionNotTheErrno
+	// for the pair that tells the two keys apart.
 	if w := r.diag().InheritedClosedStreamWriteError; w != "" && !r.outputClosedByThisCommand {
 		// Not the builtin's own complaint, and the dialect that has this
 		// sentence says so by leaving the builtin out of the location:

@@ -34,6 +34,14 @@ import (
 // The file's contents are asserted afterwards as well as the sentence. The
 // descriptor is read-only either way, so a `print` that reported the refusal
 // *and* wrote would be a different bug that the status alone cannot see.
+//
+// **And the sentence is the whole of what is said.** It used to be graded with
+// a Contains, which cannot see a line added beside the one it looks for — a
+// `print` that named the mode *and* went on to record the failed write, so
+// that the shell added `write error: bad file descriptor` underneath, passed
+// it unchanged. The number the descriptor was opened at is asked for rather
+// than assumed, because the number this shell hands out is not the reference's
+// and is residue on #4436 in its own right.
 func TestPrintRefusesADescriptorOpenForReading(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ro.txt")
@@ -45,15 +53,18 @@ sysopen -u ro ro.txt
 print -u $ro -- nope
 print "st=$?"
 read -u $ro line
-print "read=[$line]"`)
+print "read=[$line]"
+print "fd=$ro"`)
 	if st != 0 {
 		t.Fatalf("the snippet itself failed: status %d, %q / %q", st, out, errs)
 	}
-	if want := "st=1\nread=[abcdef]\n"; out != want {
-		t.Errorf("print -u on a read-only descriptor = %q, want %q", out, want)
+	fd, ok := strings.CutPrefix(strings.TrimSuffix(out, "\n"), "st=1\nread=[abcdef]\nfd=")
+	if !ok || fd == "" {
+		t.Fatalf("print -u on a read-only descriptor = %q, want st=1, the text unread and the descriptor named", out)
 	}
-	if !strings.Contains(errs, "bad mode on fd ") {
-		t.Errorf("said %q, want the mode named", errs)
+	if want := "bad mode on fd " + fd + "\n"; !strings.HasSuffix(errs, want) ||
+		strings.Count(errs, "\n") != 1 {
+		t.Errorf("said %q, want one line ending %q", errs, want)
 	}
 	after, err := os.ReadFile(path)
 	if err != nil {

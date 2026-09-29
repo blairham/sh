@@ -689,6 +689,7 @@ ksh   SetValidatesOptionLettersFirst
 ksh   ShiftFromTheEndLetter
 ksh   SubstringEndBehindTheStart
 ksh   TestAndArithmeticUpdatePipelineStatus
+ksh   TestNegationBeforeAnOperatorIsAnOperand
 ksh   TransformLetterCheckedOnlyWhenValued
 ksh   TrapReportsAnUnknownSingleCondition
 ksh   TrapSingleUnknownConditionIsUsage

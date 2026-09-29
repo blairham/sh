@@ -505,6 +505,7 @@ func Semantics() interp.Semantics {
 	// `!` negates the negation behind it. Measured 2026-09-19 in the pinned
 	// Alpine image, BusyBox 1.37 (#3700).
 	s.TestFourWordsNegateANegationOnce = interp.No
+	s.TestNegationBeforeAnOperatorIsAnOperand = interp.No
 	// But at three words a leading `!` is read before the connectives here,
 	// as it is in dash and as POSIX gives the rule: `[ ! -a x ]` is `x:
 	// unknown operand` at 2 and `[ ! x -a ]` is `argument expected` at 2,

@@ -77,13 +77,14 @@ func TestARedirectionTargetsBodyIsNotTraced(t *testing.T) {
 func TestAWordSubstitutionsBodyIsStillTraced(t *testing.T) {
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
-		// A reading substitution whose body nothing waits for is **not**
-		// asserted here: whether its line is out by the time the script ends
-		// is #5088's race and cannot be pinned, so a row for bare
-		// `: <(print A)` would flake. The reading direction is covered by the
-		// row below, where the command opens the pipe, and by
-		// TestOneCommandDecidesItByPlaceAndNotDirection.
-		{"reading, with a command that reads it", "cat <(print A) > /dev/null\n:\n", "@ print A"},
+		// **No row asserts a `<(…)` body's line on its own.** Whether it is
+		// out by the time the script ends is #5088's race — nothing waits for
+		// a reading substitution's body — so such a row flakes, which is what
+		// this one did on CI before it was taken out. The two spellings below
+		// are waited for at the command, so their bodies have run by the time
+		// anything is read; the reading direction is covered by
+		// TestOneCommandDecidesItByPlaceAndNotDirection, which grades it
+		// against a spelling that settles.
 		// The writing direction **as a word** is traced too, which is what
 		// refutes reading the rule as `>(…)` against `<(…)`.
 		{"writing", ": >(read v)\n:\n", "@ read v"},
@@ -99,18 +100,37 @@ func TestAWordSubstitutionsBodyIsStillTraced(t *testing.T) {
 	}
 }
 
-// **One command settles it.** Two reading substitutions, one a word and one a
+// **One command settles it.** Two substitutions, one a word and one a
 // redirection's target: the word's body is traced and the target's is not, so
-// the rule cannot be about the direction and cannot be about the command.
+// the rule is neither about the direction nor about the command.
+//
+// The word is a spelling the command **waits for** — the file one here, the
+// writing one below — because a `<(…)` word's body is not waited for by
+// anybody and asserting its line is asserting #5088's race. Both rows carry a
+// reading `<(…)` as the *target*, which is the half this issue is about and
+// which is silent either way.
 func TestOneCommandDecidesItByPlaceAndNotDirection(t *testing.T) {
 	dir := t.TempDir()
-	got := strings.Join(tracedLines(t, dir, "cat <(print A) < <(print B) > /dev/null\n:\n"), "\n")
-	if !strings.Contains(got, "@ print A") {
-		t.Errorf("traced %q, want the word's body traced", got)
-	}
-	if strings.Contains(got, "@ print B") {
-		t.Errorf("traced %q, want the target's body silent", got)
-	}
+	// The file spelling settles completely, so this row asserts the whole
+	// sequence rather than what it carries.
+	t.Run("a file substitution beside a reading target", func(t *testing.T) {
+		got := tracedLines(t, dir, ": =(print A) < <(print B)\n:\n")
+		if len(got) != 3 || got[0] != "@ print A" || got[2] != "@ :" ||
+			!strings.HasPrefix(got[1], "@ : /") {
+			t.Errorf("traced %q, want the word's body, the command, and nothing of the target's", got)
+		}
+	})
+	// And with a writing word beside a writing target, which is the same
+	// command in the same direction twice over.
+	t.Run("a writing word beside a writing target", func(t *testing.T) {
+		got := strings.Join(tracedLines(t, dir, ": >(print INWORD) > >(read w)\n:\n"), "\n")
+		if !strings.Contains(got, "@ print INWORD") {
+			t.Errorf("traced %q, want the word's body traced", got)
+		}
+		if strings.Contains(got, "@ read w") {
+			t.Errorf("traced %q, want the target's body silent", got)
+		}
+	})
 }
 
 // A substitution nested **inside** a silenced body is silent too, which is the

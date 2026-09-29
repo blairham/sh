@@ -15,10 +15,11 @@ import "github.com/blairham/sh/syntax"
 // FunctionLayout is how a function is shown to a person.
 func FunctionLayout() syntax.Layout {
 	return syntax.Layout{
-		RedirectDescriptor: syntax.RedirectDescriptorOmitted,
-		Indent:             "\t",
-		Nested:             true,
-		Lines:              true,
+		HereDocumentStripMarkOmitted: true,
+		RedirectDescriptor:           syntax.RedirectDescriptorOmitted,
+		Indent:                       "\t",
+		Nested:                       true,
+		Lines:                        true,
 		// No terminator anywhere: `echo one` ends its line bare, before
 		// `fi` as much as mid-block.
 		Separator:         "",

@@ -366,6 +366,28 @@ type Layout struct {
 	// bash 5.3.20 through `declare -f`.
 	HereDocumentWordSingleQuoted bool
 
+	// HereDocumentStripMarkOmitted writes a `<<-` back as `<<`.
+	//
+	// The dash asks the *reader* to strip a leading tab from every body
+	// line and from the delimiter. A listing has already done that — the
+	// body it holds is the stripped one — so the mark has no work left to
+	// do, and one shell takes it off while another leaves it on.
+	//
+	// Measured 2026-09-29 by defining `f() { cat <<-x <<-y … }` with real
+	// tabs and asking each shell to print it back:
+	//
+	//	zsh 5.9.2     `cat <<x <<y`    body at column 0
+	//	bash 5.3.20   `cat <<-x <<-y`  body at column 0
+	//	ksh93u+       `cat <<-x <<-y`  body still tab-indented
+	//
+	// **Two columns reach this and the third does not**, which is why it is
+	// a bool rather than a third named form: ksh93 writes the definition's
+	// own source text back — see Diagnostics.FunctionListingIsSourceText —
+	// so its tabs survive because nothing reprinted them. The zero value
+	// keeps the mark, which is bash's answer and the safe one for a
+	// fallback path that might print a body nobody stripped.
+	HereDocumentStripMarkOmitted bool
+
 	// RedirectDescriptor is what a written-back redirection does with the
 	// descriptor on its left when that descriptor is the operator's own
 	// default — `1` for the writing operators, `0` for the reading ones.
@@ -2035,7 +2057,7 @@ func (p *printer) redirsAfter(rs []*Redirect, blank bool) {
 		if p.writesTheDescriptor(rd) {
 			p.word(rd.N)
 		}
-		p.str(rd.Op.String())
+		p.str(p.heredocOperator(rd.Op))
 		if rd.Op.IsSeek() {
 			// The operand is an arithmetic command and is written back as
 			// one: the span is the same ArithSubst `$((…))` carries, and the
@@ -3021,3 +3043,13 @@ const (
 	// the script wrote it or not. `1>&2` comes back `>&2`.
 	RedirectDescriptorOmitted
 )
+
+// heredocOperator is the operator as this arrangement writes it back, which
+// is itself for everything but a `<<-` whose mark has nothing left to strip.
+// See [Layout.HereDocumentStripMarkOmitted].
+func (p *printer) heredocOperator(op Kind) string {
+	if op == TokDLessDash && p.layout.HereDocumentStripMarkOmitted {
+		return TokDLess.String()
+	}
+	return op.String()
+}

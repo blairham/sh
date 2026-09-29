@@ -66,6 +66,41 @@ func (r *Runner) prefixCommandOf(argv []string) prefixCommand {
 				argv = commandOperandOf(argv[1:])
 				continue
 			}
+			if m, mod := r.precommands[argv[0]]; mod && m == PrecommandTransparent && len(argv) > 1 {
+				// A **transparent** modifier is looked through too, and
+				// without the flag above: the prefix stands in front of
+				// whatever the modifier names, and that command's own rule
+				// decides. `command` is the one word that stops this, which
+				// is what CommandKeepsASpecialBuiltinsPrefix answers.
+				//
+				// Measured 2026-09-29 on zsh 5.9.2 with `posixbuiltins` on,
+				// the value read back outside a subshell:
+				//
+				//	x=v builtin :        x=v    looked through to `:`
+				//	x=v noglob :         x=v    the same, and already right
+				//	x=v command :        x=43   `command` stops it
+				//	x=v builtin true     x=43   looked through to `true`
+				//
+				// `noglob` was already right because the front end takes it
+				// away before the scan sees it; `builtin` stays in the words
+				// — it is a builtin as well as a modifier — so the builtin
+				// lookup above shadowed the look-through and the prefix was
+				// read as standing in front of `builtin` itself.
+				//
+				// **The kind test is narrower than anything a script can
+				// see today, and deliberately so.** Widening it to "any
+				// precommand" is an equivalent mutant: `command` is caught
+				// by the branch above before this one is reached, `noglob`
+				// and `-` are taken away before the scan runs, and `exec`
+				// with a command behind it replaces the shell, so there is
+				// nothing left to observe. Measured — `exec :`, `exec true`,
+				// `- :`, `- true`, `command -- :` and `noglob exec :` are
+				// unchanged either way. The test stays because it states
+				// which kind this is for, and the next modifier registered
+				// with a different kind should not inherit it silently.
+				argv = argv[1:]
+				continue
+			}
 			if r.IsSpecialBuiltinHere(argv[0]) {
 				p.kind = prefixBeforeSpecialBuiltin
 				return p
@@ -414,10 +449,22 @@ func (r *Runner) refusePrefixesNow(assigns []*syntax.Assign, p prefixCommand, re
 func (r *Runner) prefixPersistsAtThisBuiltin(word string, kind prefixCommand) bool {
 	throughCommand := false
 	if !r.IsSpecialBuiltinHere(word) {
-		if !kind.throughCommand || kind.kind != prefixBeforeSpecialBuiltin {
+		// The word is a modifier, so what the prefix stands in front of is
+		// whatever the modifiers resolved to. **Which modifier it was still
+		// matters**, and only for `command`: measured 2026-09-29 on zsh
+		// 5.9.2 under `posixbuiltins`, `x=v builtin :` and `x=v noglob :`
+		// keep the value where `x=v command :` does not, and
+		// CommandKeepsASpecialBuiltinsPrefix is that one word's answer.
+		//
+		// This used to read the written word alone, which disagreed with
+		// prefixRosterName one line away: that one already looked through
+		// the modifiers, so `builtin :` asked the roster about `:` and the
+		// axis about `builtin`, and neither answered for the command that
+		// was going to run.
+		if kind.kind != prefixBeforeSpecialBuiltin {
 			return false
 		}
-		throughCommand = true
+		throughCommand = kind.throughCommand
 	}
 	if !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin,
 		"an assignment before a special builtin persisting") {

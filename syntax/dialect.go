@@ -2949,13 +2949,15 @@ type Dialect struct {
 	// why it is one flag rather than one per spelling; there is no column
 	// that takes some and refuses others.
 	//
-	// **`>|` is core and so cannot be evidence for this flag.** BusyBox ash
-	// 1.36.1 is set true here on the strength of `set -C; echo x >| f`
-	// overwriting, and that row reads the same whichever way this flag is
-	// set. Measured in `alpine:3.20` on 2026-09-29, BusyBox accepts none of
-	// the seven: `>>|`, `&>|`, `&>>|` and `&>>!` are syntax errors and `>!`,
-	// `>>!` and `&>!` write a file named `!out`. The preset is wrong and is
-	// residue on #4436 rather than something this flag can fix.
+	// **`>|` is core and so cannot be evidence for this flag.** ash was set
+	// true here on the strength of `set -C; echo x >| f` overwriting, and
+	// that row reads the same whichever way this flag is set — a correct
+	// instrument pointed at an input that cannot exercise it. Measured in
+	// `alpine:3.20` on 2026-09-29, BusyBox 1.36.1 accepts none of the seven:
+	// `>>|`, `&>|`, `&>>|` and `&>>!` are syntax errors and `>!`, `>>!` and
+	// `&>!` write a file named `!out`. Fixed in #5119; ash answers false and
+	// `dialect/ash/clobbermarker_test.go` grades the rows on **which file
+	// was written**, because three of them are silent.
 	//
 	// The two fallbacks are different and both are what the shells do, which
 	// is the reason to be careful here. A `|` marker falls back to a pipe

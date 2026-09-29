@@ -124,21 +124,25 @@ type printOptions struct {
 	// columns is `-C n`: how many columns the operands are laid out in,
 	// filled down. Zero is no layout at all, which is every `print` that
 	// did not write the letter. See printcolumns.go.
-	columns   int
-	raw       bool
-	echoMode  bool
-	noTerm    bool
-	lineSep   bool
-	nulSep    bool
-	match     bool
-	sortDesc  bool
-	sorted    bool
-	fold      bool
-	history   bool
-	single    bool
-	editor    bool
-	prompt    bool
-	named     bool
+	columns  int
+	raw      bool
+	echoMode bool
+	noTerm   bool
+	lineSep  bool
+	nulSep   bool
+	match    bool
+	sortDesc bool
+	sorted   bool
+	fold     bool
+	history  bool
+	single   bool
+	editor   bool
+	prompt   bool
+	named    bool
+	// fdNamed says the descriptor was asked for by number — `-u3`, or the
+	// coprocess `-p` — rather than being this builtin's own standard output.
+	// It is what tells `bad mode on fd N` from silence: see printWriteFailed.
+	fdNamed   bool
 	format    string
 	hasFormat bool
 	fd        int
@@ -280,7 +284,7 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		r.RefuseCodePoint()
 	}
 	if _, err := io.WriteString(out, text); err != nil {
-		return printWriteFailed(r, opts.fd, err)
+		return printWriteFailed(r, opts.fd, opts.fdNamed, err)
 	}
 	if refused {
 		// The status the refusal left, which is the zero measured at
@@ -312,11 +316,39 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // sentence is about. `bad file number` is the other complaint and is already
 // answered above, where the number names nothing at all.
 //
+// **And the sentence belongs to a descriptor that was named.** EBADF has a
+// second cause — this builtin's own standard output being closed or opened for
+// reading by the command's redirections — and the reference says nothing at all
+// about that one. Measured 2026-09-29 on zsh 5.9.2, script files under `env -i
+// PATH=/usr/bin:/bin`:
+//
+//	print foo >&-            	silent, status 0
+//	print foo 1>&-           	silent, status 0
+//	print foo 1</etc/hosts   	silent, status 0
+//	exec 3</etc/hosts; print foo 1>&3	silent, status 0
+//	print -u1 foo >&-        	`bad file number: 1`, status 1
+//	print -u3 foo 3>&-       	`bad file number: 3`, status 1
+//	sysopen -u ro f; print -u $ro x  	`bad mode on fd 3`, status 1
+//
+// So the same closed descriptor answers differently depending on whether the
+// command named it, which is why the flag is carried rather than the number
+// alone. Writing `bad mode on fd 1` for a `print` whose stdout was closed was
+// this shell's own invention and is what `A04redirect.ztst` stops on under
+// `'>&-' redirection`.
+//
+// **Not silence in every ambient case**, which is recorded rather than claimed:
+// where fd 1 was closed *before* the command — `{ print foo } >&-`, or `exec
+// 1>&-` — the reference writes `write error: bad file descriptor` with no
+// builtin in the location, and still leaves status 0. That is the shell's own
+// stream complaint rather than this builtin's, it is on #4436, and this change
+// moves those rows from the wrong sentence at the wrong status to no sentence
+// at the right one.
+//
 // Any other error is left as it was: what this shell says for a write that
 // fails for some other reason is unmeasured, and inventing a second sentence
 // under the first one's wording would be a guess wearing a measurement.
-func printWriteFailed(r *interp.Runner, fd int, err error) int {
-	if errors.Is(err, syscall.EBADF) {
+func printWriteFailed(r *interp.Runner, fd int, named bool, err error) int {
+	if named && errors.Is(err, syscall.EBADF) {
 		r.Diagnosef("bad mode on fd %d\n", fd)
 		return 1
 	}
@@ -604,7 +636,7 @@ func applyPrintArgument(r *interp.Runner, letter byte, arg string, opts *printOp
 		r.Diagnosef("bad file number: %d\n", fd)
 		return 1
 	}
-	opts.fd = fd
+	opts.fd, opts.fdNamed = fd, true
 	return -1
 }
 
@@ -646,7 +678,7 @@ func setPrintLetter(r *interp.Runner, letter byte, opts *printOptions) int {
 			r.Diagnosef("-p: no coprocess\n")
 			return 1
 		}
-		opts.fd = fd
+		opts.fd, opts.fdNamed = fd, true
 	}
 	return -1
 }

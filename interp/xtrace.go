@@ -1505,6 +1505,12 @@ func (r *Runner) SetTraceSink(pick func(*Runner) io.Writer) { r.traceSink = pick
 // ordering, and a trace going to a descriptor of the script's own is not in
 // that ordering at all.
 func (r *Runner) tracef(format string, args ...any) {
+	// A substitution body's first line is what says it has reached a command,
+	// for the sake of the order the lines arrive in. Here rather than at the
+	// one caller that matters, because that is true of every kind of line it
+	// writes and of every runner it clones. See
+	// interp/procsubtracestart.go.
+	defer r.bodyTraceStart.mark()
 	if r.traceSink != nil {
 		if w := r.traceSink(r); w != nil {
 			_, _ = fmt.Fprintf(w, format, args...)

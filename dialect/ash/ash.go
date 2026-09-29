@@ -97,10 +97,50 @@ func Dialect() syntax.Dialect {
 	d.ArithExplicitBase = true
 	d.ArithIncDec = true
 	d.ArithComma = true
-	// The two redirection spellings: `echo x &>/dev/null` is silent, and
-	// `set -C; echo x >| f` overwrites.
+	// `echo x &>/dev/null` is silent here, which is what this flag is for:
+	// both streams to one file. Measured in `alpine:3.20` on 2026-09-29,
+	// BusyBox v1.36.1, `( echo O; echo E >&2 ) &>out` leaves `out` holding
+	// both lines and writes nothing to the terminal.
+	//
+	// **`&>>` is a syntax error here and this flag takes it anyway**, which
+	// is one row wrong in the other direction and is not the marker flag's
+	// to fix: this flag gates `&>` and `&>>` together and no value of it is
+	// right for ash. Measured in the same run, `( echo O; echo E >&2 ) &>>out`
+	// is `syntax error: unexpected redirection` at 2 there and writes `out`
+	// here. Splitting the flag is a change to a **core** axis and wants the
+	// panel re-measured for the split, since nothing has asked which columns
+	// take one and not the other; it is described in #5119 and **not filed**,
+	// deliberately, so that it is scoped rather than folded in. Residue on
+	// #4436.
 	d.AmpersandRedirect = true
-	d.ClobberOverrideMarker = true
+	// **Off, and the `>|` row is not evidence either way.** This used to be
+	// true, justified by `set -C; echo x >| f` overwriting — but `>|` is
+	// TokClobber and is core, so every dialect reads it and that row says
+	// the same thing whichever way this flag is set. A correct instrument
+	// pointed at an input that cannot exercise what it was pointed at.
+	//
+	// The flag enables seven *other* spellings and BusyBox accepts none of
+	// them. Measured in `alpine:3.20` on 2026-09-29, BusyBox v1.36.1, each
+	// row a script holding `( echo O; echo E >&2 ) OPout` in an empty
+	// directory, graded on **which file was written** rather than on the
+	// status, because three of the rows are silent:
+	//
+	//	>|      writes `out`                        (core, agrees)
+	//	>!      writes a file named `!out`          silent
+	//	>>!     writes a file named `!out`          silent
+	//	&>!     writes a file named `!out`          silent
+	//	>>|     syntax error at the `|`, status 2
+	//	&>|     syntax error at the `|`, status 2
+	//	&>>|    syntax error, status 2
+	//	&>>!    syntax error, status 2
+	//
+	// The three silent rows are why this matters: the script reports 0
+	// either way and the bytes land in a different file, with no diagnostic
+	// on either side. The `|` spellings fall back to a pipe with nothing on
+	// its left and are refused; the `!` spellings fall back to a word and
+	// are not. Same shape as #1247 in the other direction — there a marker
+	// was read as a filename, here a filename was read as a marker (#5119).
+	d.ClobberOverrideMarker = false
 	// A here-document body line that joined *before* any text of it was
 	// written still reaches the delimiter, as in dash; one that joined after
 	// text does not (#2430).

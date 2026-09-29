@@ -1770,6 +1770,27 @@ a shell name.
 By contrast `>|`, which overrides `noclobber`, is accepted with the same
 meaning by all six and is core.
 
+#### The same family spelled with the ampersand last
+
+zsh spells both-streams a second way, with the ampersand after the `>`
+rather than before it, and the second spelling is the first one exactly:
+`>>&` is `&>>`, and `>&|`, `>&!`, `>>&|` and `>>&!` are the marked forms.
+Measured 2026-09-29 across the panel and BusyBox ash 1.36.1; zsh alone
+reads any of them.
+
+`>&` itself is **not** part of this. It is POSIX duplication and every
+column lexes it; what a word that is not a descriptor number does to it is
+the interpreter's question, not the lexer's. The five the flag adds have no
+duplication reading at all — `>>&2` writes a file called `2` and `>>&-`
+one called `-`, where `>&2` duplicates and `>&-` closes — which is what
+makes them a family rather than decorations on `>&`, and why the marked
+spellings are gated on the family and not merely on the marker.
+
+Grammar flag: `ReversedAmpersandRedirect` — `zsh` only. The fallback where
+it is off is `AmpersandRedirect`'s hazard in both of its shapes: `>&!f` is
+a `>&` onto a file named `!f`, silently, in bash and in ash, and `>&|f` is
+a syntax error at the `|`.
+
 ### `>;` — a write that only lands if the command succeeded
 
 ksh93 alone has a third write operator. `cmd >; file` sends the output to

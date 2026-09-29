@@ -2936,16 +2936,26 @@ type Dialect struct {
 
 	// ClobberOverrideMarker generalizes the clobber-override marker. Core
 	// takes `|` after `>` alone, which is `>|`; this makes the marker `|`
-	// *or* `!` and lets it follow any of the four write operators, so it
-	// enables all seven of `>!`, `>>|`, `>>!`, `&>|`, `&>!`, `&>>|` and
-	// `&>>!`. The last four need AmpersandRedirect as well, since a marker
-	// cannot attach to an operator the dialect does not read.
+	// *or* `!` and lets it follow any of the write operators, so it enables
+	// eleven spellings: `>!`, `>>|`, `>>!`, `&>|`, `&>!`, `&>>|`, `&>>!`,
+	// and — with [Dialect.ReversedAmpersandRedirect], since a marker cannot
+	// attach to an operator the dialect does not read — `>&|`, `>&!`, `>>&|`
+	// and `>>&!`. The `&>` four need AmpersandRedirect for the same reason.
 	//
-	// Measured 2026-09-07 across the panel, and it moves as one thing: zsh
-	// 5.9.2 accepts all seven, and dash, bash 5.3, bash 5.3 as sh, bash 3.2
-	// and ksh93 accept none of them — they have `>|` and nothing else. That
-	// is why it is one flag rather than one per spelling; there is no column
+	// Measured 2026-09-07 across the panel and extended 2026-09-29 with the
+	// four `>&` spellings, and it still moves as one thing: zsh 5.9.2
+	// accepts all eleven, and dash, bash 5.3, bash 5.3 as sh, bash 3.2 and
+	// ksh93 accept none of them — they have `>|` and nothing else. That is
+	// why it is one flag rather than one per spelling; there is no column
 	// that takes some and refuses others.
+	//
+	// **`>|` is core and so cannot be evidence for this flag.** BusyBox ash
+	// 1.36.1 is set true here on the strength of `set -C; echo x >| f`
+	// overwriting, and that row reads the same whichever way this flag is
+	// set. Measured in `alpine:3.20` on 2026-09-29, BusyBox accepts none of
+	// the seven: `>>|`, `&>|`, `&>>|` and `&>>!` are syntax errors and `>!`,
+	// `>>!` and `&>!` write a file named `!out`. The preset is wrong and is
+	// residue on #4436 rather than something this flag can fix.
 	//
 	// The two fallbacks are different and both are what the shells do, which
 	// is the reason to be careful here. A `|` marker falls back to a pipe
@@ -2958,6 +2968,41 @@ type Dialect struct {
 	// here would quietly pick zsh's reading for text that legitimately has
 	// the other one.
 	ClobberOverrideMarker bool
+
+	// ReversedAmpersandRedirect enables `>>&`, and with
+	// [Dialect.ClobberOverrideMarker] the four marked spellings `>&|`,
+	// `>&!`, `>>&|` and `>>&!` — the both-streams operators written with the
+	// ampersand *after* the `>` rather than before it.
+	//
+	// `>&` itself is not here: it is POSIX duplication and every dialect
+	// lexes it, and whether a word that is not a descriptor number turns it
+	// into a write to a file is a semantic question the interpreter answers
+	// (GreatAmpTarget). What this flag adds is the *append* spelling, which
+	// has no duplication reading at all, and the markers.
+	//
+	// The five are their `&>` twins exactly. Measured 2026-09-29 on zsh
+	// 5.9.2, thirty rows — both streams into one file, a numeric target, a
+	// `-` target, `set -C` over an existing file, `set -C` over a missing
+	// one, and an append onto seeded contents — with `>>&` against `&>>`,
+	// `>&|` against `&>|`, `>&!` against `&>!`, `>>&|` against `&>>|` and
+	// `>>&!` against `&>>!`. Every row identical, and the probe says DIFF on
+	// the same rows when the pairs are mismatched, so the agreement is
+	// evidence rather than a probe that cannot tell anything apart.
+	//
+	// **The target is always a name here, even when it looks like a
+	// descriptor.** `>>&2` and `>&|2` write a file called `2`, and `>>&-`
+	// writes one called `-`, where `>&2` duplicates and `>&-` closes. That
+	// is what makes the append and the markers a family of their own rather
+	// than decorations on `>&`.
+	//
+	// zsh 5.9.2 alone, measured the same day: bash 5.3.20, bash 3.2.57,
+	// dash and ksh93 all refuse `>>&`, `>&|`, `>>&|` and `>>&!` outright,
+	// and BusyBox ash 1.36.1 refuses them too. The fallback where this is
+	// off is the AmpersandRedirect hazard in both directions — `>&!f` is a
+	// `>&` onto a file named `!f`, silently, in bash and in ash, and `>&|f`
+	// is a syntax error at the `|`. Accepting the union would quietly pick
+	// zsh's reading for text that has the other one.
+	ReversedAmpersandRedirect bool
 
 	// RenameOnSuccessRedirect reads `>;`, one dialect's write that lands
 	// only if the command succeeded. The output goes to a temporary file in

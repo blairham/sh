@@ -931,6 +931,12 @@ func Dialect() syntax.Dialect {
 	// holding `hi f` and reports success, so the spelling is not an error
 	// elsewhere but a different meaning (#1247).
 	d.ClobberOverrideMarker = true
+	// And the same operators spelled with the ampersand last: `>>&` appends
+	// both streams, and `>&|`, `>&!`, `>>&|` and `>>&!` are the marked
+	// forms. Each is its `&>` twin row for row, measured; what tells the
+	// family from `>&` is that the target is always a name, so `>>&2` writes
+	// a file called `2` where `>&2` duplicates the descriptor.
+	d.ReversedAmpersandRedirect = true
 	return d
 }
 

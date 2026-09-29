@@ -674,17 +674,29 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// is standard input, exactly as a plain `<` is.
 			flags = os.O_RDWR | os.O_CREATE
 		case syntax.TokAmpGreat, syntax.TokAmpGreatClobber, syntax.TokAmpGreatBang,
-			syntax.TokAmpDGreat, syntax.TokAmpDGreatClobber, syntax.TokAmpDGreatBang:
+			syntax.TokAmpDGreat, syntax.TokAmpDGreatClobber, syntax.TokAmpDGreatBang,
+			syntax.TokDGreatAmp, syntax.TokGreatAmpClobber, syntax.TokGreatAmpBang,
+			syntax.TokDGreatAmpClobber, syntax.TokDGreatAmpBang:
 			// Both streams to one file, and the override marker reaches these
 			// two operators as well in the one dialect that has it: `&>|`,
 			// `&>!`, `&>>|` and `&>>!` are the same exemption `>|` is.
+			//
+			// The five spelled with the ampersand last land here too and not
+			// beside here, because they are the same operators: `>>&` is
+			// `&>>` and `>&|` is `&>|`, measured row for row over both
+			// streams, a numeric target, a `-` target, `set -C` either way
+			// and an append onto seeded contents. A second case would be a
+			// second copy of this one to keep in step. See
+			// syntax.Dialect.ReversedAmpersandRedirect.
 			appending := op == syntax.TokAmpDGreat ||
-				op == syntax.TokAmpDGreatClobber || op == syntax.TokAmpDGreatBang
+				op == syntax.TokAmpDGreatClobber || op == syntax.TokAmpDGreatBang ||
+				op == syntax.TokDGreatAmp ||
+				op == syntax.TokDGreatAmpClobber || op == syntax.TokDGreatAmpBang
 			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 			switch {
 			case appending:
 				flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
-				if op == syntax.TokAmpDGreat {
+				if op == syntax.TokAmpDGreat || op == syntax.TokDGreatAmp {
 					// The same axis: `&>>` is an append, and the dialect that
 					// puts noclobber on `>>` puts it here too.
 					blocks, unanswered := r.noclobberBlocksAppend()

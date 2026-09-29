@@ -4106,6 +4106,45 @@ operators rather than `>` alone. Measured 2026-09-07 against `/bin/dash`,
 It moves as one thing — no column takes some spellings and refuses others —
 so it is one grammar flag, `ClobberOverrideMarker`, and not seven.
 
+### The same operators spelled with the ampersand last
+
+That column spells both-streams twice over. `>&word` is `&>word`, and the
+whole family follows: `>>&` appends, and the marker reaches all four of
+them. Measured 2026-09-29 against the same panel plus BusyBox ash 1.36.1 in
+`alpine:3.20`:
+
+| written | the other columns | zsh 5.9.2 |
+| --- | --- | --- |
+| `>&` | both streams, where a word that is not a number names a file | the same |
+| `>>&` | syntax error at the `&` | appends both streams |
+| `>&\|` | syntax error at the `\|` | truncates, overriding `set -C` |
+| `>&!` | **a file named `!`** | truncates, overriding `set -C` |
+| `>>&\|` | syntax error | appends, creating |
+| `>>&!` | syntax error | appends, creating |
+
+The five new spellings are their `&>` twins row for row — thirty rows over
+both streams, a numeric target, a `-` target, `set -C` over an existing file,
+`set -C` over a missing one, and an append onto seeded contents, with the
+same probe reporting a difference whenever the pairs are deliberately
+mismatched. So they are the same operators and not a parallel set, and they
+are read into the same tokens' worth of meaning rather than a second copy of
+it.
+
+What tells the family from `>&` itself is the **target**. `>&2` duplicates
+the descriptor and `>&-` closes it; `>>&2` writes a file called `2`,
+`>>&-` writes one called `-`, and `>&|2` and `>&!2` write a file called `2`.
+Every spelling the flag adds reads its target as a name, always. That is why
+the marked forms are gated on the family rather than on `>&` being lexable:
+a marker after `>&` is not a marker on the duplication, it is the operator
+changing kind.
+
+`>&` stays core for the same reason it always was — it is POSIX duplication,
+and whether a non-numeric word turns it into a write to a file is the
+interpreter's `GreatAmpTarget`. The flag is `ReversedAmpersandRedirect`, and
+it carries the append and the four marked spellings. Its fallbacks are the
+familiar pair one more time: `>&!f` is silently a `>&` onto a file called
+`!f` in bash and in ash, and `>&|f` is a loud refusal at the `|`.
+
 The bold cells are the reason it is a flag rather than something the lexer
 could simply learn. **The two fallbacks are not the same kind of thing.** A
 `\|` marker falls back to a pipe with nothing on its left, so the five

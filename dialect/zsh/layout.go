@@ -28,6 +28,10 @@ func FunctionLayout() syntax.Layout {
 		// would have separated it from a word: `f() { > out; }` comes back
 		// `\t > out` here, where the other engine writes `> out`.
 		BlankBeforeAWordlessRedirection: true,
+		// And a blank after every assignment word, which then serves as the
+		// separator: `url=x ` at the end of a line, and `url=x  > /dev/null`
+		// with two blanks where a redirection follows.
+		BlankAfterAnAssignment: true,
 		// `then` and `do` — after words and after a command alike — each
 		// start a line of their own.
 		ThenOnItsOwnLine:           true,

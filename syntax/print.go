@@ -454,6 +454,38 @@ type Layout struct {
 	// with the blank and `echo $(< x1)` without it.
 	BlankBeforeAWordlessRedirection bool
 
+	// BlankAfterAnAssignment writes a blank after every assignment word,
+	// which then stands in for the separator to whatever follows it —
+	// `url=x` written back as `url=x `.
+	//
+	// One engine listing a body does this and the other does not. Measured
+	// 2026-09-29 on zsh 5.9.2 through `which`, one function per row, the
+	// trailing `|` marking the end of the line:
+	//
+	//	url=x              url=x |             print y      print y|
+	//	a=1 b=2            a=1 b=2 |           true         true|
+	//	a=1 print x        a=1 print x|        unset x      unset x|
+	//	typeset -x a=1     typeset -x a=1 |    print url=x  print url=x|
+	//	local url=x        local url=x |
+	//	url=x > /dev/null  url=x  > /dev/null|
+	//
+	// **The assignment word is the noun, not the command**, and two rows say
+	// so in opposite directions. `a=1 print x` takes no trailing blank, so it
+	// is not a command holding an assignment that gains one; and
+	// `typeset -x a=1` takes one although its *last* word is the assignment
+	// only because the operand was written last. A rule keyed on the command
+	// agrees with every other row in this table.
+	//
+	// Two blanks appear where a redirection follows, because that one is
+	// written separately from the separator this stands in for. That row is
+	// what says the blank belongs to the word rather than being the ordinary
+	// separator moved.
+	//
+	// `print url=x` is the control that keeps it to assignments the grammar
+	// read as assignments: the same characters as an argument to a command
+	// that takes none are just a word.
+	BlankAfterAnAssignment bool
+
 	// AnsiCQuotedWordIsItsValue writes a `$'…'` as an ordinary single-quoted
 	// string holding the characters it stands for, decoded by this function.
 	//
@@ -757,6 +789,14 @@ type printer struct {
 }
 
 func (p *printer) str(s string) { p.b.WriteString(s) }
+
+// endsInABlank reports whether what has been written so far ends in a blank,
+// which is how a separator knows to stand down for one an assignment word
+// already carried. See Layout.BlankAfterAnAssignment.
+func (p *printer) endsInABlank() bool {
+	written := p.b.String()
+	return len(written) > 0 && written[len(written)-1] == ' '
+}
 
 // atLineStart reports whether what has been written so far ends a line.
 //
@@ -1857,7 +1897,12 @@ func patternsNeedTheParen(it *CaseItem) bool {
 func (p *printer) simple(c *SimpleCmd) {
 	first := true
 	sep := func() {
-		if !first {
+		if !first && !p.endsInABlank() {
+			// Not where the last thing written already ended in one, which
+			// is Layout.BlankAfterAnAssignment's doing: the blank an
+			// assignment carries *is* the separator to whatever follows it,
+			// and writing a second would put two between `a=1` and `b=2`
+			// where the engine that does this writes one.
 			p.str(" ")
 		}
 		first = false
@@ -1920,6 +1965,13 @@ func (p *printer) simple(c *SimpleCmd) {
 }
 
 func (p *printer) assign(a *Assign) {
+	if p.layout.BlankAfterAnAssignment {
+		// Written by the one call that ends an assignment rather than at
+		// each of its four call sites — a prefix, an operand written between
+		// a command's words, one written after them, and a compound
+		// variable's own list — so a fifth cannot be added without it.
+		defer p.str(" ")
+	}
 	p.str(a.Name)
 	if a.Index != nil {
 		p.str("[")

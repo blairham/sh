@@ -496,7 +496,31 @@ var zshOptions = []zshOption{
 	recorded("bashrematch", false),
 	recorded("beep", true),
 	recorded("bgnice", true),
-	recorded("braceccl", false),
+	{
+		// BRACE_CCL: a brace body that is neither a comma list nor a range
+		// is read as a set of characters — `{abc}` as `a b c`, `{a-cA-C}`
+		// as `A B C a b c`, sorted and deduplicated.
+		//
+		// The two readings in front of it are untouched, which is what the
+		// option's own name obscures: `{a,b}` is still alternatives and
+		// `{1..3}` is still a range with this on. See
+		// [interp.Semantics.BraceBodyIsACharacterClass] for the rows,
+		// including the four that say a descending run is not a run.
+		//
+		// Read off the axis rather than a stored bit, so
+		// `(setopt brace_ccl)` stays in the subshell — the arrangement
+		// `shwordsplit` and `posixbuiltins` use.
+		base: "braceccl", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.BraceBodyIsACharacterClass == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.BraceBodyIsACharacterClass
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("bsdecho", false),
 	matchBacked("caseglob", true, interp.GlobFoldsCase, true),
 	// `casematch` is the `=~` operator's and **nothing else**, which is the

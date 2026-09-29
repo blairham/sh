@@ -4004,6 +4004,45 @@ type Semantics struct {
 	// in, leaving `{1..5..01}` unexpanded. BusyBox ash and dash expand no
 	// braces of this kind.
 	BraceRangeStepPadsTheRange Answer
+
+	// BraceBodyIsACharacterClass reads a brace body that holds neither a
+	// comma nor a range as a **character class** — its characters and its
+	// `x-y` runs, expanded, sorted and deduplicated, one word each.
+	//
+	// One shell has it and only behind an option, so the axis is No
+	// everywhere and that shell's `braceccl` turns it on. Measured
+	// 2026-09-29 on zsh 5.9.2 with `setopt brace_ccl`, script files:
+	//
+	//	X{za-q521}Y   X1Y X2Y X5Y XaY … XqY XzY
+	//	{abc}         a b c          {cba}   a b c      (sorted)
+	//	{aa}          a                                 (deduplicated)
+	//	{a-cA-C}      A B C a b c                       (byte order)
+	//	{a}           a
+	//	{}            {}                                (nothing to read)
+	//
+	// **A descending run is not a run, and a `-` at either end is a
+	// character.** That is measured rather than assumed, and it is the half
+	// a reading built from the ascending cases gets wrong:
+	//
+	//	{c-a}   - a c        {z-a}   - a z
+	//	{-a}    - a          {a-}    - a
+	//
+	// The two readings that come first are untouched. A comma still makes
+	// alternatives and `..` still makes a range, so `{a,b}` is `a b` and
+	// `{1..3}` is `1 2 3` with the option on — which is why this is asked
+	// only where both of those have already declined.
+	//
+	// Off in every dialect, including the one that has the option: `{abc}`
+	// is the word `{abc}` in bash, ksh93 and a default zsh alike, and the
+	// other two expand no braces of this kind at all.
+	//
+	// **So it is read and not asked.** There is no disagreement here for a
+	// strict core to refuse over — the panel is unanimous and what moves the
+	// answer is one shell's `braceccl`, which is a session's state rather
+	// than a dialect's answer. Consulting it through Runner.askBrace refused
+	// `{a}` in five tests that had never heard of the option, which is how
+	// that was found.
+	BraceBodyIsACharacterClass Answer
 	// BraceRangeStepSignHonored takes a written step's sign at its word:
 	// the walk leaves the first endpoint in the direction the sign says, so
 	// a sign pointing away from the far endpoint ends the range after one

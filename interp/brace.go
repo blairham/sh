@@ -369,7 +369,126 @@ func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoint
 		return nil, false, false
 	}
 	alts, ok := alternativesInBody(sliceSpans(spans, next(open), close))
+	if !ok {
+		// Neither a comma list nor a range, which is the only shape the
+		// character-class reading is offered. See
+		// Semantics.BraceBodyIsACharacterClass.
+		if ccl, got := r.braceCharacterClass(w, open, close); got {
+			return ccl, true, false
+		}
+	}
 	return alts, ok, false
+}
+
+// braceCharacterClass reads a brace body as a set of characters — `{abc}` as
+// `a b c` — for the one shell that has the option for it.
+//
+// Reached only after the comma reading and the range reading have both
+// declined, which is what keeps `{a,b}` and `{1..3}` unchanged when the
+// option is on.
+func (r *Runner) braceCharacterClass(w *syntax.Word, open, close cursor) ([][]syntax.Span, bool) {
+	body := sliceSpansRead(w.Spans, next(open), close, r.braceScanReads())
+	text, ok := characterClassBody(body)
+	if !ok {
+		// Nothing literal to read as characters.
+		return nil, false
+	}
+	if r.sem().BraceBodyIsACharacterClass != Yes {
+		// Read rather than asked, which is the one thing to notice about
+		// this axis. Every dialect answers No — `{abc}` is the word `{abc}`
+		// in bash, ksh93, a default zsh, and the two that expand no braces
+		// at all — so there is no disagreement for a strict core to refuse
+		// over. What moves it is one shell's `braceccl` option, and an
+		// option's state is not a dialect's answer. Asking here refused
+		// `{a}` in every test that had not heard of the option, which is
+		// how this was found.
+		return nil, false
+	}
+	members := characterClassMembers(text)
+	if len(members) == 0 {
+		// An empty body names nothing, so `{}` stays the word it is in every
+		// column, option or no option.
+		//
+		// **Nothing observable distinguishes this guard**, and it is here
+		// saying so rather than claiming a behavior: a mutant that removes
+		// it survives, because handing the caller an empty list of
+		// alternatives leaves `{}` standing too. It is kept so the intent is
+		// local — this function declines rather than relying on how an empty
+		// result is treated two frames up — and a reader should not have to
+		// take that on trust. A `text == ""` test above it read the same
+		// fact and is gone.
+		return nil, false
+	}
+	return r.rangeSpans(members, w.Spans[open.span].Pos), true
+}
+
+// characterClassBody is the text a class reads, which is **every literal
+// span's value whatever its quoting** — not the unquoted literal run a range
+// or an alternative requires.
+//
+// That is the measurement and not a convenience. On zsh 5.9.2 with the option
+// on, a body whose characters arrived quoted or escaped is still a class, and
+// the quoting is gone by the time the class sees them:
+//
+//	{a\-c}   a b c      the escape is data, and the `-` still makes a run
+//	{a\,b}   , a b      an escaped comma is a member and not a separator
+//	{\a\b}   a b
+//	{a\\b}   \ a b      the backslash itself is a member
+//	{'ab'}   a b        and so is a quoted run
+//	{"ab"}   a b
+//
+// An **expansion declines here, and the reference does not** — this is a
+// gap and not a rule. Measured with `x=abc`: `{$x}` is `a b c` on zsh 5.9.2
+// with the option on and stays the word `{abc}` here, which is the same
+// question Semantics.BraceRangeEndpointsExpanded answers for a range and
+// would need its own answer for a class. Recorded on #5154 rather than
+// claimed as behavior; nothing in `D09brace.ztst` reaches it.
+func characterClassBody(body []syntax.Span) (string, bool) {
+	var b strings.Builder
+	for _, s := range body {
+		if s.Kind != syntax.Literal {
+			return "", false
+		}
+		b.WriteString(s.Value)
+	}
+	return b.String(), true
+}
+
+// characterClassMembers is the characters a class body names, sorted and
+// with duplicates dropped.
+//
+// An `x-y` run counts only where it **ascends**. A descending one is three
+// characters and so is a `-` with nothing on one side of it, which is what
+// makes `{c-a}` the three words `-`, `a`, `c` rather than an empty class or
+// a reversed run — measured on zsh 5.9.2, and the rows are on the axis.
+//
+// **Bytes, not characters**, which is measured rather than chosen and is the
+// one place a tidier reading would have been wrong: `{áb}` on zsh 5.9.2 in a
+// UTF-8 locale is three words — `b` and the two halves of the `á` — so the
+// class walks the body a byte at a time and sorts in byte order. A rune
+// reading answers `b á`, which is arguably the better shell and is not this
+// one. The `{A-z}` row agrees with it from the other side: that run takes in
+// `[ \ ] ^ _` and a backquote, which is the ASCII span and not a span of
+// letters.
+func characterClassMembers(text string) []string {
+	var seen [256]bool
+	for i := 0; i < len(text); i++ {
+		if i+2 < len(text) && text[i+1] == '-' && text[i] <= text[i+2] {
+			for c := int(text[i]); c <= int(text[i+2]); c++ {
+				seen[c] = true
+			}
+			i += 2
+			continue
+		}
+		seen[text[i]] = true
+	}
+	members := make([]string, 0, len(text))
+	for c, ok := range seen {
+		if ok {
+			members = append(members, string([]byte{byte(c)}))
+		}
+	}
+	return members
 }
 
 // alternativesInBody splits a group's body on its top-level commas, returning

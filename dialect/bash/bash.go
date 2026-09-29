@@ -1719,6 +1719,7 @@ func Semantics() interp.Semantics {
 	// contributes magnitude alone, so `{3..1..-1}` stays `3 2 1`.
 	s.BraceRangePadsToEndpointWidth = interp.Yes
 	s.BraceRangeStepPadsTheRange = interp.No
+	s.BraceBodyIsACharacterClass = interp.No
 	s.BraceRangeStepSignHonored = interp.No
 	s.BraceRangeNegativeStepReverses = interp.No
 	// Braces finish before parameters begin, so a range cannot be built

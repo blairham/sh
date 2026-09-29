@@ -100,7 +100,14 @@ const (
 // and silently wrong for one that is", was the argument for implementing it:
 // the bare answer is exactly what `-s` writes when there is no link, and the
 // arrow is what it writes when there is.
-const whenceUnimplemented = "mx"
+// **`-x` has left this list** too, and for the reason `-s` did: the letter is
+// implemented next door. `functions -x2 f` already wrote a body indented by
+// two, and `whence`, `which` and `where` take the same letter with the same
+// argument and the same complaint about a missing one — measured 2026-09-29,
+// all four names answer `number expected after -x` for `-xa` and for a bare
+// `-x`. So the reader is shared rather than written again; see
+// interp.Runner.FunctionBodyIndentOption.
+const whenceUnimplemented = "m"
 
 // registerWhence installs all three names.
 //
@@ -127,23 +134,35 @@ type whenceMode struct {
 }
 
 func whenceBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	return whenceUnder(r, ctx, args, whenceLetters, whenceMode{})
+	return whenceUnder(r, ctx, "whence", args, whenceLetters, whenceMode{})
 }
 
 // whichBuiltin is `whence -c` under its own name, with `-c` no longer on
 // offer because it is already on.
 func whichBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	return whenceUnder(r, ctx, args, whichLetters, whenceMode{csh: true})
+	return whenceUnder(r, ctx, "which", args, whichLetters, whenceMode{csh: true})
 }
 
 // whereBuiltin is `whence -ca` the same way.
 func whereBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
-	return whenceUnder(r, ctx, args, whereLetters, whenceMode{csh: true, all: true})
+	return whenceUnder(r, ctx, "where", args, whereLetters, whenceMode{csh: true, all: true})
 }
 
 // whenceUnder is the one body the three names share: read the letters this
 // name offers on top of the preset it was born with, then answer.
-func whenceUnder(r *interp.Runner, ctx context.Context, args []string, offered string, m whenceMode) int {
+func whenceUnder(r *interp.Runner, ctx context.Context, name string, args []string, offered string, m whenceMode) int {
+	// `-x` first, because its argument may be attached to the letter or be the
+	// word after it, and a scan that has not taken it cannot tell an operand
+	// from an argument — `which -x 2 f` is three words and two of them belong
+	// to the option. The same reader `functions` uses, so the four names
+	// cannot drift about what the letter takes or what it says when the number
+	// is missing. See interp.Runner.FunctionBodyIndentOption.
+	rest, restore, code := r.FunctionBodyIndentOption(name, args)
+	if code != 0 {
+		return code
+	}
+	defer restore()
+	args = rest
 	names, m, code := whenceOptions(r, args, offered, m)
 	if code != 0 || len(names) == 0 {
 		return code

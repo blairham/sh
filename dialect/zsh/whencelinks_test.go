@@ -207,17 +207,23 @@ print -r -- "missing=$?"`)
 }
 
 // The letters are on all three names and are no longer refused by any of
-// them; `-m` and `-x` still are, so the two wordings stay distinguishable.
+// them; `-m` still is, so the two wordings stay distinguishable.
+//
+// **`-x` is no longer on this list** and the row for it has become the
+// opposite: it is answered, and what it answers with is the body indented by
+// the number it was given. Keeping it here as a refusal would have pinned the
+// gap rather than the behavior — see whenceindent_test.go, and
+// interp.Runner.FunctionBodyIndentOption for the reader the four names share.
 func TestWhenceStillNamesTheLettersItHasNotGot(t *testing.T) {
 	dir := whenceLinkTree(t)
 	out, st := runZshLinks(t, dir, `whence -m "tw*" 2>&1
 print -r -- "m=$?"
-whence -x 2 two 2>&1
+whence -x 2 -f two 2>&1
 print -r -- "x=$?"
 whence -z two 2>&1
 print -r -- "z=$?"`)
 	want := "zsh:whence:1: -m is not implemented yet\nm=1\n" +
-		"zsh:whence:3: -x is not implemented yet\nx=1\n" +
+		dir + "/two\nx=0\n" +
 		"zsh:whence:5: bad option: -z\nz=1\n"
 	if out != want || st != 0 {
 		t.Errorf("the refused letters = %q (status %d), want %q", out, st, want)

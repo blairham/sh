@@ -167,10 +167,13 @@ func TestWhenceRefusesAnUnknownLetter(t *testing.T) {
 // rather than as unknown, so a script can tell the two apart.
 //
 // `-s` has left this list, with `-S` beside it: both are implemented since
-// #4446 and the rows are in whencelinks_test.go. `-m` and `-x` are what is
-// left, which is what keeps the two wordings distinguishable.
+// #4446 and the rows are in whencelinks_test.go. **`-x` has left it too** — it
+// is the indent the four body-printing names share, and its rows are in
+// whenceindent_test.go. `-m` is what is left, which is what keeps the two
+// wordings distinguishable: the row below it asks for `-z`, an unknown letter,
+// and the two must not answer alike.
 func TestWhenceRefusesTheLettersItDoesNotImplement(t *testing.T) {
-	for _, letter := range []string{"-m", "-x"} {
+	for _, letter := range []string{"-m"} {
 		out, st := runZsh(t, t.TempDir(), "whence "+letter+" echo\n")
 		if !strings.Contains(out, "not implemented") {
 			t.Errorf("%s gave %q, want it refused as missing", letter, out)

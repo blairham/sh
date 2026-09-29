@@ -19,6 +19,10 @@ package syntax
 func (l *Lexer) heredocDelimiter(w *Word) string {
 	decode := l.dialect.HeredocDelimiterValue
 	if w == nil || decode == nil {
+		// Nil is the caller having no decoder, and then the delimiter is its
+		// bytes. Spelled as an early return rather than as an identity
+		// function so that the shape with nothing to do costs nothing: it is
+		// every delimiter in every script a formatter reads.
 		return w.Literal()
 	}
 	var decodes bool

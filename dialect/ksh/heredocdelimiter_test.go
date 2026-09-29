@@ -30,6 +30,15 @@ func TestAnAnsiCHeredocDelimiterEndsAtItsValue(t *testing.T) {
 		{"under <<-", "while IFS= read -r l; do printf '%s\\n' \"$l\"; done <<-$'E\\tOF'\nBODY\nE\tOF\necho DONE\n", "BODY\nDONE\n"},
 		// A delimiter part quoted and part not.
 		{"part quoted", "while IFS= read -r l; do printf '%s\\n' \"$l\"; done <<E$'\\tOF'\nBODY\nE\tOF\necho DONE\n", "BODY\nDONE\n"},
+		// **Only the `$'…'` spans are decoded.** A single-quoted span beside
+		// one keeps its backslash, so this delimiter is a literal `\t`
+		// followed by `OF` — measured in all three references, which end the
+		// document at the written text and not at the tab.
+		{
+			"a single-quoted span is not decoded",
+			"while IFS= read -r l; do printf '%s\\n' \"$l\"; done <<'E\\t'$'OF'\nBODY\nE\\tOF\necho DONE\n",
+			"BODY\nDONE\n",
+		},
 		// **The other direction**: the text as written must not end it.
 		{
 			"the unexpanded text is body",

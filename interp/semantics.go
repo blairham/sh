@@ -21073,6 +21073,26 @@ type Semantics struct {
 	// FdVariableBadCloseIsAnError refuses `exec {name}>&-` when the name
 	// holds no descriptor number. ksh93 says nothing and reports success.
 	FdVariableBadCloseIsAnError Answer
+	// FdVariableFailedCloseIsReported is whether `{name}>&-` says so when the
+	// number the variable holds is not a descriptor this shell has open.
+	//
+	// The close itself is not refused either way — `exec` is still 0 and the
+	// command still runs — so what this decides is whether a line appears on
+	// standard error. Measured 2026-09-29 over `v=77; exec {v}<&-` and over a
+	// descriptor closed twice, script files under `env -i PATH=/usr/bin:/bin`:
+	// zsh 5.9.2 writes `failed to close file descriptor 77: bad file
+	// descriptor` for both and bash 5.3.20 and ksh93u+ write nothing at all.
+	// dash and ash have no `{name}` form to put the question to.
+	//
+	// The core follows the panel's majority and says nothing, which is also
+	// what this engine did before the field existed — so a dialect that has
+	// not thought about it is unchanged.
+	//
+	// **A descriptor the shell holds is not this question.** 0, 1 and 2 are
+	// the named streams and everything above them is the table, so a close of
+	// something open succeeds and says nothing in every column; only a number
+	// with nothing behind it reaches here.
+	FdVariableFailedCloseIsReported Answer
 
 	// FdNumberBoundedByOpenFileLimit refuses a redirection whose descriptor
 	// number is at or above the process's soft limit on open files. bash and
@@ -30133,6 +30153,10 @@ func PosixSemantics() Semantics {
 		// zsh and bash 3.2 fail (#1778).
 		ReadFailureInAFileSubstitutionFailsIt: No,
 		FdVariableBadCloseIsAnError:           Yes,
+		// Two of the three columns that have the form say nothing when the
+		// close fails, so the core says nothing — see
+		// FdVariableFailedCloseIsReported.
+		FdVariableFailedCloseIsReported: No,
 		// The standard says nothing about a ceiling, so this follows the
 		// panel: bash and ksh93 hand the kernel's refusal back, dash and zsh
 		// report success on a number the process cannot hold.

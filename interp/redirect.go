@@ -527,6 +527,28 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 						}
 						continue
 					}
+					if _, open := r.fds[n]; !open && n > 2 &&
+						r.ask(r.sem().FdVariableFailedCloseIsReported,
+							"a close through a variable naming no open descriptor") {
+						// Nothing is behind the number, so the close this
+						// line asks for cannot happen. One column says so and
+						// the rest are silent — and the *status* is not the
+						// question: `exec` is 0 either way and the command
+						// this redirection belongs to still runs. See
+						// Semantics.FdVariableFailedCloseIsReported.
+						//
+						// Above the table's own three, which are the named
+						// streams rather than entries in it: `v=1; exec
+						// {v}<&-` closes standard output for real and says
+						// nothing, in the column that speaks here as much as
+						// in the others.
+						r.diagf("%s\n", Wording(r.diag().FdVariableFailedClose,
+							"failed to close file descriptor %[1]d: %[2]s", n, "bad file descriptor"))
+					}
+					if r.unspecified {
+						r.redirErr = true
+						return closers, nil
+					}
 					if held, ok := r.fds[n]; ok {
 						delete(r.fds, n)
 						// Only when this was the last name for it. A

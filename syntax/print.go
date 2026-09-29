@@ -2032,7 +2032,7 @@ func (p *printer) redirsAfter(rs []*Redirect, blank bool) {
 			p.dup(rd)
 			continue
 		}
-		if rd.N != nil && !p.omitsDefaultDescriptor(rd) {
+		if p.writesTheDescriptor(rd) {
 			p.word(rd.N)
 		}
 		p.str(rd.Op.String())
@@ -2165,7 +2165,7 @@ func (p *printer) dup(rd *Redirect) {
 		op = TokGreatAmp
 	}
 	switch {
-	case rd.N != nil && !p.omitsDefaultDescriptor(rd):
+	case p.writesTheDescriptor(rd):
 		p.word(rd.N)
 	case rd.N != nil:
 		// Left off: this arrangement drops a default descriptor wherever it
@@ -2185,9 +2185,8 @@ func (p *printer) dup(rd *Redirect) {
 	p.word(rd.Word)
 }
 
-// omitsDefaultDescriptor reports whether the descriptor this redirection
-// carries is the operator's own default and this arrangement leaves such a
-// descriptor off.
+// writesTheDescriptor reports whether this redirection's left operand is
+// printed: it has one, and this arrangement does not leave a default off.
 //
 // The two arrangements that drop one do not drop the same ones, which is the
 // whole reason the form is named rather than a bool: bash takes a default off
@@ -2202,21 +2201,26 @@ func (p *printer) dup(rd *Redirect) {
 // and a quoted one cannot reach this. The guard that used to be here was
 // unreachable, and the mutant that deleted it changed nothing — which is
 // how it was found.
-func (p *printer) omitsDefaultDescriptor(rd *Redirect) bool {
+func (p *printer) writesTheDescriptor(rd *Redirect) bool {
+	// **The one place that asks whether there is a descriptor at all**, so
+	// that no caller repeats the test and none of them can disagree with
+	// this about what the answer means. It was the other way round until a
+	// mutant deleted a nil check and nothing failed: both callers were
+	// testing it themselves, which left the check here unreachable.
+	if rd.N == nil {
+		return false
+	}
 	switch p.layout.RedirectDescriptor {
 	case RedirectDescriptorOmitted:
 	case RedirectDescriptorWrittenOnDuplications:
 		// Files only: a duplication goes the other way in this arrangement.
 		if rd.Op == TokLessAmp || rd.Op == TokGreatAmp {
-			return false
+			return true
 		}
 	default:
-		return false
+		return true
 	}
-	if rd.N == nil {
-		return false
-	}
-	return rd.N.Literal() == defaultDescriptorOf(rd.Op)
+	return rd.N.Literal() != defaultDescriptorOf(rd.Op)
 }
 
 // defaultDescriptorOf is the descriptor an operator acts on when none is

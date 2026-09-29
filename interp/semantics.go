@@ -21121,6 +21121,24 @@ type Semantics struct {
 	// two columns that have both it and an opinion disagree.
 	ReadonlyFdVariableRefusesAClose Answer
 
+	// NoclobberProtectsAnFdVariable refuses a `{name}` redirection under
+	// `set -C` when the name already holds a descriptor this shell has open.
+	//
+	// What is protected is the **name**, not the file: the same file twice is
+	// refused, two different files are refused, and neither is opened. See
+	// Runner.fdVarWouldBeClobbered for the grid that holds the file fixed and
+	// varies what the name holds.
+	//
+	// Measured 2026-09-29. zsh 5.9.2 refuses, `can't clobber parameter m
+	// containing file descriptor 11` at 1 with the name unchanged; bash 5.3.20
+	// and ksh93u+ allocate a second descriptor and overwrite the name in
+	// silence. dash and BusyBox ash have no `{name}` form to ask it of.
+	//
+	// Asked only where the question arises — `set -C` is on, the redirection
+	// names a parameter, and that parameter holds an open descriptor — so a
+	// vector with no answer still runs every `{name}` redirection there is.
+	NoclobberProtectsAnFdVariable Answer
+
 	// JobSpecCommandWord is whether a command word beginning with `%` is a
 	// job specification rather than a command name, and which word the shell
 	// asks that of. See [JobSpecCommandWordForm]; asked only where the

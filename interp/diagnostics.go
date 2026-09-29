@@ -1949,6 +1949,18 @@ type Diagnostics struct {
 	// cannot take one out. Empty leaves the refusal silent.
 	FdVariableReadonlyClose string
 
+	// FdVariableWouldBeClobbered is the refusal `set -C` raises when a
+	// `{name}` redirection would overwrite a name already holding a descriptor
+	// this shell has open. Two verbs: %[1]s is the name and %[2]d the
+	// descriptor it holds.
+	//
+	// The number is in the sentence and is worth having there: it is what
+	// tells `m=2` — a named stream the script assigned by hand — from a
+	// number this shell allocated, and the two are refused alike. Measured
+	// 2026-09-29 on zsh 5.9.2. Empty everywhere else; see
+	// Semantics.NoclobberProtectsAnFdVariable for the columns.
+	FdVariableWouldBeClobbered string
+
 	// ArithErrorNamesTheBuiltin puts the name of the builtin that raised an
 	// arithmetic complaint in front of the sentence.
 	//

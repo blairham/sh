@@ -783,6 +783,20 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// rather than once per name: it is a question about the operator.
 		persists := false
 		if fdVar != "" {
+			// `set -C` protects the *name* in one shell, and it is checked
+			// here — before any file is opened — because the reference
+			// creates nothing when it refuses. See
+			// Runner.fdVarWouldBeClobbered.
+			if held, would := r.fdVarWouldBeClobbered(fdVar); would &&
+				r.ask(r.sem().NoclobberProtectsAnFdVariable,
+					"a noclobber shell refusing to overwrite a name holding an open descriptor") {
+				if w := r.diag().FdVariableWouldBeClobbered; w != "" {
+					r.diagf("%s\n", fmt.Sprintf(w, fdVar, held))
+				}
+				r.status = 1
+				r.redirErr = true
+				return closers, nil
+			}
 			// The session's own switch can only take the descriptor back
 			// sooner, never keep it longer — see
 			// Runner.FdVariableDescriptorOutlivesTheCommand.

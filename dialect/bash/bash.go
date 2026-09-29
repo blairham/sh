@@ -2944,6 +2944,10 @@ func Semantics() interp.Semantics {
 	// what makes this a question at all — see
 	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
 	s.ReadonlyFdVariableRefusesAClose = interp.No
+	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
+	// allocates a second descriptor and overwrites it in silence, measured
+	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.
+	s.NoclobberProtectsAnFdVariable = interp.No
 	s.DuplicationTargetError = interp.DuplicationTargetErrorCarriesOn
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No

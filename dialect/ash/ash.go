@@ -645,6 +645,10 @@ func Semantics() interp.Semantics {
 	// No braces to expand and no `-B` to turn them off: `set -B` is `illegal
 	// option -B` and ends the script.
 	s.SetBTurnsOffBraceExpansion = interp.No
+	// Nor a class: `echo {abc}` is the word itself here and this shell has
+	// no option that would read it as a set of characters, so the answer is
+	// No rather than unmeasured.
+	s.BraceBodyIsACharacterClass = interp.No
 	// unanswered BraceRangeStepPadsTheRange: with no braces to expand there
 	// is no range to write a step in. Measured in the pinned alpine image —
 	// `echo {1..5..01}` is the six characters `{1..5..01}` — which is the

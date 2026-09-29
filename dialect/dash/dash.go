@@ -312,6 +312,10 @@ func Semantics() interp.Semantics {
 	// This shell has no braces to expand and no `-B` either, so the letter
 	// is refused as the invalid option it is rather than asked about.
 	s.SetBTurnsOffBraceExpansion = interp.No
+	// Nor a class: `echo {abc}` is the word itself here and this shell has
+	// no option that would read it as a set of characters, so the answer is
+	// No rather than unmeasured.
+	s.BraceBodyIsACharacterClass = interp.No
 	// unanswered BraceRangeStepPadsTheRange: the same, and for the same
 	// reason as the line above — `echo {1..5..01}` is the word itself here,
 	// so no step is ever read and none of its zeros can pad anything.

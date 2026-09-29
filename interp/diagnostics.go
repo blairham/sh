@@ -7070,6 +7070,13 @@ type Diagnostics struct {
 	// no descriptor number. One verb: the variable's name as written,
 	// braces stripped.
 	FdVariableWithoutADescriptor string
+	// FdVariableFailedClose is `{name}>&-` where the number the variable holds
+	// is not a descriptor this shell has open. Two verbs: the number, and why
+	// the close failed.
+	//
+	// Written only where Semantics.FdVariableFailedCloseIsReported says the
+	// shell speaks at all, which is one column of the panel.
+	FdVariableFailedClose string
 
 	// MultiDigitDuplicationTarget is `>&10` in the dialect that will not
 	// take a duplication target wider than one digit — see

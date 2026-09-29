@@ -4888,6 +4888,9 @@ func Semantics() interp.Semantics {
 	// bash and ksh93 hand the kernel's refusal back. Rarely reachable, since
 	// a number this shell reads is one digit and the shell picks its own for
 	// `{name}>f`.
+	// The one column that says so when a close through a variable finds
+	// nothing open — see interp.Semantics.FdVariableFailedCloseIsReported.
+	s.FdVariableFailedCloseIsReported = interp.Yes
 	s.FdNumberBoundedByOpenFileLimit = interp.No
 	// No descriptor-number ceiling of this shell's own (#3210), and `read
 	// -t` takes no argument here at all, so the word after it is an operand
@@ -5834,6 +5837,7 @@ func Diagnostics() interp.Diagnostics {
 		// subshell`, at 1, and `disown` the same (#4538).
 		JobsNotManipulableInASubshell: "can't manipulate jobs in subshell",
 		FdVariableWithoutADescriptor:  "parameter %[1]s does not contain a file descriptor",
+		FdVariableFailedClose:         "failed to close file descriptor %[1]d: %[2]s",
 		// `mkdir dir; v=$(<dir)` — the read after a successful open, which
 		// this shell alone words. The name is the word as it expanded, not
 		// the path the working directory made of it (#1778).

@@ -966,7 +966,7 @@ func (r *Runner) numericRange(lo, hi, stepText string, hasStep bool) ([]string, 
 func (r *Runner) charRange(body, lo, hi, stepText string, hasStep bool) ([]string, bool) {
 	letters := len(lo) == 1 && len(hi) == 1 && isRangeLetter(lo[0]) && isRangeLetter(hi[0])
 	loRune, hiRune, twoChars := r.charRangeEndpoints(body)
-	renderRune := func(i int) string { return string(rune(i)) }
+	renderRune := func(i int) string { return niceRangeChar(rune(i)) }
 	if letters && !hasStep {
 		// A letter range walks the code points, which is also what makes
 		// `{a..C}` produce the punctuation between the cases — measured, not
@@ -1003,6 +1003,71 @@ func (r *Runner) charRange(body, lo, hi, stepText string, hasStep bool) ([]strin
 		n = 1
 	}
 	return r.walkRange(int(lo[0]), int(hi[0]), n, true, negStep, renderRune)
+}
+
+// niceRangeChar is one element of a character range as the measured shell
+// writes it: a character that cannot be printed comes back in that shell's
+// escape form rather than as itself.
+//
+// **Only a character range does this**, which is measured and is what says
+// the rendering belongs here and not in rangeSpans. On zsh 5.9.2, with the
+// byte 0x01 written as `$'\x01'`:
+//
+//	{$'\x01'..$'\x01'}   ^A          the range renders
+//	{$'\x01',b}          0x01 b      an alternative does not
+//	{$'\x01'$'\x02'}     0x01 0x02   nor does a BRACE_CCL class
+//	$'\x01'              0x01        nor does `print`
+//
+// The one-element range is the probe that separates the range from `print`:
+// a wider range produces the same text under either hypothesis, and a range
+// of one still goes through this code. See instruments.md §4.
+//
+// Reachable only from the reading Semantics.BraceCharRangeSpansAnyCharacter
+// turns on — the letters reading spans at most `A` to `z`, whose widest gap
+// is the six punctuation characters between the cases, all of them printable
+// — so this function is identity on every character that reading produces.
+//
+// The three forms, measured 2026-09-29 on zsh 5.9.2, each as a one-element
+// range:
+//
+//	09, 0a            \t and \n           the two with C escapes
+//	00-08, 0b-1f      ^@ … ^_             `^` plus the byte or'd with 0x40
+//	7f                ^?
+//	80-9f             \M-^@ … \M-^_       `\M-` plus the C0 form of c-0x80
+//	20-7e, a0-ff      the character       printable, so identity
+//
+// **What is deliberately not modeled**, because one measurement is not
+// enough to model it: above 0x9f the answer is the locale's own idea of
+// printable, and it is not a range. Measured on the same shell, `{$'\u00ad'`
+// (soft hyphen) is `\M--` while `{$'\u00a0'` (no-break space) is the
+// character; `$'\u200b'` and `$'\u0378'` come back as the escapes `\u200b`
+// and `\u0378` while `$'\ue000'` is the character. So the shell is asking
+// `iswprint` and choosing an escape by the codepoint's size, and modeling
+// that from this one locale would pin a platform's answer as a dialect's.
+// Those characters keep the identity they have here. Recorded on #5154.
+func niceRangeChar(c rune) string {
+	switch {
+	case c == '\t':
+		return `\t`
+	case c == '\n':
+		return `\n`
+	case c < 0x20:
+		return "^" + string(c|0x40)
+	case c == 0x7f:
+		return "^?"
+	case c >= 0x80 && c <= 0x9f:
+		// `\M-` plus the C0 form of the low half, which is one rule rather
+		// than a second table: 0x80 is `\M-^@` because 0x00 is `^@`.
+		//
+		// **The subtraction is what bounds the recursion**, not a
+		// convenience: without it the call lands in this same branch and the
+		// stack goes. A mutant that drops it takes the test binary down
+		// rather than failing a test, which is a kill that reads as a
+		// survivor unless the harness separates the two — see
+		// instruments.md §1.
+		return `\M-` + niceRangeChar(c-0x80)
+	}
+	return string(c)
 }
 
 // charRangeEndpoints reads a body spelled as exactly one character, `..`, and

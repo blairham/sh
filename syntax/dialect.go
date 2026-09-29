@@ -2848,6 +2848,37 @@ type Dialect struct {
 	// interpreted. Absent from dash.
 	DollarSingleQuote bool
 
+	// HeredocDelimiterValue is what a `$'…'` here-document **delimiter**
+	// stands for, for a parser that has to end the document at the decoded
+	// text rather than at the escapes as written.
+	//
+	// `cat <<$'E\tOF'` ends at a line reading `E<TAB>OF` in every reference
+	// shell that has the construct, and the delimiter was compared as its raw
+	// bytes here, so the document ran to the end of the file (#5062).
+	//
+	// **The caller's decoder, for the reason
+	// [Layout.AnsiCQuotedWordIsItsValue] takes one**: the escape set is a
+	// column of semantics axes — the braced-hex policy, `\C` and `\M`, the
+	// code-point encoder, what an unknown escape means — and nothing under
+	// this package may hold one. interp.Runner.AnsiCValue is that decoder and
+	// is exported for it. The argument is the text **between the quotes**, as
+	// the lexer kept it, which is what the span holds.
+	//
+	// Nil leaves the delimiter spelled as it was written, which is this
+	// package's own answer and the right one for a formatter: it is also what
+	// dash wants, where `$'…'` is not the construct at all and the delimiter
+	// really is those bytes.
+	//
+	// **The whole table is read, not a subset.** Measured 2026-09-29 over
+	// eleven escape forms, each as a delimiter and as a word, in zsh 5.9.2,
+	// bash 5.3.20 and ksh93u+: every shell ends the document at exactly what
+	// that same shell makes of the escapes in a word, including the forms the
+	// three disagree about — `$'EO\x{46}'` is `EOF` to bash and ksh and
+	// `EO\0{46}` to zsh, `$'EO\cAF'` is `EO^AF` to bash and ksh and literal
+	// `EOcAF` to zsh, and each one's document ends at its own answer. So there
+	// is no smaller decoder that would do.
+	HeredocDelimiterValue func(string) string
+
 	// DoubledQuoteInSingleQuotesIsALiteralQuote makes a doubled `'` inside a
 	// single-quoted string stand for one literal quote, with the string
 	// carrying on: `''''` is one quote character and `'a''b'` is `a'b`.

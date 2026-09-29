@@ -1110,9 +1110,30 @@ func (r *Runner) ExpandingSuffixAlias(suffix string) (string, bool) {
 // text is read as the *route it arrived by*, and `eval`'s text is a command
 // string where a sourced file is a file.
 func (r *Runner) ParseWithAliases(src string, d syntax.Dialect) *syntax.Parser {
-	p := syntax.NewParser(src, d)
+	p := syntax.NewParser(src, r.ParsingDialect(d))
 	r.ExpandAliasesIn(p)
 	return p
+}
+
+// ParsingDialect is a caller's dialect with the answers only this side has, for
+// a parse this runner is about to perform.
+//
+// One of them so far: a `$'…'` here-document delimiter ends the document at
+// what it *means*, and what the escapes mean is a column of semantics axes that
+// nothing under `syntax` may hold — see syntax.Dialect.HeredocDelimiterValue
+// and Runner.AnsiCValue (#5062).
+//
+// Here rather than at each caller, because "a parse this runner performs" is
+// the thing the answer belongs to and there are several: nested input through
+// Runner.dialect, a front end's program, and a caller that hands its own
+// dialect in. A site that builds a parser without coming through one of those
+// three is a site that will be missing the answer, which is how this was
+// missed on the route ksh reads a command string by.
+func (r *Runner) ParsingDialect(d syntax.Dialect) syntax.Dialect {
+	if d.DollarSingleQuote {
+		d.HeredocDelimiterValue = r.AnsiCValue
+	}
+	return d
 }
 
 // ExpandAliasesIn hands a parser the three tables, for a caller that built one

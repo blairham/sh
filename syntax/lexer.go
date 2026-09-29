@@ -6763,7 +6763,7 @@ func (l *Lexer) readHeredocs() {
 
 func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 	strip := r.Op == TokDLessDash
-	delim := r.Word.Literal()
+	delim := l.heredocDelimiter(r.Word)
 	start := l.pos()
 	// The line the *warning* names as where this document began, which is
 	// not the operator's line once a second document is queued behind the

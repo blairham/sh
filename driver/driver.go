@@ -2699,7 +2699,7 @@ func (sh Shell) runInput(in source) int {
 	// On the route the program arrived by, because one grammar answer
 	// depends on it: the shell that ends an unterminated quote at the end of
 	// a command string refuses the same text in a file.
-	pr := wholeProgram(src, sh.Dialect.On(in.programRoute()))
+	pr := wholeProgram(src, r.ParsingDialect(sh.Dialect.On(in.programRoute())))
 	if in.onStdin {
 		// The program is on the descriptor rather than in hand, so it is read
 		// as it runs. How much at a time is the dialect's answer, and it is
@@ -3086,7 +3086,7 @@ func (sh Shell) sayLeaving(r *interp.Runner, in source) {
 // dialect's StdinProgramReadInBlocks says — so a `read` in it finds what a
 // `read` on a plain `sh -s` would.
 func (sh Shell) stdinAfterCommandString(r *interp.Runner) *program {
-	pr := wholeProgram("", sh.Dialect.On(syntax.RouteOnStandardInput))
+	pr := wholeProgram("", r.ParsingDialect(sh.Dialect.On(syntax.RouteOnStandardInput)))
 	pr.more = stdinProgram(r, sh.Semantics.StdinProgramReadInBlocks)
 	if sh.Dialect.ExpandAliasesInProgramText.Has(syntax.RouteOnStandardInput) {
 		pr.aliases = r.ExpandingAlias
@@ -3190,7 +3190,7 @@ func (sh Shell) executeLines(
 			// a *language*, which does not carry how the text got here, and
 			// taking it as written would have turned the route's answer off
 			// half way down a file the moment a builtin changed the grammar.
-			pr.setDialect(dialect.On(in.programRoute()))
+			pr.setDialect(r.ParsingDialect(dialect.On(in.programRoute())))
 		}
 		// The shell is about to read the next unit of its program, which is
 		// one of the two moments a held signal waits for — and once more for

@@ -249,12 +249,33 @@ func (p Preset) RunLinesOn(t testing.TB, r *interp.Runner, src string) int {
 // test to stop.
 func (p Preset) Combined(t testing.TB, b Base, src string) (out string, status int, err error) {
 	t.Helper()
-	f := p.Parse(t, src)
 	var buf strings.Builder
 	b.Stdout, b.Stderr = &buf, &buf
 	r := p.Runner(b)
+	// **Through the runner**, which is how a front end parses and is not a
+	// detail: a here-document's delimiter ends the document at what its
+	// escapes *mean*, and only the runner can say what they mean — see
+	// interp.Runner.ParsingDialect. Parsing with the bare dialect first, as
+	// this did, graded every dialect suite on a parse no shell performs, and
+	// the row that noticed was a `$'…'` delimiter (#5062).
+	//
+	// Not through ParseWithAliases: a preset alias is not expanded here, which
+	// is the whole distinction CombinedThroughTheAliases exists for.
+	f := p.ParseThrough(t, r, src)
 	st, rerr := r.Run(context.Background(), f)
 	return buf.String(), st, rerr
+}
+
+// ParseThrough parses the way a shell parses text it is about to run: with the
+// answers the runner holds. See interp.Runner.ParsingDialect.
+func (p Preset) ParseThrough(t testing.TB, r *interp.Runner, src string) *syntax.File {
+	t.Helper()
+	parser := syntax.NewParser(src, r.ParsingDialect(p.Dialect()))
+	f := parser.Parse()
+	if err := parser.Err(); err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	return f
 }
 
 // CombinedWithPrelude is [Preset.Combined] with the dialect's prelude installed

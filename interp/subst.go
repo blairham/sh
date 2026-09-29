@@ -614,6 +614,9 @@ func (r *Runner) dialect() syntax.Dialect {
 	} else {
 		d = syntax.Core()
 	}
+	// And the answers only this side has, which a nested parse needs exactly
+	// as a front end's does — see Runner.parsingAs.
+	d = r.ParsingDialect(d)
 	if r.arithPrecedenceMoved {
 		// A dialect's run-time option has moved where the arithmetic
 		// operators bind, and everything parsed from here on has to be

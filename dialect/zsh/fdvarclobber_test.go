@@ -94,6 +94,9 @@ func TestWhatNoclobberDoesNotProtect(t *testing.T) {
 	for _, tc := range []struct{ name, src, wantOut string }{
 		// Not a number, so not a descriptor. The name is overwritten.
 		{"a word in the name", "m=hello\nexec {m}>f2\n", "st=0 m=11\n"},
+		// Allowed for the same reason as the row above it: the sign
+		// makes it not a number to this shell's reader, so it never
+		// reaches the question of which descriptor it names.
 		{"a negative number", "m=-1\nexec {m}>f2\n", "st=0 m=11\n"},
 		// A number, but nothing is open there.
 		{"a number this shell has not opened", "m=77\nexec {m}>f2\n", "st=0 m=11\n"},

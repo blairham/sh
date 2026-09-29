@@ -66,15 +66,17 @@ func (r *Runner) fdVarWouldBeClobbered(ref string) (fd int, clobbered bool) {
 	// Empty reads as zero, which is measured rather than assumed: `m=;
 	// setopt noclobber; exec {m}>f` is refused naming descriptor 0, where
 	// `m=hello` is allowed. So an empty value is a number and a word is not.
+	//
+	// There is no test for a negative number here because atoi does not
+	// accept a sign: `m=-1` leaves by the branch below, as `m=hello` does,
+	// and a guard for `n < 0` after it was code no input could reach. The
+	// mutant that deleted it changed nothing, which is how it was found.
 	n := 0
 	if v != "" {
 		var ok bool
 		if n, ok = atoi(v); !ok {
 			return 0, false
 		}
-	}
-	if n < 0 {
-		return 0, false
 	}
 	// The three named streams are open without being in the table — the
 	// table holds what the shell opened for itself — which is why `m=2` is

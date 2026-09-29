@@ -4188,6 +4188,10 @@ func Semantics() interp.Semantics {
 	// interp.Diagnostics.FdVariableReadonlyClose, set below, and
 	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
 	s.ReadonlyFdVariableRefusesAClose = interp.Yes
+	// And `set -C` does not protect the name: `exec {m}>f1; exec {m}>f2`
+	// allocates a second descriptor and overwrites it in silence, measured
+	// 2026-09-29. See interp.Semantics.NoclobberProtectsAnFdVariable.
+	s.NoclobberProtectsAnFdVariable = interp.No
 	// And a number the process cannot hold is refused, as it is in bash and
 	// unlike dash and zsh — in this shell's own words and quoting a different
 	// errno: with `ulimit -n 6`, `exec 8>f` is `bad file unit number [Invalid

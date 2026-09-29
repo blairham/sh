@@ -4905,6 +4905,13 @@ func Semantics() interp.Semantics {
 	// using readonly variable`. See
 	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
 	s.ReadonlyFdVariableRefusesAClose = interp.Yes
+	// And `set -C` protects a name that already holds an open descriptor, so
+	// `exec {m}>f1; exec {m}>f2` is refused rather than reallocating. The
+	// name is what is protected and not the file — the same file twice is
+	// refused too — and `>|` does not override it. `A04redirect.ztst` stops
+	// on this under `NO_CLOBBER prevents overwriting parameter with allocated
+	// fd`. See interp.Semantics.NoclobberProtectsAnFdVariable.
+	s.NoclobberProtectsAnFdVariable = interp.Yes
 	// A command word written with a leading `%` is a job specification here,
 	// read as the script wrote it: `"%prep"`, `\%prep` and a parameter
 	// holding the text are all ordinary command names, where bash takes all
@@ -5867,8 +5874,9 @@ func Diagnostics() interp.Diagnostics {
 		// variable:` is not written at either site, which is why the open
 		// wording replaces the store's sentence rather than following it the
 		// way bash's `cannot assign fd to variable` does.
-		FdVariableReadonlyOpen:  "can't allocate file descriptor to readonly parameter %[1]s",
-		FdVariableReadonlyClose: "can't close file descriptor from readonly parameter %[1]s",
+		FdVariableReadonlyOpen:     "can't allocate file descriptor to readonly parameter %[1]s",
+		FdVariableReadonlyClose:    "can't close file descriptor from readonly parameter %[1]s",
+		FdVariableWouldBeClobbered: "can't clobber parameter %[1]s containing file descriptor %[2]d",
 		// `mkdir dir; v=$(<dir)` — the read after a successful open, which
 		// this shell alone words. The name is the word as it expanded, not
 		// the path the working directory made of it (#1778).

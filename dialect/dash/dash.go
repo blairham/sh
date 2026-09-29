@@ -122,6 +122,9 @@ func Semantics() interp.Semantics {
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
 
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// unanswered NoclobberProtectsAnFdVariable: the same reason as the axis
+	// below it — there is no `{name}` redirection here for `set -C` to
+	// protect the name of.
 	// unanswered ReadonlyFdVariableRefusesAClose: there is no `{name}`
 	// redirection here at all, so there is no close through a name for a
 	// frozen name to refuse. Measured 2026-09-29, a script file: `exec

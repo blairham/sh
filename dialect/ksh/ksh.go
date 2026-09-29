@@ -687,6 +687,12 @@ func Semantics() interp.Semantics {
 	// The command that named a `>(cmd)` does not wait for its body, which is
 	// bash's answer and not zsh's — measured as an ordering, `AFTER[PIPE]`
 	// against zsh's `[PIPE]AFTER` (#2197).
+	// A command word beginning with `%` is an ordinary command name here,
+	// looked up and not found: measured 2026-09-29, `%prep` is `%prep: not
+	// found` at 127, where bash and zsh run `fg` on it. See
+	// interp.Semantics.JobSpecCommandWord.
+	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
+
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
 	// And it names the path under /dev/fd wherever it runs, which is bash's
 	// answer again: measured 2026-09-21, `echo <(true)` is `/dev/fd/3` in

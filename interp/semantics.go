@@ -21121,6 +21121,13 @@ type Semantics struct {
 	// two columns that have both it and an opinion disagree.
 	ReadonlyFdVariableRefusesAClose Answer
 
+	// JobSpecCommandWord is whether a command word beginning with `%` is a
+	// job specification rather than a command name, and which word the shell
+	// asks that of. See [JobSpecCommandWordForm]; asked only where the
+	// question arises, so a vector with no answer still runs every command
+	// that is not spelled with a leading `%`.
+	JobSpecCommandWord JobSpecCommandWordForm
+
 	// FdNumberBoundedByOpenFileLimit refuses a redirection whose descriptor
 	// number is at or above the process's soft limit on open files. bash and
 	// ksh93 do; dash and zsh accept the number and let whatever comes next

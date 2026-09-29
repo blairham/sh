@@ -2388,6 +2388,56 @@ plain listing — that the table is not the same on two operating systems — is
 what the platform table above answers: the listing is a fact about the
 machine, and now it is the machine's.
 
+## A command word beginning with `%` is a job specification, in three columns
+
+`%prep` on a line of its own is not a command to look up in three of the six:
+the shell runs `fg` on it, and with no job control that is a refusal. Measured
+2026-09-29, script files under `env -i PATH=/usr/bin:/bin`:
+
+| | |
+| --- | --- |
+| zsh 5.9.2 | `zsh:fg:1: no job control in this shell.` · 1 |
+| bash 5.3.20 | `bash: line 1: fg: no job control` · 1 |
+| bash 3.2.57 | the same · 1 |
+| ksh93u+ | `ksh: line 1: %prep: not found` · 127 |
+| dash | `dash: 1: %prep: not found` · 127 |
+| BusyBox ash 1.36.1 | `ash: line 1: %prep: not found` · 127 |
+
+**The two columns that have it disagree about which word they read**, and that
+is what makes it a form rather than a flag. Same day, same conditions:
+
+| written | zsh | bash |
+| --- | --- | --- |
+| `%prep` | `fg` | `fg` |
+| `"%prep"` | not found | `fg` |
+| `\%prep` | not found | `fg` |
+| `x=%prep; $x` | not found | `fg` |
+| `command %prep` | not found | `fg` |
+
+zsh asks about the word **as the script wrote it** — an unquoted, unescaped
+`%` as the first character of the first word, with anything at all behind it,
+so `x=rep; %p$x` is a job spec there. bash asks about **the name the lookup is
+about to use**, however it was produced.
+
+Nothing in the first row can tell those apart. A grid of `%prep`, `%1`, `%%`,
+`%+`, `%-`, `%?abc` and the rest agrees in both columns however wide it gets,
+because a plainly-written `%` word is the same word before and after
+expansion — so a flag set from any of them would have been right by luck and
+keyed on the wrong noun. The pairs above hold the reading fixed and change
+what produced the word, which is the only shape that decides it.
+
+It is not a grammar question: `%prep` parses as an ordinary word everywhere
+and no column refuses the text. The axis is `JobSpecCommandWord`, and it is
+asked **only** when something about the command already begins with `%` — a
+command word is the commonest thing a shell has, and asking it of every one
+would leave a vector with no answer unable to run anything.
+
+Three rows are measured and not answered. `%?abc` is a `fg` in zsh where
+`%?ab*` and `%*` are `no matches found`, so a `?` immediately after the `%`
+is the `%?string` job spec rather than a pattern; and bash's reading reaches
+inside `command` and does not reach a pipeline element, where zsh's does
+neither and does both respectively.
+
 ## `jobs -n` is a filter on what the shell has already said
 
 Measured 2026-09-17 from a script file under `env -i PATH=/usr/bin:/bin` with

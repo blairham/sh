@@ -4905,6 +4905,13 @@ func Semantics() interp.Semantics {
 	// using readonly variable`. See
 	// interp.Semantics.ReadonlyFdVariableRefusesAClose.
 	s.ReadonlyFdVariableRefusesAClose = interp.Yes
+	// A command word written with a leading `%` is a job specification here,
+	// read as the script wrote it: `"%prep"`, `\%prep` and a parameter
+	// holding the text are all ordinary command names, where bash takes all
+	// three. `A04redirect.ztst` opens with the ztst driver's own `%prep` and
+	// `%test` markers, which is how the file's first two differing lines come
+	// to be about job control.
+	s.JobSpecCommandWord = interp.JobSpecCommandWordAsWritten
 	s.FdNumberBoundedByOpenFileLimit = interp.No
 	// No descriptor-number ceiling of this shell's own (#3210), and `read
 	// -t` takes no argument here at all, so the word after it is an operand

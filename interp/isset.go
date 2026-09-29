@@ -87,11 +87,32 @@ func (r *Runner) elementIsSet(base, sub string, subscripted bool) bool {
 	e := &syntax.ParamExpr{Name: base}
 	if subscripted {
 		e.Index = literalWord(sub)
+		// A subscript that opens with a flag group is searched rather than
+		// indexed, and the set-ness route reaches it as text — so the group
+		// is scanned here the way the expression reader scans its own. See
+		// syntax.SubscriptFromText: without it `[[ -v a[(i)x] ]]` reaches
+		// the arithmetic reader holding `(i)x` and answers `bad math
+		// expression`, where `${a[(i)x]}` searches and answers.
+		if g, ok := syntax.SubscriptFromText(sub); ok {
+			e.IndexFlags = g
+		}
 	}
 	// A set-ness test and nothing else, so a value's producer is not run for
 	// it — measured, `[[ -v x ]]` fires no `.get` where `${x}` fires one.
 	// See Runner.askTheStoreOnly (#3121).
 	defer r.askTheStoreOnly()()
+	if subscripted && !wholeArraySubscript(sub) && r.scalarHasNoElements(base) {
+		// A scalar has no elements to name, so a subscript that names one
+		// finds nothing however well it indexes the characters. See
+		// Runner.scalarHasNoElements.
+		return false
+	}
+	if set, answered := r.searchSubscriptIsSet(e); answered {
+		// A subscript that searches, which is the one shape this operator
+		// does not take from the conditional expansion. See
+		// Runner.searchSubscriptIsSet for the rows where the two part.
+		return set
+	}
 	_, set, _ := r.paramSource(e)
 	if subscripted && wholeArraySubscript(sub) {
 		// `a[@]` and `a[*]`, which is the one shape where this operator does
@@ -441,4 +462,40 @@ func isSpecialParamName(name string) bool {
 // has already been expanded to something that wants a syntax.Word.
 func literalWord(s string) *syntax.Word {
 	return &syntax.Word{Spans: []syntax.Span{{Kind: syntax.Literal, Value: s}}}
+}
+
+// scalarHasNoElements reports a name that holds neither an array nor a table,
+// for the one question that turns on it: `[[ -v name[sub] ]]` asks whether an
+// **element** is set, and a scalar has none.
+//
+// It is not the same question as whether the subscript indexes anything.
+// `${str[3]}` on `str=string` yields `r`, so a set-ness test routed through
+// the expansion answers yes — and the reference answers no, because character
+// three of a scalar is not an element of it. Measured 2026-09-29 on zsh
+// 5.9.2, `str='string'` and `typeset -i num=7`, over a script file:
+//
+//	[[ -v str[1] ]]     unset      where the expansion yields `s`
+//	[[ -v str[3] ]]     unset      and `r`
+//	[[ -v str[1,3] ]]   unset      a range, likewise
+//	[[ -v str[-1] ]]    unset      counting from the end, likewise
+//	[[ -v num[1] ]]     unset      and an integer is a scalar too
+//
+// **`[@]` and `[*]` are not this question** and are excluded by the caller:
+// `[[ -v str[@] ]]` is *set* in the reference, because that subscript names
+// the parameter rather than an element — see wholeArraySubscriptIsSet, which
+// already carries the row.
+//
+// The rows that already agreed are what bound it: `[[ -v str[0] ]]` and
+// `[[ -v str[k] ]]` are unset either way, because the index is zero and out
+// of range; `[[ -v arr[1] ]]`, `[[ -v arr[1,2] ]]` and `[[ -v hash[k] ]]`
+// are set either way, because those names do have elements. So the rule is
+// keyed on **what the name holds**, not on what the subscript looks like.
+func (r *Runner) scalarHasNoElements(name string) bool {
+	if _, isArray := r.Arrays[name]; isArray {
+		return false
+	}
+	if _, isTable := r.assocFor(name); isTable {
+		return false
+	}
+	return true
 }

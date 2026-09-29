@@ -312,3 +312,33 @@ func (p *Parser) subscriptEnd(text string, start Pos) SubscriptEnd {
 	}
 	return SubscriptEnd{Text: p.wordFrom(text, start, Unquoted)}
 }
+
+// SubscriptFromText splits a subscript that arrives as **text** into the flag
+// group it opens with and the operand behind it, for a caller outside this
+// package that has the characters and not a parse.
+//
+// Exported because the set-ness operators reach a subscript that way. `[[ -v
+// a[(i)x] ]]`, `test -v 'a[(i)x]'` and `[ -v 'a[(i)x]' ]` all arrive at the
+// element lookup holding `(i)x` as a string, and wrapping that in a literal
+// word makes the arithmetic reader answer `bad math expression: operator
+// expected` — where `${a[(i)x]}` reads the group and searches. The two routes
+// asked the same question and only one of them could see the flags.
+//
+// The operand is a literal word for the reason the expression reader's own
+// call gives: the text has already been expanded once, so a second pass would
+// perform a substitution twice.
+//
+// ok is false where the text opens no group, and the caller should then use
+// the text as it stands.
+//
+// The operand carries no position: the text did not come from a parse, so
+// there is no offset in any source that it stands at, and inventing one would
+// put a wrong line number in any diagnostic that reads it.
+func SubscriptFromText(text string) (flags *SubscriptFlags, ok bool) {
+	g, rest, ok := scanSubscriptFlags(text)
+	if !ok {
+		return nil, false
+	}
+	g.Arg = literalWord(rest, Pos{})
+	return g, true
+}

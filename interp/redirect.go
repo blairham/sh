@@ -2293,10 +2293,20 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 	// reason this is a second wording. zsh answers the closed-descriptor axis
 	// No and would otherwise never reach BuiltinWriteError; it still says
 	// something on every route but one, and the route it stays quiet on is
-	// the one where the writing command's own redirections closed the stream.
-	// See Diagnostics.InheritedClosedStreamWriteError for the measurements.
-	ownRedirection := r.outputClosedByThisCommand && errors.Is(err, syscall.EBADF)
-	if w := r.diag().InheritedClosedStreamWriteError; w != "" && !ownRedirection {
+	// the one where the writing command's own redirections aimed the stream.
+	//
+	// **Whose redirection it was, and not which errno came back.** The two
+	// were indistinguishable while every measured row was a closed
+	// descriptor; they part on a stream that is open and refuses anyway.
+	// Measured on zsh 5.9 under Linux, where `/dev/full` and an unread fifo
+	// supply the other two errnos: `print foo > /dev/full` and a write into
+	// a broken pipe the command redirected to itself each draw the builtin's
+	// own sentence and *not* this one, exactly as `print foo >&-` draws
+	// neither, while `exec 1>/dev/full` and `exec 1>&9` before the command
+	// draw both. See Diagnostics.InheritedClosedStreamWriteError for the
+	// measurements and TestTheSilenceIsForTheOwnerOfTheRedirectionNotTheErrno
+	// for the pair that tells the two keys apart.
+	if w := r.diag().InheritedClosedStreamWriteError; w != "" && !r.outputClosedByThisCommand {
 		// Not the builtin's own complaint, and the dialect that has this
 		// sentence says so by leaving the builtin out of the location:
 		// `exec 1>&-; echo hi` is `zsh:1: write error: …` where echo's own

@@ -60,11 +60,11 @@ own. A refactor silently invalidates the patterns a harness was built on.
 
 ---
 
-## 2. The four readings of `SURVIVED`
+## 2. The five readings of `SURVIVED`
 
-A surviving mutant has four causes and **the correct response differs in
-every one**, including two where the code is wrong to touch and two where it
-is wrong to leave.
+A surviving mutant has five causes and **the correct response differs in
+every one**, including two where the code is wrong to touch, two where it is
+wrong to leave, and one where the code is simply wrong.
 
 | the cause | the code | the mutant |
 | --- | --- | --- |
@@ -72,6 +72,7 @@ is wrong to leave.
 | the tests are too weak | untouched | **add a row** |
 | the code is unreachable | **delete it** | goes with it |
 | the distinction is unobservable | **keep it** | **remove it** |
+| **the rule is wrong** | **change it** | **keep it, as the guard** |
 
 **The tests are too weak** is the ordinary case. Example: a mutant broke only
 an option's *reporting* — `setopt NAME` kept working while `[[ -o NAME ]]`
@@ -108,6 +109,38 @@ survivor trains the reader to skim the column and costs the next person the
 same investigation.
 
 ---
+
+**The rule is wrong** is the fifth, and it is the one that does not feel like
+a mutation result at all: the tests are not too weak, the code is reachable,
+the distinction is observable — and the mutant survives because the original
+rule is no more correct than the mutant over everything that was measured.
+
+The worked example is a brace range's zero-padding. The code took the widest
+of the two endpoints and the written step; a mutant replacing that maximum
+with the step's own width survived. The tests were **complete for the file
+the work was aimed at** — every row of `D09brace` passed under either
+reading — and widening the grid at exactly that spot showed the reference
+does neither: a padded *endpoint* settles the width outright and the step is
+consulted only when neither endpoint carries zeros. `{01..3..0005}` is `01`
+and not `0001`.
+
+> **A survivor can be evidence about the code rather than about the tests.**
+> Before adding a row to kill it, ask whether the two readings differ
+> anywhere the *reference* has an opinion — because a mutant as correct as
+> the original is saying the original is not correct either.
+
+Two things make this hard to see. The mutant is *equivalent over the measured
+inputs*, which is also the signature of an unobservable distinction — so the
+tempting reading is "keep the code, delete the mutant", and that ships the
+bug. And the suite row the work was aimed at could never have caught it: the
+two readings agree wherever the step is no wider than the endpoints, which
+was every case in the file. **Completeness against the target is not
+completeness about the rule** — the file bounded what had to be measured, and
+the rule reaches past it.
+
+The repair is the ordinary one for a wrong rule — change the code — plus one
+step: the mutant that restores the wrong version is **kept**, so the next
+person to reach for a maximum there does so loudly.
 
 ## 3. A total is not a per-row check, in any direction
 
@@ -349,7 +382,41 @@ This is the same family as section 1: the harness must report how much it
 successfully *read*, not only what it found. An extraction script is a
 harness.
 
-## 12. Where these came from
+## 12. A counting tool that dies on its input reads as a count of nothing
+
+Section 11 is about a harness mis-parsing a row. This is its neighbor and
+the tool is not the harness: it is `grep`, `awk`, `wc` — whatever counts the
+harness's output afterwards.
+
+A driver's transcript held raw `\x80` bytes, because the case under test was
+a range of 8-bit characters. `grep -c 'Running test'` on that file printed
+**nothing at all** — not zero, nothing — and `awk` died with a multibyte
+conversion error on standard error, which was not being read. The counts came
+back empty and were interpreted as "the file ran no chunks", which was the
+opposite of true: it ran all 28. `LC_ALL=C` in front of both fixed it.
+
+> **A counting tool that cannot read its input looks exactly like a count of
+> zero.** Where the thing being measured can emit arbitrary bytes — and a
+> shell under test always can — count in the C locale and check the counter's
+> own exit status, not only its output.
+
+Two details that made it worse, both worth expecting:
+
+- The failure was **silent in the shape that matters**. `grep` exited
+  non-zero with no message; the loop around it substituted an empty string
+  into a formatted line, and the line printed as `chunks run:   ok:`, which
+  reads as a formatting slip rather than a broken measurement.
+- It only appeared **once the work succeeded**. The bytes were in the
+  transcript because the front had moved to the 8-bit chunk; every earlier
+  run of the same command on the same file had been fine. An instrument can
+  be correct for a campaign and fail on the row that closes it.
+
+This is section 1 again from a third direction: the tool must distinguish "I
+read the input and found none" from "I could not read the input". Neither
+`grep -c` nor `awk` distinguishes those in its output, so the distinction has
+to come from the exit status or from removing the failure mode.
+
+## 13. Where these came from
 
 Each rule above cost at least one wrong conclusion that was acted on. They
 were collected during the `zsh-suite` burndown between September 2026 and the

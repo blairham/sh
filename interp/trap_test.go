@@ -484,3 +484,22 @@ func TestAReturnInsideAFunctionTheActionCalledIsThatFunctions(t *testing.T) {
 		t.Errorf("wrote %q, want %q", out, want)
 	}
 }
+
+// A real `URG` still runs its trap, which is the half of #5109 that a fix must
+// not break.
+//
+// The defect is that a trap for `URG` *also* runs on signals nothing sent: the
+// Go runtime preempts a goroutine with that signal and `os/signal` hands it
+// over. See interp/urgisthisruntimes.go for the measurement and for why nothing
+// in this package can tell the two apart.
+//
+// This row is here because the obvious "fix" — stop subscribing to `URG` — makes
+// the spurious catches go away and reads as success on any row that only counts
+// them. It answers this row with nothing at all. Every reference shell runs the
+// trap once for one signal, and so must this.
+func TestARealUrgStillRunsItsTrap(t *testing.T) {
+	out, st := run(t, `trap 'echo caught' URG; kill -URG $$; sleep 0.2; echo done`, nil)
+	if st != 0 || !strings.Contains(out, "caught") {
+		t.Errorf("got %q/%d, want the trap to have run", out, st)
+	}
+}

@@ -493,6 +493,14 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	case *body == "":
 		signal.Ignore(sig)
 	default:
+		// **URG is this runtime's own**, and a trap for it runs on signals
+		// nothing sent. os/signal forwards the preemption signal the Go
+		// runtime uses to interrupt a goroutine, so `trap 'x' URG` fires
+		// repeatedly while a script is running — see
+		// interp/urgisthisruntimes.go, which is the measurement and the three
+		// closed routes out of it (#5109). Nothing here can tell that arrival
+		// from a real one, so the subscription is made for URG as for any
+		// other signal and the defect is recorded rather than papered over.
 		signal.Notify(s.ch, sig)
 	}
 }

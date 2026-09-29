@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -1082,6 +1083,28 @@ func niceRangeChar(c rune) string {
 // two bytes each and neither is one character.
 func (r *Runner) charRangeEndpoints(body string) (lo, hi rune, ok bool) {
 	if !isASCII(body) && !r.patternCountsCharacters(body) {
+		return 0, 0, false
+	}
+	if !utf8.ValidString(body) {
+		// A byte the encoding cannot decode is not a character to count
+		// from, and the range declines rather than counting from something
+		// else. Measured 2026-09-29 on zsh 5.9.2 in a UTF-8 locale, `print
+		// -rn`, every row the word left exactly as written:
+		//
+		//	{$'\x80'..$'\x81'}   {\x80..\x81}
+		//	{$'\x80'..$'\x80'}   {\x80..\x80}
+		//	{$'\x7e'..$'\x80'}   {~..\x80}
+		//	{a..$'\xff'}         {a..\xff}
+		//	{$'\xc3\xa9'..$'\xc3\xa9'}  é — decodable, so it counts
+		//
+		// **Without this the conversion below invents a character.**
+		// `[]rune` maps each undecodable byte to U+FFFD, and the length test
+		// that follows then *passes*: `{$'\x80'..$'\x81'}` became a
+		// one-element range of U+FFFD and came back as that one character.
+		// Two endpoints the shell cannot read produced a word the script
+		// never wrote, and one that is indistinguishable from the answer a
+		// byte-counting reading would give — which is why this stands before
+		// that reading is added rather than after. See #5154.
 		return 0, 0, false
 	}
 	rs := []rune(body)

@@ -286,6 +286,16 @@ func (r *Runner) substRunner(span syntax.Span) (*Runner, func()) {
 	// apart (#1933) and the offset is the second thing to have been fixed
 	// apart in it.
 	sub.lineBase = r.spanLineBase(span)
+	// A redirection target's body renders its trace lines and writes them
+	// nowhere, which is the reference's answer and is about the substitution's
+	// place rather than its direction. The mark itself does not travel with
+	// the body: what travels is the sink, so a substitution nested inside such
+	// a body is silent for the same reason rather than by being a target
+	// itself. See interp/redirsubsttrace.go.
+	if r.bodyTraceIsDiscarded() {
+		sub.traceSink = discardedTrace
+	}
+	sub.redirectTargetWord = false
 	// A substitution's body is not handed the enclosing commands' ends,
 	// which clone gave it: the body of a second `>(cmd)` holding the first
 	// one's writing end in every command it runs is the `tee >(cat)` hang

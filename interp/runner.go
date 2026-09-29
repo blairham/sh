@@ -4195,6 +4195,10 @@ type Runner struct {
 	traceOnce *sync.Once
 	// xtrace is `set -x`: every simple command is printed before it runs.
 	xtrace bool
+	// redirectTargetWord says the expansion running now is a redirection's
+	// target, which is the one thing that decides whether a process
+	// substitution's body is traced. See interp/redirsubsttrace.go.
+	redirectTargetWord bool
 	// traceSink is where a trace line goes when it is not standard error,
 	// and nil — the default — is standard error. One shell in the panel lets
 	// a script move the whole stream with a parameter, and which parameter

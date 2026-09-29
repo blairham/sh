@@ -1237,6 +1237,16 @@ func (f closerFunc) Close() error { return f() }
 // ordinary word, so the two names the braces make are two words, and two words
 // there is the ambiguity it already reports.
 func (r *Runner) redirectTarget(rd *syntax.Redirect) ([]string, bool) {
+	// Everything expanded from here down is a redirection's target, which is
+	// what decides whether a process substitution in it has its body traced.
+	// Marked for the length of the expansion rather than tested at the
+	// substitution, because the two roads into it — a word of the command and
+	// a target of one of its redirections — are told apart by where they came
+	// from and by nothing in the word itself. See
+	// interp/redirsubsttrace.go.
+	outerTargetWord := r.redirectTargetWord
+	r.redirectTargetWord = true
+	defer func() { r.redirectTargetWord = outerTargetWord }()
 	// Whether there is a group that *could* make words, which costs nothing
 	// to ask: both halves read the spans and expand nothing, so neither runs
 	// a substitution that an expansion below would run again. The second

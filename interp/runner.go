@@ -10449,9 +10449,20 @@ type scope struct {
 // The axis is not asked at all on this path, which is the point: asking it
 // and then discarding the answer would report an unanswered axis to a
 // strict-core shell over a number it never used.
+//
+// **The continue-on-error rescue is applied here as well as in fatalQuiet**,
+// and that is the whole reason this is not three lines inline at its callers.
+// It was missing, and the miss was invisible because the two doors are read
+// as one: measured 2026-09-29 on zsh 5.9.2 over a script file, `setopt
+// continueonerror; while true; do break abc; done; print after $?` prints
+// `after 1` there and printed nothing here. A number of its own is the only
+// thing this path was meant to change.
 func (r *Runner) fatalAtStatus(status int) {
 	r.status = status
 	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
+	if r.rescuesAFatalError() {
+		r.ctl = controlAbandon
+	}
 }
 
 // fatalQuiet is fatal for a failure that has already reported itself.

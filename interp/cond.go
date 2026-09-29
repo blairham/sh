@@ -163,12 +163,31 @@ func (r *Runner) evalCond(ctx context.Context, c syntax.CondExpr) (bool, error) 
 // two would drift.
 //
 // It ends the shell at 2, in every position measured — before a `||`, inside
-// an `if` head, inside a function, from `-c` and from a script file — and the
-// commands before it on the same line have already run, which is the whole
-// difference this makes. The status is written here rather than left to
-// FatalErrorStatusIsOne: that axis answers the *generic* fatal error and this
-// refusal is 2 in the one shell that has it, where the same shell's generic
-// answer is 1.
+// an `if` head, inside a function, inside a loop, from `-c` and from a script
+// file — and the commands before it on the same line have already run, which
+// is the whole difference this makes. The status is written here rather than
+// left to FatalErrorStatusIsOne: that axis answers the *generic* fatal error
+// and this refusal is 2 in the one shell that has it, where the same shell's
+// generic answer is 1.
+//
+// **Every one of those positions is a lexical one, and the route is what
+// decides the other half.** Borrowed text gives up *itself* and the shell
+// carries on, which none of the rows above could show because none of them
+// crossed that boundary. Measured 2026-09-29 on zsh 5.9.2, script files, with
+// a second statement inside the borrowed text and a third after it:
+//
+//	eval "[[ -fail badly ]]; print inner"   inner never runs, `$?` is 2
+//	  . ./f.zsh, the same two lines         inner never runs, `$?` is 126
+//	f(){ eval "…" }; f; print after         the function runs on, at 0
+//	the same two lines at the top level     the shell ends
+//
+// So this is an ordinary fatal error and goes through the ordinary door with
+// a number of its own. It reached stopTheShell before, which raises the same
+// controlExit without marking it an *error* — and that mark is exactly what a
+// boundary reading a file of its own tests to decide whether the give-up is
+// its file's or the shell's. The readonly refusal one line away was already
+// right on all four rows, which is what says the mechanism was there and this
+// site was not using it.
 func (r *Runner) condUnknown(x *syntax.CondUnknown) (bool, error) {
 	if ok, answered, err := r.namedCondition(x); answered {
 		return ok, err
@@ -176,8 +195,7 @@ func (r *Runner) condUnknown(x *syntax.CondUnknown) (bool, error) {
 	d := r.diag()
 	r.diagf("%s\n", Wording(d.UnknownCondition, "unknown condition: %s", x.Op))
 	status := orDefault(d.UnknownConditionStatus, 2)
-	r.status = status
-	r.stopTheShell()
+	r.fatalAtStatus(status)
 	// A status rather than a message, because the complaint is already
 	// written: condStatus is the shape testClause takes the number from
 	// without saying anything further, and the shell has been stopped above.

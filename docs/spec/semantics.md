@@ -2474,6 +2474,24 @@ writing the file rather than refusing by name. Seeding the maps before
 checking turned an ordinary pipeline into a refusal in the core, which is the
 axis being consulted away from the disagreement.
 
+## `$NULLCMD` authorizes a redirection with no command; `$READNULLCMD` only picks one
+
+The two parameters are not symmetric, and the order they are read in decides
+a row. Measured 2026-09-29 on zsh 5.9.2:
+
+```
+unset NULLCMD; READNULLCMD=cat; <f     redirection with no command, 1
+NULLCMD=;      READNULLCMD=cat; <f     the same
+NULLCMD=:;     READNULLCMD=cat; <f     reads the file
+NULLCMD=:;     unset READNULLCMD; <f   0, nothing written
+```
+
+So emptying the **writer** disables the construct outright, on the reading
+side as much as the writing one, and emptying the **reader** falls back to
+the writer. Reading the reader first — which is the shape the route naturally
+suggests, since the reading form is the special case — makes the first row
+succeed.
+
 ## `jobs -n` is a filter on what the shell has already said
 
 Measured 2026-09-17 from a script file under `env -i PATH=/usr/bin:/bin` with

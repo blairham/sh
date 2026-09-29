@@ -1147,7 +1147,13 @@ func (r *Runner) dotFailed(name string, err error) int {
 	r.diagf("%s\n", Wording(format, ".: %[1]s: %[2]s", name, reason(err), r.inBuiltin))
 	// dash and ksh93 end the script here; bash and zsh report it and go on.
 	if r.ask(r.sem().DotMissingFileFatal, "`.` failing to open a file being fatal") {
-		r.fatalUsageQuiet()
+		// The POSIX door rather than the ordinary one: `.` is a special
+		// builtin and this is POSIX's rule about one failing, which one
+		// shell's continue-on-error switch does not rescue. Measured — with
+		// that switch on, `setopt posixbuiltins; . ./no/x` still ends the
+		// shell, while the same `.` with the switch alone is not fatal here
+		// at all. See Runner.fatalPosixSpecialQuiet.
+		r.fatalPosixSpecialUsageQuiet()
 		return r.status
 	}
 	return r.diag().dotCannotOpenStatus()

@@ -1724,6 +1724,10 @@ type Runner struct {
 	// one question and a second name for it is the one that would drift.
 	Route Route
 
+	// continuePastFatal is one shell's switch for a fatal error costing the
+	// statement rather than the shell. See Runner.SetContinuesPastAFatalError.
+	continuePastFatal bool
+
 	// InputName is what the front end calls where the program came from —
 	// `-c`, and empty for a script file or standard input.
 	//
@@ -8114,7 +8118,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// Taken before the stop is put back, because putting it back is
 			// what writes over it. See Runner.redirFailureStatusOfItsOwn.
 			ownStatus := r.redirFailureStatusOfItsOwn
-			r.fatalUsageQuiet()
+			// The POSIX door: this fatality is POSIX's rule about a special
+			// builtin, which the continue-on-error switch does not rescue.
+			// See Runner.fatalPosixSpecialQuiet.
+			r.fatalPosixSpecialUsageQuiet()
 			if ownStatus != 0 {
 				// The failure arrived with a number of its own — a
 				// substitution body that would not parse — and keeps it:
@@ -10452,6 +10459,54 @@ func (r *Runner) fatalQuiet() {
 	// the reason the status and the unwinding are: every fatal error comes
 	// through this one door, so nothing else has to remember to say so.
 	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
+	// And one shell has a switch that makes a fatal error cost the statement
+	// rather than the shell. It is applied *here*, for the same reason the
+	// rest of this is: one door. See Runner.rescuesAFatalError for the route
+	// it does not reach, and fatalPosixSpecialQuiet for the fatality it does
+	// not rescue.
+	if r.rescuesAFatalError() {
+		r.ctl = controlAbandon
+	}
+}
+
+// fatalPosixSpecialQuiet is fatalQuiet for a failure POSIX makes fatal
+// *because a special builtin raised it*. **Two callers**: a redirection on
+// one that would not open, and a `.` that could not read its file.
+//
+// A door of its own because one shell's continue-on-error switch does not
+// rescue these, where it does rescue that shell's own fatalities. Measured
+// 2026-09-29 on zsh 5.9.2, a script file:
+//
+//	setopt continueonerror; exec 3< ./no/x; print after
+//	    `after`, 0 — not fatal here at all without the option below
+//	setopt posixbuiltins continueonerror; exec 3< ./no/x; print after
+//	    nothing after, 1
+//	setopt posixbuiltins continueonerror; . ./no/x; print after
+//	    nothing after, 1
+//
+// and the control that keeps it about the *special* builtin rather than
+// about the option: with both options on, a refused assignment prefix in
+// front of `print` — a builtin that is not special — still reaches the next
+// line at 0.
+//
+// **A third site belongs here and is not wired.** A refused assignment
+// prefix in front of a special builtin ends the reference under both options
+// and is rescued here, because this shell's prefix-refusal rule does not yet
+// move with that option. Left diverging rather than answered wrongly; see
+// the `continueonerror` entry in dialect/zsh and #4436.
+func (r *Runner) fatalPosixSpecialQuiet() {
+	r.setFatalStatus()
+	r.ctl, r.abandon, r.errexitStopped = controlExit, abandonError, false
+}
+
+// fatalPosixSpecialUsageQuiet is that door for a complaint about **how the
+// special builtin was called**, which is fatalUsageQuiet's subject with
+// fatalPosixSpecialQuiet's cost. Both of its callers are POSIX rules about a
+// special builtin: a redirection that would not open, and a `.` that could
+// not read its file.
+func (r *Runner) fatalPosixSpecialUsageQuiet() {
+	r.fatalPosixSpecialQuiet()
+	r.abandon = abandonUsage
 }
 
 func (r *Runner) fatal(format string, args ...any) {

@@ -616,7 +616,63 @@ var zshOptions = []zshOption{
 	recorded("combiningchars", false),
 	recorded("completealiases", false),
 	recorded("completeinword", false),
-	recorded("continueonerror", false),
+	{
+		// CONTINUE_ON_ERROR: a fatal error gives up the statement and the
+		// shell reads the next one.
+		//
+		// Measured 2026-09-29 on zsh 5.9.2, three fields apart — the
+		// sentence on standard error is byte-identical either way, so what
+		// carries this is the status and whether the next command ran:
+		//
+		//	readonly foo; foo=bar set output; print after
+		//	    plain                     nothing after, 1
+		//	    setopt continueonerror    `after`, 0
+		//
+		// **The route decides whether it applies**, and the distinction to
+		// hold on to is that the option is *on* where it does nothing:
+		//
+		//	zsh -o continueonerror -c '[[ -o continueonerror ]] && print on'
+		//	    on
+		//
+		// So this is the option **taking and not applying**, which is a
+		// different thing from the option failing to set. A grid that
+		// passed `-o` on the command line could not tell those apart,
+		// because both look like "the flag did nothing". The pair that
+		// separates them sets the option *inside* the program, so its state
+		// is identical on both sides, and moves only the route:
+		//
+		//	setopt continueonerror; readonly foo
+		//	foo=bar set output; print after
+		//	    from a script file        `after`, 0
+		//	    from standard input       `after`, 0
+		//	    from `-c`                 nothing after, 1
+		//
+		// interp.Runner.Route carries that fact — it is the front end's,
+		// not the language's — and giveUpForABadSubscript already splits on
+		// the same three values for the same reason.
+		//
+		// **POSIX_BUILTINS outranks it, and only for a special builtin.**
+		// With both options on, `foo=bar set output` ends the reference
+		// while `foo=bar echo output` carries on — the same refusal, the
+		// same options, and the builtin's kind is the only thing that
+		// moved. So this does not rescue what POSIX made fatal, which is
+		// interp.Runner.fatalPosixSpecialQuiet and covers the two doors
+		// POSIX itself opens here: a failed redirection on a special
+		// builtin, and a `.` that cannot read its file.
+		//
+		// **The prefix half of that is not modeled yet**, and is left
+		// diverging rather than pinned wrong: `setopt posixbuiltins
+		// continueonerror; readonly foo; foo=bar set output` ends the
+		// reference and carries on here. It needs this option to reach the
+		// prefix-refusal rule as well, which is a third mechanism and its
+		// own front. Two of thirty-six measured rows; residue on #4436.
+		base: "continueonerror", def: false,
+		get: func(r *interp.Runner) bool { return r.ContinuesPastAFatalError() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetContinuesPastAFatalError(on)
+			return 0
+		},
+	},
 	recorded("correct", false),
 	recorded("correctall", false),
 	// Implemented rather than recorded since #2883, and it could not be

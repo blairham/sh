@@ -102,13 +102,28 @@ func (r *Runner) FunctionSourceFile(name string) string {
 func (r *Runner) ShellWords(s string) []string { return r.splitShellWords(s, "") }
 
 // FunctionBodyText is a function's body as a listing writes it, without the
-// header line and without the braces around it.
+// header line and — **unless the definition carries redirections** — without
+// the braces around it.
 //
 // The lines *between* the braces of what [Runner.FunctionText] returns, which
 // is what one shell's `$functions` association holds — measured, the value for
 // `f(){ echo hi }` is a single line `\techo hi`, tab-indented and with no
 // trailing newline. Derived from the same printer the listing uses rather than
 // from a second one, so a body reads back identically however it is asked for.
+//
+// **Redirections written on the definition keep the braces**, because there
+// would otherwise be nowhere for them to go: they follow the closing one, and
+// dropping that line drops them. Measured 2026-09-29 on zsh 5.9.2 —
+// `redirfn() { … } <in >out 2>&1; print $functions[redirfn]` answers
+//
+//	{
+//		local var
+//		…
+//	} < in > out 2>&1
+//
+// where the same function without redirections answers its body alone, with
+// no braces at all. So the brace is not decoration here; it is what makes the
+// value read back as the thing it describes.
 func (r *Runner) FunctionBodyText(name string) (string, bool) {
 	fn, ok := r.funcs[name]
 	if !ok {
@@ -119,6 +134,11 @@ func (r *Runner) FunctionBodyText(name string) (string, bool) {
 	// of the difference, and it is done on the print rather than on the
 	// tree so that the indentation is the listing's.
 	text := syntax.PrintWith(fn.Body, r.functionLayout)
+	if len(syntax.Redirections(fn.Body)) > 0 {
+		// The closing brace carries them, so it stays and so does its
+		// partner. See the paragraph above.
+		return strings.TrimSuffix(text, "\n"), true
+	}
 	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
 	if len(lines) < 2 {
 		return "", true

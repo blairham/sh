@@ -66,18 +66,20 @@ func TestPrintingWhatTheCorpusDoesNotReach(t *testing.T) {
 
 // A dup redirection, which is spelled unlike every other one.
 //
-// Two rules, and the exact spelling is the whole of what is being tested, so
-// these assert the text rather than that it parses. The operator goes tight
-// against its target where every other redirection takes a space; and where
-// the target is one the reader can resolve — a bare number, or the `-` that
-// closes a descriptor — the descriptor being redirected is written out, which
-// nothing in the source had to say.
+// The operator goes tight against its target where every other redirection
+// takes a space, and that is unconditional. **What the descriptor on the
+// left does is not**, and it moved out of this test in #4436: the three
+// columns disagree about it three ways, so it is
+// [syntax.Layout.RedirectDescriptor] and is graded in
+// TestTheThreeDescriptorForms below. These rows run under the arrangement
+// they were measured on — bash's — which is where they always belonged.
 //
 // The oracle is `type`: the only place any shell in the panel says a function
 // body back, and so the only place a printer can be checked against something
 // other than its own opinion.
 func TestPrintingADupRedirection(t *testing.T) {
 	t.Parallel()
+	layout := syntax.Layout{RedirectDescriptor: syntax.RedirectDescriptorWrittenOnDuplications}
 	for _, tc := range []struct{ name, src, want string }{
 		{"the descriptor read from is filled in", "echo hi >&2", "echo hi 1>&2"},
 		{"and the one read into", "echo hi <&3", "echo hi 0<&3"},
@@ -123,8 +125,75 @@ func TestPrintingADupRedirection(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parse: %v", err)
 			}
-			if got := strings.TrimRight(syntax.Print(f), "\n"); got != tc.want {
+			if got := strings.TrimRight(syntax.PrintFileWith(f, layout), "\n"); got != tc.want {
 				t.Errorf("printing %q gave %q, want %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}
+
+// The three answers to "what happens to a descriptor that is the operator's
+// own default", which is one question the panel splits three ways.
+//
+// Measured 2026-09-29 by defining a function and asking each shell to print
+// it back — `which` in zsh 5.9.2, `declare -f` in bash 5.3.20, `typeset -f`
+// in ksh93u+. The grid is the evidence that no single verb covers it: **bash
+// adds the default to a duplication and takes it off a file redirection**,
+// so a "normalize descriptors" bool would have to be on and off at once.
+//
+// The zero value is as-written, which is ksh93's and the conservative answer
+// for an embedder that has not chosen: a printer that neither adds nor
+// removes cannot be wrong about a descriptor nobody asked it to think about.
+func TestTheThreeDescriptorForms(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ src, asWritten, onDuplications, omitted string }{
+		// A duplication is where the three part.
+		{"echo hi >&2", "echo hi >&2", "echo hi 1>&2", "echo hi >&2"},
+		{"echo hi 1>&2", "echo hi 1>&2", "echo hi 1>&2", "echo hi >&2"},
+		{"read v <&3", "read v <&3", "read v 0<&3", "read v <&3"},
+		{"read v 0<&3", "read v 0<&3", "read v 0<&3", "read v <&3"},
+		// A descriptor that is not the default stays in all three.
+		{"echo hi 2>&1", "echo hi 2>&1", "echo hi 2>&1", "echo hi 2>&1"},
+		{"echo hi 3>&1", "echo hi 3>&1", "echo hi 3>&1", "echo hi 3>&1"},
+		// A close: bash rewrites the operator as well, the others do not.
+		{"echo hi >&-", "echo hi >&-", "echo hi 1>&-", "echo hi >&-"},
+		{"read v <&-", "read v <&-", "read v 0>&-", "read v <&-"},
+		{"echo hi 2>&-", "echo hi 2>&-", "echo hi 2>&-", "echo hi 2>&-"},
+		// A file redirection: bash goes the *other* way here, which is the
+		// pair of rows the named form exists for.
+		{"echo hi 1>out", "echo hi 1> out", "echo hi > out", "echo hi > out"},
+		{"echo hi >out", "echo hi > out", "echo hi > out", "echo hi > out"},
+		{"read v 0<in", "read v 0< in", "read v < in", "read v < in"},
+		{"echo hi 1>>out", "echo hi 1>> out", "echo hi >> out", "echo hi >> out"},
+		{"echo hi 1>|out", "echo hi 1>| out", "echo hi >| out", "echo hi >| out"},
+		{"echo hi 2>out", "echo hi 2> out", "echo hi 2> out", "echo hi 2> out"},
+		// `<>` opens for both and defaults to the reading descriptor, which
+		// is measured rather than reasoned.
+		{"read v 0<>rw", "read v 0<> rw", "read v <> rw", "read v <> rw"},
+		// Left operands that are not plain numbers are never the default,
+		// so no arrangement touches them.
+		{"echo hi {v}>out", "echo hi {v}> out", "echo hi {v}> out", "echo hi {v}> out"},
+		{"echo hi >&$fd", "echo hi >&$fd", "echo hi >&$fd", "echo hi >&$fd"},
+		{"echo hi 1>&\"1\"", "echo hi 1>&\"1\"", "echo hi 1>&\"1\"", "echo hi >&\"1\""},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			for _, form := range []struct {
+				name string
+				want string
+				f    syntax.RedirectDescriptorForm
+			}{
+				{"as written", tc.asWritten, syntax.RedirectDescriptorAsWritten},
+				{"written on duplications", tc.onDuplications, syntax.RedirectDescriptorWrittenOnDuplications},
+				{"omitted", tc.omitted, syntax.RedirectDescriptorOmitted},
+			} {
+				f, err := syntax.Parse(tc.src, syntax.Core())
+				if err != nil {
+					t.Fatalf("parse: %v", err)
+				}
+				got := strings.TrimRight(syntax.PrintFileWith(f, syntax.Layout{RedirectDescriptor: form.f}), "\n")
+				if got != form.want {
+					t.Errorf("%s: printing %q gave %q, want %q", form.name, tc.src, got, form.want)
+				}
 			}
 		})
 	}

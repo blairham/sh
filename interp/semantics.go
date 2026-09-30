@@ -24618,6 +24618,39 @@ type Semantics struct {
 	// is.
 	HistoryWordwiseSubstitutionModifier Answer
 
+	// HistorySubstitutionUnescapesTheReplacement takes a backslash in a
+	// history substitution's right side as escaping whatever follows it,
+	// **twice**, where the column without it copies every backslash through
+	// as written.
+	//
+	// Measured 2026-09-30 at a prompt, `echo one two one` then
+	// `echo !!:s/o/<n backslashes>X/`, counting the backslashes in the line
+	// the shell echoes back:
+	//
+	//	n     zsh 5.9.2   bash 5.3.20   bash 3.2.57
+	//	1     0           1             1
+	//	2     0           2             2
+	//	3     0           3             3
+	//	4     1           4             4
+	//
+	// and out to 16, where zsh has 4. Two rounds and not one: one round
+	// would leave 1 at n=2. The quick form `^old^new^` splits the same way,
+	// measured separately rather than assumed.
+	//
+	// ksh93u+ **cannot be asked** — it does not expand `!!:s/…/…/` at all,
+	// and the line runs verbatim — and dash and BusyBox ash have no history
+	// expansion, so this is a two-column question with one column each way.
+	//
+	// `W01history.ztst` is the file that needs it, and its chunk is why the
+	// count is not the whole rule: a replacement written with four
+	// backslashes reaches the shell as four, and the reference turns them
+	// into one that then escapes a `?` out of the way of the globber. See
+	// histexpand.Chars.SubstitutionUnescapesTheReplacement for the mixed-content
+	// row that pins the rule to characters rather than arithmetic, and for
+	// where the `&` is resolved. Read, not asked, for the reason HistoryWords
+	// is.
+	HistorySubstitutionUnescapesTheReplacement Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -30176,6 +30209,15 @@ func PosixSemantics() Semantics {
 		HistoryQuoteEndsAnEventReference:  No,
 		HistoryEventCharClosesAnEventName: No,
 		HistoryBracedEventReference:       No,
+		// A substitution's replacement is copied through with its
+		// backslashes as written, which is bash's answer in both releases
+		// and the one the standard's silence leaves. zsh overrides, and
+		// consumes them twice. Answered here rather than left to refuse
+		// because the question is put at every `:s/old/new/` — including in
+		// the two dialects that have no expander to reach it with, where a
+		// refusal would be a shipped bug at a site they never visit.
+		// See Semantics.HistorySubstitutionUnescapesTheReplacement.
+		HistorySubstitutionUnescapesTheReplacement: No,
 		// And the standard has no expander to read a double quote with, so
 		// the preset takes the simpler of the two readings — a `"` ends a
 		// name wherever it stands — and bash, whose answer depends on

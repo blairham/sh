@@ -59,3 +59,41 @@ func TestZshReadsAnEventNameItsOwnWay(t *testing.T) {
 		t.Errorf("HistoryWordwiseSubstitutionModifier is %v, want No — `:G` is `illegal modifier: G` here", got)
 	}
 }
+
+// A backslash in a history substitution's replacement escapes what follows
+// it, and it happens **twice**.
+//
+// See Semantics.HistorySubstitutionUnescapesTheReplacement for the panel.
+// Measured 2026-09-30 at a prompt: `!!:s/o/\\\\X/` written with four
+// backslashes comes back with one, where bash 5.3.20 and 3.2.57 come back
+// with four.
+//
+// **The expansion is run and not only the axis read**, which is what a
+// surviving mutant asked for: the engine's own tests build their
+// histexpand.Chars by hand, so an axis that was never wired into
+// Runner.HistoryChars passed every one of them. This row goes through the
+// runner, which is the only place the answer and the expander meet.
+func TestZshSubstitutionUnescapesTheReplacementTwice(t *testing.T) {
+	if got := zsh.Semantics().HistorySubstitutionUnescapesTheReplacement; got != interp.Yes {
+		t.Errorf("HistorySubstitutionUnescapesTheReplacement is %v, want Yes", got)
+	}
+	sem, diag, d := zsh.Semantics(), zsh.Diagnostics(), zsh.Dialect()
+	r := &interp.Runner{
+		Semantics: &sem, Diagnostics: &diag, Name: "zsh",
+		// Set because the guard in internal/dialecttest asks for it: a nil
+		// Dialect is the core, so any nested parse would run as a shell this
+		// row is not about.
+		Dialect: &d,
+	}
+	zsh.Apply(r)
+	// Always, not the route-gated entry point: zsh does not expand history
+	// in a script, so the gated one returns the line untouched and the row
+	// would pass whatever the rule did.
+	res, err := r.ExpandHistoryAlways(`echo !!:s/o/\\\\X/`, []string{"echo one two one"}, 1)
+	if err != nil {
+		t.Fatalf("expanding: %v", err)
+	}
+	if want := `echo ech\X one two one`; res.Line != want {
+		t.Errorf("expanded to %q, want %q", res.Line, want)
+	}
+}

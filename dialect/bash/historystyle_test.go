@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/interp"
 )
 
 // Measured under a pseudo-terminal on 2026-09-05, bash 5.3.15, with the screen
@@ -58,5 +59,38 @@ func TestHistoryStyleForgetsWhatItIgnores(t *testing.T) {
 	if s.IgnoreSpaceOption != "" || s.IgnoreDupsOption != "" {
 		t.Errorf("bash keeps these in HISTCONTROL, got %q and %q",
 			s.IgnoreSpaceOption, s.IgnoreDupsOption)
+	}
+}
+
+// A backslash in a history substitution's replacement is copied through as
+// written here, which is the other reading of
+// Semantics.HistorySubstitutionUnescapesTheReplacement.
+//
+// Inherited from the substrate rather than set in this file, so this row is
+// what says the substrate's answer is still No: flipping the preset would
+// change this shell and nothing in the zsh tests would notice.
+//
+// Measured 2026-09-30 at a prompt on 5.3.20 and 3.2.57 alike: after `echo one
+// two one`, `!!:s/o/\\\\X/` written with four backslashes comes back with
+// four, where zsh comes back with one.
+func TestBashKeepsBackslashesInASubstitutionReplacement(t *testing.T) {
+	if got := bash.Semantics().HistorySubstitutionUnescapesTheReplacement; got != interp.No {
+		t.Errorf("HistorySubstitutionUnescapesTheReplacement is %v, want No", got)
+	}
+	sem, diag, d := bash.Semantics(), bash.Diagnostics(), bash.Dialect()
+	r := &interp.Runner{
+		Semantics: &sem, Diagnostics: &diag, Name: "bash",
+		// Set because the guard in internal/dialecttest asks for it: a nil
+		// Dialect is the core, so any nested parse would run as a shell this
+		// row is not about.
+		Dialect: &d,
+	}
+	bash.Apply(r)
+	res, err := r.ExpandHistoryAlways(`echo !!:s/o/\\\\X/`, []string{"echo one two one"}, 1)
+	if err != nil {
+		t.Fatalf("expanding: %v", err)
+	}
+	if want := `echo ech\\\\X one two one`; res.Line != want {
+		t.Errorf("expanded to %q, want %q", res.Line, want)
 	}
 }

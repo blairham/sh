@@ -28,6 +28,8 @@ func TestTheEmulationDecidesWhereTheLastPipelineElementRuns(t *testing.T) {
 		{"and so is an emulate -L at the return", "f(){ emulate -L sh; }; f; x=1; echo | x=2; echo x=$x", "x=2\n"},
 		{"ksh runs it here", "emulate ksh -c 'x=1; echo | x=2; echo x=$x'", "x=2\n"},
 		{"csh runs it here", "emulate csh -c 'x=1; echo | x=2; echo x=$x'", "x=2\n"},
+		{"zsh runs it here again after sh", "emulate sh; emulate zsh; x=1; echo | x=2; echo x=$x", "x=2\n"},
+		{"and in a zsh -c run from sh", "emulate sh; emulate zsh -c 'x=1; echo | x=2; echo x=$x'", "x=2\n"},
 		{"control: zsh runs it here", "x=1; echo | x=2; echo x=$x", "x=2\n"},
 	}
 	for _, row := range rows {

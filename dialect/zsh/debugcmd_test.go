@@ -120,6 +120,33 @@ func TestZshDebugCmdStillNamesTheCommandsInsideAStatement(t *testing.T) {
 	}
 }
 
+// A command **inside** a negated element records itself, and not the negation.
+//
+// This is the row a surviving mutant asked for. The negated pipeline of one
+// is carried across its element's dispatch, so the carry has to be pinned to
+// that one command by identity: dropping the identity comparison and letting
+// it apply to whatever is running next passed every other row here, because
+// none of them looked inside a negated body.
+func TestZshDebugCmdInsideANegatedGroupNamesTheCommand(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(),
+		"trap 'print -r -- \"C=[$ZSH_DEBUG_CMD]\"' DEBUG\n"+
+			"! { print x; print y }\ntrap - DEBUG\n")
+	for _, want := range []string{
+		"C=[! {\n\tprint x\n\tprint y\n}]", // the negated statement
+		"C=[print x]",                      // and each command in it, undecorated
+		"C=[print y]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q\n  want %q in it", out, want)
+		}
+	}
+	// Two commands rather than one, so that a carry leaking onto "whatever
+	// runs next" is caught wherever it lands rather than only at the first.
+	if n := strings.Count(out, "C=[! {"); n != 1 {
+		t.Errorf("the negation was named %d times, want once, in %q", n, out)
+	}
+}
+
 // A statement's firing leaves the record naming **no command**, which is the
 // claim the two fields make together: a reader asking for a command at that
 // firing is told there is not one, because `print a && print b` is not a

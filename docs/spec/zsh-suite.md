@@ -14,7 +14,7 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, five files have become real results**, each verified
+**Since that commit, six files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
@@ -22,8 +22,9 @@ byte-identical in output and status under the reference's own driver:
     V12zparseopts    14 of 14          fd4c74161   #5162
     V13zformat        6 of 6           2b9d16b91   #5163
     C05debug          8 of 8           0a2ce6566   #5149
+    W01history        7 of 7           1e46d356f   #5165
 
-So the count the burndown moves is **26** today. The roll-up figures above are left at the commit they were taken at
+So the count the burndown moves is **27** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -38,11 +39,11 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 26 today)
+## Real results (21 at `37355aae5`, 27 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
-`V12zparseopts`, `V13zformat` and `C05debug` are the twenty-second through
-twenty-sixth and are listed here rather than below; every other entry is as
+`V12zparseopts`, `V13zformat`, `C05debug` and `W01history` are the
+twenty-second through twenty-seventh and are listed here rather than below; every other entry is as
 measured at the heading's commit.
 
 - `A03quoting`
@@ -79,6 +80,7 @@ measured at the heading's commit.
 - `V12zparseopts` (closed #5162, strict 1/1 at `fd4c74161`)
 - `V13zformat` (closed #5163, strict 1/1 at `2b9d16b91`)
 - `C05debug` (closed #5149, strict 1/1 at `0a2ce6566`)
+- `W01history` (closed #5165, strict 1/1 at `1e46d356f`)
 
 - `V08zpty`
 - `W02jobs`
@@ -112,7 +114,7 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (25), ranked by chunks unreached
+## Failing (24), ranked by chunks unreached
 
 **Measured at `fd4c74161`, 2026-09-30**, one file per driver run — every row
 still in the table. A file that has closed since leaves the table for the
@@ -201,7 +203,6 @@ front can only move chunks up.
 | — | 0 | 1 | 51 | `V06parameter` | *excluded — see below* |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
 | 5 | 5 | 0 | 53 | `E02xtrace` | xtrace with and without redirection |
-| 6 | 7 | 1 | 21 | `W01history` | History line numbering |
 | 9 | 24 | 15 | 14 | `V04features` | Failed to add parameter if local parameter present |
 | 10 | 10 | 0 | 18 | `E03posix` | Parameter hiding and tagging, printing types and values |
 | 12 | 12 | 0 | 2 | `V07pcre` | nothing runs; the reference's own first chunk is `Testing PCRE multibyte with locale en_US.UTF-8` |
@@ -318,9 +319,9 @@ measured run and never revisited. It is wrong in both directions now:
   whether they are reachable at all is a separate question from whether their
   front is fixable.
 
-So the honest statement of the target is **26 of 50 reachable today** — 21 at
-the figures' commit plus `C02cond`, `D09brace`, `V12zparseopts`, `V13zformat`
-and `C05debug` — where 50
+So the honest statement of the target is **27 of 50 reachable today** — 21 at
+the figures' commit plus `C02cond`, `D09brace`, `V12zparseopts`, `V13zformat`,
+`C05debug` and `W01history` — where 50
 is 65 less the three declines and
 less the twelve refusal-agreements, with the twelve re-examined individually
 rather than assumed unreachable since some may become reachable if the module

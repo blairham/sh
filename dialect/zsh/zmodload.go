@@ -6,6 +6,7 @@ package zsh
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -941,6 +942,21 @@ func zmodloadWiden(r *interp.Runner, module string) int {
 		// from `zsh/stat`), and a plain load is precisely what switches them
 		// on, so the enforcement is the work here rather than the bookkeeping
 		// (#1670).
+		//
+		// **The producer guard belongs here too**, and it was only on the
+		// branch below. A module has to have been narrowed at some point for
+		// a selection to exist, so a *first* load — the ordinary case, with
+		// no `-F` anywhere in the script — took this branch and never asked
+		// whether it was about to take a name the script holds. Measured on
+		// zsh 5.9.2, a function whose `local EPOCHSECONDS=mine` is followed
+		// by `zmodload zsh/datetime`: the reference writes
+		// `Can't add module parameter`, answers **2**, and leaves the name
+		// unset once the function returns, where this shell was silent at 0
+		// and owned the name afterwards.
+		if kept, code := zmodloadRestorable(r, module, zmodloadFeatures[module]); code != 0 {
+			zmodloadNarrow(r, module, kept)
+			return code
+		}
 		zmodloadEnforce(r, module, was, zmodloadFeatures[module])
 		return 0
 	}
@@ -993,7 +1009,24 @@ func zmodloadRestorable(r *interp.Runner, module string, selected []string) ([]s
 	kept, status := make([]string, 0, len(selected)), 0
 	for _, f := range selected {
 		kind, name, ok := strings.Cut(f, ":")
-		if ok && kind == "p" && r.WithdrawnParameterTaken(name) {
+		// Either reading of "this load cannot have the name", and the second
+		// is keyed on the feature being **off** rather than on the script
+		// holding it.
+		//
+		// A feature already on is one the module owns, so the load adds
+		// nothing and there is no clash to report even where a local is
+		// shadowing it — measured, `zmodload -F zsh/datetime p:EPOCHSECONDS`
+		// and then a whole load inside a function holding a
+		// `local EPOCHSECONDS` is **silent at 0** in the reference. Keying
+		// this on "the script holds the name" alone made that row refuse,
+		// which is a regression the first draft of this guard shipped past.
+		//
+		// A feature that is off is one the load has to *add*, and there the
+		// reference refuses and answers 2 — which is the ordinary first load
+		// the branch above had never been asking about.
+		adding := !slices.Contains(zmodloadEnabled(r, module), f)
+		if ok && kind == "p" && (r.WithdrawnParameterTaken(name) ||
+			(adding && parameterHeldByTheScript(r, name))) {
 			// **Two sentences for the clash, and which one depends on where
 			// the name lives.** A local says so; anything else is the plain
 			// wording. Measured 2026-09-30 on zsh 5.9.2 from a script file,

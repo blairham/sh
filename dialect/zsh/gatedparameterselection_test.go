@@ -184,15 +184,19 @@ func TestAModuleLoadDoesNotTakeANameTheScriptOwns(t *testing.T) {
 			"mine\n",
 		},
 		{
+			// The refusal is part of the answer here, not noise: the load
+			// has to *add* this name and the script holds it, so the
+			// reference writes both sentences and this row asserts them
+			// beside the value.
 			"a global, over a first whole load",
 			"EPOCHSECONDS=mine\nzmodload zsh/datetime\nprint -r -- $EPOCHSECONDS",
-			"mine\n",
+			"zsh:2: Can't add module parameter `EPOCHSECONDS': parameter already exists\nzsh:zsh/datetime:2: error when adding parameter `EPOCHSECONDS'\nmine\n",
 		},
 		{
 			// The array of the same module, so the rule is not about scalars.
 			"an array name the script owns",
 			"epochtime=mine\nzmodload zsh/datetime\nprint -r -- $epochtime",
-			"mine\n",
+			"zsh:2: Can't add module parameter `epochtime': parameter already exists\nzsh:zsh/datetime:2: error when adding parameter `epochtime'\nmine\n",
 		},
 		{
 			// A name the module **itself** already produces is not one the
@@ -209,16 +213,73 @@ func TestAModuleLoadDoesNotTakeANameTheScriptOwns(t *testing.T) {
 			// **The siblings still arrive**, which is what says the load is
 			// declined per name rather than skipped. Taking the installer
 			// out altogether passes every row above and fails this one.
+			// The refusal for the taken name comes with it, which is the
+			// pair that matters: one name declined, the rest produced.
 			"the module's other names are produced as usual",
 			"f() { local EPOCHSECONDS=mine; zmodload zsh/datetime\n" +
 				"print -r -- ${${(M)$(( ${epochtime[1]} > 0 )):#1}:-NO} }\nf",
-			"1\n",
+			"f: Can't add module parameter `EPOCHSECONDS': local parameter exists\n" +
+				"f:zsh/datetime: error when adding parameter `EPOCHSECONDS'\n1\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), tc.src)
 			if out != tc.want {
 				t.Errorf("= %q (status %d), want %q", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// A load that has to **add** a producer refuses a name the script holds, and
+// one that does not have to add anything says nothing.
+//
+// The guard existed but sat on one of two branches. A selection store only
+// exists once something has narrowed the module, so the **ordinary first
+// load** — no `-F` anywhere in the script — took the other branch and never
+// asked. Measured 2026-09-30 on zsh 5.9.2:
+//
+//	f() { local EPOCHSECONDS=mine; zmodload zsh/datetime; print $? }
+//
+//	zsh 5.9.2   Can't add module parameter … local parameter exists, 2
+//	before      silent, 0, and the shell owned the name afterwards
+//
+// **The second row is the one that keys the rule.** With the module already
+// narrowed to that very feature, the load adds nothing, and the reference is
+// silent at 0 even though a local is shadowing the name. A guard keyed on
+// "the script holds this name" refuses there — which the first draft of this
+// change did, and this row is what caught it.
+func TestAddingAProducerRefusesANameTheScriptHolds(t *testing.T) {
+	for _, tc := range []struct {
+		name, src, want string
+		code            int
+	}{
+		{
+			name: "a first load has to add it, so it refuses",
+			src:  "f() { local EPOCHSECONDS=mine; zmodload zsh/datetime; print -r -- \"in=$EPOCHSECONDS\" }\nf",
+			want: "f: Can't add module parameter `EPOCHSECONDS': local parameter exists\n" +
+				"f:zsh/datetime: error when adding parameter `EPOCHSECONDS'\nin=mine\n",
+		},
+		{
+			// Already on, so nothing is added and nothing is said.
+			name: "a feature already on adds nothing, so it is silent",
+			src: "zmodload -F zsh/datetime p:EPOCHSECONDS\n" +
+				"f() { local EPOCHSECONDS=mine; zmodload zsh/datetime; print -r -- \"st=$? in=$EPOCHSECONDS\" }\nf",
+			want: "st=0 in=mine\n",
+		},
+		{
+			// And with nobody holding the name, the same first load is
+			// silent and the parameter arrives — so the refusal is about the
+			// clash and not about first loads.
+			name: "a first load with the name free is silent",
+			src:  "zmodload zsh/datetime\nprint -r -- \"st=$? have=${EPOCHSECONDS:+YES}\"",
+			want: "st=0 have=YES\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want {
+				t.Errorf("= %q\n  want %q", out, tc.want)
 			}
 		})
 	}

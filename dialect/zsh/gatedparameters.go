@@ -182,7 +182,7 @@ func installGatedParameters(r *interp.Runner, module string) {
 	// both unset.
 	var taken []string
 	for _, name := range gatedParametersTheModuleOwns(module) {
-		if a, held := r.ParameterAttributes(name); held && !a.Provided {
+		if parameterHeldByTheScript(r, name) {
 			taken = append(taken, name)
 		}
 	}
@@ -281,4 +281,23 @@ func releaseGatedParameters(r *interp.Runner, module string) {
 	for _, name := range gatedParametersTheModuleOwns(module) {
 		r.SetParameterWithdrawn(name, true)
 	}
+}
+
+// parameterHeldByTheScript reports whether a name is one the script owns, as
+// opposed to one the shell provides.
+//
+// The question a module load has to ask twice: once to refuse the feature and
+// say so — see zmodloadRestorable — and once to leave the name alone while
+// registering the rest of the roster. It is one sentence and it is here so it
+// is not written twice, because the two readings drifting apart is exactly
+// how the load came to announce a clash on one path and install the parameter
+// on the other.
+//
+// `Provided` is what tells the shell's own names from a script's: a producer,
+// a registered refusal, or a name a dialect has claimed outright. A name the
+// module itself already produces is therefore not held by the script, which
+// is what keeps a second `zmodload` from unloading the module's parameters.
+func parameterHeldByTheScript(r *interp.Runner, name string) bool {
+	a, held := r.ParameterAttributes(name)
+	return held && !a.Provided
 }

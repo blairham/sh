@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // `type -w` names what a word is, which is how a syntax highlighter
 // classifies every word on the line before it picks a colour (#2512).
@@ -98,6 +101,22 @@ func TestTypeVerboseLetterIsNotThisShells(t *testing.T) {
 		if out != c.want || st != c.status {
 			t.Errorf("%q: got %q status %d, want %q at %d", c.src, out, st, c.want, c.status)
 		}
+	}
+}
+
+// **And `-m` stays refused as missing rather than as unknown**, because it is
+// the other kind of letter: zsh has it — `type -m ls` writes `ls is /bin/ls`
+// there — and this shell has not built it (#5230). Refusing it as a `bad
+// option` would claim zsh has no such letter, which is the mistake `-v` above
+// was the reverse of.
+//
+// Only the classification is asserted, not the status: the missing-letter
+// refusal answers 2 from `type` and 1 from `whence` today, which is #5230's
+// to settle and not a number to pin here.
+func TestTypePatternLetterIsZshsButNotBuilt(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "type -m ls\n")
+	if !strings.Contains(out, "-m is not implemented yet") || strings.Contains(out, "bad option") || st == 0 {
+		t.Errorf("got %q status %d, want it refused as not implemented, not as a bad option", out, st)
 	}
 }
 

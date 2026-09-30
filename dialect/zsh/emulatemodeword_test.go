@@ -49,8 +49,8 @@ func TestWhichWordsTheEmulateBuiltinReadsAsAMode(t *testing.T) {
 			out:  "zsh\n",
 		},
 		{
-			// Written and empty is a mode like any other — the silence an
-			// unknown mode gets, not "not enough arguments".
+			// Written and empty is a mode like any other — zsh, having no
+			// first letter (#5254) — not "not enough arguments".
 			name: "the empty word is a mode",
 			src:  `emulate ""; emulate`,
 			out:  "zsh\n",

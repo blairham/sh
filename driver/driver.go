@@ -2891,8 +2891,9 @@ func (sh Shell) applyEmulation(r *interp.Runner, in source) {
 	}
 	// Behind an end-of-options marker, because the word was taken
 	// unconditionally and a mode is not a command line: real zsh reads
-	// `--emulate -c` and `--emulate --` as modes it does not know and says
-	// nothing, where a builtin handed the bare word would read the letters.
+	// `--emulate -c` and `--emulate --` as mode words — zsh, by their first
+	// letter (#5254) — where a builtin handed the bare word would read the
+	// letters.
 	// The marker is the builtin's own — every shell's convention — so this
 	// is the front end saying "operand" and not knowing anything more.
 	_ = b(r, sh.context(), []string{"--", in.emulation})

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/blairham/sh/interp"
 )
@@ -67,9 +68,9 @@ import (
 // way; localoptions.go carries the rule now, localtraps.go carries the other,
 // and every spelling reaches them.
 //
-// Measured shapes: a bare `emulate` prints the current mode and 0; a word
-// that names no emulation — `fish`, or `SH` in the wrong case — is passed
-// over in silence, status 0, the mode unchanged; a second operand is
+// Measured shapes: a bare `emulate` prints the current mode and 0; every
+// mode word names an emulation, by its first letter (see emulationForWord);
+// a second operand is
 // `unknown argument`, 1; `-c code` runs the code under the emulation and
 // then restores everything, options included, reporting the code's status.
 
@@ -307,11 +308,7 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		_, _ = fmt.Fprintf(r.Out(), "%s\n", currentEmulation(r))
 		return 0
 	}
-	if _, known := emulations[e.mode]; !known {
-		// Measured: a word naming no emulation is passed over in silence,
-		// the mode unchanged — `emulate fish` and `emulate SH` alike.
-		return 0
-	}
+	e.mode = emulationForWord(r, e.mode)
 	if !e.hasCode {
 		applyEmulation(r, e.mode, e.strict)
 		if e.local {
@@ -361,6 +358,43 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	return st
 }
 
+// emulationForWord reads a mode word the way zsh does: **every word names an
+// emulation** (#5254). One leading `r` is dropped, and then the first letter
+// of what is left decides — `s` and `b` are sh, `k` is ksh, `c` is csh, and
+// anything else, the empty word included, is zsh. Case-sensitive, and not a
+// path: no basename is taken.
+//
+// Measured on zsh 5.9.2, 2026-09-30, from **csh** — the probe that said "an
+// unknown word leaves the mode unchanged" was run from zsh, where unchanged
+// and zsh print the same thing. From csh, `emulate fish`, `emulate BASH`,
+// `emulate ”`, `emulate r` and `emulate /bin/sh` report `zsh`; `b`, `bash`,
+// `bfoo`, `rsh`, `'s h'` report `sh`; `k`, `ksh93`, `rk` report `ksh`; `cfoo`
+// and `rcsh` report `csh`. And `emulate fish -c '…'` runs the code, under
+// zsh.
+//
+// It is the rule argv[0] is read by, so the letters are read from the same
+// table the front end reads it from, interp.EmulationOption, rather than
+// written twice; the builtin's differences are that it takes the word whole
+// and that no letter leaves it unnamed. `--emulate` hands its word here,
+// which is what makes `zsh --emulate bash` an sh.
+func emulationForWord(r *interp.Runner, word string) string {
+	opt := r.Semantics.EmulationOption
+	if word != "" && strings.IndexByte(opt.NameDropsInitial, word[0]) >= 0 {
+		word = word[1:]
+	}
+	if word != "" {
+		for _, pair := range strings.Fields(opt.NameInitials) {
+			letter, mode, ok := strings.Cut(pair, "=")
+			if ok && len(letter) == 1 && letter[0] == word[0] {
+				if _, known := emulations[mode]; known {
+					return mode
+				}
+			}
+		}
+	}
+	return "zsh"
+}
+
 // emulateArguments reads the command line. A status of -1 means "carry on";
 // anything else is the answer, already reported.
 func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status int) {
@@ -376,8 +410,8 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 	// `--emulate` takes its next word unconditionally, so the front end hands
 	// the word over behind a `--` rather than letting the builtin read `-c`
 	// or `--` as options of its own. Measured in the same run: `emulate --
-	// sh` is sh, `emulate -- -L` and `emulate -- --` are the silence an
-	// unknown mode gets, and `emulate sh --` is sh.
+	// sh` is sh, `emulate -- -L` and `emulate -- --` are mode words — zsh,
+	// by their first letter (#5254) — and `emulate sh --` is sh.
 	//
 	// It ends the flags *before* the mode and nothing more: after the mode
 	// the options are read afresh, measured 2026-09-30 — `emulate -- sh -c
@@ -441,8 +475,9 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 			// An option word with nothing in it. Not a mode — `emulate -`
 			// prints the current one and `emulate - sh` is sh — and not a
 			// flag either, which is why it does not set sawFlags. `+` alone
-			// is *not* this: measured, `emulate +` is silent and leaves the
-			// mode alone, which is an unknown mode rather than a flag word.
+			// is *not* this: measured, `emulate +` is silent at 0, which is a
+			// mode word — zsh, by its first letter (#5254) — rather than a
+			// flag word.
 			continue
 		case len(a) > 1 && a[0] == '-':
 			for _, letter := range a[1:] {
@@ -479,8 +514,8 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 		// word at all but this word itself (#5247). Measured on zsh 5.9.2,
 		// 2026-09-30: `emulate +o nullglob zsh` is `unknown argument
 		// nullglob` — the operand after the mode `+o`, which names no
-		// emulation — and a bare `emulate +o` is the silence an unknown mode
-		// gets. `+R sh`, `+L sh` and `+c 'print ran' sh` answer the same way,
+		// emulation of its own — and a bare `emulate +o` is zsh, by its first
+		// letter (#5254). `+R sh`, `+L sh` and `+c 'print ran' sh` answer the same way,
 		// and `-L +L zsh` in a function is `unknown argument zsh`.
 		//
 		// Written and empty is a mode like any other, which is measured
@@ -574,8 +609,8 @@ func (e *emulateCall) readOptionWord(r *interp.Runner, args []string, i int, wan
 // Measured on zsh 5.9.2, 2026-09-30 (#5144): a bad name is `no such option:
 // NAME` at status 1, and it is the first thing said. It comes before an
 // operand the mode has no room for (`emulate zsh -o bad 'print x'`), before
-// an `-o` or `-c` left with no word after it, and before an unknown mode is
-// passed over. And it stops the whole call: the emulation is not entered, no
+// an `-o` or `-c` left with no word after it, and before the mode word is
+// read. And it stops the whole call: the emulation is not entered, no
 // other option named beside it is set — `-o nullglob -o bad` leaves nullglob
 // off — and a `-c` string does not run.
 //

@@ -51,11 +51,32 @@ func TestTheEmulateInvocationOptionStartsTheShellInTheMode(t *testing.T) {
 			status: 0,
 		},
 		{
-			// A mode the shell does not know changes nothing and says
-			// nothing, which is the builtin's own answer to the same word.
-			name:   "an unknown mode is the builtin's silence",
+			// Every word names a mode, by its first letter (#5254): `fish`
+			// is zsh, which is the builtin's own answer to the same word.
+			name:   "a word with no letter of its own is zsh",
 			argv:   []string{"zsh", "--emulate", "fish", "-c", "emulate; echo ran"},
 			out:    "zsh\nran\n",
+			status: 0,
+		},
+		{
+			// The builtin reads the word by its first letter, one leading `r`
+			// dropped (#5254), which is what the suite's `--emulate option`
+			// chunk asks: `bash` is sh. Measured 2026-09-30.
+			name:   "bash is sh by its first letter",
+			argv:   []string{"zsh", "--emulate", "bash", "-f", "-c", "emulate"},
+			out:    "sh\n",
+			status: 0,
+		},
+		{
+			name:   "rksh is ksh once the r is dropped",
+			argv:   []string{"zsh", "--emulate", "rksh", "-f", "-c", "emulate"},
+			out:    "ksh\n",
+			status: 0,
+		},
+		{
+			name:   "and bash moves the options sh moves",
+			argv:   []string{"zsh", "--emulate", "bash", "-f", "-c", "[[ -o shwordsplit ]] && [[ -o ksharrays ]] && echo both"},
+			out:    "both\n",
 			status: 0,
 		},
 		{

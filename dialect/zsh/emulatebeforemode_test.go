@@ -25,7 +25,7 @@ func TestEmulateBeforeTheModeWord(t *testing.T) {
 		{"-o after -L", "emulate -L -o nullglob sh", "bad option: -o|st=1|zsh"},
 		{"-c", "emulate -c 'print ran' sh", "bad option: -c|st=1|zsh"},
 		{"+o is the mode", "emulate +o nullglob zsh", "unknown argument nullglob|st=1|zsh"},
-		{"+o alone is an unknown mode", "emulate +o", "st=0|zsh"},
+		{"+o alone is a mode word", "emulate +o", "st=0|zsh"},
 		{"+R is the mode", "emulate +R sh", "unknown argument sh|st=1|zsh"},
 		{"+c is the mode", "emulate +c 'print ran' sh", "unknown argument print ran|st=1|zsh"},
 		{"+o after -L is the mode", "emulate -L +o nullglob sh", "unknown argument nullglob|st=1|zsh"},

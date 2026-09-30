@@ -1348,9 +1348,9 @@ func Semantics() interp.Semantics {
 	// Both refusals are the shell's own words at status 1, where a word this
 	// front end cannot place exits 2 — `--emulate` with nothing after it is
 	// `--emulate: argument required`, and `-x --emulate sh` is `--emulate:
-	// must precede other options`. The mode itself is never judged here: an
-	// unknown one is the builtin's silence, which is the same answer `emulate
-	// fish` gives at a prompt.
+	// must precede other options`. The mode itself is never judged here: the
+	// builtin reads the word by its first letter, the same way it reads
+	// `emulate fish` at a prompt (#5254).
 	//
 	// And the *name*, which asks the same question without an option word:
 	// the first letter of argv[0]'s basename picks the mode this shell starts

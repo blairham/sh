@@ -42,7 +42,7 @@ func TestABadEmulateOptionNameStopsTheCall(t *testing.T) {
 			"no such option: fixallmybugs|st=1",
 		},
 		{
-			"before an unknown mode is passed over", "emulate bogusmode -o fixallmybugs 'print ran'",
+			"before a word that names no emulation", "emulate bogusmode -o fixallmybugs 'print ran'",
 			"no such option: fixallmybugs|st=1",
 		},
 		{

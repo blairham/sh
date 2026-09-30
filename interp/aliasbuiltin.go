@@ -178,6 +178,35 @@ func (r *Runner) aliasTableFor(name string) (display, value string, kind AliasKi
 	return "", "", AliasAnyKind, false
 }
 
+// AliasKindWord names an alias's kind in the two or three words the short
+// answers use: `whence -w`, `which -w` and `type -w` all write
+// `NAME: <this>`.
+//
+// Here beside [Runner.AliasSentence] and for the same reason it is here: a
+// dialect's own `whence` and this package's `type` write the identical word,
+// so two spellings of it would be two answers to one question. Which is not
+// hypothetical — `type -w` had its own hardcoded `alias` and called a suffix
+// alias plain while `whence -w` named it (#5219).
+//
+// Measured 2026-09-12 and again 2026-09-30 against zsh 5.9.2, with a global
+// `UP` and a suffix `txt`: `a: alias`, `UP: global alias`, `txt: suffix
+// alias`.
+//
+// A plain function rather than a method because no dialect words these
+// differently: only zsh has the kinds at all, and only zsh has a letter that
+// asks for them. The sentence above is a method because its wordings *are* a
+// dialect's; this is the same distinction [NamedKindWord] draws.
+func AliasKindWord(kind AliasKind) string {
+	switch kind {
+	case AliasGlobalKind:
+		return "global alias"
+	case AliasSuffixKind:
+		return "suffix alias"
+	case AliasAnyKind, AliasRegularKind:
+	}
+	return "alias"
+}
+
 // AliasSentence is the sentence `type` and `command -V` write for a name the
 // tables hold, in this dialect's words and for the kind it was found under.
 //

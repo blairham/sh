@@ -469,7 +469,12 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 	// only an alias was `not found` under `-a` while plain `type` named it.
 	if display, value, akind, ok := r.AliasForName(name); ok {
 		found = true
-		if !r.sayKind(m.asked(), name, "alias", "alias") {
+		// `display` and the kind's word here too, and not only on the plain
+		// road: `-a` writes the same row. Fixing one of the two left
+		// `type -aw bar.foo` still calling a suffix alias plain after
+		// `type -w bar.foo` was right, which is the whole reason the lookup
+		// hands the name back rather than each caller deriving it (#5219).
+		if !r.sayKind(m.asked(), display, "alias", AliasKindWord(akind)) {
 			r.printf("%s\n", r.AliasSentence(display, value, akind))
 		}
 	}
@@ -723,7 +728,16 @@ func (r *Runner) describeNameLinking(name string, kind typeKind, skipFuncs bool,
 	// the kind, the suffix keying and one dialect's expansion gate are all
 	// in AliasForName.
 	if display, value, akind, ok := r.AliasForName(name); ok {
-		if r.sayKind(kind, name, "alias", "alias") {
+		// The name to print is the one the lookup hands back and not the
+		// word that was asked about: a suffix alias is keyed on the
+		// extension, so `type -w bar.foo` is about `foo`. The kind's word
+		// comes from beside the sentence below for the same reason the
+		// sentence does — a dialect's `whence -w` writes the identical line,
+		// and this branch having its own `alias` is how it came to call a
+		// suffix alias plain (#5219). The bare form keeps the plain word:
+		// the dialect with the kinds has no bare spelling of this answer,
+		// and the dialects with a bare one have no suffix aliases.
+		if r.sayKind(kind, display, "alias", AliasKindWord(akind)) {
 			return 0
 		}
 		r.printf("%s\n", r.AliasSentence(display, value, akind))

@@ -90,6 +90,26 @@ func TestZformatFormatGrammar(t *testing.T) {
 			`zformat -F o '%0(a.a.A)%-0(a.a.A)' a:; print -r -- "[$o]"`,
 			"[Aa]\n",
 		},
+		// A sign written **outside** the parenthesis applies to the number
+		// written inside it. Dropping it inverts the comparison, so these
+		// two rows are a pair: one value each side of the boundary.
+		{
+			"an outer sign applies to an inner number, at the boundary",
+			`zformat -F o '%-(5j.short.long)' j:12345; print -r -- "[$o]"`,
+			"[short]\n",
+		},
+		{
+			"an outer sign applies to an inner number, past the boundary",
+			`zformat -F o '%-(5j.short.long)' j:123456; print -r -- "[$o]"`,
+			"[long]\n",
+		},
+		// And it reaches the arithmetic mode, where the number under test is
+		// negative rather than the length comparison being flipped.
+		{
+			"an outer sign reaches the arithmetic comparison too",
+			`zformat -f o '%-(2c.y.n)' c:2; print -r -- "[$o]"`,
+			"[n]\n",
+		},
 		// A backslash escapes whatever follows it, not only a colon.
 		{
 			"a backslash escapes the next byte, whatever it is",

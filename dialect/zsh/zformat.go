@@ -341,7 +341,18 @@ func zformatTernary(
 	i := at
 	if inner, innerNegative, after, has := zformatNumber(format, i); has {
 		if !hasNumber {
-			number, negative = inner, innerNegative
+			number = inner
+			if negative && !innerNegative {
+				// The sign was written **outside** the parenthesis and the
+				// number inside it, and the sign still applies. Measured,
+				// `%-(5j.short.long)` chooses `short` for a value of length
+				// five and `long` for one of length six — the `<=` reading —
+				// where dropping the sign inverts it. It reaches the
+				// arithmetic mode too: `%-(2c.y.n)` with `c:2` is `n`,
+				// because the number under test is -2 and not 2.
+				number = -inner
+			}
+			negative = negative || innerNegative
 		}
 		i = after
 	}

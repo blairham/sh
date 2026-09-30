@@ -149,6 +149,53 @@ type Chars struct {
 	// finds a live `&` behind it). A reading that unescaped twice and then
 	// expanded the `&`, or expanded it first, gets one of those two wrong.
 	SubstitutionUnescapesTheReplacement bool
+
+	// HeadAndTailTakeACount reads an unsigned decimal run after a `:h` or a
+	// `:t` as **how many components to keep** — the first n for `h`, the last
+	// n for `t` — where the column without it applies the bare modifier and
+	// leaves the digits as ordinary text.
+	//
+	// Measured 2026-09-30 at a prompt on `/my/path/for/testing`, with the
+	// result marked from inside the shell so there is no prompt to strip:
+	//
+	//	mod    zsh 5.9.2              bash 5.3.20 and 3.2.57
+	//	h      /my/path/for           /my/path/for
+	//	h1     /                      /my/path/for1
+	//	h2     /my                    /my/path/for2
+	//	h4     /my/path/for           /my/path/for4
+	//	h5     /my/path/for/testing   /my/path/for5
+	//	t1     testing                testing1
+	//	t2     for/testing            testing2
+	//	t4     my/path/for/testing    testing4
+	//	t3:h2  path/for               testing3:h2
+	//
+	// ksh93u+ cannot be asked: it does not expand `!!:…` at all. dash and
+	// BusyBox ash have no history expansion.
+	//
+	// **A count of zero is the bare modifier**, not "keep none": `h0` is
+	// `/my/path/for` and `t0` is `testing`. No sign is read — `h-1` is the
+	// bare `h` with `-1` left as text — and the run ends at the first
+	// non-digit, so `h1x` is `h1` followed by an `x`.
+	//
+	// The two halves part at the boundary, which is the row that has to be
+	// measured rather than reasoned: **`h` beyond the count yields the whole
+	// text, and `t` beyond it refuses** — unless the text is absolute, where
+	// `t` yields the whole instead, because the leading `/` is a component
+	// the last-n can still reach. Four subjects were needed to see it, since
+	// any one of them agrees with a simpler rule:
+	//
+	//	subject      t works to   beyond it
+	//	a/b          t1           modifier failed
+	//	a/b/c        t2           modifier failed
+	//	a/b/c/d      t3           modifier failed
+	//	/a/b         t2           /a/b
+	//	/a/b/c       t3           /a/b/c
+	//
+	// A **trailing slash is dropped** before the components are counted, and
+	// the two halves then disagree once more about what "the whole" is: on
+	// `/a/b/`, `h3` is `/a/b/` — the text as written — while `t3` is `/a/b`,
+	// without it.
+	HeadAndTailTakeACount bool
 }
 
 // Default is what a shell starts with: `!^#`.
@@ -201,6 +248,16 @@ func (l List) at(n int) (string, bool) {
 type NotFound struct{ Ref string }
 
 func (e *NotFound) Error() string { return e.Ref + ": event not found" }
+
+// ModifierFailed is a counted `:h` or `:t` asking for more components than
+// the text has to give.
+//
+// Only the counted form raises it, and only `t`: see
+// [Chars.HeadAndTailTakeACount] for the boundary and for why `h` answers with
+// the whole text where `t` refuses.
+type ModifierFailed struct{ Mod string }
+
+func (e *ModifierFailed) Error() string { return "modifier failed: " + e.Mod }
 
 // BadModifier is a `:` followed by something that is not a modifier.
 type BadModifier struct{ Mod string }
@@ -1144,12 +1201,17 @@ func modifiers(src []rune, j int, text string, st *state, c Chars) (string, int,
 			return "", 0, false, &BadModifier{Mod: ""}
 		}
 		switch src[j] {
-		case 'h':
-			text = head(text)
+		case 'h', 't':
+			letter := src[j]
 			j++
-		case 't':
-			text = tail(text)
-			j++
+			n := 0
+			if c.HeadAndTailTakeACount {
+				n, j = modifierCount(src, j)
+			}
+			var err error
+			if text, err = headOrTail(text, letter, n); err != nil {
+				return "", 0, false, err
+			}
 		case 'r':
 			text = root(text)
 			j++
@@ -1400,6 +1462,69 @@ func quick(line string, hist List, c Chars, st *state) (Result, error) {
 		return Result{Line: out, Changed: true, Print: print}, nil
 	}
 	return Result{Line: out, Changed: true}, nil
+}
+
+// modifierCount reads the unsigned decimal run after a counted `:h` or `:t`.
+//
+// Unsigned on purpose: `h-1` is the bare modifier with `-1` left as text, so
+// reading a sign here would swallow the `-` and answer a question nobody
+// asked. Zero is returned for no digits at all, which is the same answer the
+// bare modifier needs.
+func modifierCount(src []rune, j int) (n, next int) {
+	start := j
+	for j < len(src) && src[j] >= '0' && src[j] <= '9' {
+		n = n*10 + int(src[j]-'0')
+		j++
+	}
+	if j == start {
+		return 0, j
+	}
+	return n, j
+}
+
+// headOrTail applies `:h` or `:t`, with a count where the dialect has one.
+//
+// A count of zero — which is also "no count" — is the bare modifier, and the
+// two share a function because the counted forms are the same question asked
+// of a component list. See [Chars.HeadAndTailTakeACount] for the panel and
+// for the boundary the two letters answer differently.
+func headOrTail(s string, letter rune, n int) (string, error) {
+	if n <= 0 {
+		if letter == 'h' {
+			return head(s), nil
+		}
+		return tail(s), nil
+	}
+	// A trailing slash is not a component of its own. `/a/b/` counts as
+	// `/a/b`, measured: `t1` is `b` and not the empty piece after the slash.
+	trimmed := s
+	if len(trimmed) > 1 && strings.HasSuffix(trimmed, "/") {
+		trimmed = trimmed[:len(trimmed)-1]
+	}
+	parts := strings.Split(trimmed, "/")
+	if letter == 'h' {
+		if n >= len(parts) {
+			// The text **as written**, trailing slash included: `h3` on
+			// `/a/b/` is `/a/b/`, where `t3` on the same text is `/a/b`.
+			return s, nil
+		}
+		kept := strings.Join(parts[:n], "/")
+		if kept == "" {
+			// Only the empty piece in front of a leading slash was kept,
+			// which is the root: `h1` on `/a/b` is `/`.
+			return "/", nil
+		}
+		return kept, nil
+	}
+	if n >= len(parts) {
+		if parts[0] == "" {
+			// Absolute, so the last-n can still reach the leading `/` and
+			// the answer is the whole trimmed text rather than a refusal.
+			return trimmed, nil
+		}
+		return "", &ModifierFailed{Mod: "t"}
+	}
+	return strings.Join(parts[len(parts)-n:], "/"), nil
 }
 
 func head(s string) string {

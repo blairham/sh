@@ -94,3 +94,30 @@ func TestBashKeepsBackslashesInASubstitutionReplacement(t *testing.T) {
 		t.Errorf("expanded to %q, want %q", res.Line, want)
 	}
 }
+
+// A `:h` or `:t` takes no count here: the bare modifier runs and the digits
+// are ordinary text.
+//
+// Inherited from the substrate rather than set in this file, so this row is
+// what holds the preset's No in place — flipping it would change this shell
+// and nothing in the zsh tests would notice. Measured 2026-09-30 on 5.3.20
+// and 3.2.57 alike: `!!:1:h2` over `/my/path/for/testing` is
+// `/my/path/for2`.
+func TestBashHeadAndTailTakeNoCount(t *testing.T) {
+	if got := bash.Semantics().HistoryHeadAndTailTakeACount; got != interp.No {
+		t.Errorf("HistoryHeadAndTailTakeACount is %v, want No", got)
+	}
+	sem, diag, d := bash.Semantics(), bash.Diagnostics(), bash.Dialect()
+	r := &interp.Runner{
+		Semantics: &sem, Diagnostics: &diag, Name: "bash",
+		Dialect: &d,
+	}
+	bash.Apply(r)
+	res, err := r.ExpandHistoryAlways("echo !!:1:h2", []string{"echo /my/path/for/testing"}, 1)
+	if err != nil {
+		t.Fatalf("expanding: %v", err)
+	}
+	if want := "echo /my/path/for2"; res.Line != want {
+		t.Errorf("expanded to %q, want %q", res.Line, want)
+	}
+}

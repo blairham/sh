@@ -1187,6 +1187,10 @@ func Semantics() interp.Semantics {
 	// for the mixed-content row that pins it to characters rather than to a
 	// division.
 	s.HistorySubstitutionUnescapesTheReplacement = interp.Yes
+	// And a `:h` or `:t` takes a count of components to keep: `:h2` on
+	// `/my/path/for/testing` is `/my` where bash leaves `/my/path/for2`.
+	// See Semantics.HistoryHeadAndTailTakeACount.
+	s.HistoryHeadAndTailTakeACount = interp.Yes
 	// A quote or a backquote against the event character is ordinary text
 	// here and part of the event's name in bash and ksh93, a second event
 	// character closes the name it is in, and `!{…}` is the braced form
@@ -5435,6 +5439,7 @@ func Diagnostics() interp.Diagnostics {
 		// that introduced it, and a failed substitution names nothing at all.
 		HistoryEventNotFound:          "event not found: %[2]s",
 		HistorySubstitutionFailed:     "substitution failed",
+		HistoryModifierFailed:         "modifier failed: %[1]s",
 		HistoryBadWordSpecifier:       "no such word in event",
 		HistoryNoPreviousSubstitution: "no previous substitution",
 		// The trace attribute is a **variable** letter this engine records

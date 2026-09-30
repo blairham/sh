@@ -146,6 +146,7 @@ func (r *Runner) HistoryChars() histexpand.Chars {
 	c.FirstWordEndsARange = r.sem().HistoryFirstWordEndsARange == Yes
 	c.WordwiseSubstitution = r.sem().HistoryWordwiseSubstitutionModifier == Yes
 	c.SubstitutionUnescapesTheReplacement = r.sem().HistorySubstitutionUnescapesTheReplacement == Yes
+	c.HeadAndTailTakeACount = r.sem().HistoryHeadAndTailTakeACount == Yes
 	switch r.sem().HistoryWords {
 	case HistoryWordsShell:
 		c.Words = histexpand.WordsShell
@@ -388,6 +389,8 @@ func (r *Runner) HistoryExpansionRefusal(err error) string {
 		return Wording(d.HistoryBadWordSpecifier, "%[1]s: bad word specifier", e.Ref)
 	case *histexpand.BadModifier:
 		return Wording(d.HistoryBadModifier, "%[1]s: unrecognized history modifier", e.Mod, e.Mod)
+	case *histexpand.ModifierFailed:
+		return Wording(d.HistoryModifierFailed, "modifier failed: %[1]s", e.Mod)
 	}
 	// Nothing else reaches here — the engine raises those three and no
 	// others, and the compile-time reminder in repl/historyexpand.go says so

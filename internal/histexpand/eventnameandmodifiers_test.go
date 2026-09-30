@@ -331,3 +331,96 @@ func TestTheQuickSubstitutionUnescapesItsReplacementToo(t *testing.T) {
 		t.Errorf("keeping them, the quick form became %q", got)
 	}
 }
+
+// A `:h` or `:t` takes a count of components to keep, in one column and not
+// the other.
+//
+// See Chars.HeadAndTailTakeACount for the panel. The rows are chosen for what
+// they decide rather than for coverage:
+//
+//   - **Zero is the bare modifier**, not "keep none".
+//   - **No sign is read**, so `h-1` is the bare `h` with `-1` left as text —
+//     which is also what says the digits are scanned and not parsed.
+//   - The two letters **part at the far boundary**: `h` past the component
+//     count answers with the whole text and `t` past it refuses, *unless* the
+//     text is absolute. Four subjects are here because any one of them agrees
+//     with a simpler rule; `a/b/c/d` against `/a/b/c` is the pair that
+//     separates "past the count" from "past the slashes".
+//   - A **trailing slash** is dropped before counting, and then the two
+//     letters disagree once more about what "the whole" is.
+func TestCountedHeadAndTail(t *testing.T) {
+	plain := Chars{Event: '!', Quick: '^', Comment: '#', Words: WordsShell}
+	counted := plain
+	counted.HeadAndTailTakeACount = true
+
+	for _, row := range []struct{ subj, mod, want, bare string }{
+		{"/my/path/for/testing", "h1", "/", "/my/path/for1"},
+		{"/my/path/for/testing", "h2", "/my", "/my/path/for2"},
+		{"/my/path/for/testing", "h4", "/my/path/for", "/my/path/for4"},
+		{"/my/path/for/testing", "h5", "/my/path/for/testing", "/my/path/for5"},
+		{"/my/path/for/testing", "h0", "/my/path/for", "/my/path/for0"},
+		{"/my/path/for/testing", "t1", "testing", "testing1"},
+		{"/my/path/for/testing", "t2", "for/testing", "testing2"},
+		{"/my/path/for/testing", "t4", "my/path/for/testing", "testing4"},
+		{"/my/path/for/testing", "t5", "/my/path/for/testing", "testing5"},
+		{"/my/path/for/testing", "t0", "testing", "testing0"},
+		// Chained, which is what says the count applies to the result of the
+		// modifier before it rather than to the original word.
+		{"/my/path/for/testing", "t3:h2", "path/for", "testing3:h2"},
+		{"/my/path/for/testing", "h2:t1", "my", "/my/path/for2:t1"},
+		// No sign, and the run ends at the first non-digit.
+		{"/my/path/for/testing", "h-1", "/my/path/for-1", "/my/path/for-1"},
+		{"/my/path/for/testing", "h01", "/", "/my/path/for01"},
+		{"/my/path/for/testing", "h1x", "/x", "/my/path/for1x"},
+		// The boundary, relative against absolute.
+		{"a/b/c/d", "t3", "b/c/d", "d3"},
+		{"/a/b/c", "t3", "a/b/c", "c3"},
+		{"/a/b/c", "t4", "/a/b/c", "c4"},
+		// A trailing slash is dropped before counting, and `h`'s whole keeps
+		// it where `t`'s does not.
+		{"/a/b/", "t1", "b", ""},
+		{"/a/b/", "t2", "a/b", ""},
+		{"/a/b/", "h3", "/a/b/", ""},
+		{"/a/b/", "t3", "/a/b", ""},
+	} {
+		list := seeded("echo " + row.subj)
+		in := "echo !1:1:" + row.mod
+		if got := expanded(t, in, list, counted); got != "echo "+row.want {
+			t.Errorf("counted, %s over %q became %q, want %q", in, row.subj, got, "echo "+row.want)
+		}
+		if row.bare == "" {
+			continue
+		}
+		if got := expanded(t, in, list, plain); got != "echo "+row.bare {
+			t.Errorf("bare, %s over %q became %q, want %q", in, row.subj, got, "echo "+row.bare)
+		}
+	}
+}
+
+// And a counted `:t` asking for more than the text has **refuses**, where the
+// same count on an absolute path does not.
+//
+// The pair is the point: a row that only asserted the refusal would pass an
+// implementation that refused for every over-count, and a row that only
+// asserted the absolute case would pass one that never refused.
+func TestACountedTailPastTheTextRefuses(t *testing.T) {
+	counted := Chars{Event: '!', Quick: '^', Comment: '#', Words: WordsShell}
+	counted.HeadAndTailTakeACount = true
+
+	var failed *ModifierFailed
+	if err := refused(t, "echo !1:1:t3", seeded("echo a/b/c"), counted); !errors.As(err, &failed) {
+		t.Errorf("a relative path over-counted: %v, want a failed modifier", err)
+	} else if failed.Mod != "t" {
+		t.Errorf("the failure names %q, want t", failed.Mod)
+	}
+	if got := expanded(t, "echo !1:1:t4", seeded("echo /a/b/c"), counted); got != "echo /a/b/c" {
+		t.Errorf("an absolute path over-counted became %q, want the whole text", got)
+	}
+	// And the bare modifier never refuses, which is what keeps the refusal
+	// scoped to the counted form.
+	plain := counted
+	plain.HeadAndTailTakeACount = false
+	if got := expanded(t, "echo !1:1:t3", seeded("echo a/b/c"), plain); got != "echo c3" {
+		t.Errorf("the bare reading became %q, want the digits left as text", got)
+	}
+}

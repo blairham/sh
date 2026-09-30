@@ -3802,6 +3802,14 @@ type Diagnostics struct {
 	// is given.
 	HistorySubstitutionFailed string
 
+	// HistoryModifierFailed is a counted `:t` asking for more components than
+	// the text has. One verb: the modifier's letter.
+	//
+	// Measured 2026-09-30 on zsh 5.9.2, `!!:1:t9` over a relative path:
+	// `zsh: modifier failed: t`. Only the dialect with counted modifiers can
+	// reach it — see Semantics.HistoryHeadAndTailTakeACount.
+	HistoryModifierFailed string
+
 	// HistoryBadModifier is a `:` in a history reference followed by
 	// something that is not a modifier — `bash: |: unrecognized history
 	// modifier`.

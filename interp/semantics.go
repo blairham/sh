@@ -24651,6 +24651,26 @@ type Semantics struct {
 	// is.
 	HistorySubstitutionUnescapesTheReplacement Answer
 
+	// HistoryHeadAndTailTakeACount reads an unsigned decimal run after a
+	// history reference's `:h` or `:t` as **how many components to keep** —
+	// the first n for `h`, the last n for `t` — where the column without it
+	// applies the bare modifier and leaves the digits as ordinary text.
+	//
+	// Measured 2026-09-30 on `/my/path/for/testing`: `:h2` is `/my` in zsh
+	// 5.9.2 and `/my/path/for2` in bash 5.3.20 and 3.2.57 alike, and `:t2`
+	// is `for/testing` against `testing2`. ksh93u+ cannot be asked — it does
+	// not expand `!!:…` at all — and dash and BusyBox ash have no history
+	// expansion.
+	//
+	// Zero is the bare modifier rather than "keep none", and the two letters
+	// part at the far boundary: `h` past the component count answers with the
+	// whole text, `t` past it refuses — except on an absolute path, where the
+	// leading `/` is a component the last-n can still reach. See
+	// histexpand.Chars.HeadAndTailTakeACount for the four subjects that were
+	// needed to see that, since any one of them agrees with a simpler rule.
+	// Read, not asked, for the reason HistoryWords is.
+	HistoryHeadAndTailTakeACount Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -30218,6 +30238,13 @@ func PosixSemantics() Semantics {
 		// refusal would be a shipped bug at a site they never visit.
 		// See Semantics.HistorySubstitutionUnescapesTheReplacement.
 		HistorySubstitutionUnescapesTheReplacement: No,
+		// And a `:h` or `:t` takes no count: the bare modifier runs and the
+		// digits are ordinary text, which is bash's answer in both releases.
+		// Answered here for the same reason as the line above — the question
+		// is put at every `:h` and `:t`, including in the two dialects with no
+		// expander to reach it.
+		// See Semantics.HistoryHeadAndTailTakeACount.
+		HistoryHeadAndTailTakeACount: No,
 		// And the standard has no expander to read a double quote with, so
 		// the preset takes the simpler of the two readings — a `"` ends a
 		// name wherever it stands — and bash, whose answer depends on

@@ -97,3 +97,45 @@ func TestZshSubstitutionUnescapesTheReplacementTwice(t *testing.T) {
 		t.Errorf("expanded to %q, want %q", res.Line, want)
 	}
 }
+
+// A `:h` or `:t` takes a count of components to keep, and the refusal past
+// the end carries this shell's wording.
+//
+// See Semantics.HistoryHeadAndTailTakeACount. **The expansion is run and not
+// only the axis read**: this is the third front in a row where the survivor
+// said nothing exercised the wiring, because the engine's own tests build
+// their histexpand.Chars by hand and never go through Runner.HistoryChars.
+func TestZshHeadAndTailTakeACount(t *testing.T) {
+	if got := zsh.Semantics().HistoryHeadAndTailTakeACount; got != interp.Yes {
+		t.Errorf("HistoryHeadAndTailTakeACount is %v, want Yes", got)
+	}
+	sem, diag, d := zsh.Semantics(), zsh.Diagnostics(), zsh.Dialect()
+	r := &interp.Runner{
+		Semantics: &sem, Diagnostics: &diag, Name: "zsh",
+		// See the guard in internal/dialecttest: a nil Dialect is the core.
+		Dialect: &d,
+	}
+	zsh.Apply(r)
+	for _, c := range []struct{ in, want string }{
+		{"echo !1:1:h2", "echo /my"},
+		{"echo !1:1:t2", "echo for/testing"},
+		{"echo !1:1:h0", "echo /my/path/for"},
+	} {
+		res, err := r.ExpandHistoryAlways(c.in, []string{"echo /my/path/for/testing"}, 1)
+		if err != nil {
+			t.Fatalf("%s: %v", c.in, err)
+		}
+		if res.Line != c.want {
+			t.Errorf("%s expanded to %q, want %q", c.in, res.Line, c.want)
+		}
+	}
+	// And the refusal, through the shell's own wording rather than the
+	// engine's Go text — `zsh: modifier failed: t`, measured.
+	_, err := r.ExpandHistoryAlways("echo !1:1:t3", []string{"echo a/b/c"}, 1)
+	if err == nil {
+		t.Fatal("an over-counted tail was accepted")
+	}
+	if got, want := r.HistoryExpansionRefusal(err), "modifier failed: t"; got != want {
+		t.Errorf("the refusal reads %q, want %q", got, want)
+	}
+}

@@ -1836,7 +1836,16 @@ func builtinRunsTheScriptsOwnCommands(argv []string) bool {
 // See Semantics.TraceFromBorrowedTextFollowsItsRedirection for the panel and
 // for the three rows that pin all of this together.
 func (r *Runner) borrowedTextTraceStream() func() {
-	if !r.tracing() {
+	tracing := r.tracing()
+	if r.tracingWhenReached != nil {
+		// A builtin that moves options before it runs its text has said
+		// what tracing was when the command was reached, and that is the
+		// answer rather than the state now. Taken once, so text nested
+		// inside answers from its own entry. See
+		// Runner.HoldTracingForBorrowedText.
+		tracing, r.tracingWhenReached = *r.tracingWhenReached, nil
+	}
+	if !tracing {
 		// Nothing is being traced, so there is no line to route and no
 		// disagreement to consult. **Load-bearing rather than a shortcut**:
 		// without it every redirected `eval` asks the axis, and a strict
@@ -1873,6 +1882,36 @@ func (r *Runner) borrowedTextTraceStream() func() {
 		return nil
 	}
 	return func() { r.traceSink = saved }
+}
+
+// HoldTracingForBorrowedText records whether `xtrace` is on **now**, for the
+// next borrowed text this runner enters to decide its trace destination by,
+// and returns the undo.
+//
+// For a builtin that runs borrowed text after moving options itself: zsh's
+// `emulate … -c` applies the emulation and its own option words and only then
+// runs the string. zsh decides whether that string's trace keeps out of the
+// redirection on the command by whether tracing was on when the command was
+// **reached**, before the builtin moved anything. Measured on zsh 5.9.2,
+// 2026-09-30, `PS4='+%N:%i> '`, with `2>>f` on the command:
+//
+//	setopt xtrace; emulate zsh -c ':'                   trace → stderr
+//	emulate zsh -o xtrace -c ':'                        trace → f
+//	emulate zsh -x -c ':'                               trace → f
+//	setopt xtrace; emulate zsh +o xtrace -c 'setopt xtrace; :'   → stderr
+//	setopt xtrace; emulate -R zsh -c 'setopt xtrace; :'          → stderr
+//
+// So it is the same rule as a `.` or an `eval` — see
+// Semantics.TraceFromBorrowedTextFollowsItsRedirection — with "when the text
+// was entered" and "when the command was reached" parting only for a
+// construct that can change `xtrace` in between, which `.` and `eval` cannot.
+// The held answer is consumed by the first borrowed text entered, so text
+// nested inside that one answers from its own entry as before.
+func (r *Runner) HoldTracingForBorrowedText() func() {
+	outer := r.tracingWhenReached
+	on := r.tracing()
+	r.tracingWhenReached = &on
+	return func() { r.tracingWhenReached = outer }
 }
 
 // traceDestination is where a trace line goes right now: the sink's answer

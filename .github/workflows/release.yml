@@ -17,6 +17,9 @@ on:
 
 permissions:
   contents: write
+  # The six container images go to ghcr.io in the same run -- see `dockers_v2`
+  # in `.goreleaser.yaml`. The token below is the one that writes them.
+  packages: write
 
 jobs:
   release:
@@ -59,6 +62,26 @@ jobs:
     - name: Run tests
       run: make test
 
+    # **The one builder that can do this.** `dockers_v2` builds both
+    # architectures in a single `docker buildx build --platform
+    # linux/amd64,linux/arm64 --push`, and a runner's default builder is the
+    # `docker` driver, which cannot export a manifest list. This action makes a
+    # `docker-container` builder, which can. No QEMU beside it: the recipe pins
+    # its assembly stage to `$BUILDPLATFORM`, so nothing foreign is executed
+    # while the image is built.
+    - uses: docker/setup-buildx-action@v3
+
+    # GoReleaser builds and pushes the container images itself, so it needs a
+    # registry it is already logged in to. ghcr.io takes the run's own token,
+    # which is scoped to this repository by `packages: write` above -- nothing
+    # extra to store.
+    - name: Log in to ghcr.io
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v7
       with:
@@ -73,3 +96,49 @@ jobs:
         MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
         MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
         MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+    # The published index, pulled back and run. CI's `packaging` job smokes the
+    # same six images on every pull request that touches the recipe, but it
+    # builds them with `--snapshot`, which never creates the **multi-platform
+    # index** -- it loads one image per architecture and stops. The index is
+    # made here and nowhere else, so this is the only place a broken one can be
+    # caught. One architecture is enough for that: if the index were wrong, the
+    # runner's own pull is what would fail.
+    - name: Does the published index run?
+      run: |
+        set -euo pipefail
+
+        # The roster comes out of the render that just ran, not a list written
+        # here: a list is a claim about a roster it cannot see, and says nothing
+        # when a seventh image is added. `:latest` is dropped because it is the
+        # same digest as the version tag one line above it.
+        mapfile -t images < <(
+          jq -r '.[] | select(.type == "Docker Image") | .name' dist/artifacts.json \
+            | grep -v ':latest$' | sort -u
+        )
+        if [ "${#images[@]}" -eq 0 ]; then
+          echo "::error::the release produced no container images -- this step proved nothing"
+          exit 1
+        fi
+
+        err=$(mktemp)
+        status=0
+        for img in "${images[@]}"; do
+          name=${img%:*}; name=${name##*/}
+          # Nothing local: the tag is pulled back from the registry, so this
+          # answers for the index that was published rather than for anything
+          # the build left in the runner's image store.
+          docker rmi -f "$img" >/dev/null 2>&1 || true
+          # stderr separately, not folded in: `docker run` writes the pull's
+          # progress and any platform note there, and a comparison that read it
+          # would fail on output the shell never produced. See the same note in
+          # the CI job this mirrors.
+          got=$(docker run --rm "$img" -c 'echo $0' 2>"$err") || true
+          if [ "$got" != "/bin/$name" ]; then
+            echo "::error::$img answered [$got], wanted [/bin/$name]"
+            sed 's/^/    /' "$err"
+            status=1
+          else
+            echo "$img: ok"
+          fi
+        done
+        exit "$status"

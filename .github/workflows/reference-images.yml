@@ -21,7 +21,12 @@ on:
     branches: ['refimages/**']
   pull_request:
     paths:
-    - 'images/**'
+    # The two recipe directories by name, not `images/**`. `images/` also holds
+    # the release's `scratch/` recipe, which has no reference in it and nothing
+    # to do with this workflow -- and a touch of that file used to start both
+    # builds here, which are an emulated `apt` and an emulated C compile.
+    - 'images/dash-0.5.12/**'
+    - 'images/zsh-5.9.2/**'
     - '.github/workflows/reference-images.yml'
   workflow_dispatch:
 

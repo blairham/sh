@@ -1,5 +1,13 @@
 # Reference images
 
+**Not everything under `images/` is a reference.** `images/scratch/Dockerfile`
+is the other kind: the six `FROM scratch` images a release publishes, each
+carrying one of *this* project's shells and nothing else — see
+`docs/install.md`. It is built by `dockers_v2` in `.goreleaser.yaml` on a `v*`
+tag, not by the workflow described here, and nothing grades against it. The
+rest of this file is about the reference builds `make suite` grades a column
+*against*.
+
 `make suite` grades each dialect binary against the reference shell it claims
 to be. A column whose reference is *whatever build the machine happens to
 have* reports a fact about that machine: on `ubuntu-latest` the bash column

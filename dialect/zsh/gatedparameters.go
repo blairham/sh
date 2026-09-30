@@ -169,6 +169,23 @@ func installGatedParameters(r *interp.Runner, module string) {
 	if install == nil {
 		return
 	}
+	// Which of this module's names the **script** already owns, read before
+	// the installer runs because the installer is what would hide them.
+	//
+	// A module registers its whole roster in one call, so a name the script
+	// holds is registered over and then let go again — see
+	// interp.Runner.DropProducedParameter for why that is the shape and for
+	// the measurement. The alternative, skipping the installer altogether,
+	// takes the module's *other* names down with it: measured, a `local
+	// EPOCHSECONDS` and then `zmodload zsh/datetime` still produces
+	// `epochtime` and `EPOCHREALTIME` in the reference, and skipping left
+	// both unset.
+	var taken []string
+	for _, name := range gatedParametersTheModuleOwns(module) {
+		if a, held := r.ParameterAttributes(name); held && !a.Provided {
+			taken = append(taken, name)
+		}
+	}
 	install(r)
 	on := make(map[string]bool)
 	for _, feature := range zmodloadEnabled(r, module) {
@@ -189,6 +206,12 @@ func installGatedParameters(r *interp.Runner, module string) {
 		// and it took nothing.
 		r.SetParameterWithdrawn(name, false)
 		r.SetParameterWithdrawn(name, !on["p:"+name])
+	}
+	for _, name := range taken {
+		// The load does not take this name, now or later: once the function
+		// holding the local returns, the reference has the name unset rather
+		// than produced.
+		r.DropProducedParameter(name)
 	}
 }
 

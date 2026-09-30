@@ -147,3 +147,79 @@ func TestATakenNameStillRefusesToComeBack(t *testing.T) {
 		t.Errorf("= %q (status %d), want %q", out, st, want)
 	}
 }
+
+// A module load does not take a name the script already owns.
+//
+// Measured 2026-09-30 on zsh 5.9.2. The **value** is what these rows assert,
+// not the withdrawn record: an earlier fix in this file corrected the record
+// and left the installer writing a real producer straight over the name, so a
+// row reading `${+name}` or the feature listing would have passed while the
+// script's variable was gone.
+//
+//	zmodload -F zsh/datetime p:EPOCHSECONDS
+//	f() { local EPOCHSECONDS=mine; zmodload zsh/datetime; print $EPOCHSECONDS }
+//
+//	zsh 5.9.2   mine
+//	before      1790755518        the load wrote the clock over the local
+//
+// **The control is the same script with the load taken out**, and both shells
+// print `mine` there — which is what makes this a statement about the load
+// rather than about locals.
+//
+// Note the load is **not refused** in that row and neither shell says
+// anything about it: the producer displaces a binding it should sit under.
+func TestAModuleLoadDoesNotTakeANameTheScriptOwns(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// The control: no load, so nothing can displace anything.
+			"the control, with no load at all",
+			"zmodload -F zsh/datetime p:EPOCHSECONDS\n" +
+				"f() { local EPOCHSECONDS=mine; print -r -- $EPOCHSECONDS }\nf",
+			"mine\n",
+		},
+		{
+			"a local, over a module narrowed to that name",
+			"zmodload -F zsh/datetime p:EPOCHSECONDS\n" +
+				"f() { local EPOCHSECONDS=mine; zmodload zsh/datetime; print -r -- $EPOCHSECONDS }\nf",
+			"mine\n",
+		},
+		{
+			"a global, over a first whole load",
+			"EPOCHSECONDS=mine\nzmodload zsh/datetime\nprint -r -- $EPOCHSECONDS",
+			"mine\n",
+		},
+		{
+			// The array of the same module, so the rule is not about scalars.
+			"an array name the script owns",
+			"epochtime=mine\nzmodload zsh/datetime\nprint -r -- $epochtime",
+			"mine\n",
+		},
+		{
+			// A name the module **itself** already produces is not one the
+			// script owns, so a second load leaves it alone rather than
+			// dropping it. Without this row, treating every held name as
+			// taken passes everything above and quietly unloads the
+			// module's own parameters on the second `zmodload`.
+			"a second load does not drop the module's own names",
+			"zmodload zsh/datetime\nzmodload zsh/datetime\n" +
+				"print -r -- ${EPOCHSECONDS:+HAVE}",
+			"HAVE\n",
+		},
+		{
+			// **The siblings still arrive**, which is what says the load is
+			// declined per name rather than skipped. Taking the installer
+			// out altogether passes every row above and fails this one.
+			"the module's other names are produced as usual",
+			"f() { local EPOCHSECONDS=mine; zmodload zsh/datetime\n" +
+				"print -r -- ${${(M)$(( ${epochtime[1]} > 0 )):#1}:-NO} }\nf",
+			"1\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), tc.src)
+			if out != tc.want {
+				t.Errorf("= %q (status %d), want %q", out, st, tc.want)
+			}
+		})
+	}
+}

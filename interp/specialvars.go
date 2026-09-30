@@ -770,6 +770,26 @@ func (r *Runner) RefuseUnset(name string) {
 //
 // A produced array a script must *not* assign to is marked readonly instead,
 // which refuses with a sentence.
+// DropProducedParameter takes a producer back off a name, of either shape.
+//
+// The inverse of [Runner.SetDynamic] and [Runner.SetDynamicArray], and it
+// exists for one caller: a **module load must not take a name the script
+// already owns.** A module registers its whole roster in one call, so the
+// only way to leave one name alone is to register and then let that one go —
+// there is no per-name hook into an installer that knows nothing about who
+// else might hold its names.
+//
+// Measured on zsh 5.9.2: a function whose `local EPOCHSECONDS=mine` is
+// followed by `zmodload zsh/datetime` prints `mine`, its siblings
+// `epochtime` and `EPOCHREALTIME` are produced normally, and after the
+// function returns `EPOCHSECONDS` is **unset** — the load left that one name
+// alone for good rather than deferring it. Dropping the registration is
+// exactly that state, which is why this is a drop and not a suppression.
+func (r *Runner) DropProducedParameter(name string) {
+	delete(r.Dynamic, name)
+	delete(r.DynamicArrays, name)
+}
+
 func (r *Runner) SetDynamicArrayWriter(name string, write func(r *Runner, values []string)) {
 	if r.dynamicArrayWriters == nil {
 		r.dynamicArrayWriters = map[string]func(*Runner, []string){}

@@ -371,21 +371,71 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 	// `emulate -` each print the current mode at 0 — so a word carrying no
 	// letters leaves the call a bare one.
 	sawFlags := false
-	// And whether the operands are over. `--` ends them, which this builtin
-	// refused outright until the invocation option needed it: `--emulate`
-	// takes its next word unconditionally, so the front end hands the word
-	// over behind a `--` rather than letting the builtin read `-c` or `--`
-	// as options of its own. Measured in the same run: `emulate -- sh` is
-	// sh, `emulate -- -L` and `emulate -- --` are the silence an unknown
-	// mode gets, and `emulate sh --` is sh.
-	endOfOptions := false
+	// Whether the flags before the mode are over. `--` ends them, which this
+	// builtin refused outright until the invocation option needed it:
+	// `--emulate` takes its next word unconditionally, so the front end hands
+	// the word over behind a `--` rather than letting the builtin read `-c`
+	// or `--` as options of its own. Measured in the same run: `emulate --
+	// sh` is sh, `emulate -- -L` and `emulate -- --` are the silence an
+	// unknown mode gets, and `emulate sh --` is sh.
+	//
+	// It ends the flags *before* the mode and nothing more: after the mode
+	// the options are read afresh, measured 2026-09-30 — `emulate -- sh -c
+	// 'print ran'` runs, and `emulate -- sh -o nullglob` sets it.
+	endOfFlags := false
+	// Whether the options after the mode are over, and whether a `-c` among
+	// them is waiting for its string (#5250). zsh reads those options the way
+	// `set` does: `-c` only *marks* the call, and the string it runs is the
+	// first word left once the options are over, not the word after the
+	// letter. Measured on zsh 5.9.2, 2026-09-30:
+	//
+	//   - `emulate zsh -c 'print ran' -o nullglob` is `unknown argument -o`:
+	//     the string ended the options, and the next word has nowhere to go.
+	//   - `emulate zsh -c -o nullglob 'print ran'` runs with nullglob on, and
+	//     `-co nullglob 'print ran'` does too — the `o` took the word the `c`
+	//     did not.
+	//   - `emulate zsh -c -c 'print ran'` runs once.
+	//   - `-`, `--` and a bare `+` each end the options and are consumed:
+	//     `emulate zsh -c - 'print ran'` runs, `emulate zsh -c --` is
+	//     `string expected after -c`, and `emulate zsh - -c 'x'` is `unknown
+	//     argument -c`.
+	optionsOver := false
+	wantCode := false
+	// Whether `-L` was written before the mode, which is the letter a `-c`
+	// cannot take — see the end of this function. After the mode `-L` is
+	// another letter's business (#5248).
+	localBeforeMode := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if e.hasMode {
+			if !optionsOver {
+				switch {
+				case a == "-" || a == "--" || a == "+":
+					optionsOver = true
+					continue
+				case len(a) > 1 && (a[0] == '-' || a[0] == '+'):
+					var ok bool
+					i, ok = e.readOptionWord(r, args, i, &wantCode)
+					if !ok {
+						return e, 1
+					}
+					sawFlags = true
+					continue
+				}
+				optionsOver = true
+			}
+			if wantCode && !e.hasCode {
+				e.code, e.hasCode = a, true
+				continue
+			}
+			r.Diagnosef("unknown argument %s\n", a)
+			return e, 1
+		}
 		switch {
-		case endOfOptions:
-			// Every word after `--` is an operand, whatever it starts with.
+		case endOfFlags:
+			// Every word after `--` is the mode, whatever it starts with.
 		case a == "--":
-			endOfOptions = true
+			endOfFlags = true
 			continue
 		case a == "-":
 			// An option word with nothing in it. Not a mode — `emulate -`
@@ -394,59 +444,9 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 			// is *not* this: measured, `emulate +` is silent and leaves the
 			// mode alone, which is an unknown mode rather than a flag word.
 			continue
-		}
-		if !endOfOptions && len(a) > 1 && a[0] == '+' && e.hasMode {
-			// The `+` form, after the mode word only: before it, a word
-			// starting with `+` is not a flag word at all but the mode word
-			// itself (#5247). Measured on zsh 5.9.2, 2026-09-30: `emulate +o
-			// nullglob zsh` is `unknown argument nullglob` — the operand
-			// after the mode `+o`, which names no emulation — and a bare
-			// `emulate +o` is the silence an unknown mode gets. `+R sh`, `+L
-			// sh` and `+c 'print ran' sh` answer the same way, and `-L +L
-			// zsh` in a function is `unknown argument zsh`.
-			//
-			// After the mode: `+o name` is `-o name` the other way round and
-			// `+c` runs its string like `-c`; every other letter is
-			// *accepted and does nothing*, which is measured rather than
-			// assumed and is not what the `-` form does: `emulate zsh +X`
-			// is 0 where `emulate -X zsh` is `bad option: -X`, and a `+L`
-			// does not undo a `-L` — the emulation stays function-local.
-			for j := 1; j < len(a); j++ {
-				sawFlags = true
-				switch a[j] {
-				case 'o', 'c':
-					if i+1 >= len(args) {
-						r.Diagnosef("string expected after +%c\n", a[j])
-						return e, 1
-					}
-					i++
-					if a[j] == 'c' {
-						e.code, e.hasCode = args[i], true
-					} else {
-						if !knownEmulateOption(r, args[i]) {
-							return e, 1
-						}
-						e.options = append(e.options, emulateOption{name: args[i]})
-					}
-				}
-			}
-			continue
-		}
-		if !endOfOptions && len(a) > 1 && a[0] == '-' {
+		case len(a) > 1 && a[0] == '-':
 			for _, letter := range a[1:] {
 				sawFlags = true
-				if !e.hasMode && (letter == 'o' || letter == 'c') {
-					// Before the mode word `-o` and `-c` are not letters of
-					// this builtin at all (#5247), and the letter is refused
-					// as it is read, before the word it would take is looked
-					// at. Measured on zsh 5.9.2, 2026-09-30: `emulate -o
-					// nullglob zsh`, `emulate -o`, `emulate -Ro sh` and `-L -o
-					// nullglob sh` are each `bad option: -o` at 1 with the
-					// mode unchanged, and `emulate -c 'print ran' sh` is `bad
-					// option: -c` without running anything.
-					r.Diagnosef("bad option: -%c\n", letter)
-					return e, 1
-				}
 				switch letter {
 				case 'R':
 					// The strict form, and it is not the no-op this said it
@@ -458,34 +458,31 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 					e.strict = true
 				case 'L':
 					e.local = true
-				case 'o':
-					if i+1 >= len(args) {
-						r.Diagnosef("string expected after -o\n")
-						return e, 1
-					}
-					i++
-					if !knownEmulateOption(r, args[i]) {
-						return e, 1
-					}
-					e.options = append(e.options, emulateOption{name: args[i], on: true})
-				case 'c':
-					if i+1 >= len(args) {
-						r.Diagnosef("string expected after -c\n")
-						return e, 1
-					}
-					i++
-					e.code, e.hasCode = args[i], true
+					localBeforeMode = true
 				default:
+					// Everything else, `-o` and `-c` included (#5247): before
+					// the mode word neither is a letter of this builtin, and
+					// the letter is refused as it is read, before the word it
+					// would take is looked at. Measured on zsh 5.9.2,
+					// 2026-09-30: `emulate -o nullglob zsh`, `emulate -o`,
+					// `emulate -Ro sh` and `-L -o nullglob sh` are each `bad
+					// option: -o` at 1 with the mode unchanged, and `emulate
+					// -c 'print ran' sh` is `bad option: -c` without running
+					// anything.
 					r.Diagnosef("bad option: -%c\n", letter)
 					return e, 1
 				}
 			}
 			continue
 		}
-		if e.hasMode {
-			r.Diagnosef("unknown argument %s\n", a)
-			return e, 1
-		}
+		// The mode word. Before it a word starting with `+` is not a flag
+		// word at all but this word itself (#5247). Measured on zsh 5.9.2,
+		// 2026-09-30: `emulate +o nullglob zsh` is `unknown argument
+		// nullglob` — the operand after the mode `+o`, which names no
+		// emulation — and a bare `emulate +o` is the silence an unknown mode
+		// gets. `+R sh`, `+L sh` and `+c 'print ran' sh` answer the same way,
+		// and `-L +L zsh` in a function is `unknown argument zsh`.
+		//
 		// Written and empty is a mode like any other, which is measured
 		// rather than assumed: `emulate ""` is silent at 0 with the mode
 		// unchanged, and `emulate "" sh` is `unknown argument sh` — so the
@@ -500,7 +497,75 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 		r.Diagnosef("not enough arguments\n")
 		return e, 1
 	}
+	if wantCode && !e.hasCode {
+		// Spelled with `-` whichever form marked it: `emulate zsh +c` is
+		// `string expected after -c`, measured.
+		r.Diagnosef("string expected after -c\n")
+		return e, 1
+	}
+	if e.hasCode && localBeforeMode {
+		// The last thing said, after every refusal above: `emulate -L sh -c`
+		// is still `string expected after -c` and `emulate -L sh -c 'x'
+		// extra` still `unknown argument extra`. Measured on zsh 5.9.2,
+		// 2026-09-30, with `-LR` and with `+c` alike, and with nothing run.
+		r.Diagnosef("option -L incompatible with -c\n")
+		return e, 1
+	}
 	return e, -1
+}
+
+// readOptionWord reads one option word after the mode, args[i], the way
+// `set` reads one, and returns the index of the last word it used.
+//
+// `-o` and `+o` take the rest of their word as the name when there is one
+// and the next word when there is not — measured, `emulate zsh -onullglob
+// -c '…'` sets nullglob, `-oc` is `no such option: c`, and `-o -c` is `no
+// such option: -c`. A missing name is `string expected after -o` in either
+// form. `c` marks the call for a string (see emulateArguments).
+//
+// The `+` form's other letters are *accepted and do nothing*, which is
+// measured rather than assumed and is not what the `-` form does: `emulate
+// zsh +X` is 0 where `emulate -X zsh` is `bad option: -X`, and a `+L` does
+// not undo a `-L` — the emulation stays function-local. Which letters mean
+// what after the mode is #5248's and is left as it was.
+func (e *emulateCall) readOptionWord(r *interp.Runner, args []string, i int, wantCode *bool) (int, bool) {
+	a := args[i]
+	on := a[0] == '-'
+	for j := 1; j < len(a); j++ {
+		switch letter := a[j]; letter {
+		case 'o':
+			name := a[j+1:]
+			if name == "" {
+				if i+1 >= len(args) {
+					r.Diagnosef("string expected after -o\n")
+					return i, false
+				}
+				i++
+				name = args[i]
+			}
+			if !knownEmulateOption(r, name) {
+				return i, false
+			}
+			e.options = append(e.options, emulateOption{name: name, on: on})
+			return i, true
+		case 'c':
+			*wantCode = true
+		case 'R':
+			if on {
+				e.strict = true
+			}
+		case 'L':
+			if on {
+				e.local = true
+			}
+		default:
+			if on {
+				r.Diagnosef("bad option: -%c\n", letter)
+				return i, false
+			}
+		}
+	}
+	return i, true
 }
 
 // knownEmulateOption refuses an `-o` or `+o` name no option answers to, at

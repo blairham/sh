@@ -4,10 +4,16 @@
 package zsh
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // The staleness checks that make declined.go a ledger rather than a comment.
@@ -109,17 +115,82 @@ func sortedKeys[V any](m map[string]V) []string {
 // what is in the tree today must be quiet.
 func TestTheDeclinedLedgerIsCheckedAgainstTheFeatureTable(t *testing.T) {
 	t.Parallel()
-	if len(declinedModules) == 0 && len(declinedBuiltins) == 0 {
+	if len(declinedModules) == 0 && len(declinedBuiltins) == 0 &&
+		len(declinedFormats) == 0 {
 		// An empty ledger is a possible state and it is not this one. Said
 		// out loud because a walk over nothing reports exactly what a walk
 		// over a clean ledger reports, and the two are not the same result.
-		t.Fatal("both ledgers are empty, so this check looked at nothing")
+		t.Fatal("all three ledgers are empty, so this check looked at nothing")
 	}
 	for _, fault := range declinedModuleFaults(declinedModules, zmodloadFeatures) {
 		t.Errorf("declined module: %s", fault)
 	}
 	for _, fault := range declinedBuiltinFaults(declinedBuiltins, zmodloadFeatures) {
 		t.Errorf("declined builtin: %s", fault)
+	}
+	// A declined *format* owes the same four fields and has no feature-table
+	// question to answer: the builtin that writes it is registered and works,
+	// which is what makes it a third kind. Its falsifier is the behavioral
+	// test below.
+	for _, name := range sortedKeys(declinedFormats) {
+		for _, fault := range entryFaults(name, declinedFormats[name]) {
+			t.Errorf("declined format: %s", fault)
+		}
+	}
+}
+
+// TestZcompileStillWritesTextRatherThanWordcode is the falsifier for the
+// `zcompile wordcode` entry in declinedFormats.
+//
+// The other two ledgers are checked against a table: a declined module must
+// be absent from zmodloadFeatures and a declined builtin must be present in
+// it. A declined **format** has no such question — the builtin is registered
+// and exits 0 — so the only thing that can go stale is what it *writes*.
+//
+// So this reads the bytes. It fails the day `zcompile` starts emitting zsh's
+// magic, which is the day the decision has been taken back and the ledger
+// entry has to come out. The magic is the four bytes the suite file's own
+// `%prep` documents and the reference was measured writing; it is quoted here
+// as a **negative** expectation, which is the only way this file may hold it.
+func TestZcompileStillWritesTextRatherThanWordcode(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "victim"), []byte("print victim ran\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The builtin called directly, because this file is the package's own
+	// test and cannot reach the external helpers — and because calling it is
+	// the point: what is being checked is the bytes it writes.
+	var out bytes.Buffer
+	sem, diag, d := Semantics(), Diagnostics(), Dialect()
+	r := &interp.Runner{
+		Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &diag,
+		Dir: dir, Name: "zsh", Dialect: &d,
+	}
+	Apply(r)
+	if st := zcompileBuiltin(r, context.Background(), []string{"victim"}); st != 0 {
+		t.Fatalf("zcompile exited %d (output %q), so this check looked at nothing",
+			st, out.String())
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "victim.zwc"))
+	if err != nil {
+		t.Fatalf("no dump written, so this check looked at nothing: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("the dump is empty, so this check looked at nothing")
+	}
+	magic := []byte{0x07, 0x06, 0x05, 0x04}
+	if bytes.HasPrefix(got, magic) {
+		t.Errorf("zcompile wrote wordcode magic % x — declinedFormats records "+
+			"that this shell does not write that format, so either the entry "+
+			"is stale and should be removed on #5141, or the magic arrived by "+
+			"accident", got[:4])
+	}
+	// And the positive half, so the check above is not a test that passes
+	// because nothing was written: what is there is the script's own text.
+	if want := "print victim ran\n"; string(got) != want {
+		t.Errorf("dump = %q, want the input's text %q — declinedFormats' cost "+
+			"line quotes those bytes", got, want)
 	}
 }
 

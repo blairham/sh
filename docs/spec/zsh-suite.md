@@ -102,7 +102,7 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (29), ranked by chunks unreached
+## Failing (28), ranked by chunks unreached
 
 **Measured at `81099b07f`, 2026-09-29**, one file per driver run.
 
@@ -121,7 +121,10 @@ wrong in both directions. The two columns are close to uncorrelated:
   one measure and among the most expensive by the other.
 - `E02xtrace` is **53** lines and **5** chunks unreached: the most expensive
   row in the old table and one of the cheapest here.
-- `A09zwc` is **15** lines and **1** chunk unreached.
+- `A09zwc` was **15** lines and **1** chunk unreached — the sharpest of the
+  four, and it is no longer in the table at all: measured, it turned out to
+  be a decline (#5141). By lines it looked mid-table; by chunks it looked
+  joint-cheapest; it was neither.
 - `D04parameter` is **19** lines and **234** chunks unreached, by far the
   largest piece of work on the page and unremarkable in the old order.
 
@@ -146,13 +149,23 @@ chunk held an escape rendering, an undecodable-body decline and an inert
 option, in three changes. So a one-chunk row is the *shortest* piece of work
 on the page and not necessarily a small one.
 
-It is a better proxy than lines because it is monotone: closing a front can
-only move chunks up.
+And **a row can be unreachable rather than expensive**, which the count
+cannot show either. `A09zwc` was joint-cheapest here at a single unreached
+chunk and is now a decline: its chunk needs a `.zwc` carrying valid wordcode
+magic, and this shell writes text by a decision recorded in
+`dialect/zsh/declined.go`. One unreached chunk, and no amount of work on this
+shell closes it.
+
+So three distinct ways the chunk count misleads about cost, all measured on
+this page rather than argued: it is not a root-cause count, a one-chunk row
+can be three roots, and a cheap row can be unreachable.
+
+It is still a better proxy than lines, because it is monotone: closing a
+front can only move chunks up.
 
 | unreached | ref | ours | lines | file | today's front |
 |---:|---:|---:|---:|---|---|
 | — | 0 | 1 | 51 | `V06parameter` | *excluded — see below* |
-| 1 | 2 | 1 | 15 | `A09zwc` | workers/54571: Malformed .zwc with implausible npats does not crash the shell |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
 | 3 | 14 | 11 | 24 | `V12zparseopts` | special characters in option names |
 | 5 | 5 | 0 | 53 | `E02xtrace` | xtrace with and without redirection |
@@ -197,12 +210,13 @@ needs that said beside it, because the count cannot show it.
 
 **And two rows are settled declines rather than work**: `V07pcre` (#4737) and
 `V02zregexparse` (#4761). They are in the table because they are in the
-denominator, not because anybody should pick them up.
+denominator, not because anybody should pick them up. `A09zwc` was the third
+and is no longer a row at all — see the declines above and #5141.
 
 ## Part of this suite is ungradeable here, and it is nine files
 
 `V06parameter`'s `dlopen` failure is not a special case. It is the visible end
-of a class, and the class is larger than one file: **among the twenty-nine
+of a class, and the class is larger than one file: **among the twenty-eight
 failing files, nine have a reference that fails its own chunks in this
 layout.** Measured at `81099b07f`, the same runs the table above comes from.
 
@@ -218,8 +232,8 @@ layout.** Measured at `81099b07f`, the same runs the table above comes from.
 | `E02xtrace` | 5 | 6 | 1 |
 | `V06parameter` | 0 | 1 | 1 |
 
-Twenty chunks of 1205, and eight of the twenty are `E03posix` alone. The
-reference runs 1205 chunks across these files and passes 1185 of them.
+Twenty chunks of 1203, and eight of the twenty are `E03posix` alone. The
+reference runs 1203 chunks across these files and passes 1183 of them.
 
 **Why it matters more than twenty chunks sounds like.** A `ref` column read as
 "what zsh can do" over-counts the target, and that is precisely how the old
@@ -248,9 +262,10 @@ distribution rather than `Test/`, or build the modules these files load. Until
 one of those happens, `ref` is the honest denominator and the file's own chunk
 count is not.
 
-**Only the twenty-nine failing files were swept for this.** The strict files
+**Only the failing files were swept for this**, twenty-nine of them at the
+time and twenty-eight now that `A09zwc` is a decline. The strict files
 and the thirteen refusal-agreements have not been checked the same way, so
-the count is nine *of those twenty-nine* and the true figure across all
+the count is nine *of those* and the true figure across all
 sixty-five is unmeasured. Stated rather than extrapolated, because a number
 produced by assuming the rest are clean is the shape this section is about.
 
@@ -259,21 +274,33 @@ produced by assuming the rest are clean is the shape this section is about.
 The bar this column was given in September was **58 of 65**, set on the first
 measured run and never revisited. It is wrong in both directions now:
 
-- **Two files are settled declines**, not work: `V07pcre` (#4737) and
-  `V02zregexparse` (#4761). They cannot become real results and should never
-  have been in the denominator.
+- **Three files are settled declines**, not work: `V07pcre` (#4737),
+  `V02zregexparse` (#4761) and `A09zwc` (#5141). They cannot become real
+  results and should never have been in the denominator. The first two are
+  declined because there is no specification on the green list to implement
+  from; the third is a different reason and a distinct category — the
+  artifact its chunk requires cannot be produced without reading the format.
+  All three are recorded in `dialect/zsh/declined.go`, each with its cost,
+  its reason and what would change the answer.
 - **Twelve files agree on a refusal** because the fetch unpacks `Test/` and
   not the distribution. Several need a module this shell does not build, and
   whether they are reachable at all is a separate question from whether their
   front is fixable.
 
-So the honest statement of the target is **23 of 51 reachable today** — 21 at
-the figures' commit plus `C02cond` and `D09brace` — where 51 is 65 less the
-two declines and
+So the honest statement of the target is **23 of 50 reachable today** — 21 at
+the figures' commit plus `C02cond` and `D09brace` — where 50 is 65 less the
+three declines and
 less the twelve refusal-agreements, with the twelve re-examined individually
 rather than assumed unreachable since some may become reachable if the module
 they want is built. 58 is not a target anybody measured; it is the count of
 files that are not obviously excluded.
+
+**The denominator went down by one without any work being done**, when
+`A09zwc` was measured and declined. That is legitimate and worth saying
+plainly: a file that cannot carry a real result on current terms was being
+counted as though it could, so the old figure was the optimistic one. A
+decline moves the board by removing a row nobody could have finished, not by
+lowering a bar.
 
 `V06parameter` is a third exclusion on top of those two, for a different
 reason: the declines are files that cannot carry a result, and this one is a

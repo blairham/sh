@@ -124,25 +124,50 @@ func (p *Parser) aliasAtAFunctionName() bool {
 	if !p.at(TokWord) {
 		return false
 	}
+	// The table before the lookahead: this runs for every command word, and
+	// a word naming no alias — nearly all of them — is answered by one lookup
+	// without the probe the list question may need.
+	if _, ok := p.Aliases(p.tok.Text); !ok {
+		return false
+	}
 	if reading == AliasSuppressedWhereTheParenIsAdjacent {
 		if !p.peekIsFuncParensAdjacent() {
 			return false
 		}
-	} else if !p.peekIsFuncParens() {
-		return false
-	}
-	name := p.tok.Text
-	if _, ok := p.Aliases(name); !ok {
+	} else if !p.peekIsFuncNameListThenParens() {
+		// The refusing reading asks whether this word is a name *of* a
+		// definition, and the first of several names is one: `ga aa () { … }`
+		// with `ga` an alias is refused in zsh 5.9.2 exactly as `ga () { … }`
+		// is, the `()` two words away (#5236). The regular kind stops there —
+		// it expands only where a command begins, so `aa ga () { … }` leaves
+		// its `ga` alone and defines both, in both shells.
 		return false
 	}
 	if reading == AliasRefusesAFunctionName {
-		p.lex.remarks = append(p.lex.remarks, Remark{
-			Kind: RemarkFunctionNameIsAnAlias,
-			Pos:  p.tok.Pos, At: p.tok.Pos, Token: name,
-		})
-		p.aliasFuncRefused = true
+		p.refuseAliasAtAFunctionName(p.tok.Text)
 	}
 	return true
+}
+
+// refuseAliasAtAFunctionName writes the remark and arms the parse failure the
+// refusing dialect gives a function named by an alias. One place for both
+// kinds of alias, since they are refused in the same words: the failure is
+// located at the `()` by parseFuncParensAndBody, which disarms it.
+func (p *Parser) refuseAliasAtAFunctionName(name string) {
+	if p.aliasFuncRefused {
+		// One remark to a definition, naming the first alias in it: `GA HB ()
+		// { … }` and `ga HB () { … }` each draw one, on `GA` and on `ga`,
+		// measured. It is also what keeps a global alias standing first from
+		// being named twice — the global pass refuses it as it is read, and
+		// the command-start check then finds the same word in the table the
+		// runner hands both kinds through.
+		return
+	}
+	p.lex.remarks = append(p.lex.remarks, Remark{
+		Kind: RemarkFunctionNameIsAnAlias,
+		Pos:  p.tok.Pos, At: p.tok.Pos, Token: name,
+	})
+	p.aliasFuncRefused = true
 }
 
 // expandPipelineHead offers the word a pipeline begins with to the alias
@@ -265,6 +290,36 @@ func (p *Parser) expandGlobalAlias(fresh bool) {
 	// which is nearly every word — costs one lookup and nothing else. next is
 	// on the keystroke path.
 	if _, ok := p.GlobalAliases(p.tok.Text); !ok {
+		return
+	}
+	if p.dialect.AliasAtAFunctionName == AliasRefusesAFunctionName && p.at(TokWord) &&
+		(!p.lex.inArgument || p.dialect.FunctionMultipleNames) &&
+		p.peekIsFuncNameListThenParens() {
+		// A global alias naming a function, in the dialect that refuses one.
+		// Asked here and not at command start, because this pass runs when
+		// the word is *read*: by the time the command-start check looked, the
+		// word had already been replaced by its expansion and there was no
+		// alias left to see — measured, with a trace in both passes, parsing
+		// `GA() { … }` (#5236). And asked of every name in the list rather
+		// than the first, because a global alias expands wherever a word
+		// stands: `aa GA () { … }` and `GA aa () { … }` are both refused, the
+		// remark naming `GA`.
+		//
+		// A word after the first stands as a name only where the dialect takes
+		// a list of them: with MULTI_FUNC_DEF off, `bb GA () { … }` is a plain
+		// parse error in zsh 5.9.2 with no remark, `GA` being an argument, while
+		// `GA () { … }` is still refused with one.
+		//
+		// And the question is whether a `()` follows, not whether what stands
+		// before it could make a real definition: `echo $x GA () { … }` is
+		// refused naming `GA` too, although `$x` means nothing here could have
+		// been defined.
+		//
+		// The word is left as written rather than expanded, so what reaches
+		// the parentheses is the refusal and not a definition under the
+		// expansion's name. With ALIAS_FUNC_DEF on the dialect's reading is
+		// the expanding one and none of this is asked.
+		p.refuseAliasAtAFunctionName(p.tok.Text)
 		return
 	}
 	if p.globalDone == nil {

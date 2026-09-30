@@ -3645,6 +3645,13 @@ func (p *Parser) parseSimple() Command {
 	// the flag here is soon enough and is the only place that catches every
 	// way out.
 	defer func() { p.lex.inArgument, p.lex.inDeclarationOperand = false, false }()
+	// And a refusal armed for a name in this command and never met at its
+	// parentheses is dropped with it. `echo $x GA () { … }` arms one — the
+	// alias is followed by `()` — and is then a parse error by the route a
+	// `(` after a word takes, which never reaches parseFuncParensAndBody,
+	// the one place that disarms it. Left armed, it would refuse the next
+	// definition this parser read, whoever's it was.
+	defer func() { p.aliasFuncRefused = false }()
 
 	for p.err == nil {
 		switch {
@@ -4872,6 +4879,21 @@ func (p *Parser) peekIsFuncParens() bool {
 	default:
 		return p.pending[0].Kind == TokLeftParen && p.pending[1].Kind == TokRightParen
 	}
+}
+
+// peekIsFuncNameListThenParens reports whether the current word is a name of a
+// function definition: followed directly by `()`, or — where the dialect takes
+// a list of names — by more plain names and then `()`. The list is only
+// crossed from input the lexer has not yet handed over; a word standing inside
+// an alias's own splice is asked the one-token question alone.
+func (p *Parser) peekIsFuncNameListThenParens() bool {
+	if p.peekIsFuncParens() {
+		return true
+	}
+	if !p.dialect.FunctionMultipleNames || len(p.pending) > 0 {
+		return false
+	}
+	return p.lex.peekIsFuncNameListThenParens()
 }
 
 func (p *Parser) parseFuncPosix() Command {

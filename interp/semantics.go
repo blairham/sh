@@ -21917,9 +21917,19 @@ type Semantics struct {
 	// seventeen or fewer writes all of them.
 	//
 	// An interactive zsh does have a current event — its own line is in the
-	// list — and counts back from it there. That route is not this shell's
-	// yet: the list a dialect registers is the one `print -s` fills, and
-	// nothing records a typed line into it.
+	// list — and counts back from it there, and so does this shell: a
+	// prompt session records the lines a person types, so `fc`'s own line
+	// is numbered and `-k` comes to that number less k. Measured 2026-09-30
+	// under `-fis` with the lines on stdin, seven events and the `fc` line
+	// numbered 8: `fc -l -1` writes event 7, `fc -l -2` writes 6 and 7,
+	// `fc -l -2 -3` writes 6 then 5, and `fc -l -8` clamps to the oldest.
+	// Whether the shell *has* such a number is Runner.Interactive; the
+	// paragraphs above are the script route, where it has none, and they
+	// still hold there unchanged.
+	//
+	// `0` is not that count with k of nought and does not move with it:
+	// under the same prompt `fc -l 0` writes the whole list where `fc -l -1`
+	// writes one entry, so it keeps the floor on both routes.
 	//
 	// unpinned: never reached from the corpus, for the reason above.
 	// interp/fclisting_test.go asserts both answers over the same list

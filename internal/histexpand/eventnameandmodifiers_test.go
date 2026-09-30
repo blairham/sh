@@ -286,6 +286,11 @@ func TestASubstitutionReplacementUnescapesTwice(t *testing.T) {
 		{`echo !!:s/o/\\\X/`, "echo echX one two one", `echo ech\\\X one two one`},
 		{`echo !!:s/o/\\\\X/`, `echo ech\X one two one`, `echo ech\\\\X one two one`},
 		{`echo !!:s/o/\\\\\\\\X/`, `echo ech\\X one two one`, `echo ech\\\\\\\\X one two one`},
+		// A replacement whose first round leaves a lone backslash at the
+		// end, which is the only way that branch is reached: a shell line
+		// cannot deliver a trailing backslash, because the reader takes it
+		// as a continuation first.
+		{`echo !!:s/o/X\\`, "echo echX one two one", `echo echX\\ one two one`},
 		// The row a count cannot express.
 		{`echo !!:s/o/\\a\\\\b/`, `echo echa\b one two one`, `echo ech\\a\\\\b one two one`},
 		// And the two that fix where the `&` is resolved.

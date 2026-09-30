@@ -159,3 +159,45 @@ func TestTheGatedAndDeferredRostersDoNotOverlap(t *testing.T) {
 		t.Errorf("funcstack is deferred and gatedModuleOf says %q", got)
 	}
 }
+
+// An unload puts a gated parameter back to not existing, which is the claim
+// zmodloadUnload's doc denied until #5206.
+//
+// **This is the pair the comment needed and did not have.** The sentence
+// "parameters are not touched at all" survived in the file because nothing
+// asserted otherwise, while four lines below the table it cited
+// `releaseGatedParameters` was doing the touching. A comment nothing tests is
+// a comment that only has to be plausible, and this one sent an investigation
+// of #5158 at two functions that were already correct.
+//
+// Measured 2026-09-30 against `/opt/homebrew/bin/zsh` — zsh 5.9.2 — which
+// agrees on every row: the reference's own `${+EPOCHSECONDS}` goes 1 → 0 on
+// unload, and that row was already in the table in zmodloadRelease.
+func TestAnUnloadPutsAGatedParameterBack(t *testing.T) {
+	for _, tc := range []struct{ name, module string }{
+		{"EPOCHSECONDS", "zsh/datetime"},
+		{"EPOCHREALTIME", "zsh/datetime"},
+		{"epochtime", "zsh/datetime"},
+		{"langinfo", "zsh/langinfo"},
+		{"mapfile", "zsh/mapfile"},
+		{"errnos", "zsh/system"},
+		{"sysparams", "zsh/system"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Both halves in one run, so the "after" is known to have had a
+			// real "before" rather than a load that silently did nothing —
+			// a 0 on both sides would otherwise pass while proving only
+			// that the module never loaded.
+			got, st := runZsh(t, t.TempDir(),
+				`zmodload `+tc.module+`
+print -r -- "loaded=${+`+tc.name+`}"
+zmodload -u `+tc.module+`
+print -r -- "unloaded=${+`+tc.name+`}"`)
+			want := "loaded=1\nunloaded=0\n"
+			if got != want || st != 0 {
+				t.Errorf("$%s across a load and unload of %s = %q (status %d), want %q",
+					tc.name, tc.module, got, st, want)
+			}
+		})
+	}
+}

@@ -1376,7 +1376,18 @@ func zmodloadLoadItself(r *interp.Runner, opts zmodloadOpts, module string) int 
 //
 // It is *undo the load* and not *take the module's builtins away* — see
 // zmodloadRelease, where the four modules that decide the difference are
-// measured. Parameters are not touched at all, also measured there.
+// measured.
+//
+// **Parameters go back too**, through releaseGatedParameters on that same
+// path. This sentence used to say they were "not touched at all, also
+// measured there", which was wrong twice over and wrong against the evidence
+// it was citing: the table in zmodloadRelease carries the row
+// `zsh/datetime  strftime: none  ${+EPOCHSECONDS} 0`, which is the reference
+// losing the parameter, and releaseGatedParameters is called four lines below
+// that table. Measured again here, 2026-09-30: `${+EPOCHSECONDS}` goes 1 → 0
+// on unload in this shell and in zsh 5.9.2 alike. The code was right the
+// whole time; the comment sent an investigation of #5158 at this function
+// and at zmodloadEnforce, both of which were already correct (#5206).
 //
 // **`-i` beside it means idempotent, and it is the one letter that does**
 // (#4588). The letter is not "ignore errors": measured on zsh 5.9.2,

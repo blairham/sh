@@ -39,6 +39,9 @@ func TestEmulateReadsLettersAfterTheModeAsSetDoes(t *testing.T) {
 		},
 		{"and a letter before it still counts", "emulate zsh -Gb; [[ -o nullglob ]] && print ng", "ng|st=0"},
 		{"the string may follow -b", "emulate zsh -cb 'print ran'", "ran|st=0"},
+		// The letters every shell shares, in either table.
+		{"-C is noclobber", "emulate zsh -C -c '[[ -o clobber ]] || print noclob'", "noclob|st=0"},
+		{"-a under sh's table", "emulate sh; emulate zsh -a -c '[[ -o allexport ]] && print ae'", "ae|st=0"},
 		// The table is the caller's, not the mode's.
 		{"sh's table: -X is markdirs", "emulate sh; emulate zsh -X -c '" + read + "'", "md|st=0"},
 		{"sh's table has no -G", "emulate sh; emulate zsh -G -c 'print ran'", "bad option: -G|st=1"},

@@ -189,3 +189,38 @@ func TestAnAliasNameHoldingAnEqualsHasNoDefiningLine(t *testing.T) {
 		})
 	}
 }
+
+// **Under `-L`, an operand holding `=` is looked up rather than defined**
+// (#5226): the part in front of the first `=` is the name asked for, the value
+// is ignored, and nothing is defined. Measured 2026-09-30 against zsh 5.9.2.
+//
+// Each row lists the table afterwards, because the failure being guarded is a
+// definition that happened, and a status alone would not show one.
+func TestAliasLLooksUpAnOperandHoldingAnEquals(t *testing.T) {
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		{"nothing to find", `alias -L n=v; echo st=$?; alias`, "st=1\n"},
+		// Found: its own line at 0, and still the old value afterwards.
+		{"a name that exists", `alias n=old; alias -L n=v; echo st=$?; alias`, "alias n=old\nst=0\nn=old\n"},
+		// One found and one not: the found one's line, then 1, and the other
+		// still undefined.
+		{"a name and an assignment", `alias n=old; alias -L n m=w; echo st=$?; alias`, "alias n=old\nst=1\nn=old\n"},
+		// The name is what is in front of the *first* `=`: this asks for `x`,
+		// so the alias literally called `x=y` is not what it finds.
+		{"the first equals decides", `aliases[x=y]=z; alias -L 'x=y'; echo st=$?; alias`, "st=1\n'x=y'=z\n"},
+		{"-gL", `alias -gL n=v; echo st=$?; alias`, "st=1\n"},
+		{"-sL", `alias -sL n=v; echo st=$?; alias -s`, "st=1\n"},
+		// The controls, which put this on the letter: without `-L` the same
+		// operand defines, with or without the other letters.
+		{"plain alias defines", `alias n=v; echo st=$?; alias`, "st=0\nn=v\n"},
+		{"-r defines", `alias -r n=v; echo st=$?; alias`, "st=0\nn=v\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("%s: out %q status %d, want %q at 0", c.src, out, st, c.want)
+			}
+		})
+	}
+}

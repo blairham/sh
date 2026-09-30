@@ -146,10 +146,10 @@ func TestTheNameRunsTheEmulationBuiltin(t *testing.T) {
 // a file called `sh`, `--emulate zsh` gives a shell reporting `zsh`, and
 // under its own name `--emulate sh` gives one reporting `sh`.
 //
-// Outright is the load-bearing word. `--emulate fish` — a mode no shell knows
-// and that the builtin passes over in silence — leaves a binary called `sh`
+// Outright is the load-bearing word. `--emulate fish` — a word whose first
+// letter the builtin reads as zsh (#5254) — leaves a binary called `sh`
 // reporting `zsh`, so writing the option is what puts the name aside and the
-// name is not a fallback for a word that meant nothing.
+// name is not a fallback for a word that names no emulation of its own.
 func TestTheEmulationOptionWinsOverTheName(t *testing.T) {
 	for _, c := range []struct {
 		name  string

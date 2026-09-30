@@ -150,8 +150,9 @@ func TestTheEmulateOptionWinsOverTheName(t *testing.T) {
 	}{
 		{"the option replaces the name's mode", []string{"sh", "--emulate", "zsh", "-f", "-c", "emulate"}, "zsh\n"},
 		{"and the other way round", []string{"zsh", "--emulate", "sh", "-f", "-c", "emulate"}, "sh\n"},
-		// A mode no shell knows is the builtin's silence, and the name is
-		// not a fallback for it: the reference called `sh` reports `zsh`.
+		// A word whose first letter names nothing is zsh (#5254), and the
+		// name is not a fallback for it: the reference called `sh` reports
+		// `zsh`.
 		{"a word that names nothing still puts the name aside", []string{"sh", "--emulate", "fish", "-f", "-c", "emulate"}, "zsh\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

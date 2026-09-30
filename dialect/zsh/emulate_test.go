@@ -153,12 +153,15 @@ func TestEmulateDashLResetsTheSameSetAsABareOne(t *testing.T) {
 	}
 }
 
-// A word naming no emulation is passed over in silence, the mode unchanged —
-// measured on `fish` and on `SH`, whose case does not match.
-func TestEmulateIgnoresAnUnknownMode(t *testing.T) {
-	out, st := runZsh(t, t.TempDir(), `emulate fish; echo st=$?; emulate SH; emulate`)
-	if st != 0 || out != "st=0\nzsh\n" {
-		t.Errorf("out %q status %d, want silence and the mode still zsh", out, st)
+// A word naming no emulation of its own is zsh, not "the mode unchanged"
+// (#5254) — measured from csh, which is the only place the two differ: from
+// zsh they print the same thing, and that is how the old reading got in.
+// `SH` is zsh because the letter is read case-sensitively.
+func TestEmulateReadsAWordWithNoLetterOfItsOwnAsZsh(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(),
+		`emulate csh; emulate fish; echo st=$?; emulate; emulate csh; emulate SH; emulate`)
+	if st != 0 || out != "st=0\nzsh\nzsh\n" {
+		t.Errorf("out %q status %d, want zsh after each word", out, st)
 	}
 }
 

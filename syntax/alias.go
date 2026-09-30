@@ -376,34 +376,39 @@ func (p *Parser) spliceAlias(name, value string) {
 	// part of it: whether the *next* word is itself expanded is a question
 	// about what was written, and an inserted separator is not written.
 	written := value
-	// A token the lexer ended by a rule of its own rather than at a word
-	// boundary leaves the text after it touching the value. `{` at command
-	// position is the one such token — a word by itself whatever follows it,
-	// see [Lexer.openBraceIsAWordOfItsOwn] — so with `alias \{=echo` the
-	// value and the `end` of `{end` would read as the single word `echoend`.
-	// A blank separates them, and none is added where one already stands.
+	// The seam between the value and the text the alias word was followed by
+	// reads as a blank in this dialect unless one already stands there. That
+	// is the same seam aliasHeredocBodies supplies on its own route, and the
+	// same field decides both, so a value holding a here-document operator
+	// is left to it: adding the blank in both places gives a body line two
+	// where the reference has one. See
+	// [Dialect.AliasBodyBackslashJoinsTheNextLine], whose comment has the
+	// panel, and whose name is the other half of the same blank.
 	//
-	// Measured 2026-09-30 against zsh 5.9.2, `-fis` with the line fed on
-	// stdin, `alias \{=echo` unless the row says otherwise:
+	// Supplied here for the one token the lexer finishes by a rule of its
+	// own rather than at a word boundary — `{` at command position, a word
+	// by itself whatever follows it, see [Lexer.openBraceIsAWordOfItsOwn] —
+	// because that is the seam where the value and the text after it would
+	// otherwise touch: `alias \{=echo` used as `{end` read as the single
+	// word `echoend`. Every other word stops at a character that could not
+	// have continued it, so what follows it already begins with a blank or
+	// an operator.
 	//
-	//	{end                               end             one blank goes in
-	//	{x                                 x
-	//	{"x"          (value `print A`)    A x             before a quote too
-	//	{$HOME        (value `print A`)    A /Users/...     and a `$`
-	//	{}x                                }x              and a `}` in a word
-	//	{ x"          (value `echo "`)      x              and none where a
-	//	{  x"         (value `echo "`)      x               blank stands: the
-	//	                                                     count is kept
-	//	{x            (value `echo \`)      x              a real blank, which
-	//	                                                     the `\` escapes
-	//	alias x='print XX'; {x             x               not `XX`: the blank
-	//	                                                     is not the value's
+	// **Which is narrower than the dialect's own rule**, and deliberately:
+	// the reference reads the blank at an ordinary word alias's seam too,
+	// where the text after it begins with an operator or a newline, and this
+	// shell does not yet. Measured 2026-09-30, `alias q='echo "'`:
+	// `q;print A"` gives ` ;print A` there against `;print A` here, and
+	// `q&&print A"` and `q|print A"` differ the same way. Widening this to
+	// every token is not the one-line change it looks like — it doubles the
+	// blank on the here-document route above and on a nested body's, which
+	// four rows in the syntax package hold.
 	//
-	// The last row is why `written` is kept above: a value that *ends* in a
-	// blank does expand the next word — `alias \{='echo '` with that same
-	// `x` alias runs `echo print XX` — and this separator does not.
-	if p.tok.endedByRule {
-		if rest := p.tokTail + p.lex.src[p.lex.off:]; rest != "" && !beginsInBlank(rest) {
+	// The empty-input arm mirrors that route rather than a measurement of
+	// its own: nothing follows the alias word, so nothing distinguishes it.
+	if p.tok.endedByRule && !p.dialect.AliasBodyBackslashJoinsTheNextLine &&
+		!strings.Contains(value, "<<") {
+		if rest := p.tokTail + p.lex.src[p.lex.off:]; rest == "" || !isBlank(rest[0]) {
 			value += " "
 		}
 	}
@@ -915,18 +920,6 @@ func endsInLoneBackslash(s string) bool {
 
 // endsInBlank reports whether an alias value ends in a space or a tab, which
 // is what makes the next word eligible for expansion in turn.
-// beginsInBlank reports whether the text starts with a blank, and so already
-// separates whatever stands before it from its first word. The counterpart of
-// endsInBlank, and read by [Parser.spliceAlias] for the one token that ends
-// with a word character still to come.
-func beginsInBlank(s string) bool {
-	if s == "" {
-		return false
-	}
-	c := s[0]
-	return c == ' ' || c == '\t'
-}
-
 func endsInBlank(s string) bool {
 	if s == "" {
 		return false

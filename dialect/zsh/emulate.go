@@ -181,15 +181,31 @@ func currentEmulation(r *interp.Runner) string {
 // csh is on zsh's side of this one and against it on `cdNowhere` — measured
 // in the same run, `emulate -R csh` answers `set`. A single "is this an
 // sh-family mode" boolean standing for all of them would be wrong about two.
+//
+// `lastPipeHere` is the fifth, and the one `B07emulate` ends on: whether the
+// last element of a pipeline runs in this shell, which is
+// interp.Semantics.LastPipelineElementInCurrentShell. zsh's own mode, ksh and
+// csh run it here and **sh alone runs it in a subshell**, so `echo | x=2`
+// leaves `x` where it was only under sh. Measured 2026-09-30 on zsh 5.9.2,
+// `-f`, with an assignment, `read`, a function and a brace group as the last
+// element — four for four in each mode — under `emulate MODE -c`, a bare
+// `emulate sh`, a sticky sh function and argv[0] `sh`.
+//
+// **No option name moves it**, which is what makes it an axis of the mode
+// rather than a row of the option table: every option `emulate sh` and
+// `emulate zsh` disagree about was set to the other mode's value one at a
+// time, inside each mode, and none moved the answer — the same probe, left
+// alone, reads the subshell under sh and the current shell under zsh.
 var emulations = map[string]struct {
 	cdNowhere     bool
 	fillsHome     bool
 	declaredEmpty bool
+	lastPipeHere  bool
 }{
-	"zsh": {cdNowhere: false, fillsHome: true, declaredEmpty: true},
-	"sh":  {cdNowhere: true, fillsHome: false, declaredEmpty: false},
-	"ksh": {cdNowhere: true, fillsHome: false, declaredEmpty: false},
-	"csh": {cdNowhere: true, fillsHome: false, declaredEmpty: true},
+	"zsh": {cdNowhere: false, fillsHome: true, declaredEmpty: true, lastPipeHere: true},
+	"sh":  {cdNowhere: true, fillsHome: false, declaredEmpty: false, lastPipeHere: false},
+	"ksh": {cdNowhere: true, fillsHome: false, declaredEmpty: false, lastPipeHere: true},
+	"csh": {cdNowhere: true, fillsHome: false, declaredEmpty: true, lastPipeHere: true},
 }
 
 // applyEmulation switches the axes and puts back the options this form of
@@ -227,6 +243,10 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.DeclaredNameWithoutValueIsEmpty
 	}, answer(emulations[mode].declaredEmpty))
+	// The fifth: where a pipeline's last element runs. See the table.
+	setAxis(r, func(s *interp.Semantics) *interp.Answer {
+		return &s.LastPipelineElementInCurrentShell
+	}, answer(emulations[mode].lastPipeHere))
 	// The recorded names in one write rather than one write each. The store
 	// holds deviations, so dropping a name from it is that option back at the
 	// table's default — and this emulation's default is not always the

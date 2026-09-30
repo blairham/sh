@@ -392,6 +392,9 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 			if form.exported && !r.aliases[name].exported {
 				continue
 			}
+			if r.aliasListingSkipsTheName(name, form) {
+				continue
+			}
 			r.printf("%s\n", r.aliasLine(name, form))
 		}
 		for range marked {
@@ -568,6 +571,11 @@ func (r *Runner) aliasPatternListing(patterns []string, form aliasForm) int {
 		o := r.patternOpts(pattern)
 		for _, name := range names {
 			if matchPattern(pattern, name, o) {
+				// `-mL` reaches the defining form by another road, and the
+				// same entry has no line on this one either.
+				if r.aliasListingSkipsTheName(name, form) {
+					continue
+				}
 				r.printf("%s\n", r.aliasLine(name, form))
 			}
 		}
@@ -1058,6 +1066,44 @@ func (r *Runner) aliasLine(name string, form aliasForm) string {
 	}
 	return prefix + r.listedAliasName(name) + "=" +
 		r.quoteListedValue(r.sem().AliasQuoting, "`alias`", value, ListedValueAlone)
+}
+
+// aliasListingSkipsTheName reports whether this entry has no line in a
+// listing that would define it back, and writes the warning where it has
+// none.
+//
+// A name holding an `=` is the whole of it: `alias NAME=VALUE` splits at the
+// first one, so an entry whose name contains one cannot be written back at
+// all — a line for it would define something else if it were run. Everything
+// else that needs quoting still gets a line, quoted; `a/b` and `a+b` are
+// listed bare in both shells and `a$b` in quotes. See
+// [Diagnostics.AliasListingInvalidName], which carries the measurement.
+//
+// Only the **defining** form asks: the plain listing, `-r`, `-m` without
+// `-L`, and `+` all write the entry out, because none of them claims to be a
+// command. Which is why this is asked here rather than of the road that
+// reached it — `alias -mL 'x*'` warns and `alias -m 'x*'` does not.
+func (r *Runner) aliasListingSkipsTheName(name string, form aliasForm) bool {
+	if !form.defining || !strings.Contains(name, "=") {
+		return false
+	}
+	wording := r.diag().AliasListingInvalidName
+	if wording == "" {
+		// No dialect but one can hold such a name, and the rest list it
+		// like any other rather than growing a warning they never reach.
+		return false
+	}
+	// Located as a line of the script and not as the builtin's own
+	// complaint: `<file>:2: invalid alias …` where this builtin's option
+	// errors are `<file>:alias:2: …`, and `f: ` inside a function. Measured,
+	// and the same suppression Runner.tableRefusesAScalarStore makes for a
+	// refusal it puts from inside a builtin.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	r.diagf("%s\n", Wording(wording,
+		"invalid alias '%[1]s' encountered while printing aliases", name))
+	return true
 }
 
 // listedAliasName spells an alias's name for a listing that would define the

@@ -6137,8 +6137,17 @@ func Diagnostics() interp.Diagnostics {
 		UnaliasNoPattern:       "not enough arguments",
 		UnaliasAllWithOperands: "-a: too many arguments",
 		UnaliasUsage:           "not enough arguments",
-		UnsetNoOperands:        "%[1]s: not enough arguments",
-		UnaliasNoOperandStatus: 1,
+		// And this one is the exception to the line above: the builtin's
+		// name is *not* in the location either. `alias -L` with
+		// `aliases[x=y]=z` set writes `<file>:2: invalid alias 'x=y'
+		// encountered while printing aliases` where its own option errors
+		// are `<file>:alias:2: …`. Measured 2026-09-30; see
+		// interp.Diagnostics.AliasListingInvalidName for the rest of the
+		// table and interp.Runner.aliasListingSkipsTheName for where the
+		// name is left out.
+		AliasListingInvalidName: "invalid alias '%[1]s' encountered while printing aliases",
+		UnsetNoOperands:         "%[1]s: not enough arguments",
+		UnaliasNoOperandStatus:  1,
 		// The builtin's name comes from the location here, as everywhere in
 		// zsh, so it is not in the wording.
 		UmaskBadSymbolicMode:     "bad symbolic mode permission: %[2]s",

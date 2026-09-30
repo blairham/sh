@@ -1390,6 +1390,41 @@ type Diagnostics struct {
 	// dialect this field belongs to.
 	AliasListPrefix string
 
+	// AliasListingInvalidName is the warning `alias -L` writes instead of a
+	// line for an entry whose **name** cannot be spelled as an assignment,
+	// which is a name holding an `=`: the first one would split the line in
+	// the wrong place, so a listing that claims to write the entry back
+	// cannot write that one back at all.
+	//
+	// Reachable in one dialect only, which is why this is a wording and not
+	// an axis: the others refuse such a name at the door, and only zsh has
+	// a route that plants one anyway — `aliases[x=y]=z`, storing through the
+	// tied parameter rather than through the builtin. Empty means the entry
+	// is listed like any other, which is what every dialect that cannot hold
+	// one wants.
+	//
+	// `%[1]s` is the name, and this dialect writes it in single quotes.
+	//
+	// Measured 2026-09-30 against zsh 5.9.2, `zsh -f` on a script file under
+	// `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch `HOME`:
+	//
+	//	aliases[x=y]=z; alias -L     the presets alone on stdout, and
+	//	                             `invalid alias 'x=y' encountered while
+	//	                             printing aliases` on stderr, at 0
+	//	two invalid, one valid       the valid row, and two warnings in name
+	//	                             order
+	//	aliases[=ab]=z / [=]         the same, so it is the character and not
+	//	                             the shape of the rest
+	//	alias -sL, alias -gL         the same for the other two kinds
+	//	alias -mL 'x*'               the same: the *defining* form decides,
+	//	                             not the road that reached it
+	//
+	// The status stays 0: this is a warning and the listing goes on. And the
+	// forms that are **not** defining print the entry without a word —
+	// plain `alias`, `-r`, `-m` and `+` all write `'x=y'=z` or `x=y` in both
+	// shells — which is what says the rule is about a line that would be run
+	// back rather than about the entry being illegitimate.
+	AliasListingInvalidName string
 	// UmaskBadSymbolicOperator is that complaint where what was wanted was
 	// one of `+-=` rather than one of `rwx`, for the two dialects that tell
 	// them apart: bash says "invalid symbolic mode operator" against

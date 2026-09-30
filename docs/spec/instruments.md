@@ -900,7 +900,50 @@ Two properties of the fault worth keeping, because both make it quiet:
   twenty-four did not, and agreed exactly with the recorded numbers. Partial
   agreement on a large table is not evidence the method is right.
 
-## 21. Where these came from
+## 21. A check that prints its own verdict is not a check
+
+Every shape above is about an instrument that answers the wrong question.
+This one is about an instrument that **does not answer at all** and reads as
+though it did, and it is the cheapest of all of them to write by accident.
+
+A probe of bare reserved words hung on `while` with no body. The batch was
+killed, and the cleanup check was:
+
+```
+pgrep -f <pattern>
+echo "none above = killed"
+```
+
+`pgrep` printed the surviving process. The legend printed underneath it
+regardless — and the legend is what got read. The probe was found **26
+minutes later at 99.3% CPU**, by an unrelated end-of-front sweep.
+
+**The fault is that the confirming text is unconditional.** Nothing about the
+output distinguishes "checked and clear" from "checked, found something, and
+said the reassuring thing anyway", because the reassuring thing is a constant.
+A check has to let the *result* choose what is printed:
+
+```
+pgrep -f <pattern> && echo "STILL RUNNING" || echo "clear"
+```
+
+which is the same two words decided by an exit status rather than by the
+author's expectation. This is §12's family — a tool that cannot fail loudly —
+arriving in one line of shell rather than in a harness.
+
+Two specifics worth keeping, because both make the failure quieter:
+
+- **A hung process holds its working directory**, so `rm -rf` on the scratch
+  directory silently leaves it there. **A scratch directory that survives
+  cleanup is evidence something is still running**, and it is often the only
+  evidence anybody looks at.
+- **Never probe a construct that can hang without a per-case `timeout`.**
+  `AGENTS.md` carries the worked example already: real zsh spins at 100% on
+  `while`/`until` with an empty condition *and* an empty body, so the probe is
+  behaving exactly as designed while it eats a core. The measurement being
+  correct is not the same as the measurement being safe to leave.
+
+## 22. Where these came from
 
 Each rule above cost at least one wrong conclusion that was acted on. They
 were collected during the `zsh-suite` burndown between September 2026 and the

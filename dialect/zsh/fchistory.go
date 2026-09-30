@@ -161,9 +161,18 @@ func registerFcHistory(r *interp.Runner) {
 	// that what this lays down is the first size in force.
 	fcStartSize(r)
 	r.Register("fc", func(r *interp.Runner, ctx context.Context, args []string) int {
-		if letter, rest, found := fcFileLetter(args); found {
-			return fcFile(r, letter, rest)
-		}
+		// The push is looked for **before** the file letters, and the order
+		// is the whole of `fc -p -R file`. Both parsers claim that call —
+		// fcFileLetter sees the `-R` and fcPushLetter sees the `-p` — and
+		// with the file letters first the read ran against the *current*
+		// list and the push never happened at all, so the new session began
+		// holding everything the old one had plus the file. Measured: the
+		// reference's list after `fc -p -R file` is the file and nothing
+		// else, numbered from 1.
+		//
+		// A call with no `p` or `P` in it is not claimed here and reaches
+		// fcFileLetter exactly as before, which is what keeps plain
+		// `fc -R`, `fc -W` and `fc -A` where they were.
 		if push, pop, appendOnPop, rest, found := fcPushLetter(args); found {
 			// Pushing and popping the history list, which the core has no
 			// notion of because the list is this dialect's. See fcpush.go.
@@ -172,6 +181,9 @@ func registerFcHistory(r *interp.Runner) {
 			}
 			_ = push
 			return fcPush(r, appendOnPop, rest)
+		}
+		if letter, rest, found := fcFileLetter(args); found {
+			return fcFile(r, letter, rest)
 		}
 		return core(r, ctx, args)
 	})
@@ -334,7 +346,12 @@ func fcRemember(r *interp.Runner, line string) {
 // flag set on the way in is never cleared on the way out, and a widget would
 // read it stale.
 func fcHasOwnLine(r *interp.Runner) bool {
-	return r.HistoryListFilledByTheReader() && !editorRunning(r) && len(fcEntries(r)) > 0
+	// And not where a rule kept that line out of the list: the reader fills
+	// it, but a leading blank or a repeat means the last entry belongs to an
+	// earlier command and skipping it skips a real one. See
+	// interp.Runner.SetHistoryOwnLineIgnored for the rows.
+	return r.HistoryListFilledByTheReader() && !r.HistoryOwnLineIgnored() &&
+		!editorRunning(r) && len(fcEntries(r)) > 0
 }
 
 // fcDropOwnLine takes that entry back off, which is what `fc -s` does before

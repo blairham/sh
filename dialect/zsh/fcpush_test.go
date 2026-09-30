@@ -4,9 +4,15 @@
 package zsh_test
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // `fc -p` puts the history list aside and `fc -P` puts it back.
@@ -167,5 +173,133 @@ print -r -- "pop st=$?"`)
 	}
 	if _, err := os.Stat(file); err == nil {
 		t.Errorf("%s was written; the reference writes no file on either spelling", file)
+	}
+}
+
+// `fc -p -R file` reads the file into the **new** list, and the numbering
+// says so.
+//
+// Two parsers claim that call — one sees the `-R`, the other the `-p` — and
+// with the file letters looked for first the read ran against the *current*
+// list and the push never happened, so the new session began holding
+// everything the old one had **plus** the file.
+//
+// **The numbers are the assertion and not the count.** A fix that cleared the
+// list and then appended would give the right number of entries with the
+// wrong numbers on them; the reference restarts at 1, which an append onto a
+// kept list cannot do. `W01history.ztst` is the file that noticed, and it
+// noticed by the numbering.
+//
+// Measured 2026-09-30 on zsh 5.9.2, and the four spellings are one answer:
+// `fc -p -R f`, `fc -pR f`, `fc -R -p f` and `fc -p f` all leave the list
+// holding exactly the file.
+func TestAPushReadsItsFileIntoTheNewList(t *testing.T) {
+	for _, spelling := range []string{"-p -R", "-pR", "-R -p", "-p"} {
+		t.Run(spelling, func(t *testing.T) {
+			dir := t.TempDir()
+			file := filepath.Join(dir, "hf")
+			if err := os.WriteFile(file, []byte("alpha\nbeta\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out, st := runZshPrelude(t, dir, `SAVEHIST=20
+				 print -rs kept-outer
+				 fc `+spelling+` `+file+`
+				 print -r -- "st=$?"
+				 fc -l`)
+			if st != 0 {
+				t.Fatalf("status %d\n%s", st, out)
+			}
+			// Numbered from 1, and the outer entry gone.
+			want := "st=0\n    1  alpha\n    2  beta\n"
+			if out != want {
+				t.Errorf("fc %s gave\n%q\nwant\n%q", spelling, out, want)
+			}
+		})
+	}
+}
+
+// And a call with no `p` or `P` in it still reaches the file letters, which
+// is what keeps plain `fc -R` where it was.
+//
+// The row exists because the fix was a **reordering**: putting the push first
+// is only safe if a call the push does not claim falls through, and "falls
+// through" is the half a reordering can silently break.
+func TestAFileLetterWithoutAPushStillReadsIntoTheCurrentList(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "hf")
+	if err := os.WriteFile(file, []byte("alpha\nbeta\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runZshPrelude(t, dir, `SAVEHIST=20
+		 print -rs kept-outer
+		 fc -R `+file+`
+		 print -r -- "st=$?"
+		 fc -l`)
+	if st != 0 {
+		t.Fatalf("status %d\n%s", st, out)
+	}
+	// The outer entry is still there, with the file's added after it.
+	want := "st=0\n    1  kept-outer\n    2  alpha\n    3  beta\n"
+	if out != want {
+		t.Errorf("gave\n%q\nwant\n%q", out, want)
+	}
+}
+
+// `fc -l` stops before its **own** line only when its own line is there.
+//
+// The reader fills the list with the program's commands, and `fc`'s default
+// range ends at the command before itself — both true, and together they were
+// read as "the last entry is always mine". A rule can keep a line out: a
+// leading blank under `histignorespace` is the case the suite found, and then
+// the last entry belongs to an earlier command and skipping it skips a real
+// one.
+//
+// Measured 2026-09-30 on zsh 5.9.2 with three entries planted by `print -rs`:
+// with the listing command written with a leading space the reference lists
+// **all three**, and with the space taken off it lists up to the entry before
+// itself. This shell listed two either way.
+//
+// Driven through the two states of the flag rather than through a
+// pseudo-terminal, because what is under test is which answer the builtin
+// gives for each — that the front end sets it correctly is the repl's own row.
+func TestTheListingSkipsItsOwnLineOnlyWhenItIsInTheList(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		ignored bool
+		want    string
+	}{
+		// Its own line is in the list, so the listing stops before it.
+		{"its own line is in the list", false, "    1  alpha\n    2  beta\n"},
+		// A rule kept it out, so every entry is an earlier command's.
+		{"its own line was kept out", true, "    1  alpha\n    2  beta\n    3  gamma\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out bytes.Buffer
+			sem, diag, d := zsh.Semantics(), zsh.Diagnostics(), zsh.Dialect()
+			dir := t.TempDir()
+			r := &interp.Runner{
+				Stdout: &out, Stderr: &out,
+				Semantics: &sem, Diagnostics: &diag, Name: "zsh",
+				// See the guard in internal/dialecttest: a nil Dialect is
+				// the core.
+				Dialect: &d, Dir: dir,
+				Vars: map[string]string{"PATH": dir, "SAVEHIST": "20"},
+			}
+			zsh.Apply(r)
+			// The state the reader would have left: it fills the list, and
+			// this line either reached it or was kept out.
+			r.SetHistoryListFilledByTheReader(true)
+			r.SetHistoryOwnLineIgnored(c.ignored)
+			f, err := syntax.Parse("print -rs alpha\nprint -rs beta\nprint -rs gamma\nfc -l\n", zsh.Dialect())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if got := out.String(); got != c.want {
+				t.Errorf("gave\n%q\nwant\n%q", got, c.want)
+			}
+		})
 	}
 }

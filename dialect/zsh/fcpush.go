@@ -84,7 +84,9 @@ const (
 // which is what the reference does with it — `fc -ap` is the spelling, and a
 // lone `-a` is a push with no list of its own to append.
 func fcPushLetter(args []string) (push, pop, appendOnPop bool, rest []string, found bool) {
-	for i, word := range args {
+	i := 0
+	for ; i < len(args); i++ {
+		word := args[i]
 		if !strings.HasPrefix(word, "-") || len(word) < 2 || word == "--" {
 			break
 		}
@@ -96,6 +98,17 @@ func fcPushLetter(args []string) (push, pop, appendOnPop bool, rest []string, fo
 				pop = true
 			case 'a':
 				appendOnPop = true
+			case 'R':
+				// Claimed and not acted on, because a push **already** reads
+				// the file it is given: `fc -p file` and `fc -p -R file` are
+				// the same list in the reference, measured. Letting the `-R`
+				// through instead handed it to fcPush as the *file operand*
+				// and the real name to the core's own `-R`, so the file was
+				// read twice and the new list held it twice over.
+				//
+				// Only alongside a push: with no `p` or `P` in the call the
+				// loop below falls through and `fc -R file` goes to the core
+				// exactly as before.
 			default:
 				// A letter this does not claim, mixed into the same word:
 				// the whole call goes to the core rather than being read
@@ -103,9 +116,13 @@ func fcPushLetter(args []string) (push, pop, appendOnPop bool, rest []string, fo
 				return false, false, false, nil, false
 			}
 		}
-		if push || pop {
-			return push, pop, appendOnPop, args[i+1:], true
-		}
+	}
+	// After **every** leading option word, not after the first one holding a
+	// `p`. Returning from inside the loop left `fc -p -R file` handing `-R`
+	// to fcPush as its file operand and the real name to the core's own
+	// `-R`, so the file was read twice and the new list held it twice over.
+	if push || pop {
+		return push, pop, appendOnPop, args[i:], true
 	}
 	return false, false, false, nil, false
 }

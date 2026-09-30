@@ -2371,6 +2371,10 @@ type Runner struct {
 	// commands into that list, which is what makes a builtin's own line the
 	// last entry. See SetHistoryListFilledByTheReader.
 	histFromReader bool
+	// histOwnIgnored says the line now running was kept out of that list by
+	// one of the reader's rules, so the last entry is not this command's.
+	// See SetHistoryOwnLineIgnored.
+	histOwnIgnored bool
 	// histHasOwn and histDropOwn are the dialect's answer to whether that
 	// line is in the list and how to take it off. See SetHistoryOwnLine.
 	histHasOwn  func(*Runner) bool

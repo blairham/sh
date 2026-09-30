@@ -2228,6 +2228,15 @@ func (s Shell) recording(recall recalls, added, at *[]string) func(string) {
 		return nil
 	}
 	return func(line string) {
+		// Reported on **every** path out of this function, because a builtin
+		// asking whether its own line is the last entry has no other way to
+		// know: see interp.Runner.SetHistoryOwnLineIgnored.
+		kept := false
+		defer func() {
+			if s.Runner != nil {
+				s.Runner.SetHistoryOwnLineIgnored(!kept)
+			}
+		}()
 		if strings.TrimSpace(line) == "" {
 			// A bare newline at the prompt is nothing happening, which every
 			// shell in the panel agrees about. Checked here as well as in
@@ -2266,6 +2275,7 @@ func (s Shell) recording(recall recalls, added, at *[]string) func(string) {
 		if s.Runner != nil {
 			s.Runner.RecordHistoryEntry(line)
 		}
+		kept = true
 	}
 }
 

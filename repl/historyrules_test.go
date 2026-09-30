@@ -532,3 +532,38 @@ func TestTheOptionRulesComeFromTheShell(t *testing.T) {
 		}
 	}
 }
+
+// The session reports whether the line it just ran reached the list.
+//
+// A builtin whose default range ends "at the command before itself" has no
+// other way to know: the reader fills the list, but a rule can keep one line
+// out, and then the last entry belongs to an earlier command. See
+// interp.Runner.SetHistoryOwnLineIgnored.
+//
+// **Both states, and set on every path out of the recorder** — a recorder
+// that reported only the kept lines would leave the flag saying "kept" for a
+// line it had just hidden, which is the reading that made `fc -l` skip a real
+// entry. The blank line is here because it returns before the rules are even
+// consulted, and it is a path like any other.
+func TestTheSessionReportsWhetherTheLineReachedTheList(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		line    string
+		ignored bool
+	}{
+		{"an ordinary line is kept", "echo kept", false},
+		{"a hidden line is not", " echo hidden", true},
+		{"a blank line is not", "   ", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := &editor{}
+			var added []string
+			r := newTestRunner(map[string]string{"HISTCONTROL": "ignorespace"})
+			sh := Shell{Runner: r, Dialect: syntax.Core(), History: bashishHistory}
+			sh.recording(e, &added, new([]string))(c.line)
+			if got := r.HistoryOwnLineIgnored(); got != c.ignored {
+				t.Errorf("after %q the session reports ignored=%v, want %v", c.line, got, c.ignored)
+			}
+		})
+	}
+}

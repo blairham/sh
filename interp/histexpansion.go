@@ -264,6 +264,28 @@ func (r *Runner) SetHistoryStore(entries func(*Runner) []string, add func(*Runne
 // history.go, which has said so since the builtin landed.
 func (r *Runner) SetHistoryListFilledByTheReader(on bool) { r.histFromReader = on }
 
+// SetHistoryOwnLineIgnored and HistoryOwnLineIgnored are whether the line the
+// shell is running was **kept out of** the list the reader fills.
+//
+// SetHistoryListFilledByTheReader says the reader puts the program's own
+// commands there, "which is what makes a builtin's own line the last entry".
+// That is true of the reader and not of every line: a rule can decline one —
+// a leading blank, a repeat, a pattern, a credential — and then the last
+// entry is somebody else's and a builtin that skips it skips a real command.
+//
+// Measured on zsh 5.9.2 with `setopt histignorespace` and three entries
+// planted by `print -rs`, the listing command itself written with a leading
+// space: the reference lists all three, and this shell listed two until the
+// flag existed. With the space taken off, both list up to the entry before
+// the command — so the adjustment is right and its premise was not.
+//
+// False is the useful default: a front end that says nothing is one whose
+// lines are all recorded, which is what every route but the reader's is.
+func (r *Runner) SetHistoryOwnLineIgnored(on bool) { r.histOwnIgnored = on }
+
+// HistoryOwnLineIgnored reports it. See SetHistoryOwnLineIgnored.
+func (r *Runner) HistoryOwnLineIgnored() bool { return r.histOwnIgnored }
+
 // HistoryListFilledByTheReader reports it.
 func (r *Runner) HistoryListFilledByTheReader() bool { return r.histFromReader }
 

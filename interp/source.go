@@ -339,6 +339,80 @@ func (r *Runner) reportBorrowedParseFailure(err error, s sourced, src string) {
 	}
 }
 
+// reportBorrowedRemarks writes what the parser remarked about this text since
+// shown, and returns how many it has now been through (#5232).
+//
+// A remark is a warning about text the dialect *accepts* — see
+// syntax.Remark — and the front end writes them for a script and for `-c`
+// (driver's sayRemarks). Borrowed text is parsed here instead, and nothing
+// here asked, so every remark `eval` or `.` produced was dropped. Measured
+// 2026-09-30, the top-level row agreeing in each dialect as the control:
+//
+//	zsh 5.9.2   alias ba=x; eval 'ba() { … }'
+//	            (eval):1: defining function based on alias `ba'
+//	            (eval):1: parse error near `()'      — the second line alone here
+//	bash 5.3.20 eval 'x=$(cat <<EOF' ⏎ 'hi' ⏎ 'EOF)'  with `eval` on line 3
+//	            line 5: warning: here-document at line 3 delimited by
+//	            end-of-file (wanted `EOF')            — nothing here
+//
+// **Located the way this text's own parse failure is**, through SourceReport
+// and moved by the same line offset reportBorrowedParseFailure adds: zsh
+// counts `eval`'s lines from one, bash continues the caller's. Both the
+// remark's own line and the one its wording may quote (At, where the
+// construct began) are moved, which is what puts bash's two numbers — `line
+// 5` and `at line 3` — in step, as shiftParseError does for an error.
+//
+// Written as the text is read, before what was read runs and before any
+// failure in it is reported, because that is the order both references
+// keep: zsh's remark comes before its own parse error, and bash's before the
+// output of the command it was about.
+//
+// A remark the shell keeps to itself while it is running is never written,
+// and `eval` and `.` only ever parse while running. So ksh93's two —
+// RemarkBackquoteSubstitution and RemarkOperatorsNotSeparated, `-n` alone —
+// stay unreachable from here, measured: neither is written for `eval`'d text
+// by ksh93 either.
+func (r *Runner) reportBorrowedRemarks(rs []syntax.Remark, shown int, s sourced) int {
+	d := *r.diag()
+	shift := int32(r.lineBase + r.lineOrigin)
+	for _, rk := range rs[min(shown, len(rs)):] {
+		if RemarkOnlyWhenNotRunning(rk.Kind) {
+			continue
+		}
+		rk.Pos.Line += shift
+		if rk.At.Line > 0 {
+			rk.At.Line += shift
+		}
+		msg := d.Remark(rk)
+		if msg == "" {
+			continue
+		}
+		loc := d
+		if d.RemarkNamesItsOwnLine {
+			// The wording says where it was, so the location says only who
+			// — the split the front end makes for the same remark. Kept to
+			// match that rule rather than because anything reaches it: the
+			// one dialect that sets this is ksh93, whose remarks are all
+			// skipped above.
+			loc.Location = LocationNone
+		}
+		if s.eval && s.named == "" && d.EvalSourceName == "" {
+			// `eval`'d text with no name of its own, whose only name is the
+			// builtin's: bash's parse error there is `<s>: eval: line 3: …`,
+			// the builtin naming itself, and its remark is `<s>: line 3: …`,
+			// because a remark is the *parser* speaking about the text and
+			// not the builtin. Measured 2026-09-30 against bash 5.3.20, the
+			// same `eval` on the same line giving both. Where the text has a
+			// name — zsh's `(eval)`, a sourced file's path — the remark
+			// carries it exactly as the parse error does, and both agree.
+			r.errf("%s", loc.Report(r.name(), int(rk.Pos.Line), msg+"\n"))
+			continue
+		}
+		r.errf("%s\n", loc.SourceReport(s.naming(loc), r.name(), s.sourceName(loc), int(rk.Pos.Line), msg))
+	}
+	return len(rs)
+}
+
 // evalLinesAxis is the one sentence both askers use, so a refusal reads the
 // same whichever of them met it first.
 const evalLinesAxis = "the lines of `eval`'s text continuing the caller's"
@@ -567,6 +641,11 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// bash interleaves them. So the granularity is this axis's and not a new
 	// one.
 	consumed := 0
+	// How many of the parser's remarks have been written. One count for both
+	// readings: a whole-text read hands its tree to the loop below once, and
+	// the parser still holds the remarks it made, so a second count would
+	// write them twice.
+	remarked := 0
 	consume := func(through, body int, whole bool) {
 		if s.read == nil || through < consumed {
 			// Nothing new was read. A failure can point back at a line
@@ -598,6 +677,7 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		// error is reported.
 		consume(len(src), 0, true)
 		whole = p.Parse()
+		remarked = r.reportBorrowedRemarks(p.Remarks(), remarked, s)
 		if err := p.Err(); err != nil {
 			if whole != nil && err == whole.Refused {
 				// A line the reader gave up rather than the text — see
@@ -706,6 +786,11 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 			p.SetDialect(r.dialect().On(s.route()))
 		}
 		f, ok := nextBorrowedLine(p, &whole)
+		// Before the break as well as before the line runs: a remark made by
+		// the read that found nothing more — a document the text ran out
+		// inside — belongs to that read, and the failure reported after the
+		// loop comes after it.
+		remarked = r.reportBorrowedRemarks(p.Remarks(), remarked, s)
 		if !ok {
 			break
 		}

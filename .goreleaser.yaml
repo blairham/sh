@@ -122,6 +122,126 @@ archives:
   # `$fpath` points at nothing.
   - share/sh/functions/*
 
+# Container images: one `FROM scratch` image per shell, so that an image which
+# deliberately has no userland can still have a shell in it — run directly, or
+# lifted into somebody else's distroless image with a single `COPY --from`. The
+# recipe, what is in the rootfs and what is deliberately left out are all in
+# `images/scratch/Dockerfile`; #5185.
+#
+# `dockers_v2` rather than `dockers` because it takes the platform list itself
+# and produces one multi-architecture index per shell — the older pipe needs an
+# entry per architecture plus a `docker_manifests` block to merge them, which
+# for six shells is eighteen stanzas saying what these six say.
+#
+# A real run builds both architectures in **one** `docker buildx build` and
+# pushes an index at the unsuffixed tag; the `…-amd64` and `…-arm64` tags in a
+# `--snapshot` render are an artifact of that mode, which cannot `--load` a
+# multi-platform image and so builds one architecture at a time. The published
+# package therefore carries `:{{ .Version }}` and `:latest` and no per-
+# architecture tags. Measured against a throwaway local registry, because a
+# snapshot never creates an index and nothing else here would have said so.
+#
+# `sbom: false` because the default is **on**, and on means `buildx` resolves
+# `docker/buildkit-syft-scanner` from Docker Hub in the middle of a release —
+# a network dependency, and a rate limit, in the one workflow that must not
+# fail late. Nothing else in this file ships an SBOM either; when one is wanted
+# it belongs beside the archives rather than as six attestation manifests
+# nobody reads.
+#
+# **`ids` is the whole of what distinguishes one entry from the next**, beyond
+# the name. It filters the build context down to that one binary, and the
+# recipe asserts it received exactly one — so an entry whose `--target` and
+# `ids` disagree fails the build rather than publishing an image whose
+# entrypoint does not exist.
+dockers_v2:
+- id: image-sh
+  ids: [sh]
+  images: ['ghcr.io/blairham/sh/scratch/sh']
+  dockerfile: images/scratch/Dockerfile
+  platforms: [linux/amd64, linux/arm64]
+  sbom: false
+  flags: ['--target=sh']
+  # `latest` moves only on a real release. `prerelease: auto` below makes a tag
+  # with a suffix a prerelease, and one of those must not become what a bare
+  # `docker run ghcr.io/blairham/sh/scratch/bash` pulls.
+  tags: &imagetags
+  - '{{ .Version }}'
+  - '{{ if not .Prerelease }}latest{{ end }}'
+  labels: &imagelabels
+    org.opencontainers.image.title: sh
+    org.opencontainers.image.description: A POSIX shell in a scratch image — the binary and nothing else
+    org.opencontainers.image.url: https://github.com/blairham/sh
+    org.opencontainers.image.source: https://github.com/blairham/sh
+    org.opencontainers.image.licenses: Apache-2.0
+    org.opencontainers.image.version: '{{ .Version }}'
+    org.opencontainers.image.revision: '{{ .FullCommit }}'
+    org.opencontainers.image.created: '{{ .Date }}'
+
+- id: image-bash
+  ids: [bash]
+  images: ['ghcr.io/blairham/sh/scratch/bash']
+  dockerfile: images/scratch/Dockerfile
+  platforms: [linux/amd64, linux/arm64]
+  sbom: false
+  flags: ['--target=bash']
+  tags: *imagetags
+  labels:
+    <<: *imagelabels
+    org.opencontainers.image.title: bash
+    org.opencontainers.image.description: A bash dialect in a scratch image — the binary and nothing else
+
+- id: image-zsh
+  ids: [zsh]
+  images: ['ghcr.io/blairham/sh/scratch/zsh']
+  dockerfile: images/scratch/Dockerfile
+  platforms: [linux/amd64, linux/arm64]
+  sbom: false
+  flags: ['--target=zsh']
+  tags: *imagetags
+  labels:
+    <<: *imagelabels
+    org.opencontainers.image.title: zsh
+    org.opencontainers.image.description: A zsh dialect in a scratch image — the binary and nothing else
+
+- id: image-ksh
+  ids: [ksh]
+  images: ['ghcr.io/blairham/sh/scratch/ksh']
+  dockerfile: images/scratch/Dockerfile
+  platforms: [linux/amd64, linux/arm64]
+  sbom: false
+  flags: ['--target=ksh']
+  tags: *imagetags
+  labels:
+    <<: *imagelabels
+    org.opencontainers.image.title: ksh
+    org.opencontainers.image.description: A ksh dialect in a scratch image — the binary and nothing else
+
+- id: image-dash
+  ids: [dash]
+  images: ['ghcr.io/blairham/sh/scratch/dash']
+  dockerfile: images/scratch/Dockerfile
+  platforms: [linux/amd64, linux/arm64]
+  sbom: false
+  flags: ['--target=dash']
+  tags: *imagetags
+  labels:
+    <<: *imagelabels
+    org.opencontainers.image.title: dash
+    org.opencontainers.image.description: A dash dialect in a scratch image — the binary and nothing else
+
+- id: image-ash
+  ids: [ash]
+  images: ['ghcr.io/blairham/sh/scratch/ash']
+  dockerfile: images/scratch/Dockerfile
+  platforms: [linux/amd64, linux/arm64]
+  sbom: false
+  flags: ['--target=ash']
+  tags: *imagetags
+  labels:
+    <<: *imagelabels
+    org.opencontainers.image.title: ash
+    org.opencontainers.image.description: A BusyBox ash dialect in a scratch image — the binary and nothing else
+
 # macOS signing and notarization, matching the other repositories in this tree.
 # Gated on isEnvSet, so a release still succeeds unsigned while the secrets are
 # absent — which is the case here until they are added to this repository.

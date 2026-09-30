@@ -169,6 +169,58 @@ these is your login shell locks you out.** The warning under *Install*
 above is about `make uninstall`; this is the route a tap user has. Change
 your shell back first.
 
+## A container image, for an image that has no userland
+
+Six images, one per shell, each `FROM scratch`: the static binary, `/etc/passwd`,
+`/etc/group`, an empty `/root` and an empty `/tmp`. Nothing else — no libc, no
+loader, no coreutils, no certificate store.
+
+    docker run --rm -it ghcr.io/blairham/sh/scratch/bash:latest
+
+    ghcr.io/blairham/sh/scratch/sh          ghcr.io/blairham/sh/scratch/ksh
+    ghcr.io/blairham/sh/scratch/bash        ghcr.io/blairham/sh/scratch/dash
+    ghcr.io/blairham/sh/scratch/zsh         ghcr.io/blairham/sh/scratch/ash
+
+Tagged with the release version and `latest`; each tag is a multi-architecture
+index over `linux/amd64` and `linux/arm64`. Between 10 and 12MB in the image and
+3 to 4MB over the wire, depending on the shell.
+
+The second use is the one that motivated them. A distroless image has no shell
+on purpose, and the cost is that there is no way in when something is wrong —
+so lift one in, and the image keeps having no package manager, no libc and no
+userland:
+
+    FROM gcr.io/distroless/static-debian12
+    COPY --from=ghcr.io/blairham/sh/scratch/bash:latest /bin/bash /bin/bash
+    COPY --from=ghcr.io/blairham/sh/scratch/bash:latest /bin/sh /bin/sh
+
+One `COPY` is enough if you only want one name; `/bin/sh` in these images is a
+symlink to the binary beside it rather than a second copy.
+
+### What works in there, and what a `scratch` image does not have
+
+An interactive session works: the editor draws a prompt, edits the line and
+recalls the previous one with Up, all with **no terminfo database on disk** —
+`$terminfo` is empty and the editor writes the sequences it knows. Here-documents and `<(…)` work,
+because neither needs a temporary file. `> /dev/null` works, because the
+runtime mounts `/dev`.
+
+What is absent is absent on purpose:
+
+| | |
+| --- | --- |
+| No external commands | `ls`, `grep` and `cat` are not builtins in any of these dialects, so an external command is `command not found` until something else in the image provides one. Builtins, control flow, expansion, arithmetic and redirection are all there. |
+| No zoneinfo | `TZ` is inert: every time is UTC, and `printf '%(%Z)T'` says so rather than failing. |
+| No certificates, no `/usr` | Nothing in a shell opens a TLS connection. |
+| `/etc/passwd` has two entries | `root` and `nobody`. `~root` resolves; a `--user` with an unlisted uid has no entry, which is the same thing that happens on a machine whose uid is not in the database. |
+| `/tmp` is sticky and world-writable | So the image still works under `--user`. A bare `scratch` has no `/tmp` at all, and a redirection into it fails. |
+
+`/bin/sh` is the same binary under a second name, and that is fidelity rather
+than a convenience: a shell called `sh` starts in POSIX mode, which is what real
+bash does. Measured inside the image — `/bin/bash` reports `posix` off and
+`/bin/sh` reports it on. It also means `RUN` works in an image built `FROM` one
+of these, and `docker exec … sh` works in a container running one.
+
 ## Using it without changing your login shell
 
 The three routes that need no `chsh`, in increasing order of commitment:

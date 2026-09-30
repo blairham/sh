@@ -95,6 +95,16 @@ Homebrew's own `shfmt` (mvdan.cc/sh) wants that name too, so the formula
 declares the conflict and you pick one. `make install` does not install
 `shfmt` at all yet.
 
+There is a container image per shell as well, `FROM scratch` — the static
+binary, two files and two empty directories:
+
+    docker run --rm -it ghcr.io/blairham/sh/scratch/bash:latest
+
+The reason they exist is the other direction: a distroless image has no
+shell on purpose, and one `COPY --from` gives it one without giving it a
+libc, a package manager or a userland. `docs/install.md` has what is in
+them and what a `scratch` image does not have.
+
 A session reads everything a real shell of the same name reads, in the
 same order: `~/.bashrc`, `~/.zshrc`, the profile files, and the machine's
 own file in front of each. `docs/install.md` has the measured grid.

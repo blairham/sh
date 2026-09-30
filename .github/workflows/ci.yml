@@ -219,6 +219,10 @@ jobs:
             # to the job exercises the job.
             case "$f" in
               .goreleaser.yaml|.github/workflows/release.yml|.github/workflows/ci.yml) packaging=true ;;
+              # The container recipe is rendered by the same GoReleaser run --
+              # `dockers_v2` builds it -- so a change to it is a packaging
+              # change, and the smoke test below is the only thing that runs it.
+              images/scratch/*) packaging=true ;;
             esac
           done <<<"$(git diff --name-only "$BASE"...HEAD)"
         fi
@@ -440,6 +444,13 @@ jobs:
     # -- rather than either against a list written here. A hardcoded list is a
     # claim about a roster it cannot see, and goes stale the next time someone
     # adds a binary; derived, the check gets stronger when one is added.
+    # The render builds a linux/arm64 image as well as a linux/amd64 one, and
+    # the smoke test below runs both. Assembling them needs no emulation -- the
+    # recipe's builder stage is pinned to `$BUILDPLATFORM` -- but *running* the
+    # arm64 shell on this runner does.
+    - uses: docker/setup-qemu-action@v3
+      if: needs.changes.outputs.packaging == 'true'
+
     - name: Does the formula install every binary the build produced?
       if: needs.changes.outputs.packaging == 'true'
       shell: bash
@@ -508,6 +519,78 @@ jobs:
         if [ "$status" -eq 0 ]; then
           echo "the formula installs all $(wc -l < "$built" | tr -d ' ') binaries the build produced"
         fi
+        exit "$status"
+
+    # The six container images, run. The render proves they build; this proves
+    # each one carries the shell it is named for, which is a different claim:
+    # `dockers_v2` pairs a `--target` with an `ids` filter, and a pair that
+    # disagreed would produce an image whose `ENTRYPOINT` names a binary that
+    # is not in it. That is a runtime failure, so only running it finds it.
+    #
+    # The roster comes from `artifacts.json` for the same reason the formula
+    # check above derives its own: a list written here is a claim about a
+    # roster it cannot see, and says nothing when a seventh image is added.
+    - name: Does every image carry the shell it is named for?
+      if: needs.changes.outputs.packaging == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        # One row per distinct image, not per tag: `latest` and the version
+        # point at the same digest, and running it twice proves it twice.
+        mapfile -t images < <(
+          jq -r '.[] | select(.type == "Docker Image") | [.extra.Digest, .name] | @tsv' \
+            dist/artifacts.json | sort -u -k1,1 | cut -f2
+        )
+        if [ "${#images[@]}" -eq 0 ]; then
+          echo "::error::the render produced no container images -- this job proved nothing"
+          exit 1
+        fi
+        echo "smoking ${#images[@]} images"
+
+        # **Standard error is kept out of the comparison, not folded into it.**
+        # Half of these images are for the architecture this runner is not, and
+        # `docker run` writes a line about that to stderr before the container
+        # starts -- so a `2>&1` here compares the warning and fails every
+        # foreign-architecture row while the shell inside answered correctly.
+        # Measured: it did exactly that. The stream is still read, and printed
+        # when a row fails, because a row that fails for a real reason says why
+        # on it.
+        err=$(mktemp)
+        status=0
+        for img in "${images[@]}"; do
+          # ghcr.io/…/scratch/bash:0.0.21-next-amd64 -> bash
+          name=${img%:*}; name=${name##*/}
+
+          # Through the image's own ENTRYPOINT, which is the thing under test.
+          # `$0` is the path it was started as, so it fails loudly when the
+          # entrypoint and the binary disagree; `~root` reads /etc/passwd, and
+          # /tmp has to be there, writable and sticky, because a bare scratch
+          # has no /tmp at all.
+          want="/bin/$name /root /root sticky"
+          got=$(docker run --rm "$img" -c '
+            printf "%s %s %s" "$0" "$HOME" "$(cd ~root && pwd)"
+            if [ -w /tmp ] && [ -k /tmp ]; then printf " sticky"; else printf " NO-TMP"; fi
+          ' 2>"$err") || true
+          if [ "$got" != "$want" ]; then
+            echo "::error::$img answered [$got], wanted [$want]"
+            sed 's/^/    /' "$err"
+            status=1
+            continue
+          fi
+
+          # The second name. Every one of these images has a /bin/sh, so a
+          # derived image's `RUN` resolves and `docker exec … sh` works.
+          got=$(docker run --rm --entrypoint /bin/sh "$img" -c 'echo $0' 2>"$err") || true
+          if [ "$got" != /bin/sh ]; then
+            echo "::error::$img has no working /bin/sh -- it answered [$got]"
+            sed 's/^/    /' "$err"
+            status=1
+            continue
+          fi
+
+          echo "  $img: ok"
+        done
         exit "$status"
 
   oracle:

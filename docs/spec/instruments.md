@@ -559,7 +559,75 @@ or a type conversion. `[]rune`, `strings.ToLower`, `filepath.Clean`,
 `strings.TrimSpace` and a `%v` format are all lossy about something, and the
 question is only ever whether they are lossy about *this*.
 
-## 15. Where these came from
+## 15. A uniqueness claim is scoped to the thing it was measured over
+
+"No X can contain this" is a claim about a set, and the set is whichever one
+somebody had in mind. Outside it the claim is not weaker — it is **absent**,
+and the code that relied on it goes on relying.
+
+The worked example is the sharpest fault this campaign found. A backslash
+that arrives in a shell **value** is encoded as a sentinel byte, and the
+comment defending the choice says NUL is *the only byte no value can hold*.
+That is true, carefully argued, and load-bearing. It is a claim about
+**values**.
+
+The sentinel then met `IFS`, whose zsh default is space, tab, newline and
+**NUL**. A value's backslash matched `IFS` as itself and split a field that
+nobody asked to split. The byte was unique among values and perfectly
+ordinary among separators, and nothing in the comment was wrong.
+
+> **Write the domain into the claim.** "No value can hold NUL" invites a
+> reader to treat the byte as globally free. "NUL is unavailable to values
+> and ordinary everywhere else" would have made the collision visible at the
+> line that caused it.
+
+The general shape, because sentinels are where it recurs: a sentinel is safe
+only in the alphabet it was chosen against. Ask what *other* alphabets the
+value travels through — a separator set, a pattern, a filename, an
+environment block, a wire format — because each has its own answer and the
+choice was made against one of them.
+
+Two tells that this is what you are looking at:
+
+- The comment is **right** and the code is wrong, so reading harder does not
+  help. Section 8 is the reverse case, where the comment is false about the
+  code; here it is true about its own subject and silent about the caller's.
+- The fault appears in **one dialect or one configuration** and not the
+  others. That reads like a dialect bug and is really the alphabet changing
+  underneath a shared encoding — four shells here were already correct
+  because their `IFS` does not contain the byte, so the collision could not
+  arise in them.
+
+### Half a question answered leaves the other half standing
+
+The same site had already been repaired once. An earlier change fixed the
+**false negative** — a backslash *written into* `IFS` failing to separate,
+because the walk tested the sentinel instead of the character it stands for —
+and left the **false positive**, a sentinel that separates because `IFS`
+happens to contain its byte. Both are the same sentence misapplied, in
+opposite directions, at one position.
+
+It is a relative of the fault where a fix is written into a new helper and
+omitted from the old one, but harder to see. There the two halves are in two
+places and a reader who finds one can look for the other. Here the question
+is **half answered at a single site**: there is one place to look, it has
+already been visited, a comment above it says the position was thought
+about, and the file that comment points at carries measurements. Everything
+about it reads as settled.
+
+> **When a repair resolves an asymmetry, ask what the other direction
+> answers.** A helper that returns "not a separator" where the character is
+> not in the set has said nothing about what happens when the *sentinel* is,
+> and a caller that falls through to the raw byte test will answer that
+> question by accident.
+
+The check is one row: hold the position fixed and vary the set the byte is
+tested against. Here that is `IFS='\\'` against zsh's default, and the two
+rows pull opposite ways — which is also how the reading was chosen, because
+the first attempt satisfied one and broke the other and an existing test said
+so.
+
+## 16. Where these came from
 
 Each rule above cost at least one wrong conclusion that was acted on. They
 were collected during the `zsh-suite` burndown between September 2026 and the

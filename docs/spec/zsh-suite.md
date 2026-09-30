@@ -14,16 +14,19 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, two files have become real results.** `C02cond`,
-verified strict 1/1 at `82566556f` — 59 of 59 chunks (#5146) — and
-`D09brace`, verified at `81099b07f` — 28 of 28 (#5154). Both byte-identical
-in output and status under the reference's own driver. So the count the
-burndown moves is **23** today. The roll-up figures above are left at the commit they were taken at
+**Since that commit, three files have become real results**, each verified
+byte-identical in output and status under the reference's own driver:
+
+    C02cond          59 of 59 chunks   82566556f   #5146
+    D09brace         28 of 28          81099b07f   #5154
+    V12zparseopts    14 of 14          fd4c74161   #5162
+
+So the count the burndown moves is **24** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
 The ranking table further down carries a **different commit** from these
-figures, `81099b07f`, and says so in its own heading. Two measurements at two
+figures, `fd4c74161`, and says so in its own heading. Two measurements at two
 commits in one document is fine as long as each names its own; what is not
 fine is a single figure whose provenance is two runs — see §10.
 
@@ -33,11 +36,12 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 23 today)
+## Real results (21 at `37355aae5`, 24 today)
 
-These carry a result rather than an agreed refusal. `C02cond` and `D09brace`
-are the twenty-second and twenty-third and are listed here rather than below;
-every other entry is as measured at the heading's commit.
+These carry a result rather than an agreed refusal. `C02cond`, `D09brace`
+and `V12zparseopts` are the twenty-second, twenty-third and twenty-fourth and
+are listed here rather than below; every other entry is as measured at the
+heading's commit.
 
 - `A03quoting`
 - `A04redirect`
@@ -69,6 +73,8 @@ every other entry is as measured at the heading's commit.
 
 - `V03mathfunc`
 - `V05styles`
+
+- `V12zparseopts` (closed #5162, strict 1/1 at `fd4c74161`)
 
 - `V08zpty`
 - `W02jobs`
@@ -102,9 +108,15 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (28), ranked by chunks unreached
+## Failing (27), ranked by chunks unreached
 
-**Measured at `81099b07f`, 2026-09-29**, one file per driver run.
+**Measured at `fd4c74161`, 2026-09-30**, one file per driver run.
+
+Every row was **re-measured** rather than carried forward, and for the second
+time in a row **no front had moved** across the merges in between. That
+negative result is what makes the table worth reading: a figure carried
+forward is indistinguishable from a figure that was checked, and only one of
+them can be relied on. The cost is one driver run per file.
 
 `ref` is how many chunks the **reference's own driver** gets through
 successfully in this layout; `ours` is how many this shell does. `unreached`
@@ -167,7 +179,6 @@ front can only move chunks up.
 |---:|---:|---:|---:|---|---|
 | — | 0 | 1 | 51 | `V06parameter` | *excluded — see below* |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
-| 3 | 14 | 11 | 24 | `V12zparseopts` | special characters in option names |
 | 5 | 5 | 0 | 53 | `E02xtrace` | xtrace with and without redirection |
 | 6 | 8 | 2 | 12 | `C05debug` | Skip line from DEBUG trap |
 | 6 | 6 | 0 | 19 | `V13zformat` | basic zformat test |
@@ -216,9 +227,9 @@ and is no longer a row at all — see the declines above and #5141.
 ## Part of this suite is ungradeable here, and it is nine files
 
 `V06parameter`'s `dlopen` failure is not a special case. It is the visible end
-of a class, and the class is larger than one file: **among the twenty-eight
+of a class, and the class is larger than one file: **among the twenty-seven
 failing files, nine have a reference that fails its own chunks in this
-layout.** Measured at `81099b07f`, the same runs the table above comes from.
+layout.** Measured at `fd4c74161`, the same runs the table above comes from.
 
 | file | reference passes | of | ungradeable |
 |---|---:|---:|---:|
@@ -232,8 +243,8 @@ layout.** Measured at `81099b07f`, the same runs the table above comes from.
 | `E02xtrace` | 5 | 6 | 1 |
 | `V06parameter` | 0 | 1 | 1 |
 
-Twenty chunks of 1203, and eight of the twenty are `E03posix` alone. The
-reference runs 1203 chunks across these files and passes 1183 of them.
+Twenty chunks of 1189, and eight of the twenty are `E03posix` alone. The
+reference runs 1189 chunks across these files and passes 1169 of them.
 
 **Why it matters more than twenty chunks sounds like.** A `ref` column read as
 "what zsh can do" over-counts the target, and that is precisely how the old
@@ -262,8 +273,8 @@ distribution rather than `Test/`, or build the modules these files load. Until
 one of those happens, `ref` is the honest denominator and the file's own chunk
 count is not.
 
-**Only the failing files were swept for this**, twenty-nine of them at the
-time and twenty-eight now that `A09zwc` is a decline. The strict files
+**Only the failing files were swept for this**, twenty-seven of them now that
+`A09zwc` is a decline and two more have closed. The strict files
 and the thirteen refusal-agreements have not been checked the same way, so
 the count is nine *of those* and the true figure across all
 sixty-five is unmeasured. Stated rather than extrapolated, because a number
@@ -287,9 +298,9 @@ measured run and never revisited. It is wrong in both directions now:
   whether they are reachable at all is a separate question from whether their
   front is fixable.
 
-So the honest statement of the target is **23 of 50 reachable today** — 21 at
-the figures' commit plus `C02cond` and `D09brace` — where 50 is 65 less the
-three declines and
+So the honest statement of the target is **24 of 50 reachable today** — 21 at
+the figures' commit plus `C02cond`, `D09brace` and `V12zparseopts` — where 50
+is 65 less the three declines and
 less the twelve refusal-agreements, with the twelve re-examined individually
 rather than assumed unreachable since some may become reachable if the module
 they want is built. 58 is not a target anybody measured; it is the count of

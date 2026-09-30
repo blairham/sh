@@ -255,3 +255,74 @@ func TestAFailedModifierNamesTheWholeChain(t *testing.T) {
 		t.Errorf("a quick substitution: %v, want :s^nosuch^x^ and ^nosuch^x^", err)
 	}
 }
+
+// A backslash in a substitution's replacement escapes what follows it, and it
+// happens **twice** — in one column and not the other.
+//
+// See Chars.SubstitutionUnescapesTheReplacement for the panel. The rows here
+// are the ones that pin the rule rather than merely agree with it:
+//
+//   - **The count is not the rule.** `n/4` and two rounds of `n/2` are the
+//     same arithmetic, so no number of counted rows can tell them apart. The
+//     mixed row can: two backslashes, `a`, four backslashes, `b` comes back
+//     `a\b`, which is the two-round reading applied character by character.
+//   - **Where the `&` is resolved.** It is the second round, not before or
+//     after: `\\&` is a literal `&` while `\\\\&` is a backslash followed by
+//     the *match*. Any other order gets one of those two wrong.
+//   - **A lone trailing backslash is dropped**, which is why an odd count
+//     answers as the even one below it.
+//
+// Measured 2026-09-30 at a prompt, zsh 5.9.2 against bash 5.3.20 and 3.2.57.
+func TestASubstitutionReplacementUnescapesTwice(t *testing.T) {
+	h := seeded("echo one two one")
+	keeps := Chars{Event: '!', Quick: '^', Comment: '#', Words: WordsShell}
+	eats := keeps
+	eats.SubstitutionUnescapesTheReplacement = true
+
+	for _, row := range []struct{ in, eaten, kept string }{
+		// The counted rows, which say where the first backslash survives.
+		{`echo !!:s/o/\X/`, "echo echX one two one", `echo ech\X one two one`},
+		{`echo !!:s/o/\\X/`, "echo echX one two one", `echo ech\\X one two one`},
+		{`echo !!:s/o/\\\X/`, "echo echX one two one", `echo ech\\\X one two one`},
+		{`echo !!:s/o/\\\\X/`, `echo ech\X one two one`, `echo ech\\\\X one two one`},
+		{`echo !!:s/o/\\\\\\\\X/`, `echo ech\\X one two one`, `echo ech\\\\\\\\X one two one`},
+		// The row a count cannot express.
+		{`echo !!:s/o/\\a\\\\b/`, `echo echa\b one two one`, `echo ech\\a\\\\b one two one`},
+		// And the two that fix where the `&` is resolved.
+		//
+		// The kept column is measured and reads oddly on purpose: bash emits
+		// each backslash that is not in front of an `&` on its own, so four
+		// backslashes and an `&` come back as **three** and an `&` — the pair
+		// it consumes is the last one. Deriving that column instead of
+		// measuring it is how this row was first written wrong.
+		{`echo !!:s/o/\\&/`, "echo ech& one two one", `echo ech\& one two one`},
+		{`echo !!:s/o/\\\\&/`, `echo ech\o one two one`, `echo ech\\\& one two one`},
+	} {
+		if got := expanded(t, row.in, h, eats); got != row.eaten {
+			t.Errorf("unescaping twice, %s became %q, want %q", row.in, got, row.eaten)
+		}
+		if got := expanded(t, row.in, h, keeps); got != row.kept {
+			t.Errorf("keeping them, %s became %q, want %q", row.in, got, row.kept)
+		}
+	}
+}
+
+// And the quick form `^old^new^` reads its replacement by the same rule.
+//
+// Measured separately rather than assumed: `^o^\\\\X^` comes back with one
+// backslash in zsh 5.9.2 and four in bash 5.3.20, the same split as the long
+// form. A rule threaded into only one of the two call sites passes every row
+// above.
+func TestTheQuickSubstitutionUnescapesItsReplacementToo(t *testing.T) {
+	h := seeded("echo one two one")
+	keeps := Chars{Event: '!', Quick: '^', Comment: '#', Words: WordsShell}
+	eats := keeps
+	eats.SubstitutionUnescapesTheReplacement = true
+
+	if got := expanded(t, `^o^\\\\X^`, h, eats); got != `ech\X one two one` {
+		t.Errorf("unescaping twice, the quick form became %q", got)
+	}
+	if got := expanded(t, `^o^\\\\X^`, h, keeps); got != `ech\\\\X one two one` {
+		t.Errorf("keeping them, the quick form became %q", got)
+	}
+}

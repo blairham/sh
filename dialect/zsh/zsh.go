@@ -1180,6 +1180,13 @@ func Semantics() interp.Semantics {
 	// And a `:q` quotes where it is written. See
 	// Semantics.HistoryQuoteModifierInPlace.
 	s.HistoryQuoteModifierInPlace = interp.Yes
+	// A backslash in a substitution's replacement escapes what follows it,
+	// and it happens **twice**: `!!:s/o/\\\\X/` written with four
+	// backslashes comes back with one. bash copies all four through. See
+	// Semantics.HistorySubstitutionUnescapesTheReplacement for the panel and
+	// for the mixed-content row that pins it to characters rather than to a
+	// division.
+	s.HistorySubstitutionUnescapesTheReplacement = interp.Yes
 	// A quote or a backquote against the event character is ordinary text
 	// here and part of the event's name in bash and ksh93, a second event
 	// character closes the name it is in, and `!{…}` is the braced form

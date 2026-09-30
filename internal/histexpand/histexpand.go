@@ -109,6 +109,46 @@ type Chars struct {
 	// substitutes once in each word. See
 	// Semantics.HistoryWordwiseSubstitutionModifier.
 	WordwiseSubstitution bool
+
+	// SubstitutionUnescapesTheReplacement takes a backslash in a
+	// substitution's right side as escaping whatever follows it, **twice**,
+	// where the column without it copies every backslash through as written.
+	//
+	// Measured 2026-09-30 at a prompt, `echo one two one` then
+	// `echo !!:s/o/<n backslashes>X/`, counting the backslashes in the line
+	// the shell echoes back before running it:
+	//
+	//	n        zsh 5.9.2   bash 5.3.20   bash 3.2.57
+	//	0        0           0             0
+	//	1        0           1             1
+	//	2        0           2             2
+	//	3        0           3             3
+	//	4        1           4             4
+	//
+	// and on out to 16, where zsh has 4 and bash 16. **Two rounds and not
+	// one**: one round would leave 1 at n=2, and zsh does not reach its
+	// first backslash until n=4.
+	//
+	// ksh93u+ cannot be asked — it does not expand `!!:s/…/…/` at all, the
+	// line runs verbatim — and dash and BusyBox ash have no history
+	// expansion. So this is a two-column question with one column answering
+	// each way.
+	//
+	// The count alone does not pin the rule, because `n/4` and two rounds of
+	// `n/2` are the same arithmetic. What pins it is **mixed content**, which
+	// a count cannot express: a replacement of `\\a\\\\b` — two
+	// backslashes, `a`, four backslashes, `b` — comes back `a\b` in zsh,
+	// which is the two-round reading applied character by character and not
+	// any division.
+	//
+	// And the `&`, which is the matched text, is resolved **in the second
+	// round** rather than before or after it. Two rows say so: `\\&` is a
+	// literal `&` (the first round leaves `\&`, the second reads it as an
+	// escaped `&`), while `\\\\&` is a backslash followed by the *match*
+	// (the first round leaves `\\&`, the second turns `\\` into `\` and
+	// finds a live `&` behind it). A reading that unescaped twice and then
+	// expanded the `&`, or expanded it first, gets one of those two wrong.
+	SubstitutionUnescapesTheReplacement bool
 }
 
 // Default is what a shell starts with: `!^#`.
@@ -1127,7 +1167,7 @@ func modifiers(src []rune, j int, text string, st *state, c Chars) (string, int,
 			}
 		case 's', '&':
 			var err error
-			text, j, err = substitute(src, j, chain, text, global, wordwise, st)
+			text, j, err = substitute(src, j, chain, text, global, wordwise, st, c)
 			if err != nil {
 				return "", 0, false, err
 			}
@@ -1158,7 +1198,7 @@ func quoteText(text string, quote rune) string {
 //
 // The delimiter is whatever character follows the `s`, which is what makes
 // `:s,a,b,` work when the text is a path.
-func substitute(src []rune, j, chain int, text string, global, wordwise bool, st *state) (string, int, error) {
+func substitute(src []rune, j, chain int, text string, global, wordwise bool, st *state, c Chars) (string, int, error) {
 	if src[j] == '&' {
 		j++
 		if st.old == "" {
@@ -1199,7 +1239,7 @@ func substitute(src []rune, j, chain int, text string, global, wordwise bool, st
 	if old == "" {
 		return "", 0, &NoPreviousSubstitution{Ref: chainRef(src, chain, j)}
 	}
-	repl = replacement(repl, old)
+	repl = replacement(repl, old, c.SubstitutionUnescapesTheReplacement)
 	st.old, st.new = old, repl
 	out, err := apply(text, old, repl, global, wordwise, chainRef(src, chain, j))
 	return out, j, err
@@ -1208,26 +1248,74 @@ func substitute(src []rune, j, chain int, text string, global, wordwise bool, st
 // replacement reads the right side of a substitution: an `&` in it is the text
 // being replaced, and a backslash before one makes it an ordinary `&`.
 //
-// Unanimous, measured 2026-09-16 on bash 5.3.20 from a script and on zsh
-// 5.9.2 and ksh93u+ at a prompt: after `echo one two one`, `:s/o/&&/` is
-// `echoo one two one` in all three, and `:s/o/\&/` puts a lone `&` where the
-// `o` was — which, being an `&`, then runs `ech` in the background in both
-// columns whose output could be read. Any other backslash stays as written.
-func replacement(raw, old string) string {
-	if !strings.Contains(raw, "&") {
+// That much is unanimous, measured 2026-09-16 on bash 5.3.20 from a script
+// and on zsh 5.9.2 and ksh93u+ at a prompt: after `echo one two one`,
+// `:s/o/&&/` is `echoo one two one` in all three, and `:s/o/\&/` puts a lone
+// `&` where the `o` was — which, being an `&`, then runs `ech` in the
+// background in both columns whose output could be read.
+//
+// **The sentence that used to follow it — "any other backslash stays as
+// written" — was true of bash and not of zsh**, and nothing in that
+// measurement had asked: every row of it was an `&` row, so the claim about
+// *other* backslashes was carried rather than observed. zsh consumes them,
+// twice, and the two-column split is
+// [Chars.SubstitutionUnescapesTheReplacement], where the panel is.
+//
+// `unescape` is that answer. It makes this the **second** of the two rounds:
+// the caller has already run [unescapeOnce] over the raw text, and the `&`
+// is resolved here, in this pass, which is what the two `&` rows require.
+func replacement(raw, old string, unescape bool) string {
+	if unescape {
+		raw = unescapeOnce(raw)
+	} else if !strings.Contains(raw, "&") {
 		return raw
 	}
 	var b strings.Builder
 	for i := 0; i < len(raw); i++ {
 		switch {
 		case raw[i] == '\\' && i+1 < len(raw) && raw[i+1] == '&':
+			// Before the general case below, so an escaped `&` stays an
+			// ordinary character rather than becoming the match.
 			b.WriteByte('&')
 			i++
+		case unescape && raw[i] == '\\' && i+1 < len(raw):
+			b.WriteByte(raw[i+1])
+			i++
+		case unescape && raw[i] == '\\':
+			// A lone backslash at the end has nothing to escape and is
+			// dropped, which is what makes an odd count answer as the even
+			// one below it: n=3 and n=2 both come back with none.
 		case raw[i] == '&':
 			b.WriteString(old)
 		default:
 			b.WriteByte(raw[i])
 		}
+	}
+	return b.String()
+}
+
+// unescapeOnce is one round of "a backslash takes the next character
+// literally", and is the **first** of the two that
+// [Chars.SubstitutionUnescapesTheReplacement] describes.
+//
+// It is separate from [replacement] rather than a loop around it because the
+// two rounds are not the same operation: this one knows nothing about `&`,
+// and the second must, or `\\\\&` cannot come back as a backslash and the
+// match.
+func unescapeOnce(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' {
+			if i+1 < len(s) {
+				b.WriteByte(s[i+1])
+				i++
+			}
+			continue
+		}
+		b.WriteByte(s[i])
 	}
 	return b.String()
 }
@@ -1294,7 +1382,11 @@ func quick(line string, hist List, c Chars, st *state) (Result, error) {
 	if !strings.Contains(entry, old) {
 		return Result{}, &SubstFailed{Ref: ":s" + written, Bare: written}
 	}
-	repl = replacement(repl, old)
+	// The quick form `^old^new^` reads its right side by the same rule as
+	// `:s/old/new/`, which is measured rather than assumed: `echo one two
+	// one` then `^o^\\\\X^` comes back with one backslash in zsh 5.9.2 and
+	// four in bash 5.3.20, the same split as the long form.
+	repl = replacement(repl, old, c.SubstitutionUnescapesTheReplacement)
 	st.old, st.new = old, repl
 	out := strings.Replace(entry, old, repl, 1)
 	// Anything after the closing character is a modifier chain on the result.

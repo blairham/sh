@@ -145,6 +145,7 @@ func (r *Runner) HistoryChars() histexpand.Chars {
 	c.LastWordEndsTheDesignator = r.sem().HistoryLastWordEndsTheDesignator == Yes
 	c.FirstWordEndsARange = r.sem().HistoryFirstWordEndsARange == Yes
 	c.WordwiseSubstitution = r.sem().HistoryWordwiseSubstitutionModifier == Yes
+	c.SubstitutionUnescapesTheReplacement = r.sem().HistorySubstitutionUnescapesTheReplacement == Yes
 	switch r.sem().HistoryWords {
 	case HistoryWordsShell:
 		c.Words = histexpand.WordsShell

@@ -6780,10 +6780,12 @@ func (l *Lexer) peekIsFuncParens() bool {
 // crossed. Anything else ends the list with "no": a newline, a `;`, a pipe,
 // and a here-document or a seek, whose operands are not a plain target.
 //
-// The probe starts with inArgument off, and on purpose: with it on, one
-// dialect folds a `(` standing after a word into that word as a glob
-// qualifier list, which is the one reading that would hide the `()` asked
-// about.
+// The probe runs with the scanner's defaults and sets no position flag.
+// Whether it reads its words as arguments does not change its answer on any
+// row measured — including a later name with its parentheses attached, `GA
+// aa() { … }`, which is where a word-folding reading would have shown — so
+// nothing here depends on it, and a mutant that sets inArgument survives for
+// that reason rather than for want of a row.
 func (l *Lexer) peekIsFuncNameListThenParens() bool {
 	probe := NewLexer(l.src[l.off:], l.dialect)
 	for {

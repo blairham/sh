@@ -62,6 +62,11 @@ func TestAnAliasAnywhereInAFunctionNameListIsRefused(t *testing.T) {
 			"a global in the middle of three", "alias -g GA=isafunc\neval 'aa GA bb () { :; }'\nwhence -w isafunc\n",
 			"isafunc: none\n", refused("GA"), 1,
 		},
+		{
+			// A later name with its parentheses attached, no blank before them.
+			"a global before a name with attached ()", "alias -g GA=isafunc\neval 'GA aa() { :; }'\nwhence -w isafunc\n",
+			"isafunc: none\n", refused("GA"), 1,
+		},
 		// The regular kind, first of two — the same gap in the older check.
 		{
 			"a regular alias first of two", "alias ga=isafunc\neval 'ga aa () { :; }'\nwhence -w isafunc\n",

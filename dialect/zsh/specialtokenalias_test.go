@@ -80,3 +80,27 @@ func TestASpecialTokenIsNotAliasedWithoutGlobalAliases(t *testing.T) {
 		t.Error("a leading `&&` parsed with no global aliases, want the grammar's refusal")
 	}
 }
+
+// A value that ends in the token it is named for stops rather than splicing
+// for ever.
+//
+// The guard is the parser's alias **chain** and not a per-command set: a
+// mutant removing the set changed no row, and one removing the chain check
+// changes this one. Measured on zsh 5.9.2, `alias -g '&&=print A; &&'` with a
+// line beginning `&&` is `parse error near '&&'` — the value's own trailing
+// `&&` is left as the token, which is then a parse error exactly as it was
+// before any alias existed.
+func TestASpecialTokenAliasEndingInItselfStops(t *testing.T) {
+	table := func(name string) (string, bool) {
+		v, ok := map[string]string{"&&": "print A; &&"}[name]
+		return v, ok
+	}
+	p := syntax.NewParser("print one\n&& print two\n", zsh.Dialect())
+	p.GlobalAliases = table
+	p.Parse()
+	// It has to *stop*, and it has to stop the way the reference does. A
+	// parse without the refusal would mean the trailing token was swallowed.
+	if p.Err() == nil {
+		t.Error("the self-referential value parsed, want the refusal the reference gives")
+	}
+}

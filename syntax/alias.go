@@ -913,17 +913,20 @@ func (p *Parser) expandSpecialTokenAlias() {
 		return
 	}
 	name := p.tok.Text
-	if p.globalDone[name] || p.aliasChain[name] {
-		// Spent, by the same rule a word is — see [Parser.expandAlias].
+	if p.aliasChain[name] {
+		// Spent by an expansion this token is still inside, which is what
+		// stops `alias -g '&&=print A; &&'` from splicing for ever.
+		//
+		// aliasChain and not p.globalDone: the per-command set was here too,
+		// and a mutant removing the *marking* changed nothing — the chain is
+		// what actually catches the recursion. Two readings of one question,
+		// one of them inert, so the inert one is gone rather than left for a
+		// reader to trust.
 		return
 	}
 	value, ok := p.GlobalAliases(name)
 	if !ok {
 		return
 	}
-	if p.globalDone == nil {
-		p.globalDone = map[string]bool{}
-	}
-	p.globalDone[name] = true
 	p.spliceAlias(name, value)
 }

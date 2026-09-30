@@ -408,6 +408,23 @@ func biAlias(r *Runner, _ context.Context, args []string) int {
 	missing, refused := 0, false
 	for _, a := range args {
 		name, value, isDefinition := strings.Cut(a, "=")
+		if form.defining {
+			// `-L` makes the call a listing and nothing else: an operand
+			// holding `=` is looked up by the part in front of it, the value
+			// is ignored, and nothing is defined (#5226). Measured
+			// 2026-09-30 against zsh 5.9.2, `zsh -f` on a script file:
+			//
+			//	alias -L n=v              1, and `alias` lists nothing after
+			//	alias n=old; alias -L n=v  `alias n=old` at 0, n still old
+			//	alias n=old; alias -L n m=w  `alias n=old`, then 1, m undefined
+			//	aliases[x=y]=z; alias -L x=y  1: it asks for `x`, not `x=y`
+			//
+			// and `-gL`, `-sL` and `-Lr` the same. The controls are what put it
+			// on the letter: plain `alias n=v`, `-r`, `-g` and `+` all define,
+			// in both shells. Only the dialect with `-L` reaches this — the
+			// letter is in its accepted set alone.
+			isDefinition = false
+		}
 		if r.aliasNameIsRefused(name) {
 			// Checked ahead of everything the operand could otherwise do,
 			// which is what the two shells that check both show: nothing is

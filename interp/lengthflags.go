@@ -300,6 +300,30 @@ func trailingRunSeparates(w string, literal []bool, ifs, space string, ifsSet bo
 			break
 		}
 		c := w[i]
+		if c == valueBackslashMark {
+			// A backslash the **value** held stands here as a mark, and this
+			// walk ends rather than testing it. Two measurements pin that,
+			// pulling in opposite directions:
+			//
+			//	IFS=' \t\n\0'; v='\';  ${=v}      one field, not two
+			//	IFS='\';        v='\';  x${v}y     2 [x] [y], not three
+			//
+			// The first is the fault: zsh's default `IFS` holds the mark's own
+			// byte — space, tab, newline and **NUL**, and the mark is NUL — so
+			// a value ending in a backslash looked like a closing
+			// non-whitespace separator and opened an empty field behind it
+			// (#5162). The second says the repair is not to promote the mark to
+			// the backslash it stands for either: with a backslash *in* `IFS`
+			// that reading asks the trailing question where nothing asked it
+			// before, and the measured answer there is still two fields.
+			//
+			// A bare mark can only be one the escaping wrote — a NUL that is
+			// data carries an escape mark in front of it, and a shell value
+			// cannot hold one — which is what makes this a byte comparison. See
+			// valueBackslashMark, and interp/valuebackslashseparator.go for the
+			// mirror fault inside the splitter.
+			break
+		}
 		if strings.IndexByte(ifs, c) < 0 {
 			break
 		}

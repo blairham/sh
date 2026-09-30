@@ -354,7 +354,7 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		// text left behind, because a redefinition adds no name and a
 		// function redefined *outside* an emulation loses the mark — see
 		// sticky.go, where both rows are measured.
-		defer definingSticky(r, e.mode, e.strict)()
+		defer enterSticky(r, stickyWord(e.mode, e.strict, e.options))()
 		st = eval(r, ctx, []string{e.code})
 	}
 	saved.restore(r)

@@ -39,7 +39,10 @@ type Shell struct {
 	// it is the caller's rather than made here.
 	Runner *interp.Runner
 
-	// Dialect is the grammar lines are parsed with.
+	// Dialect is the grammar lines are parsed with where Runner has none.
+	// Once a runner with a dialect is attached it is the *runner's* that is
+	// followed, as it stands at each parse, since the options that move the
+	// grammar move that one. See parseDialect.
 	Dialect syntax.Dialect
 
 	// In, Out and Err are the terminal. In has to be one for the editor to
@@ -2444,10 +2447,30 @@ func (s Shell) dialectOption(name string) bool {
 	return optionOn(s.Runner.DialectOption, name)
 }
 
-// parseDialect is the grammar the line just typed is read with: this
-// session's, plus what the *shell* says about reading a `#` right now.
+// parseDialect is the grammar the line just typed is read with: the
+// runner's, as it stands now, plus what the *shell* says about reading a `#`
+// right now.
 //
-// Built per parse rather than held, because the second half moves while the
+// The runner's rather than this session's copy, because an option that moves
+// the grammar moves the runner's: `setopt aliasfuncdef`, `posixaliases`,
+// `nomultifuncdef` and `noshortloops` each replace Runner.Dialect with a
+// copy that has one field written, and so does the same option given on the
+// command line before the first prompt. The copy this session was handed at
+// startup never saw any of them, so every line typed afterwards was read with
+// the startup grammar — measured 2026-09-30 against zsh 5.9.2 under `-fi`,
+// all four set at the prompt and three on the command line, each doing on the
+// script route what it failed to do here (#5241). This function predates
+// every one of those options reaching the grammar, which is how nothing here
+// followed them. Where there is no runner, or it has no dialect, the
+// session's own is what there is.
+//
+// The comments rule stays this function's own, on top of whichever grammar
+// that is, because it is not the runner's to hold: it is a rule about a line
+// a *person typed*, and `-c`, `eval` and `.` read a `#` as a comment with the
+// option off (#2563). Written into the runner's dialect it would reach those
+// routes too.
+//
+// Built per parse rather than held, because both halves move while the
 // session runs: `setopt interactivecomments` typed at the prompt is a person
 // saying what the next line means. The dialect is a value, so a copy with one
 // field written is the whole of it and nothing here is shared.
@@ -2457,12 +2480,14 @@ func (s Shell) dialectOption(name string) bool {
 // line is exactly where this shows: a line that *is* a `#` has no other
 // token, and one set afterwards would have skipped it already.
 func (s Shell) parseDialect() syntax.Dialect {
-	if s.commentsAreOff() {
-		d := s.Dialect
-		d.Comments = syntax.CommentsOrdinaryText
-		return d
+	d := s.Dialect
+	if s.Runner != nil && s.Runner.Dialect != nil {
+		d = *s.Runner.Dialect
 	}
-	return s.Dialect
+	if s.commentsAreOff() {
+		d.Comments = syntax.CommentsOrdinaryText
+	}
+	return d
 }
 
 // commentsAreOff reports whether the named option is one this shell has and is

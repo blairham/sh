@@ -73,6 +73,34 @@ func TestTypeKindLetterIsNotThisShells(t *testing.T) {
 	}
 }
 
+// **Nor is `-v`** (#5221) — which this shell used to call a letter zsh has
+// and it had not built, refusing `type -v` as missing (`-v is not implemented
+// yet`, at 2) where zsh refuses it as unknown. Measured 2026-09-30 on zsh
+// 5.9.2: `bad option: -v` at 1, in whichever position the letter stands. The
+// `-t` test above is the control — the refusal road was already right, and
+// only the letter was filed on the wrong side of the pair.
+//
+// `whence -v` is whence's own letter and is not touched by this, which the
+// last row says, on a builtin so the answer does not depend on PATH.
+func TestTypeVerboseLetterIsNotThisShells(t *testing.T) {
+	const refused = "zsh:type:1: bad option: -v\n"
+	for _, c := range []struct {
+		src, want string
+		status    int
+	}{
+		{"type -v ls\n", refused, 1},
+		{"type -v\n", refused, 1},
+		{"type -wv ls\n", refused, 1},
+		{"type -vw ls\n", refused, 1},
+		{"whence -v print\n", "print is a shell builtin\n", 0},
+	} {
+		out, st := runZsh(t, t.TempDir(), c.src)
+		if out != c.want || st != c.status {
+			t.Errorf("%q: got %q status %d, want %q at %d", c.src, out, st, c.want, c.status)
+		}
+	}
+}
+
 // And `whence -w` says the same words, because they are two names for one
 // builtin and the table behind them is one table.
 func TestWhenceAndTypeAgreeOnTheWords(t *testing.T) {

@@ -5570,7 +5570,21 @@ func Diagnostics() interp.Diagnostics {
 			// in #4742: `whence -sv` and `whence -Sv` already wrote the two
 			// lines, so `type` refusing them was one spelling of a question
 			// answering where the other did not.
-			"type": "mv",
+			// `v` has left it the other way, the way `-b`, `-c` and `-n` left
+			// typeset's list above: this shell has not got it and neither
+			// has zsh. Naming it here said "zsh has it and we do not", so
+			// `type -v` was refused as missing (`-v is not implemented yet`,
+			// at 2) where zsh refuses it as unknown — `bad option: -v`, at 1
+			// (#5221). Measured 2026-09-30 on zsh 5.9.2, `-f` on a script
+			// file: `type -v ls`, `type -v`, `type -wv` and `type -vw` are
+			// all `bad option: -v` at 1, and `-t`, `-q` and `-z` refuse the
+			// same way here already, which is the control that says the
+			// refusal road was right and only the letter was misfiled.
+			// `whence -v` is unaffected — that is whence's own letter.
+			//
+			// `m` stays, correctly: `type -m ls` writes `ls is /bin/ls` at 0
+			// in zsh, so it is a letter zsh has and this shell has not built.
+			"type": "m",
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.

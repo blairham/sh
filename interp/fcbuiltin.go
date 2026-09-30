@@ -240,6 +240,11 @@ type fcHistory struct {
 	// read once: `-k` counts back from the shell's own event number, which a
 	// script has none of, rather than from the end of the list.
 	ownEvent bool
+	// hasOwnEvent says this shell *has* such a number: it draws a prompt, so
+	// the line `fc` is written on is one of its numbered events. Read only
+	// where ownEvent is set, and it is the half of that axis a script can
+	// never reach. See countedBack.
+	hasOwnEvent bool
 	// newestIsCurrent is Semantics.FcNewestEntryIsTheCurrentLine, read once:
 	// the newest entry is the line this shell is running, so the roads that
 	// run one cannot reach it.
@@ -264,6 +269,10 @@ func (r *Runner) fcHistory(entries []string, rest []string) fcHistory {
 		"`fc` given an event the history list does not hold")
 	h.ownEvent = r.ask(r.sem().FcRelativeEventNeedsTheShellsOwnEventNumber,
 		"`fc` given an event counted back from the current one")
+	// Carried in rather than discovered, for the reason Runner.Interactive
+	// gives at length: whether anybody is watching is the front end's fact.
+	// `cur` above is already this call's own number wherever there is one.
+	h.hasOwnEvent = r.Interactive
 	h.newestIsCurrent = r.ask(r.sem().FcNewestEntryIsTheCurrentLine,
 		"`fc` asked to run the newest entry of the list")
 	// The fourth is asked only where an operand puts the question, which is
@@ -415,11 +424,28 @@ func (h fcHistory) countedBack(spec string) (fcEvent, bool) {
 			return fcEvent{}, false
 		}
 		if num.n != 0 {
+			if h.hasOwnEvent {
+				// There is a current event after all — this shell draws a
+				// prompt, so the line `fc` is written on is numbered — and
+				// counting back from it is what the axis says this answer
+				// does. Which is the same arithmetic as the other answer's,
+				// because `cur` is that number either way; what the axis
+				// decides is whether a shell *has* one, and the floor below
+				// is what having none looks like.
+				return fcEvent{num: h.cur - num.n, found: true}, true
+			}
 			// The floor rather than cur-k: there is no current event to
 			// count back from, so every relative operand lands here, below
 			// the oldest event this shell numbers.
 			return fcEvent{num: fcBeforeTheOldest, found: true}, true
 		}
+		// `-0` reaches here and the bare `0` never does: the return above
+		// turns back every operand written without a minus sign, and `0` is
+		// one of those. So this is the one operand left — a minus sign and a
+		// nought — and it is not a count of none but a *word*, searched for
+		// like any other and found in no entry. Unmoved by the prompt,
+		// which is why it is outside the branch above rather than inside it
+		// with k of nought.
 		return h.search(spec), true
 	}
 	if num.dashed && num.ok {

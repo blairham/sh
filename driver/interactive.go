@@ -448,6 +448,15 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// inside, at a prompt exactly as in a script, and the prompt had no
 		// path to say it at all.
 		Remark: func(rk syntax.Remark) string {
+			// A prompt is always running, so a remark the shell keeps to
+			// itself while it runs is never said here — ksh93's obsolete
+			// backquote and its unseparated operators, which it writes under
+			// `-n` alone. The script route asks the same question of the
+			// same function; see Shell.sayRemarks. Measured, `ksh -i` with a
+			// backquote typed says nothing.
+			if interp.RemarkOnlyWhenNotRunning(rk.Kind) {
+				return ""
+			}
 			pdg := dg.ForPrompt()
 			msg := pdg.Remark(rk)
 			if msg == "" {

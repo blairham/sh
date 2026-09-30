@@ -1650,6 +1650,14 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 		}
 		return nil, "", nil, false
 	}
+	// What the parser had to say about the construct, now that it is whole or
+	// refused for good — here and not above, because an unfinished one is
+	// parsed again with the next line and would say it again each time. Before
+	// the caller reports a failure and before anything runs, which is the
+	// order both references keep: zsh's `defining function based on alias`
+	// comes ahead of its parse error, and bash's here-document warning ahead
+	// of what the command prints (#5239).
+	s.sayRemarks(p.Remarks())
 	pending.Reset()
 	// The construct is whole, so nothing is waiting on the next line.
 	c.open = nil
@@ -1827,12 +1835,17 @@ func (s Shell) endOfInput(pending *strings.Builder) ([]*syntax.File, string, err
 
 // sayRemarks writes what the parser had to say about input it accepted anyway.
 //
-// Only from the end of the input, which is the only place a prompt can reach
-// one: the single remark the panel has is a here-document delimited by the end
-// of the input, and while a session is still running there is always another
-// line, so the parser is waiting for the delimiter rather than remarking on
-// its absence. A call beside accept would be a line no test could tell from a
-// line that was never there.
+// From both places a prompt parses: each construct accept finishes, and what is
+// left over at the end of the input.
+//
+// It was the second alone, on the reasoning that the one remark the panel had
+// was a here-document delimited by the end of the input — which no running
+// session reaches, since there is always another line. That stopped being the
+// whole panel and nothing here moved with it (#5239). Measured 2026-09-30 at
+// the prompt, each a line typed and then the next: zsh 5.9.2 writes `defining
+// function based on alias 'ga'` ahead of its parse error for `ga () { :; }`,
+// and bash 5.3.20 writes its here-document warning when a `$(cat <<EOF`
+// finishes on the line after its body. Both went unsaid here.
 func (s Shell) sayRemarks(rs []syntax.Remark) {
 	if s.Remark == nil {
 		return

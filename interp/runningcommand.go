@@ -69,6 +69,30 @@ type RunningCommand struct {
 	Cmd syntax.Command
 	// Part is which of Cmd's parts is running.
 	Part CommandPart
+	// Expr is the whole **statement**, for the firings that stand for one
+	// rather than for a command: a pipeline of several elements, a negated
+	// pipeline, and an `&&`/`||` list.
+	//
+	// It is a second field rather than a wider type on Cmd because the two
+	// are different nodes in this grammar — a pipeline and a list are
+	// [syntax.Expr] and neither implements [syntax.Command], so there is no
+	// one field that holds all of them without widening to syntax.Node and
+	// losing what a reader can do with it.
+	//
+	// **Set means "prefer this".** A reader wanting the text of what the
+	// shell is about to run takes Expr when it is non-nil and Cmd otherwise;
+	// recording a command clears it, so the two never disagree. The pipeline
+	// and the list record themselves at their own firing and every command
+	// inside them records itself as it is dispatched, which is what makes the
+	// nesting come out right: `{ print c } | cat` reads back whole at the
+	// pipeline's firing and `print c` at the group's own.
+	//
+	// The negated single-element pipeline is the shape that has to be asked
+	// for specially, because nothing dispatches a pipeline of one — the
+	// element is run directly, so the `!` is not in any node the command-level
+	// record can see. Measured on zsh 5.9.2: `! true` reads back `! true` and
+	// not `true`, and `! { print x }` keeps its `!` too.
+	Expr syntax.Expr
 }
 
 // RunningCommand reports the command the shell is running.
@@ -79,9 +103,36 @@ type RunningCommand struct {
 func (r *Runner) RunningCommand() RunningCommand { return r.running }
 
 // recordRunning writes the record, unless a trap body is what is running.
+//
+// The statement field is cleared, which is the half that is easy to miss: a
+// command dispatched inside a pipeline or a list must replace the statement
+// the enclosing firing recorded, or every command inside `a | b` would read
+// back as `a | b`.
 func (r *Runner) recordRunning(c syntax.Command, part CommandPart) {
 	if r.inTrapBody {
 		return
 	}
+	if r.negatedSole != nil && part == WholeCommand && c == r.negatedSole.Cmds[0] {
+		// The command is the sole element of a negated pipeline, so the
+		// statement is the pipeline and the `!` is part of its text. Only
+		// this exact command, compared by identity: a command *inside* the
+		// element's body is a statement of its own and records itself.
+		r.running = RunningCommand{Expr: r.negatedSole}
+		return
+	}
 	r.running = RunningCommand{Cmd: c, Part: part}
+}
+
+// recordRunningStatement writes the record for a firing that stands for a
+// whole statement — see [RunningCommand.Expr].
+//
+// The command field is left nil rather than filled with the statement's first
+// command. A reader asking what the shell is about to run is told the
+// statement, and a reader asking for a command is told there is not one,
+// which is true: `print a && print b` is not a command.
+func (r *Runner) recordRunningStatement(e syntax.Expr) {
+	if r.inTrapBody {
+		return
+	}
+	r.running = RunningCommand{Expr: e}
 }

@@ -3898,6 +3898,18 @@ type Runner struct {
 	// parameter naming it — see RunningCommand.
 	running RunningCommand
 
+	// negatedSole is a negated pipeline of exactly one element, held while
+	// that element is dispatched so that the record names the statement and
+	// not the element.
+	//
+	// A pipeline of one is not run as a pipeline — the element goes straight
+	// through Runner.command — so the `!` belongs to no node the
+	// command-level record can see, and `! true` recorded `true`. Every other
+	// statement shape either records itself at its own firing or is a command
+	// in its own right; this is the one that needs carrying. Measured on zsh
+	// 5.9.2: `! true` reads back `! true`, and `! { print x }` keeps its `!`.
+	negatedSole *syntax.Pipeline
+
 	// programEnd is the line after the script's last, which is where the
 	// shell has got to once the script has run — what one dialect calls the
 	// EXIT trap's line.
@@ -6963,6 +6975,14 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		// what came before it is not carried through.
 		r.status = 0
 	} else if len(p.Cmds) == 1 {
+		if p.Negated {
+			// See Runner.negatedSole. Restored rather than cleared: a
+			// negated pipeline of one can hold a body with another inside
+			// it, and clearing would hand the inner element the outer `!`.
+			saved := r.negatedSole
+			r.negatedSole = p
+			defer func() { r.negatedSole = saved }()
+		}
 		if timing != nil {
 			// One element, run in the current shell like any other single
 			// command; the element's externals bill its slot for as long

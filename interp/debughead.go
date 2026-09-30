@@ -312,10 +312,20 @@ func (r *Runner) debugPipeline(ctx context.Context, p *syntax.Pipeline, armed bo
 		// puts it back: the elements set their own lines as they are
 		// dispatched, and a firing is not a statement having run.
 		//
-		// Nothing is recorded as the running command: the record holds a
-		// syntax.Command and a pipeline is not one, and the only parameter
-		// in the panel that would read it here is a parameter this tree does
-		// not have.
+		// The **pipeline** is recorded as what is running, not one of its
+		// commands: this firing stands for the statement, so the parameter a
+		// dialect shows at it reads the whole pipeline back. Measured on zsh
+		// 5.9.2, `{ print c } | cat` reads back as the group and the `cat`
+		// together, and `! print a | cat` keeps its `!`.
+		//
+		// This used to record nothing, on the grounds that the record holds a
+		// syntax.Command and a pipeline is not one — true of the type, and
+		// the sentence went on to say that the only parameter that would read
+		// it here was one this tree did not have. It has one now
+		// (`ZSH_DEBUG_CMD`), so the reason expired while the code stayed
+		// correct-looking, and the parameter read whatever ran before the
+		// pipeline. See RunningCommand.Expr for the field that holds it.
+		r.recordRunningStatement(p)
 		saved := r.line
 		r.line = r.pipelineLine(p)
 		r.runDebugTrap(ctx)
@@ -498,11 +508,15 @@ func (r *Runner) sublistExpr(ctx context.Context, e syntax.Expr) error {
 	// statement. Put back afterwards, because the first operand's dispatch
 	// sets it for itself.
 	//
-	// Nothing is recorded as the running command: the record holds a
-	// syntax.Command and a list is not one. What the reference's own
-	// `ZSH_DEBUG_CMD` reads back at this firing is the whole list's text,
-	// which is the shape a dialect implementing that parameter would have to
-	// record; nothing in this tree has one.
+	// The **list** is recorded as what is running, for the reason the
+	// pipeline's branch above records the pipeline: this firing stands for
+	// the statement and not for its first operand. `print a && print b` reads
+	// back whole, and each operand then records itself as it is dispatched.
+	//
+	// This too used to record nothing, and said so in a sentence ending
+	// "nothing in this tree has one" — a claim about the tree rather than
+	// about the grammar, and no longer true.
+	r.recordRunningStatement(b)
 	before := len(r.debugHeld)
 	line := r.line
 	r.line = r.lineOf(b.Pos())

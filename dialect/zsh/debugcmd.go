@@ -45,6 +45,23 @@ import (
 // FunctionLayout says — which is why this calls that rather than carrying a
 // second description of the same shell's habits.
 //
+// **A statement that is not a command reads back whole**, and this is the
+// half that was missing: the trap fires once for a pipeline and once for an
+// `&&`/`||` list, and at those firings the parameter is the statement rather
+// than any command in it. Measured 2026-09-29 against the same reference:
+//
+//	written                    reads
+//	print a && print b         print a && print b
+//	print c | cat              print c | cat
+//	! true                     ! true
+//	! print a | cat            ! print a | cat
+//	! { print x }              ! {⏎→print x⏎}
+//	{ print c } | cat          {⏎→print c⏎} | cat
+//
+// Each of those also fires for the commands **inside** it, which record
+// themselves — `{ print c } | cat` writes the pipeline first and `print c`
+// second — so the nesting is not a special case here.
+//
 // It fires for the command that **removes** the trap as well, which is what
 // says the parameter is written before each command rather than after the one
 // that has just run: `trap - DEBUG` is the last value an action ever reads.
@@ -60,10 +77,17 @@ import (
 func registerDebugCommand(r *interp.Runner) {
 	r.SetBeforeDebugTrap(func(rr *interp.Runner) {
 		rc := rr.RunningCommand()
-		if rc.Cmd == nil {
-			return
+		switch {
+		case rc.Expr != nil:
+			// A firing that stands for a whole **statement** rather than for
+			// a command: a pipeline, a negated pipeline, or an `&&`/`||`
+			// list. Preferred over Cmd, which the core leaves nil for these,
+			// and rendered through the expression printer because none of
+			// those three is a syntax.Command.
+			rr.SetVar("ZSH_DEBUG_CMD", syntax.PrintExprWith(rc.Expr, debugCommandLayout()))
+		case rc.Cmd != nil:
+			rr.SetVar("ZSH_DEBUG_CMD", syntax.PrintWith(rc.Cmd, debugCommandLayout()))
 		}
-		rr.SetVar("ZSH_DEBUG_CMD", syntax.PrintWith(rc.Cmd, debugCommandLayout()))
 	})
 }
 

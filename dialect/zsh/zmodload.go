@@ -994,7 +994,35 @@ func zmodloadRestorable(r *interp.Runner, module string, selected []string) ([]s
 	for _, f := range selected {
 		kind, name, ok := strings.Cut(f, ":")
 		if ok && kind == "p" && r.WithdrawnParameterTaken(name) {
-			r.DiagnoseAsTheShellf("Can't add module parameter `%s': parameter already exists\n", name)
+			// **Two sentences for the clash, and which one depends on where
+			// the name lives.** A local says so; anything else is the plain
+			// wording. Measured 2026-09-30 on zsh 5.9.2 from a script file,
+			// reading the first of the two lines:
+			//
+			//	local in the function that loads      local parameter exists
+			//	local in an *outer* function          local parameter exists
+			//	a global at the top level             parameter already exists
+			//	typeset -g inside a function          parameter already exists
+			//
+			// The second row is the one that decides the rule, and the suite
+			// chunk cannot: it has the local and the load in one function, so
+			// the innermost scope and "some live scope" agree there and only
+			// the nested pair tells them apart. It is the wider question, so
+			// ParameterAttributes.Local is the right reader — that field is
+			// documented for exactly this, "a caller's local is that binding
+			// for every frame under it" — rather than a second walk of the
+			// scope stack here.
+			what := "parameter already exists"
+			// The second return is dropped rather than checked: this is
+			// reached only for a name WithdrawnParameterTaken has just found
+			// *set*, so it is always held, and a mutant on the check survived
+			// by construction. A name that were not held answers with the
+			// zero attributes, whose Local is false, which is the wording
+			// this line already starts with.
+			if a, _ := r.ParameterAttributes(name); a.Local {
+				what = "local parameter exists"
+			}
+			r.DiagnoseAsTheShellf("Can't add module parameter `%s': %s\n", name, what)
 			r.DiagnoseAsf(module, "%s: error when adding parameter `%s'\n", module, name)
 			status = 2
 			continue

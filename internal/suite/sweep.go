@@ -141,6 +141,29 @@ type Band struct {
 // share of this column's agreement that is two shells declining the same case.
 func (r Report) StrictOnFailureRate() float64 { return ratio(r.StrictOnFailure, r.Strict) }
 
+// driverVerdicts scores one file's driver verdict into the two counters that
+// read it, and exists as its own function so the difference between them can
+// be asserted without running a shell.
+//
+// They differ on exactly one shape and it is the shape that matters: a file
+// the reference's driver **failed** and the two shells did not agree byte for
+// byte. That file is the whole subject of "how much of this suite cannot be
+// graded here", and it is invisible to StrictOnFailure, whose denominator is
+// the strict files. See [Report.RefDriverFailed] and #5203.
+func driverVerdicts(verdict bool, res Result) (strictOnFailure, refFailed int) {
+	if !verdict || res.RefStatus == 0 {
+		return 0, 0
+	}
+	if res.Strict {
+		return 1, 1
+	}
+	return 0, 1
+}
+
+// RefDriverFailedRate is [Report.RefDriverFailed] over the scored count — the
+// denominator StrictOnFailureRate cannot use.
+func (r Report) RefDriverFailedRate() float64 { return ratio(r.RefDriverFailed, r.Scored) }
+
 // StrictRate and LineRate are the band's two rates.
 func (b Band) StrictRate() float64 { return ratio(b.Strict, b.Scored) }
 func (b Band) LineRate() float64   { return ratio64(b.Common, b.Longest) }
@@ -212,6 +235,22 @@ type Report struct {
 	// agree on a refusal rather than on a result. Zero for a column
 	// whose suite states no verdict of its own; see [Suite.DriverVerdict].
 	StrictOnFailure int
+	// RefDriverFailed is the same question asked of **every** scored file
+	// rather than only the strict ones: how many files the reference's own
+	// driver reported as failed.
+	//
+	// StrictOnFailure cannot answer it and was read as though it could. A
+	// file the reference fails is, by that fact, a file the two shells
+	// rarely agree on byte for byte — so it is not strict, so it is not in
+	// StrictOnFailure's denominator. Asked per file the pair comes back
+	// `0/0` on a file whose reference demonstrably fails, and a vacuous
+	// denominator reads exactly like a clean result (#5203).
+	//
+	// The two numbers answer different questions and both are wanted:
+	// StrictOnFailure is "how much of our agreement is a shared refusal",
+	// this is "how much of the suite the reference cannot run here". The
+	// second is the one a target is built from.
+	RefDriverFailed int
 
 	OracleHung    int
 	DialectHung   int
@@ -486,9 +525,9 @@ func Sweep(ctx context.Context, s Suite, dir, ours, reference string, opts Optio
 			// counted only where the driver actually states a verdict:
 			// elsewhere a non-zero status is the file's own result and
 			// says nothing about whether it ran.
-			if s.DriverVerdict && res.Strict && res.RefStatus != 0 {
-				rep.StrictOnFailure++
-			}
+			so, rf := driverVerdicts(s.DriverVerdict, res)
+			rep.StrictOnFailure += so
+			rep.RefDriverFailed += rf
 		}
 	}
 	rep.MeanFile = 0

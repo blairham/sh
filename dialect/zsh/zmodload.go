@@ -1013,7 +1013,13 @@ func zmodloadRestorable(r *interp.Runner, module string, selected []string) ([]s
 			// for every frame under it" — rather than a second walk of the
 			// scope stack here.
 			what := "parameter already exists"
-			if a, held := r.ParameterAttributes(name); held && a.Local {
+			// The second return is dropped rather than checked: this is
+			// reached only for a name WithdrawnParameterTaken has just found
+			// *set*, so it is always held, and a mutant on the check survived
+			// by construction. A name that were not held answers with the
+			// zero attributes, whose Local is false, which is the wording
+			// this line already starts with.
+			if a, _ := r.ParameterAttributes(name); a.Local {
 				what = "local parameter exists"
 			}
 			r.DiagnoseAsTheShellf("Can't add module parameter `%s': %s\n", name, what)

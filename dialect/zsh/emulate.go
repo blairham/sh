@@ -395,8 +395,17 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 			// mode alone, which is an unknown mode rather than a flag word.
 			continue
 		}
-		if !endOfOptions && len(a) > 1 && a[0] == '+' {
-			// The `+` form. `+o name` is `-o name` the other way round and
+		if !endOfOptions && len(a) > 1 && a[0] == '+' && e.hasMode {
+			// The `+` form, after the mode word only: before it, a word
+			// starting with `+` is not a flag word at all but the mode word
+			// itself (#5247). Measured on zsh 5.9.2, 2026-09-30: `emulate +o
+			// nullglob zsh` is `unknown argument nullglob` — the operand
+			// after the mode `+o`, which names no emulation — and a bare
+			// `emulate +o` is the silence an unknown mode gets. `+R sh`, `+L
+			// sh` and `+c 'print ran' sh` answer the same way, and `-L +L
+			// zsh` in a function is `unknown argument zsh`.
+			//
+			// After the mode: `+o name` is `-o name` the other way round and
 			// `+c` runs its string like `-c`; every other letter is
 			// *accepted and does nothing*, which is measured rather than
 			// assumed and is not what the `-` form does: `emulate zsh +X`
@@ -426,6 +435,18 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 		if !endOfOptions && len(a) > 1 && a[0] == '-' {
 			for _, letter := range a[1:] {
 				sawFlags = true
+				if !e.hasMode && (letter == 'o' || letter == 'c') {
+					// Before the mode word `-o` and `-c` are not letters of
+					// this builtin at all (#5247), and the letter is refused
+					// as it is read, before the word it would take is looked
+					// at. Measured on zsh 5.9.2, 2026-09-30: `emulate -o
+					// nullglob zsh`, `emulate -o`, `emulate -Ro sh` and `-L -o
+					// nullglob sh` are each `bad option: -o` at 1 with the
+					// mode unchanged, and `emulate -c 'print ran' sh` is `bad
+					// option: -c` without running anything.
+					r.Diagnosef("bad option: -%c\n", letter)
+					return e, 1
+				}
 				switch letter {
 				case 'R':
 					// The strict form, and it is not the no-op this said it
@@ -474,13 +495,6 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 		e.mode, e.hasMode = a, true
 	}
 	if !e.hasMode && sawFlags {
-		if len(e.options) > 0 {
-			// An option with no emulation to apply it to. Measured: real
-			// zsh answers `bad option: -o` here rather than complaining
-			// about the count, which is why this is not the line below.
-			r.Diagnosef("bad option: -o\n")
-			return e, 1
-		}
 		// Flags with nothing to emulate, which is what real zsh says before
 		// looking at the flags themselves.
 		r.Diagnosef("not enough arguments\n")

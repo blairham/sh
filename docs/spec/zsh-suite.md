@@ -14,14 +14,15 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, three files have become real results**, each verified
+**Since that commit, four files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
     D09brace         28 of 28          81099b07f   #5154
     V12zparseopts    14 of 14          fd4c74161   #5162
+    V13zformat        6 of 6           2b9d16b91   #5163
 
-So the count the burndown moves is **24** today. The roll-up figures above are left at the commit they were taken at
+So the count the burndown moves is **25** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -36,12 +37,12 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 24 today)
+## Real results (21 at `37355aae5`, 25 today)
 
-These carry a result rather than an agreed refusal. `C02cond`, `D09brace`
-and `V12zparseopts` are the twenty-second, twenty-third and twenty-fourth and
-are listed here rather than below; every other entry is as measured at the
-heading's commit.
+These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
+`V12zparseopts` and `V13zformat` are the twenty-second through
+twenty-fifth and are listed here rather than below; every other entry is as
+measured at the heading's commit.
 
 - `A03quoting`
 - `A04redirect`
@@ -75,6 +76,7 @@ heading's commit.
 - `V05styles`
 
 - `V12zparseopts` (closed #5162, strict 1/1 at `fd4c74161`)
+- `V13zformat` (closed #5163, strict 1/1 at `2b9d16b91`)
 
 - `V08zpty`
 - `W02jobs`
@@ -108,7 +110,7 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (27), ranked by chunks unreached
+## Failing (26), ranked by chunks unreached
 
 **Measured at `fd4c74161`, 2026-09-30**, one file per driver run, except
 `C05debug`, re-measured at `1c7625a42` after #5187 and carrying its own
@@ -198,7 +200,6 @@ front can only move chunks up.
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
 | 2 | 8 | 6 | 23 | `C05debug` | ZSH_DEBUG_CMD in debug traps |
 | 5 | 5 | 0 | 53 | `E02xtrace` | xtrace with and without redirection |
-| 6 | 6 | 0 | 19 | `V13zformat` | basic zformat test |
 | 6 | 7 | 1 | 21 | `W01history` | History line numbering |
 | 9 | 24 | 15 | 14 | `V04features` | Failed to add parameter if local parameter present |
 | 10 | 10 | 0 | 18 | `E03posix` | Parameter hiding and tagging, printing types and values |
@@ -290,8 +291,9 @@ distribution rather than `Test/`, or build the modules these files load. Until
 one of those happens, `ref` is the honest denominator and the file's own chunk
 count is not.
 
-**Only the failing files were swept for this**, twenty-seven of them now that
-`A09zwc` is a decline and two more have closed. The strict files
+**Only the failing files were swept for this**, the twenty-seven failing at
+that commit — a count of the sweep and not of the board, which has moved
+since and will again. The strict files
 and the thirteen refusal-agreements have not been checked the same way, so
 the count is nine *of those* and the true figure across all
 sixty-five is unmeasured. Stated rather than extrapolated, because a number
@@ -315,8 +317,9 @@ measured run and never revisited. It is wrong in both directions now:
   whether they are reachable at all is a separate question from whether their
   front is fixable.
 
-So the honest statement of the target is **24 of 50 reachable today** — 21 at
-the figures' commit plus `C02cond`, `D09brace` and `V12zparseopts` — where 50
+So the honest statement of the target is **25 of 50 reachable today** — 21 at
+the figures' commit plus `C02cond`, `D09brace`, `V12zparseopts` and
+`V13zformat` — where 50
 is 65 less the three declines and
 less the twelve refusal-agreements, with the twelve re-examined individually
 rather than assumed unreachable since some may become reachable if the module

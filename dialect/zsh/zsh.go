@@ -1191,6 +1191,9 @@ func Semantics() interp.Semantics {
 	// `/my/path/for/testing` is `/my` where bash leaves `/my/path/for2`.
 	// See Semantics.HistoryHeadAndTailTakeACount.
 	s.HistoryHeadAndTailTakeACount = interp.Yes
+	// And `:P` makes the word an absolute, resolved path, which bash has no
+	// modifier for. See Semantics.HistoryAbsolutePathModifier.
+	s.HistoryAbsolutePathModifier = interp.Yes
 	// A quote or a backquote against the event character is ordinary text
 	// here and part of the event's name in bash and ksh93, a second event
 	// character closes the name it is in, and `!{…}` is the braced form

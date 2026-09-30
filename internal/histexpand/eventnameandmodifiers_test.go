@@ -424,3 +424,41 @@ func TestACountedTailPastTheTextRefuses(t *testing.T) {
 		t.Errorf("the bare reading became %q, want the digits left as text", got)
 	}
 }
+
+// `:P` is the dialect's to have, and a caller with no filesystem gets the
+// word back rather than a refusal.
+//
+// Both halves are contract rather than incident. The gate is what keeps the
+// letter unrecognized in the dialects without it, and the nil resolver is
+// what a caller expanding history away from a session should get: the shell
+// that has this modifier never refuses it, so a diagnostic it does not print
+// would be worse than a no-op.
+func TestTheAbsolutePathModifierIsTheDialectsAndItsResolvers(t *testing.T) {
+	h := seeded("echo link/nope")
+	without := Chars{Event: '!', Quick: '^', Comment: '#', Words: WordsShell}
+	with := without
+	with.AbsolutePathModifier = true
+
+	// No modifier at all where the dialect has none.
+	var bad *BadModifier
+	if err := refused(t, "echo !1:1:P", h, without); !errors.As(err, &bad) {
+		t.Errorf("without the modifier: %v, want an unrecognized modifier", err)
+	} else if bad.Mod != "P" {
+		t.Errorf("the refusal names %q, want P", bad.Mod)
+	}
+
+	// With the modifier and **no resolver**, the word comes back untouched.
+	// A mutant that refused here survived every other row in the tree.
+	if got := expanded(t, "echo !1:1:P", h, with); got != "echo link/nope" {
+		t.Errorf("with no resolver the word became %q, want it untouched", got)
+	}
+
+	// And with one, the modifier is what the resolver says — which is also
+	// what says the resolver is consulted at all rather than the text being
+	// cleaned here.
+	list := seeded("echo link/nope")
+	list.AbsolutePath = func(string) string { return "/resolved/by/the/host" }
+	if got := expanded(t, "echo !1:1:P", list, with); got != "echo /resolved/by/the/host" {
+		t.Errorf("with a resolver the word became %q", got)
+	}
+}

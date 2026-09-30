@@ -14,7 +14,7 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, six files have become real results**, each verified
+**Since that commit, seven files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
@@ -23,8 +23,9 @@ byte-identical in output and status under the reference's own driver:
     V13zformat        6 of 6           2b9d16b91   #5163
     C05debug          8 of 8           0a2ce6566   #5149
     W01history        7 of 7           1e46d356f   #5165
+    A02alias         18 of 18          942a026ef   #5237
 
-So the count the burndown moves is **27** today. The roll-up figures above are left at the commit they were taken at
+So the count the burndown moves is **28** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -39,11 +40,11 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 27 today)
+## Real results (21 at `37355aae5`, 28 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
-`V12zparseopts`, `V13zformat`, `C05debug` and `W01history` are the
-twenty-second through twenty-seventh and are listed here rather than below; every other entry is as
+`V12zparseopts`, `V13zformat`, `C05debug`, `W01history` and `A02alias` are
+the twenty-second through twenty-eighth and are listed here rather than below; every other entry is as
 measured at the heading's commit.
 
 - `A03quoting`
@@ -114,7 +115,7 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (24), ranked by chunks unreached
+## Failing (23), ranked by chunks unreached
 
 **Measured at `d3a708b3d`, 2026-09-30**, one file per driver run — every row
 still in the table. The `ref` column of seven rows was corrected afterwards at
@@ -303,7 +304,6 @@ front can only move chunks up.
 | 12 | 12 | 0 | 2 | `V07pcre` | nothing runs; the reference's own first chunk is `Testing PCRE multibyte with locale en_US.UTF-8` |
 | 12 | 12 | 0 | 20 | `X04zlehighlight` | region highlight - standout overlapping on other region_highlight entry |
 | 13 | 20 | 7 | 21 | `B07emulate` | Sticky emulation not triggered if sticky emulation unchanged |
-| 14 | 18 | 4 | 9 | `A02alias` | POSIX_ALIASES option |
 | 14 | 39 | 25 | 21 | `A05execution` | Bug regression: piping a shell construct to an external process may hang |
 | 14 | 16 | 2 | 15 | `D01prompt` | `` `%_' `` prompt escape |
 | 15 | 16 | 1 | 10 | `V14system` | zsystem flock invalid time arguments |
@@ -436,9 +436,9 @@ measured run and never revisited. It is wrong in both directions now:
   whether they are reachable at all is a separate question from whether their
   front is fixable.
 
-So the honest statement of the target is **27 of 50 reachable today** — 21 at
+So the honest statement of the target is **28 of 50 reachable today** — 21 at
 the figures' commit plus `C02cond`, `D09brace`, `V12zparseopts`, `V13zformat`,
-`C05debug` and `W01history` — where 50
+`C05debug`, `W01history` and `A02alias` — where 50
 is 65 less the three declines and
 less the twelve refusal-agreements, with the twelve re-examined individually
 rather than assumed unreachable since some may become reachable if the module

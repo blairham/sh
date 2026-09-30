@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -130,5 +131,61 @@ func TestTheAliasLetterRefusals(t *testing.T) {
 		if out != c.want || st != c.status {
 			t.Errorf("%s: out %q status %d, want %q at %d", c.src, out, st, c.want, c.status)
 		}
+	}
+}
+
+// **An alias whose name holds `=` has no line under `-L`** (#5222): the entry
+// is skipped and a warning goes to standard error instead.
+//
+// `aliases[x=y]=z` plants such a name through the tied parameter, the one
+// route that can. `alias NAME=VALUE` splits at the first `=`, so a line for it
+// would define something else if it were run — which is why only the listing
+// that claims to write a command back refuses it. Measured 2026-09-30 against
+// zsh 5.9.2; the table is on Diagnostics.AliasListingInvalidName.
+//
+// **Every row is one stream.** On a single pipe the reference writes all of an
+// `alias` call's warnings before any of its lines — its listing is held until
+// the builtin returns while standard error goes out at once, which a bad `-m`
+// pattern shows just as well with no `-L` involved. That ordering is its own
+// question and not this one's, so no row here depends on how the two streams
+// interleave: the lines are read with standard error dropped, and the
+// warnings with standard output dropped.
+func TestAnAliasNameHoldingAnEqualsHasNoDefiningLine(t *testing.T) {
+	const warn = "invalid alias '%s' encountered while printing aliases\n"
+	three := `aliases[x=y]=z; aliases[a=b]=w; aliases[ok]=v; `
+	for _, c := range []struct {
+		name, src, want string
+	}{
+		{"the warning, alone", `aliases[x=y]=z; alias -L`, "zsh:1: " + fmt.Sprintf(warn, "x=y")},
+		// The valid entry still gets its line, and the invalid ones none.
+		{"the lines, with the warnings dropped", three + `alias -L 2>/dev/null`, "alias ok=v\n"},
+		// One warning per skipped entry, in name order.
+		{
+			"the warnings, with the lines dropped", three + `alias -L >/dev/null`,
+			"zsh:1: " + fmt.Sprintf(warn, "a=b") + "zsh:1: " + fmt.Sprintf(warn, "x=y"),
+		},
+		// The *defining form* decides and not the road to it: `-m` reaches it
+		// too, and so do the other two kinds.
+		{"-mL", `aliases[x=y]=z; aliases[ok]=v; alias -mL 'x*'`, "zsh:1: " + fmt.Sprintf(warn, "x=y")},
+		{"-sL", `saliases[x=y]=z; alias -sL`, "zsh:1: " + fmt.Sprintf(warn, "x=y")},
+		{"-gL", `galiases[x=y]=z; alias -gL`, "zsh:1: " + fmt.Sprintf(warn, "x=y")},
+		// Located as the caller and not as the builtin — `f:` inside a
+		// function, where `alias`'s own option errors carry `alias:`.
+		{"inside a function", `aliases[x=y]=z; f() { alias -L; }; f`, "f: " + fmt.Sprintf(warn, "x=y")},
+		// A warning, not a failure: the listing goes on and says 0.
+		{"the status", `aliases[x=y]=z; alias -L >/dev/null 2>&1; echo st=$?`, "st=0\n"},
+		// The controls. A listing that is not a command writes the entry out
+		// without a word, which is what makes the rule about spelling rather
+		// than about the entry being illegitimate.
+		{"plain alias writes it out", `aliases[x=y]=z; alias`, "'x=y'=z\n"},
+		// And a name that needs no `=` is listed under `-L` like any other.
+		{"a slash is only a character", `aliases[a/b]=z; alias -L`, "alias a/b=z\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := runZsh(t, t.TempDir(), c.src)
+			if out != c.want || st != 0 {
+				t.Errorf("%s: out %q status %d, want %q at 0", c.src, out, st, c.want)
+			}
+		})
 	}
 }

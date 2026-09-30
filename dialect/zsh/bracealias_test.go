@@ -48,6 +48,22 @@ import (
 //
 // A real blank rather than a bare word boundary is what the `echo \` row
 // decides: a boundary would leave the backslash with nothing to escape.
+//
+// **This is narrower than the dialect's own seam rule, and knowingly so.**
+// The reference reads the same blank at an ordinary word alias's seam, where
+// the text after it begins with an operator or a newline, and this shell does
+// not yet. Measured the same day with `alias q='echo "'`:
+//
+//	q;print A"          ;print A        reference     ;print A    here
+//	q&&print A"         &&print A                    &&print A
+//	q|print A"          |print A                     |print A
+//	q x"                 x                            x          agrees
+//	q  x"                 x                            x          agrees
+//
+// So the rows here are the seam this change closes, not the whole of the
+// rule. Widening it to every token is not the one-line change it resembles:
+// it doubles the blank on the here-document route and on a nested body's,
+// which four rows in the syntax package already hold.
 func TestAnAliasNamedForTheOpenBraceIsSeparatedFromWhatTouchesIt(t *testing.T) {
 	t.Parallel()
 	d := zsh.Dialect()
@@ -151,6 +167,16 @@ func TestAnAliasNamedForTheOpenBraceIsSeparatedFromWhatTouchesIt(t *testing.T) {
 			"an ordinary word alias", `q x`,
 			[]string{"q", "echo", "x", "print XX"},
 			`echo x`,
+		},
+		{
+			// A value holding a here-document operator supplies this same
+			// blank on its own route, so it is not added twice: the body
+			// line is `EOF x` with one blank, as the reference has it, and
+			// `EOF  x` was this change's own regression before the route
+			// was folded in.
+			"a value holding a here-document", `{x` + "\nprint DONE\n",
+			[]string{"{", "cat <<EOF\nBODY\nEOF"},
+			"cat <<EOF\nBODY\nEOF x\nprint DONE\nEOF\n",
 		},
 		{
 			// And the brace with no alias at all is still the reserved word.

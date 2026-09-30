@@ -852,7 +852,55 @@ two columns to **disagree somewhere you already know they disagree.** A row
 with a known-failing chunk is a positive control, and an apparatus that
 reports it passing has told you about itself rather than about the shell.
 
-## 19. Where these came from
+## 19. The apparatus's concurrency is an input, and a sweep can disagree with itself
+
+§17 says the environment is an input. **So is how many copies of the
+instrument are running**, and this one is worse than a deficient environment
+because it does not stay wrong: it moves.
+
+Re-measuring the twenty-four `zsh-suite` rows four files at a time gave the
+**reference** — an installed binary that had not changed — `B02typeset` at
+**62** chunks and `E01options` at **50**. One file at a time the same command
+gives **80** and **94**, and 94 is the figure the page already recorded. The
+files interfere; nothing in the output says so.
+
+What makes it dangerous is the direction. A concurrent sweep reads as a
+**regression**, on the column you are least likely to question, because the
+reference is supposed to be the fixed side of the comparison. §18's echo is
+the mirror of it — an agreement you have not falsified — and this is a
+*disagreement* you have not falsified.
+
+The check is one serial re-run of the rows that moved, and the tell is that
+the reference moved at all. **If the side that cannot have changed has
+changed, the apparatus changed.**
+
+## 20. A path the suite resolves relative to the cwd
+
+Third apparatus fault from the same re-measurement, and it is the §5 shape —
+a probe the subject defeats — arriving through a working directory.
+
+`zsh`'s own driver reaches its shell as `$ZTST_testdir/../Src/zsh`, and
+`ZTST_testdir` comes out as the **cwd**. Run the driver from a scratch
+directory and that path misses, so the *reference* fails its own file:
+`D04parameter`'s reference read **11** chunks instead of 246, and six failing
+rows came back at **0 unreached**.
+
+**Zero unreached reads as parity.** A row where this shell reaches everything
+the reference does is exactly what a closed row looks like, so the broken
+apparatus produced six of the most encouraging numbers on the page. The
+reconciliation was §3's: the total had improved and no single row could
+explain it.
+
+Two properties of the fault worth keeping, because both make it quiet:
+
+- **It breaks the reference, not the shell under test.** Anyone reading the
+  column for "how are we doing" sees the gap close.
+- **It is invisible in a single row.** One file measured this way looks fine
+  if that file happens not to reach for the path — thirteen of the
+  twenty-four did not, and agreed exactly with the recorded numbers. Partial
+  agreement on a large table is not evidence the method is right.
+
+## 21. Where these came from
 
 Each rule above cost at least one wrong conclusion that was acted on. They
 were collected during the `zsh-suite` burndown between September 2026 and the

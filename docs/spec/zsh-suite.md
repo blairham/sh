@@ -116,23 +116,95 @@ can reach 0 differing lines without ever carrying a result.
 
 ## Failing (24), ranked by chunks unreached
 
-**Measured at `fd4c74161`, 2026-09-30**, one file per driver run — every row
+**Measured at `d3a708b3d`, 2026-09-30**, one file per driver run — every row
 still in the table. A file that has closed since leaves the table for the
 real-results list above and carries **its own commit** there, rather than
 being updated in place under this heading's: a figure whose provenance is two
 runs is the staleness §10 warns about.
 
-Every row was **re-measured** rather than carried forward, and for the second
-time in a row **no front had moved** across the merges in between. That
-negative result is what makes the table worth reading: a figure carried
-forward is indistinguishable from a figure that was checked, and only one of
-them can be relied on. The cost is one driver run per file.
+Every row was **re-measured** rather than carried forward. Twice running, no
+front had moved; this time **four did** — `V04features` by two chunks (#5158's
+work), `E02xtrace` by two, `A05execution` and `B02typeset` by one each. The
+last three moved without anybody aiming at them, which is the case for
+re-measuring rather than carrying forward: a figure carried forward is
+indistinguishable from a figure that was checked, and only one of them can be
+relied on. The cost is one driver run per file.
+
+The `lines` column was **not** re-measured this round and still carries
+`fd4c74161`, except `V04features` (8, down from 14). It is named here rather
+than left to be inferred, because that is the whole of what §10 asks: a
+figure's provenance is either written down or it is a guess.
 
 `ref` is how many chunks the **reference's own driver** gets through
 successfully in this layout; `ours` is how many this shell does. `unreached`
 is the difference, and it is the sort key. `lines` is the differing-line
 count, kept as a column because the burndown quotes it — it is **not** the
 order.
+
+### How to reproduce this table
+
+Nothing in the tree computes these two columns; they are a driver run per file
+per shell, read by hand. Before this section the method was not written down
+anywhere, which made the table exactly the thing line 29 of this page calls
+out — a number nobody can reproduce. It is:
+
+```
+cd build/suite/zsh-zsh-5.9.2/Test
+ln -sf <the shell being counted> ../Src/zsh
+ZTST_verbose=2 ZTST_exe=<same shell> <same shell> +Z -f ./ztst.zsh ./<file>.ztst
+```
+
+and the count is the `Running test` lines, **less one if the run printed
+`: test failed.`** — the chunk it stopped on was attempted, not gotten
+through. Three ways to get it wrong, each of which produces a plausible
+number rather than an error:
+
+- **Run it from anywhere but `Test/`.** `ZTST_testdir` comes out as the cwd,
+  so the suite's own `$ZTST_testdir/../Src/zsh` misses and the *reference*
+  fails its own file. `D04parameter`'s ref reads **11** instead of 246 that
+  way, and six of the failing rows come back at **0 unreached**, which reads
+  as nothing to do rather than as a dead instrument.
+- **Run the files in parallel.** They interfere. At four at a time the
+  reference disagrees with itself: `B02typeset` at **62** and `E01options` at
+  **50**, against 80 and 94 run one at a time. A regression and a concurrent
+  sweep are indistinguishable in this column, and the sweep is the faster
+  thing to suspect.
+- **Count attempted instead of completed.** Off by exactly one on every row
+  that fails, which is every row in the table, and the two numbers are both
+  plausible.
+
+`ZTST_verbose=2` is needed for the `Running test` lines and does not change
+how far either shell gets (checked at 0 and 2 on four files). The harness
+itself never sets it.
+
+### The nine ungradeable rows are a layout artifact, and it is exactly twenty chunks
+
+Run the reference the way the block above says and `ref` comes out **higher**
+on eight files than the table records — and the excess is, row for row, the
+`ungradeable` column of the nine-file table below:
+
+| file | table's `ref` | reference alone | delta | `ungradeable` |
+|---|---:|---:|---:|---:|
+| `E03posix` | 10 | 18 | +8 | 8 |
+| `D07multibyte` | 51 | 53 | +2 | 2 |
+| `V14system` | 14 | 16 | +2 | 2 |
+| `V09datetime` | 14 | 16 | +2 | 2 |
+| `D04parameter` | 244 | 246 | +2 | 2 |
+| `D06subscript` | 36 | 37 | +1 | 1 |
+| `D01prompt` | 15 | 16 | +1 | 1 |
+| `E02xtrace` | 5 | 6 | +1 | 1 |
+
+Nine for nine including `V06parameter`, which is 0 either way, and **zero
+delta on the other fifteen files.** So the twenty chunks below are not
+something the reference cannot do — they are something it cannot do *here*,
+and giving it a resolvable module path recovers all twenty. Locale was the
+obvious suspect and is not it: the same runs at `LC_ALL=C` and with `LANG`,
+`LC_ALL` and `LC_CTYPE` unset reach identical counts.
+
+**This does not shrink the gap, it moves it.** Those twenty chunks currently
+sit outside the denominator; graded, they become chunks this shell is measured
+against and mostly does not reach. That is better information and a larger
+number, and it is #5203.
 
 ### Why not differing lines
 
@@ -141,7 +213,7 @@ wrong in both directions. The two columns are close to uncorrelated:
 
 - `C01arith` is **6** lines and **55** chunks unreached — second-cheapest by
   one measure and among the most expensive by the other.
-- `E02xtrace` is **53** lines and **5** chunks unreached: the most expensive
+- `E02xtrace` is **53** lines and **3** chunks unreached: the most expensive
   row in the old table and one of the cheapest here.
 - `A09zwc` was **15** lines and **1** chunk unreached — the sharpest of the
   four, and it is no longer in the table at all: measured, it turned out to
@@ -215,8 +287,8 @@ front can only move chunks up.
 |---:|---:|---:|---:|---|---|
 | — | 0 | 1 | 51 | `V06parameter` | *excluded — see below* |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
-| 5 | 5 | 0 | 53 | `E02xtrace` | xtrace with and without redirection |
-| 9 | 24 | 15 | 14 | `V04features` | Failed to add parameter if local parameter present |
+| 3 | 5 | 2 | 53 | `E02xtrace` | xtrace with and without redirection |
+| 7 | 24 | 17 | 8 | `V04features` | Successfully added feature parameter that previously failed |
 | 10 | 10 | 0 | 18 | `E03posix` | Parameter hiding and tagging, printing types and values |
 | 12 | 12 | 0 | 2 | `V07pcre` | nothing runs; the reference's own first chunk is `Testing PCRE multibyte with locale en_US.UTF-8` |
 | 12 | 12 | 0 | 20 | `X04zlehighlight` | region highlight - standout overlapping on other region_highlight entry |
@@ -225,12 +297,12 @@ front can only move chunks up.
 | 13 | 14 | 1 | 10 | `V14system` | zsystem flock invalid time arguments |
 | 14 | 18 | 4 | 9 | `A02alias` | POSIX_ALIASES option |
 | 14 | 14 | 0 | 11 | `V09datetime` | basic format specifiers |
-| 15 | 39 | 24 | 21 | `A05execution` | Bug regression: piping a shell construct to an external process may hang |
+| 14 | 39 | 25 | 21 | `A05execution` | Bug regression: piping a shell construct to an external process may hang |
 | 35 | 36 | 1 | 10 | `D06subscript` | Scalar pattern subscripts with wildcards |
 | 38 | 66 | 28 | 9 | `B03print` | out of range argument specifier |
 | 41 | 52 | 11 | 12 | `C04funcdef` | Command not found handler, success |
 | 48 | 51 | 3 | 9 | `D07multibyte` | Subscript searching with multibyte characters |
-| 52 | 79 | 27 | 18 | `B02typeset` | Left justification of floating point |
+| 51 | 79 | 28 | 18 | `B02typeset` | Left justification of floating point |
 | 55 | 73 | 18 | 6 | `C01arith` | error using unset variable as index |
 | 61 | 61 | 0 | 6 | `V02zregexparse` | empty |
 | 74 | 75 | 1 | 15 | `C03traps` | Nested TRAPEXIT |
@@ -247,8 +319,8 @@ have its own section below — read it before treating `ref` as a target.
 
 **`V10private`'s last chunk is an entire other file.** It re-runs all 79
 chunks of `B02typeset.ztst` under `zsh/param/private`, and this shell is at
-27 of 79 there. So its `unreached` of **2** is the most misleading number in
-the table: one of those two chunks is `B02typeset`'s whole 52-chunk gap plus
+28 of 79 there. So its `unreached` of **2** is the most misleading number in
+the table: one of those two chunks is `B02typeset`'s whole 51-chunk gap plus
 whatever the private module adds. Any file whose chunk re-runs another file
 needs that said beside it, because the count cannot show it.
 
@@ -262,7 +334,13 @@ and is no longer a row at all — see the declines above and #5141.
 `V06parameter`'s `dlopen` failure is not a special case. It is the visible end
 of a class, and the class is larger than one file: **among the twenty-seven
 failing files, nine have a reference that fails its own chunks in this
-layout.** Measured at `fd4c74161`, the same runs the table above comes from.
+layout.** Measured at `fd4c74161`; the table above has since been re-measured
+at `d3a708b3d` and its `ref` column did not move, so these twenty stand.
+
+**They are the layout's twenty and not the reference's** — run outside it the
+reference passes all twenty, row for row. That is #5203 and the evidence is in
+the section of that name above; read it before treating any of these nine as
+a limit on what zsh does.
 
 | file | reference passes | of | ungradeable |
 |---|---:|---:|---:|

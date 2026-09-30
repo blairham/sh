@@ -164,10 +164,10 @@ func zshGatedParameterModule(name string) string {
 // is written below is narrower than that and is not a second writer of it: it
 // is the same answer for the names that road cannot reach, asked at the only
 // moment they exist.
-func installGatedParameters(r *interp.Runner, module string) (dropped []string) {
+func installGatedParameters(r *interp.Runner, module string) {
 	install := zshGatedParameterInstallers[module]
 	if install == nil {
-		return nil
+		return
 	}
 	// Which of this module's names the **script** already owns, read before
 	// the installer runs because the installer is what would hide them.
@@ -213,12 +213,6 @@ func installGatedParameters(r *interp.Runner, module string) (dropped []string) 
 		// than produced.
 		r.DropProducedParameter(name)
 	}
-	// Reported so the caller does not refer to a name this just let go: a
-	// reference materializes it again, and the load would end up owning the
-	// name after all — one statement later than before. Measured, the
-	// reference has the name **unset** once the function holding the local
-	// returns.
-	return taken
 }
 
 // gatedParametersTheModuleOwns is the names an unload takes away and a load

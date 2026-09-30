@@ -6,7 +6,6 @@ package zsh
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 
@@ -2009,17 +2008,11 @@ func zmodloadRefersToItsParameters(r *interp.Runner, module string) {
 	// parameter brings its names into being here rather than at startup.
 	// Ahead of the arrival below because a name that is not registered has
 	// nothing to arrive — see gatedparameters.go (#4922).
-	// The names the install let go because the script owns them are not
-	// referred to: a reference materializes the parameter again, which would
-	// hand the load the name one statement after it declined to take it. See
-	// installGatedParameters.
-	dropped := installGatedParameters(r, module)
+	installGatedParameters(r, module)
 	for _, feature := range zmodloadFeatures[module] {
-		name, ok := strings.CutPrefix(feature, "p:")
-		if !ok || slices.Contains(dropped, name) {
-			continue
+		if name, ok := strings.CutPrefix(feature, "p:"); ok {
+			r.ReferToParameter(name)
 		}
-		r.ReferToParameter(name)
 	}
 }
 

@@ -2989,6 +2989,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 		return Token{
 			Kind: TokWord, Pos: start, End: l.pos(),
 			Text: l.src[start.Offset:l.off], Spans: spans,
+			endedByRule: true,
 		}
 	}
 

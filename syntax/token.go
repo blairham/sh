@@ -465,6 +465,19 @@ type Token struct {
 	// out of an alias value that also held the body, already read from that
 	// value. See [Parser.readAliasHeredocs].
 	aliasBody *Redirect
+
+	// endedByRule says the lexer finished this token by a rule of its own
+	// rather than because the next character ended a word. The one token
+	// that is: `{` at command position, which is a word by itself whatever
+	// follows it. See [Lexer.openBraceIsAWordOfItsOwn].
+	//
+	// It matters to alias substitution and nowhere else. Every other word
+	// stops at a character that could not have continued it, so the text
+	// after it already begins with a blank or an operator and a value put
+	// in its place stands apart from what follows. This one stops with a
+	// word character still to come, so the two would touch. See
+	// [Parser.spliceAlias].
+	endedByRule bool
 }
 
 // IsQuoted reports whether any part of the word was quoted. A word can be

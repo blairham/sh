@@ -372,6 +372,41 @@ func (p *Parser) spliceAlias(name, value string) {
 		chain[n] = true
 	}
 	chain[name] = true
+	// The value as the alias holds it, kept because the blank below is not
+	// part of it: whether the *next* word is itself expanded is a question
+	// about what was written, and an inserted separator is not written.
+	written := value
+	// A token the lexer ended by a rule of its own rather than at a word
+	// boundary leaves the text after it touching the value. `{` at command
+	// position is the one such token — a word by itself whatever follows it,
+	// see [Lexer.openBraceIsAWordOfItsOwn] — so with `alias \{=echo` the
+	// value and the `end` of `{end` would read as the single word `echoend`.
+	// A blank separates them, and none is added where one already stands.
+	//
+	// Measured 2026-09-30 against zsh 5.9.2, `-fis` with the line fed on
+	// stdin, `alias \{=echo` unless the row says otherwise:
+	//
+	//	{end                               end             one blank goes in
+	//	{x                                 x
+	//	{"x"          (value `print A`)    A x             before a quote too
+	//	{$HOME        (value `print A`)    A /Users/...     and a `$`
+	//	{}x                                }x              and a `}` in a word
+	//	{ x"          (value `echo "`)      x              and none where a
+	//	{  x"         (value `echo "`)      x               blank stands: the
+	//	                                                     count is kept
+	//	{x            (value `echo \`)      x              a real blank, which
+	//	                                                     the `\` escapes
+	//	alias x='print XX'; {x             x               not `XX`: the blank
+	//	                                                     is not the value's
+	//
+	// The last row is why `written` is kept above: a value that *ends* in a
+	// blank does expand the next word — `alias \{='echo '` with that same
+	// `x` alias runs `echo print XX` — and this separator does not.
+	if p.tok.endedByRule {
+		if rest := p.tokTail + p.lex.src[p.lex.off:]; rest != "" && !beginsInBlank(rest) {
+			value += " "
+		}
+	}
 	at := p.tok.Pos
 	end := p.tok.End
 	// A comment the value opens and does not end reaches past the alias
@@ -467,7 +502,7 @@ func (p *Parser) spliceAlias(name, value string) {
 	}
 	// A value that is empty or all blanks leaves nothing behind, and the
 	// command becomes whatever followed it.
-	p.aliasNextWord = endsInBlank(value)
+	p.aliasNextWord = endsInBlank(written)
 	if len(toks) == 0 {
 		p.next()
 		return
@@ -880,6 +915,18 @@ func endsInLoneBackslash(s string) bool {
 
 // endsInBlank reports whether an alias value ends in a space or a tab, which
 // is what makes the next word eligible for expansion in turn.
+// beginsInBlank reports whether the text starts with a blank, and so already
+// separates whatever stands before it from its first word. The counterpart of
+// endsInBlank, and read by [Parser.spliceAlias] for the one token that ends
+// with a word character still to come.
+func beginsInBlank(s string) bool {
+	if s == "" {
+		return false
+	}
+	c := s[0]
+	return c == ' ' || c == '\t'
+}
+
 func endsInBlank(s string) bool {
 	if s == "" {
 		return false

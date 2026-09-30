@@ -329,6 +329,10 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return 0
 	}
 	e.mode = emulationForWord(r, e.mode)
+	if e.list {
+		listEmulation(r, e.mode, e.strict, e.local)
+		return 0
+	}
 	if !e.hasCode {
 		applyEmulation(r, e.mode, e.strict)
 		if e.local {
@@ -376,6 +380,55 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	}
 	saved.restore(r)
 	return st
+}
+
+// listEmulation is `emulate -l`: it prints what the emulation would set rather
+// than setting it (#5249). Measured on zsh 5.9.2, 2026-09-30:
+//
+//   - One name a line, sorted, each as **the value the emulation sets**, with
+//     `no` in front where that is off. The shell's own state does not show:
+//     with `setopt nullglob`, `emulate -l zsh` still prints `nonullglob`.
+//   - The names are the ones the emulation resets — the 81 bare, and under
+//     `-R` the 95 more and `exec`, 177 lines. `exec` is the one `-R` lists and
+//     that emulateoptions.go keeps among the nine no emulation touches, since
+//     no probe from inside the shell can see it moved.
+//   - `-L` lists `localoptions`, `localpatterns` and `localtraps` on, which is
+//     what `emulate -L` turns on after the emulation.
+//
+// And it **switches the mode word and nothing else**: after `emulate csh;
+// emulate -l sh`, `emulate` prints `sh`, while no option has moved —
+// `shwordsplit` still off, a `nullglob` set before it still set — and neither
+// has `cd` with no HOME or a value-less `typeset`. What does move is what
+// follows the mode word rather than an option: the last element of a pipeline
+// runs in a subshell afterwards, and the bare `setopt` listing is taken
+// against sh's defaults.
+func listEmulation(r *interp.Runner, mode string, strict, local bool) {
+	r.SetVar(emulationMode, mode)
+	setAxis(r, func(s *interp.Semantics) *interp.Answer {
+		return &s.LastPipelineElementInCurrentShell
+	}, answer(emulations[mode].lastPipeHere))
+	names := make([]string, 0, len(zshOptions))
+	byName := make(map[string]zshOption, len(zshOptions))
+	for _, o := range zshOptions {
+		if resetByEmulation(o.base, strict) || (strict && o.base == "exec") {
+			names = append(names, o.base)
+			byName[o.base] = o
+		}
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	for _, n := range names {
+		on := emulationDefault(byName[n], mode)
+		if local && (n == "localoptions" || n == "localpatterns" || n == "localtraps") {
+			on = true
+		}
+		if !on {
+			b.WriteString("no")
+		}
+		b.WriteString(n)
+		b.WriteByte('\n')
+	}
+	_, _ = fmt.Fprint(r.Out(), b.String())
 }
 
 // emulationForWord reads a mode word the way zsh does: **every word names an
@@ -461,6 +514,13 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 	localBeforeMode := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if e.hasMode && e.list {
+			// Under `-l` the mode is the last word, and anything after it is
+			// refused before it is looked at — `emulate -l sh -o bad` is
+			// this and not `no such option`, measured (#5249).
+			r.Diagnosef("too many arguments for -l\n")
+			return e, 1
+		}
 		if e.hasMode {
 			if !optionsOver {
 				switch {
@@ -501,6 +561,16 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 			continue
 		case len(a) > 1 && a[0] == '-':
 			for _, letter := range a[1:] {
+				switch letter {
+				case 'l':
+					// The listing (#5249). Not a flag the count check below
+					// counts: `emulate -l` alone prints the current mode like
+					// a bare `emulate`, where `emulate -lR` and `emulate -lL`
+					// are `not enough arguments`. Measured on zsh 5.9.2,
+					// 2026-09-30.
+					e.list = true
+					continue
+				}
 				sawFlags = true
 				switch letter {
 				case 'R':
@@ -659,6 +729,9 @@ type emulateCall struct {
 	// strict is `-R`: the emulation resets the options a bare one leaves
 	// where it found them. See emulateoptions.go for which those are.
 	strict bool
+	// list is `-l`: print the options this emulation would set instead of
+	// setting them. See listEmulation.
+	list bool
 	// options are the `-o name` and `+o name` pairs, in the order written —
 	// order matters, because the same name may appear twice.
 	options []emulateOption

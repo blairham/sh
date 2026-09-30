@@ -363,7 +363,25 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("aliasfuncdef", false),
+	// Switch-backed rather than recorded since #5235: the option was listed
+	// and answered `[[ -o ]]`, and moved nothing, so an alias at a function
+	// name was refused with it on exactly as with it off. It moves
+	// syntax.Dialect.AliasAtAFunctionName — expanding there, the way the
+	// other dialects' presets do, where zsh's own refuses. Measured
+	// 2026-09-30 against zsh 5.9.2 with `alias ga=isafunc`:
+	//
+	//	setopt aliasfuncdef; eval 'ga() { print ran; }'; isafunc   ran, 0
+	//	the same at top level, on the next line                     ran, 0
+	//	set inside `emulate -L zsh` in a function                    defined
+	//	unsetopt, or setopt noaliasfuncdef, after it                 refused
+	//	function ga { … } with it on                                 not expanded
+	//
+	// The last row is the grammar's and not the option's: the word after
+	// `function` is not a command word, so nothing is asked there either way.
+	// Like every option that moves the grammar, it reaches the next line
+	// read, which is why the eval'd and next-line rows are the ones that show
+	// it. `A02alias.ztst` stopped on this.
+	switchBacked("aliasfuncdef", false, aliasFuncDefOn, setAliasFuncDef),
 	setOptBacked("allexport", false, "allexport", false),
 	recorded("alwayslastprompt", true),
 	recorded("alwaystoend", false),
@@ -3464,6 +3482,31 @@ func dollarZeroScope(r *interp.Runner) (interp.DollarZeroScope, bool) {
 		return interp.DollarZeroIsTheShellsOwnName, true
 	}
 	return 0, false
+}
+
+// aliasFuncDefOn and setAliasFuncDef move the grammar field ALIAS_FUNC_DEF
+// names: on is the expanding answer, off is this dialect's own refusal.
+func aliasFuncDefOn(r *interp.Runner) bool {
+	return r.Dialect != nil && r.Dialect.AliasAtAFunctionName == syntax.AliasExpandsAtAFunctionName
+}
+
+func setAliasFuncDef(r *interp.Runner, on bool) {
+	if r.Dialect == nil {
+		// The guard setPosixAliases keeps, for its reason: unreachable from a
+		// test in this package, since internal/dialecttest refuses a runner
+		// built without a Dialect.
+		return
+	}
+	want := syntax.AliasRefusesAFunctionName
+	if on {
+		want = syntax.AliasExpandsAtAFunctionName
+	}
+	if r.Dialect.AliasAtAFunctionName == want {
+		return
+	}
+	d := *r.Dialect
+	d.AliasAtAFunctionName = want
+	r.Dialect = &d
 }
 
 // posixAliasesOn and setPosixAliases move the grammar flag the option names.

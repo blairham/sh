@@ -1945,7 +1945,11 @@ func (s Shell) historyFile() historyFile {
 		return historyFile{}
 	}
 	home, _ := s.Runner.GetVar("HOME")
-	h := historyFrom(s.Runner.GetVar, home)
+	// The dialect's own default file name, for a session that has not set
+	// HISTFILE — see HistoryStyle.DefaultFile, and note that an empty one is
+	// a shell that records nothing rather than one that records somewhere
+	// standard.
+	h := historyFrom(s.Runner.GetVar, home, s.History.DefaultFile)
 	// The session's boundary, so an open this package makes is asked about
 	// the same way one the interpreter makes is.
 	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}

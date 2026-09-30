@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -19,50 +20,50 @@ func vars(m map[string]string) func(string) (string, bool) {
 
 // Where the history goes, and how a session is told not to keep one.
 func TestWhereTheHistoryLives(t *testing.T) {
-	h := historyFrom(vars(nil), "/home/someone")
+	h := historyFrom(vars(nil), "/home/someone", ".sh_history")
 	if h.path != filepath.Join("/home/someone", ".sh_history") {
 		t.Errorf("default is %q, want one under the home directory", h.path)
 	}
 	if h.size != defaultHistorySize {
 		t.Errorf("default size is %d, want %d", h.size, defaultHistorySize)
 	}
-	h = historyFrom(vars(map[string]string{"HISTFILE": "/tmp/elsewhere"}), "/home/someone")
+	h = historyFrom(vars(map[string]string{"HISTFILE": "/tmp/elsewhere"}), "/home/someone", ".sh_history")
 	if h.path != "/tmp/elsewhere" {
 		t.Errorf("HISTFILE gave %q", h.path)
 	}
 	// An empty HISTFILE is how a session says to keep nothing, and is not the
 	// same as an unset one.
-	if h := historyFrom(vars(map[string]string{"HISTFILE": ""}), "/home/someone"); h.path != "" {
+	if h := historyFrom(vars(map[string]string{"HISTFILE": ""}), "/home/someone", ".sh_history"); h.path != "" {
 		t.Errorf("empty HISTFILE gave %q, want no history", h.path)
 	}
 	// With no home and no HISTFILE there is nowhere to put it.
-	if h := historyFrom(vars(nil), ""); h.path != "" {
+	if h := historyFrom(vars(nil), "", ".sh_history"); h.path != "" {
 		t.Errorf("no home gave %q, want no history", h.path)
 	}
 	// The two sizes are two questions. HISTSIZE bounds what the session can
 	// recall; HISTFILESIZE bounds what the file keeps, and defaults to
 	// HISTSIZE's value rather than to the substrate's own.
-	h = historyFrom(vars(map[string]string{"HISTSIZE": "5"}), "/home/someone")
+	h = historyFrom(vars(map[string]string{"HISTSIZE": "5"}), "/home/someone", ".sh_history")
 	if h.size != 5 {
 		t.Errorf("HISTSIZE gave %d, want 5", h.size)
 	}
 	if h.file != 5 {
 		t.Errorf("HISTFILESIZE defaulted to %d, want HISTSIZE's 5", h.file)
 	}
-	h = historyFrom(vars(map[string]string{"HISTSIZE": "5", "HISTFILESIZE": "9"}), "/home/someone")
+	h = historyFrom(vars(map[string]string{"HISTSIZE": "5", "HISTFILESIZE": "9"}), "/home/someone", ".sh_history")
 	if h.size != 5 || h.file != 9 {
 		t.Errorf("sizes are %d recalled and %d on disk, want 5 and 9", h.size, h.file)
 	}
 	// A size that is not a number leaves the default rather than zero, which
 	// would quietly turn the history off — and zero is the one value that
 	// does, so reading nonsense as zero would be the destructive reading.
-	if h := historyFrom(vars(map[string]string{"HISTSIZE": "lots"}), "/home"); h.size != defaultHistorySize {
+	if h := historyFrom(vars(map[string]string{"HISTSIZE": "lots"}), "/home", ".sh_history"); h.size != defaultHistorySize {
 		t.Errorf("a bad HISTSIZE gave %d, want the default", h.size)
 	}
-	if h := historyFrom(vars(map[string]string{"HISTFILESIZE": "-3"}), "/home"); h.file != defaultHistorySize {
+	if h := historyFrom(vars(map[string]string{"HISTFILESIZE": "-3"}), "/home", ".sh_history"); h.file != defaultHistorySize {
 		t.Errorf("a negative HISTFILESIZE gave %d, want the default", h.file)
 	}
-	if h := historyFrom(vars(map[string]string{"HISTSIZE": "0"}), "/home"); h.size != 0 {
+	if h := historyFrom(vars(map[string]string{"HISTSIZE": "0"}), "/home", ".sh_history"); h.size != 0 {
 		t.Errorf("HISTSIZE=0 gave %d, want a session that recalls nothing", h.size)
 	}
 }
@@ -341,5 +342,60 @@ func TestZeroTurnsTheWritingOff(t *testing.T) {
 	}
 	if _, err := os.Stat(h.path); err != nil {
 		t.Errorf("no file was left behind: %v", err)
+	}
+}
+
+// A dialect with **no default file** records nothing when `HISTFILE` is unset,
+// which is not the same as recording somewhere standard.
+//
+// The substrate used to default every dialect to `.sh_history` — ksh's name
+// and nobody else's — so a zsh that had run no rc file read and wrote a file
+// real zsh does not have. It was invisible in ordinary use because each
+// dialect's rc sets the variable, and it appeared exactly where an rc does
+// not run: `-f`, which is how a suite starts a shell.
+//
+// Measured 2026-09-30, empty home, no rc, interactive on a pipe: zsh 5.9.2
+// and dash write nothing, bash 5.3.20 and 3.2.57 write `.bash_history`,
+// ksh93u+ 1.0.8 writes `.sh_history`, and BusyBox ash 1.37 names
+// `.ash_history` in `$HISTFILE`.
+func TestADialectWithNoDefaultFileRecordsNothing(t *testing.T) {
+	t.Parallel()
+	if h := historyFrom(vars(nil), "/home/someone", ""); h.path != "" {
+		t.Errorf("with no default the path is %q, want none", h.path)
+	}
+	// And the name is the dialect's, not one this package chooses.
+	if h := historyFrom(vars(nil), "/home/someone", ".bash_history"); h.path != "/home/someone/.bash_history" {
+		t.Errorf("path is %q, want the dialect's own name under the home", h.path)
+	}
+	// HISTFILE still wins over both, which is the rule the default sits under
+	// rather than beside: a session that names a file means it even in a
+	// dialect that would otherwise record nothing.
+	h := historyFrom(vars(map[string]string{"HISTFILE": "/tmp/named"}), "/home/someone", "")
+	if h.path != "/tmp/named" {
+		t.Errorf("HISTFILE gave %q under a dialect with no default", h.path)
+	}
+}
+
+// And the **wiring**: a Shell's history file comes from its dialect's style.
+//
+// The row a surviving mutant asked for. Every other test here calls
+// historyFrom directly, so passing a hardcoded name at the one call site —
+// exactly the bug being fixed, one layer up — changed nothing any of them
+// could see. This one goes through the Shell, which is the only place the
+// style and the file meet.
+func TestTheSessionTakesItsDefaultFileFromTheDialect(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	shellWith := func(style HistoryStyle) Shell {
+		r := &interp.Runner{Vars: map[string]string{"HOME": home}}
+		return Shell{Runner: r, History: style}
+	}
+	if got := shellWith(HistoryStyle{DefaultFile: ".bash_history"}).historyFile().path; got != filepath.Join(home, ".bash_history") {
+		t.Errorf("the session's file is %q, want the dialect's name under the home", got)
+	}
+	// And a dialect with none records nowhere, which is the half a hardcoded
+	// name at the call site would quietly undo.
+	if got := shellWith(HistoryStyle{}).historyFile().path; got != "" {
+		t.Errorf("a dialect with no default gave %q, want none", got)
 	}
 }

@@ -23,7 +23,10 @@ describes; it does not add a seam.
 The north star for this work assumed history was already metadata-rich.
 It was not. `repl/history.go` on the day this was written is a plain
 line file — `~/.sh_history`, read at start, appended at exit, `HISTFILE`
-and `HISTFILESIZE`, and nothing else. There is no cwd, no status, no
+and `HISTFILESIZE`, and nothing else. (That name was the substrate's for
+every dialect at the time and is now ksh's alone: the default is the
+dialect's own, and two dialects have none. See
+`repl.HistoryStyle.DefaultFile`.) There is no cwd, no status, no
 duration, no timing.
 
 So this is two halves, and the first is the one nobody had built:
@@ -735,7 +738,9 @@ cheap to reverse.
    rather than to accumulate years of unread records first.
 2. **`$XDG_STATE_HOME/sh/blocks` rather than `~/.sh_blocks`.** Argued
    above from the size of the bodies. The counter-argument is
-   consistency with `~/.sh_history`, which is real.
+   consistency with the history file, which is real — though its name is
+   the dialect's rather than one path, so the consistency was never with a
+   single name.
 3. **An empty `HISTFILE` turns blocks off too.** Argued above as
    honoring what a person meant. It is a coupling between two variables,
    which is the kind of thing that surprises someone eventually.

@@ -300,13 +300,18 @@ func encodeEntries(entries, times []string, enc historyEncoding) string {
 // HISTFILE names the file and an empty one turns the history off, which is how
 // a shell is told not to record anything — a session in a directory someone
 // does not want remembered. So does having no HOME to put a default under.
-func historyFrom(get func(string) (string, bool), home string) historyFile {
+//
+// And so does a **dialect with no default file**, which is two of the five:
+// `deflt` is [HistoryStyle.DefaultFile] and an empty one means this shell
+// records nothing when the variable is unset. It used to be `.sh_history`
+// here for everybody, which is ksh's name and nobody else's.
+func historyFrom(get func(string) (string, bool), home, deflt string) historyFile {
 	path, ok := get("HISTFILE")
 	if !ok {
-		if home == "" {
+		if home == "" || deflt == "" {
 			return historyFile{}
 		}
-		path = filepath.Join(home, ".sh_history")
+		path = filepath.Join(home, deflt)
 	}
 	// An empty path is what turns the history off, and both load and save
 	// check for it — so there is nothing to do here but carry it through.

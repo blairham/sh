@@ -15,6 +15,38 @@ package repl
 // inline in wording that names no shell, and nothing filtered — which is what
 // a front end that has said nothing gets.
 type HistoryStyle struct {
+	// DefaultFile is the name, under the home directory, that this dialect
+	// reads and writes its history in when `HISTFILE` is unset. **The zero
+	// value is no file at all**, which is the answer for two of the five and
+	// was the substrate's answer for none of them.
+	//
+	// Measured 2026-09-30 with an empty home directory and no rc file, each
+	// shell interactive on a pipe, reading `$HISTFILE` back and then listing
+	// what the shell had left behind:
+	//
+	//	shell             $HISTFILE reads      file written
+	//	zsh 5.9.2         (unset)              none
+	//	bash 5.3.20       $HOME/.bash_history  .bash_history
+	//	bash 3.2.57       $HOME/.bash_history  .bash_history
+	//	ksh93u+ 1.0.8     (unset)              .sh_history
+	//	dash              (unset)              none
+	//	BusyBox ash 1.37  $HOME/.ash_history   none on a pipe
+	//
+	// Two facts, and only the second is this field. **The name** is what a
+	// shell records in, and three of the six have one. **Whether the shell
+	// sets the variable to it** is separate and is not modeled here: bash and
+	// ash publish the path in `$HISTFILE` where ksh93 uses the file and
+	// leaves the parameter unset, so a reader cannot tell the two apart from
+	// the variable. That half is recorded rather than implemented.
+	//
+	// The substrate used to default every dialect to `.sh_history`, which is
+	// ksh's name and nobody else's. It was invisible in ordinary use because
+	// each dialect's rc file sets `HISTFILE` — and it appeared exactly where
+	// an rc file does not run, which is `-f`, which is how a suite runs a
+	// shell. `W01history.ztst` numbers history events, and a file seeded from
+	// disk shifts every absolute event number by however many lines it held.
+	DefaultFile string
+
 	// SearchPrompt is what replaces the prompt, or is drawn under the line,
 	// while a reverse incremental search is running. One verb: the query
 	// typed so far.

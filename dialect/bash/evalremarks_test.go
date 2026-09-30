@@ -59,6 +59,18 @@ func TestEvalAndSourceReportTheirRemarks(t *testing.T) {
 			":\n. " + hd + "\n",
 			"[hi]\n<d>/hd.sh: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')\n",
 		},
+		{
+			// A remark on the read that then *fails*: the document runs out
+			// inside a `$(` the text never closes, so the line reader gets
+			// its remark and its error from one read, and finds nothing more.
+			// The remark is written before that read's `break`, which is the
+			// only thing that puts it out at all — written after, it is lost
+			// with the loop.
+			"a remark on the read that fails",
+			":\neval 'x=$(cat <<EOF\nhi)'\necho \"[$x]\"\n",
+			"[]\n<d>/case.sh: line 3: warning: here-document at line 2 delimited by end-of-file (wanted `EOF')\n" +
+				"<d>/case.sh: eval: line 4: unexpected EOF while looking for matching `)'\n",
+		},
 		// The control: text with nothing to remark on says nothing.
 		{"clean eval", "eval 'echo ok'\n", "ok\n"},
 	} {

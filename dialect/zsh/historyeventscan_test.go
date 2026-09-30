@@ -138,4 +138,18 @@ func TestZshHeadAndTailTakeACount(t *testing.T) {
 	if got, want := r.HistoryExpansionRefusal(err), "modifier failed: t"; got != want {
 		t.Errorf("the refusal reads %q, want %q", got, want)
 	}
+	// And the substrate's own fallback, which the row above cannot reach: a
+	// dialect supplying a wording never uses it, and this is the only
+	// dialect that can raise the error at all. Asserted with the wording
+	// cleared, because otherwise the fallback is unreachable text that any
+	// sentence would satisfy — a mutant on it survived until this row.
+	bare := zsh.Diagnostics()
+	bare.HistoryModifierFailed = ""
+	r2 := &interp.Runner{Semantics: &sem, Diagnostics: &bare, Name: "zsh", Dialect: &d}
+	zsh.Apply(r2)
+	if _, err2 := r2.ExpandHistoryAlways("echo !1:1:t3", []string{"echo a/b/c"}, 1); err2 == nil {
+		t.Error("an over-counted tail was accepted with the wording cleared")
+	} else if got, want := r2.HistoryExpansionRefusal(err2), "modifier failed: t"; got != want {
+		t.Errorf("the fallback reads %q, want %q", got, want)
+	}
 }

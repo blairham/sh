@@ -2133,6 +2133,7 @@ func Semantics() interp.Semantics {
 	// `set -u` prints nothing after it in the sourcing file either, and bash
 	// exits 1. Same under argv[0] of `sh` and in bash 3.2.
 	s.FatalErrorEndsBorrowedTextOnly = interp.No
+	s.TraceFromBorrowedTextFollowsItsRedirection = interp.Yes
 	// `${x?word}` is an error here rather than a request to stop, which shows
 	// at the one boundary this shell does give up a file at: measured, a
 	// `$BASH_ENV` whose second line is `echo X${NOPE?msg}` stops there and

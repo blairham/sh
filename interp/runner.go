@@ -4235,6 +4235,27 @@ type Runner struct {
 	// the core's, because every trace this package writes goes through it.
 	// See Runner.SetTraceSink.
 	traceSink func(*Runner) io.Writer
+	// stderrBeforeRedirs is standard error as it stood when the command now
+	// running was reached, before that command applied redirections of its
+	// own.
+	//
+	// One question needs it: a shell in the panel keeps `xtrace` out of a
+	// redirection applied to the construct running *borrowed text*, and this
+	// is the stream it writes to instead. See
+	// Semantics.TraceFromBorrowedTextFollowsItsRedirection and
+	// Runner.borrowedTextTraceStream.
+	//
+	// Set for **every** command, including one with no redirections at all,
+	// which is what makes it this command's answer rather than whatever was
+	// last true — the discipline Runner.shellStdin is set above the same
+	// early return for. Written only by applyRedirs, and not restored,
+	// because the next command sets it and the only reader consults it
+	// during the command that set it. Saving and restoring it instead left
+	// it holding an *enclosing* command's stream: with a `set -x; eval …`
+	// pair inside a group redirected to a file, the trace of the eval's own
+	// text leaked to the real standard error, where the measured shell puts
+	// it in that file.
+	stderrBeforeRedirs io.Writer
 	// condTrace is the `[[ … ]]` being traced, or nil. See condTrace.
 	condTrace *condTrace
 	// nounset is `set -u`: expanding an unset parameter is an error.

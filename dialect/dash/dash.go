@@ -122,6 +122,7 @@ func Semantics() interp.Semantics {
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
 
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	s.TraceFromBorrowedTextFollowsItsRedirection = interp.Yes
 	// unanswered NoclobberProtectsAnFdVariable: the same reason as the axis
 	// below it — there is no `{name}` redirection here for `set -C` to
 	// protect the name of.

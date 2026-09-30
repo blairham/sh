@@ -2449,6 +2449,7 @@ func Semantics() interp.Semantics {
 	// it — for an unset parameter under `set -u`, a readonly assignment, a
 	// division by zero and a bad substitution alike.
 	s.FatalErrorEndsBorrowedTextOnly = interp.Yes
+	s.TraceFromBorrowedTextFollowsItsRedirection = interp.Yes
 	// But not a builtin's complaint about how it was *called*, which is the
 	// one kind that goes straight out: measured 2026-09-15, `eval 'alias -g
 	// x=1'` inside a subshell prints nothing and leaves 2, exactly as the

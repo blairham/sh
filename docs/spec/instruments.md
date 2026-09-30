@@ -627,7 +627,68 @@ rows pull opposite ways — which is also how the reading was chosen, because
 the first attempt satisfied one and broke the other and an existing test said
 so.
 
-## 16. Where these came from
+## 16. A found instrument can see more than a purpose-built one
+
+Every other entry here is about an instrument that could not see what it
+claimed. This is the opposite case, and it is worth knowing because the
+response is different: **a suite file written by people who already knew
+which shapes discriminate can be a better instrument than the grid you built
+to answer your own question.**
+
+The worked example is `xtrace` routing. Three models of it were written, each
+fitting every row of a hand-made grid, and `E02xtrace.ztst` refuted two of
+them — because the suite runs each chunk through an `eval` and the chunk
+redirects deliberately, a composition no probe in the grid had. The file was
+not a target being approached; it was the only instrument in the room that
+held the case apart.
+
+> **When a suite file resists a model, read what its chunk asserts as a
+> specification rather than as a target.** The expectations were written by
+> somebody who knew where the seams are, and the lines they chose to assert
+> are a list of the distinctions that matter.
+
+Doing that paid immediately. The chunk's own expectation separates two
+questions that had been merged in every model: a **simple command**'s trace
+with `2>file` goes to standard error, while a **subshell**'s inner trace with
+the same redirection goes to the file. So "before the construct's own
+redirections" was already the rule for one shape, and borrowed text was a
+second question layered on it. None of the three models was written knowing
+that, and no grid built from the front alone would have said so — the front
+is one line of a chunk whose other twenty lines are the discriminators.
+
+The practical order, once a file has refused a model twice:
+
+1. Read the chunk's assertions — the `>` and `?` lines — as the specification.
+2. Ask which distinction each line exists to make; a suite rarely asserts
+   something that only one reading produces.
+3. Only then write the next probe, and write it for the distinction the file
+   named rather than the one the failure showed.
+
+This does not make a file a *substitute* for a grid. A grid varies one thing
+at a time and a suite file does not, so a file tells you *that* a model is
+wrong and a grid tells you *which* part. The mistake is treating the file
+only as the thing to be satisfied.
+
+### A report written through a shell can lose a phrase without saying so
+
+Adjacent, and about the instrument that carries the findings rather than the
+one that makes them.
+
+A write-up posted through a shell heredoc lost three phrases to command
+substitution: backticked text — the ordinary way to quote a filename or a
+construct in prose — reached a shell and was executed. What arrived read as
+**prose with words missing**, not as an error, and two sentences changed
+meaning without any sign that anything had happened.
+
+> **Write reports from a file, with something that does not interpolate.**
+> A shell is a bad courier for text about shells, because the characters you
+> are most likely to quote are the ones it is most likely to read.
+
+Leaving the damaged version in place with a correction beside it is better
+than editing it away: the failure mode is invisible by construction, so the
+only record that it happened is the one you keep on purpose.
+
+## 17. Where these came from
 
 Each rule above cost at least one wrong conclusion that was acted on. They
 were collected during the `zsh-suite` burndown between September 2026 and the

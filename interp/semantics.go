@@ -19986,6 +19986,47 @@ type Semantics struct {
 	// failure caught at a `.` reports 1 in ksh93 and 126 in zsh.
 	FatalErrorEndsBorrowedTextOnly Answer
 
+	// TraceFromBorrowedTextFollowsItsRedirection sends `xtrace` output from
+	// inside a `.` or an `eval` to the redirection applied to that
+	// construct, rather than to standard error as it stood before it.
+	//
+	// Measured 2026-09-30, `PS4='+%N:%i> '` and `set -x`, each construct
+	// carrying `2>>file`, reading what landed in the file:
+	//
+	//	                    bash 5.3  dash  ksh93  ash  zsh 5.9.2
+	//	f 2>>file           traced    yes   yes    yes  traced
+	//	{ …; } 2>>file      traced    yes   yes    yes  traced
+	//	( … ) 2>>file       traced    yes   yes    yes  traced
+	//	. ./f 2>>file       traced    yes   yes    yes  **nothing**
+	//	eval '…' 2>>file    traced    yes   yes    yes  **nothing**
+	//
+	// **The noun is borrowed text**, varied rather than assumed. A group and
+	// a subshell follow the redirection in every column, which rules out "a
+	// compound command" and "a redirection on a wrapper"; and the sourced
+	// file's **own** writes to standard error do land in the file in both
+	// shells, which makes this a question about where the trace is written
+	// rather than about what the redirection covers. The two constructs that
+	// part are the two that run text read again — the same pair
+	// FatalErrorEndsBorrowedTextOnly above is about.
+	//
+	// **Only that construct's own redirection is undone**, and three rows
+	// say so together:
+	//
+	//	{ . ./b; } 2>>g                    g gets both lines
+	//	. ./s 2>>h   where s runs g 2>>f   f gets g's trace, h empty
+	//	. a 2>>f     where a runs . b 2>>g  both files empty
+	//
+	// So the stream is the one in force before *this* construct's
+	// redirections and not the shell's original — a group's redirection is
+	// in force at that point — a redirection on anything *inside* still
+	// moves the trace, and nested borrowed text reaches its answer through
+	// the construct outside it. A destination pinned for the duration loses
+	// the second row; one recomputed from the raw stream loses the third.
+	//
+	// ash was measured in the pinned alpine image rather than taken from
+	// dash.
+	TraceFromBorrowedTextFollowsItsRedirection Answer
+
 	// BuiltinUsageErrorEscapesBorrowedText keeps an error a builtin reported
 	// about **how it was called** out of the boundary
 	// FatalErrorEndsBorrowedTextOnly draws, so such an error ends the shell

@@ -66,6 +66,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	// check, because a command with no redirections has still reached the
 	// point its words are behind it. See Runner.shellStdin.
 	r.shellStdin = nil
+	// And the stream a borrowed-text construct traces to, which is standard
+	// error as it stands now. Above the length check for the same reason
+	// shellStdin is: a command with no redirections has still been reached,
+	// and leaving the field alone there makes it an *enclosing* command's
+	// answer. See Runner.stderrBeforeRedirs.
+	r.stderrBeforeRedirs = r.Stderr
 	if len(rs) == 0 {
 		return nil, nil
 	}

@@ -699,6 +699,27 @@ func PrintWith(c Command, l Layout) string {
 	return p.b.String()
 }
 
+// PrintExprWith renders one and-or expression with a chosen arrangement.
+//
+// The companion to [PrintWith] for the two statement shapes that are **not
+// commands**. A pipeline and an `&&`/`||` list are [Expr] and neither
+// implements [Command], so PrintWith cannot be handed either one — and a
+// caller that needs the whole statement's text rather than one command's has
+// nothing else to reach for. `RunningCommand` is that caller: the shell fires
+// its DEBUG trap once for a pipeline and once for a list, and the parameter a
+// dialect shows at those firings is the statement read back.
+//
+// Unlike PrintWith this applies no body wrapping, because there is no
+// arrangement in which a statement is a body.
+func PrintExprWith(e Expr, l Layout) string {
+	if e == nil {
+		return ""
+	}
+	p := printer{layout: l}
+	p.expr(e)
+	return p.b.String()
+}
+
 // printed writes the command a caller handed in, put in a brace group first
 // where the arrangement asks for a body that is always one.
 //

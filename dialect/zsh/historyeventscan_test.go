@@ -77,8 +77,14 @@ func TestZshSubstitutionUnescapesTheReplacementTwice(t *testing.T) {
 	if got := zsh.Semantics().HistorySubstitutionUnescapesTheReplacement; got != interp.Yes {
 		t.Errorf("HistorySubstitutionUnescapesTheReplacement is %v, want Yes", got)
 	}
-	sem, diag := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{Semantics: &sem, Diagnostics: &diag, Name: "zsh"}
+	sem, diag, d := zsh.Semantics(), zsh.Diagnostics(), zsh.Dialect()
+	r := &interp.Runner{
+		Semantics: &sem, Diagnostics: &diag, Name: "zsh",
+		// Set because the guard in internal/dialecttest asks for it: a nil
+		// Dialect is the core, so any nested parse would run as a shell this
+		// row is not about.
+		Dialect: &d,
+	}
 	zsh.Apply(r)
 	// Always, not the route-gated entry point: zsh does not expand history
 	// in a script, so the gated one returns the line untouched and the row

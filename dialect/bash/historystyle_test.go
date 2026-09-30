@@ -77,8 +77,14 @@ func TestBashKeepsBackslashesInASubstitutionReplacement(t *testing.T) {
 	if got := bash.Semantics().HistorySubstitutionUnescapesTheReplacement; got != interp.No {
 		t.Errorf("HistorySubstitutionUnescapesTheReplacement is %v, want No", got)
 	}
-	sem, diag := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{Semantics: &sem, Diagnostics: &diag, Name: "bash"}
+	sem, diag, d := bash.Semantics(), bash.Diagnostics(), bash.Dialect()
+	r := &interp.Runner{
+		Semantics: &sem, Diagnostics: &diag, Name: "bash",
+		// Set because the guard in internal/dialecttest asks for it: a nil
+		// Dialect is the core, so any nested parse would run as a shell this
+		// row is not about.
+		Dialect: &d,
+	}
 	bash.Apply(r)
 	res, err := r.ExpandHistoryAlways(`echo !!:s/o/\\\\X/`, []string{"echo one two one"}, 1)
 	if err != nil {

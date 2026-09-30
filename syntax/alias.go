@@ -82,6 +82,10 @@ func (p *Parser) expandCommandWord(done map[string]bool) {
 // lines is what let the head of a pipeline drift away from every other
 // command word in the first place.
 func (p *Parser) expandCommandStart() {
+	// A **special token** where a command begins is a global alias's to
+	// claim. Ahead of the early return below, because a session may have
+	// global aliases and no command ones.
+	p.expandSpecialTokenAlias()
 	if p.Aliases == nil && p.SuffixAliases == nil {
 		return
 	}
@@ -882,4 +886,47 @@ func endsInBlank(s string) bool {
 	}
 	c := s[len(s)-1]
 	return c == ' ' || c == '\t'
+}
+
+// expandSpecialTokenAlias replaces an operator token where a command begins,
+// when a *global* alias is named for it.
+//
+// `alias -g '&&=print X;'` and a line beginning `&&` runs the value in zsh
+// 5.9.2, where the token on its own is a parse error — which is what
+// `A02alias.ztst` means by "we can now alias special tokens". Measured
+// 2026-09-30, the alias defined for each token and the token then written at
+// the start of a line: `&&`, `||`, `|`, `;`, `&`, `(`, `)`, `<` and `>` all
+// run the value there.
+//
+// **Only where a command begins**, which is the half that keeps the grammar:
+// in operator position the token wins, and `true && print two` prints `two`
+// in the reference with that same alias defined. So this sits in
+// expandCommandStart rather than in [Parser.next] beside the word kind — a
+// global alias is asked about every *word*, and an operator is offered at
+// exactly one place instead.
+//
+// Gated by GlobalAliases being nil, which is every dialect but one: nothing
+// else in the panel has the global kind at all, so no flag is needed to keep
+// this out of their grammars.
+func (p *Parser) expandSpecialTokenAlias() {
+	if p.GlobalAliases == nil || p.tok.Kind == TokWord || p.tok.Text == "" {
+		return
+	}
+	name := p.tok.Text
+	if p.aliasChain[name] {
+		// Spent by an expansion this token is still inside, which is what
+		// stops `alias -g '&&=print A; &&'` from splicing for ever.
+		//
+		// aliasChain and not p.globalDone: the per-command set was here too,
+		// and a mutant removing the *marking* changed nothing — the chain is
+		// what actually catches the recursion. Two readings of one question,
+		// one of them inert, so the inert one is gone rather than left for a
+		// reader to trust.
+		return
+	}
+	value, ok := p.GlobalAliases(name)
+	if !ok {
+		return
+	}
+	p.spliceAlias(name, value)
 }

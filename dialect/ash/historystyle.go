@@ -13,4 +13,4 @@ import "github.com/blairham/sh/repl"
 // machine, no way to measure which build a reader has. We offer a search and a
 // recall list because we have a line editor; nothing measured makes one
 // wording more ash-like than another.
-func HistoryStyle() repl.HistoryStyle { return repl.HistoryStyle{} }
+func HistoryStyle() repl.HistoryStyle { return repl.HistoryStyle{DefaultFile: ".ash_history"} }

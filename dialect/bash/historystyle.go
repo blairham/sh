@@ -45,6 +45,7 @@ import (
 // between — so IgnoredStaysInSession is left off.
 func HistoryStyle() repl.HistoryStyle {
 	return repl.HistoryStyle{
+		DefaultFile:        ".bash_history",
 		SearchPrompt:       "(reverse-i-search)`%s': ",
 		SearchFailedPrompt: "(failed reverse-i-search)`%s': ",
 		// The file's own encoding, measured 2026-09-21 on bash 5.3.20 from

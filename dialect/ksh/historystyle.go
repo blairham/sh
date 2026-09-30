@@ -20,4 +20,4 @@ import "github.com/blairham/sh/repl"
 // name a shell does not have must not be half-implemented — reading HISTIGNORE
 // here would give ksh93 a knob real ksh93 ignores, which is worse than the gap
 // it would be closing.
-func HistoryStyle() repl.HistoryStyle { return repl.HistoryStyle{} }
+func HistoryStyle() repl.HistoryStyle { return repl.HistoryStyle{DefaultFile: ".sh_history"} }

@@ -156,11 +156,11 @@ func zformatSubstInto(r *interp.Runner, mode zformatMode, param, format string, 
 		// failure.
 		return 1
 	}
-	if !isIdentifier(param) {
+	if !isStoreOperandName(param) {
 		r.DiagnoseAsTheShellf("not an identifier: %s\n", param)
 		return 1
 	}
-	r.SetVar(param, out)
+	r.SetOperandVar(param, out)
 	return 0
 }
 
@@ -204,9 +204,9 @@ func zformatEscape(
 	r *interp.Runner, mode zformatMode, format string, at int, table map[byte]string,
 ) (text string, next int, ok bool, why zformatOutcome) {
 	i := at + 1
-	number, i, hasNumber := zformatNumber(format, i)
+	number, negative, i, hasNumber := zformatWidthNumber(format, i)
 	if i < len(format) && format[i] == '(' {
-		text, next, why = zformatTernary(r, mode, format, i+1, number, hasNumber, table)
+		text, next, why = zformatTernary(r, mode, format, i+1, number, negative, hasNumber, table)
 		return text, next, why == zformatRead, why
 	}
 	// Not a ternary, so the leading number was a field width after all, and
@@ -227,10 +227,44 @@ func zformatEscape(
 	return zformatPad(value, minWidth, maxWidth, hasMax), i + 1, true, zformatRead
 }
 
+// zformatWidthNumber reads the number in front of a `%` escape — a field
+// width, or a ternary's test number when a `(` follows it.
+//
+// It differs from the signed reader in one case, and that case was three of
+// this builtin's five disagreements with zsh 5.9.2: **a lone `-` with no
+// digits is consumed and reports no number.** The signed reader rewinds
+// instead, which leaves the `-` to be read as the specifier letter, and the
+// whole spec is then copied out literally — so `%-s`, `%-.s`, `%-.2s` and
+// `%-.0s` were all literal text here and are all valid to the reference.
+//
+// Reporting **no** number rather than zero is the part that needs measuring
+// rather than assuming, because the same read feeds a ternary: `%-(c.y.n)`
+// behaves exactly as `%(c.y.n)`, so the sign without digits must not arrive
+// as a test number of 0 either. The two are indistinguishable for a width,
+// where an absent minimum and a minimum of zero both pad nothing.
+//
+// One sign, leading, and only `-`: the reference emits `%--2s`, `%- s`,
+// `%+2s` and `%5-s` literally.
+func zformatWidthNumber(format string, at int) (n int, negative bool, next int, has bool) {
+	if n, negative, next, has = zformatNumber(format, at); has {
+		return n, negative, next, true
+	}
+	if at < len(format) && format[at] == '-' {
+		return 0, true, at + 1, false
+	}
+	return 0, false, at, false
+}
+
 // zformatNumber reads an optionally negative decimal run.
-func zformatNumber(format string, at int) (n, next int, has bool) {
+//
+// It reports the sign **separately** from the value, because `-0` and `0` are
+// the same integer and this builtin tells them apart: under `-F` the sign
+// inverts the comparison, so `%0(a.a.A)` asks whether the value is longer
+// than nothing and `%-0(a.a.A)` asks whether it is empty. Deriving the sign
+// from `n < 0` instead works for every other number and silently fails for
+// this one.
+func zformatNumber(format string, at int) (n int, negative bool, next int, has bool) {
 	i := at
-	negative := false
 	if i < len(format) && format[i] == '-' {
 		negative = true
 		i++
@@ -240,25 +274,44 @@ func zformatNumber(format string, at int) (n, next int, has bool) {
 		i++
 	}
 	if i == start {
-		return 0, at, false
+		return 0, false, at, false
 	}
 	n, _ = strconv.Atoi(format[start:i])
 	if negative {
 		n = -n
 	}
-	return n, i, true
+	return n, negative, i, true
 }
 
 // zformatMaxWidth reads the `.max` half of a `%min.maxc` width.
+//
+// Two shapes measured against zsh 5.9.2 go the opposite way from the obvious
+// reading, and a fix for either one does not imply the other:
+//
+//   - A `.` with no digits is a precision that is **absent, not zero**.
+//     `%5.s` behaves exactly as `%5s` and `%.s` as `%s`, while `%.0s` yields
+//     the empty string — which is what tells the two readings apart. So the
+//     dot is consumed and no maximum is reported, where rewinding past it
+//     left the specifier letter unfindable and the whole spec was copied out
+//     literally.
+//   - A **negative** precision is not a precision. `%5.-2s` is emitted
+//     literally by the reference, so the run read here is unsigned. The
+//     minimum is not: `%-5s` is valid and pads on the left, so the signed
+//     reader stays in use there and must not be shared with this half.
 func zformatMaxWidth(format string, at int) (max, next int, has bool) {
 	if at >= len(format) || format[at] != '.' {
 		return 0, at, false
 	}
-	n, next, ok := zformatNumber(format, at+1)
-	if !ok {
-		return 0, at, false
+	i := at + 1
+	start := i
+	for i < len(format) && format[i] >= '0' && format[i] <= '9' {
+		i++
 	}
-	return n, next, true
+	if i == start {
+		return 0, at + 1, false
+	}
+	max, _ = strconv.Atoi(format[start:i])
+	return max, i, true
 }
 
 // zformatPad applies a field width. A minimum pads — to the right, or to the
@@ -282,13 +335,24 @@ func zformatPad(s string, minWidth, maxWidth int, hasMax bool) string {
 // it is written on both the one **before** it wins — measured, `%1(2c.y.n)`
 // with `c:2` chooses the false text, which only happens if the test is 1.
 func zformatTernary(
-	r *interp.Runner, mode zformatMode, format string, at, number int, hasNumber bool,
-	table map[byte]string,
+	r *interp.Runner, mode zformatMode, format string, at, number int,
+	negative, hasNumber bool, table map[byte]string,
 ) (text string, next int, why zformatOutcome) {
 	i := at
-	if inner, after, has := zformatNumber(format, i); has {
+	if inner, innerNegative, after, has := zformatNumber(format, i); has {
 		if !hasNumber {
 			number = inner
+			if negative && !innerNegative {
+				// The sign was written **outside** the parenthesis and the
+				// number inside it, and the sign still applies. Measured,
+				// `%-(5j.short.long)` chooses `short` for a value of length
+				// five and `long` for one of length six — the `<=` reading —
+				// where dropping the sign inverts it. It reaches the
+				// arithmetic mode too: `%-(2c.y.n)` with `c:2` is `n`,
+				// because the number under test is -2 and not 2.
+				number = -inner
+			}
+			negative = negative || innerNegative
 		}
 		i = after
 	}
@@ -305,7 +369,7 @@ func zformatTernary(
 	if !ok {
 		return "", 0, zformatUnreadable
 	}
-	test, evaluated := zformatTest(r, mode, table, specifier, number)
+	test, evaluated := zformatTest(r, mode, table, specifier, number, negative)
 	if !evaluated {
 		// The expression would not evaluate, and the shell has already said
 		// so and stopped. Nothing is written.
@@ -332,10 +396,49 @@ func zformatUntil(format string, at int, terminator byte) (text string, next int
 		case format[i] == '%' && i+1 < len(format) && format[i+1] == terminator:
 			out.WriteByte(terminator)
 			i++
+		case format[i] == '%' && i+1 < len(format) && format[i+1] == '(':
+			group, after, closed := zformatGroup(format, i)
+			if !closed {
+				return "", 0, false
+			}
+			out.WriteString(group)
+			i = after - 1
 		case format[i] == terminator:
 			return out.String(), i + 1, true
 		default:
 			out.WriteByte(format[i])
+		}
+	}
+	return "", 0, false
+}
+
+// zformatGroup copies a `%(`…`)` group whole, starting at its `%`, so that a
+// nested ternary's delimiters are never read as the enclosing half's.
+//
+// Only `%(` opens a group. A bare `(` is ordinary text — measured,
+// `%(8n.a(b.c).d)` is `a(b.d)`, which is the true half `a(b` followed by the
+// three characters left over after the false half — so counting every paren
+// would change a case that already agrees.
+//
+// `%` takes the next byte with it whatever it is, which is what keeps a `%)`
+// written inside a group from closing it early. The group's *content* is not
+// interpreted here; it is expanded later by whichever half is chosen, and
+// only then does an unreadable escape inside it matter.
+func zformatGroup(format string, at int) (group string, next int, closed bool) {
+	depth := 0
+	for i := at; i < len(format); i++ {
+		if format[i] == '%' && i+1 < len(format) {
+			if format[i+1] == '(' {
+				depth++
+			}
+			i++
+			continue
+		}
+		if format[i] == ')' {
+			depth--
+			if depth == 0 {
+				return format[at : i+1], i + 1, true
+			}
 		}
 	}
 	return "", 0, false
@@ -356,10 +459,11 @@ func zformatUntil(format string, at int, terminator byte) (text string, next int
 // a strict comparison and a loose one differ nowhere else.
 func zformatTest(
 	r *interp.Runner, mode zformatMode, table map[byte]string, specifier byte, number int,
+	negative bool,
 ) (test, evaluated bool) {
 	value := table[specifier]
 	if mode == zformatPresence {
-		if number < 0 {
+		if negative {
 			return len(value) <= -number, true
 		}
 		return len(value) > number, true
@@ -415,14 +519,27 @@ func zformatAlignInto(r *interp.Runner, array, separator string, words []string)
 	return 0
 }
 
-// zformatSplitPair reads one `left:right` string, where a colon in the left
-// half is written `\:` and comes back as a plain colon.
+// zformatSplitPair reads one `left:right` string.
+//
+// A backslash escapes **whatever follows it**, not only a colon: measured
+// against zsh 5.9.2, `a\\b` is `a\b` and `a\qb` is `aqb`, so the rule is
+// that the backslash is dropped and the next byte is taken literally. Reading
+// `\:` as the only escape left `a\\b` as `a\\b` and made a doubled
+// backslash look deliberate.
+//
+// A lone backslash at the very end has nothing to escape and stays: `end\` is
+// `end\`.
+//
+// **Only the left half is unescaped.** The right half is returned exactly as
+// written, which is measurable and not an oversight: `x:y\\z` comes back
+// `x.y\\z` with the separator applied and the doubled backslash intact.
+// Unescaping both halves would be the natural symmetry and it is wrong.
 func zformatSplitPair(w string) (left, right string, split bool) {
 	var out strings.Builder
 	for i := 0; i < len(w); i++ {
 		switch {
-		case w[i] == '\\' && i+1 < len(w) && w[i+1] == ':':
-			out.WriteByte(':')
+		case w[i] == '\\' && i+1 < len(w):
+			out.WriteByte(w[i+1])
 			i++
 		case w[i] == ':':
 			return out.String(), w[i+1:], true

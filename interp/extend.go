@@ -396,6 +396,22 @@ func (r *Runner) InSubshell() bool { return r.inSubshell }
 
 func (r *Runner) SetVar(name, value string) { r.setVar(name, value) }
 
+// SetOperandVar is SetVar for a name a builtin was **given as an operand**,
+// where the dialect lets that operand be a positional parameter.
+//
+// The pair exists for the reason the rest of this file does: the distinction
+// is invisible from outside. SetVar on `1` creates an ordinary variable
+// called `1`, which no script can read back — `$1` is the positional, so the
+// value lands somewhere unreachable and the builtin reports success. This
+// routes to the same store the core's own output operands use, so position 0
+// reaches `$0` and a position past the end extends the list, and it defers
+// to SetVar in a dialect where operands are names only.
+//
+// A registered builtin wanting this also wants the matching *name* rule; a
+// store that accepts a positional behind a check that rejects one is
+// unreachable, and the reverse silently drops the value.
+func (r *Runner) SetOperandVar(name, value string) { r.setOperandValue(name, value) }
+
 // GetVar reads a shell variable, falling back to the environment.
 func (r *Runner) GetVar(name string) (string, bool) { return r.getVar(name) }
 

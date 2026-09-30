@@ -510,6 +510,10 @@ func zparseoptsResolve(
 }
 
 // isIdentifier reports whether a name is one a script could read back.
+//
+// This is the **spelling** rule, and a positional parameter is deliberately
+// not one of them: see isStoreOperandName for the write-through rule, and
+// for why the two are separate here as they are in the core.
 func isIdentifier(name string) bool {
 	if name == "" {
 		return false
@@ -524,6 +528,52 @@ func isIdentifier(name string) bool {
 		}
 	}
 	return true
+}
+
+// isStoreOperandName reports whether a name is one a builtin may **write
+// through**, which is a wider question than how a variable may be spelled.
+//
+// A positional parameter is one. Measured against zsh 5.9.2, `zformat -f 1`
+// inside an anonymous function sets `$1`, `-f 0` sets `$0` and `-f 10` sets
+// `${10}` — so the run is unsigned decimal of any length and `0` is
+// included, while `-1` is refused by both shells, which is why no sign is
+// read.
+//
+// **Why this is a second function and not a widening of isIdentifier.** That
+// rule is shared by ten write-through sites across nine of these builtins,
+// and all ten store through [interp.Runner.SetVar] or SetArray, neither of
+// which knows a positional from a variable called `1`. Widening the shared
+// rule alone would turn ten honest refusals into ten silent mis-stores — the
+// name would be accepted and the value would land nowhere the script can
+// read. So a route joins this rule when its store has been moved to
+// SetOperandVar and its behavior measured, and the rest keep refusing until
+// then. The core draws the same line, between isPlainName and its own
+// isStoreOperandName.
+//
+// Routes measured to accept a positional in the reference and **not yet
+// converted**: `strftime -s`, and `zformat -a`, whose array-into-a-position
+// store needs a measurement of its own. Those are recorded on #5163 rather
+// than guessed at here.
+//
+// A name valid here may still be refused later for what it **is** rather
+// than how it is spelled: `zparseopts -A 1` is `can't change type of a
+// special parameter` in the reference, because a positional cannot become an
+// association. That is a type question and it belongs at the route that asks
+// it.
+func isStoreOperandName(name string) bool {
+	return isIdentifier(name) || isPositional(name)
+}
+
+// isPositional reports whether a name is a positional parameter's — an
+// unsigned decimal run, which the loop in isIdentifier rejects because it
+// requires the first byte to be a letter or an underscore.
+func isPositional(name string) bool {
+	for i := 0; i < len(name); i++ {
+		if name[i] < '0' || name[i] > '9' {
+			return false
+		}
+	}
+	return name != ""
 }
 
 // zparseoptsMatch is one appearance of one option on the command line, in the

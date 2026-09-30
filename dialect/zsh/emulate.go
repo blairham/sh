@@ -365,6 +365,11 @@ func emulateBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	// `-c` runs the string under the emulation and restores everything after
 	// — measured, an option set before it comes back: `setopt no_glob;
 	// emulate sh -c '…'` still refuses to glob afterwards.
+	// Whether the string's trace keeps out of this command's redirection is
+	// decided by tracing as it stood when the command was reached, before
+	// the emulation and its option words move it (#5260) — see
+	// interp.Runner.HoldTracingForBorrowedText.
+	defer r.HoldTracingForBorrowedText()()
 	saved := saveOptionState(r)
 	applyEmulation(r, e.mode, e.strict)
 	st := e.applyOptions(r)

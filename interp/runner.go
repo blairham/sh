@@ -4272,6 +4272,12 @@ type Runner struct {
 	// text leaked to the real standard error, where the measured shell puts
 	// it in that file.
 	stderrBeforeRedirs io.Writer
+	// tracingWhenReached is whether `xtrace` was on when the command now
+	// running was reached, held by a builtin that moves options before it
+	// runs borrowed text and consumed by the first borrowed text entered.
+	// Nil is "nobody held it", which is every command but that one. See
+	// Runner.HoldTracingForBorrowedText.
+	tracingWhenReached *bool
 	// condTrace is the `[[ … ]]` being traced, or nil. See condTrace.
 	condTrace *condTrace
 	// nounset is `set -u`: expanding an unset parameter is an error.

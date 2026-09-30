@@ -171,6 +171,19 @@ chunk held an escape rendering, an undecodable-body decline and an inert
 option, in three changes. So a one-chunk row is the *shortest* piece of work
 on the page and not necessarily a small one.
 
+`W01history` is the sharpest of the three, because it says something the other
+two do not: it sat at **6** chunks unreached and took **five** roots, and
+**the front this table named was the first of the five.** The column says what
+a file stops on, and what it stops on is one root — the other four were behind
+it and unnameable until it closed. In order: the default history file was the
+substrate's for every dialect (#5195), a substitution's replacement unescapes
+twice (#5196), `:h` and `:t` take a count (#5197), `:P` resolves as far as it
+resolves (#5198), and `fc -p` reads into the new list while `fc -l` skips only
+its own line (#5199). Two of those are not history expansion at all.
+
+So the ranking is a sort key and not an estimate, and the `today's front`
+column is a **label on the first root**, not a description of the work.
+
 And **a row can be unreachable rather than expensive**, which the count
 cannot show either. `A09zwc` was joint-cheapest here at a single unreached
 chunk and is now a decline: its chunk needs a `.zwc` carrying valid wordcode

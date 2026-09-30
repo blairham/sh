@@ -324,6 +324,18 @@ func printReport(w io.Writer, rep suite.Report) {
 		o.printf("                                     the distribution, so a file reaching for the\n")
 		o.printf("                                     function library or a built module fails the\n")
 		o.printf("                                     same way under both. Counted, never curated\n")
+		// And the same verdict over every scored file. Printed beside the
+		// pair above because the pair is the one that gets read as an
+		// answer to this question and cannot be: a file the reference
+		// fails is not strict, so it is never in that denominator (#5203).
+		o.printf("  ref cannot run  %-9s %5.1f%%   files the reference's own driver called failed,\n",
+			fmt.Sprintf("%d/%d", rep.RefDriverFailed, rep.Scored),
+			100*rep.RefDriverFailedRate())
+		o.printf("                                     over every scored file rather than the strict\n")
+		o.printf("                                     ones — how much of this suite cannot be graded\n")
+		o.printf("                                     here at all, which is what a target is built\n")
+		o.printf("                                     from. The line above answers a different\n")
+		o.printf("                                     question and returns 0/0 on this one\n")
 	}
 	o.printf("  line agreement  %-9s %5.1f%%   longest common subsequence of the two outputs'\n",
 		"", 100*rep.LineRate())

@@ -196,15 +196,23 @@ on eight files than the table records — and the excess is, row for row, the
 
 Nine for nine including `V06parameter`, which is 0 either way, and **zero
 delta on the other fifteen files.** So the twenty chunks below are not
-something the reference cannot do — they are something it cannot do *here*,
-and giving it a resolvable module path recovers all twenty. Locale was the
-obvious suspect and is not it: the same runs at `LC_ALL=C` and with `LANG`,
-`LC_ALL` and `LC_CTYPE` unset reach identical counts.
+something the reference cannot do.
 
-**This does not shrink the gap, it moves it.** Those twenty chunks currently
-sit outside the denominator; graded, they become chunks this shell is measured
-against and mostly does not reach. That is better information and a larger
-number, and it is #5203.
+**The first reading of this was that a resolvable module path recovers them,
+and that was wrong** — a cause proposed from the shape of the numbers rather
+than measured, which is the thing this page exists to warn about. Locale was
+excluded properly (identical counts at `LC_ALL=C` and with `LANG`, `LC_ALL`
+and `LC_CTYPE` unset) and then a cause was asserted anyway, on no better
+evidence than that it would explain the table. It does not survive the
+harness: `E03posix` reaches 18 of 18 under the harness's own environment —
+`env -i`, `PATH` without `/opt/homebrew/bin`, `LC_ALL=C LANG=C TERM=dumb
+TZ=UTC`, `HOME` and `TMPDIR` inside the run directory — and in a minimal
+layout with only the `.ztst` and `ztst.zsh` beside it.
+
+Measured in the harness with a counter that can see a failing file, it is
+**two files, not nine** — see the ungradeable section below. So the twenty
+chunks were not held out because the reference cannot run them; eighteen of
+them it runs. **This makes the target larger, not smaller** (#5203).
 
 ### Why not differing lines
 
@@ -337,10 +345,41 @@ failing files, nine have a reference that fails its own chunks in this
 layout.** Measured at `fd4c74161`; the table above has since been re-measured
 at `d3a708b3d` and its `ref` column did not move, so these twenty stand.
 
-**They are the layout's twenty and not the reference's** — run outside it the
-reference passes all twenty, row for row. That is #5203 and the evidence is in
-the section of that name above; read it before treating any of these nine as
-a limit on what zsh does.
+**Measured in the harness, it is two files and not nine.** The table above was
+built from a counter that cannot answer the question it was read as
+answering: `StrictOnFailure`'s denominator is the **strict** files, and a file
+whose reference failed is by that fact a file the two shells rarely match byte
+for byte. Asked per file it returns `0/0` on `V06parameter` — whose reference
+fails at its own first chunk — exactly as readily as on a file with nothing
+wrong.
+
+`RefDriverFailed` asks the same question over every scored file, and it was
+built by first checking it fires: `V06parameter` reads **1/1**. Over the nine:
+
+| file | reference's driver failed |
+|---|---|
+| `V06parameter` | **yes** |
+| `E02xtrace` | **yes** |
+| `E03posix` | no |
+| `D07multibyte` | no |
+| `V14system` | no |
+| `V09datetime` | no |
+| `D04parameter` | no |
+| `D06subscript` | no |
+| `D01prompt` | no |
+
+So **seven of the nine rows below are not reference failures at all**, and the
+twenty chunks this section subtracts from the target are two. The out-of-
+harness runs agree on seven of those and part from the harness on `E02xtrace`,
+which fails here and passes there — one file's worth of environment, not a
+class. That is #5203.
+
+**The direction is the point.** Every other correction on this page took a
+number that flattered this shell and made it worse. This one takes a number
+that flattered it the other way: twenty chunks were being held out of the
+denominator as things zsh cannot do here, and eighteen of them are things zsh
+does. A target built from what was not *obviously* excluded is how the old bar
+of 58 came about, and this is the same error with the sign reversed.
 
 | file | reference passes | of | ungradeable |
 |---|---:|---:|---:|

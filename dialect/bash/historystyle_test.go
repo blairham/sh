@@ -121,3 +121,24 @@ func TestBashHeadAndTailTakeNoCount(t *testing.T) {
 		t.Errorf("expanded to %q, want %q", res.Line, want)
 	}
 }
+
+// bash has no `:P` modifier, and the letter is unrecognized.
+//
+// Inherited from the substrate, so this row holds the preset's No in place.
+// Measured 2026-09-30 on 5.3.20 and 3.2.57 alike: `!!:1:P` is
+// `P: unrecognized history modifier`.
+func TestBashHasNoAbsolutePathModifier(t *testing.T) {
+	if got := bash.Semantics().HistoryAbsolutePathModifier; got != interp.No {
+		t.Errorf("HistoryAbsolutePathModifier is %v, want No", got)
+	}
+	sem, diag, d := bash.Semantics(), bash.Diagnostics(), bash.Dialect()
+	r := &interp.Runner{Semantics: &sem, Diagnostics: &diag, Name: "bash", Dialect: &d}
+	bash.Apply(r)
+	_, err := r.ExpandHistoryAlways("echo !!:1:P", []string{"echo /a/b"}, 1)
+	if err == nil {
+		t.Fatal("the modifier was accepted")
+	}
+	if got, want := r.HistoryExpansionRefusal(err), "P: unrecognized history modifier"; got != want {
+		t.Errorf("the refusal reads %q, want %q", got, want)
+	}
+}

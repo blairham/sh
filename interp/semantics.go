@@ -24671,6 +24671,25 @@ type Semantics struct {
 	// Read, not asked, for the reason HistoryWords is.
 	HistoryHeadAndTailTakeACount Answer
 
+	// HistoryAbsolutePathModifier reads `:P` in a history reference as a
+	// modifier that makes the word an absolute, resolved path. The column
+	// without it says `P: unrecognized history modifier`.
+	//
+	// Measured 2026-09-30 against a symlink tree built for the purpose, so
+	// that no row depends on this machine: zsh 5.9.2 has it, bash 5.3.20 and
+	// 3.2.57 refuse it, ksh93u+ cannot be asked at all, and dash and BusyBox
+	// ash have no history expansion.
+	//
+	// What it resolves **to** is the narrow part, and two plausible readings
+	// are both wrong: it is not a strict resolver, because a missing tail is
+	// appended rather than refused, and it is not textual, because `..` is
+	// physical — with `deep` a symlink to `real/dir`, `deep/..` is `real`
+	// and not the directory `deep` sits in. See
+	// histexpand.Chars.AbsolutePathModifier for the whole grid and
+	// Runner.resolvedAsFarAsItGoes for the walk. Read, not asked, for the
+	// reason HistoryWords is.
+	HistoryAbsolutePathModifier Answer
+
 	// ImmovableOptionsSetAtInvocation lets the command line that started the
 	// shell move an option a *running script* may not — a route split inside
 	// one shell rather than a disagreement between two, which is why it is
@@ -30245,6 +30264,11 @@ func PosixSemantics() Semantics {
 		// expander to reach it.
 		// See Semantics.HistoryHeadAndTailTakeACount.
 		HistoryHeadAndTailTakeACount: No,
+		// And there is no `:P`: the letter is an unrecognized modifier, which
+		// is what bash says in both releases. Answered here for the same
+		// reason as the lines above.
+		// See Semantics.HistoryAbsolutePathModifier.
+		HistoryAbsolutePathModifier: No,
 		// And the standard has no expander to read a double quote with, so
 		// the preset takes the simpler of the two readings — a `"` ends a
 		// name wherever it stands — and bash, whose answer depends on

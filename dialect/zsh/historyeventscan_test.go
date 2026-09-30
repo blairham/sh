@@ -4,6 +4,8 @@
 package zsh_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
@@ -151,5 +153,46 @@ func TestZshHeadAndTailTakeACount(t *testing.T) {
 		t.Error("an over-counted tail was accepted with the wording cleared")
 	} else if got, want := r2.HistoryExpansionRefusal(err2), "modifier failed: t"; got != want {
 		t.Errorf("the fallback reads %q, want %q", got, want)
+	}
+}
+
+// `:P` makes the word an absolute, resolved path, and bash has no such
+// modifier.
+//
+// See Semantics.HistoryAbsolutePathModifier. The expansion is run through the
+// runner, which is the only place the axis, the modifier and the resolver
+// meet — and the resolver is the reason this row matters beyond the axis
+// read: a nil one makes `:P` the identity, which passes the suite chunk.
+func TestZshAbsolutePathModifier(t *testing.T) {
+	if got := zsh.Semantics().HistoryAbsolutePathModifier; got != interp.Yes {
+		t.Errorf("HistoryAbsolutePathModifier is %v, want Yes", got)
+	}
+	base := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		t.Fatalf("resolving the temp directory: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(resolved, "real", "dir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("real", filepath.Join(resolved, "link")); err != nil {
+		t.Fatal(err)
+	}
+	sem, diag, d := zsh.Semantics(), zsh.Diagnostics(), zsh.Dialect()
+	r := &interp.Runner{
+		Semantics: &sem, Diagnostics: &diag, Name: "zsh",
+		// See the guard in internal/dialecttest: a nil Dialect is the core.
+		Dialect: &d,
+		Dir:     resolved,
+	}
+	zsh.Apply(r)
+	// A link and a missing tail in one word, so the row fails for an
+	// identity resolver and for a strict one alike.
+	res, err := r.ExpandHistoryAlways("echo !1:1:P", []string{"echo link/nope"}, 1)
+	if err != nil {
+		t.Fatalf("expanding: %v", err)
+	}
+	if want := "echo " + resolved + "/real/nope"; res.Line != want {
+		t.Errorf("expanded to %q, want %q", res.Line, want)
 	}
 }

@@ -196,6 +196,50 @@ type Chars struct {
 	// `/a/b/`, `h3` is `/a/b/` — the text as written — while `t3` is `/a/b`,
 	// without it.
 	HeadAndTailTakeACount bool
+
+	// AbsolutePathModifier reads `:P` as a modifier that makes the word an
+	// absolute, resolved path. The column without it says
+	// `P: unrecognized history modifier`.
+	//
+	// Measured 2026-09-30 against a symlink tree built for the purpose, so
+	// that none of it depends on this machine — `$D/fs/link` is a symlink to
+	// `real`, `$D/fs/deep` to `real/dir`, `$D/fs/dangling` to a name that
+	// does not exist, and the working directory is `$D/fs`:
+	//
+	//	written                  zsh 5.9.2
+	//	$D/fs/real/dir           $D/fs/real/dir
+	//	$D/fs/link/dir           $D/fs/real/dir
+	//	$D/fs/deep               $D/fs/real/dir
+	//	real/dir                 $D/fs/real/dir
+	//	./real/dir               $D/fs/real/dir
+	//	.                        $D/fs
+	//	..                       $D
+	//	/                        /
+	//	/../..                   /
+	//	$D/fs/real/dir/          $D/fs/real/dir
+	//	$D/fs/real/./dir         $D/fs/real/dir
+	//
+	// bash and ksh93 have no such modifier; dash and BusyBox ash have no
+	// history expansion at all.
+	//
+	// **It resolves as far as the path resolves and keeps the rest as
+	// written**, which is the half that a strict resolver gets wrong by
+	// refusing and a textual one gets wrong by cleaning:
+	//
+	//	$D/fs/real/nope/deep     $D/fs/real/nope/deep
+	//	$D/fs/link/nope          $D/fs/real/nope
+	//	$D/fs/dangling           $D/fs/dangling
+	//	$D/fs/dangling/more      $D/fs/dangling/more
+	//
+	// So the symlink in front of a missing tail is still followed, and a
+	// **dangling** link is neither followed nor refused.
+	//
+	// And `..` is resolved **physically, not lexically**, which is the one
+	// row a purely textual implementation cannot fake: `$D/fs/deep/..` is
+	// `$D/fs/real` and not `$D/fs`, because `deep` is followed first. Past
+	// the point where resolution stops the remainder is appended verbatim,
+	// `..` included — `$D/fs/dangling/..` stays as written.
+	AbsolutePathModifier bool
 }
 
 // Default is what a shell starts with: `!^#`.
@@ -214,6 +258,24 @@ type List struct {
 	// Memory is what earlier expansions left for later ones, and nil gives
 	// each call a fresh one. See Memory.
 	Memory *Memory
+
+	// AbsolutePath is how the `:P` modifier reaches the filesystem, and it is
+	// the only thing in this package that cannot be answered from the text.
+	//
+	// It takes the word as written and returns it made absolute against the
+	// working directory, with `.`, `..` and symlinks resolved as far as they
+	// resolve — see Chars.AbsolutePathModifier for what "as far as" means,
+	// measured. A nil one makes `:P` the identity, which is what a caller
+	// with no filesystem to offer should want: the modifier is then a
+	// no-op rather than a refusal, because the dialect that has it does not
+	// refuse.
+	//
+	// A function rather than a field on Chars, because Chars is a value
+	// describing the *grammar* and is copied freely — a func in it would
+	// quietly make it uncomparable. Whether the dialect has the modifier at
+	// all is the grammar's business and lives there; where the answer comes
+	// from is the session's, and lives here beside Memory.
+	AbsolutePath func(string) string
 }
 
 // Memory is the last substitution and the last `?string?` search, which
@@ -696,7 +758,7 @@ func one(src []rune, i int, sofar string, hist List, c Chars, st *state, double 
 	if ok {
 		text = strings.Join(chosen, " ")
 	}
-	text, j, print, err := modifiers(src, j, text, st, c)
+	text, j, print, err := modifiers(src, j, text, st, c, hist.AbsolutePath)
 	if err != nil {
 		return "", 0, false, err
 	}
@@ -1167,7 +1229,7 @@ func designate(src []rune, j int, words []string, c Chars, st *state) ([]string,
 
 // modifiers applies the `:h`, `:t`, `:r`, `:e`, `:p`, `:q`, `:x`, `:s` and
 // `:&` chain, and reports whether `:p` was among them.
-func modifiers(src []rune, j int, text string, st *state, c Chars) (string, int, bool, error) {
+func modifiers(src []rune, j int, text string, st *state, c Chars, abs func(string) string) (string, int, bool, error) {
 	print := false
 	// chain is where the whole chain began, which is what a failed modifier
 	// is named after. See chainRef.
@@ -1217,6 +1279,18 @@ func modifiers(src []rune, j int, text string, st *state, c Chars) (string, int,
 			j++
 		case 'e':
 			text = ext(text)
+			j++
+		case 'P':
+			if !c.AbsolutePathModifier {
+				return "", 0, false, &BadModifier{Mod: "P"}
+			}
+			// A nil resolver leaves the word alone rather than refusing: the
+			// dialect that has this modifier does not refuse, so a caller
+			// with no filesystem should get a no-op and not a diagnostic
+			// that shell never prints. See List.AbsolutePath.
+			if abs != nil {
+				text = abs(text)
+			}
 			j++
 		case 'p':
 			print = true
@@ -1455,7 +1529,7 @@ func quick(line string, hist List, c Chars, st *state) (Result, error) {
 	if i < len(src) {
 		var err error
 		var print bool
-		out, _, print, err = modifiers(src, i, out, st, c)
+		out, _, print, err = modifiers(src, i, out, st, c, hist.AbsolutePath)
 		if err != nil {
 			return Result{}, err
 		}

@@ -147,6 +147,7 @@ func (r *Runner) HistoryChars() histexpand.Chars {
 	c.WordwiseSubstitution = r.sem().HistoryWordwiseSubstitutionModifier == Yes
 	c.SubstitutionUnescapesTheReplacement = r.sem().HistorySubstitutionUnescapesTheReplacement == Yes
 	c.HeadAndTailTakeACount = r.sem().HistoryHeadAndTailTakeACount == Yes
+	c.AbsolutePathModifier = r.sem().HistoryAbsolutePathModifier == Yes
 	switch r.sem().HistoryWords {
 	case HistoryWordsShell:
 		c.Words = histexpand.WordsShell
@@ -201,7 +202,7 @@ func (r *Runner) ExpandHistory(line string, lines []string, first int) (histexpa
 // purpose. Measured — `set -o history; echo one two three; history -p "!!"`
 // writes `echo one two three` with the letter never written.
 func (r *Runner) ExpandHistoryAlways(line string, lines []string, first int) (histexpand.Result, error) {
-	return histexpand.Expand(line, histexpand.List{Lines: lines, First: first, Memory: r.historyMemory()}, r.HistoryChars())
+	return histexpand.Expand(line, histexpand.List{Lines: lines, First: first, Memory: r.historyMemory(), AbsolutePath: r.resolvedAsFarAsItGoes}, r.HistoryChars())
 }
 
 // ExpandHistoryIn is the same for a front end handing over one **physical**
@@ -213,7 +214,7 @@ func (r *Runner) ExpandHistoryIn(line string, in histexpand.Quote, lines []strin
 	if !r.histExpand {
 		return histexpand.Result{Line: line}, nil
 	}
-	return histexpand.ExpandIn(line, in, histexpand.List{Lines: lines, First: first, Memory: r.historyMemory()}, r.HistoryChars())
+	return histexpand.ExpandIn(line, in, histexpand.List{Lines: lines, First: first, Memory: r.historyMemory(), AbsolutePath: r.resolvedAsFarAsItGoes}, r.HistoryChars())
 }
 
 // historyMemory is the shell's histexpand.Memory, made the first time a line

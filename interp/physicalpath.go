@@ -496,3 +496,64 @@ func (r *Runner) physicalPathCancelingIntoTheDirectoryHeld(base, operand string)
 		return joined(), err
 	}
 }
+
+// resolvedAsFarAsItGoes is where a path physically is, with whatever could
+// not be resolved left on the end as written.
+//
+// This is what the `:P` history modifier reports — see
+// histexpand.Chars.AbsolutePathModifier for the panel and for every row it was
+// measured against. The shape it has to match is narrow, and both of the
+// obvious implementations get it wrong:
+//
+//   - A **strict** resolver refuses a path with a missing tail, where this
+//     modifier answers with the tail appended: `link/nope` is the *resolved*
+//     link and then `nope`, and `dangling` is neither followed nor refused.
+//   - A **textual** one cleans `..` lexically, and `..` here is physical:
+//     with `deep` a symlink to `real/dir`, `deep/..` is `…/real` and not the
+//     directory `deep` sits in. That row is the one a string implementation
+//     cannot fake, and it holds for a relative operand too.
+//
+// It is built by **retrying [Runner.physicalPath] on shorter prefixes** rather
+// than by a second walk that tolerates failure. The retry is what makes the
+// dangling link come out right: a tolerant walk would follow the link, fail on
+// its target, and have the target's name in hand — `…/nowhere`, which is not
+// what the reference says. Stripping from the right instead asks "does this
+// whole prefix resolve", so the link is dropped as a unit and its own name
+// stays. It also means there is one walk in this package and not two, which is
+// the reason it is written this way rather than for the cost: every prefix is
+// gated and recorded exactly as `cd -P` would be.
+func (r *Runner) resolvedAsFarAsItGoes(path string) string {
+	if path == "" {
+		return path
+	}
+	// uncleanedJoin and not filepath.Join, for the reason the `..` bullet
+	// above gives: Join cleans, and a cleaned `deep/..` has already lost the
+	// symlink the answer depends on.
+	whole := uncleanedJoin(r.workDir(), path)
+	if !filepath.IsAbs(whole) {
+		// No directory to resolve against, which this package may not borrow
+		// from the process. The word is left as written.
+		return path
+	}
+	vol := filepath.VolumeName(whole)
+	sep := string(filepath.Separator)
+	comps := splitPathComponents(whole[len(vol):])
+	for n := len(comps); n >= 0; n-- {
+		prefix := vol + sep + strings.Join(comps[:n], sep)
+		resolved, err := r.physicalPath(prefix)
+		if err != nil {
+			continue
+		}
+		if n == len(comps) {
+			return resolved
+		}
+		tail := strings.Join(comps[n:], sep)
+		if strings.HasSuffix(resolved, sep) {
+			return resolved + tail
+		}
+		return resolved + sep + tail
+	}
+	// Not even the root resolved, which a gate can say. The word as written
+	// is the honest answer and the modifier does not refuse.
+	return path
+}

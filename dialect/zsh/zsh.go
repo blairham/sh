@@ -3066,6 +3066,7 @@ func Semantics() interp.Semantics {
 	// measured, `.` reports 126 and the sourcing file runs the command after
 	// it. The status is Diagnostics.SourcedFatalStatus.
 	s.FatalErrorEndsBorrowedTextOnly = interp.Yes
+	s.TraceFromBorrowedTextFollowsItsRedirection = interp.No
 	// Except `${x?word}`, which this shell's own manual documents as printing
 	// the word and *exiting the shell* — and measured to do exactly that from
 	// inside a sourced file, where an unset parameter under `set -u` two

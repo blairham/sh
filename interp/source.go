@@ -366,6 +366,11 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		inside = EvalContextEval
 	}
 	defer r.enterEvalContext(inside)()
+	// And where this text's `xtrace` goes, which one shell keeps out of the
+	// redirection applied to the `.` or the `eval` itself. This is the one
+	// door both constructs come through — see the comment on indirection
+	// above — so it is asked here once rather than at each builtin.
+	defer r.borrowedTextTraceStream()()
 	// And an execution unit, so a bare `exit` or `return` in the text
 	// reports what the text has run rather than what the caller left behind.
 	// Both routes here are units in the column that keeps the register:
@@ -1720,4 +1725,79 @@ func builtinRunsTheScriptsOwnCommands(argv []string) bool {
 		return false
 	}
 	return false
+}
+
+// borrowedTextTraceStream keeps this text's trace lines out of the
+// redirection applied to the `.` or the `eval` itself, where the dialect says
+// they do not follow it, and returns the undo.
+//
+// **Only that construct's own redirection is undone**, which is why this
+// picks a writer per line rather than pinning a stream for the duration. A
+// redirection on anything *inside* the text still moves the trace: measured
+// on zsh 5.9.2, `g(){ print in-g }; . ./s 2>>h` with `s` holding `g 2>>f`
+// puts `+g:0> print in-g` in **f** and leaves `h` empty. A pinned sink
+// answers `h`'s replacement for both and loses the first — which is what an
+// earlier version of this did, and what `E02xtrace.ztst` caught, because the
+// suite runs each chunk through an `eval` and the chunk redirects
+// deliberately.
+//
+// The destination is reached by asking what a trace would have gone to had
+// this construct not been redirected, which is what composes the nesting:
+// `. a 2>>f` where `a` runs `. b 2>>g` leaves **both** files empty, and each
+// construct arriving at its answer through the one outside it is what
+// produces that. Recomputing from the raw stream instead would put the inner
+// trace in `g`.
+//
+// See Semantics.TraceFromBorrowedTextFollowsItsRedirection for the panel and
+// for the three rows that pin all of this together.
+func (r *Runner) borrowedTextTraceStream() func() {
+	if !r.tracing() {
+		// Nothing is being traced, so there is no line to route and no
+		// disagreement to consult. **Load-bearing rather than a shortcut**:
+		// without it every redirected `eval` asks the axis, and a strict
+		// core refuses by name over a question the text never reaches —
+		// TestTheLinesBeforeARefusalStillRan turned into a refusal when this
+		// guard was missing.
+		return func() {}
+	}
+	if r.stderrBeforeRedirs == nil || r.stderrBeforeRedirs == r.Stderr {
+		// Nothing of this construct's own moved the stream, so there is
+		// nothing to undo — and no axis to consult over a stream this would
+		// have written to anyway.
+		return func() {}
+	}
+	if r.ask(r.sem().TraceFromBorrowedTextFollowsItsRedirection,
+		"`xtrace` from a `.` or an `eval` following the redirection on it") {
+		return func() {}
+	}
+	if r.unspecified {
+		return func() {}
+	}
+	redirected, before := r.Stderr, r.stderrBeforeRedirs
+	// Asked with this construct's own redirection lifted, so an enclosing
+	// borrowed text answers first.
+	r.Stderr = before
+	dest := r.traceDestination()
+	r.Stderr = redirected
+	saved := r.traceSink
+	r.traceSink = func(in *Runner) io.Writer {
+		if in.Stderr == redirected {
+			return dest
+		}
+		// Something inside moved the stream, so the trace follows it.
+		return nil
+	}
+	return func() { r.traceSink = saved }
+}
+
+// traceDestination is where a trace line goes right now: the sink's answer
+// where it has one and standard error otherwise, which is the order tracef
+// takes, in a form a caller can read rather than write to.
+func (r *Runner) traceDestination() io.Writer {
+	if r.traceSink != nil {
+		if w := r.traceSink(r); w != nil {
+			return w
+		}
+	}
+	return r.Stderr
 }

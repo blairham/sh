@@ -254,6 +254,7 @@ func Semantics() interp.Semantics {
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
 
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	s.TraceFromBorrowedTextFollowsItsRedirection = interp.Yes
 	// **Not dash's answer, and that is the point.** BusyBox ash has named
 	// bases where dash has none, so the two split on what `8#` comes to:
 	// measured 2026-09-28 in `alpine:3.20`, `$(( 8#7 ))` is 7 and `$(( 8# ))`

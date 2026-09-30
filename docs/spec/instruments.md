@@ -476,8 +476,8 @@ made the real separator indistinguishable from the formatting. A three-word
 result read as one word for several minutes, which inverted the conclusion:
 the question was whether a brace range had expanded at all.
 
-> **Ask what your filter normalises, and whether the thing under test is made
-> of it.** Spacing, case, trailing newlines, quoting, colour: each is noise in
+> **Ask what your filter normalizes, and whether the thing under test is made
+> of it.** Spacing, case, trailing newlines, quoting, color: each is noise in
 > most measurements and the subject in some. `od -An -tx1` fixed this one by
 > not having a format whose separator collides with the data.
 
@@ -485,7 +485,81 @@ The general form is worse than a crash because a crash is reported. Here the
 pipeline exited 0, printed something plausible, and the loss happened in the
 one stage nobody thinks of as part of the instrument.
 
-## 13. Where these came from
+## 13. A mutant that survives where a comment says it should not
+
+Section 2 lists five readings of `SURVIVED`, all of them about code and
+tests. There is a sixth subject a survivor can be evidence about: **a
+comment.**
+
+A byte-range helper had a shape test that counted bytes, with a comment
+saying it had to — that a four-rune body and a four-byte body would otherwise
+take whichever test the caller happened to reach. A mutant replacing the byte
+length test with a rune one **survived**, which said the comment was a claim
+nothing could support.
+
+> **A mutant that survives where a comment says it should not is the comment
+> being checked.** There are two outcomes — the comment is wrong, or the grid
+> is missing the case — and they are told apart **by going to the reference,
+> not by weakening the comment.**
+
+Here the comment was right and the grid was short. Under `no_multibyte` a
+two-byte sequence is **two characters**, so `{$'\xc3\xa9'..a}` is five
+characters and four runes: a rune-counting length test takes it for a range
+and reads its endpoints from the wrong positions. Three rows, and the mutant
+dies.
+
+The failure mode to name is the easy resolution. Softening the comment — "the
+byte count is used here" instead of "it must be" — makes the survivor
+consistent with the code and leaves the bug, and it looks like diligence
+because a claim was made more modest. **A comment that asserts a distinction
+is a testable claim**, and a surviving mutant is the test reporting on it.
+
+The converse is worth stating too, because it is the commoner case: where the
+comment turns out to be wrong, the repair is the comment *and* the code
+simplified to match, not a row added to defend a distinction that does not
+exist.
+
+## 14. A check that normalizes its input cannot see the thing under test
+
+Section 12 is about a filter that tidies. This is the same fault inside a
+single function call, and it is the sharpest example the campaign produced,
+because the production code and the test made **the same mistake from
+opposite ends.**
+
+The subject: a brace range whose body holds a byte the encoding cannot
+decode. The reference leaves such a word alone.
+
+**In the code**, the body was converted with `[]rune` before anything was
+decided. Go maps each undecodable byte to U+FFFD, and the length test that
+followed then *passed* — so `{$'\x80'..$'\x81'}` became a one-element range
+of U+FFFD and came back as that character. Converting first invented the
+thing the check was about.
+
+**In the test**, the assertion that the result holds no U+FFFD was written
+`strings.ContainsRune(out, utf8.RuneError)` — and it **failed on correct
+output.** That function iterates runes, and Go decodes an undecodable byte
+*as* `utf8.RuneError`, so it answers true for the very input the row is built
+from.
+
+> **"Could not be decoded" and "contains the replacement character" are
+> different facts, and every rune-level reading collapses them.** Ask the
+> question at the byte level: `utf8.ValidString` for the first,
+> `strings.Contains(s, "\uFFFD")` for the second.
+
+The control that separates them is the one to keep: **a U+FFFD the script
+wrote.** It is perfectly decodable, both shells expand a range of it, and
+every implementation that checks *after* converting declines it. So it is
+both a test row and the row that kills a mutant written as that
+implementation — the wrong version is kept as the guard, the way section 2's
+fifth reading asks.
+
+The general shape: a normalizing step between the input and the check is part
+of the instrument, whether it is a shell pipeline stage, a library function,
+or a type conversion. `[]rune`, `strings.ToLower`, `filepath.Clean`,
+`strings.TrimSpace` and a `%v` format are all lossy about something, and the
+question is only ever whether they are lossy about *this*.
+
+## 15. Where these came from
 
 Each rule above cost at least one wrong conclusion that was acted on. They
 were collected during the `zsh-suite` burndown between September 2026 and the

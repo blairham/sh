@@ -4,10 +4,13 @@
 package zsh_test
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -83,5 +86,105 @@ func TestAFunctionNamedByAnAliasIsRefused(t *testing.T) {
 	p.Parse()
 	if err := p.Err(); err != nil {
 		t.Errorf("the keyword spelling: %v, want the definition", err)
+	}
+}
+
+// `posixaliases` keeps a **reserved word** out of alias expansion.
+//
+// The option had been remembered and ignored, so `A02alias.ztst` stopped on
+// `! true` running an alias named `!` where the reference negates. The flag
+// it needs already exists — it is the one bash's POSIX mode moves — so this
+// is a name being wired to a rule rather than a new rule.
+//
+// Measured 2026-09-30 on zsh 5.9.2 from a script file, an alias defined for
+// each word and the word then written where a command goes: with the option
+// on the **word** runs for `!`, `if`, `then`, `while`, `do`, `for`, `case`,
+// `function` and `time`, and with it off the alias does. An ordinary name
+// expands either way.
+//
+// Two levels, because the change has two halves. The parser rows are the
+// behavior — what actually runs — and the runner rows are the wiring, which
+// is the half this change adds and the half a parser test cannot see.
+func TestPosixAliasesKeepsAReservedWordOutOfAliasExpansion(t *testing.T) {
+	table := func(name string) (string, bool) {
+		v, ok := map[string]string{"!": "print GOT", "myword": "print GOT"}[name]
+		return v, ok
+	}
+	expanded := func(t *testing.T, d syntax.Dialect, src string) bool {
+		t.Helper()
+		p := syntax.NewParser(src, d)
+		p.Aliases = table
+		f := p.Parse()
+		if err := p.Err(); err != nil {
+			t.Fatalf("%q: %v", src, err)
+		}
+		return strings.Contains(syntax.Print(f), "GOT")
+	}
+	on, off := zsh.Dialect(), zsh.Dialect()
+	on.AliasesExpandReservedWords = false // what `setopt posixaliases` means
+	off.AliasesExpandReservedWords = true
+
+	if expanded(t, on, "! true\n") {
+		t.Error("with posixaliases the `!` alias was expanded, want the reserved word")
+	}
+	// The control: the same alias, the same text, the flag the other way.
+	if !expanded(t, off, "! true\n") {
+		t.Error("without posixaliases the `!` alias was not expanded")
+	}
+	// And an ordinary name is untouched either way, which is what says the
+	// option is about reserved words and not about aliases.
+	for _, d := range []syntax.Dialect{on, off} {
+		if !expanded(t, d, "myword\n") {
+			t.Error("an ordinary name did not expand")
+		}
+	}
+}
+
+// And the wiring: `setopt posixaliases` moves that flag, and `unsetopt` puts
+// it back.
+//
+// The option was `recorded` — accepted, remembered, and acted on by nothing —
+// so this is the half that makes the rows above reachable from a script. The
+// published count of recorded names drops by one with it, which a test in
+// this package enforces against `docs/spec/semantics.md`.
+func TestPosixAliasesMovesTheGrammarFlag(t *testing.T) {
+	d := zsh.Dialect()
+	sem, diag := zsh.Semantics(), zsh.Diagnostics()
+	dir := t.TempDir()
+	r := &interp.Runner{
+		Semantics: &sem, Diagnostics: &diag, Name: "zsh",
+		Dialect: &d, Dir: dir, Vars: map[string]string{"PATH": dir},
+	}
+	zsh.Apply(r)
+	if !r.Dialect.AliasesExpandReservedWords {
+		t.Fatal("this dialect starts with reserved-word aliases off; the rows below assume on")
+	}
+	run := func(src string) {
+		t.Helper()
+		f, err := syntax.Parse(src, zsh.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("setopt posixaliases\n")
+	if r.Dialect.AliasesExpandReservedWords {
+		t.Error("setopt posixaliases left reserved-word alias expansion on")
+	}
+	run("unsetopt posixaliases\n")
+	if !r.Dialect.AliasesExpandReservedWords {
+		t.Error("unsetopt posixaliases did not put reserved-word alias expansion back")
+	}
+	// And the option reads back, which is a separate half: the setter moves
+	// the flag and the getter reports it, and an un-inverted getter passes
+	// every row above while telling a script the opposite of the truth.
+	var out bytes.Buffer
+	r.Stdout = &out
+	run("setopt posixaliases\nif [[ -o posixaliases ]]; then print ON; else print OFF; fi\n")
+	run("unsetopt posixaliases\nif [[ -o posixaliases ]]; then print ON; else print OFF; fi\n")
+	if got := out.String(); got != "ON\nOFF\n" {
+		t.Errorf("the option reads back %q, want \"ON\\nOFF\\n\"", got)
 	}
 }

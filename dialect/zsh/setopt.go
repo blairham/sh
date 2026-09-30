@@ -1553,7 +1553,24 @@ var zshOptions = []zshOption{
 	recorded("pathdirs", false),
 	recorded("pathscript", false),
 	setOptBacked("pipefail", false, "pipefail", false),
-	recorded("posixaliases", false),
+	// `posixaliases` keeps a **reserved word** out of alias expansion, which
+	// is the grammar flag bash's POSIX mode already moves through the same
+	// door — see syntax.Dialect.AliasesExpandReservedWords.
+	//
+	// Measured 2026-09-30 on zsh 5.9.2 from a script file, an alias defined
+	// for each word and then the word written where a command goes:
+	//
+	//	word                       off              on
+	//	! if then while do for     the alias ran    the word did
+	//	case function time repeat  the alias ran    the word did
+	//	coproc { [[                the alias ran    the word did
+	//	echo, an ordinary name     the alias ran    the alias ran
+	//
+	// So it is every reserved word and nothing else, which is what the flag
+	// already says; the option had been remembered and ignored, so
+	// `A02alias.ztst` stopped on `! true` running the alias where the
+	// reference negates.
+	switchBacked("posixaliases", false, posixAliasesOn, setPosixAliases),
 	recorded("posixargzero", false),
 	{
 		// zsh's POSIX_BUILTINS, and the three things it does that this shell
@@ -3447,4 +3464,31 @@ func dollarZeroScope(r *interp.Runner) (interp.DollarZeroScope, bool) {
 		return interp.DollarZeroIsTheShellsOwnName, true
 	}
 	return 0, false
+}
+
+// posixAliasesOn and setPosixAliases move the grammar flag the option names.
+//
+// Inverted, because the option says what may **not** happen: `posixaliases`
+// on is AliasesExpandReservedWords off. A runner with no dialect of its own
+// parses with the core and has nothing to move, which is the same guard
+// emulateGrammar keeps and for the same reason.
+func posixAliasesOn(r *interp.Runner) bool {
+	return r.Dialect != nil && !r.Dialect.AliasesExpandReservedWords
+}
+
+func setPosixAliases(r *interp.Runner, on bool) {
+	if r.Dialect == nil {
+		// The guard emulateGrammar keeps, for its reason. It is not
+		// reachable from a test in this package — internal/dialecttest
+		// refuses a runner built without a Dialect, and has no escape for
+		// one — so a mutant removing it survives by construction rather than
+		// for want of a row.
+		return
+	}
+	if r.Dialect.AliasesExpandReservedWords == !on {
+		return
+	}
+	d := *r.Dialect
+	d.AliasesExpandReservedWords = !on
+	r.Dialect = &d
 }

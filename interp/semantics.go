@@ -25820,6 +25820,33 @@ type Semantics struct {
 	// the commands of the same file fire no DEBUG.
 	DebugTrapRunsInsideCalls Answer
 
+	// DebugActionArmingErrExitSkipsTheCommand makes a DEBUG action that
+	// turns ERR_EXIT **on** skip the command it fired for, and spends the
+	// option doing it.
+	//
+	// Measured 2026-09-30, a function whose DEBUG trap arms ERR_EXIT on one
+	// line of three:
+	//
+	//	                  line skipped?  ERR_EXIT after
+	//	zsh 5.9.2         yes            off
+	//	bash 5.3.20       no             on
+	//	ksh93u+           no             on
+	//
+	// Two effects and one rule, and `C05debug.ztst`'s "Skip line from DEBUG
+	// trap" asserts both: its expected output is `3 three` and `5 five` with
+	// no `4 four`, and no `Hey, ERREXIT is set!` from the line that tests the
+	// option afterwards.
+	//
+	// **The arming decides, not the action's status.** A DEBUG action
+	// returning non-zero without touching ERR_EXIT skips nothing here —
+	// measured, a body of `false` leaves both commands running — which is a
+	// different question and DebugActionDecidesTheCommand's.
+	//
+	// dash and ash cannot be asked: neither has a DEBUG trap. Measured,
+	// `trap 'echo d' DEBUG` is `DEBUG: bad trap` in dash 0.5.12 and
+	// `invalid signal specification` in BusyBox ash.
+	DebugActionArmingErrExitSkipsTheCommand Answer
+
 	// DebugTrapRefiresOnEnteringAFunction fires the DEBUG trap a *second*
 	// time for a function call: once where the call was written, and again
 	// once the frame has been entered, with the call word still the current

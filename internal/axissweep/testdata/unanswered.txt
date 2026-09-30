@@ -100,6 +100,7 @@ ash   CoprocEndsInAnArray
 ash   DebugTrapRefiresOnEnteringAFunction
 ash   DebugTrapRunsBeforeTheCommand
 ash   DebugTrapRunsInSubshells
+ash   DebugActionArmingErrExitSkipsTheCommand
 ash   DebugTrapRunsInsideCalls
 ash   DeclarationListingFilter
 ash   DeclarationRereadsAParenthesizedValue
@@ -421,6 +422,7 @@ dash  CoprocEndsInAnArray
 dash  DebugTrapRefiresOnEnteringAFunction
 dash  DebugTrapRunsBeforeTheCommand
 dash  DebugTrapRunsInSubshells
+dash  DebugActionArmingErrExitSkipsTheCommand
 dash  DebugTrapRunsInsideCalls
 dash  DeclarationListingFilter
 dash  DeclarationRereadsAParenthesizedValue

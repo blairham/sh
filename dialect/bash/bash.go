@@ -2837,6 +2837,7 @@ func Semantics() interp.Semantics {
 	// /usr/bin/false` both write EE there.
 	s.FailingPipelineWhoseLastElementRanHere = interp.LastElementJudgedThenThePipeline
 	s.DebugTrapRunsInsideCalls = interp.No
+	s.DebugActionArmingErrExitSkipsTheCommand = interp.No
 	s.DebugTrapRefiresOnEnteringAFunction = interp.Yes
 	// The heads whose own work is a word or an expression: `case`, `[[`,
 	// `((` and `select` once each, the list `for` on every pass and each of

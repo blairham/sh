@@ -3070,6 +3070,7 @@ func Semantics() interp.Semantics {
 	// pipefail; false | true` writes nothing (#2921).
 	s.FailingPipelineWhoseLastElementRanHere = interp.PipelineJudgedAsItsLastElement
 	s.DebugTrapRunsInsideCalls = interp.Yes
+	s.DebugActionArmingErrExitSkipsTheCommand = interp.No
 	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	// The same heads as the bash columns, and two measured departures: the
 	// menu loop's head repeats with its replies the way the list loop's

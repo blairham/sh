@@ -528,12 +528,15 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 					optionsOver = true
 					continue
 				case len(a) > 1 && (a[0] == '-' || a[0] == '+'):
-					var ok bool
-					i, ok = e.readOptionWord(r, args, i, &wantCode)
+					var ok, ends bool
+					i, ok, ends = e.readOptionWord(r, args, i, &wantCode)
 					if !ok {
 						return e, 1
 					}
 					sawFlags = true
+					if ends {
+						optionsOver = true
+					}
 					continue
 				}
 				optionsOver = true
@@ -640,7 +643,8 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 }
 
 // readOptionWord reads one option word after the mode, args[i], the way
-// `set` reads one, and returns the index of the last word it used.
+// `set` reads one, and returns the index of the last word it used and whether
+// the word ended the options.
 //
 // `-o` and `+o` take the rest of their word as the name when there is one
 // and the next word when there is not — measured, `emulate zsh -onullglob
@@ -648,49 +652,137 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 // such option: -c`. A missing name is `string expected after -o` in either
 // form. `c` marks the call for a string (see emulateArguments).
 //
-// The `+` form's other letters are *accepted and do nothing*, which is
-// measured rather than assumed and is not what the `-` form does: `emulate
-// zsh +X` is 0 where `emulate -X zsh` is `bad option: -X`, and a `+L` does
-// not undo a `-L` — the emulation stays function-local. Which letters mean
-// what after the mode is #5248's and is left as it was.
-func (e *emulateCall) readOptionWord(r *interp.Runner, args []string, i int, wantCode *bool) (int, bool) {
+// Every other letter is an **option letter**, the way `set` reads one
+// (#5248), and it is set after the emulation exactly as an `-o` name is —
+// see emulateLetter for which letters, and what they name.
+func (e *emulateCall) readOptionWord(r *interp.Runner, args []string, i int, wantCode *bool) (int, bool, bool) {
 	a := args[i]
 	on := a[0] == '-'
+	ends := false
 	for j := 1; j < len(a); j++ {
-		switch letter := a[j]; letter {
+		letter := rune(a[j])
+		switch letter {
 		case 'o':
 			name := a[j+1:]
 			if name == "" {
 				if i+1 >= len(args) {
 					r.Diagnosef("string expected after -o\n")
-					return i, false
+					return i, false, false
 				}
 				i++
 				name = args[i]
 			}
 			if !knownEmulateOption(r, name) {
-				return i, false
+				return i, false, false
 			}
 			e.options = append(e.options, emulateOption{name: name, on: on})
-			return i, true
+			return i, true, ends
 		case 'c':
 			*wantCode = true
-		case 'R':
+			continue
+		}
+		name, kind := emulateLetter(r, letter)
+		switch kind {
+		case letterEndsOptions:
+			ends = true
+		case letterBad:
+			r.Diagnosef("bad option: -%c\n", letter)
+			return i, false, false
+		case letterFixed:
 			if on {
-				e.strict = true
-			}
-		case 'L':
-			if on {
-				e.local = true
+				r.Diagnosef("can't change option: -%c\n", letter)
 			}
 		default:
-			if on {
-				r.Diagnosef("bad option: -%c\n", letter)
-				return i, false
-			}
+			e.options = append(e.options, emulateOption{name: name, on: on})
 		}
 	}
-	return i, true
+	return i, true, ends
+}
+
+// letterKind is what one option letter after the mode word is.
+type letterKind uint8
+
+const (
+	letterOption      letterKind = iota // names an option, set like `-o name`
+	letterBad                           // `bad option: -X`, and the call stops
+	letterFixed                         // `can't change option: -X`, and nothing moves
+	letterEndsOptions                   // `-b`: the options end with this word
+)
+
+// emulateLetter reads one option letter after the mode word (#5248).
+//
+// They are `set`'s letters, **from the table the caller's shell reads `set`
+// by**: zsh's own, or sh's while `shoptionletters` is on. Measured on zsh
+// 5.9.2, 2026-09-30, one letter at a time in both directions against a plain
+// emulation, under both tables:
+//
+//   - zsh's table: every letter of setLetterOptions and the eight every shell
+//     shares (`a e m n u v x C`) — so `-L` is `sunkeyboardhack`, `-R`
+//     `longlistjobs`, `-N` `autopushd`, `-G` `nullglob`, `-X` `listtypes`,
+//     and the digits theirs. `-b` is not a letter here: it **ends the
+//     options at the end of its word**, so `-Gb` sets nullglob and `-b -G` is
+//     `unknown argument -G`. `-j`, `-q`, `-z` and `-A` are `bad option`.
+//   - sh's: shLetterOptions and the same eight, and `-b` is `notify` — `+b`
+//     turns it off. Everything else, the digits and `-Z` included, is `bad
+//     option`: `emulate sh; emulate zsh -G` is refused, because the table is
+//     the caller's and not the mode being entered.
+//   - `-i`, `-m`, `-s`, `-t` and (zsh's table) `-Z` are `can't change
+//     option: -X` at status 0: said, nothing moves, and the call goes on —
+//     `emulate zsh -Z -c 'print ran'` runs. The `+` form of each is silent.
+//     `-m` and `-Z` were measured in a shell with no terminal, where the
+//     options behind them cannot move; in one with a terminal they read as
+//     the options do.
+//
+// A letter joins the sticky identity as the name it abbreviates: measured,
+// `-G` and `-o nullglob` are one emulation, and `-F` is `+o glob`.
+func emulateLetter(r *interp.Runner, letter rune) (string, letterKind) {
+	shLetters := zshOptions[shOptionLettersIndex].get(r)
+	switch letter {
+	case 'b':
+		if shLetters {
+			return "notify", letterOption
+		}
+		return "", letterEndsOptions
+	case 'i', 's', 't':
+		return "", letterFixed
+	case 'm':
+		if !r.Interactive {
+			return "", letterFixed
+		}
+		return "monitor", letterOption
+	case 'Z':
+		if shLetters {
+			return "", letterBad
+		}
+		if !r.Interactive {
+			return "", letterFixed
+		}
+		return "zle", letterOption
+	}
+	if name, ok := emulateSharedLetters[letter]; ok {
+		return name, letterOption
+	}
+	table := setLetterOptions
+	if shLetters {
+		table = shLetterOptions
+	}
+	if name, ok := table[letter]; ok && name != "" {
+		return name, letterOption
+	}
+	return "", letterBad
+}
+
+// emulateSharedLetters are the letters every shell spells alike, which the
+// substrate's own table answers for `set` and this builtin has to answer
+// itself.
+var emulateSharedLetters = map[rune]string{
+	'a': "allexport",
+	'e': "errexit",
+	'n': "noexec",
+	'u': "nounset",
+	'v': "verbose",
+	'x': "xtrace",
+	'C': "noclobber",
 }
 
 // knownEmulateOption refuses an `-o` or `+o` name no option answers to, at

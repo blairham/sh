@@ -110,7 +110,11 @@ can reach 0 differing lines without ever carrying a result.
 
 ## Failing (27), ranked by chunks unreached
 
-**Measured at `fd4c74161`, 2026-09-30**, one file per driver run.
+**Measured at `fd4c74161`, 2026-09-30**, one file per driver run, except
+`C05debug`, re-measured at `1c7625a42` after #5187 and carrying its own
+figures — 8 ref, 6 ours, and a front that has moved to the next chunk. A row
+updated in place without its own commit beside it is the staleness §10 warns
+about, so it is named rather than absorbed.
 
 Every row was **re-measured** rather than carried forward, and for the second
 time in a row **no front had moved** across the merges in between. That
@@ -168,9 +172,22 @@ magic, and this shell writes text by a decision recorded in
 `dialect/zsh/declined.go`. One unreached chunk, and no amount of work on this
 shell closes it.
 
-So three distinct ways the chunk count misleads about cost, all measured on
+And **a row can be gated on another row**, in which case the count is not
+merely blurred but *inverted*: a file that delegates to a large file reports a
+small number precisely because it stops early. `V10private` is the case, and
+it has its own paragraph under the table.
+
+So four distinct ways the chunk count misleads about cost, all measured on
 this page rather than argued: it is not a root-cause count, a one-chunk row
-can be three roots, and a cheap row can be unreachable.
+can be three roots, a cheap row can be unreachable, and a cheap row can be
+gated on the most expensive one.
+
+The fourth was in the prose under the table before it was in this list, and
+that is the whole reason it is here now: a front was chosen off the sort and
+the paragraph five lines below it — the one saying that row's number is the
+most misleading in the table — went unread. **A caution that is not in the
+enumeration a reader sorts by is a caution that gets sorted past.** The same
+correction this page made to itself once already, one level down.
 
 It is still a better proxy than lines, because it is monotone: closing a
 front can only move chunks up.
@@ -179,8 +196,8 @@ front can only move chunks up.
 |---:|---:|---:|---:|---|---|
 | — | 0 | 1 | 51 | `V06parameter` | *excluded — see below* |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
+| 2 | 8 | 6 | 23 | `C05debug` | ZSH_DEBUG_CMD in debug traps |
 | 5 | 5 | 0 | 53 | `E02xtrace` | xtrace with and without redirection |
-| 6 | 8 | 2 | 12 | `C05debug` | Skip line from DEBUG trap |
 | 6 | 6 | 0 | 19 | `V13zformat` | basic zformat test |
 | 6 | 7 | 1 | 21 | `W01history` | History line numbering |
 | 9 | 24 | 15 | 14 | `V04features` | Failed to add parameter if local parameter present |

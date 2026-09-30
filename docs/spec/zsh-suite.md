@@ -117,7 +117,9 @@ can reach 0 differing lines without ever carrying a result.
 ## Failing (24), ranked by chunks unreached
 
 **Measured at `d3a708b3d`, 2026-09-30**, one file per driver run — every row
-still in the table. A file that has closed since leaves the table for the
+still in the table. The `ref` column of seven rows was corrected afterwards at
+`fbf3ce78e` from the same runs, once #5209 showed those files were not
+reference failures; the section on that says which, and by how much. A file that has closed since leaves the table for the
 real-results list above and carries **its own commit** there, rather than
 being updated in place under this heading's: a figure whose provenance is two
 runs is the staleness §10 warns about.
@@ -177,13 +179,13 @@ number rather than an error:
 how far either shell gets (checked at 0 and 2 on four files). The harness
 itself never sets it.
 
-### The nine ungradeable rows are a layout artifact, and it is exactly twenty chunks
+### A cause proposed from the shape of the numbers, and what it cost
 
-Run the reference the way the block above says and `ref` comes out **higher**
-on eight files than the table records — and the excess is, row for row, the
-`ungradeable` column of the nine-file table below:
+Run the reference the way the block above says and its `ref` comes out
+**higher** on eight files than the table recorded — and the excess was, row
+for row, the `ungradeable` column those files carried:
 
-| file | table's `ref` | reference alone | delta | `ungradeable` |
+| file | old `ref` | reference alone | delta | old `ungradeable` |
 |---|---:|---:|---:|---:|
 | `E03posix` | 10 | 18 | +8 | 8 |
 | `D07multibyte` | 51 | 53 | +2 | 2 |
@@ -194,25 +196,26 @@ on eight files than the table records — and the excess is, row for row, the
 | `D01prompt` | 15 | 16 | +1 | 1 |
 | `E02xtrace` | 5 | 6 | +1 | 1 |
 
-Nine for nine including `V06parameter`, which is 0 either way, and **zero
-delta on the other fifteen files.** So the twenty chunks below are not
-something the reference cannot do.
+Nine for nine with `V06parameter`, which is 0 either way, and **zero delta on
+the other fifteen files** — a correspondence that good is an explanation
+rather than a coincidence, and the table above now carries the corrected
+`ref`.
 
-**The first reading of this was that a resolvable module path recovers them,
-and that was wrong** — a cause proposed from the shape of the numbers rather
-than measured, which is the thing this page exists to warn about. Locale was
-excluded properly (identical counts at `LC_ALL=C` and with `LANG`, `LC_ALL`
-and `LC_CTYPE` unset) and then a cause was asserted anyway, on no better
-evidence than that it would explain the table. It does not survive the
-harness: `E03posix` reaches 18 of 18 under the harness's own environment —
-`env -i`, `PATH` without `/opt/homebrew/bin`, `LC_ALL=C LANG=C TERM=dumb
-TZ=UTC`, `HOME` and `TMPDIR` inside the run directory — and in a minimal
-layout with only the `.ztst` and `ztst.zsh` beside it.
+**The first reading of it was that a resolvable module path recovered the
+twenty, and that was wrong.** Locale had been excluded properly — identical
+counts at `LC_ALL=C` and with `LANG`, `LC_ALL` and `LC_CTYPE` unset — and
+then a cause was asserted anyway, on no better evidence than that it would
+explain the table. It does not survive the harness: `E03posix` reaches 18 of
+18 under the harness's own environment, `env -i` with `PATH` lacking
+`/opt/homebrew/bin`, `LC_ALL=C LANG=C TERM=dumb TZ=UTC` and `HOME`/`TMPDIR`
+in the run directory, and in a minimal layout with only the `.ztst` and
+`ztst.zsh` beside it.
 
-Measured in the harness with a counter that can see a failing file, it is
-**two files, not nine** — see the ungradeable section below. So the twenty
-chunks were not held out because the reference cannot run them; eighteen of
-them it runs. **This makes the target larger, not smaller** (#5203).
+**Excluding one suspect is not establishing the next.** The evidence above
+narrows what the cause can be and says nothing about what it is, and the gap
+between those two is where a plausible sentence gets written down as a
+finding. What settled it was a counter that could see a failing file, which
+is #5203 and the ungradeable section below.
 
 ### Why not differing lines
 
@@ -293,30 +296,30 @@ front can only move chunks up.
 
 | unreached | ref | ours | lines | file | today's front |
 |---:|---:|---:|---:|---|---|
-| — | 0 | 1 | 51 | `V06parameter` | *excluded — see below* |
+| — | 0 | 1 | 51 | `V06parameter` | *excluded — the reference fails its own first chunk* |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
 | 3 | 5 | 2 | 53 | `E02xtrace` | xtrace with and without redirection |
 | 7 | 24 | 17 | 8 | `V04features` | Successfully added feature parameter that previously failed |
-| 10 | 10 | 0 | 18 | `E03posix` | Parameter hiding and tagging, printing types and values |
 | 12 | 12 | 0 | 2 | `V07pcre` | nothing runs; the reference's own first chunk is `Testing PCRE multibyte with locale en_US.UTF-8` |
 | 12 | 12 | 0 | 20 | `X04zlehighlight` | region highlight - standout overlapping on other region_highlight entry |
 | 13 | 20 | 7 | 21 | `B07emulate` | Sticky emulation not triggered if sticky emulation unchanged |
-| 13 | 15 | 2 | 15 | `D01prompt` | `` `%_' `` prompt escape |
-| 13 | 14 | 1 | 10 | `V14system` | zsystem flock invalid time arguments |
 | 14 | 18 | 4 | 9 | `A02alias` | POSIX_ALIASES option |
-| 14 | 14 | 0 | 11 | `V09datetime` | basic format specifiers |
 | 14 | 39 | 25 | 21 | `A05execution` | Bug regression: piping a shell construct to an external process may hang |
-| 35 | 36 | 1 | 10 | `D06subscript` | Scalar pattern subscripts with wildcards |
+| 14 | 16 | 2 | 15 | `D01prompt` | `` `%_' `` prompt escape |
+| 15 | 16 | 1 | 10 | `V14system` | zsystem flock invalid time arguments |
+| 16 | 16 | 0 | 11 | `V09datetime` | basic format specifiers |
+| 18 | 18 | 0 | 18 | `E03posix` | Parameter hiding and tagging, printing types and values |
+| 36 | 37 | 1 | 10 | `D06subscript` | Scalar pattern subscripts with wildcards |
 | 38 | 66 | 28 | 9 | `B03print` | out of range argument specifier |
 | 41 | 52 | 11 | 12 | `C04funcdef` | Command not found handler, success |
-| 48 | 51 | 3 | 9 | `D07multibyte` | Subscript searching with multibyte characters |
+| 50 | 53 | 3 | 9 | `D07multibyte` | Subscript searching with multibyte characters |
 | 51 | 79 | 28 | 18 | `B02typeset` | Left justification of floating point |
 | 55 | 73 | 18 | 6 | `C01arith` | error using unset variable as index |
 | 61 | 61 | 0 | 6 | `V02zregexparse` | empty |
 | 74 | 75 | 1 | 15 | `C03traps` | Nested TRAPEXIT |
 | 87 | 109 | 22 | 12 | `A01grammar` | how arguments to `exec -a` are handled (paraphrased: the chunk's own title uses a spelling the commit hook rejects) |
 | 87 | 94 | 7 | 13 | `E01options` | BRACE_CCL option starting from NUL |
-| 234 | 244 | 10 | 19 | `D04parameter` | interactive shell returns to top level on ${...?...} error |
+| 236 | 246 | 10 | 19 | `D04parameter` | interactive shell returns to top level on ${...?...} error |
 
 ### Three things the table cannot say on its own
 
@@ -337,99 +340,83 @@ needs that said beside it, because the count cannot show it.
 denominator, not because anybody should pick them up. `A09zwc` was the third
 and is no longer a row at all — see the declines above and #5141.
 
-## Part of this suite is ungradeable here, and it is nine files
+## Part of this suite is ungradeable here, and it is two files
 
-`V06parameter`'s `dlopen` failure is not a special case. It is the visible end
-of a class, and the class is larger than one file: **among the twenty-seven
-failing files, nine have a reference that fails its own chunks in this
-layout.** Measured at `fd4c74161`; the table above has since been re-measured
-at `d3a708b3d` and its `ref` column did not move, so these twenty stand.
+**Among the twenty-seven failing files, two have a reference that fails its
+own chunks in this layout**: `V06parameter` and `E02xtrace`.
 
-**Measured in the harness, it is two files and not nine.** The table above was
-built from a counter that cannot answer the question it was read as
-answering: `StrictOnFailure`'s denominator is the **strict** files, and a file
-whose reference failed is by that fact a file the two shells rarely match byte
-for byte. Asked per file it returns `0/0` on `V06parameter` — whose reference
-fails at its own first chunk — exactly as readily as on a file with nothing
-wrong.
+### This section said nine, and nine came from a counter that could not fire
 
-`RefDriverFailed` asks the same question over every scored file, and it was
-built by first checking it fires: `V06parameter` reads **1/1**. Over the nine:
+The figure stood at nine files and twenty chunks from `fd4c74161` until
+#5203. It was read off `StrictOnFailure`, whose denominator is the **strict**
+files — and a file whose reference failed is by that fact a file the two
+shells rarely match byte for byte, so it is never strict, so it is never
+counted. Asked per file the pair returns `0/0` on `V06parameter`, whose
+reference stops at its own first chunk, exactly as readily as on a file with
+nothing wrong. **A vacuous denominator reads like a clean result.**
+
+`RefDriverFailed` (#5209) asks the same question over every scored file, and
+it was checked against `V06parameter` — **1/1** — before any of its zeroes
+were believed. Over the nine:
 
 | file | reference's driver failed |
 |---|---|
 | `V06parameter` | **yes** |
 | `E02xtrace` | **yes** |
-| `E03posix` | no |
-| `D07multibyte` | no |
-| `V14system` | no |
-| `V09datetime` | no |
-| `D04parameter` | no |
-| `D06subscript` | no |
-| `D01prompt` | no |
+| `E03posix`, `D07multibyte`, `V14system`, `V09datetime`, `D04parameter`, `D06subscript`, `D01prompt` | no |
 
-So **seven of the nine rows below are not reference failures at all**, and the
-twenty chunks this section subtracts from the target are two. The out-of-
-harness runs agree on seven of those and part from the harness on `E02xtrace`,
-which fails here and passes there — one file's worth of environment, not a
-class. That is #5203.
+Confirmed from outside the harness too, one driver run per file: those seven
+pass every chunk they have — `E03posix` 18 of 18 under the harness's own
+environment (`env -i`, `PATH` without `/opt/homebrew/bin`, `LC_ALL=C LANG=C
+TERM=dumb TZ=UTC`, `HOME` and `TMPDIR` in the run directory) and in a minimal
+layout. `E02xtrace` is the one file the two methods part on: it fails in the
+harness and passes outside it, which is one file's worth of environment and
+not a class.
 
-**The direction is the point.** Every other correction on this page took a
-number that flattered this shell and made it worse. This one takes a number
-that flattered it the other way: twenty chunks were being held out of the
-denominator as things zsh cannot do here, and eighteen of them are things zsh
-does. A target built from what was not *obviously* excluded is how the old bar
-of 58 came about, and this is the same error with the sign reversed.
+**The seven rows' targets went up accordingly** and the table above carries
+the corrected `ref`: `E03posix` 10 → **18**, `D04parameter` 244 → **246**,
+`D07multibyte` 51 → **53**, `V14system` and `V09datetime` 14 → **16**,
+`D01prompt` 15 → **16**, `D06subscript` 36 → **37**. `E03posix` moves from
+10 unreached to **18**, which is most of a row's worth of work that was being
+held out of the denominator.
 
-| file | reference passes | of | ungradeable |
-|---|---:|---:|---:|
-| `E03posix` | 10 | 18 | **8** |
-| `D07multibyte` | 51 | 53 | 2 |
-| `V14system` | 14 | 16 | 2 |
-| `V09datetime` | 14 | 16 | 2 |
-| `D04parameter` | 244 | 246 | 2 |
-| `D06subscript` | 36 | 37 | 1 |
-| `D01prompt` | 15 | 16 | 1 |
-| `E02xtrace` | 5 | 6 | 1 |
-| `V06parameter` | 0 | 1 | 1 |
+### Why the direction matters
 
-Twenty chunks of 1189, and eight of the twenty are `E03posix` alone. The
-reference runs 1189 chunks across these files and passes 1169 of them.
+**Every other correction on this page took a number that flattered this shell
+and made it worse. This one was flattering us.** Eighteen chunks were held out
+of the target as things the reference cannot run here, and they are things it
+runs. A target built from what was not *obviously* excluded is how the old bar
+of 58 came about — this is that error with the sign reversed, and it survived
+longer precisely because nobody interrogates a number that makes the gap look
+smaller.
 
-**Why it matters more than twenty chunks sounds like.** A `ref` column read as
-"what zsh can do" over-counts the target, and that is precisely how the old
-bar of 58 came about: a number taken from what was not *obviously* excluded
-rather than from what had been measured. The same reading applied per file
-would put work on rows where no amount of work on this shell changes the
-answer.
+### What is left, and it is real
 
 **`V06parameter` is the sharpest case and the only one where the sign flips.**
-Its reference passes **0 of 1**: the reference stops at its own first chunk
-because `zsh/parameter` will not `dlopen` from `./Modules` in this layout. So
-this shell gets *further* than the reference does, its `unreached` is
-**negative**, and the 51-line figure it used to carry measured nothing at all.
-That is not instability in our column — it is the driver.
+Its reference passes **0 of 1**: it stops at its own first chunk because
+`zsh/parameter` will not `dlopen` from `./Modules` in this layout. So this
+shell gets *further* than the reference does, its `unreached` is **negative**,
+and the 51-line figure it used to carry measured nothing at all. That is not
+instability in our column — it is the driver.
 
-**The cause is the same one the refusal-agreements have**, and it is worth
-saying in one place: the fetch unpacks `Test/` and not the distribution, so a
-file reaching for a built module, the function library, or `./Modules` fails
-under *both* shells. Where that takes the whole file, it lands in the thirteen
-refusal-agreements. Where it takes some chunks and not others — `E03posix`,
-eight of eighteen — the file still scores, and the part that cannot be graded
-hides inside a number that looks like a measurement.
+**`E02xtrace` is the second**, and it is the one to re-check rather than
+trust: it fails the reference inside the harness and passes outside it, so
+whichever of the two environments is the odd one out, the row's `ref` of 5 is
+resting on the harness's answer alone.
 
-**What would move it**, and neither is work on this shell: unpack the
-distribution rather than `Test/`, or build the modules these files load. Until
-one of those happens, `ref` is the honest denominator and the file's own chunk
-count is not.
+**The cause of both is the fetch**: it unpacks `Test/` and not the
+distribution, so a file reaching for a built module, the function library, or
+`./Modules` fails under *both* shells. Where that takes the whole file, it
+lands in the thirteen refusal-agreements. What would move it, and neither is
+work on this shell: unpack the distribution rather than `Test/`, or build the
+modules these files load.
 
-**Only the failing files were swept for this**, the twenty-seven failing at
-that commit — a count of the sweep and not of the board, which has moved
-since and will again. The strict files
-and the thirteen refusal-agreements have not been checked the same way, so
-the count is nine *of those* and the true figure across all
-sixty-five is unmeasured. Stated rather than extrapolated, because a number
-produced by assuming the rest are clean is the shape this section is about.
+**Only the failing files were swept for this** — a count of the sweep and not
+of the board. The strict files and the thirteen refusal-agreements have not
+been checked the same way, so the figure is two *of those*, and the true
+number across all sixty-five is unmeasured. Stated rather than extrapolated,
+because a number produced by assuming the rest are clean is the shape this
+section is about.
 
 ## What the reachable target is
 

@@ -207,10 +207,6 @@ func installGatedParameters(r *interp.Runner, module string) (dropped []string) 
 		r.SetParameterWithdrawn(name, false)
 		r.SetParameterWithdrawn(name, !on["p:"+name])
 	}
-	// **After the bookkeeping above, not before it.** Clearing a withdrawal
-	// puts back what it took, so a drop in front of that line was undone by
-	// it — measured, the name came back produced one statement later and the
-	// row read exactly as it had before the fix.
 	for _, name := range taken {
 		// The load does not take this name, now or later: once the function
 		// holding the local returns, the reference has the name unset rather

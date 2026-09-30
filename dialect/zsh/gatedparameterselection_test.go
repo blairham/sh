@@ -195,6 +195,17 @@ func TestAModuleLoadDoesNotTakeANameTheScriptOwns(t *testing.T) {
 			"mine\n",
 		},
 		{
+			// A name the module **itself** already produces is not one the
+			// script owns, so a second load leaves it alone rather than
+			// dropping it. Without this row, treating every held name as
+			// taken passes everything above and quietly unloads the
+			// module's own parameters on the second `zmodload`.
+			"a second load does not drop the module's own names",
+			"zmodload zsh/datetime\nzmodload zsh/datetime\n" +
+				"print -r -- ${EPOCHSECONDS:+HAVE}",
+			"HAVE\n",
+		},
+		{
 			// **The siblings still arrive**, which is what says the load is
 			// declined per name rather than skipped. Taking the installer
 			// out altogether passes every row above and fails this one.

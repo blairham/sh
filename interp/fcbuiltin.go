@@ -439,11 +439,13 @@ func (h fcHistory) countedBack(spec string) (fcEvent, bool) {
 			// the oldest event this shell numbers.
 			return fcEvent{num: fcBeforeTheOldest, found: true}, true
 		}
-		// `0` keeps the floor wherever this answer is given, prompt or no
-		// prompt: it is not a count back but the place a count already
-		// ended. Measured 2026-09-30 under `-fis`, where the two part
-		// company — `fc -l 0` writes the whole list and `fc -l -1` writes
-		// one entry — so this is not the branch above with k of nought.
+		// `-0` reaches here and the bare `0` never does: the return above
+		// turns back every operand written without a minus sign, and `0` is
+		// one of those. So this is the one operand left — a minus sign and a
+		// nought — and it is not a count of none but a *word*, searched for
+		// like any other and found in no entry. Unmoved by the prompt,
+		// which is why it is outside the branch above rather than inside it
+		// with k of nought.
 		return h.search(spec), true
 	}
 	if num.dashed && num.ok {

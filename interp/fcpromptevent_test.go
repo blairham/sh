@@ -88,6 +88,11 @@ func TestARelativeOperandCountsBackFromAPromptsOwnEvent(t *testing.T) {
 		// `0` is where the count already ended, not this count with k of
 		// nought, so it keeps the floor on both routes.
 		{"fc -l 0", whole, 0, whole, 0},
+		// `-0` is a word and not a count of none, so it is searched for
+		// and found in no entry — the same on both routes. The bare `0`
+		// above is a different operand on a different path: it is not
+		// written with a minus sign, so it is never read as relative.
+		{"fc -l -0", "sh: fc: no command found\n", 1, "sh: fc: no command found\n", 1},
 		// A positive operand never reaches any of this.
 		{"fc -l 4", "4\t delta\n5\t epsilon\n", 0, "4\t delta\n5\t epsilon\n", 0},
 	} {

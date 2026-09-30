@@ -21927,9 +21927,11 @@ type Semantics struct {
 	// paragraphs above are the script route, where it has none, and they
 	// still hold there unchanged.
 	//
-	// `0` is not that count with k of nought and does not move with it:
-	// under the same prompt `fc -l 0` writes the whole list where `fc -l -1`
-	// writes one entry, so it keeps the floor on both routes.
+	// Neither `0` nor `-0` moves with that count. Measured under the same
+	// prompt: `fc -l 0` writes the whole list where `fc -l -1` writes one
+	// entry, and `fc -l -0` is `event not found: -0` on both routes — the
+	// first because a bare `0` is not a relative operand at all, the second
+	// because a minus sign and a nought spell a word rather than a count.
 	//
 	// unpinned: never reached from the corpus, for the reason above.
 	// interp/fclisting_test.go asserts both answers over the same list

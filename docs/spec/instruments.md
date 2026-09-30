@@ -304,11 +304,14 @@ than one endpoint.
 
 - **A reference must be a different program from the thing under test.**
   Perfect agreement on every row is the signature of one program, not two.
+  Section 18 is the case where two different programs were handed over and
+  one of them was never invoked.
 
 - **If you invoke a suite driver yourself, you are responsible for everything
   the harness does first** — the per-run copy, the symlink it places, the
   environment it sets. The cheap guard is to run the reference against itself
-  and require an empty diff.
+  and require an empty diff. Section 17 is what it costs when this bullet is
+  read and then not enumerated.
 
 ---
 
@@ -688,7 +691,105 @@ Leaving the damaged version in place with a correction beside it is better
 than editing it away: the failure mode is invisible by construction, so the
 only record that it happened is the one you keep on purpose.
 
-## 17. Where these came from
+## 17. The environment is an input, and a named field is not a guard
+
+**What caught this is the part to lead with: grading the reference through the
+same apparatus and watching it fail identically.** Everything else here
+follows from that one step being cheap and nearly skipped.
+
+A row that had just been advanced from 3 chunks run to 7 was re-measured on
+merged `main` with a hand-rolled ztst run. It came back **2 run, 1
+successful** — a clean, specific, plausible regression, with a named chunk to
+blame. The apparatus was missing one symlink.
+
+zsh's suite files do not reach the shell under test only through
+`$ZTST_exe`. Many of them spell it `$ZTST_testdir/../Src/zsh`, so without
+something at that path every such chunk fails on `no such file or
+directory` — **under both shells**. A hand-run that omits it does not error;
+it produces a smaller number.
+
+> **Before believing a hand-rolled measurement, run the reference through the
+> same apparatus.** A deficient environment and a real regression produce the
+> same shape, and only the reference's own row tells them apart.
+
+### The sharp part: the hazard was already documented, on this page
+
+`Suite.ShellAt` in `internal/suite/suite.go` describes this precisely, down to
+naming it "the worst shape a harness fault can take", because the two runs
+agree and the column reports a healthy number for cases neither shell ran.
+Section 6 above carries it as a bullet: *if you invoke a suite driver
+yourself, you are responsible for everything the harness does first.* Both
+were read before the run, and the run reproduced the fault anyway.
+
+> **A documented hazard that a hand-run silently reproduces is worse than an
+> undocumented one, because the reader has met the warning and believes they
+> are clear of it.**
+
+That is why this is a section rather than another bullet under section 6. A
+statement of responsibility is not a checklist: "everything the harness does
+first" cannot be complied with from the sentence, only from the code. The
+enumeration is the guard, and it is short enough to write down — for this
+suite, a per-run copy of the driver and the file, a `Src/zsh` symlink to the
+shell under test, `ZTST_exe`, and the driver invoked as section 18 describes.
+
+**The environment's deficiency need not be local to be silent.** The same
+failure has been seen from a container image carrying three locales instead of
+several hundred: the *reference* answered `cannot change locale` and every
+line after it diverged, reading as a regression of ten lines. Pin what CI
+pins, install what CI installs, and state the digest and the reference's own
+`--version` beside any number worth acting on.
+
+## 18. The shell a variable names and the shell that runs the driver
+
+Same session, second apparatus fault, and this one produced a **pass**.
+
+With the symlink fixed, both columns came back **8 chunks run, 8 successful**,
+on a file that has a chunk we demonstrably fail. The tails were
+byte-identical. The cause: zsh's invocation model is
+
+```
+ZTST_exe=<shell> <shell> +Z -f ztst.zsh <file>.ztst
+```
+
+— the shell under test runs the driver *and* is named in the variable. Setting
+only `ZTST_exe` and invoking the driver with the reference grades real zsh
+twice. What settled it was `go version -m` reading the **module path** — ours
+says `github.com/blairham/sh/cmd/zsh` — not the revision stamp, which section 6
+explains is unreliable for anything built in a linked worktree. The honest
+numbers are 7/6 against 8/8.
+
+> **Byte-identical output from two shells is the signature of one shell.**
+
+This page already states that a reference must be a different program from the
+thing under test (section 6). The reason that bullet did not catch this is
+worth the paragraph: **the check was passed, against the wrong fact.** The two
+paths in `ZTST_exe` really were two different programs, and verifying them
+would have confirmed it. The process that executed the driver was never part
+of the comparison, so nothing in the apparatus was lying — one true fact was
+checked and a second, unexamined one decided the result.
+
+So this is the third form the echo has taken here, and the forms are not
+variations on carelessness:
+
+1. **The reference was our own build** — `build/shells/bash` is `cmd/bash`,
+   named `bash` so the suite's `$THIS_SH` re-entry works. The slot was wrong.
+2. **A before-binary named across the `sh` boundary** — the same bytes, a
+   different POSIX mode, and the two sides were the same program configured
+   differently. The name was wrong.
+3. **The driver run by the wrong shell with the right variable set** — two
+   correct binaries, one of them never invoked. The *invocation* was wrong.
+
+> **Ask which process actually executed the thing you are grading, not only
+> which path you handed it.** A shell selected by a variable, by `argv[0]`, by
+> a symlink and by the command word are four claims, and a run can satisfy
+> three of them while a fourth decides the output.
+
+The general guard is cheap and it is the same one as section 17's: require the
+two columns to **disagree somewhere you already know they disagree.** A row
+with a known-failing chunk is a positive control, and an apparatus that
+reports it passing has told you about itself rather than about the shell.
+
+## 19. Where these came from
 
 Each rule above cost at least one wrong conclusion that was acted on. They
 were collected during the `zsh-suite` burndown between September 2026 and the

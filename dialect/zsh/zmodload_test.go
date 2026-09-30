@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // `zmodload`, measured against zsh 5.9.2 (2026-09-06). Whole rendered lines
 // with their locations, because the location is half of what these messages
@@ -940,5 +943,76 @@ zmodload -d zsh/a`)
 	want := "zsh/a: zsh/b zsh/c\nzsh/a: zsh/b\n"
 	if out != want || st != 0 {
 		t.Errorf("the dependency table in a subshell = %q (status %d), want %q", out, st, want)
+	}
+}
+
+// The clash a module load reports names the **local** where the name it
+// cannot add is one.
+//
+// Two wordings for one refusal, and which one depends on where the name
+// lives. `V04features.ztst` stops on this, and it stops on the wording alone
+// — the status, the second sentence and the narrowing were all already right.
+//
+// Measured 2026-09-30 on zsh 5.9.2 from a script file:
+//
+//	local in the function that loads      local parameter exists
+//	local in an *outer* function          local parameter exists
+//	a global at the top level             parameter already exists
+//	typeset -g inside a function          parameter already exists
+//
+// **The second row is the one that decides the rule and the suite cannot.**
+// The chunk has the local and the load in one function, so "the innermost
+// scope has it" and "some live scope has it" agree there; only the nested
+// pair tells them apart, and the answer is the wider one. That is why this
+// reads ParameterAttributes.Local — documented as "a caller's local is that
+// binding for every frame under it" — rather than walking the scope stack
+// here for the narrower question.
+func TestTheModuleParameterClashNamesALocal(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"a local in the function that loads",
+			"zmodload -F zsh/datetime b:strftime\n" +
+				"fn() { local EPOCHSECONDS=x; zmodload zsh/datetime }\nfn",
+			"local parameter exists",
+		},
+		{
+			// The row the suite chunk cannot reach.
+			"a local in an outer function",
+			"zmodload -F zsh/datetime b:strftime\n" +
+				"inner() { zmodload zsh/datetime }\n" +
+				"outer() { local EPOCHSECONDS=x; inner }\nouter",
+			"local parameter exists",
+		},
+		{
+			"a global at the top level",
+			"zmodload -F zsh/datetime b:strftime\n" +
+				"EPOCHSECONDS=x\nzmodload zsh/datetime",
+			"parameter already exists",
+		},
+		{
+			// `-g` in a function is not a local, which is what says the rule
+			// is about the binding and not about being inside a call.
+			"typeset -g inside a function",
+			"zmodload -F zsh/datetime b:strftime\n" +
+				"fn() { typeset -g EPOCHSECONDS=x; zmodload zsh/datetime }\nfn",
+			"parameter already exists",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), tc.src)
+			want := "Can't add module parameter `EPOCHSECONDS': " + tc.want
+			if !strings.Contains(out, want) {
+				t.Errorf("= %q\n  want it to hold %q", out, want)
+			}
+			// And not the other wording, so a row cannot pass on a message
+			// that happens to hold both.
+			other := "parameter already exists"
+			if tc.want == other {
+				other = "local parameter exists"
+			}
+			if strings.Contains(out, other) {
+				t.Errorf("= %q\n  must not hold %q", out, other)
+			}
+		})
 	}
 }

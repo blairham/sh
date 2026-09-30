@@ -283,33 +283,88 @@ func zparseoptsSpecs(r *interp.Runner, opts zparseoptsOpts, words []string) ([]z
 
 // parseZparseoptsSpec reads one description.
 func parseZparseoptsSpec(word string) (zparseoptsSpec, bool) {
-	spec := zparseoptsSpec{word: word}
-	var name strings.Builder
-	i := 0
-	for ; i < len(word); i++ {
-		c := word[i]
-		if c == '\\' && i+1 < len(word) {
-			// An escaped special character is part of the name, which is how
-			// an option called `-a:b` is described at all.
-			i++
-			name.WriteByte(word[i])
-			continue
+	name, i := scanZparseoptsSpecName(word)
+	if len(word) > 0 && (word[0] == '+' || word[0] == ':' || word[0] == '=') {
+		// No `name == ""` beside this, although the branch is only about a
+		// description whose name scan found nothing: the scan breaks at
+		// these three characters, so a word starting with one *always*
+		// leaves an empty name. A mutant that dropped the extra condition
+		// survived, which is how the redundancy was found — see
+		// instruments.md §2's fourth reading.
+		// **Escaping is optional on the first character**, which is what
+		// lets an option be called `-:`, `-+` or `-=` with no backslash in
+		// front of it. Measured 2026-09-29 on zsh 5.9.2, `zparseopts -D -a
+		// optv -` with `-+:=\` on the command line: the descriptions
+		// `'\+ \: \= \\'` and `'+ : = \'` both leave optv `-+ -: -= -\`
+		// and argv untouched. That is `V12zparseopts.ztst`'s "special
+		// characters in option names".
+		//
+		// It is a **second attempt rather than a rule about position zero**,
+		// because both readings apply and the shell takes whichever parses.
+		// Four rows say so:
+		//
+		//	:      the option `-:`        nothing follows, so the name fits
+		//	::     `-:` with an argument  `:` is a remainder, so it still fits
+		//	:=A    `-:` stored in A       and so is a target
+		//	:x     never matches, silent  `x` is neither, so it does not fit
+		//
+		// `:=A` is the sharp one. A rule that took the punctuation only when
+		// the description ended there would read that as an empty name with
+		// a target and leave `-:` unmatched; a rule that took it always
+		// would turn `=x` — a description that names no option, and silently
+		// 0 — into `invalid option description`.
+		if spec, ok := parseZparseoptsSpecTail(word, word[:1], 1); ok {
+			return spec, true
 		}
-		if c == '+' || c == ':' || c == '=' {
-			break
-		}
-		name.WriteByte(c)
 	}
-	spec.name = name.String()
-	if spec.name == "" {
+	if name == "" {
 		// A description that names no option. Not an error of its own, and
 		// measured twice to be sure: `zparseopts -a arr "=x"` is silently 0
 		// — the description simply never matches, and two of them are still
 		// 0 — while `zparseopts "=x"` is `no default array defined: =x`. So
 		// it is a description with *no* array, whatever follows the `=`, and
 		// the complaint about a missing default array is the one it earns.
+		//
+		// Reached only once the attempt above has declined, so `:` and `=`
+		// on their own are options and `:x` and `=x` are still this.
 		return zparseoptsSpec{word: word}, true
 	}
+	return parseZparseoptsSpecTail(word, name, i)
+}
+
+// scanZparseoptsSpecName reads a description's option name and says where it
+// stopped: everything up to the first unescaped `+`, `:` or `=`.
+//
+// An escaped special character is part of the name, which is how an option
+// called `-a:b` is described at all.
+func scanZparseoptsSpecName(word string) (name string, next int) {
+	var b strings.Builder
+	i := 0
+	for ; i < len(word); i++ {
+		c := word[i]
+		if c == '\\' && i+1 < len(word) {
+			i++
+			b.WriteByte(word[i])
+			continue
+		}
+		if c == '+' || c == ':' || c == '=' {
+			break
+		}
+		b.WriteByte(c)
+	}
+	return b.String(), i
+}
+
+// parseZparseoptsSpecTail reads what follows a description's name — the `+`,
+// the argument marker and the `=array` — from the position the name ended at.
+//
+// Shared by the two readings above, and it has to be: the empty-name case
+// returns early without consulting the tail at all, so an attempt that reused
+// the whole parser on `word[1:]` would silently drop the modifiers. It did,
+// and `::` came back as `-:` with no argument while `:=A` came back with no
+// array.
+func parseZparseoptsSpecTail(word, name string, i int) (zparseoptsSpec, bool) {
+	spec := zparseoptsSpec{word: word, name: name}
 	if i < len(word) && word[i] == '+' {
 		spec.plus = true
 		i++

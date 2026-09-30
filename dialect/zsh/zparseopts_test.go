@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // `zparseopts`, measured against zsh 5.9.2 (2026-09-06) with a scratch HOME
 // and no startup files. Every want below is a byte-for-byte transcript of
@@ -625,4 +628,91 @@ func TestZparseoptsStrictNamesTheLetterAndNotTheWord(t *testing.T) {
 		snippet: `set -- --xy; zparseopts -F -a o a; echo "st=$?"`,
 		want:    "zsh:zparseopts:1: bad option: --xy\nst=1\n",
 	}})
+}
+
+// A description's **first character is its option name whatever it is**, so
+// the backslash an option called `-:` or `-+` or `-=` would need is optional
+// there.
+//
+// `V12zparseopts.ztst`'s "special characters in option names" is the row that
+// needs it, and it makes the point as a pair: `'\+ \: \= \\'` and
+// `'+ : = \'` must give the same answer, because escaping always works and is
+// only *optional* on the first character. So the two spellings grade each
+// other.
+//
+// Measured 2026-09-29 on zsh 5.9.2 with `zparseopts -D -a optv -` and
+// `-+:=\` on the command line.
+func TestAZparseoptsDescriptionTakesItsFirstCharacterAsTheName(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	// The pair, which is the file's own control.
+	for _, specs := range []string{`'\+' '\:' '\=' '\\'`, `'+' ':' '=' '\'`} {
+		src := "() {\n  local -a optv\n  zparseopts -D -a optv - " + specs +
+			"\n  print -r - \"optv:[${(j: :)optv}] argv:[${(j: :)argv}]\"\n} " +
+			`'-+:=\'` + " 1 2 3\n"
+		out, st := runZsh(t, dir, src)
+		const want = `optv:[-+ -: -= -\] argv:[1 2 3]` + "\n"
+		if out != want || st != 0 {
+			t.Errorf("specs %s: got %q (status %d), want %q", specs, out, st, want)
+		}
+	}
+}
+
+// And the four rows that say it is a **second attempt** rather than a rule
+// about position zero: the leading punctuation is the name when what follows
+// it parses as a description's tail, and is the modifier it usually is when
+// it does not.
+//
+// `:=A` is the sharp one. A rule that took the punctuation only where the
+// description ended there would read it as an empty name with a target and
+// leave `-:` unmatched; a rule that took it always would turn `=x` — a
+// description naming no option, silently 0 — into `invalid option
+// description`.
+func TestAZparseoptsLeadingSpecialIsTheNameOnlyWhenTheRestParses(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, tc := range []struct{ spec, args, want string }{
+		// The name reading fits: what follows the punctuation is a
+		// modifier, a target, or nothing.
+		{":", "-: 1", "optv:[-:] argv:[1] A:[]"},
+		{"+", "-+ 1", "optv:[-+] argv:[1] A:[]"},
+		{"=", "-= 1", "optv:[-=] argv:[1] A:[]"},
+		{"::", "-: val 1", "optv:[-: val] argv:[1] A:[]"},
+		{":=A", "-: 1", "optv:[] argv:[1] A:[-:]"},
+		{"+=A", "-+ 1", "optv:[] argv:[1] A:[-+]"},
+		// It does not fit: `x` is neither, so the ordinary reading stands
+		// and the description names no option — silently, and nothing is
+		// taken off the command line.
+		{":x", "-: 1", "optv:[] argv:[-: 1] A:[]"},
+		{"=x", "-= 1", "optv:[] argv:[-= 1] A:[]"},
+		{"+x", "-+ 1", "optv:[] argv:[-+ 1] A:[]"},
+	} {
+		t.Run(tc.spec, func(t *testing.T) {
+			t.Parallel()
+			src := "() {\n  local -a optv A\n" +
+				"  zparseopts -D -a optv - '" + tc.spec + "'\n" +
+				"  print -r - \"optv:[${(j: :)optv}] argv:[${(j: :)argv}] A:[${(j: :)A}]\"\n" +
+				"} " + tc.args + "\n"
+			out, st := runZsh(t, dir, src)
+			if got := strings.TrimSuffix(out, "\n"); got != tc.want || st != 0 {
+				t.Errorf("spec %q with %s: got %q (status %d), want %q",
+					tc.spec, tc.args, got, st, tc.want)
+			}
+		})
+	}
+}
+
+// An invalid description is still invalid, which is the half the second
+// attempt must not swallow: it declines and the ordinary reading refuses.
+func TestAZparseoptsInvalidDescriptionIsStillRefused(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, spec := range []string{"a:x", "a:::=x"} {
+		out, st := runZsh(t, dir,
+			"() { local -a A; zparseopts -a A - '"+spec+"'; } 2>&1\n")
+		if st == 0 || !strings.Contains(out, "invalid option description: "+spec) {
+			t.Errorf("spec %q: got %q (status %d), want the refusal naming it",
+				spec, out, st)
+		}
+	}
 }

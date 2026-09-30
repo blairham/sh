@@ -14,15 +14,16 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, four files have become real results**, each verified
+**Since that commit, five files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
     D09brace         28 of 28          81099b07f   #5154
     V12zparseopts    14 of 14          fd4c74161   #5162
     V13zformat        6 of 6           2b9d16b91   #5163
+    C05debug          8 of 8           0a2ce6566   #5149
 
-So the count the burndown moves is **25** today. The roll-up figures above are left at the commit they were taken at
+So the count the burndown moves is **26** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -37,11 +38,11 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 25 today)
+## Real results (21 at `37355aae5`, 26 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
-`V12zparseopts` and `V13zformat` are the twenty-second through
-twenty-fifth and are listed here rather than below; every other entry is as
+`V12zparseopts`, `V13zformat` and `C05debug` are the twenty-second through
+twenty-sixth and are listed here rather than below; every other entry is as
 measured at the heading's commit.
 
 - `A03quoting`
@@ -77,6 +78,7 @@ measured at the heading's commit.
 
 - `V12zparseopts` (closed #5162, strict 1/1 at `fd4c74161`)
 - `V13zformat` (closed #5163, strict 1/1 at `2b9d16b91`)
+- `C05debug` (closed #5149, strict 1/1 at `0a2ce6566`)
 
 - `V08zpty`
 - `W02jobs`
@@ -110,13 +112,13 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (26), ranked by chunks unreached
+## Failing (25), ranked by chunks unreached
 
-**Measured at `fd4c74161`, 2026-09-30**, one file per driver run, except
-`C05debug`, re-measured at `1c7625a42` after #5187 and carrying its own
-figures — 8 ref, 6 ours, and a front that has moved to the next chunk. A row
-updated in place without its own commit beside it is the staleness §10 warns
-about, so it is named rather than absorbed.
+**Measured at `fd4c74161`, 2026-09-30**, one file per driver run — every row
+still in the table. A file that has closed since leaves the table for the
+real-results list above and carries **its own commit** there, rather than
+being updated in place under this heading's: a figure whose provenance is two
+runs is the staleness §10 warns about.
 
 Every row was **re-measured** rather than carried forward, and for the second
 time in a row **no front had moved** across the merges in between. That
@@ -198,7 +200,6 @@ front can only move chunks up.
 |---:|---:|---:|---:|---|---|
 | — | 0 | 1 | 51 | `V06parameter` | *excluded — see below* |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
-| 2 | 8 | 6 | 23 | `C05debug` | ZSH_DEBUG_CMD in debug traps |
 | 5 | 5 | 0 | 53 | `E02xtrace` | xtrace with and without redirection |
 | 6 | 7 | 1 | 21 | `W01history` | History line numbering |
 | 9 | 24 | 15 | 14 | `V04features` | Failed to add parameter if local parameter present |
@@ -317,9 +318,9 @@ measured run and never revisited. It is wrong in both directions now:
   whether they are reachable at all is a separate question from whether their
   front is fixable.
 
-So the honest statement of the target is **25 of 50 reachable today** — 21 at
-the figures' commit plus `C02cond`, `D09brace`, `V12zparseopts` and
-`V13zformat` — where 50
+So the honest statement of the target is **26 of 50 reachable today** — 21 at
+the figures' commit plus `C02cond`, `D09brace`, `V12zparseopts`, `V13zformat`
+and `C05debug` — where 50
 is 65 less the three declines and
 less the twelve refusal-agreements, with the twelve re-examined individually
 rather than assumed unreachable since some may become reachable if the module

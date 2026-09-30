@@ -3478,6 +3478,11 @@ func posixAliasesOn(r *interp.Runner) bool {
 
 func setPosixAliases(r *interp.Runner, on bool) {
 	if r.Dialect == nil {
+		// The guard emulateGrammar keeps, for its reason. It is not
+		// reachable from a test in this package — internal/dialecttest
+		// refuses a runner built without a Dialect, and has no escape for
+		// one — so a mutant removing it survives by construction rather than
+		// for want of a row.
 		return
 	}
 	if r.Dialect.AliasesExpandReservedWords == !on {

@@ -4,6 +4,7 @@
 package zsh_test
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -175,5 +176,15 @@ func TestPosixAliasesMovesTheGrammarFlag(t *testing.T) {
 	run("unsetopt posixaliases\n")
 	if !r.Dialect.AliasesExpandReservedWords {
 		t.Error("unsetopt posixaliases did not put reserved-word alias expansion back")
+	}
+	// And the option reads back, which is a separate half: the setter moves
+	// the flag and the getter reports it, and an un-inverted getter passes
+	// every row above while telling a script the opposite of the truth.
+	var out bytes.Buffer
+	r.Stdout = &out
+	run("setopt posixaliases\nif [[ -o posixaliases ]]; then print ON; else print OFF; fi\n")
+	run("unsetopt posixaliases\nif [[ -o posixaliases ]]; then print ON; else print OFF; fi\n")
+	if got := out.String(); got != "ON\nOFF\n" {
+		t.Errorf("the option reads back %q, want \"ON\\nOFF\\n\"", got)
 	}
 }

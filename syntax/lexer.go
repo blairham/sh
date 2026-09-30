@@ -6765,6 +6765,49 @@ func (l *Lexer) peekIsFuncParens() bool {
 	return i < len(l.src) && l.src[i] == ')'
 }
 
+// peekIsFuncNameListThenParens reports whether what follows the cursor is the
+// rest of a function definition's name list ending in its `()` — which is what
+// makes the word just read one of that definition's names, wherever it stands
+// in the list (#5236).
+//
+// Read with a probe of this same scanner rather than by looking at bytes,
+// because what may stand in the list is whatever the scanner calls a word:
+// zsh 5.9.2 refuses a global alias followed by `$x`, by `'a ( b'`, by
+// `$(echo)` and by `a*b` before the `()` exactly as it refuses one followed by
+// a plain name, and a quote or a substitution can hold a blank or a
+// parenthesis a byte scan would stop at. A redirection may stand in the list
+// too, with its target — `GA >out () { … }` is refused the same way — and is
+// crossed. Anything else ends the list with "no": a newline, a `;`, a pipe,
+// and a here-document or a seek, whose operands are not a plain target.
+//
+// The probe runs with the scanner's defaults and sets no position flag.
+// Whether it reads its words as arguments does not change its answer on any
+// row measured — including a later name with its parentheses attached, `GA
+// aa() { … }`, which is where a word-folding reading would have shown — so
+// nothing here depends on it, and a mutant that sets inArgument survives for
+// that reason rather than for want of a row.
+func (l *Lexer) peekIsFuncNameListThenParens() bool {
+	probe := NewLexer(l.src[l.off:], l.dialect)
+	for {
+		t := probe.Next()
+		if probe.Err() != nil {
+			return false
+		}
+		switch {
+		case t.Kind == TokWord:
+		case t.Kind.IsRedirect() && !t.Kind.IsHeredoc() && !t.Kind.IsSeek():
+			if probe.Next().Kind != TokWord || probe.Err() != nil {
+				return false
+			}
+		case t.Kind == TokLeftParen:
+			r := probe.Next()
+			return probe.Err() == nil && r.Kind == TokRightParen
+		default:
+			return false
+		}
+	}
+}
+
 // readHeredocs consumes the bodies of every here-document queued on the line
 // just ended, in the order their operators appeared.
 func (l *Lexer) readHeredocs() {

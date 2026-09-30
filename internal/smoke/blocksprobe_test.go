@@ -246,7 +246,7 @@ func TestALineToldToBeForgottenIsNotKeptAsABlock(t *testing.T) {
 			if _, err := s.waitForExit(); err != nil {
 				t.Fatalf("the session did not end: %v", err)
 			}
-			written, err := os.ReadFile(filepath.Join(dir, ".sh_history"))
+			written, err := os.ReadFile(historyFileIn(dir))
 			if err != nil {
 				t.Fatalf("history file: %v", err)
 			}

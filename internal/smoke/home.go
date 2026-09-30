@@ -214,6 +214,10 @@ const continuationPrompt = "...more> "
 // real HOME is not passed on and neither is anything else the person running
 // this happens to have set — an rc file that was read because the *user's*
 // environment pointed at it is not evidence about the shell.
+// historyFileIn is the history file these sessions use, named so that a row
+// reading it and the session writing it cannot disagree.
+func historyFileIn(dir string) string { return filepath.Join(dir, ".smoke_history") }
+
 func environment(dir, path string, d Dialect) []string {
 	return []string{
 		"HOME=" + dir,
@@ -227,11 +231,21 @@ func environment(dir, path string, d Dialect) []string {
 		// The prompt of a shell that read no startup file. See envPromptPrefix.
 		"PS1=" + envPromptPrefix + d.CwdEscape + promptFieldSep + d.UserEscape + "]" + promptAnchor,
 		"PS2=" + continuationPrompt,
-		// Where this session records what it ran. See blocksStoreDir.
+		// The history file, **named** rather than left to a default.
 		//
-		// HISTFILE is deliberately not set here: an empty one turns the block
-		// store off as well, and unset is not empty — it leaves the session
-		// recording, which is the state these rows are about.
+		// An empty HISTFILE turns the block store off as well, so this must
+		// be non-empty for the rows that grade a store — that part of the
+		// reasoning is unchanged. What changed is the other half: leaving it
+		// unset used to give every dialect `$HOME/.sh_history`, and the
+		// default is now the dialect's own, which is *no file at all* for two
+		// of them. A row reading the file by a name it chose would then be
+		// asserting one dialect's default while running under another's.
+		//
+		// Naming it also makes these rows about what they are about. The
+		// block store is the subject; which file a dialect picks when nobody
+		// says is graded in dialect.TestEachDialectsDefaultHistoryFile.
+		"HISTFILE=" + historyFileIn(dir),
+		// Where this session records what it ran. See blocksStoreDir.
 		"SH_BLOCKS_DIR=" + blocksStoreDir(dir),
 		// And the output half, by name. Since #2274 neither half is something
 		// a session gets for saying nothing, so a suite that wants to grade

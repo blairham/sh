@@ -295,12 +295,26 @@ func clearedSet(m map[string]bool) map[string]bool {
 // The word goes into done so the splice cannot find itself. Without it a
 // value that leaves the same word standing in command position — an empty
 // one does — matches the same suffix forever.
+//
+// **done is only half of that**, and the half that was missing is the one
+// this function did not have. done is spent per *command*: it is a fresh map
+// at every command start, so it stops a word the value leaves in the same
+// command and nothing else. A value that ends in a separator — `print A;`,
+// `print A &&`, `print A |` — puts the appended word at the start of the
+// **next** command, where done is empty again, and the suffix matched once
+// more for ever (#5223). The regular kind asks both, and says why:
+// Parser.expandAlias refuses a name that is `done` *or* in aliasChain, the
+// names the current token is still inside. The appended word is inside this
+// very splice, so the chain is what answers for it. Measured 2026-09-30
+// against zsh 5.9.2: `alias -s mysuff='print -r A;'` and `x.mysuff` write
+// `A`, then `command not found: x.mysuff` at 127 — one expansion, and the
+// word it put in command position is a command like any other.
 func (p *Parser) expandSuffixAlias(done map[string]bool) {
 	if !p.aliasable(p.SuffixAliases) {
 		return
 	}
 	word := p.tok.Text
-	if done[word] {
+	if done[word] || p.aliasChain[word] {
 		return
 	}
 	dot := strings.LastIndexByte(word, '.')

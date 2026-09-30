@@ -6,6 +6,7 @@ package syntax_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -158,6 +159,58 @@ func TestASuffixAliasWithAnEmptyValueTerminates(t *testing.T) {
 	t.Parallel()
 	if got, want := kinds(t, "./x.txt", nil, table("txt", ""), nil), "./x.txt"; got != want {
 		t.Errorf("./x.txt = %q, want %q", got, want)
+	}
+}
+
+// **A value ending in a separator cannot loop either** (#5223), which is the
+// half of the test above that the spent set does not reach.
+//
+// The empty value leaves the word in the *same* command, so the spent set
+// stops it. A value ending in `;`, `&&` or `|` puts the appended word at the
+// start of the **next** command, and the spent set is a fresh map at every
+// command start — so it was empty again there, the suffix matched once more,
+// and the parse never returned. What stops it now is the chain of names the
+// token is still inside, which is how the regular kind already refused
+// `alias a='echo took;a'`.
+//
+// Measured 2026-09-30 against zsh 5.9.2: `alias -s mysuff='print -r A;'` and
+// `x.mysuff` write `A` and then `command not found: x.mysuff` at 127 — one
+// expansion, after which the word is a command like any other.
+//
+// **Each case runs against a deadline**, because the failure being guarded
+// is a parse that does not return: without one, a regression here would hang
+// the package until the test binary's own timeout rather than failing, and a
+// mutation run would read that as a stall rather than a kill. A case that
+// does not return leaves its goroutine spinning until the binary exits, which
+// is the price of reporting it at all.
+//
+// The two-word row is the one that keeps the fix from being too wide: each
+// word expands once, so the chain is per splice and not a ban on the suffix
+// for the rest of the line.
+func TestASuffixAliasEndingInASeparatorTerminates(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, value, src, want string }{
+		{"a semicolon", "print A;", "x.txt", "print A; x.txt"},
+		{"an and-list", "print A &&", "x.txt", "print A && x.txt"},
+		{"a pipe", "print A |", "x.txt", "print A | x.txt"},
+		{"two words, each once", "print A;", "x.txt; y.txt", "print A; x.txt; print A; y.txt"},
+		// The control: no separator, so the word stays an argument and
+		// nothing was ever going to loop.
+		{"no separator", "print A", "x.txt", "print A x.txt"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			got := make(chan string, 1)
+			go func() { got <- kinds(t, c.src, nil, table("txt", c.value), nil) }()
+			select {
+			case g := <-got:
+				if g != c.want {
+					t.Errorf("%q with value %q = %q, want %q", c.src, c.value, g, c.want)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatalf("%q with value %q did not finish parsing", c.src, c.value)
+			}
+		})
 	}
 }
 

@@ -164,10 +164,27 @@ func zshGatedParameterModule(name string) string {
 // is written below is narrower than that and is not a second writer of it: it
 // is the same answer for the names that road cannot reach, asked at the only
 // moment they exist.
-func installGatedParameters(r *interp.Runner, module string) {
+func installGatedParameters(r *interp.Runner, module string) (dropped []string) {
 	install := zshGatedParameterInstallers[module]
 	if install == nil {
-		return
+		return nil
+	}
+	// Which of this module's names the **script** already owns, read before
+	// the installer runs because the installer is what would hide them.
+	//
+	// A module registers its whole roster in one call, so a name the script
+	// holds is registered over and then let go again — see
+	// interp.Runner.DropProducedParameter for why that is the shape and for
+	// the measurement. The alternative, skipping the installer altogether,
+	// takes the module's *other* names down with it: measured, a `local
+	// EPOCHSECONDS` and then `zmodload zsh/datetime` still produces
+	// `epochtime` and `EPOCHREALTIME` in the reference, and skipping left
+	// both unset.
+	var taken []string
+	for _, name := range gatedParametersTheModuleOwns(module) {
+		if a, held := r.ParameterAttributes(name); held && !a.Provided {
+			taken = append(taken, name)
+		}
 	}
 	install(r)
 	on := make(map[string]bool)
@@ -190,6 +207,22 @@ func installGatedParameters(r *interp.Runner, module string) {
 		r.SetParameterWithdrawn(name, false)
 		r.SetParameterWithdrawn(name, !on["p:"+name])
 	}
+	// **After the bookkeeping above, not before it.** Clearing a withdrawal
+	// puts back what it took, so a drop in front of that line was undone by
+	// it — measured, the name came back produced one statement later and the
+	// row read exactly as it had before the fix.
+	for _, name := range taken {
+		// The load does not take this name, now or later: once the function
+		// holding the local returns, the reference has the name unset rather
+		// than produced.
+		r.DropProducedParameter(name)
+	}
+	// Reported so the caller does not refer to a name this just let go: a
+	// reference materializes it again, and the load would end up owning the
+	// name after all — one statement later than before. Measured, the
+	// reference has the name **unset** once the function holding the local
+	// returns.
+	return taken
 }
 
 // gatedParametersTheModuleOwns is the names an unload takes away and a load

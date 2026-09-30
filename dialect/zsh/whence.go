@@ -347,12 +347,17 @@ func whencePath(r *interp.Runner, name string, m whenceMode) int {
 // through the core rather than written again here: `type` in this shell *is*
 // `whence -v`, so a second spelling would be a second answer to one question.
 func aliasAnswer(r *interp.Runner, name, value string, kind interp.AliasKind, m whenceMode) string {
-	word, csh := "alias", "aliased to "
+	// The `-w` word is taken from the core rather than spelled again here,
+	// for the reason the `-v` sentence below already is: `type` in this
+	// shell *is* `whence -v`, so one question gets one answer. The `-c`
+	// phrase stays local because only this letter has one.
+	word := interp.AliasKindWord(kind)
+	csh := "aliased to "
 	switch kind {
 	case interp.AliasGlobalKind:
-		word, csh = "global alias", "globally aliased to "
+		csh = "globally aliased to "
 	case interp.AliasSuffixKind:
-		word, csh = "suffix alias", "suffix aliased to "
+		csh = "suffix aliased to "
 	case interp.AliasAnyKind, interp.AliasRegularKind:
 	}
 	switch {

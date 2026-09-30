@@ -51,6 +51,31 @@ func TestWhenceNamesEachKindOfAlias(t *testing.T) {
 		// answer of its own.
 		{`type p.txt`, "txt is a suffix alias for cat -n\n", 0},
 		{`type UP`, "UP is a global alias for | tr a-z A-Z\n", 0},
+		// **And not on the `-w` road either**, which is where it did have
+		// one: `type -w p.txt` answered `p.txt: alias` — the asked word and
+		// the plain kind — while every row above named `txt` a suffix alias
+		// (#5219). These rows sat missing from this very table, which had
+		// the plain road of each kind and the `-w` road of none, so the one
+		// guard meant to keep `type` and `whence` together covered the half
+		// that agreed.
+		{`type -w p.txt`, "txt: suffix alias\n", 0},
+		{`type -w UP`, "UP: global alias\n", 0},
+		{`type -w cmd`, "cmd: alias\n", 0},
+		// `-a` writes the same row and had the same second answer, fixed a
+		// grid later than `-w` was: one call site of the shared lookup is
+		// not the other.
+		{`type -aw p.txt`, "txt: suffix alias\n", 0},
+		{`type -aw UP`, "UP: global alias\n", 0},
+		{`type -aw cmd`, "cmd: alias\n", 0},
+		// The extension and not the whole word, on this road too.
+		{`type -w p.q.txt`, "txt: suffix alias\n", 0},
+		// And the negatives, so a rule that named the *suffix* whatever was
+		// asked would not pass: a bare extension is nobody, and a word with
+		// no alias behind it is `none` rather than a kind.
+		// At 1, measured: a name with nothing behind it is `none` and a
+		// failure, on this road as on `whence -w txt`.
+		{`type -w txt`, "txt: none\n", 1},
+		{`type -w p.zzz`, "p.zzz: none\n", 1},
 
 		// `command -v` writes a line that would define the alias back, kind
 		// letter and all — except for the suffix kind, whose line is the

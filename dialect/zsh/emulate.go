@@ -414,6 +414,9 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 					if a[j] == 'c' {
 						e.code, e.hasCode = args[i], true
 					} else {
+						if !knownEmulateOption(r, args[i]) {
+							return e, 1
+						}
 						e.options = append(e.options, emulateOption{name: args[i]})
 					}
 				}
@@ -440,6 +443,9 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 						return e, 1
 					}
 					i++
+					if !knownEmulateOption(r, args[i]) {
+						return e, 1
+					}
 					e.options = append(e.options, emulateOption{name: args[i], on: true})
 				case 'c':
 					if i+1 >= len(args) {
@@ -481,6 +487,27 @@ func emulateArguments(r *interp.Runner, args []string) (e emulateCall, status in
 		return e, 1
 	}
 	return e, -1
+}
+
+// knownEmulateOption refuses an `-o` or `+o` name no option answers to, at
+// the point the command line is read rather than when the options are set.
+//
+// Measured on zsh 5.9.2, 2026-09-30 (#5144): a bad name is `no such option:
+// NAME` at status 1, and it is the first thing said. It comes before an
+// operand the mode has no room for (`emulate zsh -o bad 'print x'`), before
+// an `-o` or `-c` left with no word after it, and before an unknown mode is
+// passed over. And it stops the whole call: the emulation is not entered, no
+// other option named beside it is set — `-o nullglob -o bad` leaves nullglob
+// off — and a `-c` string does not run.
+//
+// Left to right, as the words are read: a bad name *after* a surplus operand
+// is not reached, and the operand is what is reported.
+func knownEmulateOption(r *interp.Runner, name string) bool {
+	if _, _, ok := resolveOptionName(normalizeOption(name)); ok {
+		return true
+	}
+	r.Diagnosef("no such option: %s\n", name)
+	return false
 }
 
 // emulateCall is one command line, read.

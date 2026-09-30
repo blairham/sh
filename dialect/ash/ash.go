@@ -254,6 +254,10 @@ func Semantics() interp.Semantics {
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
 
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// unanswered DebugActionArmingErrExitSkipsTheCommand: the same, and
+	// measured in the pinned alpine image rather than taken from dash —
+	// `trap 'echo d' DEBUG` is `invalid signal specification` in BusyBox
+	// ash, so there is no DEBUG action to ask about.
 	s.TraceFromBorrowedTextFollowsItsRedirection = interp.Yes
 	// **Not dash's answer, and that is the point.** BusyBox ash has named
 	// bases where dash has none, so the two split on what `8#` comes to:

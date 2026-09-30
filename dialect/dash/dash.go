@@ -122,6 +122,10 @@ func Semantics() interp.Semantics {
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
 
 	s.ArithmeticOnlyBodyIsAnArithmeticExpansion = interp.No
+	// unanswered DebugActionArmingErrExitSkipsTheCommand: this shell has no
+	// DEBUG trap to arm anything from. Measured 2026-09-30 —
+	// `trap 'echo d' DEBUG` is `trap: DEBUG: bad trap` in dash 0.5.12, so
+	// the action the axis is about cannot exist here.
 	s.TraceFromBorrowedTextFollowsItsRedirection = interp.Yes
 	// unanswered NoclobberProtectsAnFdVariable: the same reason as the axis
 	// below it — there is no `{name}` redirection here for `set -C` to

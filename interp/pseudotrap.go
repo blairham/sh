@@ -581,8 +581,16 @@ func (r *Runner) fireDebugTrap(ctx context.Context, entering bool) {
 		r.beforeDebugTrap(r)
 	}
 	r.inDebugTrap = true
+	armed := r.errexit
 	acted := r.runPseudoTrapBody(ctx, "DEBUG", *body, r.status)
 	r.inDebugTrap = false
+	if !armed && r.errexit && r.debugActionArmingErrExitSkips() {
+		// The action turned ERR_EXIT on, which in one shell is how a DEBUG
+		// action says "do not run this command" — and the option is spent
+		// saying it. See Runner.debugActionArmingErrExitSkips.
+		r.debugSkip, r.status, r.errexit = true, 0, false
+		return
+	}
 	if entering {
 		// The firing with the frame already entered answers differently, and
 		// it is the one place the two rules can be told apart — see
@@ -909,4 +917,45 @@ func (r *Runner) debugTrapStopped() bool {
 // calls has its own name there, and an unmarked name answers no.
 func (r *Runner) tracesIntoFunctions() bool {
 	return r.functrace || (r.inFunc != "" && r.tracedFuncs[r.inFunc])
+}
+
+// debugActionArmingErrExitSkips reports whether a DEBUG action that turns
+// ERR_EXIT **on** thereby skips the command it fired for — and spends the
+// option doing it.
+//
+// Asked only where the action really armed it, which is what keeps a script
+// with an ordinary DEBUG trap off the question entirely: with nothing armed
+// there is no disagreement to consult, and asking anyway would make a strict
+// core refuse by name over a rule the script never reaches. That guard is
+// load-bearing rather than tidy — the same shape cost an unrelated test on
+// #5156, where an axis asked where nothing needed the answer turned a
+// working case into a refusal.
+//
+// Measured 2026-09-30, `PS4` unset, each shell running a function that sets
+// its DEBUG trap to arm ERR_EXIT on one line:
+//
+//	                  line skipped?  ERR_EXIT after
+//	zsh 5.9.2         yes            off
+//	bash 5.3.20       no             on
+//	ksh93u+           no             on
+//
+// So two effects and one rule: the command does not run, and the option is
+// back off for the line after it. `C05debug.ztst`'s "Skip line from DEBUG
+// trap" asserts both — its expected output has `3 three` and `5 five` with
+// no `4 four`, and no `Hey, ERREXIT is set!` from the line that tests the
+// option afterwards.
+//
+// **It is the arming that decides and not the action's status**, which is
+// the neighboring rule: a DEBUG action returning non-zero without touching
+// ERR_EXIT skips nothing in this shell — measured, a trap body of `false`
+// leaves both commands running — and that is what
+// Semantics.DebugActionDecidesTheCommand is about in the columns that have
+// it.
+//
+// dash and ash cannot be asked: neither has a DEBUG trap at all. Measured —
+// `trap 'echo d' DEBUG` is `DEBUG: bad trap` in dash 0.5.12 and `invalid
+// signal specification` in BusyBox ash, the latter in the pinned image.
+func (r *Runner) debugActionArmingErrExitSkips() bool {
+	return r.ask(r.sem().DebugActionArmingErrExitSkipsTheCommand,
+		"a DEBUG action arming ERR_EXIT skipping the command it fired for")
 }

@@ -3747,6 +3747,7 @@ func Semantics() interp.Semantics {
 	// false && true; }` carries on under `set -e`.
 	s.FailingPipelineWhoseLastElementRanHere = interp.PipelineJudgedUnlessItsLastElementJudgedItself
 	s.DebugTrapRunsInsideCalls = interp.Yes
+	s.DebugActionArmingErrExitSkipsTheCommand = interp.Yes
 	s.DebugTrapRefiresOnEnteringAFunction = interp.No
 	// Every compound head, once each — `if`, `while`, a group, a subshell,
 	// `repeat` and a function *definition* among them — and a loop's passes

@@ -167,3 +167,67 @@ var declinedBuiltins = map[string]declined{
 			"specification, so there is something to implement *from*.",
 	},
 }
+
+// declinedFormats is a binary format this shell deliberately does not write.
+//
+// The third kind, and the first of its kind, so its shape is worth stating.
+// The builtin is implemented and it works; what is declined is the **artifact
+// it produces**. Nothing refuses at a word — `zcompile` writes a file and
+// exits 0 — so the falsifier cannot be a table lookup the way the other two
+// ledgers' are. It is a behavioral test instead:
+// TestZcompileStillWritesTextRatherThanWordcode reads what the builtin
+// writes and fails if it ever starts with zsh's magic, which is the day this
+// entry has to be taken back out loud.
+//
+// **Its reason is also a different reason**, and that is why it is not filed
+// beside the other two. Theirs is "there is no specification on the green
+// list to implement from" — the thing is documented nowhere this shell may
+// read. This one's is "the artifact the test requires cannot be produced
+// without reading the format", which is the clean-room boundary approached
+// from the *other* side: a format learned from a test's fixtures is learned
+// from the implementation just as surely as one read out of the source.
+var declinedFormats = map[string]declined{
+	"zcompile wordcode": {
+		issue: 5141,
+		cost: "`A09zwc.ztst` is 2 chunks with 1 unreached — `make zsh-suite " +
+			"ARGS='-only A09zwc.ztst -jobs 1'`, oracle " +
+			"/opt/homebrew/bin/zsh 5.9.2, ours build/shells/zsh, measured " +
+			"on origin/main at 81099b07f. **Joint-cheapest row on the " +
+			"re-ranked table in docs/spec/zsh-suite.md and not cheap at " +
+			"all**, which is that page's third shape for how a chunk count " +
+			"misleads about cost: a row can be unreachable rather than " +
+			"expensive. Its other chunk passes, and passes for a reason " +
+			"worth knowing — `source zwc.tmp/victim` finds the *text* file " +
+			"whatever the `.zwc` beside it holds.",
+		why: "The chunk needs a `.zwc` carrying **valid wordcode magic** " +
+			"whose interior is then corrupted, and this shell cannot write " +
+			"one. Measured 2026-09-29, `zcompile victim` over a one-line " +
+			"script, first eight bytes: zsh 5.9.2 writes " +
+			"`07 06 05 04 00 80 00 00`, the magic and the version, and this " +
+			"shell writes `70 72 69 6e 74 20 76 69` — seventeen bytes of " +
+			"the script's own text. " +
+			"That is a decision already argued at the top of zcompile.go: " +
+			"wordcode is zsh's internal representation, reading it out of " +
+			"zsh's source is what CLEANROOM.md forbids as squarely as the C " +
+			"source, and text is what degrades best — real zsh silently " +
+			"ignores a `.zwc` it cannot read and falls back to the source, " +
+			"verified there with junk, with an empty file and with plain " +
+			"shell text. " +
+			"So the chunk can be satisfied two ways and neither is " +
+			"available. Detecting that the text dump *we* wrote has been " +
+			"modified invents a validation rule — and the file's other " +
+			"chunk, which requires **silence** for the unmodified dump, is " +
+			"the proof that the rule would be `our own bytes changed` " +
+			"rather than what zsh checks. Reverse-engineering the header " +
+			"from the test's own hints — the magic bytes, and " +
+			"`FD_PRELEN*4 + sizeof(wordcode)*2 = 56` written in the file's " +
+			"comment — is the same boundary from the other side, and it is " +
+			"the side people miss: a fixture is the implementation speaking.",
+		changes: "A description of the wordcode container arriving on " +
+			"CLEANROOM.md's green list — a specification or a manual page, " +
+			"not a test's fixtures and not the source — or a decision that " +
+			"this one format may be derived, taken deliberately and written " +
+			"down here rather than inferred from the fact that a suite row " +
+			"wants it.",
+	},
+}

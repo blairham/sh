@@ -335,7 +335,7 @@ The two guards answer different questions and both are needed:
 
 A comment stating something true about a reference shell, while the code
 beside it no longer does that, reads as a **guarantee** rather than an
-observation. Four routes to one, all observed:
+observation. Five routes to one, all observed:
 
 | route | example |
 | --- | --- |
@@ -343,8 +343,9 @@ observation. Four routes to one, all observed:
 | **argued instead of measured** | an axis doc explaining a disagreeing row away |
 | **conditions in prose the script never enforced** | an option named in a comment and absent from the fixture |
 | **true of the reference, false of the code** | a comment claiming a row is implemented when it describes what was measured |
+| **true in both halves, stale in the clause joining them** | "nothing in this tree has one", written before the tree had one — see below |
 
-Only the last has a mechanical guard available, and only where somebody made
+Only the fourth has a mechanical guard available, and only where somebody made
 the claim **derived rather than stated**: a count computed from a table fails
 a test the moment the table and the prose part, where a number written in
 prose drifts silently.
@@ -354,6 +355,68 @@ prose drifts silently.
 
 Every claim in a comment that could be derived instead is a guard nobody has
 written yet.
+
+### A fifth route: right in both halves, stale in the clause that joins them
+
+The four above are comments that are **wrong** somewhere. This one is not, and
+that is why it survived reading:
+
+> Nothing is recorded as the running command: the record holds a
+> `syntax.Command` and a list is not one. What the reference's own
+> `ZSH_DEBUG_CMD` reads back at this firing is the whole list's text, which is
+> the shape a dialect implementing that parameter would have to record;
+> **nothing in this tree has one.**
+
+Both halves are still true. `Pipeline` and `BinaryExpr` implement
+`syntax.Expr` and neither implements `syntax.Command`, so the record genuinely
+could not hold either; and the reference genuinely does read the whole list
+back. What expired is the **clause joining them** — the tree acquired a
+dialect with that parameter, and from that day the passage described a gap
+while reading as a decision. It sat in two files, was read twice while working
+on exactly that parameter, and was believed both times.
+
+> **A comment saying "nothing here does X yet" is dated the moment it is
+> written**, and it carries no mark saying so.
+
+The tell is different from the other four, which is the reason this is its own
+route. There is **nothing to falsify** — no claim to check against a shell, no
+number to re-derive, no fixture to inspect. There is only a **premise to
+re-date**, and the premise is about the *tree*, which moves without anyone
+revisiting the comment that depended on it.
+
+So the two questions are not the same question:
+
+- *Is this comment true?* — which the four routes above answer, and which this
+  one passes.
+- *Was this comment's reason about something that can change without it?* —
+  which nothing answers, and which is the one that mattered.
+
+The practical guard is narrow but cheap: **when a comment's reason is the
+absence of a caller, name what would end the absence.** "No dialect has this
+parameter" is a fact with an owner — the parameter — so the sentence should say
+which name to grep for, and then adding that name is what finds the comment.
+Recording a nullary fact about the tree without saying what would falsify it
+is how a gap acquires the appearance of a choice.
+
+**Writing this section found a third copy of the same sentence.** The guard
+above was cheap enough to run rather than only prescribe — one `grep` for
+"nothing in this tree" and its neighbors — and it turned up the claim a
+**third** time, in the axis documentation that described the absence rather
+than in either site that caused it. The change that fixed the two recording
+sites had left it, so for one commit the tree said the firing records nothing
+while the firing recorded. It is fixed in the same change as this paragraph.
+
+That is worth more than the paragraph it interrupts. A sentence repeated in
+three places is not three comments, it is one claim with three copies, and
+fixing the copies a change *touches* leaves the ones that merely describe it —
+which are exactly the ones a reader consults first. So the sweep is the guard:
+**grep the sentence, not the function.**
+
+The same sweep found the phrase in a dozen places in the oracle's own records,
+where it is legitimately dated — a record of what a panel answered on a day
+says what no dialect claimed on that day, and is not a premise anything
+depends on. The one other code comment it found names the feature that would
+end its absence, which is the form this section asks for.
 
 ---
 

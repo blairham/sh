@@ -226,9 +226,9 @@ func (r *Runner) debugArithPart(ctx context.Context, c *syntax.ForArithClause, p
 // one for the pipeline and one for each `echo`. So commands nested inside an
 // element go on firing normally and only the element's own head is withheld.
 // zsh's `ZSH_DEBUG_CMD` at that firing reads the whole pipeline back — `echo
-// A | sed "s/^/P:/"` — which is the shape a dialect implementing that
-// parameter would have to record; nothing in this tree has one, so the
-// firing records nothing. See RunningCommand.
+// A | sed "s/^/P:/"` — and the firing records the pipeline so that it can:
+// see RunningCommand.Expr, which is the field that holds a statement, since
+// the record's command field cannot.
 //
 // dash and BusyBox ash have no DEBUG condition and never reach the question.
 

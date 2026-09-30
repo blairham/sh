@@ -6741,6 +6741,30 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 		}
 		return valueBackslashSeparator(s, i, ifs)
 	}
+	// valueBSPos is the same position without asking whether it separates:
+	// the byte standing there is the *mark* and the character it stands for
+	// is a backslash, so the raw IFS test below must never see it.
+	//
+	// **One shell's default IFS holds the mark's byte.** zsh's is space, tab,
+	// newline and NUL, and the mark is NUL — see valueBackslashMark, which
+	// calls NUL the only byte no value can hold and is right about values
+	// and not about IFS. So `v='a\b'; ${=v}` split at the mark and came
+	// back two fields, `a` and `\b`, where the panel is unanimous at one
+	// (#5162). valueBackslashSeparator closed the mirror of this — a
+	// backslash in IFS not separating — and left this half, because it
+	// answers 0 when IFS holds no backslash and the walk then tested the
+	// mark as data.
+	// isWS below needs no clause of its own, and that is measured rather
+	// than assumed: a mutant adding one changed no answer, because the mark's
+	// byte is never IFS *whitespace* — ifsSpace takes the whitespace set from
+	// IFS and isIFSWhitespace admits only space, tab and newline. The
+	// separator test is where the mark has to be read, and that is isSep.
+	valueBSPos := func(i int) bool {
+		if isBoundary(i) || isMark(i) || (literal != nil && literal[i]) {
+			return false
+		}
+		return s[i] == valueBackslashMark
+	}
 	isWS := func(i int) bool {
 		if isBoundary(i) {
 			return true
@@ -6760,8 +6784,10 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 		if isMark(i) || (literal != nil && literal[i]) {
 			return false
 		}
-		if valueBS(i) > 0 {
-			return true
+		if valueBSPos(i) {
+			// The character is a backslash, so it separates exactly when
+			// IFS holds one — and never because IFS holds the mark's byte.
+			return valueBS(i) > 0
 		}
 		if widths != nil {
 			return widths[i] > 0

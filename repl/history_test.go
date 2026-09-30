@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -372,5 +373,29 @@ func TestADialectWithNoDefaultFileRecordsNothing(t *testing.T) {
 	h := historyFrom(vars(map[string]string{"HISTFILE": "/tmp/named"}), "/home/someone", "")
 	if h.path != "/tmp/named" {
 		t.Errorf("HISTFILE gave %q under a dialect with no default", h.path)
+	}
+}
+
+// And the **wiring**: a Shell's history file comes from its dialect's style.
+//
+// The row a surviving mutant asked for. Every other test here calls
+// historyFrom directly, so passing a hardcoded name at the one call site —
+// exactly the bug being fixed, one layer up — changed nothing any of them
+// could see. This one goes through the Shell, which is the only place the
+// style and the file meet.
+func TestTheSessionTakesItsDefaultFileFromTheDialect(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	shellWith := func(style HistoryStyle) Shell {
+		r := &interp.Runner{Vars: map[string]string{"HOME": home}}
+		return Shell{Runner: r, History: style}
+	}
+	if got := shellWith(HistoryStyle{DefaultFile: ".bash_history"}).historyFile().path; got != filepath.Join(home, ".bash_history") {
+		t.Errorf("the session's file is %q, want the dialect's name under the home", got)
+	}
+	// And a dialect with none records nowhere, which is the half a hardcoded
+	// name at the call site would quietly undo.
+	if got := shellWith(HistoryStyle{}).historyFile().path; got != "" {
+		t.Errorf("a dialect with no default gave %q, want none", got)
 	}
 }

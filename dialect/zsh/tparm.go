@@ -221,9 +221,9 @@ func tparmFormat(s string, i int, pop func() int, b *strings.Builder) (int, bool
 	verb := s[j]
 	v := pop()
 	if verb == 's' {
-		b.WriteString(fmt.Sprintf(spec+"s", strconv.Itoa(v)))
+		fmt.Fprintf(b, spec+"s", strconv.Itoa(v))
 	} else {
-		b.WriteString(fmt.Sprintf(spec+string(verb), v))
+		fmt.Fprintf(b, spec+string(verb), v)
 	}
 	return j, true
 }

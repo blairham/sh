@@ -1029,6 +1029,10 @@ func (r *Runner) reportJobLookup(spec string, code int, name string) int {
 		return r.status
 	}
 	d := r.diag()
+	if line, ok := jobSpecMiss(*d, name, spec); ok {
+		r.diagf("%s\n", line)
+		return orDefault(d.NoSuchJobStatus, 1)
+	}
 	r.diagf("%s\n", Wording(d.NoSuchJob, "%[1]s: %[2]s: no such job", name, spec))
 	return orDefault(d.NoSuchJobStatus, 1)
 }

@@ -1841,6 +1841,11 @@ func usesTheOptionWording(e *killError, d Diagnostics) bool {
 // rather than `kill`'s, and measured as such: `kill -NOPE` is four lines there
 // and `kill -Q` is one. The word itself is never printed.
 func (e *killError) lines(d Diagnostics) []string {
+	if e.kind == killNoSuchJob {
+		if line, ok := jobSpecMiss(d, "kill", e.operand); ok {
+			return []string{line}
+		}
+	}
 	w, fallback := e.format(d), e.fallback()
 	if !usesTheOptionWording(e, d) || !d.KillIllegalOptionPerLetter {
 		return []string{Wording(w, fallback, e.verbs()...)}

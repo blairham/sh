@@ -2950,6 +2950,23 @@ type Runner struct {
 	// not at all, which no reading of the table's order produces. See
 	// markedJobs.
 	jobOrder []*Job
+	// commandSlot is the job number the running command holds, in the
+	// dialect where one does — zero where it holds none or holds one with no
+	// number — and commandSlotHeld says some command is holding it, so that
+	// one called from it takes nothing more. See
+	// Semantics.ACommandHoldsAJobSlot and Runner.holdACommandsJobSlot.
+	commandSlot     int
+	commandSlotHeld bool
+	// marksByNumber says the `+` and `-` are markCurrent and markPrevious,
+	// job numbers, rather than read off jobOrder: a slot has been in play,
+	// and a number can then name no job and still be marked. Zero is no
+	// marker. See Runner.engageMarksByNumber.
+	marksByNumber             bool
+	markCurrent, markPrevious int
+	// commandSerial counts the commands that have held a slot, so that a
+	// job noticed under one is told from a job noticed under the next — see
+	// Job.noticedInCommand.
+	commandSerial uint64
 	// jobIdents hands out the numbers a job with no process of its own
 	// answers to — see Runner.inventJobIdent, which is where the whole of it
 	// is. A pointer because it is shared down the clone chain rather than
@@ -6999,6 +7016,9 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 	case *syntax.Pipeline:
 		return r.pipeline(ctx, x)
 	case *syntax.TimeClause:
+		if release := r.holdACommandsJobSlot(); release != nil {
+			defer release()
+		}
 		return r.timeClause(ctx, x)
 	}
 	return r.unsupported(fmt.Sprintf("%T", e))
@@ -7278,6 +7298,11 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		r.debugCompoundHead(ctx, c)
 		if r.debugTrapStopped() {
 			return nil
+		}
+	}
+	if holdsAJobSlot(c) {
+		if release := r.holdACommandsJobSlot(); release != nil {
+			defer release()
 		}
 	}
 	switch x := c.(type) {

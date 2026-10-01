@@ -424,6 +424,11 @@ const evalLinesAxis = "the lines of `eval`'s text continuing the caller's"
 // . empty.sh` both end at 0 in every shell in the panel, so an empty script
 // *clears* a failure rather than preserving it.
 func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
+	// Code run by a builtin holds a job slot, where a command does: `eval`
+	// and `.` as much as a brace group. See Semantics.ACommandHoldsAJobSlot.
+	if release := r.holdACommandsJobSlot(); release != nil {
+		defer release()
+	}
 	// Text being read again, which is one level of indirection: `eval` and a
 	// sourced file both arrive here, and one dialect's trace prefix counts
 	// them. See Runner.tracePrefixDepth.

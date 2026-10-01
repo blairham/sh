@@ -3,7 +3,11 @@
 
 package ksh_test
 
-import "testing"
+import (
+	"strconv"
+	"syscall"
+	"testing"
+)
 
 // **`sleep` is a builtin here, reading the numbers ksh93u+ reads and
 // complaining in its words, with no location** — measured 2026-10-01 on
@@ -36,14 +40,15 @@ sleep -1; echo o=$?`)
 
 // **A trapped signal ends the sleep**, the handler runs before the next
 // command, and the status is the signal's in this shell's encoding — 256 plus
-// the number. Measured on ksh93u+: `T` and then 286 for USR1, after the 0.2
+// the number. Measured on ksh93u+ on macOS: `T` and then 286 for USR1, after the 0.2
 // seconds the sender waited rather than the 5 asked for.
 func TestATrappedSignalEndsASleep(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `trap 'echo T' USR1
 (/bin/sleep 0.2; kill -USR1 $$) &
 SECONDS=0; sleep 5; s=$?
 (( SECONDS < 4 )) && echo "st=$s quick"`)
-	if want := "T\nst=286 quick\n"; out != want || st != 0 {
+	// 256 plus the platform's own number: USR1 is 30 on macOS and 10 on Linux.
+	if want := "T\nst=" + strconv.Itoa(256+int(syscall.SIGUSR1)) + " quick\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }

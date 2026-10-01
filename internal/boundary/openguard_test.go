@@ -208,9 +208,10 @@ var exempt = map[string]string{
 		"to open, to learn whether the open can block. The open itself goes through the gate a " +
 		"moment later and is refused there; this answers a question about waiting, and a " +
 		"refusal here would change nothing except which of the two says no.",
-	"interp.CommandsOnPath": "the PATH directories, listed to answer a view of what is " +
-		"runnable. The shell chose the paths — they are $PATH — and this is the command search " +
-		"every execution already makes, asked once instead of per word.",
+	"interp.pathEntries": "the PATH directories, listed to answer a view of what is " +
+		"runnable — CommandsOnPath — or of what the directories hold, which is one shell's " +
+		"command table (PathEntries, #5230). The shell chose the paths — they are $PATH — and " +
+		"this is the command search every execution already makes, asked once instead of per word.",
 	"interp.heredocReader": "the spool a here-document's or a here-string's body is put on, so " +
 		"that a child naming the descriptor can read it (#2759). The text is this shell's own — " +
 		"a string the parser produced — and there is no path a script named: the file is made " +

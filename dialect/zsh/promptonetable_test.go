@@ -72,6 +72,12 @@ func TestTheDrawerAndTheInterpreterReadOneTable(t *testing.T) {
 		t.Errorf("the interpreter's Expand is not the drawer's: %v against %v", gotExpand, drawnExpand)
 	}
 	got.Expand, drawn.Expand = nil, nil
+	// ClockFormat is a function too, and is asked the same way.
+	if reflect.ValueOf(got.ClockFormat).Pointer() != reflect.ValueOf(drawn.ClockFormat).Pointer() ||
+		drawn.ClockFormat == nil {
+		t.Errorf("the interpreter's ClockFormat is not the drawer's, or there is none")
+	}
+	got.ClockFormat, drawn.ClockFormat = nil, nil
 	if !reflect.DeepEqual(got, drawn) {
 		t.Errorf("the interpreter's table is not the drawer's:\n interp: %+v\n drawer: %+v", got, drawn)
 	}

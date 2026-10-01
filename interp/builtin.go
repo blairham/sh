@@ -6759,7 +6759,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// remainder anyway, so `read x` on `a  ` is `a` and `read x y` on
 		// `a b  ` is `a` and `b` under either answer — and an axis reported
 		// where it decides nothing is a refusal a script cannot act on.
-		fields = r.trailingSeparatorField(fields, text, lits, ifs, set, false)
+		fields = r.trailingSeparatorField(fields, text, lits, ifs, set, false, false)
 	}
 	// `at` is the splitter's own list and is one short of `fields` exactly
 	// when the answer above added one. The short entry is never the one read:

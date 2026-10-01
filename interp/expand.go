@@ -6735,8 +6735,17 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 	// than as itself, so the byte standing at its position is not the byte
 	// the splitter has to test. valueBackslashSeparator is what reads it, and
 	// it answers 0 everywhere else. See interp/valuebackslashseparator.go.
+	// A NUL is the mark only in the escaped form, and only where no escape
+	// stands in front of it: a NUL that is *data* is either in a string that
+	// was never escaped — `read`'s line — or behind the escape
+	// escapeValueBackslashes writes for it. Reading every NUL as the mark is
+	// what kept zsh's default IFS, which holds a NUL, from ever splitting at
+	// one in `read` (#5263).
+	dataNUL := func(i int) bool {
+		return !escaped || (i > 0 && marks != nil && marks[i-1])
+	}
 	valueBS := func(i int) int {
-		if isBoundary(i) || isMark(i) || (literal != nil && literal[i]) {
+		if isBoundary(i) || isMark(i) || (literal != nil && literal[i]) || dataNUL(i) {
 			return 0
 		}
 		return valueBackslashSeparator(s, i, ifs)
@@ -6760,7 +6769,7 @@ func splitFieldsAt(s string, literal, boundary []bool, ifs, space string, ifsSet
 	// IFS and isIFSWhitespace admits only space, tab and newline. The
 	// separator test is where the mark has to be read, and that is isSep.
 	valueBSPos := func(i int) bool {
-		if isBoundary(i) || isMark(i) || (literal != nil && literal[i]) {
+		if isBoundary(i) || isMark(i) || (literal != nil && literal[i]) || dataNUL(i) {
 			return false
 		}
 		return s[i] == valueBackslashMark

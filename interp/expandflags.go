@@ -510,8 +510,16 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 				// `${=spec}` splitting, which is field splitting on IFS and
 				// not a separator the group named. Quoted it keeps the
 				// fields at the edges — see interp/splitflag.go.
+				//
+				// The words here are the text they came to, not the
+				// escaped form — the escaping happens after the group has
+				// run — so they are split as plain text. Reading them as
+				// escaped took a value's backslash for a quote and a
+				// value's NUL for the value-backslash mark, so `${(@)=v}`
+				// never split at the NUL zsh's default IFS holds, and an
+				// IFS of a backslash split at the NUL instead (#5263).
 				ifs, set := r.ifs()
-				split = append(split, r.splitFieldsAsking(w, nil, ifs, set, quoted, true)...)
+				split = append(split, r.splitFieldsAsking(w, nil, ifs, set, quoted, false)...)
 				continue
 			}
 			split = append(split, r.splitFlagged(w, e)...)

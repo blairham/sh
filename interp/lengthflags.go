@@ -276,7 +276,7 @@ func separatedFieldCount(w, ifs string, ifsSet bool) int {
 // separator opens a field however much whitespace follows it.
 func ifsWordCount(w, ifs, space string, ifsSet bool, chars func() (string, bool)) int {
 	n := len(splitFields(w, ifs, space, ifsSet, chars))
-	if trailingRunSeparates(w, nil, ifs, space, ifsSet) {
+	if trailingRunSeparates(w, nil, ifs, space, ifsSet, false) {
 		n++
 	}
 	return n
@@ -290,9 +290,13 @@ func ifsWordCount(w, ifs, space string, ifsSet bool, chars func() (string, bool)
 // the run rather than belonging to it, and `read -A` on `a\:` is one field in
 // the shell where `a:` is two. A nil mask exempts nothing, which is every
 // caller but that one.
-func trailingRunSeparates(w string, literal []bool, ifs, space string, ifsSet bool) bool {
+func trailingRunSeparates(w string, literal []bool, ifs, space string, ifsSet, escaped bool) bool {
 	if ifsSet && ifs == "" {
 		return false
+	}
+	var marks []bool
+	if escaped {
+		marks = escapedMarks(w)
 	}
 	found := false
 	for i := len(w) - 1; i >= 0; i-- {
@@ -300,7 +304,7 @@ func trailingRunSeparates(w string, literal []bool, ifs, space string, ifsSet bo
 			break
 		}
 		c := w[i]
-		if c == valueBackslashMark {
+		if c == valueBackslashMark && escaped && (i == 0 || marks == nil || !marks[i-1]) {
 			// A backslash the **value** held stands here as a mark, and this
 			// walk ends rather than testing it. Two measurements pin that,
 			// pulling in opposite directions:
@@ -317,9 +321,13 @@ func trailingRunSeparates(w string, literal []bool, ifs, space string, ifsSet bo
 			// that reading asks the trailing question where nothing asked it
 			// before, and the measured answer there is still two fields.
 			//
-			// A bare mark can only be one the escaping wrote — a NUL that is
-			// data carries an escape mark in front of it, and a shell value
-			// cannot hold one — which is what makes this a byte comparison. See
+			// A bare mark can only be one the escaping wrote, and only in a
+			// string that was escaped at all: a NUL that is data carries an
+			// escape mark in front of it there, and in plain text — `read`'s
+			// line, `${#(w)v}` — every NUL is data. A zsh value really can
+			// hold one, so an unguarded byte comparison here ended the run at
+			// a data NUL and lost the trailing separator `read` keeps
+			// (#5263). See
 			// valueBackslashMark, and interp/valuebackslashseparator.go for the
 			// mirror fault inside the splitter.
 			break

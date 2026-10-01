@@ -341,6 +341,18 @@ func sysreadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 	}
 	buf, status := sysreadOnce(r, in, size)
 	if status != 0 {
+		// The count still says how the read ended, where a wait that ran
+		// out or could not be asked leaves it alone — measured against zsh
+		// 5.9.2: a read that failed is -1, an end of input (and `-s 0`,
+		// which is one) is 0, and `-t` on a descriptor that is not one
+		// keeps whatever the parameter held.
+		if counting {
+			n := "-1"
+			if status == sysreadEnd {
+				n = "0"
+			}
+			r.StoreThroughOperand(count, n)
+		}
 		return status
 	}
 	if counting {
@@ -354,7 +366,16 @@ func sysreadBuiltin(r *interp.Runner, _ context.Context, args []string) int {
 		// So `-o` is where the bytes went, not a copy of where they also went,
 		// and a shell that assigned as well would leave a caller's parameter
 		// holding data it had already passed on.
-		return sysreadCopy(r, out, buf)
+		status := sysreadCopy(r, out, buf)
+		if status == sysreadCopyFail && len(rest) == 1 {
+			// Diverted, unless the diversion failed: then the bytes are
+			// not lost but land in the parameter the caller *named* —
+			// never in a defaulted REPLY, which is left as it was.
+			// Measured: `print -n ab | sysread -o 9 w` is 3 with w=ab,
+			// and the same without w leaves REPLY untouched.
+			r.StoreThroughOperand(dest, string(buf))
+		}
+		return status
 	}
 	r.StoreThroughOperand(dest, string(buf))
 	return 0
@@ -443,8 +464,8 @@ func sysreadOnce(r *interp.Runner, fd, size int) ([]byte, int) {
 	return nil, sysreadReadFail
 }
 
-// sysreadCopy is `-o`: the bytes just read, written on to another descriptor
-// as well as into the parameter.
+// sysreadCopy is `-o`: the bytes just read, written on to another
+// descriptor instead of into the parameter.
 func sysreadCopy(r *interp.Runner, out string, buf []byte) int {
 	fd, err := strconv.Atoi(out)
 	if err != nil {

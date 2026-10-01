@@ -2197,7 +2197,7 @@ func (r *Runner) nextFreeFd(freeing int) int {
 	if freeing >= 0 && r.sem().FdMove != FdMoveRelocates {
 		freeing = -1
 	}
-	fd := r.sem().FirstAllocatedDescriptor.number()
+	fd := r.firstAllocatedDescriptor()
 	for {
 		if _, held := r.fds[fd]; !held || fd == freeing {
 			return fd

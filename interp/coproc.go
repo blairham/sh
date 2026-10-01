@@ -428,7 +428,7 @@ func (r *Runner) fdWithinOpenFileLimit(fd int) bool {
 // highestFreeFds is the n highest free entries at or below from, in descending
 // order, or false where there are not that many above the allocation base.
 func (r *Runner) highestFreeFds(from, n int) ([]int, bool) {
-	base := r.sem().FirstAllocatedDescriptor.number()
+	base := r.firstAllocatedDescriptor()
 	out := make([]int, 0, n)
 	for fd := from; fd >= base && len(out) < n; fd-- {
 		if _, held := r.fds[fd]; !held {

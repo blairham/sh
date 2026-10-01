@@ -71,20 +71,31 @@ var errNoDescription = errors.New("no terminal description")
 // the second and third, and a description found in either is the same file
 // format.
 var terminfoSystemDirectories = []string{
+	// Homebrew's ncurses is keg-only, so its database — the one its own
+	// programs compile against — is under the keg rather than the prefix.
+	// `kitty` and `ghostty` are there and in no system directory on this
+	// machine, which is a terminal a person is plausibly running this shell
+	// inside.
+	//
+	// **First, ahead of the system's own**, because that is the order the
+	// reference reads them in: the panel's zsh 5.9.2 links Homebrew's
+	// `libncursesw.6.dylib`, whose compiled-in default is this database and
+	// then `/usr/share/terminfo`. Measured 2026-10-01 under `env -i`: its
+	// `${#terminfo}` for `TERM=screen` is 144, the keg's description, where
+	// the system's has 136 and no `hpa` — so `echoti hpa 7` is `\e[8G` there
+	// and was `no such terminfo capability` here — while `TERM=1178`, a name
+	// only the system database holds, is still found (#5291). The
+	// coordinator's call, recorded on the issue: emulate the reference's
+	// build. A machine with no keg reads the system list exactly as before.
+	"/opt/homebrew/opt/ncurses/share/terminfo",
+	"/usr/local/opt/ncurses/share/terminfo",
 	"/usr/share/terminfo",
 	"/etc/terminfo",
 	"/lib/terminfo",
 	"/usr/lib/terminfo",
 	"/usr/share/lib/terminfo",
 	"/usr/local/share/terminfo",
-	// Homebrew's ncurses is keg-only, so its database — the one its own
-	// programs compile against — is under the keg rather than the prefix.
-	// `kitty` and `ghostty` are there and in no system directory on this
-	// machine, which is a terminal a person is plausibly running this shell
-	// inside.
 	"/opt/homebrew/share/terminfo",
-	"/opt/homebrew/opt/ncurses/share/terminfo",
-	"/usr/local/opt/ncurses/share/terminfo",
 }
 
 // terminfoDirectories is the database search path, in the order a

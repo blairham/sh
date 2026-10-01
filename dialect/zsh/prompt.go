@@ -183,6 +183,16 @@ func PromptStyle() interp.PromptStyle {
 			'k': "\x1b[49m",
 			'E': "\x1b[K",
 		},
+		// The attribute codes write the terminal's own strings, by their
+		// termcap names, and nothing where the description has none — so
+		// the fixed strings above are only what a runner with no reader
+		// draws. Measured on zsh 5.9.2: `%S` and `%s` are `\e[3m` and
+		// `\e[23m` under `TERM=screen`, and every one of these is nothing
+		// with TERM unset or `dumb` (#5289). `%f` and `%k` are not here:
+		// they write the same bytes whatever the terminal is.
+		SequenceCapabilities: map[rune]string{
+			'B': "md", 'b': "me", 'U': "us", 'u': "ue", 'S': "so", 's': "se", 'E': "ce",
+		},
 		// What each of those sequences does to the terminal's visual state.
 		//
 		// The point of the table is `%b`. On this terminal the only way to

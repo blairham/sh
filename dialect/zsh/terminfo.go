@@ -6,6 +6,7 @@ package zsh
 import (
 	"maps"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/blairham/sh/interp"
@@ -191,6 +192,11 @@ func (c *capabilityTables) tables(r *interp.Runner) (
 			byTermcap[entry.Termcap] = interp.Scalar(entry.Value)
 		}
 	}
+	// The termcap `me` is not the terminfo `sgr0` it is filed under, where
+	// the two differ; see termcapExitAttributes.
+	if sgr0, ok := byTerminfo["sgr0"]; ok {
+		byTermcap["me"] = interp.Scalar(termcapExitAttributes(sgr0.Str, byTerminfo["sgr"].Str, byTerminfo["rmacs"].Str))
+	}
 	c.from, c.terminfo, c.listed, c.termcap, c.kinds = key, byTerminfo, listed, byTermcap, kinds
 	return byTerminfo, listed, byTermcap, kinds
 }
@@ -200,6 +206,12 @@ func (c *capabilityTables) tables(r *interp.Runner) (
 // system.
 func registerTerminfoModules(r *interp.Runner) {
 	tables := &capabilityTables{}
+	// And the prompt's attribute codes read the same description, through
+	// the termcap names: see PromptStyle's SequenceCapabilities and
+	// promptCapability.
+	r.SetTerminalCapabilityReader(func(code string) string {
+		return promptCapability(tables.termcapTable(r), code)
+	})
 	registerCapabilityParameter(r, "terminfo", "cols", "lines",
 		tables.listedTable, tables.readTable)
 	// The same two names under termcap's spelling, and there the two readings
@@ -299,4 +311,111 @@ func registerCapabilityParameter(
 	// tracking.
 	r.MarkReadonly(name)
 	hideModuleParameter(r, name)
+}
+
+// termcapExitAttributes is the termcap `me` a description's `sgr0` comes to.
+//
+// Where the description also says how to set every attribute (`sgr`) and how
+// to leave the alternate character set (`rmacs`), `me` is `sgr` with every
+// attribute off and the character-set half taken out — provided that comes to
+// the same reset `sgr0` does once its own character-set half is out.
+// Otherwise it is `sgr0` as written. Measured on zsh 5.9.2 by reading
+// `${(V)termcap[me]}` beside the terminfo strings, entry by entry:
+//
+//	          sgr0           rmacs     me
+//	xterm     \E(B\E[m       \E(B      \E[0m   sgr off is \E(B\E[0m
+//	screen    \E[m^O         ^O        \E[0m   sgr off is \E[0m^O
+//	vt100     \E[m^O$<2>     ^O        \E[0m
+//	ansi      \E[0;10m       \E[10m    \E[0m   the 10 is the character set
+//	linux     \E[m^O         ^O        \E[m^O  sgr off is \E[0;10m^O, which
+//	                                            is not the same reset
+//	vt220     \E[m\E(B       \E(B$<4>  \E[0m\E(B  the padded exit is in
+//	                                            neither, so nothing comes out
+//	no sgr    \E[m           (none)    \E[m
+//
+// The rows are each other's controls: screen and linux have the same `sgr0`
+// and `rmacs` and part company on `sgr` alone.
+func termcapExitAttributes(sgr0, sgr, rmacs string) string {
+	if sgr == "" || rmacs == "" {
+		return sgr0
+	}
+	off := stripPadding(withoutCharset(tparm(sgr, make([]int, 9)), rmacs))
+	plain := stripPadding(withoutCharset(sgr0, rmacs))
+	if sameReset(off, plain) {
+		return off
+	}
+	return sgr0
+}
+
+// withoutCharset takes the alternate character set's exit out of a reset: the
+// bytes themselves where they appear, or — where the exit is a one-parameter
+// SGR, `\E[10m` — that parameter out of the reset's own list.
+func withoutCharset(s, rmacs string) string {
+	// As written, padding and all: vt220's `rmacs` is `\E(B$<4>`, which its
+	// `sgr` does not contain, and its `me` keeps the `\E(B` — measured,
+	// `\E[0m\E(B`.
+	rm := rmacs
+	if strings.Contains(s, rm) {
+		return strings.Replace(s, rm, "", 1)
+	}
+	if p, ok := strings.CutPrefix(rm, "\x1b["); ok {
+		if p, ok = strings.CutSuffix(p, "m"); ok && p != "" {
+			if body, ok := strings.CutPrefix(s, "\x1b["); ok {
+				if body, ok = strings.CutSuffix(body, "m"); ok {
+					var keep []string
+					for _, part := range strings.Split(body, ";") {
+						if part != p {
+							keep = append(keep, part)
+						}
+					}
+					return "\x1b[" + strings.Join(keep, ";") + "m"
+				}
+			}
+		}
+	}
+	return s
+}
+
+// sameReset reports whether two SGR strings reset alike: `\E[m` and `\E[0m`
+// are one reset.
+func sameReset(a, b string) bool {
+	norm := func(s string) string { return strings.ReplaceAll(s, "\x1b[m", "\x1b[0m") }
+	return norm(a) == norm(b)
+}
+
+// promptCapability is what one attribute code writes: the termcap string,
+// with its padding taken off the way the terminal library's output routine
+// takes it off — measured, vt100's `$termcap[md]` is `\E[1m$<2>` and `%B`
+// under that TERM writes `\E[1m`. Empty where the description has no such
+// capability, which is what every code writes with no description at all.
+func promptCapability(table interp.AssocArray, code string) string {
+	if _, up := table["up"]; !up {
+		// A terminal the cursor cannot move up on is one zsh draws no
+		// attribute on at all: measured, a description holding `bold`,
+		// `sgr0` and `smso` writes nothing for `%B|%b|%S` until `cuu1` is
+		// added to it, and then writes all three — `cols`, `lines`, `am`,
+		// `cup` and `clear` each changed nothing. With no description at all
+		// there is no `up` either, which is TERM unset and `dumb`.
+		return ""
+	}
+	v, ok := table[code]
+	if !ok {
+		return ""
+	}
+	return stripPadding(v.Str)
+}
+
+// stripPadding takes the `$<…>` delays out of a capability string.
+func stripPadding(s string) string {
+	for {
+		i := strings.Index(s, "$<")
+		if i < 0 {
+			return s
+		}
+		j := strings.IndexByte(s[i:], '>')
+		if j < 0 {
+			return s
+		}
+		s = s[:i] + s[i+j+1:]
+	}
 }

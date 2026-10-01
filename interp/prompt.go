@@ -189,6 +189,21 @@ type PromptStyle struct {
 	// Read after Codes, so a letter in both is the field.
 	Sequences map[rune]string
 
+	// SequenceCapabilities names, for a Sequences code, the capability of the
+	// terminal's description it draws instead of its fixed string — by
+	// termcap code, since that is how the one shell with the table asks. A
+	// terminal with no such capability, or no description at all, draws
+	// nothing and changes no visual state.
+	//
+	// zsh's attribute codes are the reason. Measured on zsh 5.9.2 with
+	// `print -rnP '%B|%b|%U|%u|%S|%s|%E|%F{red}'`: under `TERM=xterm` the
+	// codes write `\e[1m`, `\e[0m`, `\e[4m`, `\e[24m`, `\e[7m`, `\e[27m` and
+	// `\e[K`; under `TERM=screen` the standout pair is `\e[3m` and `\e[23m`,
+	// that entry's own; and with TERM unset, `dumb` or naming no entry they
+	// write nothing at all, while `%F{red}` is `\e[31m` in every one of them
+	// (#5289). Read through [FieldTerminalCapability].
+	SequenceCapabilities map[rune]string
+
 	// Visual is which of those sequences change the terminal's visual state,
 	// and how. See [PromptVisual]: it is what lets a bold-off write the
 	// color back that clearing the bold took with it.
@@ -799,6 +814,13 @@ const (
 	// answered for `%(L.…)` and is a property of the tying, not of the
 	// escape.
 	FieldShellLevel
+	// FieldTerminalCapability is one string of the terminal's description,
+	// named by its termcap code in the argument — what a code listed in
+	// [PromptStyle.SequenceCapabilities] draws. The runner answers it through
+	// the reader a dialect installs with [Runner.SetTerminalCapabilityReader],
+	// and a runner with no reader has no answer, so the code's fixed
+	// Sequences string is drawn instead.
+	FieldTerminalCapability
 )
 
 // PromptColor is which half of the screen a color code paints.
@@ -1352,6 +1374,19 @@ func (w *promptWalk) walk(runes []rune) {
 			}
 			w.draw(v)
 			continue
+		}
+		if name, ok := w.st.SequenceCapabilities[code]; ok {
+			// The terminal's own string for the code, where the dialect draws
+			// one and the runner can read it; none at all writes nothing and
+			// restores nothing, measured: under `TERM=dumb`, `%F{red}%Ba` is
+			// `\e[31m` and `a`.
+			if seq, known := w.field(FieldTerminalCapability, name, false); known {
+				if seq != "" {
+					w.b.WriteString(seq)
+					w.visualWritten(code, seq)
+				}
+				continue
+			}
 		}
 		if seq, ok := w.st.Sequences[code]; ok {
 			// Bytes the terminal reads rather than draws, so they are written
@@ -1922,6 +1957,11 @@ func (r *Runner) promptHostName() (string, bool) {
 func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bool) {
 	st := r.promptStyle
 	switch f {
+	case FieldTerminalCapability:
+		if r.terminalCapability == nil {
+			return "", false
+		}
+		return r.terminalCapability(arg), true
 	case FieldEscape:
 		return string(st.Escape), true
 	case FieldUser:

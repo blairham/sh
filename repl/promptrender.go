@@ -155,6 +155,11 @@ func (s Shell) promptQuantity(c PromptCondition, n int) (int, bool) {
 // however `$USER` is set.
 func (s Shell) field(f PromptField, arg string, braced bool) string {
 	switch f {
+	case FieldTerminalCapability:
+		// The terminal's own string for an attribute code, which the
+		// interpreter reads from the description the dialect chose — so a
+		// drawn prompt and `print -P` agree about it.
+		return s.askRunner(f, arg, braced)
 	case FieldUser, FieldHost, FieldHostFull:
 		// Who is typing and where, which only the shell that was built knows
 		// — asked of the Runner for the reason `%x` below is, so that `\u`

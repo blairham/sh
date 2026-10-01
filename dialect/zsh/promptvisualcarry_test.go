@@ -89,7 +89,7 @@ func TestAPromptRenderingRestoresWhatAnEarlierOneSet(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, st := runZsh(t, dir, decl+tc.src)
+			out, st := runZsh(t, dir, xtermLikeTerminal(t)+decl+tc.src)
 			if out != tc.want || st != 0 {
 				t.Errorf("%s = %q (status %d), want %q", tc.src, out, st, tc.want)
 			}

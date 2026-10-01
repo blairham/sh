@@ -2474,6 +2474,7 @@ func childIn(v io.Reader) io.Reader {
 }
 
 func childOut(v io.Writer) io.Writer {
+	v = unheld(v)
 	if _, closed := v.(closedFd); closed {
 		return closedInChild
 	}

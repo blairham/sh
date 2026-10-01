@@ -175,6 +175,13 @@ func (r *Runner) lockedStderr() io.Writer {
 // shells of the panel. That was the price #735 recorded for guarding both
 // sides of a construct, and it is not one that has to be paid.
 func lockWriter(locks *streamLocks, w io.Writer) io.Writer {
+	// A builtin's held output guards itself, and its destination is guarded
+	// by this same lock: wrapped again, a flush would take the lock twice.
+	// Unwrapped, it would be let go of at the builtin's first write. See
+	// heldOutput.
+	if h, ok := w.(*heldOutput); ok {
+		return h
+	}
 	if _, ok := w.(*os.File); ok {
 		return w
 	}

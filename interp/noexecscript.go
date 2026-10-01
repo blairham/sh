@@ -510,7 +510,7 @@ func (r *Runner) runImageAsScript(ctx context.Context, name, path string, argv, 
 		// for is a child of ours, so everything below it is one too. See
 		// Runner.ChildStdin.
 		ChildStdin:      r.ChildStdin,
-		Stdout:          r.Stdout,
+		Stdout:          unheld(r.Stdout),
 		Stderr:          r.Stderr,
 		Gate:            r.Gate,
 		Events:          r.Events,

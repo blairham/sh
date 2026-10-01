@@ -941,6 +941,10 @@ func Dialect() syntax.Dialect {
 }
 
 // Semantics is what zsh means where the shells conflict.
+// prefixKeepingBuiltins is the roster of interp.Semantics.BuiltinsKeepingAnAssignmentPrefix,
+// named so that `unsetopt posixbuiltins` can put back what `setopt` took away.
+const prefixKeepingBuiltins = "alias hash builtin exec"
+
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 
@@ -1606,7 +1610,7 @@ func Semantics() interp.Semantics {
 	// where `V=1 :` and `V=1 shift 0` do not. See
 	// interp.Semantics.BuiltinsKeepingAnAssignmentPrefix for the rows and for
 	// why this is not the specialness axis (#3313).
-	s.BuiltinsKeepingAnAssignmentPrefix = "alias hash builtin exec"
+	s.BuiltinsKeepingAnAssignmentPrefix = prefixKeepingBuiltins
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
 	s.AliasListingQuotesTheName = interp.Yes

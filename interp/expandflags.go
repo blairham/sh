@@ -52,10 +52,10 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 			escapeSep = globEscape
 		}
 	}
-	r.flagKeepsBare = false
+	r.flagWordBare, r.flagKeepsBare = nil, false
 	words, isList, escaped, ok := r.flaggedWords(e, sp, quoted, escapeSep)
-	keepsBare := r.flagKeepsBare
-	r.flagKeepsBare = false
+	bare, keepsBare := r.flagWordBare, r.flagKeepsBare
+	r.flagWordBare, r.flagKeepsBare = nil, false
 	// Nothing below this line is a list of a word's fields until the loop at
 	// the end says so, and the marks belong to the call that is reading them.
 	// See interp/emptynullfield.go.
@@ -136,7 +136,11 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 		// it stands for — "this empty field is one the flag keeps because
 		// it is at an end" — is the whole reason the branch exists.
 		atKeptEdge := edges && (i == 0 || i == len(words)-1)
-		if w == "" && !keepEmpty && !atKeptEdge {
+		// Unquoted, what an `=` split keeps is the bare field and only that:
+		// an empty *value* is no word, so `${=e}` with `e=` is nothing while
+		// `${=d}` with `d=:` is two empty words.
+		valueGone := !quoted && eqSplit && !r.expandingNestedInner && w == "" && bare != nil && !bare[i]
+		if w == "" && (!keepEmpty || valueGone) && !atKeptEdge {
 			// Not removed here: it is a field of the word until the word
 			// says otherwise, exactly as an empty element of an unquoted
 			// array is. Measured on zsh 5.9.2 — `v='::b'; x${(s.:.)v}y` is
@@ -812,14 +816,13 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		}
 		words = fields
 	}
-	// Whether the empty words a nested `=` split left bare are kept, for the
-	// one reader that decides which empty words the command line keeps — see
-	// expandFlagged. Only while the marks still stand: a `(Q)` makes them
-	// values, and a sort, a re-reading or a shell split moves them.
-	r.flagKeepsBare = false
-	if keepsBare && bare != nil && len(bare) == len(words) && !orderApplies(e) && !reevalFlagApplies(e) && !markJoin {
+	// The bare marks, for the one reader that decides which empty words the
+	// command line keeps — see expandFlagged. Only while they still line up
+	// with the words: a sort, a re-reading or a shell split moves them.
+	r.flagWordBare, r.flagKeepsBare = nil, false
+	if len(bare) == len(words) && !orderApplies(e) && !reevalFlagApplies(e) && !markJoin {
 		if _, shell := shellSplitOpts(e); !shell {
-			r.flagKeepsBare = true
+			r.flagWordBare, r.flagKeepsBare = bare, keepsBare && bare != nil
 		}
 	}
 	return words, isList, markJoin && escapeSep != nil, true

@@ -13,7 +13,7 @@ import "testing"
 // builtins there and fork nothing. With `/bin/sleep` in the middle the
 // reference answers both specs with 0 rather than the status — the job is
 // still in the table, holding a status it lost to the foreground reap — and
-// that is a different divergence, filed separately.
+// that is a different divergence, #5302.
 func TestAFinishedJobStaysInTheTable(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `(exit 4) & i=0; while (( i < 300000 )); do (( i++ )); done; x=$(:); wait %%; echo cur=$?
 (exit 3) & i=0; while (( i < 300000 )); do (( i++ )); done; x=$(:); wait %1; echo spec=$?`)

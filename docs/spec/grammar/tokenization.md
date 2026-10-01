@@ -1767,6 +1767,13 @@ build described above; a deployment standardized on 93u+m would turn it
 back on, which is the point of its being a configured value rather than
 a shell name.
 
+Grammar flag: `AmpersandAppendRedirect`, for `&>>` alone. It is on in
+core and off in `posix`, `dash`, `ksh` and `ash`. BusyBox ash 1.37.0 reads
+`&>` and refuses `&>>` with `syntax error: unexpected redirection` at 2.
+bash 3.2.57 does the same, failing with
+`` syntax error near unexpected token `>' ``. So one flag over both operators had no right value for that
+column (#5135).
+
 By contrast `>|`, which overrides `noclobber`, is accepted with the same
 meaning by all six and is core.
 

@@ -476,6 +476,29 @@ func (r *Runner) settleBackgroundJobAtALoopsBackEdge() {
 	r.settleWaitingJobPart()
 }
 
+// SettleBeforeAWait settles a background job's pid when a builtin a dialect
+// provides is about to wait on something outside the shell: a timeout with
+// nothing to watch, or a lock another body holds.
+//
+// The sixth trigger, and the same reasoning as the blocking read and the
+// blocking open, reached from a builtin this package does not own. Measured
+// 2026-10-01: `( zselect -t 30; echo bg ) & echo fg` printed `bg` before `fg`
+// here, because nothing in the body started a process or ended until the
+// timeout had run, and zsh 5.9.2 printed `fg` first, having forked before the
+// body ran a thing. The same held for `( zsystem flock f; zselect -t 50 ) &`,
+// which is how a script holds a lock in the background, and a foreground that
+// then asked for the lock asked after the job had already let it go.
+//
+// A dialect calls it only where it is about to wait, never on the way in: a
+// `zselect` that answers at once still lets the body go on to start the
+// process whose pid `$!` would rather report.
+func (r *Runner) SettleBeforeAWait() {
+	if r.bg == nil && r.part == nil {
+		return
+	}
+	r.settleWaitingJobPart()
+}
+
 // settleWaitingJobPart is what the three triggers above do once they have
 // decided the job is about to wait on something outside the shell: the job's
 // pid settles at zero where this shell is the one that names it, and either

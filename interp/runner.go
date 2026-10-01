@@ -594,6 +594,11 @@ type Runner struct {
 	// until it overwrites it: a `( … )` inside a `<(…)` whose own body never
 	// asked still names the substitution's group, which contains it.
 	bodyAnchor *procAnchor
+	// process is the process a real shell would be running this body in, set
+	// beside bodyAnchor at the same five places and nil on the shell itself.
+	// Copied by clone, because a clone that is not a fork — a function, an
+	// eval — is still the same process. See Process.
+	process *Process
 	// substRan records that a command substitution reported a status while
 	// the command now running was being expanded — its words and then its
 	// assignments alike, which is why it is cleared at the top of simple()

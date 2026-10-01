@@ -640,6 +640,8 @@ func (r *Runner) assocSearchKeys(e *syntax.ParamExpr, a AssocArray, g *syntax.Su
 //	${h[(k)x]}       plain  a key with no pattern in it matches itself
 //	${h[(k)*]}       bs     the key `\*` is a pattern for a literal star
 //	${h[(k)\*]}      ``     the subscript keeps its backslash, so nothing matches
+//	"${h[(k)x\"]}"   the value under `x"`: the subscript is read as a key is,
+//	                 so double quotes spend the backslash in front of a quote
 //	${h[(ke)abc]}    star   `(e)` changes nothing here, nor does `(n:2:)`
 //
 // and `setopt extendedglob` reaches the keys: `(#i)AB` matches `ab`.
@@ -654,7 +656,7 @@ func (r *Runner) assocSearchKeys(e *syntax.ParamExpr, a AssocArray, g *syntax.Su
 // takes the first key its own `${(k)h}` lists that matches, and ours lists
 // sorted. The two agree wherever one key matches.
 func (r *Runner) assocKeyFlag(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags, every bool) []string {
-	subject := r.renderSubscript(g.Arg, searchKeepsEscape)
+	subject := r.assocKeyIn(g.Arg, e.EnclosedInDoubleQuotes)
 	var found []string
 	for _, k := range r.assocKeys(e.Name, a) {
 		if hasUnterminatedBracket(k, r.emptyBracketCompiles()) ||

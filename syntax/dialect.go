@@ -8052,6 +8052,31 @@ type Dialect struct {
 	// `coproc MY cat` runs `MY cat` in both shells, and both leave whatever
 	// the reader asks for afterwards unset.
 	CoprocName bool
+
+	// CoprocAfterABar lets `coproc` begin a command after a pipe bar, the way
+	// any other command may. Additive over Coproc, and asked only where that
+	// is set: a dialect without the word reads `coproc` as a command name
+	// wherever it stands. Blair's decision on #5273: a field of its own.
+	//
+	// Measured 2026-10-01, as a script file and under `-c`:
+	//
+	//	probe                          bash 5.3.20   zsh 5.9.2
+	//	echo | coproc true             runs          parse error near `coproc'
+	//	echo hi | coproc { cat; }      runs          parse error
+	//	echo |& coproc cat             runs          parse error
+	//	a bar, a newline, then coproc  runs          parse error, on line 2
+	//	inside an `if` condition       runs          parse error
+	//	coproc true | cat              runs          runs
+	//	echo | "coproc" true           command name  command name
+	//	echo | { coproc cat; }         runs          runs
+	//
+	// So zsh refuses the bare word where a later element of a pipeline
+	// begins, and nowhere else: the first element may be one, a quoted
+	// spelling is a command name, and a group after the bar begins a list of
+	// its own. An alias named `coproc` does not reach it — zsh still refuses
+	// after `alias coproc=echo` — so the word is refused before the alias
+	// table is asked.
+	CoprocAfterABar bool
 }
 
 // On returns this dialect set to parse a program that arrived by route.

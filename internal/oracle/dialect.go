@@ -171,6 +171,9 @@ func Dialect() syntax.Dialect {
 	// records what that costs.
 	d.Coproc = true
 	d.CoprocName = true
+	// And a `coproc` after a bar, which one column refuses and one runs —
+	// so the grammar that has to read every case is the one that takes it.
+	d.CoprocAfterABar = true
 	// `v=$(cat <<EOF` / `a` / `EOF)` — the here-document cases whose delimiter
 	// carries the closing parenthesis. Three of the seven columns refuse them
 	// — dash, zsh and ash — and the corpus records both answers, so the

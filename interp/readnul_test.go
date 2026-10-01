@@ -40,8 +40,8 @@ func TestAReadWithNoNulInItAsksNothing(t *testing.T) {
 // what it says — the drop happening before a counted read counts.
 func TestANulInTheRecordIsWhereTheAxisIsAsked(t *testing.T) {
 	const src = `printf 'ab\0cd\n' > f; read -r v < f; echo "len=${#v}"; read -r -n 3 w < f; echo "w=$w"`
-	if out, _ := readNul(t, NulInAValueUnspecified, `printf 'ab\0cd\n' > f; read -r v < f; echo "st=$?"`); !strings.Contains(out, "the shells disagree here and no dialect was chosen") || !strings.HasSuffix(out, "st=2\n") {
-		t.Errorf("unanswered: %q, want the refusal and status 2", out)
+	if out, _ := readNul(t, NulInAValueUnspecified, `printf 'ab\0cd\n' > f; v=old; read -r v < f; echo "st=$? v=$v"`); !strings.Contains(out, "the shells disagree here and no dialect was chosen") || !strings.HasSuffix(out, "st=2 v=old\n") {
+		t.Errorf("unanswered: %q, want the refusal, status 2 and nothing assigned", out)
 	}
 	for _, c := range []struct {
 		p    NulInAValuePolicy

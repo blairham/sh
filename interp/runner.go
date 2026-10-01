@@ -9630,6 +9630,9 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		// Reaped, so a child of this shell has ended — a stop is not one,
 		// the process being still there. See Runner.childReaped.
 		r.childWaitedFor()
+		// And a finished background job is learned of here. See
+		// Runner.noticeFinishedJobs.
+		r.noticeFinishedJobs()
 	}
 	r.status = status
 	if w.Killed {

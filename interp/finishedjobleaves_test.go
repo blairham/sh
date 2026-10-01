@@ -4,7 +4,9 @@
 package interp_test
 
 import (
+	"errors"
 	"strings"
+	"syscall"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -70,5 +72,32 @@ func TestAFinishedJobWithAReportComingStays(t *testing.T) {
 	})
 	if !strings.HasSuffix(out, "cur=4\n") {
 		t.Errorf("got %q, want cur=4", out)
+	}
+}
+
+// **The front end's wait notices too.** A shell whose front end supplies
+// WaitForCommand runs a foreground command through that wait rather than
+// os/exec's, which is the route every binary here takes, and the notice has
+// to be taken there as well or the dialect's answer would depend on which
+// route a command went.
+func TestAFinishedJobIsNoticedThroughTheFrontEndsWait(t *testing.T) {
+	out, _ := runGrammar(t, `(exit 4) & /bin/sleep 0.3; wait %%; echo "cur=$?"`, nil, func(r *Runner) {
+		s := *r.Semantics
+		s.FinishedJobLeavesTheTable = Yes
+		r.Semantics = &s
+		r.WaitForCommand = func(pid int) (Wait, error) {
+			for {
+				var ws syscall.WaitStatus
+				if _, err := syscall.Wait4(pid, &ws, 0, nil); errors.Is(err, syscall.EINTR) {
+					continue
+				} else if err != nil {
+					return Wait{}, err
+				}
+				return Wait{Status: ws.ExitStatus()}, nil
+			}
+		}
+	})
+	if !strings.HasSuffix(out, "cur=127\n") {
+		t.Errorf("got %q, want cur=127", out)
 	}
 }

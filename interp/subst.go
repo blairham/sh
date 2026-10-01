@@ -280,6 +280,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// A fork finished with: a real shell reads a substitution's output from
 	// a pipe to a child, and reaps that child here. See Runner.childReaped.
 	r.childWaitedFor()
+	r.noticeFinishedJobs()
 	return strings.TrimRight(out.String(), "\n")
 }
 

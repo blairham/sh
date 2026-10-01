@@ -2746,8 +2746,10 @@ func (r *Runner) dropFinishedJobs() {
 // noticeFinishedJobs marks every job that has finished by now as one the shell
 // knows has finished, for dropFinishedJobs.
 //
-// Called where the shell has just waited for a child in the foreground, which
-// is when the reference learns of a background job's end: measured
+// Called where the shell has just waited for a child in the foreground — the
+// sites that call childWaitedFor, each on the goroutine that owns the runner,
+// and once after a pipeline rather than per element — which is when the
+// reference learns of a background job's end: measured
 // 2026-10-01 on zsh 5.9.2, `(exit 5) & :; wait %%` and `(exit 5) & x=1; wait
 // %%` are 5, four runs in four, while the same line with `/usr/bin/true`,
 // `sleep 0.2` or `$(echo)` in the middle is `no current job`. A job that has
@@ -2990,6 +2992,9 @@ func (r *Runner) startAndWait(cmd *exec.Cmd, ownGroup bool) error {
 	// A child of this shell has been reaped, which is the whole of what the
 	// `CHLD` condition counts. See Runner.childReaped.
 	r.childWaitedFor()
+	// And a finished background job is learned of here. See
+	// Runner.noticeFinishedJobs.
+	r.noticeFinishedJobs()
 	return err
 }
 

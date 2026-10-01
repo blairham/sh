@@ -680,6 +680,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	// Every element has been waited for, which is where a coprocess that
 	// ended is noticed. See Runner.retireCoproc for the measurements.
 	r.retireCoproc()
+	// And a finished background job. Here, on the shell's own goroutine,
+	// rather than where each element is reaped: those run on the elements'
+	// goroutines and the set is the shell's. See Runner.noticeFinishedJobs.
+	r.noticeFinishedJobs()
 
 	for _, err := range errs {
 		if err != nil {

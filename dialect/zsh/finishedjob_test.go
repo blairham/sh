@@ -21,8 +21,11 @@ wait %%; echo "cur=$?"
 wait %1; echo "spec=$?"
 wait $p; echo "pid=$?"
 (exit 5) & :; wait %%; echo "unnoticed=$?"
-( (exit 6) & /bin/sleep 0.3; wait %%; echo "subshell=$?" )`)
-	want := "zsh:wait:3: no current job\ncur=127\nzsh:wait:6: %1: no such job\nspec=127\npid=3\nunnoticed=5\nzsh:wait:9: no current job\nsubshell=127\n"
+( (exit 6) & /bin/sleep 0.3; wait %%; echo "subshell=$?" )
+(exit 7) & /bin/sleep 0.3 | /bin/sleep 0; wait %%; echo "pipeline=$?"
+(exit 8) & ( /bin/sleep 0.3 ); wait %%; echo "after a subshell=$?"
+(exit 9) & x=$(/bin/sleep 0.3); wait %%; echo "after a substitution=$?"`)
+	want := "zsh:wait:3: no current job\ncur=127\nzsh:wait:6: %1: no such job\nspec=127\npid=3\nunnoticed=5\nzsh:wait:9: no current job\nsubshell=127\nzsh:wait:10: no current job\npipeline=127\nzsh:wait:11: no current job\nafter a subshell=127\nzsh:wait:12: no current job\nafter a substitution=127\n"
 	if out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}

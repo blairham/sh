@@ -109,7 +109,6 @@ func (r *Runner) childReaped() {
 func (r *Runner) childWaitedFor() {
 	r.childReaped()
 	r.releaseSignalsHeldForInput()
-	r.noticeFinishedJobs()
 }
 
 // childReapedByTheShell is childReaped for a raise that happens on another

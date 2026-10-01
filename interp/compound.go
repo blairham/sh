@@ -204,6 +204,7 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// here in a shell that forks: one for the parentheses, whatever ran
 		// inside them. See Runner.childReaped.
 		r.childWaitedFor()
+		r.noticeFinishedJobs()
 		return err
 	})
 }

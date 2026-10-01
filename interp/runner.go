@@ -2120,12 +2120,10 @@ type Runner struct {
 	// things (#1596).
 	expandingNestedInner bool
 
-	// flagWordBare is which of the words a flag group handed back are bare —
-	// empty fields a split or a nested list made, rather than empty values —
-	// passed from flaggedWords to expandFlagged and cleared there.
-	flagWordBare []bool
-	// flagKeepsBare says those bare words are kept unquoted, which a nested
-	// `=` split's are. See Runner.nestedElementsAreBare.
+	// flagKeepsBare says the bare words a flag group handed back — empty
+	// fields a nested `=` split made, rather than empty values — are kept
+	// unquoted. Passed from flaggedWords to expandFlagged and cleared there.
+	// See Runner.nestedElementsAreBare.
 	flagKeepsBare bool
 	// listNulls is, per field the unquoted list path last produced, whether
 	// that field is one of the empty *elements* the list held rather than

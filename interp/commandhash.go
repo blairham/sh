@@ -146,6 +146,41 @@ func (r *Runner) forgetHashedCommand(name string) bool {
 func (r *Runner) forgetEveryHashedCommand() {
 	r.cmdHash = nil
 	r.cmdHashOrder = nil
+	r.cmdHashFilled = false
+}
+
+// FillCommandHashFromPath puts every name the directories on PATH hold into
+// the command table, once until the table is next emptied — by `hash -r`,
+// `rehash`, or an assignment to PATH, which is what empties it everywhere.
+//
+// For a shell whose table is filled by *listing* PATH rather than one name at
+// a time. Measured 2026-10-01 on zsh 5.9.2 under `-f`, with PATH two scratch
+// directories (#5266): a bare `hash` lists only what was hashed, while `hash
+// -f` — or any read of `$commands`, a single key included — fills the table,
+// after which `hash` lists every name PATH holds, a directory and a file with
+// no execute bit among them, the first directory winning a name both hold.
+// An entry already in the table is kept, whichever came first: `hash
+// zbar=/bin/ls` before or after the fill both leave `zbar=/bin/ls`. And the
+// fill is a snapshot, so `hashexecutablesonly` set after it changes nothing
+// while set before it leaves the two out.
+//
+// executablesOnly is that option's answer, read by the dialect that has it.
+func (r *Runner) FillCommandHashFromPath(executablesOnly bool) {
+	if r.cmdHashFilled {
+		return
+	}
+	r.cmdHashFilled = true
+	entries := r.pathEntries(executablesOnly)
+	names := make([]string, 0, len(entries))
+	for name := range entries {
+		if _, kept := r.cmdHash[name]; !kept {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		r.putHashedCommand(name, entries[name], 0)
+	}
 }
 
 // hashedCommandNames is the table in the order this dialect lists it.

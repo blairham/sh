@@ -264,8 +264,13 @@ func TestWritingCommandsHashesTheCommand(t *testing.T) {
 echo "then=[${commands[myc]:-ABSENT}]"
 hash
 myc`)
+	// And the read filled the table from PATH, so `hash` lists what the
+	// directory holds beside the written entry — measured on zsh 5.9.2 with
+	// PATH this directory: `myc`, `other` and `realcmd` (#5266).
 	want := "then=[" + filepath.Join(dir, "other") + "]\n" +
 		"myc=" + filepath.Join(dir, "other") + "\n" +
+		"other=" + filepath.Join(dir, "other") + "\n" +
+		"realcmd=" + filepath.Join(dir, "realcmd") + "\n" +
 		"other\n"
 	if out != want || st != 0 {
 		t.Errorf("writing $commands = %q (status %d), want %q", out, st, want)
@@ -895,10 +900,10 @@ echo "assign=$?"`)
 //
 // The row that makes it a removal rather than a word taken and dropped is the
 // one in the middle: the name the write put in the table is gone from `hash`
-// afterwards, and the read falls back to what the search finds. A name PATH
-// still resolves comes back on the next read, which is what the shell being
-// modeled does too — there because every touch of the parameter refills the
-// table, here because the search is the other half of the view.
+// afterwards, which lists only what the read's fill put there. And a name
+// PATH holds stays gone once unset — measured on zsh 5.9.2 with PATH this
+// directory, `onpath=[]`: the filled table is the whole answer, and it is
+// filled once until something empties it (#5266).
 func TestUnsettingACommandsElementForgetsTheHashedCommand(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "toolx"), []byte("#!/bin/sh\n"), 0o755); err != nil {
@@ -912,8 +917,8 @@ echo "table=[$(hash)]"
 unset "commands[toolx]"
 echo "onpath=[${commands[toolx]:+found}]"`)
 	want := "hashed=[/bin/zzonly]\n" +
-		"st=0 gone=[ABSENT]\ntable=[]\n" +
-		"onpath=[found]\n"
+		"st=0 gone=[ABSENT]\ntable=[toolx=" + filepath.Join(dir, "toolx") + "]\n" +
+		"onpath=[]\n"
 	if out != want || st != 0 {
 		t.Errorf("unsetting a $commands element = %q (status %d), want %q", out, st, want)
 	}

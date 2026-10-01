@@ -170,7 +170,9 @@ hash -L 2>&1
 print -r -- "L=$?"
 hash -t zzc 2>&1
 print -r -- "t=$?"`)
-	want := "zsh:hash:1: -f is not implemented yet\nf=2\n" +
+	// `-f` has left the refused set too (#5266): it fills the table and
+	// lists nothing, at 0, as zsh 5.9.2 does.
+	want := "f=0\n" +
 		"zsh:hash:3: -L is not implemented yet\nL=2\n" +
 		"zsh:hash:5: bad option: -t\nt=1\n"
 	if out != want || st != 0 {

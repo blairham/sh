@@ -2705,6 +2705,92 @@ func (r *Runner) reap(j *Job) {
 	}
 }
 
+// dropFinishedJobs takes out of the table every finished job that nothing is
+// going to report, in the dialect where such a job does not stay. See
+// Semantics.FinishedJobLeavesTheTable.
+//
+// Called where a job spec is resolved, and never from the goroutine a job
+// ends on, which may not touch the table. Reading it lazily is the same
+// answer: what the job left behind is only observable through such a read.
+// A listing needs no call — whether it shows a finished job is
+// JobsListFinishedJobs, which the same dialect already answers No — and
+// zsh's `$jobstates` skips finished jobs for the same reason.
+//
+// The question is asked only where a finished job is there to ask about, so a
+// table of running jobs, or none, consults nothing. "Finished" means noticed
+// as finished — see noticeFinishedJobs. Each job goes the way a
+// waited-for one does, so its process id still answers `wait`.
+func (r *Runner) dropFinishedJobs() {
+	if r.JobControl && r.monitor {
+		// A notice before the next prompt, or a listing, reports it, and
+		// that is when every column lets it go.
+		return
+	}
+	var finished []*Job
+	for _, j := range r.jobs {
+		if r.noticedJobs[j] {
+			finished = append(finished, j)
+		}
+	}
+	if len(finished) == 0 {
+		return
+	}
+	if !r.ask(r.sem().FinishedJobLeavesTheTable, "a finished background job that nothing has reported") {
+		return
+	}
+	for _, j := range finished {
+		r.reap(j)
+	}
+}
+
+// noticeFinishedJobs marks every job that has finished by now as one the shell
+// knows has finished, for dropFinishedJobs.
+//
+// Called where the shell has just waited for a child in the foreground — the
+// sites that call childWaitedFor, each on the goroutine that owns the runner,
+// and once after a pipeline rather than per element — which is when the
+// reference learns of a background job's end: measured
+// 2026-10-01 on zsh 5.9.2, `(exit 5) & :; wait %%` and `(exit 5) & x=1; wait
+// %%` are 5, four runs in four, while the same line with `/usr/bin/true`,
+// `sleep 0.2` or `$(echo)` in the middle is `no current job`. A job that has
+// ended is only *known* to have ended once the shell has reaped a child, and
+// a run of builtins reaps nothing.
+//
+// That is a model of a race, made deterministic: in the reference a long
+// enough run of builtins can be interrupted by the child's signal, and here it
+// never is. Choosing the reap as the moment is what keeps `cmd & wait %%` —
+// a job still running as far as the reference knows — from depending on how
+// fast a goroutine ends.
+//
+// Per runner, because every shell notices for itself: a subshell is a process
+// of its own in the reference, with the table it inherited, and it learns of
+// a job's end when *it* reaps a child — measured, `{ (exit 7) & /usr/bin/true;
+// wait %%; }` run as a `&` job is `no current job` there too. The set is
+// replaced rather than written, so a clone that copied the parent's set — or a
+// parent whose set a clone copied — never sees the other's notices, and the
+// Job, which several goroutines can reach, is never written at all.
+func (r *Runner) noticeFinishedJobs() {
+	var ended []*Job
+	for _, j := range r.jobs {
+		if j.Finished() && !r.noticedJobs[j] {
+			ended = append(ended, j)
+		}
+	}
+	if len(ended) == 0 {
+		return
+	}
+	noticed := make(map[*Job]bool, len(r.noticedJobs)+len(ended))
+	for j := range r.noticedJobs {
+		if slices.Contains(r.jobs, j) {
+			noticed[j] = true
+		}
+	}
+	for _, j := range ended {
+		noticed[j] = true
+	}
+	r.noticedJobs = noticed
+}
+
 // reapedJobsKept bounds that memory.
 //
 // bash does not appear to bound it at all: measured 2026-09-13, `wait "$first"`
@@ -2906,6 +2992,9 @@ func (r *Runner) startAndWait(cmd *exec.Cmd, ownGroup bool) error {
 	// A child of this shell has been reaped, which is the whole of what the
 	// `CHLD` condition counts. See Runner.childReaped.
 	r.childWaitedFor()
+	// And a finished background job is learned of here. See
+	// Runner.noticeFinishedJobs.
+	r.noticeFinishedJobs()
 	return err
 }
 

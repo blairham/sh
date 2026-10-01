@@ -23,6 +23,7 @@ var sharedTables = map[string]string{
 	"optionLetterNames":  "the dialect's `set` option letters, handed in whole by Apply and never written to afterwards — the same terms optionLists is on, one field kind along",
 	"dialectCompgen":     "the `compgen -A` actions a dialect registered with SetCompgenAction, written at setup and never again — a script can ask compgen for one but has no way to add, replace or remove one",
 	"onParameterArrival": "what a dialect wants run when a deferred name is first referred to, registered by SetParameterArrival at setup and never again — a script can trigger one but has no way to add, replace or remove one",
+	"noticedJobs":        "never written, only replaced whole by noticeFinishedJobs — so a subshell that shares its parent's set and then notices a job gets a set of its own, and neither runner ever sees the other's notices",
 }
 
 // sharedStacks names every slice a clone is allowed to share with its parent,
@@ -292,6 +293,7 @@ func TestACloneOwnsEveryScopeTable(t *testing.T) {
 // Runner is nil here, the check says so by name, and somebody has to decide
 // whether it belongs in ownTables or in sharedTables.
 func seedTables(r *Runner) {
+	r.noticedJobs = map[*Job]bool{{}: true}
 	r.Vars = map[string]string{"seed": "v"}
 	r.Arrays = map[string]Array{"seed": {0: {Str: "v"}}}
 	r.AssocArrays = map[string]AssocArray{"seed": {"k": {Str: "v"}}}

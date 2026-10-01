@@ -1254,6 +1254,8 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.Yes
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.No
+	// Measured 2026-10-01: a finished job stays in the table: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
+	s.FinishedJobLeavesTheTable = interp.No
 	// And it is the one column that keeps nothing once a job is reported:
 	// `wait %1; wait "$p"` is 127 there where it is the job's status in
 	// every other column measured.

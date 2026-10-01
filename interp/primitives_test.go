@@ -33,12 +33,9 @@ func TestBraceExpansionRunsBeforeParameterExpansion(t *testing.T) {
 	}
 }
 
-func TestBraceRangeIsBounded(t *testing.T) {
-	// A typo must not hang the shell.
-	if got, _ := run(t, `echo {1..999999}`, nil); !strings.HasPrefix(got, "{1..") {
-		t.Errorf("an oversized range should be left alone, got %.40q", got)
-	}
-}
+// TestBraceRangeIsBounded lived here and pinned a ten-thousand-element bound
+// no shell in the panel has; the measured rows replacing it are each
+// dialect's TestABraceRangeHasNoLengthBound (#5140).
 
 func TestTildeExpansion(t *testing.T) {
 	tests := []struct{ src, want string }{

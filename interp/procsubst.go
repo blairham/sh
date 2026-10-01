@@ -1613,7 +1613,7 @@ func (r *Runner) substEndCandidates() []int {
 			return lowest(nil)
 		}
 		var out []int
-		base := r.sem().FirstAllocatedDescriptor.number()
+		base := r.firstAllocatedDescriptor()
 		for fd := topOfTheDescriptorTable; fd >= base; fd-- {
 			if free(fd) {
 				out = append(out, fd)
@@ -1626,7 +1626,7 @@ func (r *Runner) substEndCandidates() []int {
 		}
 		return lowest(up(topOfTheDescriptorTable+1, nil))
 	}
-	return up(r.sem().FirstAllocatedDescriptor.number(), nil)
+	return up(r.firstAllocatedDescriptor(), nil)
 }
 
 // shellEndFloor is the lowest number the shell's own end of a substitution

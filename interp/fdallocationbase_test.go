@@ -27,7 +27,7 @@ func TestTheDescriptorTheShellPicksHasABase(t *testing.T) {
 		want string
 	}{
 		{"from ten", AllocateDescriptorsFromTen, "10\n"},
-		{"from eleven", AllocateDescriptorsFromEleven, "11\n"},
+		{"from eleven", AllocateDescriptorsPastTheShellsInput, "11\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := permissive()
@@ -44,7 +44,7 @@ func TestTheDescriptorTheShellPicksHasABase(t *testing.T) {
 // gets: a second one takes the next free number up from it.
 func TestTheSecondPickedDescriptorIsTheNextFreeOne(t *testing.T) {
 	sem := permissive()
-	sem.FirstAllocatedDescriptor = AllocateDescriptorsFromEleven
+	sem.FirstAllocatedDescriptor = AllocateDescriptorsPastTheShellsInput
 	out, st := run(t, `exec {a}< /dev/null; exec {b}< /dev/null; echo "$a $b"`, withSem(sem))
 	if want := "11 12\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
@@ -56,7 +56,7 @@ func TestTheSecondPickedDescriptorIsTheNextFreeOne(t *testing.T) {
 // hands back.
 func TestAPickedDescriptorNeverCollidesWithASingleDigit(t *testing.T) {
 	for _, base := range []DescriptorAllocationBase{
-		AllocateDescriptorsFromTen, AllocateDescriptorsFromEleven,
+		AllocateDescriptorsFromTen, AllocateDescriptorsPastTheShellsInput,
 	} {
 		sem := permissive()
 		sem.FirstAllocatedDescriptor = base
@@ -68,7 +68,7 @@ func TestAPickedDescriptorNeverCollidesWithASingleDigit(t *testing.T) {
 }
 
 func baseNumber(b DescriptorAllocationBase) int {
-	if b == AllocateDescriptorsFromEleven {
+	if b == AllocateDescriptorsPastTheShellsInput {
 		return 11
 	}
 	return 10

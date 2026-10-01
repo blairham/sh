@@ -81,7 +81,7 @@ func TestASubstitutionEndTakesTheDialectsRegion(t *testing.T) {
 		},
 		{
 			"where any descriptor goes, up from the base of 11",
-			SubstitutionEndsWhereAnyDescriptorGoes, AllocateDescriptorsFromEleven, 11, 11 + 63,
+			SubstitutionEndsWhereAnyDescriptorGoes, AllocateDescriptorsPastTheShellsInput, 11, 11 + 63,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

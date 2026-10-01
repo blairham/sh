@@ -33902,20 +33902,45 @@ const (
 	// because it is the answer this shell gave everywhere before the axis
 	// existed.
 	AllocateDescriptorsFromTen DescriptorAllocationBase = iota
-	// AllocateDescriptorsFromEleven is zsh 5.9.2.
-	AllocateDescriptorsFromEleven
+	// AllocateDescriptorsPastTheShellsInput is zsh 5.9.2: from 10, where 10
+	// is the shell's own whenever its input is not standard input, so 11 on
+	// every route but one. Measured 2026-10-01 with `exec {x}<f; echo $x`, and
+	// the same of `sysopen -u` and of `<(true)`'s `/dev/fd/N`:
+	//
+	//	-c, a script file          11  (a script file is open on 10)
+	//	-fi on a terminal          11  (the terminal is)
+	//	-f < script, -fs, a pipe   10, and 10 is handed out again once closed
+	//
+	// #5133 reported 3 for `sysopen`, which no route reproduces.
+	AllocateDescriptorsPastTheShellsInput
 )
 
-// number is the descriptor the base stands for.
+// number is the descriptor the base stands for, on a route that reads a
+// program from somewhere other than standard input.
 func (b DescriptorAllocationBase) number() int {
-	if b == AllocateDescriptorsFromEleven {
+	if b == AllocateDescriptorsPastTheShellsInput {
 		return 11
 	}
 	return 10
 }
 
 func (b DescriptorAllocationBase) String() string {
+	if b == AllocateDescriptorsPastTheShellsInput {
+		return "past the shell's input"
+	}
 	return "from " + itoa(b.number())
+}
+
+// firstAllocatedDescriptor is the number this shell counts up from when it
+// picks a descriptor: the base, and for the one base keyed on the shell's
+// input, 10 where that input is a standard input nobody is typing at. See
+// AllocateDescriptorsPastTheShellsInput.
+func (r *Runner) firstAllocatedDescriptor() int {
+	b := r.sem().FirstAllocatedDescriptor
+	if b == AllocateDescriptorsPastTheShellsInput && r.Route == RouteStandardInput && !r.Interactive {
+		return 10
+	}
+	return b.number()
 }
 
 // HeredocBodyMedium is what a shell puts a here-document's text *on*, which

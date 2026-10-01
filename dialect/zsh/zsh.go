@@ -3378,9 +3378,10 @@ func Semantics() interp.Semantics {
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsUseEveryTarget = interp.Yes
 	// `exec {fd}< /etc/hosts; echo $fd` says 11 here and 10 in bash 5.3 and
-	// ksh93 — measured 2026-09-12. The same number comes back from `zsocket`
-	// in `$REPLY` and from `sysopen -u name` (#1752).
-	s.FirstAllocatedDescriptor = interp.AllocateDescriptorsFromEleven
+	// ksh93 — measured 2026-09-12 — and 10 here too where the program is
+	// read from standard input (2026-10-01, #5133). The same number comes
+	// back from `zsocket` in `$REPLY` and from `sysopen -u name` (#1752).
+	s.FirstAllocatedDescriptor = interp.AllocateDescriptorsPastTheShellsInput
 	// `exec 3<<X` puts the body in a temporary file here, so `/dev/fd/3` is
 	// a regular file and the descriptor is seekable: `head -1 <&3` reads a
 	// block and seeks back, and the `cat <&3` after it still gets the rest of

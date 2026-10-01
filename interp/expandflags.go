@@ -510,11 +510,19 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		isList = false
 	}
 
+	// Which of the words are *bare* empties: an empty field the split below
+	// made, as against an empty value. The single-`q` style quotes only the
+	// second — see bareEmptyMarks. Nil when the group does not split, and
+	// nothing ahead of the split can have made one.
+	var bare []bool
+
 	// Rule 11: splitting. `f` is split-at-newlines; an empty `s` separator
 	// splits into characters, which is measured.
 	if hasSplit {
 		var split []string
+		var splitBare []bool
 		for _, w := range words {
+			from := len(split)
 			if ifsSplit {
 				// `${=spec}` splitting, which is field splitting on IFS and
 				// not a separator the group named. Quoted it keeps the
@@ -529,11 +537,21 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 				// IFS of a backslash split at the NUL instead (#5263).
 				ifs, set := r.ifs()
 				split = append(split, r.splitFieldsAsking(w, nil, ifs, set, quoted, false)...)
-				continue
+			} else {
+				split = append(split, r.splitFlagged(w, e)...)
 			}
-			split = append(split, r.splitFlagged(w, e)...)
+			// What a split of a word with something in it leaves empty is a
+			// bare field; a word that was already empty splits into itself
+			// and keeps what it was. Measured on zsh 5.9.2 with IFS=:, `d=:`
+			// and `e=`: `${(@q)=d}` is two empty words, `${(@q)=e}` is `''`.
+			splitBare = bareEmptyMarks(split[from:], splitBare)
+			if w == "" {
+				for j := from; j < len(split); j++ {
+					splitBare[j] = false
+				}
+			}
 		}
-		words, isList = split, true
+		words, isList, bare = split, true, splitBare
 	}
 
 	// Rules 12, 13, 14 in the manual's order: case, prompt escapes, quoting.
@@ -563,6 +581,9 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// gated on PROMPT_SUBST, which is what the third row says. A third
 		// `%` adds nothing over the second.
 		subst := strings.Count(e.Flags, "%") >= 2
+		// And what the prompt escapes come to is a value: measured,
+		// `${(@q%)=u}` quotes the empty fields `${(@q)=u}` leaves bare.
+		bare = nil
 		for i, w := range words {
 			v, pok := r.promptEscapes(w, e, subst)
 			if !pok {
@@ -573,7 +594,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
-			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing, r.DoubledQuoteInSingleQuotes())
+			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing || bare != nil && bare[i], r.DoubledQuoteInSingleQuotes())
 		}
 	}
 	// And after the quoting, which is the order `${(Vq)}` measures: a tab
@@ -1904,4 +1925,34 @@ func (r *Runner) rangeModifiers(
 	}
 	from := &syntax.ParamExpr{Name: e.Name, Op: e.Op, Arg: e.Arg, Arg2: lenWord}
 	return mods, sliceElems(words, r.numOf(e.Arg, e, lenWord), from, r), true
+}
+
+// bareEmptyMarks appends to marks one entry per word, true where the word is
+// empty, and answers the result.
+//
+// It is how flaggedWords keeps the **bare** empty fields a split made apart
+// from empty values, which nothing after the split can tell apart because both
+// are the empty string. The single-`q` style writes an empty value as a pair
+// of single quotes and a bare field as nothing, the same distinction
+// substitutedNothing draws for an operator that substituted nothing. Measured
+// on zsh 5.9.2 with IFS=:, `u=a::b:`, `d=:` and `e=` (#5281):
+//
+//	${(@q)=u}               a, nothing, b, nothing
+//	${(@q)=d}               nothing, nothing
+//	${(@q)=e}               a quoted empty: a word that was already empty
+//	${(@qq)=u}, ${(@q-)=u}  each empty quoted: only the one style
+//	${(@q%)=u}              each empty quoted: prompt escapes make values
+//
+// Unquoted, a bare field is an empty word, which the command line keeps only
+// where the split keeps its empty fields.
+//
+// Not reached, and measured to differ: the same holds in zsh for the
+// elements of a *nested* list — `"${(@q)${b[@]}}"` leaves an empty element
+// of `b` bare — but not for a nested scalar under `(@)`, and the nesting
+// hands this function strings with no way to tell the two apart (#5299).
+func bareEmptyMarks(words []string, marks []bool) []bool {
+	for _, w := range words {
+		marks = append(marks, w == "")
+	}
+	return marks
 }

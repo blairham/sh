@@ -790,6 +790,8 @@ func Semantics() interp.Semantics {
 	// before it. The line three above already records that BusyBox refuses
 	// `-e`, which is why the set is the one it is (#4963).
 	s.ReadOptions = "rsd:p:t:n:u:"
+	// Measured 2026-10-01: a NUL is dropped from what `read` and a substitution take in. See Semantics.NulInAValue.
+	s.NulInAValue = interp.NulDropped
 	// `unset` has the two POSIX letters and calls anything else illegal:
 	// `unset -q x` is `illegal option -q`.
 	// unanswered EmptyAssociativeKeyRefusesTheLength: there is no keyed table

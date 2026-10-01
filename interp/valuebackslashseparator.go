@@ -59,9 +59,12 @@ import "strings"
 // the caller step past the separator without reading half of a mark as data.
 //
 // A bare mark can only be one the escaping wrote, which is what makes the
-// test a byte comparison rather than a search: a NUL that is *data* carries
-// an escape mark in front of it, so the caller's isMark has already refused
-// it. See valueBackslashMark.
+// test a byte comparison rather than a search — but only in a string that was
+// escaped at all, and only where no escape stands in front of the NUL. The
+// caller decides both before asking: see dataNUL in splitFieldsAt, which was
+// added when a zsh value's NUL turned out to be read as this mark (#5263).
+// isMark alone never refused it, since the escape is the byte before the NUL
+// and not the NUL itself. See valueBackslashMark.
 func valueBackslashSeparator(s string, i int, ifs string) int {
 	if i >= len(s) || s[i] != valueBackslashMark {
 		return 0

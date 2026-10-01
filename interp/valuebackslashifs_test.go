@@ -126,7 +126,7 @@ func TestTrailingRunSeparatesReadsTheBackslashAndNotTheMark(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newTestRunner(t, &Runner{})
-			if got := trailingRunSeparates(tc.s, nil, tc.ifs, r.ifsSpace(tc.ifs), true); got != tc.want {
+			if got := trailingRunSeparates(tc.s, nil, tc.ifs, r.ifsSpace(tc.ifs), true, true); got != tc.want {
 				t.Errorf("%q with IFS %q = %v, want %v", tc.s, tc.ifs, got, tc.want)
 			}
 		})

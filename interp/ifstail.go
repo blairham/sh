@@ -20,7 +20,7 @@ import "strings"
 func (r *Runner) splitFieldsAsking(s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
 	space := r.ifsSpace(ifs)
 	out := splitFieldsEdges(s, literal, ifs, space, ifsSet, keepEdges, escaped, r.countsTheLocalesWideUnits)
-	return r.trailingSeparatorField(out, s, literal, ifs, ifsSet, keepEdges)
+	return r.trailingSeparatorField(out, s, literal, ifs, ifsSet, keepEdges, escaped)
 }
 
 // splitFieldsAsk is splitFieldsAsking for the callers that have no escape
@@ -48,7 +48,7 @@ func (r *Runner) splitFieldsAsk(s, ifs string, ifsSet bool) []string {
 // dialect reading that has boundaries at all — see interp/listboundary.go.
 func (r *Runner) splitFieldsAskEdge(s string, boundary []bool, ifs string, ifsSet bool) (fields []string, openEnd bool) {
 	out, openEnd := splitFieldsOpenEnd(s, nil, boundary, ifs, r.ifsSpace(ifs), ifsSet, false, true, r.countsTheLocalesWideUnits)
-	fields = r.trailingSeparatorField(out, s, nil, ifs, ifsSet, false)
+	fields = r.trailingSeparatorField(out, s, nil, ifs, ifsSet, false, true)
 	return fields, openEnd && len(fields) == len(out)
 }
 
@@ -82,8 +82,8 @@ func (r *Runner) splitFieldsAskPlain(s, ifs string, ifsSet bool) []string {
 // the edge-keeping rule of a quoted `${=spec}` the field behind the last
 // separator is there already, so there is nothing to decide and asking would
 // add a second one.
-func (r *Runner) trailingSeparatorField(fields []string, s string, literal []bool, ifs string, ifsSet, keepEdges bool) []string {
-	if keepEdges || !trailingRunSeparates(s, literal, ifs, r.ifsSpace(ifs), ifsSet) {
+func (r *Runner) trailingSeparatorField(fields []string, s string, literal []bool, ifs string, ifsSet, keepEdges, escaped bool) []string {
+	if keepEdges || !trailingRunSeparates(s, literal, ifs, r.ifsSpace(ifs), ifsSet, escaped) {
 		return fields
 	}
 	if !r.ask(r.sem().TrailingSeparatorEndsAField,
@@ -109,7 +109,7 @@ func (r *Runner) trailingSeparatorField(fields []string, s string, literal []boo
 // separator, because the run with one in it has already been decided above and
 // asking again would add a second empty field.
 func (r *Runner) readFieldsTail(fields []string, s string, literal []bool, ifs string, ifsSet bool) []string {
-	if out := r.trailingSeparatorField(fields, s, literal, ifs, ifsSet, false); len(out) != len(fields) {
+	if out := r.trailingSeparatorField(fields, s, literal, ifs, ifsSet, false, false); len(out) != len(fields) {
 		return out
 	}
 	if r.unspecified || !trailingRunIsWhitespace(s, literal, ifs, r.ifsSpace(ifs), ifsSet) {

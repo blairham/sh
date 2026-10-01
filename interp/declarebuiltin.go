@@ -4030,7 +4030,16 @@ func (r *Runner) declarationListing(f declareFlags) (int, bool) {
 		// row that was already right — and under a plus it is the same walk
 		// with the values left off.
 		if f.remove {
-			return r.declarationNameListing(r.declarableNames()), true
+			// The same names the valued listing walks, the produced ones
+			// included: measured 2026-10-01 on zsh 5.9.2, a bare `typeset +`
+			// names RANDOM, SECONDS, TTY, USERNAME, the prompts, `argv`,
+			// `pipestatus` and `prompt` exactly as a bare `typeset` lists
+			// them, and here it named none (#5157).
+			names, produced, listing := r.listedNames()
+			if r.unspecified {
+				return r.status, true
+			}
+			return r.declarationNameListingOf(names, produced, listing), true
 		}
 		return r.bareDeclarationListing(), true
 	}

@@ -537,9 +537,16 @@ func (r *Runner) matchedListing(patterns []string, namesOnly bool) int {
 // of the routes existed — the plus form with no pattern wrote nothing at all
 // (#1576). Choosing the names is the caller's; writing them is here.
 func (r *Runner) declarationNameListing(names []string) int {
+	return r.declarationNameListingOf(names, nil, ProducedListingUnspecified)
+}
+
+// declarationNameListingOf is declarationNameListing over names some of which
+// the dialect produces rather than stores, read the way the valued listing
+// reads them. See Runner.listedNames.
+func (r *Runner) declarationNameListingOf(names []string, produced map[string]bool, listing ProducedListing) int {
 	locals := r.innermostLocalNames()
 	for _, name := range names {
-		d, _ := r.declarationOf(name)
+		d, _ := r.listedDeclarationOf(name, produced[name], listing)
 		if r.DeferredParameter(name) {
 			// The same row the bare listing writes for a parameter nothing
 			// has referred to, which is what "the attribute words and the

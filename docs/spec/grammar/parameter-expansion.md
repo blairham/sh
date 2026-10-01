@@ -5739,8 +5739,9 @@ the second row, together with single quotes not being quoting.
 
 A subscript *search* is a different road, because its operand is a
 pattern. There zsh drops the backslash before `$` and a backquote, as it
-does in a key (#5269), and **keeps** it before `{` and `}`, where a key
-drops it. So the two roads cannot share one rule. The backslashes before
+does in a key, and **keeps** it before `{` and `}`, where a key drops it.
+Measured 2026-10-01 under `(r)`, `(R)`, `(i)`, `(I)` and `(re)` with both
+spellings planted; implemented in #5269. So the two roads cannot share one rule. The backslashes before
 `\`, `(`, `)`, `[`, `]` and `*` are the matcher's.
 
 The two readings the panel splits on are parked in #5268.

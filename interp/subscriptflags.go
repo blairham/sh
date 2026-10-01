@@ -386,7 +386,7 @@ func (r *Runner) scalarSearchStart(g *syntax.SubscriptFlags, n int, back bool) (
 // `${(@)a:#$g}` in the same shell removes nothing, and the difference is that
 // only one of the two is a quoting context.
 func (r *Runner) subscriptMatcher(g *syntax.SubscriptFlags, prefix bool) func(string) bool {
-	operand := r.searchOperand(g.Arg)
+	operand := r.renderSubscript(g.Arg, searchKeepsEscape)
 	if strings.ContainsRune(g.Flags, 'e') {
 		if prefix {
 			return func(el string) bool { return strings.HasPrefix(el, operand) }
@@ -486,6 +486,25 @@ func (r *Runner) renderSubscript(w *syntax.Word, keepEscape func(string) bool) s
 	b.WriteString(quote(open))
 	return b.String()
 }
+
+// searchKeepsEscape answers, for a search operand, whether a backslash stays
+// in front of the character it escapes: everywhere but before `$` and a
+// backquote, which are not pattern characters and so have nothing for the
+// matcher to read the escape as.
+//
+// Measured 2026-10-01 on zsh 5.9.2 (`-f`, a script file under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C`), with both `aCb` and `a\Cb` in the array and
+// the operand spelled `a\Cb`: `(r)`, `(R)`, `(i)`, `(I)` and `(re)` all find
+// `aCb` for `$` and a backquote, and for every other character tried —
+// `\`, `(`, `)`, `[`, `]`, `*`, `?`, `#`, `~`, `{`, `}`, `"`, `'`, a letter
+// — find what they found before this, the escape left for the matcher. Here
+// all of them kept it, so `${a[(r)a\$b]}` looked for four characters and
+// found nothing (#5269).
+//
+// It is not keyKeepsEscape, and the two parting is measured: a key drops
+// the backslash before `{` and `}` as well and a search keeps it. The two
+// share only the two characters a pattern never reads.
+func searchKeepsEscape(c string) bool { return c != "$" && c != "`" }
 
 // searchStart is the 0-based element the walk begins at, and whether that is
 // an element at all.

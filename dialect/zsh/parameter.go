@@ -308,8 +308,9 @@ var zshEmptyParams = []struct {
 	// — the readonly word `$builtins` carries and `$dis_aliases` does not
 	// (#4909).
 	{name: "dis_builtins", waitsFor: "disable -b", readonly: true},
-	{name: "dis_functions", waitsFor: "disable -f"},
-	{name: "dis_functions_source", waitsFor: "disable -f", readonly: true},
+	// `dis_functions` and `dis_functions_source` have left this list: they
+	// are the switched-off table `disable -f` fills, and are views of it now.
+	// See disfunctions.go.
 	// The *disabled* half of the two kinds #2081 added, and they are still
 	// honestly empty: an alias is in these tables only once `disable` has
 	// taken it out of the live one, and `disable -a` — which covers the

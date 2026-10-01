@@ -6,6 +6,7 @@ package zsh
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/blairham/sh/interp"
 )
@@ -21,19 +22,22 @@ import (
 // registered in its place, rather than one builtin trying to be both — which
 // would accept `-n`, which zsh refuses, and refuse `-f`, which zsh takes.
 //
-// The builtins table is what these implement. The other five are refused as
-// not implemented rather than silently doing nothing, and the listing is of
-// *this* shell's builtins, which are not zsh's — nothing can make those the
-// same set, and pretending otherwise would be the silent wrong answer this
-// project exists to avoid.
+// The builtins table and the functions table (`-f`) are what these implement.
+// The other four are refused as not implemented rather than silently doing
+// nothing, and the builtins listing is of *this* shell's builtins, which are
+// not zsh's — nothing can make those the same set, and pretending otherwise
+// would be the silent wrong answer this project exists to avoid.
 
 // enableBuiltin builds `enable` or `disable`; they differ only in which way
 // they switch a name and which list they print when given nothing.
 func enableBuiltin(name string, on bool) interp.Builtin {
 	return func(r *interp.Runner, _ context.Context, args []string) int {
-		rest, code := hashTableOptions(r, name, args)
+		rest, table, code := hashTableOptions(r, name, args)
 		if code != 0 {
 			return code
+		}
+		if table == 'f' {
+			return switchFunctions(r, name, on, rest)
 		}
 		if len(rest) == 0 {
 			return listNames(r, on)
@@ -77,17 +81,17 @@ func listNames(r *interp.Runner, enabled bool) int {
 
 // hashTableOptions reads the leading options, which name a table rather than
 // modify an action.
-func hashTableOptions(r *interp.Runner, builtin string, args []string) ([]string, int) {
+func hashTableOptions(r *interp.Runner, builtin string, args []string) ([]string, byte, int) {
 	// One step rather than a loop: every option here names the table and is
 	// the whole of what this builtin was asked, so nothing is ever read
 	// twice. `--` hands back what follows it, and the rest return.
 	if len(args) > 0 {
 		a := args[0]
 		if a == "" || a[0] != '-' {
-			return args, 0
+			return args, 0, 0
 		}
 		if a == "--" {
-			return args[1:], 0
+			return args[1:], 0, 0
 		}
 		if a == "-" {
 			// A lone `-`, eaten in this dialect and an operand elsewhere.
@@ -97,24 +101,64 @@ func hashTableOptions(r *interp.Runner, builtin string, args []string) ([]string
 			// (#5040). See interp.Runner.ReadALoneDash.
 			switch r.ReadALoneDash() {
 			case interp.LoneDashUnanswered:
-				return nil, 2
+				return nil, 0, 2
 			case interp.LoneDashEndsTheOptions:
-				return args[1:], 0
+				return args[1:], 0, 0
 			}
-			return args, 0
+			return args, 0, 0
 		}
 		switch a {
-		case "-a", "-f", "-m", "-r", "-s":
+		case "-f":
+			return args[1:], 'f', 0
+		case "-a", "-m", "-r", "-s":
 			// A table this shell does not keep. Said out loud rather than
 			// passed over: `disable -a foo` that quietly did nothing would
 			// leave the alias in place and report success.
 			r.Diagnosef("%s: %s is not implemented yet\n", builtin, a)
-			return nil, 2
+			return nil, 0, 2
 		}
 		r.Diagnosef("%s: bad option: %s\n", builtin, a)
-		return nil, 1
+		return nil, 0, 1
 	}
-	return args, 0
+	return args, 0, 0
+}
+
+// switchFunctions is `enable -f` and `disable -f`: the functions table, which
+// a script fills itself, switched a name at a time.
+//
+// Measured 2026-10-01 on zsh 5.9.2 (`-f`, a script file under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C`), with `zq() { print zq; }`:
+//
+//	disable -f zq       0, and `zq` is then `command not found` at 127
+//	disable -f zq       again, 0 — already off is no change
+//	enable -f zq        0 — on whether or not it was off
+//	disable -f nosuch   no such hash table element: nosuch, 1
+//	disable -f          the switched-off definitions, as `functions` lists
+//	enable -f           the live ones, the same way
+//	disable -f 'z*'     no such hash table element: z*, 1 — not a pattern
+//
+// What "off" is lives in the core: see interp.Runner.SetFunctionWithdrawn.
+func switchFunctions(r *interp.Runner, builtin string, on bool, names []string) int {
+	if len(names) == 0 {
+		list, text := r.ListedFuncNames(), r.FunctionText
+		if !on {
+			list, text = r.WithdrawnFunctionNames(), r.WithdrawnFunctionText
+		}
+		for _, n := range list {
+			if def, ok := text(n); ok {
+				_, _ = fmt.Fprintln(r.Out(), strings.TrimSuffix(def, "\n"))
+			}
+		}
+		return 0
+	}
+	status := 0
+	for _, n := range names {
+		if !r.SetFunctionWithdrawn(n, !on) {
+			r.Diagnosef("%s: no such hash table element: %s\n", builtin, n)
+			status = 1
+		}
+	}
+	return status
 }
 
 // registerEnable puts both in place, replacing the core's `enable`.

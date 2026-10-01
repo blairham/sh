@@ -588,8 +588,9 @@ func TestTheEmptyParametersStayHonest(t *testing.T) {
 	for _, tc := range []struct{ param, waitsFor string }{
 		{"dis_aliases", "disable -a nosuch"},
 		{"dis_builtins", "disable -b nosuch"},
-		{"dis_functions", "disable -f nosuch"},
-		{"dis_functions_source", "disable -f nosuch"},
+		// `dis_functions` and `dis_functions_source` have left this list
+		// the way `nameddirs` did: `disable -f` works (#5267), and both are
+		// views of the table it fills — see disablefunction_test.go.
 		{"dis_galiases", "disable -a nosuch"},
 		{"dis_patchars", "disable -p nosuch"},
 		{"dis_reswords", "disable -r nosuch"},
@@ -622,15 +623,15 @@ print -r -- "st=$?"`)
 // nothing said at either end. The three zsh marks readonly refuse in zsh's own words
 // instead, which does the same job.
 func TestWritingToAnEmptyParameterIsRefusedByName(t *testing.T) {
+	// `dis_functions` was the middle row and is a table now (#5267): a write
+	// to it defines a switched-off function, which disablefunction_test.go
+	// asserts.
 	out, st := runZsh(t, t.TempDir(), `dis_aliases[x]=ls 2>&1
 print -r -- "after=${#dis_aliases}"
-dis_functions[f]=x 2>&1
-print -r -- "after=${#dis_functions}"
 dis_reswords=(x) 2>&1
 print -r -- "unreached"`)
 	want := "zsh:1: dis_aliases[x]: disable -a is not implemented yet\nafter=0\n" +
-		"zsh:3: dis_functions[f]: disable -f is not implemented yet\nafter=0\n" +
-		"zsh:5: read-only variable: dis_reswords\n"
+		"zsh:3: read-only variable: dis_reswords\n"
 	if out != want || st != 1 {
 		t.Errorf("writes to the still-empty tables = %q (status %d), want %q", out, st, want)
 	}

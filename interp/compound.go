@@ -1253,6 +1253,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
 	r.funcs[c.Name] = c
+	r.definedOverAWithdrawal(c.Name)
 	// A definition replaces the body, and the trace mark belonged to the
 	// body: measured on zsh 5.9.2, `functions -t f; f() { print B }; f`
 	// writes a bare `B`. See interp/functiontrace.go.

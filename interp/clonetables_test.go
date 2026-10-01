@@ -353,6 +353,7 @@ func seedTables(r *Runner) {
 	r.cloexecFds = map[int]bool{8: true}
 	r.exported = map[string]bool{"seed": true}
 	r.exportedFuncs = map[string]bool{"seed": true}
+	r.withdrawnFuncs = map[string]withdrawnFunction{"seed": {}}
 	r.readonlyFuncs = map[string]bool{"seed": true}
 	r.tracedFuncs = map[string]bool{"seed": true}
 	r.funcTraceMarks = map[string]string{"seed": "t"}

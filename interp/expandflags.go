@@ -52,7 +52,10 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 			escapeSep = globEscape
 		}
 	}
+	r.flagWordBare, r.flagKeepsBare = nil, false
 	words, isList, escaped, ok := r.flaggedWords(e, sp, quoted, escapeSep)
+	bare, keepsBare := r.flagWordBare, r.flagKeepsBare
+	r.flagWordBare, r.flagKeepsBare = nil, false
 	// Nothing below this line is a list of a word's fields until the loop at
 	// the end says so, and the marks belong to the call that is reading them.
 	// See interp/emptynullfield.go.
@@ -104,14 +107,27 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	// while `${(s.:.)u}` and `${(@s.:.)u}` are `[a][b]` — so the empties are
 	// the IFS split's own, and an unquoted array's empty *elements* still go:
 	// `a=(x '' y); ${(@)a}` is `[x][y]` (#5275).
+	// An `=` split keeps its empty fields because they are bare, and a group
+	// that unquoted them has made them values — which then go the way a
+	// letter split's empty fields go. Measured on zsh 5.9.2 with IFS=: and
+	// `u=a::b:`: `${(Q)=u}` is `a` and `b`, `"${(Q)=u}"` is `a`, `b` and the
+	// edge, `"${(@Q)=u}"` keeps all four. See flaggedWords.
+	eqSplit := splitFlagInGroup(e, sp)
+	unquotedSplit := eqSplit && strings.ContainsRune(e.Flags, 'Q')
+	if unquotedSplit {
+		eqSplit = false
+	}
+	// And a nested `=` split's bare fields are kept unquoted for the same
+	// reason, which flaggedWords says through keepsBare.
+	eqSplit = eqSplit || keepsBare
 	keepEmpty := (quoted || r.expandingNestedInner) &&
-		(r.flagKeepsFields(e) || splitFlagInGroup(e, sp)) ||
-		!quoted && splitFlagInGroup(e, sp)
+		(r.flagKeepsFields(e) || eqSplit) ||
+		!quoted && eqSplit
 	// And a quoted `(f)` or `(s)` keeps the empty field at each *edge* while
 	// still dropping the interior ones, which is the same rule `${=spec}`
 	// already follows for an IFS split and was measured separately for these
 	// two flags — see splitFlagEdges.
-	edges := !keepEmpty && splitFlagEdges(e, quoted)
+	edges := !keepEmpty && (splitFlagEdges(e, quoted) || unquotedSplit && quoted)
 	out := make([]string, 0, len(words))
 	nulls := make([]bool, 0, len(words))
 	for i, w := range words {
@@ -120,7 +136,11 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 		// it stands for — "this empty field is one the flag keeps because
 		// it is at an end" — is the whole reason the branch exists.
 		atKeptEdge := edges && (i == 0 || i == len(words)-1)
-		if w == "" && !keepEmpty && !atKeptEdge {
+		// Unquoted, what an `=` split keeps is the bare field and only that:
+		// an empty *value* is no word, so `${=e}` with `e=` is nothing while
+		// `${=d}` with `d=:` is two empty words.
+		valueGone := !quoted && eqSplit && !r.expandingNestedInner && w == "" && bare != nil && !bare[i]
+		if w == "" && (!keepEmpty || valueGone) && !atKeptEdge {
 			// Not removed here: it is a field of the word until the word
 			// says otherwise, exactly as an empty element of an unquoted
 			// array is. Measured on zsh 5.9.2 — `v='::b'; x${(s.:.)v}y` is
@@ -414,6 +434,47 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// Rule 7: the operator, applied to the value at this level. Measured:
 	// the flags apply to what the operator leaves — `${(U)x:-def}` is DEF,
 	// `${(U)u:=def}` assigns def and substitutes DEF.
+	// **The empty elements of a nested list are bare**, the way the empty
+	// fields a split makes are: they are what an expansion came to, not
+	// values the script held. Measured on zsh 5.9.2 (`-f`, `LC_ALL=C`) with
+	// `b=(x '' y)`, `IFS=:` and `u=a::b:` (#5299):
+	//
+	//	"${(@q)${b[@]}}"         x, nothing, y   the empty left bare
+	//	"${(@qq)${b[@]}}"        'x', '', 'y'    only the single `q` style
+	//	${(@q)${b[@]}}           x, y            unquoted, gone before any flag:
+	//	${(@qq)${b[@]}}          'x', 'y'        even the quoting that would
+	//	${#${b[@]}}              2               have kept it, and the count
+	//	${(q)${(s.:.)u}}         a, b
+	//	"${(@q)${b[2]}}"         ''              a nested *value* is a value
+	//	s=''; "${(@q)${(@)s}}"   ''              a scalar under (@) is one too
+	//
+	// So it is the elements of an array or a split a level down that are
+	// bare, and not every word a nested expansion hands back. An operator in
+	// the group can turn a word into an empty one, which is a value, so the
+	// marks are kept only where no operator ran.
+	var nestedBare []bool
+	keepsBare := false
+	if e.Inner != nil && isList && indirect == nil && e.Op == 0 {
+		kind := r.nestedElementsAreBare(e)
+		switch {
+		case kind == nestedBareNone:
+		case quoted || kind == nestedBareFromAnIFSSplit:
+			// An `=` split a level down keeps its bare fields unquoted, as
+			// one in the group itself does: `${(q)${=u}}` and `${(@)${=u}}`
+			// are four words, two of them empty.
+			nestedBare = bareEmptyMarks(words, nil)
+			keepsBare = !quoted
+		default:
+			kept := words[:0:0]
+			for _, w := range words {
+				if w != "" {
+					kept = append(kept, w)
+				}
+			}
+			words = kept
+		}
+	}
+
 	words, isList, ok, nothing := r.applyFlagOp(e, words, set, isList, indirect, quoted)
 	if !ok {
 		return nil, false, false, false
@@ -514,15 +575,28 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// made, as against an empty value. The single-`q` style quotes only the
 	// second — see bareEmptyMarks. Nil when the group does not split, and
 	// nothing ahead of the split can have made one.
-	var bare []bool
+	bare := nestedBare
+	if joined {
+		bare = nil
+	}
 
 	// Rule 11: splitting. `f` is split-at-newlines; an empty `s` separator
 	// splits into characters, which is measured.
 	if hasSplit {
 		var split []string
 		var splitBare []bool
-		for _, w := range words {
+		for i, w := range words {
 			from := len(split)
+			if w == "" {
+				// An empty word splits into itself, in either context, and
+				// keeps what it was: measured, unquoted `${(q)=e}` with
+				// `e=` is the one word `''`, where `${=e}` is no word at
+				// all — the empty value going the way an unquoted empty
+				// value goes once the group is done with it.
+				split = append(split, "")
+				splitBare = append(splitBare, bare != nil && bare[i])
+				continue
+			}
 			if ifsSplit {
 				// `${=spec}` splitting, which is field splitting on IFS and
 				// not a separator the group named. Quoted it keeps the
@@ -545,11 +619,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			// and keeps what it was. Measured on zsh 5.9.2 with IFS=:, `d=:`
 			// and `e=`: `${(@q)=d}` is two empty words, `${(@q)=e}` is `''`.
 			splitBare = bareEmptyMarks(split[from:], splitBare)
-			if w == "" {
-				for j := from; j < len(split); j++ {
-					splitBare[j] = false
-				}
-			}
 		}
 		words, isList, bare = split, true, splitBare
 	}
@@ -635,6 +704,11 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// `${(Qq)v}` and `${(qQ)v}` on `'a b'` are both `'a b'`, the round trip,
 	// where a `Q` that ran first would have left `a\ b`. See quoteflag.go.
 	if strings.ContainsRune(e.Flags, 'Q') {
+		// What the unquoting comes to is a value, as the prompt escapes'
+		// is: measured, unquoted `${(Q)=u}` is `a` and `b` where `${=u}`
+		// keeps the two empty fields, and quoted `"${(Q)=u}"` keeps only the
+		// one at the edge, exactly as a letter split does. See expandFlagged.
+		bare = nil
 		for i, w := range words {
 			words[i] = r.unquoteFlagged(w)
 		}
@@ -741,6 +815,15 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			isList = true
 		}
 		words = fields
+	}
+	// The bare marks, for the one reader that decides which empty words the
+	// command line keeps — see expandFlagged. Only while they still line up
+	// with the words: a sort, a re-reading or a shell split moves them.
+	r.flagWordBare, r.flagKeepsBare = nil, false
+	if len(bare) == len(words) && !orderApplies(e) && !reevalFlagApplies(e) && !markJoin {
+		if _, shell := shellSplitOpts(e); !shell {
+			r.flagWordBare, r.flagKeepsBare = bare, keepsBare && bare != nil
+		}
 	}
 	return words, isList, markJoin && escapeSep != nil, true
 }
@@ -1946,13 +2029,62 @@ func (r *Runner) rangeModifiers(
 // Unquoted, a bare field is an empty word, which the command line keeps only
 // where the split keeps its empty fields.
 //
-// Not reached, and measured to differ: the same holds in zsh for the
-// elements of a *nested* list — `"${(@q)${b[@]}}"` leaves an empty element
-// of `b` bare — but not for a nested scalar under `(@)`, and the nesting
-// hands this function strings with no way to tell the two apart (#5299).
+// The same holds for the elements of a *nested* list — `"${(@q)${b[@]}}"`
+// leaves an empty element of `b` bare — and not for a nested scalar under
+// `(@)`, which the nesting cannot tell apart from a list by its strings alone;
+// see nestedElementsAreBare, which asks the inner as written (#5299).
 func bareEmptyMarks(words []string, marks []bool) []bool {
 	for _, w := range words {
 		marks = append(marks, w == "")
 	}
 	return marks
 }
+
+// nestedElementsAreBare reports whether the inner of a nested expansion hands
+// back the elements of a list — an array's, or what a split made — rather than
+// a value: the words whose empty members are bare. See flaggedWords, where the
+// measurement is.
+//
+// Asked of the inner as written, because the fields alone cannot say it: a
+// scalar under `(@)` comes back looking exactly like a list of one, and its
+// empty value is a value.
+func (r *Runner) nestedElementsAreBare(e *syntax.ParamExpr) nestedBareKind {
+	span, _ := r.nestedInnerSpan(e)
+	p := span.Param
+	if span.Kind != syntax.ParamExp || p == nil || p.Inner != nil || p.Length || p.Indirect {
+		return nestedBareNone
+	}
+	if strings.ContainsAny(p.Flags, splitFlagLetters) {
+		return nestedBareFromAList
+	}
+	if p.SplitFlags%2 == 1 {
+		return nestedBareFromAnIFSSplit
+	}
+	if !r.paramIsAList(p) {
+		return nestedBareNone
+	}
+	if p.Name == "@" || p.Name == "*" {
+		return nestedBareFromAList
+	}
+	if _, ok := r.arrayElems(p.Name); ok {
+		return nestedBareFromAList
+	}
+	if _, isAssoc := r.assocFor(p.Name); isAssoc {
+		return nestedBareFromAList
+	}
+	return nestedBareNone
+}
+
+// nestedBareKind is what nestedElementsAreBare finds a level down.
+type nestedBareKind int
+
+const (
+	// nestedBareNone is a value: nothing in it is bare.
+	nestedBareNone nestedBareKind = iota
+	// nestedBareFromAList is an array's elements, or a letter split's
+	// fields, whose empty members are gone unquoted and bare in quotes.
+	nestedBareFromAList
+	// nestedBareFromAnIFSSplit is an `=` split's fields, whose empty members
+	// are bare in either context and kept unquoted.
+	nestedBareFromAnIFSSplit
+)

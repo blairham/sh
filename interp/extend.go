@@ -890,6 +890,7 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
 	r.funcs[name] = decl
+	r.definedOverAWithdrawal(name)
 	// The same bookkeeping a definition the parser read gets. Without it a
 	// function defined through this seam had no origin at all, so the one
 	// route that most needs one — a file on the function search path, which

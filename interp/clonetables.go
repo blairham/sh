@@ -221,6 +221,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// made a definition made in a subshell the parent's, and a removal made
 	// in one the parent's too, at status 0 with nothing said either way.
 	c.funcs = maps.Clone(r.funcs)
+	c.withdrawnFuncs = maps.Clone(r.withdrawnFuncs)
 	// And which variables have a discipline function watching them, which is
 	// a view of that same table and goes with it: measured on ksh93u+,
 	// `g=raw; ( function g.get { .sh.value=sub; }; echo "$g" )` answers `sub`

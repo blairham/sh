@@ -635,6 +635,9 @@ type Runner struct {
 	scriptListingLayout    syntax.Layout
 	exportedFunctionLayout syntax.Layout
 	exportedFuncs          map[string]bool
+	// withdrawnFuncs are the script's functions switched off — see
+	// withdrawnfunction.go. Cloned into a subshell with funcs.
+	withdrawnFuncs map[string]withdrawnFunction
 	// readonlyFuncs are the functions a script has frozen, in the one dialect
 	// with the notion — see Semantics.FunctionAttributeLetters. A name in here
 	// cannot be redefined and cannot be unset, and both refusals are the

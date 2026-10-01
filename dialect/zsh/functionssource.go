@@ -92,4 +92,5 @@ func registerFunctionsSource(r *interp.Runner) {
 	r.SetDynamicAssocElement("functions_source", zshFunctionSourceValue)
 	r.MarkReadonly("functions_source")
 	hideModuleParameter(r, "functions_source")
+	registerDisabledFunctions(r)
 }

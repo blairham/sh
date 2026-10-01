@@ -2337,6 +2337,12 @@ func (r *Runner) unsetFunction(name string) int {
 		// this shell provides is exactly a name the script never defined.
 		fn = nil
 	}
+	if fn == nil && r.RemoveWithdrawnFunction(name) {
+		// A function switched off is still the script's, and removing it is
+		// quiet at 0 — measured, `disable -f zr; unfunction zr` in zsh
+		// 5.9.2. See withdrawnfunction.go.
+		return 0
+	}
 	if fn == nil {
 		if r.ask(r.sem().UnsetFunctionReportsMissing, "`unset -f` naming a function that is not defined") {
 			r.diagf("%s\n", Wording(d.UnsetFunctionNotFound, "unset: %[1]s: not found", name))

@@ -181,6 +181,7 @@ func (r *Runner) importFunctions() {
 				r.funcs = map[string]*syntax.FuncDecl{}
 			}
 			r.funcs[name] = decl
+			r.definedOverAWithdrawal(name)
 		}
 	}
 }

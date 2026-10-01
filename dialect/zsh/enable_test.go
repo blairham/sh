@@ -87,9 +87,10 @@ func TestANameThatIsNotABuiltinIsAHashTableElement(t *testing.T) {
 
 // TestATableThisShellDoesNotKeepIsSaidOutLoud. `-a` and the rest name hash
 // tables this shell has no answer for, and doing nothing quietly would leave
-// the alias in place and report success.
+// the alias in place and report success. `-f` has left the list: the
+// functions table is kept (#5267), and its rows are in disablefunction_test.go.
 func TestATableThisShellDoesNotKeepIsSaidOutLoud(t *testing.T) {
-	for _, opt := range []string{"-a", "-f", "-m", "-r", "-s"} {
+	for _, opt := range []string{"-a", "-m", "-r", "-s"} {
 		out, st := runZsh(t, t.TempDir(), "disable "+opt+" foo\n")
 		if !strings.Contains(out, "not implemented yet") {
 			t.Errorf("%s: output = %q, want it said out loud", opt, out)

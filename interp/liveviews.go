@@ -68,7 +68,14 @@ func (r *Runner) FunctionIsListed(name string) bool {
 // read. A fallback here would have written a path where that shell writes
 // nothing.
 func (r *Runner) FunctionSourceFile(name string) string {
-	if file := r.functionFile(name); file != "" {
+	return r.sourceFileAnswer(r.functionFile(name))
+}
+
+// sourceFileAnswer is FunctionSourceFile's reading of a recorded file, shared
+// with the switched-off table so the two cannot answer the `-c` route
+// differently.
+func (r *Runner) sourceFileAnswer(file string) string {
+	if file != "" {
 		return file
 	}
 	if r.Route == RouteCommandString {
@@ -129,6 +136,12 @@ func (r *Runner) FunctionBodyText(name string) (string, bool) {
 	if !ok {
 		return "", false
 	}
+	return r.functionBodyText(fn), true
+}
+
+// functionBodyText is FunctionBodyText for a declaration in hand, which the
+// switched-off table needs too.
+func (r *Runner) functionBodyText(fn *syntax.FuncDecl) string {
 	// The printed body is `{`, the statements, `}` — one line each, in the
 	// dialect's own layout. Dropping the first and last lines is the whole
 	// of the difference, and it is done on the print rather than on the
@@ -137,13 +150,13 @@ func (r *Runner) FunctionBodyText(name string) (string, bool) {
 	if len(syntax.Redirections(fn.Body)) > 0 {
 		// The closing brace carries them, so it stays and so does its
 		// partner. See the paragraph above.
-		return strings.TrimSuffix(text, "\n"), true
+		return strings.TrimSuffix(text, "\n")
 	}
 	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
 	if len(lines) < 2 {
-		return "", true
+		return ""
 	}
-	return strings.Join(lines[1:len(lines)-1], "\n"), true
+	return strings.Join(lines[1:len(lines)-1], "\n")
 }
 
 // DefineFunctionFromText defines a function from the text of its body, which

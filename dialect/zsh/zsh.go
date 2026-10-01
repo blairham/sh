@@ -6418,6 +6418,9 @@ func Apply(r *interp.Runner) {
 	// see them, so no listing here writes a row for one. See
 	// interp.Runner.SetEngineOwnedPrefix, where the routes are (#5014).
 	r.SetEngineOwnedPrefix(zshEngineStorePrefix)
+	// `~[name]` is a directory a script's own function names. See
+	// dynamicdir.go.
+	r.DynamicDirectoryFunctions = zshDynamicDirectoryFunctions
 	// This shell has an `enable`, but a different one: it works on hash
 	// tables and takes none of bash's options — `enable -n` is a bad option
 	// there. Claiming a bash-shaped one would be worse than not having it.

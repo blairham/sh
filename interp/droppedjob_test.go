@@ -11,7 +11,8 @@ import (
 )
 
 // droppedJobs runs src with finished jobs leaving the table, a missing job
-// spec answered in silence, and the memory of a reported job set to remember.
+// spec answered in silence, a listing that shows a finished job, and the memory
+// of a reported job set as asked.
 func droppedJobs(t *testing.T, remember Answer, src string) (string, int) {
 	t.Helper()
 	return runGrammar(t, src, nil, func(r *Runner) {
@@ -19,6 +20,7 @@ func droppedJobs(t *testing.T, remember Answer, src string) (string, int) {
 		s.FinishedJobLeavesTheTable = Yes
 		s.WaitReportsAMissingJob = No
 		s.WaitRemembersAReapedJob = remember
+		s.JobsListFinishedJobs = Yes
 		r.Semantics = &s
 	})
 }

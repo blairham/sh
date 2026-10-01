@@ -5,6 +5,7 @@ package interp
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -317,6 +318,10 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 
 	words, set, isList := r.flagBase(e)
+	// Which of the words are *bare* empties: an empty field a split made, as
+	// against an empty value. The single-`q` style quotes only the second —
+	// see bareEmptyMarks. Nil until the group splits.
+	var bare []bool
 
 	// Rule 4: (P) treats the value so far as a further name, before any
 	// operator runs — `${(P)x:-def}` tests the *resolved* value.
@@ -343,6 +348,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// not the same string, and indirectTarget keeps the one the write
 		// wants. See indirectName.
 		words, set, isList = r.indirectBase(indirectName(text), e.Flags)
+		bare = nil
 	}
 
 	// Rule 4b: `(t)` puts the *type* of the name in place of its value, and
@@ -356,6 +362,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			return nil, false, false, false
 		}
 		isList = false
+		bare = nil
 	}
 
 	// The is-it-set question, asked of whatever the base and `(P)` came to:
@@ -409,14 +416,22 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
 		joined = true
+		bare = nil
 	}
 
 	// Rule 7: the operator, applied to the value at this level. Measured:
 	// the flags apply to what the operator leaves — `${(U)x:-def}` is DEF,
 	// `${(U)u:=def}` assigns def and substitutes DEF.
+	before := words
 	words, isList, ok, nothing := r.applyFlagOp(e, words, set, isList, indirect, quoted)
 	if !ok {
 		return nil, false, false, false
+	}
+	if !slices.Equal(before, words) {
+		// The operator put words of its own in place, and what it wrote is
+		// values: measured, `"${(@q)${(@)b}:#x}"` with `b=(x '' y)` quotes
+		// the empty element that survives the filter.
+		bare = nil
 	}
 	// The state substitutedNothing names, narrowed to where the shell being
 	// modeled can see it. Outside double quotes it cannot: measured on zsh
@@ -432,6 +447,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// else. See lengthflags.go.
 	if e.Length {
 		words, isList = []string{itoa(r.flaggedLength(e, words, isList))}, false
+		bare = nil
 	}
 
 	// An `=` beside the group is this same step with IFS for a separator.
@@ -508,13 +524,16 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		!joined && isList && !markJoin {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
+		bare = nil
 	}
 
 	// Rule 11: splitting. `f` is split-at-newlines; an empty `s` separator
 	// splits into characters, which is measured.
 	if hasSplit {
 		var split []string
-		for _, w := range words {
+		var splitBare []bool
+		for i, w := range words {
+			from := len(split)
 			if ifsSplit {
 				// `${=spec}` splitting, which is field splitting on IFS and
 				// not a separator the group named. Quoted it keeps the
@@ -529,11 +548,21 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 				// IFS of a backslash split at the NUL instead (#5263).
 				ifs, set := r.ifs()
 				split = append(split, r.splitFieldsAsking(w, nil, ifs, set, quoted, false)...)
-				continue
+			} else {
+				split = append(split, r.splitFlagged(w, e)...)
 			}
-			split = append(split, r.splitFlagged(w, e)...)
+			// What a split of a word with something in it leaves empty is a
+			// bare field; a word that was already empty splits into itself
+			// and keeps what it was. Measured on zsh 5.9.2 with IFS=:, `d=:`
+			// and `e=`: `${(@q)=d}` is two empty words, `${(@q)=e}` is `''`.
+			splitBare = bareEmptyMarks(split[from:], splitBare)
+			if w == "" {
+				for j := from; j < len(split); j++ {
+					splitBare[j] = bare != nil && bare[i]
+				}
+			}
 		}
-		words, isList = split, true
+		words, isList, bare = split, true, splitBare
 	}
 
 	// Rules 12, 13, 14 in the manual's order: case, prompt escapes, quoting.
@@ -549,6 +578,9 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// escapeflag.go for where the reading itself lives and why.
 	if escapeFlagApplies(e) {
 		words = r.escapeFlagged(e, words)
+		if len(words) != len(bare) {
+			bare = nil
+		}
 	}
 	if strings.ContainsRune(e.Flags, '%') {
 		// Written *twice* is a second question, and the only one of the
@@ -563,6 +595,9 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// gated on PROMPT_SUBST, which is what the third row says. A third
 		// `%` adds nothing over the second.
 		subst := strings.Count(e.Flags, "%") >= 2
+		// And what the prompt escapes come to is a value: measured,
+		// `${(@q%)=u}` quotes the empty fields `${(@q)=u}` leaves bare.
+		bare = nil
 		for i, w := range words {
 			v, pok := r.promptEscapes(w, e, subst)
 			if !pok {
@@ -573,7 +608,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 	if n := strings.Count(e.Flags, "q"); n > 0 {
 		for i, w := range words {
-			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing, r.DoubledQuoteInSingleQuotes())
+			words[i] = quoteFlagged(w, n, e.QuoteModifier, nothing || bare != nil && bare[i], r.DoubledQuoteInSingleQuotes())
 		}
 	}
 	// And after the quoting, which is the order `${(Vq)}` measures: a tab
@@ -1904,4 +1939,34 @@ func (r *Runner) rangeModifiers(
 	}
 	from := &syntax.ParamExpr{Name: e.Name, Op: e.Op, Arg: e.Arg, Arg2: lenWord}
 	return mods, sliceElems(words, r.numOf(e.Arg, e, lenWord), from, r), true
+}
+
+// bareEmptyMarks appends to marks one entry per word, true where the word is
+// empty, and answers the result.
+//
+// It is how flaggedWords keeps the **bare** empty fields a split made apart
+// from empty values, which nothing after the split can tell apart because both
+// are the empty string. The single-`q` style writes an empty value as a pair
+// of single quotes and a bare field as nothing, the same distinction
+// substitutedNothing draws for an operator that substituted nothing. Measured
+// on zsh 5.9.2 with IFS=:, `u=a::b:`, `d=:` and `e=` (#5281):
+//
+//	${(@q)=u}               a, nothing, b, nothing
+//	${(@q)=d}               nothing, nothing
+//	${(@q)=e}               a quoted empty: a word that was already empty
+//	${(@qq)=u}, ${(@q-)=u}  each empty quoted: only the one style
+//	${(@q%)=u}              each empty quoted: prompt escapes make values
+//
+// Unquoted, a bare field is an empty word, which the command line keeps only
+// where the split keeps its empty fields.
+//
+// Not reached, and measured to differ: the same holds in zsh for the
+// elements of a *nested* list — `"${(@q)${b[@]}}"` with `b` holding an empty
+// element between two others leaves that one bare — but not for a nested scalar under `(@)`, and the
+// nesting hands this function strings with no way to tell the two apart.
+func bareEmptyMarks(words []string, marks []bool) []bool {
+	for _, w := range words {
+		marks = append(marks, w == "")
+	}
+	return marks
 }

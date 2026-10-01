@@ -93,6 +93,7 @@ func seedStacks(r *Runner) {
 	r.jobs = append(make([]*Job, 0, 4), nil)
 	r.jobOrder = append(make([]*Job, 0, 4), nil)
 	r.reaped = append(make([]*Job, 0, 4), nil)
+	r.dropped = append(make([]*Job, 0, 4), nil)
 	r.procSubJobs = append(make([]*Job, 0, 4), nil)
 	r.enclosingProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.releasedSubstFds = append(make([]int, 0, 4), 63)

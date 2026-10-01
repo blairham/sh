@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/blairham/sh/syntax"
 
@@ -258,6 +259,38 @@ func (r *Runner) In() io.Reader { return r.stdin() }
 // how a registered builtin ends up saying less than the one beside it. This
 // is here because writing one found it missing.
 func (r *Runner) Diagnosef(format string, args ...any) { r.diagf(format, args...) }
+
+// SleepFor blocks for d, or until a trapped signal arrives or ctx ends, and
+// reports the status a signal that cut it short leaves — the same wait `wait`
+// itself does, for a dialect whose `sleep` is a builtin. A negative d sleeps
+// until a signal does arrive.
+//
+// The handler is not run here; it runs where every other handler does, at the
+// top of the next statement. Measured on ksh93u+, whose `sleep` is a builtin:
+// `trap 'echo T' USR1; (/bin/sleep 0.2; kill -USR1 $$) & sleep 1; echo $?`
+// writes `T` and then 286 after 0.2 seconds — USR1's status in that shell's
+// encoding, which is the one signalDeathStatus already asks about.
+func (r *Runner) SleepFor(ctx context.Context, d time.Duration) (status int, interrupted bool) {
+	// A background job sleeping here has started as far as it is going to
+	// before the time is up, and the shell that ran `&` must not wait the
+	// sleep out to learn so: `(sleep 0.5; exit 3) & /usr/bin/true; wait %1`
+	// is 3 in ksh93, and was 0 here, the `&` having held until the body was
+	// over — so the foreground child reaped after it saw the job finished.
+	r.SettleBeforeAWait()
+	done := make(chan struct{})
+	if d >= 0 {
+		t := time.AfterFunc(d, func() { close(done) })
+		defer t.Stop()
+	}
+	sig, trapped, gaveUp := r.awaitOrTrap(done, ctx.Done())
+	switch {
+	case trapped:
+		return r.signalDeathStatus(sig), true
+	case gaveUp:
+		return 1, true
+	}
+	return 0, false
+}
 
 // RefuseBuiltinUsagef writes a builtin's complaint about **how it was
 // called** — located the way this dialect locates that builtin's complaints,

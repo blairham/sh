@@ -2946,6 +2946,19 @@ type Runner struct {
 	// a second time can still answer, which six of the seven measured columns
 	// do. See Runner.reap and Semantics.WaitRemembersAReapedJob.
 	reaped []*Job
+	// dropped are the finished jobs the table let go of with nothing having
+	// reported them — Semantics.FinishedJobLeavesTheTable — newest last and
+	// bounded as reaped is. Like reaped they are out of the table; unlike
+	// reaped nothing has told the script their status yet, so the first
+	// `wait` naming one's process id answers it whatever the dialect says
+	// about remembering, and is then forgotten. Measured 2026-10-01 in
+	// ksh93u+, which remembers nothing a `wait` reported and still answers
+	// `(exit 4) & p=$!; /bin/sleep .3; wait $p` with 4, and 127 the second
+	// time; zsh 5.9.2 answers the same two.
+	dropped []*Job
+	// answeringDropped is the dropped job a `wait` by id has just taken out
+	// of dropped, which reap then lets go of rather than remembering.
+	answeringDropped *Job
 	// procSubJobs is the process substitution bodies `$!` has named, where
 	// the dialect says a substitution does. Beside the table and never in it:
 	// `jobs` does not list them and a bare `wait` does not wait for them, and

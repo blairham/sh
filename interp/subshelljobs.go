@@ -183,6 +183,8 @@ func (r *Runner) inheritJobs(kind jobBoundary) {
 	// even reached, and a shell that never backgrounded anything stays off
 	// that axis exactly as it did. See Runner.reaped.
 	r.reaped = nil
+	// And the dropped ones, for the same reason: a forked body dropped none.
+	r.dropped = nil
 	if len(r.jobs) == 0 {
 		return
 	}

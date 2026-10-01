@@ -1254,8 +1254,11 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.Yes
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.No
-	// Measured 2026-10-01: a finished job stays in the table: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
-	s.FinishedJobLeavesTheTable = interp.No
+	// Measured 2026-10-01: a finished job leaves the table once the shell has
+	// reaped a foreground child — `(exit 4) & /bin/sleep 0.3; wait %%` is 0,
+	// the silent miss, where the builtin `sleep` reaps nothing and leaves it
+	// there at 4. See Semantics.FinishedJobLeavesTheTable (#5302).
+	s.FinishedJobLeavesTheTable = interp.Yes
 	// And it is the one column that keeps nothing once a job is reported:
 	// `wait %1; wait "$p"` is 127 there where it is the job's status in
 	// every other column measured.
@@ -6087,6 +6090,7 @@ func Apply(r *interp.Runner) {
 	// `newgrp` is `exec newgrp` under a builtin's name, which is what lets it
 	// be a *special* builtin here. See newgrp.go.
 	registerNewgrp(r)
+	registerSleep(r)
 	// The two marks a `-f` line puts on a function: `-u` reads the body from
 	// `$FPATH` at the first call, and `-t` traces it. See fpath.go.
 	registerFPath(r)

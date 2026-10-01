@@ -90,3 +90,23 @@ func TestTheCutReachesARedirectionTarget(t *testing.T) {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }
+
+// **A dropped NUL is remarked on once per substitution where the dialect has
+// words for it**, and in silence where it has none. The wording is the
+// dialect's; the count and the place are the substitution's.
+func TestADroppedNulIsSaidOncePerSubstitution(t *testing.T) {
+	const src = `v=$(printf 'a\0b\0c'); w="$(printf '\0')$(printf 'x')$(printf '\0')"; echo "[$v$w]"`
+	out, _ := runGrammar(t, src, nil, func(r *Runner) {
+		s := *r.Semantics
+		s.NulInAValue = NulDropped
+		r.Semantics = &s
+		d := Diagnostics{SubstitutionDroppedANul: "dropped one"}
+		r.Diagnostics = &d
+	})
+	if strings.Count(out, "dropped one\n") != 3 || !strings.HasSuffix(out, "[abcx]\n") {
+		t.Errorf("got %q, want three remarks and [abcx]", out)
+	}
+	if out, _ := substNul(t, NulDropped, src); out != "[abcx]\n" {
+		t.Errorf("no wording: got %q, want [abcx] in silence", out)
+	}
+}

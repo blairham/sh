@@ -4790,6 +4790,10 @@ func Diagnostics() interp.Diagnostics {
 		// spellings only — measured 2026-09-20, one document and two (#3711).
 		HeredocCarriedOutOfSubstitution: "warning: command substitution: " +
 			"%[1]d unterminated here-document%[2]s",
+		// And when one took in a NUL it dropped: once per substitution, on
+		// the command's line. Measured 2026-10-01; see
+		// Diagnostics.SubstitutionDroppedANul.
+		SubstitutionDroppedANul: "warning: command substitution: ignored null byte in input",
 		// bash names the builtin for its own two spellings and not for the
 		// two POSIX has: `declare: r: readonly variable` against a plain
 		// `r: readonly variable` from `export`.

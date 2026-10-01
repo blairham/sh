@@ -1176,10 +1176,10 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 // markedLookup is what a marker's spec resolves to: its job, nothing, or a
 // number no job holds.
 func (r *Runner) markedLookup(j *Job) (*Job, int) {
-	switch {
-	case j == nil:
+	switch j {
+	case nil:
 		return nil, jobMissing
-	case j == emptyJobSlot:
+	case emptyJobSlot:
 		return nil, jobOnAnEmptySlot
 	}
 	return j, jobFound

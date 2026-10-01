@@ -2381,6 +2381,14 @@ func (p *Parser) parsePipeline() Expr {
 			p.failUnexpected("")
 			return pl
 		}
+		if len(pl.Cmds) > 0 && p.dialect.Coproc && !p.dialect.CoprocAfterABar && p.atWord("coproc") {
+			// A `coproc` after a bar, in the dialect that will not start a
+			// coprocess there. Refused at the word, before the alias table is
+			// asked, which is where zsh refuses it. See
+			// Dialect.CoprocAfterABar.
+			p.failUnexpected("")
+			return pl
+		}
 		cmd := p.parseCommand()
 		if cmd == nil {
 			if len(pl.Cmds) == 0 {

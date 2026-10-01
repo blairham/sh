@@ -340,6 +340,9 @@ func Dialect() syntax.Dialect {
 	// ksh93 answers the other way and was already right.
 	d.ArrayLiteralRunningOutIsUnmatched = true
 	d.CoprocName = true
+	// And may begin any element of a pipeline, where zsh refuses it after a
+	// bar. Measured 2026-10-01; see syntax.Dialect.CoprocAfterABar.
+	d.CoprocAfterABar = true
 	// And the way that array is closed: `exec {COPROC[1]}>&-` names the
 	// element holding the feed. Not core because zsh has the `{name}` token
 	// and still reads a subscripted one as a word.

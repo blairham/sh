@@ -21,10 +21,11 @@ func jobSpecGlob(t *testing.T, a Answer, src string) (string, int) {
 
 // **Only a field beginning `%` and a live `?` asks**, so a vector that has not
 // answered the axis still globs every other word — including a `?` one byte
-// further along, and a `%?` whose `?` was quoted.
+// further along, a `?` second in a word that does not begin `%`, and a `%?`
+// whose `?` was quoted.
 func TestOnlyALeadingPercentQuestionMarkAsks(t *testing.T) {
-	out, st := jobSpecGlob(t, Unspecified, `echo ?a %* b%? '%?'`)
-	if strings.Contains(out, "disagree") || st != 0 || out != "%a %?b2 %a b%? %?\n" {
+	out, st := jobSpecGlob(t, Unspecified, `: > ab; echo ?a %* b%? '%?' a?`)
+	if strings.Contains(out, "disagree") || st != 0 || out != "%a %?b2 %a b%? %? ab\n" {
 		t.Errorf("got %q (status %d), want every word globbed and nothing refused", out, st)
 	}
 	out, st = jobSpecGlob(t, Unspecified, `echo %?`)

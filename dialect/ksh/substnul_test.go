@@ -25,3 +25,13 @@ v=` + "`" + `printf 'f\0g'` + "`" + `; printf '<%s>' "$v"; echo`
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }
+
+// **The `${ … ;}` spelling cuts the same way**, its output being captured
+// like any other substitution's: measured on ksh93u+, `printf '<%s>' ${ printf
+// 'a\0b'; }y "${ printf 'c\0d'; }"` is `<a><c>`.
+func TestACurrentShellSubstitutionCutsAtANul(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(), `printf '<%s>' ${ printf 'a\0b'; }y "${ printf 'c\0d'; }"; echo`)
+	if want := "<a><c>\n"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}

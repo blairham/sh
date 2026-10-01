@@ -599,6 +599,10 @@ type Runner struct {
 	// Copied by clone, because a clone that is not a fork — a function, an
 	// eval — is still the same process. See Process.
 	process *Process
+	// noticedJobs is the jobs this shell has learned have finished, which
+	// is what the one dialect that drops such a job drops. Replaced rather
+	// than written, so a clone may share it. See Runner.noticeFinishedJobs.
+	noticedJobs map[*Job]bool
 	// substRan records that a command substitution reported a status while
 	// the command now running was being expanded — its words and then its
 	// assignments alike, which is why it is cleared at the top of simple()

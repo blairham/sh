@@ -167,12 +167,6 @@ type Job struct {
 	// has said nothing about it yet has nothing to correct.
 	reportedState jobReportState
 
-	// noticed records that the shell waited for a child after this job had
-	// finished, which is when the one dialect that drops a finished job
-	// learns it has finished. See Runner.noticeFinishedJobs. Written and read
-	// on the shell's own goroutine only.
-	noticed bool
-
 	// stopExpected says this shell has sent this job a signal whose default
 	// action is to stop it, and has not yet been told that it stopped.
 	//
@@ -2734,7 +2728,7 @@ func (r *Runner) dropFinishedJobs() {
 	}
 	var finished []*Job
 	for _, j := range r.jobs {
-		if j.noticed {
+		if r.noticedJobs[j] {
 			finished = append(finished, j)
 		}
 	}
@@ -2766,18 +2760,33 @@ func (r *Runner) dropFinishedJobs() {
 // a job still running as far as the reference knows — from depending on how
 // fast a goroutine ends.
 //
-// Only on the shell at the top. A subshell's waits are its own, and a
-// background job's run on another goroutine, where the table may not be
-// touched.
+// Per runner, because every shell notices for itself: a subshell is a process
+// of its own in the reference, with the table it inherited, and it learns of
+// a job's end when *it* reaps a child — measured, `{ (exit 7) & /usr/bin/true;
+// wait %%; }` run as a `&` job is `no current job` there too. The set is
+// replaced rather than written, so a clone that copied the parent's set — or a
+// parent whose set a clone copied — never sees the other's notices, and the
+// Job, which several goroutines can reach, is never written at all.
 func (r *Runner) noticeFinishedJobs() {
-	if r.inSubshell || r.forkedForABackgroundJob {
-		return
-	}
+	var ended []*Job
 	for _, j := range r.jobs {
-		if j.Finished() {
-			j.noticed = true
+		if j.Finished() && !r.noticedJobs[j] {
+			ended = append(ended, j)
 		}
 	}
+	if len(ended) == 0 {
+		return
+	}
+	noticed := make(map[*Job]bool, len(r.noticedJobs)+len(ended))
+	for j := range r.noticedJobs {
+		if slices.Contains(r.jobs, j) {
+			noticed[j] = true
+		}
+	}
+	for _, j := range ended {
+		noticed[j] = true
+	}
+	r.noticedJobs = noticed
 }
 
 // reapedJobsKept bounds that memory.

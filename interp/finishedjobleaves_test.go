@@ -54,3 +54,21 @@ func TestAFinishedJobIsWhereTheAxisIsAsked(t *testing.T) {
 		t.Errorf("dropped: %q, want cur=127", out)
 	}
 }
+
+// **With job control and the monitor on, a finished job waits for its report**
+// even where the dialect drops one nobody will report. The notice before the
+// next prompt, or a listing, is what lets it go in every column — measured on
+// zsh 5.9.2 on a pseudo-terminal with `setopt nonotify`, where `jobs` lists
+// `exit 4` first — so the spec still finds it here.
+func TestAFinishedJobWithAReportComingStays(t *testing.T) {
+	out, _ := runGrammar(t, `set -m; (exit 4) & /bin/sleep 0.3; wait %%; echo "cur=$?"`, nil, func(r *Runner) {
+		s := *r.Semantics
+		s.FinishedJobLeavesTheTable = Yes
+		s.MonitorNeedsATerminal = No
+		r.Semantics = &s
+		r.JobControl = true
+	})
+	if !strings.HasSuffix(out, "cur=4\n") {
+		t.Errorf("got %q, want cur=4", out)
+	}
+}

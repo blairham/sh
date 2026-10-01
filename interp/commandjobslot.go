@@ -67,16 +67,6 @@ func holdsAJobSlot(c syntax.Command) bool {
 	return true
 }
 
-// takeTheCommandSlot hands the running command's number to a job that is the
-// command itself — one stopped in the foreground — and answers it, or zero
-// where no command holds one. The command holds nothing after that: the
-// number belongs to a job the table lists.
-func (r *Runner) takeTheCommandSlot() int {
-	n := r.commandSlot
-	r.commandSlot = 0
-	return n
-}
-
 // engageMarksByNumber moves the markers onto numbers, where a command holds a
 // slot: from here a marker can name the slot, or a number nobody holds, and
 // jobOrder cannot say either. The numbers start as the order's answer.

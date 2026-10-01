@@ -1949,10 +1949,6 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 	// — see setProcessGroup's caller, where the foreground half does not ask
 	// about the monitor.
 	job.settleStartedPID(pid, true)
-	// The command that stopped is the command holding the slot, where one
-	// holds one, so the job is that number and not the next. See
-	// Semantics.ACommandHoldsAJobSlot.
-	job.num = r.takeTheCommandSlot()
 	r.addJob(job)
 	r.setLastJob(job)
 	r.becomeCurrentJob(job)

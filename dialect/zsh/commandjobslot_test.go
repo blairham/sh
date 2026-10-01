@@ -60,6 +60,36 @@ func TestACommandHoldsAJobSlot(t *testing.T) {
 			"zsh:jobs:1: no current job\nzsh:jobs:1: no previous job\n",
 		},
 		{
+			"a function with a simple body holds one too",
+			`f() /bin/sleep 0.3; /bin/sleep 0.1 & f; jobs %%; jobs %-`,
+			"zsh:jobs:1: no current job\nzsh:jobs:1: %-: no such job\n",
+		},
+		{
+			"a leaving - is chosen again",
+			`{ /bin/sleep 0.4 & (exit 3) & /bin/sleep 0.4 & /bin/sleep 0.2; jobs %-; }; wait`,
+			"[2]  - running    /bin/sleep 0.4\n",
+		},
+		{
+			"control: a job that ended before the command leaves no slot behind",
+			`/bin/sleep 0.1 & /bin/sleep 0.3; { jobs %%; jobs %-; }`,
+			"zsh:jobs:1: no current job\nzsh:jobs:1: no previous job\n",
+		},
+		{
+			"a bare disown with the + on the slot",
+			`f() { (exit 3) & /bin/sleep 0.2; disown; echo $?; }; f`,
+			"f:disown: no current job\n1\n",
+		},
+		{
+			"a bare wait hands the + to the slot",
+			`{ /bin/sleep 0.5 & kill %%; wait; jobs %%; jobs %-; }`,
+			"zsh:jobs:1: %%: no such job\nzsh:jobs:1: no previous job\n",
+		},
+		{
+			"a command inside a subshell holds nothing more",
+			`( /bin/sleep 0.3 & { /bin/sleep 0.2 & print ${(k)jobstates}; } ); wait`,
+			"2 3\n",
+		},
+		{
 			"the - is the highest number, the slot counting",
 			`{ (exit 3) & /bin/sleep 0.4 & /bin/sleep 0.2; jobs %%; jobs %-; }; wait`,
 			"[3]  + running    /bin/sleep 0.4\nzsh:jobs:1: %-: no such job\n",

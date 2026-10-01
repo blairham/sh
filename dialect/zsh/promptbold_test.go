@@ -93,7 +93,7 @@ func TestABoldOffWritesTheColorBackAgain(t *testing.T) {
 			"every attribute on, then off one at a time",
 		},
 	} {
-		src := "v=" + singleQuote(tc.prompt) + `; print -rn -- "${(%%)v}"`
+		src := xtermLikeTerminal(t) + "v=" + singleQuote(tc.prompt) + `; print -rn -- "${(%%)v}"`
 		out, st := runZsh(t, t.TempDir(), src)
 		if out != tc.want || st != 0 {
 			t.Errorf("%s\n %s\n  drew %q (status %d)\n  want %q", tc.why, tc.prompt, out, st, tc.want)

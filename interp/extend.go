@@ -1543,6 +1543,15 @@ func (r *Runner) PromptQuantity(c PromptCondition, n int) (int, bool) {
 // what the interpreter answers from. See driver.
 func (r *Runner) PromptStyleValue() PromptStyle { return r.promptStyle }
 
+// SetTerminalCapabilityReader installs what answers [FieldTerminalCapability]:
+// the string the terminal's description holds under a termcap code, ready to
+// write, or empty where it holds none. A dialect that reads a description
+// installs one; the substrate reads none itself, because which database a
+// shell reads is the shell's to say.
+func (r *Runner) SetTerminalCapabilityReader(read func(termcap string) string) {
+	r.terminalCapability = read
+}
+
 // SetOptionNamespace installs the names `[[ -o name ]]` reads, for a dialect
 // whose option namespace is wider than the `set -o` names it declares.
 //

@@ -2127,6 +2127,8 @@ type Runner struct {
 	// flagKeepsBare says those bare words are kept unquoted, which a nested
 	// `=` split's are. See Runner.nestedElementsAreBare.
 	flagKeepsBare bool
+	// terminalCapability is the reader SetTerminalCapabilityReader installs.
+	terminalCapability func(termcap string) string
 	// listNulls is, per field the unquoted list path last produced, whether
 	// that field is one of the empty *elements* the list held rather than
 	// anything the splitter made. It is handed from elementFields to

@@ -5725,8 +5725,11 @@ The read agrees row for row. With both `aCb` and `a\Cb` planted by an
 array literal, `${h[a\Cb]}` finds `aCb` for the nine and `a\Cb` for
 every other character, whether or not the expansion is in double quotes.
 The one exception is `"` inside a double-quoted word: there,
-`"${h[a\"b]}"` finds `a"b`, which bash and ksh93 also find. This
-implementation does not yet; that is #5270.
+`"${h[a\"b]}"` finds `a"b`, which bash and ksh93 also find. The double
+quotes spend the escape for a key and not for a search: `"${a[(r)a\"b]}"`
+still finds `a\"b`. The parser records the enclosing quotes on the
+expansion, since the subscript is read again from its raw text and cannot
+say so itself (#5270).
 
 So the nine are **not** a difference between the two readings: every
 column drops the backslash before them. The as-written reading had been

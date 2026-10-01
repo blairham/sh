@@ -365,7 +365,7 @@ func (r *Runner) assocSubscript(a AssocArray, e *syntax.ParamExpr) []string {
 		// key in turn.
 		return r.disciplinedElements(e.Name, r.assocKeys(e.Name, a), values)
 	}
-	key := r.assocKey(e.Subscript())
+	key := r.assocKeyRead(e)
 	if r.reportEmptyAssocKeyRead(e, key) {
 		// Refused outright rather than reported and answered, which is the
 		// length operator's row alone. Nothing to give back: the word is
@@ -477,7 +477,7 @@ func (r *Runner) assocSubscriptOfTheName(e *syntax.ParamExpr) []string {
 		// ordinary key, and asking the produced key instead would collapse
 		// the two spellings into one.
 		if w := r.searchOperand(e.Subscript()); w != "@" && w != "*" {
-			key := r.assocKey(e.Subscript())
+			key := r.assocKeyRead(e)
 			if r.reportEmptyAssocKeyRead(e, key) {
 				return nil
 			}
@@ -531,9 +531,25 @@ func (r *Runner) absentAssocElement(e *syntax.ParamExpr, key string) []string {
 // difference between the readings: see keyKeepsEscape. The search operand
 // keeps all of them, because a pattern reads them.
 func (r *Runner) assocKey(w *syntax.Word) string {
+	return r.assocKeyIn(w, false)
+}
+
+// assocKeyRead is assocKey for an expansion's own subscript, which knows
+// whether the expansion was written inside double quotes. There the quotes
+// have already spent a `\"`, so the as-written key holds a bare `"` — see
+// syntax.ParamExpr.EnclosedInDoubleQuotes for the measurement (#5270).
+func (r *Runner) assocKeyRead(e *syntax.ParamExpr) string {
+	return r.assocKeyIn(e.Subscript(), e.EnclosedInDoubleQuotes)
+}
+
+func (r *Runner) assocKeyIn(w *syntax.Word, inDoubleQuotes bool) string {
 	r.expandSubscriptTilde(w)
 	quoted := r.expandKeyQuoted(w)
-	asWritten := r.renderSubscript(w, keyKeepsEscape)
+	keep := keyKeepsEscape
+	if inDoubleQuotes {
+		keep = func(c string) bool { return c != `"` && keyKeepsEscape(c) }
+	}
+	asWritten := r.renderSubscript(w, keep)
 	if quoted == asWritten {
 		return quoted
 	}

@@ -80,3 +80,13 @@ func TestTheCutKeepsABackslashTheValueHeld(t *testing.T) {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }
+
+// **A redirection target ends at the NUL too**, since a target is a word like
+// any other: measured on ksh93u+, `echo hi > "$(printf 'f\0g')h"` writes the
+// file `f`.
+func TestTheCutReachesARedirectionTarget(t *testing.T) {
+	out, st := substNul(t, NulCutInASubstitution, `: > "$(printf 'o\0g')h"; test -e o && echo cut; : > $(printf 'p\0q'); test -e p && echo cut`)
+	if want := "cut\ncut\n"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}

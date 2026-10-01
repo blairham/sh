@@ -51,6 +51,9 @@ func flagsRun(t *testing.T, src string) (string, string, int) {
 	sem.GlobExpansionResults = No
 	sem.FatalErrorStatusIsOne = Yes
 	sem.DeclaredNameWithoutValueIsEmpty = Yes
+	// And keeps a NUL a command substitution took in, which the `0` flag's
+	// cases build their values from — see Semantics.NulInAValue.
+	sem.NulInAValue = NulKept
 	var out, errs bytes.Buffer
 	// The dialect travels with the runner so nested input — a sourced file,
 	// an eval — parses the same grammar.

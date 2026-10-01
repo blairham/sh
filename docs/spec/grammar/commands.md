@@ -471,6 +471,31 @@ not begin here.
 dash says `` "!" unexpected `` for the second one, against `word
 unexpected` for a name.
 
+### A `!` after a bar is refused
+
+A `!` is written in front of a whole pipeline, never after one of its
+bars. Measured 2026-09-30 from script files, and over `-c`:
+
+| script | zsh 5.9.2 | bash 5.3.20 | dash | BusyBox ash 1.37.0 | ksh93u+ |
+| --- | --- | --- | --- | --- | --- |
+| `echo \| ! true` | ``parse error near `!'`` | ``syntax error near unexpected token `!'`` | `` "!" unexpected `` | `` unexpected "!" `` | runs, 1 |
+| `echo \| ! true \| cat` | refused | refused | refused | refused | runs, 1 |
+| `! true \| ! true` | refused | refused | refused | refused | runs, 0 |
+| `echo \|` newline `! true` | refused | refused | refused | refused | runs, 1 |
+| `eval "echo \| ! true"` | refused, 1 | refused, 2 | refused | refused | runs, 1 |
+
+Four of the five refuse at the `!`. ksh93 alone takes it and toggles the
+**whole pipeline's** negation, so two of them cancel. This implementation
+refuses in every dialect, ksh included. ksh93's reading is parked (#5272)
+rather than modeled, since our ksh ran the `!` as a command named `!` and
+so matched no shell either way (#5256).
+
+Neighbors that agree everywhere and stay as they were: a quoted `"!"` and
+a glued `!true` are command names; `echo | (! true)` and `echo | { !
+true; }` begin a pipeline of their own inside the group; and where `|&`
+is ksh93's coprocess operator rather than a bar, `echo |& ! true` is a
+new pipeline and answers 1.
+
 ## `time` prefixes a pipeline
 
 `time` is a reserved word, not a command. It times a **whole pipeline**

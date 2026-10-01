@@ -2351,6 +2351,28 @@ func (p *Parser) parsePipeline() Expr {
 	// other half and not only as input that ended.
 	depth := len(p.open)
 	for {
+		if len(pl.Cmds) > 0 && p.atWord("!") {
+			// A `!` after a bar. The negation belongs to a whole pipeline and
+			// is written in front of it, so here it is a reserved word
+			// standing where a command belongs — refused at the `!` itself.
+			// Measured 2026-09-30 from a script file: `echo | ! true` is
+			// ``parse error near `!'`` in zsh 5.9.2, ``syntax error near
+			// unexpected token `!'`` in bash 5.3.20 and `` "!" unexpected ``
+			// in dash, and so is every other place after a bar — before a
+			// third command, after a newline, inside `if` and `eval`, and
+			// `! true | ! true`. It ran here as a command named `!` (#5256).
+			//
+			// ksh93 alone takes it, toggling the whole pipeline's negation.
+			// That reading is parked rather than modeled (#5272), so this refuses in
+			// every dialect — the ksh one included, which ran the `!` as a
+			// command and matched no shell either way.
+			//
+			// Only the bare word: a quoted `"!"` and a glued `!true` are
+			// command names everywhere, and `echo | (! true)` and `echo | {
+			// ! true; }` begin a pipeline of their own inside the group.
+			p.failUnexpected("")
+			return pl
+		}
 		cmd := p.parseCommand()
 		if cmd == nil {
 			if len(pl.Cmds) == 0 {

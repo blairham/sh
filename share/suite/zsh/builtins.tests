@@ -252,3 +252,26 @@ zpty -L
 printf 'the listing with nothing to list -> %s\n' "$?"
 ( zpty -d nosuch_zz ) 2>&1 > /dev/null
 printf 'deleting a name it has not got -> %s\n' "$?"
+
+# Six more of zsh's builtins that no case mentioned (#5265), each the
+# smallest thing it can be asked. `chdir` is `cd` under its own name and says
+# so when it fails; `pushln` and `getln` are the buffer stack's writer and
+# reader; `ttyctl` keeps one bit a script can read back; `compcall` refuses
+# outside a completion function; `bye` is `exit`.
+chdir /
+printf 'chdir -> %s %s\n' "$?" "$PWD"
+chdir /nonexistent-directory-for-the-suite 2>&1
+printf 'chdir missing -> %s\n' "$?"
+pushln one two
+getln line
+printf 'getln -> %s [%s]\n' "$?" "$line"
+getln line
+printf 'getln empty -> %s\n' "$?"
+ttyctl
+ttyctl -f
+ttyctl
+ttyctl -u
+compcall 2>&1
+printf 'compcall -> %s\n' "$?"
+( bye 4 )
+printf 'bye -> %s\n' "$?"

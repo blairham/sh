@@ -1232,12 +1232,16 @@ func (r *Runner) walkRange(from, to, step int, hasStep, negStep bool, render fun
 		dir = -1
 	}
 	var out []string
+	// No bound on the length. There was one — ten thousand elements, "so a
+	// typo cannot hang the shell" — and no shell in the panel has it:
+	// measured 2026-10-01, `x=( {1..1000000} )` holds a million elements in
+	// zsh 5.9.2, bash 5.3.20 and ksh93u+ alike, and the bound left
+	// `{1..20000}` unexpanded here, as one literal word. That is what
+	// A05execution.ztst's pipe-hang chunk caught: `printf "%d\n" {1..20000}`
+	// printed `0` and a `bad math expression` where zsh prints the numbers
+	// (#5140).
 	for i := from; (dir > 0 && i <= to) || (dir < 0 && i >= to); i += dir * step {
 		out = append(out, render(i))
-		// A range is bounded so a typo cannot hang the shell.
-		if len(out) > 10000 {
-			return nil, false
-		}
 	}
 	if hasStep && negStep &&
 		r.askBrace(r.sem().BraceRangeNegativeStepReverses, "a negative step reversing the range") {

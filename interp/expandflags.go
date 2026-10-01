@@ -96,8 +96,17 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	// line loses. See Runner.expandingNestedInner, which carries the
 	// measurement — `${(j:,:)${(@)${a[@]}}}` keeps its hole where the same
 	// expansion written as a word does not.
+	//
+	// An IFS split keeps its empty fields unquoted too, which an `(s)` split
+	// does not. Measured 2026-10-01 on zsh 5.9.2 with `IFS=:` and
+	// `u='a::b:'`: `${(@)=u}`, `${(U)=u}` and `${(@)=u:-x}` are all
+	// `[a][][b][]`, the four fields the flag-free `${=u}` already gave here,
+	// while `${(s.:.)u}` and `${(@s.:.)u}` are `[a][b]` — so the empties are
+	// the IFS split's own, and an unquoted array's empty *elements* still go:
+	// `a=(x '' y); ${(@)a}` is `[x][y]` (#5275).
 	keepEmpty := (quoted || r.expandingNestedInner) &&
-		(r.flagKeepsFields(e) || splitFlagInGroup(e, sp))
+		(r.flagKeepsFields(e) || splitFlagInGroup(e, sp)) ||
+		!quoted && splitFlagInGroup(e, sp)
 	// And a quoted `(f)` or `(s)` keeps the empty field at each *edge* while
 	// still dropping the interior ones, which is the same rule `${=spec}`
 	// already follows for an IFS split and was measured separately for these

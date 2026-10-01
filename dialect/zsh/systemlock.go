@@ -57,13 +57,19 @@ import (
 // **not** survive into a forked child, which a per-description one would.
 // Both are what POSIX record locks do and neither is what flock(2) does.
 //
-// The consequence here is one this shell gets for free and would have had to
-// work for: a subshell is a cloned Runner in this process rather than a fork,
-// and a per-process lock cannot exclude itself, so `( zsystem flock -t 0 f )`
-// inside a shell already holding `f` is 0 in both shells for the same reason.
-// The half that does *not* carry over is written down in the spec: zsh's fork
-// gives a subshell its own copy of the lock table, and here it is a clone of
-// one array, so a subshell can unlock what its parent took.
+// The consequence here is one this shell has to reconstruct by hand: a
+// subshell is a cloned Runner in this process rather than a fork, and the
+// system's per-process lock cannot exclude this process from itself. This
+// used to say that `( zsystem flock -t 0 f )` inside a shell holding `f` is 0
+// in both shells, and it is not — measured 2026-10-01, zsh 5.9.2 refuses it,
+// because the fork is another process and the lock is not inherited. So which
+// body holds a file is kept beside the system's answer; see
+// systemlockowners.go and interp.Process.
+//
+// One case still does not carry over: `zsystem flock -u` in a subshell, on a
+// descriptor its parent locked. zsh's subshell unlocks only its own copy, so
+// a later subshell is still refused; here the clone shares the descriptor and
+// the later subshell is granted the lock. Measured both ways 2026-10-01.
 //
 // # The three statuses of a failed lock, and only one of them speaks
 //
@@ -356,7 +362,13 @@ func zsystemLock(r *interp.Runner, ctx context.Context, opts zsystemFlockOpts, n
 		_ = f.Close()
 		return 1
 	}
-	held, err := systemLockTake(int(f.Fd()), opts.read, !opts.timed, opts.timeout, opts.interval)
+	proc := r.Process()
+	held, err := systemLockTake(int(f.Fd()), opts.read, !opts.timed, opts.timeout, opts.interval,
+		func() bool { return systemLockClaim(f, proc, opts.read) },
+		// Somebody holds it and this is going to wait, so a background job
+		// running this has started as far as it will before the wait ends.
+		// See interp.Runner.SettleBeforeAWait.
+		r.SettleBeforeAWait)
 	if !held {
 		_ = f.Close()
 		if opts.timed && opts.timeout > 0 {

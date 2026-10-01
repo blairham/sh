@@ -124,6 +124,10 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// the one lifetime of the five that is not the body's own run. See
 	// Runner.anchorForkedBody for the other four.
 	sub.bodyAnchor = keep.anchor
+	// The process is the body's and not the family's: a job the body
+	// backgrounds is a process of its own, given one where it is started, so
+	// this one ends with the body's run. See Process.
+	exitBody := sub.forkProcess()
 
 	// And where its *output* goes, for the dialect that does not wait for the
 	// body: held rather than written straight through. See
@@ -176,6 +180,8 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 			sub.diagf("%v\n", err)
 		}
 	}, func() {
+		// The body's process has ended, however the goroutine did.
+		exitBody()
 		// A fork of this shell has ended, whether or not it was given a job to
 		// be named by: bash forks for a process substitution's body and reaps
 		// it like any other child. Measured 2026-09-23, `trap 'echo C' CHLD;

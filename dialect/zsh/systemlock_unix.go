@@ -50,34 +50,37 @@ func systemLockOpen(path string, reading bool) (*os.File, error) {
 // The error is returned alongside the verdict rather than folded into it,
 // because the caller says two different things about a failure depending on
 // whether it waited: see zsystemLock.
-func systemLockTake(fd int, reading, block bool, wait, interval time.Duration) (bool, error) {
+func systemLockTake(fd int, reading, block bool, wait, interval time.Duration, claim func() bool, waiting func()) (bool, error) {
 	kind := int16(syscall.F_WRLCK)
 	if reading {
 		kind = syscall.F_RDLCK
 	}
 	lock := syscall.Flock_t{Type: kind, Whence: 0, Start: 0, Len: 0}
-	if block {
-		for {
-			err := syscall.FcntlFlock(uintptr(fd), syscall.F_SETLKW, &lock)
-			if errors.Is(err, syscall.EINTR) {
-				// A signal arrived while waiting. The request is unchanged,
-				// so it is made again — the alternative is a lock builtin
-				// that fails whenever anything at all happens to the shell.
-				continue
-			}
-			return err == nil, err
-		}
-	}
 	if interval <= 0 {
 		interval = time.Millisecond
 	}
 	deadline := time.Now().Add(wait)
+	// The first ask never blocks, even for a wait with no end: whether this
+	// is going to wait at all is something the caller is told before it
+	// does. See waiting's caller.
+	cmd, waited := syscall.F_SETLK, false
 	for {
-		err := syscall.FcntlFlock(uintptr(fd), syscall.F_SETLK, &lock)
+		err := syscall.FcntlFlock(uintptr(fd), cmd, &lock)
 		switch {
 		case err == nil:
-			return true, nil
+			if claim() {
+				return true, nil
+			}
+			// The system said yes because the holder is this process: a
+			// body of this shell that a real shell would have forked holds
+			// it. Answered the way the system answers a holder elsewhere —
+			// a refusal for an ask, and another try for a wait. See
+			// interp.Process.
+			err = syscall.EAGAIN
 		case errors.Is(err, syscall.EINTR):
+			// A signal arrived while waiting. The request is unchanged, so
+			// it is made again — the alternative is a lock builtin that
+			// fails whenever anything at all happens to the shell.
 			continue
 		case !errors.Is(err, syscall.EAGAIN) && !errors.Is(err, syscall.EACCES):
 			// Not "somebody else has it" — a descriptor open the wrong way
@@ -86,8 +89,20 @@ func systemLockTake(fd int, reading, block bool, wait, interval time.Duration) (
 			return false, err
 		}
 		left := time.Until(deadline)
-		if left <= 0 {
+		if !block && left <= 0 {
 			return false, err
+		}
+		if !waited {
+			waited = true
+			waiting()
+		}
+		if block {
+			// Somebody holds it, so from here the system's own blocking
+			// form does the waiting — which returns at once for a holder
+			// in this process, and that holder is waited out by the poll.
+			cmd = syscall.F_SETLKW
+			time.Sleep(interval)
+			continue
 		}
 		time.Sleep(min(interval, left))
 	}

@@ -250,15 +250,21 @@ func (r *Runner) anchoredGroup() (int, bool) {
 // the body ends. Overwrites whatever the clone inherited from the body around
 // it, which is what a nested body wants: a real shell forks again there.
 func (c *Runner) anchorForkedBody() func() {
+	// The process itself is always given, anchor or not: what it answers —
+	// whose locks these are — needs no placeholder child. See Process.
+	exit := c.forkProcess()
 	a := newProcAnchor(c.ProcessAnchor)
 	if a == nil {
 		// No placeholder to lead a group with, so there is nothing to
 		// overwrite and nothing to release. The inherited field is nil for
 		// the same reason: the program is the Runner's and the clone has the
 		// same one.
-		return func() {}
+		return exit
 	}
 	a.outer = c.bodyAnchor
 	c.bodyAnchor = a
-	return a.stop
+	return func() {
+		a.stop()
+		exit()
+	}
 }

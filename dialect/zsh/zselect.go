@@ -154,6 +154,12 @@ func zselectWait(r *interp.Runner, opts *zselectOpts, wait *time.Duration) ([3][
 			shellOf[sys] = fd
 		}
 	}
+	if wait == nil || *wait > 0 {
+		// About to wait, so a background job running this has started as
+		// far as it will before the wait ends. See
+		// interp.Runner.SettleBeforeAWait.
+		r.SettleBeforeAWait()
+	}
 	read, write, except, err := fdset.Ready(asked[0], asked[1], asked[2], wait)
 	if err != nil {
 		return asked, 1

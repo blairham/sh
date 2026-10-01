@@ -68,6 +68,9 @@ var zshGatedBuiltins = map[string][]string{
 	"zsh/zselect": {"zselect"},
 	"zsh/stat":    {"zstat"},
 	"zsh/zpty":    {"zpty"},
+	// Measured with the rest of #5265: `whence -w zsocket` is `none` under
+	// `-f` until `zmodload zsh/net/socket`, and `builtin` after it.
+	"zsh/net/socket": {"zsocket"},
 	"zsh/files": {
 		"zf_chgrp", "zf_chmod", "zf_chown", "zf_ln", "zf_mkdir",
 		"zf_mv", "zf_rm", "zf_rmdir", "zf_sync",

@@ -302,22 +302,20 @@ func TestBothParametersAreReadonlyAndTheirValuesStayOutOfAListing(t *testing.T) 
 	}
 }
 
-// The modules load, and one of the two builtins they name is still missing
-// and still refuses where it is called.
+// The modules load, and both builtins they name answer.
 //
-// That is the module rule in zmodload.go rather than an inconsistency: a
-// missing builtin refuses by name on the line that ran it, so it never holds a
-// module shut, and a script told `zsh/termcap` loaded finds out about `echotc`
-// where it calls `echotc`. `echoti` is no longer on that side of the line —
-// see echoti.go and #2142 — so the row it used to occupy here is now the
-// answer rather than the refusal.
+// `echotc` was the one still missing, and it refused by name on the line that
+// ran it — the module rule in zmodload.go, which never holds a module shut
+// over a missing builtin. It is there now (#5265), so its row is an answer
+// too: the fixture has no `ti`, and measured on zsh 5.9.2 a code the
+// description lacks is `no such capability` at 1.
 func TestTheModulesLoadAndTheRemainingBuiltinStillRefuses(t *testing.T) {
 	out, st := runZshTerminfo(t, `zmodload zsh/terminfo; print -r -- "ti=$?"
 zmodload zsh/termcap; print -r -- "tc=$?"
 zmodload -e zsh/terminfo zsh/termcap; print -r -- "both=$?"
 echoti cuu1 >/dev/null 2>&1; print -r -- "echoti=$?"
 echotc ti 2>&1; print -r -- "echotc=$?"`)
-	want := "ti=0\ntc=0\nboth=0\nechoti=0\nzsh:5: command not found: echotc\necho" + "tc=127\n"
+	want := "ti=0\ntc=0\nboth=0\nechoti=0\nzsh:echotc:5: no such capability: ti\necho" + "tc=1\n"
 	if out != want || st != 0 {
 		t.Errorf("loading the two modules = %q (status %d), want %q", out, st, want)
 	}

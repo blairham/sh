@@ -2127,6 +2127,9 @@ type Runner struct {
 	// flagKeepsBare says those bare words are kept unquoted, which a nested
 	// `=` split's are. See Runner.nestedElementsAreBare.
 	flagKeepsBare bool
+	// builtinRenamedFrom is the builtin a RunBuiltinAs is running under
+	// another name, whose name its messages open with.
+	builtinRenamedFrom string
 	// terminalCapability is the reader SetTerminalCapabilityReader installs.
 	terminalCapability func(termcap string) string
 	// listNulls is, per field the unquoted list path last produced, whether
@@ -5358,6 +5361,13 @@ func (r *Runner) diagLineNamed(construct, format string, args ...any) string {
 		// location the rest of this function would build is written by that
 		// builtin nowhere.
 		return path.Base(r.invokedAs()) + ": " + strings.TrimPrefix(msg, name+": ")
+	}
+	if from := r.builtinRenamedFrom; from != "" && r.inBuiltin != "" {
+		// A builtin running under another's name: what it says about itself
+		// says the name it runs as. See Runner.RunBuiltinAs.
+		if rest, cut := strings.CutPrefix(msg, from+": "); cut {
+			msg = r.inBuiltin + ": " + rest
+		}
 	}
 	if r.speaker != "" && r.inBuiltin != "" && r.inBuiltin != r.speaker {
 		// A builtin the dialect's own function called. The complaint reaches

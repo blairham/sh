@@ -360,6 +360,22 @@ func (r *Runner) DiagnoseAsTheShellf(format string, args ...any) {
 	r.diagf(format, args...)
 }
 
+// RunBuiltinAs runs a builtin under another builtin's name, for a dialect
+// whose builtin is another one spelled differently. name is what the running
+// builtin is called while it runs — the name its complaints are located under
+// — and from, where it is not empty, is the builtin whose own name opens the
+// messages it writes, which are rewritten to open with name instead. Measured
+// on zsh 5.9.2: `history` is `fc -l` and complains as `zsh:fc:1: no such
+// event: 1`, so it runs as "fc"; `chdir` is `cd` and complains as
+// `zsh:chdir:1: no such file or directory: /nope`, and as `f:chdir:1:` inside
+// a function f, so it runs as "chdir" from "cd".
+func (r *Runner) RunBuiltinAs(name, from string, b Builtin, ctx context.Context, args []string) int {
+	outerName, outerFrom := r.inBuiltin, r.builtinRenamedFrom
+	r.inBuiltin, r.builtinRenamedFrom = name, from
+	defer func() { r.inBuiltin, r.builtinRenamedFrom = outerName, outerFrom }()
+	return b(r, ctx, args)
+}
+
 // DiagnoseAsf is the third of the same three: a complaint from machinery the
 // builtin asked for that has a *name* of its own, which is neither the
 // builtin's nor the bare shell's.

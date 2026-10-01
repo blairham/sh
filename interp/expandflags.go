@@ -1949,7 +1949,7 @@ func (r *Runner) rangeModifiers(
 // Not reached, and measured to differ: the same holds in zsh for the
 // elements of a *nested* list — `"${(@q)${b[@]}}"` leaves an empty element
 // of `b` bare — but not for a nested scalar under `(@)`, and the nesting
-// hands this function strings with no way to tell the two apart.
+// hands this function strings with no way to tell the two apart (#5299).
 func bareEmptyMarks(words []string, marks []bool) []bool {
 	for _, w := range words {
 		marks = append(marks, w == "")

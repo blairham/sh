@@ -256,25 +256,30 @@ func PromptStyle() interp.PromptStyle {
 		// follows it: `true &&` inside a `then` draws `then cmdand`. A
 		// loop's `do` is drawn as nothing at all, and the loop stays.
 		OpenWords: map[string]interp.OpenWord{
-			"for":      {Text: "for"},
-			"while":    {Text: "while"},
-			"until":    {Text: "until"},
-			"select":   {Text: "select"},
-			"case":     {Text: "case"},
-			"if":       {Text: "if"},
-			"then":     {Text: "then", Replaces: true},
-			"else":     {Text: "else", Replaces: true},
-			"elif":     {Text: "elif", Replaces: true},
-			"{":        {Text: "cursh"},
-			"function": {Text: "function"},
-			"(":        {Text: "subsh"},
-			"$(":       {Text: "cmdsubst"},
-			"`":        {Text: "bquote"},
-			"${":       {Text: "braceparam"},
-			"<<":       {Text: "heredoc"},
-			"'":        {Text: "quote"},
-			`"`:        {Text: "dquote"},
-			"|":        {Text: "pipe"},
+			"for":    {Text: "for"},
+			"while":  {Text: "while"},
+			"until":  {Text: "until"},
+			"select": {Text: "select"},
+			"case":   {Text: "case"},
+			"if":     {Text: "if"},
+			"then":   {Text: "then", Replaces: true},
+			"else":   {Text: "else", Replaces: true},
+			"elif":   {Text: "elif", Replaces: true},
+			// Two words drawn only while a command runs, never by a
+			// continuation prompt: a running `elif`'s body, and `repeat`.
+			// See interp/openruntime.go.
+			"elif-then": {Text: "elif-then", Replaces: true},
+			"repeat":    {Text: "repeat"},
+			"{":         {Text: "cursh"},
+			"function":  {Text: "function"},
+			"(":         {Text: "subsh"},
+			"$(":        {Text: "cmdsubst"},
+			"`":         {Text: "bquote"},
+			"${":        {Text: "braceparam"},
+			"<<":        {Text: "heredoc"},
+			"'":         {Text: "quote"},
+			`"`:         {Text: "dquote"},
+			"|":         {Text: "pipe"},
 			// The pipe that carries standard error has a name of its own
 			// here, which is the one place the two spellings of a bar are
 			// distinguishable to the person typing: `echo b |&` then a

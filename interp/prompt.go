@@ -1964,8 +1964,10 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		}
 		return itoa(line), true
 	case FieldOpenState:
-		// Nothing is open: a script that reached an expansion has parsed.
-		return "", true
+		// Nothing is open to the parser — a script that reached an expansion
+		// has parsed — so what is drawn is what the running command is
+		// inside. See openruntime.go.
+		return r.openRuntimeText(st.OpenWords), true
 	case FieldVersion:
 		return st.Version, st.Version != ""
 	case FieldVersionFull:

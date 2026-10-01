@@ -457,6 +457,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// Each element is its own job component, so the copy running it
 		// names it rather than inheriting whatever the shell last ran.
 		sub.killed = p.Cmds[i]
+		// Every element but the first is drawn as inside the pipe. See
+		// openruntime.go.
+		if i > 0 {
+			sub.openRun = r.openRunWith("|")
+		}
 		// And the element fires no DEBUG trap of its own where the pipeline
 		// has already fired for it, which is the half of that rule a dialect
 		// carrying the trap into a subshell would otherwise double.
@@ -660,7 +665,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			r.elementFired = fired
 			start := time.Now()
 			serialBefore := r.stmtSerial
+			popOpen := r.openRuntime("|")
 			errs[i] = r.command(ctx, p.Cmds[i])
+			popOpen()
 			hereBodyRan = r.stmtSerial != serialBefore
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)

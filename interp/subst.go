@@ -147,6 +147,8 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 
 	var out bytes.Buffer
 	sub := r.clone()
+	// The body is drawn as inside the substitution. See openruntime.go.
+	sub.openRun = r.openRunWith("$(")
 	// A command substitution is a boundary for a writing body's output where
 	// a subshell is not: the value is read the moment this returns, so a body
 	// still writing into it has to be joined first. See Runner.collectBodies

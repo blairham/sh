@@ -106,7 +106,11 @@ func TestPrintPAndThePercentFlagAgree(t *testing.T) {
 		`%B%U%S%b%u%s%E`,
 		// The fields the interpreter holds.
 		`%%`, `%n`, `%m`, `%M`, `%~`, `%d`, `%/`, `%c`, `%C`, `%#`,
-		`%?`, `%j`, `%_`, `%{X%}`, `%x`, `%N`,
+		`%?`, `%j`, `%{X%}`, `%x`, `%N`,
+		// `%_` has left this list: it draws what the running command is
+		// inside, and the `print -P` spelling here runs inside a `$( … )`
+		// where the flag spelling does not — measured, zsh 5.9.2 answers
+		// `[cmdsubst][]` to exactly this probe. See openruntime_test.go.
 		// The clock, whose two readers have two clocks and one formatter —
 		// asked as the *shape* of the answer rather than the moment, since a
 		// second between the two calls would otherwise fail the test.

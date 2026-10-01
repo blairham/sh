@@ -149,6 +149,7 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 			r.frames[n-1].FuncLine = saved.FuncLine
 		}()
 	}
+	defer r.openRuntimeFresh(fn.Body)()
 	return true, r.command(ctx, fn.Body)
 }
 

@@ -46,6 +46,9 @@ var sharedStacks = map[string]string{
 	"RlimitOrder":     "the order this kernel numbers its limits in, handed in by the front end at setup and never appended to — a fact about the machine rather than anything a script can move",
 	"substLevelsOut":  "rebuilt with append([]substLevel{}, …) every time a level opens, so a write never lands in an array anyone else holds",
 	"carriedHeredocs": "the running file's own list, replaced wholesale by RunPart and never appended to — a subshell reads the same file's list, which is what it should see",
+	"openRun": "never appended to in place: openRuntime and openRunWith clip before " +
+		"they append, so a subshell sharing the array reads its parent's view and writes " +
+		"one of its own",
 	"dialectCompgenAfter": "where each dialect action sits in `compgen -A`'s order, " +
 		"appended to by SetCompgenAction at setup and never again — the order is the " +
 		"dialect's declaration, on the same terms as optionLists",
@@ -76,6 +79,7 @@ func seedStacks(r *Runner) {
 	r.listNulls = append(make([]bool, 0, 4), false)
 	r.procSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
 	r.heldProcSubs = append(make([]procSubPipe, 0, 4), procSubPipe{})
+	r.openRun = append(make([]string, 0, 4), "if")
 	r.frames = append(make([]Frame, 0, 4), Frame{})
 	r.evalContexts = append(make([]EvalContext, 0, 4), EvalContextEval)
 	r.callArgs = append(make([]callArgs, 0, 4), callArgs{})

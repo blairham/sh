@@ -220,6 +220,8 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 		// `if (( 1+ )); then :; fi` in the dialect that abandons over a math
 		// error ended the script at 0 where ksh93 ends it at 1, so the shell
 		// stopped and then said it had succeeded.
+		// What the field draws for each part — see openruntime.go.
+		defer r.openRuntime("if")()
 		if err := r.condList(ctx, c.Cond); err != nil {
 			return err
 		}
@@ -227,9 +229,11 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 			return nil
 		}
 		if r.status == 0 {
+			r.replaceOpenRuntime("then")
 			return r.runList(ctx, c.Then)
 		}
 		for _, e := range c.Elifs {
+			r.replaceOpenRuntime("elif")
 			if err := r.condList(ctx, e.Cond); err != nil {
 				return err
 			}
@@ -237,10 +241,12 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 				return nil
 			}
 			if r.status == 0 {
+				r.replaceOpenRuntime("elif-then")
 				return r.runList(ctx, e.Then)
 			}
 		}
 		if c.HasElse {
+			r.replaceOpenRuntime("else")
 			return r.runList(ctx, c.Else)
 		}
 		// No branch ran, so the `if` itself succeeded.
@@ -614,6 +620,8 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			}
 		}
 		defer r.enteringLoop()()
+		// After the initializer, which the field draws outside the loop.
+		defer r.openRuntime("for")()
 		for {
 			r.debugPassOf(ctx, c, ArithCond)
 			// The condition is the one of the three parts a refusal ends the
@@ -2007,7 +2015,9 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// not at the loop. See Runner.constructLine.
 	outerConstruct := r.constructLine
 	r.constructLine = 0
+	restoreOpen := r.openRuntimeFresh(fn.Body)
 	err := r.command(ctx, fn.Body)
+	restoreOpen()
 	r.readersLine = outerReader
 	r.constructLine = outerConstruct
 	// Whatever arrived while the body's *last* command ran, handled before

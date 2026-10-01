@@ -245,6 +245,9 @@ func PromptStyle() interp.PromptStyle {
 		// draws `x`, and `print -P 'x%'` and `${(%):-x%}` are `x` too. bash
 		// and ksh93 draw the character, which is the zero value.
 		TrailingEscapeIsDropped: true,
+		// `%N<…<` and `%N>…>` cut what follows them; see
+		// interp/prompttruncate.go for the rows (#5150).
+		Truncation: true,
 		// zsh draws a percent sign where bash draws a dollar.
 		Privilege: "%",
 		// Measured with nothing assigned: real zsh prompts with the host and

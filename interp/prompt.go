@@ -356,6 +356,10 @@ type PromptStyle struct {
 	// silently one character wrong on every prompt that ends in the escape.
 	TrailingEscapeIsDropped bool
 
+	// Truncation is `%N<string<` and `%N>string>`: what follows is cut to N
+	// columns with string in place of the cut. See prompttruncate.go.
+	Truncation bool
+
 	// Unknown is what happens to an escape whose code is not in Codes,
 	// Sequences or Colors. The three shells that have a language give three
 	// different answers.
@@ -942,6 +946,7 @@ func expandPromptStyle(st PromptStyle, text string, field PromptResolver, quanti
 	}
 	w := promptWalk{st: st, field: field, quantity: quantity, width: unaskedWidth, visual: *visual}
 	w.walk([]rune(text))
+	w.endTruncation()
 	// Written back whether or not the walk was refused: what it drew before
 	// the refusal has reached the terminal, so the sequences it wrote are in
 	// effect either way.
@@ -1208,6 +1213,12 @@ type promptWalk struct {
 	// column: measured, `%{XY%}ab` has drawn two columns and not four.
 	hidden int
 
+	// trunc is the truncation segment open now, and zero the byte ranges of
+	// the buffer drawn inside `%{ … %}`, which a truncation counts as no
+	// width. See prompttruncate.go.
+	trunc *promptTruncation
+	zero  [][2]int
+
 	// visual is the terminal's visual state as the shell has set it — see
 	// [promptVisualState], which this walk is handed and hands back.
 	visual promptVisualState
@@ -1288,6 +1299,10 @@ func (w *promptWalk) walk(runes []rune) {
 		code := runes[i]
 		if w.st.Conditional != 0 && code == w.st.Conditional {
 			i = w.conditional(runes, i, num)
+			continue
+		}
+		if w.st.Truncation && (code == '<' || code == '>') {
+			i = w.truncationAt(runes, i, num)
 			continue
 		}
 		if w.st.Conditional != 0 && code == w.st.ConditionalEnd {
@@ -1469,6 +1484,9 @@ func (w *promptWalk) visualWritten(code rune, seq string) {
 
 // draw writes text the terminal shows, and counts what it costs.
 func (w *promptWalk) draw(v string) {
+	if w.hidden > 0 && v != "" {
+		w.zero = append(w.zero, [2]int{w.b.Len(), w.b.Len() + len(v)})
+	}
 	w.b.WriteString(v)
 	if w.st.Conditional == 0 || w.hidden > 0 {
 		// Nothing can ask about the column, or nothing drawn here reaches

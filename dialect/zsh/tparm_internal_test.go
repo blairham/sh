@@ -41,6 +41,7 @@ func TestTparmComputesTheMeasuredSequences(t *testing.T) {
 		{"arithmetic, right operand popped first", "%p1%p2%-%d", []int{9, 4}, "5"},
 		{"a formatted width", "%p1%:-3d|", []int{5}, "5  |"},
 		{"variables", "%p1%Pa%ga%ga%+%d", []int{6}, "12"},
+		{"a skipped branch holding a conditional of its own", "%?%p1%t%?%p2%tA%eB%;%eC%;", []int{0, 1}, "C"},
 	} {
 		if got := tparm(c.cap, c.params); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)

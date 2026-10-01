@@ -1315,7 +1315,7 @@ func (r *Runner) assocSubscriptKey(e *syntax.ParamExpr, elems []string) (string,
 		// already answered there, for the same two letters.
 		return "", false
 	}
-	return r.assocKey(e.Subscript()), true
+	return r.assocKeyRead(e), true
 }
 
 // substitutedNothing reports whether the operator substituted a written word

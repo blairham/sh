@@ -176,6 +176,19 @@ type ParamExpr struct {
 	// question — bash and ksh93 count from 0, zsh from 1 — so nothing here
 	// interprets it.
 	Index *Word
+	// EnclosedInDoubleQuotes records that the expansion was written inside
+	// double quotes, which the subscript word above cannot say: it is read
+	// again from the raw text between the brackets, so a `\"` in it is the
+	// same span either way.
+	//
+	// The difference is the outer quoting's, and one reading of a subscript
+	// sees it. Measured 2026-10-01 on zsh 5.9.2, a script file under `env -i`
+	// with both `a"b` and `a\"b` planted as keys: `"${h[a\"b]}"` looks up
+	// `a"b` and `${h[a\"b]}` looks up `a\"b`, while the search
+	// `"${a[(r)a\"b]}"` still finds `a\"b` — so the double quotes spend the
+	// escape for a key and not for a pattern. bash 5.3.20 and ksh93u+ look up
+	// `a"b` both ways (#5270).
+	EnclosedInDoubleQuotes bool
 	// BareIndexText is that same subscript read as *text*: the `[`, whatever
 	// stands between the brackets, and the `]`, lexed as a word in the
 	// expansion's own quoting. Nil unless the expansion was written without
@@ -766,7 +779,7 @@ const specialParams = "@*#?-$!0123456789"
 // kept on the node, because one refusal writes the `$` back only for it (see
 // ParamExpr.Bare).
 func (p *Parser) parseParamExp(src string, start Pos, q Quoting, bare bool) *ParamExpr {
-	e := &ParamExpr{Start: start, Stop: start, Bare: bare}
+	e := &ParamExpr{Start: start, Stop: start, Bare: bare, EnclosedInDoubleQuotes: q == DoubleQuoted}
 	s := src
 
 	if strings.HasPrefix(s, "(") {

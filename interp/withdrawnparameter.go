@@ -80,6 +80,46 @@ func (r *Runner) SetParameterWithdrawn(name string, withdrawn bool) {
 		r.restoreParameter(name)
 		return
 	}
+	// A producer a hidden local is standing over is not in the tables: the
+	// scope took it out and will put it back when it ends. Withdrawing
+	// without it captured nothing and left the scope to restore the module's
+	// parameter after the module had given it up — measured on zsh 5.9.2,
+	// `f(){ local EPOCHSECONDS=5; zmodload -F zsh/datetime -p:EPOCHSECONDS }`
+	// leaves the name unset once f returns, and `+p:EPOCHSECONDS` brings it
+	// back; here it stayed produced, and the `+p` then refused it as taken.
+	// The same happens to a first load inside such a function (#5158). So the
+	// withdrawal takes the producer from wherever it is.
+	for _, sc := range r.scopes {
+		r.resumeProducer(sc, name)
+	}
+	// And the freeze, for the same reason: a local standing over the name
+	// has set the readonly mark aside to put back when it ends, so the
+	// *global's* mark is the one the outermost such scope saved rather than
+	// the one in the table now. Measured on zsh 5.9.2 with `zsh/datetime`
+	// loaded, `g(){ local EPOCHSECONDS=x; zmodload -u zsh/datetime }; g;
+	// EPOCHSECONDS=(a b)` assigns the array at 0; here the scope froze the
+	// name again on its way out and the assignment was refused (#5158).
+	//
+	// The value-hiding mark is set aside the same way, with the other
+	// attributes a declaration displaces, and goes the same way: without
+	// it the name came back from the call as an ordinary array that still
+	// listed as `array-hideval`.
+	frozen, hidden := r.readonly[name], r.hidden[name]
+	for _, sc := range r.scopes {
+		if was, ok := sc.savedReadonly[name]; ok {
+			frozen = was
+			sc.savedReadonly[name] = false
+			break
+		}
+	}
+	for _, sc := range r.scopes {
+		if was, ok := sc.savedAttrs[name]; ok {
+			hidden = was.hidden
+			was.hidden = false
+			sc.savedAttrs[name] = was
+			break
+		}
+	}
 	w := withdrawnParameter{
 		scalar:      r.Dynamic[name],
 		array:       r.DynamicArrays[name],
@@ -88,8 +128,8 @@ func (r *Runner) SetParameterWithdrawn(name string, withdrawn bool) {
 		writeScalar: r.dynamicWriters[name],
 		writeArray:  r.dynamicArrayWriters[name],
 		writeAssoc:  r.dynamicAssocWriters[name],
-		readonly:    r.readonly[name],
-		hidden:      r.hidden[name],
+		readonly:    frozen,
+		hidden:      hidden,
 	}
 	w.absent, w.wasAbsent = r.absentParams[name]
 	w.elemsReason, w.hadElems = r.absentElements[name]

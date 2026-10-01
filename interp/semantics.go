@@ -551,6 +551,45 @@ type Semantics struct {
 	// expansion and is not an option — see interp/tildeflag.go, where the two
 	// meet.
 	GlobExpansionResults Answer
+	// JobSpecQuestionMarkIsLiteral is whether a `?` standing right after a
+	// word's leading `%` is a character rather than a pattern when the word
+	// is matched against the filesystem. Yes in zsh, which reads the spelling
+	// as the `%?string` job spec its manual gives for `kill`, `wait` and `fg`;
+	// No in the other five.
+	//
+	// Measured 2026-10-01 with `LC_ALL=C`, in a directory holding `%xb1`,
+	// `%?b2`, `%?`, `%a` and `b%a`:
+	//
+	//	word        zsh 5.9.2        bash 5.3.20, ksh93u+, dash, ash 1.37.0
+	//	%?          %?               %? %a
+	//	%?*         %? %?b2          %? %?b2 %a %xb1
+	//	%??         no matches       (the other `?` is still live)
+	//	'%'? \%?    %?               (globbed)
+	//	$v? (v=%)   %?               (globbed)
+	//	%?bar       %?bar            (no file: the word itself)
+	//	%%? b%?     globbed          globbed
+	//
+	// So it is the one `?` at the second byte of the field and nothing else:
+	// the `%` may have been quoted or have come out of an expansion, a second
+	// metacharacter still makes the word a pattern with that `?` as content,
+	// and a `?` anywhere further along is live. It is a fact about **pathname
+	// expansion** only: `case %x in %?)` and `[[ %x == %? ]]` match in zsh as
+	// they do everywhere.
+	//
+	// Asked only where a field on its way to the filesystem begins `%` and a
+	// live `?`, so no ordinary word consults it.
+	//
+	// unpinned zsh: no corpus row globs a word beginning `%?`; pinned by
+	// TestAJobSpecQuestionMarkIsNotAPattern.
+	//
+	// unpinned bash: the same reach, pinned by TestAJobSpecQuestionMarkGlobs.
+	//
+	// unpinned ksh: the same reach, pinned by TestAJobSpecQuestionMarkGlobs.
+	//
+	// unpinned dash: the same reach, pinned by TestAJobSpecQuestionMarkGlobs.
+	//
+	// unpinned ash: the same reach, pinned by TestAJobSpecQuestionMarkGlobs.
+	JobSpecQuestionMarkIsLiteral Answer
 	// ValueBackslashInAPattern is what a backslash that arrived in a **value**
 	// does to the character behind it when the field is then matched as a
 	// pattern. Three readings, and no two of them can stand in for each other.
@@ -29244,6 +29283,9 @@ func PosixSemantics() Semantics {
 		TrailingSeparatorEndsAField: No,
 		GlobExpansionResults:        Yes,
 		GlobNoMatchIsError:          No,
+		// XCU 2.13.1 gives `%` no meaning in a pattern, so a `?` after one is
+		// a pattern like any other; four of the five dialects agree.
+		JobSpecQuestionMarkIsLiteral: No,
 		// XCU 2.13.1 makes a `/` in a pattern a separator whatever stands
 		// around it and says nothing about the bracket one lands inside, so
 		// the bracket stays a bracket that matches nothing — which is what

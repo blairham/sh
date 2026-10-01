@@ -2252,6 +2252,9 @@ func Semantics() interp.Semantics {
 	// them, which is ksh93's answer and not bash's.
 	s.BareReadTakesTheLineWhole = interp.No
 	s.GlobExpansionResults = interp.No
+	// A word beginning `%?` is the `%?string` job spec, so that `?` is not a
+	// pattern. Measured 2026-10-01; see Semantics.JobSpecQuestionMarkIsLiteral.
+	s.JobSpecQuestionMarkIsLiteral = interp.Yes
 	s.GlobNoMatchIsError = interp.Yes
 	// No parameter of GLOBIGNORE's kind, and `.` and `..` are not in what a
 	// pattern may match: `echo .*` is `.dot` alone and `echo .*/` matches

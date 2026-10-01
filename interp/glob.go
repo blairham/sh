@@ -962,6 +962,11 @@ func (r *Runner) glob(field string) ([]string, bool) {
 	if !ok {
 		return nil, false
 	}
+	// A `%?` at the head of the field is a job spec rather than a pattern in
+	// one dialect, so its `?` is content from here on. Taken before anything
+	// asks whether the field is a pattern at all: `%?bar` is not one there,
+	// and names nothing. See Runner.jobSpecQuestionMark.
+	field = r.jobSpecQuestionMark(field)
 	// The qualifier list a pattern may carry at its end, read before
 	// anything else looks at the field — it decides what the *pattern* is.
 	// After `set -f`, because a word globbing is the condition for the group

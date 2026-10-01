@@ -7376,6 +7376,20 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	return r.unsupported(fmt.Sprintf("%T", c))
 }
 
+// onlyCommandsOwnOptions says whether the words behind a line's modifiers
+// leave it with nothing to run: none at all, or — behind `command` — only the
+// `-p` and `--` that `command` takes for itself. Measured on zsh 5.9.2,
+// `v=1 command -p` and `v=1 command --` leave `$_` and drop the value as `v=1
+// command` does, where `command -v` is a lookup of nothing and sets `$_`.
+func onlyCommandsOwnOptions(rest []string, stoppedAtCommand bool) bool {
+	for _, w := range rest {
+		if !stoppedAtCommand || (w != "-p" && w != "--") {
+			return false
+		}
+	}
+	return true
+}
+
 // unsupported refuses rather than silently doing nothing.
 func (r *Runner) unsupported(what string) error {
 	return fmt.Errorf("not implemented yet: %s", what)
@@ -7485,6 +7499,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// Neither is the same question as whether the command has any words left.
 	// See the refusal below.
 	sawModifier, sawRedirectionForm := false, false
+	// Whether the scan stopped at `command`, which is the one modifier whose
+	// no-command form throws the whole line away. See the no-redirection
+	// half of the commandless rule below.
+	stoppedAtCommand := false
 	// How many of the words in argv the scan itself put there. A command
 	// whose only words are modifiers has nothing to run; one with a word
 	// behind them has.
@@ -7664,7 +7682,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// What follows is a command name and not a modifier, which
 				// is measured: `command builtin >f` looks `builtin` up on
 				// the filesystem and reports 127.
-				scanning = false
+				scanning, stoppedAtCommand = false, true
 				break
 			}
 		}
@@ -7741,6 +7759,42 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// `v=1 command >f` keeps the value while `v=1 command` drops it, and
 		// `command` is not on any roster.
 		argv = nil
+	}
+	// **Without a redirection the same predicate is a third road**, the
+	// one the reference takes for a line of modifiers with nothing behind
+	// them (#5137). Measured 2026-10-01 on zsh 5.9.2, `: MARK; X; print
+	// "_=[$_] v=[$v]"` and the same under `set -x`:
+	//
+	//	v=1 builtin   _=[MARK] v=[1]  traced `v=1 `, as the bare assignment
+	//	v=1 exec      _=[MARK] v=[1]  … and noglob, -, nocorrect, builtin builtin
+	//	v=1 command   _=[MARK] v=[]   traced not at all, and the value is
+	//	                              never expanded: `v=$(echo side >&2)
+	//	                              command` writes nothing
+	//	builtin       _=[MARK]        and `command`, `exec`, `noglob builtin`
+	//	v=1           _=[] v=[1]      the control: a bare assignment empties it
+	//
+	// So nothing runs and `$_` is left where it was, which is the half
+	// neither existing road had. The prefix is the bare assignment's —
+	// kept, traced, its substitution's status the command's — except
+	// behind `command`, where the line is dropped whole and is 0: `false;
+	// v=$(exit 3) command` is 0 where `false; v=$(exit 3) builtin` is 3.
+	// `command -p` and `command --` are `command` alone; `command -v` runs.
+	//
+	// Not through the roster: the prefix persists here because nothing ran
+	// to take it back, whichever builtin the line names.
+	modifiersOnly := false
+	//
+	// `exec` is here as much as `builtin`: its no-command form belongs to a
+	// redirection, and there is none. And `nocorrect`, which the grammar
+	// took away before the scan could see it, is here through the words it
+	// left on the command.
+	if (sawModifier || len(c.Precommands) > 0) && len(c.Redirs) == 0 &&
+		len(argv) >= modifierWords && onlyCommandsOwnOptions(argv[modifierWords:], stoppedAtCommand) {
+		if stoppedAtCommand {
+			r.status = 0
+			return nil
+		}
+		argv, modifiersOnly = nil, true
 	}
 	savedDash := r.dashPrecommand
 	r.dashPrecommand = dash
@@ -7888,7 +7942,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	r.noteInputLevelArgument(argv)
 	if len(argv) > 0 {
 		r.lastArg, r.lastArgSet = argv[len(argv)-1], true
-	} else if len(c.Assigns) > 0 {
+	} else if len(c.Assigns) > 0 && !modifiersOnly {
 		r.lastArg, r.lastArgSet = "", true
 	}
 

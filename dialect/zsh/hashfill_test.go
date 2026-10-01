@@ -13,7 +13,8 @@ import "testing"
 // among them, the first directory winning a name both hold and the hand-hashed
 // entry kept; `-f` refusing a name; an assignment to PATH emptying the table,
 // and a read of `$commands` filling it again; and `hashexecutablesonly` set
-// before the fill leaving the two out.
+// before the fill leaving the two out; and a write to `$commands`, its first
+// touch, filling it as a read does.
 func TestTheCommandTableIsFilledByListingPath(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/files
 zf_mkdir -p p1/zdir p2
@@ -30,8 +31,9 @@ PATH=$PATH; show
 print -r -- ${(ko)commands[(I)z*]}
 show
 hash -r; setopt hashexecutablesonly
-print -r -- ${(ko)commands[(I)z*]}`)
-	if want := "zman=/bin/ls\n--\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nzman=/bin/ls\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzz=D/p1/zz\n--\nzsh:hash:11: too many arguments\nfv=1\n--\nzab zbar zbaz zdir zfoo znoexec zqux zz\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzz=D/p1/zz\n--\nzab zbar zbaz zfoo zqux zz\n"; out != want || st != 0 {
+print -r -- ${(ko)commands[(I)z*]}
+hash -r; unsetopt hashexecutablesonly; commands[zw]=/bin/ls; show`)
+	if want := "zman=/bin/ls\n--\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nzman=/bin/ls\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzz=D/p1/zz\n--\nzsh:hash:11: too many arguments\nfv=1\n--\nzab zbar zbaz zdir zfoo znoexec zqux zz\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzz=D/p1/zz\n--\nzab zbar zbaz zfoo zqux zz\nzab=D/p2/zab\nzbar=D/p1/zbar\nzbaz=D/p2/zbaz\nzdir=D/p1/zdir\nzfoo=D/p1/zfoo\nznoexec=D/p1/znoexec\nzqux=D/p1/zqux\nzw=/bin/ls\nzz=D/p1/zz\n--\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }

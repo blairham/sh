@@ -199,9 +199,10 @@ func TestStrftimeWrites(t *testing.T) {
 			`strftime "%F|%T|%D|%R|%r" 1788698096`,
 			local.Format("2006-01-02|15:04:05|01/02/06|15:04|03:04:05 PM") + "\n",
 		},
-		// A conversion nothing knows keeps its letter and loses the `%`,
-		// which is the C library's answer and measured here too.
-		{"an unknown conversion", `strftime "%Q|%%" 1788698096`, "Q|%\n"},
+		// A conversion nothing knows is written back whole, which is the GNU
+		// C library's answer and measured on the suite's image (#5160); the
+		// macOS library drops the `%` instead.
+		{"an unknown conversion", `strftime "%Q|%%" 1788698096`, "%Q|%\n"},
 		// `--` ends the letters, and the letters cluster: `-ns v` is `-n`
 		// and `-s v`, which is how a real script writes them.
 		{"the letters end at --", `strftime -- "%Y" 0`, time.Unix(0, 0).Format("2006") + "\n"},

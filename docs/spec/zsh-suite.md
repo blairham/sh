@@ -14,7 +14,7 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, ten files have become real results**, each verified
+**Since that commit, eleven files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
@@ -27,8 +27,9 @@ byte-identical in output and status under the reference's own driver:
     B07emulate       20 of 20          9f49a4f6c   #5257
     V04features      24 of 24          a91b224aa   #5158
     D01prompt        16 of 16          (#5150's closing PR)
+    V09datetime      16 of 16          (#5160's closing PR; in the suite's image, see below)
 
-So the count the burndown moves is **31** today. The roll-up figures above are left at the commit they were taken at
+So the count the burndown moves is **32** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -43,13 +44,26 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 31 today)
+## Real results (21 at `37355aae5`, 32 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
 `V12zparseopts`, `V13zformat`, `C05debug`, `W01history`, `A02alias`,
-`B07emulate`, `V04features` and `D01prompt` are the twenty-second through
-thirty-first and are listed here rather than below; every other entry is as
-measured at the heading's commit.
+`B07emulate`, `V04features`, `D01prompt` and `V09datetime` are the
+twenty-second through thirty-second and are listed here rather than below; every
+other entry is as measured at the heading's commit.
+
+`V09datetime` is a real result **in the suite's image and not on a Mac**, and
+that is a decision rather than a gap. Its `strftime` extensions are the C
+library's, the two builds of zsh 5.9.2 carry two libraries, and the file's own
+preparation runs its extension chunks only where the library has them — so the
+macOS reference skips two chunks that the Debian one runs. #5160 chose the GNU
+library, because the image is what CI grades the zsh column against. Measured
+2026-10-01 with `suitecheck -dialect zsh -only V09datetime.ztst -jobs 1` run
+inside `ghcr.io/blairham/sh/zsh@sha256:aab8255c…` (`zsh 5.9.2
+(aarch64-unknown-linux-gnu)`), graded binary named `zsh`: strict 1/1, line
+agreement 100%; the driver's own output byte-identical, 16 of 16 chunks. The
+same command against `/opt/homebrew/bin/zsh` reads 0/1 strict with 2 differing
+lines, and those are the two skipped chunks.
 
 - `A03quoting`
 - `A04redirect`

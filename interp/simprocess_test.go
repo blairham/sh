@@ -41,12 +41,12 @@ func TestAForkedBodyIsAProcessOfItsOwn(t *testing.T) {
 		return fmt.Sprint("p", n)
 	}
 	r.Register("whoami", func(r *interp.Runner, _ context.Context, args []string) int {
-		fmt.Fprintf(r.Stdout, "%s %s\n", args[0], name(r.Process()))
+		_, _ = fmt.Fprintf(r.Stdout, "%s %s\n", args[0], name(r.Process()))
 		return 0
 	})
 	r.Register("atexit", func(r *interp.Runner, _ context.Context, args []string) int {
 		w, said := r.Stdout, args[0]
-		r.Process().AtExit(func() { fmt.Fprintf(w, "exit %s\n", said) })
+		r.Process().AtExit(func() { _, _ = fmt.Fprintf(w, "exit %s\n", said) })
 		return 0
 	})
 	src := `whoami top

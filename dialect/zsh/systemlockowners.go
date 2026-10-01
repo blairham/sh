@@ -78,7 +78,7 @@ func systemLockClaim(f *os.File, proc *interp.Process, read bool) bool {
 	}
 	systemLockHolders.list = kept
 	for _, h := range kept {
-		if h.proc != proc && os.SameFile(h.info, info) && !(h.read && read) {
+		if h.proc != proc && os.SameFile(h.info, info) && (!h.read || !read) {
 			return false
 		}
 	}

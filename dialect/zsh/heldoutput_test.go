@@ -19,3 +19,14 @@ eval 'print d; /bin/sh -c "echo e >&2"; print f'`)
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }
+
+// **A child started inside a held builtin is handed the descriptor itself**,
+// not the hold: `> f` on an `eval` is a file to the command inside it, as it
+// is in zsh 5.9.2 (measured 2026-10-01, `notpipe`). Handed the hold, the
+// child would be given a pipe this shell copies from.
+func TestAChildInsideAHeldBuiltinWritesTheDescriptor(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `eval '/bin/sh -c "test -p /dev/stdout && echo pipe || echo notpipe"' > f; /bin/cat f`)
+	if want := "notpipe\n"; out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}

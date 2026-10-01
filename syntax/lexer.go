@@ -1736,8 +1736,10 @@ var operators = []Kind{
 // enabled reports whether the dialect has this operator at all.
 func (l *Lexer) enabled(k Kind) bool {
 	switch k {
-	case TokAmpGreat, TokAmpDGreat:
+	case TokAmpGreat:
 		return l.dialect.AmpersandRedirect
+	case TokAmpDGreat:
+		return l.dialect.AmpersandAppendRedirect
 	case TokSemiAmp:
 		return l.dialect.CaseFallthrough
 	case TokDSemiAmp:
@@ -1766,12 +1768,16 @@ func (l *Lexer) enabled(k Kind) bool {
 		return l.dialect.RenameOnSuccessRedirect
 	case TokLessHash, TokGreatHash:
 		return l.dialect.SeekRedirect
-	case TokAmpGreatClobber, TokAmpGreatBang, TokAmpDGreatClobber, TokAmpDGreatBang:
+	case TokAmpGreatClobber, TokAmpGreatBang:
 		// The marker on the both-streams operators needs those operators
 		// first: where `&>` is not read at all, `&>|` cannot be the marker on
 		// it, and the fallback that matters is `&` then `>|` rather than a
 		// four-byte operator nobody wrote.
 		return l.dialect.ClobberOverrideMarker && l.dialect.AmpersandRedirect
+	case TokAmpDGreatClobber, TokAmpDGreatBang:
+		// And on the appending one, which needs that one. See
+		// Dialect.AmpersandAppendRedirect.
+		return l.dialect.ClobberOverrideMarker && l.dialect.AmpersandAppendRedirect
 	case TokDGreatAmp:
 		return l.dialect.ReversedAmpersandRedirect
 	case TokGreatAmpClobber, TokGreatAmpBang, TokDGreatAmpClobber, TokDGreatAmpBang:

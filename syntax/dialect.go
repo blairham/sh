@@ -693,7 +693,18 @@ const (
 // syntax means different things, are not additive and do not belong here; they
 // are the interpreter's problem and get their own vector.
 type Dialect struct {
-	// AmpersandRedirect enables `&>` and `&>>`, which redirect both streams.
+	// AmpersandRedirect enables `&>`, which redirects both streams, and
+	// AmpersandAppendRedirect its appending `&>>`. Two flags because the
+	// panel takes them apart (#5135). Measured 2026-10-01, `( echo O; echo E
+	// >&2 ) OP out`:
+	//
+	//	              &>          &>>
+	//	bash 5.3.20   both lines  both lines
+	//	zsh 5.9.2     both lines  both lines
+	//	bash 3.2.57   both lines  syntax error near unexpected token `>'
+	//	BusyBox ash   both lines  syntax error: unexpected redirection, 2
+	//	  1.37.0
+	//	ksh93u+, dash  neither: `&` then a redirection, as below
 	//
 	// This is the one to be careful with. Where it is off, `echo hi &>b` is
 	// not an error: it is `echo hi &` — a background command — followed by
@@ -701,7 +712,8 @@ type Dialect struct {
 	// elsewhere, and nothing is reported. Accepting the union of dialects
 	// here would silently pick one meaning for text that legitimately has
 	// two.
-	AmpersandRedirect bool
+	AmpersandRedirect       bool
+	AmpersandAppendRedirect bool
 
 	// BareNegationReach says where a `!` written with no pipeline after it
 	// may stand, and how far the shell will look for one.
@@ -8104,12 +8116,15 @@ func Core() Dialect {
 		Select:            true,
 		ForBraceBody:      true,
 		AmpersandRedirect: true,
-		CaseFallthrough:   true,
-		DollarSingleQuote: true,
-		Herestring:        true,
-		ArithCommand:      true,
-		DoubleBracket:     true,
-		FunctionKeyword:   true,
+		// bash 3.2 has `&>` without it, which is no column this tree builds a
+		// dialect for; every dialect taking `&>` from here takes both.
+		AmpersandAppendRedirect: true,
+		CaseFallthrough:         true,
+		DollarSingleQuote:       true,
+		Herestring:              true,
+		ArithCommand:            true,
+		DoubleBracket:           true,
+		FunctionKeyword:         true,
 		// Every shell in the panel but dash times a pipeline with it. The
 		// `-p` flag is not here: zsh reads `-p` as a word of the pipeline,
 		// so the flag is bash's and ksh93's to add.

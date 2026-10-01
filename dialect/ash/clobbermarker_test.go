@@ -12,6 +12,7 @@ import (
 
 	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/internal/dialecttest"
+	"github.com/blairham/sh/syntax"
 )
 
 // TestNoClobberOverrideMarker pins the side of #1247 that is easy to lose,
@@ -108,12 +109,6 @@ func TestTheMarkerSpellingsAreFilenamesAndPipes(t *testing.T) {
 // `&>` is real evidence for AmpersandRedirect and is measured: BusyBox leaves
 // `out` holding both lines and writes nothing to the terminal. It is here so
 // that "turn the marker off" cannot be read as "turn both off".
-//
-// **`&>>` is still wrong and is deliberately not asserted here.** BusyBox
-// refuses it and we take it, because AmpersandRedirect gates `&>` and `&>>`
-// together and no value of that flag is right for this shell. Splitting it is
-// a change to a core axis and wants the panel re-measured for the split; see
-// the note on #5119.
 func TestBothStreamsToOneFileIsStillTaken(t *testing.T) {
 	dir := t.TempDir()
 	out, st, err := preset.Combined(t, dialecttest.Base{
@@ -128,6 +123,16 @@ func TestBothStreamsToOneFileIsStillTaken(t *testing.T) {
 	body, rerr := os.ReadFile(filepath.Join(dir, "out"))
 	if rerr != nil || string(body) != "O\nE\n" {
 		t.Errorf("out file %q (%v), want both lines in it", body, rerr)
+	}
+}
+
+// **And `&>>` is refused** (#5135). Measured 2026-10-01 on BusyBox 1.37.0:
+// `( echo O; echo E >&2 ) &>>out` is `syntax error: unexpected redirection`
+// at 2 and writes nothing, which is what the driver says for a refusal at
+// this token — the grammar is the half that was wrong.
+func TestAppendingBothStreamsIsRefused(t *testing.T) {
+	if _, err := syntax.Parse("( echo O; echo E >&2 ) &>>out\n", ash.Dialect()); err == nil {
+		t.Error("`&>>` parsed; BusyBox refuses it")
 	}
 }
 

@@ -350,6 +350,12 @@ func TestNoAmpersandRedirect(t *testing.T) {
 	if ksh.Dialect().AmpersandRedirect {
 		t.Error("ksh93u+ 2012 has no &>, and treating it as one operator silently redirects what should have been backgrounded")
 	}
+	// Nor `&>>`, which is its own flag since #5135: measured 2026-10-01,
+	// `( echo O; echo E >&2 ) &>> out` backgrounds the group and leaves
+	// `out` empty.
+	if ksh.Dialect().AmpersandAppendRedirect {
+		t.Error("ksh93u+ 2012 has no &>> either")
+	}
 }
 
 // TestUnterminatedNamesTheInnermostUnclosedKeyword is ksh93's view, and the

@@ -102,17 +102,13 @@ func Dialect() syntax.Dialect {
 	// BusyBox v1.36.1, `( echo O; echo E >&2 ) &>out` leaves `out` holding
 	// both lines and writes nothing to the terminal.
 	//
-	// **`&>>` is a syntax error here and this flag takes it anyway**, which
-	// is one row wrong in the other direction and is not the marker flag's
-	// to fix: this flag gates `&>` and `&>>` together and no value of it is
-	// right for ash. Measured in the same run, `( echo O; echo E >&2 ) &>>out`
-	// is `syntax error: unexpected redirection` at 2 there and writes `out`
-	// here. Splitting the flag is a change to a **core** axis and wants the
-	// panel re-measured for the split, since nothing has asked which columns
-	// take one and not the other; it is described in #5119 and **not filed**,
-	// deliberately, so that it is scoped rather than folded in. Residue on
-	// #4436.
 	d.AmpersandRedirect = true
+	// **And `&>>` is a syntax error**, which is why the two are separate
+	// flags (#5135). Measured 2026-10-01 on BusyBox 1.37.0: `( echo O; echo
+	// E >&2 ) &>>out` is `syntax error: unexpected redirection` at 2, and
+	// writes nothing. See syntax.Dialect.AmpersandAppendRedirect for the
+	// panel.
+	d.AmpersandAppendRedirect = false
 	// **Off, and the `>|` row is not evidence either way.** This used to be
 	// true, justified by `set -C; echo x >| f` overwriting — but `>|` is
 	// TokClobber and is core, so every dialect reads it and that row says

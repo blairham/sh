@@ -102,11 +102,13 @@ const autoloadStubPrefix = "builtin autoload -X"
 //   - `-r` and `-R` fix the *path* now rather than at the call. See
 //     autoloadFixPath for what the two of them are measured to do and how
 //     they differ from each other.
-//   - `-t`/`-T` (trace this function), `-d`/`-k`/`-m` (ksh-style and pattern
-//     forms), `-w`/`-W` (read a compiled `.zwc` file) are named as missing.
+//   - `-k` is the ksh style: the file is *run* and is expected to define the
+//     function itself. See autoloadKshStyle.
+//   - `-t`/`-T` (trace this function), `-d`/`-m` (pattern forms), `-w`/`-W`
+//     (read a compiled `.zwc` file) are named as missing.
 //     Each is a thing this shell does not do, and a builtin that took the
 //     letter and dropped it would read as one that did.
-const autoloadUnimplemented = "dkmtTwW"
+const autoloadUnimplemented = "dmtTwW"
 
 func registerAutoload(r *interp.Runner) {
 	r.Register("autoload", autoloadBuiltin)
@@ -226,6 +228,10 @@ type autoloadOpts struct {
 	// because the stub a declaration writes is the letters it was given and a
 	// script reads them back. See autoloadStubPrefix.
 	zshParse bool
+	// kshStyle is `-k`: the file is run and defines the function, rather
+	// than being its body. Recorded in the stub like the two above, which is
+	// how the call learns it. See autoloadKshStyle.
+	kshStyle bool
 	// now is `-X` or `+X`: resolve at once instead of at the call.
 	now bool
 	// plus records which sign `X` was written with, because they name
@@ -345,6 +351,8 @@ func autoloadFromDeclaration(r *interp.Runner, names []string, letters string) i
 			opts.keepAliases = true
 		case 'z':
 			opts.zshParse = true
+		case 'k':
+			opts.kshStyle = true
 		}
 		// `u` is the letter that got the line here and says nothing more; any
 		// other letter the declaration's own parser accepted is not part of
@@ -385,6 +393,9 @@ func autoloadStub(opts autoloadOpts, dir string) string {
 	}
 	if opts.zshParse {
 		body += "z"
+	}
+	if opts.kshStyle {
+		body += "k"
 	}
 	if dir != "" {
 		body += " " + autoloadStubWord(dir)
@@ -492,6 +503,8 @@ func autoloadOptions(r *interp.Runner, args []string) (opts autoloadOpts, rest [
 				opts.keepAliases = true
 			case letter == 'z':
 				opts.zshParse = true
+			case letter == 'k':
+				opts.kshStyle = true
 			case strings.IndexByte(autoloadUnimplemented, letter) >= 0:
 				r.Diagnosef("-%c is not implemented yet\n", letter)
 				return opts, nil, 1
@@ -538,10 +551,8 @@ func autoloadOptionLetters(args []string) string {
 //	autoload -kz kf     the same — the order does not matter
 //	autoload -kU kf     st=0, and the stub records `-XUk`
 //
-// This shell has the zsh style and not the ksh one, so `-k` alone is still
-// refused by name a few lines below — the honest answer, and the one that
-// lets a script tell a shell lacking the letter from a typo. What was wrong
-// was the *pair*: `-Uzk` met the by-name refusal, which is this
+// `-k` alone was refused by name here until the ksh style was built (#5140).
+// What was wrong before that was the *pair*: `-Uzk` met the by-name refusal, which is this
 // implementation confessing to something zsh itself rejects, and `add-zsh-hook`
 // hands its letters straight to `autoload`, so the status reaches a caller
 // (#2149).
@@ -588,6 +599,9 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 		// a pending stub any more. See autoloadRunResolved for what the
 		// answer decides.
 		stub := autoloadPending(r, name)
+		if opts.kshStyle {
+			return autoloadKshStyle(r, ctx, name, names, opts, stub)
+		}
 		if code := autoloadResolveIn(r, name, names, opts.keepAliases, stub); code != 0 {
 			return code
 		}
@@ -615,11 +629,128 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 			status = 1
 			continue
 		}
+		if opts.kshStyle {
+			if code := autoloadKshWrapper(r, name, opts.keepAliases); code != 0 {
+				status = code
+			}
+			continue
+		}
 		if code := autoloadResolve(r, name, opts.keepAliases); code != 0 {
 			status = code
 		}
 	}
 	return status
+}
+
+// autoloadKshStyle is the call of a name declared with `-k`: the file is run
+// in the call's frame, with the call's arguments, and is expected to define
+// the name; the definition it left is then run the same way.
+//
+// Measured 2026-10-01 on zsh 5.9.2 (`-f`, a script file under `env -i
+// PATH=/usr/bin:/bin LC_ALL=C`), with `fpath=(.)` and a file `kf` holding
+// `print "loading $*"`, a definition of `kf` printing `kf called $*`, and
+// `print "loaded"`:
+//
+//	autoload -Uk kf; functions kf   kf () { # undefined / builtin autoload -XUk }
+//	kf a b                          loading a b / loaded / kf called a b, 0
+//	kf c                            kf called c — the file is not run again
+//
+// and with a file `kb` that defines nothing, `print "body only $*"`:
+//
+//	kb x       body only x, then `kb: function not defined by file` located
+//	           at the call, 1 — and kb is still the stub afterwards
+//
+// A file holding a definition with a redirection on it is the case
+// A05execution.ztst asks about: `kr() { … } > kr.log` defines kr, and the
+// call then writes to the file.
+func autoloadKshStyle(r *interp.Runner, ctx context.Context, name string, dirs []string, opts autoloadOpts, stub bool) int {
+	path, text, ok := autoloadKshFile(r, name, dirs)
+	if !ok {
+		return autoloadFileNotFound(r, name, stub)
+	}
+	before, _ := r.FunctionText(name)
+	if !zshDefineFromText(r, name, text, path, opts.keepAliases) {
+		r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
+		return 1
+	}
+	installed, _ := r.FunctionText(name)
+	if _, err := autoloadKshRun(r, ctx, name, stub); err != nil {
+		r.Diagnosef("%s: %v\n", name, err)
+		return 1
+	}
+	if after, _ := r.FunctionText(name); after == installed {
+		// The file defined nothing of that name, so the stub goes back: a
+		// later call tries the file again, which is what zsh does.
+		_ = zshDefineFromText(r, name, autoloadStubBody(before), "", opts.keepAliases)
+		r.LocatedAtTheCall(func() {
+			r.DiagnoseAsTheShellf("%s: function not defined by file\n", name)
+		})
+		return 1
+	}
+	if _, err := autoloadKshRun(r, ctx, name, stub); err != nil {
+		r.Diagnosef("%s: %v\n", name, err)
+		return 1
+	}
+	return r.ExitStatus()
+}
+
+// autoloadKshRun runs a name's body in the call's own frame where the stub
+// opened one, and calls it with the replaced function's arguments otherwise
+// — the split autoloadRunResolved makes, for the reason it gives.
+func autoloadKshRun(r *interp.Runner, ctx context.Context, name string, stub bool) (bool, error) {
+	if stub {
+		return r.RunFunctionBodyInPlace(ctx, name)
+	}
+	args := append([]string(nil), r.Params...)
+	return r.CallFunction(ctx, name, args...)
+}
+
+// autoloadKshWrapper is `+X` on a name declared with `-k`: the function is
+// defined at once, as the file's text with a call of the name after it, and
+// nothing runs. Measured on zsh 5.9.2 with a file `kg` holding
+// `print "loading2 $*"` and a definition of `kg`:
+//
+//	autoload -Uk +X kg; functions kg   kg () { print "loading2 $*" / kg () { … } / kg "$@" }
+//	kg z                               loading2 z / kg called z
+//
+// and a file defining nothing still answers 0 and leaves a function — the
+// check `function not defined by file` belongs to the call, not to this.
+func autoloadKshWrapper(r *interp.Runner, name string, keepAliases bool) int {
+	path, text, ok := autoloadKshFile(r, name, nil)
+	if !ok {
+		return autoloadFileNotFound(r, name, false)
+	}
+	body := strings.TrimSuffix(text, "\n") + "\n" + name + ` "$@"`
+	if !zshDefineFromText(r, name, body, path, keepAliases) {
+		r.DiagnoseAsTheShellf("%s: bad function definition\n", name)
+		return 1
+	}
+	return 0
+}
+
+// autoloadKshFile finds a ksh-style name's file the way the zsh style finds
+// one — the `-X` directory where the stub carries one, `$fpath` otherwise.
+func autoloadKshFile(r *interp.Runner, name string, dirs []string) (path, text string, ok bool) {
+	if len(dirs) == 1 {
+		path = filepath.Join(dirs[0], name)
+		body, err := r.ReadFileGated(path)
+		if err != nil {
+			return "", "", false
+		}
+		return path, string(body), true
+	}
+	return autoloadFile(r, name)
+}
+
+// autoloadStubBody is a listed stub's body without its braces, which is the
+// text that defines it again.
+func autoloadStubBody(listed string) string {
+	for _, line := range strings.Split(listed, "\n") {
+		if t := strings.TrimSpace(line); strings.HasPrefix(t, autoloadStubPrefix) {
+			return t
+		}
+	}
+	return listed
 }
 
 // autoloadRunResolved is the second half of `-X`: run what the resolution

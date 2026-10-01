@@ -270,8 +270,9 @@ autoload`)
 
 // The letters. `-U` and `-z` are accepted and change nothing — an autoloaded
 // file is parsed with this shell's own grammar either way, and every real
-// script writes them. The nine zsh has and this shell does not are named as
-// missing, and the rest are `bad option`.
+// script writes them. The letters zsh has and this shell does not are named as
+// missing, and the rest are `bad option`. `-k` has left the missing ones: the
+// ksh style is built (#5140), and its rows are in autoloadksh_test.go.
 func TestAutoloadLetters(t *testing.T) {
 	out, _ := runZsh(t, t.TempDir(), `autoload -Uz ok1 2>&1
 print -r -- "1 Uz st=$?"
@@ -285,7 +286,7 @@ autoload -Q f 2>&1
 print -r -- "5 Q st=$?"`)
 	want := "1 Uz st=0\n" +
 		"zsh:autoload:3: -t is not implemented yet\n2 t st=1\n" +
-		"zsh:autoload:5: -k is not implemented yet\n3 k st=1\n" +
+		"3 k st=0\n" +
 		"zsh:autoload:7: -w is not implemented yet\n4 w st=1\n" +
 		"zsh:autoload:9: bad option: -Q\n5 Q st=1\n"
 	if out != want {
@@ -344,11 +345,14 @@ autoload -kz kf 2>&1
 print -r -- "4 kz st=$?"
 autoload -kU kf 2>&1
 print -r -- "5 kU st=$?"`)
-	want := "zsh:autoload:1: -k is not implemented yet\n1 k st=1\n" +
+	// The first and last rows are zsh's own answers, which this test's
+	// comment always recorded and which this shell gives now that `-k` is
+	// built rather than refused by name (#5140).
+	want := "1 k st=0\n" +
 		"zsh:autoload:3: invalid option(s)\n2 Uzk st=1\n" +
 		"zsh:autoload:5: invalid option(s)\n3 zk st=1\n" +
 		"zsh:autoload:7: invalid option(s)\n4 kz st=1\n" +
-		"zsh:autoload:9: -k is not implemented yet\n5 kU st=1\n"
+		"5 kU st=0\n"
 	if out != want {
 		t.Errorf("the two styles = %q, want %q", out, want)
 	}

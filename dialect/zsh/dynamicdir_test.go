@@ -39,6 +39,7 @@ func TestDynamicNamedDirectories(t *testing.T) {
 		{"nomatch refuses it and ends the script", "print -r -- ~[scuzzy]/rubbish\nprint after", "zsh:11: no directory expansion: ~[scuzzy]\n"},
 		{"only a word's leading tilde", "setopt nonomatch; print -r -- x~[barmy]", "x~[barmy]\n"},
 		{"an empty reply is no answer", "zsh_directory_name() { reply=(); return 0 }; setopt nonomatch; print -r -- ~[E]", "~[E]\n"},
+		{"nor is an empty string", "zsh_directory_name() { reply=(''); return 0 }; setopt nonomatch; print -r -- ~[E]/x", "~[E]/x\n"},
 		{"the array's functions after the first", "unfunction zsh_directory_name; zsh_directory_name_functions=(f2); f2() { [[ $1 = n && $2 = G ]] && { reply=(/gee); return 0 }; return 1 }; print -r -- ~[G]", "/gee\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

@@ -5708,6 +5708,43 @@ Two neighbors stay unanimous and must not move with it:
   subscript can afford — the evaluator ignores blanks anyway — is wrong
   here.
 
+#### Nine escapes are not "as written"
+
+"The text as written" does not hold for every backslash in a key. Measured
+2026-09-30 on zsh 5.9.2 (`-f`, a script file under `env -i
+PATH=/usr/bin:/bin LC_ALL=C`), with one key per printable punctuation
+character plus a letter, a digit and a space, each stored as `h[a\Cb]=z`
+and listed back with its length:
+
+| escaped character | zsh 5.9.2 stores | bash 5.3.20, ksh93u+ store |
+| --- | --- | --- |
+| `$` `` ` `` `\` `(` `)` `[` `]` `{` `}` | `aCb` | `aCb` |
+| every other one, `"` `'` `*` `x` space included | `a\Cb` | `aCb` |
+
+The read agrees row for row. With both `aCb` and `a\Cb` planted by an
+array literal, `${h[a\Cb]}` finds `aCb` for the nine and `a\Cb` for
+every other character, whether or not the expansion is in double quotes.
+The one exception is `"` inside a double-quoted word: there,
+`"${h[a\"b]}"` finds `a"b`, which bash and ksh93 also find. This
+implementation does not yet; that is #5270.
+
+So the nine are **not** a difference between the two readings: every
+column drops the backslash before them. The as-written reading had been
+keeping it on both the store and the read. A key stored and read through
+subscripts therefore round-tripped. A key that reached the table by any
+other route was never found: `h=('a$b' z)`, `alias 'a$b'=z` and `k='a$b';
+h[$k]=1` all hold `a$b`, and `${h[a\$b]}` looked up `a\$b` (#5227). What
+stays the as-written reading's own, and divides the panel, is the rest of
+the second row, together with single quotes not being quoting.
+
+A subscript *search* is a different road, because its operand is a
+pattern. There zsh drops the backslash before `$` and a backquote, as it
+does in a key (#5269), and **keeps** it before `{` and `}`, where a key
+drops it. So the two roads cannot share one rule. The backslashes before
+`\`, `(`, `)`, `[`, `]` and `*` are the matcher's.
+
+The two readings the panel splits on are parked in #5268.
+
 #### An empty key
 
 A key that comes out **empty** is a third answer again, and it is

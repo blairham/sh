@@ -12,7 +12,7 @@ import "testing"
 // what that shell wrote.
 func TestADoubleQuotedSubscriptSpendsTheEscapedQuote(t *testing.T) {
 	dir := t.TempDir()
-	const plant = "typeset -A h; h=('a\"b' bare 'a\\\"b' kept 'a$b' D)\na=('a\"b' 'a\\\"b')\n"
+	const plant = "typeset -A h; h=('a\"b' bare 'a\\\"b' kept 'a$b' D 'axb' X 'a\\xb' KX)\na=('a\"b' 'a\\\"b')\n"
 	for _, c := range []struct{ name, src, want string }{
 		{"in double quotes", `print -rn -- "${h[a\"b]}"`, "bare"},
 		{"in an assignment's double quotes", `x="${h[a\"b]}"; print -rn -- "$x"`, "bare"},
@@ -22,6 +22,7 @@ func TestADoubleQuotedSubscriptSpendsTheEscapedQuote(t *testing.T) {
 		{"unquoted", `print -rn -- ${h[a\"b]}`, "kept"},
 		{"a search in double quotes", `print -rn -- "${a[(r)a\"b]}"`, `a\"b`},
 		{"a dollar in double quotes", `print -rn -- "${h[a\$b]}"`, "D"},
+		{"an ordinary character keeps it in double quotes", `print -rn -- "${h[a\xb]}"`, "KX"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if out, st := runZsh(t, dir, plant+c.src+"\n"); out != c.want || st != 0 {

@@ -1720,7 +1720,7 @@ func (r *Runner) waitNextJobs(args []string) ([]*Job, int) {
 				}
 				continue
 			}
-			r.diagf("%s\n", Wording(r.diag().WaitNoSuchJob, "wait: %[1]s: no such job", a))
+			r.waitReportsNoSuchJob(a)
 			return nil, orDefault(r.diag().WaitNoSuchJobStatus, 127)
 		}
 		pid, ok := atoi(a)
@@ -1845,8 +1845,19 @@ func (r *Runner) waitJobSpecNaming(spec string) (int, *Job) {
 		}
 		return 0, nil
 	}
-	r.diagf("%s\n", Wording(r.diag().WaitNoSuchJob, "wait: %[1]s: no such job", spec))
+	r.waitReportsNoSuchJob(spec)
 	return orDefault(r.diag().WaitNoSuchJobStatus, 127), nil
+}
+
+// waitReportsNoSuchJob is the one sentence both of `wait`'s routes write for a
+// spec that names nothing — worded by the spec's shape where the dialect does
+// that. See jobSpecMiss.
+func (r *Runner) waitReportsNoSuchJob(spec string) {
+	if line, ok := jobSpecMiss(*r.diag(), "wait", spec); ok {
+		r.diagf("%s\n", line)
+		return
+	}
+	r.diagf("%s\n", Wording(r.diag().WaitNoSuchJob, "wait: %[1]s: no such job", spec))
 }
 
 // waitBadJob is an operand that names neither a process nor a job.

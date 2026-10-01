@@ -6181,6 +6181,11 @@ func Diagnostics() interp.Diagnostics {
 		// The builtin's name rides the location, as ever.
 		WaitNoSuchJob: "wait: %[1]s: no such job",
 		KillNoSuchJob: "kill: %[1]s: no such job",
+		// A spec that names nothing is worded by its shape, on every job
+		// builtin alike; see Diagnostics.JobSpecNoCurrent for the rows.
+		JobSpecNoCurrent:  "%[1]s: no current job",
+		JobSpecNoPrevious: "%[1]s: no previous job",
+		JobSpecNotFound:   "%[1]s: job not found: %[2]s",
 		// The wording is the shared one; the number is not. Measured,
 		// `jobs %9` reports 127 — a command that is not there — which is the
 		// same number this shell's `wait` gives a job that is not there.

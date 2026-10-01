@@ -4366,6 +4366,26 @@ type Diagnostics struct {
 	// uses for the same question.
 	NoSuchJobStatus int
 
+	// JobSpecNoCurrent, JobSpecNoPrevious and JobSpecNotFound word a job spec
+	// that names nothing *by the shape of the spec*, in the dialect whose
+	// every job builtin does that. Empty — the other dialects — keeps the one
+	// sentence the builtin already has for every shape.
+	//
+	// Measured 2026-10-01 on zsh 5.9.2 (`-f`, a script file, no jobs), with
+	// `kill`, `disown`, `jobs` and `wait` alike:
+	//
+	//	%%  %+  %      <builtin>: no current job
+	//	%-             <builtin>: no previous job
+	//	%foo  %?bar    <builtin>: job not found: foo / ?bar
+	//	%1             <builtin>: %1: no such job — the number keeps it
+	//
+	// and bash 5.3.20 writes `<builtin>: %%: no such job` for every one. Two
+	// verbs each, the builtin and the spec without its `%`; the first two
+	// use only the first. The statuses are the builtin's own and do not move.
+	JobSpecNoCurrent  string
+	JobSpecNoPrevious string
+	JobSpecNotFound   string
+
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
 	PrintfUsageUnprefixed bool

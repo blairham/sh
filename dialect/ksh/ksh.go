@@ -539,6 +539,9 @@ func Dialect() syntax.Dialect {
 	// after constructs rather than after shells. A dialect built for the
 	// newer build sets this back to true; the panel measures the older one.
 	d.AmpersandRedirect = false
+	// And no `&>>` either: `( echo O; echo E >&2 ) &>> out` is a background
+	// job and an emptied `out` there, measured 2026-10-01 (#5135).
+	d.AmpersandAppendRedirect = false
 	// `>;` writes to a temporary file beside the target and renames it over
 	// the target only if the command succeeded. Measured 2026-09-14 on
 	// ksh93u+ 2012-08-01, where it is unique in the panel: `echo new >; f`

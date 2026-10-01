@@ -34,20 +34,21 @@ logout; print -r -- unreached`)
 	}
 }
 
-// **`echotc` is `echoti` by termcap code**, and asks for exactly the
-// parameters a string reads. Measured under `TERM=xterm` on zsh 5.9.2: `cm 3
-// 4` is `\e[4;5H`, a bare or short `cm` is `not enough arguments`, `md 3` is
-// `too many arguments`, `co` is 80, `am` is yes, `bw` no, an unknown code is
-// `no such capability`, and with no terminal at all `echotc md` is silent at 1.
+// **`getln` is `read -zr`**, so what was pushed comes back with its
+// backslashes.
 func TestGetlnKeepsABackslash(t *testing.T) {
-	// `getln` is `read -zr`, so what was pushed comes back with its
-	// backslashes: measured on zsh 5.9.2, `[a\b]` and `[c\]`.
+	// Measured on zsh 5.9.2: `[a\b]` and `[c\]`.
 	out, st := runZsh(t, t.TempDir(), `print -rz -- 'a\b'; getln x; print -r -- "[$x]"; print -rz -- 'c\'; getln y; print -r -- "[$y]"`)
 	if want := "[a\\b]\n[c\\]\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }
 
+// **`echotc` is `echoti` by termcap code**, and asks for exactly the
+// parameters a string reads. Measured under `TERM=xterm` on zsh 5.9.2: `cm 3
+// 4` is `\e[4;5H`, a bare or short `cm` is `not enough arguments`, `md 3` is
+// `too many arguments`, `co` is 80, `am` is yes, `bw` no, an unknown code is
+// `no such capability`, and with no terminal at all `echotc md` is silent at 1.
 func TestEchotcReadsTheTermcapNames(t *testing.T) {
 	out, st := runZsh(t, t.TempDir(), xtermLikeTerminal(t)+`echotc md; print " $?"
 echotc cm 3 4; print " $?"

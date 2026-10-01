@@ -414,6 +414,15 @@ func (r *Runner) subscriptMatcher(g *syntax.SubscriptFlags, prefix bool) func(st
 // subscript behind a flag group and wrong for the search in front of it, and
 // a word is the only shape that carries where a substitution is.
 func (r *Runner) searchOperand(w *syntax.Word) string {
+	return r.renderSubscript(w, func(string) bool { return true })
+}
+
+// renderSubscript is that rendering with a say over which escapes keep
+// their backslash: keepEscape is handed the escaped character and answers
+// whether the backslash stays in front of it. The search operand keeps every
+// one, because the matcher reads them; an associative key keeps only some —
+// see keyKeepsEscape.
+func (r *Runner) renderSubscript(w *syntax.Word, keepEscape func(string) bool) string {
 	if w == nil {
 		return ""
 	}
@@ -445,7 +454,10 @@ func (r *Runner) searchOperand(w *syntax.Word) string {
 		case syntax.BackslashQuoted:
 			// One character each, so this cannot use the run above: `\*\?`
 			// is two backslashes and not one.
-			b.WriteString(`\` + s.Value)
+			if keepEscape(s.Value) {
+				b.WriteString(`\`)
+			}
+			b.WriteString(s.Value)
 			continue
 		case syntax.DollarSingleQuoted:
 			b.WriteString("$'" + s.Value + "'")

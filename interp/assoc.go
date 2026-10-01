@@ -526,10 +526,14 @@ func (r *Runner) absentAssocElement(e *syntax.ParamExpr, key string) []string {
 // Asked only where the two readings differ, so a key with no quote or
 // backslash in it — which is nearly every key a script writes — never demands
 // a dialect for the question.
+//
+// "Exactly as written" stops short of nine escapes, and that part is not a
+// difference between the readings: see keyKeepsEscape. The search operand
+// keeps all of them, because a pattern reads them.
 func (r *Runner) assocKey(w *syntax.Word) string {
 	r.expandSubscriptTilde(w)
 	quoted := r.expandKeyQuoted(w)
-	asWritten := r.searchOperand(w)
+	asWritten := r.renderSubscript(w, keyKeepsEscape)
 	if quoted == asWritten {
 		return quoted
 	}
@@ -537,6 +541,32 @@ func (r *Runner) assocKey(w *syntax.Word) string {
 		return quoted
 	}
 	return asWritten
+}
+
+// keyKeepsEscape answers, for a key read as written, whether a backslash
+// stays in front of the character it escapes.
+//
+// It does not before nine of them — `$`, a backquote, `\`, `(`, `)`, `[`, `]`, `{`
+// and `}` — and does before every other. Measured 2026-09-30 on zsh 5.9.2
+// (`-f`, a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`), one key
+// per printable punctuation character plus a letter, a digit and a space,
+// each spelled `h[a\Cb]=z` and listed back with its length: those nine store
+// as the three characters `aCb` and every other one as the four characters
+// `a\Cb`. The read agrees row for row — with both `aCb` and `a\Cb` planted
+// by an array literal, `${h[a\Cb]}` finds the first for exactly those nine
+// and the second for the rest, quoted or not.
+//
+// The nine are not a choice between the two readings above. bash 5.3.20 and
+// ksh93u+ remove every backslash in a key, these nine included, so on these
+// the panel agrees and only the as-written reading had been keeping them —
+// on the way in and on the way out alike, which is why a key stored and read
+// in one shell round-tripped and a key stored by another route (`h=('a$b' z)`,
+// `alias 'a$b'=z`) was never found (#5227). What the panel does not agree on
+// is the rest: the backslash before `"` and before an ordinary character, and
+// whether single quotes are quoting at all, are the as-written reading's own
+// and stay where they are.
+func keyKeepsEscape(c string) bool {
+	return c == "" || !strings.Contains("$`\\()[]{}", c)
 }
 
 // expandSubscriptTilde is Semantics.SubscriptKeyExpandsALeadingTilde: the

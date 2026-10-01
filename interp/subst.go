@@ -281,7 +281,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// a pipe to a child, and reaps that child here. See Runner.childReaped.
 	r.childWaitedFor()
 	r.noticeFinishedJobs()
-	return strings.TrimRight(out.String(), "\n")
+	return r.substitutedValue(out.String())
 }
 
 // currentShellSubst runs a `${ … ;}` or `${| … ;}` body on this runner.
@@ -409,7 +409,7 @@ func (r *Runner) currentShellSubst(ctx context.Context, f *syntax.File, base int
 		return v
 	}
 	closeScope()
-	return strings.TrimRight(out.String(), "\n")
+	return r.substitutedValue(out.String())
 }
 
 // assignBookkeeping saves the fields an assignment with no command name reads

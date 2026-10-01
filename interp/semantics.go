@@ -2475,13 +2475,31 @@ type Semantics struct {
 	//	zsh 5.9.2            every NUL kept   every NUL kept
 	//
 	// So three answers, and ksh93's is two at once: it drops in `read` and
-	// cuts in a substitution, which is what NulCutInASubstitution says.
-	// `read`'s half is asked here; the substitution's is a later step of the
-	// same issue, as is bash's warning.
+	// cuts in a substitution, which is what NulCutInASubstitution says. Both
+	// halves are asked: `read` in Runner.readNulFilter, and every spelling
+	// that captures output — `$( … )`, backquotes, `$(<file)` and `${ … ;}` —
+	// in Runner.substitutedValue.
+	//
+	// **ksh93's cut is the field's, not the substitution's.** Measured on
+	// ksh93u+: `"x$(printf 'a\0b')y"` is `xa` — the `y` written after the
+	// substitution is gone as well — and `$(printf 'a\0b c')` unquoted is the
+	// two fields `a` and `c`, a blank after the NUL still making a field. So
+	// the byte is kept through splitting and each finished field is ended at
+	// it (Runner.cutAtNul): an argument, an assignment's value, a `[[ ]]`
+	// operand, a redirection target and a pattern operand all end there, and
+	// `${#v}` after `v=$(printf 'a\0b')` is 1. A here-document is a stream
+	// rather than a field, and ksh93 writes the byte into it as it is.
+	//
+	// **And the order is part of each answer.** Where the byte is dropped it
+	// goes before the trailing newlines do: `$(printf 'a\n\0')` is `a` in
+	// dash, bash and ash. Where it stays — kept, or held for the cut — it
+	// stops the newlines: the same line is `a` and a newline in ksh93, and
+	// `a`, a newline and the NUL in zsh.
 	//
 	// Asked only where a NUL actually arrives, and not where it is the
 	// delimiter: `read -d ''` ends the record at the NUL in bash and zsh,
-	// which is a reading of `-d` rather than of the byte.
+	// which is a reading of `-d` rather than of the byte. A substitution with
+	// no NUL in its output asks nothing.
 	//
 	// **Not modeled**, and measured:
 	//
@@ -2492,17 +2510,28 @@ type Semantics struct {
 	//     `a\0 b` is `ab` there and `a b` everywhere else, while `IFS=` keeps
 	//     the blank. That is the NUL acting as a field boundary, which is a
 	//     question about splitting rather than about the byte.
+	//   - An arithmetic expression holding a substituted NUL. ksh93 ends the
+	//     whole expression text there — `$(( $(printf '1\0 2') + 1 ))` is 1 —
+	//     and the expression scanner here uses the byte as its own mark, so
+	//     the cut is not taken there.
+	//   - bash's warning, `command substitution: ignored null byte in input`,
+	//     which is a diagnostic rather than a value and a step of its own.
 	//
-	// unpinned zsh: no corpus row puts a NUL in front of `read`; pinned by
-	// TestReadKeepsANul.
+	// unpinned zsh: no corpus row puts a NUL in front of `read` or in a
+	// substitution's output; pinned by TestReadKeepsANul and
+	// TestASubstitutionKeepsANul.
 	//
-	// unpinned bash: the same reach, pinned by TestReadDropsANul.
+	// unpinned bash: the same reach, pinned by TestReadDropsANul and
+	// TestASubstitutionDropsANul.
 	//
-	// unpinned ksh: the same reach, pinned by TestReadDropsANul.
+	// unpinned ksh: the same reach, pinned by TestReadDropsANul and
+	// TestASubstitutionCutsAtANul.
 	//
-	// unpinned dash: the same reach, pinned by TestReadDropsANul.
+	// unpinned dash: the same reach, pinned by TestReadDropsANul and
+	// TestASubstitutionDropsANul.
 	//
-	// unpinned ash: the same reach, pinned by TestReadDropsANul.
+	// unpinned ash: the same reach, pinned by TestReadDropsANul and
+	// TestASubstitutionDropsANul.
 	NulInAValue NulInAValuePolicy
 	// ReadArrayDefault is what the `-A` spelling of the array letter fills
 	// when the line names no parameter: zsh fills the array `reply`, and
@@ -32347,7 +32376,8 @@ const (
 	// `read` and in a substitution alike. dash, bash and BusyBox ash.
 	NulDropped
 	// NulCutInASubstitution drops the byte in `read` and, in a command
-	// substitution, ends the value at the first one. ksh93.
+	// substitution, holds it until the word is finished and then ends the
+	// field it landed in at the first one. ksh93.
 	NulCutInASubstitution
 	// NulKept keeps it as a byte of the value. zsh.
 	NulKept

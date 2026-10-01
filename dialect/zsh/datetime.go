@@ -26,8 +26,8 @@ import (
 // exist**. The three parameters are one clock read each, through
 // [interp.Runner.Now] — the hook `printf '%(fmt)T'` already reads, so a shell
 // whose embedder pins the clock pins these too. `strftime` is a formatter over
-// the same format language `printf '%(fmt)T'` writes, and it calls
-// [interp.Strftime] rather than carrying a second copy of it.
+// the POSIX date format with the C library's extensions on top — see
+// zshStrftime.
 //
 // So the module loads because everything it names is here, not because the
 // rule in zmodload.go forgave anything. That rule is what made it worth
@@ -273,7 +273,13 @@ func strftimeForward(r *interp.Runner, opts strftimeOpts, rest []string) int {
 		r.Diagnosef("%s\n", complaint)
 		return 1
 	}
-	out := zshStrftime(rest[0], t)
+	out, ok := zshStrftimeBounded(rest[0], t)
+	if !ok {
+		// Measured on the suite's image: `strftime -s v '%320d' 0` is this
+		// at status 1 and leaves v unset. See zshStrftimeBounded.
+		r.Diagnosef("bad/unsupported format: '%s'\n", rest[0])
+		return 1
+	}
 	if opts.assign {
 		r.SetVar(opts.scalar, out)
 		return 0
@@ -319,24 +325,28 @@ func strftimeReverse(r *interp.Runner, opts strftimeOpts, rest []string) int {
 	return 0
 }
 
-// zshStrftime is the format language `printf '%(fmt)T'` writes, plus the five
-// conversions this shell's builtin has beyond it.
+// zshStrftime is the format language of zsh's `strftime`, its `%D{…}` and
+// `zstat -F`: the conversions the shell writes itself, and the rest the way the
+// GNU C library writes them.
 //
-// The POSIX ones are not repeated here: each is handed to [interp.Strftime]
-// one conversion at a time, so a fix to `%V` reaches both spellings and
-// neither can drift from the other. Only the extras are answered here, and
-// they are the ones measured against zsh 5.9.2:
+// The shell's own are these, in the spellings strftimeOwn and
+// strftimeFraction read, measured against zsh 5.9.2:
 //
 //	%N   the nanoseconds, nine digits
 //	%.   the fraction, three digits, or `%<n>.` for n of them, rounded
 //	%f   the day of the month, unpadded — `6`, where `%d` is `06`
 //	%K   the hour of a 24-hour clock, unpadded
 //	%L   the hour of a 12-hour clock, unpadded
+//	%-y  the two-digit year, which the flag does not shorten
 //
-// A `%` at the very end of the format is written as itself, and a conversion
-// neither this nor [interp.Strftime] knows keeps its letter and loses the
-// `%` — measured, `%Q` is `Q` — which is the C library's answer rather than
-// this shell's.
+// Everything else is the C library's, and which library is a choice: the two
+// builds of zsh 5.9.2 this repository grades against carry two, and the one
+// emulated is the GNU library of the suite's Debian image (#5160) — see
+// strftimeglibc.go, which holds the rules and the measurements. That is
+// deliberately not [interp.Strftime], whose answers are POSIX's for `printf
+// '%(fmt)T'` and carry no flags at all.
+//
+// A `%` at the very end of the format is written as itself.
 func zshStrftime(format string, t time.Time) string {
 	var b strings.Builder
 	for i := 0; i < len(format); i++ {
@@ -344,35 +354,97 @@ func zshStrftime(format string, t time.Time) string {
 			b.WriteByte(format[i])
 			continue
 		}
-		// `%<digits>.` is the fraction with a width, and the digits belong to
-		// the conversion rather than being text before it.
-		if width, end, ok := strftimeFractionWidth(format, i+1); ok {
+		// The conversions the shell owns come first, and only in the
+		// spellings it reads: anything else is the C library's.
+		if width, end, ok := strftimeFraction(format, i+1); ok {
 			b.WriteString(fraction(t, width))
 			i = end
 			continue
 		}
-		if n, v, ok := strftimePadded(format, i+1, t); ok {
+		if v, end, ok := strftimeOwn(format, i+1, t); ok {
 			b.WriteString(v)
-			i = n
+			i = end
 			continue
 		}
-		i++
-		switch format[i] {
-		case 'N':
-			b.WriteString(pad9(t.Nanosecond()))
-		case '.':
-			b.WriteString(fraction(t, 3))
-		case 'f':
-			b.WriteString(strconv.Itoa(t.Day()))
-		case 'K':
-			b.WriteString(strconv.Itoa(t.Hour()))
-		case 'L':
-			b.WriteString(strconv.Itoa(twelveHour(t.Hour())))
-		default:
-			b.WriteString(interp.Strftime("%"+string(format[i]), t))
-		}
+		f, end := readGlibcSpec(format, i)
+		b.WriteString(glibcStrftime(format[i:end+1], f, t))
+		i = end
 	}
 	return b.String()
+}
+
+// zshStrftimeBounded is zshStrftime with the room the shell gives the result:
+// 64 bytes for each byte of the format, the terminating NUL among them. A
+// result that does not fit is refused rather than cut. Measured on the suite's
+// image, bisected: `%319d` writes its 319 digits and `%320d` is refused;
+// `x%382d` writes 383 and `x%383d` is refused; `ab%445d` writes 447 and
+// `ab%446d` is refused — and a width that fits because the format is longer
+// fits, so `%300d%300d` writes 600. An empty format writes nothing.
+//
+// **The prompt's `%D{…}` has a room of its own, and it is not modeled.**
+// Measured the same day: `%D{%159d}` draws 159 digits and `%D{%160d}` draws
+// nothing, while `%D{x%199d}` draws all 200 — so it is neither this bound nor
+// a fixed size, and the prompt keeps writing the whole result.
+func zshStrftimeBounded(format string, t time.Time) (string, bool) {
+	out := zshStrftime(format, t)
+	if format != "" && len(out) >= 64*len(format) {
+		return "", false
+	}
+	return out, true
+}
+
+// strftimeOwn is one of the four letters the shell writes itself — `%f`,
+// `%K`, `%L` and `%N` — written bare or behind a `-`, the only two spellings
+// it reads them in. Measured on the suite's image: `%-f` is `6` and `%5f`,
+// `%_f` and `%Ef` are the C library's, which writes them back as text.
+func strftimeOwn(format string, i int, t time.Time) (string, int, bool) {
+	stripped := format[i] == '-'
+	if stripped {
+		i++
+	}
+	if i >= len(format) {
+		return "", 0, false
+	}
+	switch format[i] {
+	case 'y':
+		// `%-y` only, and the two digits survive it: measured on the suite's
+		// image, `%-y` in 2001 is `01` where the C library's own `%-1y` is
+		// `1` and `%-g` is `1`. The shell reads the spelling and drops the
+		// flag, which is the one way the measurement makes sense.
+		if stripped {
+			return pad(((t.Year()%100)+100)%100, 2), i, true
+		}
+	case 'N':
+		return pad9(t.Nanosecond()), i, true
+	case 'f':
+		return strconv.Itoa(t.Day()), i, true
+	case 'K':
+		return strconv.Itoa(t.Hour()), i, true
+	case 'L':
+		return strconv.Itoa(twelveHour(t.Hour())), i, true
+	}
+	return "", 0, false
+}
+
+// strftimeFraction reads a `%.` conversion and its width, and reports false
+// for anything else. Measured on the suite's image: an optional `-`, then
+// either digits — the width, `%0.` writing nothing and `%12.` nine digits —
+// or one of `E`, `O`, `_`, `^` and `#`, which change nothing, then the `.`.
+// `%_1.` and `%1E.` are the C library's, which writes them back as text.
+func strftimeFraction(format string, i int) (width, end int, ok bool) {
+	if i < len(format) && format[i] == '-' {
+		i++
+	}
+	if i < len(format) && strings.IndexByte("EO_^#", format[i]) >= 0 {
+		if i+1 < len(format) && format[i+1] == '.' {
+			return 3, i + 1, true
+		}
+		return 0, 0, false
+	}
+	if i < len(format) && format[i] == '.' {
+		return 3, i, true
+	}
+	return strftimeFractionWidth(format, i)
 }
 
 // strftimeFractionWidth reads the digits of a `%<n>.` conversion, and reports
@@ -676,76 +748,4 @@ func isSpaceByte(c byte) bool {
 
 func isAlnumByte(c byte) bool {
 	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
-}
-
-// strftimePadded is a numeric conversion written with a padding flag — `-` for
-// none, `_` for spaces, `0` for zeros — and possibly the `O` modifier, for the
-// nine conversions this shell pads itself. It answers the index of the
-// conversion letter, the text, and whether the spelling was this at all.
-//
-// Measured 2026-10-01 at 1181100005 (2007-06-06 03:20:05 UTC) on two builds of
-// zsh 5.9.2 — `/opt/homebrew/bin/zsh` on macOS and the Debian build the suite's
-// image carries — and kept to the cells where the two agree:
-//
-//	%d %-d %_d %0d %Od %-Od      06 6 " 6" 06 06 6     and so for H I m S
-//	%e %-e %_e %0e %Oe %-Oe      " 6" 6 " 6" 06 " 6" 6  and so for k l
-//	%M %-M %_M                   20 20 20              nothing to strip
-//
-// What the two builds do *not* agree on is left as it was: a width (`%5d`),
-// `^` and `#`, the `E` modifier, and every flag on `y`, `Y`, `j`, `U`, `W`,
-// `V`, `C`, `g`, `G`, `u`, `w` and the zsh-only `f`, `K`, `L`, `N` — those
-// follow each build's C library, and the macOS one writes most of them as
-// text (#5160).
-func strftimePadded(format string, i int, t time.Time) (int, string, bool) {
-	if i >= len(format) {
-		return 0, "", false
-	}
-	flag := byte(0)
-	if strings.IndexByte("-_0", format[i]) >= 0 {
-		flag, i = format[i], i+1
-	}
-	modified := false
-	if i < len(format) && format[i] == 'O' {
-		modified, i = true, i+1
-	}
-	if (flag == 0 && !modified) || i >= len(format) {
-		return 0, "", false
-	}
-	var n int
-	pad := byte('0')
-	switch format[i] {
-	case 'd':
-		n = t.Day()
-	case 'e':
-		n, pad = t.Day(), ' '
-	case 'H':
-		n = t.Hour()
-	case 'I':
-		n = twelveHour(t.Hour())
-	case 'k':
-		n, pad = t.Hour(), ' '
-	case 'l':
-		n, pad = twelveHour(t.Hour()), ' '
-	case 'm':
-		n = int(t.Month())
-	case 'M':
-		n = t.Minute()
-	case 'S':
-		n = t.Second()
-	default:
-		return 0, "", false
-	}
-	switch flag {
-	case '-':
-		return i, strconv.Itoa(n), true
-	case '_':
-		pad = ' '
-	case '0':
-		pad = '0'
-	}
-	v := strconv.Itoa(n)
-	if len(v) < 2 {
-		v = string(pad) + v
-	}
-	return i, v, true
 }

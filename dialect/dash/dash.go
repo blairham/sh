@@ -591,6 +591,8 @@ func Semantics() interp.Semantics {
 	// 0.5.12, `read -e v` and `read -E v` are both `Illegal option` at 2
 	// (#4963).
 	s.ReadOptions = "rp:"
+	// Measured 2026-10-01: a NUL is dropped from what `read` and a substitution take in. See Semantics.NulInAValue.
+	s.NulInAValue = interp.NulDropped
 	// dash has the two POSIX letters and calls anything else illegal.
 	// unanswered CodePointPastSixBytesIsEncoded: the question comes after a
 	// `\u` has been read and there is no construct here that reads one.

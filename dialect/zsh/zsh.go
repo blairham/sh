@@ -2699,6 +2699,8 @@ func Semantics() interp.Semantics {
 	// takes one entry off the editor buffer stack, which `print -z` fills.
 	// See editorbuffer.go (#4966).
 	s.ReadOptions = "rsnpAd:t#u:k#qeEz"
+	// Measured 2026-10-01: every NUL a `read` or a substitution meets is kept as a byte of the value. See Semantics.NulInAValue.
+	s.NulInAValue = interp.NulKept
 	// And what the echo pair means, which is the half a letter in the
 	// accepted set does not say. Yes: measured 2026-09-28 under `-f`,
 	// `printf '  a   b   c  \n' | read -E x y` writes `a` and `b   c` and

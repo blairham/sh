@@ -2459,6 +2459,51 @@ type Semantics struct {
 	// timeout is a deadline and needs no answer. See ReadZeroTimeoutStyle
 	// for the measurements.
 	ReadZeroTimeout ReadZeroTimeoutStyle
+
+	// NulInAValue is what a NUL byte arriving from outside the shell does
+	// to the value it arrives in — through `read`, and through a command
+	// substitution. Blair's decision on #5233: one setting for both, with
+	// the answers the panel gives.
+	//
+	// Measured 2026-10-01 on `printf 'A=1\0B=2\0 c\0d\n'`, macOS arm64:
+	//
+	//	                     read -r v        v=$(cat file)
+	//	dash                 A=1B=2 cd        A=1B=2 cd
+	//	bash 5.3.20          A=1B=2 cd        A=1B=2 cd, and a warning
+	//	ksh93u+ 2012-08-01   A=1B=2 cd        A=1   — cut at the first NUL
+	//	BusyBox ash 1.37.0   A=1B=2 cd        A=1B=2 cd
+	//	zsh 5.9.2            every NUL kept   every NUL kept
+	//
+	// So three answers, and ksh93's is two at once: it drops in `read` and
+	// cuts in a substitution, which is what NulCutInASubstitution says.
+	// `read`'s half is asked here; the substitution's is a later step of the
+	// same issue, as is bash's warning.
+	//
+	// Asked only where a NUL actually arrives, and not where it is the
+	// delimiter: `read -d ''` ends the record at the NUL in bash and zsh,
+	// which is a reading of `-d` rather than of the byte.
+	//
+	// **Not modeled**, and measured:
+	//
+	//   - Counted reads. `read -r -n 3` over `ab\0cd` is `abc` in bash, which
+	//     drops the byte before counting, and `ab` in ksh93 and BusyBox ash,
+	//     which count it and then drop it. Read here as bash reads them.
+	//   - ksh93 with the default IFS also drops the blanks *after* a NUL:
+	//     `a\0 b` is `ab` there and `a b` everywhere else, while `IFS=` keeps
+	//     the blank. That is the NUL acting as a field boundary, which is a
+	//     question about splitting rather than about the byte.
+	//
+	// unpinned zsh: no corpus row puts a NUL in front of `read`; pinned by
+	// TestReadKeepsANul.
+	//
+	// unpinned bash: the same reach, pinned by TestReadDropsANul.
+	//
+	// unpinned ksh: the same reach, pinned by TestReadDropsANul.
+	//
+	// unpinned dash: the same reach, pinned by TestReadDropsANul.
+	//
+	// unpinned ash: the same reach, pinned by TestReadDropsANul.
+	NulInAValue NulInAValuePolicy
 	// ReadArrayDefault is what the `-A` spelling of the array letter fills
 	// when the line names no parameter: zsh fills the array `reply`, and
 	// ksh93 drops the letter and reads as a bare `read` does. Asked only
@@ -29211,6 +29256,11 @@ func PosixSemantics() Semantics {
 		// the dialects add are theirs to add, and the two count axes are
 		// unreachable without the letters that raise them.
 		ReadOptions: "r",
+		// POSIX asks `read` for a text file, which has no NUL in it, so it
+		// says nothing; four of the five measured columns drop the byte,
+		// and dropping is the reading that keeps a value one a C program
+		// could hold.
+		NulInAValue: NulDropped,
 		// POSIX gives `unset` both letters and no others.
 		UnsetOptions: "vf",
 		// And `readonly` exactly one. The kind letters are bash's and zsh's
@@ -32284,6 +32334,35 @@ func (r *Runner) arithRecursionBound() ArithRecursionBoundPolicy {
 		r.unspecified = true
 	}
 	return p
+}
+
+// NulInAValuePolicy is what a NUL byte from outside the shell does to the
+// value it arrives in. See Semantics.NulInAValue for the measured columns.
+type NulInAValuePolicy int
+
+const (
+	// NulInAValueUnspecified is no answer, and is refused like any other.
+	NulInAValueUnspecified NulInAValuePolicy = iota
+	// NulDropped leaves the byte out and keeps everything around it, in
+	// `read` and in a substitution alike. dash, bash and BusyBox ash.
+	NulDropped
+	// NulCutInASubstitution drops the byte in `read` and, in a command
+	// substitution, ends the value at the first one. ksh93.
+	NulCutInASubstitution
+	// NulKept keeps it as a byte of the value. zsh.
+	NulKept
+)
+
+func (p NulInAValuePolicy) String() string {
+	switch p {
+	case NulDropped:
+		return "dropped"
+	case NulCutInASubstitution:
+		return "dropped in read, cut in a substitution"
+	case NulKept:
+		return "kept"
+	}
+	return "unspecified"
 }
 
 // DollarSingleNulPolicy is what a NUL an escape produced does to the text

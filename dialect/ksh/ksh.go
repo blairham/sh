@@ -1937,6 +1937,8 @@ func Semantics() interp.Semantics {
 	// 2012-08-01, `read -e v` and `read -E v` are both `unknown option`
 	// with the usage line after them, at 2 (#4963).
 	s.ReadOptions = "rspAd:n:N:t:u:"
+	// Measured 2026-10-01: `read` drops a NUL; a command substitution ends its value at the first one. See Semantics.NulInAValue.
+	s.NulInAValue = interp.NulCutInASubstitution
 	// ksh93 takes `-n` and refuses `-m`, with its own usage line after it.
 	s.UnsetOptions = "vfn"
 	// `readonly` keeps POSIX's single letter, and this shell says so

@@ -1294,6 +1294,8 @@ func Semantics() interp.Semantics {
 	// 5.3.20: `read -a <<<'a b'` is `read: -a: option requires an argument`
 	// at 2, with no `REPLY` afterwards.
 	s.ReadOptions = "rseEa:d:i:n:N:p:t:u:"
+	// Measured 2026-10-01: a NUL is dropped from what `read` and a substitution take in (the substitution says so, in a warning). See Semantics.NulInAValue.
+	s.NulInAValue = interp.NulDropped
 	// And `-e` and `-E` are the **line editor** here, not zsh's echo: `-e`
 	// reads the line through readline and `-E` reads it with the shell's
 	// default completion bound, and off a terminal both do nothing at all.

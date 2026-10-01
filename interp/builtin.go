@@ -6466,8 +6466,17 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if readsKeys {
 		return r.readKeysInto(next, keys, r.readKeyTarget(array, named, args))
 	}
+	if delim != 0 {
+		// A NUL that is not the delimiter is a byte of the record, and what
+		// the dialect does with one is asked as it arrives. See
+		// Runner.readDropsNul.
+		next = r.readNulFilter(next)
+	}
 	text, lits, end := readSegment(next, raw, delim, count, exact,
 		r.countsTheLocalesCharacters, r.readCharacterWidth)
+	if r.unspecified {
+		return 2
+	}
 
 	// A `read` that fails still assigns. All four shells clear the variables
 	// at end of input rather than leaving what was there, and the reason is
@@ -7075,6 +7084,46 @@ const (
 
 // directByteSource reads the stream a byte at a time, in the calling
 // goroutine — the path every read without a deadline takes.
+// readNulFilter is a `read` byte source with the dialect's answer to a NUL
+// applied: where the value may not hold one, the byte is left out and the read
+// goes on to the next, so a counted read counts the bytes it keeps — measured,
+// `read -r -n 3` over `ab\0cd` is `abc` in bash 5.3.20. See
+// Semantics.NulInAValue.
+//
+// The question is put when the first NUL arrives and not before, so a record
+// with none in it — every ordinary `read` — asks nothing. An unanswered vector
+// ends the read as end of input does, with the refusal already said; the
+// caller sees r.unspecified.
+func (r *Runner) readNulFilter(next func() (byte, int)) func() (byte, int) {
+	asked, drop := false, false
+	return func() (byte, int) {
+		for {
+			b, ev := next()
+			if ev != evByte || b != 0 {
+				return b, ev
+			}
+			if !asked {
+				asked = true
+				switch r.sem().NulInAValue {
+				case NulKept:
+				case NulDropped, NulCutInASubstitution:
+					drop = true
+				default:
+					r.diagf("%s\n", r.unanswered("a NUL byte in what `read` takes in"))
+					r.status = 2
+					r.unspecified = true
+				}
+			}
+			if r.unspecified {
+				return 0, evEOF
+			}
+			if !drop {
+				return b, ev
+			}
+		}
+	}
+}
+
 func directByteSource(in io.Reader) func() (byte, int) {
 	var ch [1]byte
 	return func() (byte, int) {

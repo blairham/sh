@@ -380,20 +380,17 @@ func zshStrftime(format string, t time.Time) string {
 // `x%382d` writes 383 and `x%383d` is refused; `ab%445d` writes 447 and
 // `ab%446d` is refused — and a width that fits because the format is longer
 // fits, so `%300d%300d` writes 600. An empty format writes nothing.
+//
+// **The prompt's `%D{…}` has a room of its own, and it is not modeled.**
+// Measured the same day: `%D{%159d}` draws 159 digits and `%D{%160d}` draws
+// nothing, while `%D{x%199d}` draws all 200 — so it is neither this bound nor
+// a fixed size, and the prompt keeps writing the whole result.
 func zshStrftimeBounded(format string, t time.Time) (string, bool) {
 	out := zshStrftime(format, t)
 	if format != "" && len(out) >= 64*len(format) {
 		return "", false
 	}
 	return out, true
-}
-
-// zshPromptClock is the prompt's `%D{…}`, which has the same room and draws
-// nothing where the builtin refuses: measured, `print -P '%D{%320d}'` writes
-// an empty line.
-func zshPromptClock(format string, t time.Time) string {
-	out, _ := zshStrftimeBounded(format, t)
-	return out
 }
 
 // strftimeOwn is one of the four letters the shell writes itself — `%f`,

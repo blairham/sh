@@ -105,7 +105,47 @@ func TestStrftimeRefusesAResultPastItsRoom(t *testing.T) {
 			t.Errorf("%q: %d bytes, ok %v; want %d, %v", c.format, len(out), ok, c.n, c.ok)
 		}
 	}
-	if got := zshPromptClock("%320d", at); got != "" {
-		t.Errorf("prompt clock past its room: %q, want nothing", got)
+}
+
+// **The shell's own conversions are its own only in the spellings it reads**;
+// any other spelling is the C library's, which writes it back as text. Rows
+// measured on the suite's image at 1181100005 (2007-06-06 03:20:05 UTC).
+func TestStrftimeOwnSpellings(t *testing.T) {
+	at := time.Unix(1181100005, 0).UTC()
+	for _, c := range []struct{ format, want string }{
+		{"%.", "000"},
+		{"%-.", "000"},
+		{"%_.", "000"},
+		{"%^.", "000"},
+		{"%#.", "000"},
+		{"%E.", "000"},
+		{"%O.", "000"},
+		{"%-E.", "000"},
+		{"%0.", ""},
+		{"%5.", "00000"},
+		{"%12.", "000000000"},
+		{"%-12.", "000000000"},
+		{"%_1.", "%_1."},
+		{"%1E.", "%1E."},
+		{"%^1.", "%^1."},
+		{"%_E.", "%_E."},
+		{"%f", "6"},
+		{"%-f", "6"},
+		{"%_f", "%_f"},
+		{"%5f", "  %5f"},
+		{"%^f", "%^F"},
+		{"%K", "3"},
+		{"%-K", "3"},
+		{"%L", "3"},
+		{"%N", "000000000"},
+		{"%-N", "000000000"},
+		{"%1N", "%1N"},
+		{"%-y", "07"},
+		{"%-1y", "7"},
+		{"%-g", "7"},
+	} {
+		if got := zshStrftime(c.format, at); got != c.want {
+			t.Errorf("%q: got %q, want %q", c.format, got, c.want)
+		}
 	}
 }

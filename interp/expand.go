@@ -922,7 +922,9 @@ func (r *Runner) wordResult(b *wordFields) []string {
 			}
 		}
 	}
-	return b.result()
+	// A substituted NUL ends its field here, once the field is whole, in
+	// the dialect that reads it that way. See Runner.cutAtNul.
+	return r.cutFieldsAtNul(b.result())
 }
 
 // globFields is pathname expansion, the last stage of a word: it acts on
@@ -1116,7 +1118,9 @@ func (r *Runner) wordTextUnsplit(w *syntax.Word, mark func(syntax.Span, string) 
 		}
 		b.WriteString(text)
 	}
-	return b.String()
+	// The same cut an ordinary word's fields get, on the one text this
+	// reading makes. See Runner.cutAtNul.
+	return r.cutAtNul(b.String(), keepMarks)
 }
 
 // expandRedirectTargetViews expands a redirection's target once and returns
@@ -1220,13 +1224,15 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 		ifs, set := r.ifs()
 		r.addSpan(&f, s, r.splitFieldsAsk(text, ifs, set), listMarks{}, false)
 	}
-	plain = globUnescape(b.String())
+	// A substituted NUL ends a target's name where it ends any other word's,
+	// in every one of the three views. See Runner.cutAtNul.
+	plain = r.cutAtNul(globUnescape(b.String()), false)
 
-	words = u.result()
+	words = r.cutFieldsAtNul(u.result())
 	if words != nil {
 		words = r.globFields(words)
 	}
-	fields = f.result()
+	fields = r.cutFieldsAtNul(f.result())
 	if fields == nil {
 		return nil, words, plain
 	}

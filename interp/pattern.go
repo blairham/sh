@@ -553,7 +553,12 @@ func (r *Runner) patternSpan(s syntax.Span) (text string, live bool) {
 		}
 		return text + r.bareSubscriptPattern(tail), true
 	case syntax.CommandSubst:
-		return r.expansionPattern(r.commandSubst(r.ctx, s), s.Quoting, r.sem().GlobExpansionResults)
+		// A pattern operand is text that never becomes a field, so the cut a
+		// field gets at a substituted NUL is taken here, on the value — see
+		// Runner.cutAtNul. Measured on ksh93u+: `v=abc; echo
+		// "${v#$(printf 'a\0b')}"` is `bc`, the operand having ended at the
+		// NUL.
+		return r.expansionPattern(r.cutAtNul(r.commandSubst(r.ctx, s), false), s.Quoting, r.sem().GlobExpansionResults)
 	case syntax.ArithSubst:
 		v, ok := r.arithSpanValue(s)
 		if !ok {

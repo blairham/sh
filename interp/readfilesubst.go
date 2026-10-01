@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -132,7 +131,7 @@ func (r *Runner) readFileSubst(ctx context.Context, rd *syntax.Redirect, span sy
 	// The same trailing-newline rule every command substitution follows, and
 	// measured to be the same one: a file holding `A\n\n\n` substitutes as
 	// `A` in all five shells that have the form.
-	return strings.TrimRight(out.String(), "\n")
+	return r.substitutedValue(out.String())
 }
 
 // readFailed is what `$(<file)` does when the read fails after the open

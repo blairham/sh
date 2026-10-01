@@ -566,7 +566,7 @@ func (r *Runner) assocKey(w *syntax.Word) string {
 // whether single quotes are quoting at all, are the as-written reading's own
 // and stay where they are.
 func keyKeepsEscape(c string) bool {
-	return c == "" || !strings.Contains("$`\\()[]{}", c)
+	return !strings.Contains("$`\\()[]{}", c)
 }
 
 // expandSubscriptTilde is Semantics.SubscriptKeyExpandsALeadingTilde: the

@@ -94,3 +94,15 @@ func TestAKeyStoredElsewhereIsFoundThroughASubscript(t *testing.T) {
 		})
 	}
 }
+
+// A search is the other road through the same brackets, and it does not take
+// the key's rule: its operand is a pattern, and the backslash before `{` that
+// a key drops is kept there. Measured on zsh 5.9.2 with both spellings in an
+// indexed array — `${a[(r)a\{b]}` is `a\{b` where `h[a\{b]` stores `a{b`.
+// So one rule applied to both roads would be wrong on this row.
+func TestASearchKeepsTheBackslashAKeyDrops(t *testing.T) {
+	src := `a=('a{b' 'a\{b'); print -rn -- "${a[(r)a\{b]}"` + "\n"
+	if out, st := runZsh(t, t.TempDir(), src); out != `a\{b` || st != 0 {
+		t.Errorf("${a[(r)a\\{b]} = %q at %d, want %q", out, st, `a\{b`)
+	}
+}

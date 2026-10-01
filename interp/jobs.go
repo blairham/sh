@@ -2750,6 +2750,30 @@ func (r *Runner) dropFinishedJobs() {
 	if !r.ask(r.sem().FinishedJobLeavesTheTable, "a finished background job that nothing has reported") {
 		return
 	}
+	r.dropJobs(finished)
+}
+
+// dropFinishedJobsWhereAnswered is dropFinishedJobs for the reads that follow
+// from the answer rather than decide it — a listing, and a `wait` by process
+// id. A vector that has not answered keeps the job, and the question those
+// reads put is asked by their own axes: whether a listing shows a finished
+// job is JobsListFinishedJobs, and what an id answers is the job's status
+// either way the first time.
+func (r *Runner) dropFinishedJobsWhereAnswered() {
+	if r.monitor || r.sem().FinishedJobLeavesTheTable != Yes {
+		return
+	}
+	var finished []*Job
+	for _, j := range r.jobs {
+		if r.noticedJobs[j] {
+			finished = append(finished, j)
+		}
+	}
+	r.dropJobs(finished)
+}
+
+// dropJobs takes jobs out of the table into the memory of dropped ones.
+func (r *Runner) dropJobs(finished []*Job) {
 	for _, j := range finished {
 		r.Forget(j)
 		r.dropped = appendBounded(r.dropped, j)
@@ -2842,10 +2866,7 @@ func (r *Runner) waitableByIdent(pid int) []*Job {
 	// too, since a `wait` by id is as much a read of the table as a `%` spec
 	// is: the first one answers a dropped job and the second finds nothing.
 	// See Runner.dropped.
-	r.dropFinishedJobs()
-	if r.unspecified {
-		return nil
-	}
+	r.dropFinishedJobsWhereAnswered()
 	var jobs []*Job
 	// Not the table, where it is the parent's: measured, `p=$!` outside and
 	// `( wait "$p" )` inside a `-fm` zsh answers `wait: pid N is not a child

@@ -5725,7 +5725,8 @@ The read agrees row for row. With both `aCb` and `a\Cb` planted by an
 array literal, `${h[a\Cb]}` finds `aCb` for the nine and `a\Cb` for
 every other character, whether or not the expansion is in double quotes.
 The one exception is `"` inside a double-quoted word: there,
-`"${h[a\"b]}"` finds `a"b`, which bash and ksh93 also find.
+`"${h[a\"b]}"` finds `a"b`, which bash and ksh93 also find. This
+implementation does not yet; that is #5270.
 
 So the nine are **not** a difference between the two readings: every
 column drops the backslash before them. The as-written reading had been
@@ -5736,9 +5737,13 @@ h[$k]=1` all hold `a$b`, and `${h[a\$b]}` looked up `a\$b` (#5227). What
 stays the as-written reading's own, and divides the panel, is the rest of
 the second row, together with single quotes not being quoting.
 
-A subscript *search* is a different road and was not part of this
-measurement. Its operand is a pattern, and there the backslashes before
+A subscript *search* is a different road, because its operand is a
+pattern. There zsh drops the backslash before `$` and a backquote, as it
+does in a key (#5269), and **keeps** it before `{` and `}`, where a key
+drops it. So the two roads cannot share one rule. The backslashes before
 `\`, `(`, `)`, `[`, `]` and `*` are the matcher's.
+
+The two readings the panel splits on are parked in #5268.
 
 #### An empty key
 

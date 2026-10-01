@@ -157,7 +157,21 @@ func (r *Runner) declareMatchingKept(name string, patterns []string, f declareFl
 	// Whatever the letters ask for, applied to the parameters that already
 	// exist. A pattern creates nothing: `typeset -mx 'nosuch*'` is a silent
 	// 0 with no name behind it.
+	//
+	// Applied to them *where they are*, even in a function: a match is an
+	// existing parameter, so the line reaches it the way `-g` would rather
+	// than making a local of it — unless `+g` was written, which asks for
+	// exactly that. Measured 2026-10-01 against zsh 5.9.2, with a global
+	// x=1 and the line in a function:
+	//
+	//	typeset -h -m 'x*'      x stays 1, and stays global
+	//	typeset -i -m 'x*'      x is integer 1, global
+	//	typeset -h +g -m 'x*'   x is a new empty local; the global is 1 after
+	//	typeset -i +g -m 'x*'   x is a new integer local 0
 	f.matching, f.matchNames = false, false
+	if !f.globalOff {
+		f.global = true
+	}
 	operands := r.matchedOperands(patterns)
 	if len(operands) == 0 {
 		return 0

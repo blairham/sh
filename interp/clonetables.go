@@ -490,6 +490,13 @@ func (c *Runner) ownTables(r *Runner) {
 	c.releasedSubstFds = slices.Clone(r.releasedSubstFds)
 	c.jobs = slices.Clone(r.jobs)
 	c.jobOrder = slices.Clone(r.jobOrder)
+	// Without the running command's slot, which is the parent's command and
+	// not a job the clone can number past or mark, and with its markers read
+	// off the order again. Held all the same, so that a command inside the
+	// clone takes none of its own — its numbering is
+	// SubshellIsAJobInItsOwnTable's (#5321).
+	c.commandSlot, c.commandSlotHeld = 0, true
+	c.marksByNumber, c.markCurrent, c.markPrevious = false, 0, 0
 	// And the memory of the ones already reported, which a body a real shell
 	// would have forked does not inherit at all — inheritJobs empties it a
 	// moment after this. It is cloned here anyway rather than left aliased,

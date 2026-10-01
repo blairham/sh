@@ -1697,6 +1697,11 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	if r.refuseFunctionNesting(fn.Name) {
 		return nil
 	}
+	// A function call holds a job slot, where a command does. See
+	// Semantics.ACommandHoldsAJobSlot.
+	if release := r.holdACommandsJobSlot(); release != nil {
+		defer release()
+	}
 	if r.depth >= maxDepth {
 		r.diagf("%s: too deeply nested\n", fn.Name)
 		r.status = 1

@@ -73,6 +73,7 @@ func biDisown(r *Runner, _ context.Context, args []string) int {
 		// The current job, and with none the complaint is the dialect's —
 		// or, in one shell, a bare failing status. Empty means silence: the
 		// engine measured saying nothing says nothing here on purpose.
+		r.dropFinishedJobsWhereAnswered()
 		current := r.currentJob()
 		if current == nil {
 			if w := r.diag().DisownNoCurrentJob; w != "" {
@@ -510,6 +511,15 @@ func (r *Runner) jobRows(jobs []*Job, explicit bool) ([]jobRow, int) {
 			}
 		} else if r.unspecified {
 			return nil, 2
+		} else {
+			// Oldest first is by number, which is the start order until a
+			// job refills a hole. Measured 2026-10-01: zsh 5.9.2 lists
+			// `sleep 1 & sleep 1 & sleep 1 & kill %1; wait %1; sleep 1 &
+			// jobs` as 1, 2, 3 with the refilled 1 first. bash never refills
+			// one, so the two orders are the same there; the newest-first
+			// columns go by start order, BusyBox ash listing that line 1, 3,
+			// 2.
+			slices.SortStableFunc(rows, func(a, b jobRow) int { return a.job.num - b.job.num })
 		}
 	}
 	return rows, 0
@@ -996,6 +1006,7 @@ func (r *Runner) canResume() bool {
 // current one where there is no argument.
 func (r *Runner) pickJob(args []string, name string) (*Job, int) {
 	if len(args) == 0 {
+		r.dropFinishedJobsWhereAnswered()
 		current := r.currentJob()
 		if current == nil {
 			d := r.diag()
@@ -1034,7 +1045,7 @@ func (r *Runner) reportJobLookup(spec string, code int, name string) int {
 		return r.status
 	}
 	d := r.diag()
-	if line, ok := jobSpecMiss(*d, name, spec); ok {
+	if line, ok := jobSpecMiss(*d, name, spec); ok && code != jobOnAnEmptySlot {
 		r.diagf("%s\n", line)
 		return orDefault(d.NoSuchJobStatus, 1)
 	}
@@ -1119,6 +1130,12 @@ const (
 	jobMissing
 	jobSpecAmbiguous
 	jobSpecUnanswered
+	// jobOnAnEmptySlot is a spec naming a job number no job holds but the
+	// shell still answers to: the slot the running command holds, or a
+	// marker left on one a command held. Missing, in the spec's own words, to
+	// every verb but `kill`, which sends it nothing and succeeds. See
+	// Semantics.ACommandHoldsAJobSlot.
+	jobOnAnEmptySlot
 )
 
 // findJobQuietly is findJob without the complaint, for a caller that words its
@@ -1131,25 +1148,22 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	text := strings.TrimPrefix(spec, "%")
 	switch text {
 	case "", "%", "+":
-		current := r.currentJob()
-		if current == nil {
-			return nil, jobMissing
-		}
-		return current, jobFound
+		current, _ := r.markedEntries()
+		return r.markedLookup(current)
 	case "-":
 		// The runner-up rather than the job before this one in the table,
 		// which is the same choice the listing's `-` is written from — see
 		// markedJobs. Measured, the two agree in every column: `jobs %-`
 		// names exactly the job a listing puts `-` on.
-		_, previous := r.markedJobs()
-		if previous == nil {
-			return nil, jobMissing
-		}
-		return previous, jobFound
+		_, previous := r.markedEntries()
+		return r.markedLookup(previous)
 	}
 	n, ok := atoi(text)
 	if !ok {
 		return r.findJobByName(text)
+	}
+	if n != 0 && n == r.commandSlot {
+		return nil, jobOnAnEmptySlot
 	}
 	for _, j := range r.jobs {
 		if j.num == n {
@@ -1157,6 +1171,18 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 		}
 	}
 	return nil, jobMissing
+}
+
+// markedLookup is what a marker's spec resolves to: its job, nothing, or a
+// number no job holds.
+func (r *Runner) markedLookup(j *Job) (*Job, int) {
+	switch {
+	case j == nil:
+		return nil, jobMissing
+	case j == emptyJobSlot:
+		return nil, jobOnAnEmptySlot
+	}
+	return j, jobFound
 }
 
 // findJobByName resolves `%name` — the job whose command begins with the

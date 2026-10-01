@@ -10405,16 +10405,16 @@ type Semantics struct {
 	// one. A rule written against the clone would have been wrong on the last
 	// two, and one written against the compound wrong on the same two.
 	//
-	// **What this does not model**: a compound command *also* holds a job
-	// number while it runs and frees it afterwards, which is the mechanism
-	// underneath the number two. Measured: `sleep 3 &` then
-	// `{ sleep 2 & print … ; }` numbers the new job **3**, a job started after
-	// the group ends takes 2 back, and `( f )` where `f` backgrounds one
-	// numbers it **3** rather than 2 because the function call holds a slot
-	// inside the subshell. Modeling that would move job numbering for every
-	// compound command in the shell and its pipeline-element row does not yet
-	// resolve, so it is recorded here and left alone — a subshell containing a
-	// compound is the case this answer is knowingly wrong about (#5021).
+	// **What this does not model**: a command *also* holds a job number
+	// while it runs and frees it afterwards, which is the mechanism underneath
+	// the number two. In the shell itself that is ACommandHoldsAJobSlot. Inside
+	// a clone it is still only this answer, and the clone is where it is
+	// irregular. Re-measured 2026-10-01 under `-f -c`: `( eval "sleep 1 &
+	// jobs" )` and `( if true; then sleep 1 & jobs; fi )` number the job 3,
+	// while `( f )` and `( { sleep 1 & jobs } )` number it 2. `{ sleep 1 & jobs
+	// } | cat` and `{ … } & wait` number it 2 with no job behind them. With one
+	// job behind them they number it 1, marked `+`, which is not "from one"
+	// as the grid above reads (#5321).
 	SubshellIsAJobInItsOwnTable Answer
 
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`
@@ -15480,6 +15480,90 @@ type Semantics struct {
 	//
 	// unpinned ash: the same reach, pinned by TestAFinishedJobStaysInTheTable.
 	FinishedJobLeavesTheTable Answer
+
+	// ACommandHoldsAJobSlot is whether a command the shell runs itself holds
+	// a number in its own job table while it runs: the jobs it starts are
+	// numbered past it, and the `+` and `-` can land on it.
+	//
+	// The holders are compound commands, function calls, and builtins that
+	// run code (`eval`, `.`, `source`). The first one to start holds the
+	// slot, and the commands nested inside it take no number of their own.
+	// The slot is the lowest free number when the command starts, and it
+	// leaves with the command. Measured 2026-10-01 on zsh 5.9.2 under `-f -c`
+	// and through a pseudo-terminal under `-fi`, with the same numbers on both:
+	//
+	//	{ sleep 1 & jobs }                  [2]  + running    sleep 1
+	//	f() { sleep 1 & jobs }; f           [2]; also eval, `.`, if, for,
+	//	                                    while, case, !{…}, repeat, time
+	//	sleep 1 & { jobs; sleep 1 & jobs; } [1]  +, then [1] and [3]  +
+	//	{ sleep 1 & }; jobs                 [2]  +: the job keeps its number
+	//	sleep 0.1 & { sleep 0.3; sleep 1 & jobs; }
+	//	                                    [1]: the slot was taken (2) at the
+	//	                                    start, so the hole at 1 went to
+	//	                                    the job
+	//
+	// and with a job that ends while the command runs, `sleep 0.1 & X; jobs
+	// %-` reads `%-: no such job` for a brace group, if, for, while, case,
+	// repeat, time, a function call, eval and `.`. It reads `no previous job`
+	// for an external command, `! cmd`, `a && b`, `a | b`, `command cmd` and
+	// `( cmd )`. bash 5.3.20, ksh93u+, dash and BusyBox ash 1.37.0 number
+	// every row from 1, so they answer No.
+	//
+	// **While a slot is in play the markers are numbers**, and a number can
+	// name no job. The rule:
+	//
+	//   - A job that becomes current takes `+`, and `-` goes to the
+	//     highest-numbered other, the slot counting.
+	//   - A job that leaves with the `+` hands it to the `-`, and the `-` is
+	//     chosen again.
+	//   - When the command ends, a `+` on its slot goes to the `-`, and a `-`
+	//     on it stays where it is.
+	//
+	// The rows:
+	//
+	//	f() { sleep 1 & jobs %-; }; f       %-: no such job (the slot)
+	//	f() { (exit 3) & /usr/bin/true; wait %%; wait %- }; f
+	//	                                    %%: no such job, then no previous job
+	//	{ sleep 1 & (exit 3) & sleep 0.2; jobs %%; jobs %- }
+	//	                                    [2]  + …, then %-: no such job
+	//	sleep 1 & { sleep 1 & }; jobs; jobs %-
+	//	                                    [1], [3]  +, then %-: no such job:
+	//	                                    the - on a number nobody holds
+	//	f() { sleep 0.1 & /bin/sleep 0.3; }; f; jobs %%; jobs %-
+	//	                                    no current job, no previous job
+	//	sleep 0.2 & sleep 0.5; wait %%      no current job: no slot
+	//
+	// The job leaves the table when it is noticed as finished, not when a
+	// spec is read, so a job dropped lazily is dropped as of the command it
+	// was noticed under (Runner.forget). A spec landing on the slot, or on a
+	// number nobody holds, is missing in its own words: `%%: no such job`, not
+	// `no current job`. That holds for `jobs`, `wait` and `disown`. `kill`
+	// sends it nothing and succeeds: `kill -0 %%` and `kill -0 %1` are 0
+	// inside the function above. A bare `disown` with the `+` on the slot
+	// says `no current job`.
+	//
+	// Read rather than asked. Every compound command would otherwise be a
+	// refusal in a vector that has not answered, and the zero value is five
+	// of the six columns' reading.
+	//
+	// Not modeled:
+	//   - Inside a clone, which keeps SubshellIsAJobInItsOwnTable's numbering
+	//     (#5321).
+	//   - A trap's body, which takes a further number inside a brace group:
+	//     `trap "sleep 1 & jobs" USR1; { kill -USR1 $$; }` is [3] there and
+	//     [2] here.
+	//
+	// unpinned zsh: no corpus row backgrounds a job inside a construct and
+	// then lists it or names it by spec; pinned by TestACommandHoldsAJobSlot.
+	//
+	// unpinned bash: the same reach, pinned by TestACommandHoldsNoJobSlot.
+	//
+	// unpinned ksh: the same reach, pinned by TestACommandHoldsNoJobSlot.
+	//
+	// unpinned dash: the same reach, pinned by TestACommandHoldsNoJobSlot.
+	//
+	// unpinned ash: the same reach, pinned by TestACommandHoldsNoJobSlot.
+	ACommandHoldsAJobSlot Answer
 
 	// WaitRemembersAReapedJob keeps a job that `wait` has already reported
 	// the status of answerable by its process id, after it has left the job
@@ -30292,6 +30376,7 @@ func PosixSemantics() Semantics {
 		// POSIX keeps a finished job's status known until `wait` or `jobs`
 		// has reported it, which is every measured column but one.
 		FinishedJobLeavesTheTable: No,
+		ACommandHoldsAJobSlot:     No,
 		// And no `wait -p` either, for the same reason: the standard's
 		// `wait` takes no options at all.
 		WaitPNamesTheFinishedJob: No,

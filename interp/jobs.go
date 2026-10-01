@@ -31,6 +31,11 @@ type Job struct {
 	// exactly where this is 0.
 	PID    int
 	Status int
+	// noticedInCommand is the running command that was holding a job slot
+	// when this job was noticed as finished, by its serial, or zero. A job
+	// dropped later, at the spec that reads it, left the table in the
+	// reference when it was noticed — see Runner.forget.
+	noticedInCommand uint64
 
 	// ident is the number a *script* names this job by: `$!`, `wait <n>`,
 	// `kill <n>`, and the id a `jobs -l` or `jobs -p` listing prints. It is
@@ -1137,12 +1142,16 @@ func (r *Runner) FinishedJobNotices() []string {
 	// one prompt later than it ended.
 	r.reapJobs()
 	var lines []string
+	withSlot := r.commandSlot != 0
+	r.engageMarksByNumber(withSlot)
+	var left []int
 	kept := r.jobs[:0]
 	for _, j := range r.jobs {
 		if !j.Finished() {
 			kept = append(kept, j)
 			continue
 		}
+		left = append(left, j.num)
 		// The command is always shown, even in the two dialects that leave
 		// it out of a `jobs` listing: both of them print it here. That is
 		// what makes JobsShowBackgroundCommand a question about the listing
@@ -1153,6 +1162,9 @@ func (r *Runner) FinishedJobNotices() []string {
 		r.jobs[i] = nil
 	}
 	r.jobs = kept
+	for _, n := range left {
+		r.marksAfterLeaving(n, withSlot)
+	}
 	return lines
 }
 
@@ -1409,6 +1421,12 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		// shell with no job control that held them here would start listing
 		// finished jobs a shell without this line never listed.
 		if !r.JobControl {
+			// One at a time, so that the markers hear of each: where a
+			// command holds a slot, they are numbers that outlive the jobs
+			// they were on. See Semantics.ACommandHoldsAJobSlot.
+			for _, j := range slices.Clone(r.jobs) {
+				r.Forget(j)
+			}
 			r.jobs, r.jobOrder = nil, nil
 		}
 		return 0
@@ -1743,7 +1761,7 @@ func (r *Runner) waitNextJobs(args []string) ([]*Job, int) {
 				}
 				continue
 			}
-			r.waitReportsNoSuchJob(a)
+			r.waitReportsNoSuchJob(a, code)
 			return nil, orDefault(r.diag().WaitNoSuchJobStatus, 127)
 		}
 		pid, ok := atoi(a)
@@ -1868,15 +1886,19 @@ func (r *Runner) waitJobSpecNaming(spec string) (int, *Job) {
 		}
 		return 0, nil
 	}
-	r.waitReportsNoSuchJob(spec)
+	r.waitReportsNoSuchJob(spec, code)
 	return orDefault(r.diag().WaitNoSuchJobStatus, 127), nil
 }
 
 // waitReportsNoSuchJob is the one sentence both of `wait`'s routes write for a
 // spec that names nothing — worded by the spec's shape where the dialect does
 // that. See jobSpecMiss.
-func (r *Runner) waitReportsNoSuchJob(spec string) {
-	if line, ok := jobSpecMiss(*r.diag(), "wait", spec); ok {
+//
+// A spec that named the running command's slot is a miss by its own words,
+// whatever its shape: `%%` there is `%%: no such job` and not `no current
+// job`. See Semantics.ACommandHoldsAJobSlot.
+func (r *Runner) waitReportsNoSuchJob(spec string, code int) {
+	if line, ok := jobSpecMiss(*r.diag(), "wait", spec); ok && code != jobOnAnEmptySlot {
 		r.diagf("%s\n", line)
 		return
 	}
@@ -1927,6 +1949,10 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 	// — see setProcessGroup's caller, where the foreground half does not ask
 	// about the monitor.
 	job.settleStartedPID(pid, true)
+	// The command that stopped is the command holding the slot, where one
+	// holds one, so the job is that number and not the next. See
+	// Semantics.ACommandHoldsAJobSlot.
+	job.num = r.takeTheCommandSlot()
 	r.addJob(job)
 	r.setLastJob(job)
 	r.becomeCurrentJob(job)
@@ -2441,7 +2467,15 @@ func (r *Runner) addJob(job *Job) {
 		// not a table it appends to. See Runner.jobsInherited.
 		r.jobs, r.jobOrder, r.jobsInherited = nil, nil, false
 	}
-	job.num = r.nextJobNumber()
+	if job.num == 0 {
+		// A finished job nothing will report has left the table by now, in
+		// the dialect where it leaves — so its number is free for this one.
+		// Measured 2026-10-01: `sleep 0.1 & /bin/sleep 0.3; sleep 1 & jobs`
+		// is `[1]` in zsh 5.9.2 and ksh93u+, where the lazy drop numbered
+		// it 2. See Semantics.FinishedJobLeavesTheTable.
+		r.dropFinishedJobsWhereAnswered()
+		job.num = r.nextJobNumber()
+	}
 	// Where the job started, recorded here because here is where "the job
 	// entered the table" happens for every route into it. See Job.Dir: the
 	// one listing that names a directory names the job's and not the
@@ -2476,12 +2510,18 @@ func (r *Runner) addJob(job *Job) {
 // `jobs %2` is asked *before* the new job as well, so a shell that never
 // freed the slot is not counted as one that refilled it.
 func (r *Runner) nextJobNumber() int {
-	high, taken := 0, make(map[int]bool, len(r.jobs))
+	high, taken := 0, make(map[int]bool, len(r.jobs)+1)
 	for _, j := range r.jobs {
 		taken[j.num] = true
 		if j.num > high {
 			high = j.num
 		}
+	}
+	if r.commandSlot != 0 {
+		// The running command's, which no job in the table holds and no
+		// job may take. See Semantics.ACommandHoldsAJobSlot.
+		taken[r.commandSlot] = true
+		high = max(high, r.commandSlot)
 	}
 	// Where this table's numbers begin. One ordinarily; two in a `( … )`
 	// subshell of the dialect that makes one a job of its own, which holds
@@ -2544,6 +2584,7 @@ func (r *Runner) becomeCurrentJob(j *Job) {
 		r.jobOrder[i] = nil
 	}
 	r.jobOrder = append(kept, j)
+	r.marksAfterANewCurrent(j)
 }
 
 // markedJobs are the two jobs a listing marks: `+` on the one `fg` would pick
@@ -2570,6 +2611,20 @@ func (r *Runner) becomeCurrentJob(j *Job) {
 // same two jobs the listing marks — so this is not a cosmetic column: a
 // `fg %+` after a ^Z resumes a different job in the two camps.
 func (r *Runner) markedJobs() (current, previous *Job) {
+	current, previous = r.markedEntries()
+	if current == emptyJobSlot {
+		current = nil
+	}
+	if previous == emptyJobSlot {
+		previous = nil
+	}
+	return current, previous
+}
+
+// markedEntries is markedJobs with a marker on a number no job holds left in,
+// as emptyJobSlot, for the lookup that has to say a marker names it. See
+// Semantics.ACommandHoldsAJobSlot.
+func (r *Runner) markedEntries() (current, previous *Job) {
 	if r.ownJobsStartAtTwo {
 		// **This is the only place a subshell's marks are decided**, and
 		// deliberately so. An early return in becomeCurrentJob saying the
@@ -2588,6 +2643,15 @@ func (r *Runner) markedJobs() (current, previous *Job) {
 		// subshell's job 2 reads `-` although no job 3 is there to be found.
 		return r.jobByNumber(r.inheritedCurrentJob), r.jobByNumber(r.inheritedPreviousJob)
 	}
+	if r.marksByNumber {
+		return r.jobOrEmptySlot(r.markCurrent), r.jobOrEmptySlot(r.markPrevious)
+	}
+	return r.orderedMarks()
+}
+
+// orderedMarks is the markers read off jobOrder, which is how they are read
+// everywhere but where a command's job slot has put them on numbers.
+func (r *Runner) orderedMarks() (current, previous *Job) {
 	current = r.pickMarkedJob(nil)
 	if current != nil {
 		previous = r.pickMarkedJob(current)
@@ -2775,7 +2839,7 @@ func (r *Runner) dropFinishedJobsWhereAnswered() {
 // dropJobs takes jobs out of the table into the memory of dropped ones.
 func (r *Runner) dropJobs(finished []*Job) {
 	for _, j := range finished {
-		r.Forget(j)
+		r.forget(j, true)
 		r.dropped = appendBounded(r.dropped, j)
 	}
 }
@@ -2837,6 +2901,9 @@ func (r *Runner) noticeFinishedJobs() {
 	}
 	for _, j := range ended {
 		noticed[j] = true
+		if r.commandSlot != 0 {
+			j.noticedInCommand = r.commandSerial
+		}
 	}
 	r.noticedJobs = noticed
 }
@@ -2947,7 +3014,23 @@ func (r *Runner) jobByIdent(n int) *Job {
 
 // Forget drops a job the shell has finished with — one that has been resumed
 // into the foreground and ended, or reported as done.
-func (r *Runner) Forget(j *Job) {
+func (r *Runner) Forget(j *Job) { r.forget(j, false) }
+
+// forget is Forget, told whether the job is a finished one being dropped
+// lazily. Such a job left the table, in the shell being modeled, when it was
+// noticed — so a marker it held falls to the running command's slot only if
+// that same command is still the one running. `sleep 0.2 & sleep 0.5; wait %%`
+// is `no current job` in zsh 5.9.2: the job went during `sleep 0.5`, whose slot
+// went with it. See Semantics.ACommandHoldsAJobSlot.
+func (r *Runner) forget(j *Job, dropped bool) {
+	// The command holding a slot when this job left: the one running now,
+	// or — for a job dropped lazily — the one it was noticed under, if that
+	// is still the one running.
+	withSlot := r.commandSlot != 0 && (!dropped || j.noticedInCommand == r.commandSerial)
+	if withSlot || r.marksByNumber {
+		r.engageMarksByNumber(withSlot)
+		defer r.marksAfterLeaving(j.num, withSlot)
+	}
 	for i, other := range r.jobs {
 		if other == j {
 			r.jobs = append(r.jobs[:i], r.jobs[i+1:]...)

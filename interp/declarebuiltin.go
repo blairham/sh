@@ -245,6 +245,10 @@ type declareFlags struct {
 	// apart: `integer +x n` is still an integer in both shells that have the
 	// word, and `integer +i n` is one in only one of them.
 	integerOff bool
+	// globalOff records a `g` written under a plus. It makes no binding
+	// global and it is not the default either: under `-m` it is what asks
+	// for local copies of the matches. See declareMatchingKept.
+	globalOff bool
 	// signDecided records that the *builtin's name* has already settled
 	// whether this line removes the integer attribute, so the letters must
 	// not be read again. `integer +i n` reaches it: the plus form removes
@@ -627,7 +631,22 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			case 'g':
 				// Global rather than local: the assignment reaches the
 				// global cell however deep the function stack is.
-				f.global = true
+				//
+				// Under a plus it is the opposite, and not a no-op. Measured
+				// 2026-10-01: `f(){ typeset +g x; x=2; }` leaves a global x
+				// alone in zsh 5.9.2 and in bash 5.3 alike — +g is "local",
+				// the default a function's declaration already has. It used
+				// to set global here whatever the sign. What it
+				// additionally decides under `-m` is in declareMatchingKept.
+				//
+				// Not measured into anything: `-g +g` on one line, where the
+				// two shells part (bash keeps global, zsh's last letter
+				// wins). A plus never clears a global set by a minus here.
+				if f.remove {
+					f.globalOff = true
+				} else {
+					f.global = true
+				}
 			case 'T':
 				// The tie: the operands are a scalar, an array and an
 				// optional separator rather than a list of names. Recorded
@@ -4086,7 +4105,7 @@ func withoutListingLetters(f declareFlags) declareFlags {
 	f.lower, f.upper, f.capital = false, false, false
 	f.unique, f.hidden = false, false
 	f.traced = false
-	f.global, f.inert = false, false
+	f.global, f.globalOff, f.inert = false, false, false
 	// The reference letter is a listing letter too — see attributeFilter,
 	// where the measurement is. Without this line `declare -n` with no
 	// operand was not a listing at all: it fell past declarationListing into

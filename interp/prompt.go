@@ -715,6 +715,14 @@ const (
 	// dialect's words: `for`, or `for then`, or `quote`. Empty at a prompt
 	// that is not a continuation, because nothing is waiting.
 	FieldOpenState
+	// FieldPromptArrayElement is one element of the array the prompt-array
+	// conditions read, chosen by the code's count: nought or none is the
+	// first, a negative count counts from the end, and one past either end
+	// draws nothing. Measured 2026-10-01 on zsh 5.9.2 with
+	// `psvar=(caesar adsum jam forte)`: `%v` `%0v` `%1v` are caesar, `%4v`
+	// and `%-v` and `%-1v` are forte, `%-4v` is caesar, `%5v` and `%-5v` are
+	// empty — and with nothing set, empty.
+	FieldPromptArrayElement
 	// FieldVersion and FieldVersionFull are the version the dialect claims,
 	// short and long. bash draws 5.3 for one and 5.3.15 for the other.
 	FieldVersion
@@ -1963,6 +1971,19 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 			line = 0
 		}
 		return itoa(line), true
+	case FieldPromptArrayElement:
+		elems, _ := r.GetArray(promptArray)
+		n := promptCount(arg)
+		switch {
+		case n == 0:
+			n = 1
+		case n < 0:
+			n = len(elems) + n + 1
+		}
+		if n < 1 || n > len(elems) {
+			return "", true
+		}
+		return elems[n-1], true
 	case FieldOpenState:
 		// Nothing is open to the parser — a script that reached an expansion
 		// has parsed — so what is drawn is what the running command is

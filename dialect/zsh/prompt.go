@@ -86,6 +86,9 @@ func PromptStyle() interp.PromptStyle {
 			'h': interp.FieldHistoryNumber,
 			'y': interp.FieldTerminalName,
 			'_': interp.FieldOpenState,
+			// An element of `$psvar`, which the two conditions below already
+			// read (#5150).
+			'v': interp.FieldPromptArrayElement,
 			// zsh's own non-printing markers. Measured: `%{X%}` drew X and
 			// neither marker, and unlike bash's, a marker with no partner is
 			// dropped rather than written to the terminal.

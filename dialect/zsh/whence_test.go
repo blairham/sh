@@ -163,27 +163,6 @@ func TestWhenceRefusesAnUnknownLetter(t *testing.T) {
 	}
 }
 
-// A letter this shell has and this build does not is refused as missing
-// rather than as unknown, so a script can tell the two apart.
-//
-// `-s` has left this list, with `-S` beside it: both are implemented since
-// #4446 and the rows are in whencelinks_test.go. **`-x` has left it too** — it
-// is the indent the four body-printing names share, and its rows are in
-// whenceindent_test.go. `-m` is what is left, which is what keeps the two
-// wordings distinguishable: the row below it asks for `-z`, an unknown letter,
-// and the two must not answer alike.
-func TestWhenceRefusesTheLettersItDoesNotImplement(t *testing.T) {
-	for _, letter := range []string{"-m"} {
-		out, st := runZsh(t, t.TempDir(), "whence "+letter+" echo\n")
-		if !strings.Contains(out, "not implemented") {
-			t.Errorf("%s gave %q, want it refused as missing", letter, out)
-		}
-		if st != 1 {
-			t.Errorf("%s: status = %d, want 1", letter, st)
-		}
-	}
-}
-
 // Nothing to ask about is a silent 1 here, where the other shell prints a
 // usage line at 2. The quiet answer is the trap: a script reading the status
 // sees a plain miss.
@@ -289,14 +268,12 @@ func TestWhichIsWhenceWithC(t *testing.T) {
 		{"-v is not on offer", "which -v echo", "zsh:which:3: bad option: -v", 1},
 		{"-f is not on offer", "which -f echo", "zsh:which:3: bad option: -f", 1},
 
-		// A letter this shell has and this one does not stays distinguishable
-		// from a letter that is not a letter. The `:3:` is the setup's two
-		// lines above the command, which is the location the diagnostic
-		// carries and part of what is asserted.
-		//
-		// `-S` was this row until #4446 implemented it; `-m` is a letter zsh
-		// still has and this shell still has not.
-		{"-m is missing, not unknown", "which -m echo", "zsh:which:3: -m is not implemented yet", 1},
+		// `-m` is on offer: it was refused as missing until #5230 built it,
+		// and `which -m echo` is the builtin's csh line, measured.
+		// The `:3:` on the refusal below is the setup's two lines above the
+		// command, which is the location the diagnostic carries and part of
+		// what is asserted.
+		{"-m is the pattern lookup", "which -m echo", "echo: shell built-in command", 0},
 		{"-z is unknown", "which -z echo", "zsh:which:3: bad option: -z", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -320,7 +297,7 @@ func TestWhereKeepsTheLettersItsPresetLeft(t *testing.T) {
 		{"-w is the bare kind, over every resolution", "where -w echo", "echo: builtin", 0},
 		{"-a is not on offer", "where -a echo", "zsh:where:1: bad option: -a", 1},
 		{"-c is not on offer", "where -c echo", "zsh:where:1: bad option: -c", 1},
-		{"-m is missing, not unknown", "where -m echo", "zsh:where:1: -m is not implemented yet", 1},
+		{"-m is the pattern lookup", "where -m echo", "echo: shell built-in command", 0},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, st := runZsh(t, dir, c.src+"\n")

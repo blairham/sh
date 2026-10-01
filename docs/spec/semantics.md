@@ -11871,6 +11871,66 @@ What was built, all through the extension seam — registered builtins in each
   used to refuse *every* dash word, which is right for `-v` and wrong for
   `-p` and `-w`, both of which this shell answers.
 
+  The letters after "and" on that table were all refused as missing once.
+  `-s` and `-S` were built in #4446, `-x` beside them, and `-m` last, in
+  #5230 — so every letter zsh has is now answered under all three names.
+
+  **`-m`, the pattern lookup.** Each operand is a pattern, and the answer
+  is every name it matches in every table, each written in that table's
+  own shape. Measured on zsh 5.9.2, 2026-09-30, `-f` on a script file under
+  `env -i PATH=/usr/bin:/bin LC_ALL=C`, with PATH set to two scratch
+  directories `p2:p1` — p2 holding `qqab`, `qqbar`, `qqbaz`; p1 holding
+  `qqfoo`, `qqbar`, a directory `qqdir`, a file `qqnoexec` without the
+  execute bit and a link `qqlink -> qqfoo` — and an alias `qqbar=ls`, a
+  global alias `qqg=x`, and functions `qqbaz` then `qqa`:
+
+      whence -m 'qq*'       ls / x / qqa / qqbaz / p2/qqab / p2/qqbar /
+                            p2/qqbaz / p1/qqdir / p1/qqfoo / p1/qqlink /
+                            p1/qqnoexec                               0
+      whence -am 'qqba?'    ls / qqbaz / p2/qqbar / p1/qqbar / p2/qqbaz 0
+      whence -pm 'qq*'      the command rows of the first line alone   0
+      whence -m 'fo*'       for / foreach / fo   (with a function fo)  0
+      whence -m 'nos*'      nothing                                    1
+      whence -vm 'nos*' qqfoo   qqfoo is p1/qqfoo                      0
+      whence -am qqdir      nothing                                    0
+      whence -sm qqlink     p1/qqlink                                  0
+      whence -asm qqlink    p1/qqlink -> p1/qqfoo                      0
+
+  Read off those rows:
+
+  - The tables are walked **in turn** — aliases (regular and global
+    together, sorted by name; never suffix), reserved words, functions,
+    builtins, then commands — and **every** match in each is written, so a
+    name in two tables is answered twice (`qqbaz` the function and then
+    `p2/qqbaz`; `local` the reserved word and then the builtin). Within a
+    table the names are sorted, not in definition order.
+  - The **command table is the directories' listing**, the first PATH
+    directory winning: a directory, a non-executable file and a dangling
+    link are all in it, and a name `hash` added is too (`hash qqman=/bin/ls`
+    makes `whence -m 'qqm*'` write `/bin/ls`).
+  - **`-a` makes the command rows a search**: every PATH hit of each
+    matching name, so `qqbar` twice and `qqdir` not at all. `-p` keeps only
+    the command rows, with or without `-a`.
+  - **`-s` and `-S` reach only the search's rows**; a row read from the
+    table is written bare.
+  - **A miss is silence in every shape** (`-v`, `-c` and `-w` included),
+    and the status is 1 only when no operand matched anything. A match is a
+    name in a table, not a line written: `whence -am qqdir` writes nothing
+    and answers 0.
+  - A disabled builtin is not in the table: `disable echo; whence -m
+    'ech?'` is silence at 1.
+  - `type -m` is `whence -vm` with `type`'s own letters: `type -m 'qqba?'`
+    is the four `-v` sentences, `type -fm qqa` the body, and `type -cm` is
+    `bad option: -c` at 1 as `type -c` is.
+
+  And `-f` on a **function** is the body whatever shape was asked for —
+  `whence -vf`, `-fv`, `-wf` and `-vfa` all write the definition — while
+  `whence -vf echo` is still the builtin's sentence.
+
+  Not modeled: zsh fills its command table once and answers from it until
+  `rehash`, so a file added to PATH later may be missing from its listing.
+  This walks the directories each time it is asked.
+
   `which` is registered even though /usr/bin/which exists: a builtin
   shadowing a PATH command is what this shell does, and the five shells
   without the builtin reach the external, which knows only PATH — the same
@@ -12894,15 +12954,6 @@ than missing:
   and wording (`bad file number: 9` where ksh93 brackets the errno). Its
   `whence` is built now, above; `print` stays command-not-found, visible in
   the corpus's `print/` cases as the recorded difference.
-- zsh `whence -m`, `-s`, `-S` and `-x`, under all three of its names: `-m`
-  reads the operands as *patterns* and matches them against every name the
-  shell could run, PATH included — the answer on the measuring machine was
-  sixty-four lines of /usr/bin, and nothing here walks PATH; `-s` resolves a
-  symlink, which would be the bare answer for every name that is not one and
-  silently wrong for one that is, and `-S` is `-s` reporting every step of
-  the chain rather than the last; `-x` sets the tab width of a printed body.
-  Each is refused as not implemented rather than as unknown, the same
-  distinction `compgen` draws between an action a shell lacks and a typo.
 - zsh `setopt` names of the **recorded** kind: 102 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150, then 145 while the

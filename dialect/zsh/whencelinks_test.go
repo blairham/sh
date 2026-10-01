@@ -207,7 +207,9 @@ print -r -- "missing=$?"`)
 }
 
 // The letters are on all three names and are no longer refused by any of
-// them; `-m` still is, so the two wordings stay distinguishable.
+// them. `-m` was the row that stayed refused as missing until #5230 built it;
+// it is answered now, and over the link tree it lists `two` bare — the table's
+// rows draw no arrow, measured.
 //
 // **`-x` is no longer on this list** and the row for it has become the
 // opposite: it is answered, and what it answers with is the body indented by
@@ -222,7 +224,7 @@ whence -x 2 -f two 2>&1
 print -r -- "x=$?"
 whence -z two 2>&1
 print -r -- "z=$?"`)
-	want := "zsh:whence:1: -m is not implemented yet\nm=1\n" +
+	want := dir + "/two\nm=0\n" +
 		dir + "/two\nx=0\n" +
 		"zsh:whence:5: bad option: -z\nz=1\n"
 	if out != want || st != 0 {

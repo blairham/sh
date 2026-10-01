@@ -77,16 +77,16 @@ func TestTheIndentLetterNeedsANumber(t *testing.T) {
 			}
 		})
 	}
-	// And the letter that is still missing is still refused as missing, which
-	// is what keeps "unimplemented" meaning something: a script can tell a
-	// shell that lacks a feature from a typo.
-	t.Run("the letter this shell has not got", func(t *testing.T) {
-		out, st, errs := runZshSplit(t, dir, fn+"which -m f\n")
-		want := "zsh:which:2: -m is not implemented yet\n"
-		if out != "" || errs != want || st != 1 {
-			t.Errorf("out %q err %q status %d, want %q at 1", out, errs, st, want)
+	// `-m` used to be refused here as the letter still missing; it is built
+	// now (#5230), and the indent reaches the bodies it lists. Measured on
+	// zsh 5.9.2: `which -x2 -m f` and `which -mx2 f` both write the body
+	// indented by two.
+	for _, src := range []string{"which -x2 -m f\n", "which -mx2 f\n"} {
+		out, st, errs := runZshSplit(t, dir, fn+src)
+		if want := "f () {\n  print hi\n}\n"; out != want || errs != "" || st != 0 {
+			t.Errorf("%q: out %q err %q status %d, want %q at 0", src, out, errs, st, want)
 		}
-	})
+	}
 }
 
 // **The arrangement is for the length of one command**, which is the half a

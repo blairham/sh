@@ -167,6 +167,12 @@ type Job struct {
 	// has said nothing about it yet has nothing to correct.
 	reportedState jobReportState
 
+	// noticed records that the shell waited for a child after this job had
+	// finished, which is when the one dialect that drops a finished job
+	// learns it has finished. See Runner.noticeFinishedJobs. Written and read
+	// on the shell's own goroutine only.
+	noticed bool
+
 	// stopExpected says this shell has sent this job a signal whose default
 	// action is to stop it, and has not yet been told that it stopped.
 	//
@@ -2702,6 +2708,75 @@ func (r *Runner) reap(j *Job) {
 			r.reaped[i] = nil
 		}
 		r.reaped = append(r.reaped[:0], r.reaped[extra:]...)
+	}
+}
+
+// dropFinishedJobs takes out of the table every finished job that nothing is
+// going to report, in the dialect where such a job does not stay. See
+// Semantics.FinishedJobLeavesTheTable.
+//
+// Called where a job spec is resolved, and never from the goroutine a job
+// ends on, which may not touch the table. Reading it lazily is the same
+// answer: what the job left behind is only observable through such a read.
+// A listing needs no call — whether it shows a finished job is
+// JobsListFinishedJobs, which the same dialect already answers No — and
+// zsh's `$jobstates` skips finished jobs for the same reason.
+//
+// The question is asked only where a finished job is there to ask about, so a
+// table of running jobs, or none, consults nothing. "Finished" means noticed
+// as finished — see noticeFinishedJobs. Each job goes the way a
+// waited-for one does, so its process id still answers `wait`.
+func (r *Runner) dropFinishedJobs() {
+	if r.JobControl && r.monitor {
+		// A notice before the next prompt, or a listing, reports it, and
+		// that is when every column lets it go.
+		return
+	}
+	var finished []*Job
+	for _, j := range r.jobs {
+		if j.noticed {
+			finished = append(finished, j)
+		}
+	}
+	if len(finished) == 0 {
+		return
+	}
+	if !r.ask(r.sem().FinishedJobLeavesTheTable, "a finished background job that nothing has reported") {
+		return
+	}
+	for _, j := range finished {
+		r.reap(j)
+	}
+}
+
+// noticeFinishedJobs marks every job that has finished by now as one the shell
+// knows has finished, for dropFinishedJobs.
+//
+// Called where the shell has just waited for a child in the foreground, which
+// is when the reference learns of a background job's end: measured
+// 2026-10-01 on zsh 5.9.2, `(exit 5) & :; wait %%` and `(exit 5) & x=1; wait
+// %%` are 5, four runs in four, while the same line with `/usr/bin/true`,
+// `sleep 0.2` or `$(echo)` in the middle is `no current job`. A job that has
+// ended is only *known* to have ended once the shell has reaped a child, and
+// a run of builtins reaps nothing.
+//
+// That is a model of a race, made deterministic: in the reference a long
+// enough run of builtins can be interrupted by the child's signal, and here it
+// never is. Choosing the reap as the moment is what keeps `cmd & wait %%` —
+// a job still running as far as the reference knows — from depending on how
+// fast a goroutine ends.
+//
+// Only on the shell at the top. A subshell's waits are its own, and a
+// background job's run on another goroutine, where the table may not be
+// touched.
+func (r *Runner) noticeFinishedJobs() {
+	if r.inSubshell || r.forkedForABackgroundJob {
+		return
+	}
+	for _, j := range r.jobs {
+		if j.Finished() {
+			j.noticed = true
+		}
 	}
 }
 

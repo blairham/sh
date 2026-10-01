@@ -1609,6 +1609,8 @@ func Semantics() interp.Semantics {
 	// is nobody's to infer. TestDisownIsNotABuiltin pins the absence.
 	s.JobSpecsByName = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
+	// Measured 2026-10-01: a finished job stays in the table until reported: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
+	s.FinishedJobLeavesTheTable = interp.No
 	// And a job it has already reported stays waitable by its process id.
 	s.WaitRemembersAReapedJob = interp.Yes
 	// `Terminated: 15` on the reap, which is the same sentence this shell

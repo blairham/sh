@@ -15282,6 +15282,43 @@ type Semantics struct {
 	// ksh93 says nothing at all and reports 0.
 	WaitReportsAMissingJob Answer
 
+	// FinishedJobLeavesTheTable drops a background job from the job table as
+	// soon as it has finished, where nothing is going to report it — no
+	// notice before a prompt, because the shell has no job control. True in
+	// zsh alone.
+	//
+	// Measured 2026-10-01 on script files under `env -i`:
+	//
+	//	(exit 4) & sleep 0.3; wait %%      zsh 5.9.2  no current job, 127
+	//	                                   bash 5.3.20, ksh93u+, dash, BusyBox
+	//	                                   ash 1.37.0: 4
+	//	(exit 3) & sleep 0.3; wait %1      zsh: %1: no such job, 127; bash: 3
+	//	(exit 4) & wait %%                 4 everywhere: the job is still running
+	//	                                   when the spec is read, so it is there
+	//
+	// and in zsh `jobs` lists nothing and `$jobstates` is empty, while
+	// `wait "$p"` by process id still answers the status — the job has left
+	// the table and is remembered as a reaped one is. See
+	// WaitRemembersAReapedJob for that memory.
+	//
+	// **Only where nothing will report it.** zsh with the monitor on keeps the
+	// job until its notice or a listing has said it ended — measured on a
+	// pseudo-terminal with `setopt nonotify`, `jobs` lists `exit 4` and the
+	// `wait %%` after it is `no current job` — which is the reporting every
+	// dialect already does, so that case is not asked.
+	//
+	// unpinned zsh: the corpus has no row that waits on a job spec after the
+	// job has finished; pinned by TestAFinishedJobLeavesTheTable.
+	//
+	// unpinned bash: the same reach, pinned by TestAFinishedJobStaysInTheTable.
+	//
+	// unpinned ksh: the same reach, pinned by TestAFinishedJobStaysInTheTable.
+	//
+	// unpinned dash: the same reach, pinned by TestAFinishedJobStaysInTheTable.
+	//
+	// unpinned ash: the same reach, pinned by TestAFinishedJobStaysInTheTable.
+	FinishedJobLeavesTheTable Answer
+
 	// WaitRemembersAReapedJob keeps a job that `wait` has already reported
 	// the status of answerable by its process id, after it has left the job
 	// table. True everywhere but ksh93.
@@ -30079,6 +30116,9 @@ func PosixSemantics() Semantics {
 		AmbiguousJobNameIsRefused: Yes,
 		WaitReportsAMissingJob:    Yes,
 		WaitNextJob:               WaitNextJobAbsent,
+		// POSIX keeps a finished job's status known until `wait` or `jobs`
+		// has reported it, which is every measured column but one.
+		FinishedJobLeavesTheTable: No,
 		// And no `wait -p` either, for the same reason: the standard's
 		// `wait` takes no options at all.
 		WaitPNamesTheFinishedJob: No,

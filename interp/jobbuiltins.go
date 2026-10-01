@@ -1119,6 +1119,10 @@ const (
 // findJobQuietly is findJob without the complaint, for a caller that words its
 // own — `kill %9` is `kill`'s error to report, not this one's.
 func (r *Runner) findJobQuietly(spec string) (*Job, int) {
+	r.dropFinishedJobs()
+	if r.unspecified {
+		return nil, jobSpecUnanswered
+	}
 	text := strings.TrimPrefix(spec, "%")
 	switch text {
 	case "", "%", "+":

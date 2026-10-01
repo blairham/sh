@@ -301,7 +301,23 @@ func (r *Runner) RemoveSuffixAlias(suffix string) bool {
 // the search is the identical one. Nothing process-wide is touched and no
 // state is kept: a caller asking twice with a different PATH gets two answers,
 // which is the point of a view.
-func (r *Runner) CommandsOnPath() map[string]string {
+func (r *Runner) CommandsOnPath() map[string]string { return r.pathEntries(true) }
+
+// PathEntries is every name the directories on PATH hold, to the path of the
+// first one holding it — what [Runner.CommandsOnPath] lists before it asks
+// whether the entry would run.
+//
+// For a shell whose command table is filled by *listing* the directories
+// rather than by searching for one name: measured 2026-09-30 on zsh 5.9.2,
+// `whence -m 'z*'` over a PATH holding a directory, a file without the
+// execute bit and a dangling symlink names all three — the table holds what
+// the directory holds, and nothing checks it until something tries to run
+// it. Earlier PATH entries win, as they do in a lookup.
+func (r *Runner) PathEntries() map[string]string { return r.pathEntries(false) }
+
+// pathEntries is the one walk both listings share, so the two cannot come to
+// disagree about which directory wins or how a relative entry is resolved.
+func (r *Runner) pathEntries(runnableOnly bool) map[string]string {
 	out := map[string]string{}
 	path, _ := r.getVar("PATH")
 	for _, dir := range r.pathElements(path) {
@@ -320,7 +336,7 @@ func (r *Runner) CommandsOnPath() map[string]string {
 				continue
 			}
 			full := r.absolute(filepath.Join(dir, name))
-			if r.runnable(full) != nil {
+			if runnableOnly && r.runnable(full) != nil {
 				continue
 			}
 			out[name] = full

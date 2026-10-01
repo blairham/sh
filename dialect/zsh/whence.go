@@ -6,6 +6,7 @@ package zsh
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -51,13 +52,10 @@ import (
 // is `bad option: -v`, measured. So it is not a synonym with a flag set, it is
 // a second name whose options are refused.
 //
-// `-m` and `-x` are this shell's and are not implemented, and they are
-// refused out loud rather than ignored. `-m` reads the operands as patterns
-// and matches them against every name the shell could run, PATH included —
-// the answer on the measuring machine was sixty-four lines of /usr/bin — and
-// nothing here can walk PATH; `-x` sets the tab width of a printed body. The
-// same rule `compgen` follows: an answer that cannot be generated is refused
-// rather than guessed.
+// `-m` reads the operands as patterns and answers for every name each one
+// matches, in every table — see whencePattern, which carries the measurement.
+// It was refused as missing until #5230, on the grounds that nothing here could
+// walk PATH; [interp.Runner.PathEntries] is that walk.
 //
 // **`-s` was on that list and is not now** (#4446), and the sentence it was
 // refused with is the specification it is implemented to: it "would be the
@@ -84,17 +82,21 @@ import (
 //
 // whenceLetters are the letters each name implements.
 const (
-	whenceLetters = "vpcawfsS"
-	whichLetters  = "pawsS"
-	whereLetters  = "pwsS"
+	whenceLetters = "vpcawfsSm"
+	whichLetters  = "pawsSm"
+	whereLetters  = "pwsSm"
+	// typeLetters are `type`'s own letters, offered when it is answered here
+	// rather than by the core — which it is only when `-m` is among them. See
+	// typeBuiltin.
+	typeLetters = "apwfsSm"
 )
 
-// whenceUnimplemented are the letters zsh has that this one does not, kept
-// apart so they are refused as missing rather than as unknown — a script can
-// tell a shell that lacks something from a typo. All three names take them,
-// and all three refuse them the same way.
+// The letters zsh has that this one does not used to be kept apart here, so
+// they were refused as missing rather than as unknown — a script can tell a
+// shell that lacks something from a typo. The list is empty now: `-m` was the
+// last, built in #5230.
 //
-// **`-s` and `-S` have left this list** (#4446). They are the two depths of
+// **`-s` and `-S` left that list** (#4446). They are the two depths of
 // one walk — see whenceLinks — and the argument for refusing `-s`, that it
 // "would be the same as the bare answer for every name that is not a symlink
 // and silently wrong for one that is", was the argument for implementing it:
@@ -107,7 +109,6 @@ const (
 // all four names answer `number expected after -x` for `-xa` and for a bare
 // `-x`. So the reader is shared rather than written again; see
 // interp.Runner.FunctionBodyIndentOption.
-const whenceUnimplemented = "m"
 
 // registerWhence installs all three names.
 //
@@ -119,6 +120,47 @@ func registerWhence(r *interp.Runner) {
 	r.Register("whence", whenceBuiltin)
 	r.Register("which", whichBuiltin)
 	r.Register("where", whereBuiltin)
+	if core, ok := r.Builtin("type"); ok {
+		r.Register("type", typeBuiltin(core))
+	}
+}
+
+// typeBuiltin is this shell's `type`, which is `whence -v` — measured, and
+// the reason the sentences are shared rather than written twice. The core
+// answers every spelling of it but one: `-m`, the pattern lookup, is a walk
+// over every table and only `whence` makes it, so a `type` asked for it is
+// answered by that walk with `-v` already on.
+//
+// Measured 2026-09-30 on zsh 5.9.2, `-f` on a script file under `env -i`:
+// `type -m 'zba?'` writes exactly the lines `whence -vm 'zba?'` writes, and
+// `type -wm`, `-fm`, `-pm` and `-am` write what `whence` writes with the same
+// letters and `-v`. A letter `type` has not got is the refusal it always was —
+// `type -cm zq` is `bad option: -c` at 1, as `type -c zq` is.
+func typeBuiltin(core interp.Builtin) interp.Builtin {
+	return func(r *interp.Runner, ctx context.Context, args []string) int {
+		if !optionWordsHold(args, 'm') {
+			return core(r, ctx, args)
+		}
+		names, m, code := whenceOptions(r, args, typeLetters, whenceMode{verbose: true})
+		if code != 0 || len(names) == 0 {
+			return code
+		}
+		return whenceNames(r, ctx, names, m)
+	}
+}
+
+// optionWordsHold reports whether a letter is among the leading option words,
+// which end at the first operand, at `--` and at a lone `-`.
+func optionWordsHold(args []string, letter byte) bool {
+	for _, word := range args {
+		if word == "--" || word == "-" || !strings.HasPrefix(word, "-") {
+			return false
+		}
+		if strings.IndexByte(word[1:], letter) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // whenceMode is what the letters asked for.
@@ -131,6 +173,7 @@ type whenceMode struct {
 	funcs   bool // -f: a function answers with its body
 	link    bool // -s: where the path ends up
 	chain   bool // -S: every link on the way there
+	pattern bool // -m: each operand is a pattern over every table
 }
 
 func whenceBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
@@ -171,6 +214,9 @@ func whenceUnder(r *interp.Runner, ctx context.Context, name string, args []stri
 }
 
 func whenceNames(r *interp.Runner, ctx context.Context, names []string, m whenceMode) int {
+	if m.pattern {
+		return whencePatterns(r, names, m)
+	}
 	status := 0
 	for _, name := range names {
 		if st := whenceOne(r, ctx, name, m); st != 0 {
@@ -218,9 +264,6 @@ func whenceOptions(r *interp.Runner, args []string, offered string, m whenceMode
 			switch {
 			case strings.ContainsRune(offered, letter):
 				setWhenceLetter(&m, byte(letter))
-			case strings.ContainsRune(whenceUnimplemented, letter):
-				r.Diagnosef("-%c is not implemented yet\n", letter)
-				return nil, m, 1
 			default:
 				r.Diagnosef("bad option: -%c\n", letter)
 				return nil, m, 1
@@ -253,7 +296,144 @@ func setWhenceLetter(m *whenceMode, letter byte) {
 		m.link = true
 	case 'S':
 		m.chain = true
+	case 'm':
+		m.pattern = true
 	}
+}
+
+// whencePatterns is `-m`: every operand is a pattern, and the answer is every
+// name it matches in every table, each in that table's own shape.
+//
+// Measured 2026-09-30 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f` on a script
+// file under `env -i PATH=/usr/bin:/bin LC_ALL=C`), with PATH set to two
+// scratch directories — `p2` holding zab, zbar, zbaz and `p1` holding zfoo,
+// zbar, zqux, zz, a directory zdir and a file znoexec without the execute bit
+// — an alias zbar and a function zbaz:
+//
+//   - **The tables in turn, and every match in each.** Aliases (regular and
+//     global together, never suffix), then reserved words, then functions,
+//     then builtins, then commands. `whence -m 't*'` with an alias `tal` and a
+//     function `tfn` is `tal`'s value, then `then`, `time`, `typeset`, then
+//     `tfn`, then the builtins from `test` on. A name in two tables is
+//     answered twice: `zbaz` is the function and then `…/p2/zbaz`, and `local`
+//     is the reserved word and then the builtin.
+//   - **Sorted within a table**, not in definition order: functions defined
+//     zq then za are listed za, zq; aliases zy, zb (global), zc are listed by
+//     name across both kinds.
+//   - **The command table is the directories' listing**, the first directory
+//     winning: zdir and znoexec are answered, and `zbar` once, from p2. A name
+//     `hash` put there is in it too — `hash zman=/bin/ls` makes `whence -m
+//     'zm*'` write `/bin/ls` — and is not a PATH hit.
+//   - **`-a` makes the command rows a search** instead: every PATH hit of
+//     every matching name, so `zbar` twice and zdir, znoexec and the hashed
+//     zman not at all. `-p` keeps only the command rows, with or without it.
+//   - **`-s` and `-S` reach only the `-a` rows.** With `zlink -> /bin/ls` on
+//     PATH, `whence -sm zlink`, `-Sm`, `-psm` and `type -sm` write the path
+//     bare, where `whence -s zlink`, `whence -asm 'zl*'`, `-apsm` and `type
+//     -sam` write the arrow — the table's rows are written as the table
+//     holds them and only a search resolves.
+//   - **A miss is silence in every shape**, `-v`, `-c` and `-w` included, and
+//     the status is 1 only when no operand matched anything: `whence -m
+//     'nos*' zfoo` and `whence -m zfoo 'nos*'` are both 0. A match is a name
+//     in a table and not a line written — `whence -am qqdir` writes nothing
+//     at 0, because the table holds the directory and the search finds no
+//     file to run.
+//   - **An operand matching in two patterns is written twice** — `whence -m
+//     'zf*' 'zfo*'` repeats both lines.
+//
+// The pattern is the shell's own, so `-m 'z[ab]*'` and `-m '(zfoo|zz)'` match
+// as `case` would and a plain name matches itself. A disabled builtin is not
+// listed — `disable zle` takes it out of `whence -m 'zl*'` — because
+// [interp.Runner.BuiltinNames] already leaves out what is switched off or
+// withdrawn.
+//
+// What is not modeled: zsh fills its command table once and answers from it
+// until `rehash`, so a file added to PATH later can be missing from its
+// listing. This walks the directories each time.
+func whencePatterns(r *interp.Runner, patterns []string, m whenceMode) int {
+	found := false
+	for _, pattern := range patterns {
+		if whencePattern(r, pattern, m) {
+			found = true
+		}
+	}
+	if found {
+		return 0
+	}
+	return 1
+}
+
+// whencePattern answers for one pattern and reports whether it matched.
+func whencePattern(r *interp.Runner, pattern string, m whenceMode) bool {
+	found := false
+	matching := func(names []string) []string {
+		var out []string
+		for _, name := range names {
+			if r.MatchPattern(pattern, name) {
+				out = append(out, name)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	if !m.path {
+		var aliases []string
+		for name := range r.AliasTable() {
+			aliases = append(aliases, name)
+		}
+		for name := range r.GlobalAliasTable() {
+			aliases = append(aliases, name)
+		}
+		for _, name := range matching(aliases) {
+			if display, value, akind, ok := r.AliasForName(name); ok {
+				found = true
+				writeLine(r, aliasAnswer(r, display, value, akind, m))
+			}
+		}
+		tables := []struct {
+			kind  interp.NameKind
+			names []string
+		}{
+			{interp.NameReserved, zshReservedWords},
+			{interp.NameFunction, r.ListedFuncNames()},
+			{interp.NameBuiltin, r.BuiltinNames()},
+		}
+		for _, table := range tables {
+			for _, name := range matching(table.names) {
+				found = true
+				writeLine(r, resolvedAnswer(r, name, table.kind, "", m))
+			}
+		}
+	}
+	commands := r.PathEntries()
+	for _, name := range r.HashedCommandNames() {
+		if path, ok := r.HashedCommandPath(name); ok {
+			commands[name] = path
+		}
+	}
+	names := make([]string, 0, len(commands))
+	for name := range commands {
+		names = append(names, name)
+	}
+	for _, name := range matching(names) {
+		// A name the table holds is a match whether or not the search below
+		// finds a file to write for it: measured, `whence -am qqdir` over a
+		// directory on PATH and `whence -am 'qqm*'` over a name only `hash`
+		// put there both write nothing and answer 0.
+		found = true
+		if m.all {
+			for _, path := range r.LookPathAll(name) {
+				writeLine(r, resolvedAnswer(r, name, interp.NameFile, path, m))
+			}
+			continue
+		}
+		// A row read from the table is written as the table holds it: `-s`
+		// and `-S` draw no arrow here, and do on the `-a` rows above.
+		table := m
+		table.link, table.chain = false, false
+		writeLine(r, resolvedAnswer(r, name, interp.NameFile, commands[name], table))
+	}
+	return found
 }
 
 // whenceOne answers for one name.
@@ -378,6 +558,17 @@ func aliasAnswer(r *interp.Runner, name, value string, kind interp.AliasKind, m 
 // Diagnostics already carry and asking them twice is how two answers to one
 // question come to disagree.
 func resolvedAnswer(r *interp.Runner, name string, kind interp.NameKind, path string, m whenceMode) string {
+	// `-f` on a function is the body whatever else was asked for: measured
+	// 2026-09-30 on zsh 5.9.2, `whence -vf zq`, `whence -fv zq`, `whence -wf
+	// zq` and `whence -vfa zq` all write the definition and nothing else,
+	// while `whence -vf echo` is still the builtin's sentence — the letter
+	// is about functions and leaves every other kind to the shape. It is also
+	// what `type -fm` needs, since `type` is `whence -v`.
+	if kind == interp.NameFunction && m.funcs {
+		if body, ok := r.FunctionText(name); ok {
+			return body
+		}
+	}
 	if m.kind {
 		return name + ": " + whenceKindWord(kind)
 	}

@@ -41,7 +41,7 @@ import (
 //     `vi-match-bracket` for `^X^B` because zsh does would be naming a widget
 //     nothing here performs, and `bindkey` is a question a person asks to find
 //     out what a key does. What it answers is what this editor will actually
-//     do. The same rule `whence -m` follows: an answer that cannot be
+//     do. The same rule `compgen` follows: an answer that cannot be
 //     generated is refused rather than invented.
 //   - **`-p`, `-R`, `-N`, `-A`, `-D` and `-d`** — prefix bindings, ranges of
 //     keys, and making, aliasing or destroying a keymap — are refused as not

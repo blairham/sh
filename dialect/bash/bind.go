@@ -59,7 +59,7 @@ import (
 //     `vi-match` because bash does would be naming something nothing here
 //     performs, and `bind -q` is a question a person asks to find out what a
 //     key does. The same rule `bindkey` follows on the other side, and the
-//     same rule `whence -m` follows: an answer that cannot be generated is
+//     same rule `compgen` follows: an answer that cannot be generated is
 //     refused rather than invented.
 //   - **`-v`, `-V` and `-f`** — readline's variables and reading an inputrc —
 //     are refused as not implemented. There is no readline here to hold a

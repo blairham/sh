@@ -5582,9 +5582,11 @@ func Diagnostics() interp.Diagnostics {
 			// refusal road was right and only the letter was misfiled.
 			// `whence -v` is unaffected — that is whence's own letter.
 			//
-			// `m` stays, correctly: `type -m ls` writes `ls is /bin/ls` at 0
-			// in zsh, so it is a letter zsh has and this shell has not built.
-			"type": "m",
+			//
+			// `m` has left it the first way, by being built (#5230): `type -m`
+			// is `whence -vm`, the pattern lookup, and a zsh `type` that is
+			// handed the letter is answered by whence's own walk. See
+			// typeBuiltin in whence.go.
 			// jobs' letters that are zsh's own: -d names the directory the
 			// job was started in, and -z and -Z are about the process
 			// title rather than about the job table.

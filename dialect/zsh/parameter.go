@@ -4,6 +4,7 @@
 package zsh
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -706,19 +707,24 @@ func writeZshOption(r *interp.Runner, name, value string, set bool) {
 // key was measured at nine milliseconds against tens of microseconds for the
 // lookup; making it fill the table would put that back and more.
 func zshCommandsView(r *interp.Runner) interp.AssocArray {
-	found := r.CommandsOnPath()
-	out := make(interp.AssocArray, len(found))
-	for name, path := range found {
-		out[name] = interp.Scalar(path)
-	}
-	// Second, so a hashed entry writes over what the search found rather than
-	// the other way round.
-	for _, name := range r.HashedCommandNames() {
+	fillCommandHash(r)
+	names := r.HashedCommandNames()
+	out := make(interp.AssocArray, len(names))
+	for _, name := range names {
 		if path, ok := r.HashedCommandPath(name); ok {
 			out[name] = interp.Scalar(path)
 		}
 	}
 	return out
+}
+
+// fillCommandHash is the fill any touch of `$commands` makes, and `hash -f`:
+// every name PATH holds, executable or not unless `hashexecutablesonly` is
+// on. Measured on zsh 5.9.2 (#5266): `${(ko)commands[(I)z*]}` names a
+// directory and a file with no execute bit, which the option leaves out.
+func fillCommandHash(r *interp.Runner) {
+	only, _ := conditionOption(r, "hashexecutablesonly")
+	r.FillCommandHashFromPath(only)
 }
 
 // zshCommandValue is `${commands[git]}`: the table, then one PATH search,
@@ -745,10 +751,13 @@ func zshCommandValue(r *interp.Runner, name string) (string, bool) {
 	if strings.ContainsRune(name, '/') {
 		return "", false
 	}
-	if path, ok := r.HashedCommandPath(name); ok {
-		return path, true
-	}
-	return r.LookPath(name)
+	// A single key fills the table too: measured, `hash -r; : ${commands[zz]};
+	// hash` lists all of PATH. And the filled table is the whole answer, so a
+	// name unset out of it stays out until the table is emptied and filled
+	// again: measured, `unset "commands[toolx]"; ${commands[toolx]}` is
+	// empty although PATH still holds toolx.
+	fillCommandHash(r)
+	return r.HashedCommandPath(name)
 }
 
 // writeZshCommand is `commands[c]=/path` and `unset "commands[c]"`, which
@@ -786,6 +795,14 @@ func zshCommandValue(r *interp.Runner, name string) (string, bool) {
 // than about the table, and the removal is taken here whenever it is asked
 // for.
 func writeZshCommand(r *interp.Runner, name, value string, set bool) {
+	// A write and an unset touch the table as a read does, so they fill it
+	// first: measured, `unset "commands[toolx]"` then `${commands[toolx]}` is
+	// empty with toolx on PATH, the fill having come before the removal.
+	//
+	// Not modeled: an unset that is the *first* touch of the parameter in a
+	// fresh shell is `commands: assignment to invalid subscript range` there,
+	// and here it removes the entry like any other.
+	fillCommandHash(r)
 	if !set {
 		r.ForgetHashedCommand(name)
 		return
@@ -934,4 +951,48 @@ func writeZshErrno(r *interp.Runner, value string) {
 	if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
 		r.SetLastErrno(n)
 	}
+}
+
+// registerHashFill wraps `hash` with its `-f` letter: the table filled from
+// PATH at once, the fill `$commands` makes, and nothing listed. Measured on
+// zsh 5.9.2 (#5266): `hash -f` writes nothing at 0, and a `hash` after it
+// lists every name PATH holds. Everything else is the core's.
+func registerHashFill(r *interp.Runner) {
+	core, ok := r.Builtin("hash")
+	if !ok {
+		return
+	}
+	r.Register("hash", func(rr *interp.Runner, ctx context.Context, args []string) int {
+		filled := false
+		rest := make([]string, 0, len(args))
+		for i, a := range args {
+			if a == "--" || len(a) < 2 || a[0] != '-' {
+				// The options are over, and the rest is the core's as written.
+				rest = append(rest, args[i:]...)
+				break
+			}
+			if strings.ContainsRune(a, 'f') {
+				filled = true
+				if a = strings.ReplaceAll(a, "f", ""); a == "-" {
+					continue
+				}
+			}
+			rest = append(rest, a)
+		}
+		if filled {
+			for _, a := range rest {
+				if a != "--" && (len(a) < 2 || a[0] != '-') {
+					// The fill takes no names: measured, `hash -fv zz` is
+					// `too many arguments` at 1 and fills nothing.
+					rr.Diagnosef("too many arguments\n")
+					return 1
+				}
+			}
+			// And lists nothing, whatever else was asked for: measured,
+			// `hash -fv` writes nothing at 0.
+			fillCommandHash(rr)
+			return 0
+		}
+		return core(rr, ctx, rest)
+	})
 }

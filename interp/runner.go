@@ -1459,6 +1459,9 @@ type Runner struct {
 	// subshells explain and which no field here claims yet.
 	cmdHash      map[string]hashedCommand
 	cmdHashOrder []string
+	// cmdHashFilled says the table has been filled from PATH since it was
+	// last emptied. See Runner.FillCommandHashFromPath.
+	cmdHashFilled bool
 
 	// namedDirs is the table behind `~name` — a directory this shell was
 	// *told* about, written by `hash -d` in the one dialect that has the

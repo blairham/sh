@@ -5521,7 +5521,10 @@ func Diagnostics() interp.Diagnostics {
 			// the comment above warns about, read from the other side: a
 			// letter named here while the accepted set spells it is either a
 			// wrong refusal or, as here, a line nothing reads.
-			"hash": "fL",
+			//
+			// **And `-f` left it with #5266**: it fills the table from PATH,
+			// in hashFill.
+			"hash": "L",
 			// read's letters about a terminal or the line editor —
 			// -e/-E echoing, -z and the zle pair -c/-l. The -p
 			// coprocess is implemented as its measured refusal — see
@@ -6656,6 +6659,7 @@ func Apply(r *interp.Runner) {
 	// terminfo.go.
 	registerTerminfoModules(r)
 	registerBuiltinSynonyms(r)
+	registerHashFill(r)
 	// And `zsh/langinfo`'s one: the locale's own vocabulary, answered from
 	// the variables that name the locale rather than from a fixed table. See
 	// langinfo.go.

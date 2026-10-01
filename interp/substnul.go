@@ -28,6 +28,12 @@ func (r *Runner) substitutedValue(out string) string {
 		case NulKept, NulCutInASubstitution:
 		case NulDropped:
 			out = strings.ReplaceAll(out, "\x00", "")
+			// Said once for the substitution, however many there were, in
+			// the one dialect that says anything. See
+			// Diagnostics.SubstitutionDroppedANul.
+			if w := r.diag().SubstitutionDroppedANul; w != "" {
+				r.diagf("%s\n", w)
+			}
 		default:
 			r.diagf("%s\n", r.unanswered("a NUL byte in what a command substitution takes in"))
 			r.status = 2

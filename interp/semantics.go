@@ -2475,7 +2475,9 @@ type Semantics struct {
 	//	zsh 5.9.2            every NUL kept   every NUL kept
 	//
 	// So three answers, and ksh93's is two at once: it drops in `read` and
-	// cuts in a substitution, which is what NulCutInASubstitution says. Both
+	// cuts in a substitution, which is what NulCutInASubstitution says. What
+	// bash says about the byte it dropped is Diagnostics.SubstitutionDroppedANul.
+	// Both
 	// halves are asked: `read` in Runner.readNulFilter, and every spelling
 	// that captures output — `$( … )`, backquotes, `$(<file)` and `${ … ;}` —
 	// in Runner.substitutedValue.
@@ -2514,8 +2516,6 @@ type Semantics struct {
 	//     whole expression text there — `$(( $(printf '1\0 2') + 1 ))` is 1 —
 	//     and the expression scanner here uses the byte as its own mark, so
 	//     the cut is not taken there.
-	//   - bash's warning, `command substitution: ignored null byte in input`,
-	//     which is a diagnostic rather than a value and a step of its own.
 	//
 	// unpinned zsh: no corpus row puts a NUL in front of `read` or in a
 	// substitution's output; pinned by TestReadKeepsANul and

@@ -1467,6 +1467,21 @@ type Diagnostics struct {
 	// syntax.Dialect.HeredocBodyFromAfterTheCommand.
 	HeredocCarriedOutOfSubstitution string
 
+	// SubstitutionDroppedANul is what a shell says when a command
+	// substitution took in a NUL and dropped it — see
+	// Semantics.NulInAValue, which decides the dropping. Empty means nothing
+	// is said, which is every column but one.
+	//
+	// Measured 2026-10-01: bash 5.3.20 writes `warning: command substitution:
+	// ignored null byte in input` once per substitution, however many NULs
+	// it held, on the line of the command the substitution is in, and goes on
+	// with the byte dropped — `$?` is still the body's status. `$(<file)`,
+	// backquotes and `${ … ;}` say it too. bash 3.2.57, dash 0.5.12 and
+	// BusyBox ash 1.37.0 drop the byte and say nothing; ksh93 and zsh do not
+	// drop it, so the question does not arise there. `read` dropping a NUL is
+	// silent in every column.
+	SubstitutionDroppedANul string
+
 	// BackquoteObsolete is what a shell says about the older command
 	// substitution, `` `…` ``. Empty means nothing is said, which is five of
 	// the six columns.

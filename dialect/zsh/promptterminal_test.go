@@ -14,6 +14,7 @@ import (
 // terminal with no way up draws no attribute at all.
 const (
 	capClrEol            = 6   // el
+	capCursorAddress     = 10  // cup
 	capCursorUp          = 19  // cuu1
 	capEnterBoldMode     = 27  // bold
 	capEnterStandoutMode = 35  // smso
@@ -38,6 +39,7 @@ func xtermLikeTerminal(t *testing.T) string {
 			capExitAltCharset:    "\x1b(B",
 			capSetAttributes:     "%?%p9%t\x1b(0%e\x1b(B%;\x1b[0%?%p6%t;1%;%?%p5%t;2%;%?%p2%t;4%;%?%p1%p3%|%t;7%;%?%p4%t;5%;%?%p7%t;8%;m",
 			capClrEol:            "\x1b[K",
+			capCursorAddress:     "\x1b[%i%p1%d;%p2%dH",
 			capCursorUp:          "\x1b[A",
 			capEnterBoldMode:     "\x1b[1m",
 			capEnterStandoutMode: "\x1b[7m",

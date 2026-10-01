@@ -38,7 +38,7 @@ import (
 // naming the package.
 func TestZsocketListenerHoldsOneConnectionAndRefusesTheNext(t *testing.T) {
 	dir := socketDir(t)
-	src := `zsocket -l sock
+	src := `zmodload zsh/net/socket; zsocket -l sock
 zsocket sock
 print -r -- "first=$?"
 zsocket sock 2>&1

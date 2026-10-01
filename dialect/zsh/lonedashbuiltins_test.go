@@ -241,12 +241,10 @@ func TestTheLoneDashReadersAskRatherThanAssume(t *testing.T) {
 		name, src, wantNo string
 		wantNoStatus      int
 	}{
-		// `whence` says nothing about a name it cannot find — measured, a
-		// bare `whence -` is silent at 1 — so the dash being a name shows in
-		// the **status** and nowhere else. A row written against the text
-		// would have passed with the dash eaten, which is the whole reason
-		// this one is here.
-		{"whence looks the dash up", `whence - echo`, "echo", 1},
+		// The dash is a builtin's name in this dialect's table (#5265), so
+		// `whence -w` looked up as a name answers for it — which a dash read
+		// as the end of the options never would.
+		{"whence looks the dash up", `whence -w - echo`, "-: builtin", 0},
 		{"enable names the dash as a table element", `enable - -f x`, "no such hash table element: -", 1},
 		{"setopt names the dash as an option", `setopt - -x`, "no such option: -", 1},
 		{"shift reads the dash as a count", `shift -`, "-", 2},

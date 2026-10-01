@@ -110,6 +110,8 @@ type capabilityTables struct {
 	// word for a person. Keyed by the terminfo name alone, because that is
 	// the only spelling the builtin takes.
 	kinds map[string]repl.TerminalCapabilityKind
+	// termcapKinds is the same by termcap code, for `echotc`.
+	termcapKinds map[string]repl.TerminalCapabilityKind
 }
 
 // terminfoEnvironment is every variable the answer depends on, in the order
@@ -137,6 +139,17 @@ func (c *capabilityTables) listedTable(r *interp.Runner) interp.AssocArray {
 func (c *capabilityTables) readTable(r *interp.Runner) interp.AssocArray {
 	found, _, _, _ := c.tables(r)
 	return found
+}
+
+// termcapEntry is one capability by termcap code, and which section it came
+// from, for `echotc`.
+func (c *capabilityTables) termcapEntry(r *interp.Runner, code string) (string, repl.TerminalCapabilityKind, bool) {
+	byTermcap := c.termcapTable(r)
+	c.mu.Lock()
+	kind := c.termcapKinds[code]
+	c.mu.Unlock()
+	v, ok := byTermcap[code]
+	return v.Str, kind, ok
 }
 
 // termcapTable is the `$termcap` half, read through the same cache.
@@ -172,6 +185,7 @@ func (c *capabilityTables) tables(r *interp.Runner) (
 	byTerminfo := make(interp.AssocArray, len(caps))
 	listed := make(interp.AssocArray, len(caps))
 	byTermcap := make(interp.AssocArray, len(caps))
+	termcapKinds := make(map[string]repl.TerminalCapabilityKind, len(caps))
 	for _, entry := range caps {
 		byTerminfo[entry.Terminfo] = interp.Scalar(entry.Value)
 		kinds[entry.Terminfo] = entry.Kind
@@ -190,6 +204,7 @@ func (c *capabilityTables) tables(r *interp.Runner) (
 		// reaches first because booleans come before strings.
 		if _, taken := byTermcap[entry.Termcap]; entry.Termcap != "" && !taken {
 			byTermcap[entry.Termcap] = interp.Scalar(entry.Value)
+			termcapKinds[entry.Termcap] = entry.Kind
 		}
 	}
 	// The termcap `me` is not the terminfo `sgr0` it is filed under, where
@@ -198,6 +213,7 @@ func (c *capabilityTables) tables(r *interp.Runner) (
 		byTermcap["me"] = interp.Scalar(termcapExitAttributes(sgr0.Str, byTerminfo["sgr"].Str, byTerminfo["rmacs"].Str))
 	}
 	c.from, c.terminfo, c.listed, c.termcap, c.kinds = key, byTerminfo, listed, byTermcap, kinds
+	c.termcapKinds = termcapKinds
 	return byTerminfo, listed, byTermcap, kinds
 }
 
@@ -220,6 +236,7 @@ func registerTerminfoModules(r *interp.Runner) {
 	registerCapabilityParameter(r, "termcap", "co", "li",
 		tables.termcapTable, tables.termcapTable)
 	registerEchoti(r, tables)
+	registerEchotc(r, tables)
 }
 
 // registerCapabilityParameter installs one of them, with the two things a
@@ -339,8 +356,8 @@ func termcapExitAttributes(sgr0, sgr, rmacs string) string {
 	if sgr == "" || rmacs == "" {
 		return sgr0
 	}
-	off := stripPadding(withoutCharset(tparm(sgr, make([]int, 9)), rmacs))
-	plain := stripPadding(withoutCharset(sgr0, rmacs))
+	off := withoutPadding(withoutCharset(tparm(sgr, make([]int, 9)), rmacs))
+	plain := withoutPadding(withoutCharset(sgr0, rmacs))
 	if sameReset(off, plain) {
 		return off
 	}
@@ -402,20 +419,5 @@ func promptCapability(table interp.AssocArray, code string) string {
 	if !ok {
 		return ""
 	}
-	return stripPadding(v.Str)
-}
-
-// stripPadding takes the `$<…>` delays out of a capability string.
-func stripPadding(s string) string {
-	for {
-		i := strings.Index(s, "$<")
-		if i < 0 {
-			return s
-		}
-		j := strings.IndexByte(s[i:], '>')
-		if j < 0 {
-			return s
-		}
-		s = s[:i] + s[i+j+1:]
-	}
+	return withoutPadding(v.Str)
 }

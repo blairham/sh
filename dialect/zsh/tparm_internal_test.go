@@ -52,10 +52,12 @@ func TestTparmComputesTheMeasuredSequences(t *testing.T) {
 // Padding is a delay for the writer and never reaches the terminal.
 func TestWithoutPadding(t *testing.T) {
 	for in, want := range map[string]string{
-		"\x1b[4;5H$<5>":  "\x1b[4;5H",
-		"\x0f$<2>":       "\x0f",
-		"a$<10.5*/>b":    "ab",
-		"a$<x>b":         "a$<x>b",
+		"\x1b[4;5H$<5>": "\x1b[4;5H",
+		"\x0f$<2>":      "\x0f",
+		"a$<10.5*/>b":   "ab",
+		"a$<x>b":        "a$<x>b",
+		// No number is no delay, as terminfo(5) describes padding.
+		"a$<>b":          "a$<>b",
 		"cost $5 and $<": "cost $5 and $<",
 	} {
 		if got := withoutPadding(in); got != want {

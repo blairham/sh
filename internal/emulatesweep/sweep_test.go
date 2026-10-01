@@ -15,6 +15,30 @@ import (
 	"github.com/blairham/sh/internal/oracle"
 )
 
+// hangingShell is a fixture that never answers, written once by TestMain.
+//
+// Not by each test that wants it: those tests run in parallel with others that
+// fork, and Linux refuses to exec a file some process still holds open for
+// writing — a child forked between this process's open and close of the file
+// holds the descriptor until it execs, and the exec of the fixture fails with
+// "text file busy" (#5324). Before m.Run nothing else in the package is
+// running, so nothing can be forking.
+var hangingShell string
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "emulatesweep-")
+	if err != nil {
+		panic(err)
+	}
+	hangingShell = filepath.Join(dir, "hangs")
+	if err := os.WriteFile(hangingShell, []byte("#!/bin/sh\nexec sleep 30\n"), 0o700); err != nil { //nolint:gosec // a fixture that must be executable
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
+
 // ourZsh builds the shipped zsh binary, which is the one binary this sweep can
 // always point at. The controls are asserted against it rather than against a
 // zsh that may not be installed: a control suite that skips on the machine
@@ -268,11 +292,7 @@ func TestAShellThatNeverStartedIsAnError(t *testing.T) {
 // answer today, so the one shape that must never be manufactured is a zero.
 func TestAHungRunIsNeitherRefusedNorAccepted(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	hang := filepath.Join(dir, "hangs")
-	if err := os.WriteFile(hang, []byte("#!/bin/sh\nexec sleep 30\n"), 0o700); err != nil { //nolint:gosec // a fixture that must be executable
-		t.Fatal(err)
-	}
+	hang := hangingShell
 	got, err := Ask(context.Background(), t.TempDir(),
 		Binary{Name: "hangs", Path: hang, Timeout: 250 * time.Millisecond},
 		"hang", "echo hi")
@@ -299,11 +319,7 @@ func TestAHungRunIsNeitherRefusedNorAccepted(t *testing.T) {
 // control did not finish has not been seen to fire.
 func TestAHungControlIsAControlFailure(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	hang := filepath.Join(dir, "hangs")
-	if err := os.WriteFile(hang, []byte("#!/bin/sh\nexec sleep 30\n"), 0o700); err != nil { //nolint:gosec // a fixture that must be executable
-		t.Fatal(err)
-	}
+	hang := hangingShell
 	err := fireControls(context.Background(), t.TempDir(),
 		Binary{Name: "hangs", Path: hang, Timeout: 250 * time.Millisecond})
 	if err == nil {

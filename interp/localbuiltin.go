@@ -150,6 +150,14 @@ func (r *Runner) attributeWordHead(d declaration, isLocal bool) string {
 	if d.readonly {
 		words = append(words, "readonly")
 	}
+	if d.traced {
+		// Between `readonly` and `exported`, measured 2026-10-01 on zsh
+		// 5.9.2: `local -rxt l2` lists as `local readonly tagged exported
+		// l2`, `typeset -Ut` as `tagged unique`, `typeset -ut` as
+		// `uppercase tagged` and `typeset -Tt TT tt` as `array tagged tied
+		// TT tt` (#5157).
+		words = append(words, "tagged")
+	}
 	if d.exported && (isLocal || d.isArr || d.isAssoc) {
 		// An exported *scalar* at the top level earns no word, and that is
 		// measured rather than an omission: `export ee=1; typeset` writes

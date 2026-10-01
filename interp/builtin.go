@@ -7529,6 +7529,17 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			defer r.localListingIsTheRunningCallsOwn()()
 			return r.declarePrint(args)
 		}
+		if f.remove && !f.print {
+			// A plus sign with nothing after it is `typeset`'s plus listing
+			// and not this word's own, whole table and all. Measured
+			// 2026-10-01 on zsh 5.9.2 inside a function: `local +` writes
+			// what `typeset +` writes, names and no values, and `local +x`
+			// writes the exported names, where this wrote every value
+			// (#5157).
+			if code, answered := r.declarationListing(f); answered {
+				return code
+			}
+		}
 		return r.bareLocalListing()
 	}
 	if kept, dash := localDashOperands(args); dash {

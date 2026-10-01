@@ -589,7 +589,7 @@ func (r *Runner) searchNth(g *syntax.SubscriptFlags) int {
 // where the shells promise none.
 func (r *Runner) searchAssoc(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags, search byte) []string {
 	if search == 'k' || search == 'K' {
-		return r.assocKeyFlag(e, a, g)
+		return r.assocKeyFlag(e, a, g, search == 'K')
 	}
 	found := r.assocSearchKeys(e, a, g, search)
 	return assocSearchWords(e, a, found, search == 'i' || search == 'I')
@@ -628,30 +628,55 @@ func (r *Runner) assocSearchKeys(e *syntax.ParamExpr, a AssocArray, g *syntax.Su
 }
 
 // assocKeyFlag is `(k)` and `(K)` over a table, which is the one place the
-// pair is not `(r)` and `(R)` under another spelling.
+// pair is not `(r)` and `(R)` under another spelling: the match is turned
+// around, and the table's **keys are the patterns** the subscript is matched
+// against (#5278). `(k)` answers the first key that matches and `(K)` every
+// one.
 //
-// It is a **lookup and not a search**: no pattern, no walk, no modifiers.
-// Measured on zsh 5.9.2, 2026-09-12, with `m=(aa 1 bb 2)`:
+// Measured on zsh 5.9.2, 2026-10-01, with `h=('a*' star 'b?' q x plain '\*' bs)`:
 //
-//	${m[(k)aa]}     1     the value under the key spelled exactly `aa`
-//	${m[(K)aa]}     1     and the case of the letter changes nothing
-//	${m[(k)a*]}     ``    a pattern is not a key, so it is a miss
-//	${m[(k)zz]}     ``    and so is a key the table has not got
-//	${m[(kn:1:)a*]} ``    the modifiers a search reads move nothing here
-//	${(kv)m[(k)aa]} aa 1  and the expansion's own letters still choose
+//	${h[(k)abc]}     star   the key `a*` matches `abc`
+//	${h[(K)b1]}      q      and `b?` matches `b1`
+//	${h[(k)x]}       plain  a key with no pattern in it matches itself
+//	${h[(k)*]}       bs     the key `\*` is a pattern for a literal star
+//	${h[(k)\*]}      ``     the subscript keeps its backslash, so nothing matches
+//	${h[(ke)abc]}    star   `(e)` changes nothing here, nor does `(n:2:)`
 //
-// So the value is what comes back by default — where `(i)` over the same
-// table answers the *key* — and `${#m[(k)aa]}` is 1, the match count, which
-// is what puts this on the same list-shaped route as the searches.
+// and `setopt extendedglob` reaches the keys: `(#i)AB` matches `ab`.
 //
-// The exactness is the discriminator: a pattern reading would answer
-// `${m[(k)a*]}` with the 1 under `aa`, and it does not (#1986).
-func (r *Runner) assocKeyFlag(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags) []string {
-	key := r.assocKey(g.Arg)
-	if _, ok := a[key]; !ok {
+// The earlier reading here was an exact lookup (#1986), and every row it was
+// measured on still agrees: `m=(aa 1 bb 2)` answers `${m[(k)a*]}` with
+// nothing because neither `aa` nor `bb`, read as a pattern, matches the text
+// `a*`. A table with no pattern characters in its keys cannot tell the two
+// readings apart, which is how the first one survived.
+//
+// "First" is the table's listing order, as for every other search here: zsh
+// takes the first key its own `${(k)h}` lists that matches, and ours lists
+// sorted. The two agree wherever one key matches.
+func (r *Runner) assocKeyFlag(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags, every bool) []string {
+	subject := r.renderSubscript(g.Arg, searchKeepsEscape)
+	var found []string
+	for _, k := range r.assocKeys(e.Name, a) {
+		if hasUnterminatedBracket(k, r.emptyBracketCompiles()) ||
+			r.lang().PatternAlternation && hasUnterminatedPatternGroup(k, r.emptyBracketCompiles()) {
+			// A key that is not a well-formed pattern matches nothing, and
+			// says nothing: measured, keys `[`, `[a` and `a(b` answer the
+			// very text they are spelled with as empty, at 0, where matching
+			// them as a pattern would refuse the bracket out loud.
+			continue
+		}
+		if !r.matchPatternR(k, subject, patternInAWord) {
+			continue
+		}
+		found = append(found, k)
+		if !every {
+			break
+		}
+	}
+	if len(found) == 0 {
 		return nil
 	}
-	return assocSearchWords(e, a, []string{key}, false)
+	return assocSearchWords(e, a, found, false)
 }
 
 // assocSearchWords is which half of each matched pair the expansion asked

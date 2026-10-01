@@ -6,6 +6,8 @@ package zsh
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -69,20 +71,16 @@ import (
 // `command not found: echoti` at 127, which is zmodload.go's existing feature
 // seam and needs nothing from this file.
 //
-// # Parameters are refused rather than guessed
+// # Parameters
 //
 // A capability whose sequence takes arguments keeps terminfo's own parameter
 // language in the table — `cup` is `\e[%i%p1%d;%p2%dH` — and zsh computes it
 // when arguments follow: `echoti cup 3 4` is `\e[4;5H`, `echoti cup 3` is
 // `\e[4;1H`, and `echoti cup` with none writes the language itself, unchanged.
-//
-// So the no-argument case *is* the table's value and is exact, and the
-// argument case is a small stack language — `%p`, `%{n}`, `%i`, the
-// arithmetic, `%?…%t…%e…%;` — that nothing measured on a real startup reaches.
-// It is refused by name here rather than approximated, which is the same
-// choice terminfo.go made about the builtin as a whole and for the same
-// reason: a wrong sequence sent to a terminal is a corrupted screen with
-// nothing said, where a refusal names its line.
+// The computing is tparm.go, implemented from terminfo(5) and measured
+// against zsh across four terminal types (#5150). It was refused by name
+// before that, on the reasoning that a wrong sequence sent to a terminal is a
+// corrupted screen with nothing said.
 func registerEchoti(r *interp.Runner, tables *capabilityTables) {
 	r.Register("echoti", func(r *interp.Runner, _ context.Context, args []string) int {
 		return echotiBuiltin(r, tables, args)
@@ -104,16 +102,56 @@ func echotiBuiltin(r *interp.Runner, tables *capabilityTables, args []string) in
 		return 1
 	}
 	if len(args) > 1 {
-		// See the file comment: the table holds terminfo's parameter
-		// language and computing it is a language of its own.
-		r.Diagnosef("%s: computing a capability's parameters is not implemented yet\n", name)
-		return 1
+		// The table holds terminfo's parameter language, computed here with
+		// the arguments as numbers. See tparm.
+		params := make([]int, 0, len(args)-1)
+		for _, a := range args[1:] {
+			n, _ := strconv.Atoi(a)
+			params = append(params, n)
+		}
+		_, _ = fmt.Fprint(r.Out(), withoutPadding(tparm(value.Str, params)))
+		return 0
 	}
 	if kinds[name] == repl.StringCapability {
-		// Bytes for the terminal, and nothing added to them.
-		_, _ = fmt.Fprint(r.Out(), value.Str)
+		// Bytes for the terminal, less the padding a terminal never reads.
+		_, _ = fmt.Fprint(r.Out(), withoutPadding(value.Str))
 		return 0
 	}
 	_, _ = fmt.Fprintln(r.Out(), value.Str)
 	return 0
+}
+
+// withoutPadding takes out terminfo's padding specifications, `$<n>` with an
+// optional `*` or `/` after the number, which are a delay for whatever writes
+// the string and not bytes for the terminal. Measured on zsh 5.9.2 under
+// TERM=vt100, whose `cup` is `\e[%i%p1%d;%p2%dH$<5>`: `echoti cup 3 4` is
+// `\e[4;5H` and a bare `echoti cup` is the language without the `$<5>` (#5150).
+func withoutPadding(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '$' && i+1 < len(s) && s[i+1] == '<' {
+			if j := strings.IndexByte(s[i:], '>'); j > 0 && paddingSpec(s[i+2:i+j]) {
+				i += j
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// paddingSpec reports whether the text between `$<` and `>` is a delay: a
+// number, possibly with a fraction, and the `*` and `/` terminfo(5) allows.
+func paddingSpec(s string) bool {
+	digits := false
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c >= '0' && c <= '9':
+			digits = true
+		case c == '.' || c == '*' || c == '/':
+		default:
+			return false
+		}
+	}
+	return digits
 }

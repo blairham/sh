@@ -6,7 +6,6 @@ package zsh
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 
@@ -344,8 +343,9 @@ func setWhenceLetter(m *whenceMode, letter byte) {
 //
 // The pattern is the shell's own, so `-m 'z[ab]*'` and `-m '(zfoo|zz)'` match
 // as `case` would and a plain name matches itself. A disabled builtin is not
-// listed — `disable zle` takes it out of `whence -m 'zl*'` — which falls out
-// of asking each table's answer through NameKinds rather than the raw table.
+// listed — `disable zle` takes it out of `whence -m 'zl*'` — because
+// [interp.Runner.BuiltinNames] already leaves out what is switched off or
+// withdrawn.
 //
 // What is not modeled: zsh fills its command table once and answers from it
 // until `rehash`, so a file added to PATH later can be missing from its
@@ -374,7 +374,7 @@ func whencePattern(r *interp.Runner, pattern string, m whenceMode) bool {
 			}
 		}
 		sort.Strings(out)
-		return slices.Compact(out)
+		return out
 	}
 	if !m.path {
 		var aliases []string
@@ -400,9 +400,6 @@ func whencePattern(r *interp.Runner, pattern string, m whenceMode) bool {
 		}
 		for _, table := range tables {
 			for _, name := range matching(table.names) {
-				if !slices.Contains(r.NameKinds(name), table.kind) {
-					continue
-				}
 				found = true
 				writeLine(r, resolvedAnswer(r, name, table.kind, "", m))
 			}

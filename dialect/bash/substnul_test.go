@@ -24,3 +24,13 @@ v=` + "`" + `printf 'f\0g'` + "`" + `; printf '<%s>' "$v"; echo`
 		t.Errorf("got %q, want %q", out, want)
 	}
 }
+
+// **The `${ … ;}` spelling drops the byte too**, its output being captured
+// like any other substitution's: measured on bash 5.3.20, `printf '<%s>' ${
+// printf 'a\0b'; }y "${ printf 'c\0d'; }"` is `<aby><cd>`.
+func TestACurrentShellSubstitutionDropsANul(t *testing.T) {
+	out, _ := runBashSplit(t, `printf '<%s>' ${ printf 'a\0b'; }y "${ printf 'c\0d'; }"; echo`)
+	if want := "<aby><cd>\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

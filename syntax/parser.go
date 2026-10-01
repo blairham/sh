@@ -2352,6 +2352,14 @@ func (p *Parser) parsePipeline() Expr {
 	depth := len(p.open)
 	for {
 		if len(pl.Cmds) > 0 && p.atWord("!") {
+			// Offered to the alias table first, as the `!` at the head is:
+			// where the dialect lets an alias replace a reserved word, `echo
+			// x | ! cat` with `!` aliased runs the alias. Marked as offered
+			// either way so parseCommand does not ask a second time.
+			p.expandCommandStart()
+			p.aliasHeadHandled = true
+		}
+		if len(pl.Cmds) > 0 && p.atWord("!") {
 			// A `!` after a bar. The negation belongs to a whole pipeline and
 			// is written in front of it, so here it is a reserved word
 			// standing where a command belongs — refused at the `!` itself.

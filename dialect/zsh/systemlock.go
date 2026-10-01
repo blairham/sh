@@ -425,7 +425,6 @@ func zsystemUnlock(r *interp.Runner, text string) int {
 		// table this function does not own. Unlocking first is the half that
 		// does not depend on it.
 		systemLockRelease(sys)
-		systemLockDrop(r.Process(), sys)
 	}
 	r.CloseDescriptor(fd)
 	r.SetArray(systemLockStore, append(append([]string(nil), held[:at]...), held[at+1:]...))

@@ -14,7 +14,10 @@ import (
 // again for what it holds is 0, and a subshell, a command substitution or a
 // non-last pipeline element asking for it is refused — while the last element
 // of a pipeline is the shell itself and is 0. Two read locks share; a write
-// lock excludes a read one.
+// lock excludes a read one. A process substitution is a process too, `-u`
+// gives a lock back and so does closing its descriptor, and a job that has to wait for one lets the shell carry
+// on — the shell that started it would otherwise never reach the `-u` the job
+// is waiting for.
 func TestALockExcludesTheShellsOtherProcesses(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "f"), nil, 0o600); err != nil {
@@ -24,20 +27,29 @@ func TestALockExcludesTheShellsOtherProcesses(t *testing.T) {
 zsystem flock -t 0 f; print -r -- "again=$?"
 ( zsystem flock -t 0 f ); print -r -- "subshell=$?"
 x=$(zsystem flock -t 0 f; print -r -- $?); print -r -- "subst=$x"
+read v < <(zsystem flock -t 0 f 2>/dev/null; print $?); print -r -- "procsubst=$v"
 zsystem flock -t 0 f | :; print -r -- "left=$pipestatus"
 : | zsystem flock -t 0 f; print -r -- "last=$pipestatus"
 zsystem flock -r g 2>/dev/null; : >g; zsystem flock -r -f rd g
 ( zsystem flock -r -t 0 g ); print -r -- "readread=$?"
-( zsystem flock -t 0 g ); print -r -- "readwrite=$?"`)
-	want := "again=0\nsubshell=1\nsubst=1\nleft=1 0\nlast=0 0\nreadread=0\nreadwrite=1\n"
+( zsystem flock -t 0 g ); print -r -- "readwrite=$?"
+: >h; zsystem flock -f fd h; zsystem flock -u $fd
+( zsystem flock -t 0 h ); print -r -- "unlocked=$?"
+zsystem flock -f fd h; exec {fd}>&-
+( zsystem flock -t 0 h ); print -r -- "closed=$?"
+zsystem flock -f fd h
+( zsystem flock h; print -r -- "job took it" ) &
+print -r -- "shell went on"
+zsystem flock -u $fd; wait`)
+	want := "again=0\nsubshell=1\nsubst=1\nprocsubst=1\nleft=1 0\nlast=0 0\nreadread=0\nreadwrite=1\nunlocked=0\nclosed=0\nshell went on\njob took it\n"
 	if out != want || st != 0 {
 		t.Errorf("statuses = %q (status %d), want %q", out, st, want)
 	}
 	wantWholeLines(t, errs,
 		"zsh:zsystem:3: failed to lock file f: resource temporarily unavailable",
 		"zsh:zsystem:4: failed to lock file f: resource temporarily unavailable",
-		"zsh:zsystem:5: failed to lock file f: resource temporarily unavailable",
-		"zsh:zsystem:9: failed to lock file g: resource temporarily unavailable",
+		"zsh:zsystem:6: failed to lock file f: resource temporarily unavailable",
+		"zsh:zsystem:10: failed to lock file g: resource temporarily unavailable",
 	)
 }
 

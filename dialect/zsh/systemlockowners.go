@@ -37,10 +37,6 @@ import (
 type systemLockHolder struct {
 	info os.FileInfo
 	file *os.File
-	// sys is the system's number for file, which is how `-u` finds it:
-	// the script names a descriptor of this shell's, and that is what
-	// the runner translates it to.
-	sys  int
 	proc *interp.Process
 	read bool
 }
@@ -87,36 +83,23 @@ func systemLockClaim(f *os.File, proc *interp.Process, read bool) bool {
 		}
 	}
 	systemLockHolders.list = append(systemLockHolders.list,
-		systemLockHolder{info: info, file: f, sys: int(f.Fd()), proc: proc, read: read})
-	proc.AtExit(func() { systemLockDrop(proc, -1) })
+		systemLockHolder{info: info, file: f, proc: proc, read: read})
+	proc.AtExit(func() { systemLockDrop(proc) })
 	return true
 }
 
-// systemLockDrop forgets what proc holds: on the file open at the system
-// descriptor sys, or every file when sys is negative, which is the process
-// ending. A process's locks on one file go together, as they do for the
-// system, where closing any descriptor on the file gives up all of them.
-func systemLockDrop(proc *interp.Process, sys int) {
+// systemLockDrop forgets everything proc holds, which is the process ending.
+// A lock given back while the process goes on — `-u`, or the descriptor
+// closed some other way — needs nothing here: its descriptor is closed, and a
+// holder whose descriptor is closed is not live.
+func systemLockDrop(proc *interp.Process) {
 	systemLockHolders.mu.Lock()
 	defer systemLockHolders.mu.Unlock()
-	var info os.FileInfo
-	if sys >= 0 {
-		for _, h := range systemLockHolders.list {
-			if h.proc == proc && h.sys == sys {
-				info = h.info
-				break
-			}
-		}
-		if info == nil {
-			return
-		}
-	}
 	kept := systemLockHolders.list[:0]
 	for _, h := range systemLockHolders.list {
-		if h.proc == proc && (info == nil || os.SameFile(h.info, info)) {
-			continue
+		if h.proc != proc {
+			kept = append(kept, h)
 		}
-		kept = append(kept, h)
 	}
 	systemLockHolders.list = kept
 }

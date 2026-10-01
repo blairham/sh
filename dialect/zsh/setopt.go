@@ -1709,6 +1709,26 @@ var zshOptions = []zshOption{
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.DotMissingFileFatal
 			}, answer(on))
+			// And the roster goes: the standard's rule replaces this shell's
+			// own list rather than standing beside it (#5136). Measured
+			// 2026-10-01 on zsh 5.9.2, `( x=43; x=v CMD; print "x=$x" >
+			// result )` read back outside the subshell:
+			//
+			//	CMD                     default   posixbuiltins
+			//	alias foo=bar           x=v       x=43   the roster, gone
+			//	hash -r, hash 2>out     x=v       x=43
+			//	builtin alias foo=bar   x=v       x=43
+			//	builtin :, exec 2>out   x=43      x=v    the standard's rule
+			//	builtin, exec           x=v       x=v    nothing ran (#5137)
+			//
+			// The last row is why this could not land before the commandless
+			// rule carried the bare words itself: the roster was what kept
+			// them, and clearing it moved them.
+			roster := prefixKeepingBuiltins
+			if on {
+				roster = ""
+			}
+			setAxis(r, func(s *interp.Semantics) *string { return &s.BuiltinsKeepingAnAssignmentPrefix }, roster)
 			// And a sixth, read **backwards**: with the option on, a
 			// `[[ -o name ]]` whose name this shell does not have is the
 			// plain silent false the other columns give rather than this

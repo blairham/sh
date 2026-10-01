@@ -1766,6 +1766,10 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// Measured 2026-10-01: a finished job nothing will report is gone from the table at once: `(exit 4) & sleep 0.3; wait %%` is `no current job`, 127. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.Yes
+	// Measured 2026-10-01: a builtin's output is held until it returns, so its
+	// complaints come first on a stream that carries both. See
+	// Semantics.BuiltinOutputHeldUntilItReturns.
+	s.BuiltinOutputHeldUntilItReturns = interp.Yes
 	// And a job it has already reported stays waitable by its process id:
 	// `wait %1; wait "$p"` answers the job's status in 5.9.2.
 	s.WaitRemembersAReapedJob = interp.Yes

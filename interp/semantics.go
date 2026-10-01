@@ -15395,6 +15395,45 @@ type Semantics struct {
 	// ksh93 says nothing at all and reports 0.
 	WaitReportsAMissingJob Answer
 
+	// BuiltinOutputHeldUntilItReturns keeps what a builtin writes to standard
+	// output until the builtin returns, where that output is not a terminal,
+	// so that what it writes to standard error in the same call comes first on
+	// a stream that carries both. Yes in zsh and dash, which buffer the one
+	// stream and not the other.
+	//
+	// Measured 2026-10-01, standard output and standard error on one pipe:
+	//
+	//	                                zsh 5.9.2, dash 0.5.12   bash 5.3.20, ash 1.37.0
+	//	alias -m 'a*' '[' 'x*' (zsh)    bad pattern, aa, xx
+	//	typeset -p HOME nosuch PATH     no such variable, HOME, PATH (zsh)
+	//	hash -d -m a '[' a              bad pattern, then both (zsh)
+	//	alias aa nosuch xx (dash, bash) not found, aa, xx        aa, not found, xx
+	//	print a; print -u2 b; print c   a, b, c everywhere: separate builtins
+	//	                                each write theirs when they return
+	//
+	// ksh93 is answered No and is not one rule: its `alias aa nosuch xx` is
+	// the error first, and its `type ls nosuchcmd echo` interleaves.
+	//
+	// Read rather than asked — see Runner.holdBuiltinOutput, which also says
+	// why a nested builtin flushes rather than stacking, and why a child
+	// process is handed the descriptor rather than the hold.
+	//
+	// unpinned zsh: no corpus row puts both streams of one builtin on one
+	// pipe; pinned by TestABuiltinsOutputComesAfterItsComplaints.
+	//
+	// unpinned dash: the same reach, pinned by
+	// TestABuiltinsOutputComesAfterItsComplaints.
+	//
+	// unpinned bash: the same reach, pinned by
+	// TestABuiltinsOutputInterleavesItsComplaints.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestABuiltinsOutputInterleavesItsComplaints.
+	//
+	// unpinned ash: the same reach, pinned by
+	// TestABuiltinsOutputInterleavesItsComplaints.
+	BuiltinOutputHeldUntilItReturns Answer
+
 	// FinishedJobLeavesTheTable drops a background job from the job table as
 	// soon as it has finished, where nothing is going to report it — the
 	// monitor is off, so no notice before a prompt will. True in zsh and in
@@ -29296,6 +29335,9 @@ func PosixSemantics() Semantics {
 		// XCU 2.13.1 gives `%` no meaning in a pattern, so a `?` after one is
 		// a pattern like any other; four of the five dialects agree.
 		JobSpecQuestionMarkIsLiteral: No,
+		// A builtin's output goes out as it is written: the reading that
+		// needs no buffer, and bash's and ash's.
+		BuiltinOutputHeldUntilItReturns: No,
 		// XCU 2.13.1 makes a `/` in a pattern a separator whatever stands
 		// around it and says nothing about the bracket one lands inside, so
 		// the bracket stays a bracket that matches nothing — which is what

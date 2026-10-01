@@ -2133,6 +2133,10 @@ type Runner struct {
 	// builtinRenamedFrom is the builtin a RunBuiltinAs is running under
 	// another name, whose name its messages open with.
 	builtinRenamedFrom string
+	// charDevFile and charDev remember whether standard output was a
+	// character device, for holdBuiltinOutput.
+	charDevFile *os.File
+	charDev     bool
 	// terminalCapability is the reader SetTerminalCapabilityReader installs.
 	terminalCapability func(termcap string) string
 	// listNulls is, per field the unquoted list path last produced, whether

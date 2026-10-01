@@ -1613,6 +1613,10 @@ func Semantics() interp.Semantics {
 	s.WaitReportsAMissingJob = interp.Yes
 	// Measured 2026-10-01: a finished job stays in the table until reported: `(exit 4) & sleep 0.3; wait %%` is 4. See Semantics.FinishedJobLeavesTheTable.
 	s.FinishedJobLeavesTheTable = interp.No
+	// Measured 2026-10-01: a builtin's output is held until it returns, so its
+	// complaints come first on a stream that carries both. See
+	// Semantics.BuiltinOutputHeldUntilItReturns.
+	s.BuiltinOutputHeldUntilItReturns = interp.Yes
 	// And a job it has already reported stays waitable by its process id.
 	s.WaitRemembersAReapedJob = interp.Yes
 	// `Terminated: 15` on the reap, which is the same sentence this shell

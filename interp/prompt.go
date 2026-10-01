@@ -356,6 +356,12 @@ type PromptStyle struct {
 	// silently one character wrong on every prompt that ends in the escape.
 	TrailingEscapeIsDropped bool
 
+	// ClockFormat is what a braced date code's format is written with, where
+	// the dialect's language has more than the standard conversions — zsh's
+	// `%D{%N}` is the nanoseconds and `%D{%3.}` the fraction, the same
+	// extras its `strftime` builtin has. Nil is the standard set.
+	ClockFormat func(format string, t time.Time) string
+
 	// Truncation is `%N<string<` and `%N>string>`: what follows is cut to N
 	// columns with string in place of the cut. See prompttruncate.go.
 	Truncation bool
@@ -2242,6 +2248,9 @@ func (r *Runner) promptClockField(f PromptField, arg string, braced bool) (strin
 		// empty format is a format: measured, `%D` is `26-09-07` and `%D{}`
 		// is nothing at all, which is what strftime of an empty format
 		// answers anyway.
+		if format := r.promptStyle.ClockFormat; format != nil {
+			return format(arg, now), true
+		}
 		return strftime(arg, now), true
 	}
 	switch f {

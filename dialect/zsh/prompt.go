@@ -248,6 +248,10 @@ func PromptStyle() interp.PromptStyle {
 		// `%N<…<` and `%N>…>` cut what follows them; see
 		// interp/prompttruncate.go for the rows (#5150).
 		Truncation: true,
+		// `%D{…}` is written in the same language as the `strftime` builtin,
+		// extras and all: measured, `%D{%9.}` and `%D{%N}` are nine digits
+		// in zsh 5.9.2, where the standard set wrote `9.` and `N` (#5150).
+		ClockFormat: zshStrftime,
 		// zsh draws a percent sign where bash draws a dollar.
 		Privilege: "%",
 		// Measured with nothing assigned: real zsh prompts with the host and

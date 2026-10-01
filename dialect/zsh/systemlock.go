@@ -5,6 +5,7 @@ package zsh
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -257,8 +258,9 @@ func zsystemFlockOptions(r *interp.Runner, args []string) (zsystemFlockOpts, []s
 // **positive**: `-i 0` and `-i -1` are each `invalid interval value` with the
 // word quoted as it was written, which is also what `-i bogus` gets, by the
 // same route — the expression is zero and zero is not an interval. A timeout
-// has no such rule, and zero is its most useful value: it is what "ask, do not
-// wait" is spelled as.
+// has no floor, and zero is its most useful value: it is what "ask, do not
+// wait" is spelled as. Both have a ceiling, described beside the two constants
+// below.
 func zsystemFlockSeconds(r *interp.Runner, opts *zsystemFlockOpts, letter byte, text string) int {
 	seconds, err := strconv.ParseFloat(text, 64)
 	if err != nil {
@@ -271,17 +273,53 @@ func zsystemFlockSeconds(r *interp.Runner, opts *zsystemFlockOpts, letter byte, 
 		}
 		seconds = float64(n)
 	}
-	d := time.Duration(seconds * float64(time.Second))
 	if letter == 'i' {
-		if d <= 0 {
+		if !(seconds > 0) && !math.IsNaN(seconds) || seconds > flockLongestInterval {
 			r.Diagnosef("flock: invalid interval value: '%s'\n", text)
 			return 1
 		}
-		opts.interval = d
+		opts.interval = flockDuration(seconds)
 		return 0
 	}
-	opts.timeout, opts.timed = d, true
+	if seconds > flockLongestTimeout {
+		r.Diagnosef("flock: invalid timeout value: '%s'\n", text)
+		return 1
+	}
+	opts.timeout, opts.timed = flockDuration(seconds), true
 	return 0
+}
+
+// Each letter has a ceiling as well as a floor, and the two are not alike.
+//
+// A timeout may be at most 1073741823 seconds — 2^30 less one, and a whole
+// number: 1073741823 waits and 1073741823.000001 is `invalid timeout value`,
+// as are 2e9, 1e100 and inf. Measured against zsh 5.9.2; -inf, nan and every
+// negative are accepted, since nothing bounds a timeout from below.
+//
+// An interval's ceiling is in microseconds: a little under the largest 64-bit
+// count of them, at 0.999 of it. 9214148664817.9 is accepted and
+// 9214148664817.93 refused, and 1e10, 4294967296 and nan are all intervals —
+// so the ceiling is not the timeout's, and a NaN passes both comparisons.
+const (
+	flockLongestTimeout  = 1<<30 - 1
+	flockLongestInterval = math.MaxInt64 / 1e6 * 0.999
+)
+
+// flockDuration converts a number of seconds that has passed the checks above
+// into a wait, saturating rather than wrapping where a count too large for a
+// time.Duration either way would come back with the wrong sign — `-t -inf` is
+// accepted and has to mean "do not wait" rather than whatever an overflowing
+// conversion makes of it. NaN waits for nothing.
+func flockDuration(seconds float64) time.Duration {
+	switch {
+	case math.IsNaN(seconds):
+		return 0
+	case seconds*float64(time.Second) >= math.MaxInt64:
+		return math.MaxInt64
+	case seconds*float64(time.Second) <= math.MinInt64:
+		return math.MinInt64
+	}
+	return time.Duration(seconds * float64(time.Second))
 }
 
 // zsystemLock opens the file and takes the lock, and is where the three

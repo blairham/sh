@@ -2370,7 +2370,29 @@ func (r *Runner) abbreviatedDirectory(dir string) string {
 			drawn, shortened = under, true
 		}
 	}
+	// A function's own name for a leading part of the path is weighed by how
+	// much of the path it claims, not by how short it draws — see
+	// dynamicdir.go for the rows: it beats a named directory that claims no
+	// more, and loses to the home on a tie.
+	if under, claimed, ok := r.dynamicDirectoryPrefix(dir); ok {
+		static := 0
+		if shortened {
+			static = len(dir) - len(drawnTail(drawn))
+		}
+		home := shortened && (drawn == "~" || strings.HasPrefix(drawn, "~/"))
+		if !shortened || claimed > static || (claimed == static && !home) {
+			drawn = under
+		}
+	}
 	return drawn
+}
+
+// drawnTail is what follows a shortened directory's tilde word.
+func drawnTail(drawn string) string {
+	if i := strings.IndexByte(drawn, '/'); i >= 0 {
+		return drawn[i:]
+	}
+	return ""
 }
 
 // promptCwd is the directory a prompt's abbreviating codes are about, read

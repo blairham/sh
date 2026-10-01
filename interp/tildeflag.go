@@ -170,6 +170,12 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 	// make plain: no user is called `1`, and a shell with the tilde answers
 	// it out of state no lookup of a name can reach. See
 	// Runner.directoryStackTilde and Semantics.DirectoryStackParameter.
+	if dir, ok, bracketed := r.dynamicDirectoryTilde(name); bracketed {
+		if !ok {
+			return "", "", false
+		}
+		return dir, tail, true
+	}
 	if dir, ok, isIndex := r.directoryStackTilde(name); isIndex {
 		if !ok {
 			return "", "", false

@@ -860,6 +860,12 @@ type Runner struct {
 	// on a runner with no such user.
 	UserHomeDir func(name string) (string, bool)
 
+	// DynamicDirectoryFunctions names the functions a `~[name]` tilde and a
+	// prompt's `%~` ask about a dynamic named directory, in the order they
+	// are asked. Nil means the bracketed tilde is not a construct of this
+	// dialect. See dynamicdir.go.
+	DynamicDirectoryFunctions func(r *Runner) []string
+
 	// Terminal says this shell has a terminal, which is the fact job control
 	// turns on: the kernel hands SIGINT and SIGTSTP to whatever process group
 	// owns one, so a shell with none has nothing to hand a job and nothing to

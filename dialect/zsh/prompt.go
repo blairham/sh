@@ -86,6 +86,9 @@ func PromptStyle() interp.PromptStyle {
 			'h': interp.FieldHistoryNumber,
 			'y': interp.FieldTerminalName,
 			'_': interp.FieldOpenState,
+			// An element of `$psvar`, which the two conditions below already
+			// read (#5150).
+			'v': interp.FieldPromptArrayElement,
 			// zsh's own non-printing markers. Measured: `%{X%}` drew X and
 			// neither marker, and unlike bash's, a marker with no partner is
 			// dropped rather than written to the terminal.
@@ -242,6 +245,13 @@ func PromptStyle() interp.PromptStyle {
 		// draws `x`, and `print -P 'x%'` and `${(%):-x%}` are `x` too. bash
 		// and ksh93 draw the character, which is the zero value.
 		TrailingEscapeIsDropped: true,
+		// `%N<…<` and `%N>…>` cut what follows them; see
+		// interp/prompttruncate.go for the rows (#5150).
+		Truncation: true,
+		// `%D{…}` is written in the same language as the `strftime` builtin,
+		// extras and all: measured, `%D{%9.}` and `%D{%N}` are nine digits
+		// in zsh 5.9.2, where the standard set wrote `9.` and `N` (#5150).
+		ClockFormat: zshStrftime,
 		// zsh draws a percent sign where bash draws a dollar.
 		Privilege: "%",
 		// Measured with nothing assigned: real zsh prompts with the host and
@@ -256,25 +266,30 @@ func PromptStyle() interp.PromptStyle {
 		// follows it: `true &&` inside a `then` draws `then cmdand`. A
 		// loop's `do` is drawn as nothing at all, and the loop stays.
 		OpenWords: map[string]interp.OpenWord{
-			"for":      {Text: "for"},
-			"while":    {Text: "while"},
-			"until":    {Text: "until"},
-			"select":   {Text: "select"},
-			"case":     {Text: "case"},
-			"if":       {Text: "if"},
-			"then":     {Text: "then", Replaces: true},
-			"else":     {Text: "else", Replaces: true},
-			"elif":     {Text: "elif", Replaces: true},
-			"{":        {Text: "cursh"},
-			"function": {Text: "function"},
-			"(":        {Text: "subsh"},
-			"$(":       {Text: "cmdsubst"},
-			"`":        {Text: "bquote"},
-			"${":       {Text: "braceparam"},
-			"<<":       {Text: "heredoc"},
-			"'":        {Text: "quote"},
-			`"`:        {Text: "dquote"},
-			"|":        {Text: "pipe"},
+			"for":    {Text: "for"},
+			"while":  {Text: "while"},
+			"until":  {Text: "until"},
+			"select": {Text: "select"},
+			"case":   {Text: "case"},
+			"if":     {Text: "if"},
+			"then":   {Text: "then", Replaces: true},
+			"else":   {Text: "else", Replaces: true},
+			"elif":   {Text: "elif", Replaces: true},
+			// Two words drawn only while a command runs, never by a
+			// continuation prompt: a running `elif`'s body, and `repeat`.
+			// See interp/openruntime.go.
+			"elif-then": {Text: "elif-then", Replaces: true},
+			"repeat":    {Text: "repeat"},
+			"{":         {Text: "cursh"},
+			"function":  {Text: "function"},
+			"(":         {Text: "subsh"},
+			"$(":        {Text: "cmdsubst"},
+			"`":         {Text: "bquote"},
+			"${":        {Text: "braceparam"},
+			"<<":        {Text: "heredoc"},
+			"'":         {Text: "quote"},
+			`"`:         {Text: "dquote"},
+			"|":         {Text: "pipe"},
 			// The pipe that carries standard error has a name of its own
 			// here, which is the one place the two spellings of a bar are
 			// distinguishable to the person typing: `echo b |&` then a

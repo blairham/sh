@@ -197,10 +197,19 @@ func (w *promptWalk) conditional(runes []rune, i int, num string) int {
 		w.refused = string(w.st.Conditional) + string(test)
 		return end - 1
 	}
+	// A truncation begun inside the arm ends with it, where one begun before
+	// the conditional runs on across it — see prompttruncate.go.
+	outer := w.trunc
 	if on {
 		w.walk(yes)
 	} else {
 		w.walk(no)
+	}
+	if w.trunc != outer {
+		w.endTruncation()
+		if outer != nil && !outer.done {
+			w.trunc = outer
+		}
 	}
 	return end - 1
 }
@@ -245,6 +254,14 @@ func (w *promptWalk) skipEscape(runes []rune, i int) int {
 	}
 	code := runes[j]
 	j++
+	if w.st.Truncation && (code == '<' || code == '>') {
+		// The string runs to the closing character, and a delimiter inside
+		// it is the string's: `%(?.%5<..<abc.x)` is one arm `%5<..<abc`.
+		for j < len(runes) && runes[j] != code {
+			j++
+		}
+		return min(j+1, len(runes))
+	}
 	if code != w.st.Conditional || w.st.Conditional == 0 {
 		return j
 	}

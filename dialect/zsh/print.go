@@ -702,6 +702,21 @@ func printFormatted(r *interp.Runner, ctx context.Context, opts printOptions, re
 	if !ok {
 		return 1
 	}
+	if opts.prompt {
+		// `-P` reaches the *arguments* and not the format: measured on zsh
+		// 5.9.2, `print -P -f '[%s]\n' '%n'` writes the login name between
+		// the brackets and `print -P -f '%%n[%s]\n' y` writes `%n[y]`, the
+		// format's own percent signs being printf's (#5150).
+		expanded := make([]string, len(rest))
+		for i, a := range rest {
+			v, ok := r.PromptExpand(a)
+			if !ok {
+				return 1
+			}
+			expanded[i] = v
+		}
+		rest = expanded
+	}
 	return printf(r, ctx, append([]string{opts.format}, rest...))
 }
 

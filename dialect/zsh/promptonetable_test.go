@@ -72,6 +72,12 @@ func TestTheDrawerAndTheInterpreterReadOneTable(t *testing.T) {
 		t.Errorf("the interpreter's Expand is not the drawer's: %v against %v", gotExpand, drawnExpand)
 	}
 	got.Expand, drawn.Expand = nil, nil
+	// ClockFormat is a function too, and is asked the same way.
+	if reflect.ValueOf(got.ClockFormat).Pointer() != reflect.ValueOf(drawn.ClockFormat).Pointer() ||
+		drawn.ClockFormat == nil {
+		t.Errorf("the interpreter's ClockFormat is not the drawer's, or there is none")
+	}
+	got.ClockFormat, drawn.ClockFormat = nil, nil
 	if !reflect.DeepEqual(got, drawn) {
 		t.Errorf("the interpreter's table is not the drawer's:\n interp: %+v\n drawer: %+v", got, drawn)
 	}
@@ -106,7 +112,11 @@ func TestPrintPAndThePercentFlagAgree(t *testing.T) {
 		`%B%U%S%b%u%s%E`,
 		// The fields the interpreter holds.
 		`%%`, `%n`, `%m`, `%M`, `%~`, `%d`, `%/`, `%c`, `%C`, `%#`,
-		`%?`, `%j`, `%_`, `%{X%}`, `%x`, `%N`,
+		`%?`, `%j`, `%{X%}`, `%x`, `%N`,
+		// `%_` has left this list: it draws what the running command is
+		// inside, and the `print -P` spelling here runs inside a `$( … )`
+		// where the flag spelling does not — measured, zsh 5.9.2 answers
+		// `[cmdsubst][]` to exactly this probe. See openruntime_test.go.
 		// The clock, whose two readers have two clocks and one formatter —
 		// asked as the *shape* of the answer rather than the moment, since a
 		// second between the two calls would otherwise fail the test.

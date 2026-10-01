@@ -638,6 +638,11 @@ type Runner struct {
 	// withdrawnFuncs are the script's functions switched off — see
 	// withdrawnfunction.go. Cloned into a subshell with funcs.
 	withdrawnFuncs map[string]withdrawnFunction
+	// openRun is what the running command is inside, for a prompt's
+	// open-state field, and openRunBody the body of the function being
+	// called, whose braces are not drawn. See openruntime.go.
+	openRun     []string
+	openRunBody syntax.Command
 	// readonlyFuncs are the functions a script has frozen, in the one dialect
 	// with the notion — see Semantics.FunctionAttributeLetters. A name in here
 	// cannot be redefined and cannot be unset, and both refusals are the
@@ -6923,7 +6928,14 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 			return nil
 		}
 		r.armSublistOperand(x.Y)
-		if err := r.expr(ctx, x.Y); err != nil {
+		key := "||"
+		if x.Op == syntax.TokAndAnd {
+			key = "&&"
+		}
+		pop := r.openRuntime(key)
+		err = r.expr(ctx, x.Y)
+		pop()
+		if err != nil {
 			return err
 		}
 		if !lastIsNegated(x.Y) {
@@ -7237,6 +7249,10 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		r.reopenErrJudgment(set)
 		return err
 	case *syntax.Group:
+		if x != r.openRunBody {
+			defer r.openRuntime("{")()
+		}
+		r.openRunBody = nil
 		return r.group(ctx, x)
 	case *syntax.NamespaceClause:
 		return r.namespaceClause(ctx, x)
@@ -7247,20 +7263,29 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	case *syntax.IfClause:
 		return r.ifClause(ctx, x)
 	case *syntax.LoopClause:
+		key := "while"
+		if x.Until {
+			key = "until"
+		}
+		defer r.openRuntime(key)()
 		return r.loop(ctx, x)
 	case *syntax.ForClause:
+		defer r.openRuntime("for")()
 		return r.forClause(ctx, x)
 	case *syntax.ForArithClause:
 		return r.forArithClause(ctx, x)
 	case *syntax.CaseClause:
+		defer r.openRuntime("case")()
 		return r.caseClause(ctx, x)
 	case *syntax.FuncDecl:
 		return r.funcDecl(x)
 	case *syntax.TestClause:
 		return r.testClause(ctx, x)
 	case *syntax.SelectClause:
+		defer r.openRuntime("select")()
 		return r.selectClause(ctx, x)
 	case *syntax.RepeatClause:
+		defer r.openRuntime("repeat")()
 		return r.repeatClause(ctx, x)
 	case *syntax.AnonFunc:
 		return r.anonFunc(ctx, x)

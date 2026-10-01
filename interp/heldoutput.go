@@ -89,8 +89,8 @@ func unheld(w io.Writer) io.Writer {
 // the dialect does, and answers what ends the hold and reports a failed write
 // — or nothing, where there is nothing to hold.
 //
-// Nested, the hold already in place is flushed at the inner builtin's start
-// and its end rather than stacked: each builtin's output reaches the
+// Nested, the hold already in place is flushed at the inner builtin's end
+// rather than stacked: each builtin's output reaches the
 // descriptor when that builtin returns, so `eval 'print a; print -u2 b; print
 // c'` is a, b and c in order, as it is in the shell being modeled.
 //
@@ -104,7 +104,6 @@ func (r *Runner) holdBuiltinOutput() func() {
 		return nil
 	}
 	if h, ok := r.Stdout.(*heldOutput); ok {
-		_ = h.flush()
 		return func() {
 			if err := h.flush(); err != nil && r.writeFailed == nil {
 				r.writeFailed = err

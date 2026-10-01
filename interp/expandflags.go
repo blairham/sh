@@ -5,7 +5,6 @@ package interp
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -318,10 +317,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 
 	words, set, isList := r.flagBase(e)
-	// Which of the words are *bare* empties: an empty field a split made, as
-	// against an empty value. The single-`q` style quotes only the second —
-	// see bareEmptyMarks. Nil until the group splits.
-	var bare []bool
 
 	// Rule 4: (P) treats the value so far as a further name, before any
 	// operator runs — `${(P)x:-def}` tests the *resolved* value.
@@ -348,7 +343,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		// not the same string, and indirectTarget keeps the one the write
 		// wants. See indirectName.
 		words, set, isList = r.indirectBase(indirectName(text), e.Flags)
-		bare = nil
 	}
 
 	// Rule 4b: `(t)` puts the *type* of the name in place of its value, and
@@ -362,7 +356,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			return nil, false, false, false
 		}
 		isList = false
-		bare = nil
 	}
 
 	// The is-it-set question, asked of whatever the base and `(P)` came to:
@@ -416,22 +409,14 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
 		joined = true
-		bare = nil
 	}
 
 	// Rule 7: the operator, applied to the value at this level. Measured:
 	// the flags apply to what the operator leaves — `${(U)x:-def}` is DEF,
 	// `${(U)u:=def}` assigns def and substitutes DEF.
-	before := words
 	words, isList, ok, nothing := r.applyFlagOp(e, words, set, isList, indirect, quoted)
 	if !ok {
 		return nil, false, false, false
-	}
-	if !slices.Equal(before, words) {
-		// The operator put words of its own in place, and what it wrote is
-		// values: measured, `"${(@q)${(@)b}:#x}"` with `b=(x '' y)` quotes
-		// the empty element that survives the filter.
-		bare = nil
 	}
 	// The state substitutedNothing names, narrowed to where the shell being
 	// modeled can see it. Outside double quotes it cannot: measured on zsh
@@ -447,7 +432,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// else. See lengthflags.go.
 	if e.Length {
 		words, isList = []string{itoa(r.flaggedLength(e, words, isList))}, false
-		bare = nil
 	}
 
 	// An `=` beside the group is this same step with IFS for a separator.
@@ -524,15 +508,20 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		!joined && isList && !markJoin {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
-		bare = nil
 	}
+
+	// Which of the words are *bare* empties: an empty field the split below
+	// made, as against an empty value. The single-`q` style quotes only the
+	// second — see bareEmptyMarks. Nil when the group does not split, and
+	// nothing ahead of the split can have made one.
+	var bare []bool
 
 	// Rule 11: splitting. `f` is split-at-newlines; an empty `s` separator
 	// splits into characters, which is measured.
 	if hasSplit {
 		var split []string
 		var splitBare []bool
-		for i, w := range words {
+		for _, w := range words {
 			from := len(split)
 			if ifsSplit {
 				// `${=spec}` splitting, which is field splitting on IFS and
@@ -558,7 +547,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			splitBare = bareEmptyMarks(split[from:], splitBare)
 			if w == "" {
 				for j := from; j < len(split); j++ {
-					splitBare[j] = bare != nil && bare[i]
+					splitBare[j] = false
 				}
 			}
 		}
@@ -578,9 +567,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// escapeflag.go for where the reading itself lives and why.
 	if escapeFlagApplies(e) {
 		words = r.escapeFlagged(e, words)
-		if len(words) != len(bare) {
-			bare = nil
-		}
 	}
 	if strings.ContainsRune(e.Flags, '%') {
 		// Written *twice* is a second question, and the only one of the
@@ -1961,9 +1947,9 @@ func (r *Runner) rangeModifiers(
 // where the split keeps its empty fields.
 //
 // Not reached, and measured to differ: the same holds in zsh for the
-// elements of a *nested* list — `"${(@q)${b[@]}}"` with `b` holding an empty
-// element between two others leaves that one bare — but not for a nested scalar under `(@)`, and the
-// nesting hands this function strings with no way to tell the two apart.
+// elements of a *nested* list — `"${(@q)${b[@]}}"` leaves an empty element
+// of `b` bare — but not for a nested scalar under `(@)`, and the nesting
+// hands this function strings with no way to tell the two apart.
 func bareEmptyMarks(words []string, marks []bool) []bool {
 	for _, w := range words {
 		marks = append(marks, w == "")

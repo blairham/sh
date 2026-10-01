@@ -2181,7 +2181,73 @@ func (r *Runner) timeZone() *time.Location {
 	if loc, err := time.LoadLocation(tz); err == nil && tz != "" {
 		return loc
 	}
+	if loc, ok := posixZone(tz); ok {
+		return loc
+	}
 	return time.UTC
+}
+
+// TimeZone is timeZone for a dialect's own date builtins, which have to write
+// in the zone the script's `$TZ` names rather than the process's: measured on
+// zsh 5.9.2, `TZ=UTC; strftime %X 1200000001` is `21:20:01` with the machine
+// on Eastern time, and was `16:20:01` here (#5160).
+func (r *Runner) TimeZone() *time.Location { return r.timeZone() }
+
+// posixZone reads a `$TZ` that no zone database names, in the form POSIX
+// gives it: a zone name and an offset *west* of UTC — `UTC+5` is five hours
+// behind — with optional minutes and seconds, the name possibly in angle
+// brackets. Measured on zsh 5.9.2, `strftime '%H:%M %Z %z' 0` under each:
+//
+//	UTC+5          19:00 UTC -0500
+//	UTC-3          03:00 UTC +0300
+//	FOO+5:30       18:30 FOO -0530
+//	<+0330>-3:30   03:30 +0330 +0330
+//	UTC0           00:00 UTC +0000
+//
+// A daylight-saving part after the offset is not modeled: the standard time
+// is used all year. A name the system's database holds — `EST5EDT` is one —
+// never reaches here.
+func posixZone(tz string) (*time.Location, bool) {
+	i, name := 0, ""
+	if strings.HasPrefix(tz, "<") {
+		j := strings.IndexByte(tz, '>')
+		if j < 0 {
+			return nil, false
+		}
+		name, i = tz[1:j], j+1
+	} else {
+		for i < len(tz) && (tz[i] >= 'A' && tz[i] <= 'Z' || tz[i] >= 'a' && tz[i] <= 'z') {
+			i++
+		}
+		name = tz[:i]
+	}
+	if len(name) < 3 || i >= len(tz) {
+		return nil, false
+	}
+	sign := 1
+	switch tz[i] {
+	case '+':
+		i++
+	case '-':
+		sign, i = -1, i+1
+	}
+	var parts [3]int
+	for k := 0; k < 3; k++ {
+		start := i
+		for i < len(tz) && tz[i] >= '0' && tz[i] <= '9' {
+			i++
+		}
+		if i == start {
+			return nil, false
+		}
+		parts[k], _ = strconv.Atoi(tz[start:i])
+		if i >= len(tz) || tz[i] != ':' || k == 2 {
+			break
+		}
+		i++
+	}
+	west := parts[0]*3600 + parts[1]*60 + parts[2]
+	return time.FixedZone(name, -sign*west), true
 }
 
 // printfSpecPrefix is where a conversion's verb starts: past the `%`, the

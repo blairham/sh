@@ -50,6 +50,7 @@ func shell() driver.Shell {
 		Semantics:              zsh.Semantics(),
 		Diagnostics:            zsh.Diagnostics(),
 		Prelude:                zsh.Prelude(),
+		CommandStringParameter: "ZSH_EXECUTION_STRING",
 		Register:               zsh.Apply,
 		PromptStyle:            zsh.PromptStyle(),
 		EditorStyle:            zsh.EditorStyle(),

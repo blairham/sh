@@ -284,6 +284,13 @@ func (r *Runner) producedListingNames(walked []string) []string {
 			// cannot disagree about whether the name is still there.
 			continue
 		}
+		if !r.dynamicParameterIsThere(name) {
+			// Nor is a parameter the dialect says is absent here, which a
+			// named `typeset -p` already refuses: measured 2026-10-01, zsh
+			// 5.9.2 under `-c` lists no `ZSH_SCRIPT` at all, where this
+			// listed `ZSH_SCRIPT=''` (#5157).
+			continue
+		}
 		add = append(add, name)
 	}
 	return add

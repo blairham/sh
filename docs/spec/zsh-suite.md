@@ -14,7 +14,7 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, eight files have become real results**, each verified
+**Since that commit, nine files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
@@ -25,8 +25,9 @@ byte-identical in output and status under the reference's own driver:
     W01history        7 of 7           1e46d356f   #5165
     A02alias         18 of 18          942a026ef   #5237
     B07emulate       20 of 20          9f49a4f6c   #5257
+    V04features      24 of 24          a91b224aa   #5158
 
-So the count the burndown moves is **29** today. The roll-up figures above are left at the commit they were taken at
+So the count the burndown moves is **30** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -41,11 +42,11 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 29 today)
+## Real results (21 at `37355aae5`, 30 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
-`V12zparseopts`, `V13zformat`, `C05debug`, `W01history`, `A02alias` and
-`B07emulate` are the twenty-second through twenty-ninth and are listed here rather than below; every other entry is as
+`V12zparseopts`, `V13zformat`, `C05debug`, `W01history`, `A02alias`,
+`B07emulate` and `V04features` are the twenty-second through thirtieth and are listed here rather than below; every other entry is as
 measured at the heading's commit.
 
 - `A03quoting`
@@ -83,6 +84,8 @@ measured at the heading's commit.
 - `V13zformat` (closed #5163, strict 1/1 at `2b9d16b91`)
 - `C05debug` (closed #5149, strict 1/1 at `0a2ce6566`)
 - `W01history` (closed #5165, strict 1/1 at `1e46d356f`)
+- `V04features` (closed #5158, strict 1/1 at `a91b224aa`, the branch head
+  before the squash; 24 of 24 chunks under the reference's own driver)
 
 - `V08zpty`
 - `W02jobs`
@@ -116,7 +119,7 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (22), ranked by chunks unreached
+## Failing (21), ranked by chunks unreached
 
 **Measured at `d3a708b3d`, 2026-09-30**, one file per driver run — every row
 still in the table. The `ref` column of seven rows was corrected afterwards at
@@ -301,7 +304,6 @@ front can only move chunks up.
 | — | 0 | 1 | 51 | `V06parameter` | *excluded — the reference fails its own first chunk* |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
 | 3 | 5 | 2 | 53 | `E02xtrace` | xtrace with and without redirection |
-| 7 | 24 | 17 | 8 | `V04features` | Successfully added feature parameter that previously failed |
 | 12 | 12 | 0 | 2 | `V07pcre` | nothing runs; the reference's own first chunk is `Testing PCRE multibyte with locale en_US.UTF-8` |
 | 12 | 12 | 0 | 20 | `X04zlehighlight` | region highlight - standout overlapping on other region_highlight entry |
 | 14 | 39 | 25 | 21 | `A05execution` | Bug regression: piping a shell construct to an external process may hang |

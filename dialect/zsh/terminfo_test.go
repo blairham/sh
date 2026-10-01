@@ -360,7 +360,10 @@ echoti cuu1 3; print -r -- "parameters=$?"`)
 	want := "zsh:echoti:2: no such terminfo capability: nosuchcap_zz\nbogus=1\n" +
 		"no\nabsent-boolean=0\n" +
 		"zsh:echoti:4: not enough arguments\nnone=1\n" +
-		"zsh:echoti:5: cuu1: computing a capability's parameters is not implemented yet\nparameters=1\n"
+		// Arguments to a capability with no parameter codes in it are
+		// computed over and leave it as it was — measured on zsh 5.9.2,
+		// `echoti cuu1 3` is `\e[A` at 0 (#5150, which built the computing).
+		"\x1b[Aparameters=0\n"
 	if out != want || st != 0 {
 		t.Errorf("echoti refusals = %q (status %d), want %q", out, st, want)
 	}

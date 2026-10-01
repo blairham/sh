@@ -15396,23 +15396,33 @@ type Semantics struct {
 	WaitReportsAMissingJob Answer
 
 	// FinishedJobLeavesTheTable drops a background job from the job table as
-	// soon as it has finished, where nothing is going to report it — no
-	// notice before a prompt, because the shell has no job control. True in
-	// zsh alone.
+	// soon as it has finished, where nothing is going to report it — the
+	// monitor is off, so no notice before a prompt will. True in zsh and in
+	// ksh93.
 	//
-	// Measured 2026-10-01 on script files under `env -i`:
+	// Measured 2026-10-01 on script files under `env -i`, with an external
+	// `sleep` — the shell learns of the job's end when it reaps a child in
+	// the foreground, and ksh93's own `sleep` is a builtin that reaps none:
 	//
-	//	(exit 4) & sleep 0.3; wait %%      zsh 5.9.2  no current job, 127
-	//	                                   bash 5.3.20, ksh93u+, dash, BusyBox
-	//	                                   ash 1.37.0: 4
-	//	(exit 3) & sleep 0.3; wait %1      zsh: %1: no such job, 127; bash: 3
-	//	(exit 4) & wait %%                 4 everywhere: the job is still running
-	//	                                   when the spec is read, so it is there
+	//	(exit 4) & /bin/sleep 0.3; wait %%  zsh 5.9.2  no current job, 127
+	//	                                    ksh93u+    0, in silence: the miss
+	//	                                               (WaitReportsAMissingJob)
+	//	                                    bash 5.3.20, dash, BusyBox ash
+	//	                                    1.37.0: 4
+	//	(exit 3) & /bin/sleep 0.3; wait %1  zsh: %1: no such job, 127; ksh: 0;
+	//	                                    bash: 3
+	//	(exit 4) & sleep 0.3; wait %%       4 in ksh93, whose builtin `sleep`
+	//	                                    reaps nothing (#5302)
+	//	(exit 4) & wait %%                  4 everywhere: the job is still running
+	//	                                    when the spec is read, so it is there
 	//
-	// and in zsh `jobs` lists nothing and `$jobstates` is empty, while
-	// `wait "$p"` by process id still answers the status — the job has left
-	// the table and is remembered as a reaped one is. See
-	// WaitRemembersAReapedJob for that memory.
+	// and in both `jobs` lists nothing, while `wait "$p"` by process id still
+	// answers the status — once: a second `wait "$p"` is 127 in both, though
+	// zsh remembers a job `wait %1` reported. See Runner.dropped, and
+	// WaitRemembersAReapedJob for the memory of a reported one.
+	//
+	// The monitor is the option and not the terminal: ksh93u+ `-c 'set -m;
+	// (exit 3) & /bin/sleep .3; wait %1'` is 3 with no terminal anywhere.
 	//
 	// **Only where nothing will report it.** zsh with the monitor on keeps the
 	// job until its notice or a listing has said it ended — measured on a
@@ -15425,7 +15435,7 @@ type Semantics struct {
 	//
 	// unpinned bash: the same reach, pinned by TestAFinishedJobStaysInTheTable.
 	//
-	// unpinned ksh: the same reach, pinned by TestAFinishedJobStaysInTheTable.
+	// unpinned ksh: the same reach, pinned by TestAFinishedJobLeavesTheTable.
 	//
 	// unpinned dash: the same reach, pinned by TestAFinishedJobStaysInTheTable.
 	//

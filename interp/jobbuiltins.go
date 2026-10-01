@@ -135,6 +135,14 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// What `bg` let go of may have ended since the last prompt, and a listing
 	// that did not ask would report it as still running.
 	r.reapJobs()
+	// And a finished job the dialect has already let go of is not there to
+	// list: measured 2026-10-01 on ksh93u+, `(exit 4) & /bin/sleep 0.3; jobs`
+	// lists nothing and the `wait %1` after it is the silent miss. See
+	// Semantics.FinishedJobLeavesTheTable.
+	r.dropFinishedJobs()
+	if r.unspecified {
+		return 2
+	}
 	// A listing is the shell showing the person their stopped jobs, which is
 	// the whole of what the warning at exit is for — measured, `exit` after a
 	// `jobs` exits at once in bash and in zsh, where `exit` after any other

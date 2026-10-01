@@ -2687,6 +2687,14 @@ func (r *Runner) Jobs() []*Job { return slices.Clone(r.jobs) }
 // narrower reading two columns hold that is not modeled here.
 func (r *Runner) reap(j *Job) {
 	r.Forget(j)
+	if j == r.answeringDropped {
+		// A job the table had dropped, answering the one `wait` by id it
+		// gets: it is reported now and remembered nowhere. Measured
+		// 2026-10-01, a second `wait $p` is 127 in zsh 5.9.2 and in ksh93u+,
+		// though zsh remembers a job `wait %1` reported. See Runner.dropped.
+		r.answeringDropped = nil
+		return
+	}
 	if slices.Contains(r.reaped, j) {
 		// Already remembered: a second `wait` for the same id reaches this
 		// through the memory itself, and a job listed twice would only push
@@ -2721,9 +2729,13 @@ func (r *Runner) reap(j *Job) {
 // as finished — see noticeFinishedJobs. Each job goes the way a
 // waited-for one does, so its process id still answers `wait`.
 func (r *Runner) dropFinishedJobs() {
-	if r.JobControl && r.monitor {
+	if r.monitor {
 		// A notice before the next prompt, or a listing, reports it, and
-		// that is when every column lets it go.
+		// that is when every column lets it go. The option and not the
+		// terminal: measured 2026-10-01, ksh93u+ `-c 'set -m; (exit 3) &
+		// /bin/sleep .3; wait %1'` is 3 with no terminal anywhere, and the
+		// same line with a `jobs` before the `wait` lists `Done(3)` and then
+		// misses.
 		return
 	}
 	var finished []*Job
@@ -2739,8 +2751,22 @@ func (r *Runner) dropFinishedJobs() {
 		return
 	}
 	for _, j := range finished {
-		r.reap(j)
+		r.Forget(j)
+		r.dropped = appendBounded(r.dropped, j)
 	}
+}
+
+// appendBounded appends a job to one of the out-of-table memories, keeping
+// the newest reapedJobsKept and clearing the slots it lets go of.
+func appendBounded(list []*Job, j *Job) []*Job {
+	list = append(list, j)
+	if extra := len(list) - reapedJobsKept; extra > 0 {
+		for i := range list[:extra] {
+			list[i] = nil
+		}
+		list = append(list[:0], list[extra:]...)
+	}
+	return list
 }
 
 // noticeFinishedJobs marks every job that has finished by now as one the shell
@@ -2812,6 +2838,14 @@ const reapedJobsKept = 1024
 // Job.Ident is what closed that, and the shape stays because a caller must not
 // have to know it did.
 func (r *Runner) waitableByIdent(pid int) []*Job {
+	// What the table has let go of is let go of before an id is looked up
+	// too, since a `wait` by id is as much a read of the table as a `%` spec
+	// is: the first one answers a dropped job and the second finds nothing.
+	// See Runner.dropped.
+	r.dropFinishedJobs()
+	if r.unspecified {
+		return nil
+	}
 	var jobs []*Job
 	// Not the table, where it is the parent's: measured, `p=$!` outside and
 	// `( wait "$p" )` inside a `-fm` zsh answers `wait: pid N is not a child
@@ -2837,6 +2871,15 @@ func (r *Runner) waitableByIdent(pid int) []*Job {
 	}
 	if len(jobs) > 0 {
 		return jobs
+	}
+	// A job the table dropped unreported answers its first `wait` by id
+	// unasked, and is reported from then on. See Runner.dropped.
+	for i, j := range r.dropped {
+		if j.Ident() == pid {
+			r.dropped = slices.Delete(r.dropped, i, i+1)
+			r.answeringDropped = j
+			return []*Job{j}
+		}
 	}
 	// The memory, and the axis asked *at the disagreement and nowhere else*:
 	// only a number this shell has actually reaped a job under is a number

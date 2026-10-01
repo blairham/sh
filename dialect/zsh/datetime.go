@@ -217,30 +217,60 @@ func strftimeOptions(r *interp.Runner, args []string) (strftimeOpts, []string, i
 // the clock's own nanoseconds. That falls out of the epoch being rebuilt at
 // second precision rather than needing a branch of its own; a branch was
 // there and a mutant proved it could not be told from its absence.
-func strftimeWhen(r *interp.Runner, rest []string) (t time.Time, bad string, ok bool) {
+func strftimeWhen(r *interp.Runner, rest []string) (t time.Time, complaint string, ok bool) {
 	t = r.Now()
 	if len(rest) > 1 {
 		secs, err := strconv.ParseInt(strings.TrimSpace(rest[1]), 10, 64)
 		if err != nil {
-			return t, rest[1], false
+			return t, rest[1] + ": " + strftimeEpochComplaint(rest[1]), false
 		}
 		t = time.Unix(secs, 0)
 	}
 	nsec := int64(t.Nanosecond())
 	if len(rest) > 2 {
-		n, err := strconv.ParseInt(strings.TrimSpace(rest[2]), 10, 64)
-		if err != nil {
-			return t, rest[2], false
+		word := rest[2]
+		n, err := strconv.ParseInt(strings.TrimSpace(word), 10, 64)
+		switch {
+		case err == nil:
+		case word != "" && strings.TrimSpace(word) == "":
+			// Blanks and nothing else are nought, measured: `strftime %Y 5 ' '`
+			// writes the year where `''` is refused.
+			n = 0
+		default:
+			return t, word + ": invalid decimal number", false
+		}
+		// A count of nanoseconds is less than a second and not negative.
+		// Measured on zsh 5.9.2: 1000000000 and -1 are each `N: invalid
+		// nanosecond value` at 1, where they wrapped into the seconds here
+		// (#5160).
+		if n < 0 || n > 999_999_999 {
+			return t, word + ": invalid nanosecond value", false
 		}
 		nsec = n
 	}
-	return time.Unix(t.Unix(), nsec), "", true
+	// In the zone the script's `$TZ` names, not the process's: see
+	// interp.Runner.TimeZone (#5160).
+	return time.Unix(t.Unix(), nsec).In(r.TimeZone()), "", true
+}
+
+// strftimeEpochComplaint words an epoch that is not a number, which zsh 5.9.2
+// splits by whether it *starts* like one: `abc`, `x1`, ` ` and the empty word
+// are `invalid argument`, and `1x` — digits and then something else — is
+// `invalid decimal number`. Measured, the nanosecond position has no such
+// split and says the second for all of them.
+func strftimeEpochComplaint(word string) string {
+	w := strings.TrimLeft(word, " \t")
+	w = strings.TrimLeft(w, "+-")
+	if w != "" && w[0] >= '0' && w[0] <= '9' {
+		return "invalid decimal number"
+	}
+	return "invalid argument"
 }
 
 func strftimeForward(r *interp.Runner, opts strftimeOpts, rest []string) int {
-	t, bad, ok := strftimeWhen(r, rest)
+	t, complaint, ok := strftimeWhen(r, rest)
 	if !ok {
-		r.Diagnosef("%s: invalid argument\n", bad)
+		r.Diagnosef("%s\n", complaint)
 		return 1
 	}
 	out := zshStrftime(rest[0], t)
@@ -260,7 +290,7 @@ func strftimeReverse(r *interp.Runner, opts strftimeOpts, rest []string) int {
 		r.Diagnosef("not enough arguments\n")
 		return 1
 	}
-	t, left, unknown, ok := zshStrptime(rest[0], rest[1])
+	t, left, unknown, ok := zshStrptime(rest[0], rest[1], r.TimeZone())
 	if unknown != "" {
 		// Not "format not matched": the input may match perfectly well and
 		// the shortfall is this shell's. Saying otherwise would send a
@@ -319,6 +349,11 @@ func zshStrftime(format string, t time.Time) string {
 		if width, end, ok := strftimeFractionWidth(format, i+1); ok {
 			b.WriteString(fraction(t, width))
 			i = end
+			continue
+		}
+		if n, v, ok := strftimePadded(format, i+1, t); ok {
+			b.WriteString(v)
+			i = n
 			continue
 		}
 		i++
@@ -434,7 +469,7 @@ type strptimeFields struct {
 // A run of whitespace in the format matches any run of whitespace in the
 // input, including none, which is what C's strptime does and what makes
 // `"%d %b %Y"` read a header with two spaces in it.
-func zshStrptime(format, input string) (t time.Time, left, unknown string, ok bool) {
+func zshStrptime(format, input string, zone *time.Location) (t time.Time, left, unknown string, ok bool) {
 	f := strptimeFields{year: 1900, month: 1, day: 1}
 	i, j := 0, 0
 	for i < len(format) {
@@ -486,7 +521,10 @@ func zshStrptime(format, input string) (t time.Time, left, unknown string, ok bo
 			hour += 12
 		}
 	}
-	t = time.Date(f.year, time.Month(f.month), f.day, hour, f.minute, f.sec, 0, time.Local)
+	// Read in `$TZ`'s zone, as the forward direction writes in it: measured,
+	// `strftime -r '%Y-%m-%d %H:%M' '2008-01-10 21:20'` is 1200000000 with
+	// TZ=UTC and 1200018000 with TZ=EST5EDT.
+	t = time.Date(f.year, time.Month(f.month), f.day, hour, f.minute, f.sec, 0, zone)
 	return t, input[j:], "", true
 }
 
@@ -638,4 +676,76 @@ func isSpaceByte(c byte) bool {
 
 func isAlnumByte(c byte) bool {
 	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+// strftimePadded is a numeric conversion written with a padding flag — `-` for
+// none, `_` for spaces, `0` for zeros — and possibly the `O` modifier, for the
+// nine conversions this shell pads itself. It answers the index of the
+// conversion letter, the text, and whether the spelling was this at all.
+//
+// Measured 2026-10-01 at 1181100005 (2007-06-06 03:20:05 UTC) on two builds of
+// zsh 5.9.2 — `/opt/homebrew/bin/zsh` on macOS and the Debian build the suite's
+// image carries — and kept to the cells where the two agree:
+//
+//	%d %-d %_d %0d %Od %-Od      06 6 " 6" 06 06 6     and so for H I m S
+//	%e %-e %_e %0e %Oe %-Oe      " 6" 6 " 6" 06 " 6" 6  and so for k l
+//	%M %-M %_M                   20 20 20              nothing to strip
+//
+// What the two builds do *not* agree on is left as it was: a width (`%5d`),
+// `^` and `#`, the `E` modifier, and every flag on `y`, `Y`, `j`, `U`, `W`,
+// `V`, `C`, `g`, `G`, `u`, `w` and the zsh-only `f`, `K`, `L`, `N` — those
+// follow each build's C library, and the macOS one writes most of them as
+// text (#5160).
+func strftimePadded(format string, i int, t time.Time) (int, string, bool) {
+	if i >= len(format) {
+		return 0, "", false
+	}
+	flag := byte(0)
+	if strings.IndexByte("-_0", format[i]) >= 0 {
+		flag, i = format[i], i+1
+	}
+	modified := false
+	if i < len(format) && format[i] == 'O' {
+		modified, i = true, i+1
+	}
+	if (flag == 0 && !modified) || i >= len(format) {
+		return 0, "", false
+	}
+	var n int
+	pad := byte('0')
+	switch format[i] {
+	case 'd':
+		n = t.Day()
+	case 'e':
+		n, pad = t.Day(), ' '
+	case 'H':
+		n = t.Hour()
+	case 'I':
+		n = twelveHour(t.Hour())
+	case 'k':
+		n, pad = t.Hour(), ' '
+	case 'l':
+		n, pad = twelveHour(t.Hour()), ' '
+	case 'm':
+		n = int(t.Month())
+	case 'M':
+		n = t.Minute()
+	case 'S':
+		n = t.Second()
+	default:
+		return 0, "", false
+	}
+	switch flag {
+	case '-':
+		return i, strconv.Itoa(n), true
+	case '_':
+		pad = ' '
+	case '0':
+		pad = '0'
+	}
+	v := strconv.Itoa(n)
+	if len(v) < 2 {
+		v = string(pad) + v
+	}
+	return i, v, true
 }

@@ -2145,7 +2145,7 @@ func (r *Runner) promptQuantity(c PromptCondition, n int) (int, bool) {
 	case ConditionCwdComponentsHome:
 		return pathComponents(r.abbreviatedDirectory(r.promptCwd(r.promptStyle))), true
 	}
-	if v, ok := promptClockQuantity(c, r.Now()); ok {
+	if v, ok := promptClockQuantity(c, r.promptNow()); ok {
 		return v, true
 	}
 	return 0, false
@@ -2242,7 +2242,7 @@ func (r *Runner) promptClockField(f PromptField, arg string, braced bool) (strin
 	default:
 		return "", false
 	}
-	now := r.Now()
+	now := r.promptNow()
 	if braced {
 		// The braces replace the shape the code would otherwise draw, and an
 		// empty format is a format: measured, `%D` is `26-09-07` and `%D{}`
@@ -2632,4 +2632,17 @@ func trailingComponents(path string, n int) string {
 		return path
 	}
 	return strings.Join(parts[len(parts)-n:], "/")
+}
+
+// promptNow is the clock a prompt reads, in the script's `$TZ` where one is
+// set: measured on zsh 5.9.2, `TZ=UTC; print -P %D{%H:%Z}` draws UTC on a
+// machine in another zone. With no TZ the clock is left in whatever zone it
+// carries, which is the process's for the real clock and the embedder's own
+// for a pinned one.
+func (r *Runner) promptNow() time.Time {
+	now := r.Now()
+	if _, set := r.getVar("TZ"); set {
+		return now.In(r.timeZone())
+	}
+	return now
 }

@@ -3,7 +3,11 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // `disable -f` and `enable -f`, and the switched-off table they keep (#5267).
 // Measured 2026-10-01 on zsh 5.9.2 (`-f`, a script file under `env -i
@@ -38,5 +42,23 @@ func TestASwitchedOffFunctionIsNoFunctionUntilSwitchedBackOn(t *testing.T) {
 				t.Errorf("got %q, want %q", out, c.want)
 			}
 		})
+	}
+}
+
+// The file a switched-off function was read from is kept with it: the
+// disabled table names it, and switching the function back on gives it back
+// to the sentences that name a function's origin. Measured on zsh 5.9.2
+// under `-c` with the definition in a sourced file: `${dis_functions_source[zq]}`
+// is `./lib.zsh`, and after `enable -f zq` `whence -v zq` says `zq is a shell
+// function from ./lib.zsh`.
+func TestASwitchedOffFunctionKeepsItsFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lib.zsh"), []byte("zq() { :; }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	src := ". ./lib.zsh\ndisable -f zq\nprint -r -- \"[${dis_functions_source[zq]}]\"\nenable -f zq\nwhence -v zq\n"
+	want := "[./lib.zsh]\nzq is a shell function from ./lib.zsh\n"
+	if out, st := runZsh(t, dir, src); out != want || st != 0 {
+		t.Errorf("got %q at %d, want %q", out, st, want)
 	}
 }

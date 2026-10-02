@@ -30,6 +30,7 @@ byte-identical in output and status under the reference's own driver:
     V09datetime      16 of 16          (#5160's closing PR; in the suite's image, see below)
     E03posix         18 of 18          5d1dc7eaa   #5157, on this Mac and in the suite's image
     V06parameter      5 of 5           c368f04ea   #5159, on this Mac and in the suite's image
+    D06subscript     37 of 37          e5ebb3e9a   #5152, on this Mac and in the suite's image
 
 `E03posix` was measured at `5d1dc7eaa`, 2026-10-02, under the reference's own
 driver run serially from `Test/`: 18 of 18 chunks and 510 driver lines with 0
@@ -48,7 +49,19 @@ through the harness. It was ungradeable until #5448 linked the reference's own
 modules where the driver looks for them, and its roots were #5453 (`eval`'s
 text in the four trace arrays) and #5457 (`hashlistall`).
 
-So the count the burndown moves is **34** today. The roll-up figures above are left at the commit they were taken at
+`D06subscript` was measured at `e5ebb3e9a`, 2026-10-02, under the reference's own
+driver run serially from `Test/`: 37 of 37 chunks, `all tests successful`, and
+the driver's output byte-identical at status 0, both on this Mac against
+`/opt/homebrew/bin/zsh` (zsh 5.9.2, aarch64-apple-darwin25.4.0) and in the
+column's image `ghcr.io/blairham/sh/zsh@sha256:aab8255c…` (zsh 5.9.2,
+aarch64-unknown-linux-gnu). Through the harness, `-only D06subscript.ztst
+-jobs 1` with the binary named `zsh` reads strict 1/1, `of those` 0/1, `ref
+cannot run` 0/1 and line agreement 100.0%. It took four changes: an operand's
+key read as written (#5432), `ksh_zero_subscript` (#5441), a flagged pair on
+the left of `=` (#5452), and the `(w)`, `(s:…:)` and `(p)` word letters with
+a chained link read by them.
+
+So the count the burndown moves is **35** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -63,12 +76,12 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 34 today)
+## Real results (21 at `37355aae5`, 35 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
 `V12zparseopts`, `V13zformat`, `C05debug`, `W01history`, `A02alias`,
-`B07emulate`, `V04features`, `D01prompt`, `V09datetime`, `E03posix` and
-`V06parameter` are the twenty-second through thirty-fourth and are listed here rather than below; every
+`B07emulate`, `V04features`, `D01prompt`, `V09datetime`, `E03posix`,
+`V06parameter` and `D06subscript` are the twenty-second through thirty-fifth and are listed here rather than below; every
 other entry is as measured at the heading's commit.
 
 `V09datetime` is a real result **in the suite's image and not on a Mac**, and
@@ -124,6 +137,8 @@ lines, and those are the two skipped chunks.
 - `D01prompt` (closed #5150, strict 1/1 with `TERM=xterm-256color`
   inherited, so the two colour chunks ran rather than skipped; 16 of 16
   chunks under the reference's own driver)
+- `D06subscript` (closed #5152, strict 1/1; 37 of 37 chunks under the
+  reference's own driver, on this Mac and in the suite's image)
 
 - `V08zpty`
 - `W02jobs`
@@ -157,7 +172,7 @@ can reach 0 differing lines without ever carrying a result.
 
 - `Z03run-help`
 
-## Failing (20), ranked by chunks unreached
+## Failing (19), ranked by chunks unreached
 
 **Measured at `d3a708b3d`, 2026-09-30**, one file per driver run — every row
 still in the table. The `ref` column of seven rows was corrected afterwards at
@@ -348,7 +363,6 @@ front can only move chunks up.
 | 15 | 16 | 1 | 10 | `V14system` | zsystem flock invalid time arguments |
 | 16 | 16 | 0 | 11 | `V09datetime` | basic format specifiers |
 | 0 | 18 | 18 | 0 | `E03posix` | *a real result at `5d1dc7eaa` — see the list at the top (#5157)* |
-| 36 | 37 | 1 | 10 | `D06subscript` | Scalar pattern subscripts with wildcards |
 | 38 | 66 | 28 | 9 | `B03print` | out of range argument specifier |
 | 41 | 52 | 11 | 12 | `C04funcdef` | Command not found handler, success |
 | 50 | 53 | 3 | 9 | `D07multibyte` | Subscript searching with multibyte characters |

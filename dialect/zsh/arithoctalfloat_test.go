@@ -14,8 +14,8 @@ func TestAReadModifyWriteSubscriptIsEvaluatedOnce(t *testing.T) {
 	if want := "1 1 2\n2 15 6 7\n2 1 1\n"; out != want || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, want)
 	}
-	out, _, errs = runZshUTF8(t, "typeset -A h; (( h[ab]++ )); (( h[ab] += 5 )); print ${(kv)h}")
-	if want := "ab 6\n"; out != want || errs != "" {
+	out, _, errs = runZshUTF8(t, "typeset -A h; x=0; (( h[x++]++ )); (( h[x++] += 5 )); print $x ${(kv)h}")
+	if want := "0 x++ 6\n"; out != want || errs != "" {
 		t.Errorf("table: got %q, %q, want %q", out, errs, want)
 	}
 }

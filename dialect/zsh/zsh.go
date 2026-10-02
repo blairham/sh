@@ -1185,6 +1185,9 @@ func Semantics() interp.Semantics {
 	// `exec` with options and nothing to run is refused before its
 	// redirections. See Semantics.ExecOptionsRequireACommand (#5380).
 	s.ExecOptionsRequireACommand = interp.Yes
+	// And `builtin`'s name is looked up before anything behind it is
+	// matched. See Semantics.BuiltinNameIsLookedUpBeforeGlobbing (#5377).
+	s.BuiltinNameIsLookedUpBeforeGlobbing = interp.Yes
 	s.ScriptSearchOptionName = "pathscript"
 	// And sh and ksh emulation start with it on (#5383).
 	s.ScriptSearchUnderEmulation = "sh ksh"

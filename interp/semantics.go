@@ -25943,6 +25943,17 @@ type Semantics struct {
 	// Read as `== Yes`, so a preset that leaves it alone has the zero
 	// value's answer.
 	ExecOptionsRequireACommand Answer
+	// BuiltinNameIsLookedUpBeforeGlobbing looks up the name `builtin` was
+	// given before any word behind it is matched, so that a name naming no
+	// builtin is refused by `builtin` and the words behind it are never
+	// globbed. Measured 2026-10-02 in an empty directory: zsh 5.9.2 says `no
+	// such builtin: nosuch` for `builtin nosuch nomatch*` and `no such
+	// builtin: -a` for `builtin -a nomatch*`, where `command -a nomatch*` is
+	// `no matches found`; bash 5.3.20 under failglob says `no match:
+	// nomatch*` first, which is the zero value. ksh93u+'s `builtin` takes
+	// builtin names to add rather than one to run, and dash and BusyBox ash
+	// have no `builtin` (#5377).
+	BuiltinNameIsLookedUpBeforeGlobbing Answer
 
 	// ExecTakesTheLoginLetter is `exec -l`, which puts a `-` on the front of
 	// the argv[0] the replacement sees — the mark `login` and every terminal

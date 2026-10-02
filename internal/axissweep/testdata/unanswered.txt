@@ -85,6 +85,7 @@ ash   BraceRangeZeroStepCountsAsOne
 ash   BraceRescanEntersFailedGroup
 ash   BraceScanReadsProducedText
 ash   BraceStopsFieldSplitting
+ash   BuiltinNameIsLookedUpBeforeGlobbing
 ash   BuiltinReadsOptions
 ash   CaseAttributeFoldsWhenRead
 ash   CaseAttributeReplacesTheNumericAttribute
@@ -415,6 +416,7 @@ dash  BraceRangeZeroStepCountsAsOne
 dash  BraceRescanEntersFailedGroup
 dash  BraceScanReadsProducedText
 dash  BraceStopsFieldSplitting
+dash  BuiltinNameIsLookedUpBeforeGlobbing
 dash  BuiltinReadsOptions
 dash  CaseAttributeFoldsWhenRead
 dash  CaseAttributeReplacesTheNumericAttribute

@@ -48,3 +48,18 @@ func (s *execOptionScan) take(fields []string) int {
 	}
 	return len(fields)
 }
+
+// builtinNameWordAhead says the word behind this modifier is the name
+// `builtin` runs, to be looked up before any later word is matched against
+// the filesystem. See Semantics.BuiltinNameIsLookedUpBeforeGlobbing.
+func (r *Runner) builtinNameWordAhead(field string) bool {
+	return globUnescape(field) == "builtin" && r.sem().BuiltinNameIsLookedUpBeforeGlobbing == Yes
+}
+
+// namesNoBuiltin reports whether field, the name given to `builtin`, names
+// none — so that nothing behind it is matched, and `builtin` refuses the name
+// without a glob failure being reached first.
+func (r *Runner) namesNoBuiltin(field string) bool {
+	_, ok := r.lookupBuiltin(globUnescape(field))
+	return !ok
+}

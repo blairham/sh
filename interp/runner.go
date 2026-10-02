@@ -7660,6 +7660,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// `exec`'s own options, read before the match where the dialect reads
 	// them there. See Runner.execOptionWordsAhead.
 	var execScan execOptionScan
+	// Whether the next field is the name `builtin` was given, which one
+	// dialect looks up before any word behind it is matched. See
+	// Semantics.BuiltinNameIsLookedUpBeforeGlobbing.
+	builtinNameNext := false
 	// How many of the words in argv the scan itself put there. A command
 	// whose only words are modifiers has nothing to run; one with a word
 	// behind them has.
@@ -7808,6 +7812,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			argv = append(argv, r.globFieldsUnlessSuppressed(fields[:n], true)...)
 			fields = fields[n:]
 		}
+		if builtinNameNext && len(fields) > 0 {
+			builtinNameNext = false
+			noglob = noglob || r.namesNoBuiltin(fields[0])
+		}
 		for scanning && len(fields) > 0 {
 			m, ok := r.precommand(fields[0])
 			if !ok {
@@ -7840,11 +7848,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			argv = append(argv, r.globFieldsUnlessSuppressed(fields[:1], noglob)...)
 			modifierWords++
 			execScan.reading = !dash && r.execOptionWordsAhead(fields[0])
+			builtinNameNext = !dash && r.builtinNameWordAhead(fields[0])
 			fields = fields[1:]
 			if execScan.reading {
 				n := execScan.take(fields)
 				argv = append(argv, r.globFieldsUnlessSuppressed(fields[:n], true)...)
 				fields = fields[n:]
+			}
+			if builtinNameNext && len(fields) > 0 {
+				builtinNameNext = false
+				noglob = noglob || r.namesNoBuiltin(fields[0])
 			}
 			if m == PrecommandStopsTheScan {
 				// What follows is a command name and not a modifier, which

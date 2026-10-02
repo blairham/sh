@@ -2526,6 +2526,11 @@ func Semantics() interp.Semantics {
 	// x` and `exec --` are each `st=0`, and `exec -c >f` makes `f`. See
 	// Semantics.ExecOptionsRequireACommand.
 	s.ExecOptionsRequireACommand = interp.No
+	// ksh93's `builtin` adds builtins rather than running one, so its words
+	// are ordinary operands: measured 2026-10-02 on ksh93u+, `builtin nosuch
+	// nomatch*` reports each word as not found. See
+	// Semantics.BuiltinNameIsLookedUpBeforeGlobbing.
+	s.BuiltinNameIsLookedUpBeforeGlobbing = interp.No
 	// `-a` and `-c`, and no `-l`: this shell reports the letter as an
 	// option it does not know and ends the script, `exec` being special.
 	s.ExecTakesTheLoginLetter = interp.No

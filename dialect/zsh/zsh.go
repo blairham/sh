@@ -5847,8 +5847,9 @@ func Diagnostics() interp.Diagnostics {
 		// One line for the whole condition rather than one per primary, and
 		// the operands quoted: `[[ -n a && -n b ]]` is one line here and two
 		// in bash and ksh93.
-		TraceCondition:        interp.TraceCondWhole,
-		TraceConditionQuoting: interp.QuoteShell,
+		TraceCondition:              interp.TraceCondWhole,
+		TraceConditionQuoting:       interp.QuoteShell,
+		TracePatternEscapesLiterals: true,
 		// The two arithmetic sites disagree in this shell alone: a `(( ))`
 		// command is wrapped in spaced parentheses and the three parts of a
 		// `for ((;;))` header are written bare — `i=0`, `i<2`, `i++`.

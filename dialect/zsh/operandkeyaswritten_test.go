@@ -44,7 +44,7 @@ func TestAnExpansionInASubscriptSpendsAnEscapedQuote(t *testing.T) {
 		{`print -r -- $h[k\"m] "$h[k\"m]"`, "B A\n"},
 		{`print -r -- $h[$h[k\"m]] "$h[$h[k\"m]]" "${h[$h[k\"m]]}"`, "fromA fromA fromA\n"},
 		{`print -r -- "$h[(i)k\"m]" "$h[$h[(i)k\"m]]" $h[$h[(i)k\"m]]`, "k\\\"m A B\n"},
-		{`print -r -- ${h[$h[(e)k\"m]]} $h[$h[k\\m]]`, "fromA fromP\n"},
+		{`print -r -- ${h[$h[(e)k\"m]]} $h[$h[k\\m]] $h[(k)k\"m] $h[$h[(k)k\"m]]`, "fromA fromP B fromA\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), setup+tc.src)
 		if got != tc.want {

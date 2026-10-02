@@ -148,7 +148,7 @@ func (r *Runner) createMode(perm int) fs.FileMode {
 // child inherits whatever the shell itself inherited.
 func (r *Runner) startMasked(cmd *exec.Cmd) error {
 	defer r.holdMaskForFork()()
-	return cmd.Start()
+	return r.startWithAsyncDispositions(cmd.Start)
 }
 
 // holdMaskForFork puts this shell's mask on the process and answers with what

@@ -333,6 +333,14 @@ type Runner struct {
 	// be a body's own.
 	SetUmask func(mask int) (old int, err error)
 
+	// StartIgnoringInterrupts runs start — a process start — with SIGINT and
+	// SIGQUIT ignored for its length, so the child it starts inherits the
+	// ignore, and puts the process's own handling back afterwards. Nil — the
+	// default — means this Runner may not touch the process's dispositions,
+	// and a child of an asynchronous list then starts with the signals the
+	// process has. See interp/asyncinterrupts.go.
+	StartIgnoringInterrupts func(start func() error) error
+
 	// StopThisProcess stops this process the way `suspend` does: it does not
 	// return until something sends SIGCONT. Nil — the default — means this
 	// shell is not the process and cannot stop it, and the builtin refuses.
@@ -4313,6 +4321,10 @@ type Runner struct {
 	// subshell boundary rather than being set inside it, because one
 	// dialect lists an ignore it set and not one it inherited.
 	inheritedIgnored map[string]bool
+	// asyncIgnoresInterrupts says this runner is an asynchronous list of a
+	// shell without job control, whose children start with SIGINT and
+	// SIGQUIT ignored. See interp/asyncinterrupts.go.
+	asyncIgnoresInterrupts bool
 	// trapSnapshot is the listing the parent shell would have shown when
 	// this subshell began, kept for the dialects whose `trap` still shows
 	// it there, and dropped the moment this runner modifies any trap.

@@ -781,6 +781,12 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// A background job keeps the parent's trap listing in one shell fewer
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)
+	// And the two keyboard signals off, for what the job starts, where
+	// there is no job control to put it out of the keyboard's reach. See
+	// interp/asyncinterrupts.go (#5414).
+	if !r.monitor && !r.Interactive {
+		sub.asyncIgnoresInterrupts = true
+	}
 	sub.bg = job
 	// And somewhere for a signal aimed at the job to reach the body's own
 	// traps, which no process of the job's holds. See bodyinbox.go.

@@ -75,6 +75,10 @@ var fatalWatch struct {
 	// traps answers whether the current shell has a trap for a signal. Nil
 	// until a shell that owns the process has been built.
 	traps atomic.Pointer[func(syscall.Signal) bool]
+	// ch is the watch's subscription, kept so a start that had to ignore
+	// the keyboard signals can hand them back to it. See
+	// startIgnoringInterrupts.
+	ch chan os.Signal
 }
 
 // watchFatalSignals arranges for an untrapped fatal signal from outside to end
@@ -91,7 +95,8 @@ func watchFatalSignals(r *interp.Runner) {
 		// Buffered, because os/signal drops an arrival rather than blocking
 		// and there are eight of these. Nothing here is slow, but a shell
 		// being killed is not the moment to depend on that.
-		ch := make(chan os.Signal, len(fatalSignals))
+		ch := make(chan os.Signal, len(fatalSignals)+1)
+		fatalWatch.ch = ch
 		signal.Notify(ch, fatalSignals...)
 		go func() {
 			for s := range ch {
@@ -112,4 +117,31 @@ func watchFatalSignals(r *interp.Runner) {
 			}
 		}()
 	})
+}
+
+// startIgnoringInterrupts starts a program of an asynchronous list with
+// SIGINT and SIGQUIT ignored, so that it inherits them that way, and hands
+// the two back afterwards. See interp/asyncinterrupts.go for the rule and the
+// measurement (#5414).
+//
+// signal.Ignore undoes every subscription the process had for the two, and
+// signal.Reset cannot undo an ignore — see interp's restoreDispositions — so
+// what goes back is a subscription: this watch's, which dies of an untrapped
+// arrival exactly as the runtime's default would have. interp puts its own
+// trap subscriptions back beside it. A signal the script itself had ignored
+// is left ignored.
+func startIgnoringInterrupts(start func() error) error {
+	keyboard := []os.Signal{syscall.SIGINT, syscall.SIGQUIT}
+	var handBack []os.Signal
+	for _, sig := range keyboard {
+		if !signal.Ignored(sig) {
+			handBack = append(handBack, sig)
+		}
+	}
+	signal.Ignore(keyboard...)
+	err := start()
+	if ch := fatalWatch.ch; ch != nil && len(handBack) > 0 {
+		signal.Notify(ch, handBack...)
+	}
+	return err
 }

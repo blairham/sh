@@ -8971,14 +8971,25 @@ type Diagnostics struct {
 	// a `${x:?word}` does not — that is message text rather than a name.
 	//
 	// False — the zero value and the substrate's own — writes the bytes as
-	// they are, which is ksh93u+, dash and BusyBox ash. **zsh is a third
-	// answer and is not modeled here**: it escapes the bytes with a caret
-	// notation of its own and no quotes around them —
-	// `command not found: 5\M-^Y…` — which is a spelling nothing else in this
-	// tree writes and which its own trace does not use. It stays on False, so
-	// that column names the word as written; a measured gap rather than a
-	// hidden one.
+	// they are, which is ksh93u+, dash and BusyBox ash. zsh is a third answer,
+	// DiagnosticNamesAWordVisibly below.
 	DiagnosticNamesAWordEscaped bool
+	// DiagnosticNamesAWordVisibly writes the word such a diagnostic names with
+	// each character it cannot print in a caret notation of its own and no
+	// quotes around it: zsh. Measured 2026-10-02 on 5.9.2, each word run as a
+	// command under `LC_ALL=en_US.UTF-8`:
+	//
+	//	a<0x01>x    ^Ax          a<0x09>b    a\tb       a<0x0a>b    a\nb
+	//	a<0x1b>     a^[          a<0x7f>     a^?
+	//	<0x80>      \M-^@        a<0x9b>     a\M-^[     — the C1 bytes
+	//	<0xe9>x     \M-ix        a<0xff>     a\M-^?     <0xa0>  \M-  (a space)
+	//	            — a byte that begins no character: `\M-` and the low half
+	//	é           é            — a character, written as itself
+	//
+	// and under `LC_ALL=C` the bytes from 0xa0 up are written as they are
+	// while 0x80 to 0x9f still take `\M-`. `cd` names its operand the same
+	// way, and so do a path that is not there and a file that will not run.
+	DiagnosticNamesAWordVisibly bool
 	// TraceBareBracket is the one exemption from all of that: how much of a
 	// `[ … ]` test is printed without quotes even though the same character
 	// is quoted everywhere else.

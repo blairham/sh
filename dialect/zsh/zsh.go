@@ -6098,6 +6098,8 @@ func Diagnostics() interp.Diagnostics {
 		// Diagnostics.NearTextEscapesControlCharacters for the seven rows
 		// and for where the high half stops (#3563).
 		NearTextEscapesControlCharacters: true,
+		// A word a diagnostic names, in the caret notation; see the field.
+		DiagnosticNamesAWordVisibly: true,
 		// And the same cut on the second message a substitution body refused
 		// at expansion time is given — see the field.
 		SubstitutionParseFailureQuotesTheWord: true,

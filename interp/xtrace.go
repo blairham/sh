@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -1283,10 +1284,65 @@ func traceBracketIsBare(p TraceBareBracket, words []string, i int) bool {
 // naming a word has to reach the same rendering rather than grow a second
 // one.
 func (r *Runner) NamedWord(s string) string {
+	if r.diag().DiagnosticNamesAWordVisibly {
+		return r.visibleWord(s)
+	}
 	if !r.diag().DiagnosticNamesAWordEscaped || !traceHoldsAnUnwritableByte(s, r.eachTraceUnit) {
 		return s
 	}
 	return dollarQuote(s, r.diag().TraceEscape, r.eachTraceUnit)
+}
+
+// visibleWord is a word with each character that cannot be printed written
+// in the caret notation niceRangeChar spells, the way
+// Diagnostics.DiagnosticNamesAWordVisibly names one. A byte that begins no
+// character of the locale's is `\M-` and the low half's form; under a locale
+// whose characters are not counted, only 0x80 to 0x9f are.
+func (r *Runner) visibleWord(s string) string {
+	if isPrintableASCII(s) {
+		// The common case, answered without the walk; the walk gives the
+		// same text for it, so a mutant dropping this survives by design.
+		return s
+	}
+	chars := !isASCII(s) && r.countsTheLocalesCharacters()
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		c := s[i]
+		if c < utf8.RuneSelf {
+			b.WriteString(niceRangeChar(rune(c)))
+			i++
+			continue
+		}
+		if chars {
+			if u, n := utf8.DecodeRuneInString(s[i:]); u != utf8.RuneError || n > 1 {
+				b.WriteString(niceRangeChar(u))
+				i += n
+				continue
+			}
+			b.WriteString(`\M-` + niceRangeChar(rune(c-0x80)))
+			i++
+			continue
+		}
+		if c <= 0x9f {
+			b.WriteString(`\M-` + niceRangeChar(rune(c-0x80)))
+		} else {
+			b.WriteByte(c)
+		}
+		i++
+	}
+	return b.String()
+}
+
+// isPrintableASCII reports whether every byte of s is printable ASCII, which
+// is every word a diagnostic usually names and the one shape visibleWord can
+// return untouched without walking it.
+func isPrintableASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] >= 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // eachTraceUnit walks a value the way a trace reads it: bytes that stand

@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 // `${(V)x}` through the shell that has the flag, against zsh 5.9.2.
 //
@@ -24,7 +27,14 @@ print -r -- "[${(V)r}]"
 print -r -- "[${(Vq)s}]"
 u=héllo
 print -r -- "[${(V)u}]"`)
-	want := "[a\\tb]\n[a\\nb]\n[a^[b]\n[a^Mb]\n[a$'\\t'b]\n[héllo]\n"
+	// The last row runs under no locale, so its two high bytes are the C
+	// library's to classify: macOS calls them printing and glibc does not,
+	// measured on zsh 5.9.2 on both — see interp/clocaleprints_darwin.go.
+	hello := "[h\\M-C\\M-)llo]\n"
+	if runtime.GOOS == "darwin" {
+		hello = "[héllo]\n"
+	}
+	want := "[a\\tb]\n[a\\nb]\n[a^[b]\n[a^Mb]\n[a$'\\t'b]\n" + hello
 	if out != want || st != 0 {
 		t.Errorf("(V) = %q (status %d), want %q", out, st, want)
 	}

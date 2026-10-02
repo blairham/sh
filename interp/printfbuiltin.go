@@ -1605,6 +1605,12 @@ func (r *Runner) printfConvert(spec string, verb byte, timeFmt string, next func
 		// is the half of the field a `%c` really has.
 		return fmt.Sprintf(printfWithoutPrecision(spec)+"s", arg[:1]), 0, false
 	case 'q':
+		if !present && r.ask(r.sem().PrintfQuoteOfNoArgumentIsEmpty, "`%q` with no operand left writing nothing") {
+			return "", 0, false
+		}
+		if r.unspecified {
+			return "", r.status, true
+		}
 		return r.printfQuote(spec, arg)
 	case 'd', 'i':
 		n, code, stop := r.printfNumber(arg, present)

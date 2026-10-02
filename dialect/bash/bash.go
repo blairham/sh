@@ -2853,6 +2853,9 @@ func Semantics() interp.Semantics {
 	// too, and the second begins the next record. Measured 2026-10-02 on
 	// 5.3.20 (#5153).
 	s.ReadDelimiterIsTheLocalesCharacter = interp.No
+	// `printf '[%q]'` with no operand quotes the empty string: `['']`,
+	// measured 2026-10-02 on 5.3.20 (#5153).
+	s.PrintfQuoteOfNoArgumentIsEmpty = interp.No
 	// Reached only under `shopt -s lastpipe`: the last element is judged as a
 	// statement and then the pipeline is, so `true | false` and `true |
 	// /usr/bin/false` both write EE there.

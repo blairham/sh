@@ -1482,6 +1482,8 @@ func Semantics() interp.Semantics {
 	// T2' USR1; kill -USR1 $$; echo after` writes T1 and the error and exits
 	// 2, and so does `: $((1/0))` in place of the read (#5360).
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheShell
+	// unanswered PrintfQuoteOfNoArgumentIsEmpty: `%q` is `invalid
+	// directive` here, so there is no quoting to leave out.
 	// unanswered ReadDelimiterIsTheLocalesCharacter: `read -d` is `Illegal
 	// option -d`, so there is no delimiter to read whole.
 	// unanswered ErrTrapFiresForAnErrorTheShellGaveUpOver: there is no ERR

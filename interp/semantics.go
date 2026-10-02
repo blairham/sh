@@ -4780,6 +4780,13 @@ type Semantics struct {
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
 	// the others read 0, because `kill` succeeded.
 	SignalHandlerSeesEarlierStatus Answer
+	// PrintfQuoteOfNoArgumentIsEmpty makes a `%q` the operands have run out
+	// for write nothing at all, where the other reading quotes the empty
+	// string it stands for. Measured 2026-10-02 under `env -i
+	// PATH=/usr/bin:/bin`: `printf '[%q]\n'` writes `[]` in zsh 5.9.2 and
+	// ksh93u+ 2012-08-01 and `['']` in bash 5.3.20, and `printf '[%q]\n' ''`
+	// is `['']` in all three. Asked only where a `%q` has no operand left.
+	PrintfQuoteOfNoArgumentIsEmpty Answer
 	// ReadDelimiterIsTheLocalesCharacter makes `read -d` stop at the whole of
 	// a delimiter that is one character of the locale's encoding and more
 	// than one byte, where the other reading stops at its first byte and

@@ -146,6 +146,9 @@ type editor struct {
 	// Nil is the two fixed sequences in paste.go. See
 	// EditorStyle.BracketedPasteParameter.
 	pasteCodes func() (on, off string)
+	// transformTermcap is Shell.TransformTermcap bound to the session's
+	// context, or nil. See termcaptransform.go.
+	transformTermcap func(code, arg string) (string, bool)
 	// postdisplay is text drawn after the line's end without being part of
 	// the line: an inline suggestion. The shell that has it calls it
 	// `POSTDISPLAY`, a widget sets it, and it lives for the rest of the read —
@@ -1425,6 +1428,9 @@ func columns(matches []string, width int) []string {
 // call. See repaint.go.
 func (e *editor) write(s string) {
 	e.drawn.valid = false
+	if e.transformTermcap != nil {
+		s = transformTermcapSequences(s, e.transformTermcap)
+	}
 	_, _ = io.WriteString(e.out, s)
 }
 

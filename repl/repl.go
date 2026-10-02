@@ -260,6 +260,15 @@ type Shell struct {
 	// not offered beside it.
 	RunWidget func(ctx context.Context, name string, in Line) (Line, bool)
 
+	// TransformTermcap is what the editor writes in place of one of the
+	// terminal-control sequences it would write, where the shell has asked to
+	// see them under their termcap names. code is the name — `cd`, `ce`, `le`,
+	// `LE` — and arg the count a counted one carries, empty for the others.
+	// The second result is false where no transformation is installed, and
+	// the sequence is then written as it stands. Nil is a shell with no such
+	// seam. See termcaptransform.go.
+	TransformTermcap func(ctx context.Context, code, arg string) (string, bool)
+
 	// RunScheduled runs whatever the shell had set aside for a time that has
 	// now passed. It is called once at every prompt, before the prompt is
 	// drawn, in the terminal's own line discipline — the same place and the
@@ -2565,6 +2574,10 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// What colors the line while it is typed, which is nothing unless the
 		// front end said otherwise.
 		highlighter: s.Highlighter,
+		// And what stands in for its own control sequences, where the shell
+		// installed something to. Bound to the context the session runs in,
+		// because it calls the shell.
+		transformTermcap: s.termcapTransform(ctx),
 		// What this dialect marks an abandoned line with, which is `^C` in
 		// two of the four and nothing in the other two.
 		interrupt:       s.Editor.Interrupt,

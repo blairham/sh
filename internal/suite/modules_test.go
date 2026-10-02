@@ -7,7 +7,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 // fakeReference is a program that answers the module question the way a
@@ -76,4 +78,21 @@ func TestTheZshColumnLinksItsReferencesModules(t *testing.T) {
 		return
 	}
 	t.Fatal("no zsh column in the panel")
+}
+
+// And the run itself places it: a file run through the harness finds the
+// reference's modules beside it, under both shells. A test of placeModules
+// alone would pass with the call taken out of the run.
+func TestARunFindsTheReferencesModules(t *testing.T) {
+	mods := t.TempDir()
+	if err := os.WriteFile(filepath.Join(mods, "probe"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ref := fakeReference(t, mods)
+	tests := testDir(t, map[string]string{"m.tests": "test -f Modules/probe && echo FOUND\n"})
+	s := Suite{Name: "zsh", ShellVar: "THIS_SH", ModulesAt: "Modules", ModulesQuery: "ignored"}
+	got := runIn(context.Background(), s, "", tests, "m.tests", "/bin/sh", ref, Options{Timeout: 5 * time.Second})
+	if !strings.Contains(got.Output, "FOUND") {
+		t.Errorf("the run wrote %q, want the module directory found at ./Modules", got.Output)
+	}
 }

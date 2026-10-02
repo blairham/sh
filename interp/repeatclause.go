@@ -25,6 +25,12 @@ func (r *Runner) repeatClause(ctx context.Context, c *syntax.RepeatClause) error
 		// arithmetic expression. The status is the loop's afterwards either
 		// way.
 		n, ok := r.repeatCount(c.Count)
+		if !ok && r.ctl != controlNone {
+			// A count that failed has ended the line or the shell, and the
+			// status it left is the one that is reported: `repeat 1+ print
+			// y` exits 1 in zsh 5.9.2, measured 2026-10-02 (#5382).
+			return nil
+		}
 		r.status = 0
 		if !ok {
 			return nil
@@ -82,10 +88,14 @@ func (r *Runner) repeatCount(w *syntax.Word) (int64, bool) {
 		// says.
 		r.diagf("%s\n", r.diag().ParseFailure(perr))
 		r.status = 1
+		r.countFailed()
 		return 0, false
 	}
 	n, err := r.evalArith(tree)
 	if err != nil {
+		r.diagf("%s\n", r.arithFailure(fields[0], err))
+		r.status = 1
+		r.countFailed()
 		return 0, false
 	}
 	// A count of zero or less needs no test of its own: the loop counts up
@@ -93,4 +103,15 @@ func (r *Runner) repeatCount(w *syntax.Word) (int64, bool) {
 	// and `repeat -1` alike. A guard for it was a line no test could
 	// distinguish.
 	return int64(n), true
+}
+
+// countFailed ends what a failed count ends, which is what any failed
+// expansion in the heading ends: measured 2026-10-02 on zsh 5.9.2 under
+// `-f`, `repeat 1+ print y; print after`, `repeat 1/0 …` and `repeat {} …`
+// each write their arithmetic error and nothing after it, exactly as `repeat
+// $((1+)) …` does, where this shell went on to the next command. See
+// Runner.failedHeading (#5382).
+func (r *Runner) countFailed() {
+	r.expandErr = true
+	r.failedHeading()
 }

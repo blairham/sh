@@ -1176,6 +1176,9 @@ func Semantics() interp.Semantics {
 	// `-o pathscript` looks the script operand up along PATH, stopping at
 	// the first entry of the name that is not a directory. Measured
 	// 2026-10-02 on 5.9.2 (#5138).
+	// `exec` with options and nothing to run is refused before its
+	// redirections. See Semantics.ExecOptionsRequireACommand (#5380).
+	s.ExecOptionsRequireACommand = interp.Yes
 	s.ScriptSearchOptionName = "pathscript"
 	// And sh and ksh emulation start with it on (#5383).
 	s.ScriptSearchUnderEmulation = "sh ksh"

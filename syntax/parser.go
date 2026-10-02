@@ -7622,7 +7622,15 @@ func (p *Parser) shortBodyAfterHeader(headerEnded bool) (body []*Stmt, stop Pos,
 func (p *Parser) parseRepeat() Command {
 	c := &RepeatClause{Start: p.tok.Pos}
 	defer p.opens("repeat")()
+	// The count is an argument and not a command word, so a brace that
+	// begins it is text: measured 2026-10-02 on zsh 5.9.2, `repeat {1,2}
+	// print y` is `bad math expression: illegal character: {` — the count
+	// one word, unexpanded — where reading the brace as the reserved word
+	// made the line a parse error (#5382).
+	saved := p.lex.inArgument
+	p.lex.inArgument = true
 	p.next()
+	p.lex.inArgument = saved
 	c.Count = p.word()
 	if c.Count == nil {
 		p.failUnexpectedOperand("a count")

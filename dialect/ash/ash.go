@@ -1873,6 +1873,10 @@ func Semantics() interp.Semantics {
 	// are `illegal option` at the same door `-x` is, and this shell's `exec`
 	// is special, so the script ends there (#3056).
 	s.ExecTakesOptions = interp.Yes
+	// An `exec` of options alone runs nothing at 0 here: measured
+	// 2026-10-02 on BusyBox v1.37.0 in the pinned alpine image, `exec -a x`
+	// and `exec --` are each `st=0`. See Semantics.ExecOptionsRequireACommand.
+	s.ExecOptionsRequireACommand = interp.No
 	s.ExecTakesTheLoginLetter = interp.No
 	s.ExecTakesTheEmptyEnvironmentLetter = interp.No
 	s.ExecLoginPrefixesTheGivenName = interp.No

@@ -6453,6 +6453,14 @@ type Diagnostics struct {
 	//
 	// Empty is bash's, which names the builtin alone.
 	RestrictedExec string
+	// ExecRequiresACommand, ExecFlagRequiresAParameter and ExecUnknownFlag
+	// are the sentences Semantics.ExecOptionsRequireACommand writes: an
+	// `exec` of options alone, one whose `-a` took the last word as its
+	// name, and a letter `exec` has not got. The letter is the argument of
+	// the last two. See interp/execwithoutacommand.go.
+	ExecRequiresACommand       string
+	ExecFlagRequiresAParameter string
+	ExecUnknownFlag            string
 	// RestrictedCommandOption refuses `command -p`. Two verbs: the builtin's
 	// name and the letter, in that order, and again a dialect may use either —
 	// bash writes `command: -p: restricted` and ksh93 writes `-p: restricted`.

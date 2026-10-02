@@ -480,6 +480,7 @@ dash  ErrTrapRefiresForTheCommandItFiredInside
 dash  ErrTrapRunsInSubshells
 dash  ErrTrapRunsInsideFunctions
 dash  ErrexitSeesPipefailFailure
+dash  ExecOptionsRequireACommand
 dash  ExitTrapFiresPastTheEnd
 dash  ExpansionResultSuppliesGroupSyntax
 dash  ExportContainerLetterNeedsAValue

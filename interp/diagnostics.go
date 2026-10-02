@@ -1152,6 +1152,10 @@ type Diagnostics struct {
 	// character alone and %[2]s is the whole directive as written, so `%lQ`
 	// is `Q` for half of them and `%lQ` for the other half.
 	PrintfBadVerb string
+	// PrintfPositionOutOfRange is a conversion naming an argument past the
+	// pass's — `%[1]d` the position. Empty is the core's wording. Reached
+	// only where Semantics.PrintfArgumentPositions has positions.
+	PrintfPositionOutOfRange string
 	// PrintfBadVerbStatus is what that reports. Zero means 1.
 	PrintfBadVerbStatus int
 	// PrintfMissingVerb is a format that ended before its conversion

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/interp"
 )
@@ -112,7 +113,7 @@ const printLetters = "rRnlNmoOiszSpufPD"
 // `f`/`u`/`C` arm of the option reader. `-a` and `-c` are the other two
 // column layouts and stay here: they are the *across* fill and the
 // terminal-width one, and neither is this letter.
-const printUnimplemented = "acbvxX"
+const printUnimplemented = "acb"
 
 // registerPrint installs the builtin.
 func registerPrint(r *interp.Runner) {
@@ -146,6 +147,13 @@ type printOptions struct {
 	format    string
 	hasFormat bool
 	fd        int
+	// assign is `-v name`: the text goes into the parameter rather than out
+	// to a stream. See printBuiltin.
+	assign string
+	// leadingTabs and allTabs are `-x n` and `-X n`, the tab stops a tab is
+	// expanded to — at the start of an operand, or anywhere. See
+	// expandTabs.
+	leadingTabs, allTabs int
 }
 
 // separator and terminator are the two settings the table above records.
@@ -181,6 +189,13 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		var ok bool
 		if rest, ok = printMatching(r, rest); !ok {
 			return 1
+		}
+		if opts.hasFormat && len(rest) == 0 {
+			// A format with nothing left to format writes nothing, where
+			// the words alone still write their terminator: measured
+			// 2026-10-02 on zsh 5.9.2, `print -m -f 'fmt\n' z a` writes
+			// nothing at 0 and `print -m z a` an empty line.
+			return 0
 		}
 	}
 	if opts.named {
@@ -257,8 +272,17 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		}
 		return 0
 	}
+	if opts.assign != "" && opts.fdNamed {
+		// Measured 2026-10-02 on zsh 5.9.2: `print -v x -u2 hi` writes this
+		// and stores nothing.
+		r.Diagnosef("-p or -u not allowed with -s, -S, -v, or -z\n")
+		return 1
+	}
 	if opts.hasFormat {
 		return printFormatted(r, ctx, opts, rest)
+	}
+	if opts.assign != "" {
+		return printAssigned(r, ctx, opts, rest)
 	}
 	out, ok := r.WriterForFd(opts.fd)
 	if !ok {
@@ -292,6 +316,43 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		return r.ExitStatus()
 	}
 	return 0
+}
+
+// printAssigned is `print -v name`: the text the words make, stored in the
+// parameter through `printf -v`, so a name with a subscript, a refused name
+// and a frozen one are answered the way that builtin answers them — and the
+// two do answer alike, measured: `not an identifier: 1x` and `read-only
+// variable: r` from both.
+//
+// The terminator is not stored for the joined form or for `-N`, and is for
+// `-l` and the column layouts. Measured 2026-10-02 on zsh 5.9.2, read back
+// with `print -rn -- "$x"`:
+//
+//	print -v x a b         `a b`       print -v x -N a b    `a\0b`
+//	print -v x -l a b      `a\nb\n`    print -v x -c a b    `a\nb\n`
+//	print -v x -n hello    `hello`     print -v x           empty
+func printAssigned(r *interp.Runner, ctx context.Context, opts printOptions, rest []string) int {
+	text, ok, refused := printText(r, opts, rest)
+	if opts.columns > 0 {
+		text, ok, refused = printColumnLines(r, opts, rest)
+	}
+	if !ok {
+		return 1
+	}
+	if refused {
+		r.RefuseCodePoint()
+	}
+	if opts.columns == 0 && !opts.lineSep {
+		text = strings.TrimSuffix(text, opts.terminator())
+	}
+	printf, found := r.Builtin("printf")
+	if !found {
+		return 1
+	}
+	if code := printf(r, ctx, []string{"-v", opts.assign, "%s", text}); code != 0 || !refused {
+		return code
+	}
+	return r.ExitStatus()
 }
 
 // printWriteFailed says what a write that did not happen was refused for.
@@ -390,6 +451,9 @@ func printText(r *interp.Runner, opts printOptions, words []string) (text string
 		// `\c` ends the output where it stands, terminator and all.
 		return text, true, false
 	}
+	if opts.allTabs > 0 {
+		text = expandTabs(text, 0, opts.allTabs, false)
+	}
 	// A refusal keeps the terminator: measured 2026-09-11 under `LC_ALL=C`,
 	// `print -- 'a\u00e9Z'` leaves `61 0a` and abandons the script.
 	return text + opts.terminator(), true, refused
@@ -428,12 +492,60 @@ func printJoined(r *interp.Runner, opts printOptions, words []string, sep string
 				return "", false, false, false
 			}
 		}
+		if opts.leadingTabs > 0 {
+			expanded = expandTabs(expanded, textColumn(b.String()), opts.leadingTabs, true)
+		}
 		b.WriteString(expanded)
 		if stop {
 			return b.String(), true, true, false
 		}
 	}
 	return b.String(), true, false, false
+}
+
+// expandTabs turns tabs into the spaces that reach the next stop, counting
+// columns in characters from the last newline, with the text starting at
+// column at. leading stops at the first character that is not a tab, which is
+// `-x`: measured 2026-10-02 on zsh 5.9.2, `print -x4 a $'\tb'` is `a   b` —
+// the tab at the start of its operand, counted from where the operand
+// starts — and a tab at the start of a line inside one, while `print -x4
+// $'a\tb'` and `print -x4 $' \tc'` keep their tabs. `-X` expands every one: `print -X4 $'ab\tc\tdefg\th'` is `ab  c
+// defg    h`, and `print -X3 $'\u00e9\tx'` is `é  x`, a character being one
+// column.
+func expandTabs(s string, at, every int, leading bool) string {
+	if !strings.Contains(s, "\t") {
+		return s
+	}
+	var b strings.Builder
+	col := at
+	// open says the tabs here are still leading ones: at the start of the
+	// text, or after a newline in it.
+	open := true
+	for _, c := range s {
+		switch {
+		case c == '\t' && (open || !leading):
+			n := every - col%every
+			b.WriteString(strings.Repeat(" ", n))
+			col += n
+			continue
+		case c == '\n':
+			col, open = 0, true
+		default:
+			col++
+			open = false
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
+}
+
+// textColumn is the column the end of s stands at: characters since its last
+// newline.
+func textColumn(s string) int {
+	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
+		s = s[i+1:]
+	}
+	return utf8.RuneCountInString(s)
 }
 
 // printMatching is `-m`: the first operand is a pattern and the rest are kept
@@ -554,7 +666,7 @@ func readPrintOptions(r *interp.Runner, args []string, opts *printOptions) (rest
 				// as letters and stops on the space after them (#1708).
 			case letter == 'e' && echoWord:
 				opts.raw = false
-			case letter == 'f' || letter == 'u' || letter == 'C':
+			case letter == 'f' || letter == 'u' || letter == 'C' || letter == 'v' || letter == 'x' || letter == 'X':
 				arg, more, ok := printOptionArgument(r, letter, letters[i+1:], rest)
 				if !ok {
 					return nil, 1
@@ -624,6 +736,25 @@ func printOptionArgument(r *interp.Runner, letter byte, attached string, rest []
 // applyPrintArgument stores what `-f` or `-u` was given. A code of -1 means
 // carry on.
 func applyPrintArgument(r *interp.Runner, letter byte, arg string, opts *printOptions) int {
+	if letter == 'v' {
+		opts.assign = arg
+		return -1
+	}
+	if letter == 'x' || letter == 'X' {
+		// A tab stop every n columns. Measured 2026-10-02 on zsh 5.9.2:
+		// `print -x0 a` is `positive integer expected after -x: 0` at 1.
+		n, err := strconv.Atoi(arg)
+		if err != nil || n <= 0 {
+			r.Diagnosef("positive integer expected after -%c: %s\n", letter, arg)
+			return 1
+		}
+		if letter == 'x' {
+			opts.leadingTabs = n
+		} else {
+			opts.allTabs = n
+		}
+		return -1
+	}
 	if letter == 'f' {
 		opts.format, opts.hasFormat = arg, true
 		return -1
@@ -716,6 +847,11 @@ func printFormatted(r *interp.Runner, ctx context.Context, opts printOptions, re
 			expanded[i] = v
 		}
 		rest = expanded
+	}
+	if opts.assign != "" {
+		// Stored as printf produced it, terminator and all: `print -f
+		// '%s\n' -v x a b` stores `a\nb\n`, measured.
+		return printf(r, ctx, append([]string{"-v", opts.assign, opts.format}, rest...))
 	}
 	return printf(r, ctx, append([]string{opts.format}, rest...))
 }

@@ -6730,6 +6730,54 @@ type Semantics struct {
 	//
 	// Asked only where a format actually ends inside a conversion.
 	PrintfUnfinishedConversionIsAPercent Answer
+
+	// PrintfArgumentPositions is whether a conversion may name the argument
+	// it takes — `%2$s`, and `*2$` for a width or a precision — and, where it
+	// may, how a pass counts what it used. Zero is PrintfPositionsRefused,
+	// where the `$` is a bad conversion. See PrintfPositionsPerPass for the
+	// reading this implements; ksh93's is a third, recorded below and not
+	// modeled.
+	//
+	// Measured 2026-10-02: `printf '%2$s %1$s\n' a b` is `b a` in zsh 5.9.2
+	// and ksh93u+, and a refusal in bash 5.3.20 (`` `$': invalid format
+	// character ``), dash 0.5.12 (`%2$: invalid directive`, 2) and BusyBox ash
+	// 1.37.0 (`invalid format`). ksh93 parts from zsh on the rest of the
+	// pass: `printf '%1$s %s\n' a b` is `a b` there and `a a` / `b b` in
+	// zsh, and `printf '%3$s\n' a b` is an empty line at 0 there and `3:
+	// argument specifier out of range` at 1 in zsh.
+	//
+	// unpinned zsh: no corpus row writes a positional conversion; pinned by
+	// TestPrintfReadsArgumentPositionsAPassAtATime.
+	//
+	// unpinned bash: the same reach; pinned by
+	// TestPrintfRefusesArgumentPositions.
+	//
+	// unpinned dash: the same reach; pinned by
+	// TestPrintfRefusesArgumentPositions.
+	//
+	// unpinned ash: the same reach; pinned by
+	// TestPrintfRefusesArgumentPositions.
+	//
+	// unpinned ksh: the same reach, and ksh93's own reading is not modeled;
+	// the refusal it holds is pinned by TestPrintfRefusesArgumentPositions.
+	PrintfArgumentPositions PrintfArgumentPositionForm
+
+	// PrintfVTakesAnElementPerPass makes `printf -v name`, where name is an
+	// indexed array and the format is used more than once, store each use's
+	// text as an element of its own rather than the whole text as one value.
+	// Measured 2026-10-02: `typeset -a foo; printf -v foo '%s' a b c` leaves
+	// `foo=( a b c )` in zsh 5.9.2 and `foo=([0]="abc")` in bash 5.3.20; one
+	// use, `printf -v foo x`, leaves a scalar `foo=x` in zsh, and an
+	// association or a scalar takes the whole text there too. zsh's own
+	// `print -f … -v` is this route, and B03print asks it (#5143). dash,
+	// BusyBox ash and ksh93u+ have no `-v`.
+	//
+	// unpinned zsh: no corpus row reuses a format into an array; pinned by
+	// TestPrintfIntoAnArrayTakesAnElementPerPass.
+	//
+	// unpinned bash: the same reach; pinned by
+	// TestPrintfIntoAnArrayIsOneElement.
+	PrintfVTakesAnElementPerPass Answer
 	// PrintfHexEscape is how a printf format reads `\x`, and it is four
 	// answers rather than a presence:
 	//
@@ -29685,6 +29733,9 @@ func PosixSemantics() Semantics {
 		// An operand naming no job is reported: the standard has `wait`
 		// write a diagnostic for it, and every column does by default.
 		JobSpecMissIsSilent: No,
+		// The standard has no `printf -v`, so nothing is stored a use at a
+		// time; the one column that does says so itself.
+		PrintfVTakesAnElementPerPass: No,
 		// The standard has the name set to a question mark when the options
 		// run out.
 		GetoptsEndOfOptionsNamesIt: Yes,
@@ -31169,6 +31220,9 @@ func CoreSemantics() Semantics {
 		// but one option of one shell. Answered here because the run that
 		// asks is the ordinary failing `wait %1`.
 		JobSpecMissIsSilent: No,
+		// And `printf -v` into an array stores one value, which is bash's;
+		// zsh says otherwise itself. Read rather than asked.
+		PrintfVTakesAnElementPerPass: No,
 		// `getopts` writes `?` into the name when it runs out of options,
 		// which is the standard's own words and six of the seven columns.
 		// The substrate answers it rather than refusing it because the run

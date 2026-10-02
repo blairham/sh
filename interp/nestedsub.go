@@ -199,7 +199,7 @@ func (r *Runner) nestedSubscriptSource(e *syntax.ParamExpr, span syntax.Span) (s
 	}
 	words := r.nestedInnerFields(e)
 	if r.nestedResultIsAList(inner.Param, words, inner.Quoting != syntax.Unquoted) {
-		return subscriptSource{elems: words}, true
+		return subscriptSource{elems: words, ghosts: r.nestedEmptiesAreGhosts(e)}, true
 	}
 	return subscriptSource{elems: []string{strings.Join(words, "")}, scalar: true}, true
 }

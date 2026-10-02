@@ -3451,23 +3451,20 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// the split it is subject to is the one its quoting gives it, and
 		// not one a length turns off. See nestedInnerSplit for the
 		// measurement that took the claim back out.
-		words, _, isList := r.nestedWords(e)
+		// Unquoted, a list's empty elements are already gone, so `${#${b[@]}}`
+		// is 2 with `b=(x '' y)` and `${#${(s.:.)u}}` is 2 with `u=a::b:`,
+		// where the quoted form counts 3 and an `=` split's fields count all
+		// four (#5312). See unquotedInnerDropsItsEmpties.
+		words, set, isList := r.nestedWords(e)
 		if isList {
-			if !e.EnclosedInDoubleQuotes && r.nestedElementsAreBare(e) == nestedBareFromAList {
-				// Unquoted, a list's empty elements are gone before they
-				// are counted, as they are under a flag group: `${#${b[@]}}`
-				// is 2 with `b=(x '' y)` and `${#${(s.:.)u}}` is 2 with
-				// `u=a::b:`, where the quoted form counts 3 and an `=`
-				// split's fields count all four (#5312).
-				n := 0
-				for _, w := range words {
-					if w != "" {
-						n++
-					}
-				}
-				return itoa(n)
-			}
 			return itoa(len(words))
+		}
+		if set && e.Index != nil && r.nestedEmptiesAreGhosts(e) {
+			// One element picked out of a nested list, and it is one of the
+			// list's ghosts: `"${#${b[@]}[2]}"` is 1 with `b=(xyz "" y)`,
+			// where an element that is not there — `[5]`, or a search that
+			// found nothing — is 0. See Runner.nestedEmptiesAreGhosts.
+			words = ghostsAsOneUnit(words)
 		}
 		return itoa(r.stringLength(strings.Join(words, "")))
 	}
@@ -9105,12 +9102,15 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	// pattern the shell is about to escape for someone: leaving them on
 	// answered `${${v}}` on `a*b` with a backslash in it.
 	words = unescapeAll(words)
-	if innerLetterSplitDropsItsEmpties(span) {
+	if innerLetterSplitDropsItsEmpties(span) || r.unquotedInnerDropsItsEmpties(e, span) {
 		// A letter split a level down with no `@` beside it leaves no empty
 		// field, inside quotes as well: with `u=a::b:`, `"${(@)${(s.:.)u}}"`
 		// is two words, `"${#${(s.:.)u}}"` is 2 and `"${${(s.:.)u}}"` is
 		// `a:b` in zsh 5.9.2, where the same split written at the top in
 		// quotes keeps its last empty field (#5312).
+		//
+		// And unquoted, a list's empty elements are gone before the outer
+		// half reads anything — see unquotedInnerDropsItsEmpties.
 		kept := words[:0]
 		for _, w := range words {
 			if w != "" {
@@ -9120,6 +9120,31 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 		words = kept
 	}
 	return words
+}
+
+// unquotedInnerDropsItsEmpties says the inner of a nested expansion is a list —
+// an array's elements, or what a letter split made — expanded without quotes,
+// whose empty elements are therefore gone before the outer half reads it: its
+// subscript, its operator and its flags alike. Measured on zsh 5.9.2
+// (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`), 2026-10-02, with `b=(xyz "" y)`,
+// `c3=("" x)`, `c2=("" "")` and `u=a::b` (#5412):
+//
+//	${${b[@]}[2]}          y      the second element of what is left
+//	${${b[@]}[-2]}         xyz
+//	${${c3[@]}[1]}         x
+//	${${(@s.:.)u}[2]}      b
+//	${${${b[@]}}[2]}       y      and a level further down as well
+//	${${b[@]}[(i)y]}       2
+//	${${b[@]}/#/p}         pxyz py  the operator never sees the empty
+//	x${^${b[@]}}y          xxyzy xyy
+//	${${c2[@]}[1]-z}       z      nothing left, so the element is unset
+//	x=${${b[@]}[2]}        y      an assignment's value is unquoted too
+//
+// Quoted, the same inner keeps them: `"${${b[@]}[(i)y]}"` is 3. An `=` split's
+// empty fields are the exception and stay either way — `IFS=:;
+// ${${=u}[2]}` is empty — which is nestedElementsAreBare's other kind.
+func (r *Runner) unquotedInnerDropsItsEmpties(e *syntax.ParamExpr, span syntax.Span) bool {
+	return span.Quoting == syntax.Unquoted && r.nestedElementsAreBare(e) == nestedBareFromAList
 }
 
 // innerLetterSplitDropsItsEmpties says the inner of a nested expansion is a

@@ -73,7 +73,16 @@ func lengthFlag(e *syntax.ParamExpr) byte {
 // flaggedLength answers `${#…}` for an expansion carrying a flag group: the
 // modifier's count where one was written, and otherwise the plain answer —
 // the number of elements for a list and the length of the value for a scalar.
-func (r *Runner) flaggedLength(e *syntax.ParamExpr, words []string, isList bool) int {
+//
+// ghosts says the empty words are a nested list's ghosts, each one character
+// and one word long — see Runner.nestedEmptiesAreGhosts. Measured on zsh 5.9.2
+// under `LC_ALL=C` with `b=(xyz "" y)`: `"${(c)#${b[@]}}"` and
+// `"${(cm)#${b[@]}}"` are 7, `"${(w)#${b[@]}}"` and `"${(W)#${b[@]}}"` are 3,
+// and `"${(m)#${b[@]}[2]}"` and `"${(c)#${b[@]}[2]}"` are 1 (#5412).
+func (r *Runner) flaggedLength(e *syntax.ParamExpr, words []string, isList, ghosts bool) int {
+	if ghosts {
+		words = ghostsAsOneUnit(words)
+	}
 	switch lengthFlag(e) {
 	case 'c':
 		return r.countCharacters(e, words)
@@ -86,6 +95,24 @@ func (r *Runner) flaggedLength(e *syntax.ParamExpr, words []string, isList bool)
 		return len(words)
 	}
 	return r.measuredLength(e, words[0])
+}
+
+// ghostOneUnit is what a nested list's empty element is measured as: one
+// character, and a word. The byte is the one the sort reads it as — see
+// nestedSortKey — and it is never written out.
+const ghostOneUnit = "\xa1"
+
+// ghostsAsOneUnit is words with each empty one replaced by ghostOneUnit, in a
+// copy: the caller's words are the value the expansion goes on to substitute.
+func ghostsAsOneUnit(words []string) []string {
+	out := make([]string, len(words))
+	for i, w := range words {
+		if w == "" {
+			w = ghostOneUnit
+		}
+		out[i] = w
+	}
+	return out
 }
 
 // measuredLength is one word's length in the units the group asked for:

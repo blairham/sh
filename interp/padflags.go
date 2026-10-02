@@ -83,7 +83,7 @@ func (r *Runner) padFlagged(e *syntax.ParamExpr, words []string) ([]string, bool
 	rp := r.paddingArgs(e, 'r', e.PadRight)
 	// An empty element a nested expansion handed back is one unit wide here,
 	// though it prints as nothing. See Runner.padAGhost.
-	ghost := innerEmptiesSortLast(e)
+	ghost := r.nestedEmptiesAreGhosts(e)
 	out := make([]string, len(words))
 	for i, w := range words {
 		if ghost && w == "" {
@@ -279,8 +279,9 @@ func (r *Runner) repeatFill(fill string, n int, keepRight bool) string {
 // `"${(@l:1:)${b[@]}}"` leaves it empty, `"${(@l:3:)${b[@]}}"` pads it to
 // two blanks, `"${(@r:2::-:)${b[@]}}"` to one `-`, and
 // `"${(@l:2::L:r:2::R:)${b[@]}}"` is `LLR` — the unit is the word's second
-// half. The same nesting rule as the sort key decides which empties these
-// are: see nestedSortKey (#5345).
+// half. Which empties these are is Runner.nestedEmptiesAreGhosts, the rule
+// the sort key and a length follow too (#5345, #5412): a nested *value* that
+// is empty is not one, and `"${(l:3:)${b[2]}}"` is three blanks.
 func (r *Runner) padAGhost(lw, rw int, lp, rp padding) string {
 	switch {
 	case lw > 0 && rw > 0:

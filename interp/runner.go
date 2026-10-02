@@ -2159,11 +2159,13 @@ type Runner struct {
 	// line an unquoted empty element is no field at all, which is unanimous
 	// and has nothing to do with splitting — `a=(one "" two); printf "[%s]"
 	// ${a[@]}` is `[one][two]` in every column. As the inner of a nesting it
-	// is a value the outer operator is about to read, and it survives:
-	// measured on zsh 5.9.2, 2026-09-09, `${(j:,:)${(@)${a[@]}}}` on the same
-	// array is `one,,two`, and the spelling without `(@)` is `one  two` —
-	// the inner joined on IFS with the empty still between two separators.
-	// Either way the element is there.
+	// is a value the outer operator is about to read, and it survives *in
+	// quotes*: measured on zsh 5.9.2, `"${(j:,:)${(@)${a[@]}}}"` on the same
+	// array is `one,,two`. Unquoted, a list's empty element is gone before the
+	// outer half reads it — `${(j:,:)${(@)${a[@]}}}` and
+	// `${(j:,:)${${a[@]}}}` are both `one,two`, re-measured 2026-10-02 — and
+	// what keeps an empty field there is an `=` split's, which stays either
+	// way. See unquotedInnerDropsItsEmpties (#5412).
 	//
 	// Dropping it made an *alternation pattern* one alternative short and
 	// still a valid pattern, so nothing failed and it matched the wrong

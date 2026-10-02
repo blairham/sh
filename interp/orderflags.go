@@ -77,7 +77,7 @@ const orderFlags = "uoOnia-"
 // and `${(@Ou)a}` all agree, so which of the two runs first is not
 // observable when both are written — but it is when only `u` is, and that is
 // what fixes the order here.
-func orderWords(e *syntax.ParamExpr, words []string) []string {
+func (r *Runner) orderWords(e *syntax.ParamExpr, words []string) []string {
 	signed := signedSortFlag(e)
 	if strings.ContainsRune(e.Flags, 'u') {
 		seen := make(map[string]bool, len(words))
@@ -118,7 +118,7 @@ func orderWords(e *syntax.ParamExpr, words []string) []string {
 	// they were written in: `${(@oi)a}` on `(B a C b)` is `a B b C`, with the
 	// `B` still ahead of the `b`.
 	key := func(w string) string { return w }
-	if innerEmptiesSortLast(e) {
+	if r.nestedEmptiesAreGhosts(e) {
 		key = nestedSortKey
 	}
 	sort.SliceStable(words, func(i, j int) bool {
@@ -160,13 +160,15 @@ func orderWords(e *syntax.ParamExpr, words []string) []string {
 //	                                    lines were never the inner's elements
 func nestedSortKey(w string) string {
 	if w == "" {
-		return "\xa1"
+		return ghostOneUnit
 	}
 	return w
 }
 
-// innerEmptiesSortLast reports whether e's words are sorted with
-// nestedSortKey: see it for the measurements.
+// innerEmptiesSortLast reports whether nothing at e's own level — no split, no
+// operator that rewrites the words — has turned its inner's ghosts into plain
+// empty words. It is the half of Runner.nestedEmptiesAreGhosts that reads the
+// node alone; see nestedSortKey for the measurements.
 func innerEmptiesSortLast(e *syntax.ParamExpr) bool {
 	// A command substitution's words reach a sort only through a split
 	// flag, which the next test turns away, so a nested inner is enough.
@@ -182,6 +184,54 @@ func innerEmptiesSortLast(e *syntax.ParamExpr) bool {
 		return false
 	}
 	return true
+}
+
+// nestedEmptiesAreGhosts reports whether the empty words e's inner hands back
+// are **ghosts**: empty when printed or matched by an operator, and one unit
+// wide to everything that reads them before an operator does — the sort key
+// (nestedSortKey), the padding (Runner.padAGhost), a length and a search
+// subscript.
+//
+// Two things must hold. No operator or split at this level rewrote the words,
+// which is innerEmptiesSortLast. And the inner is a *list* — an array's
+// elements, or what a split made — rather than a value, or a nesting of such a
+// list that kept its elements on the way up. Measured on zsh 5.9.2 under
+// `LC_ALL=C`, 2026-10-02, with `b=(xyz "" y)` and `e=` (#5412):
+//
+//	"${#${b[@]}[2]}"          1     an array's empty element
+//	"${(c)#${b[@]}}"          7     one character in a count of them too
+//	"${(w)#${b[@]}}"          3     and one word
+//	IFS=:; u=a::b; "${#${=u}[2]}"  1   an `=` split's empty field
+//	"${#${(@)${b[@]}}[2]}"    1     a list kept through a level above
+//	"${#${(@)b[2,2]}[1]}"     1     a range is a list of one
+//	"${(@l:3:)${(@)b[2]}}"    `   ` a single element is a value — three blanks
+//	"${(l:3:)${e}}"           `   ` as is a scalar
+//	"${(c)#${${b[@]}}}"       6     and a level that joined its list
+//	"${#${${b[@]}[2]}}"       0     or picked one element out of it
+//
+// Unquoted, a list's empty elements are gone before any of this reads them —
+// see unquotedInnerDropsItsEmpties — and an `=` split's stay ghosts either way.
+func (r *Runner) nestedEmptiesAreGhosts(e *syntax.ParamExpr) bool {
+	if !innerEmptiesSortLast(e) {
+		return false
+	}
+	if r.nestedElementsAreBare(e) != nestedBareNone {
+		return true
+	}
+	span, _ := r.nestedInnerSpan(e)
+	p := span.Param
+	if span.Kind != syntax.ParamExp || p == nil || p.Inner == nil || p.Length || p.Indirect {
+		return false
+	}
+	if joinFlagWritten(p.Flags) != 0 || (span.Quoting != syntax.Unquoted && !r.flagKeepsFields(p)) {
+		// The level above joined its list into one value.
+		return false
+	}
+	if p.Index != nil && !r.subscriptSelectsElements(p) {
+		// It picked one element out of it, which is a value.
+		return false
+	}
+	return r.nestedEmptiesAreGhosts(p)
 }
 
 // compareWords orders two words: by this shell's own order — shellOrder, and

@@ -189,7 +189,17 @@ func (r *Runner) searchIndex(g *syntax.SubscriptFlags, search byte, src subscrip
 	if src.scalar {
 		return r.scalarSearchIndex(g, search, r.units(src.elems[0]), src.elems[0])
 	}
-	at, found, miss := r.searchElements(g, search, src.elems)
+	elems := src.elems
+	if src.ghosts {
+		// A ghost is one character to a search, though the element it names
+		// is still empty. Measured on zsh 5.9.2 under `LC_ALL=C` with
+		// `b=(xyz "" y)`: `"${${b[@]}[(i)?]}"` and `"${${b[@]}[(i)[^x]]}"`
+		// are 2, `"${${b[@]}[(i)]}"` is 4 and `"${${b[@]}[(I)]}"` is 0 —
+		// nothing is empty to the empty pattern — and `"${${b[@]}[(r)?]}"`
+		// is the empty element (#5412).
+		elems = ghostsAsOneUnit(elems)
+	}
+	at, found, miss := r.searchElements(g, search, elems)
 	base := r.arrayBase()
 	switch {
 	case found:

@@ -185,6 +185,10 @@ func (o *patternOpts) eqPatternHere(pat, sub string) (pw, sw int, ok bool) {
 	case o.foldWide:
 		return pn, sn, eqRuneFolded(pr, sr)
 	}
+	// Whole, though stepping a byte at a time arrives at the same answer —
+	// the continuation bytes that follow are lone bytes on both sides and
+	// compare as the case above does — so a mutant doing that survives by
+	// design.
 	return pn, sn, pat[:pn] == sub[:sn]
 }
 

@@ -20486,6 +20486,24 @@ type Semantics struct {
 	// 2026-10-02 on zsh 5.9.2, `--pathscript` and `-o pathscript` alike
 	// (#5138).
 	ScriptSearchOptionName string
+	// ScriptSearchUnderEmulation names the emulation modes that start with
+	// that option on, whitespace-separated, so a script operand is looked
+	// for along PATH without the invocation saying so. Measured 2026-10-02
+	// on zsh 5.9.2 with a script on PATH and nowhere else: `--emulate sh -f
+	// name` and `--emulate ksh -f name` run it, as do argv[0] `sh` and
+	// `ksh`; `--emulate zsh` and `--emulate csh` say `can't open input
+	// file`; and `+o pathscript` after the mode word, or after the argv[0]
+	// mode, turns it back off. Read off the mode word rather than the option
+	// table for ScriptSearchOptionName's reason (#5383).
+	//
+	// unpinned bash: no emulation option and no mode word, so the empty
+	// string is the only value that means anything; the same for ksh, dash
+	// and ash.
+	//
+	// unpinned zsh: reached only from the command line, which no corpus row
+	// varies. Pinned by TestAnEmulationThatSearchesFindsTheScriptOnPath in
+	// dialect/zsh.
+	ScriptSearchUnderEmulation string
 	// ScriptSearchTakesTheFirstFile makes the search stop at the first entry
 	// of the name that is not a directory — the current directory's, then
 	// each PATH directory's — and read that one or fail, rather than take

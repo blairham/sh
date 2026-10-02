@@ -1293,6 +1293,13 @@ type invocation struct {
 	// along PATH, written on the invocation. See
 	// Semantics.ScriptSearchOptionName.
 	scriptSearch bool
+	// scriptSearchWritten is whether the invocation named that option at
+	// all, under either sign. Unwritten, the emulation decides — see
+	// Shell.searchesForTheScript.
+	scriptSearchWritten bool
+	// namedEmulation is the emulation argv[0] names, read before the
+	// operands for the one question that needs it then.
+	namedEmulation string
 	// fromStdin is `-s`: the script arrives on standard input and every
 	// operand is a parameter, none of them a path. An option like any
 	// other, not a terminator — measured, all four shells still read
@@ -1547,6 +1554,9 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 	if err != nil {
 		return sh, source{}, nil, err
 	}
+	// The mode argv[0] names, which the operand's search needs before the
+	// emulation itself is applied — see Shell.searchesForTheScript.
+	inv.namedEmulation = EmulationNamed(argv, sh.Semantics.EmulationOption)
 	if inv.version || inv.help {
 		// Nothing after it is read and nothing before it runs, so no gate is
 		// installed either: the route the rest of the vector would have
@@ -2060,9 +2070,9 @@ func (sh Shell) noteNamedOption(inv *invocation, name string, on bool) {
 	}
 	switch {
 	case sh.Semantics.ScriptSearchOptionName != "" && name == sh.Semantics.ScriptSearchOptionName:
-		inv.scriptSearch = on
+		inv.scriptSearch, inv.scriptSearchWritten = on, true
 	case sh.Semantics.ScriptSearchOptionName != "" && name == "no"+sh.Semantics.ScriptSearchOptionName:
-		inv.scriptSearch = !on
+		inv.scriptSearch, inv.scriptSearchWritten = !on, true
 	case sh.Semantics.InteractiveOptionName != "" && name == sh.Semantics.InteractiveOptionName:
 		inv.interactive, inv.interactiveWritten = on, true
 	case sh.Semantics.NonInteractiveOptionName != "" && name == sh.Semantics.NonInteractiveOptionName:
@@ -2156,7 +2166,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 	// word that was typed stays `$0` and the path the search resolved is what
 	// a diagnostic names — see Shell.scriptOnPath and the two names it
 	// returns.
-	read, zero, b, found := sh.scriptOnPath(path, inv.scriptSearch)
+	read, zero, b, found := sh.scriptOnPath(path, sh.searchesForTheScript(inv))
 	var err error
 	if !found {
 		// Through the gate: the program a shell was pointed at is an access
@@ -2222,6 +2232,22 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		src: string(b), name: read, file: read, zero: zero,
 		params: args[1:], dg: sh.Diagnostics.ForScript(), opts: inv.opts,
 	}, nil
+}
+
+// searchesForTheScript is whether a slash-less script operand is looked for
+// along PATH by the dialect's option: as the invocation wrote it, and where it
+// wrote nothing, as the emulation the shell starts in has it. The mode is the
+// `--emulate` word or argv[0]'s, whichever named one — see
+// Semantics.ScriptSearchUnderEmulation.
+func (sh Shell) searchesForTheScript(inv invocation) bool {
+	if inv.scriptSearchWritten {
+		return inv.scriptSearch
+	}
+	mode := inv.emulation
+	if !inv.emulating {
+		mode = inv.namedEmulation
+	}
+	return mode != "" && spelt(sh.Semantics.ScriptSearchUnderEmulation, mode)
 }
 
 // scriptOnPath resolves a script operand, answering with the path to read and

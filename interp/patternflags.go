@@ -161,16 +161,31 @@ func (o *patternOpts) eqPatternByte(pat, sub byte) bool {
 // U+FFFD and comparing those would call them equal — which would make
 // `[[ É == \é ]]` match, since the escape splits the pattern's character in
 // half and leaves the second byte to be matched on its own.
+//
+// Where the units are characters, a unit is compared with a unit: a byte that
+// begins no character stands for itself and is never the first byte of a
+// character the subject holds. Measured 2026-10-02 on zsh 5.9.2 under
+// `LC_ALL=en_US.UTF-8`: `[[ é == $'\xc3'* ]]`, `[[ é == *$'\xc3'* ]]` and
+// `[[ é == $'\xc3'? ]]` are all false, and `x=$'\xc3a'; [[ $x == $'\xc3'* ]]`
+// is true (#5153).
 func (o *patternOpts) eqPatternHere(pat, sub string) (pw, sw int, ok bool) {
-	if !o.foldWide || !o.chars || (pat[0] < utf8.RuneSelf && sub[0] < utf8.RuneSelf) {
+	if !o.chars || (pat[0] < utf8.RuneSelf && sub[0] < utf8.RuneSelf) {
 		return 1, 1, o.eqPatternByte(pat[0], sub[0])
 	}
 	pr, pn := utf8.DecodeRuneInString(pat)
 	sr, sn := utf8.DecodeRuneInString(sub)
-	if pr == utf8.RuneError && pn == 1 || sr == utf8.RuneError && sn == 1 {
+	pBad, sBad := pr == utf8.RuneError && pn == 1, sr == utf8.RuneError && sn == 1
+	switch {
+	case pBad && sBad:
 		return 1, 1, o.eqPatternByte(pat[0], sub[0])
+	case pBad || sBad:
+		// A byte that begins no character against a character: never the
+		// same unit, whatever their first bytes are.
+		return pn, sn, false
+	case o.foldWide:
+		return pn, sn, eqRuneFolded(pr, sr)
 	}
-	return pn, sn, eqRuneFolded(pr, sr)
+	return pn, sn, pat[:pn] == sub[:sn]
 }
 
 // splitPatternFlags peels a `(#…)` flag group off the front of p.

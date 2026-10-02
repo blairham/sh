@@ -3008,6 +3008,13 @@ type Runner struct {
 	// Runner.runAsItsOwnJob and Semantics.SubshellIsAJobInItsOwnTable.
 	ownJobsStartAtTwo                         bool
 	inheritedCurrentJob, inheritedPreviousJob int
+	// marksFrozen is the same inherited, unmoving marks without the
+	// numbering: a forked body that is not parentheses, whose parent holds a
+	// job numbered one. See Runner.runAsAForkedBody.
+	marksFrozen bool
+	// slotOneIsTheBody says number one, while a command holds it, is the
+	// forked body itself. See Runner.bodySlotLookup.
+	slotOneIsTheBody bool
 	// subshellSelfWaited says a `wait` has reached the `( … )` this shell is,
 	// which no spec names after. See Runner.subshellSelfLookup.
 	subshellSelfWaited bool
@@ -5251,7 +5258,7 @@ func (r *Runner) clone() *Runner {
 	c.inSubshell = true
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
-	c.tailCmd, c.unforkedSelf = nil, false
+	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false
 	// And one boundary further from the shell that was started. The flag
 	// above cannot answer this: it is already true in a subshell of a
 	// subshell, and a dialect that names the count needs to tell those two

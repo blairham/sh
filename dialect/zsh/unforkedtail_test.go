@@ -102,6 +102,17 @@ func TestTheLastSubshellOfACommandStringMovesItsMarkers(t *testing.T) {
 			"(wait %1; kill -0 %1; echo k=$?)",
 			"zsh:kill:1: %1: no such job\nk=1\n",
 		},
+		{"the parent's + is the parentheses", "/bin/sleep 1 & (jobs %%; echo s=$?)", "s=0\n"},
+		{
+			"the parent's - is not inherited",
+			"/bin/sleep 1 & /bin/sleep 1 & (jobs %%; echo s=$?; jobs %-; echo t=$?)",
+			"s=0\nzsh:jobs:1: no previous job\nt=127\n",
+		},
+		{
+			"a + left on a number nobody holds",
+			"f() { /bin/sleep 0 & wait }; f; (jobs %%; echo s=$?)",
+			"s=0\n",
+		},
 		{
 			"a job that ended hands the + back to the parentheses",
 			"(/bin/sleep 0 & /bin/sleep 0.3; jobs; jobs %%; echo s=$?; jobs %-; echo t=$?)",

@@ -162,7 +162,7 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		if r.runsUnforked(c) && !sub.jobsInherited {
 			// Unless nothing follows them, which leaves them unforked in
 			// that dialect and its markers moving. See unforkedtail.go.
-			sub.runAsTheShellItself(c)
+			sub.runAsTheShellItself(c, r)
 		} else {
 			// And the parentheses are a job of their own in one dialect, so
 			// the jobs this body starts are numbered from two and never take

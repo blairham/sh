@@ -124,13 +124,33 @@ func (r *Runner) runsUnforked(c *syntax.Subshell) bool {
 // runAsTheShellItself arms the clone of parentheses that runsUnforked: the
 // parentheses hold slot one, as a brace group would, and the markers move by
 // number from there. Its own last command is a tail in turn.
-func (r *Runner) runAsTheShellItself(c *syntax.Subshell) {
-	r.ownJobsStartAtTwo = false
+//
+// The `+` starts where the parent's was, as a number, and the `-` starts
+// nowhere. A `+` that names no job here names the parentheses, whatever the
+// number. Measured 2026-10-02 on zsh 5.9.2 under `-f -c`: `sleep 1 & ( jobs
+// %%; echo $? )` is 0, `sleep 1 & sleep 1 & ( jobs %%; …; jobs %- )` is 0
+// and then `no previous job`, and after `f() { sleep 0 & wait }; f` has left
+// the `+` on f's number, `( jobs %% )` is 0 too, where with no history it is
+// `no current job`.
+func (r *Runner) runAsTheShellItself(c *syntax.Subshell, parent *Runner) {
+	r.ownJobsStartAtTwo, r.marksFrozen = false, false
 	r.inheritedCurrentJob, r.inheritedPreviousJob = 0, 0
 	r.unforkedSelf = true
 	r.subshellSelfWaited = false
 	r.commandSlot, r.commandSlotHeld, r.outerSlots = 1, true, nil
 	r.tailCmd = tailCommandOf(c.List)
+	current, _ := parent.markedEntries()
+	num := current.numOrZero()
+	if current == emptyJobSlot {
+		num = parent.markCurrent
+	}
+	r.marksByNumber, r.markCurrent, r.markPrevious = num != 0, num, 0
+}
+
+// unforkedCurrentIsTheSelf says a `+` that names no job here names the
+// parentheses, before a `wait` has reached them.
+func (r *Runner) unforkedCurrentIsTheSelf() bool {
+	return r.unforkedSelf && !r.subshellSelfWaited && r.markCurrent != 0
 }
 
 // unforkedSelfLookup says a marker on this number names the parentheses
@@ -145,4 +165,13 @@ func (r *Runner) unforkedSelfLookup(num int) bool {
 // such job` at 1, and `( sleep 1 & wait; jobs %% )` is `no current job`.
 func (r *Runner) unforkedSelfGone(num int) bool {
 	return r.unforkedSelf && r.subshellSelfWaited && num != 0 && num == r.commandSlot
+}
+
+// bodySlotLookup says number one names the forked body itself: the slot its
+// own command — a function call, an `eval` — holds, in a body whose parent
+// had no job one. A builtin element holds none, so `jobs %1 | cat` is `%1:
+// no such job` there where `f | cat` with `jobs %1` in f is 0. Measured
+// 2026-10-02 on zsh 5.9.2. See Runner.runAsAForkedBody.
+func (r *Runner) bodySlotLookup(num int) bool {
+	return r.slotOneIsTheBody && !r.subshellSelfWaited && num == 1 && r.slotHeld(1)
 }

@@ -1170,10 +1170,10 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	case "", "%", "+":
 		current, _ := r.markedEntries()
 		if current == nil && r.subshellSelfLookup(r.inheritedCurrentJob) ||
-			current == emptyJobSlot && r.unforkedSelfLookup(r.markCurrent) {
+			current == emptyJobSlot && r.unforkedCurrentIsTheSelf() {
 			return nil, jobIsTheSubshell
 		}
-		if current == emptyJobSlot && r.unforkedSelfGone(r.markCurrent) {
+		if current == emptyJobSlot && r.unforkedSelf && r.subshellSelfWaited {
 			// The `+` on parentheses already waited for is no current job,
 			// where a `-` there is the slot's own complaint. See
 			// unforkedtail.go.
@@ -1199,7 +1199,7 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	if !ok {
 		return r.findJobByName(text)
 	}
-	if n == 1 && (r.subshellSelfLookup(1) || r.unforkedSelfLookup(1)) {
+	if n == 1 && (r.subshellSelfLookup(1) || r.unforkedSelfLookup(1) || r.bodySlotLookup(1)) {
 		return nil, jobIsTheSubshell
 	}
 	if r.unforkedSelfGone(n) {

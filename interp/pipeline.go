@@ -460,6 +460,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// Runner.runAsItsOwnJob.
 		if _, paren := p.Cmds[i].(*syntax.Subshell); paren {
 			sub.runAsItsOwnJob(r)
+		} else {
+			// Any other element is a fork with its own reading of the
+			// numbers. See Runner.runAsAForkedBody (#5321).
+			sub.runAsAForkedBody(r, p.Cmds[i])
 		}
 		// Each element is its own job component, so the copy running it
 		// names it rather than inheriting whatever the shell last ran.

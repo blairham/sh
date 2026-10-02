@@ -1429,6 +1429,11 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 			// none.
 			return 0
 		}
+		// And it reaches the `( … )` this shell is, in the dialect where the
+		// parentheses are a job: measured 2026-10-02 on zsh 5.9.2, `( wait;
+		// jobs %1 ); :` is `%1: no such job` where `( jobs %1 ); :` is 0,
+		// and the same unforked. See subshellSelfLookup.
+		r.subshellSelfWaited = true
 		// A copy of the table, because waiting can now write a finished
 		// job's notice — a *different* job's, ending while this one is
 		// waited out — and a notice forgets what it reports. Ranging over

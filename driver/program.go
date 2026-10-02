@@ -196,6 +196,27 @@ func (pr *program) nextLine() (*syntax.File, bool) {
 	}
 }
 
+// nothingAfter is whether the line just handed out is the last of a program
+// that arrived whole: what follows it is blank lines and comments, or
+// nothing. False wherever more input could still arrive, since a pipe's next
+// read is not text in hand.
+func (pr *program) nothingAfter(line *syntax.File) bool {
+	if pr.more != nil || pr.gate != nil || line == nil {
+		return false
+	}
+	at := int(line.Last.Offset)
+	if at < 0 || at > len(pr.pending) {
+		return false
+	}
+	for _, rest := range strings.Split(pr.pending[at:], "\n") {
+		rest = strings.TrimLeft(rest, " \t")
+		if rest != "" && !strings.HasPrefix(rest, "#") {
+			return false
+		}
+	}
+	return true
+}
+
 // err reports why parsing stopped, or nil.
 func (pr *program) err() error {
 	if pr.p == nil {

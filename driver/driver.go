@@ -3457,6 +3457,10 @@ func (sh Shell) executeLines(
 		// And the text it came from, which a diagnostic raised while the line
 		// runs may have to quote — see interp.Runner.SetProgramText.
 		r.SetProgramText(pr.text())
+		// And whether anything follows it, which the one dialect that does
+		// not fork the last command of a command string needs to know. See
+		// interp.Runner.LastPart.
+		r.LastPart = in.invocationRoute() == interp.RouteCommandString && pr.nothingAfter(line)
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.

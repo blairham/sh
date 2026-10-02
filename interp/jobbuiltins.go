@@ -1169,8 +1169,15 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	switch text {
 	case "", "%", "+":
 		current, _ := r.markedEntries()
-		if current == nil && r.subshellSelfLookup(r.inheritedCurrentJob) {
+		if current == nil && r.subshellSelfLookup(r.inheritedCurrentJob) ||
+			current == emptyJobSlot && r.unforkedSelfLookup(r.markCurrent) {
 			return nil, jobIsTheSubshell
+		}
+		if current == emptyJobSlot && r.unforkedSelfGone(r.markCurrent) {
+			// The `+` on parentheses already waited for is no current job,
+			// where a `-` there is the slot's own complaint. See
+			// unforkedtail.go.
+			return nil, jobMissing
 		}
 		return r.markedLookup(current)
 	case "-":
@@ -1179,7 +1186,8 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 		// markedJobs. Measured, the two agree in every column: `jobs %-`
 		// names exactly the job a listing puts `-` on.
 		_, previous := r.markedEntries()
-		if previous == nil && r.inheritedPreviousJob == 1 && r.subshellSelfLookup(1) {
+		if previous == nil && r.inheritedPreviousJob == 1 && r.subshellSelfLookup(1) ||
+			previous == emptyJobSlot && r.unforkedSelfLookup(r.markPrevious) {
 			// The `-` on 1, which is the subshell itself; a `-` on any
 			// other number naming nothing is still no previous job. See
 			// subshellSelfLookup.
@@ -1191,8 +1199,14 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	if !ok {
 		return r.findJobByName(text)
 	}
-	if n == 1 && r.subshellSelfLookup(1) {
+	if n == 1 && (r.subshellSelfLookup(1) || r.unforkedSelfLookup(1)) {
 		return nil, jobIsTheSubshell
+	}
+	if r.unforkedSelfGone(n) {
+		// Missing to every verb, `kill` included, where a brace group's
+		// slot is something `kill` sends nothing to and succeeds. See
+		// unforkedtail.go.
+		return nil, jobMissing
 	}
 	if r.slotHeld(n) {
 		return nil, jobOnAnEmptySlot

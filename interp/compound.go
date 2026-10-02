@@ -109,6 +109,11 @@ func (r *Runner) runList(ctx context.Context, list []*syntax.Stmt) error {
 func (r *Runner) group(ctx context.Context, c *syntax.Group) error {
 	// A brace group runs in *this* shell, so its assignments escape. That is
 	// the whole difference between it and a subshell.
+	if r.isTail(c) {
+		// Run straight through, so its last command is the shell's last. See
+		// unforkedtail.go.
+		r.tailCmd = tailCommandOf(c.List)
+	}
 	return r.withRedirs(ctx, c.Redirs, func() error { return r.runList(ctx, c.List) })
 }
 
@@ -154,10 +159,16 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 			sub.inbox, sub.inboxGoesToTheParentheses = r.inbox, false
 		}
 		sub.inheritJobs(jobBoundaryCompound)
-		// And the parentheses are a job of their own in one dialect, so the
-		// jobs this body starts are numbered from two and never take the
-		// `+`. See Runner.runAsItsOwnJob.
-		sub.runAsItsOwnJob(r)
+		if r.runsUnforked(c) && !sub.jobsInherited {
+			// Unless nothing follows them, which leaves them unforked in
+			// that dialect and its markers moving. See unforkedtail.go.
+			sub.runAsTheShellItself(c)
+		} else {
+			// And the parentheses are a job of their own in one dialect, so
+			// the jobs this body starts are numbered from two and never take
+			// the `+`. See Runner.runAsItsOwnJob.
+			sub.runAsItsOwnJob(r)
+		}
 		// The group a real shell's fork would have given these parentheses,
 		// for a body that asks which process it is. Its lifetime is the
 		// body's own run: the caller joins here before carrying on, so there
@@ -234,6 +245,15 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 		// stopped and then said it had succeeded.
 		// What the field draws for each part — see openruntime.go.
 		defer r.openRuntime("if")()
+		// Whichever branch runs is the shell's last, where the `if` is. See
+		// unforkedtail.go.
+		tail := r.isTail(c)
+		branch := func(list []*syntax.Stmt) error {
+			if tail {
+				r.tailCmd = tailCommandOf(list)
+			}
+			return r.runList(ctx, list)
+		}
 		if err := r.condList(ctx, c.Cond); err != nil {
 			return err
 		}
@@ -242,7 +262,7 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 		}
 		if r.status == 0 {
 			r.replaceOpenRuntime("then")
-			return r.runList(ctx, c.Then)
+			return branch(c.Then)
 		}
 		for _, e := range c.Elifs {
 			r.replaceOpenRuntime("elif")
@@ -254,12 +274,12 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 			}
 			if r.status == 0 {
 				r.replaceOpenRuntime("elif-then")
-				return r.runList(ctx, e.Then)
+				return branch(e.Then)
 			}
 		}
 		if c.HasElse {
 			r.replaceOpenRuntime("else")
-			return r.runList(ctx, c.Else)
+			return branch(c.Else)
 		}
 		// No branch ran, so the `if` itself succeeded.
 		r.status = 0
@@ -556,6 +576,11 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			// the body — and before the body, because bash's header is the
 			// line that introduces the iteration.
 			r.traceForNames(c.Header, c.Names, items, i)
+			if i+stride >= len(items) && r.isTail(c) {
+				// The last pass is the shell's last; the ones before it are
+				// not. See unforkedtail.go.
+				r.tailCmd = tailCommandOf(c.Body)
+			}
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err
 			}
@@ -980,6 +1005,12 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 			// `len(item.Body) > 0` test was here and was dead — the mutant
 			// that removes it changes no measured row.
 			r.status = before
+			if r.isTail(c) && item.Term != syntax.TokSemiAmp && item.Term != syntax.TokDSemiAmp &&
+				item.Term != syntax.TokSemiPipe {
+				// The arm is the shell's last, where nothing runs after it.
+				// See unforkedtail.go.
+				r.tailCmd = tailCommandOf(item.Body)
+			}
 			if err := r.runList(ctx, item.Body); err != nil {
 				return err
 			}

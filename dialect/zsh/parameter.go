@@ -247,6 +247,12 @@ func registerParameterModule(r *interp.Runner) {
 	// interp.Runner.SetSilentToPrint.
 	r.SetSilentToPrint("reswords")
 	hideModuleParameter(r, "reswords")
+	// And its switched-off half, typed alike: `${(t)dis_reswords}` is
+	// `array-readonly-hide-hideval-special` too, measured 2026-10-02 (#5142).
+	r.SetDynamicArray("dis_reswords", zshDisabledReservedWordsView)
+	r.MarkReadonly("dis_reswords")
+	r.SetSilentToPrint("dis_reswords")
+	hideModuleParameter(r, "dis_reswords")
 	r.SetDynamicAssoc("parameters", zshParametersView)
 	r.SetDynamicAssocElement("parameters", zshParameterValue)
 	// Readonly and hidden together, the pair `builtins` needs and for the same
@@ -342,7 +348,8 @@ var zshEmptyParams = []struct {
 	// feature; the emptiness did not.
 	{name: "dis_galiases", waitsFor: "disable -a"},
 	{name: "dis_patchars", waitsFor: "disable -p", array: true, readonly: true},
-	{name: "dis_reswords", waitsFor: "disable -r", array: true, readonly: true},
+	// `dis_reswords` has left this list: it is the switched-off table
+	// `disable -r` fills now. See reswords.go.
 	{name: "dis_saliases", waitsFor: "disable -s"},
 }
 

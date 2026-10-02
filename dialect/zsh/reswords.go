@@ -115,8 +115,28 @@ func zshReserves(name string) bool { return zshReservedWordSet[name] }
 // out the package's own backing array makes a caller that ever does so
 // rewrite the table for every shell in the process, and that is the shape of
 // bug nothing here would catch.
-func zshReservedWordsView(*interp.Runner) []string {
-	out := make([]string, len(zshReservedWords))
-	copy(out, zshReservedWords)
+//
+// A word `disable -r` has switched off leaves it for `$dis_reswords`:
+// measured 2026-10-02 on zsh 5.9.2, after `disable -r typeset` the one is
+// thirty long without it and the other holds it alone (#5142).
+func zshReservedWordsView(r *interp.Runner) []string {
+	out := make([]string, 0, len(zshReservedWords))
+	for _, w := range zshReservedWords {
+		if r == nil || !r.ReservedWordDisabled(w) {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// zshDisabledReservedWordsView is `$dis_reswords`, the words `disable -r`
+// has switched off, in the order `$reswords` holds them.
+func zshDisabledReservedWordsView(r *interp.Runner) []string {
+	var out []string
+	for _, w := range zshReservedWords {
+		if r != nil && r.ReservedWordDisabled(w) {
+			out = append(out, w)
+		}
+	}
 	return out
 }

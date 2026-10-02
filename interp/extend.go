@@ -106,7 +106,7 @@ func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
 		// different thing from `enable -n` below — see withdrawnbuiltin.go.
 		return nil, false
 	}
-	if r.disabledBuiltins[name] {
+	if r.disabledBuiltins[name] && name != r.reservedCommand {
 		// `enable -n` puts a name aside without forgetting what it was, so
 		// the word is looked up on PATH like any other and enabling it again
 		// gets the same builtin back.

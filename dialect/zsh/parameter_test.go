@@ -598,7 +598,8 @@ func TestTheEmptyParametersStayHonest(t *testing.T) {
 		// views of the table it fills — see disablefunction_test.go.
 		{"dis_galiases", "disable -a nosuch"},
 		{"dis_patchars", "disable -p nosuch"},
-		{"dis_reswords", "disable -r nosuch"},
+		// `dis_reswords` has left this list: `disable -r` fills it for the
+		// declaration words (#5142), see TestDisableRSwitchesADeclarationWord.
 		{"dis_saliases", "disable -s nosuch"},
 		// `nameddirs` was the eighth row and has left this list: `hash -d`
 		// works now, so the table it reports on exists and the parameter is

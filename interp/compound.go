@@ -152,7 +152,6 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// bodyinbox.go.
 		if r.inboxGoesToTheParentheses {
 			sub.inbox, sub.inboxGoesToTheParentheses = r.inbox, false
-			sub.inbox.replaceTraps(sub.traps)
 		}
 		sub.inheritJobs(jobBoundaryCompound)
 		// And the parentheses are a job of their own in one dialect, so the

@@ -50,14 +50,6 @@ func newBodyInbox(traps map[string]string) *bodyInbox {
 	return &bodyInbox{traps: maps.Clone(traps)}
 }
 
-// replaceTraps starts the copy again from a table, for a body handing its
-// inbox to the subshell that is really the job.
-func (b *bodyInbox) replaceTraps(traps map[string]string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.traps = maps.Clone(traps)
-}
-
 // noteTrap is the body telling its inbox what a condition holds now.
 func (b *bodyInbox) noteTrap(name string, body *string) {
 	b.mu.Lock()

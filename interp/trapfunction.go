@@ -303,7 +303,7 @@ func (r *Runner) restoreTrapFunction(cond, fname string, decl *syntax.FuncDecl) 
 	}
 	if now != "" {
 		delete(r.trapFuncs, cond)
-		if now != fname || decl == nil {
+		if now != fname {
 			r.removeFunctionQuietly(now)
 		}
 	}

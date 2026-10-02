@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // A handler spelled as a `TRAP…` function is scoped the way the trap it
 // stands for is: an EXIT handler always, and a signal's or a
@@ -52,6 +55,11 @@ func TestATrapFunctionIsScopedWithItsTrap(t *testing.T) {
 		{
 			"unfunction gives the caller's function back",
 			"TRAPINT() { print O; }; fn1() { setopt localtraps; unfunction TRAPINT; trap; }; fn1; trap",
+			"TRAPINT () {\n\tprint O\n}\n",
+		},
+		{
+			"a one-word reset gives the caller's function back",
+			"TRAPINT() { print O; }; fn1() { setopt localtraps; trap INT; trap; }; fn1; trap",
 			"TRAPINT () {\n\tprint O\n}\n",
 		},
 		{
@@ -115,5 +123,19 @@ func TestASignalToABackgroundBodyReachesItsTraps(t *testing.T) {
 				t.Errorf("%s\n got %q\nwant %q", c.src, out, c.want)
 			}
 		})
+	}
+}
+
+// A subshell inside the body is a fork of its own, which a signal aimed at
+// the job does not reach: its trap is not the job's. Measured 2026-10-02 on
+// zsh 5.9.2, `{ ( trap 'print S' TERM; sleep 0.6 ); print after $? } & sleep
+// 0.2; kill -TERM $!; wait; print end` writes only `end` — the job's body
+// dies of the signal untrapped, which is a difference of this shell's that
+// is not asserted here; that S is not written is.
+func TestASignalToABackgroundBodyMissesASubshellInIt(t *testing.T) {
+	const src = "{ ( trap 'print S' TERM; sleep 0.6 ); print after $?; } & sleep 0.2; kill -TERM $!; wait; print end"
+	out, _ := runZshOnPath(t, t.TempDir(), src)
+	if strings.Contains(out, "S") || !strings.HasSuffix(out, "end\n") {
+		t.Errorf("%s\n got %q, want no S and a last line of end", src, out)
 	}
 }

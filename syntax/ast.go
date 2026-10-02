@@ -461,6 +461,13 @@ type Assign struct {
 	// still holds the whole subscript as written, so a reader that does not
 	// know about groups sees what the source said.
 	IndexFlags *SubscriptFlags
+	// IndexRange is the subscript read as a **pair** whose ends carry flag
+	// groups of their own — `a[(r)q,(r)r]=v` replaces the span from the
+	// element holding `q` to the one holding `r` — and nil where neither end
+	// opens with one. The same reading ParamExpr.IndexRange is on the read
+	// side, asked of the same text by the same function; an unflagged pair
+	// stays the arithmetic reader's to split, as it always was.
+	IndexRange *SubscriptRange
 	// Member is the dotted member path written after the subscript's closing
 	// bracket — `.p` in `a[1].p=9`, `.q.r` in `a[1].q.r=4` — with its leading
 	// dot and empty where none was written.

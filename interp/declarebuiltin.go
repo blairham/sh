@@ -2105,7 +2105,11 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 				return r.status
 			}
 		}
-		if !df.global {
+		// Not over a name this scope already holds, which inherits nothing:
+		// `f(){ local FOO=a:b; export FOO; typeset FOO; typeset -p FOO }`
+		// lists `local -x FOO=a:b` in zsh 5.9.2, measured 2026-10-02, where
+		// asking took the attribute off the scope's own local.
+		if !df.global && !redeclared {
 			r.localExportAttribute(name, df.export)
 			if r.unspecified {
 				// See biLocal: an unanswered axis refuses the declaration
@@ -3446,7 +3450,19 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		// type letter: measured 2026-09-12, `export +i q=4` still exports in
 		// the shell whose `export` reads the declaration letters, and lists
 		// as `export q=4`. See exportForced.
-		r.declarationExports(name, !f.remove || f.exportForced)
+		//
+		// **The letter's own sign, not the last word's.** `typeset +x -i e`
+		// unexports `e` in bash 5.3, zsh 5.9.2 and ksh93 alike, measured
+		// 2026-10-02 — the `-i` word after it does not turn the `+x` into a
+		// request to export. Reading the word's sign exported a name the
+		// line was taking the attribute off.
+		// Unless the builtin's name settled the sign for the whole line,
+		// which is `integer`'s axis: see signDecided.
+		on := !f.remove
+		if plus, written := f.lastSign('x'); written && !f.signDecided {
+			on = !plus
+		}
+		r.declarationExports(name, on || f.exportForced)
 	}
 	// The case attributes fold at assignment here, which is what bash and
 	// ksh93 do. zsh stores the raw text and folds on *expansion* — every

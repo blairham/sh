@@ -443,6 +443,9 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 			"third argument of tie must be join character"))
 		return 1
 	}
+	if r.refuseSpecialTie(scalar, array, sep, len(args) > 2) {
+		return 1
+	}
 	// Both halves must be names. **Behind the refusals above**, which is
 	// measured: `typeset -T ':' ':'` is `can't tie a variable to itself: :`
 	// rather than `not valid in this context: :`, and the two rules about
@@ -470,8 +473,9 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// both halves take a shadow: a function-local tie is gone on return,
 	// measured — `typeset -T L1 l1` inside a function leaves `$L1` unset
 	// after it and `${+l1}` 0.
+	scalarFresh := false
 	if !f.global {
-		scalarFresh, _ := r.shadowTypeset(scalar)
+		scalarFresh, _ = r.shadowTypeset(scalar)
 		arrayFresh, _ := r.shadowTypeset(array)
 		if r.unspecified {
 			return r.status
@@ -519,8 +523,18 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// exported global in the way, the array half is `array-local-tied`
 		// under `-xT` already, so nothing here is giving it the letter; this
 		// is only about what it inherits.
-		r.localExportAttribute(scalar, f.export)
-		r.localExportAttribute(array, false)
+		//
+		// **Only over a cell the shadow made.** A name this scope already
+		// holds is not inheriting anything: `typeset FOO=a:b; export FOO;
+		// typeset -T FOO foo` in a function lists `local -xT FOO` and types
+		// as `scalar-local-tied-export`, measured 2026-10-02 on zsh 5.9.2,
+		// where asking took the attribute off the scope's own local.
+		if scalarFresh {
+			r.localExportAttribute(scalar, f.export)
+		}
+		if arrayFresh {
+			r.localExportAttribute(array, false)
+		}
 		if r.unspecified {
 			return r.status
 		}
@@ -634,6 +648,16 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	if !f.global {
 		depth = len(r.scopes)
 	}
+	old, retied := r.tieOf(scalar)
+	if retied && hasValue {
+		// A scalar value written on the line that ties the pair again keeps
+		// the separator the pair already had, and the value splits on it.
+		// Measured 2026-10-02 on zsh 5.9.2 under `-f`: `typeset -T V=a:b v;
+		// typeset -T V=c:d v +` lists back as `typeset -T V v=( c d )`, and a
+		// later `V=e+f` is one element. An array value on the same line is
+		// not this case — `typeset -T W w=(c d) +` does move to `+`.
+		sep = old.sep
+	}
 	r.tieNames(tie{scalar: scalar, array: array, sep: sep, depth: depth})
 	// Readonly last, the same order biDeclare follows and for the same
 	// reason: it decides whether the assignment below is allowed at all, and
@@ -654,11 +678,35 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		r.setVarAs(scalar, value, assignedByDeclaration)
 		return 0
 	}
+	// **A pair tied again joins its elements with the new separator and
+	// splits the result on it**, rather than splitting the old scalar on the
+	// new separator. Measured 2026-10-02 on zsh 5.9.2 under `-f`:
+	// `typeset -T V v=(a b); typeset -T V v +` prints `a+b` for `$V`; with
+	// `-UuT` over `(a b a b)` the array lists back as `( a b )` and `$V` as
+	// `A+B`; an empty pair comes back with one empty element; and elements
+	// `(a:b c)` tied again with `:` are three. The last is what says the
+	// join is re-split rather than handed to the array as it was. Written
+	// through the scalar, so the letters this line brought — `-U` among
+	// them — reach the elements on the way back in.
+	if retied {
+		var elems []string
+		if a, ok := r.Arrays[array]; ok {
+			elems = r.readArray(a)
+		}
+		r.setVar(scalar, strings.Join(elems, sep))
+		return 0
+	}
 	// A name that already holds a value keeps it and is read back through
 	// the tie that has just arrived — the same rule an integer or a case
 	// attribute follows. This is what makes `PATH=…; typeset -T PATH path`
 	// give `path` the fields rather than emptying both.
-	if v, ok := r.getVar(scalar); ok {
+	//
+	// Not a cell the shadow has just made, though, which holds the empty
+	// string only because a new local starts there: `f(){ typeset -T S s;
+	// print ${#s} }` is 0 in zsh 5.9.2, measured 2026-10-02, exactly as at
+	// the top level, where reading the fresh local back split it into one
+	// empty element.
+	if v, ok := r.getVar(scalar); ok && !scalarFresh {
 		r.mirrorScalarToArray(scalar, v)
 		return 0
 	}

@@ -7802,7 +7802,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// and one function rather than two. See declarationtakenback.go.
 		held := r.holdTheDeclaration(name)
 		r.applyAttributes(name, f)
-		r.localExportAttribute(name, f.export)
+		// Over a binding this line made only — see biDeclare's call.
+		if !redeclared {
+			r.localExportAttribute(name, f.export)
+		}
 		if r.unspecified {
 			// The declaration is not made at all: reporting the unanswered
 			// axis and then assigning anyway is the silent wrong answer.

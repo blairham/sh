@@ -7839,6 +7839,7 @@ func (p *Parser) parseCase() Command {
 			parenthesized = true
 			p.next()
 		}
+		it.Grouped = parenthesized && p.dialect.CasePatternListSpansBlanks
 		if !p.casePatterns(it, parenthesized) {
 			p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
 			p.inCaseWord = false

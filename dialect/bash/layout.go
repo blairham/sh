@@ -84,6 +84,8 @@ func common() syntax.Layout {
 		// through `type` on a function holding nothing else (#4161).
 		BareTimeSuffix:   " ",
 		CaseHeaderSuffix: " ",
+		// `a|b)` is listed `a | b)`. Measured 2026-10-02 (#5138).
+		CaseAlternativesSpaced: true,
 
 		// What a listing says about a body beyond where its lines break,
 		// all of it measured on bash 5.3.15 and bash 3.2.57 through

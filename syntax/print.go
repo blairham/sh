@@ -233,6 +233,13 @@ type Layout struct {
 	// CasePatternsParenthesised writes an arm's pattern with the opening
 	// parenthesis that the grammar allows and most shells leave out.
 	CasePatternsParenthesised bool
+	// CaseAlternativesSpaced writes a blank on each side of the `|` between
+	// an arm's alternatives, as both listings do: `a|b)` comes back `a |
+	// b)` in bash 5.3.20's `declare -f` and `(a | b)` in zsh 5.9.2's
+	// `which`, measured 2026-10-02 (#5138). An arm one dialect read as a
+	// single pattern is written as it read it — see CaseItem.Grouped —
+	// which is what keeps zsh's `( a | b )` as `(a|b)`.
+	CaseAlternativesSpaced bool
 
 	// SubshellBodyOnItsOwnLines gives a `( … )` the shape a brace group
 	// gets: the parenthesis ends its line, the statements are indented one
@@ -1873,9 +1880,13 @@ func (p *printer) caseArms(x *CaseClause) {
 		if p.layout.CasePatternsParenthesised || p.caseBlanks {
 			p.str("(")
 		}
+		sep := "|"
+		if p.layout.CaseAlternativesSpaced && !it.Grouped {
+			sep = " | "
+		}
 		for i, pat := range it.Patterns {
 			if i > 0 {
-				p.str("|")
+				p.str(sep)
 			}
 			p.word(pat)
 		}

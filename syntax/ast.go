@@ -1001,6 +1001,13 @@ type CaseItem struct {
 	Term    Kind
 	TermPos Pos
 	Start   Pos
+	// Grouped says the arm's list was written inside its parenthesis in a
+	// dialect that reads that list as one pattern, which is how it is
+	// listed: zsh 5.9.2 writes `( a | b )` back as `(a|b)` and `c | d)` as
+	// `(c | d)`, and under `emulate sh`, where the parenthesis is only the
+	// arm's, `(one|two)` as `(one | two)`. Measured 2026-10-02 (#5138). See
+	// Dialect.CasePatternListSpansBlanks, the flag that option moves.
+	Grouped bool
 }
 
 func (i *CaseItem) Pos() Pos { return i.Start }

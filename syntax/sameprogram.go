@@ -35,6 +35,7 @@ var (
 	assignType      = reflect.TypeOf(Assign{})
 	paramExprType   = reflect.TypeOf(ParamExpr{})
 	fileType        = reflect.TypeOf(File{})
+	caseItemType    = reflect.TypeOf(CaseItem{})
 )
 
 // SameProgram reports whether two trees are the same program, and where they
@@ -132,6 +133,14 @@ func spellingOnly(t reflect.Type, name string) bool {
 		// `1/(0)` reprinted with a space somewhere else is the same program
 		// written down differently.
 		return t == arithBinaryType
+	}
+	if name == "Grouped" {
+		// Whether an arm's alternatives were written inside its parenthesis
+		// in the dialect that reads them there as one pattern — see
+		// [CaseItem.Grouped]. `(a|b)` and `a|b)` match the same subjects
+		// there, and the flag is kept only so a listing can write the arm
+		// back the way it was read.
+		return t == caseItemType
 	}
 	// Header, which only the clauses that keep one have.
 	return name == "Header"

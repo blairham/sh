@@ -129,3 +129,19 @@ func (r *Runner) SetLoopBodyEndsInEnd(on bool) {
 	d.LoopBodyEndsInEnd = on
 	r.Dialect = &d
 }
+
+// QuotedNewlineIsUnmatched reports the grammar flag of that name, which one
+// dialect's `cshjunkiequotes` turns on and off at run time. See
+// syntax.Dialect.QuotedNewlineIsUnmatched.
+func (r *Runner) QuotedNewlineIsUnmatched() bool { return r.dialect().QuotedNewlineIsUnmatched }
+
+// SetQuotedNewlineIsUnmatched sets that flag for what this runner reads from
+// here on, the way SetLoopBodyEndsInEnd does for its own.
+func (r *Runner) SetQuotedNewlineIsUnmatched(on bool) {
+	d := r.dialect()
+	if d.QuotedNewlineIsUnmatched == on {
+		return
+	}
+	d.QuotedNewlineIsUnmatched = on
+	r.Dialect = &d
+}

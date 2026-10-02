@@ -131,6 +131,10 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 		return marked, true
 	}
 	out := make([]literalElem, 0, len(elems))
+	// The literal is one word list for `cshnullglob`. See
+	// interp/cshnullglob.go.
+	endGlobUnit := r.beginGlobUnit()
+	defer endGlobUnit()
 	for _, el := range elems {
 		if el.Nested != nil {
 			if el.Nested.Members != nil {

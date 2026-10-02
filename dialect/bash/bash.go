@@ -3440,6 +3440,9 @@ func Semantics() interp.Semantics {
 	// Measured 2026-10-01: `(exit 4) &` lists as `( exit 4 ) &`. See
 	// Semantics.JobCommandIsReprinted.
 	s.JobCommandIsReprinted = interp.Yes
+	// `${v/#%pat/rep}`: the two anchors together, or a start anchor over a
+	// `%`. Measured 2026-10-02. See Semantics.ReplacementAnchorsCombine.
+	s.ReplacementAnchorsCombine = interp.No
 
 	// Whether a backgrounded job is announced to whoever is typing.
 	// Whether `export -f` carries a function to a child.

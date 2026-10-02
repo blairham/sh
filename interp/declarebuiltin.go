@@ -3197,7 +3197,10 @@ func (r *Runner) compoundCell(name string) bool {
 // both words reach one tie helper, so for that construct the exemption is a
 // test — see Runner.tieTakesAGlobal, which is the only other caller.
 func (r *Runner) exportLetterDeclaresAGlobal(name string, f declareFlags) bool {
-	if !f.export || len(r.scopes) == 0 {
+	if !f.export || len(r.scopes) == 0 || f.globalOff {
+		// `+g` asks for the local outright: measured 2026-10-02 on zsh
+		// 5.9.2, `f(){ typeset +g -x v=1 }` leaves `v` local and exported
+		// with GLOBAL_EXPORT on and off alike (#5155).
 		return false
 	}
 	if r.localCell(name) {

@@ -4324,6 +4324,9 @@ func Semantics() interp.Semantics {
 	// arrangement. See Runner.jobCommandOnOneLine (#5342).
 	s.JobCommandIsReprinted = interp.Yes
 	s.JobCommandIsOneLineOfTheBodyLayout = interp.Yes
+	// `${v/#%pat/rep}`: the two anchors together, or a start anchor over a
+	// `%`. Measured 2026-10-02. See Semantics.ReplacementAnchorsCombine.
+	s.ReplacementAnchorsCombine = interp.Yes
 
 	// Whether a backgrounded job is announced to whoever is typing.
 	// zsh announces a job only where standard input is a terminal, and not

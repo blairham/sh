@@ -970,6 +970,8 @@ func Semantics() interp.Semantics {
 	// found` at 127.
 	// unanswered NameBeyondASCIIStaysOutOfTheEnvironment: a name here is
 	// ASCII under every locale, so there is no such name to export.
+	// unanswered ReplacementAnchorsCombine: this shell reads no anchor on a
+	// span replacement, so the two have nothing to combine.
 	// unanswered CommandWordListingNeedsAKindLetter: this shell has no
 	// arrays, so every name a listing could write is a scalar and there is
 	// no kind to leave out or to ask a letter for.

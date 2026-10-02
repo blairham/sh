@@ -803,9 +803,29 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("cshjunkiequotes", false),
+	{
+		// CSH_JUNKIE_QUOTES: a newline inside quotes is the quote that never
+		// closed, unless a backslash escapes it. See
+		// syntax.Dialect.QuotedNewlineIsUnmatched for the rows (#5155).
+		base: "cshjunkiequotes", def: false,
+		get: func(r *interp.Runner) bool { return r.QuotedNewlineIsUnmatched() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetQuotedNewlineIsUnmatched(on)
+			return 0
+		},
+	},
 	nullCommandOption("cshnullcmd"),
-	recorded("cshnullglob", false),
+	{
+		// CSH_NULL_GLOB: an unmatched pattern is deleted, and the word list
+		// is an error only where none of its patterns matched. See
+		// interp/cshnullglob.go (#5155).
+		base: "cshnullglob", def: false,
+		get: func(r *interp.Runner) bool { return r.CshNullGlob() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetCshNullGlob(on)
+			return 0
+		},
+	},
 	{
 		// DEBUG_BEFORE_CMD: whether the DEBUG trap runs ahead of each
 		// command or behind it. On by default, and implemented rather than
@@ -942,7 +962,24 @@ var zshOptions = []zshOption{
 	// rather than refused.
 	recorded("functionargzero", true),
 	setOptBacked("glob", true, "noglob", true),
-	recorded("globalexport", true),
+	{
+		// GLOBAL_EXPORT: the export letter on a declaration inside a
+		// function reaches the global, where it is on — the default. Off,
+		// `typeset -x v` there is a local. Measured 2026-10-02 on zsh 5.9.2:
+		// `f(){ typeset -x v=1 }` lists `v` as `scalar-local-export` inside
+		// the call with the option off and `scalar-export` with it on
+		// (#5155).
+		base: "globalexport", def: true,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ExportLetterDeclaresAGlobal == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ExportLetterDeclaresAGlobal
+			}, answer(on))
+			return 0
+		},
+	},
 	// And the narrower escape hatch beside `rcs` below: whether this shell
 	// reads the files in the machine's own directory, which the invocation
 	// initializes from `-d` and `--no-globalrcs`.
@@ -1112,7 +1149,16 @@ var zshOptions = []zshOption{
 	recorded("histreduceblanks", false),
 	recorded("histsavebycopy", true),
 	recorded("histsavenodups", false),
-	recorded("histsubstpattern", false),
+	{
+		// HIST_SUBST_PATTERN: `:s` reads its left half as a pattern. See
+		// interp.Runner.substitutePattern (#5155).
+		base: "histsubstpattern", def: false,
+		get: func(r *interp.Runner) bool { return r.HistSubstPattern() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetHistSubstPattern(on)
+			return 0
+		},
+	},
 	recorded("histverify", false),
 	// HUP: whether a session that is leaving sends SIGHUP to the jobs it is
 	// about to abandon, and says how many. Not recorded since #4509 — the

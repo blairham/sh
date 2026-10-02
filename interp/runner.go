@@ -4325,6 +4325,16 @@ type Runner struct {
 	// shell without job control, whose children start with SIGINT and
 	// SIGQUIT ignored. See interp/asyncinterrupts.go.
 	asyncIgnoresInterrupts bool
+	// cshNullGlob is one dialect's `cshnullglob`, and globUnit the word list
+	// it is judged over. See interp/cshnullglob.go.
+	cshNullGlob bool
+	globUnit    *globUnit
+	// histSubstPattern is one dialect's `histsubstpattern`. See
+	// Runner.substitutePattern.
+	histSubstPattern bool
+	// modifierTextEscaped says the modifier being applied came from a glob
+	// qualifier, whose text is the field's escaped form.
+	modifierTextEscaped bool
 	// trapSnapshot is the listing the parent shell would have shown when
 	// this subshell began, kept for the dialects whose `trap` still shows
 	// it there, and dropped the moment this runner modifies any trap.
@@ -7700,6 +7710,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// it was written at. See interp/operandwrittenorder.go.
 	argvBefore := make([]int, 0, len(c.Args))
 	var lexedAt, sourceClosedAt []string
+	endGlobUnit := r.beginGlobUnit()
 	for i, w := range c.Args {
 		argvBefore = append(argvBefore, len(argv))
 		if r.expandErr || r.ctl == controlExit {
@@ -7897,6 +7908,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			lexedAt = append(lexedAt, argv[operandStart])
 		}
 	}
+	endGlobUnit()
 	// The operand positions belong to this command alone: a command
 	// substitution in one of the values has already run, with a set of its
 	// own, and whatever ran before this command must come back afterwards.

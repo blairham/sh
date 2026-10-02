@@ -3106,6 +3106,9 @@ func Semantics() interp.Semantics {
 	// on ksh93u+ 2012-08-01, `export ñ=1 a=2; /usr/bin/env` lists both. See
 	// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment.
 	s.NameBeyondASCIIStaysOutOfTheEnvironment = interp.No
+	// `${v/#%pat/rep}`: the two anchors together, or a start anchor over a
+	// `%`. Measured 2026-10-02. See Semantics.ReplacementAnchorsCombine.
+	s.ReplacementAnchorsCombine = interp.No
 	// A bare `trap` inside the running EXIT trap lists it (nothing here,
 	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
 	s.ExitTrapListedWhileItRuns = interp.No

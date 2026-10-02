@@ -58,6 +58,7 @@ func (r *Runner) substituteModifier(value, rest string, global bool, e *syntax.P
 	// what is remembered for the next `:s` is the string itself. The
 	// replacement keeps its escapes until it is used, because an `&` in it is
 	// not a character.
+	written := pattern
 	pattern = unescapeModifier(pattern)
 	with, tail, closed := scanDelimited(after, delim)
 	if !closed {
@@ -83,7 +84,54 @@ func (r *Runner) substituteModifier(value, rest string, global bool, e *syntax.P
 		pattern = r.lastSubst.pattern
 	}
 	r.lastSubst = lastSubstitution{pattern: pattern, with: with, set: true}
+	if r.histSubstPattern {
+		// The modifier's own escapes are resolved first, as they are for the
+		// literal reading; what is left is the pattern's, and the operator's
+		// delimiter goes back in escaped.
+		patternText := strings.ReplaceAll(unescapeModifier(written), "/", "\\/")
+		if out, ok := r.substitutePattern(value, patternText, with, global); ok {
+			return out, true
+		}
+	}
 	return substituteLiteral(value, pattern, with, global), true
+}
+
+// substitutePattern is `:s` under one shell's `histsubstpattern`, where the
+// left half is a pattern read the way `${x/pat/rep}` reads one — `#` and `%`
+// anchor it, `(#b)` fills `$match` — and the right half is expanded for each
+// match the same way. Measured 2026-10-02 on zsh 5.9.2 under `-f` with
+// `extendedglob`, in a directory holding `tmpcd`, `tmpfile1` and `tmpfile2`:
+//
+//	print *(:s/t??/TING/)                             TINGcd TINGfile1 …
+//	foo=(one.c two.c three.c)
+//	print ${foo:s/#%(#b)t(*).c/T${match[1]}.X/}       one.c Two.X Three.X
+//
+// and with the option off the same two are literal and change nothing
+// (#5155). Read through the expansion's own grammar: the two halves are
+// handed to the parser as `${v/pat/rep}`, so every rule that operator keeps
+// is kept here without a second copy.
+func (r *Runner) substitutePattern(value, pattern, with string, global bool) (string, bool) {
+	op := "/"
+	if global {
+		op = "//"
+	}
+	if r.modifierTextEscaped {
+		with = globUnescape(with)
+	}
+	f, err := syntax.Parse("${_"+op+pattern+"/"+withoutQuotes(with)+"}", r.dialect())
+	if err != nil || len(f.Stmts) != 1 {
+		return "", false
+	}
+	p, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
+	if !ok || len(p.Cmds) != 1 {
+		return "", false
+	}
+	c, ok := p.Cmds[0].(*syntax.SimpleCmd)
+	if !ok || len(c.Args) != 1 || len(c.Args[0].Spans) != 1 || c.Args[0].Spans[0].Param == nil {
+		return "", false
+	}
+	e := c.Args[0].Spans[0].Param
+	return r.replaceWith(value, r.patternOf(e.Arg), e), true
 }
 
 // repeatSubstitution is `:&` — the last substitution again, on this value.
@@ -211,6 +259,31 @@ func expandAmpersand(with, matched string, rule backslashRule) string {
 			b.WriteString(matched)
 		default:
 			b.WriteByte(with[i])
+		}
+	}
+	return b.String()
+}
+
+// withoutQuotes takes the quote characters out of a modifier's replacement,
+// which the modifier's own reading has already done before the expansion
+// sees it: measured 2026-10-02 on zsh 5.9.2, under `histsubstpattern`
+// `${x:s/#(#b)tmp(*e)/'scrunchy${match[1]}'/}` on `tmpfile1` is
+// `scrunchyfile1` — the quotes gone and the parameter still expanded —
+// where the same text as `${x/…/'…'}` keeps the parameter literal.
+func withoutQuotes(s string) string {
+	if !strings.ContainsAny(s, `'"`) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c == '\\' && i+1 < len(s):
+			b.WriteByte(c)
+			i++
+			b.WriteByte(s[i])
+		case c == '\'' || c == '"':
+		default:
+			b.WriteByte(c)
 		}
 	}
 	return b.String()

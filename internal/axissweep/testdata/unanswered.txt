@@ -235,6 +235,7 @@ ash   ReadonlyFdVariableRefusesAClose
 ash   ReadonlyRecordsTheCompoundAttribute
 ash   RegexMatchOmitsGroupsThatDidNotMatch
 ash   RegexMatchSurvivesAFailedMatch
+ash   ReplacementAnchorsCombine
 ash   ReplacementEmptyMatchDeclined
 ash   RestrictedBuiltinRefusalIsFatal
 ash   RestrictedFreezeIsAReadonly
@@ -594,6 +595,7 @@ dash  ReadonlyReferenceLetter
 dash  RegexMatchOmitsGroupsThatDidNotMatch
 dash  RegexMatchSurvivesAFailedMatch
 dash  ReplacementAnchors
+dash  ReplacementAnchorsCombine
 dash  ReplacementEmptyMatchDeclined
 dash  ReplacementOperandTakesTheEnclosingQuoting
 dash  RestrictedBuiltinRefusalIsFatal

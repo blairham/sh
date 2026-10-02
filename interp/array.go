@@ -2492,6 +2492,9 @@ type subscriptSource struct {
 	name   string
 	elems  []string
 	scalar bool
+	// ghosts says the empty elements are a nested list's ghosts, which a
+	// search matches as one character. See Runner.nestedEmptiesAreGhosts.
+	ghosts bool
 }
 
 // subscriptOver answers a subscript against values already in hand.

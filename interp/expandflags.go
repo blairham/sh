@@ -455,23 +455,15 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	var nestedBare []bool
 	keepsBare := false
 	if e.Inner != nil && isList && indirect == nil && e.Op == 0 {
-		kind := r.nestedElementsAreBare(e)
-		switch {
-		case kind == nestedBareNone:
-		case quoted || kind == nestedBareFromAnIFSSplit:
-			// An `=` split a level down keeps its bare fields unquoted, as
-			// one in the group itself does: `${(q)${=u}}` and `${(@)${=u}}`
-			// are four words, two of them empty.
+		// Unquoted, a list's empty elements never got here — see
+		// unquotedInnerDropsItsEmpties — so the marks are for the quoted
+		// list and for an `=` split a level down, which keeps its bare
+		// fields unquoted as one in the group itself does: `${(q)${=u}}` and
+		// `${(@)${=u}}` are four words, two of them empty.
+		if kind := r.nestedElementsAreBare(e); kind == nestedBareFromAnIFSSplit ||
+			(kind == nestedBareFromAList && quoted) {
 			nestedBare = bareEmptyMarks(words, nil)
 			keepsBare = !quoted
-		default:
-			kept := words[:0:0]
-			for _, w := range words {
-				if w != "" {
-					kept = append(kept, w)
-				}
-			}
-			words = kept
 		}
 	}
 
@@ -492,7 +484,8 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// length for a scalar, unless `c`, `w` or `W` said to count something
 	// else. See lengthflags.go.
 	if e.Length {
-		words, isList = []string{itoa(r.flaggedLength(e, words, isList))}, false
+		ghosts := (set || isList) && r.nestedEmptiesAreGhosts(e)
+		words, isList = []string{itoa(r.flaggedLength(e, words, isList, ghosts))}, false
 	}
 
 	// An `=` beside the group is this same step with IFS for a separator.
@@ -796,8 +789,18 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// list: `*` sorts ahead of a path only once `%x` has become one, and
 	// `a!` ahead of `a\ b` only once the space has become a backslash —
 	// both orders reverse if the sort runs first.
+	// A sort moves the words and not their bare marks, so the marks are made
+	// again behind it where they can be: where every empty word was bare, the
+	// empty words are still exactly the bare ones. Measured on zsh 5.9.2 with
+	// `IFS=:` and `u=a::b:`: `${(@o)${=u}}` is the four words `a`, `b` and two
+	// empty ones, where dropping the marks lost both.
+	marksFollowSort := false
 	if orderApplies(e) {
-		words = orderWords(e, words)
+		marksFollowSort = len(bare) == len(words) && emptiesAllBare(words, bare)
+		words = r.orderWords(e, words)
+		if marksFollowSort {
+			bare = bareEmptyMarks(words, nil)
+		}
 	}
 
 	// Rule 22: padding, which stands here rather than where the rule numbers
@@ -833,7 +836,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// command line keeps — see expandFlagged. Only while they still line up
 	// with the words: a sort, a re-reading or a shell split moves them.
 	r.flagWordBare, r.flagKeepsBare = nil, false
-	if len(bare) == len(words) && !orderApplies(e) && !reevalFlagApplies(e) && !markJoin {
+	if len(bare) == len(words) && (!orderApplies(e) || marksFollowSort) && !reevalFlagApplies(e) && !markJoin {
 		if _, shell := shellSplitOpts(e); !shell {
 			r.flagWordBare, r.flagKeepsBare = bare, keepsBare && bare != nil
 		}
@@ -2174,6 +2177,21 @@ func bareEmptyMarks(words []string, marks []bool) []bool {
 		marks = append(marks, w == "")
 	}
 	return marks
+}
+
+// emptiesAllBare reports whether every empty word is marked bare and there is
+// at least one, which is when the marks can be made again from the words.
+func emptiesAllBare(words []string, bare []bool) bool {
+	any := false
+	for i, w := range words {
+		if w == "" {
+			if !bare[i] {
+				return false
+			}
+			any = true
+		}
+	}
+	return any
 }
 
 // nestedElementsAreBare reports whether the inner of a nested expansion hands

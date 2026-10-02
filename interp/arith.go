@@ -1193,6 +1193,12 @@ func radixWritten(e syntax.ArithExpr) (base int, padded bool) {
 func arithPlaceOf(e syntax.ArithExpr) (arithPlace, bool) {
 	switch x := e.(type) {
 	case *syntax.ArithVar:
+		if x.Special {
+			// A special parameter is a value: `$(( ?++ ))` is `lvalue
+			// required`, as `$(( 1++ ))` is. See
+			// syntax.Dialect.ArithSpecialParameterOperands.
+			return arithPlace{}, false
+		}
 		return arithPlace{name: x.Name}, true
 	case *syntax.ArithIndex:
 		return arithPlace{

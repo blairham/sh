@@ -7502,6 +7502,20 @@ type Dialect struct {
 	// the code of the `1`, where the count is `$(( $#a ))`.
 	ArithCharacterCode bool
 
+	// ArithSpecialParameterOperands reads `?`, `$` and a `#` with no name
+	// after it, standing where an operand belongs, as the special parameters
+	// of those names. Measured 2026-10-02 on zsh 5.9.2 with `set -- a b;
+	// (exit 3)`: `$(( ? ))` is 3, `$(( ? + 1 ))` 4, `$(( 1 ? ? : 2 ))` 3,
+	// `$(( # ))` 2, `$(( $ > 0 ))` 1, and `repeat '?' cmd` runs cmd three
+	// times; `$(( @ ))` is `illegal character: @`. bash 5.3.20 calls the
+	// first an operand it expected. They are values and not names a script
+	// may assign: `$(( ?++ ))` and `$(( ? = 5 ))` are `lvalue required`.
+	//
+	// The `#` is the character-code operator's own spelling with no name
+	// after it, so it is read there — see ArithCharacterCode, where `#a` is
+	// the code of `$a`'s first character and `##a` the code of `a`.
+	ArithSpecialParameterOperands bool
+
 	// ArithFunctionCall enables `name(args)` inside an arithmetic expression:
 	// a call to a *math function*, which is a name the shell has been told
 	// arithmetic may call. See [ArithCall].

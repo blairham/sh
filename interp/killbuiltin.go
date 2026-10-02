@@ -263,6 +263,7 @@ func (r *Runner) signalListingName(name string) string {
 }
 
 func biKill(r *Runner, _ context.Context, args []string) int {
+	r.forgetANumberNobodyHolds()
 	if len(args) == 0 {
 		return r.killReport(killUsage, "")
 	}
@@ -1880,6 +1881,9 @@ func (r *Runner) killFailed(err error) int {
 		return 1
 	}
 	d := r.diag()
+	if ke.kind == killNoSuchJob && r.jobSpecMissIsSilent() {
+		return 1
+	}
 	target := ke.kind == killNoSuchProcess || ke.kind == killNotPermitted || ke.kind == killSendFailed
 	// One dialect prints the usage and a failed target with no location and
 	// no shell name at all. The one that writes its *own name* in front of

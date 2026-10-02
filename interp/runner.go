@@ -2947,6 +2947,9 @@ type Runner struct {
 	// Runner.runAsItsOwnJob and Semantics.SubshellIsAJobInItsOwnTable.
 	ownJobsStartAtTwo                         bool
 	inheritedCurrentJob, inheritedPreviousJob int
+	// subshellSelfWaited says a `wait` has reached the `( … )` this shell is,
+	// which no spec names after. See Runner.subshellSelfLookup.
+	subshellSelfWaited bool
 	// jobOrder is the order jobs became *notable*, oldest first: a job is
 	// appended when it enters the table and again, moved to the end, every
 	// time it stops. It is not the table's order, which is slot order, and
@@ -2967,6 +2970,14 @@ type Runner struct {
 	// Semantics.ACommandHoldsAJobSlot and Runner.holdACommandsJobSlot.
 	commandSlot     int
 	commandSlotHeld bool
+	// outerSlots are the numbers held by the commands this one runs inside,
+	// outermost first, where a holder nests — see Runner.holdACommandsJobSlot.
+	// They are taken as commandSlot is, and a marker can land on any of them.
+	outerSlots []int
+	// bodyHoldsNoSlot is the body of the nameless function being entered,
+	// which runs as that function and not as the brace group it is written
+	// as. See holdsAJobSlot.
+	bodyHoldsNoSlot syntax.Command
 	// marksByNumber says the `+` and `-` are markCurrent and markPrevious,
 	// job numbers, rather than read off jobOrder: a slot has been in play,
 	// and a number can then name no job and still be marked. Zero is no
@@ -2977,6 +2988,9 @@ type Runner struct {
 	// job noticed under one is told from a job noticed under the next — see
 	// Job.noticedInCommand.
 	commandSerial uint64
+	// commandSerials hands out commandSerial's values, which a nested holder
+	// puts back on the way out rather than counting on from.
+	commandSerials uint64
 	// jobIdents hands out the numbers a job with no process of its own
 	// answers to — see Runner.inventJobIdent, which is where the whole of it
 	// is. A pointer because it is shared down the clone chain rather than
@@ -7071,7 +7085,7 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 	case *syntax.Pipeline:
 		return r.pipeline(ctx, x)
 	case *syntax.TimeClause:
-		if release := r.holdACommandsJobSlot(); release != nil {
+		if release := r.holdACommandsJobSlot(true); release != nil {
 			defer release()
 		}
 		return r.timeClause(ctx, x)
@@ -7355,8 +7369,9 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 			return nil
 		}
 	}
-	if holdsAJobSlot(c) {
-		if release := r.holdACommandsJobSlot(); release != nil {
+	if holdsAJobSlot(c) && c != r.bodyHoldsNoSlot {
+		_, brace := c.(*syntax.Group)
+		if release := r.holdACommandsJobSlot(!brace); release != nil {
 			defer release()
 		}
 	}
@@ -9727,6 +9742,10 @@ func (r *Runner) backgroundExitStatus(err error) int {
 // waiting — two waits on one child is a race over who reaps it, and the loser
 // gets an error instead of a status.
 func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, action Action, ownGroup bool) error {
+	// A program the shell waits for is a job of the shell's while it runs,
+	// and so reads the table the way `jobs` does: see
+	// Runner.forgetANumberNobodyHolds.
+	defer r.forgetANumberNobodyHolds()
 	if err := r.startMasked(cmd); err != nil {
 		if st, ran := r.imageAsScript(ctx, action, cmd.Path, argv, cmd.Env, err); ran {
 			r.status = st

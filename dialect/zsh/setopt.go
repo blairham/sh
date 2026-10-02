@@ -1704,6 +1704,9 @@ var zshOptions = []zshOption{
 				return &s.GetoptsErrorEndsTheWord
 			}, answer(on))
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.JobSpecMissIsSilent
+			}, answer(on))
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.RedirectErrorOnSpecialBuiltinFatal
 			}, answer(on))
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {

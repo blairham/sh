@@ -909,9 +909,18 @@ zsh refuses `$(( ##\C ))` as `bad character after ##` where we answer 0.
 spelling makes bash lose the closing parenthesis of the whole word, so the
 row would be about its scanner rather than about the operator.
 
+A `#` with no name after it is not this operator at all: it is the
+parameter. Measured 2026-10-02 on zsh 5.9.2 with `set -- a b`, `$(( # ))` is
+2 and `$(( # + 1 ))` is 3, where `$(( #x ))` is still the code of `$x`'s
+first character. `?` and a `$` with no name after it are read the same way —
+`(exit 3); print $(( ? + 1 ))` is 4, `$(( 1 ? ? : 2 ))` is 3, `$(( $ > 0 ))`
+is 1, and `repeat '?' cmd` counts with the last status — and none of the
+three can be assigned: `$(( ?++ ))` is `lvalue required`.
+
 Grammar flags: `ArithCharacterCode` — core: off; `zsh`: on — and
 `ArithCharacterEscapes`, which is the span above: core neither, `zsh`
-masked with an optional dash, `ksh` folded with no dash.
+masked with an optional dash, `ksh` folded with no dash. The parameters are
+`ArithSpecialParameterOperands` — core: off; `zsh`: on.
 
 ## Quote characters inside an expression
 

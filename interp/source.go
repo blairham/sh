@@ -426,7 +426,7 @@ const evalLinesAxis = "the lines of `eval`'s text continuing the caller's"
 func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// Code run by a builtin holds a job slot, where a command does: `eval`
 	// and `.` as much as a brace group. See Semantics.ACommandHoldsAJobSlot.
-	if release := r.holdACommandsJobSlot(); release != nil {
+	if release := r.holdACommandsJobSlot(true); release != nil {
 		defer release()
 	}
 	// Text being read again, which is one level of indirection: `eval` and a

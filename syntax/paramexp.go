@@ -189,6 +189,27 @@ type ParamExpr struct {
 	// escape for a key and not for a pattern. bash 5.3.20 and ksh93u+ look up
 	// `a"b` both ways (#5270).
 	EnclosedInDoubleQuotes bool
+	// InsideASubscript records that the expansion was written inside another
+	// expansion's subscript, where a `\"` in its own subscript is spent
+	// before that subscript is read as a key, as double quotes spend it. Its
+	// search pattern is spent too where the expansion around it is also
+	// inside double quotes, which neither of the two does on its own.
+	// Measured 2026-10-02 on zsh 5.9.2 (`-f`, `LC_ALL=C`), with both `k"m`
+	// and `k\"m` planted as keys of `h` holding `A` and `B`, and `A` and `B`
+	// as keys holding `fromA` and `fromB`:
+	//
+	//	$h[k\"m]            B       the escape kept, at the top
+	//	$h[$h[k\"m]]        fromA   and spent one level in
+	//	"$h[$h[k\"m]]"      fromA   quoted or not
+	//	"$h[(i)k\"m]"       k\"m    a pattern at the top keeps it
+	//	"$h[$h[(i)k\"m]]"   A       and one level in, quoted, does not
+	//	$h[$h[(i)k\"m]]     B       while unquoted it still does
+	//	$h[$h[k\\m]]        fP      no other escape moves: `\\`, `\a` and `\$`
+	//	                            read one level in as they do at the top
+	//
+	// See SubscriptFlags.PatternSpendsAnEscapedQuote, the fact for the
+	// pattern.
+	InsideASubscript bool
 	// BareIndexText is that same subscript read as *text*: the `[`, whatever
 	// stands between the brackets, and the `]`, lexed as a word in the
 	// expansion's own quoting. Nil unless the expansion was written without
@@ -1063,6 +1084,10 @@ scan:
 				})
 			}
 			e.Index, e.IndexFlags, e.IndexRange, e.IndexText = idx, g, rng, inner
+			markInsideASubscript(idx, e.EnclosedInDoubleQuotes)
+			if g != nil {
+				markInsideASubscript(g.Arg, e.EnclosedInDoubleQuotes)
+			}
 			e.IndexDots = nil
 			if p.dialect.SubscriptDotRange && rng == nil && g == nil {
 				e.IndexDots = dotRangeOf(idx)
@@ -2731,4 +2756,23 @@ func placeLinesIn(spans []Span, at Pos) []Span {
 		}
 	}
 	return out
+}
+
+// markInsideASubscript marks the expansions written directly in a subscript's
+// word as being there, and quoted says the expansion the subscript belongs to
+// was inside double quotes. See ParamExpr.InsideASubscript. Those further in
+// are marked by the subscript they stand in, which was read first.
+func markInsideASubscript(w *Word, quoted bool) {
+	if w == nil {
+		return
+	}
+	for _, s := range w.Spans {
+		if s.Kind != ParamExp || s.Param == nil {
+			continue
+		}
+		s.Param.InsideASubscript = true
+		if s.Param.IndexFlags != nil && quoted {
+			s.Param.IndexFlags.PatternSpendsAnEscapedQuote = true
+		}
+	}
 }

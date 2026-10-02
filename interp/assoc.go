@@ -539,7 +539,7 @@ func (r *Runner) assocKey(w *syntax.Word) string {
 // have already spent a `\"`, so the as-written key holds a bare `"` — see
 // syntax.ParamExpr.EnclosedInDoubleQuotes for the measurement (#5270).
 func (r *Runner) assocKeyRead(e *syntax.ParamExpr) string {
-	return r.assocKeyIn(e.Subscript(), e.EnclosedInDoubleQuotes)
+	return r.assocKeyIn(e.Subscript(), e.EnclosedInDoubleQuotes || e.InsideASubscript)
 }
 
 func (r *Runner) assocKeyIn(w *syntax.Word, inDoubleQuotes bool) string {

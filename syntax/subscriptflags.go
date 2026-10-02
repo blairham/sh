@@ -61,6 +61,11 @@ type SubscriptFlags struct {
 	Sep   string
 	// Arg is the subscript after the group.
 	Arg *Word
+	// PatternSpendsAnEscapedQuote says a `\"` in Arg is spent before it is
+	// read as a pattern, which is so where the expansion this group belongs
+	// to stands inside the subscript of one written in double quotes. See
+	// ParamExpr.InsideASubscript.
+	PatternSpendsAnEscapedQuote bool
 }
 
 // Subscript is the word a subscript's *reading* uses: the operand behind a

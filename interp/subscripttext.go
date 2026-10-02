@@ -55,6 +55,9 @@ import (
 // subscript that expands to itself, which keeps a caller from asking its axis
 // about a key the two readings agree on.
 func (r *Runner) expandedSubscriptText(operand string) (string, bool) {
+	if key, again, asWritten := r.expandedKeyAsWritten(operand); asWritten {
+		return key, again
+	}
 	e, ok := r.reference(operand)
 	if !ok || e.Index == nil {
 		return "", false
@@ -64,6 +67,103 @@ func (r *Runner) expandedSubscriptText(operand string) (string, bool) {
 		return "", false
 	}
 	return got, true
+}
+
+// expandedKeyAsWritten is expandedSubscriptText for a **key** in a dialect
+// whose subscript is no quoting context: the text as it was written, every
+// quote character in it a character of the key and every expansion in it
+// performed — the reading the same subscript gets written on a line of its
+// own, which is Semantics.SubscriptIsAQuotingContext's answer of no. Measured
+// on zsh 5.9.2 (`-f`, `LC_ALL=C`), 2026-10-02, with `typeset -A h; x=V`,
+// listing the key each store left:
+//
+//	typeset -g "h[a\"b]"=1      a"b      a quote that does not close
+//	typeset -g 'h[c\"d]'=2      c\"d     a backslash before it stays
+//	typeset -g 'h[g\\h]'=5      g\h      and one before a backslash goes
+//	typeset -g 'h["$x"]'=1      "V"      quotes kept, the expansion performed
+//	typeset -g 'h[a"$x]'=5      a"V
+//	typeset -g 'h[$(echo "a b")]'=4   a b   a substitution's own quoting is its
+//	read 'h[x"y]' <<< R         x"y      and every other operand route alike
+//	[[ -v 'h[a"b]' ]]           true, with that key stored
+//
+// Every one of those quotes came off here before, so `a"b` was stored as
+// `ab` and found by nothing that wrote it (#5152).
+//
+// The third result says whether this reading applied; where it did not, the
+// caller's word expansion is the answer.
+func (r *Runner) expandedKeyAsWritten(operand string) (key string, again, applied bool) {
+	open := strings.IndexByte(operand, '[')
+	if open <= 0 || !strings.HasSuffix(operand, "]") {
+		return "", false, false
+	}
+	base, sub := operand[:open], operand[open+1:len(operand)-1]
+	if !strings.ContainsAny(sub, `'"\`) || strings.ContainsAny(sub, quoteStandIns) {
+		// Nothing for the two readings to part over, or a text already
+		// holding a stand-in, which the round trip below could not tell
+		// from one of its own.
+		return "", false, false
+	}
+	if _, keyed := r.assocFor(base); !keyed {
+		return "", false, false
+	}
+	if r.ask(r.sem().SubscriptIsAQuotingContext, "an array subscript being a quoting context") {
+		return "", false, false
+	}
+	// The quote characters stand aside while the text is read, so the reader
+	// sees no quoting construct in it — a quote that never closes would
+	// otherwise be read to the end of the text and rendered back closed — and
+	// come back once the expansions have been performed.
+	e, ok := r.reference(base + "[" + standInQuotes(sub) + "]")
+	if !ok || e.Index == nil {
+		return "", false, true
+	}
+	got := restoreQuotes(r.renderSubscript(e.Index, keyKeepsEscape))
+	if got == sub || got == "" {
+		return "", false, true
+	}
+	return got, true, true
+}
+
+// quoteStandIns are the characters a quote, an apostrophe and a backslash in
+// front of either stand in as while expandedKeyAsWritten reads a key:
+// private-use code points, which no reader gives a meaning.
+const quoteStandIns = "\uE000\uE001\uE002"
+
+// standInQuotes puts the stand-ins in for the quote characters outside a
+// substitution, whose quoting is the quoting of the commands in it — see
+// substitutionSpan.
+func standInQuotes(sub string) string {
+	var b strings.Builder
+	for i := 0; i < len(sub); i++ {
+		if n := substitutionSpan(sub, i); n > 0 {
+			b.WriteString(sub[i : i+n])
+			i += n - 1
+			continue
+		}
+		switch sub[i] {
+		case '\\':
+			// A backslash in front of a quote is kept in front of it, which is
+			// keyKeepsEscape's answer for both, so it stands aside with it:
+			// left as it is, it would escape the first byte of the stand-in.
+			if i+1 < len(sub) && (sub[i+1] == '"' || sub[i+1] == '\'') {
+				b.WriteString("\uE002")
+				continue
+			}
+			b.WriteByte(sub[i])
+		case '"':
+			b.WriteString("\uE000")
+		case '\'':
+			b.WriteString("\uE001")
+		default:
+			b.WriteByte(sub[i])
+		}
+	}
+	return b.String()
+}
+
+// restoreQuotes is standInQuotes undone.
+func restoreQuotes(s string) string {
+	return strings.NewReplacer("\uE000", `"`, "\uE001", "'", "\uE002", `\`).Replace(s)
 }
 
 // subscriptTextCouldExpand reports whether a second round could possibly

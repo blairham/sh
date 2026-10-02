@@ -124,6 +124,12 @@ func Dialect() syntax.Dialect {
 		"declare": true, "typeset": true, "local": true,
 		"export": true, "readonly": true, "private": true,
 	}
+	// The reserved-word declarations, which `private` is not: it is the
+	// module's builtin. Measured 2026-10-02 through `which` (#5138).
+	d.DeclarationReservedWords = map[string]bool{
+		"declare": true, "export": true, "float": true, "integer": true,
+		"local": true, "readonly": true, "typeset": true,
+	}
 	// `nocorrect` is a reserved word here and in no other panel shell:
 	// measured 2026-09-08, `whence -w nocorrect` is `reserved` where
 	// `noglob` beside it is `builtin`, and the two behave accordingly —

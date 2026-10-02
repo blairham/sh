@@ -2017,6 +2017,12 @@ func (p *printer) simple(c *SimpleCmd) {
 		sep()
 		p.assign(operands[next])
 	}
+	if p.layout.BlankAfterAnAssignment && c.DeclaresByReservedWord && !p.endsInABlank() {
+		// Once, at the end, wherever the assignment stood among the
+		// operands: `typeset b=1 c` is listed `typeset b=1 c ` and `typeset
+		// c b=1` as `typeset c b=1 `. See Dialect.DeclarationReservedWords.
+		p.str(" ")
+	}
 	// A command that is nothing but redirections has no word for the blank
 	// to separate them from — see Layout.BlankBeforeAWordlessRedirection,
 	// which is where the two engines part.
@@ -2024,11 +2030,14 @@ func (p *printer) simple(c *SimpleCmd) {
 }
 
 func (p *printer) assign(a *Assign) {
-	if p.layout.BlankAfterAnAssignment {
+	if p.layout.BlankAfterAnAssignment && !a.Operand {
 		// Written by the one call that ends an assignment rather than at
-		// each of its four call sites — a prefix, an operand written between
-		// a command's words, one written after them, and a compound
-		// variable's own list — so a fifth cannot be added without it.
+		// each of its call sites — a prefix and a compound variable's own
+		// list — so another cannot be added without it.
+		//
+		// Not for an operand: the blank a declaration's assignment earns is
+		// the command's, written once at its end. See
+		// SimpleCmd.DeclaresByReservedWord.
 		defer p.str(" ")
 	}
 	p.str(a.Name)

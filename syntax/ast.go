@@ -609,8 +609,13 @@ type SimpleCmd struct {
 	// Nothing that *runs* the command reads them. That is the point of the
 	// class: a word the grammar removes is a word the command cannot see.
 	Precommands []*Word
-	Start       Pos
-	Stop        Pos
+	// DeclaresByReservedWord says the command word is one of
+	// [Dialect.DeclarationReservedWords] and an operand is an assignment,
+	// which a listing marks with a blank at the end. A fact read off the
+	// words, so a tree printed and read again says it again.
+	DeclaresByReservedWord bool
+	Start                  Pos
+	Stop                   Pos
 }
 
 func (c *SimpleCmd) Pos() Pos     { return c.Start }

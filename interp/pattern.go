@@ -3084,6 +3084,9 @@ type patternClasses struct {
 	// Semantics.IFSWhitespaceIsEverySpaceCharacter. Empty is the POSIX
 	// three, which is what every caller that never asked gets.
 	space string
+	// asciiNames says a name is ASCII only, so `[[:IDENT:]]` is too. See
+	// Semantics.NamesTakeTheLocalesLetters.
+	asciiNames bool
 }
 
 // holds answers one of the extra names, and answers false for any name the
@@ -3107,6 +3110,13 @@ func (c patternClasses) holds(name, unit string) bool {
 		// underscore. Letters and digits rather than ASCII ones — measured,
 		// `é`, `日` and `٣` are all in it, which is the alnum answer this
 		// matcher already gives.
+		//
+		// Unless a name is ASCII only, where the class follows it: measured
+		// 2026-10-02 on 5.9.2, `[[ é = [[:IDENT:]] ]]` is false under
+		// `setopt posix_identifiers` and true without it (#5153).
+		if c.asciiNames && (len(unit) != 1 || unit[0] >= 0x80) {
+			return false
+		}
 		return unit == "_" || inPosixClass("alnum", unit)
 	case "WORD":
 		// A word to the line editor: the same letters and digits, plus
@@ -3507,6 +3517,9 @@ func (r *Runner) patternClasses(pattern string) patternClasses {
 	}
 	if classDeclared(names, "WORD") {
 		c.word, _ = r.getVar("WORDCHARS")
+	}
+	if classDeclared(names, "IDENT") {
+		c.asciiNames = r.sem().NamesTakeTheLocalesLetters != Yes
 	}
 	return c
 }

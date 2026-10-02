@@ -3334,6 +3334,10 @@ func Semantics() interp.Semantics {
 	// interp.SubshellExitTrapPolicy (#3612).
 	s.SubshellExitTrapAfterAGiveUp = interp.SubshellExitTrapSkippedByABuiltinsUsageToo
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
+	// A name may hold the locale's letters and digits past ASCII, until
+	// `posix_identifiers` says otherwise — see setopt.go. Measured
+	// 2026-10-02 on 5.9.2 (#5153).
+	s.NamesTakeTheLocalesLetters = interp.Yes
 	// The operand of `exit` and of `return` is an arithmetic expression here,
 	// and alone in the panel: `return r` is the value of `r` and `return r+1`
 	// is one more, where ksh93 reads the leading digits and gets 0, and dash

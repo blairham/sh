@@ -1857,6 +1857,15 @@ var zshOptions = []zshOption{
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.ArithmeticAssignmentDeclaresANumber
 			}, answer(!on))
+			// And the character rule the option is named for: with it on a
+			// name is ASCII again. Measured 2026-10-02 on 5.9.2 under
+			// `LC_ALL=en_US.UTF-8`, `hähä=3` assigns with the option off
+			// and is `command not found: hähä=3` in `(setopt
+			// posix_identifiers; eval …)`. See
+			// interp.Semantics.NamesTakeTheLocalesLetters (#5153).
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.NamesTakeTheLocalesLetters
+			}, answer(!on))
 			return 0
 		},
 	},

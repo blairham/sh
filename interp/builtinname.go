@@ -6,6 +6,8 @@ package interp
 import (
 	"path"
 	"strings"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // An operand a builtin was given where it wanted a name.
@@ -42,7 +44,7 @@ func (r *Runner) isBuiltinName(builtin, name string, takes NameOperands) bool {
 	if name == "" {
 		return false
 	}
-	if isPlainName(name) {
+	if isPlainName(name) || r.isLocaleName(name) {
 		return true
 	}
 	if r.dottedBuiltinName(builtin, name) {
@@ -60,6 +62,15 @@ func (r *Runner) isBuiltinName(builtin, name string, takes NameOperands) bool {
 	r.status = 2
 	r.unspecified = true
 	return false
+}
+
+// isLocaleName reports whether s is a name that holds a character past ASCII,
+// where the dialect and the locale let a name hold one — the grammar's rule
+// for the same text, read at the builtin. See
+// Runner.NameTakesALetterPastASCII.
+func (r *Runner) isLocaleName(s string) bool {
+	d := syntax.Dialect{NameTakesALetterPastASCII: r.NameTakesALetterPastASCII}
+	return syntax.IsNameIn(s, &d)
 }
 
 // isPlainName reports whether s is a name: a letter or `_`, then letters,

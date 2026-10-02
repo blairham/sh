@@ -5,6 +5,7 @@ package interp
 
 import (
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/blairham/sh/internal/charset"
@@ -601,4 +602,53 @@ func (r *Runner) localeCharacterWidth(b, next byte, a Answer, axis string) int {
 		return 1
 	}
 	return 2
+}
+
+// NameTakesALetterPastASCII is what fills syntax.Dialect's field of the same
+// name: whether c, a character past ASCII, may be part of a name here and
+// now. The dialect has to say so, and the locale has to be one whose
+// characters are decoded as UTF-8 — under `LC_ALL=C` the bytes of `ä` are no
+// letter in either shell that takes one. See
+// Semantics.NamesTakeTheLocalesLetters.
+//
+// Exported for the front end, which builds a parser of its own and hands it
+// the same answer.
+func (r *Runner) NameTakesALetterPastASCII(c rune) bool {
+	if r.sem().NamesTakeTheLocalesLetters != Yes || r.localeIsC() || r.localeEncoding() == localeSingleByte {
+		return false
+	}
+	return isLocaleNameLetter(c)
+}
+
+// isLocaleNameLetter is the character rule itself: the locale's letters and
+// digits, at any position.
+func isLocaleNameLetter(c rune) bool {
+	return unicode.IsLetter(c) || unicode.IsDigit(c)
+}
+
+// NameLettersBeforeARunner is Runner.NameTakesALetterPastASCII for a parse a
+// front end makes before it has a runner to ask — the dialect that reads a
+// command string whole before running any of it: the vector's answer, under
+// the locale lookup names. Nil where a name is ASCII only.
+//
+// It reads the same three variables in the same order a runner does, so the
+// up-front parse and the one that runs agree about a name.
+func NameLettersBeforeARunner(s *Semantics, lookup func(string) (string, bool)) func(rune) bool {
+	if s == nil || s.NamesTakeTheLocalesLetters != Yes {
+		return nil
+	}
+	for _, name := range localeVariables {
+		v, _ := lookup(name)
+		if v == "" {
+			continue
+		}
+		if v == "C" || v == "POSIX" || !codesetIsUTF8(v) {
+			return nil
+		}
+		return isLocaleNameLetter
+	}
+	if s.UnsetLocaleIsUnicodeAware == Yes {
+		return isLocaleNameLetter
+	}
+	return nil
 }

@@ -6174,8 +6174,8 @@ func (r *Runner) declares(name string) bool {
 // the operand is an assignment there as much as `n=3` is. Reading only span
 // zero could not see it — `a[$i]=v` reaches this as three spans, and the `=`
 // that ends the name is in the last of them.
-func assignShaped(w *syntax.Word) bool {
-	_, _, ok := assignNameSplit(w)
+func (r *Runner) assignShaped(w *syntax.Word) bool {
+	_, _, ok := r.assignNameSplit(w)
 	return ok
 }
 
@@ -6186,8 +6186,8 @@ func assignShaped(w *syntax.Word) bool {
 // rules it enforces are written down. An **appending** operand is the other
 // half and is appendNameSplit: the two cannot be one predicate, because
 // assignNameSplit is shared with keywordPromotable — see there.
-func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
-	span, off, appends, ok := declarationNameSplit(w)
+func (r *Runner) assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
+	span, off, appends, ok := r.declarationNameSplit(w)
 	return span, off, ok && !appends
 }
 
@@ -6209,7 +6209,7 @@ func assignNameSplit(w *syntax.Word) (span, off int, ok bool) {
 // not names at all. It is reported rather than folded into the name because
 // the two readings have different callers and a different axis: see
 // appendNameSplit.
-func declarationNameSplit(w *syntax.Word) (span, off int, appends, ok bool) {
+func (r *Runner) declarationNameSplit(w *syntax.Word) (span, off int, appends, ok bool) {
 	if w == nil || len(w.Spans) == 0 {
 		return 0, 0, false, false
 	}
@@ -6257,7 +6257,7 @@ func declarationNameSplit(w *syntax.Word) (span, off int, appends, ok bool) {
 				// what this one refuses — `[1]=v` and `a-b[1]=v` both arrive
 				// with the same `name` either way — which is why there is
 				// not one.
-				if !isPlainName(name) {
+				if !isPlainName(name) && !r.isLocaleName(name) {
 					return 0, 0, false, false
 				}
 				return i, j, plus, true
@@ -6266,7 +6266,7 @@ func declarationNameSplit(w *syntax.Word) (span, off int, appends, ok bool) {
 					if closed {
 						return 0, 0, false, false
 					}
-					name += string(c)
+					name += s.Value[j : j+1]
 				}
 			}
 		}
@@ -6282,12 +6282,12 @@ func declarationNameSplit(w *syntax.Word) (span, off int, appends, ok bool) {
 // works out first — and it is expanded as an assignment's *value* is, so the
 // brackets are never a pattern and the text is never split.
 func (r *Runner) expandAssignArg(w *syntax.Word) string {
-	i, j, ok := assignNameSplit(w)
+	i, j, ok := r.assignNameSplit(w)
 	if !ok {
 		// An appending operand, `x+=v`, whose name assignNameSplit refuses
 		// and appendNameSplit takes. The `+` stays on the name half, which
 		// is what the utility reads the operator off.
-		i, j, ok = appendNameSplit(w)
+		i, j, ok = r.appendNameSplit(w)
 	}
 	if !ok {
 		// Never, from either caller: both asked one of those two questions.

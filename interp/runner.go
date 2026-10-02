@@ -7657,7 +7657,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// word to be a declaration: with argv empty there is no utility yet,
 		// so the word is an ordinary promotion and the axis below is never
 		// reached.
-		if i > 0 && assignShaped(w) {
+		if i > 0 && r.assignShaped(w) {
 			declaring := len(argv) > 0 && r.declarationCommand(c, argv)
 			// `set -k` takes the word before the declaration route can,
 			// where the dialect says it reaches that far. bash's does and
@@ -7665,10 +7665,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			// rather than assumed — see
 			// Semantics.KeywordPromotesADeclarationsOperand. A non-declaring
 			// command never asks it.
-			if r.keywordAssignments && keywordPromotable(w) &&
+			if r.keywordAssignments && r.keywordPromotable(w) &&
 				(!declaring || r.ask(r.sem().KeywordPromotesADeclarationsOperand,
 					"`set -k` reaching a declaration utility's own operand")) {
-				if a := keywordAssign(w); a != nil {
+				if a := r.keywordAssign(w); a != nil {
 					promoted = append(promoted, a)
 					continue
 				}
@@ -7718,7 +7718,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// separate question — zsh and ksh93 refuse it, bash appends — and
 		// that is Semantics.DeclarationTakesAnAppendOperand, which was
 		// answering about a word that had already been split (#3772).
-		appendOperand := i > 0 && len(argv) > 0 && appendOperandShaped(w) &&
+		appendOperand := i > 0 && len(argv) > 0 && r.appendOperandShaped(w) &&
 			r.declarationCommand(c, argv)
 		if appendOperand && r.lang().AppendAssign {
 			if r.unspecified {

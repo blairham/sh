@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Parser builds a syntax tree from tokens.
@@ -3225,7 +3226,7 @@ func (p *Parser) isAssign(t Token) (assignHead, bool) {
 		name = name[:len(name)-1]
 		h.append = true
 	}
-	if !isNameIn(name, p.dialect.DottedName) {
+	if !isNameInDialect(name, &p.dialect) {
 		// A run of digits names a positional parameter where the dialect has
 		// the construct. Behind isName rather than inside it, because every
 		// other caller of that function is asking about an identifier — a
@@ -3272,7 +3273,7 @@ func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
 		return h, false
 	}
 	name := t.Spans[0].Value[:open]
-	if !isNameIn(name, p.dialect.DottedName) {
+	if !isNameInDialect(name, &p.dialect) {
 		return h, false
 	}
 	// Where the chain starts, which is the open bracket until a link has been
@@ -3673,6 +3674,50 @@ func isFuncName(s string, punctuation bool) bool {
 }
 
 func isName(s string) bool { return isNameIn(s, false) }
+
+// wideNameAt is how many bytes the name character at the front of s takes
+// where it is a character past ASCII the dialect lets a name hold, and 0
+// otherwise — an ASCII byte included, which nameByte answers. See
+// [Dialect.NameTakesALetterPastASCII].
+func (d *Dialect) wideNameAt(s string) int {
+	if d.NameTakesALetterPastASCII == nil || s == "" || s[0] < utf8.RuneSelf {
+		return 0
+	}
+	c, n := utf8.DecodeRuneInString(s)
+	if (c == utf8.RuneError && n <= 1) || !d.NameTakesALetterPastASCII(c) {
+		return 0
+	}
+	return n
+}
+
+// nameLength is how many bytes of s from its front are a name under the
+// dialect's rules: nameByte for ASCII, with DottedName's answer, and
+// wideNameAt past it. The byte offset stands in for the position nameByte
+// asks about, which only tells the first character from the rest.
+func (d *Dialect) nameLength(s string) int {
+	i := 0
+	for i < len(s) {
+		if n := d.wideNameAt(s[i:]); n > 0 {
+			i += n
+		} else if nameByte(s[i], i, d.DottedName) {
+			i++
+		} else {
+			break
+		}
+	}
+	return i
+}
+
+// isNameInDialect is isNameIn with the dialect's whole rule, the letters past
+// ASCII included.
+func isNameInDialect(s string, d *Dialect) bool {
+	return s != "" && d.nameLength(s) == len(s)
+}
+
+// IsNameIn reports whether s is a name under the dialect's rule for one —
+// the grammar's own, for an interpreter judging a builtin's operand by it so
+// that the two cannot come to disagree about which characters a name holds.
+func IsNameIn(s string, d *Dialect) bool { return isNameInDialect(s, d) }
 
 // isNameIn is isName with [Dialect.DottedName]'s answer carried in, for the
 // positions that read a name the interpreter will then look up. The callers
@@ -7336,7 +7381,7 @@ func (p *Parser) forNameIsUsable() bool {
 		// [Dialect.ForNameMayBeAPositionalParameter].
 		return true
 	}
-	return isNameIn(p.tok.Literal(), p.dialect.DottedName)
+	return isNameInDialect(p.tok.Literal(), &p.dialect)
 }
 
 // isAllDigits reports whether s is one or more decimal digits and nothing

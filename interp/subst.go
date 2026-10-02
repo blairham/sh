@@ -642,6 +642,10 @@ func (r *Runner) dialect() syntax.Dialect {
 	// same reason ArithPrecedence above is applied here rather than kept
 	// beside the dialect. See syntax.Dialect.CharacterWidth (#4235).
 	d.CharacterWidth = r.CharacterWidth
+	// And which characters past ASCII a name may hold, which is the same
+	// kind of answer: the locale's, and the dialect's own option. See
+	// syntax.Dialect.NameTakesALetterPastASCII.
+	d.NameTakesALetterPastASCII = r.NameTakesALetterPastASCII
 	return d
 }
 

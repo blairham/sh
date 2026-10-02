@@ -3077,6 +3077,10 @@ func Semantics() interp.Semantics {
 	// An error inside a handler ends the handler, for a signal's, ERR's and
 	// DEBUG's alike, and the error itself raises no ERR. Measured 2026-10-02
 	// on 93u+ 2012-08-01, see interp.HandlerErrorReach (#5360).
+	// A name may hold the locale's letters and digits past ASCII:
+	// `hähä=3; echo $hähä` writes 3 under `LC_ALL=en_US.UTF-8` on 93u+
+	// 2012-08-01, measured 2026-10-02 (#5153).
+	s.NamesTakeTheLocalesLetters = interp.Yes
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// A pipeline whose last element ran here is judged by that element's own

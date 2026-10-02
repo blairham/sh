@@ -2522,7 +2522,7 @@ func (a *arithParser) name() (string, bool) {
 		return "", false
 	}
 	dot := a.dial.DottedName
-	if !nameByte(a.src[a.off], 0, dot) {
+	if !nameByte(a.src[a.off], 0, dot) && a.dial.wideNameAt(a.src[a.off:]) == 0 {
 		return "", false
 	}
 	if a.src[a.off] == '.' && a.off+1 < len(a.src) &&
@@ -2532,8 +2532,6 @@ func (a *arithParser) name() (string, bool) {
 		return "", false
 	}
 	begin := a.off
-	for a.off < len(a.src) && nameByte(a.src[a.off], a.off-begin, dot) {
-		a.off++
-	}
+	a.off += a.dial.nameLength(a.src[a.off:])
 	return a.src[begin:a.off], true
 }

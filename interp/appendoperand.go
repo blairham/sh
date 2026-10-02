@@ -137,8 +137,8 @@ func (r *Runner) declarationAppend(name, value string, global, fresh bool) bool 
 // assignNameSplit is shared with keywordPromotable, where taking `x+` as a
 // name would make `set -k`'s `x+=1 cmd` a prefix assignment *named* `x+`
 // rather than an append — which nothing has measured.
-func appendOperandShaped(w *syntax.Word) bool {
-	_, _, ok := appendNameSplit(w)
+func (r *Runner) appendOperandShaped(w *syntax.Word) bool {
+	_, _, ok := r.appendNameSplit(w)
 	return ok
 }
 
@@ -157,8 +157,8 @@ func appendOperandShaped(w *syntax.Word) bool {
 // three-part, and it is this issue's (#3789): the word was split into fields
 // and then matched against the filesystem, and the element it named was
 // replaced rather than joined.
-func appendNameSplit(w *syntax.Word) (span, off int, ok bool) {
-	span, off, appends, ok := declarationNameSplit(w)
+func (r *Runner) appendNameSplit(w *syntax.Word) (span, off int, ok bool) {
+	span, off, appends, ok := r.declarationNameSplit(w)
 	return span, off, ok && appends
 }
 

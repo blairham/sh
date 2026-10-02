@@ -111,6 +111,10 @@ func (r *Runner) tieNames(t tie) {
 // *script's* tie leaves behind, measured: `unset SCA` then `SCA=a:b` gives a
 // plain scalar and `${#sca}` stays 0. One of the shell's own pairs is not
 // untied by `unset` at all; see the `special` field and unsetName.
+// Untie is untie for a dialect: a tie it registered, given up again — the
+// pair goes on as two ordinary names.
+func (r *Runner) Untie(name string) { r.untie(name) }
+
 func (r *Runner) untie(name string) {
 	t, ok := r.tied[name]
 	if !ok {

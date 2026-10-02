@@ -7204,4 +7204,7 @@ func Apply(r *interp.Runner) {
 	// of why it is here rather than beside each: a withdrawal written before
 	// a registration is undone by it. See gatedbuiltins.go (#4997).
 	withdrawGatedBuiltins(r)
+	// And the parameters a shell started as `sh` or `ksh` never had, after
+	// every registration for the same reason. See emulationhiding.go.
+	hideTheParametersAnEmulationDoesNotHave(r)
 }

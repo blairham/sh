@@ -1204,6 +1204,14 @@ func (s source) invocationRoute() interp.Route {
 // unterminated quote at the end of one, and the route is what reading an
 // invocation produced. The same three cases `$0` already splits on, and the
 // same reason — a fact about the invocation rather than about the language.
+// invocationEmulation is the emulation the invocation asked for, or nothing.
+func (s source) invocationEmulation() string {
+	if !s.emulating {
+		return ""
+	}
+	return s.emulation
+}
+
 func (s source) programRoute() syntax.ProgramRoutes {
 	switch {
 	case s.onStdin:
@@ -2308,7 +2316,16 @@ func commandSource(sh Shell, src string, operands []string) source {
 // `umask` did nothing, would be a different shell from the one that runs the
 // same lines from a file.
 func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, route interp.Route) *interp.Runner {
+	return sh.newRunnerAs(name, params, dg, route, "")
+}
+
+// newRunnerAs is newRunner for a shell started in an emulation — see
+// interp.Runner.InvocationEmulation.
+func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics, route interp.Route, emulation string) *interp.Runner {
 	r := &interp.Runner{
+		// The emulation the invocation named, which the dialect reads as it
+		// registers. See interp.Runner.InvocationEmulation.
+		InvocationEmulation: emulation,
 		// Where the program came from. Three things read it: the status one
 		// dialect gives a failed expansion, the fatality another gives a
 		// readonly reassignment, and the route letters in `$-`.
@@ -2630,7 +2647,7 @@ func (sh Shell) runInput(in source) int {
 		}
 	}
 
-	r := sh.newRunner(name, in.params, dg, in.invocationRoute())
+	r := sh.newRunnerAs(name, in.params, dg, in.invocationRoute(), in.invocationEmulation())
 	if in.zero != "" {
 		// `$0` where it is not the name diagnostics use — see source.zero.
 		// Through the rename seam rather than through Runner.Name, which is

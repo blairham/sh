@@ -389,6 +389,10 @@ func (r *Runner) MarkInteger(name string) {
 	r.integer[name] = true
 }
 
+// UnmarkInteger takes the integer attribute back off a name, which is what
+// `typeset +i` does, for a dialect that put it there.
+func (r *Runner) UnmarkInteger(name string) { delete(r.integer, name) }
+
 // MarkExported puts the export attribute on a name, which is what `export`
 // does — so the name reaches a child's environment and a listing writes it
 // with the export word.

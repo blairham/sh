@@ -647,12 +647,23 @@ type Error struct {
 	// ksh93 says ``newline' unexpected`` for both.
 	BraceNameStopFollowsAPrefix bool
 	// BraceRanOutInTheName says an unterminated `${…}` in the parameter form
-	// ran out of input before it had read an operator: `${`, `${x`, `${#x`,
-	// and with flags `${(e)x` — where `${x:-` has read one and is reading a
-	// word. One dialect words the two apart where the text is read at
+	// stopped before it had read an operator: `${`, `${x`, `${#x`, with flags
+	// `${(e)x`, and a name followed by anything that is not an operator —
+	// `${x b`, `${x.`, `${x;` — where `${x:-` has read one and is reading a
+	// word. Measured 2026-10-02 on zsh 5.9.2 through `(e)`: after the name,
+	// `/ # % - = + ? :` are `closing brace expected` and every other
+	// character tried is `bad substitution`; a `[` is the subscript's own
+	// refusal. One dialect words the two apart where the text is read at
 	// expansion time, and not on the command line. See
 	// interp.Diagnostics.RawTextBraceRanOutInTheName.
 	BraceRanOutInTheName bool
+	// BraceParamFormUnclosed says the refusal is an unterminated `${…}` in
+	// the parameter form — the one BraceNameStop and BraceRanOutInTheName
+	// describe — and not some construct inside one. A here-document body
+	// read at expansion time reports this one at the command's line rather
+	// than as a sub-parse of the body. See
+	// interp.Diagnostics.HeredocBraceRanOutInTheName.
+	BraceParamFormUnclosed bool
 	// FlagGroupWordTail is the rest of the *word* a refused expansion flag
 	// group stands in: the source from the character after the group's
 	// closing `)` to the end of the word, the expansion's own `}` and any

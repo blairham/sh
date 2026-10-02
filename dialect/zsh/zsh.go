@@ -833,6 +833,12 @@ func Dialect() syntax.Dialect {
 	// a backslash and a command substitution are stepped over in every column
 	// and are not this. See the flag for the five rows.
 	d.ArithCommandScanIgnoresQuoting = true
+	// And the square brackets have to balance at the `))`, or it is two
+	// subshells. See Dialect.ArithBracketsMustBalance (#5378).
+	d.ArithBracketsMustBalance = true
+	// An operand where a conditional's `:` belonged is blamed as an
+	// operand. See Dialect.ArithConditionalThenLeftoverIsAnOperand (#5378).
+	d.ArithConditionalThenLeftoverIsAnOperand = true
 	// And the same at the `$((` fallback, which is a second field because
 	// the two scans were measured separately: `echo $(( '0)' + 1 ))` runs a
 	// command named `0)` here where the bash columns refuse the expression

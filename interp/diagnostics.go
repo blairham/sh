@@ -5496,6 +5496,19 @@ type Diagnostics struct {
 	// `closing brace expected` too — the command line's reader does not
 	// part the two (#5138).
 	RawTextBraceRanOutInTheName string
+	// HeredocBraceRanOutInTheName and HeredocBraceUnclosed are the two
+	// sentences for an unterminated `${…}` in a here-document body, which
+	// is read at expansion time and refused at the command's line: the
+	// first where the expansion stopped before an operator (see
+	// syntax.Error.BraceRanOutInTheName), the second where it was reading
+	// an operand. Each takes the body's whole text. Measured 2026-10-02 on
+	// bash 5.3.20, `cat <<E` over `a ${x b` and `c` is `line 1: a ${x b`,
+	// `c`, `: bad substitution`, and over `${x:-y` is `line 1: bad
+	// substitution: no closing `}' in` and the body. Empty, the raw-text
+	// sentences are used — zsh 5.9.2 writes `bad substitution` and `closing
+	// brace expected` there, at the command's line too (#5379).
+	HeredocBraceRanOutInTheName string
+	HeredocBraceUnclosed        string
 	// UnmatchedBraceSubstDropsTheNameNewline reports an unterminated `${x`
 	// one line earlier than the input ran out: the newline the parameter
 	// name stopped at is not counted.

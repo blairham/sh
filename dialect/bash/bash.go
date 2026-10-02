@@ -4063,9 +4063,13 @@ func Diagnostics() interp.Diagnostics {
 		// the expansion's quoting, and with the quotes off — `echo
 		// 'lit'"${x@QQ}"` names `${x@QQ}` alone, where `echo
 		// "pre${x@QQ}post"` names all of `pre${x@QQ}post`.
-		BadSubstitution:      "%[1]s: bad substitution",
-		BadSubstitutionNames: interp.NamesTheQuotingRun,
-		ParamNullOrNotSet:    "parameter null or not set",
+		BadSubstitution: "%[1]s: bad substitution",
+		// An unterminated `${` in a here-document body, quoting the body.
+		// Measured 2026-10-02 on bash 5.3.20 (#5379).
+		HeredocBraceRanOutInTheName: "%s: bad substitution",
+		HeredocBraceUnclosed:        "bad substitution: no closing `}' in %s",
+		BadSubstitutionNames:        interp.NamesTheQuotingRun,
+		ParamNullOrNotSet:           "parameter null or not set",
 		// `${!v}` refusing its source, which 5.3 has and 3.2 does not; see
 		// interp.Runner.refuseIndirection.
 		IndirectionUndeclared: "%[1]s: invalid indirect expansion",

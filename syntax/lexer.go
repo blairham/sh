@@ -4075,7 +4075,7 @@ func (l *Lexer) doubleParenKind(skip int) SpanKind {
 	// the pair *that* reached across, and `(`.
 	from := l.off + 3 + skip + l.arithOpenerContinuationAt(l.off+2+skip)
 	if doubleParenIsArith(l.src, from, l.dialect.ContinuationPartsTheArithmeticCloser,
-		l.dialect.ArithSubstScanIgnoresQuoting) {
+		l.dialect.ArithSubstScanIgnoresQuoting, l.dialect.ArithBracketsMustBalance) {
 		return ArithSubst
 	}
 	return CommandSubst
@@ -4136,10 +4136,14 @@ func (l *Lexer) takeArithOpenerContinuation() {
 // ignoresQuoting is the dialect's answer to whether this scan sees a `)`
 // written inside quotes — see [Dialect.ArithSubstScanIgnoresQuoting], which is
 // the same-shaped question the `((` scan asks one construct over.
-func doubleParenIsArith(src string, from int, partsCloser, ignoresQuoting bool) bool {
-	depth := 1
+func doubleParenIsArith(src string, from int, partsCloser, ignoresQuoting, bracketsBalance bool) bool {
+	depth, brackets := 1, 0
 	for i := from; i < len(src); i++ {
 		switch src[i] {
+		case '[':
+			brackets++
+		case ']':
+			brackets--
 		case '\\':
 			i++
 		case '\'', '"', '`':
@@ -4158,7 +4162,7 @@ func doubleParenIsArith(src string, from int, partsCloser, ignoresQuoting bool) 
 				if !partsCloser {
 					j += continuationWidthAt(src, j)
 				}
-				return j < len(src) && src[j] == ')'
+				return j < len(src) && src[j] == ')' && (!bracketsBalance || brackets == 0)
 			}
 		}
 	}
@@ -5831,6 +5835,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				// report is about.
 				se.BraceNameStop, se.BraceNameStopFollowsAPrefix = braceNameStop(l.src[start:])
 				se.BraceRanOutInTheName = braceRanOutInTheName(l.src[start:], l.dialect.ParamExpansionFlags)
+				se.BraceParamFormUnclosed = true
 			}
 			break
 		}
@@ -6583,6 +6588,9 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 	// closing parenthesis stands. The two opening parens are not counted
 	// because they are not the expression's.
 	depth := 0
+	// And the square brackets, in the dialect whose reading depends on them.
+	// See Dialect.ArithBracketsMustBalance.
+	brackets := 0
 	exprStart := l.off
 	exprEnd := -1
 	joined := l.collectContinuations()
@@ -6676,6 +6684,12 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 				continue
 			}
 			l.advance()
+		case '[':
+			brackets++
+			l.advance()
+		case ']':
+			brackets--
+			l.advance()
 		case '(':
 			depth++
 			l.advance()
@@ -6690,7 +6704,7 @@ func (l *Lexer) scanArithCommand(start Pos) (Token, bool) {
 			// Anything else and there was never an arithmetic command here:
 			// `((echo a); echo b)` is two groupings, and every shell on the
 			// panel runs it as one.
-			if l.peekAt(1) != ')' {
+			if l.peekAt(1) != ')' || (l.dialect.ArithBracketsMustBalance && brackets != 0) {
 				joined(exprStart, exprStart)
 				return Token{}, false
 			}
@@ -7890,7 +7904,8 @@ func braceRanOutInTheName(body string, flags bool) bool {
 		body = body[strings.IndexByte(body, ')')+1:]
 	}
 	body = strings.TrimLeft(body, "#!^=~+")
-	return len(braceName(body)) == len(body)
+	rest := body[len(braceName(body)):]
+	return rest == "" || !strings.ContainsRune("/#%-=+?:[", rune(rest[0]))
 }
 
 // quoteProtectsTheBrace reports whether a single quote standing at the end of

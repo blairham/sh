@@ -1172,6 +1172,11 @@ func (a *arithParser) ternary() ArithExpr {
 	a.space()
 	colon := a.off
 	if !a.take(":") {
+		if a.dial.ArithConditionalThenLeftoverIsAnOperand && a.off < len(a.src) &&
+			a.leftoverKind() == ErrArithOperator {
+			a.failArith(ErrArithOperator, a.src[a.off:])
+			return cond
+		}
 		a.failArith(ErrArithConditionalColon, a.src[thenAt:])
 		return cond
 	}

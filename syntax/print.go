@@ -2701,7 +2701,7 @@ func (p *printer) span(s Span) {
 		// without the space would hand back `$(( a; b ))` — arithmetic, and
 		// a different program. Measured, bash 5.3.20 writes `$( ( a; b ))`.
 		body := p.commandSubstBody(s.Value)
-		if strings.HasPrefix(body, "(") && doubleParenIsArith("$("+body+")", 3, false, false) {
+		if strings.HasPrefix(body, "(") && doubleParenIsArith("$("+body+")", 3, false, false, false) {
 			p.str("$( " + body + ")")
 			return
 		}

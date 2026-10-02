@@ -2292,12 +2292,11 @@ func (sh Shell) firstScriptFile(operand string) (read, zero string, body []byte,
 		}
 		candidates = append(candidates, filepath.Join(dir, operand))
 	}
-	for i, candidate := range candidates {
+	for _, candidate := range candidates {
 		b, err := sh.readFile(candidate)
 		if err == nil {
-			if i == 0 {
-				return operand, "", b, true
-			}
+			// The typed word as `$0` either way: for the file here it is the
+			// path that was read as well.
 			return candidate, operand, b, true
 		}
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.EISDIR) {

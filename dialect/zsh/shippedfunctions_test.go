@@ -28,7 +28,7 @@ import (
 //
 // Found from this file's own path rather than from the working directory,
 // because "go test ./..." and "go test ./dialect/zsh" start in different
-// places and a relative path would be right in one of them. The four names are
+// places and a relative path would be right in one of them. The names are
 // checked rather than assumed: a test that silently graded an empty directory
 // would pass every row below by finding no function to disagree with.
 func shippedFunctionDir(t *testing.T) string {
@@ -38,7 +38,7 @@ func shippedFunctionDir(t *testing.T) string {
 		t.Fatal("no caller information: cannot find the shipped function files")
 	}
 	dir := filepath.Join(filepath.Dir(thisFile), "..", "..", "share", "sh", "functions")
-	for _, name := range []string{"add-zsh-hook", "colors", "is-at-least", "regexp-replace"} {
+	for _, name := range []string{"add-zle-hook-widget", "add-zsh-hook", "colors", "is-at-least", "regexp-replace"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Fatalf("shipped function %s: %v", name, err)
 		}

@@ -1,0 +1,146 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# add-zle-hook-widget [ -L | -dD ] [ -Uzk ] hook widgetname
+#
+# Several widget names are special to the line editor — `zle-line-init` and
+# its fellows are called by zle itself at fixed moments — and only one widget
+# can have each name.  This lets several plugins each put a widget on one of
+# those moments: the special widget becomes a dispatcher, and the widgets it
+# runs are kept in a zstyle, one context per hook, style `widgets`.
+#
+# Written from zshcontrib(1) and from what the installed shell answers, never
+# from its function files.  docs/spec/functions.md records the run.
+#
+# Measured, and each line is a case a real startup reaches:
+#
+#   * the hook may be written with or without its `zle-` prefix;
+#   * the first registration of any hook sets the style `types` on the
+#     context `zle-hook` to the list of hooks below;
+#   * each widget is kept as `<n>:<name>`, where n is one more than the
+#     highest already there, starting at 1 — a removal leaves a gap, and the
+#     next widget does not fill it;
+#   * a widget already in the list is not added twice;
+#   * a widget that was already on the special name before any of this is
+#     kept as `0:user:<function>`, under a widget of that name, so it runs
+#     first;
+#   * a name that is no widget yet is autoloaded with the `-U`, `-z` and `-k`
+#     given, and made a widget, so the file is read the first time the hook
+#     fires;
+#   * `-d` removes by exact name and `-D` reads the name as a pattern;
+#   * `-L` lists the `widgets` styles, as `zstyle -L` writes them;
+#   * an unknown hook, or the wrong number of operands, is the usage on
+#     standard error and status 1.
+#
+# The dispatcher runs the widgets in the order of their numbers, each as
+# `zle <name> -Nw -- "$@"` — so `$WIDGET` inside one is its own name, not the
+# special one's, which the manual says in so many words.
+
+emulate -L zsh
+
+local -a hooktypes
+hooktypes=( isearch-exit isearch-update line-pre-redraw line-init line-finish
+	history-line-set keymap-select )
+
+local usage="Usage: add-zle-hook-widget hook widgetname
+Valid hooks are:
+  $hooktypes"
+
+local option
+local -a autoloadopts
+integer remove=0 listing=0
+
+while getopts "dDLUzk" option; do
+	case $option in
+	(d) remove=1 ;;
+	(D) remove=2 ;;
+	(L) listing=1 ;;
+	(U|z|k) autoloadopts+=( -$option ) ;;
+	(*) return 1 ;;
+	esac
+done
+shift $(( OPTIND - 1 ))
+
+if (( listing )); then
+	local candidate
+	for candidate in $hooktypes; do
+		zstyle -L "zle-$candidate" widgets
+	done
+	return 0
+fi
+
+if (( $# != 2 )); then
+	print -u2 -r -- $usage
+	return 1
+fi
+
+local hook=${1#zle-} name=$2 known= candidate
+for candidate in $hooktypes; do
+	[[ $candidate == $hook ]] && known=yes
+done
+if [[ -z $known ]]; then
+	print -u2 -r -- $usage
+	return 1
+fi
+
+local context=zle-$hook
+local -a current kept
+local entry
+zstyle -a $context widgets current
+
+if (( remove )); then
+	for entry in $current; do
+		if (( remove == 1 )); then
+			[[ ${entry#*:} == $name ]] && continue
+		else
+			[[ ${entry#*:} == ${~name} ]] && continue
+		fi
+		kept+=( $entry )
+	done
+	if (( $#kept )); then
+		zstyle $context widgets $kept
+	else
+		zstyle -d $context widgets
+	fi
+	return 0
+fi
+
+for entry in $current; do
+	[[ ${entry#*:} == $name ]] && return 0
+done
+
+zmodload zsh/zleparameter 2>/dev/null
+zstyle zle-hook types $hooktypes
+
+# The special widget becomes the dispatcher, keeping what was there.
+local dispatcher=azhw:$context
+if [[ ${widgets[$context]-} != user:$dispatcher ]]; then
+	local previous=${widgets[$context]-}
+	if [[ $previous == user:* ]]; then
+		zle -N user:${previous#user:} ${previous#user:}
+		current=( 0:user:${previous#user:} $current )
+	fi
+	functions[$dispatcher]='
+		local -a __azhw_list __azhw_sorted
+		local __azhw_entry
+		zstyle -a ${0#azhw:} widgets __azhw_list
+		__azhw_sorted=( ${(n)__azhw_list} )
+		for __azhw_entry in $__azhw_sorted; do
+			zle ${__azhw_entry#*:} -Nw -- "$@"
+		done'
+	zle -N $context $dispatcher
+fi
+
+# The next number: one past the highest, whatever has been removed.
+integer next=1 n
+for entry in $current; do
+	n=${entry%%:*}
+	(( n >= next )) && next=$(( n + 1 ))
+done
+
+if [[ -z ${widgets[$name]-} ]]; then
+	autoload $autoloadopts -- $name
+	zle -N $name
+fi
+zstyle $context widgets $current $next:$name
+return 0

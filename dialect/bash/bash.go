@@ -1009,6 +1009,11 @@ func Semantics() interp.Semantics {
 	// beside it still works, so it is this one letter that does nothing and
 	// not the option word. See interp/exportprintoperand.go.
 	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintLetterIsInert
+	// The standard's listing writes every kind here: measured 2026-10-02 on
+	// bash 5.3.20 under --posix, `export -p` writes `export -a a=(…)` and
+	// `export -A h=(…)` beside `export s="1"`, and `readonly -p` the frozen
+	// array. See Semantics.CommandWordListingNeedsAKindLetter.
+	s.CommandWordListingNeedsAKindLetter = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes

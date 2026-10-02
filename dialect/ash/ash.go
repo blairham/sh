@@ -965,6 +965,9 @@ func Semantics() interp.Semantics {
 	// and `export -p nosuch` declares `nosuch` exported where dash declares
 	// nothing. See interp/exportprintoperand.go.
 	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintLetterIsInert
+	// unanswered CommandWordListingNeedsAKindLetter: this shell has no
+	// arrays, so every name a listing could write is a scalar and there is
+	// no kind to leave out or to ask a letter for.
 	// Every listed value is single-quoted with an embedded quote doubled out:
 	// `v="quo'te"; set` writes `v='quo'"'"'te'`, and `alias` writes its
 	// bodies the same way.

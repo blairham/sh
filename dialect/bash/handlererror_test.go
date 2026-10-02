@@ -31,6 +31,7 @@ func TestAnErrorInsideAHandler(t *testing.T) {
 		// A heredoc body is a boundary that catches an unset parameter, and
 		// what it caught is not the handler's error: measured the same day,
 		// the handler after it still ends at its own division by zero.
+		{"ERR, arith, after a caught unset", "set -u\ncat <<E\n$nope\nE\ntrap 'echo T1; : $((1/0)); echo T2' ERR\nfalse\necho after", true},
 		{"USR1, arith, after a caught unset", "set -u\ncat <<E\n$nope\nE\ntrap 'echo T1; : $((1/0)); echo T2' USR1\nkill -USR1 $$\necho after", true},
 	} {
 		t.Run(c.name, func(t *testing.T) {

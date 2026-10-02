@@ -291,6 +291,14 @@ const (
 	// token it did not want names the token. Pos is the operator that went over
 	// the bound, which is on the command's own line.
 	ErrHeredocCount
+	// ErrArithUnmatchedCloseParen is a `)` left over after a complete
+	// expression, closing no group: `x="3)"; $(( x ))`. Its own kind because
+	// the three shells that word leftovers apart each have a sentence for
+	// this one — zsh `bad math expression: unexpected ')'`, ksh93
+	// `unbalanced parenthesis`, and bash its ordinary `arithmetic syntax
+	// error in expression` where `1 @` is `invalid arithmetic operator` —
+	// measured 2026-10-02.
+	ErrArithUnmatchedCloseParen
 )
 
 // TokenClass is what sort of thing a token is, for the dialect that words an

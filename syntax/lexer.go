@@ -5253,6 +5253,30 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool, bool) {
 			l.lastBodyRanOut = sub.lex.incomplete
 			l.lastBodyWaitedForAThen = sub.refusedWaitingForAThen
 		}
+		if sub.err == nil && sub.at(TokEOF) && !sub.lex.incomplete && l.commentsExist() {
+			// The read ran to the end of the text with every construct it
+			// opened closed and nothing owed — no here-document body still
+			// being read, no quote left open. So every parenthesis it
+			// passed was one the grammar accounted for, and the body simply
+			// has not ended yet: the count starts where the text does, and
+			// finds nothing to close on. Counting from the front instead
+			// took a `case` pattern's `)` for the closer of the
+			// substitution, which is what a line-at-a-time read of
+			//
+			//	print $((case foo in
+			//	bar)
+			//	…
+			//	esac)
+			//	print after)
+			//
+			// meets at its `esac)` line: zsh 5.9.2 reads on and runs it, and
+			// this refused the second `;;` (#5145). The here-document a
+			// delimiter has not come for is the case this leaves alone, for
+			// the reason the paragraph above gives; and so is a reader with
+			// no comments, whose `#` the grammar's read would have taken
+			// for one and run to the end on.
+			l.lastBodyStop = len(l.src)
+		}
 		if sub.err == nil && !sub.at(TokEOF) {
 			// The read *stopped* rather than refusing, which is what a
 			// reserved word that cannot begin a command does to parseList:

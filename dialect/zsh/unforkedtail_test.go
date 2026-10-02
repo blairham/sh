@@ -5,10 +5,41 @@ package zsh_test
 
 import (
 	"bytes"
+	"sync"
 	"testing"
 
 	"github.com/blairham/sh/driver"
 )
+
+// lockedOutput is one buffer for both streams, safe for the copying
+// goroutines a child's streams are fed through: the rows below interleave a
+// builtin's complaint with another's output, so the two must land in order in
+// one place.
+type lockedOutput struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (o *lockedOutput) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.buf.Write(p)
+}
+
+func (o *lockedOutput) String() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.buf.String()
+}
+
+// runZshC runs src as `zsh -f -c`, both streams into one.
+func runZshC(src string) string {
+	var out lockedOutput
+	sh := zshShell()
+	sh.Stdout, sh.Stderr = &out, &out
+	driver.MainArgs(sh, []string{"zsh", "-f", "-c", src})
+	return out.String()
+}
 
 // **The last command of a `-c` string is not forked, so a `( … )` there moves
 // its markers** (#5320). Measured 2026-10-02 on zsh 5.9.2 under `-f -c`, byte
@@ -78,9 +109,7 @@ func TestTheLastSubshellOfACommandStringMovesItsMarkers(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			var out bytes.Buffer
-			driver.MainArgs(zshWriting(&out, &out), []string{"zsh", "-f", "-c", c.src})
-			if got := out.String(); got != c.want {
+			if got := runZshC(c.src); got != c.want {
 				t.Errorf("%s\ngot  %q\nwant %q", c.src, got, c.want)
 			}
 		})
@@ -96,9 +125,7 @@ func TestABareWaitReachesTheSubshellItself(t *testing.T) {
 		{"(jobs %1; echo s=$?); :", "s=0\n"},
 		{"(wait; jobs %1; echo s=$?)", "zsh:jobs:1: %1: no such job\ns=127\n"},
 	} {
-		var out bytes.Buffer
-		driver.MainArgs(zshWriting(&out, &out), []string{"zsh", "-f", "-c", c.src})
-		if got := out.String(); got != c.want {
+		if got := runZshC(c.src); got != c.want {
 			t.Errorf("%s\ngot  %q\nwant %q", c.src, got, c.want)
 		}
 	}

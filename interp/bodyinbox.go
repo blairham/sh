@@ -70,7 +70,7 @@ import (
 // is waited for to its end before the body dies, because their elements are
 // clones on goroutines of their own rather than a wait this can give up. The
 // status and the output come out the same; the death is late, and a program
-// in them ends rather than running on. Recorded on #5355.
+// in them ends rather than running on. That is #5386.
 //
 // Not INT or QUIT: a background job in a shell without job control ignores
 // both, measured — `{ sleep 1; print after } & kill -INT $!` prints `after`.

@@ -3074,6 +3074,11 @@ func Semantics() interp.Semantics {
 	// the failure and each of the three calls — where bash writes one and
 	// zsh writes one.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapAlwaysRefires
+	// An error inside a handler ends the handler, for a signal's, ERR's and
+	// DEBUG's alike, and the error itself raises no ERR. Measured 2026-10-02
+	// on 93u+ 2012-08-01, see interp.HandlerErrorReach (#5360).
+	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
+	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// A pipeline whose last element ran here is judged by that element's own
 	// status, and a builtin or a function there is judged twice: `true |
 	// false` writes EE and `true | /usr/bin/false` writes E, and `set -o

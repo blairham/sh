@@ -1805,6 +1805,11 @@ type Runner struct {
 
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
+	// gaveUpOverAnUnsetParameter says the error the shell last gave up
+	// over was a parameter `set -u` refused, which one dialect's trap
+	// handlers do not catch. Cleared as a handler starts, which is the only
+	// place it is read. See Runner.handlerTakesItsError.
+	gaveUpOverAnUnsetParameter bool
 	// callEndedOnAReturn says the function call that last unwound ended on
 	// a `return` written in it rather than by running off its end. See
 	// Runner.forcedByATrapFunction.
@@ -5992,6 +5997,15 @@ func (r *Runner) fatalExpansion(format string, args ...any) {
 	r.fatalExpansionQuiet()
 }
 
+// fatalUnsetParameter is fatalExpansion for a parameter `set -u` refuses to
+// read, marked as that so a trap handler's boundary can tell it from the
+// other errors in the one dialect that lets it through. See
+// HandlerErrorEndsTheHandlerUnlessAParameterIsUnset.
+func (r *Runner) fatalUnsetParameter(format string, args ...any) {
+	r.fatalExpansion(format, args...)
+	r.gaveUpOverAnUnsetParameter = true
+}
+
 // fatalParamError is fatalExpansion for `${x?word}` and `${x:?word}`, the one
 // expansion failure a dialect may read as a request to stop rather than as an
 // error — see Semantics.ParamErrorIsAnExitRequest for what that is measured
@@ -6948,6 +6962,9 @@ func lastIsNegated(e syntax.Expr) bool {
 // measured and unanimous among the shells that have the condition. When both
 // apply, the trap runs first and the script then stops, in that order.
 func (r *Runner) checkErrExit(ctx context.Context) {
+	// An error the shell is giving up over is judged in one dialect before
+	// it goes on unwinding. See errTrapForAGiveUp.
+	r.errTrapForAGiveUp(ctx)
 	if r.status == 0 || r.ctl != controlNone || r.unjudged {
 		return
 	}

@@ -2842,6 +2842,13 @@ func Semantics() interp.Semantics {
 	// twice with nothing asked, because a sourced file never bounded this
 	// trap in the first place.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapRefiresWhereItWasSetFirst
+	// An error inside a handler ends the handler — a signal's, ERR's,
+	// DEBUG's or RETURN's — except an unset parameter under `set -u`, which
+	// ends the shell from there as from anywhere; and the error itself
+	// raises no ERR. Measured 2026-10-02 on 5.3.20, see
+	// interp.HandlerErrorReach (#5360).
+	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandlerUnlessAParameterIsUnset
+	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// Reached only under `shopt -s lastpipe`: the last element is judged as a
 	// statement and then the pipeline is, so `true | false` and `true |
 	// /usr/bin/false` both write EE there.

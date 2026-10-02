@@ -3786,6 +3786,12 @@ func Semantics() interp.Semantics {
 	// says which happened. A subshell still fires on both sides, which is
 	// the axis above and not this one.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapFiresOnceForTheFailure
+	// An error inside a handler ends the handler and nothing more, for a
+	// signal's, ERR's and DEBUG's alike; and an error the shell gives up
+	// over raises ZERR first. Measured 2026-10-02 on 5.9.2 under `-f`, see
+	// interp.HandlerErrorReach and the second axis's own comment (#5360).
+	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
+	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.Yes
 	// A pipeline whose last element ran here is judged once, by its status,
 	// unless that element is a compound whose body judged itself: `true | {
 	// false && true; }` carries on under `set -e`.

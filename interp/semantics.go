@@ -4780,6 +4780,24 @@ type Semantics struct {
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
 	// the others read 0, because `kill` succeeded.
 	SignalHandlerSeesEarlierStatus Answer
+	// AHandlersErrorEnds is how far an error the shell reports and gives up
+	// over reaches when it happens inside a trap handler — an unset
+	// parameter under `set -u`, a division by zero: the handler alone, or
+	// the shell. See [HandlerErrorReach] for the measured grid.
+	AHandlersErrorEnds HandlerErrorReach
+	// ErrTrapFiresForAnErrorTheShellGaveUpOver raises the ERR condition for
+	// an error the shell reports and gives up over, before it gives up:
+	// measured 2026-10-02 under `env -i PATH=/usr/bin:/bin`, `set -u; trap
+	// 'echo T' ERR; : $nope; echo after` writes the error and then T in zsh
+	// 5.9.2 and exits 1, and so does `: $((1/0))` in place of the read.
+	// bash 5.3, ksh93 and BusyBox ash write the error and nothing else. In
+	// zsh it is not raised for `${nope?word}`, which that shell's other
+	// axes already read as a request to stop rather than an error (see
+	// ParamErrorIsAnExitRequest), nor for a failure inside a tested context
+	// such as an `if` condition.
+	//
+	// unpinned dash: there is no ERR condition to raise.
+	ErrTrapFiresForAnErrorTheShellGaveUpOver Answer
 	// ExitTrapIsFunctionLocal fires an EXIT trap set inside a function when
 	// that function returns, rather than when the script ends. zsh alone; a
 	// trap set at the top level behaves the same everywhere.
@@ -31653,6 +31671,47 @@ func (t TrapLocality) String() string {
 	}
 	return "unspecified"
 }
+
+// HandlerErrorReach is how far an error the shell reports and gives up over
+// reaches from inside a trap handler, which is the same question a boundary
+// such as `eval` answers for the text it runs, asked of a handler.
+//
+// Measured 2026-10-02 under `env -i PATH=/usr/bin:/bin`, with `[set -u;]
+// trap 'echo T1; <error>; echo T2' <trap>; <fire>; echo after`:
+//
+//	                    USR1      ERR       DEBUG       USR1    ERR     DEBUG
+//	                    unset     unset     unset       1/0     1/0     1/0
+//	zsh 5.9.2           T1 after  T1 after  T1 T1 after the same, every cell
+//	ksh93u+ 2012        T1 after  T1 after  T1 T1 after the same, every cell
+//	bash 5.3.20         T1, ends  T1, ends  T1, ends    T1 after  T1 after  T1 T1 after
+//	BusyBox ash 1.37.0  T1, ends  T1 after  —           T1, ends  T1 after  —
+//	dash (/bin/dash)    T1, ends  —         —           T1, ends  —       —
+//
+// Where only the handler ends, the code it interrupted resumes with the
+// status it had: `false; echo after $?` writes `after 1`. bash's RETURN
+// handler is a boundary too — `f() { trap 'echo T1; : $((1/0)); echo T2'
+// RETURN }; f; echo after $?` writes `after 0`. The EXIT trap is not
+// covered: the shell is ending already.
+type HandlerErrorReach uint8
+
+const (
+	// HandlerErrorReachUnspecified is no answer, refused by name, and only
+	// where a handler has just given up over an error.
+	HandlerErrorReachUnspecified HandlerErrorReach = iota
+	// HandlerErrorEndsTheShell gives up the shell as the same error would
+	// anywhere else: dash.
+	HandlerErrorEndsTheShell
+	// HandlerErrorEndsTheHandler gives up the handler and nothing more:
+	// zsh and ksh93, every condition.
+	HandlerErrorEndsTheHandler
+	// HandlerErrorEndsAnErrHandler gives up the handler only where the
+	// handler is ERR's, and the shell where it is a signal's: BusyBox ash.
+	HandlerErrorEndsAnErrHandler
+	// HandlerErrorEndsTheHandlerUnlessAParameterIsUnset gives up the
+	// handler, except over an unset parameter under `set -u`, which ends the
+	// shell from a handler as it does from anywhere: bash.
+	HandlerErrorEndsTheHandlerUnlessAParameterIsUnset
+)
 
 // ErrTrapRefiring is what a command owes the ERR trap when the failure it
 // reports has already fired it. See

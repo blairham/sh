@@ -193,7 +193,9 @@ func (r *Runner) runPseudoTrapBody(ctx context.Context, name, body string, sees 
 	// line 5 and the `return` on line 7, bash 5.3.15 numbers a two-line
 	// RETURN body 7 and 8.
 	r.inCommandTrap = name == "DEBUG" || name == "ERR" || name == "RETURN"
+	r.gaveUpOverAnUnsetParameter = false
 	r.runTrapBody(ctx, name, body)
+	r.handlerTakesItsError(name)
 	r.inCommandTrap = outer
 	acted := r.status
 	if r.ctl == controlNone {
@@ -996,4 +998,62 @@ func (r *Runner) forcedByATrapFunction(fname string, status int) {
 		return
 	}
 	r.status, r.ctl = status, controlReturn
+}
+
+// handlerTakesItsError catches an error a trap handler gave up over, where
+// the dialect makes the handler the boundary, so that the code the handler
+// interrupted carries on. A request to stop — `exit`, `set -e` firing — is
+// never caught. See [HandlerErrorReach] for the grid.
+//
+// Read after the handler and before the caller puts the status back, which
+// is what makes the interrupted code see its own status rather than the
+// error's: the caller restores it only where nothing is unwinding.
+func (r *Runner) handlerTakesItsError(cond string) {
+	// Either kind of give-up: the shell's, and the *line's* in the dialect
+	// that gives up only the line over a failed expansion — a handler's
+	// action is a line of its own there, so the line it gives up is the
+	// handler's. See Semantics.FailedExpansionAbandonsTheLine.
+	if !r.pendingFileError() && r.ctl != controlAbandon {
+		return
+	}
+	if r.abandon == abandonParamError && r.sem().ParamErrorIsAnExitRequest == Yes {
+		// The operand the dialect reads as a request to stop rather than as
+		// an error, which a handler no more catches than `eval` does:
+		// measured 2026-10-02 on zsh 5.9.2, `trap 'print T1; : ${nope?boom};
+		// print T2' ZERR; false; print after` writes T1 and the complaint
+		// and exits 1.
+		return
+	}
+	switch r.sem().AHandlersErrorEnds {
+	case HandlerErrorEndsTheHandler:
+	case HandlerErrorEndsAnErrHandler:
+		if cond != "ERR" {
+			return
+		}
+	case HandlerErrorEndsTheHandlerUnlessAParameterIsUnset:
+		if r.gaveUpOverAnUnsetParameter {
+			return
+		}
+	case HandlerErrorEndsTheShell:
+		return
+	default:
+		r.diagf("%s\n", r.unanswered("an error inside a trap handler ending the handler rather than the shell"))
+		r.status = 2
+		r.unspecified = true
+		return
+	}
+	r.takeFileError()
+}
+
+// errTrapForAGiveUp raises the ERR condition for an error the shell has
+// just reported and is giving up over, in the dialect that raises it there.
+// The give-up goes on afterwards unless the handler itself stops the shell.
+// See Semantics.ErrTrapFiresForAnErrorTheShellGaveUpOver.
+func (r *Runner) errTrapForAGiveUp(ctx context.Context) {
+	if r.ctl != controlExit || r.abandon != abandonError || r.status == 0 ||
+		r.tested != 0 || r.errTrapFired || r.unjudged || !r.errTrapIsSet() ||
+		r.sem().ErrTrapFiresForAnErrorTheShellGaveUpOver != Yes {
+		return
+	}
+	r.runErrTrap(ctx)
 }

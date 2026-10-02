@@ -1719,6 +1719,11 @@ func Semantics() interp.Semantics {
 	// call at all, so only the outermost of the three is a place it can
 	// fire.
 	s.ErrTrapRefiresForTheCommandItFiredInside = interp.ErrTrapAlwaysRefires
+	// An error inside the ERR handler ends the handler, and inside a
+	// signal's ends the shell; the error itself raises no ERR. Measured
+	// 2026-10-02 on BusyBox 1.37.0, see interp.HandlerErrorReach (#5360).
+	s.AHandlersErrorEnds = interp.HandlerErrorEndsAnErrHandler
+	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// unanswered FailingPipelineWhoseLastElementRanHere: every element of a
 	// pipeline is a subshell here and nothing moves one into this shell, so a
 	// pipeline is judged once by its status and the question is never put.

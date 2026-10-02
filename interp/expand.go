@@ -7706,7 +7706,7 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		// to. Measured, `set -u; q=1; ${!q}` with no positional parameters is
 		// `!q: unbound variable` in both bash columns — the written name,
 		// under the indirection's own sigil (#3214).
-		r.fatalExpansion("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", r.unboundSubject(e)))
+		r.fatalUnsetParameter("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", r.unboundSubject(e)))
 		return
 	}
 	switch e.Name {
@@ -7719,7 +7719,7 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		// ksh93 alone lets `$1` be empty here. bash writes the `$` back for
 		// a positional and not for a name, which is why the wording is its
 		// own field rather than a decoration applied here.
-		r.fatalExpansion("%s\n", r.unboundSigilWording(e, e.Name))
+		r.fatalUnsetParameter("%s\n", r.unboundSigilWording(e, e.Name))
 		return
 	}
 	if e.Name == "!" {
@@ -7737,12 +7737,12 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		// leaving `$!` alone — so the pair splits the panel differently and
 		// asking it here would be asking the wrong question.
 		if r.lastBackgroundPidRefusedUnderNounset() {
-			r.fatalExpansion("%s\n", r.unboundSigilWording(e, e.Name))
+			r.fatalUnsetParameter("%s\n", r.unboundSigilWording(e, e.Name))
 		}
 		return
 	}
 	if !isPositional(e.Name) {
-		r.fatalExpansion("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", r.unboundSubject(e)))
+		r.fatalUnsetParameter("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", r.unboundSubject(e)))
 	}
 }
 

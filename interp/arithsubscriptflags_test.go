@@ -143,11 +143,15 @@ func TestASearchWritingATableInsideAnExpressionWritesNothing(t *testing.T) {
 // A letter the group is read with and this does not carry is refused by name
 // here as it is in an expansion, rather than becoming part of a key or of an
 // expression.
-func TestAFlagInAnExpressionThisDoesNotCarryIsRefusedByName(t *testing.T) {
-	const src = `a=(10 20 30); echo $(( a[(w)20] ))`
+// A letter that says what a string's units are reads an array's elements as
+// it always did: measured on zsh 5.9.2, `$(( a[(w)20] ))` over three elements
+// is 0, the twentieth element being empty. It was refused by name while `(w)`
+// was not carried (#5152).
+func TestAWordFlagInAnExpressionReadsAnArraysElements(t *testing.T) {
+	const src = `a=(10 20 30); echo $(( a[(w)20] )) $(( a[(w)2] ))`
 	out, status := runSubArith(t, src)
-	if !strings.Contains(out, "(w) subscript flag is not implemented") || status == 0 {
-		t.Errorf("%s = %q (status %d), want a refusal naming (w)", src, out, status)
+	if out != "0 20\n" || status != 0 {
+		t.Errorf("%s = %q (status %d), want \"0 20\" at 0", src, out, status)
 	}
 }
 

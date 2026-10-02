@@ -170,17 +170,14 @@ func TestAChainWhoseLinkNamedNothingIsUnset(t *testing.T) {
 	}
 }
 
-// A refusal from inside a chain names every subscript that was written, so a
-// reader can find the text in the script. Named `a[(w)q]` it would name a
-// subscript the file does not contain.
-func TestARefusalFromInsideAChainNamesTheWholeChain(t *testing.T) {
-	out, st := runChainedSubscript(t, `a=(x y); printf "[%s]" "${a[1][(w)q]}"`)
-	const want = "${a[1][(w)q]}: the (w) subscript flag is not implemented"
-	if !strings.Contains(out, want) {
-		t.Errorf("gave %q, want a refusal naming %q", out, want)
-	}
-	if st == 0 {
-		t.Errorf("status 0, want the unbuilt flag refused")
+// A link that names one string reads it by its words where the group says
+// so, as a name holding that string does: measured on zsh 5.9.2,
+// `a=("x y" b); ${a[1][(w)2]}` is `y`, and `(w)q` is the first word, `q`
+// being 0 and the word clamped. Reading characters gave a space (#5152).
+func TestAChainReadsAStringsWords(t *testing.T) {
+	out, st := runChainedSubscript(t, `a=("x y" b); printf "[%s]" "${a[1][(w)2]}" "${a[1][(w)q]}" "${a[1][(f)1]}"`)
+	if want := "[y][x][x y]"; out != want || st != 0 {
+		t.Errorf("gave %q at %d, want %q at 0", out, st, want)
 	}
 }
 

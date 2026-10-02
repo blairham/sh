@@ -64,17 +64,14 @@ func TestTheFlagGroupShapeAPluginManagerAsksWith(t *testing.T) {
 	}
 }
 
-// A group this implementation reads and does not carry is refused by name,
-// which is the convention that let the flag set be enumerated exactly rather
-// than guessed at.
-func TestASubscriptFlagThisDialectReadsAndDoesNotCarry(t *testing.T) {
-	for _, tc := range []struct{ src, names string }{
-		{`a=(x y); printf "[%s]" "${a[(w)y]}"`, "(w)"},
-	} {
-		out, st := runZsh(t, t.TempDir(), tc.src)
-		if !strings.Contains(out, tc.names+" subscript flag is not implemented") || st == 0 {
-			t.Errorf("%s = %q (status %d), want a refusal naming %s", tc.src, out, st, tc.names)
-		}
+// Every letter the group reads is carried now — `(w)` was the last, refused
+// by name until #5152 — and over an array it is the ordinary subscript:
+// measured on zsh 5.9.2, `${a[(w)y]}` on `(x y)` is empty and `${a[(w)2]}`
+// is `y`.
+func TestAWordLetterOverAnArrayIsTheOrdinarySubscript(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `a=(x y); printf "[%s]" "${a[(w)y]}" "${a[(w)2]}"`)
+	if want := "[][y]"; out != want || st != 0 {
+		t.Errorf("= %q (status %d), want %q at 0", out, st, want)
 	}
 }
 
@@ -146,11 +143,12 @@ func TestASearchOnTheLeftOfAnAssignmentNamesACharacter(t *testing.T) {
 // because a `printf` after the refusal never runs.
 func TestARefusedSubscriptFlagOnTheLeftEndsTheLine(t *testing.T) {
 	for _, tc := range []struct{ src, says, kept string }{
-		// A letter this dialect does not carry: the documented partial, in
-		// this shell's own words about it.
+		// A word letter over an array is the ordinary subscript, and `x` is
+		// 0 to it: measured on zsh 5.9.2, `b[(w)x]=Q` is `b: assignment to
+		// invalid subscript range` at 1 (#5152).
 		{
 			`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(w)x]=Q`,
-			"subscript flag is not implemented", "[x y]",
+			"b: assignment to invalid subscript range", "[x y]",
 		},
 		// A search naming a place to write in a *table* is the shell's own
 		// refusal and not ours: measured 2026-09-12 on zsh 5.9.2,

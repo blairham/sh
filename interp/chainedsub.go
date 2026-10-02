@@ -119,6 +119,13 @@ func (r *Runner) subscriptAgainst(e *syntax.ParamExpr, src subscriptSource) ([]s
 			// A letter the group does not carry, refused by name inside.
 			return nil, true
 		}
+		if subscriptCountsLines(e.IndexFlags) && src.scalar && e.IndexRange == nil {
+			// One value read by its lines or its words, the reading a name
+			// holding a string gets — measured on zsh 5.9.2,
+			// `a=("x y" b); ${a[1][(w)2]}` is `y` and `${a[1][(f)1]}` is
+			// `x y`, where reading characters gave a space and an `x`.
+			return r.lineSubscript(e, orderedSearchLetter(search), src.elems[0])
+		}
 		if search != 0 {
 			return r.searchSubscript(e, search, src)
 		}

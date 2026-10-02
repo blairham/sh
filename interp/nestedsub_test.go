@@ -504,13 +504,13 @@ func TestACommaInASearchOperandSeparatesThePair(t *testing.T) {
 	}
 }
 
-func TestARefusalThroughAReferenceNamesTheWrittenText(t *testing.T) {
-	out, st := runNestedSubscript(t, `a=(x y); h=a; printf "[%s]" "${${(P)h}[(w)y]}"`)
-	if !strings.Contains(out, "${${(P)h}[(w)y]}: the (w) subscript flag is not implemented") {
-		t.Errorf("got %q, want the refusal to name the written text", out)
-	}
-	if st == 0 {
-		t.Errorf("status 0, want the unimplemented flag refused")
+// Through a reference the subscript reaches the array, whose elements a word
+// letter does not reach: measured on zsh 5.9.2, `${${(P)h}[(w)y]}` is empty,
+// `y` being 0 to the arithmetic (#5152).
+func TestAWordFlagThroughAReferenceReadsTheArray(t *testing.T) {
+	out, st := runNestedSubscript(t, `a=(x y); h=a; printf "[%s]" "${${(P)h}[(w)y]}" "${${(P)h}[(w)2]}"`)
+	if want := "[][y]"; out != want || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, want)
 	}
 }
 

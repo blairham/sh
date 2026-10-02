@@ -132,9 +132,13 @@ func TestUnsettingThroughASearchOverAString(t *testing.T) {
 // per operand and goes on to the rest, which is the shape it already has for
 // a subscript that will not evaluate — and is what the shell does, measured.
 func TestARefusedSubscriptFlagLeavesUnsetRunningOn(t *testing.T) {
+	// `(w)` over an array is the ordinary subscript, and `y` is 0 to it —
+	// below the first element, which is what is refused. It was the letter
+	// refused by name until it was carried (#5152); the shape of the line is
+	// the same either way.
 	out, st := flaggedUnsetRun(t, `b=(x y z); unset 'b[(w)y]'; echo ran`+showB)
-	if !strings.Contains(out, "the (w) subscript flag is not implemented") {
-		t.Errorf("got %q, want the flag refused by name", out)
+	if !strings.Contains(out, "bad array subscript") {
+		t.Errorf("got %q, want the subscript refused", out)
 	}
 	if !strings.Contains(out, "ran\n[x][y][z] n=3\n") {
 		t.Errorf("got %q, want the builtin to report and the script to run on", out)

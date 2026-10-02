@@ -443,6 +443,9 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 			"third argument of tie must be join character"))
 		return 1
 	}
+	if r.refuseSpecialTie(scalar, array, sep, len(args) > 2) {
+		return 1
+	}
 	// Both halves must be names. **Behind the refusals above**, which is
 	// measured: `typeset -T ':' ':'` is `can't tie a variable to itself: :`
 	// rather than `not valid in this context: :`, and the two rules about

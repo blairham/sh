@@ -176,6 +176,13 @@ type Diagnostics struct {
 	// refusal here, which is measured rather than assumed — see
 	// Runner.declareTie (#5100).
 	TieTakesThreeOperands string
+	// TieSpecialToItsPartnerOnly is a half of one of the shell's own tied
+	// pairs named beside a name that is not its partner, `typeset -T FOO
+	// manpath`, and TieSpecialJoinCharacterFixed is the shell's own pair
+	// named again with another separator, `typeset -T PATH path -`. See
+	// Runner.refuseSpecialTie.
+	TieSpecialToItsPartnerOnly   string
+	TieSpecialJoinCharacterFixed string
 	// UntieRefused is what the *plus* form of the letter says: `typeset +T
 	// SCALAR` is not the tie's undoing but a refusal naming the builtin that
 	// is. See Runner.refuseUntie.

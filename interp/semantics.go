@@ -21742,10 +21742,11 @@ type Semantics struct {
 	// the newline, which is what this echo did everywhere before the field
 	// existed.
 	//
-	// Not modeled, and named here so it is not mistaken for this: zsh
+	// Not this field, and named here so it is not mistaken for it: zsh
 	// echoes the whole of a `-c` string before running any of it, where
 	// every other column echoes a line as it is read. That is a different
-	// mechanism and the trailing newline it writes belongs to it.
+	// mechanism and the trailing newline it writes belongs to it — the front
+	// end's read of a text read whole writes it, whatever this says (#5428).
 	VerboseEchoAddsAMissingNewline Answer
 
 	// ReadTimeoutOperandIsArithmetic reads `read -t`'s argument as an

@@ -135,7 +135,10 @@ type Job struct {
 	// procs is every process the job is made of *now*, which is not the same
 	// question as PID and is the one `kill %1` asks. See Job.took.
 	procsMu sync.Mutex
-	procs   []jobProcess
+	// firstGone says the process the job's PID names has been waited for,
+	// under procsMu. See Runner.jobOutlivingItsFirstProcess.
+	firstGone bool
+	procs     []jobProcess
 
 	// parts counts the pieces of the job that have still to start, and
 	// started is closed when the count reaches zero. A backgrounded pipeline
@@ -3081,16 +3084,10 @@ func (r *Runner) jobOutlivingItsFirstProcess(pid int) *Job {
 		if j.PID != pid || j.Finished() {
 			continue
 		}
-		live := false
 		j.procsMu.Lock()
-		for _, p := range j.procs {
-			if p.pid == pid {
-				live = true
-				break
-			}
-		}
+		gone := j.firstGone
 		j.procsMu.Unlock()
-		if !live {
+		if gone {
 			return j
 		}
 	}
@@ -3161,6 +3158,11 @@ func (j *Job) released(pid int) {
 	j.procsMu.Lock()
 	defer j.procsMu.Unlock()
 	j.procs = slices.DeleteFunc(j.procs, func(p jobProcess) bool { return p.pid == pid })
+	if pid == j.PID {
+		// The process `$!` names has been waited for while the job may run
+		// on. See Runner.jobOutlivingItsFirstProcess.
+		j.firstGone = true
+	}
 }
 
 // processes is what signaling this job has to reach, newest last.

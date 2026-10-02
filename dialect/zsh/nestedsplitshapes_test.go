@@ -29,6 +29,9 @@ show() { printf '%s:' $#; for x in "$@"; do printf '<%s>' "$x"; done; print; }
 		// A quoted `s` a level down drops its empties as an unquoted one.
 		{`show "${(@)${(s.:.)u}}"`, "2:<a><b>"},
 		{`show "${(@q)${(s.:.)u}}"`, "2:<a><b>"},
+		// …and with an `@` beside it the inner keeps them.
+		{`show "${(@)${(@s.:.)u}}"`, "4:<a><><b><>"},
+		{`show "${#${(@s.:.)u}}"`, "1:<4>"},
 		// A count of a nested list counts only the words it would make.
 		{`show ${#${b[@]}}`, "1:<2>"},
 		{`show ${#${(s.:.)u}}`, "1:<2>"},

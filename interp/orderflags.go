@@ -168,7 +168,9 @@ func nestedSortKey(w string) string {
 // innerEmptiesSortLast reports whether e's words are sorted with
 // nestedSortKey: see it for the measurements.
 func innerEmptiesSortLast(e *syntax.ParamExpr) bool {
-	if e.Inner == nil || len(e.Inner.Spans) != 1 || e.Inner.Spans[0].Kind != syntax.ParamExp {
+	// A command substitution's words reach a sort only through a split
+	// flag, which the next test turns away, so a nested inner is enough.
+	if e.Inner == nil {
 		return false
 	}
 	if strings.ContainsAny(e.Flags, splitFlagLetters) || e.SplitFlags%2 == 1 {

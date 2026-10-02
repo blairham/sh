@@ -3341,6 +3341,8 @@ func Semantics() interp.Semantics {
 	// `read -d £` stops at the whole `£` under a UTF-8 locale. Measured
 	// 2026-10-02 on 5.9.2 (#5153).
 	s.ReadDelimiterIsTheLocalesCharacter = interp.Yes
+	// `printf '[%q]'` with no operand is `[]`. Measured 2026-10-02 (#5153).
+	s.PrintfQuoteOfNoArgumentIsEmpty = interp.Yes
 	// The operand of `exit` and of `return` is an arithmetic expression here,
 	// and alone in the panel: `return r` is the value of `r` and `return r+1`
 	// is one more, where ksh93 reads the leading digits and gets 0, and dash

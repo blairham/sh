@@ -216,6 +216,7 @@ ash   PrintfFloatOperandIsEvaluatedTwice
 ash   PrintfHexFloatDefaultIsTwelveDigits
 ash   PrintfHexFloatZeroFillPrecedesThePrefix
 ash   PrintfOutputPrecedesComplaint
+ash   PrintfQuoteOfNoArgumentIsEmpty
 ash   PrintfRefusedOperandKeepsItsLeadingNumber
 ash   PrintfTimeOperandIsADateString
 ash   ProducedParameterListing
@@ -560,6 +561,7 @@ dash  PrintfCountFrozenNameStopsThePass
 dash  PrintfCountOperandTakesASubscript
 dash  PrintfFloatOperandIsEvaluatedTwice
 dash  PrintfOutputPrecedesComplaint
+dash  PrintfQuoteOfNoArgumentIsEmpty
 dash  PrintfRefusedOperandKeepsItsLeadingNumber
 dash  PrintfReportsAMissingHexDigit
 dash  ProducedParameterListing

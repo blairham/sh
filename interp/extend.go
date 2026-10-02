@@ -2156,6 +2156,40 @@ func (r *Runner) SetAssoc(name string, values map[string]string) {
 	r.AssocArrays[name] = table
 }
 
+// SetList stores a builtin's list result under a name the way a list
+// assignment to that name would: as an array, or — where the name is
+// already an associative array — as the table the values pair off into,
+// first a key and then its value. An odd count is refused the way the
+// literal `h=(a 1 b)` is, and SetList reports false having said so.
+//
+// zsh's `zstat -A` is the measured caller: `typeset -A h; zstat -A h +size
+// -n -- f` leaves `h` keyed by the name, and with one file and no `-n` it is
+// `bad set of key/value pairs for associative array`, measured 2026-10-02 on
+// 5.9.2.
+func (r *Runner) SetList(name string, values []string) bool {
+	if _, isTable := r.AssocArrays[name]; !isTable {
+		r.setArray(name, values)
+		return true
+	}
+	if len(values)%2 != 0 {
+		// Located as the shell and not as the builtin, which is how the
+		// assignment the store stands for is reported: measured, `zsh:1:`
+		// and no `zstat:` in it.
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		r.fatal("%s\n", Wording(r.diag().UnpairedTableLiteralElements,
+			"bad set of key/value pairs for associative array"))
+		r.inBuiltin = outer
+		return false
+	}
+	table := make(map[string]string, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		table[values[i]] = values[i+1]
+	}
+	r.SetAssoc(name, table)
+	return true
+}
+
 // GetAssoc is the table an associative array holds, and whether there is one.
 //
 // A copy rather than the runner's own map, so a caller that reads a table,

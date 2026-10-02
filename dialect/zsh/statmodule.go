@@ -389,7 +389,11 @@ func zstatReport(r *interp.Runner, ctx context.Context, opts zstatOpts, files []
 	}
 	switch {
 	case opts.toArray:
-		r.SetArray(opts.array, collected)
+		// Into a table where the name already is one. See
+		// interp.Runner.SetList.
+		if !r.SetList(opts.array, collected) {
+			return 1
+		}
 	case opts.toHash:
 		r.SetAssoc(opts.hash, hash)
 	}

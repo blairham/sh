@@ -3083,6 +3083,9 @@ func Semantics() interp.Semantics {
 	s.NamesTakeTheLocalesLetters = interp.Yes
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
+	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+
+	// 2012-08-01 (#5153).
+	s.PrintfQuoteOfNoArgumentIsEmpty = interp.Yes
 	// unanswered ReadDelimiterIsTheLocalesCharacter: 93u+ 2012-08-01 follows
 	// neither reading of a delimiter of more than one byte — see the field —
 	// so the shell refuses by name rather than choosing one (#5153).

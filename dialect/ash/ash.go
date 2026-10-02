@@ -1726,6 +1726,8 @@ func Semantics() interp.Semantics {
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `read -d £` stops at the first byte of the `£` under `LC_ALL=C.UTF-8`,
 	// measured 2026-10-02 on BusyBox 1.37.0 (#5153).
+	// unanswered PrintfQuoteOfNoArgumentIsEmpty: `%q` is `invalid format`
+	// in BusyBox 1.37.0, measured 2026-10-02 (#5153).
 	s.ReadDelimiterIsTheLocalesCharacter = interp.No
 	// unanswered FailingPipelineWhoseLastElementRanHere: every element of a
 	// pipeline is a subshell here and nothing moves one into this shell, so a

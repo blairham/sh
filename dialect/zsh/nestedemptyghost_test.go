@@ -43,7 +43,7 @@ func TestANestedListsEmptyElements(t *testing.T) {
 		{`show "${${b[@]}[(i)]}" "${${b[@]}[(I)]}" "${${b[@]}[(i)?]}" "${${b[@]}[(i)[^x]]}"`, "4:<4><0><2><2>\n"},
 		{`show "${${b[@]}[(r)?]}" "${${b[@]}[(i)??]}"`, "2:<><4>\n"},
 		// A pad: a nested *value* is not a ghost and pads to the full width.
-		{`show "${(l:3:)${b[2]}}" "${(l:3:)${e}}" "${(@l:3:)${(@)b[2]}}" "${(@l:3:)${(@)b[2,2]}}"`, "4:<   ><   ><   ><  >\n"},
+		{`show "${(l:3:)${b[2]}}" "${(l:3:)${e}}" "${(@l:3:)${(@)b[2]}}" "${(@l:3:)${(@)b[2,2]}}" "${(@l:3:)${(@j..)${c[@]}}}"`, "5:<   ><   ><   ><  ><   >\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), setup+tc.src)
 		if got != tc.want {

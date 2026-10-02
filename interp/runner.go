@@ -1021,6 +1021,12 @@ type Runner struct {
 	// stored the way any other name's is; this is the message that it
 	// happened. See SetAssignmentAction.
 	assignmentActions map[string]func(*Runner, string)
+	// assignmentGuards are the names whose assignment can be refused by what
+	// it would change outside the shell. See SetAssignmentGuard.
+	assignmentGuards map[string]func(*Runner, string) (string, bool)
+	// declaringWithoutAValue says the store under way is a declaration's own
+	// empty value rather than an assignment. See declareEmpty.
+	declaringWithoutAValue bool
 	// inheritedParameterActions is the same seam for the one route a store
 	// cannot reach: the value this shell was *launched* holding. See
 	// SetInheritedParameterAction.
@@ -9400,6 +9406,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if _, stop := r.refusePrefixes(c.Assigns, external, !r.expandErr); stop {
 		return nil
 	}
+	if r.prefixGuardRefuses(prefixEnv) {
+		return nil
+	}
 	if pathFromPrefix {
 		// **And the search is made with it**, which is the half that was
 		// missing: the child was handed the new PATH and this shell went on
@@ -12548,6 +12557,20 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		// changed. See interp/framescope.go.
 		return
 	}
+	if guard, ok := r.assignmentGuards[name]; ok && !r.declaringWithoutAValue {
+		if msg, refused := guard(r, value); refused {
+			// The assignment would change something outside the shell and
+			// the change was refused, which ends the shell. See
+			// Runner.SetAssignmentGuard. Named as the assignment's and not a
+			// declaration builtin's: `local UID=5` is `g: failed …` in zsh
+			// 5.9.2, with no `local` in it.
+			speaker := r.inBuiltin
+			r.inBuiltin = ""
+			r.fatal("%s\n", msg)
+			r.inBuiltin = speaker
+			return
+		}
+	}
 	r.Vars[name] = value
 	// And the other half of a tie, if this name is one. After the store, so
 	// that the mirror's own read of this name sees the new value.
@@ -12925,7 +12948,7 @@ func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
 	r.writingADeclarationsOperand = true
 	defer func() { r.writingADeclarationsOperand = declaring }()
 	for _, a := range c.Assigns {
-		if !a.Operand {
+		if !a.Operand || r.arrayOperandApplied(a) {
 			continue
 		}
 		if e := r.expandedArrayOperand(a); e != nil {

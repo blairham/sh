@@ -1730,6 +1730,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		if len(r.arrayOperands) > 0 {
+			// An array literal written earlier on this line, on the name this
+			// operand reaches, is stored first; and a bare name is where one
+			// was written. See interp/arrayoperandorder.go.
+			if hasValue {
+				base, _, _ := strings.Cut(name, "[")
+				r.storeArrayOperandBefore(base)
+			} else {
+				r.noteArrayOperandName(name)
+			}
+		}
 		r.rereadingAQuotedLiteral = hasValue && r.operandHidesALiteral(name, value, f, false)
 		// A **member path** whose base is a reference is a member of the name
 		// the reference points at, and the whole operand is about that cell.
@@ -5036,6 +5047,11 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, namesAnAttribute,
 	leavesAnAttribute, inherits, standardWord bool,
 ) {
+	// A declaration with no value asks nothing of the system: measured,
+	// `local UID` in zsh 5.9.2 reads 501 and refuses nothing, where `local
+	// UID=5` is the refusal. See Runner.SetAssignmentGuard.
+	defer func(was bool) { r.declaringWithoutAValue = was }(r.declaringWithoutAValue)
+	r.declaringWithoutAValue = true
 	// A name that already holds a value is not one this declaration is
 	// bringing into being, and nothing about being declared empties it:
 	// `typeset -x v` on a `v=abc` leaves `abc` alone in all four shells that

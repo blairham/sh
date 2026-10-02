@@ -196,16 +196,27 @@ func currentEmulation(r *interp.Runner) string {
 // `emulate zsh` disagree about was set to the other mode's value one at a
 // time, inside each mode, and none moved the answer — the same probe, left
 // alone, reads the subshell under sh and the current shell under zsh.
+//
+// `infNaN` is the sixth, and E03posix's (#5157): whether arithmetic reads the
+// names `inf` and `nan` as the two floating constants, which is
+// interp.Semantics.ArithInfAndNaNAreConstants. zsh's own mode, ksh and csh do
+// and **sh alone reads them as parameters**, so `inf=42; echo $((inf))` is
+// `42` only under sh and `Inf` in the other three. Measured 2026-10-02 on zsh
+// 5.9.2, `-f`, under a bare `emulate MODE`, an argv[0] of `sh`, a sticky sh
+// function, `emulate -L sh` and `emulate -l sh` — the last moving it exactly
+// as it moves `lastPipeHere`. No option moves it: under `emulate sh`, every
+// name `emulate -l zsh` lists set to zsh's value leaves `$((inf))` at `42`.
 var emulations = map[string]struct {
 	cdNowhere     bool
 	fillsHome     bool
 	declaredEmpty bool
 	lastPipeHere  bool
+	infNaN        bool
 }{
-	"zsh": {cdNowhere: false, fillsHome: true, declaredEmpty: true, lastPipeHere: true},
-	"sh":  {cdNowhere: true, fillsHome: false, declaredEmpty: false, lastPipeHere: false},
-	"ksh": {cdNowhere: true, fillsHome: false, declaredEmpty: false, lastPipeHere: true},
-	"csh": {cdNowhere: true, fillsHome: false, declaredEmpty: true, lastPipeHere: true},
+	"zsh": {cdNowhere: false, fillsHome: true, declaredEmpty: true, lastPipeHere: true, infNaN: true},
+	"sh":  {cdNowhere: true, fillsHome: false, declaredEmpty: false, lastPipeHere: false, infNaN: false},
+	"ksh": {cdNowhere: true, fillsHome: false, declaredEmpty: false, lastPipeHere: true, infNaN: true},
+	"csh": {cdNowhere: true, fillsHome: false, declaredEmpty: true, lastPipeHere: true, infNaN: true},
 }
 
 // applyEmulation switches the axes and puts back the options this form of
@@ -247,6 +258,10 @@ func applyEmulation(r *interp.Runner, mode string, strict bool) {
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.LastPipelineElementInCurrentShell
 	}, answer(emulations[mode].lastPipeHere))
+	// The sixth: whether `inf` and `nan` are constants. See the table.
+	setAxis(r, func(s *interp.Semantics) *interp.Answer {
+		return &s.ArithInfAndNaNAreConstants
+	}, answer(emulations[mode].infNaN))
 	// The recorded names in one write rather than one write each. The store
 	// holds deviations, so dropping a name from it is that option back at the
 	// table's default — and this emulation's default is not always the
@@ -412,6 +427,9 @@ func listEmulation(r *interp.Runner, mode string, strict, local bool) {
 	setAxis(r, func(s *interp.Semantics) *interp.Answer {
 		return &s.LastPipelineElementInCurrentShell
 	}, answer(emulations[mode].lastPipeHere))
+	setAxis(r, func(s *interp.Semantics) *interp.Answer {
+		return &s.ArithInfAndNaNAreConstants
+	}, answer(emulations[mode].infNaN))
 	names := make([]string, 0, len(zshOptions))
 	byName := make(map[string]zshOption, len(zshOptions))
 	for _, o := range zshOptions {

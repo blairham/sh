@@ -145,7 +145,7 @@ func (e *editor) styled() string {
 				continue
 			}
 			b = append(b, line[at:r.start]...)
-			b = append(b, r.on...)
+			b = append(b, e.guardedCodes(r.on)...)
 			at = r.start
 			continue
 		}
@@ -153,9 +153,9 @@ func (e *editor) styled() string {
 			continue
 		}
 		b = append(b, line[at:r.start]...)
-		b = append(b, r.on...)
+		b = append(b, e.guardedCodes(r.on)...)
 		b = append(b, line[r.start:r.end]...)
-		b = append(b, r.off...)
+		b = append(b, e.guardedCodes(r.off)...)
 		at = r.end
 	}
 	if len(b) == 0 {

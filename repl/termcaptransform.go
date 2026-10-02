@@ -31,6 +31,24 @@ import (
 // terminal's: the sequences are the ones this package writes for the
 // operations, and nothing else in the stream is touched.
 
+// highlightGuard brackets the codes a highlighter asked for, so that the
+// transformation passes them through untouched: they are attributes, which
+// the transformation never sees, and a highlighter's codes can spell a cursor
+// movement — `zle_highlight`'s `fg_default_code:D` makes a foreground's ending
+// `ESC[3Dm`, which reads as three columns left. ESC followed by DEL is not a
+// sequence any terminal is sent, and the guards are written only while a
+// transformation is installed, so no other session ever carries one.
+const highlightGuard = "\x1b\x7f"
+
+// guardedCodes is codes, bracketed for the transformation where one is
+// installed.
+func (e *editor) guardedCodes(codes string) string {
+	if e.transformTermcap == nil || codes == "" {
+		return codes
+	}
+	return highlightGuard + codes + highlightGuard
+}
+
 // termcapTransform is TransformTermcap bound to ctx, or nil.
 func (s Shell) termcapTransform(ctx context.Context) func(code, arg string) (string, bool) {
 	if s.TransformTermcap == nil {
@@ -58,6 +76,16 @@ func transformTermcapSequences(s string, transform func(code, arg string) (strin
 	}
 	var b strings.Builder
 	for i := 0; i < len(s); {
+		if strings.HasPrefix(s[i:], highlightGuard) {
+			rest := s[i+len(highlightGuard):]
+			end := strings.Index(rest, highlightGuard)
+			if end < 0 {
+				end = len(rest)
+			}
+			b.WriteString(rest[:end])
+			i += len(highlightGuard) + end + len(highlightGuard)
+			continue
+		}
 		code, arg, n := termcapAt(s[i:])
 		if n == 0 {
 			b.WriteByte(s[i])
@@ -66,7 +94,9 @@ func transformTermcapSequences(s string, transform func(code, arg string) (strin
 		}
 		out, ok := transform(code, arg)
 		if !ok {
-			return s
+			// Nothing installed after all: the line as it was, without the
+			// guards, which only a transformation knows to read.
+			return strings.ReplaceAll(s, highlightGuard, "")
 		}
 		b.WriteString(out)
 		i += n

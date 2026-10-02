@@ -7956,6 +7956,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.lastArg, r.lastArgSet = "", true
 	}
 
+	if len(argv) == 0 && !aPrefixIsWritten(c.Assigns) {
+		// Nothing to run and nothing to assign, which one column traces as
+		// its prefix alone and another as a bare line. See
+		// Semantics.EmptyCommandTrace.
+		r.traceEmptyCommand()
+	}
 	if len(argv) == 0 {
 		// Assignments with no command name persist, which is the difference
 		// between `x=1` and `x=1 cmd`.

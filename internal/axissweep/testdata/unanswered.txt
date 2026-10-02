@@ -91,6 +91,7 @@ ash   CaseAttributeReplacesTheNumericAttribute
 ash   ChainedSubscriptReadsANestedValue
 ash   CodePointPastSixBytesIsEncoded
 ash   CommandTrackingStartsOn
+ash   CommandWordListingNeedsAKindLetter
 ash   CompoundArithAssignmentConvertsItsValue
 ash   CompoundAttribute
 ash   CompoundElementsGoThroughTheAttribute
@@ -420,6 +421,7 @@ dash  CaseAttributeReplacesTheNumericAttribute
 dash  ChainedSubscriptReadsANestedValue
 dash  CodePointPastSixBytesIsEncoded
 dash  CommandTrackingStartsOn
+dash  CommandWordListingNeedsAKindLetter
 dash  CompoundArithAssignmentConvertsItsValue
 dash  CompoundAttribute
 dash  CompoundElementsGoThroughTheAttribute

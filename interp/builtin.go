@@ -3767,7 +3767,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		if lists {
 			form, dashP := r.bareOrDashP(opts, r.sem().ExportListing)
 			return r.declarePrintForm(names, form, dashP,
-				func(d declaration) bool { return d.exported })
+				func(d declaration) bool { return d.exported && r.listsThisKind(d, form, "") })
 		}
 	}
 	args, status, ended := r.builtinNames("export", args, false)
@@ -8859,9 +8859,27 @@ func (r *Runner) exportAsADeclaration(args []string, letters string) (int, bool)
 	if code != 0 {
 		return code, true
 	}
-	if f.print || len(rest) == 0 {
-		// A listing after all — `export -p` and `export -i` with no names —
-		// and the listing is the loop's below, not a declaration's.
+	if f.print {
+		// The listing with the dialect's letters on it, which the loop
+		// below cannot read: `export -ap` is a refused `-a` there. Measured
+		// 2026-10-02 on zsh 5.9.2, it writes every exported name in the
+		// native form and adds the arrays to the scalars in the standard's
+		// form — see Semantics.CommandWordListingNeedsAKindLetter.
+		names, lists := r.exportPrintWithOperands(rest)
+		if r.unspecified {
+			return r.status, true
+		}
+		if lists {
+			form, _ := r.bareOrDashP("p", r.sem().ExportListing)
+			return r.declarePrintForm(names, form, true, func(d declaration) bool {
+				return d.exported && r.listsThisKind(d, form, f.letters)
+			}), true
+		}
+		f.print = false
+	}
+	if len(rest) == 0 {
+		// A listing after all — `export -i` with no names — and the listing
+		// is the loop's below, not a declaration's.
 		return 0, false
 	}
 	f.export = true

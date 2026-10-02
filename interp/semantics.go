@@ -14001,6 +14001,22 @@ type Semantics struct {
 	// R="2"` here, which is DeclareListingCommandWord and already carried;
 	// [Runner.SetPosixMode] moves this axis there and back (#2154, #2060).
 	ReadonlyListing DeclarationListingForm
+	// CommandWordListingNeedsAKindLetter is whether an `export -p` or
+	// `readonly -p` written in the standard's form — DeclareListingCommandWord
+	// — leaves out the names that are not scalars unless a kind letter asks
+	// for them: an array under `-a`, an associative array under `-A`.
+	//
+	// Measured 2026-10-02 on zsh 5.9.2 under POSIX_BUILTINS, inside a
+	// function holding exported and frozen scalars, arrays and a table:
+	// `export -p` writes the scalars alone, `export -ap` the arrays as well
+	// (`export za=( 4 5 )`), `readonly -Ap` the table as well, and `-ip`
+	// narrows nothing. ksh93u+ writes every kind under the same form —
+	// `export a=(1 2)` beside `export s=1` — which is the reading the zero
+	// value keeps.
+	//
+	// Read as `== Yes` and only where that form is the one being written,
+	// so no preset that never reaches it has to answer.
+	CommandWordListingNeedsAKindLetter Answer
 
 	// CoprocEndsInAnArray publishes a started coprocess's near ends as the
 	// two elements of an array — `${COPROC[0]}` to read and `${COPROC[1]}` to

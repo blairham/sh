@@ -1210,6 +1210,11 @@ func Semantics() interp.Semantics {
 	// w=8` writes nothing and leaves `w` at 8 and exported, and `export -p
 	// nosuch` declares `nosuch` exported. See interp/exportprintoperand.go.
 	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintLetterIsInert
+	// The standard's listing writes every kind here: measured 2026-10-02 on
+	// ksh93u+, `export -p` writes `export a=(1 2)` and `export h=([k]=v)`
+	// beside `export s=1`, and `readonly -p` the frozen array. See
+	// Semantics.CommandWordListingNeedsAKindLetter.
+	s.CommandWordListingNeedsAKindLetter = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes

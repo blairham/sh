@@ -1718,6 +1718,9 @@ func Semantics() interp.Semantics {
 	s.ExportListing = interp.DeclareListingExportSpelled
 	// readonly -p speaks typeset here, not readonly.
 	s.ReadonlyListing = interp.DeclareListingExportSpelled
+	// Only reached once POSIX_BUILTINS moves the two listings to the
+	// standard's form. See Semantics.CommandWordListingNeedsAKindLetter.
+	s.CommandWordListingNeedsAKindLetter = interp.Yes
 	// The bare form drops the command word in both builtins, which is where
 	// this shell's `readonly` parts company with its own `readonly -p` by more
 	// than a word: `typeset -r R=2` with the letter, `R=2` without it.

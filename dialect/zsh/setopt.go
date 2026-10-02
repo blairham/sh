@@ -1764,6 +1764,26 @@ var zshOptions = []zshOption{
 				listing = interp.DeclareListingCommandWord
 			}
 			setAxis(r, func(s *interp.Semantics) *interp.DeclarationListingForm { return &s.ReadonlyListing }, listing)
+			// `export -p` moves with it: measured the same day, the option
+			// turns `local -x zs=6` into `export zs=6`.
+			setAxis(r, func(s *interp.Semantics) *interp.DeclarationListingForm { return &s.ExportListing }, listing)
+			// And `-p` beside operands goes inert, as it is in bash and
+			// ksh93: measured 2026-10-02 on zsh 5.9.2, `X=1; export -p X`
+			// lists `typeset X=1` without the option and under it lists
+			// nothing and exports `X`, and `readonly -p X` freezes it.
+			printWithOperands := interp.ExportPrintNarrowsToTheOperands
+			if on {
+				printWithOperands = interp.ExportPrintLetterIsInert
+			}
+			setAxis(r, func(s *interp.Semantics) *interp.ExportPrintOperandPolicy {
+				return &s.ExportOrReadonlyPrintWithOperands
+			}, printWithOperands)
+			// And `readonly` in a function stops declaring a local: measured
+			// the same day, `f(){ X=1; readonly X }` freezes the outer `X`
+			// under the option and a local `X` without it.
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ReadonlyDeclaresALocal
+			}, answer(!on))
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.JobSpecMissIsSilent
 			}, answer(on))

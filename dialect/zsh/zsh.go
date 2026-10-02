@@ -1177,6 +1177,8 @@ func Semantics() interp.Semantics {
 	// the first entry of the name that is not a directory. Measured
 	// 2026-10-02 on 5.9.2 (#5138).
 	s.ScriptSearchOptionName = "pathscript"
+	// And sh and ksh emulation start with it on (#5383).
+	s.ScriptSearchUnderEmulation = "sh ksh"
 	s.ScriptSearchTakesTheFirstFile = true
 	s.OptionNamesFoldCaseAndUnderscores = true
 	s.NonInteractiveOptionName = "nointeractive"

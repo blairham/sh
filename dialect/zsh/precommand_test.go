@@ -350,3 +350,54 @@ func TestCommandStopsTheScan(t *testing.T) {
 		}
 	}
 }
+
+// TestExecOptionsAreReadBeforeTheMatch: `exec`'s option words and the name
+// its `-a` takes are read before any word is matched against the filesystem,
+// so neither is a pattern — and behind them the scan goes on. Measured
+// 2026-10-02 on zsh 5.9.2 beside files foo1 and foo2 (#5138); bash 5.3.20
+// matches the name like any word, which dialect/bash's control pins.
+//
+// The child prints its "$0" quoted: a child that printed it bare would match
+// `foo*` itself and hide the difference.
+func TestExecOptionsAreReadBeforeTheMatch(t *testing.T) {
+	const child = `/bin/sh -c 'printf "[%s]" "$0" "$@"; echo'`
+	for _, tc := range []struct{ src, want string }{
+		{`exec -a foo* ` + child, "[foo*]"},
+		{`exec -a fo? ` + child, "[fo?]"},
+		{`exec -c -a foo* ` + child, "[foo*]"},
+		{`exec -a foo* -c ` + child, "[foo*]"},
+		{`exec -la foo* ` + child, "[foo*]"},
+		{`e=exec; $e -a foo* ` + child, "[foo*]"},
+		{`exec -a '' ` + child, "[]"},
+		// The other expansions still happen: only the match is skipped.
+		{`exec -a fo{o,x} ` + child, "zsh:1: command not found: fox"},
+		// The command's own words are matched as ever, and a `--` ends the
+		// options, so what follows it is the command and is matched too.
+		{`exec -a foo* ` + child + ` foo*`, "[foo1][foo2]"},
+		{`exec -- echo foo*`, "foo1 foo2"},
+		// And a modifier behind the options is still a modifier.
+		{`exec -c noglob echo f*`, "f*"},
+		// What is not an option is matched, and an unmatched pattern is
+		// fatal here, which is what tells the rows apart: after a `--`, after
+		// a bundle whose `a` took the rest of its word, behind the `-`
+		// modifier that switches the options off, and behind a modifier that
+		// is not `exec`.
+		{`exec -- -a nomatch*`, "zsh:1: no matches found: nomatch*"},
+		{`exec -aa nomatch*`, "zsh:1: no matches found: nomatch*"},
+		{`- exec -a nomatch*`, "zsh:1: no matches found: nomatch*"},
+		{`command -a nomatch*`, "zsh:1: no matches found: nomatch*"},
+		// The options can arrive in one word that splits.
+		{`c=(exec -a "foo*"); ${~c} ` + child, "[foo*]"},
+	} {
+		dir := t.TempDir()
+		for _, f := range []string{"foo1", "foo2"} {
+			if err := os.WriteFile(filepath.Join(dir, f), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		out, _ := runZsh(t, dir, "("+tc.src+") 2>&1")
+		if strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}

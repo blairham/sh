@@ -25874,6 +25874,18 @@ type Semantics struct {
 	// assignment on the same command: `FOO=bar exec -c env` prints nothing.
 	ExecTakesTheEmptyEnvironmentLetter Answer
 
+	// ExecOptionsAreReadBeforeGlobbing reads `exec`'s option words, and the
+	// name `-a` takes, before any word is matched against the filesystem, so
+	// neither is a pattern. Measured 2026-10-02 with files foo1 and foo2 and a
+	// child that prints its "$0": zsh 5.9.2 answers `exec -a foo* cmd` with
+	// `foo*`, and `exec -? cmd` with `unknown exec flag` beside a file named
+	// `-l`; bash 5.3.20, ksh93u+ and BusyBox ash 1.37.0 match the name like
+	// any word, so `foo2` is the command and is not found, and bash's `-?`
+	// becomes `-l`. dash's `exec` has no options, so its words are ordinary
+	// operands there. Behind the options the scan goes on: `exec -c noglob
+	// echo foo*` honors the `noglob` in zsh. Read as `== Yes`.
+	ExecOptionsAreReadBeforeGlobbing Answer
+
 	// ExecLoginPrefixesTheGivenName decides what `-l` and `-a` do together.
 	//
 	// True in bash, where the `-` goes on the name `-a` chose, so `exec -l -a
@@ -30038,6 +30050,7 @@ func PosixSemantics() Semantics {
 		ExecTakesTheLoginLetter:            No,
 		ExecTakesTheEmptyEnvironmentLetter: No,
 		ExecLoginPrefixesTheGivenName:      No,
+		ExecOptionsAreReadBeforeGlobbing:   No,
 		// POSIX gives `.` one operand and no options, so a leading dash-word
 		// is not one — and there is no `-p` to read.
 		DotReadsOptions:             No,

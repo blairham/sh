@@ -3157,6 +3157,9 @@ func Semantics() interp.Semantics {
 	s.ExecTakesTheLoginLetter = interp.Yes
 	s.ExecTakesTheEmptyEnvironmentLetter = interp.Yes
 	s.ExecLoginPrefixesTheGivenName = interp.No
+	// And the options are read before the match: `exec -a foo* cmd` names the
+	// command `foo*` beside a file foo1. Measured 2026-10-02 (#5138).
+	s.ExecOptionsAreReadBeforeGlobbing = interp.Yes
 	// And the name a command is started under can be asked for by an exported
 	// `ARGV0`, which no other column reads: the variable is spent on argv[0]
 	// and the child never sees it. `exec -a` is the other spelling and wins

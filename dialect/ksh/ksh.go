@@ -2526,6 +2526,11 @@ func Semantics() interp.Semantics {
 	// x` and `exec --` are each `st=0`, and `exec -c >f` makes `f`. See
 	// Semantics.ExecOptionsRequireACommand.
 	s.ExecOptionsRequireACommand = interp.No
+	// ksh93's `builtin` adds builtins rather than running one, so its words
+	// are ordinary operands: measured 2026-10-02 on ksh93u+, `builtin nosuch
+	// nomatch*` reports each word as not found. See
+	// Semantics.BuiltinNameIsLookedUpBeforeGlobbing.
+	s.BuiltinNameIsLookedUpBeforeGlobbing = interp.No
 	// `-a` and `-c`, and no `-l`: this shell reports the letter as an
 	// option it does not know and ends the script, `exec` being special.
 	s.ExecTakesTheLoginLetter = interp.No
@@ -3097,6 +3102,13 @@ func Semantics() interp.Semantics {
 	// `hähä=3; echo $hähä` writes 3 under `LC_ALL=en_US.UTF-8` on 93u+
 	// 2012-08-01, measured 2026-10-02 (#5153).
 	s.NamesTakeTheLocalesLetters = interp.Yes
+	// An exported name past ASCII reaches a child here: measured 2026-10-02
+	// on ksh93u+ 2012-08-01, `export ñ=1 a=2; /usr/bin/env` lists both. See
+	// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment.
+	s.NameBeyondASCIIStaysOutOfTheEnvironment = interp.No
+	// A bare `trap` inside the running EXIT trap lists it (nothing here,
+	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
+	s.ExitTrapListedWhileItRuns = interp.No
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+

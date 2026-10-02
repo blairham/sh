@@ -168,7 +168,7 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 		hideInherited, askedHide := false, false
 		for _, name := range r.listedTrapOrder() {
 			if name == "EXIT" {
-				r.printTrapEntry("EXIT", *r.exitTrap)
+				r.printTrapEntry("EXIT", *r.listedExitTrap())
 				continue
 			}
 			if r.inheritedIgnored[name] {
@@ -514,7 +514,7 @@ func (r *Runner) listSignals() int {
 func (r *Runner) listedTrapOrder() []string {
 	table := r.trapTable()
 	names := make([]string, 0, len(table)+1)
-	if r.exitTrap != nil {
+	if r.listedExitTrap() != nil {
 		names = append(names, "EXIT")
 	}
 	for name := range table {
@@ -564,4 +564,20 @@ func trapConditionNumber(name string) int {
 		return n
 	}
 	return -1
+}
+
+// listedExitTrap is the EXIT trap a listing writes: the one set, or — while
+// the trap is running, which empties the slot so the body cannot fire it
+// again — the body being run, in the dialects that list it there. Measured
+// 2026-10-02 over `trap 'echo E; trap' EXIT; echo b`: bash 5.3.20 and zsh
+// 5.9.2 list the trap after `E`, and dash, ksh93u+ and BusyBox ash list
+// nothing. See Semantics.ExitTrapListedWhileItRuns (#5357).
+func (r *Runner) listedExitTrap() *string {
+	if r.exitTrap != nil {
+		return r.exitTrap
+	}
+	if r.runningExitTrap != nil && r.sem().ExitTrapListedWhileItRuns == Yes {
+		return r.runningExitTrap
+	}
+	return nil
 }

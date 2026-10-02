@@ -25943,6 +25943,33 @@ type Semantics struct {
 	// Read as `== Yes`, so a preset that leaves it alone has the zero
 	// value's answer.
 	ExecOptionsRequireACommand Answer
+	// BuiltinNameIsLookedUpBeforeGlobbing looks up the name `builtin` was
+	// given before any word behind it is matched, so that a name naming no
+	// builtin is refused by `builtin` and the words behind it are never
+	// globbed. Measured 2026-10-02 in an empty directory: zsh 5.9.2 says `no
+	// such builtin: nosuch` for `builtin nosuch nomatch*` and `no such
+	// builtin: -a` for `builtin -a nomatch*`, where `command -a nomatch*` is
+	// `no matches found`; bash 5.3.20 under failglob says `no match:
+	// nomatch*` first, which is the zero value. ksh93u+'s `builtin` takes
+	// builtin names to add rather than one to run, and dash and BusyBox ash
+	// have no `builtin` (#5377).
+	BuiltinNameIsLookedUpBeforeGlobbing Answer
+	// NameBeyondASCIIStaysOutOfTheEnvironment leaves an exported name
+	// holding a byte past ASCII out of a child's environment, though the
+	// shell itself lists it as exported. Measured 2026-10-02 under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=en_US.UTF-8`: zsh 5.9.2 runs `export ñ=1
+	// a=2; /usr/bin/env` and the child sees `a=2` alone while `typeset -p ñ`
+	// is `export ñ=1`; ksh93u+ 2012-08-01 hands the child both, which is the
+	// zero value. bash, dash and BusyBox ash have no such name to export
+	// (#5364).
+	NameBeyondASCIIStaysOutOfTheEnvironment Answer
+	// ExitTrapListedWhileItRuns lists the EXIT trap in a bare `trap` run by
+	// that trap's own body. Measured 2026-10-02 over `trap 'echo E; trap'
+	// EXIT; echo b` under `-c`: bash 5.3.20 writes `trap -- 'echo E; trap'
+	// EXIT` after `E` and zsh 5.9.2 its own spelling of the same, where
+	// dash, ksh93u+ and BusyBox ash (pinned alpine image) write nothing —
+	// the zero value (#5357).
+	ExitTrapListedWhileItRuns Answer
 
 	// ExecTakesTheLoginLetter is `exec -l`, which puts a `-` on the front of
 	// the argv[0] the replacement sees — the mark `login` and every terminal

@@ -69,3 +69,16 @@ func TestANameIsASCIIUnderTheCLocale(t *testing.T) {
 		t.Errorf("with no locale named: got %q, want %q", got, "ähä\n")
 	}
 }
+
+// An exported name past ASCII is exported in the shell and reaches no child.
+// See interp.Semantics.NameBeyondASCIIStaysOutOfTheEnvironment.
+//
+// Measured 2026-10-02 on zsh 5.9.2 under the same environment as above: the
+// child sees `a=2` alone, and the shell lists `export ñ=1` (#5364).
+func TestAnExportedNamePastASCIIReachesNoChild(t *testing.T) {
+	got := runZshInLocale(t, "en_US.UTF-8",
+		"export ñ=1 a=2; /usr/bin/env | /usr/bin/grep -c '=' >/dev/null; /usr/bin/env | while read -r l; do [[ $l == (ñ|a)=* ]] && print -r -- $l; done; typeset -p ñ")
+	if want := "a=2\nexport ñ=1\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

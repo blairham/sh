@@ -1014,6 +1014,8 @@ func Semantics() interp.Semantics {
 	// `export -A h=(…)` beside `export s="1"`, and `readonly -p` the frozen
 	// array. See Semantics.CommandWordListingNeedsAKindLetter.
 	s.CommandWordListingNeedsAKindLetter = interp.No
+	// unanswered NameBeyondASCIIStaysOutOfTheEnvironment: a name here is
+	// ASCII under every locale, so there is no such name to export.
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
@@ -2217,6 +2219,13 @@ func Semantics() interp.Semantics {
 	// `exec -c`, `exec -a x` and `exec --` are each `st=0`, and `exec -c >f`
 	// makes `f`. See Semantics.ExecOptionsRequireACommand.
 	s.ExecOptionsRequireACommand = interp.No
+	// `builtin`'s words are matched before its name is looked up: measured
+	// 2026-10-02 on bash 5.3.20 under failglob, `builtin nosuch nomatch*`
+	// is `no match: nomatch*`. See Semantics.BuiltinNameIsLookedUpBeforeGlobbing.
+	s.BuiltinNameIsLookedUpBeforeGlobbing = interp.No
+	// A bare `trap` inside the running EXIT trap lists it (it does here,
+	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
+	s.ExitTrapListedWhileItRuns = interp.Yes
 	// Both letters, and `-l` reaches the name `-a` chose: `exec -l -a NAME`
 	// hands the replacement `-NAME`, where zsh hands it `NAME`.
 	s.ExecTakesTheLoginLetter = interp.Yes

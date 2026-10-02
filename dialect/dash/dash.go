@@ -880,8 +880,16 @@ func Semantics() interp.Semantics {
 	// ways the same. This is the one column of the panel that reads the
 	// letter that way. See interp/exportprintoperand.go.
 	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintDropsTheOperands
+	// A bare `trap` inside the running EXIT trap lists nothing here,
+	// measured 2026-10-02. See Semantics.ExitTrapListedWhileItRuns.
+	s.ExitTrapListedWhileItRuns = interp.No
 	// unanswered ExecOptionsRequireACommand: this `exec` reads no options,
 	// so a dash-word is the command and the question does not arise.
+	// unanswered BuiltinNameIsLookedUpBeforeGlobbing: this shell has no
+	// `builtin`, measured 2026-10-02 — `builtin echo hi` is `builtin: not
+	// found` at 127.
+	// unanswered NameBeyondASCIIStaysOutOfTheEnvironment: a name here is
+	// ASCII under every locale, so there is no such name to export.
 	// unanswered CommandWordListingNeedsAKindLetter: this shell has no
 	// arrays, so every name a listing could write is a scalar and there is
 	// no kind to leave out or to ask a letter for.

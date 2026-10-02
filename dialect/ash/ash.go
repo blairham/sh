@@ -965,6 +965,11 @@ func Semantics() interp.Semantics {
 	// and `export -p nosuch` declares `nosuch` exported where dash declares
 	// nothing. See interp/exportprintoperand.go.
 	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintLetterIsInert
+	// unanswered BuiltinNameIsLookedUpBeforeGlobbing: this shell has no
+	// `builtin`, measured 2026-10-02 — `builtin echo hi` is `builtin: not
+	// found` at 127.
+	// unanswered NameBeyondASCIIStaysOutOfTheEnvironment: a name here is
+	// ASCII under every locale, so there is no such name to export.
 	// unanswered CommandWordListingNeedsAKindLetter: this shell has no
 	// arrays, so every name a listing could write is a scalar and there is
 	// no kind to leave out or to ask a letter for.
@@ -1877,6 +1882,9 @@ func Semantics() interp.Semantics {
 	// 2026-10-02 on BusyBox v1.37.0 in the pinned alpine image, `exec -a x`
 	// and `exec --` are each `st=0`. See Semantics.ExecOptionsRequireACommand.
 	s.ExecOptionsRequireACommand = interp.No
+	// A bare `trap` inside the running EXIT trap lists it (nothing here,
+	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
+	s.ExitTrapListedWhileItRuns = interp.No
 	s.ExecTakesTheLoginLetter = interp.No
 	s.ExecTakesTheEmptyEnvironmentLetter = interp.No
 	s.ExecLoginPrefixesTheGivenName = interp.No

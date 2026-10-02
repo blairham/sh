@@ -3336,10 +3336,79 @@ func (r *Runner) jobCommandText(st *syntax.Stmt) string {
 		cp.Negated = false
 		e = &cp
 	}
+	if r.sem().JobCommandIsOneLineOfTheBodyLayout == Yes {
+		return r.jobCommandOnOneLine(st, e)
+	}
 	// The arrangement a script is written back in, whose statements share a
 	// line outside a declaration — `{ /bin/sleep 1; }` and `( a; b )` on one
 	// line, `if` and `for` across several — which is what a job is listed
 	// in. The file-level fields of it reach nothing here, a statement not
 	// being a file.
 	return syntax.PrintExprWith(e, r.scriptListingLayout)
+}
+
+// jobCommandOnOneLine is the job's command in the arrangement the shell
+// writes a function body in, with its lines run together: a line break
+// becomes `; `, except after the words that open something — a `case`
+// header's `in`, a `{` and a `(` — and after an arm's `;;`, where it is a
+// blank, and the indentation goes. A function definition is its header and
+// `{ ... }`.
+//
+// Measured 2026-10-01 and 2026-10-02 on zsh 5.9.2, `CMD &` and then `jobs`
+// (#5342):
+//
+//	typed                                  listed
+//	x=1   /bin/sleep  1                    x=1 /bin/sleep 1
+//	(/bin/sleep 1;:)                       ( /bin/sleep 1; :; )
+//	if :; then /bin/sleep 1; else :; fi    if :; then; /bin/sleep 1; else; :; fi
+//	for i in a; do /bin/sleep 1; done      for i in a; do; /bin/sleep 1; done
+//	case x in x) a;; y|z) b; c;; esac      case x in (x) a ;; (y | z) b; c ;; esac
+//	/bin/sleep 1 >/dev/null 2>&1           /bin/sleep 1 > /dev/null 2>&1
+//	f() { :; }                             f () { ... }
+//	{ /bin/sleep 1 } always { : }          {; /bin/sleep 1; } always {; :; }
+//
+// A pipeline of several programs and an `&&` list are left as they were
+// typed: zsh lists the first a line per element and the second as the
+// element running, which are #5322's and not this arrangement's.
+func (r *Runner) jobCommandOnOneLine(st *syntax.Stmt, e syntax.Expr) string {
+	switch x := e.(type) {
+	case *syntax.BinaryExpr:
+		return st.Text
+	case *syntax.Pipeline:
+		if len(x.Cmds) != 1 {
+			return st.Text
+		}
+		if f, ok := x.Cmds[0].(*syntax.FuncDecl); ok {
+			header := syntax.PrintExprWith(&syntax.Pipeline{Cmds: []syntax.Command{f}}, r.functionLayout)
+			if at := strings.IndexByte(header, '{'); at > 0 {
+				return header[:at] + "{ ... }"
+			}
+		}
+	}
+	// A brace is followed by a blank, except in an `always` block, whose two
+	// braces are followed by `; ` like any other line: `{ /bin/sleep 1 }
+	// always { : }` lists as `{; /bin/sleep 1; } always {; :; }`.
+	braceBlank := true
+	if p, ok := e.(*syntax.Pipeline); ok && len(p.Cmds) == 1 {
+		if _, try := p.Cmds[0].(*syntax.TryClause); try {
+			braceBlank = false
+		}
+	}
+	text := syntax.PrintExprWith(e, r.functionLayout)
+	lines := strings.Split(text, "\n")
+	var b strings.Builder
+	for i, line := range lines {
+		line = strings.TrimLeft(line, "\t")
+		if i > 0 {
+			prev := strings.TrimLeft(lines[i-1], "\t")
+			if strings.HasSuffix(prev, " in") || (braceBlank && strings.HasSuffix(prev, "{")) ||
+				prev == "(" || strings.HasSuffix(prev, ";;") {
+				b.WriteByte(' ')
+			} else {
+				b.WriteString("; ")
+			}
+		}
+		b.WriteString(line)
+	}
+	return b.String()
 }

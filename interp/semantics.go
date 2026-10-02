@@ -10693,9 +10693,15 @@ type Semantics struct {
 	// unpinned bash: no corpus row lists a job whose text the printer moves;
 	// pinned by TestAJobsCommandIsReprinted.
 	//
-	// unpinned zsh: zsh reprints in a shape of its own, which is #5342 and not
-	// this field's.
+	// unpinned zsh: zsh reprints in a shape of its own, the reprint run onto
+	// one line — see JobCommandIsOneLineOfTheBodyLayout. Pinned by
+	// TestAJobsCommandIsOneLineOfTheParse in dialect/zsh.
 	JobCommandIsReprinted Answer
+	// JobCommandIsOneLineOfTheBodyLayout writes that reprint as the
+	// function-body arrangement run onto one line, which is zsh's shape —
+	// see Runner.jobCommandOnOneLine for the rows (#5342). Read only where
+	// JobCommandIsReprinted is Yes.
+	JobCommandIsOneLineOfTheBodyLayout Answer
 
 	// JobsListNewestFirst puts the most recent job at the top of a `jobs`
 	// listing. True in dash and ksh93; bash and zsh list oldest first.
@@ -30852,7 +30858,9 @@ func PosixSemantics() Semantics {
 		// has reported it, which is every measured column but one.
 		FinishedJobLeavesTheTable: No,
 		JobCommandIsReprinted:     No,
-		ACommandHoldsAJobSlot:     No,
+		// Nothing reprinted, so nothing run onto a line either.
+		JobCommandIsOneLineOfTheBodyLayout: No,
+		ACommandHoldsAJobSlot:              No,
 		// And no `wait -p` either, for the same reason: the standard's
 		// `wait` takes no options at all.
 		WaitPNamesTheFinishedJob: No,

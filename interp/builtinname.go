@@ -69,9 +69,6 @@ func (r *Runner) isBuiltinName(builtin, name string, takes NameOperands) bool {
 // for the same text, read at the builtin. See
 // Runner.NameTakesALetterPastASCII.
 func (r *Runner) isLocaleName(s string) bool {
-	if isASCII(s) {
-		return false
-	}
 	d := syntax.Dialect{NameTakesALetterPastASCII: r.NameTakesALetterPastASCII}
 	return syntax.IsNameIn(s, &d)
 }

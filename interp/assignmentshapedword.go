@@ -106,7 +106,7 @@ func (r *Runner) assignmentShapeIsATildeContext(w *syntax.Word, span, eq int) bo
 		// refusal of the shape and not of the word.
 		return false
 	}
-	if r.assignmentShapedHead(s.Value) != eq {
+	if assignmentShapedHead(s.Value) != eq {
 		return false
 	}
 	if r.posixMode {
@@ -171,7 +171,7 @@ func firstUnquotedEquals(spans []syntax.Span) (span, eq int, ok bool) {
 // append, and then an `=`. Measured against the panel: `xFOO=`, `_f=` and
 // `FOO+=` are the shape and `--opt=`, `1abc=`, `f.g=` and a leading `=` are
 // not, in every column that has the rule and in the six that do not.
-func (r *Runner) assignmentShapedHead(v string) int {
+func assignmentShapedHead(v string) int {
 	eq := strings.IndexByte(v, '=')
 	if eq <= 0 {
 		return -1
@@ -194,7 +194,7 @@ func (r *Runner) assignmentShapedHead(v string) int {
 		}
 		name = name[:i]
 	}
-	if !isPlainName(name) && !r.isLocaleName(name) {
+	if !isPlainName(name) {
 		return -1
 	}
 	return eq

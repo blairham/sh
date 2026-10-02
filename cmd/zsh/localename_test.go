@@ -39,6 +39,7 @@ func TestANameHoldsTheLocalesLetters(t *testing.T) {
 		{"posix_identifiers takes it away", "setopt posix_identifiers; eval 'hähä=3' || print refused", "refused\n"},
 		{"IDENT follows the rule", "[[ é = [[:IDENT:]] ]] && print in; setopt posix_identifiers; [[ é = [[:IDENT:]] ]] || print out", "in\nout\n"},
 		{"a declaration's value takes its tildes", "HOME=/hh; export ö=~/z; f() { local ü=~/w; print $ü }; f; typeset é=~/y; print $ö $é", "/hh/w\n/hh/z /hh/y\n"},
+		{"an element, a substitution's file and a brace", "hä[2]=b; print $hä; ö==(print hi); [[ $ö == /* ]] && print path; ü=x}; print $ü", "b\npath\nx}\n"},
 		{"an array literal and text eval reads", "hä=(1 2); print $hä[2]; eval 'ö=1; print $ö'", "2\n1\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

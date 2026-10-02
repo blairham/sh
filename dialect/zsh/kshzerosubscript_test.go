@@ -21,6 +21,8 @@ func TestKshZeroSubscriptNamesTheFirstElement(t *testing.T) {
 		{`setopt kshzerosubscript; print -r -- :${a[0,0]}:${a[1,0]}:${a[0,1]}:${a[2,0]}:${a[0,2]}:`, ":p::p::p q:\n"},
 		{`setopt kshzerosubscript; a[0,0]=W; print -r -- $a`, "W q r s\n"},
 		{`setopt kshzerosubscript; a[1,0]=W; print -r -- $a`, "W p q r s\n"},
+		{`setopt kshzerosubscript; unset 'a[1,0]'; print -r -- "<$a>" ${#a}`, "< p q r s> 5\n"},
+		{`setopt kshzerosubscript; unset 'a[0,0]'; print -r -- "<$a>" ${#a}`, "< q r s> 4\n"},
 		// Arithmetic is not reached.
 		{`setopt kshzerosubscript; print -r -- $((a[0]))`, "0\n"},
 		// The backward miss is the index 0, read and written as the first.

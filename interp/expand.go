@@ -1853,9 +1853,16 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, l
 			// `${=a[@]}` joins the list and splits the string, so the
 			// elements are gone before the marks could mean anything —
 			// edges included, since what the flag splits is one string and
-			// the word loop asks the scalar path about its ends. The old
-			// reading's fields are what it is handed.
-			parts, marks = withoutNullFields(parts, marks.nulls), listMarks{}
+			// the word loop asks the scalar path about its ends.
+			//
+			// An empty element is joined like any other, though, and that
+			// is measured: with `IFS=:` and `b=(x '' y)`, unquoted `${=b}`
+			// is the three words `x`, nothing and `y` in zsh 5.9.2 — the
+			// join `x::y` split on a separator that is not white space —
+			// where dropping the empty element first left two. Under a
+			// white-space IFS the two runs of it are one and the empty goes
+			// either way (#5312).
+			marks = listMarks{}
 			parts = r.splitFlagFields(s, sp, parts)
 		}
 		if tail != nil {
@@ -2302,7 +2309,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// this path never glob-escaped, so `a=("zz*" other)` matched
 			// the directory in the zsh dialect, where the shell leaves the
 			// star alone.
-			return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
+			return r.tildeFlagElements(s, head, r.listElementFields(e, s, sp, elems)), true
 		}
 		if s.Quoting != syntax.Unquoted {
 			if len(elems) == 0 && e.Op == syntax.ParamNone {
@@ -2347,7 +2354,7 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			}
 			return escapeAll(elems), true
 		}
-		return r.tildeFlagElements(s, head, r.elementFields(elems, sp, r.globSubstAnswer(s))), true
+		return r.tildeFlagElements(s, head, r.listElementFields(e, s, sp, elems)), true
 	}
 	// `${@@Q}` and `${*@Q}`: a transformation distributes over the positional
 	// parameters exactly as it does over a whole array — one word per
@@ -2409,6 +2416,19 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	// Unquoted, each parameter goes through the same two stages every other
 	// expansion does.
 	return r.tildeFlagElements(s, head, r.elementFields(r.params(), sp, r.globSubstAnswer(s))), true
+}
+
+// listElementFields is elementFields for the list path, which knows what the
+// elements came from: the empty fields an `=` split a level down made are
+// bare, and kept unquoted as they are in a flag group (#5299). With `IFS=:`
+// and `u=a::b:`, `${${=u}}` is the four words `a`, nothing, `b`, nothing in
+// zsh 5.9.2, where an array's empty element is gone unquoted (#5312).
+func (r *Runner) listElementFields(e *syntax.ParamExpr, s syntax.Span, sp splitPolicy, elems []string) []string {
+	fields := r.elementFields(elems, sp, r.globSubstAnswer(s))
+	if e.Inner != nil && e.Op == syntax.ParamNone && r.nestedElementsAreBare(e) == nestedBareFromAnIFSSplit {
+		r.listNulls = nil
+	}
+	return fields
 }
 
 // elementFields is what an unquoted list expansion yields: the fields its
@@ -3439,6 +3459,20 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// measurement that took the claim back out.
 		words, _, isList := r.nestedWords(e)
 		if isList {
+			if !e.EnclosedInDoubleQuotes && r.nestedElementsAreBare(e) == nestedBareFromAList {
+				// Unquoted, a list's empty elements are gone before they
+				// are counted, as they are under a flag group: `${#${b[@]}}`
+				// is 2 with `b=(x '' y)` and `${#${(s.:.)u}}` is 2 with
+				// `u=a::b:`, where the quoted form counts 3 and an `=`
+				// split's fields count all four (#5312).
+				n := 0
+				for _, w := range words {
+					if w != "" {
+						n++
+					}
+				}
+				return itoa(n)
+			}
 			return itoa(len(words))
 		}
 		return itoa(r.stringLength(strings.Join(words, "")))
@@ -8948,6 +8982,17 @@ func (r *Runner) expandingQuoting(e *syntax.ParamExpr) syntax.Quoting {
 // with none, and the splitting policy that quoting implies.
 func (r *Runner) nestedInnerSpan(e *syntax.ParamExpr) (syntax.Span, splitPolicy) {
 	span := e.Inner.Spans[0]
+	if span.Kind == syntax.ParamExp && span.Param != nil && span.Param.SplitFlags%2 == 1 {
+		// An `=` a level down splits as an unquoted one does, whatever the
+		// quoting around it: with `IFS=:` and `u=a::b:`, `"${(@)${=u}}"` is
+		// the four words `a`, nothing, `b`, nothing in zsh 5.9.2, and with
+		// `IFS=" "` and `v=" a  b "`, `"${(@)${=v}}"` is the two words `a`
+		// and `b` — where `"${=v}"` at the top keeps its edges and is four.
+		// The quoting still decides what the *outer* does with the fields:
+		// `"${${=u}}"` joins them (#5312).
+		span.Quoting = syntax.Unquoted
+		return span, splitByDialect
+	}
 	if span.Quoting != syntax.Unquoted {
 		// Written with quotes of its own, which is a different construct and
 		// is why `${(@f)"$(cmd)"}` differs from the same characters without
@@ -9013,7 +9058,33 @@ func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	// value is a character the outer operator matches against and not a
 	// pattern the shell is about to escape for someone: leaving them on
 	// answered `${${v}}` on `a*b` with a backslash in it.
-	return unescapeAll(words)
+	words = unescapeAll(words)
+	if innerLetterSplitDropsItsEmpties(span) {
+		// A letter split a level down with no `@` beside it leaves no empty
+		// field, inside quotes as well: with `u=a::b:`, `"${(@)${(s.:.)u}}"`
+		// is two words, `"${#${(s.:.)u}}"` is 2 and `"${${(s.:.)u}}"` is
+		// `a:b` in zsh 5.9.2, where the same split written at the top in
+		// quotes keeps its last empty field (#5312).
+		kept := words[:0]
+		for _, w := range words {
+			if w != "" {
+				kept = append(kept, w)
+			}
+		}
+		words = kept
+	}
+	return words
+}
+
+// innerLetterSplitDropsItsEmpties says the inner of a nested expansion is a
+// letter split — `s`, `f` or `0` — with no `@` beside it. See
+// nestedInnerFields.
+func innerLetterSplitDropsItsEmpties(span syntax.Span) bool {
+	p := span.Param
+	if span.Kind != syntax.ParamExp || p == nil {
+		return false
+	}
+	return strings.ContainsAny(p.Flags, splitFlagLetters) && !strings.Contains(p.Flags, "@")
 }
 
 // nestedInnerSplit is the field splitting an inner substitution's *text* is

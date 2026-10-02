@@ -117,14 +117,69 @@ func orderWords(e *syntax.ParamExpr, words []string) []string {
 	// Stable, because a fold makes ties reachable and they keep the order
 	// they were written in: `${(@oi)a}` on `(B a C b)` is `a B b C`, with the
 	// `B` still ahead of the `b`.
+	key := func(w string) string { return w }
+	if innerEmptiesSortLast(e) {
+		key = nestedSortKey
+	}
 	sort.SliceStable(words, func(i, j int) bool {
-		c := compareWords(words[i], words[j], fold, numeric, signed)
+		c := compareWords(key(words[i]), key(words[j]), fold, numeric, signed)
 		if descending {
 			return c > 0
 		}
 		return c < 0
 	})
 	return words
+}
+
+// nestedSortKey is what an element a nested expansion produced is sorted on:
+// itself, except that an empty one sorts as the single byte 0xa1 rather than
+// ahead of everything. Measured on zsh 5.9.2 under LC_ALL=C, 2026-10-01, with
+// `b=($'\xff' "" x $'\xa0' $'\xa2')`:
+//
+//	"${(@o)${b[@]}}"     x \xa0 "" \xa2 \xff   the empty between 0xa0 and 0xa2
+//	"${(@O)${b[@]}}"     \xff "" x          (on `($'\xff' "" x)`) and reversed
+//	"${(@o)b}"           "" x y             (on `(x "" y)`) where not nested,
+//	                                        the empty is first as it should be
+//	c=("${(@)b}"); "${(@o)c}"               and first again once it is stored
+//
+// The same holds under `i` and `n`, and whether the inner is quoted or not:
+// `"${(@oi)${b[@]}}"`, `"${(@on)${b[@]}}"` and `"${(@o)"${b[@]}"}"` all put
+// the empty last on `("" x)` (#5312). So the key is the nesting, not the
+// spelling of the inner.
+//
+// It is the empty a nested *parameter expansion* hands back, and nothing that
+// rewrites the words on the way out keeps it — same shell, same day, on
+// `b=(x "" y)`:
+//
+//	"${(@o)${b[@]}-z}"       x y ""     an operator that leaves the words alone
+//	"${(@oU)${b[@]}}"        X Y ""     and a case flag, keep it last
+//	"${(@o)${b[@]}#x}"       "" "" y    a pattern operator puts it first,
+//	"${(@o)${b[@]}/x/w}"     "" w y     as `%`, `/` and `:#` do too,
+//	"${(@os.:.)${:-x::y}}"   "" x y     and so does a split in the outer,
+//	"${(@of)"$(print x)"}"              and a command substitution's empty
+//	                                    lines were never the inner's elements
+func nestedSortKey(w string) string {
+	if w == "" {
+		return "\xa1"
+	}
+	return w
+}
+
+// innerEmptiesSortLast reports whether e's words are sorted with
+// nestedSortKey: see it for the measurements.
+func innerEmptiesSortLast(e *syntax.ParamExpr) bool {
+	if e.Inner == nil || len(e.Inner.Spans) != 1 || e.Inner.Spans[0].Kind != syntax.ParamExp {
+		return false
+	}
+	if strings.ContainsAny(e.Flags, splitFlagLetters) || e.SplitFlags%2 == 1 {
+		return false
+	}
+	switch e.Op {
+	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong, syntax.ParamTrimSuffix,
+		syntax.ParamTrimSuffixLong, syntax.ParamReplace, syntax.ParamExclude:
+		return false
+	}
+	return true
 }
 
 // compareWords orders two words: by this shell's own order — shellOrder, and

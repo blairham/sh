@@ -636,7 +636,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if fd > 2 && !persists {
 				saveFds()
 			}
-			if err := r.dupFd(fd, name, r.dupTargetText(rd, moveFrom), opened); err != nil {
+			if err := r.dupFd(fd, name, r.dupTargetText(rd, moveFrom), rd.Op != syntax.TokLessAmp, opened); err != nil {
 				r.diagf("%v\n", err)
 				// A duplication that fails is a redirection that failed, and
 				// carries the same number as one whose file would not open.
@@ -879,7 +879,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				if fd > 2 {
 					saveFds()
 				}
-				if err := r.dupFd(fd, "0", "", opened); err != nil {
+				if err := r.dupFd(fd, "0", "", false, opened); err != nil {
 					r.diagf("%v\n", err)
 					r.status = r.redirectFailureStatus()
 					r.redirErr = true
@@ -2088,7 +2088,7 @@ func (r *Runner) seekableFd(fd int) (io.Seeker, bool) {
 // dialect — `cat <a <b` reads both files in order — and this shell has none,
 // for either operator, so joining `<&` to a set nothing else fills would
 // model half of a feature.
-func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer) error {
+func (r *Runner) dupFd(fd int, target, written string, write bool, opened map[int]io.Writer) error {
 	if target == "-" {
 		// Whatever this command had aimed at the number, it no longer has.
 		delete(opened, fd)
@@ -2176,6 +2176,14 @@ func (r *Runner) dupFd(fd int, target, written string, opened map[int]io.Writer)
 			r.redirectStdout(w)
 		}
 	default:
+		// A numbered descriptor joins its targets the same way, for a write
+		// duplication: `exec 3>&1 3>&2; print -u 3 x` writes `x` to both
+		// streams in zsh 5.9.2, and `exec 3>&1; exec 3>&2` — two lists —
+		// to standard error alone. Measured 2026-10-02 (#5155). A read
+		// duplication stays out for the reason the doc comment gives.
+		if w, ok := src.(io.Writer); ok && write {
+			src = r.eachTarget(fd, w, opened)
+		}
 		r.setFd(fd, src)
 	}
 	return nil

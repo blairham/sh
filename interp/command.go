@@ -483,6 +483,8 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string, default
 		r.takeSpecialBuiltinFailure()
 		r.throughCommandWord = outerCommand
 		r.inBuiltin = outer
+		r.reportExitValue(st)
+		r.commandRanAWord = true
 		return st
 	}
 	// And the default path, if `-p` asked for one — around the lookup the
@@ -490,6 +492,7 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string, default
 	// here, which is the line the measurement draws: `command -p eval 'ls'`
 	// looks `ls` up on the caller's PATH in every column.
 	defer r.searchingTheDefaultPath(defaultPath)()
+	r.commandRanAWord = true
 	if err := r.exec(ctx, args, r.environ()); err != nil {
 		r.diagf("command: %v\n", err)
 		return 1

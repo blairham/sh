@@ -107,15 +107,22 @@ func (r *Runner) lookPath(name string) (string, error) {
 // written back is Runner.reportedPath's axis — and a remembered path is the
 // hash table's own spelling, which lookPathReporting answers for.
 func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) {
-	if strings.ContainsRune(name, '/') {
+	slashed := strings.ContainsRune(name, '/')
+	if slashed {
 		full := r.absolute(name)
-		if err := r.runnable(full); err != nil {
+		err := r.runnable(full)
+		if err == nil {
+			return full, full, nil
+		}
+		if !r.searchesTheSlashedName(name) {
 			return "", "", &pathError{
 				name: name, resolved: full,
 				missing: errors.Is(err, os.ErrNotExist), err: err,
 			}
 		}
-		return full, full, nil
+		// Not here, and this shell looks down the path for it — the walk
+		// below, which joins a name with a slash exactly as a bare one. The
+		// hash is skipped: it holds bare names alone.
 	}
 
 	// What the command hash already holds, which is the whole reason it is
@@ -126,7 +133,7 @@ func (r *Runner) lookPathSpelled(name string) (path, spelled string, err error) 
 	// with two copies of one name on PATH, the first hashed and then
 	// deleted — the arrangement that tells the readings apart, since with
 	// one copy all four fail and only the wording moves.
-	if hashed, ok := r.hashedCommandPath(name); ok && r.rememberingLookups() {
+	if hashed, ok := r.hashedCommandPath(name); ok && !slashed && r.rememberingLookups() {
 		full := r.absolute(hashed)
 		err := r.runnable(full)
 		if err == nil {
@@ -509,7 +516,10 @@ func (r *Runner) cannotRun(err error, how naming) int {
 	// Nothing by that name. A slash makes it a path that is not there, which
 	// three of the four word differently from a bare name off PATH.
 	format := orElse(how.bare, how.fallback)
-	if strings.ContainsRune(pe.name, '/') {
+	// Unless the walk is what found nothing, which a name with a slash
+	// reaches only under `pathdirs`: zsh says `command not found: sub/x`
+	// there. See Runner.searchesTheSlashedName.
+	if strings.ContainsRune(pe.name, '/') && !errors.Is(pe.err, errNotFound) {
 		format = orElse(r.diag().PathNotFound, format)
 	}
 	// The name and nothing else. Every not-found wording in the panel spells
@@ -543,7 +553,9 @@ func (r *Runner) lookPathAll(name string) []string {
 		if r.runnable(full) == nil {
 			return []string{full}
 		}
-		return nil
+		if !r.searchesTheSlashedName(name) {
+			return nil
+		}
 	}
 	var hits []string
 	path, _ := r.getVar("PATH")

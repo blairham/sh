@@ -3167,10 +3167,20 @@ func (j *Job) released(pid int) {
 	j.procsMu.Lock()
 	defer j.procsMu.Unlock()
 	j.procs = slices.DeleteFunc(j.procs, func(p jobProcess) bool { return p.pid == pid })
-	if pid == j.PID {
-		// The process `$!` names has been waited for while the job may run
-		// on. See Runner.jobOutlivingItsFirstProcess.
-		j.firstGone = true
+	// The process `$!` names has been waited for while the job may run on.
+	// See Runner.jobOutlivingItsFirstProcess.
+	//
+	// PID is read only once the settle is seen to have happened: another
+	// element of the same pipeline may be settling it at this moment, and
+	// the close of ready is what orders that write before this read (#5424).
+	// Not settled yet means not this process, since a process is settled
+	// before it is waited for.
+	select {
+	case <-j.ready:
+		if pid == j.PID {
+			j.firstGone = true
+		}
+	default:
 	}
 }
 

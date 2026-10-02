@@ -297,7 +297,7 @@ func registerCapabilityParameter(
 			return nil
 		}
 		out := maps.Clone(table)
-		rows, cols := r.ScreenSize()
+		rows, cols := screenSizeFor(r, table, colsKey, linesKey)
 		out[colsKey] = interp.Scalar(strconv.Itoa(cols))
 		out[linesKey] = interp.Scalar(strconv.Itoa(rows))
 		return out
@@ -311,10 +311,10 @@ func registerCapabilityParameter(
 		}
 		switch key {
 		case colsKey:
-			_, cols := r.ScreenSize()
+			_, cols := screenSizeFor(r, table, colsKey, linesKey)
 			return strconv.Itoa(cols), true
 		case linesKey:
-			rows, _ := r.ScreenSize()
+			rows, _ := screenSizeFor(r, table, colsKey, linesKey)
 			return strconv.Itoa(rows), true
 		}
 		value, ok := table[key]
@@ -420,4 +420,22 @@ func promptCapability(table interp.AssocArray, code string) string {
 		return ""
 	}
 	return withoutPadding(v.Str)
+}
+
+// screenSizeFor is the two size capabilities: the terminal's own size, the
+// environment's, and — where neither answers — the description's, before the
+// classic 80 by 24. Measured 2026-10-02 on zsh 5.9.2 with no terminal under
+// `env -i`: `TERM=guru`, whose description says `lines#33`, answers 33 lines
+// and 80 columns, `TERM=wy520-36w` answers 36 and 132, `LINES=50
+// COLUMNS=99` in the environment wins over both, and `TERM=linux`, whose
+// description says neither, answers 24 and 80 (#5315).
+func screenSizeFor(r *interp.Runner, table interp.AssocArray, colsKey, linesKey string) (rows, cols int) {
+	described := func(key string) int {
+		n, err := strconv.Atoi(table[key].Str)
+		if err != nil {
+			return 0
+		}
+		return n
+	}
+	return r.ScreenSizeOr(described(linesKey), described(colsKey))
 }

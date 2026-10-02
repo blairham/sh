@@ -3,7 +3,10 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // `${(V)x}`: make the characters a terminal would act on visible instead.
 //
@@ -63,6 +66,47 @@ func visibleText(s string) string {
 		default:
 			b.WriteByte(c)
 		}
+	}
+	return b.String()
+}
+
+// visibleFlagText is visibleText for the `(V)` flag, which reaches past ASCII
+// too: a byte that begins no character is written `\M-` and the visible
+// form of its low seven bits. Under a locale whose characters are counted
+// that is every such byte; under one whose are not, only 0x80 to 0x9f, whose
+// low half is a control — the rest are written as they are. Measured
+// 2026-10-02 on zsh 5.9.2: under `en_US.UTF-8` a lone `\x9b` is `\M-^[`,
+// `\x89` is `\M-\t`, `\xe1` is `\M-a` and `\xff` is `\M-^?`, a whole `é`
+// is `é`, and `\xe2\x82` is `\M-b\M-^B`; under `C` the `\x9b` and the
+// `\x89` are the same and `\xe1` and `\xff` are the bytes themselves
+// (#5315).
+func (r *Runner) visibleFlagText(s string) string {
+	if isASCII(s) {
+		return visibleText(s)
+	}
+	chars := r.countsTheLocalesCharacters()
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	for i := 0; i < len(s); {
+		c := s[i]
+		if c < utf8.RuneSelf {
+			b.WriteString(visibleText(s[i : i+1]))
+			i++
+			continue
+		}
+		if chars {
+			if u, n := utf8.DecodeRuneInString(s[i:]); u != utf8.RuneError || n > 1 {
+				b.WriteString(s[i : i+n])
+				i += n
+				continue
+			}
+		}
+		if chars || c <= 0x9f {
+			b.WriteString(`\M-` + visibleText(string(rune(c&0x7f))))
+		} else {
+			b.WriteByte(c)
+		}
+		i++
 	}
 	return b.String()
 }

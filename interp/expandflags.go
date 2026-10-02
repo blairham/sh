@@ -684,7 +684,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	// this did not. See visibleflag.go.
 	if strings.ContainsRune(e.Flags, 'V') {
 		for i, w := range words {
-			words[i] = visibleText(w)
+			words[i] = r.visibleFlagText(w)
 		}
 	}
 	// Rule 14's third spelling: `(b)` marks the *pattern* metacharacters and

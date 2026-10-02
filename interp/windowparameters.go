@@ -224,12 +224,26 @@ func (r *Runner) windowSizeValue(name string) string {
 // `${COLUMNS}` reports there. Both differences are why this is not
 // windowSizeValue with a different caller.
 func (r *Runner) ScreenSize() (rows, cols int) {
+	return r.ScreenSizeOr(tty.FallbackRows, tty.FallbackCols)
+}
+
+// ScreenSizeOr is ScreenSize with the last answer the caller's own rather
+// than the classic 80 by 24: the terminal, then the environment, then
+// defRows and defCols where either is positive. A terminal description that
+// says how big its screen is answers there — see the zsh/terminfo module.
+func (r *Runner) ScreenSizeOr(defRows, defCols int) (rows, cols int) {
+	if defRows <= 0 {
+		defRows = tty.FallbackRows
+	}
+	if defCols <= 0 {
+		defCols = tty.FallbackCols
+	}
 	rows, cols, _ = r.terminalSize()
 	if cols <= 0 {
-		cols = r.inheritedSize("COLUMNS", tty.FallbackCols)
+		cols = r.inheritedSize("COLUMNS", defCols)
 	}
 	if rows <= 0 {
-		rows = r.inheritedSize("LINES", tty.FallbackRows)
+		rows = r.inheritedSize("LINES", defRows)
 	}
 	return rows, cols
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -98,12 +99,31 @@ func biPrintf(r *Runner, _ context.Context, args []string) (status int) {
 	// `-v name` collects the text instead of printing it. Swapped rather than
 	// threaded through, because everything below writes to r.stdout() and the
 	// format is reused in a loop.
+	// Where each use of the format becomes an element: the ends of the uses.
+	// See Semantics.PrintfVTakesAnElementPerPass.
+	var passEnds []int
+	perPass := false
+	if assign != "" && r.sem().PrintfVTakesAnElementPerPass == Yes {
+		name := r.throughNameref(assign)
+		_, assoc := r.assocFor(name)
+		perPass = !assoc && r.nameIsAnArray(name)
+	}
 	if assign != "" {
 		var into strings.Builder
 		saved := r.Stdout
 		r.Stdout = &into
 		defer func() {
 			r.Stdout = saved
+			if perPass && len(passEnds) > 1 {
+				text, from := into.String(), 0
+				elems := make([]string, 0, len(passEnds))
+				for _, end := range passEnds {
+					elems = append(elems, text[from:end])
+					from = end
+				}
+				r.setArray(assign, elems)
+				return
+			}
 			// Through the operand store and not setVar, because the name may
 			// carry a subscript: `printf -v 'q[1]'` fills an element and
 			// `printf -v 'm[k]'` a keyed one. setVar made a *scalar* whose
@@ -128,6 +148,11 @@ func biPrintf(r *Runner, _ context.Context, args []string) (status int) {
 	// all. Unanimous, and the reason this is a loop rather than one pass.
 	for pass := 0; ; pass++ {
 		used, code, end := r.printfOnce(format, operands)
+		if perPass {
+			if sb, ok := r.Stdout.(*strings.Builder); ok {
+				passEnds = append(passEnds, sb.Len())
+			}
+		}
 		if code != 0 {
 			status = code
 		}
@@ -237,8 +262,100 @@ const (
 // consumed, the status of any complaint, and how the pass ended — which is
 // printfPassEnd's three and not a bool, because one shell drops the rest of a
 // pass without ending the builtin.
+// PrintfArgumentPositionForm is Semantics.PrintfArgumentPositions.
+type PrintfArgumentPositionForm uint8
+
+const (
+	// PrintfPositionsRefused has no positions: `%2$s` is a bad conversion.
+	// bash, dash and BusyBox ash, and the core.
+	PrintfPositionsRefused PrintfArgumentPositionForm = iota
+	// PrintfPositionsPerPass is zsh's: a position counts from the first
+	// argument of the pass, a conversion with none takes the next argument
+	// in order whatever positions were used around it, and the pass uses as
+	// many arguments as the larger of the two. A position past the pass's
+	// arguments ends the builtin at 1 — `N: argument specifier out of range`
+	// — with what the pass wrote before it kept. Measured 2026-10-02 on zsh
+	// 5.9.2:
+	//
+	//	printf '%2$d%1$d\n' 1 2 3 4                21 / 43
+	//	printf '%2$s %s %3$s\n' Morning Good World  Good Morning World
+	//	printf '%1$s %s\n' a b                      a a / b b
+	//	printf '%1$*2$d' 1 2 3 4 5 6 7 8 9 10        ` 1   3     5       7         9`
+	//	printf '%3$.*1$d\n' 4 0 3                   0003
+	//	print -f '%*.*1$d\n' 1 2 3                  2 / 000
+	//	printf '%2$s\n' 1 2 3                       2, then `2: … out of range`
+	//	printf '%1$s %2$s %1$s\n' a b c d e         a b a / c d c / `e ` and
+	//	                                            the complaint
+	//	printf '%*0$d'                              `0: … out of range`
+	//	printf '%s %*1$d|%s|\n' 5 7 8 9             `5     7|8|` / `9         0||`:
+	//	                                            a star's position moves the
+	//	                                            next argument in order
+	//	printf '%0$s' a                             `%0$: invalid directive`
+	PrintfPositionsPerPass
+)
+
+// printfPositionalSpec takes the positions out of the conversion src begins
+// with: the value's, `N$` straight after the `%`, and one per `*` in order —
+// a position for a `*N$`, -1 for a plain `*`. The conversion comes back with
+// them removed, for the ordinary scanner, with how many bytes went. A `%0$`
+// is left alone, which is what refuses it.
+func printfPositionalSpec(src string) (conv string, removed, value int, stars []int) {
+	value = -1
+	j := 1
+	k := j
+	for k < len(src) && src[k] >= '0' && src[k] <= '9' {
+		k++
+	}
+	if k > j && k < len(src) && src[k] == '$' && src[j:k] != "0" && src[j] != '0' {
+		value, _ = strconv.Atoi(src[j:k])
+		j = k + 1
+	}
+	var b strings.Builder
+	b.WriteByte('%')
+	k = j
+	for k < len(src) {
+		c := src[k]
+		if c == '*' {
+			b.WriteByte('*')
+			k++
+			d := k
+			for d < len(src) && src[d] >= '0' && src[d] <= '9' {
+				d++
+			}
+			if d > k && d < len(src) && src[d] == '$' {
+				n, _ := strconv.Atoi(src[k:d])
+				stars = append(stars, n)
+				k = d + 1
+				continue
+			}
+			stars = append(stars, -1)
+			continue
+		}
+		if strings.IndexByte("-+ #0'.123456789", c) < 0 {
+			break
+		}
+		b.WriteByte(c)
+		k++
+	}
+	b.WriteString(src[k:])
+	conv = b.String()
+	return conv, len(src) - len(conv), value, stars
+}
+
+// printfPositionOutOfRange is the complaint about a position past the pass's
+// arguments. See PrintfPositionsPerPass.
+func (r *Runner) printfPositionOutOfRange(n int) int {
+	r.diagf("%s\n", Wording(r.diag().PrintfPositionOutOfRange,
+		"printf: %[1]d: argument specifier out of range", n))
+	return 1
+}
+
 func (r *Runner) printfOnce(format string, operands []string) (int, int, printfPassEnd) {
 	used, status := 0, 0
+	// The highest position a conversion named this pass. See
+	// PrintfPositionsPerPass.
+	highest := 0
+	positions := r.sem().PrintfArgumentPositions == PrintfPositionsPerPass
 	// Written as it is produced rather than collected and written at the end:
 	// a shell that complains half way through has already printed the half
 	// before it, and ksh93's `[` arrives before its complaint about what
@@ -289,7 +406,19 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 			// See printfWriter.
 			mark := b.mark()
 			b.begin()
-			spec, verb, timeFmt, n, code := r.scanPrintfSpec(format[i:])
+			conv, removed, value, stars := format[i:], 0, -1, []int(nil)
+			if positions {
+				conv, removed, value, stars = printfPositionalSpec(conv)
+				for _, p := range append([]int{value}, stars...) {
+					if p >= 0 && (p == 0 || p > len(operands)) {
+						code := r.printfPositionOutOfRange(p)
+						b.end(mark, false)
+						return max(used, highest), code, printfPassStopped
+					}
+				}
+			}
+			spec, verb, timeFmt, n, code := r.scanPrintfSpec(conv)
+			n += removed
 			if code != 0 {
 				b.end(mark, false)
 				return used, code, printfPassStopped
@@ -344,7 +473,39 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 				return used, code, printfPassStopped
 			}
 			took := used
-			text, code, stop := r.printfVerb(spec, verb, timeFmt, next)
+			take := next
+			if value >= 0 || slices.ContainsFunc(stars, func(p int) bool { return p >= 0 }) {
+				// The stars in order, then the value, each from its position
+				// or from the next argument in order. See
+				// PrintfPositionsPerPass.
+				calls := 0
+				take = func() (string, bool) {
+					p := -1
+					switch {
+					case calls < len(stars):
+						p = stars[calls]
+					case calls == len(stars):
+						p = value
+					}
+					star := calls < len(stars)
+					calls++
+					if p < 0 {
+						return next()
+					}
+					highest = max(highest, p)
+					if star {
+						// A star's position moves the next argument in order
+						// to the one after it, where a value's does not:
+						// `printf '%s %*1$d|%s|' 5 7 8 9` writes `5     7|8|`
+						// and `printf '%2$s %s' a b` writes `b a`, measured
+						// on zsh 5.9.2.
+						used = p
+					}
+					return operands[p-1], true
+				}
+				took = -1
+			}
+			text, code, stop := r.printfVerb(spec, verb, timeFmt, take)
 			if code != 0 {
 				status = code
 			}
@@ -354,11 +515,11 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, printfP
 			// however many star operands it read on the way.
 			b.end(mark, !stop && used > took)
 			if stop {
-				return used, status, printfPassStopped
+				return max(used, highest), status, printfPassStopped
 			}
 		}
 	}
-	return used, status, printfPassRan
+	return max(used, highest), status, printfPassRan
 }
 
 // printfVerb formats one conversion, resolving the width and the precision a
@@ -2750,6 +2911,16 @@ func (r *Runner) printfBadVerb(conversion, verb string) int {
 	d := r.diag()
 	if i := strings.LastIndexByte(conversion, '%'); i >= 0 {
 		conversion = conversion[i:]
+	}
+	// The directive is named up to a NUL in it and no further, which is the
+	// one shell whose arguments can hold one: measured 2026-10-02 on zsh
+	// 5.9.2, `printf $'%\0'` is `%: invalid directive` and `printf $'%5\0d'`
+	// is `%5: invalid directive` (#5143).
+	if i := strings.IndexByte(conversion, 0); i >= 0 {
+		conversion = conversion[:i]
+	}
+	if i := strings.IndexByte(verb, 0); i >= 0 {
+		verb = verb[:i]
 	}
 	r.diagf("%s\n", Wording(d.PrintfBadVerb, "printf: %[2]s: invalid directive", verb, r.quotedDirective(conversion)))
 	return orDefault(d.PrintfBadVerbStatus, 1)

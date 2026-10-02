@@ -182,9 +182,8 @@ func TestPrintRefusals(t *testing.T) {
 		// got — the terminal's name here.
 		{`print -P '%q'`, "zsh:print:1: the %q prompt escape is not implemented\n", 1},
 		{`print -P '%y'`, "zsh:print:1: the %y prompt escape is not implemented\n", 1},
-		{`print -v foo x`, "zsh:print:1: -v is not implemented yet\n", 1},
-		{`print -x2 a`, "zsh:print:1: -x is not implemented yet\n", 1},
-		{`print -X2 a`, "zsh:print:1: -X is not implemented yet\n", 1},
+		// `-v`, `-x` and `-X` have left it: see printfpositions_test.go
+		// (#5143).
 		{`print -u2 -f '%s' a`, "zsh:print:1: -f with -u is not implemented yet\n", 1},
 	} {
 		out, st := runZsh(t, t.TempDir(), tc.src)

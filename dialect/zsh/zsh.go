@@ -3487,6 +3487,12 @@ func Semantics() interp.Semantics {
 	s.PrintfFloatOperandIsEvaluatedTwice = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
+	// A conversion may name its argument; see
+	// interp.PrintfPositionsPerPass for the measurements.
+	s.PrintfArgumentPositions = interp.PrintfPositionsPerPass
+	// And `printf -v` into an array stores a use of the format an element;
+	// see the axis for the measurements.
+	s.PrintfVTakesAnElementPerPass = interp.Yes
 	// The same two digits bash reads, and an empty digit run is a zero
 	// rather than an escape left standing: `printf 'a\xZ'` is a NUL here.
 	// unanswered PrintfReportsAMissingHexDigit: an empty digit run is a zero
@@ -6175,10 +6181,11 @@ func Diagnostics() interp.Diagnostics {
 		CdTooManyOperands: "cd: too many arguments",
 		// And `cd old new` where old is not in the current directory's path,
 		// which names the operand where ksh93's does not.
-		CdBadSubstitution: "cd: string not in pwd: %[1]s",
-		PrintfBadVerb:     "%[2]s: invalid directive",
-		PrintfMissingVerb: "%[1]s: invalid directive",
-		UmaskBadMask:      "bad umask",
+		CdBadSubstitution:        "cd: string not in pwd: %[1]s",
+		PrintfBadVerb:            "%[2]s: invalid directive",
+		PrintfPositionOutOfRange: "%[1]d: argument specifier out of range",
+		PrintfMissingVerb:        "%[1]s: invalid directive",
+		UmaskBadMask:             "bad umask",
 		// The builtin's name comes from the location, as everywhere in zsh.
 		UnaliasNotFound: "no such hash table element: %[2]s",
 		// `zsh:unalias:1: not enough arguments` — the location carries the

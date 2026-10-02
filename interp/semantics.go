@@ -10460,6 +10460,38 @@ type Semantics struct {
 	// kept nothing for this kind of job, and the listing is where that shows.
 	JobsShowBackgroundCommand Answer
 
+	// JobCommandIsReprinted writes a job's command in a `jobs` listing as
+	// the shell prints its parse — the arrangement it writes a script back
+	// in, whose statements share a line outside a declaration — rather than
+	// as it was typed. Measured 2026-10-01 on
+	// bash 5.3.20, `CMD &` and then `jobs`:
+	//
+	//	typed                          listed
+	//	(exit 4) &                     ( exit 4 ) &
+	//	(/bin/sleep 1;:) &             ( /bin/sleep 1; : ) &
+	//	x=1   /bin/sleep  1 &          x=1 /bin/sleep 1 &
+	//	if :; then /bin/sleep 1; fi &  if :; then / ␠␠␠␠/bin/sleep 1; / fi &
+	//	for i in a; do …; done &       for i in a; / do / ␠␠␠␠…; / done &
+	//	/bin/sleep 1 >/dev/null 2>&1 & /bin/sleep 1 > /dev/null 2>&1 &
+	//	! /bin/sleep 1 &               /bin/sleep 1 &: the bang is not written
+	//	{ /bin/sleep 1; } &            { /bin/sleep 1; } &: one line, where
+	//	                               `declare -f` gives the group its own
+	//	while :; do a; b; done &       while :; do / ␠␠␠␠a; b; / done &
+	//	a | b &, a && b &              as typed, which they print as
+	//
+	// so the text is the printer over the statement, with the layout this
+	// dialect gives SetScriptListingLayout (#5311). zsh
+	// reprints too, in a shape of its own — `( /bin/sleep 1; :; )`, `if :;
+	// then; …; fi` — which is not this one and is answered No here; dash and
+	// ksh93 show no command at all (JobsShowBackgroundCommand).
+	//
+	// unpinned bash: no corpus row lists a job whose text the printer moves;
+	// pinned by TestAJobsCommandIsReprinted.
+	//
+	// unpinned zsh: zsh reprints in a shape of its own, which is #5342 and not
+	// this field's.
+	JobCommandIsReprinted Answer
+
 	// JobsListNewestFirst puts the most recent job at the top of a `jobs`
 	// listing. True in dash and ksh93; bash and zsh list oldest first.
 	//
@@ -30409,6 +30441,7 @@ func PosixSemantics() Semantics {
 		// POSIX keeps a finished job's status known until `wait` or `jobs`
 		// has reported it, which is every measured column but one.
 		FinishedJobLeavesTheTable: No,
+		JobCommandIsReprinted:     No,
 		ACommandHoldsAJobSlot:     No,
 		// And no `wait -p` either, for the same reason: the standard's
 		// `wait` takes no options at all.

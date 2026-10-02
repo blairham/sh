@@ -146,6 +146,12 @@ func TestAnElementThatForkedIsReported(t *testing.T) {
 		{"time : | :", "[:]\n"},
 		{"time { : } | ext", "[{ :; }]\n[ext]\n"},
 		{"time command ext", "[command ext]\n"},
+		// The last element runs in the shell here when it is a builtin, and
+		// `command` still forks for the program it finds.
+		{"time : | command ext", "[:]\n[command ext]\n"},
+		// And the element's mark is its own: the program run after the
+		// timed one is not timed and does not reach back into the report.
+		{"time ext; ext; echo done", "[ext]\ndone\n"},
 		{"time { ext }", ""},
 		{"f() { ext; }; time f", ""},
 		{"time eval ext", ""},

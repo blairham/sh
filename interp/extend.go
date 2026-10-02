@@ -1580,7 +1580,13 @@ func (r *Runner) PromptStyleValue() PromptStyle { return r.promptStyle }
 // write, or empty where it holds none. A dialect that reads a description
 // installs one; the substrate reads none itself, because which database a
 // shell reads is the shell's to say.
-func (r *Runner) SetTerminalCapabilityReader(read func(termcap string) string) {
+//
+// The reader is handed the runner to answer for, the way an option namespace
+// is, and must read that one rather than the one it was installed on: a
+// subshell is a cloned runner that keeps this field, and reading a
+// capability is not side-effect free in every shell — in zsh it can set the
+// terminal up, which is the subshell's business and not its parent's.
+func (r *Runner) SetTerminalCapabilityReader(read func(r *Runner, termcap string) string) {
 	r.terminalCapability = read
 }
 

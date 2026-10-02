@@ -239,90 +239,6 @@ func terminfoStringAt(table []byte, off int) (string, bool) {
 	return string(table[off : off+end]), true
 }
 
-// terminfoStringIndex is where a string capability sits in the string array.
-//
-// Two of them are needed by name rather than by position, because two
-// booleans are answered from a string rather than from their own slot.
-func terminfoStringIndex(name string) int {
-	for i, n := range terminfoStringNames {
-		if n.terminfo == name {
-			return i
-		}
-	}
-	return -1
-}
-
-// The two string slots the derived booleans below are read out of.
-var (
-	terminfoBackspaceIndex = terminfoStringIndex("cub1")
-	terminfoNewlineIndex   = terminfoStringIndex("nel")
-)
-
-// terminfoDerivedBooleans is the pair of boolean capabilities that are not
-// read from the boolean array, and what each is read from instead.
-//
-// Both are termcap's, both are answered by real zsh from a *string*
-// capability, and both are wrong in real descriptions if the stored bit is
-// believed. See terminfoHasBackspace and terminfoNewlineIsLinefeed.
-var terminfoDerivedBooleans = map[string]struct {
-	index int
-	want  string
-	// storedWins says whether the bit in the boolean array is the answer
-	// when the string it is derived from is absent. Measured, and the two
-	// differ: `OTbs` falls back to it and `OTNL` does not.
-	storedWins bool
-}{
-	"OTbs": {index: terminfoBackspaceIndex, want: "\b", storedWins: true},
-	"OTNL": {index: terminfoNewlineIndex, want: "\n", storedWins: false},
-}
-
-// terminfoDerivedBoolean answers one of the two booleans that are not read
-// from the boolean array the way every other boolean is.
-//
-// `OTbs` is termcap's `bs` — "moving the cursor back one column is a
-// backspace" — and `OTNL` is termcap's `NL` — "a linefeed moves to the next
-// line". Measured against zsh 5.9.2, each is derived from the string
-// capability it describes and the stored bit loses. Synthetic descriptions,
-// compiled with `tic` and read back, 2026-09-11:
-//
-//	cub1=\b                    OTbs=yes
-//	cub1=\E[D                  OTbs=no
-//	OTbs set, cub1=\E[D        OTbs=no    — the stored bit loses
-//	OTbs set, no cub1          OTbs=yes   — and wins when nothing overrules it
-//	nel=\n                     OTNL=yes
-//	OTNL set, no nel           OTNL=no    — which is the difference between
-//	                                        the two, and is why storedWins is
-//	                                        a field rather than always true
-//
-// It is not a curiosity. Reading the slot gives the wrong answer on real
-// terminals in both directions: `ansi` stores `OTbs` and spells `cub1` as
-// `\E[D`, while `linux`, `hpterm`, `sun`, `aixterm`, `cygwin` and `putty` all
-// leave the bit clear and spell `cub1` as a backspace.
-func terminfoDerivedBoolean(name string, stored byte, table []byte, offsets []int) (string, bool) {
-	from, ok := terminfoDerivedBooleans[name]
-	if !ok {
-		return "", false
-	}
-	fallback := from.storedWins && stored == 1
-	if from.index < 0 || from.index >= len(offsets) {
-		return terminfoBoolean(boolByte(fallback)), true
-	}
-	value, present := terminfoStringAt(table, offsets[from.index])
-	if !present {
-		return terminfoBoolean(boolByte(fallback)), true
-	}
-	return terminfoBoolean(boolByte(value == from.want)), true
-}
-
-// boolByte is the stored spelling of a decision this file has just made, so
-// that one function turns a boolean into `yes` or `no`.
-func boolByte(b bool) byte {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // terminfoBoolean is how a stored boolean reads.
 //
 // `yes` and `no`, which is the wording measured out of zsh 5.9.2 rather than
@@ -382,12 +298,11 @@ func parseTerminalDescription(data []byte) ([]TerminalCapability, error) {
 		if i < len(bools) {
 			stored = bools[i]
 		}
-		value := terminfoBoolean(stored)
-		if derived, ok := terminfoDerivedBoolean(name.terminfo, stored, table, offsets); ok {
-			value = derived
-		}
+		// The stored bit, `OTbs` and `OTNL` included: those two read from
+		// a string only in the converted reading. See
+		// ConvertedCapabilities.
 		caps = append(caps, TerminalCapability{
-			Terminfo: name.terminfo, Termcap: name.termcap, Value: value,
+			Terminfo: name.terminfo, Termcap: name.termcap, Value: terminfoBoolean(stored),
 			Kind: BooleanCapability,
 		})
 	}

@@ -63,49 +63,19 @@ package repl
 //
 // Swept over 250 of the 2,684 descriptions in /usr/share/terminfo, comparing
 // this reader's answers against zsh 5.9.2's `$terminfo` key by key and byte
-// by byte, 2026-09-11. Every value agreed except for three things. Two of
-// them are now matched in dialect/zsh/terminfo.go — `cols` and `lines` are
-// the screen's size (#2101), and the extended section reads without being
-// enumerated (#2102) — and the third is recorded rather than emulated:
+// by byte, 2026-09-11. Every value agreed except for three things, and all
+// three are now matched in dialect/zsh/terminfo.go: `cols` and `lines` are
+// the screen's size (#2101), the extended section reads without being
+// enumerated (#2102), and `rs2` and `is3` (#5315).
 //
-//   - **`rs2` and `is3`.** zsh answers absent for these two on descriptions
-//     that carry them — `screen`, `vt100`, `sun`, `aixterm`, `putty` and
-//     about a fifth of the database — while `infocmp` prints the value and
-//     this reader returns it. The rule is that `rs2` is answered when `rs1`
-//     or `rs3` is also present and not otherwise, reproduced with
-//     descriptions compiled for the purpose.
-//
-//     #2100 asked for one of two things before deciding: a mechanism in the
-//     curses library that made the rule predictable and platform-independent,
-//     or a second platform where the behavior was not there. Measured
-//     2026-09-14 on Alpine 3.20 under a container — zsh 5.9 against musl and
-//     ncurses 6.4, reading that image's own /usr/share/terminfo — and neither
-//     answer is the one that arrived:
-//
-//     The behavior **is** there. `${+terminfo[rs2]}` is 0 for `screen`,
-//     `vt100`, `sun` and `putty` and 1 for `xterm-256color`, exactly as on
-//     this machine, and the same compiled two-line descriptions reproduce
-//     the rule in both places: `rs2=\EQQ` alone reads absent, `rs1=\EWW,
-//     rs2=\EQQ` and `rs2=\EQQ, rs3=\EGG` both read, and `rep=\EDD,
-//     rs2=\EQQ` does not. So it is not an artifact of one machine's curses
-//     library. (`aixterm` is in the list above and not in this one: that
-//     image carries no such description, so its 0 there says nothing.)
-//
-//     And it is not the curses *lookup* either, which is the half that
-//     settles what to do about it: `tput rs2` prints the bytes on both
-//     platforms for every description zsh calls absent, so `tigetstr("rs2")`
-//     answers and the suppression is the shell's own. On a description
-//     carrying nothing but `rs2` the two readings of zsh's own parameter then
-//     disagree — `${(kv)terminfo}` iterates `rs2` with its value while
-//     `${terminfo[rs2]}` is empty and `${+terminfo[rs2]}` is 0, measured
-//     identically on both platforms.
-//
-//     Matching that would mean listing a key the lookup denies, which is the
-//     one direction interp.Runner.SetDynamicAssocElement's contract refuses
-//     and for a concrete reason: it is what makes `${terminfo[rs2]:-d}` take
-//     the default for a name the shell has just enumerated. So the answer
-//     stands — report what the description holds, in both readings — and it
-//     is a comment rather than an open question.
+// The last of those was recorded here for a while as a lookup that denied a
+// key its own enumeration listed, and so as something not to emulate. It was
+// never that. The enumeration and the lookup were reading **two different
+// readings of the description**, and the lookup had moved the shell from the
+// first to the second before answering: zsh's `${(kv)terminfo}` read after
+// any lookup has no `is3` either, and an `OTi2` holding its bytes instead.
+// ConvertedCapabilities is that second reading, and the dialect says when it
+// is in force.
 //
 // TerminalCapabilityKind is which of the description's three sections a
 // capability came from.

@@ -96,6 +96,14 @@ func echotiBuiltin(r *interp.Runner, tables *capabilityTables, args []string) in
 	}
 	name := args[0]
 	byTerminfo, kinds := tables.terminfoTable(r)
+	if len(byTerminfo) == 0 {
+		// No terminal at all, and silence is the answer: measured
+		// 2026-10-02, `echoti bel` under a `$TERM` the database does not
+		// hold — or one whose description is generic, see
+		// genericDescription — writes nothing at status 1, which is what
+		// `echotc` says in the same place.
+		return 1
+	}
 	value, ok := byTerminfo[name]
 	if !ok {
 		r.Diagnosef("no such terminfo capability: %s\n", name)

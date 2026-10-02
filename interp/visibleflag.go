@@ -73,8 +73,9 @@ func visibleText(s string) string {
 // visibleFlagText is visibleText for the `(V)` flag, which reaches past ASCII
 // too: a byte that begins no character is written `\M-` and the visible
 // form of its low seven bits. Under a locale whose characters are counted
-// that is every such byte; under one whose are not, only 0x80 to 0x9f, whose
-// low half is a control — the rest are written as they are. Measured
+// that is every such byte; under one whose are not, every byte the C library
+// does not class as printing — which is a platform's answer, see
+// cLocalePrintsHighByte — and the rest are written as they are. Measured
 // 2026-10-02 on zsh 5.9.2: under `en_US.UTF-8` a lone `\x9b` is `\M-^[`,
 // `\x89` is `\M-\t`, `\xe1` is `\M-a` and `\xff` is `\M-^?`, a whole `é`
 // is `é`, and `\xe2\x82` is `\M-b\M-^B`; under `C` the `\x9b` and the
@@ -101,7 +102,7 @@ func (r *Runner) visibleFlagText(s string) string {
 				continue
 			}
 		}
-		if chars || c <= 0x9f {
+		if chars || !cLocalePrintsHighByte(c) {
 			b.WriteString(`\M-` + visibleText(string(rune(c&0x7f))))
 		} else {
 			b.WriteByte(c)

@@ -15608,8 +15608,7 @@ type Semantics struct {
 	//   - A job that leaves with the `+` hands it to the `-`, and the `-` is
 	//     chosen again.
 	//   - When the command ends, a `+` on its slot goes to the `-` where the
-	//     `-` is a job or a number still held, and a `-` on it stays where it
-	//     is. A `+` with nowhere to go stays on the number, which nobody holds
+	//     `-` is a job, and a `-` on it stays where it is. A `+` with nowhere to go stays on the number, which nobody holds
 	//     now, until something reads the table outside a command: `jobs`,
 	//     `wait`, `kill` and a program run in the foreground take it off (see
 	//     Runner.forgetANumberNobodyHolds), and a command that holds that

@@ -65,8 +65,7 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 		// slot — before the slot goes. See Runner.forget.
 		r.dropFinishedJobsWhereAnswered()
 		if r.marksByNumber && r.markCurrent != 0 && r.markCurrent == r.commandSlot &&
-			(r.jobByNumber(r.markPrevious) != nil ||
-				r.markPrevious != 0 && slices.Contains(r.outerSlots, r.markPrevious)) {
+			r.jobByNumber(r.markPrevious) != nil {
 			// The `+` was on the command, and goes where `%-` was — where
 			// `%-` is a job. The `-` is left where it is, even on the
 			// number the command is letting go of: measured, `sleep 1 & {
@@ -80,12 +79,8 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 			// on job 1. See Runner.forgetANumberNobodyHolds for where it is
 			// read again.
 			//
-			// The `-` is then chosen again from the jobs and — for a command
-			// inside another — the numbers still held, this one's among them
-			// until it goes. Measured the same day: after `f() { eval 'sleep
-			// 0 & wait' }; f`, `g() { eval 'wait %%; wait %-' }; g` reads
-			// `%%: no such job` and then `%-: no such job`, so the `-` is on the
-			// eval's number.
+			// The `-` is then chosen again from the jobs and, for a command
+			// inside another, the numbers still held.
 			r.markCurrent = r.markPrevious
 			r.markPrevious = r.highestJobBut(r.markCurrent, outerSlot != 0)
 		}

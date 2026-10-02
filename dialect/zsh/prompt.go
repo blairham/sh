@@ -109,6 +109,10 @@ func PromptStyle() interp.PromptStyle {
 			// draws from the parameter is the prefix it drew from a built-in
 			// string only if the code is here (#2928).
 			'i': interp.FieldLineNumber,
+			// And the same line counted in the file `%x` names, which is
+			// where the two part: inside a function and inside `eval`. See
+			// interp.FieldFileLineNumber for the measurements.
+			'I': interp.FieldFileLineNumber,
 			// Draws nothing and counts as a column, which is what a prompt
 			// uses to tell the shell that bytes it has hidden inside `%{ %}`
 			// do reach the screen. Measured, `%G` alone leaves the text empty

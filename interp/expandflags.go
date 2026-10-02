@@ -1944,7 +1944,7 @@ func quoteFlagged(v string, count int, mod byte, nothing, doubled bool) string {
 	default:
 		var b strings.Builder
 		b.WriteString("$'")
-		eachQuotableByte(v, func(_ int, c byte) {
+		eachQuotableByte(v, func(i int, c byte) {
 			switch {
 			case c == '\'':
 				b.WriteString(`\'`)
@@ -1953,7 +1953,7 @@ func quoteFlagged(v string, count int, mod byte, nothing, doubled bool) string {
 			case c == '!':
 				b.WriteString(`\!`)
 			case c < 0x20 || c >= 0x7f:
-				b.WriteString(controlEscape(c))
+				b.WriteString(controlEscapeBefore(c, v[i+1:]))
 			default:
 				b.WriteByte(c)
 			}
@@ -1996,7 +1996,7 @@ func quoteWithBackslashes(v string, nothing bool) string {
 			// `$'\177'` and `$'\377'`. Ahead of the table on purpose: a tab
 			// and a newline are in it, and here they are `$'\t'` and `$'\n'`
 			// rather than a backslash and a raw byte.
-			b.WriteString("$'" + controlEscape(c) + "'")
+			b.WriteString("$'" + controlEscapeBefore(c, v[i+1:]) + "'")
 		case quotableByte(i, c):
 			b.WriteByte('\\')
 			b.WriteByte(c)
@@ -2053,6 +2053,19 @@ func controlEscape(c byte) string {
 		return `\v`
 	}
 	return fmt.Sprintf(`\%03o`, c)
+}
+
+// controlEscapeBefore is controlEscape for a byte with rest behind it, which
+// spells a NUL as `\0` wherever the octal digit that would lengthen it does
+// not follow. Measured 2026-10-02 on zsh 5.9.2: `${(q)x}` over a NUL then `b`
+// is `$'\0'b`, over a NUL then `1` is `$'\000'1`, over a NUL then `8` is
+// `$'\0'8`, and `$'\1'` stays `$'\001'` — so it is the NUL alone, and the
+// digit counts even outside the quotes the escape stands in (#5336).
+func controlEscapeBefore(c byte, rest string) string {
+	if c == 0 && (rest == "" || rest[0] < '0' || rest[0] > '7') {
+		return `\0`
+	}
+	return controlEscape(c)
 }
 
 // matchingFlag reports whether the `M` flag was written, which turns the

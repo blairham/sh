@@ -3394,6 +3394,11 @@ func editingOption(base, keymap string) zshOption {
 // moves nothing, in both sets — measured, `set -- c a b; set -s` leaves the
 // parameters alone under `emulate sh` as it does under zsh.
 var shLetterOptions = map[rune]string{
+	// `-b` is notify in sh's set, where this shell's own leaves the letter
+	// out: measured 2026-10-02, `emulate sh; set +b; [[ -o notify ]]` is
+	// off and `$-` loses its `b`, where `set +b` under zsh's letters is
+	// `bad option: -b` (#5336).
+	'b': "notify",
 	'f': "noglob",
 	'i': "interactive",
 	'l': "login",
@@ -3416,6 +3421,14 @@ var shLetterOptions = map[rune]string{
 // interp.Runner.SetRefusedOptionLetters.
 const shRefusedLetters = "hHE"
 
+// The startup letters and the `f` letter's option under this shell's own set,
+// which the preset carries and installOptionLetters puts back.
+const (
+	zshStartupLetters            = "569X"
+	zshInteractiveStartupLetters = "569XZ"
+	zshFLetterOption             = "norcs"
+)
+
 // installOptionLetters points the letter reader at one of the two sets.
 //
 // Both halves together, which is the whole point of their being a pair: a map
@@ -3423,6 +3436,27 @@ const shRefusedLetters = "hHE"
 // the shared reading, and refusals left behind from the other set would
 // refuse letters this set has.
 func installOptionLetters(r *interp.Runner, sh bool) {
+	// And `$-`, which writes the letters of whichever set is in force. Under
+	// sh's every letter comes from that set's own table: there are no
+	// startup letters to carry — zsh's `569X` name options sh's set has no
+	// letter for, or names another — the noglob letter is `f`, and `f` no
+	// longer means norcs. Measured 2026-10-02 on zsh 5.9.2: `emulate sh;
+	// print $-` is `b`, `setopt listtypes autolist` adds nothing to it, `set
+	// -o markdirs` makes it `Xb`, and `zsh --emulate sh -fc 'print $-'` —
+	// the `-f` read as noglob — is `f` (#5336).
+	startup, interactive := zshStartupLetters, zshInteractiveStartupLetters
+	noglobF, fLetter := interp.No, zshFLetterOption
+	if sh {
+		startup, interactive, noglobF, fLetter = "", "", interp.Yes, ""
+	}
+	if r.Semantics != nil {
+		// Nil while the dialect is still being applied, where the preset
+		// already holds this shell's own answers.
+		setAxis(r, func(s *interp.Semantics) *string { return &s.DefaultOptionLetters }, startup)
+		setAxis(r, func(s *interp.Semantics) *string { return &s.InteractiveOptionLetters }, interactive)
+		setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.NoglobLetterIsF }, noglobF)
+		setAxis(r, func(s *interp.Semantics) *string { return &s.SetFLetterOption }, fLetter)
+	}
 	if sh {
 		r.SetOptionLetterNames(shLetterOptions)
 		r.SetRefusedOptionLetters(shRefusedLetters)

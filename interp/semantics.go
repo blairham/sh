@@ -25970,6 +25970,21 @@ type Semantics struct {
 	// dash, ksh93u+ and BusyBox ash (pinned alpine image) write nothing —
 	// the zero value (#5357).
 	ExitTrapListedWhileItRuns Answer
+	// InvocationNameParameter names the parameter a shell sets to the name
+	// it was invoked as: argv[0]'s base name, with a login shell's leading
+	// `-` taken off. Measured 2026-10-02 on zsh 5.9.2: `ZSH_NAME` is `zsh`
+	// for `/opt/homebrew/bin/zsh`, `sh` through a link named `sh`, `myzsh`
+	// under `exec -a /x/y/myzsh`, `zsh` under `exec -a -zsh`, and `zsh` for
+	// a script file, whose own path is `$0` and not argv[0]; an inherited
+	// `ZSH_NAME=foo` is overwritten. Empty, nothing is set (#5336).
+	//
+	// unpinned bash: no such parameter in bash, ksh93, dash or BusyBox ash,
+	// so the empty string is the only value that means anything there.
+	//
+	// unpinned zsh: reached only through the front end, which no corpus row
+	// varies the argv[0] of. Pinned by TestZshNameIsTheInvocationsName in
+	// cmd/zsh.
+	InvocationNameParameter string
 
 	// ExecTakesTheLoginLetter is `exec -l`, which puts a `-` on the front of
 	// the argv[0] the replacement sees — the mark `login` and every terminal

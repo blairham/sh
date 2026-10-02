@@ -61,8 +61,12 @@ func (sh Shell) promptDefaults(r *interp.Runner, in source, afterTheFiles bool) 
 	// to prompt, so it is written before the `say` gate rather than behind
 	// it. See PromptStyle.DefaultTrace.
 	if st.DefaultTrace != "" {
+		trace := st.DefaultTrace
+		if in.emulating && spelt(st.TraceEmulations, in.emulation) {
+			trace = st.DefaultTraceUnderEmulation
+		}
 		if _, ok := r.GetVar("PS4"); !ok {
-			r.SetVar("PS4", st.DefaultTrace)
+			r.SetVar("PS4", trace)
 		}
 	}
 	// The one column that splits the pair assigns PS2 with nobody to prompt

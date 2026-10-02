@@ -483,6 +483,13 @@ type PromptStyle struct {
 	// Not exported: measured, a child of any column in the panel has no PS4
 	// in its environment unless one was inherited.
 	DefaultTrace string
+	// DefaultTraceUnderEmulation is DefaultTrace for a shell *started* in one
+	// of TraceEmulations, whitespace-separated mode words. Measured
+	// 2026-10-02 on zsh 5.9.2 with nothing inherited: started as `sh` or
+	// `ksh`, by `--emulate` or by the name, PS4 is `+ `, and started as
+	// itself or as `csh` it is `+%N:%i> `; a later `emulate` moves neither
+	// (#5336).
+	DefaultTraceUnderEmulation, TraceEmulations string
 
 	// DefaultsFollowTheStartupFiles says this dialect assigns Default and
 	// DefaultContinued *after* its startup files rather than before them.

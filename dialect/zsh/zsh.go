@@ -1078,7 +1078,7 @@ func Semantics() interp.Semantics {
 	// letter there without the letter having been written, and `set +f` in a
 	// `zsh -f` shell takes both away again (#1542). See setopt.go's `rcs`
 	// entry, which is the same state read the other way up.
-	s.SetFLetterOption = "norcs"
+	s.SetFLetterOption = zshFLetterOption
 	// `set -h` is histignoredups here — a history option — not the command
 	// tracking the letter abbreviates in bash and ksh93.
 	s.SetHLetterTracksCommands = interp.No
@@ -1166,11 +1166,11 @@ func Semantics() interp.Semantics {
 	// `s` of the standard-input route is added on top of it and comes from
 	// Runner.Route; under `-c` zsh shows neither route letter, where bash
 	// and ksh93 show `c`.
-	s.DefaultOptionLetters = "569X"
+	s.DefaultOptionLetters = zshStartupLetters
 	// And `569XZi` when interactive, so the interactive set is the same four
 	// plus the line-editor letter. Measured 2026-09-05 under `-i script.sh`
 	// and at a pseudo-terminal alike; `i` comes from the runner.
-	s.InteractiveOptionLetters = "569XZ"
+	s.InteractiveOptionLetters = zshInteractiveStartupLetters
 	// The option namespace's own way of saying `-i`, and the shell prompts for
 	// it: measured 2026-09-16 with a program on a pipe so nothing else could
 	// make it interactive, `zsh -f -o interactive` draws a prompt, runs the
@@ -1194,6 +1194,9 @@ func Semantics() interp.Semantics {
 	// A bare `trap` inside the running EXIT trap lists it (it does here,
 	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
 	s.ExitTrapListedWhileItRuns = interp.Yes
+	// `ZSH_NAME` is the name the shell was invoked as. See
+	// Semantics.InvocationNameParameter (#5336).
+	s.InvocationNameParameter = "ZSH_NAME"
 	s.ScriptSearchOptionName = "pathscript"
 	// And sh and ksh emulation start with it on (#5383).
 	s.ScriptSearchUnderEmulation = "sh ksh"

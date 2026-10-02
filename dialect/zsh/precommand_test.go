@@ -383,7 +383,7 @@ func TestExecOptionsAreReadBeforeTheMatch(t *testing.T) {
 		// modifier that switches the options off, and behind a modifier that
 		// is not `exec`.
 		{`exec -- -a nomatch*`, "zsh:1: no matches found: nomatch*"},
-		{`exec -aa echo nomatch*`, "zsh:1: no matches found: nomatch*"},
+		{`exec -aa nomatch*`, "zsh:1: no matches found: nomatch*"},
 		{`- exec -a nomatch*`, "zsh:1: no matches found: nomatch*"},
 		{`command -a nomatch*`, "zsh:1: no matches found: nomatch*"},
 		// The options can arrive in one word that splits.

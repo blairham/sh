@@ -600,7 +600,20 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("cdablevars", false),
+	{
+		// CDABLE_VARS: a `cd` operand that names no directory is tried as a
+		// named directory — `cd v` and `cd v/sub` where `v` holds an
+		// absolute path. The capability bash's `cdable_vars` moves, read
+		// the way Semantics.CdVariableIsANamedDirectory says this shell
+		// reads it. Measured 2026-10-02 on 5.9.2, E01options' `CDABLE_VARS
+		// option` (#5155).
+		base: "cdablevars", def: false,
+		get: func(r *interp.Runner) bool { return r.BareCdOperandCanNameAVariable() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetBareCdOperandCanNameAVariable(on)
+			return 0
+		},
+	},
 	recorded("cdsilent", false),
 	{
 		// CHASE_DOTS: a `..` in a `cd`'s destination is resolved against

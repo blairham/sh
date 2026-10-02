@@ -5359,7 +5359,24 @@ func biCd(r *Runner, ctx context.Context, args []string) int {
 	// what said it was a second statement of a rule the name syntax already
 	// makes true, and those are the branches that rot.
 	if !announced && r.cdOperandCanNameAVariable && !filepath.IsAbs(dir) && !dash {
-		if !r.enterableFromHere(old, dir) {
+		if r.sem().CdVariableIsANamedDirectory == Yes {
+			// The other reading: the operand is a `~name` without the tilde,
+			// so the name is its first component, the value has to be
+			// absolute, and nothing is announced. See
+			// Semantics.CdVariableIsANamedDirectory.
+			//
+			// Asked of the path as written rather than through
+			// enterableFromHere, which cleans it first: `v/..` is the
+			// directory itself to a lexical reading and no such file to the
+			// `cd` that follows, measured — so the variable is what has to
+			// answer for it.
+			if r.enterable(old+"/"+dir) != nil {
+				name, rest, _ := strings.Cut(dir, "/")
+				if value, ok := r.getVar(name); ok && strings.HasPrefix(value, "/") {
+					dir = filepath.Clean(value + "/" + rest)
+				}
+			}
+		} else if !r.enterableFromHere(old, dir) {
 			if value, ok := r.getVar(dir); ok {
 				namedByAVariable, viaAVariable, dir = value, true, value
 			}

@@ -70,3 +70,37 @@ func TestTheEditorWritesTheTransformationInPlaceOfItsSequences(t *testing.T) {
 		t.Errorf("the transformation was never asked: %q", drawn)
 	}
 }
+
+// A highlighter's codes are attributes and never reach the transformation,
+// even where they spell a cursor movement: `ESC[3Dm` is a foreground's ending
+// under `zle_highlight`'s `fg_default_code:D`, and zsh writes it as it is.
+func TestAHighlightersCodesAreNotTransformed(t *testing.T) {
+	blank := func(string, string) (string, bool) { return "", true }
+	in := "\x1b[D" + highlightGuard + "\x1b[3Dm" + highlightGuard + "x\x1b[K"
+	if got, want := transformTermcapSequences(in, blank), "\x1b[3Dmx"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	none := func(string, string) (string, bool) { return "", false }
+	if got, want := transformTermcapSequences(in, none), "\x1b[D\x1b[3Dmx\x1b[K"; got != want {
+		t.Errorf("with nothing installed: got %q, want %q", got, want)
+	}
+}
+
+// And through the editor: what a highlighter asks for goes out as it is with
+// a transformation installed, guards and all taken away.
+func TestTheEditorKeepsAHighlightersCodesFromTheTransformation(t *testing.T) {
+	var out strings.Builder
+	e := Shell{}.newEditor(t.Context(), &terminalState{})
+	e.transformTermcap = func(string, string) (string, bool) { return "", true }
+	e.highlighter = HighlighterFunc(func(string) []Highlight {
+		return []Highlight{{Start: 1, Style: "\x1b[3Dm", Point: true}}
+	})
+	e.in, e.out = typing("ab\r"), &out
+	if _, err := e.readLine(drawPrompt("$ ")); err != nil {
+		t.Fatal(err)
+	}
+	drawn := out.String()
+	if !strings.Contains(drawn, "a\x1b[3Dmb") || strings.Contains(drawn, highlightGuard) {
+		t.Errorf("the highlighter's code was not written as it is: %q", drawn)
+	}
+}

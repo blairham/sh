@@ -835,6 +835,12 @@ Three things the table settles that the manual leaves open:
   describes `\e[3` followed by "one to three ASCII digits", which would make
   `fg=200` into `ESC[3200m`. It is `ESC[38;5;200m`, and a hex triplet is
   `ESC[38;2;r;g;bm`.
+  That is the default codes only. With `zle_highlight` giving a start code,
+  every palette color is that start code, the number and the end code —
+  `fg_start_code:"S|" fg_end_code:"|E"` writes `fg=196` as `S|196|E` — and
+  a color's ending is the start code, `fg_default_code` (`9`) and the end
+  code. A hex triplet is written in full whatever the codes say. Measured
+  2026-10-02 on zsh 5.9.2; `dialect/zsh/regionhighlight.go` has the rows.
 - **Color names abbreviate.** `b` and `bl` both select black, so a prefix is
   matched against the eight names rather than the whole word being required.
 

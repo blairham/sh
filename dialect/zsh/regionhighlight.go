@@ -115,6 +115,7 @@ func RegionHighlights(r *interp.Runner, line string) []repl.Highlight {
 	if len(layers) == 0 {
 		return nil
 	}
+	codes := readRegionCodes(r)
 	var out []repl.Highlight
 	var before regionAttrs
 	var covering []int
@@ -128,7 +129,7 @@ func RegionHighlights(r *interp.Runner, line string) []repl.Highlight {
 			}
 		}
 		after := regionWord(layers, now)
-		if codes := regionTransition(layers, covering, now, before, after); codes != "" {
+		if codes := regionTransition(layers, covering, now, before, after, codes); codes != "" {
 			out = append(out, repl.Highlight{Start: starts[i], Style: codes, Point: true})
 		}
 		before, covering = after, now
@@ -154,7 +155,7 @@ type regionLayer struct {
 }
 
 // regionAttrs is what a character is drawn with: three attributes, and a
-// foreground and background color held as the sequence that selects them.
+// foreground and background color held as regionColor keys.
 type regionAttrs struct {
 	bold, standout, underline bool
 	fg, bg                    string
@@ -211,9 +212,9 @@ func regionSpec(spec string) (regionAttrs, bool) {
 		case part == "underline":
 			a.underline = true
 		case strings.HasPrefix(part, "fg="):
-			a.fg = colorEscape(strings.TrimPrefix(part, "fg="), true)
+			a.fg = regionColor(strings.TrimPrefix(part, "fg="))
 		case strings.HasPrefix(part, "bg="):
-			a.bg = colorEscape(strings.TrimPrefix(part, "bg="), false)
+			a.bg = regionColor(strings.TrimPrefix(part, "bg="))
 		}
 		// Anything else contributes nothing, and that is the whole of what
 		// the rest have in common: `none`, which overrides a default rather
@@ -258,8 +259,6 @@ const (
 	regionBoldOff      = "\x1b[0m"
 	regionStandoutOff  = "\x1b[27m"
 	regionUnderlineOff = "\x1b[24m"
-	regionFgOff        = "\x1b[39m"
-	regionBgOff        = "\x1b[49m"
 )
 
 // regionTransition is what goes out between two characters: was is the
@@ -284,7 +283,7 @@ const (
 // Written again means all of it, in a fixed order — bold, standout,
 // underline, foreground, background — which is the order the ending
 // sequences go out in too.
-func regionTransition(layers []regionLayer, was, now []int, before, after regionAttrs) string {
+func regionTransition(layers []regionLayer, was, now []int, before, after regionAttrs, codes regionCodes) string {
 	var off regionAttrs
 	for _, j := range was {
 		if !slices.Contains(now, j) {
@@ -317,8 +316,8 @@ func regionTransition(layers []regionLayer, was, now []int, before, after region
 		{off.bold, regionBoldOff},
 		{off.standout, regionStandoutOff},
 		{off.underline, regionUnderlineOff},
-		{off.fg != "", regionFgOff},
-		{off.bg != "", regionBgOff},
+		{off.fg != "", codes.fg.off()},
+		{off.bg != "", codes.bg.off()},
 	} {
 		if o.on {
 			b.WriteString(o.seq)
@@ -355,8 +354,12 @@ func regionTransition(layers []regionLayer, was, now []int, before, after region
 		if after.underline {
 			b.WriteString("\x1b[4m")
 		}
-		b.WriteString(after.fg)
-		b.WriteString(after.bg)
+		if after.fg != "" {
+			b.WriteString(codes.fg.color(after.fg))
+		}
+		if after.bg != "" {
+			b.WriteString(codes.bg.color(after.bg))
+		}
 	}
 	return b.String()
 }
@@ -368,60 +371,120 @@ var regionColorNames = []string{
 	"black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
 }
 
-// colorEscape is what one `fg=` or `bg=` value paints.
+// regionColor is the color one `fg=` or `bg=` value names, as a key: the
+// palette number in decimal, or `#` and the three channels of a hex triplet
+// joined by `;`. regionCodes.color turns it into what is written.
 //
 // Empty for `default`, which measured paints nothing — the parameter's way of
 // saying "leave the terminal's own color alone" — and empty for a value that
-// names nothing, which is the drop this file applies everywhere else.
-func colorEscape(value string, foreground bool) string {
+// names nothing, which is the drop this file applies everywhere else. Out of
+// the palette's range is nothing too, rather than a color the person did not
+// ask for.
+func regionColor(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" || value == "default" {
 		return ""
 	}
-	base, extended := "3", "38"
-	if !foreground {
-		base, extended = "4", "48"
-	}
-	// A hex triplet is 24-bit color: `ESC[38;2;r;g;bm`, measured.
 	if after, ok := strings.CutPrefix(value, "#"); ok {
 		r, g, b, ok := parseHexTriplet(after)
 		if !ok {
 			return ""
 		}
-		return "\x1b[" + extended + ";2;" +
-			strconv.Itoa(r) + ";" + strconv.Itoa(g) + ";" + strconv.Itoa(b) + "m"
+		return "#" + strconv.Itoa(r) + ";" + strconv.Itoa(g) + ";" + strconv.Itoa(b)
 	}
 	if n, err := strconv.Atoi(value); err == nil {
-		return paletteEscape(n, base, extended)
+		if n < 0 || n > 255 {
+			return ""
+		}
+		return strconv.Itoa(n)
 	}
 	// "Colour is also known as color", and both spellings of grey are zsh's
 	// too — but neither is one of the eight, so a name is matched against the
 	// eight and nothing else, as a prefix.
 	for n, name := range regionColorNames {
 		if strings.HasPrefix(name, strings.ToLower(value)) {
-			return paletteEscape(n, base, extended)
+			return strconv.Itoa(n)
 		}
 	}
 	return ""
 }
 
-// paletteEscape is a numbered color, in whichever of the two forms its number
-// falls in.
+// regionCodes is how a color is written, which `zle_highlight` can change:
+// each channel's start, end and default-color codes.
 //
-// The manual describes one form — `fg_start_code` then "one to three ASCII
-// digits" — which would make `fg=200` into `ESC[3200m`. Measured, it is
-// `ESC[38;5;200m`, and only 0 through 7 take the short form. Out of range is
-// nothing rather than a color the person did not ask for.
-func paletteEscape(n int, base, extended string) string {
-	switch {
-	case n < 0 || n > 255:
-		return ""
-	case n <= 7:
-		return "\x1b[" + base + strconv.Itoa(n) + "m"
-	default:
-		return "\x1b[" + extended + ";5;" + strconv.Itoa(n) + "m"
-	}
+// The manual names six fields and their defaults — `fg_start_code` (`\e[3`),
+// `fg_default_code` (`9`), `fg_end_code` (`m`) and the three `bg_` ones with
+// `\e[4` — and says the start code is "followed by one to three ASCII digits
+// representing the colour". Measured 2026-10-02 on zsh 5.9.2 through a
+// pseudo-terminal, with `zle_highlight=( fg_start_code:"S|" fg_end_code:"|E"
+// bg_start_code:"B|" bg_end_code:"|F" )`:
+//
+//	fg=1                 S|1|E   ending S|9|E
+//	fg=196               S|196|E
+//	bg=2                 B|2|F   ending B|9|F
+//	fg=#ff0000           ESC[38;2;255;0;0m, ending S|9|E
+//	fg_default_code:D    fg=1 ends ESC[3Dm
+//
+// So a palette color above 7 is the start code and its number only where a
+// start code was given: with none, it is `ESC[38;5;n m`, the table in
+// docs/spec/editing.md. A hex triplet is written in full whatever the codes
+// say, and its ending is the channel's default like any other.
+type regionCodes struct {
+	fg, bg regionChannelCodes
 }
+
+// regionChannelCodes is one channel's three codes, and whether its start code
+// was given rather than defaulted.
+type regionChannelCodes struct {
+	start, end, def string
+	given           bool
+	extended        string
+}
+
+// readRegionCodes reads `zle_highlight`'s code fields, leaving the defaults
+// where a field is not there.
+func readRegionCodes(r *interp.Runner) regionCodes {
+	c := regionCodes{
+		fg: regionChannelCodes{start: "\x1b[3", end: "m", def: "9", extended: "38"},
+		bg: regionChannelCodes{start: "\x1b[4", end: "m", def: "9", extended: "48"},
+	}
+	fields, _ := r.GetArray("zle_highlight")
+	for _, f := range fields {
+		name, value, ok := strings.Cut(f, ":")
+		if !ok {
+			continue
+		}
+		switch name {
+		case "fg_start_code":
+			c.fg.start, c.fg.given = value, true
+		case "fg_end_code":
+			c.fg.end = value
+		case "fg_default_code":
+			c.fg.def = value
+		case "bg_start_code":
+			c.bg.start, c.bg.given = value, true
+		case "bg_end_code":
+			c.bg.end = value
+		case "bg_default_code":
+			c.bg.def = value
+		}
+	}
+	return c
+}
+
+// color is what selects key on this channel.
+func (c regionChannelCodes) color(key string) string {
+	if rgb, ok := strings.CutPrefix(key, "#"); ok {
+		return "\x1b[" + c.extended + ";2;" + rgb + "m"
+	}
+	if n, _ := strconv.Atoi(key); n > 7 && !c.given {
+		return "\x1b[" + c.extended + ";5;" + key + "m"
+	}
+	return c.start + key + c.end
+}
+
+// off is what returns this channel to the terminal's own color.
+func (c regionChannelCodes) off() string { return c.start + c.def + c.end }
 
 // parseHexTriplet reads `#rgb` and `#rrggbb`, the two lengths the manual gives.
 //

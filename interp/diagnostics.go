@@ -5001,6 +5001,11 @@ type Diagnostics struct {
 	// The old sentence counted four, which left the fifth dialect out of a
 	// group it is in and left zsh looking like a column the script row had
 	// never been measured on.
+	//
+	// The read is one read and it is after the startup files: an option a
+	// startup file sets is the grammar the string is read in, and an option
+	// the string sets reaches none of its own later lines — `setopt rcquotes`
+	// on line 1 leaves `'a''b'` on line 2 reading `ab` (#5420).
 	CommandStringParsedWhole bool
 
 	// StdinProgramSurvivesAParseFailure reports a line that did not parse and

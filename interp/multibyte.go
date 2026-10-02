@@ -626,33 +626,6 @@ func isLocaleNameLetter(c rune) bool {
 	return unicode.IsLetter(c) || unicode.IsDigit(c)
 }
 
-// NameLettersBeforeARunner is Runner.NameTakesALetterPastASCII for a parse a
-// front end makes before it has a runner to ask — the dialect that reads a
-// command string whole before running any of it: the vector's answer, under
-// the locale lookup names. Nil where a name is ASCII only.
-//
-// It reads the same three variables in the same order a runner does, so the
-// up-front parse and the one that runs agree about a name.
-func NameLettersBeforeARunner(s *Semantics, lookup func(string) (string, bool)) func(rune) bool {
-	if s == nil || s.NamesTakeTheLocalesLetters != Yes {
-		return nil
-	}
-	for _, name := range localeVariables {
-		v, _ := lookup(name)
-		if v == "" {
-			continue
-		}
-		if v == "C" || v == "POSIX" || !codesetIsUTF8(v) {
-			return nil
-		}
-		return isLocaleNameLetter
-	}
-	if s.UnsetLocaleIsUnicodeAware == Yes {
-		return isLocaleNameLetter
-	}
-	return nil
-}
-
 // CharacterLength is what fills syntax.Dialect's field of the same name: how
 // many bytes the locale's character at the front of s takes. One for ASCII,
 // for a single-byte locale and for a sequence the encoding cannot decode; the

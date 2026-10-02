@@ -9470,6 +9470,9 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		return nil
 	}
 	if lookErr != nil {
+		if handled := r.commandNotFoundHandled(ctx, argv, lookErr); handled {
+			return nil
+		}
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: lookErr})
 		// 127 for a name that resolved to nothing and 126 for a file that is
 		// there and will not start. Both unanimous, and collapsing them into

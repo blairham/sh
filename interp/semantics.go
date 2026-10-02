@@ -5934,6 +5934,23 @@ type Semantics struct {
 	// … )` chunk whose expectation has no error output at all (#5140).
 	JobSpecMissIsSilent Answer
 
+	// CommandNotFoundHandler names the function a command word that names
+	// nothing is handed to, instead of the shell's complaint — empty for no
+	// such function. The function runs as a subshell with the word and its
+	// arguments as its own, and its status is the command's; a return of 127
+	// says nothing more. A word written with a slash is never handed over.
+	// Measured 2026-10-02:
+	//
+	//	zsh 5.9.2   command_not_found_handler   `nosuch a b` → `$*` is `nosuch a
+	//	            b`, ZSH_SUBSHELL is 1 inside, an assignment there is gone
+	//	            afterwards, `return 5` is 5, `./nosuch` is not handed over
+	//	bash 5.3.20 command_not_found_handle    the same, BASH_SUBSHELL 0 inside
+	//	            and the assignment still gone
+	//
+	// ksh93u+, dash 0.5.12 and BusyBox ash 1.37.0 have no such function.
+	// zsh's own C04funcdef asks for it (#5148).
+	CommandNotFoundHandler string
+
 	// ValuelessDeclarationLeavesTheNameUnset makes a declaration with no value
 	// that carries the export or the readonly attribute leave the name unset,
 	// whatever DeclaredNameWithoutValueIsEmpty says — the standard's reading

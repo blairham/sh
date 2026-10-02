@@ -16,8 +16,12 @@ import (
 // every keypress, so it never panics, and unfinished input is distinguishable
 // from wrong input because `if x; then` mid-typing is normal.
 type Parser struct {
-	lex     *Lexer
-	dialect Dialect
+	// anonBodyOpen is where the body of the nameless function being read
+	// opens, so the group that closes it can put the lexer in argument
+	// position for the call's words. See parseAnonFunc.
+	anonBodyOpen Pos
+	lex          *Lexer
+	dialect      Dialect
 
 	tok Token
 
@@ -5522,7 +5526,16 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 	// spelling keeps it for the same reason — see Parser.parseFuncPosix.
 	body := p.tok
 	p.funcBody = true
+	// The brace that closes this body is followed by the call's words, and
+	// those are read the way a command's arguments are: `() { echo $1 }
+	// (y|z)*` hands the call the files the pattern matches in zsh 5.9.2,
+	// measured 2026-10-02, where reading the `(` as a token refused the line
+	// (#5148). Keyed on the brace the body opens with, so a group inside the
+	// body closes as any group does.
+	outerAnonOpen := p.anonBodyOpen
+	p.anonBodyOpen = body.Pos
 	fn.Body = p.parseCommand()
+	p.anonBodyOpen = outerAnonOpen
 	if fn.Body == nil {
 		hadError := p.err != nil
 		if keyword {
@@ -5626,6 +5639,9 @@ func (p *Parser) parseAnonFunc(keyword bool) Command {
 // "words and redirections always interleave", which is wrong in half the
 // grammar.
 func (p *Parser) readAnonCallWords(fn *AnonFunc) {
+	// The argument position the body's closing brace opened ends with the
+	// words. See parseAnonFunc.
+	defer func() { p.lex.inArgument = false }()
 	for {
 		if p.tok.Kind == TokWord && !p.atStopWord() {
 			if fn.Keyword && len(fn.Redirs) > 0 {
@@ -6107,6 +6123,11 @@ func (p *Parser) parseGroupNamed(word, named string) Command {
 		return c
 	}
 	c.Stop = p.tok.End
+	if p.anonBodyOpen != (Pos{}) && c.Start == p.anonBodyOpen {
+		// A nameless function's own body: what follows is its call's
+		// argument list. See parseAnonFunc.
+		p.lex.inArgument = true
+	}
 	p.next()
 	return c
 }

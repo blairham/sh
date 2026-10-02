@@ -3493,6 +3493,9 @@ func Semantics() interp.Semantics {
 	// And `printf -v` into an array stores a use of the format an element;
 	// see the axis for the measurements.
 	s.PrintfVTakesAnElementPerPass = interp.Yes
+	// A command word that names nothing goes to this function when it is
+	// defined; see the axis for the measurements.
+	s.CommandNotFoundHandler = "command_not_found_handler"
 	// The same two digits bash reads, and an empty digit run is a zero
 	// rather than an escape left standing: `printf 'a\xZ'` is a NUL here.
 	// unanswered PrintfReportsAMissingHexDigit: an empty digit run is a zero

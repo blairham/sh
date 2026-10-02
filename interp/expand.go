@@ -7103,7 +7103,7 @@ func (r *Runner) dollarZero() (string, bool) {
 		// frame it was written on is the only one that answers with it.
 		return held, true
 	}
-	call, inCall := r.innermostCall(frames)
+	call, inCall := r.innermostZeroCall(frames)
 	keyword, inKeyword := r.innermostKeywordFunction(frames)
 	if !inCall && !inKeyword {
 		// Nothing on the stack could answer, so the axis is not consulted:

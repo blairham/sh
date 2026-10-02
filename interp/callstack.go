@@ -45,6 +45,14 @@ type Frame struct {
 	// a path the script never wrote.
 	Operand string
 
+	// keepsCallersZero says the frame was entered while the dialect's switch
+	// had `$0` naming nothing, so it leaves `$0` to the frame below. zsh's
+	// `functionargzero` is read at the call rather than at the read:
+	// measured 2026-10-02 on zsh 5.9.2, `f(){ print $0 }; g(){ unsetopt
+	// functionargzero; f }; g` prints `g`, and `() { setopt localoptions
+	// nofunctionargzero; f }; f` prints `(anon)` and then `f` (#5155).
+	keepsCallersZero bool
+
 	// Line is the line this frame was entered from, in the frame below it.
 	Line int
 
@@ -250,6 +258,13 @@ func (r *Runner) pushFrame(f Frame) {
 		// for a file rather than a file, and one dialect wants a different
 		// name in the same place. See Frame.NoFile.
 		f.NoFile, f.File = true, r.Name
+	}
+	// Whether this frame names `$0` is decided as it is entered, in the
+	// dialect that can switch it. See Frame.keepsCallersZero.
+	if r.dollarZeroSwitch != nil {
+		if scope, ok := r.dollarZeroSwitch(r); ok && scope == DollarZeroIsTheShellsOwnName {
+			f.keepsCallersZero = true
+		}
 	}
 	r.frames = append(r.frames, f)
 }
@@ -635,4 +650,20 @@ func (r *Runner) arithLevel(text string) (int, bool) {
 		return 0, true
 	}
 	return n, true
+}
+
+// innermostZeroCall is innermostCall for `$0`: the innermost frame that names
+// it, passing over the ones entered while the dialect's switch had it naming
+// nothing. See Frame.keepsCallersZero.
+func (r *Runner) innermostZeroCall(frames []Frame) (string, bool) {
+	for i := len(frames) - 1; i >= 0; i-- {
+		if frames[i].Startup {
+			return "", false
+		}
+		if frames[i].keepsCallersZero {
+			continue
+		}
+		return r.innermostCall(frames[:i+1])
+	}
+	return "", false
 }

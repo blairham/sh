@@ -36365,18 +36365,10 @@ func (s DollarZeroScope) String() string {
 func (r *Runner) dollarZeroScope() DollarZeroScope {
 	p := r.sem().DollarZeroNames
 	// **A script can switch this while it runs, in the dialect that has a
-	// name for it.** The preset is the shell's default and not a constant:
-	// zsh's `functionargzero` is on by default and `unsetopt functionargzero`
-	// puts `$0` back to the shell's own name. See
+	// name for it** — zsh's `functionargzero`. See
 	// Runner.SetDollarZeroScopeSwitch.
-	//
-	// Read before the unanswered check below, so a dialect that installs a
-	// switch never reaches the refusal.
-	if r.dollarZeroSwitch != nil {
-		if scoped, ok := r.dollarZeroSwitch(r); ok {
-			return scoped
-		}
-	}
+	// The switch itself is read where a frame is entered rather than here —
+	// see Frame.keepsCallersZero — because the option decides at the call.
 	if p == DollarZeroScopeUnspecified {
 		r.diagf("%s\n", r.unanswered("$0 naming the function or sourced file it is inside"))
 		r.status = 2

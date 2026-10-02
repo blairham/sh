@@ -4763,13 +4763,16 @@ func (p *Parser) reservedDeclarationAssignment(c *SimpleCmd) bool {
 	for n < len(first.Value) && isNameByte(first.Value[n], n) {
 		n++
 	}
-	if n == 0 || n == len(first.Value) {
+	if n == len(first.Value) {
 		return false
 	}
 	switch rest := first.Value[n:]; {
-	case strings.HasPrefix(rest, "="), strings.HasPrefix(rest, "+="):
+	case n > 0 && (strings.HasPrefix(rest, "=") || strings.HasPrefix(rest, "+=")):
 		return true
 	case rest[0] == '[':
+		// With or without a name in front of it: `typeset [a]=1` is listed
+		// with the blank too, where `typeset =x` is not. Measured
+		// 2026-10-02.
 		for i, sp := range p.tok.Spans {
 			v := sp.Value
 			if i == 0 {

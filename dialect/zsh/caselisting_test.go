@@ -44,10 +44,16 @@ func TestAReservedDeclarationHoldingAnAssignmentIsListedWithABlank(t *testing.T)
 		{`typeset a+=3`, "\ttypeset a+=3 \n"},
 		{`typeset i=(1) c`, "\ttypeset i=(1) c \n"},
 		{`typeset o=1 >/dev/null`, "\ttypeset o=1  > /dev/null\n"},
+		// The blank is the command's own, so a word ending in a blank of
+		// its own still takes it.
+		{`typeset a=x\ `, "\ttypeset a=x\\  \n"},
+		{`typeset [a]=1`, "\ttypeset [a]=1 \n"},
 		// None: no assignment, one the grammar does not read as one, a
 		// declaration that is not the reserved word, and `private`, which
 		// takes an array but is a builtin.
 		{`typeset c d`, "\ttypeset c d\n"},
+		{`"typeset" b=1`, "\t\"typeset\" b=1\n"},
+		{`typeset =x`, "\ttypeset =x\n"},
 		{`typeset "a=1"`, "\ttypeset \"a=1\"\n"},
 		{`typeset $x=1`, "\ttypeset $x=1\n"},
 		{`builtin typeset a=1`, "\tbuiltin typeset a=1\n"},
@@ -56,6 +62,19 @@ func TestAReservedDeclarationHoldingAnAssignmentIsListedWithABlank(t *testing.T)
 		out, _ := runZsh(t, t.TempDir(), "f() { "+tc.src+" }; which f")
 		if !strings.Contains(out, tc.want) {
 			t.Errorf("%s listed %q, want %q in it", tc.src, out, tc.want)
+		}
+	}
+}
+
+// TestAWordEndingInABlankKeepsItsSeparator: only an assignment's own blank
+// stands in for the separator after it, so a word that ends in an escaped
+// blank is still followed by one. `echo a\  b` was listed `echo a\ b`, one
+// argument where there were two. Measured 2026-10-02 on zsh 5.9.2 (#5138).
+func TestAWordEndingInABlankKeepsItsSeparator(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), "f() { echo a\\  b; x=a\\  print y }; which f")
+	for _, want := range []string{"\techo a\\  b\n", "\tx=a\\  print y\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("listing %q lacks %q", out, want)
 		}
 	}
 }

@@ -13308,13 +13308,13 @@ type Semantics struct {
 	// assigning it conditionally, so the difference is silent: the function
 	// reads the caller's value where it expected nothing.
 	//
-	// unpinned zsh: never reached. It is asked only where
-	// `DeclaredNameWithoutValueIsEmpty` said no, and this dialect says yes
-	// — a `local u` there exists holding the empty string, so there is no
-	// outer value left to hide. Measured 2026-09-12: `u=out; f() { local
-	// u; echo "[${u-UNSET}]"; }; f` is `[]` in zsh 5.9.2 and here, and
-	// moving this axis to `Yes` or to `Unspecified` changes neither
-	// (#2057).
+	// zsh reaches it only under TYPESET_TO_UNSET, which is what turns
+	// `DeclaredNameWithoutValueIsEmpty` off there; without the option a
+	// `local u` holds the empty string and there is no outer value left to
+	// hide (#2057). With it, zsh hides (#5157).
+	//
+	// unpinned zsh: no corpus row sets the option; pinned by
+	// TestALocalHidesTheCallersValueUnderTypesetToUnset.
 	ValuelessDeclarationHidesTheOuterValue Answer
 
 	// DeclarationAssignmentClearsTheExportAttribute takes the export

@@ -36,3 +36,14 @@ func TestATrailingCommaIsAnOperandThatRanOut(t *testing.T) {
 		t.Errorf("got %q, %q", out, errs)
 	}
 }
+
+// An increment is not an assignment of an expression, so it declares nothing:
+// measured, `a=(5); (( a++ ))` leaves `${(t)a}` at `array` there. This shell
+// leaves a scalar, which is #5369; what is pinned here is the half that
+// holds, that no number was declared.
+func TestAnArithIncrementDeclaresNothingOverAnArray(t *testing.T) {
+	out, _, errs := runZshUTF8(t, "a=(5); (( a++ )); print ${(t)a} $a[1]")
+	if out == "integer 6\n" || errs != "" {
+		t.Errorf("got %q, %q, want no integer declared", out, errs)
+	}
+}

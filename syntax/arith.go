@@ -1031,17 +1031,13 @@ func (a *arithParser) expr() ArithExpr {
 		a.off++
 		y := a.assign()
 		if y == nil {
-			if a.p.err != nil {
-				// What followed the comma was refused in its own words —
-				// `3,, 4` is the second comma wanting an operand.
-				return x
-			}
-			a.space()
-			if a.off >= len(a.src) && a.dial.ArithCommaMayEndTheExpression {
+			if a.dial.ArithCommaMayEndTheExpression {
 				return x
 			}
 			// Nothing after the comma, which is an operand that ran out at
-			// the operator, worded the way any other is. See
+			// the operator, worded the way any other is; where what follows
+			// was refused in words of its own — `3,, 4` — those stand, the
+			// first failure being the one reported. See
 			// [Dialect.ArithCommaMayEndTheExpression].
 			a.failArith(ErrArithOperandEnd, a.src[at:])
 			return x

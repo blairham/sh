@@ -292,6 +292,7 @@ func (r *Runner) runAsItsOwnJob(parent *Runner) {
 		return
 	}
 	r.ownJobsStartAtTwo = true
+	r.subshellSelfWaited = false
 	// The marks, as numbers. Taken from the parent because the rows
 	// themselves may be about to go: which job was current is a fact about
 	// the fork, and it outlives the table it was read from.
@@ -301,5 +302,13 @@ func (r *Runner) runAsItsOwnJob(parent *Runner) {
 	}
 	if previous != nil {
 		r.inheritedPreviousJob = previous.num
+	}
+	if parent.marksByNumber {
+		// The numbers themselves, where a marker is on a number no job
+		// holds — which markedJobs answers as the empty slot, numbered
+		// nothing. Measured 2026-10-02 on zsh 5.9.2: after `f() { sleep 0 &
+		// wait }; f` leaves the `+` on f's number, a later `( wait %% )` is
+		// 0, where with no history it is `no current job`.
+		r.inheritedCurrentJob, r.inheritedPreviousJob = parent.markCurrent, parent.markPrevious
 	}
 }

@@ -59,9 +59,13 @@ func (n *ArithNum) arithNode() {}
 // ArithVar is a bare name, which inside arithmetic is a variable reference.
 // An unset one is zero rather than an error.
 type ArithVar struct {
-	Name  string
-	Start Pos
-	Stop  Pos
+	Name string
+	// Special is a special parameter standing as an operand — `?`, `$` or
+	// `#` — which is a value and not a name a script may assign. See
+	// Dialect.ArithSpecialParameterOperands.
+	Special bool
+	Start   Pos
+	Stop    Pos
 }
 
 func (n *ArithVar) Pos() Pos   { return n.Start }
@@ -1520,6 +1524,14 @@ func (a *arithParser) primary() ArithExpr {
 	// the operand sentence in zsh 5.9.2 — none of the four reads the `i`
 	// behind it. A bare `k='i'` still names the element in all four, because
 	// that is the evaluator resolving a name and not an expansion (#3047).
+	if a.dial.ArithSpecialParameterOperands {
+		// `?`, and a `$` with no name after it: the special parameters. See
+		// Dialect.ArithSpecialParameterOperands.
+		if c := a.src[a.off]; c == '?' || c == '$' && (a.off+1 >= len(a.src) || !nameByte(a.src[a.off+1], 0, a.dial.DottedName)) {
+			a.off++
+			return &ArithVar{Name: string(c), Special: true, Start: start, Stop: start}
+		}
+	}
 	if !a.expanded && a.take("$") {
 		if name, ok := a.name(); ok {
 			return &ArithVar{Name: name, Start: start, Stop: start}
@@ -2346,6 +2358,12 @@ func (a *arithParser) charCode(start Pos) ArithExpr {
 			a.off++
 		}
 		n.Name = a.src[begin:a.off]
+		if n.Name == "" && n.Op == "#" && a.dial.ArithSpecialParameterOperands &&
+			(a.off >= len(a.src) || a.src[a.off] != '[') {
+			// No name after it, so it is the parameter: `$(( # ))` is `$#`.
+			// See Dialect.ArithSpecialParameterOperands.
+			return &ArithVar{Name: "#", Special: true, Start: start, Stop: start}
+		}
 		if a.off < len(a.src) && a.src[a.off] == '[' {
 			if end := closingBracket(a.src[a.off:], a.p.dialect.SubscriptQuoteProtectsTheClosingBracket); end > 0 {
 				a.off += end + 1

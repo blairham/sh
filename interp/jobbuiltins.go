@@ -122,6 +122,7 @@ const (
 )
 
 func biJobs(r *Runner, _ context.Context, args []string) int {
+	r.forgetANumberNobodyHolds()
 	// The letters are the dialect's. A shared set would have this engine
 	// accept `jobs -r` in dash, which refuses it — the failure mode #469
 	// was: an option nobody reads is an option silently ignored.
@@ -1056,6 +1057,9 @@ func (r *Runner) reportJobLookup(spec string, code int, name string) int {
 		return r.status
 	}
 	d := r.diag()
+	if r.jobSpecMissIsSilent() {
+		return orDefault(d.NoSuchJobStatus, 1)
+	}
 	if line, ok := jobSpecMiss(*d, name, spec); ok && code != jobOnAnEmptySlot {
 		r.diagf("%s\n", line)
 		return orDefault(d.NoSuchJobStatus, 1)
@@ -1190,7 +1194,7 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	if n == 1 && r.subshellSelfLookup(1) {
 		return nil, jobIsTheSubshell
 	}
-	if n != 0 && n == r.commandSlot {
+	if r.slotHeld(n) {
 		return nil, jobOnAnEmptySlot
 	}
 	for _, j := range r.jobs {
@@ -1270,6 +1274,18 @@ func (r *Runner) findJobByName(text string) (*Job, int) {
 // So a plain `jobs` and `wait` pass over it and every other verb misses it.
 // The last command of a `-c` string is not forked there, and its markers move
 // as the shell's own do — see #5320; that route is not modeled here.
+//
+// **A wait that reached it takes it away**, as a wait on any job does: measured
+// 2026-10-02 on the same shell, `(wait %1; echo $?; wait %1; echo $?); :` is
+// 0 and then `%1: no such job` at 127, and `jobs %1` after the first wait
+// misses too. So does a `wait %%` that passed over to it.
+// jobSpecMissIsSilent is Semantics.JobSpecMissIsSilent, read rather than asked:
+// it is put by every failing `wait %1`, and a vector that has not answered it
+// would refuse the ordinary failure.
+func (r *Runner) jobSpecMissIsSilent() bool {
+	return r.sem().JobSpecMissIsSilent == Yes
+}
+
 func (r *Runner) subshellSelfLookup(num int) bool {
-	return r.ownJobsStartAtTwo && num != 0 && r.jobByNumber(num) == nil
+	return r.ownJobsStartAtTwo && !r.subshellSelfWaited && num != 0 && r.jobByNumber(num) == nil
 }

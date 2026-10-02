@@ -19,8 +19,13 @@ import (
 
 func (r *Runner) repeatClause(ctx context.Context, c *syntax.RepeatClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
-		r.status = 0
+		// The count before the status is cleared, because the count may read
+		// it: `(exit 3); repeat "$?" echo x` writes three lines in zsh 5.9.2,
+		// measured 2026-10-02, and so does `repeat '?'`, the count being an
+		// arithmetic expression. The status is the loop's afterwards either
+		// way.
 		n, ok := r.repeatCount(c.Count)
+		r.status = 0
 		if !ok {
 			return nil
 		}

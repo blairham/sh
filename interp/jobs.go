@@ -1315,6 +1315,7 @@ const maxNamedSignal = 64
 // trapped signal cuts the wait short, which is the one thing that gives a
 // bare `wait` a status of its own.
 func biWait(r *Runner, _ context.Context, args []string) int {
+	r.forgetANumberNobodyHolds()
 	// Whatever this wait is for, the shell is about to reap what it can —
 	// which is where a coprocess that ended is noticed. See
 	// Runner.retireCoproc for the measurements, and note that a `wait` is one
@@ -1488,7 +1489,7 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 			// A number that is not one of this shell's children. Unanimous
 			// on the status — 127, the one a command that is not there
 			// reports — and two of the four say so out loud.
-			if w := r.diag().WaitNotOurChild; w != "" {
+			if w := r.diag().WaitNotOurChild; w != "" && !r.jobSpecMissIsSilent() {
 				r.diagf("%s\n", Wording(w, "", pid))
 			}
 			last = 127
@@ -1748,6 +1749,7 @@ func (r *Runner) waitNextJobs(args []string) ([]*Job, int) {
 				continue
 			}
 			if code == jobIsTheSubshell {
+				r.subshellSelfWaited = true
 				continue
 			}
 			if code == jobSpecAmbiguous {
@@ -1781,7 +1783,7 @@ func (r *Runner) waitNextJobs(args []string) ([]*Job, int) {
 			found = true
 		}
 		if !found {
-			if w := r.diag().WaitNotOurChild; w != "" {
+			if w := r.diag().WaitNotOurChild; w != "" && !r.jobSpecMissIsSilent() {
 				r.diagf("%s\n", Wording(w, "", pid))
 			}
 			return nil, 127
@@ -1855,7 +1857,9 @@ func (r *Runner) waitJobSpecNaming(spec string) (int, *Job) {
 	j, code := r.findJobQuietly(spec)
 	switch code {
 	case jobIsTheSubshell:
-		// Returned from at once. See subshellSelfLookup.
+		// Returned from at once, and gone once it has been: see
+		// subshellSelfLookup.
+		r.subshellSelfWaited = true
 		return 0, nil
 	case jobFound:
 		st, sig, hit, stopped := r.waitFor(j)
@@ -1904,6 +1908,9 @@ func (r *Runner) waitJobSpecNaming(spec string) (int, *Job) {
 // whatever its shape: `%%` there is `%%: no such job` and not `no current
 // job`. See Semantics.ACommandHoldsAJobSlot.
 func (r *Runner) waitReportsNoSuchJob(spec string, code int) {
+	if r.jobSpecMissIsSilent() {
+		return
+	}
 	if line, ok := jobSpecMiss(*r.diag(), "wait", spec); ok && code != jobOnAnEmptySlot {
 		r.diagf("%s\n", line)
 		return
@@ -2519,11 +2526,13 @@ func (r *Runner) nextJobNumber() int {
 			high = j.num
 		}
 	}
-	if r.commandSlot != 0 {
-		// The running command's, which no job in the table holds and no
-		// job may take. See Semantics.ACommandHoldsAJobSlot.
-		taken[r.commandSlot] = true
-		high = max(high, r.commandSlot)
+	for _, n := range append([]int{r.commandSlot}, r.outerSlots...) {
+		if n != 0 {
+			// The running commands', which no job in the table holds and
+			// no job may take. See Semantics.ACommandHoldsAJobSlot.
+			taken[n] = true
+			high = max(high, n)
+		}
 	}
 	// Where this table's numbers begin. One ordinarily; two in a `( … )`
 	// subshell of the dialect that makes one a job of its own, which holds

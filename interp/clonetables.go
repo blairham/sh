@@ -495,7 +495,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// off the order again. Held all the same, so that a command inside the
 	// clone takes none of its own — its numbering is
 	// SubshellIsAJobInItsOwnTable's (#5321).
-	c.commandSlot, c.commandSlotHeld = 0, true
+	c.commandSlot, c.commandSlotHeld, c.outerSlots = 0, true, nil
 	c.marksByNumber, c.markCurrent, c.markPrevious = false, 0, 0
 	// And the memory of the ones already reported, which a body a real shell
 	// would have forked does not inherit at all — inheritJobs empties it a

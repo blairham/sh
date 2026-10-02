@@ -5911,6 +5911,29 @@ type Semantics struct {
 	// refused numeral never meets this axis and does not ask it.
 	GetoptsErrorEndsTheWord Answer
 
+	// JobSpecMissIsSilent has `wait`, `jobs`, `kill` and `disown` say
+	// nothing about an operand that names no job — the status is unchanged —
+	// where every column otherwise says so. One column answers yes, and only
+	// under an option: zsh's POSIX_BUILTINS, which `emulate sh` and an
+	// `argv[0]` of `sh` set too. Measured 2026-10-02 on zsh 5.9.2 under `-f
+	// -c`:
+	//
+	//	setopt posixbuiltins; wait 1; wait %1; wait %%; wait %-; wait %foo
+	//	                                    127 each, and nothing written
+	//	setopt posixbuiltins; jobs %1; kill %1; disown %1
+	//	                                    127, 1, 127, and nothing written
+	//	the same without the option         `pid 1 is not a child of this
+	//	                                    shell`, `%1: no such job`, …
+	//
+	// bash 5.3.20 — `--posix` too — dash 0.5.12 and BusyBox ash 1.37.0 write
+	// each one. ksh93u+ writes `jobs: no such job` and answers `wait`, `kill`
+	// and `disown` at 0 with nothing written, which is WaitReportsAMissingJob's
+	// answer and its own statuses rather than this one.
+	//
+	// It is zsh's own A05execution that asks, in a `( setopt POSIX_BUILTINS;
+	// … )` chunk whose expectation has no error output at all (#5140).
+	JobSpecMissIsSilent Answer
+
 	// GetoptsTakesAPlusPrefixedOption reads a word beginning with `+` as an
 	// option word, exactly as a word beginning with `-`, and reports the
 	// letter with the sign still in front of it.
@@ -15550,11 +15573,14 @@ type Semantics struct {
 	// a number in its own job table while it runs: the jobs it starts are
 	// numbered past it, and the `+` and `-` can land on it.
 	//
-	// The holders are compound commands, function calls, and builtins that
-	// run code (`eval`, `.`, `source`). The first one to start holds the
-	// slot, and the commands nested inside it take no number of their own.
-	// The slot is the lowest free number when the command starts, and it
-	// leaves with the command. Measured 2026-10-01 on zsh 5.9.2 under `-f -c`
+	// The holders are compound commands, named function calls, and builtins
+	// that run code (`eval`, `.`, `source`). The first one to start holds a
+	// slot, and of the commands nested inside it the brace groups and the
+	// function calls take no number of their own while `if`, the loops,
+	// `case`, `repeat`, `time`, `eval` and `.` each take another — see
+	// Runner.holdACommandsJobSlot for those rows. A nameless function holds
+	// nothing. The slot is the lowest free number when the command starts,
+	// and it leaves with the command. Measured 2026-10-01 on zsh 5.9.2 under `-f -c`
 	// and through a pseudo-terminal under `-fi`, with the same numbers on both:
 	//
 	//	{ sleep 1 & jobs }                  [2]  + running    sleep 1
@@ -15581,8 +15607,12 @@ type Semantics struct {
 	//     highest-numbered other, the slot counting.
 	//   - A job that leaves with the `+` hands it to the `-`, and the `-` is
 	//     chosen again.
-	//   - When the command ends, a `+` on its slot goes to the `-`, and a `-`
-	//     on it stays where it is.
+	//   - When the command ends, a `+` on its slot goes to the `-` where the
+	//     `-` is a job, and a `-` on it stays where it is. A `+` with nowhere to go stays on the number, which nobody holds
+	//     now, until something reads the table outside a command: `jobs`,
+	//     `wait`, `kill` and a program run in the foreground take it off (see
+	//     Runner.forgetANumberNobodyHolds), and a command that holds that
+	//     number again reads it as its own.
 	//
 	// The rows:
 	//
@@ -29652,6 +29682,9 @@ func PosixSemantics() Semantics {
 		// departure and reaches it through its own option rather than
 		// through a preset.
 		GetoptsErrorEndsTheWord: No,
+		// An operand naming no job is reported: the standard has `wait`
+		// write a diagnostic for it, and every column does by default.
+		JobSpecMissIsSilent: No,
 		// The standard has the name set to a question mark when the options
 		// run out.
 		GetoptsEndOfOptionsNamesIt: Yes,
@@ -31132,6 +31165,10 @@ func CoreSemantics() Semantics {
 		// refuse the builtin's ordinary use. zsh moves it under an option
 		// of its own and says so there.
 		GetoptsErrorEndsTheWord: No,
+		// A job spec that names nothing is reported, which is every column
+		// but one option of one shell. Answered here because the run that
+		// asks is the ordinary failing `wait %1`.
+		JobSpecMissIsSilent: No,
 		// `getopts` writes `?` into the name when it runs out of options,
 		// which is the standard's own words and six of the seven columns.
 		// The substrate answers it rather than refusing it because the run

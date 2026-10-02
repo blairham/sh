@@ -1699,10 +1699,14 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	if r.refuseFunctionNesting(fn.Name) {
 		return nil
 	}
-	// A function call holds a job slot, where a command does. See
+	// A function call holds a job slot, where a command does — a named one:
+	// `() { sleep 1 & jobs }` is [1] in zsh 5.9.2, measured 2026-10-02, and
+	// `() { if true; then sleep 1 & jobs; fi }` is [2]. See
 	// Semantics.ACommandHoldsAJobSlot.
-	if release := r.holdACommandsJobSlot(); release != nil {
-		defer release()
+	if inPlace == nil {
+		if release := r.holdACommandsJobSlot(false); release != nil {
+			defer release()
+		}
 	}
 	if r.depth >= maxDepth {
 		r.diagf("%s: too deeply nested\n", fn.Name)
@@ -2040,6 +2044,13 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	outerConstruct := r.constructLine
 	r.constructLine = 0
 	restoreOpen := r.openRuntimeFresh(fn.Body)
+	if inPlace != nil {
+		// A nameless function's body is not a brace group that holds a
+		// number of its own: `() { sleep 1 & jobs }` is [1]. See holdsAJobSlot.
+		outerBody := r.bodyHoldsNoSlot
+		r.bodyHoldsNoSlot = fn.Body
+		defer func() { r.bodyHoldsNoSlot = outerBody }()
+	}
 	err := r.command(ctx, fn.Body)
 	restoreOpen()
 	r.readersLine = outerReader

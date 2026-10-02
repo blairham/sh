@@ -17,8 +17,11 @@ func TestAnArrayOperandIsStoredBeforeALaterOperandOnItsName(t *testing.T) {
   typeset w=(a b) v=2 w[2]=X; print -r -- $w $v
   local q=(1 2) q=(3); print -r -- $q
 }
-fn`)
-	if want := "array-local\nyes\nno\nc b\na X 2\n3\n"; out != want {
+fn
+g=(); typeset g[2]=x g=(a); print -r -- $g`)
+	// The last row is the order the other way round: the element first, so
+	// the literal written after it is what stays.
+	if want := "array-local\nyes\nno\nc b\na X 2\n3\na\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }

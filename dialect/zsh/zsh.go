@@ -5850,6 +5850,9 @@ func Diagnostics() interp.Diagnostics {
 		TraceCondition:              interp.TraceCondWhole,
 		TraceConditionQuoting:       interp.QuoteShell,
 		TracePatternEscapesLiterals: true,
+		// A name the locale cannot print is written in `$'…'`; see the
+		// field for the measurement.
+		FunctionListingNameDollarQuotes: true,
 		// The two arithmetic sites disagree in this shell alone: a `(( ))`
 		// command is wrapped in spaced parentheses and the three parts of a
 		// `for ((;;))` header are written bare — `i=0`, `i<2`, `i++`.

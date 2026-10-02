@@ -1266,7 +1266,9 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// A definition replaces the body, and the trace mark belonged to the
 	// body: measured on zsh 5.9.2, `functions -t f; f() { print B }; f`
 	// writes a bare `B`. See interp/functiontrace.go.
-	r.forgetFunctionTrace(c.Name)
+	if !r.redefinesTheRunningBody(c.Name) {
+		r.forgetFunctionTrace(c.Name)
+	}
 	// And whether the dialect defined it or the script did, which decides
 	// whose voice its diagnostics carry — see prelude.go.
 	r.preludeDefined(c.Name, c)
@@ -1989,11 +1991,27 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// leaving the trace on there.
 	mode := r.functionTraceMarkMode(name)
 	boundOutside := r.xtraceBoundToTheBody
+	// A nameless function is part of the body it is written in, so it
+	// carries that body's mark rather than being the first body past it.
+	// Measured 2026-10-01 on zsh 5.9.2: with `fn() { () { gn; () { true } }
+	// }` and `functions -T fn`, both nameless bodies trace and gn's does
+	// not — the call line `+(anon):0> gn` is written and nothing under it.
+	// It still restores the option on the way out: `() { set -x }; print
+	// after` traces nothing after.
+	inheritsTheMark := inPlace != nil && mode == functionTraceUnmarked
+	if inheritsTheMark {
+		mode = functionTraceUnmarked
+		if boundOutside {
+			mode = functionTraceBodyAlone
+		}
+	}
 	if r.functionCallRestoresTheTrace() || mode != functionTraceUnmarked || boundOutside {
 		wasTracing := r.xtrace
 		defer func() { r.xtrace = wasTracing }()
 	}
 	switch {
+	case inheritsTheMark:
+		// Neither on nor off: the trace is whatever the body around it had.
 	case mode != functionTraceUnmarked:
 		r.xtrace = true
 	case boundOutside:

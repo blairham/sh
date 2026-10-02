@@ -3497,6 +3497,26 @@ const funcNamePunctuation = "!#%+,-./:@]^"
 // the difference and answered yes.
 func tokenHoldsAnExpansion(t Token) bool { return spansHoldAnExpansion(t.Spans) }
 
+// funcNameWaitsForTheShell reports a definition's name that is not its
+// literal text until the shell has read it: one holding an expansion, and one
+// holding a `$'…'`, whose escapes are decoded by the dialect at run time
+// rather than by the lexer. Measured 2026-10-01 on zsh 5.9.2: `$'c\td'() {
+// echo y }; $'c\td'` prints `y`, and so does `function $'g\th' { echo k }`,
+// where taking the literal text defined a function called `c\td`.
+func funcNameWaitsForTheShell(spans []Span) bool {
+	return spansHoldAnExpansion(spans) || spansHoldADollarSingleQuote(spans)
+}
+
+// spansHoldADollarSingleQuote reports a `$'…'` among the spans.
+func spansHoldADollarSingleQuote(spans []Span) bool {
+	for _, s := range spans {
+		if s.Kind == Literal && s.Quoting == DollarSingleQuoted {
+			return true
+		}
+	}
+	return false
+}
+
 func spansHoldAnExpansion(spans []Span) bool {
 	for _, s := range spans {
 		if s.Kind != Literal {
@@ -4951,7 +4971,7 @@ func (p *Parser) parseFuncPosix() Command {
 		// parseFuncKeyword; only these two spellings have a name at all.
 		fn.RefusedName = text
 	}
-	if (p.dialect.FunctionNameExpands && tokenHoldsAnExpansion(p.tok)) ||
+	if (p.dialect.FunctionNameExpands && funcNameWaitsForTheShell(p.tok.Spans)) ||
 		p.funcNameIsGenerated(p.tok) {
 		// A name that is not text until the shell runs, kept whole. p.word()
 		// consumes it, which is the p.next() the plain path takes.
@@ -5176,7 +5196,7 @@ func (p *Parser) parseFuncPosixNamesAtParen(c *SimpleCmd) Command {
 // answer and not this word's.
 func (p *Parser) funcNameFromWord(w *Word) FuncName {
 	n := FuncName{Name: w.Literal()}
-	if (p.dialect.FunctionNameExpands && spansHoldAnExpansion(w.Spans)) ||
+	if (p.dialect.FunctionNameExpands && funcNameWaitsForTheShell(w.Spans)) ||
 		(p.dialect.FunctionNameIsFilenameGenerated && spansHoldBarePatternCharacter(w.Spans)) {
 		n.Word = w
 	}
@@ -5660,6 +5680,13 @@ func (p *Parser) funcKeywordName() (FuncName, bool) {
 		if !p.dialect.FunctionNameExpands {
 			return FuncName{}, false
 		}
+		n := FuncName{Name: p.tok.Literal()}
+		n.Word = p.word()
+		return n, true
+	}
+	if p.dialect.FunctionNameExpands && spansHoldADollarSingleQuote(p.tok.Spans) {
+		// Text whose escapes the shell decodes, which is the dialect's to do
+		// and not the lexer's: see funcNameWaitsForTheShell.
 		n := FuncName{Name: p.tok.Literal()}
 		n.Word = p.word()
 		return n, true

@@ -2660,6 +2660,14 @@ type Diagnostics struct {
 	// panel. Zero is the quoting answer, which is what the column that can
 	// hold the widest names takes.
 	FunctionListingNameSpelling FunctionListingNameSpelling
+	// FunctionListingNameDollarQuotes writes a listed function's name in
+	// `$'…'` when the locale cannot print a byte of it, where false writes
+	// the bytes as they are. Measured 2026-10-01: with `ヌ` defined —
+	// UTF-8 e3 83 8c, two of which are C1 controls to a single-byte locale
+	// — `LC_ALL=C functions ヌ` writes `$'\343\M-\C-C\M-\C-L' () {` in zsh
+	// 5.9.2, and `LC_ALL=C declare -f` in bash 5.3 and `typeset -f` in ksh93
+	// write the three bytes. See Runner.dollarQuotedFunctionName.
+	FunctionListingNameDollarQuotes bool
 
 	// FunctionListingAssignmentNameHeader is that header for a name the
 	// dialect above spells with the keyword — the one shape where a bare

@@ -7,6 +7,8 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -4292,7 +4294,7 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 			// *declaration* rather than a body — no header, no braces, and
 			// so nowhere for the block form below to go. See
 			// Diagnostics.UndefinedFunctionListing.
-			return Wording(row, "", listedFunctionName(name))
+			return Wording(row, "", r.listedFunctionNameIn(name))
 		}
 	}
 	body := syntax.PrintWith(fn.Body, r.functionLayout)
@@ -4335,7 +4337,7 @@ func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
 func (r *Runner) listedHeaderName(name string) (spelled string, assignment bool) {
 	if r.diag().FunctionListingNameSpelling !=
 		FunctionListingNameIsBareWithAKeywordForAnAssignment {
-		return listedFunctionName(name), false
+		return r.listedFunctionNameIn(name), false
 	}
 	return name, nameReadsAsAnAssignment(name)
 }
@@ -4406,6 +4408,126 @@ func listedFunctionName(name string) string {
 		return name
 	}
 	return "'" + strings.ReplaceAll(name, "'", `'\''`) + "'"
+}
+
+// listedFunctionNameIn is listedFunctionName in this shell's locale: a name
+// holding a byte the locale cannot print is written in `$'…'` where the
+// dialect does that, and quoted or left bare as before otherwise. See
+// Diagnostics.FunctionListingNameDollarQuotes.
+func (r *Runner) listedFunctionNameIn(name string) string {
+	if r.diag().FunctionListingNameDollarQuotes {
+		if q, ok := r.dollarQuotedFunctionName(name); ok {
+			return q
+		}
+	}
+	return listedFunctionName(name)
+}
+
+// dollarQuotedFunctionName writes name in `$'…'` if the locale cannot print
+// some byte of it, and reports false — nothing to do — otherwise. Measured
+// 2026-10-01 on zsh 5.9.2 by defining each name through `functions[$n]=:` and
+// reading the first line of `functions -- $n`, under LC_ALL=C and under
+// en_US.UTF-8:
+//
+//	$'a\tb'  $'a\nb'             tab and newline by name, in both locales
+//	$'a\C-Ab'  $'a\C-[b'  $'a\C-Mb'   every other control as \C- and the
+//	$'a\C-?b'                     byte with 0x40 flipped, DEL as \C-?
+//	$'a\M-\C-_b'                  0x80–0x9f as \M- and the byte below it,
+//	                              in both locales
+//	\303\251 (é)                  printable in both, so bare — under C a
+//	a\240b                        byte from 0xa0 up is printable
+//	$'a\M- b'                     but not to UTF-8, where a lone one is not
+//	$'\343\M-\C-C\M-\C-L' (ヌ)      C: the printable byte as it is, the
+//	ヌ                             others as above; UTF-8 prints the whole
+//	$'\M-\C-E' (U+0085)           an unprintable character is its code
+//	                              point, under UTF-8
+//	$'a\'b\t'  $'a\\b\t'          the quote and the backslash escaped,
+//	$'a"b\t'  $'a$b\t'  $'a b\t'   nothing else
+func (r *Runner) dollarQuotedFunctionName(name string) (string, bool) {
+	utf := r.localeEncoding() == localeUTF8
+	if r.localeEncoding() == localeUnnamed && strings.ContainsFunc(name, func(c rune) bool { return c >= 0x80 }) {
+		utf = r.unsetLocaleIsUnicodeAware()
+	}
+	type piece struct {
+		text      string
+		printable bool
+		meta      int // the byte to render, for an unprintable piece
+	}
+	var pieces []piece
+	unprintable := false
+	for i := 0; i < len(name); {
+		c := name[i]
+		if utf && c >= 0x80 {
+			rn, size := utf8.DecodeRuneInString(name[i:])
+			if rn == utf8.RuneError && size <= 1 {
+				pieces = append(pieces, piece{meta: int(c)})
+				unprintable = true
+				i++
+				continue
+			}
+			if unicode.IsPrint(rn) {
+				pieces = append(pieces, piece{text: name[i : i+size], printable: true})
+				i += size
+				continue
+			}
+			unprintable = true
+			if rn < 0x100 {
+				pieces = append(pieces, piece{meta: int(rn)})
+			} else {
+				for j := i; j < i+size; j++ {
+					pieces = append(pieces, piece{meta: int(name[j])})
+				}
+			}
+			i += size
+			continue
+		}
+		if c < 0x20 || c == 0x7f || c >= 0x80 && c < 0xa0 {
+			pieces = append(pieces, piece{meta: int(c)})
+			unprintable = true
+		} else {
+			pieces = append(pieces, piece{text: name[i : i+1], printable: true})
+		}
+		i++
+	}
+	if !unprintable {
+		return "", false
+	}
+	var b strings.Builder
+	b.WriteString("$'")
+	for _, p := range pieces {
+		if p.printable {
+			for k := 0; k < len(p.text); k++ {
+				if p.text[k] == '\'' || p.text[k] == '\\' {
+					b.WriteByte('\\')
+				}
+				b.WriteByte(p.text[k])
+			}
+			continue
+		}
+		c := p.meta
+		if c >= 0x80 {
+			b.WriteString(`\M-`)
+			c &= 0x7f
+		}
+		switch {
+		case c == '\t':
+			b.WriteString(`\t`)
+		case c == '\n':
+			b.WriteString(`\n`)
+		case c == 0x7f:
+			b.WriteString(`\C-?`)
+		case c < 0x20:
+			b.WriteString(`\C-`)
+			b.WriteByte(byte(c + 0x40))
+		case c == '\'' || c == '\\':
+			b.WriteByte('\\')
+			b.WriteByte(byte(c))
+		default:
+			b.WriteByte(byte(c))
+		}
+	}
+	b.WriteByte('\'')
+	return b.String(), true
 }
 
 // functionNameNeedsQuotes is the bare set above, read one rune at a time.

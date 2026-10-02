@@ -179,6 +179,11 @@ type Job struct {
 	// the way out of a script reads it — so it needs no synchronization of
 	// its own. It exists because `kill(2)` returns when the signal is *sent*:
 	// the note is owed and has not arrived. See Runner.awaitExpectedStops.
+	// inbox is where a signal aimed at this job reaches the body that is
+	// running it, where the job is a body of this shell's rather than a
+	// program. See bodyinbox.go.
+	inbox *bodyInbox
+
 	stopExpected bool
 	// noticedStop says the shell has already taken that note into the job's
 	// own Stopped and StopSig. Written only on the shell's own goroutine,
@@ -777,6 +782,11 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)
 	sub.bg = job
+	// And somewhere for a signal aimed at the job to reach the body's own
+	// traps, which no process of the job's holds. See bodyinbox.go.
+	job.inbox = newBodyInbox(sub.traps)
+	sub.inbox = job.inbox
+	sub.inboxGoesToTheParentheses = theForkIsTheParentheses(st)
 	// Every process this shell and anything it clones starts is a process of
 	// this job. Wider than bg on purpose: a pipeline clears bg on all but its
 	// last element so that one pid is settled once, and inJob is what keeps

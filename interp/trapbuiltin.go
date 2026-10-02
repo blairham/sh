@@ -321,14 +321,16 @@ func (r *Runner) trapSingleArgument(cond string) int {
 	// A reset takes the function form of the handler with it, the same way
 	// setting an action does — measured, `TRAPZERR(){ … }; trap - ZERR`
 	// leaves no TRAPZERR function behind. See trapfunction.go.
+	//
+	// A reset is localized like a set: measured, `f() { trap - USR1 }` with
+	// the scoping on puts the caller's handler back at the return — and
+	// before the function goes, so that what is kept is the function too.
+	r.localizeTrap(name, sig)
 	r.releaseTrapFunction(name)
 	if name == "EXIT" {
 		r.exitTrap = nil
 		return 0
 	}
-	// A reset is localized like a set: measured, `f() { trap - USR1 }` with
-	// the scoping on puts the caller's handler back at the return.
-	r.localizeTrap(name, sig)
 	if slot := r.pseudoTrapSlot(name); slot != nil {
 		*slot = nil
 		r.clearPseudoInherited(name)

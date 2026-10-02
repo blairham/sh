@@ -4247,6 +4247,15 @@ type Runner struct {
 	// No lock: a subshell's runner is a copy owned by the goroutine running
 	// it, which is also the only thing that records or takes from this.
 	selfPending []string
+	// inbox is where the shell that started this body as a background job
+	// leaves a signal it aimed at the job, for the body's own traps. Nil
+	// everywhere else, a subshell of the body included. See bodyinbox.go.
+	inbox *bodyInbox
+	// inboxGoesToTheParentheses says this body's statement is a `( … )` that
+	// is the fork itself, so the inbox belongs to the subshell the
+	// parentheses make rather than to this runner. See
+	// theForkIsTheParentheses.
+	inboxGoesToTheParentheses bool
 	// selfHeldForInput is selfPending's other half: what this body aimed at
 	// itself and is holding until the shell reads more input or finishes
 	// waiting for a child. See Runner.signalIsHeldUntilInputOrAChild.

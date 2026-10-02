@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // The second spelling of a trap: a *function* whose name is `TRAP` followed
@@ -122,7 +124,11 @@ func namesATrapCondition(word string) bool {
 // body's `local` is local, its `return` returns from it, and the number the
 // condition is known by arrives as `$1`. A copied body would run in the
 // caller's scope and be a different thing wearing the same name.
-func (r *Runner) bindTrapFunction(fname string) bool {
+//
+// displaced is the definition the name held before this one, which is what a
+// call scoping its traps keeps for the return when the name was already the
+// handler: the table holds the new body by the time this is asked.
+func (r *Runner) bindTrapFunction(fname string, displaced *syntax.FuncDecl) bool {
 	cond, sig, ok := r.trapFunctionCondition(fname)
 	if !ok {
 		return false
@@ -130,7 +136,7 @@ func (r *Runner) bindTrapFunction(fname string) bool {
 	// Setting a handler is a modification like any other, so a listing this
 	// subshell inherited stops standing in for its own state.
 	r.trapsModified()
-	r.localizeTrap(cond, sig)
+	r.localizeTrapHolding(cond, sig, displaced)
 	action := fname + " " + strconv.Itoa(r.trapConditionNumberFor(cond, sig))
 	switch {
 	case cond == "EXIT":
@@ -179,6 +185,13 @@ func (r *Runner) unbindTrapFunction(fname string) {
 	for cond, bound := range r.trapFuncs {
 		if bound != fname {
 			continue
+		}
+		// Kept for the return, function and all, where the call scopes
+		// its traps: measured on zsh 5.9.2, `TRAPINT() { print O }; f() {
+		// setopt localtraps; unfunction TRAPINT }; f; trap` lists the
+		// function again.
+		if cond != "EXIT" {
+			r.localizeTrap(cond, signalNumberFor(cond))
 		}
 		delete(r.trapFuncs, cond)
 		r.trapsModified()
@@ -259,4 +272,50 @@ func signalNumberFor(name string) syscall.Signal {
 		}
 	}
 	return 0
+}
+
+// restoreTheExitTrapFunction puts the function the caller's EXIT handler was
+// spelled as back, for a call whose own EXIT trap has just fired and been
+// taken away: the function spelling is the same slot as the action, so it is
+// scoped the same way. Measured 2026-10-02 on zsh 5.9.2:
+//
+//	fn1() { TRAPEXIT() { print EXIT1 }; fn2() { TRAPEXIT() { print EXIT2 } }; fn2; functions TRAPEXIT }; fn1
+//	        EXIT2, then fn1's TRAPEXIT listed, then EXIT1 — and after
+//	        fn1, `functions TRAPEXIT` finds nothing
+//	f() { TRAPEXIT() { print E1 }; g() { trap 'print T2' EXIT }; g; print mid }; f
+//	        T2, mid, E1: g's trap took the function away only for g
+//	f() { trap 'print T1' EXIT; g() { TRAPEXIT() { print E2 } }; g; trap }; f
+//	        E2, then `trap -- 'print T1' EXIT`, then T1
+//
+// (#5147).
+func (r *Runner) restoreTheExitTrapFunction(fname string, decl *syntax.FuncDecl) {
+	r.restoreTrapFunction("EXIT", fname, decl)
+}
+
+// restoreTrapFunction makes fname, defined as decl, the function cond's
+// handler is spelled as again — or, for an empty fname, takes away whatever
+// function stands for cond now. The action that calls it is the caller's to
+// put back; this is the function table's half.
+func (r *Runner) restoreTrapFunction(cond, fname string, decl *syntax.FuncDecl) {
+	now := r.trapFuncs[cond]
+	if now == fname && (fname == "" || r.funcs[fname] == decl) {
+		return
+	}
+	if now != "" {
+		delete(r.trapFuncs, cond)
+		if now != fname || decl == nil {
+			r.removeFunctionQuietly(now)
+		}
+	}
+	if fname == "" || decl == nil {
+		return
+	}
+	if r.funcs == nil {
+		r.funcs = map[string]*syntax.FuncDecl{}
+	}
+	r.funcs[fname] = decl
+	if r.trapFuncs == nil {
+		r.trapFuncs = map[string]string{}
+	}
+	r.trapFuncs[cond] = fname
 }

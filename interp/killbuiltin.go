@@ -646,6 +646,13 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			r.killFailed(&killError{kind: killNotPermitted, operand: t, errno: syscall.EPERM})
 			continue
 		}
+		if r.deliverToABody(named, aims, name, sig) {
+			// A job that is a body of this shell's, whose own traps answer
+			// the signal: it goes to them and not to the programs the body
+			// has started. See bodyinbox.go.
+			sent++
+			continue
+		}
 		if len(aims) == 0 {
 			// A target that is there with nothing to reach, which is a job
 			// either way: one that has ended and that the script has not

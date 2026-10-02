@@ -450,6 +450,9 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		// dialect that hides an inherited ignore lists one the subshell
 		// makes itself.
 		delete(r.inheritedIgnored, name)
+		if r.inbox != nil {
+			r.inbox.noteTrap(name, body)
+		}
 		return
 	}
 	s := r.sigs()
@@ -840,7 +843,7 @@ func (r *Runner) takeSelfPending() []string {
 // dash, bash 5.3, ksh93 and zsh all put the handler's output in that file, so
 // the handler runs while the redirection is still in force.
 func (r *Runner) runSelfRaisedTraps(ctx context.Context) {
-	if !r.inSubshell || len(r.selfPending) == 0 {
+	if !r.inSubshell || len(r.selfPending) == 0 && r.inbox == nil {
 		return
 	}
 	r.runPendingTraps(ctx)
@@ -1075,7 +1078,15 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		// on `{ trap 'echo child >&2' PIPE; echo "$big"; echo reached >&2; }
 		// | true`, every shell in the panel runs the element's handler and
 		// none of them runs the shell's.
-		for _, name := range r.takeSelfPending() {
+		//
+		// And what the shell aimed at this body as a background job, which
+		// is the same: the body's signal, answered by the body's handler.
+		// See bodyinbox.go.
+		pending := r.takeSelfPending()
+		if r.inbox != nil {
+			pending = append(pending, r.inbox.take()...)
+		}
+		for _, name := range pending {
 			if body, ok := r.traps[name]; ok && body != "" {
 				r.runTrapHandler(ctx, name, body)
 			}

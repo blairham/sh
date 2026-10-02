@@ -294,39 +294,28 @@ print -r -- "5 Q st=$?"`)
 	}
 }
 
-// A name with a separator in it is not looked for anywhere — not on
-// `$fpath`, and not at the place it spells either. Measured 2026-09-12 on
-// zsh 5.9.2 with the file right there and `$fpath` emptied: all three
-// spellings refuse, `-Uz` and `-rUz` at the call and `-RUz` at the
-// declaration, so the file being on disk changes nothing (#1999).
-func TestAnAutoloadNameWithAPathIsRefused(t *testing.T) {
+// An absolute path as the name declares its base name, and the path itself
+// is no function: called by the path it is the file, which is not executable
+// here, so `permission denied` at 126; called by the base name it runs, with
+// `$fpath` emptied, under all three letters — `-R` included, which resolves
+// at the declaration and finds the file. Measured 2026-10-02 on zsh 5.9.2
+// (#5392). This test used to say the absolute form was refused like the
+// relative one (#1999); the measurement behind that was of a relative path,
+// and the relative half is still refused — see
+// TestAutoloadOfAnAbsolutePathDefinesItsBaseName.
+func TestAnAbsoluteAutoloadPathIsNoFunctionButItsBaseNameIs(t *testing.T) {
 	fp := fpathDir(t, map[string]string{"direct": `print -r -- BYPATH`})
 	path := filepath.Join(fp, "direct")
-	for _, tc := range []struct {
-		name    string
-		letters string
-	}{
-		{"the ordinary declaration", "-Uz"},
-		{"a fixed path recorded at the declaration", "-rUz"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			out, st := runZsh(t, t.TempDir(), `fpath=()
-autoload `+tc.letters+` `+path+`
-`+path)
-			if !strings.Contains(out, "function definition file not found") || st == 0 {
-				t.Errorf("a path operand = %q (status %d), want the refusal at a nonzero status", out, st)
-			}
-			if strings.Contains(out, "BYPATH") {
-				t.Errorf("a path operand ran the file at %q", path)
+	for _, letters := range []string{"-Uz", "-rUz", "-RUz"} {
+		t.Run(letters, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), `fpath=()
+autoload `+letters+` `+path+`
+`+path+` 2>/dev/null; print -r -- "path st=$?"
+direct`)
+			if want := "path st=126\nBYPATH\n"; out != want {
+				t.Errorf("%s = %q, want %q", letters, out, want)
 			}
 		})
-	}
-	// `-R` refuses at the declaration rather than at the call, so there is
-	// nothing after it to run.
-	out, st := runZsh(t, t.TempDir(), `fpath=()
-autoload -RUz `+path)
-	if !strings.Contains(out, "function definition file not found") || st == 0 {
-		t.Errorf("-R with a path operand = %q (status %d), want the refusal at a nonzero status", out, st)
 	}
 }
 

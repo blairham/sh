@@ -273,6 +273,12 @@ func autoloadBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 	status := 0
 	for _, name := range names {
+		// An absolute path names its file: the function is the file's
+		// base name, loaded from exactly there. See autoloadAbsolute.
+		file, dirOfFile, absolute := autoloadAbsolute(name)
+		if absolute {
+			name = file[len(dirOfFile)+1:]
+		}
 		if autoloadDefined(r, name) {
 			// Already a function, so there is nothing to mark: measured,
 			// `myfn() { echo body; }; autoload -Uz myfn; myfn` runs the body
@@ -296,7 +302,10 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 		// and plainly afterwards must not keep answering from the first
 		// declaration's file.
 		dir := ""
-		if opts.fixPath {
+		if absolute {
+			autoloadRecordPath(r, name, file)
+			dir = dirOfFile
+		} else if opts.fixPath {
 			code, path := autoloadFixPath(r, name, opts.strict)
 			if code != 0 {
 				// Carried rather than returned, because `autoload -R a b`
@@ -1329,16 +1338,50 @@ func autoloadFixPath(r *interp.Runner, name string, strict bool) (int, string) {
 		}
 		return 0, ""
 	}
+	autoloadRecordPath(r, name, path)
+	// The *directory*, which is what the stub carries and what a fixed path
+	// is really about — measured, `autoload -r f` lists as
+	// `builtin autoload -X <dir>` and never as the file.
+	return 0, filepath.Dir(path)
+}
+
+// autoloadRecordPath fixes the file a name loads from.
+func autoloadRecordPath(r *interp.Runner, name, path string) {
 	paths, _ := r.GetAssoc(autoloadPathStore)
 	if paths == nil {
 		paths = map[string]string{}
 	}
 	paths[name] = path
 	r.SetAssoc(autoloadPathStore, paths)
-	// The *directory*, which is what the stub carries and what a fixed path
-	// is really about — measured, `autoload -r f` lists as
-	// `builtin autoload -X <dir>` and never as the file.
-	return 0, filepath.Dir(path)
+}
+
+// autoloadAbsolute reads a declared name that is an absolute path: the file
+// it names, cleaned, and whether it was one. Measured 2026-10-02 on zsh 5.9.2
+// under `-f`, with `fns/f2` on disk and `fns` not on `$fpath` (#5392):
+//
+//	autoload -Uz -- $PWD/fns/myfn.zsh   `myfn.zsh` is a function, and runs
+//	autoload -Uz $PWD/fns/f2; functions f2   lists `builtin autoload -XUz
+//	                                         $PWD/fns` — the directory, as -r
+//	autoload -U $PWD/fns/f2; fpath=(); f2    still loads: the path is fixed
+//	autoload -Uz $PWD/fns/nosuch; nosuch     a function, and at the call
+//	                                         `function definition file not found`
+//	autoload ./fns/f2                        no `f2`: a relative path with a
+//	                                         separator is #1999's, not this
+//
+// which is iTerm2's shell integration, `autoload -Uz -- "$file"` and then a
+// call by `${file:t}`. The path is kept as written, not cleaned: `autoload
+// -Uz $PWD/fns//./myfn.zsh` lists `-XUz $PWD/fns//.` and the source is the
+// path as given. The directory is everything before the last slash.
+func autoloadAbsolute(name string) (file, dir string, ok bool) {
+	if !strings.HasPrefix(name, "/") {
+		return "", "", false
+	}
+	i := strings.LastIndexByte(name, '/')
+	if i == len(name)-1 {
+		// No base name to declare.
+		return "", "", false
+	}
+	return name, name[:i], true
 }
 
 // autoloadForgetPath drops a name's fixed path, so the next call searches.

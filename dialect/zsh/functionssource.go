@@ -60,8 +60,16 @@ func zshFunctionsSourceView(r *interp.Runner) interp.AssocArray {
 // autoloadPending is the same predicate `${functions[af]}` already asks to
 // give a stub its own body text, rather than a second notion of what a stub
 // is.
+//
+// Except a stub whose file is already fixed — by `-r`, or by an absolute path
+// as the name — which answers with that file before the body is read:
+// measured 2026-10-02 on zsh 5.9.2, `autoload -Uz -r f2` with `fns` on
+// `$fpath` and `autoload -Uz $PWD/fns/f2` both give `$PWD/fns/f2` (#5392).
 func zshFunctionSourceOf(r *interp.Runner, name string) string {
 	if autoloadPending(r, name) {
+		if path, ok := autoloadFixedPath(r, name); ok {
+			return path
+		}
 		return ""
 	}
 	return r.FunctionSourceFile(name)

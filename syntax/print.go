@@ -309,6 +309,14 @@ type Layout struct {
 	// why it is asked for rather than assumed.
 	BodyIsAlwaysBraced bool
 
+	// AnonymousFunctionInParentheses writes a nameless function as `() {`
+	// whichever spelling it was written in, and the keyword standing alone
+	// as `() {` around an empty body. A listing's normalization, like the
+	// braces above. Measured 2026-10-02 on zsh 5.9.2 through `functions`:
+	// `function { : } a` lists as `() {` … `} a`, and a bare `function` as
+	// an empty `() {` block (#5148).
+	AnonymousFunctionInParentheses bool
+
 	// DoAfterArithmeticOnItsOwnLine is the third of the three `do` questions
 	// above, for the arithmetic `for`.
 	//
@@ -1245,12 +1253,18 @@ func (p *printer) command(c Command) {
 		// empty group standing in for the body it was not given is not
 		// printed — `function { }` is a different command from `function`,
 		// and one that answers differently. See [AnonFunc.Bare].
+		if x.Bare && p.layout.AnonymousFunctionInParentheses {
+			p.str("() ")
+			p.command(&Group{Start: x.Pos(), Stop: x.End()})
+			p.redirs(x.Redirs)
+			break
+		}
 		if x.Bare {
 			p.str("function")
 			p.redirs(x.Redirs)
 			break
 		}
-		if x.Keyword {
+		if x.Keyword && !p.layout.AnonymousFunctionInParentheses {
 			p.str("function ")
 		} else {
 			p.str("() ")

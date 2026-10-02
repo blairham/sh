@@ -58,6 +58,9 @@ func FunctionLayout() syntax.Layout {
 		ParameterBracesAsWritten: true,
 		PipeBothWrittenOut:       true,
 		BodyIsAlwaysBraced:       true,
+		// And a nameless function is `() {` whichever word it was written
+		// with — `function { … }` included. Measured 2026-10-02 (#5148).
+		AnonymousFunctionInParentheses: true,
 
 		// And a fourth: the three expressions of an arithmetic `for` keep
 		// the blanks written after them and lose the ones written before,

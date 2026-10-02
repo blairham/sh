@@ -2530,6 +2530,9 @@ func Semantics() interp.Semantics {
 	// A format that ends inside a conversion is an error here, with a
 	// second wording of its own — see PrintfMissingVerb.
 	s.PrintfUnfinishedConversionIsAPercent = interp.No
+	// The not-found handler, one letter short of zsh's name; see
+	// interp.Semantics.CommandNotFoundHandler.
+	s.CommandNotFoundHandler = "command_not_found_handle"
 	// `\x41` is an `A`, and at most two digits: `\x0ff` is 0x0f then an
 	// `f`. A `\x` with no digit after it stands as written, with a warning
 	// on standard error and a status that is still zero.

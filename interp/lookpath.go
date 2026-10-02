@@ -632,3 +632,29 @@ func (r *Runner) autoCdInstead(ctx context.Context, argv []string) (status int, 
 	}
 	return cd(r, ctx, operands), true
 }
+
+// commandNotFoundHandled hands a command word that names nothing to the
+// dialect's handler function, where there is one and it is defined, and
+// reports whether it did. See Semantics.CommandNotFoundHandler.
+func (r *Runner) commandNotFoundHandled(ctx context.Context, argv []string, lookErr error) bool {
+	name := r.sem().CommandNotFoundHandler
+	if name == "" || len(argv) == 0 || strings.ContainsRune(argv[0], '/') {
+		return false
+	}
+	var pe *pathError
+	if !errors.As(lookErr, &pe) || !pe.missing {
+		return false
+	}
+	fn, ok := r.funcs[name]
+	if !ok {
+		return false
+	}
+	// A subshell, as the shells run it: nothing the handler sets is left
+	// behind, and its status is the command's.
+	sub := r.clone()
+	sub.inheritJobs(jobBoundaryCompound)
+	_ = sub.callFunc(ctx, fn, argv)
+	sub.endSubshell(ctx)
+	r.status, r.diedOfSig = sub.status, sub.diedOfSig
+	return true
+}

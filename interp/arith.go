@@ -1388,7 +1388,7 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		if p.modifies && r.arithModifiesAnArray(p.name, r.formatNum(v)) {
 			return nil
 		}
-		if r.arithAssignmentDeclaresANumber(p.name) || (!p.modifies && from != nil && r.arithAssignmentReplacesAnArray(p.name)) {
+		if r.arithAssignmentDeclaresANumber(p.name) || (from != nil && r.arithAssignmentReplacesAnArray(p.name)) {
 			if v.floatKind() {
 				// **The value's type decides which attribute**, and a float
 				// value declares a float. See declareFloatFromArithmetic,

@@ -8081,7 +8081,7 @@ said off and the braces went on expanding, so a script could read the state
 and watch it be false in the same breath. A recorded name is one this shell
 does not do **in either state**, so nothing it says can be contradicted by
 what the shell then does — the request is remembered and the feature is
-absent, which is the same bargain the 101 recorded `setopt` names strike.
+absent, which is the same bargain the 100 recorded `setopt` names strike.
 The bill is real and it is deferred rather than waived: `globstar` on with no
 `**` crossing is a weaker answer than `globstar` implemented, which is why
 each name that is recorded rather than built carries an issue of its own. A
@@ -8915,7 +8915,11 @@ what separates it from `posixtraps` (#4591). The full grid, and the rows that
 say the reading reaches the plain run and nothing else, are in
 `docs/spec/grammar/tokenization.md`.
 
-So 101 of 185 are recorded, the count above is the one produced by counting
+`forcefloat` left the recorded set in #5145: every operand arithmetic reads
+is a float under it, constants and names alike, and a bitwise operator still
+makes an integer — see `interp.Runner.forcedFloat` for the rows.
+
+So 100 of 185 are recorded, the count above is the one produced by counting
 the constructors in `dialect/zsh/setopt.go`, and **the fixed set is now
 exactly the set real zsh refuses**: `interactive`, `shinstdin`,
 `singlecommand` and `zle`. `monitor` left it in #1720 because zsh grants it
@@ -12954,7 +12958,7 @@ than missing:
   and wording (`bad file number: 9` where ksh93 brackets the errno). Its
   `whence` is built now, above; `print` stays command-not-found, visible in
   the corpus's `print/` cases as the recorded difference.
-- zsh `setopt` names of the **recorded** kind: 101 of the 185 are recognized,
+- zsh `setopt` names of the **recorded** kind: 100 of the 185 are recognized,
   remembered and reported without being acted on. See "zsh's option names".
   (This line read 157 while the table above read 150, then 145 while the
   table read 132; neither number was ever the count the table produces, and

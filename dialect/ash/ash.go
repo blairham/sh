@@ -1394,6 +1394,9 @@ func Semantics() interp.Semantics {
 	// under `env -i` and exports it, which puts ash on bash's side of this
 	// and leaves dash alone on the other. See interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelCounted
+	// Read from the front in decimal: `SHLVL=08` is counted from 8.
+	// Measured 2026-10-02 on BusyBox 1.37.0 (#5145).
+	s.ShellLevelReading = interp.ShellLevelReadsTheFrontInDecimal
 	// And a shell that replaces this process counts one deeper, as ksh93
 	// does: measured 2026-09-18 in the pinned image, `exec /bin/busybox ash
 	// -c 'echo $SHLVL'` reads 2 where this shell holds 1.

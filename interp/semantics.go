@@ -4780,6 +4780,15 @@ type Semantics struct {
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
 	// the others read 0, because `kill` succeeded.
 	SignalHandlerSeesEarlierStatus Answer
+	// ArithInfAndNaNAreConstants reads the names `inf` and `nan`, in any
+	// case, as the two floating constants rather than as parameters — before
+	// any parameter of that name. Measured 2026-10-02: with `Inf=4`, zsh
+	// 5.9.2 answers `$(( Inf ))` with `Inf` and `$(( $Inf ))` with 4, `$((
+	// inf + 1 ))` is `Inf` and `$(( inf - inf ))` `NaN`, `x=inf; $(( x ))`
+	// is `Inf`, and `(( n = inf ))` declares `typeset -F n=inf`; bash 5.3.20
+	// answers `inf=4; $(( inf ))` with 4, and ksh93u+ 2012-08-01 reads both
+	// as unset names. Read as `== Yes`.
+	ArithInfAndNaNAreConstants Answer
 	// ArithStoreRefusalIsAnError makes an element store the arithmetic
 	// refuses — a subscript before the first element — an arithmetic error,
 	// failing the expression the way `1/0` does; the other reading reports it
@@ -6479,6 +6488,10 @@ type Semantics struct {
 	// See ShellLevelPolicy, which carries the panel and the reason the
 	// exporting half is the one that matters.
 	ShellLevel ShellLevelPolicy
+	// ShellLevelReading is how an inherited `$SHLVL` the shell counts from
+	// is read: the whole value, or as much of its front as is a number. See
+	// ShellLevelReading, the type, for the measurements.
+	ShellLevelReading ShellLevelReading
 
 	// ShellLevelExec is whether a shell that *replaces* this process counts
 	// one deeper than this one. A question beside ShellLevel rather than a
@@ -29780,6 +29793,10 @@ func PosixSemantics() Semantics {
 		// attribute, so the preset keeps the arithmetic it does describe.
 		LetReadsALeadingZeroAsDecimal:       No,
 		ArithmeticAssignmentDeclaresANumber: No,
+		// The standard's arithmetic has no floating constants, so a name is
+		// a name: bash 5.3.20, dash and BusyBox ash read `inf` as one,
+		// measured 2026-10-02.
+		ArithInfAndNaNAreConstants: No,
 		// A name is the portable character set and no more: the standard's
 		// Name is underscores, digits and the alphabetics of that set. bash 5.3.20,
 		// dash and BusyBox ash 1.37.0 hold to it under a UTF-8 locale as

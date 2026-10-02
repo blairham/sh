@@ -48,3 +48,11 @@ func (r *Runner) SetArithLeadingZeroNamesOctalDigits(on bool) {
 	d.ArithLeadingZeroNamesOctalDigits = on
 	r.Dialect = &d
 }
+
+// ArithForcesFloat reports whether arithmetic reads every operand as a float.
+// See Runner.forcedFloat.
+func (r *Runner) ArithForcesFloat() bool { return r.arithForcesFloat }
+
+// SetArithForcesFloat moves it, for a dialect whose option namespace has a
+// name for it — zsh's `force_float`.
+func (r *Runner) SetArithForcesFloat(on bool) { r.arithForcesFloat = on }

@@ -883,7 +883,17 @@ var zshOptions = []zshOption{
 	matchBacked("extendedglob", false, interp.ExtendedPatternOperators, false),
 	recorded("extendedhistory", false),
 	recorded("flowcontrol", true),
-	recorded("forcefloat", false),
+	{
+		// FORCE_FLOAT: every operand arithmetic reads is a float, constants
+		// and names alike, so `$(( 3/4 ))` is 0.75. Measured 2026-10-02 on
+		// 5.9.2; see interp.Runner.forcedFloat for the rows (#5145).
+		base: "forcefloat", def: false,
+		get: func(r *interp.Runner) bool { return r.ArithForcesFloat() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetArithForcesFloat(on)
+			return 0
+		},
+	},
 	// `$0` inside a function is the function's name here, which is what the
 	// name asks for and what this shell already does — and what it goes on
 	// doing whichever way the name is written, which is why it is recorded

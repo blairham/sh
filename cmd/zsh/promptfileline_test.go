@@ -28,6 +28,7 @@ func TestTheFileLineEscapeCountsInTheFile(t *testing.T) {
 			"a:4\nb:5\nc:7\n",
 		},
 		{"a function called from eval", "f() {\n  print -P f:%I\n}\neval \":\nf\"\n", "f:2\n"},
+		{"eval in a function called from eval", "f() {\n  eval \"print -P g:%I\"\n}\n:\neval \":\nf\"\n", "g:3\n"},
 		{
 			"the trace prefix",
 			"PS4=\"+%x:%I> \"\nfn() {\n  print This is fn.\n}\n:\nfn\n",

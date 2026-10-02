@@ -2248,7 +2248,26 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("typesettounset", false),
+	{
+		// TYPESET_TO_UNSET: a declaration with no value leaves the name
+		// declared and unset rather than holding an empty value. It is
+		// interp.Semantics.DeclaredNameWithoutValueIsEmpty read backwards,
+		// and it was recorded and nothing else until #5157. Measured
+		// 2026-10-01 on zsh 5.9.2: `setopt typesettounset; typeset X; echo
+		// "[${X+set}]"` is `[]`, `emulate sh; unsetopt typesettounset` gives
+		// `[set]` back, `emulate csh; setopt typesettounset` gives `[]`, and
+		// with it on `integer i; typeset -a a; typeset -p i a` writes
+		// `typeset -i i` and `typeset -a a` with no value. So the emulation's
+		// own reading of the axis is this option's default in that mode.
+		base: "typesettounset", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.DeclaredNameWithoutValueIsEmpty == interp.No
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer { return &s.DeclaredNameWithoutValueIsEmpty }, answer(!on))
+			return 0
+		},
+	},
 	setOptBacked("unset", true, "nounset", true),
 	setOptBacked("verbose", false, "verbose", false),
 	editingOption("vi", "viins"),

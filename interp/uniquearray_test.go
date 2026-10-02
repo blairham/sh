@@ -133,7 +133,14 @@ typeset -p s1
 typeset -Ux x1=v
 typeset -p x1
 typeset -AU m1
-typeset -p m1`, withUniqueness, Diagnostics{})
+typeset -p m1`, func(s *Semantics) {
+		withUniqueness(s)
+		// The letter's shell in its own mode, where a valueless
+		// declaration holds an empty value: `typeset -AU m1` lists back
+		// as `=( )`. Under its sh mode the table holds nothing and lists
+		// as `typeset -AU m1` (#5157).
+		s.DeclaredNameWithoutValueIsEmpty = Yes
+	}, Diagnostics{})
 	// `s1` lists back folded because this engine folds a case attribute at
 	// assignment — see the note in applyDeclaration. The letters are what
 	// this test is about.

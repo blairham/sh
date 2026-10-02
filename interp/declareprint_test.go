@@ -109,6 +109,10 @@ func TestDeclarePrintExportSpelledForm(t *testing.T) {
 		s.DeclareValueQuoting = ListingQuoteWhenNeededEscaped
 		// The form belongs to an engine whose arrays are dense.
 		s.ArraysAreSparse = No
+		// And, in its own mode, whose valueless declaration holds an empty
+		// value — the `=( )` the last row writes. Under that engine's sh
+		// mode the same row writes no value (#5157).
+		s.DeclaredNameWithoutValueIsEmpty = Yes
 	}
 	for _, tc := range []struct{ src, want string }{
 		{`v=1; typeset -p v`, `typeset v=1`},

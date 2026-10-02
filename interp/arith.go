@@ -1539,6 +1539,10 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 					"%[1]s needs a variable", x.Op),
 			}
 		}
+		place, err := r.settlePlaceIndex(place)
+		if err != nil {
+			return intNum(0), err
+		}
 		old, err := r.readPlace(place)
 		if err != nil {
 			return intNum(0), err
@@ -1583,6 +1587,38 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 	return intNum(0), arithError{msg: "unknown unary " + x.Op}
 }
 
+// settlePlaceIndex evaluates an indexed element's subscript once, for an
+// operator that reads the element and then writes it, and hands back the
+// place with the number in its subscript's stead — so a side effect in the
+// subscript happens once. Measured 2026-10-02, `array=(1); x=0; ((
+// array[++x]++ ))` leaves x at 1 in zsh 5.9.2, bash 5.3.20 and ksh93u+
+// 2012-08-01 alike, and `(( a[i++] += 10 ))` steps i once; here both read
+// the subscript twice (#5145).
+//
+// A key, a flag group and an empty pair are left as they are: none of them
+// is an expression this evaluates.
+func (r *Runner) settlePlaceIndex(p arithPlace) (arithPlace, error) {
+	if !p.subscripted || p.index == nil || p.flags != nil || p.empty {
+		return p, nil
+	}
+	if _, isTable := r.assocFor(p.name); isTable {
+		return p, nil
+	}
+	n, err := r.arithSubscriptIndex(&syntax.ArithIndex{
+		Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked,
+	})
+	if err != nil {
+		return p, err
+	}
+	text := r.formatNum(n)
+	var settled syntax.ArithExpr = &syntax.ArithNum{Text: strings.TrimPrefix(text, "-")}
+	if strings.HasPrefix(text, "-") {
+		settled = &syntax.ArithUnary{Op: "-", X: settled}
+	}
+	p.index = settled
+	return p, nil
+}
+
 // addNum steps a value by one, keeping it whichever kind it was.
 func (r *Runner) addNum(n arithNum, step float64) arithNum {
 	if n.floatKind() {
@@ -1606,6 +1642,11 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 		return intNum(0), err
 	}
 	if x.Op != "=" {
+		// The subscript once, for the read and the write both. See
+		// settlePlaceIndex.
+		if place, err = r.settlePlaceIndex(place); err != nil {
+			return intNum(0), err
+		}
 		old, err := r.readPlace(place)
 		if err != nil {
 			return intNum(0), err

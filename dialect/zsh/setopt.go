@@ -962,7 +962,24 @@ var zshOptions = []zshOption{
 	// rather than refused.
 	recorded("functionargzero", true),
 	setOptBacked("glob", true, "noglob", true),
-	recorded("globalexport", true),
+	{
+		// GLOBAL_EXPORT: the export letter on a declaration inside a
+		// function reaches the global, where it is on — the default. Off,
+		// `typeset -x v` there is a local. Measured 2026-10-02 on zsh 5.9.2:
+		// `f(){ typeset -x v=1 }` lists `v` as `scalar-local-export` inside
+		// the call with the option off and `scalar-export` with it on
+		// (#5155).
+		base: "globalexport", def: true,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ExportLetterDeclaresAGlobal == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ExportLetterDeclaresAGlobal
+			}, answer(on))
+			return 0
+		},
+	},
 	// And the narrower escape hatch beside `rcs` below: whether this shell
 	// reads the files in the machine's own directory, which the invocation
 	// initializes from `-d` and `--no-globalrcs`.

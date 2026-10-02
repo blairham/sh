@@ -4,6 +4,8 @@
 package zsh_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -46,6 +48,28 @@ func TestASignalLeftAtItsDefaultEndsABackgroundBody(t *testing.T) {
 			`{ trap 'print T' TERM; while :; do :; done } & /bin/sleep 0.2; kill -KILL $!; wait $!; print $?`,
 			"137\n",
 		},
+		// At once, and not when the program is done: the wait is given up,
+		// whether the program was the job's first or a later one.
+		{
+			"the first program's wait is given up",
+			`typeset -F SECONDS; { ` + prog + `; print after } & /bin/sleep 0.2; kill -TERM $!; s=$SECONDS; wait $!; print $? $(( SECONDS - s < 0.3 ))`,
+			"143 1\n",
+		},
+		{
+			"a later program's wait is given up",
+			`typeset -F SECONDS; { /usr/bin/true; ` + prog + `; print after } & /bin/sleep 0.2; kill -TERM $!; s=$SECONDS; wait $!; print $? $(( SECONDS - s < 0.3 ))`,
+			"143 1\n",
+		},
+		{
+			"an EXIT trap keeps the last command a shell's",
+			`{ trap 'print X' EXIT; ` + prog + ` } & /bin/sleep 0.2; kill -TERM $!; wait $!; print $?` + after,
+			"143\nsurvived\n",
+		},
+		{
+			"the end of an and-list is a last command",
+			`true && ` + prog + ` & /bin/sleep 0.2; kill -TERM $!; wait $!; print $?` + after,
+			"143\n",
+		},
 		// The exec'd last command: the fork has become the program, so the
 		// signal is the program's and nothing writes the marker.
 		{
@@ -81,5 +105,18 @@ func TestASignalLeftAtItsDefaultEndsABackgroundBody(t *testing.T) {
 				t.Errorf("took %v: the kill was not prompt", took)
 			}
 		})
+	}
+}
+
+// TestAKilledBodysProgramOutlivesTheShell: the program a killed body was
+// running is not ended when the shell itself finishes either. Measured
+// 2026-10-02 on zsh 5.9.2: the marker the program writes after the shell has
+// exited is there (#5355).
+func TestAKilledBodysProgramOutlivesTheShell(t *testing.T) {
+	dir := t.TempDir()
+	runZsh(t, dir, `{ /bin/sh -c '/bin/sleep 0.5; : >marker'; print after } & /bin/sleep 0.2; kill -TERM $!`)
+	time.Sleep(900 * time.Millisecond)
+	if _, err := os.Stat(filepath.Join(dir, "marker")); err != nil {
+		t.Errorf("the program did not outlive the shell: %v", err)
 	}
 }

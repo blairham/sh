@@ -52,7 +52,9 @@ import (
 // commands — and a wait for one of its programs is abandoned on the spot,
 // without the program being signaled, which is what makes "the next moment"
 // arrive at once rather than when the program ends. See
-// Runner.awaitForegroundCommand.
+// Runner.waitForBackgroundProcess, which is where a body's programs are
+// waited for; a body with the monitor on waits through the front end and is
+// not given up yet.
 //
 // **Except where the fork would have become the program.** A real shell runs
 // the last command of a forked body by exec'ing it, so the job *is* that

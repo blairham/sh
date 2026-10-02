@@ -3692,19 +3692,18 @@ func (d *Dialect) wideNameAt(s string) int {
 
 // nameLength is how many bytes of s from its front are a name under the
 // dialect's rules: nameByte for ASCII, with DottedName's answer, and
-// wideNameAt past it. Positions are counted in characters, so a digit after
-// a letter past ASCII is the second character and not the first.
+// wideNameAt past it. The byte offset stands in for the position nameByte
+// asks about, which only tells the first character from the rest.
 func (d *Dialect) nameLength(s string) int {
-	i, k := 0, 0
+	i := 0
 	for i < len(s) {
 		if n := d.wideNameAt(s[i:]); n > 0 {
 			i += n
-		} else if nameByte(s[i], k, d.DottedName) {
+		} else if nameByte(s[i], i, d.DottedName) {
 			i++
 		} else {
 			break
 		}
-		k++
 	}
 	return i
 }

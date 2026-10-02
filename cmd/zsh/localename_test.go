@@ -38,6 +38,7 @@ func TestANameHoldsTheLocalesLetters(t *testing.T) {
 		{"typeset, arithmetic, for and read", "typeset ñ=2; (( ü = 4 )); for ö in 1 2; do print $ö; done; read é <<< hi; print $ñ $ü $é", "1\n2\n2 4 hi\n"},
 		{"posix_identifiers takes it away", "setopt posix_identifiers; eval 'hähä=3' || print refused", "refused\n"},
 		{"IDENT follows the rule", "[[ é = [[:IDENT:]] ]] && print in; setopt posix_identifiers; [[ é = [[:IDENT:]] ]] || print out", "in\nout\n"},
+		{"an array literal and text eval reads", "hä=(1 2); print $hä[2]; eval 'ö=1; print $ö'", "2\n1\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := runZshInLocale(t, "en_US.UTF-8", c.src); got != c.want {
@@ -50,8 +51,19 @@ func TestANameHoldsTheLocalesLetters(t *testing.T) {
 // Under the C locale the bytes of `ä` are no letter, so the word is a
 // command and `$hä` is `$h` followed by text: measured, `hähä=3; print
 // $hähä` writes `ähä` there.
+//
+// And with no locale named at all, which this shell reads as C: measured, the
+// same line under `env -i PATH=/usr/bin:/bin` alone writes the same.
 func TestANameIsASCIIUnderTheCLocale(t *testing.T) {
 	if got := runZshInLocale(t, "C", "hähä=3; print $hähä"); got != "ähä\n" {
 		t.Errorf("got %q, want %q", got, "ähä\n")
+	}
+	var out, errs strings.Builder
+	sh := scratchShell(t)
+	sh.Stdout, sh.Stderr = &out, &errs
+	sh.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir()}
+	driver.MainArgs(sh, []string{"zsh", "-fc", "hähä=3; print $hähä"})
+	if got := out.String(); got != "ähä\n" {
+		t.Errorf("with no locale named: got %q, want %q", got, "ähä\n")
 	}
 }

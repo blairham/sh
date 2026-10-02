@@ -148,6 +148,9 @@ func Dialect() syntax.Dialect {
 	d.NamespaceBlock = true
 	// And a second `!` inverts the first, as in bash: `! ! true` answers 0.
 	d.RepeatedNegationToggles = true
+	// And a `!` after a pipe bar toggles the whole pipeline's negation. See
+	// syntax.Dialect.NegationAfterABarTogglesThePipeline (#5272).
+	d.NegationAfterABarTogglesThePipeline = true
 	// A process substitution stands only where a command takes a word — an
 	// argument, or a file redirection's target. In a `[[ ]]` operand, a
 	// `case` subject or pattern, a loop header's list, an array literal or a

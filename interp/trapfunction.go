@@ -161,6 +161,17 @@ func (r *Runner) bindTrapFunction(fname string, displaced *syntax.FuncDecl) bool
 	return true
 }
 
+// isATrapFunction reports whether a function stands for a condition's
+// handler now.
+func (r *Runner) isATrapFunction(fname string) bool {
+	for _, bound := range r.trapFuncs {
+		if bound == fname {
+			return true
+		}
+	}
+	return false
+}
+
 // releaseTrapFunction takes the function bound to a condition out, for a
 // `trap` command that has just given the condition a handler of its own.
 //

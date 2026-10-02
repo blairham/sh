@@ -4,6 +4,8 @@
 package zsh_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -137,5 +139,34 @@ func TestASignalToABackgroundBodyMissesASubshellInIt(t *testing.T) {
 	out, _ := runZshOnPath(t, t.TempDir(), src)
 	if strings.Contains(out, "S") || !strings.HasSuffix(out, "end\n") {
 		t.Errorf("%s\n got %q, want no S and a last line of end", src, out)
+	}
+}
+
+// A function defined through text rather than written out — an autoloaded
+// stub, `functions[name]=…` — is the handler its name says, as a written-out
+// one is, and the handler the EXIT trap is firing is not hidden from itself
+// the way a call the script makes of it is. Measured 2026-10-02 on zsh
+// 5.9.2, `env -i PATH=/usr/bin:/bin zsh -fc` with a file `TRAPEXIT` holding
+// `print R` and a file `TRAPUSR1` holding `print U` on `$fpath` (#5147).
+func TestATrapFunctionDefinedFromText(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"an autoloaded TRAPEXIT fires once", "fpath=(. $fpath); autoload TRAPEXIT; print a; exit", "a\nR\n"},
+		{"and once after another call", "fpath=(. $fpath); autoload TRAPEXIT; fn() { print F }; fn; print a", "F\na\nR\n"},
+		{"an autoloaded signal handler", "fpath=(. $fpath); autoload TRAPUSR1; kill -USR1 $$; print a; functions TRAPUSR1", "U\na\nTRAPUSR1 () {\n\tprint U\n}\n"},
+		{"a definition through the table", "functions[TRAPUSR1]='print hi'; kill -USR1 $$; print a", "hi\na\n"},
+		{"the firing handler can see itself", "TRAPEXIT() { functions TRAPEXIT >/dev/null; print f=$? }; TRAPEXIT; print b", "f=1\nb\nf=0\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, body := range map[string]string{"TRAPEXIT": "print R\n", "TRAPUSR1": "print U\n"} {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			out, _ := runZshOnPath(t, dir, c.src)
+			if out != c.want {
+				t.Errorf("%s\n got %q\nwant %q", c.src, out, c.want)
+			}
+		})
 	}
 }

@@ -1941,6 +1941,14 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// come apart, and measured on zsh 5.9.2 (`-f`, 2026-09-25) they come
 	// apart in both directions — see the branches at the return.
 	enteredHoldingTheTrap := r.sem().ExitTrapIsFunctionLocal == Yes
+	// Except for the call the EXIT trap is firing, which is the handler
+	// itself running at the exit and holds nothing from itself: measured
+	// 2026-10-02 on zsh 5.9.2, `TRAPEXIT() { print E; functions TRAPEXIT
+	// >/dev/null; print f=$? }; TRAPEXIT` writes f=1 for the call the
+	// script makes and f=0 for the one the exit makes, and a `trap` in the
+	// second lists the function.
+	firing := r.inExitTrap && outerTrap == nil && outerTrapFn != ""
+	enteredHoldingTheTrap = enteredHoldingTheTrap && !firing
 	// And, in the shell where a `function name { … }` call gets a trap table
 	// of its own, the rest of that table — taken and emptied here, put back
 	// as the call unwinds. EXIT goes with it, which is why this is beside

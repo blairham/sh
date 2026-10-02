@@ -1810,6 +1810,10 @@ type Runner struct {
 	// handlers do not catch. Cleared as a handler starts, which is the only
 	// place it is read. See Runner.handlerTakesItsError.
 	gaveUpOverAnUnsetParameter bool
+	// arithStoreRefusal, where it is set, is where failedSubscript leaves the
+	// sentence of an element store arithmetic is making, rather than writing
+	// it and giving up. See Runner.storePlace.
+	arithStoreRefusal *string
 	// callEndedOnAReturn says the function call that last unwound ended on
 	// a `return` written in it rather than by running off its end. See
 	// Runner.forcedByATrapFunction.
@@ -11091,6 +11095,12 @@ func (r *Runner) failedExpansion() {
 // reached by one column only, so neither had an axis to read. These four are
 // reached by three, which is why this one asks.
 func (r *Runner) failedSubscript(format string, args ...any) {
+	if r.arithStoreRefusal != nil {
+		// An element store inside arithmetic, whose refusal the expression
+		// answers rather than the store. See Runner.storePlace.
+		*r.arithStoreRefusal = fmt.Sprintf(format, args...)
+		return
+	}
 	r.diagf(format, args...)
 	// A subscript, whatever wording reached here: the `-c` rule on
 	// Runner.giveUpForABadSubscript is a rule about brackets and the door

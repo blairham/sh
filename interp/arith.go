@@ -1402,8 +1402,7 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 			r.spliceCharacterSpan(p.name, place.from, place.to, text, false)
 			return nil
 		}
-		r.setArrayElem(p.name, place.from, p.sub, text)
-		return nil
+		return r.arithStoreElement(p.name, place.from, p.sub, text)
 	}
 	target := &syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked, Empty: p.empty}
 	if r.reportArithWholeArraySubscript(target) {
@@ -1422,7 +1421,35 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 	if sub == "" {
 		sub = r.formatNum(idx)
 	}
-	r.setArrayElem(p.name, idx.asInt(), sub, text)
+	return r.arithStoreElement(p.name, idx.asInt(), sub, text)
+}
+
+// arithStoreElement is setArrayElem for a store arithmetic makes, where a
+// refusal — a subscript before the first element — is the expression's to
+// answer: an arithmetic error in the dialect that reads it as one, and the
+// complaint with the expression going on in the other. See
+// Semantics.ArithStoreRefusalIsAnError.
+func (r *Runner) arithStoreElement(name string, idx int, sub, text string) error {
+	refused := ""
+	outer := r.arithStoreRefusal
+	r.arithStoreRefusal = &refused
+	r.setArrayElem(name, idx, sub, text)
+	r.arithStoreRefusal = outer
+	if refused == "" {
+		return nil
+	}
+	sentence := strings.TrimSuffix(refused, "\n")
+	// Read rather than asked: a vector that has not answered keeps the
+	// refusal as every other store reports one, which is the substrate's
+	// answer and the one it had before the question was put.
+	switch r.sem().ArithStoreRefusalIsAnError {
+	case Yes:
+		return arithError{msg: sentence, complete: true}
+	case No:
+		r.diagf("%s\n", sentence)
+		return nil
+	}
+	r.failedSubscript("%s", refused)
 	return nil
 }
 

@@ -86,8 +86,8 @@ import "github.com/blairham/sh/syntax"
 //
 // A subscript is the one shape assignNameSplit takes that this does not: see
 // the note above for the two answers the references give it.
-func keywordPromotable(w *syntax.Word) bool {
-	span, off, ok := assignNameSplit(w)
+func (r *Runner) keywordPromotable(w *syntax.Word) bool {
+	span, off, ok := r.assignNameSplit(w)
 	if !ok || span != 0 {
 		return false
 	}
@@ -111,8 +111,8 @@ func keywordPromotable(w *syntax.Word) bool {
 //
 // A nil Value for a word with nothing after the `=`, which is what the parser
 // produces for a written `A=` and what keeps `f A= x` and `A= f x` one answer.
-func keywordAssign(w *syntax.Word) *syntax.Assign {
-	_, off, ok := assignNameSplit(w)
+func (r *Runner) keywordAssign(w *syntax.Word) *syntax.Assign {
+	_, off, ok := r.assignNameSplit(w)
 	if !ok {
 		return nil
 	}

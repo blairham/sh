@@ -38,6 +38,7 @@ func TestANameHoldsTheLocalesLetters(t *testing.T) {
 		{"typeset, arithmetic, for and read", "typeset ñ=2; (( ü = 4 )); for ö in 1 2; do print $ö; done; read é <<< hi; print $ñ $ü $é", "1\n2\n2 4 hi\n"},
 		{"posix_identifiers takes it away", "setopt posix_identifiers; eval 'hähä=3' || print refused", "refused\n"},
 		{"IDENT follows the rule", "[[ é = [[:IDENT:]] ]] && print in; setopt posix_identifiers; [[ é = [[:IDENT:]] ]] || print out", "in\nout\n"},
+		{"a declaration's value takes its tildes", "HOME=/hh; export ö=~/z; f() { local ü=~/w; print $ü }; f; typeset é=~/y; print $ö $é", "/hh/w\n/hh/z /hh/y\n"},
 		{"an array literal and text eval reads", "hä=(1 2); print $hä[2]; eval 'ö=1; print $ö'", "2\n1\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

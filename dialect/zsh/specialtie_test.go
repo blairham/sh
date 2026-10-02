@@ -31,3 +31,21 @@ func TestTheShellsOwnTiedPairsCannotBeRetied(t *testing.T) {
 		}
 	}
 }
+
+// TestTheShellsOwnPairSurvivesARetieInAFunction pins that a function naming
+// one of the shell's own pairs with `-T` leaves the pair tied after it
+// returns. Measured 2026-10-02 on zsh 5.9.2 under `-f`.
+func TestTheShellsOwnPairSurvivesARetieInAFunction(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"f(){ typeset -UT MANPATH manpath; MANPATH=/a:/a; print $manpath }; f; MANPATH=/c:/c; print $manpath", "/a\n/c /c\n"},
+		{
+			"f(){ typeset MANPATH; manpath=(/ /); typeset -UT MANPATH manpath; print $manpath }; f; MANPATH=/a:/b; typeset -p MANPATH",
+			"/\ntypeset -T MANPATH manpath=( /a /b )\n",
+		},
+	} {
+		got, _ := runZsh(t, t.TempDir(), tc.src)
+		if got != tc.want {
+			t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
+		}
+	}
+}

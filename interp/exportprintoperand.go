@@ -3,6 +3,8 @@
 
 package interp
 
+import "strings"
+
 // What the `-p` letter on `export` and `readonly` does once the line carries
 // operands — `export -p s=5`, `readonly -p t`.
 //
@@ -130,4 +132,21 @@ func (r *Runner) exportPrintWithOperands(args []string) ([]string, bool) {
 	r.status = 2
 	r.unspecified = true
 	return nil, true
+}
+
+// listsThisKind reports whether a listing in this form writes d, given the
+// letters the line carried. Every kind is listed except where the dialect's
+// standard-form listing wants a kind letter for a name that is not a scalar —
+// see Semantics.CommandWordListingNeedsAKindLetter.
+func (r *Runner) listsThisKind(d declaration, form DeclarationListingForm, letters string) bool {
+	if form != DeclareListingCommandWord || r.sem().CommandWordListingNeedsAKindLetter != Yes {
+		return true
+	}
+	switch {
+	case d.isAssoc:
+		return strings.ContainsRune(letters, 'A')
+	case d.isArr:
+		return strings.ContainsRune(letters, 'a')
+	}
+	return true
 }

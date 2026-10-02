@@ -77,6 +77,19 @@ func (r *Runner) readonlyAsTheDeclaration(_ context.Context, args []string, lett
 	// always written — measured, `v=1; readonly v; readonly` is `v=1` here
 	// and in zsh 5.9.2 alike, where the name-only branch wrote `v`.
 	f.added = true
+	// And the scope is the axis's, which the declaration word does not ask
+	// on its own: where `readonly` declares no local, it is `typeset -gr`.
+	// Measured 2026-10-02 on zsh 5.9.2, `f(){ X=1; readonly X; typeset -p
+	// X }` is `typeset -r X=''` and leaves the outer `X=1` alone, and
+	// under POSIX_BUILTINS the same call is `typeset -g -r X=1` and the
+	// outer `X` is frozen.
+	if !f.global && len(r.scopes) > 0 &&
+		!r.ask(r.sem().ReadonlyDeclaresALocal, "`readonly` inside a function declaring a local") {
+		f.global = true
+	}
+	if r.unspecified {
+		return r.status, true
+	}
 	if f.print && len(args) == 0 && r.sem().ReadonlyListing == DeclareListingCommandWord {
 		// The standard's listing, where the dialect's option moved this axis
 		// there: `readonly name=value`, and only for scalars. Measured
@@ -87,7 +100,7 @@ func (r *Runner) readonlyAsTheDeclaration(_ context.Context, args []string, lett
 		// nothing at all — which is also why zsh's own read-only tables do
 		// not appear in it (#5157).
 		return r.declarePrintForm(nil, DeclareListingCommandWord, true, func(d declaration) bool {
-			return d.readonly && !d.isArr && !d.isAssoc
+			return d.readonly && r.listsThisKind(d, DeclareListingCommandWord, f.letters)
 		}), true
 	}
 	if f.print && len(args) > 0 {

@@ -90,6 +90,9 @@ func TestPosixBuiltinsMakesThePrintLetterInert(t *testing.T) {
 		{"setopt posixbuiltins; X=1; export -p X; echo .; typeset -p X", ".\nexport X=1\n"},
 		{"setopt posixbuiltins; X=1; readonly -p X; echo .; X=2", ".\nzsh:1: read-only variable: X\n"},
 		{"setopt posixbuiltins; readonly -p Y=3; echo $Y", "3\n"},
+		// And `readonly` in a function freezes the outer name.
+		{"f(){ setopt localoptions posixbuiltins; X=1; readonly X; typeset -p X }; f; typeset -p X", "typeset -g -r X=1\ntypeset -r X=1\n"},
+		{"f(){ X=1; readonly X; typeset -p X }; f; typeset -p X", "typeset -r X=''\ntypeset X=1\n"},
 		// Without the option, the letter narrows.
 		{"X=1; export -p X; echo .", "typeset X=1\n.\n"},
 		{"X=1; readonly -p X; echo .; X=2; echo $X", "typeset X=1\n.\n2\n"},
@@ -97,6 +100,27 @@ func TestPosixBuiltinsMakesThePrintLetterInert(t *testing.T) {
 		got, _ := runZsh(t, t.TempDir(), tc.src)
 		if got != tc.want {
 			t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
+		}
+	}
+}
+
+// TestPosixBuiltinsListsScalarsUnlessAKindLetterAsks pins the standard-form
+// listings POSIX_BUILTINS moves `export -p` and `readonly -p` to: scalars
+// alone, arrays under `-a`, a table under `-A`, and every kind in the native
+// form. Measured 2026-10-02 on zsh 5.9.2 under `-f`, inside a function.
+func TestPosixBuiltinsListsScalarsUnlessAKindLetterAsks(t *testing.T) {
+	const setup = "f(){ local -rax zra=(2); local -rAx zrh=(3 3); local -rx zrs=1; local -ax za=(4 5); local -x zs=6\n"
+	for _, tc := range []struct{ body, want string }{
+		{"print -l ${(M)${(f)\"$(export -ap)\"}:#* z*}", "local -ax za=( 4 5 )\nlocal -arx zra=( 2 )\nlocal -Arx zrh=( [3]=3 )\nlocal -rx zrs=1\nlocal -x zs=6\n"},
+		{"setopt localoptions posixbuiltins; print -l ${(M)${(f)\"$(export -p)\"}:#* z*}", "export zrs=1\nexport zs=6\n"},
+		{"setopt localoptions posixbuiltins; print -l ${(M)${(f)\"$(export -ap)\"}:#* z*}", "export za=( 4 5 )\nexport zra=( 2 )\nexport zrs=1\nexport zs=6\n"},
+		{"setopt localoptions posixbuiltins; print -l ${(M)${(f)\"$(readonly -p)\"}:#* z*}", "readonly zrs=1\n"},
+		{"setopt localoptions posixbuiltins; print -l ${(M)${(f)\"$(readonly -ap)\"}:#* z*}", "readonly zra=( 2 )\nreadonly zrs=1\n"},
+		{"setopt localoptions posixbuiltins; print -l ${(M)${(f)\"$(readonly -Ap)\"}:#* z*}", "readonly zrh=( [3]=3 )\nreadonly zrs=1\n"},
+	} {
+		got, _ := runZsh(t, t.TempDir(), setup+tc.body+"\n}; f")
+		if got != tc.want {
+			t.Errorf("%s\n got %q\nwant %q", tc.body, got, tc.want)
 		}
 	}
 }

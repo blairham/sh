@@ -473,6 +473,14 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// both halves take a shadow: a function-local tie is gone on return,
 	// measured — `typeset -T L1 l1` inside a function leaves `$L1` unset
 	// after it and `${+l1}` 0.
+	// One of the shell's own pairs stays the shell's: a declaration that
+	// names it again, inside a function or not, changes its attributes and
+	// never unties it. Measured 2026-10-02 on zsh 5.9.2 under `-f`,
+	// `f(){ typeset -UT MANPATH manpath }; f; MANPATH=/c:/c; print
+	// $manpath` is `/c /c` there, where the local's untie on return took the
+	// pair apart for good.
+	own, ownPair := r.tied[scalar]
+	ownPair = ownPair && own.special && own.scalar == scalar && own.array == array
 	scalarFresh := false
 	if !f.global {
 		scalarFresh, _ = r.shadowTypeset(scalar)
@@ -541,7 +549,9 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// The tie itself is not in the variable tables, so the scope's
 		// save-and-restore does not carry it. Undone by hand on the way out,
 		// and only where there was a scope to undo it in.
-		r.AtFunctionReturn(func() { r.untie(scalar) })
+		if !ownPair {
+			r.AtFunctionReturn(func() { r.untie(scalar) })
+		}
 	}
 	// A **frozen scalar** refuses the tie, and it is the readonly refusal
 	// rather than a fourth tie refusal of its own: the sentence is
@@ -658,7 +668,12 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// not this case — `typeset -T W w=(c d) +` does move to `+`.
 		sep = old.sep
 	}
-	r.tieNames(tie{scalar: scalar, array: array, sep: sep, depth: depth})
+	if ownPair {
+		own.sep = sep
+		r.tieNames(own)
+	} else {
+		r.tieNames(tie{scalar: scalar, array: array, sep: sep, depth: depth})
+	}
 	// Readonly last, the same order biDeclare follows and for the same
 	// reason: it decides whether the assignment below is allowed at all, and
 	// applying it up front made a declaration refuse its own value.

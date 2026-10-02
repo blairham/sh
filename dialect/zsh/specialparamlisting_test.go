@@ -23,6 +23,8 @@ func TestTheSpecialParametersAreListed(t *testing.T) {
 		{"a named -p writes nothing", `typeset -p '#'; echo st=$?`, "st=0\n"},
 		{"a pattern", `typeset +m '[#?0]'`, "integer 10 readonly '#'\n0\ninteger 10 readonly '?'\n"},
 		{"with parameters", `set -- a 'b c'; typeset -m '[*@#]'`, "'#'=2\n'*'=( a 'b c' )\n@=( a 'b c' )\n"},
+		// The running command's last word, whatever the environment held.
+		{"$_", `typeset -m _; echo x; typeset +m _`, "_=_\nx\n_\n"},
 		{"HISTCHARS", `typeset +m HISTCHARS; typeset -p HISTCHARS`, "HISTCHARS\ntypeset HISTCHARS='!^#'\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

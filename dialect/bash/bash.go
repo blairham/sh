@@ -1066,9 +1066,14 @@ func Semantics() interp.Semantics {
 	// alike. See the axis for the narrower answer this same binary gives
 	// when it is invoked as `sh`.
 	s.WaitRemembersAReapedJob = interp.Yes
-	// Nothing is said about the signal that ended a job a `wait` reaped,
-	// measured — where the same death in the foreground is reported.
-	s.WaitReportsTheSignalThatEndedTheJob = interp.No
+	// A named `wait` says which signal ended the job it reaped, in the
+	// foreground's sentence, and keeps quiet for a TERM. Measured
+	// 2026-10-02 on bash 5.3.20 with a job killed after it started: `sleep 1
+	// & kill -USR1 $!; wait $!` writes `line 1: PID User defined signal 1:
+	// 30  sleep 1`. The 2026-09-18 row that said nothing was a TERM, which
+	// is the one signal this route leaves unsaid — see
+	// Diagnostics.WaitIsQuietForTerminate (#5389).
+	s.WaitReportsTheSignalThatEndedTheJob = interp.Yes
 	s.WaitNextJob = interp.WaitNextJobFirstToFinish
 	// And `-p var` beside it, which names the job the status came from.
 	// bash 5's letter alone: the 3.2 build answers `wait: -p: invalid
@@ -4141,7 +4146,12 @@ func Diagnostics() interp.Diagnostics {
 		JobStopped:                          "Stopped",
 		JobDone:                             "Done",
 		JobExited:                           "Exit %[1]d",
-		JobRunningShowsAmpersand:            true,
+		// A job a signal ended is named by the signal, the host's words
+		// and its number: `Terminated: 15`. Measured 2026-10-02 on bash
+		// 5.3.20 (#5389).
+		JobSignaled:              "%[1]s",
+		WaitIsQuietForTerminate:  true,
+		JobRunningShowsAmpersand: true,
 		// ^Z prints the listing's own row — JobStoppedNotice is left empty
 		// for that — under a newline of its own, because the terminal has
 		// just echoed `^Z` where the cursor was.

@@ -517,32 +517,49 @@ func (r *Runner) producedParameter(name string) bool {
 // h=v; typeset -m h` writes `h=v` there, where the bare listing and `+m`
 // write the name with no value at all.
 func (r *Runner) matchedListing(patterns []string, namesOnly bool) int {
-	names := r.matchedNames(patterns)
+	names, produced, listing := r.matchedListedNames(patterns)
+	if r.unspecified {
+		return r.status
+	}
 	if namesOnly {
-		return r.declarationNameListing(names)
+		return r.declarationNameListingOf(names, produced, listing)
 	}
 	for _, name := range names {
-		d, _ := r.declarationOf(name)
-		r.printf("%s\n", name+"="+r.listedDeclarationValue(d))
+		d, _ := r.listedDeclarationOf(name, produced[name], listing)
+		r.printf("%s\n", r.listedName(name)+"="+r.listedDeclarationValue(d))
 	}
 	return 0
 }
 
-// declarationNameListing writes each name with its attribute words and no
-// value — `integer n`, `array tied FPATH fpath`.
+// matchedListedNames is matchedNames over what a whole-table listing walks,
+// the produced parameters included — the names a pattern *lists*, where
+// matchedNames is the names it may *assign* to. Measured 2026-10-01 on zsh
+// 5.9.2: `typeset +m '*'` names `0`, HISTCHARS, the prompts and RANDOM
+// exactly as a bare `typeset +` does (#5157).
+func (r *Runner) matchedListedNames(patterns []string) ([]string, map[string]bool, ProducedListing) {
+	all, produced, listing := r.listedNames()
+	var out []string
+	for _, pattern := range patterns {
+		o := r.patternOpts(pattern)
+		for _, name := range all {
+			if matchPattern(pattern, name, o) {
+				out = append(out, name)
+			}
+		}
+	}
+	return out, produced, listing
+}
+
+// declarationNameListingOf writes each name with its attribute words and no
+// value — `integer n`, `array tied FPATH fpath` — over names some of which
+// the dialect produces rather than stores, read the way the valued listing
+// reads them. See Runner.listedNames.
 //
 // The shape two commands share, which is why it is a function rather than a
 // branch: `typeset +m PAT` names the matches and a bare `typeset +` names the
 // whole table. Those reached the same rows by two routes before, and only one
 // of the routes existed — the plus form with no pattern wrote nothing at all
 // (#1576). Choosing the names is the caller's; writing them is here.
-func (r *Runner) declarationNameListing(names []string) int {
-	return r.declarationNameListingOf(names, nil, ProducedListingUnspecified)
-}
-
-// declarationNameListingOf is declarationNameListing over names some of which
-// the dialect produces rather than stores, read the way the valued listing
-// reads them. See Runner.listedNames.
 func (r *Runner) declarationNameListingOf(names []string, produced map[string]bool, listing ProducedListing) int {
 	locals := r.innermostLocalNames()
 	for _, name := range names {
@@ -562,7 +579,7 @@ func (r *Runner) declarationNameListingOf(names []string, produced map[string]bo
 			r.printf("%s\n", r.deferredParameterRow(d, locals[name]))
 			continue
 		}
-		r.printf("%s\n", r.attributeWordHead(d, locals[name])+name)
+		r.printf("%s\n", r.attributeWordHead(d, locals[name])+r.listedName(name))
 	}
 	return 0
 }
@@ -638,7 +655,7 @@ func (r *Runner) declarationFilteredNameListing(names []string, produced map[str
 		if !known || !keep(d) {
 			continue
 		}
-		r.printf("%s\n", name)
+		r.printf("%s\n", r.listedName(name))
 	}
 	return 0
 }

@@ -7340,6 +7340,21 @@ func (r *Runner) reportRawTextRefusal(err error) {
 		r.diagf("%s\n", failure)
 		return
 	}
+	if se, ok := err.(*syntax.Error); ok && r.inHeredocBody && se.BraceParamFormUnclosed && !se.HoldsProgram {
+		// A parameter expansion that never closed is the expansion's own
+		// refusal rather than a sub-parse of the body, so it is located at
+		// the command's line and says nothing about a substitution. See
+		// Diagnostics.HeredocBraceRanOutInTheName (#5379).
+		custom := d.HeredocBraceUnclosed
+		if se.BraceRanOutInTheName {
+			custom = d.HeredocBraceRanOutInTheName
+		}
+		if custom != "" {
+			failure = Wording(custom, "", r.heredocBodyText)
+		}
+		r.diagf("%s\n", failure)
+		return
+	}
 	was := r.line
 	if r.expansionBodyLine > 0 {
 		if at := d.ParseFailureLine(err); at > 0 {

@@ -5831,6 +5831,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				// report is about.
 				se.BraceNameStop, se.BraceNameStopFollowsAPrefix = braceNameStop(l.src[start:])
 				se.BraceRanOutInTheName = braceRanOutInTheName(l.src[start:], l.dialect.ParamExpansionFlags)
+				se.BraceParamFormUnclosed = true
 			}
 			break
 		}
@@ -7890,7 +7891,8 @@ func braceRanOutInTheName(body string, flags bool) bool {
 		body = body[strings.IndexByte(body, ')')+1:]
 	}
 	body = strings.TrimLeft(body, "#!^=~+")
-	return len(braceName(body)) == len(body)
+	rest := body[len(braceName(body)):]
+	return rest == "" || !strings.ContainsRune("/#%-=+?:[", rune(rest[0]))
 }
 
 // quoteProtectsTheBrace reports whether a single quote standing at the end of

@@ -992,7 +992,7 @@ func (r *Runner) debugActionArmingErrExitSkips() bool {
 // No dialect is asked. The convention is one dialect's own, and the
 // function spelling is how a script reaches this code at all.
 func (r *Runner) forcedByATrapFunction(fname string, status int) {
-	if fname == "" || !r.callEndedOnAReturn || status == 0 || r.ctl != controlNone {
+	if fname == "" || !r.callEndedOnAReturn || status == 0 {
 		return
 	}
 	r.status, r.ctl = status, controlReturn

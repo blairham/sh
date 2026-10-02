@@ -460,27 +460,27 @@ func runZshTerminfoSized(t *testing.T, src string) (string, int) {
 	return out, st
 }
 
-// `cols` and `lines` are the **screen's** size and not the description's, in
-// both spellings and in both readings.
+// `cols` and `lines` are the screen's size where there is a screen, and the
+// description's where there is none.
 //
 // Measured against zsh 5.9.2 through a pseudo-terminal opened 100 by 37:
 // `${terminfo[cols]}` is 100 under `TERM=xterm-256color`, whose description
-// says 80, and 80 by 24 under `TERM=linux`, whose description carries neither
-// number at all. So the description loses to the window even where it has an
-// answer, which is what this fixture's 999 by 888 is for — a reader that took
-// the description would print those and nothing else would tell it apart from
-// one that took the screen.
+// says 80. Measured again 2026-10-02 with no terminal at all under `env -i`:
+// `TERM=guru`, whose description says `lines#33`, answers 33 lines, and
+// `TERM=wy520-36w` answers 36 by 132 — so with no window the description is
+// read, before the classic 80 by 24. This file used to assert 80 by 24 here
+// over the fixture's 999 by 888, from a measurement whose description said 80
+// by 24 itself and so could not tell the two readings apart (#5315).
 //
-// This run holds no terminal and inherits no `$COLUMNS`, so the screen is the
-// classic 80 by 24 — which is also zsh's answer for that state, and is not
-// `$COLUMNS`'s own: that reports 0 with no window anywhere (#2101).
-func TestTheSizeCapabilitiesAreTheScreensAndNotTheDescriptions(t *testing.T) {
+// This run holds no terminal and inherits no `$COLUMNS`, and `$COLUMNS`
+// itself reports 0 with no window anywhere (#2101).
+func TestTheSizeCapabilitiesAreTheDescriptionsWithNoScreen(t *testing.T) {
 	out, st := runZshTerminfoSized(t, `print -r -- "cols=${terminfo[cols]} lines=${terminfo[lines]}"
 print -r -- "co=${termcap[co]} li=${termcap[li]}"
 print -r -- "set=${+terminfo[cols]}${+terminfo[lines]}${+termcap[co]}${+termcap[li]}"
 print -r -- "listed=${terminfo[(I)cols]}${terminfo[(I)lines]}"
 print -r -- "columns=$COLUMNS"`)
-	want := "cols=80 lines=24\nco=80 li=24\nset=1111\nlisted=colslines\ncolumns=0\n"
+	want := "cols=999 lines=888\nco=999 li=888\nset=1111\nlisted=colslines\ncolumns=0\n"
 	if out != want || st != 0 {
 		t.Errorf("the size capabilities = %q (status %d), want %q", out, st, want)
 	}

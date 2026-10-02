@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"unicode/utf8"
 
 	"github.com/blairham/sh/interp"
 )
@@ -510,8 +509,9 @@ func printJoined(r *interp.Runner, opts printOptions, words []string, sep string
 // the tab at the start of its operand, counted from where the operand
 // starts — and a tab at the start of a line inside one, while `print -x4
 // $'a\tb'` and `print -x4 $' \tc'` keep their tabs. `-X` expands every one: `print -X4 $'ab\tc\tdefg\th'` is `ab  c
-// defg    h`, and `print -X3 $'\u00e9\tx'` is `é  x`, a character being one
-// column.
+// defg    h`, and `print -X3 $'\u00e9\tx'` is `é  x`, a character being the
+// columns it is drawn in: `print -X8 $'one\tＺＳＨ\tthree'` puts two spaces
+// after the three wide letters, which take two columns each.
 func expandTabs(s string, at, every int, leading bool) string {
 	if !strings.Contains(s, "\t") {
 		return s
@@ -531,7 +531,7 @@ func expandTabs(s string, at, every int, leading bool) string {
 		case c == '\n':
 			col, open = 0, true
 		default:
-			col++
+			col += interp.DisplayColumns(string(c))
 			open = false
 		}
 		b.WriteRune(c)
@@ -539,13 +539,13 @@ func expandTabs(s string, at, every int, leading bool) string {
 	return b.String()
 }
 
-// textColumn is the column the end of s stands at: characters since its last
-// newline.
+// textColumn is the column the end of s stands at: the columns a terminal
+// draws since its last newline.
 func textColumn(s string) int {
 	if i := strings.LastIndexByte(s, '\n'); i >= 0 {
 		s = s[i+1:]
 	}
-	return utf8.RuneCountInString(s)
+	return interp.DisplayColumns(s)
 }
 
 // printMatching is `-m`: the first operand is a pattern and the rest are kept

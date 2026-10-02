@@ -737,7 +737,7 @@ func writeZshOption(r *interp.Runner, name, value string, set bool) {
 // key was measured at nine milliseconds against tens of microseconds for the
 // lookup; making it fill the table would put that back and more.
 func zshCommandsView(r *interp.Runner) interp.AssocArray {
-	fillCommandHash(r)
+	fillCommandHashWhereListed(r)
 	names := r.HashedCommandNames()
 	out := make(interp.AssocArray, len(names))
 	for _, name := range names {
@@ -755,6 +755,37 @@ func zshCommandsView(r *interp.Runner) interp.AssocArray {
 func fillCommandHash(r *interp.Runner) {
 	only, _ := conditionOption(r, "hashexecutablesonly")
 	r.FillCommandHashFromPath(only)
+}
+
+// listsEveryCommand is HASH_LIST_ALL, which decides whether touching
+// `$commands` fills the table with every name PATH holds.
+func listsEveryCommand(r *interp.Runner) bool {
+	on, _ := conditionOption(r, "hashlistall")
+	return on
+}
+
+// fillCommandHashWhereListed is the fill a touch of `$commands` makes, where
+// HASH_LIST_ALL asks for one, and nothing where it does not. Measured
+// 2026-10-02 on zsh 5.9.2 (`-f`), from a script file, with a fresh executable
+// `tool1` in `path=( $PWD )`, then `rehash`, a read of `$commands[tool1]`,
+// and the file removed (#5159):
+//
+//	                               keys after rehash   after the read   read after rm
+//	hashlistall    hashcmds        every name          every name       tool1
+//	hashlistall    nohashcmds      every name          every name       tool1
+//	nohashlistall  hashcmds        none                tool1            tool1
+//	nohashlistall  nohashcmds      none                none             empty
+//
+// So without the option nothing fills the table, a read of a name it lacks
+// searches PATH, and the search is kept only under `hashcmds` — which is why
+// a file removed after it was read is still reported then and not otherwise.
+// A file added after `rehash` and never looked up is found by the read under
+// `nohashlistall` and not under `hashlistall`, whose fill was a snapshot.
+// V06parameter's `$commands look-up with no_hash_list_all` is the last row.
+func fillCommandHashWhereListed(r *interp.Runner) {
+	if listsEveryCommand(r) {
+		fillCommandHash(r)
+	}
 }
 
 // zshCommandValue is `${commands[git]}`: the table, then one PATH search,
@@ -786,8 +817,25 @@ func zshCommandValue(r *interp.Runner, name string) (string, bool) {
 	// name unset out of it stays out until the table is emptied and filled
 	// again: measured, `unset "commands[toolx]"; ${commands[toolx]}` is
 	// empty although PATH still holds toolx.
-	fillCommandHash(r)
-	return r.HashedCommandPath(name)
+	if listsEveryCommand(r) {
+		fillCommandHash(r)
+		return r.HashedCommandPath(name)
+	}
+	// Under `nohashlistall` there is no fill: the table answers what it
+	// holds, and a name it does not hold is searched for, and kept only
+	// where `hashcmds` keeps what a search finds. See
+	// fillCommandHashWhereListed.
+	if path, ok := r.HashedCommandPath(name); ok {
+		return path, true
+	}
+	hits := r.LookPathAll(name)
+	if len(hits) == 0 {
+		return "", false
+	}
+	if on, _ := conditionOption(r, "hashcmds"); on {
+		r.HashCommand(name, hits[0])
+	}
+	return hits[0], true
 }
 
 // writeZshCommand is `commands[c]=/path` and `unset "commands[c]"`, which
@@ -832,7 +880,7 @@ func writeZshCommand(r *interp.Runner, name, value string, set bool) {
 	// Not modeled: an unset that is the *first* touch of the parameter in a
 	// fresh shell is `commands: assignment to invalid subscript range` there,
 	// and here it removes the entry like any other.
-	fillCommandHash(r)
+	fillCommandHashWhereListed(r)
 	if !set {
 		r.ForgetHashedCommand(name)
 		return

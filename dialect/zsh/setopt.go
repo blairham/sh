@@ -1130,7 +1130,9 @@ var zshOptions = []zshOption{
 	// wrong was the report.
 	recordedOver("hashdirs", true, func(r *interp.Runner) bool { return r.Interactive }),
 	recorded("hashexecutablesonly", false),
-	recorded("hashlistall", true),
+	// Read by `$commands` before it fills the command table. See
+	// fillCommandHashWhereListed (#5159).
+	storeBacked("hashlistall", true),
 	recorded("histallowclobber", false),
 	recorded("histbeep", true),
 	recorded("histexpiredupsfirst", false),

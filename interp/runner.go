@@ -7616,6 +7616,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	// no-command form throws the whole line away. See the no-redirection
 	// half of the commandless rule below.
 	stoppedAtCommand := false
+	// `exec`'s own options, read before the match where the dialect reads
+	// them there. See Runner.execOptionWordsAhead.
+	var execScan execOptionScan
 	// How many of the words in argv the scan itself put there. A command
 	// whose only words are modifiers has nothing to run; one with a word
 	// behind them has.
@@ -7759,6 +7762,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// Over fields and not over words: one word can produce several and
 		// the front of that list is what carries the modifier —
 		// `c=(noglob echo); $c a[b]c` prints the three characters.
+		if execScan.reading {
+			n := execScan.take(fields)
+			argv = append(argv, r.globFieldsUnlessSuppressed(fields[:n], true)...)
+			fields = fields[n:]
+			if execScan.reading {
+				continue
+			}
+		}
 		for scanning && len(fields) > 0 {
 			m, ok := r.precommand(fields[0])
 			if !ok {
@@ -7790,7 +7801,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			}
 			argv = append(argv, r.globFieldsUnlessSuppressed(fields[:1], noglob)...)
 			modifierWords++
+			execScan.reading = !dash && r.execOptionWordsAhead(fields[0])
 			fields = fields[1:]
+			if execScan.reading {
+				n := execScan.take(fields)
+				argv = append(argv, r.globFieldsUnlessSuppressed(fields[:n], true)...)
+				fields = fields[n:]
+				if execScan.reading {
+					break
+				}
+			}
 			if m == PrecommandStopsTheScan {
 				// What follows is a command name and not a modifier, which
 				// is measured: `command builtin >f` looks `builtin` up on

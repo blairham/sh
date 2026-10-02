@@ -982,8 +982,14 @@ func (sh Shell) withDefaults(argv []string) Shell {
 	}
 	// A real shell names itself by the path it was invoked by — dash reports
 	// "/bin/dash: 1: …" — so argv[0] wins over the configured name, which is
-	// left as the fallback for a test or for an argv with nothing in it.
-	if len(argv) > 0 && argv[0] != "" {
+	// left as the fallback for an argv with nothing in it.
+	//
+	// An empty argv[0] is a name and not the absence of one: measured
+	// 2026-10-02, `exec -a '' sh -c 'echo "x${0}x"'` writes `xx` in zsh
+	// 5.9.2, bash 5.3.20, ksh93u+ and dash alike. The three that name
+	// themselves in a diagnostic then name nothing — `: line 1: …` — which
+	// is #5373; the diagnostic prefix still falls back to `sh` here.
+	if len(argv) > 0 {
 		sh.Name = argv[0]
 	}
 	if sh.Session == "" {

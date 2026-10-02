@@ -30,3 +30,13 @@ func TestAnArithStoreRefusalIsAnError(t *testing.T) {
 		})
 	}
 }
+
+// And a store outside arithmetic after one inside it is refused as before,
+// written and fatal: measured, `(( newarray[0] = 1 )); newarray[0]=2; print
+// no` writes the sentence twice and exits 1 without the `no`.
+func TestAStoreAfterAnArithStoreRefusalIsRefusedAsBefore(t *testing.T) {
+	out, st, errs := runZshUTF8(t, "(( newarray[0] = 1 )); newarray[0]=2; print no")
+	if out != "" || st != 1 || strings.Count(errs, "newarray: assignment to invalid subscript range") != 2 {
+		t.Errorf("got %q at %d, %q, want nothing at 1 and the sentence twice", out, st, errs)
+	}
+}

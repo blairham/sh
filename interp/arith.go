@@ -1402,7 +1402,8 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 			r.spliceCharacterSpan(p.name, place.from, place.to, text, false)
 			return nil
 		}
-		return r.arithStoreElement(p.name, place.from, p.sub, text)
+		r.setArrayElem(p.name, place.from, p.sub, text)
+		return nil
 	}
 	target := &syntax.ArithIndex{Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked, Empty: p.empty}
 	if r.reportArithWholeArraySubscript(target) {

@@ -1022,6 +1022,10 @@ func (r *Runner) emptyArithSubscriptTarget(name string) (handled bool, err error
 // be incremented; the operator is not what decides it.
 type arithPlace struct {
 	name string
+	// modifies says the store is a read-modify-write — `++`, `--` or a
+	// compound operator — rather than a plain `=`, which one dialect stores
+	// into an array differently. See arithModifiesAnArray.
+	modifies bool
 	// index is nil when the target is a plain name.
 	index syntax.ArithExpr
 	// sub is the subscript as written, which is the key on an associative
@@ -1099,6 +1103,30 @@ func (r *Runner) arithAssignmentReplacesAnArray(name string) bool {
 	_, indexed := r.Arrays[name]
 	_, table := r.AssocArrays[name]
 	return indexed || table
+}
+
+// arithModifiesAnArray stores a read-modify-write on the bare name of an
+// array, in the dialect whose plain assignment replaces one — and reports
+// whether it was one. The array stays an array: an indexed one holds the
+// value as its one element, and an associative one is left as it was.
+// Measured 2026-10-02 on zsh 5.9.2 (#5369): `a=(5); (( a++ ))` leaves
+// `array 6`, `a=(); (( ++a ))` `array 1`, `(( a += 2 ))` and `(( a *= 3 ))`
+// an array too, `let a++` and `$(( a++ ))` the same, and `typeset -A h; ((
+// h++ ))` an association with nothing stored, where `(( a = 3 ))` is
+// `integer 3`. bash reads and writes element 0 for both and is not this.
+func (r *Runner) arithModifiesAnArray(name, text string) bool {
+	if r.sem().ArithmeticAssignmentDeclaresANumber != Yes || r.readonly[name] {
+		// A frozen name goes the ordinary way, which is where its refusal is.
+		return false
+	}
+	if _, table := r.AssocArrays[name]; table {
+		return true
+	}
+	if _, indexed := r.Arrays[name]; indexed {
+		r.setArray(name, []string{text})
+		return true
+	}
+	return false
 }
 
 // declareIntegerFromArithmetic gives a name the arithmetic just created the
@@ -1357,7 +1385,10 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// empty expression names, so the pair goes to the element path with
 		// everything else and only a target with no brackets at all is here
 		// (#1764).
-		if r.arithAssignmentDeclaresANumber(p.name) || (from != nil && r.arithAssignmentReplacesAnArray(p.name)) {
+		if p.modifies && r.arithModifiesAnArray(p.name, r.formatNum(v)) {
+			return nil
+		}
+		if r.arithAssignmentDeclaresANumber(p.name) || (!p.modifies && from != nil && r.arithAssignmentReplacesAnArray(p.name)) {
 			if v.floatKind() {
 				// **The value's type decides which attribute**, and a float
 				// value declares a float. See declareFloatFromArithmetic,
@@ -1621,6 +1652,7 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 			step = -1
 		}
 		next := r.addNum(old, step)
+		place.modifies = true
 		if err := r.writePlace(place, next, nil); err != nil {
 			return intNum(0), err
 		}
@@ -1714,6 +1746,7 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 		return intNum(0), err
 	}
 	if x.Op != "=" {
+		place.modifies = true
 		// The subscript once, for the read and the write both. See
 		// settlePlaceIndex.
 		if place, err = r.settlePlaceIndex(place); err != nil {

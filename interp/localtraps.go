@@ -6,6 +6,8 @@ package interp
 import (
 	"sort"
 	"syscall"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // Traps that are local to the function that set them.
@@ -62,6 +64,11 @@ type savedTrapState struct {
 	// ignoredInherited is the same question for a signal: an ignore this
 	// runner inherited is listed differently from one it set itself.
 	ignoredInherited bool
+	// fname and decl are the function the handler was spelled as, where it
+	// was one, and that function's definition: the empty name for a handler
+	// written as an action, or for none.
+	fname string
+	decl  *syntax.FuncDecl
 }
 
 // localizeTrap records what a condition holds, just before a `trap` command
@@ -86,6 +93,14 @@ type savedTrapState struct {
 //     runs before that one looks at whether this call installed a trap of
 //     its own.
 func (r *Runner) localizeTrap(name string, sig syscall.Signal) {
+	r.localizeTrapHolding(name, sig, nil)
+}
+
+// localizeTrapHolding is localizeTrap for a modification that has already
+// replaced the definition of the function the condition is spelled as:
+// displaced is the body it held, kept in place of the one the table holds
+// now. Nil means the table has not moved.
+func (r *Runner) localizeTrapHolding(name string, sig syscall.Signal, displaced *syntax.FuncDecl) {
 	if r.sem().FunctionLocalTraps != TrapsGoBackAtTheReturn || name == "EXIT" {
 		return
 	}
@@ -102,6 +117,23 @@ func (r *Runner) localizeTrap(name string, sig syscall.Signal) {
 		sc.savedTraps = map[string]savedTrapState{}
 	}
 	s := savedTrapState{name: name, sig: sig}
+	// The function the handler is spelled as, where it is one: the two
+	// spellings are one slot, so what comes back at the return is the
+	// function as well as the call of it. Measured 2026-10-02 on zsh 5.9.2,
+	// under `setopt localtraps` in f:
+	//
+	//	TRAPINT() { print O }; f() { TRAPINT() { print N } }; f; trap
+	//	        lists O's body
+	//	f() { TRAPINT() { print I } }; f; functions TRAPINT
+	//	        finds nothing: the function goes with the trap
+	//	TRAPINT() { print O }; f() { trap 'print T' INT }; f; trap
+	//	        lists O's body, the function defined again
+	if fname := r.trapFuncs[name]; fname != "" {
+		s.fname, s.decl = fname, r.funcs[fname]
+		if displaced != nil {
+			s.decl = displaced
+		}
+	}
 	if slot := r.pseudoTrapSlot(name); slot != nil {
 		s.pseudo, s.action = true, *slot
 		s.frame, s.inherited = r.pseudoTrapOrigin(name)
@@ -174,6 +206,7 @@ func (r *Runner) restoreLocalTraps(sc *scope) {
 	}
 	for _, name := range sortedTrapNames(sc.savedTraps) {
 		s := sc.savedTraps[name]
+		r.restoreTrapFunction(s.name, s.fname, s.decl)
 		if s.pseudo {
 			*r.pseudoTrapSlot(s.name) = s.action
 			r.setPseudoTrapOrigin(s.name, s.frame, s.inherited)

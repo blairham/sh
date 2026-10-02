@@ -147,6 +147,12 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// `$( … )` gets and a background job, a pipeline element and a
 		// process substitution do not. See Runner.unsetEmptiesAnUnwrittenArray.
 		sub.arraysAreAView = !r.forkedForABackgroundJob
+		// And a signal aimed at the job, where these parentheses are the
+		// job's fork: their traps are the ones it reaches. See
+		// bodyinbox.go.
+		if r.inboxGoesToTheParentheses {
+			sub.inbox, sub.inboxGoesToTheParentheses = r.inbox, false
+		}
 		sub.inheritJobs(jobBoundaryCompound)
 		// And the parentheses are a job of their own in one dialect, so the
 		// jobs this body starts are numbered from two and never take the
@@ -1261,6 +1267,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	if r.funcs == nil {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
+	displaced := r.funcs[c.Name]
 	r.funcs[c.Name] = c
 	r.definedOverAWithdrawal(c.Name)
 	// A definition replaces the body, and the trace mark belonged to the
@@ -1286,7 +1293,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 	// And, in the dialect that reads a function name as a condition, the
 	// definition *is* the trap — see trapfunction.go. After the tables
 	// above, because binding it looks the function up by name.
-	r.bindTrapFunction(c.Name)
+	r.bindTrapFunction(c.Name, displaced)
 	if r.unspecified {
 		// The dialect has not said whether a `TRAP…` name is a handler, and
 		// the definition is exactly the thing that turns on the answer.
@@ -1923,6 +1930,10 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// function set one of its own — and the answer the axis gave when that
 	// inherited trap was set, which goes back with it.
 	outerTrap, outerDepth, outerLocal := r.exitTrap, r.trapDepth, r.exitTrapLocal
+	// And the function the EXIT handler is spelled as, which is part of the
+	// same slot: see restoreTheExitTrapFunction.
+	outerTrapFn := r.trapFuncs["EXIT"]
+	outerTrapDecl := r.funcs[outerTrapFn]
 	// And whether the scoping was on at the *entry*, which is a second
 	// moment and a second question: it decides whether this call holds the
 	// trap it inherited, where Semantics.ExitTrapIsFunctionLocal read at the
@@ -1930,6 +1941,14 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// come apart, and measured on zsh 5.9.2 (`-f`, 2026-09-25) they come
 	// apart in both directions — see the branches at the return.
 	enteredHoldingTheTrap := r.sem().ExitTrapIsFunctionLocal == Yes
+	// Except for the call the EXIT trap is firing, which is the handler
+	// itself running at the exit and holds nothing from itself: measured
+	// 2026-10-02 on zsh 5.9.2, `TRAPEXIT() { print E; functions TRAPEXIT
+	// >/dev/null; print f=$? }; TRAPEXIT` writes f=1 for the call the
+	// script makes and f=0 for the one the exit makes, and a `trap` in the
+	// second lists the function.
+	firing := r.inExitTrap && outerTrap == nil && outerTrapFn != ""
+	enteredHoldingTheTrap = enteredHoldingTheTrap && !firing
 	// And, in the shell where a `function name { … }` call gets a trap table
 	// of its own, the rest of that table — taken and emptied here, put back
 	// as the call unwinds. EXIT goes with it, which is why this is beside
@@ -1938,6 +1957,19 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	r.takeTheTrapTable(sc)
 	if sc.trapTableWasTaken {
 		r.exitTrap, r.trapDepth, r.exitTrapLocal = nil, 0, Unspecified
+	} else if enteredHoldingTheTrap && (outerTrap != nil || outerTrapFn != "") {
+		// Held, the caller's handler is not this call's at all: it is set
+		// aside for the length of the body and comes back at the return,
+		// whatever the body did to EXIT. Measured 2026-10-02 on zsh 5.9.2:
+		// `fn1() { trap 'print EXIT1' EXIT; fn2() { trap - EXIT }; fn2 };
+		// fn1` writes EXIT1, and with fn1's handler spelled `TRAPEXIT`,
+		// fn2's `unfunction TRAPEXIT` is `no such hash table element` —
+		// the function is not there to remove (#5147).
+		r.exitTrap, r.trapDepth = nil, 0
+		if outerTrapFn != "" {
+			delete(r.trapFuncs, "EXIT")
+			delete(r.funcs, outerTrapFn)
+		}
 	}
 	// And, in that same shell, the option table — which the same word
 	// scopes and the same word does *not* empty. The body is handed the
@@ -2095,6 +2127,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		if body != nil {
 			exitTrapReturned = r.runFunctionExitTrap(ctx, *body)
 		}
+		r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
 	} else if r.exitTrap != nil && r.exitTrap != outerTrap && r.trapDepth == r.depth+1 {
 		// The call set an EXIT trap of its own. Whether it fires here is
 		// the answer the axis gave when the `trap` command ran — recorded
@@ -2106,6 +2139,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 			body := *r.exitTrap
 			r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
 			exitTrapReturned = r.runFunctionExitTrap(ctx, body)
+			r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
 		} else if enteredHoldingTheTrap && outerTrap != nil {
 			// It does not fire, and the call was nonetheless entered with
 			// the scoping on — so the trap it inherited was held for it and
@@ -2126,7 +2160,13 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 			// here, so a function's EXIT trap replaces the caller's there
 			// as it always has.
 			r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
+			r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
 		}
+	} else if enteredHoldingTheTrap && r.exitTrap == nil && (outerTrap != nil || outerTrapFn != "") {
+		// The body set nothing, or took away what it had: the handler set
+		// aside at the entry comes back. See the entry.
+		r.exitTrap, r.trapDepth, r.exitTrapLocal = outerTrap, outerDepth, outerLocal
+		r.restoreTheExitTrapFunction(outerTrapFn, outerTrapDecl)
 	}
 	r.Params, r.inFunc, r.funcLine = saved, savedIn, savedLine
 	r.paramsReplacedBySet = savedReplaced

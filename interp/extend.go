@@ -938,6 +938,7 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 	if r.funcs == nil {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
+	displaced := r.funcs[name]
 	r.funcs[name] = decl
 	r.definedOverAWithdrawal(name)
 	// The same bookkeeping a definition the parser read gets. Without it a
@@ -962,6 +963,21 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 	// The same notice the script's own definition route gives — see
 	// AtFunctionDefinition, and functionDefined for why every route has to.
 	r.functionDefined(name)
+	// And the trap, where the name is one: a definition through this seam
+	// is a definition, so `autoload TRAPEXIT` and `functions[TRAPUSR1]=…`
+	// install the handler the way writing the function out does. Measured
+	// 2026-10-02 on zsh 5.9.2 under `-f`: `autoload TRAPEXIT; exit` runs
+	// the file's body at the exit, `autoload TRAPUSR1; trap` lists the
+	// stub, and `functions[TRAPUSR1]='print hi'; kill -USR1 $$` prints hi
+	//
+	// Not for a stub being replaced by the body it stood for while it
+	// runs, which is what an autoloaded handler's first call is: the trap
+	// is armed already — or, for a call the script makes, set aside until
+	// the return, see callFuncInPlace — and arming it from inside its own
+	// first run fired an EXIT handler twice (#5147).
+	if !r.redefinesTheRunningBody(name) {
+		r.bindTrapFunction(name, displaced)
+	}
 	return true
 }
 

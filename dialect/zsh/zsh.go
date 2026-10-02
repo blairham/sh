@@ -5934,8 +5934,11 @@ func Diagnostics() interp.Diagnostics {
 		// One line for the whole condition rather than one per primary, and
 		// the operands quoted: `[[ -n a && -n b ]]` is one line here and two
 		// in bash and ksh93.
-		TraceCondition:              interp.TraceCondWhole,
-		TraceConditionQuoting:       interp.QuoteShell,
+		TraceCondition:        interp.TraceCondWhole,
+		TraceConditionQuoting: interp.QuoteShell,
+		// `=~` traced in the condition module's spelling, operands as
+		// written (#5347).
+		TraceRegexMatch:             "-regex-match",
 		TracePatternEscapesLiterals: true,
 		// A name the locale cannot print is written in `$'…'`; see the
 		// field for the measurement.

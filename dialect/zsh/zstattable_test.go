@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // `zstat -A` into a name that is already an associative array stores the
@@ -32,5 +34,16 @@ func TestZstatStoresIntoATable(t *testing.T) {
 	if want := "bad set of key/value pairs for associative array"; !strings.Contains(out, want) || strings.Contains(out, "zstat:") ||
 		strings.Contains(out, "after") || st != 1 {
 		t.Errorf("odd: got %q at %d, want the refusal located as the shell and the script stopped at 1", out, st)
+	}
+}
+
+// And the refusal leaves 1 behind for the next command where the shell
+// carries on past a fatal error: measured, under `setopt continueonerror` in
+// a script file `print st=$?` after it writes `st=1`.
+func TestZstatsRefusalLeavesItsStatus(t *testing.T) {
+	src := "setopt continueonerror\nzmodload zsh/stat\nprint -n abc > x\ntypeset -A h\nzstat -A h +size -- x\nprint st=$?\n"
+	out, _, errs := runZshSplitOnRoute(t, interp.RouteScriptFile, src)
+	if out != "st=1\n" || !strings.Contains(errs, "bad set of key/value pairs") {
+		t.Errorf("got %q, %q, want st=1 after the refusal", out, errs)
 	}
 }

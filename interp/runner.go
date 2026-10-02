@@ -1735,6 +1735,13 @@ type Runner struct {
 	// almost always; a clone inherits it, so a subshell inside a timed
 	// element still bills that element.
 	elemCPU *cpuAccum
+	// timedElem is the timed pipeline element running on this runner, and
+	// timedElemDirect says the simple command running now is that element
+	// itself rather than one inside it — which is what a trip to the
+	// filesystem needs to know to mark the element forked. See
+	// elemTiming.forked.
+	timedElem       *elemTiming
+	timedElemDirect bool
 	// Route is where the program came from: a command string, a script
 	// file, or standard input.
 	//
@@ -7198,13 +7205,13 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 			// One element, run in the current shell like any other single
 			// command; the element's externals bill its slot for as long
 			// as it runs.
-			saved := r.elemCPU
-			r.elemCPU = &timing.elems[0].cpu
+			saved, savedElem := r.elemCPU, r.timedElem
+			r.elemCPU, r.timedElem = &timing.elems[0].cpu, &timing.elems[0]
 			start := time.Now()
 			r.elementFired = r.elementFired || quiet
 			err := r.command(ctx, p.Cmds[0])
 			timing.elems[0].wall = time.Since(start)
-			r.elemCPU = saved
+			r.elemCPU, r.timedElem = saved, savedElem
 			if err != nil {
 				return err
 			}
@@ -7512,6 +7519,11 @@ func (r *Runner) unsupported(what string) error {
 // element of has already made — or withheld — its DEBUG firing, so there is
 // none to make here; see Semantics.DebugTrapPipelines and Runner.elementFired.
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
+	if r.timedElem != nil {
+		saved := r.timedElemDirect
+		r.timedElemDirect = r.timedElem.node == syntax.Command(c)
+		defer func() { r.timedElemDirect = saved }()
+	}
 	// The DEBUG trap fires here, before anything about the command is even
 	// expanded. A simple command fires it in every column that has the
 	// condition; which *compound* heads fire it as well is the dialect's
@@ -9470,6 +9482,9 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	r.execSerial = r.stmtSerial
+	if r.timedElemDirect {
+		r.timedElem.forked = true
+	}
 	if r.restricted && restrictedPath(argv[0]) {
 		// A restricted shell runs what its PATH finds and nothing a script
 		// points at. Before the lookup, which is measured and is the whole

@@ -242,6 +242,11 @@ type Layout struct {
 	// in the same listing and from the same tree, which is what makes this
 	// a field.
 	SubshellBodyOnItsOwnLines bool
+	// SubshellTerminatesItsLastCommand writes a one-line `( … )` the way a
+	// brace group is written, every command ending in `; ` — the text zsh
+	// 5.9.2 labels a job with: `( :; )` for `(:)`, and `( ( :; ); )` for
+	// `( (:) )`, measured 2026-10-02 with `TIMEFMT='%J'; time …`.
+	SubshellTerminatesItsLastCommand bool
 
 	// BlankLineAfterAHereDocumentBody writes the newline that opens the next
 	// line even where a here-document body has already ended the line,
@@ -1184,7 +1189,15 @@ func (p *printer) command(c Command) {
 		// itself a subshell needs the separation, `((` being arithmetic.
 		p.str("( ")
 		p.stmts(x.List)
-		p.str(" )")
+		// An empty list has nothing to terminate. Unreachable from the one
+		// grammar that asks for this — `()` is a nameless function there —
+		// and kept so that no other grammar can print `( ; )`.
+		if p.layout.SubshellTerminatesItsLastCommand && len(x.List) > 0 {
+			p.terminate()
+			p.str(")")
+		} else {
+			p.str(" )")
+		}
 		p.oweASkippedSeparator = false
 		p.redirs(x.Redirs)
 	case *Group:

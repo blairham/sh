@@ -7766,9 +7766,6 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			n := execScan.take(fields)
 			argv = append(argv, r.globFieldsUnlessSuppressed(fields[:n], true)...)
 			fields = fields[n:]
-			if execScan.reading {
-				continue
-			}
 		}
 		for scanning && len(fields) > 0 {
 			m, ok := r.precommand(fields[0])
@@ -7807,9 +7804,6 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				n := execScan.take(fields)
 				argv = append(argv, r.globFieldsUnlessSuppressed(fields[:n], true)...)
 				fields = fields[n:]
-				if execScan.reading {
-					break
-				}
 			}
 			if m == PrecommandStopsTheScan {
 				// What follows is a command name and not a modifier, which

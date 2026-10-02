@@ -377,6 +377,17 @@ func TestExecOptionsAreReadBeforeTheMatch(t *testing.T) {
 		{`exec -- echo foo*`, "foo1 foo2"},
 		// And a modifier behind the options is still a modifier.
 		{`exec -c noglob echo f*`, "f*"},
+		// What is not an option is matched, and an unmatched pattern is
+		// fatal here, which is what tells the rows apart: after a `--`, after
+		// a bundle whose `a` took the rest of its word, behind the `-`
+		// modifier that switches the options off, and behind a modifier that
+		// is not `exec`.
+		{`exec -- -a nomatch*`, "zsh:1: no matches found: nomatch*"},
+		{`exec -aa echo nomatch*`, "zsh:1: no matches found: nomatch*"},
+		{`- exec -a nomatch*`, "zsh:1: no matches found: nomatch*"},
+		{`command -a nomatch*`, "zsh:1: no matches found: nomatch*"},
+		// The options can arrive in one word that splits.
+		{`c=(exec -a "foo*"); ${~c} ` + child, "[foo*]"},
 	} {
 		dir := t.TempDir()
 		for _, f := range []string{"foo1", "foo2"} {

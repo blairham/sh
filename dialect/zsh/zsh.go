@@ -4320,6 +4320,10 @@ func Semantics() interp.Semantics {
 
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.Yes
+	// And the command is the statement reprinted, on one line of the body
+	// arrangement. See Runner.jobCommandOnOneLine (#5342).
+	s.JobCommandIsReprinted = interp.Yes
+	s.JobCommandIsOneLineOfTheBodyLayout = interp.Yes
 
 	// Whether a backgrounded job is announced to whoever is typing.
 	// zsh announces a job only where standard input is a terminal, and not

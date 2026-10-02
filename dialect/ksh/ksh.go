@@ -401,6 +401,9 @@ func Dialect() syntax.Dialect {
 	// shell resumes after giving the reading up rather than about the scan.
 	// See the flag for the five rows.
 	d.ArithCommandScanIgnoresQuoting = true
+	// A sequence may end at its comma: `echo $(( 3, ))` writes 3. Measured
+	// 2026-10-02 on 93u+ 2012-08-01 (#5145).
+	d.ArithCommaMayEndTheExpression = true
 	// And the same at the `$((` fallback, which is a second field because
 	// the two scans were measured separately: `echo $(( '0)' + 1 ))` runs a
 	// command named `0)` here where the bash columns refuse the expression

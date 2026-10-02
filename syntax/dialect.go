@@ -4844,6 +4844,12 @@ type Dialect struct {
 
 	// ArithComma enables the sequence operator. Not POSIX; dash rejects it.
 	ArithComma bool
+	// ArithCommaMayEndTheExpression lets a sequence end at its comma, the
+	// value being what stands in front of it. Measured 2026-10-02: `echo
+	// $(( 3, ))` writes 3 in ksh93u+ 2012-08-01, and is an operand that ran
+	// out in zsh 5.9.2 (`bad math expression: operand expected at end of
+	// string`) and in bash 5.3.20 (`operand expected (error token is ", ")`).
+	ArithCommaMayEndTheExpression bool
 
 	// ArithExponent enables `**`, exponentiation. Not POSIX — the operator
 	// is not in ISO C either — and dash rejects it; bash, ksh93 and zsh all

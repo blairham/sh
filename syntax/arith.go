@@ -1027,10 +1027,23 @@ func (a *arithParser) expr() ArithExpr {
 		if !a.has(",") || !a.dial.ArithComma {
 			return x
 		}
+		at := a.off
 		a.off++
 		y := a.assign()
 		if y == nil {
-			a.p.fail("expected an expression after , in arithmetic")
+			if a.p.err != nil {
+				// What followed the comma was refused in its own words —
+				// `3,, 4` is the second comma wanting an operand.
+				return x
+			}
+			a.space()
+			if a.off >= len(a.src) && a.dial.ArithCommaMayEndTheExpression {
+				return x
+			}
+			// Nothing after the comma, which is an operand that ran out at
+			// the operator, worded the way any other is. See
+			// [Dialect.ArithCommaMayEndTheExpression].
+			a.failArith(ErrArithOperandEnd, a.src[at:])
 			return x
 		}
 		x = &ArithBinary{Op: ",", X: x, Y: y}

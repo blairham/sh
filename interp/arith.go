@@ -1017,6 +1017,24 @@ func (r *Runner) arithAssignmentDeclaresANumber(name string) bool {
 	return !set
 }
 
+// arithAssignmentReplacesAnArray reports whether an assignment written in
+// arithmetic to a name holding an array — indexed or associative — replaces
+// it with a number declared the way a new name is, in the dialect whose
+// assignments declare one. Measured 2026-10-02 on zsh 5.9.2: `xarr=(); ((
+// xarr = 3 ))` leaves `integer 3`, `a=(1 2); (( a = 3 ))` and `typeset -A h;
+// (( h = 3 ))` the same, `(( xarr = 1.5 ))` a float, and `let xarr=3` and
+// `$(( xarr = 3 ))` the same as `(( ))`. Only an assignment: `xarr=(); ((
+// xarr++ ))` leaves an array holding 1, which is why the caller asks only
+// where an expression was assigned (#5145).
+func (r *Runner) arithAssignmentReplacesAnArray(name string) bool {
+	if r.sem().ArithmeticAssignmentDeclaresANumber != Yes {
+		return false
+	}
+	_, indexed := r.Arrays[name]
+	_, table := r.AssocArrays[name]
+	return indexed || table
+}
+
 // declareIntegerFromArithmetic gives a name the arithmetic just created the
 // integer attribute, and the output base a radix literal in the expression
 // wrote.
@@ -1273,7 +1291,7 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// empty expression names, so the pair goes to the element path with
 		// everything else and only a target with no brackets at all is here
 		// (#1764).
-		if r.arithAssignmentDeclaresANumber(p.name) {
+		if r.arithAssignmentDeclaresANumber(p.name) || (from != nil && r.arithAssignmentReplacesAnArray(p.name)) {
 			if v.floatKind() {
 				// **The value's type decides which attribute**, and a float
 				// value declares a float. See declareFloatFromArithmetic,

@@ -58,6 +58,30 @@ type Semantics struct {
 	// splits an unquoted *command* substitution, so this is two fields and
 	// not one.
 	SplitParamExpansion Answer
+	// ArithExpansionIsSplit field-splits the result of an unquoted arithmetic
+	// expansion, where SplitParamExpansion would split a parameter's.
+	//
+	// The standard puts an arithmetic expansion's result through field
+	// splitting, and every column but one does. Measured 2026-10-02 with
+	// `IFS=2; printf "<%s>\n" $((11*11))`:
+	//
+	//	bash 5.3.20, bash 3.2.57, dash 0.5.12,     <1> <1>
+	//	ksh93u+ 2012-08-01, BusyBox ash 1.37.0
+	//	zsh 5.9.2                                  <121>
+	//
+	// and zsh keeps its answer however it is asked: under `setopt
+	// shwordsplit`, under an argv[0] of `sh`, for `$[11*11]` and for
+	// `$((11*11))x`. zsh's own E03posix asks this and marks the row an
+	// expected failure (#5157).
+	//
+	// Asked only where the result holds a separator, which a number almost
+	// never does, and only where SplitParamExpansion has not already said no.
+	//
+	// unpinned zsh: no corpus row sets IFS to a digit; pinned by
+	// TestAnArithmeticResultIsNeverSplit.
+	//
+	// unpinned bash: likewise; pinned by TestAnArithmeticResultIsSplit.
+	ArithExpansionIsSplit Answer
 	// EmptyQuotesAfterASeparatorAreAField is whether a quoted empty word
 	// written behind a separator in the word a `-` or `+` substitutes opens a
 	// field of its own.
@@ -29812,6 +29836,7 @@ func PosixSemantics() Semantics {
 		StartupFillsAnAbsentHome:     No,
 		CdRemembersAHomeThatWasUnset: No,
 		SplitParamExpansion:          Yes,
+		ArithExpansionIsSplit:        Yes,
 		// `cd` refuses when the path it built is not there. XCU's own
 		// algorithm builds `curpath` from `$PWD` and the operand and then
 		// chdirs to *that*, so a `$PWD` that has stopped leading anywhere is

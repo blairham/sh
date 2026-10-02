@@ -2917,8 +2917,18 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		if !ok {
 			return "", false
 		}
+		split := sp.answer(r.sem().SplitParamExpansion)
+		if unquoted && split != No {
+			// The one column that never splits this result, asked only where
+			// there is a separator to split at. See
+			// Semantics.ArithExpansionIsSplit.
+			if ifs, _ := r.ifs(); containsAnyOf(v, ifs) &&
+				!r.ask(r.sem().ArithExpansionIsSplit, "splitting the result of an arithmetic expansion") {
+				split = No
+			}
+		}
 		return r.expansionResult(v, unquoted, r.sem().GlobExpansionResults,
-			sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted arithmetic expansion")
+			split, "splitting an unquoted arithmetic expansion")
 	}
 	return "", false
 }

@@ -2189,6 +2189,9 @@ func Semantics() interp.Semantics {
 	// local's value.
 	s.LocalInheritsTheExportAttribute = interp.No
 	s.SplitParamExpansion = interp.No
+	// And an arithmetic result is never split, under `shwordsplit` or an
+	// argv[0] of `sh` alike — see Semantics.ArithExpansionIsSplit.
+	s.ArithExpansionIsSplit = interp.No
 	// An unquoted list is joined on IFS before it is split, as in bash.
 	//
 	// **This was `No`, and the measurement behind that was taken in the one

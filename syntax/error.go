@@ -646,6 +646,13 @@ type Error struct {
 	// is the parameter and a `#` in front of a name is the length operator.
 	// ksh93 says ``newline' unexpected`` for both.
 	BraceNameStopFollowsAPrefix bool
+	// BraceRanOutInTheName says an unterminated `${…}` in the parameter form
+	// ran out of input before it had read an operator: `${`, `${x`, `${#x`,
+	// and with flags `${(e)x` — where `${x:-` has read one and is reading a
+	// word. One dialect words the two apart where the text is read at
+	// expansion time, and not on the command line. See
+	// interp.Diagnostics.RawTextBraceRanOutInTheName.
+	BraceRanOutInTheName bool
 	// FlagGroupWordTail is the rest of the *word* a refused expansion flag
 	// group stands in: the source from the character after the group's
 	// closing `)` to the end of the word, the expansion's own `}` and any

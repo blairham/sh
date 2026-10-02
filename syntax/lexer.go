@@ -5830,6 +5830,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 				// report, and the stop belongs to whichever construct that
 				// report is about.
 				se.BraceNameStop, se.BraceNameStopFollowsAPrefix = braceNameStop(l.src[start:])
+				se.BraceRanOutInTheName = braceRanOutInTheName(l.src[start:], l.dialect.ParamExpansionFlags)
 			}
 			break
 		}
@@ -7876,6 +7877,24 @@ func braceNameStop(body string) (stop string, prefixed bool) {
 		return string(body[i]), prefixed
 	}
 	return "", prefixed
+}
+
+// braceRanOutInTheName reports whether body — the text since a `${` that
+// never closed — ends before any operator has been read: a flag group where
+// the dialect has them, any run of the prefix operators, and a name or a
+// special parameter at most. See Error.BraceRanOutInTheName.
+func braceRanOutInTheName(body string, flags bool) bool {
+	if flags && strings.HasPrefix(body, "(") {
+		end := strings.IndexByte(body, ')')
+		if end < 0 {
+			// A flag group that never closed is the flag reader's refusal,
+			// and a different sentence.
+			return false
+		}
+		body = body[end+1:]
+	}
+	body = strings.TrimLeft(body, "#!^=~+")
+	return len(braceName(body)) == len(body)
 }
 
 // quoteProtectsTheBrace reports whether a single quote standing at the end of

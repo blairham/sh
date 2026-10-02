@@ -6144,7 +6144,10 @@ func Diagnostics() interp.Diagnostics {
 		// this shell has and refuses the same way.
 		UnmatchedArithSubst: "parse error near `%[3]s'",
 		UnmatchedBraceSubst: "closing brace expected",
-		SyntaxErrorStatus:   1,
+		// And `bad substitution` where text read at expansion time ran out
+		// before an operator. Measured 2026-10-02 (#5138).
+		RawTextBraceRanOutInTheName: "bad substitution",
+		SyntaxErrorStatus:           1,
 		// zsh alone answers "a syntax error" differently depending on where it
 		// read the text: 1 from -c, 126 from a file `.` opened.
 		SourcedSyntaxErrorStatus: 126,

@@ -7299,8 +7299,12 @@ func (r *Runner) rawSpansRead(text string, read func(string, syntax.Dialect) ([]
 // and then refuses already gets the same two answers.
 func (r *Runner) reportRawTextRefusal(err error) {
 	d := r.diag()
+	failure := d.ParseFailure(err)
+	if se, ok := err.(*syntax.Error); ok && se.BraceRanOutInTheName && d.RawTextBraceRanOutInTheName != "" {
+		failure = d.RawTextBraceRanOutInTheName
+	}
 	if !r.inBodyReadAtExpansion {
-		r.diagf("%s\n", d.ParseFailure(err))
+		r.diagf("%s\n", failure)
 		return
 	}
 	was := r.line
@@ -7309,7 +7313,7 @@ func (r *Runner) reportRawTextRefusal(err error) {
 			r.line = r.expansionBodyLine + at - 1
 		}
 	}
-	r.errf("%s", r.diagLineNamed(r.substFailureRoute(syntax.Span{}), "%s\n", d.ParseFailure(err)))
+	r.errf("%s", r.diagLineNamed(r.substFailureRoute(syntax.Span{}), "%s\n", failure))
 	r.line = was
 }
 

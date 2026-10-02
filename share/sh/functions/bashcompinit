@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# bashcompinit
+#
+# Define `complete` and `compgen`, bash's two completion builtins, as
+# functions over the completion system's tables, so a bash completion script
+# can be sourced into a zsh startup.  zshcompsys(1) names it; what the two
+# functions do is measured, since the manual says only that they emulate
+# bash.
+#
+# Written from the manual and from what the installed shell answers, never
+# from its function files.  docs/spec/functions.md records the run.
+#
+# Measured on zsh 5.9.2 under `-f -c`, after `compinit -D -u; bashcompinit`:
+#
+#   * `complete -F fn cmd` makes `_comps[cmd]` `_bash_complete -F fn`, the
+#     options quoted as a word list: `-W 'a b'` is `_bash_complete -W a\ b`;
+#   * `complete -p` lists every `_bash…` entry as a `complete` line, whatever
+#     names follow it; `complete -r cmd` removes one; `complete` alone is 0;
+#   * `compgen` lists what its options name **and ignores the word** it is
+#     given — `compgen -W 'alpha beta' -- al` is both — one to a line, each
+#     between the `-P` prefix and the `-S` suffix; with nothing to list it
+#     writes one empty line, and an `-F` function that is not there is the
+#     shell's own `command not found` and then that empty line.
+#
+# `_bash_complete` is defined too, because `_comps` names it; this shell's
+# completion does not read `_comps`, so it completes nothing.
+
+emulate -L zsh
+
+complete() {
+	emulate -L zsh
+	local -a args
+	local opt name entry
+	integer printing=0 removing=0
+	while (( $# )); do
+		case $1 in
+		(-p) printing=1; shift ;;
+		(-r) removing=1; shift ;;
+		(-[oAGWCFXPS]) args+=( $1 $2 ); shift 2 ;;
+		(-?*) args+=( $1 ); shift ;;
+		(--) shift; break ;;
+		(*) break ;;
+		esac
+	done
+	if (( printing )); then
+		for name in ${(ko)_comps}; do
+			entry=$_comps[$name]
+			[[ $entry == _bash* ]] || continue
+			print -r -- "complete ${entry#_bash_complete } $name"
+		done
+		return 0
+	fi
+	if (( removing )); then
+		for name; do
+			unset "_comps[$name]"
+		done
+		return 0
+	fi
+	for name; do
+		_comps[$name]="_bash_complete ${(j: :)${(@q)args}}"
+	done
+	return 0
+}
+
+compgen() {
+	emulate -L zsh -o extendedglob
+	zmodload zsh/parameter 2>/dev/null
+	local -a results
+	local prefix= suffix= opt
+	while (( $# )); do
+		case $1 in
+		(-W) results+=( ${=2} ); shift 2 ;;
+		(-P) prefix=$2; shift 2 ;;
+		(-S) suffix=$2; shift 2 ;;
+		(-G) results+=( ${~2}(N) ); shift 2 ;;
+		(-F) $2; shift 2 ;;
+		(-C) results+=( ${(f)"$(eval $2)"} ); shift 2 ;;
+		(-X|-o) shift 2 ;;
+		(-A)
+			case $2 in
+			(function) results+=( ${(k)functions} ) ;;
+			(alias) results+=( ${(k)aliases} ) ;;
+			(variable) results+=( ${(k)parameters} ) ;;
+			(command) results+=( ${(k)commands} ${(k)functions} ${(k)aliases} ${(k)builtins} ) ;;
+			(directory) results+=( *(N/) ) ;;
+			(file) results+=( *(N) ) ;;
+			(keyword) results+=( ${(k)reswords} ) ;;
+			(builtin) results+=( ${(k)builtins} ) ;;
+			esac
+			shift 2
+			;;
+		(-a) results+=( ${(k)aliases} ); shift ;;
+		(-b) results+=( ${(k)builtins} ); shift ;;
+		(-c) results+=( ${(k)commands} ${(k)functions} ${(k)aliases} ${(k)builtins} ); shift ;;
+		(-d) results+=( *(N/) ); shift ;;
+		(-f) results+=( *(N) ); shift ;;
+		(-k) results+=( $reswords ); shift ;;
+		(-v) results+=( ${(k)parameters} ); shift ;;
+		(--) shift; break ;;
+		(*) shift ;;
+		esac
+	done
+	(( $#results )) || { print; return 0 }
+	print -rl -- ${prefix}${^results}${suffix}
+	return 0
+}
+
+_bash_complete() {
+	return 1
+}

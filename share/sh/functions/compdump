@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# compdump
+#
+# zsh writes the completion system's tables to a dump file that the next
+# compinit reads back instead of scanning $fpath.  This shell writes none:
+# the file would be read by the other shell too, and the two must not trade
+# one another's files.  So this is the name a startup file may call, and it
+# does nothing, at 0.  See compinit, and docs/spec/functions.md.
+
+return 0

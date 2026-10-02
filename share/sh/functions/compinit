@@ -1,0 +1,180 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# compinit [ -D ] [ -d dumpfile ] [ -u | -i ] [ -C ] [ -w ]
+#
+# Initialize the completion system's tables: read the first line of every
+# `_name` file on $fpath, autoload the functions those lines mark, record
+# which command each completes, and define `compdef` for a startup file to
+# add its own.  zshcompsys(1), "Initialization", is the specification.
+#
+# Written from that manual and from what the installed shell answers, never
+# from its function files.  docs/spec/functions.md records the run.
+#
+# Measured on zsh 5.9.2 under `-f -c`, with a directory of fixture files:
+#
+#   * `#compdef foo bar=baz -p "x*"` makes `_comps[foo]` and `_comps[bar]`
+#     the file's name, `_services[bar]` `baz`, and `_patcomps["x*"]` — the
+#     words of the line split on blanks, quotes and all;
+#   * `#compdef -P pat ...` goes to `_postpatcomps`;
+#   * `#autoload` autoloads the file and records nothing;
+#   * a file with neither line is left alone, not even autoloaded;
+#   * the first file of a name on $fpath is the one that counts;
+#   * `_comps` and its fellows are hidden-value associations;
+#   * `compdef`, `compaudit` and `compdump` are functions afterwards;
+#   * with an insecure directory on $fpath and neither `-u` nor `-i`, a
+#     shell with no terminal writes `not interactive and can't open
+#     terminal`, a blank line and `compinit: initialization aborted` to
+#     standard error, is 1, and leaves no compinit defined; `-i` leaves the
+#     insecure directories out and `-u` reads them anyway;
+#   * a run that finished leaves compinit autoloadable again, so a second
+#     call reads $fpath afresh.
+#
+# Where this differs from zsh, on purpose:
+#
+#   * **no dump is written.**  zsh writes ${ZDOTDIR:-$HOME}/.zcompdump, or the
+#     `-d` file, and reads it back on the next start; a dump this shell wrote
+#     would be read by the other shell too, and the two must not trade one
+#     another's files.  `-d`, `-D` and `-C` are taken and change nothing else;
+#   * the completion widgets are not rebound to zsh's own `_main_complete`,
+#     which this shell does not ship: Tab keeps this shell's own completion,
+#     and what compinit records is what `compdef` and a plugin read back.
+
+emulate -L zsh -o extendedglob
+
+local opt
+local -a dumpfile
+integer audit=1 ignoreinsecure=0
+while getopts "d:DiuCw" opt; do
+	case $opt in
+	(d) dumpfile=( $OPTARG ) ;;
+	(D) dumpfile=() ;;
+	(i) ignoreinsecure=1 ;;
+	(u) audit=0 ;;
+	(C) audit=0 ;;
+	(w) ;;
+	(*) return 1 ;;
+	esac
+done
+
+typeset -gHA _comps _services _patcomps _postpatcomps _compautos
+autoload -Uz compaudit compdump
+
+local -a scan
+scan=( $fpath )
+if (( audit )); then
+	local -a insecure
+	insecure=( ${(f)"$(compaudit 2>/dev/null)"} )
+	if (( $#insecure )); then
+		if (( ignoreinsecure )); then
+			scan=( ${scan:|insecure} )
+		else
+			if [[ -t 0 ]]; then
+				print -u2 -r -- "zsh compinit: insecure directories, run compaudit for list."
+				if ! read -q "?Ignore insecure directories and continue [y] or abort compinit [n]? "; then
+					print -u2
+					print -u2 -r -- "compinit: initialization aborted"
+					unfunction compinit compdef 2>/dev/null
+					return 1
+				fi
+				print -u2
+				scan=( ${scan:|insecure} )
+			else
+				print -u2 -r -- "not interactive and can't open terminal"
+				print -u2
+				print -u2 -r -- "compinit: initialization aborted"
+				unfunction compinit compdef 2>/dev/null
+				return 1
+			fi
+		fi
+	fi
+fi
+
+compdef() {
+	emulate -L zsh -o extendedglob
+	local opt fn name style key
+	integer autoload=0 noreplace=0 expression=0 delete=0 keyed=0 keyedmany=0
+	while [[ $1 == -[anedkK]## ]]; do
+		opt=$1
+		shift
+		[[ $opt == *a* ]] && autoload=1
+		[[ $opt == *n* ]] && noreplace=1
+		[[ $opt == *e* ]] && expression=1
+		[[ $opt == *d* ]] && delete=1
+		[[ $opt == *k* ]] && keyed=1
+		[[ $opt == *K* ]] && keyedmany=1
+	done
+	if (( delete )); then
+		for name; do
+			unset "_comps[$name]" "_services[$name]"
+		done
+		return 0
+	fi
+	(( $# )) || return 0
+	fn=$1
+	shift
+	(( autoload )) && autoload -Uz -- ${fn%% *}
+	if (( keyed )); then
+		style=$1
+		shift
+		zle -C $fn $style $fn
+		for key; do
+			bindkey -- $key $fn
+		done
+		return 0
+	fi
+	if (( keyedmany )); then
+		while (( $# >= 3 )); do
+			zle -C $1 $2 $fn
+			bindkey -- $3 $1
+			shift 3
+		done
+		return 0
+	fi
+	local table=_comps
+	for name; do
+		case $name in
+		(-p) table=_patcomps; continue ;;
+		(-P) table=_postpatcomps; continue ;;
+		(-N) table=_comps; continue ;;
+		esac
+		if [[ $table == _comps && $name == *=* ]]; then
+			(( noreplace )) && (( ${+_comps[${name%%=*}]} )) && continue
+			_comps[${name%%=*}]=$fn
+			_services[${name%%=*}]=${name#*=}
+			continue
+		fi
+		if (( noreplace )); then
+			eval "(( \${+${table}[\$name]} ))" && continue
+		fi
+		eval "${table}[\$name]=\$fn"
+	done
+	return 0
+}
+
+local dir file line name
+local -A seen
+for dir in $scan; do
+	for file in $dir/_*(N.); do
+		name=${file:t}
+		[[ $name == *~ ]] && continue
+		(( ${+seen[$name]} )) && continue
+		seen[$name]=1
+		IFS= read -r line < $file || [[ -n $line ]] || continue
+		case $line in
+		('#compdef '*|'#compdef')
+			compdef -na $name ${=${line#\#compdef}}
+			;;
+		('#autoload '*|'#autoload')
+			autoload -Uz ${=${line#\#autoload}} -- $name
+			;;
+		esac
+	done
+done
+
+# Waiting to be read again rather than gone: measured, `whence -w compinit`
+# afterwards is a function whose body is still to be loaded, and a second
+# call rescans.  An aborted run leaves no compinit at all.
+unfunction compinit
+autoload -Uz compinit
+return 0

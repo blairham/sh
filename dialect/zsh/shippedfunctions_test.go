@@ -38,7 +38,7 @@ func shippedFunctionDir(t *testing.T) string {
 		t.Fatal("no caller information: cannot find the shipped function files")
 	}
 	dir := filepath.Join(filepath.Dir(thisFile), "..", "..", "share", "sh", "functions")
-	for _, name := range []string{"add-zle-hook-widget", "add-zsh-hook", "colors", "is-at-least", "regexp-replace"} {
+	for _, name := range []string{"add-zle-hook-widget", "add-zsh-hook", "bashcompinit", "colors", "compaudit", "compdump", "compinit", "is-at-least", "regexp-replace"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Fatalf("shipped function %s: %v", name, err)
 		}

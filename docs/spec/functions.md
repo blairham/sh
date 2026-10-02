@@ -372,16 +372,49 @@ the same file on `FPATH`: `is-at-least`, `colors`, `regexp-replace`, the
 alias row and the `=~` capture parameters come back **byte-identical**, and
 `add-zsh-hook` differs on the one `typeset -g` line of #2041.
 
-## What is not shipped, and why
+## `compinit`, `compaudit`, `compdump` and `bashcompinit`
 
-`compinit` — and with it `compdef`, `compdump` and the completion system
-it initializes — is **out of scope on purpose**. It is an order of
-magnitude larger than the four above put together, and it exists to drive
-a completion system this shell does not have yet. A startup file that calls
-it on the default search still gets `compinit: function definition file not
-found`, and that is an honest gap rather than a silent one. A startup file
-that has put another zsh's `fpath` in front gets further and fails later,
-at `zsh/complete` — #2770.
+`compinit` used to be out of scope here on the reasoning that it initializes
+a completion system this shell does not have. That was the wrong question:
+a startup file calls it whether or not Tab is driven by it, and then calls
+`compdef` and reads `_comps` — zi replays its recorded `compdef` calls, and a
+framework's completion setup calls `bashcompinit` — so its absence was a
+startup error on every real rc (#5393). What is shipped is the **tables and
+the names**, written from zshcompsys(1) and measured against zsh 5.9.2 under
+`-f -c` with a directory of fixture files, 2026-10-02:
+
+| probe | zsh |
+| --- | --- |
+| `#compdef foo bar=baz -p "x*"` | `_comps[foo]`, `_comps[bar]` the file's name; `_services[bar]=baz`; `_patcomps["x*"]` — split on blanks, quotes kept |
+| `#compdef -P pat qq` | both words to `_postpatcomps` |
+| `#autoload` | autoloaded, nothing recorded |
+| a file with neither line | not autoloaded |
+| `${(t)_comps}` | `association-hideval` |
+| afterwards | `compdef`, `compaudit`, `compdump` are functions; `compinit` is autoloadable again |
+| `compdef fn cmd`, `-n`, `-d`, `name=service` | set, keep, remove, set with a service |
+| a world-writable `$fpath` entry | `compaudit`: the heading on stderr, the directory on stdout, 1 |
+| the same under `compinit`, no `-u`/`-i`, no terminal | `not interactive and can't open terminal`, a blank line, `compinit: initialization aborted`, 1, and no `compinit` left |
+| `compinit -i` | the insecure directory left out |
+| `complete -F f c1`, `complete -o nospace -W 'q r' c2` | `_comps[c2]` is `_bash_complete -o nospace -W q\ r`; `complete -p` lists them back |
+| `compgen -W 'alpha beta' -- al` | `alpha` and `beta`: the word is **ignored** |
+| `compgen -P pre`/`-S suf` | each result between them |
+| `compgen` with nothing to list | one empty line |
+
+Two divergences, both deliberate:
+
+* **No dump is written.** zsh writes `${ZDOTDIR:-$HOME}/.zcompdump`, or the
+  `-d` file, and reads it back next time; a dump written here would be read
+  by the other shell too, and the two must not trade files. `-d`, `-D` and
+  `-C` are taken and change nothing else, and `compdump` does nothing at 0.
+* **Tab is not rebound to `_main_complete`**, which this shell does not ship,
+  and `_bash_complete` completes nothing: this shell's own completion stays,
+  and what compinit records is what a startup file and a plugin read back.
+
+And one wording: an `-F` function `compgen` cannot find is the shell's
+`command not found`, located at `compgen`'s own line where zsh's names an
+anonymous function's.
+
+## What is not shipped, and why
 
 `vcs_info` is the same answer for the same reason, and it turned up in the
 measurement rather than in the issue: it is a VCS status subsystem with a

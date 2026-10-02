@@ -330,6 +330,19 @@ func (r *Runner) startBeside(ctx context.Context, name string, s concurrentStrea
 		status = sub.status
 	}, func() {
 		releaseFds()
+		// **The command's input first, before it is finished**: a fork that
+		// has exited holds no read end of its input, so once `wait` has
+		// returned a write into that input is a broken pipe in every shell.
+		// Closed after the finish, it was one only when this goroutine won
+		// the race with the script's next line — `coproc CP { echo hi; };
+		// exec 3>&${CP[1]}; wait; echo x >&3` wrote into a pipe still open
+		// and carried on, on a loaded runner (#5367). Its *output* is
+		// closed after the finish, below, for #2661's reason, which is about
+		// the other end.
+		inFirst := s.closeEnds && s.in != nil && s.in != s.out && s.in != s.errs
+		if inFirst {
+			_ = s.in.Close()
+		}
 		// A fork of this shell has ended: a coprocess is a child in bash and
 		// is reaped like one. Measured 2026-09-23, `trap 'echo C' CHLD;
 		// coproc CP { echo x; }` fires once for it there and fired not at all
@@ -358,7 +371,11 @@ func (r *Runner) startBeside(ctx context.Context, name string, s concurrentStrea
 		// closes of a number the operating system may have handed out again
 		// in between.
 		if s.closeEnds {
-			closeOnce(s.in, s.out, s.errs)
+			in := s.in
+			if inFirst {
+				in = nil
+			}
+			closeOnce(in, s.out, s.errs)
 		}
 	})
 	<-job.ready

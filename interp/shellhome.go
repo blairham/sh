@@ -75,6 +75,11 @@ func (r *Runner) SeedHomeDirectory() {
 	}
 	if home, ok := r.UserHomeDir(""); ok && home != "" {
 		r.setVar("HOME", home)
+		// And exported, which is the reference's own answer and not the
+		// environment's: measured 2026-10-01 on zsh 5.9.2 under `env -i
+		// PATH=/usr/bin:/bin`, `env | grep -c HOME` is 1 and `typeset +x`
+		// names HOME, from a shell that was handed none (#5332).
+		r.MarkExported("HOME")
 		// The shell has a home now, so `unset HOME` after this leaves an
 		// empty destination rather than no destination — which is the
 		// reference's own answer, since the seeded value is a home it was

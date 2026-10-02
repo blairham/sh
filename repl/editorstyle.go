@@ -161,6 +161,12 @@ type EditorStyle struct {
 	// has.
 	SelfInsertWidget string
 
+	// SpecialWidgets says this shell has the widgets the line editor calls
+	// itself — `zle-line-init`, `zle-line-pre-redraw` and `zle-line-finish`
+	// — so the editor asks for them by name. False for a dialect with none,
+	// which then never asks. See specialwidgets.go.
+	SpecialWidgets bool
+
 	// What to do about a line of output that never ended.
 	//
 	// A command — or a plugin loading — can leave the cursor part-way along a

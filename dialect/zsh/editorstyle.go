@@ -41,6 +41,10 @@ func EditorStyle() repl.EditorStyle {
 		// intercepts a printable key. See repl's EditorStyle.SelfInsertWidget
 		// and #2485.
 		SelfInsertWidget: "self-insert",
+		// And the editor calls zle-line-init, zle-line-pre-redraw and
+		// zle-line-finish where they are defined. Measured 2026-10-02
+		// through a pseudo-terminal (#5398).
+		SpecialWidgets: true,
 		// Output that never ended its line. Measured 2026-09-12 through a
 		// pseudo-terminal with an rc file ending `printf 'LEFTOVER'`: this
 		// shell writes a bold, inverse `%` where the output stopped, pads to

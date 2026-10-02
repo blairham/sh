@@ -2597,6 +2597,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		pastedStyle:    s.Editor.PastedTextStyle,
 		pastedStyleEnd: s.Editor.PastedTextStyleEnd,
 		selfInsert:     s.Editor.SelfInsertWidget,
+		specials:       s.Editor.SpecialWidgets,
 		// What to do about output that never ended its line. Read through the
 		// options rather than taken as values, because both are options a
 		// person turns off — and the return is the outer of the two, so a

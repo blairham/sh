@@ -151,6 +151,12 @@ type editor struct {
 	// it takes cells, moves the end of the drawn text to the right, and is
 	// what the cursor has to come back over.
 	postdisplay string
+	// specials says the shell has special widgets to ask for at all. See
+	// EditorStyle.SpecialWidgets.
+	specials bool
+	// inSpecial says a special widget is running, so a redraw it makes asks
+	// for no other. See specialwidgets.go.
+	inSpecial bool
 
 	// noTerminal says this session's input is **not** a terminal, which is not
 	// the same question as whether there is an editor: the editor reads bytes
@@ -448,6 +454,9 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// done and what the pty instruments are written against.
 		e.recordDrawn(prompt, "", 0)
 	}
+	// The shell's own word on the new line, before any key: what it puts on
+	// the line is drawn by the branch below, as a seeded line is.
+	e.specialWidget("zle-line-init", prompt)
 	if len(e.line) > 0 {
 		// A line that starts with something on it has to be drawn before the
 		// first key rather than by it — the redraws below are a keystroke's,
@@ -486,8 +495,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 				// Through the accept path rather than beside it, so the line
 				// is ended, recorded and drawn exactly as a carriage return
 				// would have ended it.
-				e.endLine(prompt, "")
-				return string(e.line), nil
+				return e.accepted(prompt), nil
 			}
 			return "", err
 		}
@@ -543,8 +551,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			// the whole of how a plugin's wrapper around `accept-line` works,
 			// since the wrapper is what the key is bound to (#2082).
 			if _, accept := e.runShellWidget(b.Function, prompt); accept {
-				e.endLine(prompt, "")
-				return string(e.line), nil
+				return e.accepted(prompt), nil
 			}
 			continue
 		case claimed:
@@ -567,8 +574,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			// insert map is read in.
 			switch e.viKey(buf[0], prompt) {
 			case viAccepted:
-				e.endLine(prompt, "")
-				return string(e.line), nil
+				return e.accepted(prompt), nil
 			case viAbandoned:
 				return e.abandon(prompt)
 			case viStopped:
@@ -593,8 +599,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			// what it means everywhere but on an empty line.
 			e.change(false, e.deleteForward)
 		case '\r', '\n':
-			e.endLine(prompt, "")
-			return string(e.line), nil
+			return e.accepted(prompt), nil
 		case ctrlA:
 			e.moveTo(0, prompt)
 		case ctrlE:
@@ -630,8 +635,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			// `operate-and-get-next`: accept this line and offer the entry
 			// after it at the next prompt. See operateAndGetNext.
 			e.operateNext = e.browsing + 2
-			e.endLine(prompt, "")
-			return string(e.line), nil
+			return e.accepted(prompt), nil
 		case ctrlP:
 			e.browse(-1, prompt)
 		case ctrlN:
@@ -706,8 +710,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 					if accept {
 						// A wrapper that committed the line while handling a
 						// printable key. Unlikely and not ours to refuse.
-						e.endLine(prompt, "")
-						return string(e.line), nil
+						return e.accepted(prompt), nil
 					}
 					continue
 				}
@@ -975,6 +978,7 @@ func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 // behind it. The whole line otherwise, which is what this always used to do
 // and is what every case below falls back to.
 func (e *editor) redraw(prompt drawnPrompt) {
+	e.specialWidget("zle-line-pre-redraw", prompt)
 	e.pendingDraw = false
 	cols := e.cols()
 	if cols <= 0 {

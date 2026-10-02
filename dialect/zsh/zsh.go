@@ -1191,6 +1191,9 @@ func Semantics() interp.Semantics {
 	// An exported name past ASCII reaches no child. See
 	// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment (#5364).
 	s.NameBeyondASCIIStaysOutOfTheEnvironment = interp.Yes
+	// A bare `trap` inside the running EXIT trap lists it (it does here,
+	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
+	s.ExitTrapListedWhileItRuns = interp.Yes
 	s.ScriptSearchOptionName = "pathscript"
 	// And sh and ksh emulation start with it on (#5383).
 	s.ScriptSearchUnderEmulation = "sh ksh"

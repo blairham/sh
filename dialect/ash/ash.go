@@ -1882,6 +1882,9 @@ func Semantics() interp.Semantics {
 	// 2026-10-02 on BusyBox v1.37.0 in the pinned alpine image, `exec -a x`
 	// and `exec --` are each `st=0`. See Semantics.ExecOptionsRequireACommand.
 	s.ExecOptionsRequireACommand = interp.No
+	// A bare `trap` inside the running EXIT trap lists it (nothing here,
+	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
+	s.ExitTrapListedWhileItRuns = interp.No
 	s.ExecTakesTheLoginLetter = interp.No
 	s.ExecTakesTheEmptyEnvironmentLetter = interp.No
 	s.ExecLoginPrefixesTheGivenName = interp.No

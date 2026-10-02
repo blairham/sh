@@ -25963,6 +25963,13 @@ type Semantics struct {
 	// zero value. bash, dash and BusyBox ash have no such name to export
 	// (#5364).
 	NameBeyondASCIIStaysOutOfTheEnvironment Answer
+	// ExitTrapListedWhileItRuns lists the EXIT trap in a bare `trap` run by
+	// that trap's own body. Measured 2026-10-02 over `trap 'echo E; trap'
+	// EXIT; echo b` under `-c`: bash 5.3.20 writes `trap -- 'echo E; trap'
+	// EXIT` after `E` and zsh 5.9.2 its own spelling of the same, where
+	// dash, ksh93u+ and BusyBox ash (pinned alpine image) write nothing —
+	// the zero value (#5357).
+	ExitTrapListedWhileItRuns Answer
 
 	// ExecTakesTheLoginLetter is `exec -l`, which puts a `-` on the front of
 	// the argv[0] the replacement sees — the mark `login` and every terminal

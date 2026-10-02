@@ -3106,6 +3106,9 @@ func Semantics() interp.Semantics {
 	// on ksh93u+ 2012-08-01, `export ñ=1 a=2; /usr/bin/env` lists both. See
 	// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment.
 	s.NameBeyondASCIIStaysOutOfTheEnvironment = interp.No
+	// A bare `trap` inside the running EXIT trap lists it (nothing here,
+	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
+	s.ExitTrapListedWhileItRuns = interp.No
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+

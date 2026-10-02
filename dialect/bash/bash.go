@@ -2223,6 +2223,9 @@ func Semantics() interp.Semantics {
 	// 2026-10-02 on bash 5.3.20 under failglob, `builtin nosuch nomatch*`
 	// is `no match: nomatch*`. See Semantics.BuiltinNameIsLookedUpBeforeGlobbing.
 	s.BuiltinNameIsLookedUpBeforeGlobbing = interp.No
+	// A bare `trap` inside the running EXIT trap lists it (it does here,
+	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
+	s.ExitTrapListedWhileItRuns = interp.Yes
 	// Both letters, and `-l` reaches the name `-a` chose: `exec -l -a NAME`
 	// hands the replacement `-NAME`, where zsh hands it `NAME`.
 	s.ExecTakesTheLoginLetter = interp.Yes

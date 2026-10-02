@@ -634,6 +634,16 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	if !f.global {
 		depth = len(r.scopes)
 	}
+	old, retied := r.tieOf(scalar)
+	if retied && hasValue {
+		// A scalar value written on the line that ties the pair again keeps
+		// the separator the pair already had, and the value splits on it.
+		// Measured 2026-10-02 on zsh 5.9.2 under `-f`: `typeset -T V=a:b v;
+		// typeset -T V=c:d v +` lists back as `typeset -T V v=( c d )`, and a
+		// later `V=e+f` is one element. An array value on the same line is
+		// not this case — `typeset -T W w=(c d) +` does move to `+`.
+		sep = old.sep
+	}
 	r.tieNames(tie{scalar: scalar, array: array, sep: sep, depth: depth})
 	// Readonly last, the same order biDeclare follows and for the same
 	// reason: it decides whether the assignment below is allowed at all, and
@@ -652,6 +662,24 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// The declaration's own value, which splits into the array like any
 		// other assignment to the scalar.
 		r.setVarAs(scalar, value, assignedByDeclaration)
+		return 0
+	}
+	// **A pair tied again joins its elements with the new separator and
+	// splits the result on it**, rather than splitting the old scalar on the
+	// new separator. Measured 2026-10-02 on zsh 5.9.2 under `-f`:
+	// `typeset -T V v=(a b); typeset -T V v +` prints `a+b` for `$V`; with
+	// `-UuT` over `(a b a b)` the array lists back as `( a b )` and `$V` as
+	// `A+B`; an empty pair comes back with one empty element; and elements
+	// `(a:b c)` tied again with `:` are three. The last is what says the
+	// join is re-split rather than handed to the array as it was. Written
+	// through the scalar, so the letters this line brought — `-U` among
+	// them — reach the elements on the way back in.
+	if retied {
+		var elems []string
+		if a, ok := r.Arrays[array]; ok {
+			elems = r.readArray(a)
+		}
+		r.setVar(scalar, strings.Join(elems, sep))
 		return 0
 	}
 	// A name that already holds a value keeps it and is read back through

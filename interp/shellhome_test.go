@@ -67,6 +67,19 @@ func TestAShellSeedsAHomeTheEnvironmentDidNotGiveIt(t *testing.T) {
 			t.Errorf("HOME = %q (set %v), want the password entry — %s", got, ok, errs)
 		}
 	})
+	t.Run("and the seeded home is exported", func(t *testing.T) {
+		// Measured 2026-10-01 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`:
+		// `env | grep -c HOME` is 1, so a child sees the home the shell gave
+		// itself (#5332).
+		r, errs := homeRunner(t, func(s *Semantics) { s.StartupFillsAnAbsentHome = Yes })
+		r.SeedHomeDirectory()
+		var out strings.Builder
+		r.Stdout = &out
+		runHome(t, r, `/usr/bin/env`)
+		if !strings.Contains(out.String(), "HOME=/the/password/entry\n") {
+			t.Errorf("a child's environment was %q, want the seeded HOME in it — %s", out.String(), errs)
+		}
+	})
 	t.Run("the column that does not", func(t *testing.T) {
 		r, errs := homeRunner(t, func(s *Semantics) { s.StartupFillsAnAbsentHome = No })
 		r.SeedHomeDirectory()

@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Blair Hamilton
+# SPDX-License-Identifier: Apache-2.0
+#
+# compaudit [ dir ... ]
+#
+# The directories completion functions would be loaded from that are not
+# safe to load from: owned by someone other than root and the current user,
+# or writable by group or others.  zshcompsys(1) describes it as the check
+# compinit makes before it reads anything.
+#
+# Written from zshcompsys(1) and from what the installed shell answers, never
+# from its function files.  docs/spec/functions.md records the run.
+#
+# Measured on zsh 5.9.2:
+#
+#   * with nothing insecure it writes nothing and is 0;
+#   * otherwise `There are insecure directories:` goes to standard error and
+#     each directory, one to a line, to standard output, and it is 1.
+#
+# With operands it audits those directories rather than $fpath, which is the
+# form compinit itself uses.
+
+emulate -L zsh
+zmodload -F zsh/stat b:zstat 2>/dev/null
+
+local -a dirs insecure
+local dir
+integer uid mode
+if (( $# )); then
+	dirs=( "$@" )
+else
+	dirs=( $fpath )
+fi
+
+for dir in $dirs; do
+	[[ -d $dir ]] || continue
+	uid=$(zstat -L +uid -- $dir 2>/dev/null) || continue
+	mode=$(zstat -L +mode -- $dir 2>/dev/null) || continue
+	if (( uid != 0 && uid != EUID )) || (( mode & 8#022 )); then
+		insecure+=( $dir )
+	fi
+done
+
+(( $#insecure )) || return 0
+print -u2 -r -- "There are insecure directories:"
+print -rl -- $insecure
+return 1

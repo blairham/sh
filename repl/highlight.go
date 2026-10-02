@@ -55,6 +55,17 @@ type Highlight struct {
 	// chose its own ending could leave the rest of the line in a color, which
 	// is a line editor that gradually paints the screen.
 	Style string
+
+	// Point says Style is written at Start and nothing else: no run, and no
+	// reset of this package's after it. End is ignored.
+	//
+	// For a highlighter that decides every transition itself, which is the
+	// shape zsh's `region_highlight` has: what goes out where one region ends
+	// inside another depends on both, and a run with a fixed reset after it
+	// cannot say that. A highlighter answering in points owns the attributes
+	// it leaves on at the end of the line too — the reset rule above is the
+	// default, not a guarantee it overrides by accident.
+	Point bool
 }
 
 // Highlighter colors a line as it is typed.
@@ -99,6 +110,8 @@ const highlightReset = "\x1b[0m"
 type styleRun struct {
 	start, end int
 	on, off    string
+	// point is Highlight.Point: on is written at start and the run is empty.
+	point bool
 }
 
 // styled is the line as it goes to the terminal.
@@ -127,6 +140,15 @@ func (e *editor) styled() string {
 	var b []byte
 	at := 0
 	for _, r := range runs {
+		if r.point {
+			if r.start < at || r.start > len(line) || r.on == "" {
+				continue
+			}
+			b = append(b, line[at:r.start]...)
+			b = append(b, r.on...)
+			at = r.start
+			continue
+		}
 		if r.start < at || r.end <= r.start || r.end > len(line) || r.on == "" {
 			continue
 		}
@@ -136,7 +158,7 @@ func (e *editor) styled() string {
 		b = append(b, r.off...)
 		at = r.end
 	}
-	if at == 0 {
+	if len(b) == 0 {
 		// Nothing was applied, so nothing was copied.
 		return line
 	}
@@ -171,6 +193,10 @@ func (e *editor) styleRuns(line string) []styleRun {
 		return runs
 	}
 	for _, r := range e.highlighter.Highlight(line) {
+		if r.Point {
+			runs = append(runs, styleRun{start: r.Start, end: r.Start, on: r.Style, point: true})
+			continue
+		}
 		runs = append(runs, styleRun{start: r.Start, end: r.End, on: r.Style, off: highlightReset})
 	}
 	return runs

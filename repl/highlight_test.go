@@ -217,3 +217,21 @@ func TestAColoredLineReachesTheTerminalAndTheCursorStillLandsRight(t *testing.T)
 	}
 	s.end()
 }
+
+// A point is written where it says and nothing is written after it: the
+// highlighter that answers in points owns every transition, the end of the
+// line's included.
+func TestAPointHighlightIsWrittenWhereItSaysAndNothingAfter(t *testing.T) {
+	e := &editor{line: []rune("abcdefgh")}
+	e.highlighter = HighlighterFunc(func(string) []Highlight {
+		return []Highlight{
+			{Start: 2, Style: "<on>", Point: true},
+			{Start: 4, Style: "<off>", Point: true},
+			{Start: 8, Style: "<end>", Point: true},
+			{Start: 9, Style: "<past>", Point: true},
+		}
+	})
+	if got, want := e.styled(), "ab<on>cd<off>efgh<end>"; got != want {
+		t.Errorf("styled = %q, want %q", got, want)
+	}
+}

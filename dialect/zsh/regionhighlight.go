@@ -4,6 +4,7 @@
 package zsh
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -79,7 +80,8 @@ func ResetRegionHighlight(r *interp.Runner) {
 	r.SetArray(zleRegion, nil)
 }
 
-// RegionHighlights is what the store means, as runs repl can draw.
+// RegionHighlights is what the store means, as the codes repl writes between
+// the line's characters.
 //
 // The dialect's answer to driver.Shell.HighlightLine. The line comes in
 // because the offsets have to be converted against it: zsh counts characters
@@ -91,6 +93,10 @@ func ResetRegionHighlight(r *interp.Runner) {
 // plausible would put color under text the highlighter did not name, which is
 // worse than leaving it plain and is the kind of silent wrong answer the
 // editor has no way to report.
+//
+// The answer is points rather than runs — repl.Highlight.Point — because
+// where one region ends inside another, what goes out depends on both. See
+// regionTransition for the rule.
 func RegionHighlights(r *interp.Runner, line string) []repl.Highlight {
 	elems, _ := r.GetArray(zleRegion)
 	if len(elems) == 0 {
@@ -100,11 +106,32 @@ func RegionHighlights(r *interp.Runner, line string) []repl.Highlight {
 	// three small integer lookups after this, where converting per element
 	// would walk the line again for each.
 	starts := runeStarts(line)
-	out := make([]repl.Highlight, 0, len(elems))
+	var layers []regionLayer
 	for _, elem := range elems {
-		if run, ok := parseRegionElement(elem, starts); ok {
-			out = append(out, run)
+		if layer, ok := parseRegionElement(elem, len(starts)-1); ok {
+			layers = append(layers, layer)
 		}
+	}
+	if len(layers) == 0 {
+		return nil
+	}
+	var out []repl.Highlight
+	var before regionAttrs
+	var covering []int
+	for i := 0; i < len(starts); i++ {
+		var now []int
+		if i < len(starts)-1 {
+			for j, l := range layers {
+				if l.start <= i && i < l.end {
+					now = append(now, j)
+				}
+			}
+		}
+		after := regionWord(layers, now)
+		if codes := regionTransition(layers, covering, now, before, after); codes != "" {
+			out = append(out, repl.Highlight{Start: starts[i], Style: codes, Point: true})
+		}
+		before, covering = after, now
 	}
 	return out
 }
@@ -120,12 +147,28 @@ func runeStarts(line string) []int {
 	return append(out, len(line))
 }
 
-// parseRegionElement turns one element into a run, or reports that it is not
-// one this shell can draw.
-func parseRegionElement(elem string, starts []int) (repl.Highlight, bool) {
+// regionLayer is one element: the characters it covers and what it asks for.
+type regionLayer struct {
+	start, end int
+	attrs      regionAttrs
+}
+
+// regionAttrs is what a character is drawn with: three attributes, and a
+// foreground and background color held as the sequence that selects them.
+type regionAttrs struct {
+	bold, standout, underline bool
+	fg, bg                    string
+}
+
+// colored says a foreground or a background is set.
+func (a regionAttrs) colored() bool { return a.fg != "" || a.bg != "" }
+
+// parseRegionElement turns one element into a layer, or reports that it is
+// not one this shell can draw. chars is the length of the line in characters.
+func parseRegionElement(elem string, chars int) (regionLayer, bool) {
 	fields := strings.Fields(elem)
 	if len(fields) < 3 {
-		return repl.Highlight{}, false
+		return regionLayer{}, false
 	}
 	// This is also where a `P` element goes, in both of its spellings. The
 	// flag says the offsets count a PREDISPLAY, which this shell does not
@@ -140,45 +183,37 @@ func parseRegionElement(elem string, starts []int) (repl.Highlight, bool) {
 	start, err1 := strconv.Atoi(fields[0])
 	end, err2 := strconv.Atoi(fields[1])
 	if err1 != nil || err2 != nil {
-		return repl.Highlight{}, false
+		return regionLayer{}, false
 	}
 	// Out of the line's range is dropped rather than clamped, for the reason
 	// the doc comment gives: a clamp invents a region.
-	if start < 0 || end < start || end > len(starts)-1 {
-		return repl.Highlight{}, false
+	if start < 0 || end < start || end > chars {
+		return regionLayer{}, false
 	}
-	style := regionStyle(fields[2])
-	if style == "" {
-		return repl.Highlight{}, false
+	attrs, ok := regionSpec(fields[2])
+	if !ok {
+		return regionLayer{}, false
 	}
-	return repl.Highlight{Start: starts[start], End: starts[end], Style: style}, true
+	return regionLayer{start: start, end: end, attrs: attrs}, true
 }
 
-// regionStyle is the escape sequence one spec opens with, or empty for a spec
-// that paints nothing.
-//
-// Only the opening sequence: repl ends every run with a full reset of its own,
-// which is repl/highlight.go's stated design and not something to work around
-// from here. The spec section records what that costs and where it shows.
-//
-// The order is the shell's and not the spec's — attributes, then foreground,
-// then background, whatever order they were written in. Measured:
-// `fg=red,bold` goes out `ESC[1m` `ESC[31m`.
-func regionStyle(spec string) string {
-	var attrs, fg, bg string
+// regionSpec is what one spec asks for, and false for a spec that paints
+// nothing.
+func regionSpec(spec string) (regionAttrs, bool) {
+	var a regionAttrs
 	for _, part := range strings.Split(spec, ",") {
 		part = strings.TrimSpace(part)
 		switch {
 		case part == "bold":
-			attrs += "\x1b[1m"
+			a.bold = true
 		case part == "standout":
-			attrs += "\x1b[7m"
+			a.standout = true
 		case part == "underline":
-			attrs += "\x1b[4m"
+			a.underline = true
 		case strings.HasPrefix(part, "fg="):
-			fg = colorEscape(strings.TrimPrefix(part, "fg="), true)
+			a.fg = colorEscape(strings.TrimPrefix(part, "fg="), true)
 		case strings.HasPrefix(part, "bg="):
-			bg = colorEscape(strings.TrimPrefix(part, "bg="), false)
+			a.bg = colorEscape(strings.TrimPrefix(part, "bg="), false)
 		}
 		// Anything else contributes nothing, and that is the whole of what
 		// the rest have in common: `none`, which overrides a default rather
@@ -189,7 +224,141 @@ func regionStyle(spec string) string {
 		// staticcheck caught the third, and the `P` guard above is the same
 		// story. A branch that only falls through is not documentation.
 	}
-	return attrs + fg + bg
+	return a, a != regionAttrs{}
+}
+
+// regionWord is what a character covered by the given layers is drawn with.
+//
+// The layers apply in the array's order. One that sets a color **replaces**
+// everything under it, attributes included; one that sets only attributes
+// adds them to what is under it and keeps its colors. Measured 2026-10-02 on
+// zsh 5.9.2 through a pseudo-terminal, `standout` over 1–5 and `fg=2` over
+// 3–7: the overlap is drawn green and not reversed. The same pair the other
+// way round draws the overlap both.
+func regionWord(layers []regionLayer, covering []int) regionAttrs {
+	var w regionAttrs
+	for _, j := range covering {
+		l := layers[j].attrs
+		if l.colored() {
+			w = l
+			continue
+		}
+		w.bold = w.bold || l.bold
+		w.standout = w.standout || l.standout
+		w.underline = w.underline || l.underline
+	}
+	return w
+}
+
+// The sequences that end each attribute. Bold has no ending of its own and
+// is ended by ending everything, which zsh does without putting back what
+// that also ended — measured: `bold` over 1–5 and `underline` over 3–7 leave
+// the last two characters of the underline plain.
+const (
+	regionBoldOff      = "\x1b[0m"
+	regionStandoutOff  = "\x1b[27m"
+	regionUnderlineOff = "\x1b[24m"
+	regionFgOff        = "\x1b[39m"
+	regionBgOff        = "\x1b[49m"
+)
+
+// regionTransition is what goes out between two characters: was is the
+// layers covering the one before and what it was drawn with, now and after
+// the same for the one after.
+//
+// Fitted to 93 measured pairs of regions on zsh 5.9.2 through a
+// pseudo-terminal, 2026-10-02 — every pair of nine specs over 1–5 and 3–7 —
+// and then checked against 60 more drawn at random, two and three regions at
+// arbitrary offsets, which it reproduced byte for byte. The rule:
+//
+//   - **What is turned off** is everything an element that ends here asked
+//     for, whether or not it was showing, and anything that was showing and
+//     is not now. A color changing to another color is not turned off.
+//   - **Everything showing is then written again** if any of these holds:
+//     something turned off was showing and is wanted again; a color that was
+//     showing was turned off and something is still showing in its place or
+//     as an attribute; something is showing now that was not, or in another
+//     color; or an element starts here and the character is drawn
+//     differently from the one before.
+//
+// Written again means all of it, in a fixed order — bold, standout,
+// underline, foreground, background — which is the order the ending
+// sequences go out in too.
+func regionTransition(layers []regionLayer, was, now []int, before, after regionAttrs) string {
+	var off regionAttrs
+	for _, j := range was {
+		if !slices.Contains(now, j) {
+			l := layers[j].attrs
+			off.bold = off.bold || l.bold
+			off.standout = off.standout || l.standout
+			off.underline = off.underline || l.underline
+			if l.fg != "" {
+				off.fg = "off"
+			}
+			if l.bg != "" {
+				off.bg = "off"
+			}
+		}
+	}
+	off.bold = off.bold || (before.bold && !after.bold)
+	off.standout = off.standout || (before.standout && !after.standout)
+	off.underline = off.underline || (before.underline && !after.underline)
+	if before.fg != "" && after.fg == "" {
+		off.fg = "off"
+	}
+	if before.bg != "" && after.bg == "" {
+		off.bg = "off"
+	}
+	var b strings.Builder
+	for _, o := range []struct {
+		on  bool
+		seq string
+	}{
+		{off.bold, regionBoldOff},
+		{off.standout, regionStandoutOff},
+		{off.underline, regionUnderlineOff},
+		{off.fg != "", regionFgOff},
+		{off.bg != "", regionBgOff},
+	} {
+		if o.on {
+			b.WriteString(o.seq)
+		}
+	}
+	// A color turned off counts only where one was showing: an ending
+	// element's color that a later one had replaced puts nothing back.
+	// Attributes need no such test — one turned off while not showing and
+	// wanted now is showing now and not before, which the clause after them
+	// already answers.
+	shownFg, shownBg := off.fg != "" && before.fg != "", off.bg != "" && before.bg != ""
+	afterAttrs := after.bold || after.standout || after.underline
+	again := (off.bold && after.bold) || (off.standout && after.standout) ||
+		(off.underline && after.underline) ||
+		((shownFg || shownBg) && (afterAttrs || (shownFg && after.fg != "") || (shownBg && after.bg != ""))) ||
+		(after.bold && !before.bold) || (after.standout && !before.standout) ||
+		(after.underline && !before.underline) ||
+		(after.fg != "" && after.fg != before.fg) || (after.bg != "" && after.bg != before.bg)
+	if !again && after != before && after != (regionAttrs{}) {
+		for _, j := range now {
+			if !slices.Contains(was, j) {
+				again = true
+				break
+			}
+		}
+	}
+	if again {
+		if after.bold {
+			b.WriteString("\x1b[1m")
+		}
+		if after.standout {
+			b.WriteString("\x1b[7m")
+		}
+		if after.underline {
+			b.WriteString("\x1b[4m")
+		}
+		b.WriteString(after.fg)
+		b.WriteString(after.bg)
+	}
+	return b.String()
 }
 
 // regionColorNames is the eight zsh sets by name, in the order the terminal

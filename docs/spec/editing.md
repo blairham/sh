@@ -841,18 +841,43 @@ Three things the table settles that the manual leaves open:
 `none` and `fg=default` paint nothing at all, so an element carrying either
 is an element with no effect rather than one that resets what is under it.
 
+### Where regions overlap
+
+The table above is one region alone. Where regions overlap, what is drawn
+depends on all of them, and what is written where one ends depends on what
+the others are doing. Measured 2026-10-02 on zsh 5.9.2 through a
+pseudo-terminal with the editor's own terminal operations blanked by
+`zle -T tc`, over every pair of nine specs at 1–5 and 3–7 and then sixty
+arrays of two and three regions at random offsets:
+
+- **A character is drawn with the regions over it applied in the array's
+  order.** A region that sets a color replaces everything under it,
+  attributes included; one that sets only attributes adds them and keeps the
+  colors under it. `standout` then `fg=2` draws the overlap green and not
+  reversed; `fg=2` then `standout` draws it both.
+- **Where a region ends, everything it asked for is turned off**, whether or
+  not it was showing — `standout` under a later color still writes
+  `ESC[27m` where it ends. Anything that was showing and is not now is turned
+  off too. A color changing to another color is not turned off.
+- **Bold is turned off with `ESC[0m`**, which ends everything, and nothing
+  the reset also ended is put back: `bold` at 1–5 under `underline` at 3–7
+  leaves the last two underlined characters plain.
+- **Then everything showing is written again**, all of it, when something
+  turned off was showing and is wanted again; when a color that was showing
+  was turned off and something still shows; when something shows that did
+  not, or in another color; or when a region starts and the character is
+  drawn differently from the one before. The order is bold, standout,
+  underline, foreground, background — the same order the endings go out in.
+
+`dialect/zsh/testdata/regiontransitions.json` holds all 153 measured rows
+and the dialect's test draws every one of them.
+
 ### What this shell does with it
 
-The closing sequences above are **not** reproduced. `repl` ends every run with
-a full reset by its own documented design — see `repl/highlight.go` — and a
-run that chose its own ending is the thing that file refuses. So only the
-opening sequence is derived from the spec, and what follows the run is
-`repl`'s. On a line where one run ends where the next begins the difference is
-invisible; on one where a run ends inside another's span it is not, and that
-is a shape `region_highlight` can express and this does not.
-
-The offsets are converted from characters to bytes on the way in, because
-`repl.Highlight` counts bytes.
+The dialect computes every transition itself and hands the editor the codes
+to write between characters — `repl.Highlight.Point` — rather than runs the
+editor would end with a reset of its own. The offsets are converted from
+characters to bytes on the way in, because `repl.Highlight` counts bytes.
 
 ## The editor without a terminal — one dialect
 

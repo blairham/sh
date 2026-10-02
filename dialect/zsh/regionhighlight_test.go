@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
 
@@ -23,6 +24,24 @@ import (
 // esc makes an escape sequence readable in a failure message.
 func esc(s string) string { return strings.ReplaceAll(s, "\x1b", "ESC") }
 
+// drawRegions is the line with the codes RegionHighlights asks for written
+// where it asks, which is what the editor draws.
+func drawRegions(t *testing.T, r *interp.Runner, line string) string {
+	t.Helper()
+	var b strings.Builder
+	at := 0
+	for _, h := range zsh.RegionHighlights(r, line) {
+		if !h.Point || h.Start < at || h.Start > len(line) {
+			t.Fatalf("not a point in order on the line: %+v", h)
+		}
+		b.WriteString(line[at:h.Start])
+		b.WriteString(h.Style)
+		at = h.Start
+	}
+	b.WriteString(line[at:])
+	return b.String()
+}
+
 // TestAWidgetColorsPartOfTheLine is the feature end to end: a widget writes
 // the parameter, and what the editor draws carries the run.
 //
@@ -37,19 +56,10 @@ func TestAWidgetColorsPartOfTheLine(t *testing.T) {
 	if _, ok, _ := runWidget(t, r, out, "paint", in); !ok {
 		t.Fatal("the widget did not run")
 	}
-	runs := zsh.RegionHighlights(r, "AAAABBBB")
-	if len(runs) != 2 {
-		t.Fatalf("got %d runs, want 2: %+v", len(runs), runs)
-	}
-	for i, want := range []repl.Highlight{
-		{Start: 0, End: 4, Style: "\x1b[31m"},
-		{Start: 4, End: 8, Style: "\x1b[1m\x1b[32m"},
-	} {
-		if runs[i] != want {
-			t.Errorf("run %d: got {%d %d %s}, want {%d %d %s}",
-				i, runs[i].Start, runs[i].End, esc(runs[i].Style),
-				want.Start, want.End, esc(want.Style))
-		}
+	// Measured on zsh 5.9.2 through a pseudo-terminal, 2026-10-02.
+	want := "\x1b[31mAAAA\x1b[39m\x1b[1m\x1b[32mBBBB\x1b[0m\x1b[39m"
+	if got := drawRegions(t, r, "AAAABBBB"); got != want {
+		t.Errorf("drawn %s, want %s", esc(got), esc(want))
 	}
 }
 
@@ -70,13 +80,10 @@ func TestTheOffsetsAreCharactersAndTheRunsAreBytes(t *testing.T) {
 	if _, ok, _ := runWidget(t, r, out, "paint", repl.Line{Buffer: line}); !ok {
 		t.Fatal("the widget did not run")
 	}
-	runs := zsh.RegionHighlights(r, line)
-	if len(runs) != 1 {
-		t.Fatalf("got %d runs, want 1", len(runs))
-	}
 	// h(1) é(2) l(1) = 4 bytes for 3 characters.
-	if runs[0].Start != 0 || runs[0].End != 4 {
-		t.Errorf("got bytes %d..%d, want 0..4", runs[0].Start, runs[0].End)
+	want := "\x1b[31mhél\x1b[39mlo wörld"
+	if got := drawRegions(t, r, line); got != want {
+		t.Errorf("drawn %s, want %s", esc(got), esc(want))
 	}
 }
 
@@ -149,8 +156,8 @@ func TestWhatASpecPaints(t *testing.T) {
 				t.Fatal("the widget did not run")
 			}
 			runs := zsh.RegionHighlights(r, "abcdef")
-			if len(runs) != 1 {
-				t.Fatalf("got %d runs, want 1", len(runs))
+			if len(runs) != 2 || runs[0].Start != 0 || runs[1].Start != 3 {
+				t.Fatalf("got %+v, want an opening at 0 and an ending at 3", runs)
 			}
 			if runs[0].Style != c.want {
 				t.Errorf("got %s, want %s", esc(runs[0].Style), esc(c.want))
@@ -169,7 +176,7 @@ func TestWhatASpecPaints(t *testing.T) {
 // the first; one that never cleared it passes the first and fails the second.
 func TestItLivesAsLongAsTheLineDoes(t *testing.T) {
 	r, out := zleRunner(t, `
-		add() { region_highlight+=("0 3 fg=red"); }
+		add() { region_highlight+=("0 3 fg=$(( 1 + $#region_highlight ))"); }
 		zle -N add
 	`)
 	for i := 1; i <= 2; i++ {
@@ -177,8 +184,10 @@ func TestItLivesAsLongAsTheLineDoes(t *testing.T) {
 			t.Fatalf("widget %d did not run", i)
 		}
 	}
-	if runs := zsh.RegionHighlights(r, "abcdef"); len(runs) != 2 {
-		t.Fatalf("across two widgets on one line: got %d runs, want 2", len(runs))
+	// The first widget leaves `fg=1` and the second adds `fg=2` over it, which
+	// draws green: only the second element being there can do that.
+	if got, want := drawRegions(t, r, "abcdef"), "\x1b[32mabc\x1b[39mdef"; got != want {
+		t.Fatalf("across two widgets on one line: drawn %s, want %s", esc(got), esc(want))
 	}
 	zsh.ResetRegionHighlight(r)
 	if runs := zsh.RegionHighlights(r, "abcdef"); len(runs) != 0 {

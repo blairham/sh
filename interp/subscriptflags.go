@@ -504,7 +504,15 @@ func (r *Runner) renderSubscript(w *syntax.Word, keepEscape func(string) bool) s
 // It is not keyKeepsEscape, and the two parting is measured: a key drops
 // the backslash before `{` and `}` as well and a search keeps it. The two
 // share only the two characters a pattern never reads.
-func searchKeepsEscape(c string) bool { return c != "$" && c != "`" }
+//
+// **Nor before a backslash**, which is the escape taken off and the backslash
+// left — and then the matcher reads that one: measured 2026-10-02 on the same
+// shell over `a=('a\b' ab 'a?' '\' '?')`, `$a[(i)a\\b]` is 1, `a\\?` is
+// 3, `\\\\` is 4 and `\\?` is 5, where keeping it made each a literal
+// backslash too many (#5152). A backslash that arrives in a *value* is the
+// matcher's from the start and is unaffected: `p='a\?'; $a[(i)$p]` is 3 in
+// both.
+func searchKeepsEscape(c string) bool { return c != "$" && c != "`" && c != `\` }
 
 // searchStart is the 0-based element the walk begins at, and whether that is
 // an element at all.

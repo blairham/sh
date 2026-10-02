@@ -7563,6 +7563,49 @@ func (l *Lexer) bareSubscript(name string, q Quoting) (Span, bool) {
 				sawSub = true
 			}
 		}
+		if i >= subEnd && c == '$' && i+1 < len(l.src) && l.src[i+1] == '{' {
+			// A braced expansion suspends the word-end test the same way,
+			// because its flag group opens with the `(` that ends a word
+			// everywhere else. Measured 2026-10-02 on zsh 5.9.2, `s=abc`:
+			// `$s[(i)${(L)x}b]` is 2 and `x='*'; $s[(i)${(q)x}]` is the
+			// position of a literal star, where this read the brackets as
+			// text and globbed the word (#5152).
+			//
+			// Stepped over whole, its brackets with it: the expansion is
+			// one unit and closes its own, so `$s[(i)${(q)s[(r)\]]}]` is
+			// one subscript holding one expansion, measured the same day.
+			if end := bracedExpansionEnd(l.src[i:]); end > 0 {
+				i += end - 1
+				continue
+			}
+		}
+		if c == '\\' && i >= subEnd && i+1 < len(l.src) && l.src[i+1] != '\n' {
+			// A backslash keeps the character after it from counting: the
+			// `\]` and `\[` of `$s[(r)\],(R)\[]` are pattern text, measured
+			// on zsh 5.9.2 (#5152).
+			i++
+			continue
+		}
+		if c == ',' && depth == 1 && i >= subEnd && l.dialect.ArraySubscriptFlags {
+			// The second half of a range may open with a flag group of its
+			// own: `$s[(r)a,(R)b]`, measured on zsh 5.9.2 (#5152). Stepped
+			// over as the first one is.
+			if _, rest, isGroup := scanSubscriptFlags(l.src[i+1:]); isGroup {
+				past = len(l.src) - len(rest)
+				continue
+			}
+		}
+		if c == '[' && depth > 0 && i >= subEnd && l.dialect.ArraySubscriptFlags {
+			// A subscript inside this one opens its own flag group, which is
+			// stepped over as the outer one is: `$s[(i)$s[(r)\*]]` is the
+			// index of the element the inner search found, measured on zsh
+			// 5.9.2 (#5152).
+			if _, rest, isGroup := scanSubscriptFlags(l.src[i+1:]); isGroup {
+				depth++
+				past = len(l.src) - len(rest)
+				continue
+			}
+		}
 		switch {
 		case c == '[':
 			depth++
@@ -7589,6 +7632,32 @@ func (l *Lexer) bareSubscript(name string, q Quoting) (Span, bool) {
 		}
 	}
 	return l.keptBareSubscript(q, sawSub)
+}
+
+// bracedExpansionEnd is the length of the `${…}` that s begins with, quotes
+// and nested braces and substitutions stepped over, or 0 where it does not
+// close.
+func bracedExpansionEnd(s string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; c {
+		case '\\':
+			i++
+		case '\'', '"':
+			for i++; i < len(s) && s[i] != c; i++ {
+				if c == '"' && s[i] == '\\' {
+					i++
+				}
+			}
+		case '{':
+			depth++
+		case '}':
+			if depth--; depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return 0
 }
 
 // keptBareSubscript is what the brackets are once the scan above has given
@@ -7672,6 +7741,26 @@ func bareSubscriptClose(s string, d Dialect, ends func(byte) bool) int {
 			sub := NewLexer(s[i:], d)
 			if sub.skipSubstitution() && sub.Err() == nil {
 				i += sub.off - 1
+				continue
+			}
+		}
+		if c == '$' && i+1 < len(s) && s[i+1] == '{' {
+			// The same two rules Lexer.bareSubscript reads the subscript
+			// by — a braced expansion and a backslash — so the two scans
+			// agree where it closes (#5152).
+			if end := bracedExpansionEnd(s[i:]); end > 0 {
+				i += end - 1
+				continue
+			}
+		}
+		if c == '\\' && i+1 < len(s) && s[i+1] != '\n' {
+			i++
+			continue
+		}
+		if c == '[' && d.ArraySubscriptFlags {
+			if _, rest, isGroup := scanSubscriptFlags(s[i+1:]); isGroup {
+				depth++
+				i = len(s) - len(rest) - 1
 				continue
 			}
 		}

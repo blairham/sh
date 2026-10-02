@@ -490,7 +490,11 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// the match is about to apply: bash traces `[[ ab =~ ab ]]` for
 		// `[[ ab =~ "a"b ]]`, so the line says what the words came to rather
 		// than how the matcher was told to read them.
-		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(text))
+		if spelled := r.diag().TraceRegexMatch; spelled != "" {
+			r.traceConditionPrimary(r.wordAsWritten(x.X), spelled, r.wordAsWritten(x.Y))
+		} else {
+			r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.traceCondOperand(text))
+		}
 		pat := text
 		// bash treats a quoted portion as a literal string; ksh93 and zsh
 		// keep it an expression, so quoting a regex is unportable in either
@@ -1204,4 +1208,17 @@ var errCondOperandFailed = errors.New("condition operand did not expand")
 // and made the comparison hold (#3556).
 func (r *Runner) condOperandDidNotExpand() bool {
 	return r.failedHeading()
+}
+
+// wordAsWritten is a word's text as the program spelled it: the slice of the
+// running source it was read from, and the printer's rendering of it where
+// the source is not in hand or the word did not come from it. The printer is
+// the fallback and not the answer, because it re-escapes what the script
+// left bare — `^a$` comes back as `^a\$`.
+func (r *Runner) wordAsWritten(w *syntax.Word) string {
+	text, _ := r.textInForce()
+	if from, to := int(w.Start.Offset), int(w.Stop.Offset); from >= 0 && from < to && to <= len(text) {
+		return text[from:to]
+	}
+	return syntax.PrintWord(w)
 }

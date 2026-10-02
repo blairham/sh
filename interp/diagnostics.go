@@ -9151,6 +9151,16 @@ type Diagnostics struct {
 	// zsh quote in both places. Zero is QuoteNever, bash's answer and the
 	// substrate's own.
 	TraceConditionQuoting TraceQuoting
+	// TraceRegexMatch is how a traced `[[ x =~ y ]]` spells the operator,
+	// where a dialect spells it otherwise; and where it does, both operands
+	// are written as the script wrote them rather than as they expanded.
+	// Measured 2026-10-01 and 2026-10-02 on zsh 5.9.2 from a script file
+	// under `set -x`: `[[ a =~ "f o" ]]` traces `[[ a -regex-match "f o" ]]`,
+	// `[[ a =~ x\ y ]]` keeps its backslash, and `v="p q"; [[ $v =~ $v ]]`
+	// traces `[[ $v -regex-match $v ]]`, where `==` beside it traces the
+	// values. Empty, the operator is `=~` and the operands are values, which
+	// is bash 5.3's reading (#5347).
+	TraceRegexMatch string
 	// TracePatternEscapesLiterals writes a traced pattern — a `[[ … ]]`
 	// pattern operand and a `case` arm alike — with the characters that are
 	// text rather than pattern marked by a backslash, where false writes the

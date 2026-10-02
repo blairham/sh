@@ -137,7 +137,10 @@ type ParameterAttributes struct {
 // `${+parameters[nosuch]}` be 0 without the dialect keeping a second list of
 // what exists.
 func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
-	if name == "" || r.removedForDescription(name) {
+	if name == "" || (r.removedForDescription(name) && !r.declaredBare[name]) {
+		// Removed, unless what removed it was a declaration hiding an outer
+		// value behind a binding of its own that holds nothing — which is a
+		// name the shell has, and is described below (#5157).
 		return ParameterAttributes{}, false
 	}
 	a := ParameterAttributes{
@@ -221,7 +224,14 @@ func (r *Runner) ParameterAttributes(name string) (ParameterAttributes, bool) {
 		}
 		a.ZeroFilled = w.zeroFillLetter()
 	}
-	if !r.parameterIsProvided(name) && !r.parameterExists(name) {
+	// A name a declaration brought into being holding nothing is described
+	// all the same, which is measured: on zsh 5.9.2 under `setopt
+	// typesettounset`, `f() { local var; print ${(t)var}; }` is `scalar-local`
+	// and `typeset top; print ${(t)top}` is `scalar`, with `${+var}` at 0 in
+	// both. An `unset` of the local is not that state — `local v; unset v`
+	// leaves `${(t)v}` empty — and neither is a POSIX_BUILTINS `readonly RO`,
+	// which leaves no record at all (#5157).
+	if !r.parameterIsProvided(name) && !r.parameterExists(name) && !r.declaredBare[name] {
 		return ParameterAttributes{}, false
 	}
 	return a, true

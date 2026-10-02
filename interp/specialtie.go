@@ -34,6 +34,20 @@ func (r *Runner) refuseSpecialTie(scalar, array, sep string, sepWritten bool) bo
 			continue
 		}
 		if t.scalar == scalar && t.array == array {
+			// **A half the scope hid is no longer the partner.** `typeset -h
+			// path` in a function makes a plain local of that name, and the
+			// pair then answers as though a stranger had been named beside
+			// it: `(){ typeset -h path; typeset -T PATH path=(x) }` is `PATH
+			// special parameter can only be tied to special parameter path`,
+			// and hiding `PATH` instead names `path`. Measured the same day.
+			if r.tieShadowedInItsScope(t) {
+				switch {
+				case r.shadowIsHidden(t.array):
+					return r.refuseSpecialPartner(t.scalar, t.array)
+				case r.shadowIsHidden(t.scalar):
+					return r.refuseSpecialPartner(t.array, t.scalar)
+				}
+			}
 			if sepWritten && sep != t.sep {
 				r.diagf("%s\n", Wording(r.diag().TieSpecialJoinCharacterFixed,
 					"cannot change the join character of special tied parameters"))
@@ -46,10 +60,16 @@ func (r *Runner) refuseSpecialTie(scalar, array, sep string, sepWritten bool) bo
 		if name == t.array {
 			partner = t.scalar
 		}
-		r.diagf("%s\n", Wording(r.diag().TieSpecialToItsPartnerOnly,
-			"%s special parameter can only be tied to special parameter %s", name, partner))
-		r.status = 1
-		return true
+		return r.refuseSpecialPartner(name, partner)
 	}
 	return false
+}
+
+// refuseSpecialPartner says that name, a half of one of the shell's own
+// pairs, can only be tied to partner, and refuses.
+func (r *Runner) refuseSpecialPartner(name, partner string) bool {
+	r.diagf("%s\n", Wording(r.diag().TieSpecialToItsPartnerOnly,
+		"%s special parameter can only be tied to special parameter %s", name, partner))
+	r.status = 1
+	return true
 }

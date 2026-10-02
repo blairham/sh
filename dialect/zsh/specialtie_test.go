@@ -16,6 +16,9 @@ func TestTheShellsOwnTiedPairsCannotBeRetied(t *testing.T) {
 		{"typeset -T path FOO; print $?", "zsh:typeset:1: path special parameter can only be tied to special parameter PATH\n1\n"},
 		{"typeset -T 1 manpath; print $?", "zsh:typeset:1: manpath special parameter can only be tied to special parameter MANPATH\n1\n"},
 		{"typeset -T PATH path +; print $?", "zsh:typeset:1: cannot change the join character of special tied parameters\n1\n"},
+		// A half the function hid is a stranger to its partner.
+		{"(){ typeset -h path; typeset -T PATH path=(x) }; print $?", "(anon):typeset: PATH special parameter can only be tied to special parameter path\n1\n"},
+		{"(){ typeset -h PATH; typeset -T PATH path=(x) }; print $?", "(anon):typeset: path special parameter can only be tied to special parameter PATH\n1\n"},
 		// The controls: the pair itself, with and without its own separator.
 		{"typeset -T MANPATH manpath; print $?", "0\n"},
 		{"typeset -T PATH path :; print $?", "0\n"},

@@ -195,7 +195,12 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// the one death. Only a body that signaled itself — which is
 		// `$BASHPID` and `$sysparams[pid]`, the two ways a script can name it
 		// (see selfkillbody.go) — reaches this.
-		if sub.diedOfItsOwnSignal() {
+		//
+		// Not a body killed as a background job, which is a job that ended
+		// and is reported as one, when the shell next reports its jobs — not
+		// a sentence the parentheses write the moment they die. See
+		// bodyinbox.go.
+		if sub.diedOfItsOwnSignal() && !sub.diedAsAJob {
 			// The group the body leads is its process id as far as anything
 			// that asked is concerned, and asking is how the script got the
 			// number it signaled — so it is already started and this starts

@@ -1082,6 +1082,15 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		// And what the shell aimed at this body as a background job, which
 		// is the same: the body's signal, answered by the body's handler.
 		// See bodyinbox.go.
+		if r.inbox != nil {
+			// A signal that ends the body, before anything it had queued:
+			// a process killed by one runs nothing more. See bodyinbox.go.
+			if name, sig := r.inbox.death(); sig != 0 {
+				r.diedAsAJob = true
+				r.signalDeath(name, sig)
+				return
+			}
+		}
 		pending := r.takeSelfPending()
 		if r.inbox != nil {
 			pending = append(pending, r.inbox.take()...)

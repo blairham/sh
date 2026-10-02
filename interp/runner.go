@@ -4274,6 +4274,14 @@ type Runner struct {
 	// leaves a signal it aimed at the job, for the body's own traps. Nil
 	// everywhere else, a subshell of the body included. See bodyinbox.go.
 	inbox *bodyInbox
+	// diedAsAJob says the signal this runner died of was aimed at it as a
+	// background job, which the job's own notice reports rather than the
+	// parentheses that hold it. See bodyinbox.go.
+	diedAsAJob bool
+	// runningSimple is the simple command this runner is running, for a
+	// background body that has to know whether it is one a fork would have
+	// exec'd. See bodyInbox.reachedATail.
+	runningSimple *syntax.SimpleCmd
 	// inboxGoesToTheParentheses says this body's statement is a `( … )` that
 	// is the fork itself, so the inbox belongs to the subshell the
 	// parentheses make rather than to this runner. See
@@ -7519,6 +7527,11 @@ func (r *Runner) unsupported(what string) error {
 // element of has already made — or withheld — its DEBUG firing, so there is
 // none to make here; see Semantics.DebugTrapPipelines and Runner.elementFired.
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
+	if r.inbox != nil {
+		saved := r.runningSimple
+		r.runningSimple = c
+		defer func() { r.runningSimple = saved }()
+	}
 	if r.timedElem != nil {
 		saved := r.timedElemDirect
 		r.timedElemDirect = r.timedElem.node == syntax.Command(c)
@@ -9482,6 +9495,9 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	r.execSerial = r.stmtSerial
+	if r.inbox != nil {
+		r.inbox.reachedATail(r.runningSimple, r.exitTrap != nil)
+	}
 	if r.timedElemDirect {
 		r.timedElem.forked = true
 	}
@@ -9758,6 +9774,19 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 // plain os/exec wait it has always been, and nothing moves.
 func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 	if !r.monitor || r.WaitForCommand == nil || r.bg == nil {
+		if r.inbox != nil {
+			// A body that can be killed while it waits, and then stops
+			// waiting and leaves the program running. See bodyinbox.go.
+			done := make(chan error, 1)
+			go func() { done <- cmd.Wait() }()
+			select {
+			case err := <-done:
+				return r.backgroundExitStatus(err)
+			case <-r.inbox.died:
+				_, sig := r.inbox.death()
+				return 128 + int(sig)
+			}
+		}
 		return r.backgroundExitStatus(cmd.Wait())
 	}
 	pid := cmd.Process.Pid

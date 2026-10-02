@@ -78,14 +78,9 @@ const (
 	// `trap` use.
 	ListingQuoteAlwaysDouble
 	// ListingQuoteWhenNeededPlain leaves a plain value bare and single-quotes
-	// everything else, reaching for `$'...'` never: zsh's `trap`.
-	//
-	// zsh arrives at that output a different way — it parses the action when
-	// the trap is set, refuses one it cannot parse, and lists the parse back
-	// rather than the text it was given, so `a<tab>b` lists as `a b`. For an
-	// action that is an ordinary command the two agree, which is every
-	// action in the corpus. Where they do not, this is the closer of the two
-	// answers available, and re-printing the parse is its own question.
+	// everything else, reaching for `$'...'` never: the key quoting zsh's
+	// `typeset -p` uses. It was zsh's `trap` style too until #5409 found the
+	// difference it stood for was the action's parse being written back.
 	ListingQuoteWhenNeededPlain
 )
 

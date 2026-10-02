@@ -1197,6 +1197,9 @@ func Semantics() interp.Semantics {
 	// `ZSH_NAME` is the name the shell was invoked as. See
 	// Semantics.InvocationNameParameter (#5336).
 	s.InvocationNameParameter = "ZSH_NAME"
+	// A trap's action is listed from its parse. See
+	// Semantics.TrapActionListedFromItsParse (#5409).
+	s.TrapActionListedFromItsParse = interp.Yes
 	s.ScriptSearchOptionName = "pathscript"
 	// And sh and ksh emulation start with it on (#5383).
 	s.ScriptSearchUnderEmulation = "sh ksh"
@@ -1650,7 +1653,7 @@ func Semantics() interp.Semantics {
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededRuns
 	s.AliasListingQuotesTheName = interp.Yes
-	s.TrapQuoting = interp.ListingQuoteWhenNeededPlain
+	s.TrapQuoting = interp.ListingQuoteWhenNeededEscaped
 	// `typeset -p` writes `typeset v=1`, an exported scalar as `export e=E`
 	// — values in the alias style, keys in the trap one.
 	s.DeclareListing = interp.DeclareListingExportSpelled

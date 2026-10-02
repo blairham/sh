@@ -1885,6 +1885,10 @@ func Semantics() interp.Semantics {
 	// A bare `trap` inside the running EXIT trap lists it (nothing here,
 	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
 	s.ExitTrapListedWhileItRuns = interp.No
+	// A trap's action is listed as it was written: measured 2026-10-02 on
+	// BusyBox v1.37.0 in the pinned alpine image, `trap 'echo E;   trap' USR1; trap` keeps the three blanks.
+	// See Semantics.TrapActionListedFromItsParse.
+	s.TrapActionListedFromItsParse = interp.No
 	s.ExecTakesTheLoginLetter = interp.No
 	s.ExecTakesTheEmptyEnvironmentLetter = interp.No
 	s.ExecLoginPrefixesTheGivenName = interp.No

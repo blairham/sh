@@ -13648,10 +13648,8 @@ type Semantics struct {
 	// it never answers this field. Re-measured 2026-09-12: a bare `set`
 	// writes `Q='a'"'"'b'` there (#2060).
 	//
-	// unexhibited ListingQuoteWhenNeededPlain: TrapQuoting holds it, for
-	// zsh. zsh's `typeset -p` reaches for `$'...'` where its `trap`
-	// listing never does, which is why the two are separate fields
-	// (#2060).
+	// unexhibited ListingQuoteWhenNeededPlain: no field holds it; it is
+	// the key quoting zsh's `typeset -p` uses, reached directly (#5409).
 	DeclareValueQuoting ListingQuotingStyle
 
 	// ListedHashIsBareAfterANonName leaves a `#` in a listed value
@@ -16240,9 +16238,8 @@ type Semantics struct {
 	// for bash's `declare -p`, which is not the style its own `set`
 	// listing uses (#2060).
 	//
-	// unexhibited ListingQuoteWhenNeededPlain: TrapQuoting holds it, for
-	// zsh's `trap`. The bare `set` in zsh 5.9.2 reaches for the escaped
-	// style instead, measured with the same probe (#2060).
+	// unexhibited ListingQuoteWhenNeededPlain: no field holds it; it is
+	// the key quoting zsh's `typeset -p` uses, reached directly (#5409).
 	SetListingQuoting ListingQuotingStyle
 
 	// SelectLayout is how `select` draws its menu. Three engines rather than
@@ -16584,10 +16581,8 @@ type Semantics struct {
 	// 5.9.2, `al='echo a'"'"'b'` in dash and `al=$'echo a\'b'` in ksh93u+
 	// (#2060).
 	//
-	// unexhibited ListingQuoteWhenNeededPlain: TrapQuoting holds it, for
-	// zsh, whose trap listing never reaches for `$'...'` where its alias
-	// listing does — the paragraph on TrapQuoting is the measurement
-	// (#2060).
+	// unexhibited ListingQuoteWhenNeededPlain: no field holds it; it is
+	// the key quoting zsh's `typeset -p` uses, reached directly (#5409).
 	AliasQuoting ListingQuotingStyle
 
 	// AliasListingQuotesTheName spells an alias's **name** the way
@@ -16621,14 +16616,19 @@ type Semantics struct {
 	AliasListingQuotesTheName Answer
 
 	// TrapQuoting is that same question asked of `trap`, and it is a
-	// separate field because one dialect answers the two differently: zsh
-	// writes an alias holding a tab as `$'a\tb'` and a trap holding one as
-	// a plainly quoted `'a<tab>b'`.
+	// separate field because the dialects do not all answer the two alike.
 	//
-	// unexhibited ListingQuoteWhenNeededEscaped: AliasQuoting and
-	// DeclareValueQuoting hold it, for zsh, which is the split this field
-	// exists to record: the same shell writes an alias holding a tab as
-	// `$'a\tb'` and a trap holding one plainly (#2060).
+	// zsh's was read as a split of its own until #5409: a trap holding a
+	// tab listed as a plainly quoted `a b`, which is the *parse* written
+	// back — the unquoted tab is a blank between two words — and not a
+	// quoting style. Once the action is listed from its parse (see
+	// TrapActionListedFromItsParse), the quoting is the escaped style its
+	// alias listing has: measured 2026-10-02 on zsh 5.9.2, `print "it's"`
+	// lists as `'print "it'\''s"'` and `print 'a<tab>b'` as `$'print
+	// \'a\tb\''`.
+	//
+	// unexhibited ListingQuoteWhenNeededPlain: no field holds it; it is
+	// the key quoting zsh's `typeset -p` uses, reached directly.
 	//
 	// unexhibited ListingQuoteAlwaysDouble: DeclareValueQuoting holds it,
 	// for bash's `declare -p`. bash's own `trap -p` uses the escaped
@@ -25985,6 +25985,13 @@ type Semantics struct {
 	// varies the argv[0] of. Pinned by TestZshNameIsTheInvocationsName in
 	// cmd/zsh.
 	InvocationNameParameter string
+	// TrapActionListedFromItsParse lists a trap's action written back from
+	// its parse, in the function listing's arrangement, rather than as the
+	// script wrote it. Measured 2026-10-02 on zsh 5.9.2: `trap 'print E;
+	// trap' EXIT; trap` writes `trap -- $'print E\ntrap' EXIT`; bash 5.3.20,
+	// ksh93u+, dash and BusyBox ash list the text as written, which is the
+	// zero value (#5409).
+	TrapActionListedFromItsParse Answer
 
 	// ExecTakesTheLoginLetter is `exec -l`, which puts a `-` on the front of
 	// the argv[0] the replacement sees — the mark `login` and every terminal

@@ -513,6 +513,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// The element's externals bill its own slot, wherever inside
 			// it they run — the clone hands the pointer down.
 			sub.elemCPU = &timing.elems[i].cpu
+			// A copy of the shell is a process of its own in the shell
+			// this layout was measured from, whatever it runs.
+			timing.elems[i].forked = true
 		}
 		subs[i] = sub
 	}
@@ -623,7 +626,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// element upstream writing into one nothing will ever read.
 		func() {
 			savedIn, savedOut, savedErr := r.Stdin, r.Stdout, r.Stderr
-			savedCPU := r.elemCPU
+			savedCPU, savedElem := r.elemCPU, r.timedElem
 			savedShellIn := r.shellStdin
 			defer func() {
 				r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr
@@ -631,7 +634,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				// that ran no redirection list at all would otherwise leave
 				// the reading end for whatever the shell does next.
 				r.pipeMultio = pipeAsAMultioTarget{}
-				r.elemCPU = savedCPU
+				r.elemCPU, r.timedElem = savedCPU, savedElem
 				// Put back with the streams, and for a sharper reason than
 				// tidiness: this element runs on the shell itself, so a
 				// record left behind would outlive the pipeline and tell
@@ -652,7 +655,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			}
 			r.Stdout, r.Stderr = sharedOut, sharedErr
 			if timing != nil {
-				r.elemCPU = &timing.elems[i].cpu
+				r.elemCPU, r.timedElem = &timing.elems[i].cpu, &timing.elems[i]
 			}
 			if skip != nil && skip[i] {
 				// Refused by a DEBUG action, like any other element — and

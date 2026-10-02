@@ -64,15 +64,13 @@ const (
 // A mutex rather than a pair of atomics because a process substitution or a
 // nested pipeline inside the element can finish on its own goroutine.
 type cpuAccum struct {
-	mu          sync.Mutex
-	user, sys   time.Duration
-	sawExternal bool
+	mu        sync.Mutex
+	user, sys time.Duration
 }
 
 func (a *cpuAccum) add(user, sys time.Duration) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.sawExternal = true
 	a.user += user
 	a.sys += sys
 }
@@ -87,6 +85,19 @@ type elemTiming struct {
 	// the pipeline has been waited for, so it needs no lock.
 	wall time.Duration
 	cpu  cpuAccum
+	// node is the element itself, which is how the dispatch tells the
+	// element's own command from one run somewhere inside it.
+	node syntax.Command
+	// forked says the element ran as a process of its own, which is what
+	// earns it a line: one in a copy of the shell, a `( … )`, or a simple
+	// command that went to the filesystem for its program. Measured
+	// 2026-10-02 on zsh 5.9.2 with `TIMEFMT='%J'`: `time (:)`, `time : | :`
+	// (the first `:` alone), `time nosuchcmd` and `time command sleep 0.01`
+	// each write a line, and `time { sleep 0.01 }`, `time f` with a function
+	// that sleeps, `time eval sleep 0.01` and `time if true; then sleep 0.01;
+	// fi` write none — the sleep inside ran in a process, but the element did
+	// not (#5138).
+	forked bool
 }
 
 // pipelineTiming is the collection for one timed pipeline, one slot per
@@ -95,10 +106,17 @@ type pipelineTiming struct {
 	elems []elemTiming
 }
 
+// jobTextLayout is the printer's layout for the text a report labels an
+// element with, which is the one-line form with a `( … )` written the way a
+// brace group is. See syntax.Layout.SubshellTerminatesItsLastCommand.
+var jobTextLayout = syntax.Layout{SubshellTerminatesItsLastCommand: true}
+
 func (t *pipelineTiming) grow(cmds []syntax.Command) {
 	t.elems = make([]elemTiming, len(cmds))
 	for i, c := range cmds {
-		t.elems[i].text = syntax.PrintCommand(c)
+		t.elems[i].text = syntax.PrintWith(c, jobTextLayout)
+		t.elems[i].node = c
+		_, t.elems[i].forked = c.(*syntax.Subshell)
 	}
 }
 
@@ -216,7 +234,7 @@ func (r *Runner) reportTime(d Diagnostics, posix bool, elapsed time.Duration, us
 		if timing != nil {
 			for i := range timing.elems {
 				e := &timing.elems[i]
-				if !e.cpu.sawExternal {
+				if !e.forked {
 					// Nothing forked for this element, and the shell this
 					// layout was measured from prints nothing for one of
 					// those — measured again with a format set, `time :`
@@ -253,7 +271,7 @@ func (r *Runner) reportTime(d Diagnostics, posix bool, elapsed time.Duration, us
 	case d.TimeLayout == TimePerCommand && timing != nil:
 		for i := range timing.elems {
 			e := &timing.elems[i]
-			if !e.cpu.sawExternal {
+			if !e.forked {
 				// Nothing forked for this element, and the shell this
 				// layout was measured from prints nothing for one of
 				// those — a lone builtin reports nothing at all.

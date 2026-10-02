@@ -128,3 +128,36 @@ func TestTheDefaultValueRendersTheDefaultLayout(t *testing.T) {
 		t.Errorf("got %q, want the two labels through the format", out)
 	}
 }
+
+// TestAnElementThatForkedIsReported — the line is earned by the element
+// running as a process of its own, not by a program running somewhere inside
+// it. Measured 2026-10-02 on zsh 5.9.2 with `TIMEFMT='[%J]'` (#5138): a `( …
+// )` is reported even around a builtin, and so is every element but the last
+// of a pipeline, and a command that went looking for a program is reported
+// even when there was none; a brace group, a function and an `eval` that ran
+// a program are not, because they ran in the shell.
+//
+// The `( … )` is labeled with every command ending in `; `, which is how the
+// default layout labels it too.
+func TestAnElementThatForkedIsReported(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"time (:)", "[( :; )]\n"},
+		{"time ( (:) ) >/dev/null", "[( ( :; ); ) > /dev/null]\n"},
+		{"time : | :", "[:]\n"},
+		{"time { : } | ext", "[{ :; }]\n[ext]\n"},
+		{"time command ext", "[command ext]\n"},
+		{"time { ext }", ""},
+		{"f() { ext; }; time f", ""},
+		{"time eval ext", ""},
+		{"time if true; then ext; fi", ""},
+	} {
+		out, _ := runZsh(t, timedDir(t), "TIMEFMT='[%J]'\n"+tc.src)
+		if out != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+	out, _ := runZsh(t, timedDir(t), "TIMEFMT='[%J]'\ntime nosuchcmd 2>/dev/null")
+	if out != "[nosuchcmd 2> /dev/null]\n" {
+		t.Errorf("a command that was not found = %q, want its line", out)
+	}
+}

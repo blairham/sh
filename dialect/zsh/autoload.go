@@ -275,9 +275,12 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 	for _, name := range names {
 		// An absolute path names its file: the function is the file's
 		// base name, loaded from exactly there. See autoloadAbsolute.
-		file, absolute := autoloadAbsolute(name)
+		file, dirOfFile, absolute := autoloadAbsolute(name)
 		if absolute {
-			name = filepath.Base(file)
+			name = file[len(dirOfFile)+1:]
+			if dirOfFile == "" {
+				dirOfFile = "/"
+			}
 		}
 		if autoloadDefined(r, name) {
 			// Already a function, so there is nothing to mark: measured,
@@ -304,7 +307,7 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 		dir := ""
 		if absolute {
 			autoloadRecordPath(r, name, file)
-			dir = filepath.Dir(file)
+			dir = dirOfFile
 		} else if opts.fixPath {
 			code, path := autoloadFixPath(r, name, opts.strict)
 			if code != 0 {
@@ -1369,16 +1372,19 @@ func autoloadRecordPath(r *interp.Runner, name, path string) {
 //	                                         separator is #1999's, not this
 //
 // which is iTerm2's shell integration, `autoload -Uz -- "$file"` and then a
-// call by `${file:t}`.
-func autoloadAbsolute(name string) (string, bool) {
+// call by `${file:t}`. The path is kept as written, not cleaned: `autoload
+// -Uz $PWD/fns//./myfn.zsh` lists `-XUz $PWD/fns//.` and the source is the
+// path as given. The directory is everything before the last slash.
+func autoloadAbsolute(name string) (file, dir string, ok bool) {
 	if !strings.HasPrefix(name, "/") {
-		return "", false
+		return "", "", false
 	}
-	file := filepath.Clean(name)
-	if file == "/" {
-		return "", false
+	i := strings.LastIndexByte(name, '/')
+	if i == len(name)-1 {
+		// No base name to declare.
+		return "", "", false
 	}
-	return file, true
+	return name, name[:i], true
 }
 
 // autoloadForgetPath drops a name's fixed path, so the next call searches.

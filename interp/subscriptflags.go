@@ -396,7 +396,7 @@ func (r *Runner) scalarSearchStart(g *syntax.SubscriptFlags, n int, back bool) (
 // `${(@)a:#$g}` in the same shell removes nothing, and the difference is that
 // only one of the two is a quoting context.
 func (r *Runner) subscriptMatcher(g *syntax.SubscriptFlags, prefix bool) func(string) bool {
-	operand := r.renderSubscript(g.Arg, searchKeepsEscape)
+	operand := r.searchPatternOperand(g)
 	if strings.ContainsRune(g.Flags, 'e') {
 		if prefix {
 			return func(el string) bool { return strings.HasPrefix(el, operand) }
@@ -413,6 +413,16 @@ func (r *Runner) subscriptMatcher(g *syntax.SubscriptFlags, prefix bool) func(st
 		operand += "*"
 	}
 	return func(el string) bool { return r.matchPatternR(operand, el, patternInAWord) }
+}
+
+// searchPatternOperand is a search group's operand, rendered for the matcher:
+// with its backslashes kept, except the one in front of a `"` where
+// syntax.SubscriptFlags.PatternSpendsAnEscapedQuote says it is spent.
+func (r *Runner) searchPatternOperand(g *syntax.SubscriptFlags) string {
+	if g.PatternSpendsAnEscapedQuote {
+		return r.renderSubscript(g.Arg, func(c string) bool { return c != `"` && searchKeepsEscape(c) })
+	}
+	return r.renderSubscript(g.Arg, searchKeepsEscape)
 }
 
 // searchOperand renders a subscript search's operand: every substitution
@@ -674,7 +684,7 @@ func (r *Runner) assocSearchKeys(e *syntax.ParamExpr, a AssocArray, g *syntax.Su
 // takes the first key its own `${(k)h}` lists that matches, and ours lists
 // sorted. The two agree wherever one key matches.
 func (r *Runner) assocKeyFlag(e *syntax.ParamExpr, a AssocArray, g *syntax.SubscriptFlags, every bool) []string {
-	subject := r.assocKeyIn(g.Arg, e.EnclosedInDoubleQuotes)
+	subject := r.assocKeyIn(g.Arg, e.EnclosedInDoubleQuotes || e.InsideASubscript)
 	var found []string
 	for _, k := range r.assocKeys(e.Name, a) {
 		if hasUnterminatedBracket(k, r.emptyBracketCompiles()) ||
@@ -1196,7 +1206,7 @@ func (r *Runner) scalarSearchEnd(g *syntax.SubscriptFlags, search byte, chars []
 	for i, c := range chars {
 		offs[i+1] = offs[i] + len(c)
 	}
-	operand := r.renderSubscript(g.Arg, searchKeepsEscape)
+	operand := r.searchPatternOperand(g)
 	exact := strings.ContainsRune(g.Flags, 'e')
 	endsHere := func(end int) bool {
 		for start := end; start >= 0; start-- {

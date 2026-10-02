@@ -29,7 +29,7 @@ func TestExecHandsItsStandardOutputToTheReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 	src := "print -n first; exec /bin/echo hi"
 	f, err := syntax.Parse(src, zsh.Dialect())
 	if err != nil {

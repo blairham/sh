@@ -7634,21 +7634,19 @@ func (l *Lexer) bareSubscript(name string, q Quoting) (Span, bool) {
 	return l.keptBareSubscript(q, sawSub)
 }
 
-// bracedExpansionEnd is the length of the `${…}` that s begins with, quotes
-// and nested braces and substitutions stepped over, or 0 where it does not
-// close.
+// bracedExpansionEnd is the length of the `${…}` that s begins with, nested
+// braces counted and a backslash's character passed over, or 0 where it does
+// not close.
+//
+// A quote is not stepped over: zsh 5.9.2 does not protect a `}]` inside one
+// either, measured 2026-10-02 — `s='a}]b'; print $s[(i)${x:-"}]"}]` writes
+// `0(i)${x:-}]}]` there — and what it does instead is not modeled.
 func bracedExpansionEnd(s string) int {
 	depth := 0
 	for i := 0; i < len(s); i++ {
 		switch c := s[i]; c {
 		case '\\':
 			i++
-		case '\'', '"':
-			for i++; i < len(s) && s[i] != c; i++ {
-				if c == '"' && s[i] == '\\' {
-					i++
-				}
-			}
 		case '{':
 			depth++
 		case '}':

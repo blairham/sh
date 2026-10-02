@@ -16,6 +16,11 @@ import (
 func compinitFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
+	// Set rather than left to the umask, which another test in this package
+	// may have moved: a group-writable fixture is one compaudit refuses.
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	for name, body := range map[string]string{
 		"_foo":    "#compdef foo bar=baz -p \"x*\"\nprint in _foo\n",
 		"_helper": "#autoload\nprint helper\n",

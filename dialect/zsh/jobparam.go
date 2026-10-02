@@ -87,7 +87,7 @@ func listedJobs(r *interp.Runner) []*interp.Job {
 	all := r.Jobs()
 	out := make([]*interp.Job, 0, len(all))
 	for _, j := range all {
-		if j.Finished() {
+		if j.Finished() && !j.ListedOnceEnded() {
 			continue
 		}
 		out = append(out, j)
@@ -119,7 +119,7 @@ func jobByKey(r *interp.Runner, key string) (*interp.Job, bool) {
 	j, code := r.FindJobBySpec(key)
 	switch code {
 	case interp.JobSpecFound:
-		if j.Finished() {
+		if j.Finished() && !j.ListedOnceEnded() {
 			// The table these three publish is the one that has not ended —
 			// see listedJobs.
 			return nil, false
@@ -164,6 +164,11 @@ func jobStateValue(r *interp.Runner, key string) (string, bool) {
 // between a stopped job and the newest one is an axis the core already holds.
 func jobStateText(r *interp.Runner, j *interp.Job) string {
 	state := jobStateWord(j.Stopped, syscall.Signal(j.StopSig))
+	if word, ok := r.EndedWord(j); ok {
+		// The forked elements of a pipeline the shell runs the last element
+		// of, which are listed `done` once noticed — `1 done::<pid>=done`.
+		state = word
+	}
 	var b strings.Builder
 	b.WriteString(state)
 	b.WriteByte(':')
@@ -177,6 +182,27 @@ func jobStateText(r *interp.Runner, j *interp.Job) string {
 	// A job carrying neither marker leaves the field empty and keeps both
 	// colons, which is the shape the four-job measurement is about.
 	b.WriteByte(':')
+	if elems := r.ElementStates(j); elems != nil {
+		// A pipeline listed an element at a time names each element's
+		// process with that element's own state. See
+		// interp.Runner.ElementStates.
+		for i, e := range elems {
+			if i > 0 {
+				b.WriteByte(':')
+			}
+			b.WriteString(strconv.Itoa(e.PID))
+			b.WriteByte('=')
+			if e.Exited != 0 {
+				// The raw wait status, where the listing says the exit
+				// status: measured 2026-10-02, the `exit 3` element of `exit
+				// 3 | /bin/sleep 0.3 &` reads `<pid>=exit 768` here.
+				b.WriteString("exit " + strconv.Itoa(e.Exited<<8))
+				continue
+			}
+			b.WriteString(e.Word)
+		}
+		return b.String()
+	}
 	for i, pid := range j.Processes() {
 		if i > 0 {
 			b.WriteByte(':')

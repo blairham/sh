@@ -3166,6 +3166,13 @@ type Runner struct {
 	// beside `sub.bg = nil` in pipeline.go for why only one element may
 	// settle the number.
 	inJob *Job
+	// jobElem is which element of inJob's listed pipeline this shell is
+	// running, counted from one, or zero. See jobelements.go.
+	jobElem int
+	// pendingPipeJob is the job a pipeline's forked elements make, waiting
+	// for its last element's command to take a slot it can be listed under.
+	// See Runner.pipelineJob.
+	pendingPipeJob *Job
 	// part is this shell's share of the job's start: `&` does not return
 	// until every element of a backgrounded pipeline has one. Nil where this
 	// shell is not one of several — see Job.expectPart.
@@ -5274,6 +5281,7 @@ func (r *Runner) clone() *Runner {
 	// A clone is a fork until the one construct that knows otherwise says so,
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.unforkedSelf, c.slotOneIsTheBody = nil, false, false
+	c.pendingPipeJob = nil
 	// And one boundary further from the shell that was started. The flag
 	// above cannot answer this: it is already true in a subshell of a
 	// subshell, and a dialect that names the count needs to tell those two

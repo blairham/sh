@@ -5266,6 +5266,11 @@ func Diagnostics() interp.Diagnostics {
 		// `jobs -l`, and `jobs -p` too: the process id after the marker,
 		// with the same state column after it.
 		JobLineLong: "[%[1]d]  %[2]s %[3]d %-9[4]s  %[5]s",
+		// A backgrounded pipeline an element at a time, under the column the
+		// state starts in. See interp.Diagnostics.JobElementLine (#5322).
+		JobElementLine:     "       %-9[1]s  %[2]s",
+		JobElementLineLong: "       %[1]s %-9[2]s  %[3]s",
+		JobElementJoin:     " | ",
 		// `jobs -d`, under the row rather than in it. Spaces either side of
 		// the colon, and the directory with the home directory written `~`.
 		// Measured 2026-09-25 on 5.9.2: `(pwd : /tmp/jobsdir/a)` from `/tmp`
@@ -5378,6 +5383,12 @@ func Diagnostics() interp.Diagnostics {
 		// Only ever seen in a completion notice: zsh's listing never
 		// mentions a job that has ended.
 		JobDone: "done",
+		// And one that exited non-zero is called by its status. Measured
+		// 2026-10-02 on zsh 5.9.2: through a pseudo-terminal under `-fi`,
+		// `(exit 3) &` is announced `[1]  + exit 3     ( exit 3; )` at the
+		// next prompt, and under `-f -c` the first element of `exit 3 |
+		// /bin/sleep 0.3 &` lists as `exit 3` (#5322).
+		JobExited: "exit %[1]d",
 		// A job a signal ended is named for the signal rather than called
 		// done, in this shell's own words for it — see signalDescriptions,
 		// which is why the number the second verb offers is not taken:

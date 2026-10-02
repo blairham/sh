@@ -42,7 +42,11 @@ var emptyJobSlot = &Job{}
 // and inside a `( … )`, which is a job of its own there, `( eval 'J' )` and
 // `( if true; then J; fi )` are [3] where `( { J } )` is [2] (#5321).
 func (r *Runner) holdACommandsJobSlot(nests bool) func() {
-	if r.sem().ACommandHoldsAJobSlot != Yes || r.commandSlotHeld && !nests {
+	if r.sem().ACommandHoldsAJobSlot != Yes || r.commandSlotHeld && !nests && r.pendingPipeJob == nil {
+		// Unless this is the last element of a pipeline the shell runs
+		// itself, which is a job of its own and takes a number whatever is
+		// holding one: `{ true | { jobs } }` lists the pipeline as [2]. See
+		// Runner.pipelineJob.
 		return nil
 	}
 	outerHeld, outerSlot, outerSerial := r.commandSlotHeld, r.commandSlot, r.commandSerial
@@ -58,6 +62,12 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 		r.commandSlot = 1
 	} else {
 		r.commandSlot = r.nextJobNumber()
+	}
+	if pj := r.pendingPipeJob; pj != nil {
+		// The last element of a pipeline the shell runs itself, taking the
+		// slot its forked elements are listed under. See Runner.pipelineJob.
+		r.pendingPipeJob = nil
+		r.placePipelineJob(pj)
 	}
 	return func() {
 		// A job that ended while this command ran left the table while it

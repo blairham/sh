@@ -10653,6 +10653,11 @@ type Semantics struct {
 	// } | cat` and `{ … } & wait` number it 2 with no job behind them. With one
 	// job behind them they number it 1, marked `+`, which is not "from one"
 	// as the grid above reads (#5321).
+	//
+	// **Nor does it hold where the parentheses are not forked**, which in
+	// that dialect is where nothing follows them in a `-c` string: there they
+	// are the shell itself and the markers move. See interp/unforkedtail.go
+	// (#5320).
 	SubshellIsAJobInItsOwnTable Answer
 
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`

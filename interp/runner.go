@@ -4278,6 +4278,11 @@ type Runner struct {
 	// background job, which the job's own notice reports rather than the
 	// parentheses that hold it. See bodyinbox.go.
 	diedAsAJob bool
+	// reservedOff is the declaration reserved words switched off, and
+	// reservedCommand the one the running simple command is, if any. See
+	// reservedoff.go.
+	reservedOff     map[string]bool
+	reservedCommand string
 	// runningSimple is the simple command this runner is running, for a
 	// background body that has to know whether it is one a fork would have
 	// exec'd. See bodyInbox.reachedATail.
@@ -7527,6 +7532,11 @@ func (r *Runner) unsupported(what string) error {
 // element of has already made — or withheld — its DEBUG firing, so there is
 // none to make here; see Semantics.DebugTrapPipelines and Runner.elementFired.
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
+	if len(r.lang().DeclarationReservedWords) > 0 {
+		saved := r.reservedCommand
+		r.reservedCommand = r.declaresByReservedWord(c)
+		defer func() { r.reservedCommand = saved }()
+	}
 	if r.inbox != nil {
 		saved := r.runningSimple
 		r.runningSimple = c

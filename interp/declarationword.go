@@ -60,6 +60,11 @@ func (r *Runner) declarationCommand(c *syntax.SimpleCmd, argv []string) bool {
 			return false
 		}
 	}
+	if r.reservedOff[argv[k]] && r.lang().DeclarationReservedWords[argv[k]] {
+		// The reserved word is switched off, so the command is the builtin
+		// and its operands are ordinary words. See reservedoff.go.
+		return false
+	}
 	reading := r.sem().DeclarationCommandWord
 	if reading == DeclarationByUtilityName {
 		return true

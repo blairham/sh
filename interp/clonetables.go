@@ -285,6 +285,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// inside a subshell is that subshell's, exactly as `hash` is.
 	c.namedDirs = maps.Clone(r.namedDirs)
 	c.disabledBuiltins = maps.Clone(r.disabledBuiltins)
+	c.reservedOff = maps.Clone(r.reservedOff)
 	c.withdrawnBuiltins = maps.Clone(r.withdrawnBuiltins)
 	// And the parameter half, which has to travel with the tables it takes
 	// names out of: those are cloned below, so a withdrawal that stayed

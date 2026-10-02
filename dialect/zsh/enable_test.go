@@ -89,8 +89,10 @@ func TestANameThatIsNotABuiltinIsAHashTableElement(t *testing.T) {
 // tables this shell has no answer for, and doing nothing quietly would leave
 // the alias in place and report success. `-f` has left the list: the
 // functions table is kept (#5267), and its rows are in disablefunction_test.go.
+// So has `-r`, for the declaration words of the reserved-word table; the rest
+// of that table is refused by name — see TestDisableRSwitchesADeclarationWord.
 func TestATableThisShellDoesNotKeepIsSaidOutLoud(t *testing.T) {
-	for _, opt := range []string{"-a", "-m", "-r", "-s"} {
+	for _, opt := range []string{"-a", "-m", "-s"} {
 		out, st := runZsh(t, t.TempDir(), "disable "+opt+" foo\n")
 		if !strings.Contains(out, "not implemented yet") {
 			t.Errorf("%s: output = %q, want it said out loud", opt, out)

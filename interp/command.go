@@ -432,6 +432,12 @@ func (r *Runner) reportWhatRuns(name string) int {
 // for the path of `/usr/bin/time`. See [syntax.Dialect.Reserves] for the
 // measurement and for the two spellings the lexer does not class as words.
 func (r *Runner) reservedWord(name string) bool {
+	if r.reservedOff[name] {
+		// Switched off, so the name is whatever else it is: `whence -w
+		// typeset` after `disable -r typeset` is `builtin` in zsh 5.9.2.
+		// See reservedoff.go.
+		return false
+	}
 	if r.reservedWords != nil {
 		return r.reservedWords(name)
 	}

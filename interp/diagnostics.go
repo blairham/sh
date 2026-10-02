@@ -9826,7 +9826,7 @@ func (d Diagnostics) arithUnclosedSubscript(expr string, se *syntax.Error) (stri
 		return "", false
 	}
 	switch se.Kind {
-	case syntax.ErrArithOperator, syntax.ErrArithBadOperator, syntax.ErrArithUnmatchedCloseParen:
+	case syntax.ErrArithOperator, syntax.ErrArithBadOperator:
 	default:
 		// The two leftover-text kinds and nothing else: a refusal about an
 		// operand, a byte or a conditional is not about a subscript however

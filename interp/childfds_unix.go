@@ -6,6 +6,7 @@
 package interp
 
 import (
+	"io"
 	"os"
 	"slices"
 )
@@ -282,6 +283,13 @@ func (r *Runner) replacementFiles() []*os.File {
 // a different road, because os/exec copies bytes for a stream that is not a
 // file; a replacement has no such road, so the number has to be real.
 func streamFile(v any) *os.File {
+	// A builtin's held output is the stream it holds, with what it kept
+	// written out first — `exec` is a builtin, so in the dialects that hold
+	// one the stream reached here held, and a nil for it closed standard
+	// output under the command `exec` became (#5434). See unheld.
+	if w, ok := v.(io.Writer); ok {
+		v = unheld(w)
+	}
 	switch f := v.(type) {
 	case *os.File:
 		return f

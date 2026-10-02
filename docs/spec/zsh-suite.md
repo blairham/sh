@@ -14,7 +14,7 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, eleven files have become real results**, each verified
+**Since that commit, twelve files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
@@ -28,8 +28,19 @@ byte-identical in output and status under the reference's own driver:
     V04features      24 of 24          a91b224aa   #5158
     D01prompt        16 of 16          (#5150's closing PR)
     V09datetime      16 of 16          (#5160's closing PR; in the suite's image, see below)
+    E03posix         18 of 18          5d1dc7eaa   #5157, on this Mac and in the suite's image
 
-So the count the burndown moves is **32** today. The roll-up figures above are left at the commit they were taken at
+`E03posix` was measured at `5d1dc7eaa`, 2026-10-02, under the reference's own
+driver run serially from `Test/`: 18 of 18 chunks and 510 driver lines with 0
+differing, both on this Mac against `/opt/homebrew/bin/zsh` (zsh 5.9.2,
+aarch64-apple-darwin25.4.0) and in the column's image
+`ghcr.io/blairham/sh/zsh@sha256:aab8255c…` (zsh 5.9.2, aarch64-unknown-linux-gnu,
+as root). Through the harness, `-only E03posix.ztst -jobs 1` with the binary
+named `zsh` reads strict 1/1, `of those` 0/1, `ref cannot run` 0/1 and line
+agreement 100.0%. The image row needed #5445: there the suite runs as root,
+and an `EUID` assignment that changed nothing passed a row the reference fails.
+
+So the count the burndown moves is **33** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -44,12 +55,12 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 32 today)
+## Real results (21 at `37355aae5`, 33 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
 `V12zparseopts`, `V13zformat`, `C05debug`, `W01history`, `A02alias`,
-`B07emulate`, `V04features`, `D01prompt` and `V09datetime` are the
-twenty-second through thirty-second and are listed here rather than below; every
+`B07emulate`, `V04features`, `D01prompt`, `V09datetime` and `E03posix` are the
+twenty-second through thirty-third and are listed here rather than below; every
 other entry is as measured at the heading's commit.
 
 `V09datetime` is a real result **in the suite's image and not on a Mac**, and
@@ -328,7 +339,7 @@ front can only move chunks up.
 | 14 | 39 | 25 | 21 | `A05execution` | Bug regression: piping a shell construct to an external process may hang |
 | 15 | 16 | 1 | 10 | `V14system` | zsystem flock invalid time arguments |
 | 16 | 16 | 0 | 11 | `V09datetime` | basic format specifiers |
-| 18 | 18 | 0 | 18 | `E03posix` | Parameter hiding and tagging, printing types and values |
+| 0 | 18 | 18 | 0 | `E03posix` | *a real result at `5d1dc7eaa` — see the list at the top (#5157)* |
 | 36 | 37 | 1 | 10 | `D06subscript` | Scalar pattern subscripts with wildcards |
 | 38 | 66 | 28 | 9 | `B03print` | out of range argument specifier |
 | 41 | 52 | 11 | 12 | `C04funcdef` | Command not found handler, success |

@@ -25929,6 +25929,20 @@ type Semantics struct {
 	// The answer has to come before the command is looked up, because it
 	// decides which word the command is.
 	ExecTakesOptions Answer
+	// ExecOptionsRequireACommand refuses an `exec` whose words are all its
+	// own options, before any redirection on the line is made, and ends the
+	// shell at 1. Measured 2026-10-02 on zsh 5.9.2 under `-f`: `exec -c`,
+	// `exec -a`, `exec --`, `exec -z` and `exec -a x -c` each write `exec
+	// requires a command to execute`, `exec -a x` writes `exec flag -a
+	// requires a parameter`, `exec -c >f` makes no `f`, and `(exec -c);
+	// echo $?` is 1. bash 5.3.20, bash 3.2.57 and ksh93u+ take every one of
+	// those lines as `exec` with nothing to run, at 0 with the redirection
+	// made, which is the zero value. dash and BusyBox ash read no options
+	// here at all, so the question does not reach them (#5380).
+	//
+	// Read as `== Yes`, so a preset that leaves it alone has the zero
+	// value's answer.
+	ExecOptionsRequireACommand Answer
 
 	// ExecTakesTheLoginLetter is `exec -l`, which puts a `-` on the front of
 	// the argv[0] the replacement sees — the mark `login` and every terminal

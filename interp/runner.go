@@ -8396,6 +8396,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 			r.redirectForBuiltin = argv[0]
 		}
 	}
+	if r.refuseExecWithoutACommand(argv) {
+		// Ahead of every redirection on the line. See
+		// interp/execwithoutacommand.go.
+		r.redirectForBuiltin, r.redirForCommandWord = "", ""
+		return nil
+	}
 	defer func() {
 		r.prefixTraceAssigns, r.prefixTraceValues = nil, nil
 		r.prefixTraceJoins, r.prefixGlobMatches = nil, nil

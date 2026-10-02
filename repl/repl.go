@@ -2594,6 +2594,7 @@ func (s Shell) newEditor(ctx context.Context, state *terminalState) *editor {
 		// terminal's to receive.
 		noTerminal:     state == nil,
 		bracketedPaste: s.Editor.BracketedPaste,
+		pasteCodes:     s.bracketedPasteCodes(),
 		pastedStyle:    s.Editor.PastedTextStyle,
 		pastedStyleEnd: s.Editor.PastedTextStyleEnd,
 		selfInsert:     s.Editor.SelfInsertWidget,
@@ -2701,6 +2702,29 @@ func (s *Shell) listQueryThreshold() func() (int, bool) {
 // Nil where the dialect names no such parameter, which is every dialect but
 // one, and **a nil wait waits no time at all** — the behavior every dialect
 // that ignores this already had, so nothing inherits a new default.
+// bracketedPasteCodes reads the bracketing's two sequences out of the
+// parameter the dialect keeps them in, or is nil where it keeps none. See
+// EditorStyle.BracketedPasteParameter for the rule and the measurement.
+func (s *Shell) bracketedPasteCodes() func() (on, off string) {
+	name := s.Editor.BracketedPasteParameter
+	if name == "" || s.Runner == nil {
+		return nil
+	}
+	return func() (on, off string) {
+		codes, ok := s.Runner.GetArray(name)
+		if !ok || len(codes) != 2 {
+			return "", ""
+		}
+		off = codes[1]
+		if off != "" {
+			// The return the fixed sequence carries, which belongs to the end
+			// of the line rather than to the code. See pasteModeOff.
+			off += "\r"
+		}
+		return codes[0], off
+	}
+}
+
 func (s *Shell) keySequenceWait() func() (time.Duration, bool) {
 	name := s.Editor.KeySequenceWaitParameter
 	if name == "" || s.Runner == nil {

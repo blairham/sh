@@ -141,6 +141,11 @@ type editor struct {
 	// paste — which is every line until one arrives and again from the next
 	// keystroke on. See paste.go.
 	bracketedPaste bool
+	// pasteCodes is what asks for the bracketing and what takes it back, read
+	// at the start of each line, where the dialect keeps them in a parameter.
+	// Nil is the two fixed sequences in paste.go. See
+	// EditorStyle.BracketedPasteParameter.
+	pasteCodes func() (on, off string)
 	// postdisplay is text drawn after the line's end without being part of
 	// the line: an inline suggestion. The shell that has it calls it
 	// `POSTDISPLAY`, a widget sets it, and it lives for the rest of the read —
@@ -429,8 +434,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// each of the ways out, because there are four of them and one of
 		// them is the input failing. See paste.go for what the two sequences
 		// are and what was measured.
-		e.write(pasteModeOn)
-		defer e.write(pasteModeOff)
+		on, off := pasteModeOn, pasteModeOff
+		if e.pasteCodes != nil {
+			on, off = e.pasteCodes()
+		}
+		e.write(on)
+		if off != "" {
+			defer e.write(off)
+		}
 	}
 	// The leading rows first and once — every redraw after this rewrites only
 	// the last row. See drawnPrompt.

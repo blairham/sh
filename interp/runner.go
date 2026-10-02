@@ -1852,6 +1852,10 @@ type Runner struct {
 	// arithForcesFloat makes every operand arithmetic reads a float, which is
 	// zsh's `force_float`. See Runner.forcedFloat.
 	arithForcesFloat bool
+	// operandsKeepTheirAssignments is zsh's `ksh_typeset`: an operand of a
+	// declaration *builtin* that looks like an assignment is not split. See
+	// interp/kshtypeset.go.
+	operandsKeepTheirAssignments bool
 	// arithStoreRefusal, where it is set, is where failedSubscript leaves the
 	// sentence of an element store arithmetic is making, rather than writing
 	// it and giving up. See Runner.storePlace.
@@ -7880,7 +7884,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		}
 		// expandWord split in two, so the match can be decided between the
 		// halves rather than before the word is read.
-		fields := r.expandWordEscaped(w)
+		fields, kept := r.builtinDeclarationOperand(c, argv, i, w)
+		if !kept {
+			fields = r.expandWordEscaped(w)
+		}
 		// Put down before the next word rather than at the end of the
 		// command: only the word this armed it for stands in that position.
 		restorePosition()

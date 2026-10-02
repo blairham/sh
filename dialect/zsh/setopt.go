@@ -1364,7 +1364,17 @@ var zshOptions = []zshOption{
 	// listZshOptions reads it; it was `recorded` until #4529, which is why
 	// `emulate ksh` printed 11 names where the reference prints 185 rows.
 	storeBacked("kshoptionprint", false),
-	recorded("kshtypeset", false),
+	{
+		// KSH_TYPESET: an operand of a declaration builtin that writes an
+		// `=` is kept whole rather than split. See interp/kshtypeset.go for
+		// the rows (#5157).
+		base: "kshtypeset", def: false,
+		get: (*interp.Runner).OperandsKeepTheirAssignments,
+		set: func(r *interp.Runner, on bool) int {
+			r.SetOperandsKeepTheirAssignments(on)
+			return 0
+		},
+	},
 	{
 		// KSH_ZERO_SUBSCRIPT: a subscript of 0 is the first element. See
 		// [interp.Semantics.ZeroSubscriptIsTheFirstElement] for the rows.

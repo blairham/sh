@@ -4274,6 +4274,13 @@ type Runner struct {
 	// leaves a signal it aimed at the job, for the body's own traps. Nil
 	// everywhere else, a subshell of the body included. See bodyinbox.go.
 	inbox *bodyInbox
+	// runningSimple is the simple command this runner is running, for a
+	// background body that has to know whether it is one a fork would have
+	// exec'd. See bodyInbox.reachedATail.
+	runningSimple *syntax.SimpleCmd
+	// abandonedWait says the wait just returned was given up rather than
+	// answered, because the body was killed. See awaitForegroundCommand.
+	abandonedWait bool
 	// inboxGoesToTheParentheses says this body's statement is a `( … )` that
 	// is the fork itself, so the inbox belongs to the subshell the
 	// parentheses make rather than to this runner. See
@@ -7519,6 +7526,11 @@ func (r *Runner) unsupported(what string) error {
 // element of has already made — or withheld — its DEBUG firing, so there is
 // none to make here; see Semantics.DebugTrapPipelines and Runner.elementFired.
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
+	if r.inbox != nil {
+		saved := r.runningSimple
+		r.runningSimple = c
+		defer func() { r.runningSimple = saved }()
+	}
 	if r.timedElem != nil {
 		saved := r.timedElemDirect
 		r.timedElemDirect = r.timedElem.node == syntax.Command(c)
@@ -9482,6 +9494,9 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	r.execSerial = r.stmtSerial
+	if r.inbox != nil {
+		r.inbox.reachedATail(r.runningSimple, r.exitTrap != nil)
+	}
 	if r.timedElemDirect {
 		r.timedElem.forked = true
 	}
@@ -9567,6 +9582,18 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	// same environment this one is.
 	name, env := r.namedByTheEnvironment(argv[0], env)
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
+	if inbox := r.inbox; inbox != nil {
+		// A program of a background body outlives the body when a signal
+		// killed it, as a fork's child outlives the fork — so the context
+		// the body ends with does not end the program then. See
+		// bodyinbox.go.
+		cmd.Cancel = func() error {
+			if _, sig := inbox.death(); sig != 0 {
+				return nil
+			}
+			return cmd.Process.Kill()
+		}
+	}
 	cmd.Args[0] = r.dashed(name)
 	ownGroup := (r.bg != nil && r.monitor) ||
 		(r.bg == nil && r.monitor && r.Terminal && r.WaitForCommand != nil)
@@ -9758,6 +9785,19 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 // plain os/exec wait it has always been, and nothing moves.
 func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 	if !r.monitor || r.WaitForCommand == nil || r.bg == nil {
+		if r.inbox != nil {
+			// A body that can be killed while it waits, and then stops
+			// waiting and leaves the program running. See bodyinbox.go.
+			done := make(chan error, 1)
+			go func() { done <- cmd.Wait() }()
+			select {
+			case err := <-done:
+				return r.backgroundExitStatus(err)
+			case <-r.inbox.died:
+				_, sig := r.inbox.death()
+				return 128 + int(sig)
+			}
+		}
 		return r.backgroundExitStatus(cmd.Wait())
 	}
 	pid := cmd.Process.Pid
@@ -9881,6 +9921,13 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		// There is nobody to tell either — a job the script cannot see is a
 		// job it cannot resume — so waiting again is also the only ending
 		// that does not strand the process.
+	}
+	if r.abandonedWait {
+		// The body this runs in was killed and has stopped waiting: the
+		// program runs on, unreaped by this, and os/exec's Wait would wait
+		// for it. See bodyinbox.go.
+		r.abandonedWait = false
+		return nil
 	}
 	if !stoppedWait(w) {
 		// The command has ended, so os/exec's own bookkeeping can be closed
@@ -13869,7 +13916,14 @@ func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
 func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
 	note := r.jobNoticeWake()
 	wait := r.WaitForCommand
-	if note == nil {
+	var died <-chan struct{}
+	if r.inbox != nil {
+		// A background body that is killed stops waiting for its program
+		// and leaves it running, as a fork's death leaves its child. See
+		// bodyinbox.go; runWatched reads abandonedWait.
+		died = r.inbox.died
+	}
+	if note == nil && died == nil {
 		return wait(pid)
 	}
 	type answer struct {
@@ -13887,6 +13941,10 @@ func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
 			return a.w, a.err
 		case <-note:
 			r.writeFinishedJobNotices()
+		case <-died:
+			_, sig := r.inbox.death()
+			r.abandonedWait = true
+			return Wait{Killed: true, Signal: sig}, nil
 		}
 	}
 }

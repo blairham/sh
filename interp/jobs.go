@@ -785,6 +785,16 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// And somewhere for a signal aimed at the job to reach the body's own
 	// traps, which no process of the job's holds. See bodyinbox.go.
 	job.inbox = newBodyInbox(sub.traps)
+	job.inbox.tails = map[*syntax.SimpleCmd]bool{}
+	tailCommands(st.Expr, job.inbox.tails)
+	if p, ok := st.Expr.(*syntax.Pipeline); ok && len(p.Cmds) > 1 {
+		// A pipeline of programs is its processes from the start, with no
+		// shell of its own in front of them: `sleep | cat & kill $!` ends
+		// the `sleep`, where `{ sleep | cat } &` leaves it running — the
+		// group is a fork that runs the pipeline. Measured 2026-10-02 on
+		// zsh 5.9.2, `kill $!` and `kill %1` alike (#5355).
+		job.inbox.execd = true
+	}
 	sub.inbox = job.inbox
 	sub.inboxGoesToTheParentheses = theForkIsTheParentheses(st)
 	// Every process this shell and anything it clones starts is a process of

@@ -5081,6 +5081,12 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 			}
 		}
 	}
+	if keepsTheEnvironmentEntry && r.sem().ValuelessDeclarationLeavesTheNameUnset == Yes {
+		// The standard's reading of `export name` and `readonly name`, and
+		// of a declaration carrying either attribute: the name is left as
+		// it was. See Semantics.ValuelessDeclarationLeavesTheNameUnset.
+		return
+	}
 	if r.declaredNameWithoutValueIsEmpty(standardWord) {
 		// The array half of a tie is set empty in its own kind — no elements,
 		// not an empty string — and the mirror carries that to the scalar. See

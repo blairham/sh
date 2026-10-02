@@ -47,5 +47,8 @@ func registerPatternCharacters(r *interp.Runner) {
 		return append([]string(nil), zshPatternCharacters...)
 	})
 	r.MarkReadonly("patchars")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("patchars")
 	hideModuleParameter(r, "patchars")
 }

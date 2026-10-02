@@ -878,6 +878,8 @@ func Semantics() interp.Semantics {
 	// row `setarray/no-values-and-whether-the-name-survives`, measured in the
 	// container that column is reached through rather than reasoned across
 	// from dash, so BusyBox ash has no prepend to write with no values behind.
+	// unanswered ZeroFillKeepsLeadingBlanks, ZeroFillGoesAfterAnIntegersSign:
+	// the same wall — there is no zero fill here to ask either question of.
 	// unanswered DeclareZeroFillLetter: BusyBox ash has no `typeset` at all,
 	// measured 2026-09-15 on v1.37.0, so the `Z` letter cannot be put to it
 	// under either reading.

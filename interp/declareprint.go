@@ -313,6 +313,10 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		producedListsElements = pd.ListsItsElements
 		attributed = true
 	}
+	if r.silentToPrint[name] {
+		// See Runner.SetSilentToPrint.
+		d.silent = true
+	}
 	// The one producer that outlives an `unset`, under the answer that says it
 	// does — asked in front of the removal rather than behind it, because the
 	// removal is what the axis is *about*. Every other producer here really

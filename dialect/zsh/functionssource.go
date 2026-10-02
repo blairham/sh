@@ -91,6 +91,9 @@ func registerFunctionsSource(r *interp.Runner) {
 	r.SetDynamicAssoc("functions_source", zshFunctionsSourceView)
 	r.SetDynamicAssocElement("functions_source", zshFunctionSourceValue)
 	r.MarkReadonly("functions_source")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("functions_source")
 	hideModuleParameter(r, "functions_source")
 	registerDisabledFunctions(r)
 }

@@ -368,6 +368,22 @@ func (r *Runner) pathEntries(runnableOnly bool) map[string]string {
 // where this refuses with the sentence the dialect already has for the case.
 func (r *Runner) MarkReadonly(name string) { r.markReadonly(name) }
 
+// SetSilentToPrint makes a `-p` listing write nothing for name, named or in a
+// whole listing, at 0, where the bare listing still has its row — for a
+// dialect whose own tables are listed that way. Measured 2026-10-02 on zsh
+// 5.9.2: after `zmodload zsh/parameter`, `typeset -p builtins` writes
+// nothing and `readonly -p` lists none of that module's frozen tables, while
+// `typeset` lists `association readonly builtins`; zsh/system's and
+// zsh/datetime's frozen tables, `sysparams` and `epochtime`, list under `-p`
+// as `typeset -Ar sysparams`. So it is a fact about each table and not a rule
+// about frozen ones, and the dialect names them (#5142).
+func (r *Runner) SetSilentToPrint(name string) {
+	if r.silentToPrint == nil {
+		r.silentToPrint = map[string]bool{}
+	}
+	r.silentToPrint[name] = true
+}
+
 // MarkInteger puts the integer attribute on a name, which is what
 // `typeset -i` does.
 //

@@ -90,5 +90,8 @@ func zshHistoryWordsView(r *interp.Runner) []string {
 func registerHistoryWords(r *interp.Runner) {
 	r.SetDynamicArray("historywords", zshHistoryWordsView)
 	r.MarkReadonly("historywords")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("historywords")
 	hideModuleParameter(r, "historywords")
 }

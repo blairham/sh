@@ -84,11 +84,11 @@ func TestIntegerTakesFewerLettersThanTypesetHere(t *testing.T) {
 		t.Errorf("integer -A = %q (status %d), want it refused as a bad option under "+
 			"its own name", out, st)
 	}
-	// A letter this shell's `integer` really has is named as missing instead,
-	// and `-Z` is one it has and `typeset` here is also missing.
-	out, _ = runZsh(t, t.TempDir(), `integer -Z m`)
-	if !strings.Contains(out, "integer:1: -Z is not implemented yet") {
-		t.Errorf("integer -Z = %q, want the letter named as missing", out)
+	// And a letter it really has is taken: `-Z` was named as missing here
+	// until #5142.
+	out, _ = runZsh(t, t.TempDir(), `integer -Z 3 m=7; print -r -- "[$m]"`)
+	if out != "[007]\n" {
+		t.Errorf("integer -Z = %q, want the zero fill", out)
 	}
 }
 

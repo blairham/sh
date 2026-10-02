@@ -129,10 +129,11 @@ func traceEntries(r *interp.Runner, element func(frames []interp.Frame, i int) s
 // script.
 //
 // Top level is **empty**, not a one-element array: `${#functrace}` is 0 with
-// nothing called, the same place `${#funcstack}` is 0. So is the `eval` gap
-// funcstackNames records above — real zsh pushes an `(eval)` frame and this
-// shell has none — and it shows here as one *missing element* rather than as
-// a wrong one, which is the same deliberate difference and not a second.
+// nothing called, the same place `${#funcstack}` is 0.
+//
+// A call made from inside `eval`'s text is written as that text names itself,
+// `(eval)` and the text's own line: `f` on the third line of an `eval` is
+// `(eval):3`, the same wherever the `eval` stands (#5159).
 func functraceEntries(r *interp.Runner) []string {
 	return traceEntries(r, func(frames []interp.Frame, i int) string {
 		f := frames[i]
@@ -172,8 +173,10 @@ func functraceEntries(r *interp.Runner) []string {
 // `$0`. unitFile is what keeps them apart — see enteredFromFile, which
 // measured the same split for `$functrace`.
 //
-// Empty at the top level, and short by the same `eval` frame, for the reasons
-// functraceEntries gives.
+// Empty at the top level, for the reason functraceEntries gives. A call made
+// from inside `eval`'s text is at the file's own line, the text's line one
+// being the line the `eval` stands on: `f` on the third line of an `eval` on
+// line 7 is at line 9 (#5159).
 func funcfiletraceEntries(r *interp.Runner) []string {
 	return traceEntries(r, func(frames []interp.Frame, i int) string {
 		return callSiteFileAndLine(r, frames, i)

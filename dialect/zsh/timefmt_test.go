@@ -156,6 +156,12 @@ func TestAnElementThatForkedIsReported(t *testing.T) {
 		{"f() { ext; }; time f", ""},
 		{"time eval ext", ""},
 		{"time if true; then ext; fi", ""},
+		// A backgrounded element follows the same rule, measured the same
+		// day (#5381): the program and the subshell are reported once the
+		// job is waited for, and a builtin is not.
+		{"time ext &\nwait", "[ext]\n"},
+		{"time (:) &\nwait", "[( :; )]\n"},
+		{"time : &\nwait", ""},
 	} {
 		out, _ := runZsh(t, timedDir(t), "TIMEFMT='[%J]'\n"+tc.src)
 		if out != tc.want {

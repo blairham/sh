@@ -19,7 +19,18 @@ func TestTheCharacterCodeFlag(t *testing.T) {
 		{"1114112", "\xf4\x90\x80\x80"},
 		{"2147483647", "\xfd\xbf\xbf\xbf\xbf\xbf"},
 		{"2147483648", "\xfe\x80\x80\x80\x80\x80"},
+		{"2047", "\xdf\xbf"},
+		{"2048", "\xe0\xa0\x80"},
+		{"65535", "\xef\xbf\xbf"},
+		{"65536", "\xf0\x90\x80\x80"},
+		{"2097151", "\xf7\xbf\xbf\xbf"},
+		{"2097152", "\xf8\x88\x80\x80\x80"},
+		{"67108863", "\xfb\xbf\xbf\xbf\xbf"},
+		{"67108864", "\xfc\x84\x80\x80\x80\x80"},
+		{"3221225472", "\xff\x80\x80\x80\x80\x80"},
 		{"4294967361", "A"},
+		{"'1+'", ""},
+		{"'1/0'", ""},
 		{"-1", "\xff"},
 		{"-200", "\x38"},
 		{"-256", "\x00"},
@@ -50,5 +61,15 @@ func TestTheCharacterCodeFlagOverAnArray(t *testing.T) {
 	out, _, errs := runZshUTF8(t, "a=(65 66 1+2); print -rn -- ${(#)a}")
 	if want := "A B \x03"; out != want || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, want)
+	}
+}
+
+// An element whose expression will not evaluate is empty, and so drops out
+// of an unquoted expansion: measured, `a=(65 '1+' 66); print ${(#)a}` writes
+// `A B` at 0 with nothing on standard error.
+func TestTheCharacterCodeFlagDropsAFailedElement(t *testing.T) {
+	out, st, errs := runZshUTF8(t, "a=(65 '1+' 66); print -rn -- ${(#)a}")
+	if out != "A B" || errs != "" || st != 0 {
+		t.Errorf("got %q, %q, %d, want %q at 0", out, errs, st, "A B")
 	}
 }

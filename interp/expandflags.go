@@ -640,11 +640,7 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			}
 		case '#':
 			for i, w := range words {
-				n, ok := r.ArithValue(w)
-				if !ok {
-					return nil, false, false, false
-				}
-				words[i] = r.characterForCode(n)
+				words[i] = r.characterForCodeOf(w)
 			}
 		}
 	}
@@ -1654,6 +1650,23 @@ func (r *Runner) convertCase(v string, upper bool) string {
 //	4294967361     A: the value is taken as 32 bits
 //	-1  ff   -200  38   -256  00: a negative value is its low byte
 //	abc            NUL: the word is an expression, and an unset name is 0
+//
+// characterForCodeOf is that over a word not yet evaluated, and an expression
+// that will not evaluate is no character at all and no complaint either:
+// measured, `x='1+'; print -n ${(#)x}` and the same over `1/0` write nothing
+// at status 0, and `a=(65 '1+' 66); print ${(#)a}` writes `A B`.
+func (r *Runner) characterForCodeOf(w string) string {
+	tree, _, err := r.arithTreeOver(nil, w, arithTextArrived)
+	if err != nil {
+		return ""
+	}
+	n, err := r.evalNum(tree)
+	if err != nil {
+		return ""
+	}
+	return r.characterForCode(n.asInt())
+}
+
 func (r *Runner) characterForCode(n int) string {
 	if n < 0 || !r.countsTheLocalesCharacters() {
 		return string([]byte{byte(n)})
@@ -1664,8 +1677,8 @@ func (r *Runner) characterForCode(n int) string {
 	}
 	// The original UTF-8 scheme: a lead byte saying how many continuation
 	// bytes follow, each carrying six bits. Past 31 bits the lead is the
-	// one that says five, with the low thirty bits behind it — measured,
-	// 2147483648 is fe 80 80 80 80 80.
+	// one that says five and the two bits left over go into it — measured,
+	// 2147483648 is fe 80 80 80 80 80 and 3221225472 is ff 80 80 80 80 80.
 	var lead byte
 	var conts int
 	switch {
@@ -1680,7 +1693,7 @@ func (r *Runner) characterForCode(n int) string {
 	case u < 0x80000000:
 		lead, conts = 0xfc, 5
 	default:
-		lead, conts, u = 0xfe, 5, u&0x3fffffff
+		lead, conts = 0xfe, 5
 	}
 	out := make([]byte, conts+1)
 	for i := conts; i > 0; i-- {

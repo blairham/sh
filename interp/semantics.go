@@ -10662,10 +10662,12 @@ type Semantics struct {
 	//
 	// **It is keyed on a real `( … )`**, not on "a subshell" and not on "a
 	// compound". Measured the same day, the boundaries that number from two
-	// are `( … )`, `( … ) | cat`, `$( … )`, a backquoted substitution,
-	// `<( … )` and `( … ) &` — while `{ … } | cat` and `{ … } &` number from
-	// one. A rule written against the clone would have been wrong on the last
-	// two, and one written against the compound wrong on the same two.
+	// whatever the parent holds are `( … )`, `( … ) | cat`, `$( … )`, a
+	// backquoted substitution, `<( … )` and `( … ) &`. `{ … } | cat`, `{ … }
+	// &` and a function as a pipeline element keep the frozen marks too, but
+	// number from two only where the parent holds no job one, and from one
+	// where it does — see Runner.runAsAForkedBody, which has that grid
+	// (#5321).
 	//
 	// **What this does not model**: a command *also* holds a job number
 	// while it runs and frees it afterwards, which is the mechanism underneath
@@ -10673,10 +10675,8 @@ type Semantics struct {
 	// a clone it is still only this answer, and the clone is where it is
 	// irregular. Re-measured 2026-10-01 under `-f -c`: `( eval "sleep 1 &
 	// jobs" )` and `( if true; then sleep 1 & jobs; fi )` number the job 3,
-	// while `( f )` and `( { sleep 1 & jobs } )` number it 2. `{ sleep 1 & jobs
-	// } | cat` and `{ … } & wait` number it 2 with no job behind them. With one
-	// job behind them they number it 1, marked `+`, which is not "from one"
-	// as the grid above reads (#5321).
+	// while `( f )` and `( { sleep 1 & jobs } )` number it 2 — a command
+	// inside the clone takes a slot where it would nest.
 	//
 	// **Nor does it hold where the parentheses are not forked**, which in
 	// that dialect is where nothing follows them in a `-c` string: there they
@@ -15916,8 +15916,9 @@ type Semantics struct {
 	// of the six columns' reading.
 	//
 	// Not modeled:
-	//   - Inside a clone, which keeps SubshellIsAJobInItsOwnTable's numbering
-	//     (#5321).
+	//   - Inside a clone, whose numbering is SubshellIsAJobInItsOwnTable's
+	//     (see Runner.runAsAForkedBody) and whose own commands take a slot
+	//     only where they would nest.
 	//   - A trap's body, which takes a further number inside a brace group:
 	//     `trap "sleep 1 & jobs" USR1; { kill -USR1 $$; }` is [3] there and
 	//     [2] here.

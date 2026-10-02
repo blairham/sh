@@ -757,6 +757,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// Runner.runAsItsOwnJob.
 	if theForkIsTheParentheses(st) {
 		sub.runAsItsOwnJob(r)
+	} else {
+		// And any other body is a fork too, with its own reading of the
+		// numbers. See Runner.runAsAForkedBody (#5321).
+		sub.runAsAForkedBody(r, forkedBodyOf(st))
 	}
 	// The fork a background job is, which a `( … )` standing as its body does
 	// not fork again: measured 2026-09-17, ksh93u+'s `a=(1 2 3); ( unset
@@ -2687,7 +2691,7 @@ func (r *Runner) markedJobs() (current, previous *Job) {
 // as emptyJobSlot, for the lookup that has to say a marker names it. See
 // Semantics.ACommandHoldsAJobSlot.
 func (r *Runner) markedEntries() (current, previous *Job) {
-	if r.ownJobsStartAtTwo {
+	if r.ownJobsStartAtTwo || r.marksFrozen {
 		// **This is the only place a subshell's marks are decided**, and
 		// deliberately so. An early return in becomeCurrentJob saying the
 		// same thing was written first and was dead code — the order it

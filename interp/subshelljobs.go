@@ -293,6 +293,13 @@ func (r *Runner) runAsItsOwnJob(parent *Runner) {
 	}
 	r.ownJobsStartAtTwo = true
 	r.subshellSelfWaited = false
+	r.inheritMarksAsNumbers(parent)
+}
+
+// inheritMarksAsNumbers takes the parent's `+` and `-` as the numbers they
+// were on at the fork, which is all a forked body knows of them: nothing it
+// does moves them. See Semantics.SubshellIsAJobInItsOwnTable.
+func (r *Runner) inheritMarksAsNumbers(parent *Runner) {
 	// The marks, as numbers. Taken from the parent because the rows
 	// themselves may be about to go: which job was current is a fact about
 	// the fork, and it outlives the table it was read from.
@@ -311,4 +318,65 @@ func (r *Runner) runAsItsOwnJob(parent *Runner) {
 		// 0, where with no history it is `no current job`.
 		r.inheritedCurrentJob, r.inheritedPreviousJob = parent.markCurrent, parent.markPrevious
 	}
+}
+
+// runAsAForkedBody arms any other body the one dialect forks — a pipeline
+// element, a `&` job's body — that is not parentheses. Its markers are the
+// parent's numbers and never move, as a `( … )`'s are; what differs is the
+// numbering, which turns on whether the parent holds a job numbered one.
+// Measured 2026-10-02 on zsh 5.9.2 under `-f -c`, `J` standing for `sleep
+// 0.3 & sleep 0.3 & print ${(kv)jobstates}` and n for the parent's running `&`
+// jobs before the element:
+//
+//	                          n=0           n≥1
+//	{ J } | cat, { J } & …    2 ::, 3 ::    1, 2, marked where the parent's
+//	f | cat (f's body is J)   the same      +/- numbers fall
+//	if true; then J; fi | cat 2, 3          2, 3
+//	{ if true; then J; fi } | cat
+//	                          3, 4          2, 3
+//
+// and with the parent holding job 2 alone — 1 ended and noticed — the body
+// numbers 2 and 3 as for n=0, while with job 1 alone it numbers 1 and 2. So
+// where the parent has no job one, the body is a job of its own exactly as
+// parentheses are: it holds number one itself, `jobs %1` and `wait %1` pass
+// over it at 0, and its own command takes no further slot. Where the parent
+// has one, the body holds nothing and a command in it takes a slot only where
+// it would inside parentheses (an `if`, not a brace group or a call).
+func (r *Runner) runAsAForkedBody(parent *Runner, body syntax.Command) {
+	if parent.sem().SubshellIsAJobInItsOwnTable != Yes {
+		return
+	}
+	if _, simple := body.(*syntax.SimpleCmd); simple {
+		// A simple command is not a job of its own: what holds number one,
+		// where the parent has none, is the command — a function call or an
+		// `eval` takes it as it would in the shell, and a builtin takes
+		// nothing. `f | cat` numbers f's job 2 and `jobs %1` in f is 0,
+		// where `jobs %1 | cat` is `%1: no such job`, and `eval "sleep 1 &
+		// jobs" | cat` is [2]. See Runner.bodySlotLookup.
+		r.marksFrozen = true
+		r.subshellSelfWaited = false
+		r.inheritMarksAsNumbers(parent)
+		if parent.jobByNumber(1) == nil {
+			r.commandSlotHeld, r.slotOneIsTheBody = false, true
+		}
+		return
+	}
+	if parent.jobByNumber(1) == nil {
+		r.runAsItsOwnJob(parent)
+		r.bodyHoldsNoSlot = body
+		return
+	}
+	r.marksFrozen = true
+	r.subshellSelfWaited = false
+	r.inheritMarksAsNumbers(parent)
+}
+
+// forkedBodyOf is the command a `&` job's fork runs as itself, where there is
+// one: a pipeline of one, not negated.
+func forkedBodyOf(st *syntax.Stmt) syntax.Command {
+	p, single := st.Expr.(*syntax.Pipeline)
+	if !single || p.Negated || len(p.Cmds) != 1 {
+		return nil
+	}
+	return p.Cmds[0]
 }

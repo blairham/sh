@@ -727,6 +727,9 @@ func runIn(ctx context.Context, s Suite, root, tests, name, shell, reference str
 	if err := placeShell(s, run, shell); err != nil {
 		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
 	}
+	if err := placeModules(ctx, s, run, reference); err != nil {
+		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
+	}
 	if err := placeBeside(s, root, run); err != nil {
 		return placed{Outcome: Outcome{Output: err.Error(), Status: -1, Failed: true}, Dir: run}
 	}

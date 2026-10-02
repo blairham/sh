@@ -351,6 +351,23 @@ type Suite struct {
 	// so that the binary is not duplicated 65 times per run, and it is made
 	// per run so that each side points at its own shell.
 	ShellAt string
+	// ModulesAt is where the reference's own loadable modules are linked,
+	// relative to the directory a file is run in, and ModulesQuery is the
+	// `-c` program that makes the reference print the directory they live in.
+	// Both empty for a suite whose shell loads nothing from the build tree.
+	//
+	// zsh's driver looks for modules at `./Modules`, which is in the build
+	// tree the suite expects to be sitting in. Only `Test/` is unpacked, so
+	// nothing is there, and a file that loads one fails in the **reference**
+	// at its first chunk. Measured 2026-10-02 on zsh 5.9.2, on this Mac and
+	// in the column's image: `V06parameter` stops on `failed to load module
+	// zsh/parameter` at chunk 1 of 5 in both, and with the reference's own
+	// module directory linked at `Test/Modules` it passes 5 of 5 in both
+	// (#5159). Linking it at `Src/Modules` does not help. The link is made for
+	// both runs, so the layout is one fact about the run directory rather
+	// than about one shell.
+	ModulesAt    string
+	ModulesQuery string
 	// Lookup is where the oracle binary might be, in order. The reference
 	// shell on the machine is the oracle — never the shipped expected
 	// output.
@@ -594,6 +611,8 @@ var Panel = []Suite{
 		DriverArgs:    []string{"+Z", "-f"},
 		DriverVerdict: true,
 		ShellAt:       "../Src/zsh",
+		ModulesAt:     "Modules",
+		ModulesQuery:  `print -r -- "$module_path[1]"`,
 		ShellVar:      "ZTST_exe",
 		Lookup:        []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
 		MustReport:    "zsh",

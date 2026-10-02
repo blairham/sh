@@ -320,7 +320,7 @@ front can only move chunks up.
 
 | unreached | ref | ours | lines | file | today's front |
 |---:|---:|---:|---:|---|---|
-| — | 0 | 1 | 51 | `V06parameter` | *excluded — the reference fails its own first chunk* |
+| 4 | 5 | 1 | 34 | `V06parameter` | Eval tracing — gradeable since #5159 linked the reference's modules; measured 2026-10-02 at `46059ce4d` |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
 | 3 | 5 | 2 | 53 | `E02xtrace` | xtrace with and without redirection |
 | 12 | 12 | 0 | 2 | `V07pcre` | nothing runs; the reference's own first chunk is `Testing PCRE multibyte with locale en_US.UTF-8` |
@@ -418,6 +418,26 @@ Its reference passes **0 of 1**: it stops at its own first chunk because
 shell gets *further* than the reference does, its `unreached` is **negative**,
 and the 51-line figure it used to carry measured nothing at all. That is not
 instability in our column — it is the driver.
+
+**And the driver's layout was fixable, so it is not excluded any more**
+(#5159). The driver looks for modules at `./Modules` in the test directory.
+That is the build tree's layout, and only `Test/` is unpacked, so nothing was
+there. `Suite.ModulesAt` now links the reference's own module directory at
+that path for both runs. The harness asks the reference for the directory
+(`$module_path[1]`) rather than keeping a list of where package managers put
+it. Measured 2026-10-02 on zsh 5.9.2, on this Mac (`/opt/homebrew/bin/zsh`,
+aarch64-apple-darwin25.4.0) and in the column's image (`ghcr.io/blairham/sh/zsh@sha256:aab8255c…`,
+aarch64-unknown-linux-gnu): the reference passes **5 of 5** of its own chunks
+in both, where it passed 0 of 1 before. Linking the directory at `Src/Modules`
+instead leaves it at 0. Through the harness, `-only V06parameter.ztst` reads
+`ref cannot run 0/1` and **34** differing lines, against `1/1` and 51 on the
+same binary through `main`'s harness. This shell now stops at chunk 2, `Eval
+tracing`, which is the work.
+
+The link reaches every file of the column, not only this one. Any other file
+whose reference failed on a missing module now runs that module in the
+reference. Its next figure in `suites.yml` is the first that measures the
+reference with its modules.
 
 **`E02xtrace` is the second**, and it is the one to re-check rather than
 trust: it fails the reference inside the harness and passes outside it, so

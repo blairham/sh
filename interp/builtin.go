@@ -7375,9 +7375,6 @@ func readSegment(next func() (byte, int), raw bool, delim byte, wideDelim string
 				// The second byte of a character, so it is data whatever it
 				// spells — a backslash, the delimiter, a separator.
 				write(c)
-				if text, ok := atWideDelim(); ok {
-					return text, literalMask(escapedAt, len(text)), endDelim
-				}
 				continue
 			}
 			// Not a character after all: what was held is a byte, and this

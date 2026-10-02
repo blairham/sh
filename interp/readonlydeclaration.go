@@ -77,5 +77,18 @@ func (r *Runner) readonlyAsTheDeclaration(_ context.Context, args []string, lett
 	// always written — measured, `v=1; readonly v; readonly` is `v=1` here
 	// and in zsh 5.9.2 alike, where the name-only branch wrote `v`.
 	f.added = true
+	if f.print && len(args) == 0 && r.sem().ReadonlyListing == DeclareListingCommandWord {
+		// The standard's listing, where the dialect's option moved this axis
+		// there: `readonly name=value`, and only for scalars. Measured
+		// 2026-10-02 on zsh 5.9.2 under POSIX_BUILTINS, `readonly foo=bar
+		// novalue; readonly -p` writes `readonly foo=bar` and `readonly
+		// novalue`, an integer and an export alike are `readonly n=3`, and
+		// `readonly -a arr=(1 2); readonly -A as=(a 1); readonly -p` writes
+		// nothing at all — which is also why zsh's own read-only tables do
+		// not appear in it (#5157).
+		return r.declarePrintForm(nil, DeclareListingCommandWord, true, func(d declaration) bool {
+			return d.readonly && !d.isArr && !d.isAssoc
+		}), true
+	}
 	return r.declareNames(name, args, f), true
 }

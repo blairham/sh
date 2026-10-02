@@ -424,6 +424,23 @@ func (r *Runner) readOptionNumber(builtin string, f *declareFlags, letter byte, 
 	// The letter itself is not set here. Both spellings that reach this have
 	// already written it — the detached one in the word before, the attached
 	// one in what is left of this word after the number comes off.
+	if letter == 'p' {
+		// The listing's layout. Measured 2026-10-02 on zsh 5.9.2: `a=("&"
+		// "" plugh); typeset -p1 a` writes `typeset -a a=(` and then each
+		// element quoted on a line of its own, two spaces in, then `)`; a
+		// table writes `  [k]=v` a line each; a scalar is unchanged; an
+		// empty array or table is `=()`. `typeset -p 1 a` reads the `1` as
+		// the number, `-p0` is the plain `-p`, and `-p2` is `bad argument
+		// to -p: 2` at 1 (#5157).
+		if n > 1 {
+			r.diagf("%s\n", Wording(r.diag().DeclarePrintBadLayout, "%[1]s: bad argument to -p: %[2]s",
+				r.builtinComplaintName(builtin), written))
+			r.status = 1
+			return false
+		}
+		r.listsOneElementPerLine = n == 1
+		return true
+	}
 	if letter == 'L' || letter == 'R' || letter == 'Z' {
 		if r.widthNumberIsSettled(f, n) {
 			// The column where the **first** number written is the one the

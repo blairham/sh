@@ -23,6 +23,7 @@ func TestTheExportLetterTakesItsOwnSign(t *testing.T) {
 			"local -xT FOO foo=( a b )\nscalar-local-tied-export\n",
 		},
 		{"f(){ local FOO=a:b; export FOO; typeset FOO; typeset -p FOO }; f", "FOO=a:b\nlocal -x FOO=a:b\n"},
+		{"f(){ local FOO=a:b; export FOO; local FOO; typeset -p FOO }; f", "FOO=a:b\nlocal -x FOO=a:b\n"},
 		{"f(){ typeset -T S s; print ${#s}; typeset -p s }; f", "0\ntypeset -aT S s=(  )\n"},
 		// And a fresh local over an exported global still answers the axis.
 		{"export G=1; f(){ local G; typeset -p G }; f", "typeset G=''\n"},

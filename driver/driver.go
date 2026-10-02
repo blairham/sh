@@ -2242,13 +2242,11 @@ func (sh Shell) scriptOnPath(operand string, optionSaysSearch bool) (read, zero 
 	if sh.Semantics.ScriptSearchTakesTheFirstFile {
 		return sh.firstScriptFile(operand)
 	}
-	if b, err := sh.readFile(operand); err == nil {
-		return operand, "", b, true
-	} else if !errors.Is(err, fs.ErrNotExist) {
+	if _, err := sh.readFile(operand); !errors.Is(err, fs.ErrNotExist) {
 		// Anything here at all, readable or not: bash 5.3.20 names a
 		// directory here `Is a directory` and a mode-000 file here
 		// `Permission denied`, both at 126, though PATH holds a script of
-		// the name. Worded by the caller's read of the operand.
+		// the name. Read again, and worded, by the caller.
 		return operand, "", nil, false
 	}
 	list, _ := lookupEnv(sh.env(), "PATH")
@@ -2287,15 +2285,14 @@ func (sh Shell) scriptOnPath(operand string, optionSaysSearch bool) (read, zero 
 // same refusal here, words it.
 func (sh Shell) firstScriptFile(operand string) (read, zero string, body []byte, found bool) {
 	list, _ := lookupEnv(sh.env(), "PATH")
-	dirs := append([]string{""}, filepath.SplitList(list)...)
-	for i, dir := range dirs {
-		candidate := operand
-		if i > 0 {
-			if dir == "" {
-				dir = "."
-			}
-			candidate = filepath.Join(dir, operand)
+	candidates := []string{operand}
+	for _, dir := range filepath.SplitList(list) {
+		if dir == "" {
+			dir = "."
 		}
+		candidates = append(candidates, filepath.Join(dir, operand))
+	}
+	for i, candidate := range candidates {
 		b, err := sh.readFile(candidate)
 		if err == nil {
 			if i == 0 {

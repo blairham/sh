@@ -142,12 +142,6 @@ func (r *Runner) inWord(w *syntax.Word) func() {
 	}
 }
 
-// expandOneWord is the pipeline for a single word, after braces: fields, then
-// pathname expansion over them.
-func (r *Runner) expandOneWord(w *syntax.Word) []string {
-	return r.globFields(r.expandOneWordFields(w))
-}
-
 // expandOneWordFields is that pipeline stopped before the match, giving the
 // fields in their marked form. See expandWordEscaped for why the two stages
 // are separable.
@@ -9013,8 +9007,8 @@ func (r *Runner) nestedInnerSpan(e *syntax.ParamExpr) (syntax.Span, splitPolicy)
 func (r *Runner) nestedInnerFields(e *syntax.ParamExpr) []string {
 	var words []string
 	// The inner is exactly one substitution span — the grammar admits nothing
-	// else in that position — so this is expandOneWord's loop with the loop
-	// taken out, and it keeps the fields that expandAt yields rather than
+	// else in that position — so this is the one-word pipeline's loop with
+	// the loop taken out, and it keeps the fields that expandAt yields rather than
 	// joining them the way expandWordNoSplit does. Whether those fields are
 	// a list or one string is the caller's question: nestedWords refuses a
 	// list and nestedResultIsAList decides it for a subscript.

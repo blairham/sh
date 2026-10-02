@@ -3346,6 +3346,9 @@ func Semantics() interp.Semantics {
 	// An element store arithmetic refuses fails the expression, as `1/0`
 	// does: `(( a[0] = 1 ))` is 2. Measured 2026-10-02 on 5.9.2 (#5145).
 	s.ArithStoreRefusalIsAnError = interp.Yes
+	// `inf` and `nan` are the floating constants, in any case. Measured
+	// 2026-10-02 on 5.9.2 (#5145).
+	s.ArithInfAndNaNAreConstants = interp.Yes
 	// The operand of `exit` and of `return` is an arithmetic expression here,
 	// and alone in the panel: `return r` is the value of `r` and `return r+1`
 	// is one more, where ksh93 reads the leading digits and gets 0, and dash

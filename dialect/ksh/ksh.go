@@ -3095,6 +3095,10 @@ func Semantics() interp.Semantics {
 	// An element store arithmetic refuses fails the expression, as `1/0`
 	// does. Measured 2026-10-02 on 93u+ 2012-08-01 (#5145).
 	s.ArithStoreRefusalIsAnError = interp.Yes
+	// `inf` and `nan` are names like any other, unset ones reading as
+	// nothing a script can use. Measured 2026-10-02 on 93u+ 2012-08-01
+	// (#5145).
+	s.ArithInfAndNaNAreConstants = interp.No
 	// unanswered ReadDelimiterIsTheLocalesCharacter: 93u+ 2012-08-01 follows
 	// neither reading of a delimiter of more than one byte — see the field —
 	// so the shell refuses by name rather than choosing one (#5153).

@@ -274,6 +274,39 @@ func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 	return v, err
 }
 
+// arithFloatConstant is the value a name stands for where the dialect reads
+// `inf` and `nan` as constants. See Semantics.ArithInfAndNaNAreConstants.
+func (r *Runner) arithFloatConstant(name string) (arithNum, bool) {
+	if len(name) != 3 || r.sem().ArithInfAndNaNAreConstants != Yes {
+		return arithNum{}, false
+	}
+	switch {
+	case strings.EqualFold(name, "inf"):
+		return floatNum(math.Inf(1)), true
+	case strings.EqualFold(name, "nan"):
+		return floatNum(math.NaN()), true
+	}
+	return arithNum{}, false
+}
+
+// constantIsNoPlace refuses an assignment or an increment whose target is
+// one of the floating constants, which is no place to store anything:
+// measured 2026-10-02 on zsh 5.9.2, `(( NaN = 1 ))`, `(( Inf++ ))` and `$((
+// inf += 1 ))` are each `bad math expression: lvalue required` (#5145).
+func (r *Runner) constantIsNoPlace(p arithPlace) error {
+	if p.subscripted {
+		return nil
+	}
+	if _, constant := r.arithFloatConstant(p.name); !constant {
+		return nil
+	}
+	reason := r.diag().ArithAssignToNonPlace
+	if reason == "" {
+		reason = r.diag().ArithIncrementNeedsAPlace
+	}
+	return arithError{msg: Wording(reason, "attempted assignment to non-variable"), complete: true}
+}
+
 // forcedFloat is an operand's value as a float where the runner's arithmetic
 // forces every one to be — zsh's `force_float` — and as it is otherwise.
 // Measured 2026-10-02 on zsh 5.9.2 under `setopt force_float`: `$(( 3/4 ))`
@@ -297,9 +330,23 @@ func (r *Runner) evalNumNode(e syntax.ArithExpr) (arithNum, error) {
 		return r.forcedFloat(r.parseArithNum(x.Text, x.Tail))
 
 	case *syntax.ArithVar:
+		if c, ok := r.arithFloatConstant(x.Name); ok {
+			return c, nil
+		}
 		return r.forcedFloat(r.arithValueOf(x.Name))
 
 	case *syntax.ArithIndex:
+		if _, constant := r.arithFloatConstant(x.Name); constant {
+			// A constant with brackets after it, which the dialect that
+			// reads `Inf` as one takes for a base it cannot read: measured
+			// 2026-10-02 on zsh 5.9.2, `integer Inf; $(( Inf[0] ))` and
+			// `Inf=(5 6); $(( Inf[1] ))` are both `bad base syntax` and
+			// end the shell at 1 (#5145).
+			return intNum(0), arithError{
+				msg:      Wording(r.diag().ArithBadBaseSyntax, "bad base syntax"),
+				complete: true,
+			}
+		}
 		return r.forcedFloat(r.arithElement(x))
 
 	case *syntax.ArithCharCode:
@@ -1553,6 +1600,9 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 					"%[1]s needs a variable", x.Op),
 			}
 		}
+		if err := r.constantIsNoPlace(place); err != nil {
+			return intNum(0), err
+		}
 		place, err := r.settlePlaceIndex(place)
 		if err != nil {
 			return intNum(0), err
@@ -1650,6 +1700,9 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 		// has a plain name. The empty pair used to be refused while parsing
 		// and so could be left out of this — see ArithAssign.Empty (#1764).
 		subscripted: x.Index != nil || x.Sub != "" || x.Empty,
+	}
+	if err := r.constantIsNoPlace(place); err != nil {
+		return intNum(0), err
 	}
 	v, err := r.evalNum(x.Value)
 	if err != nil {

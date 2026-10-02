@@ -3083,6 +3083,9 @@ func Semantics() interp.Semantics {
 	s.NamesTakeTheLocalesLetters = interp.Yes
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
+	// unanswered ReadDelimiterIsTheLocalesCharacter: 93u+ 2012-08-01 follows
+	// neither reading of a delimiter of more than one byte — see the field —
+	// so the shell refuses by name rather than choosing one (#5153).
 	// A pipeline whose last element ran here is judged by that element's own
 	// status, and a builtin or a function there is judged twice: `true |
 	// false` writes EE and `true | /usr/bin/false` writes E, and `set -o

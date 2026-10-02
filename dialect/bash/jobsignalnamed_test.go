@@ -8,7 +8,8 @@ import (
 	"testing"
 )
 
-var pidRun = regexp.MustCompile(`[0-9]{4,}`)
+// A pid, and the padding a short one is written with.
+var pidRun = regexp.MustCompile(` +[0-9]{3,} `)
 
 // TestAJobASignalEndedIsNamedBySignal pins the `jobs` row for a job a signal
 // ended, and the notice a named `wait` writes over one. Measured 2026-10-02
@@ -30,7 +31,7 @@ func TestAJobASignalEndedIsNamedBySignal(t *testing.T) {
 		{"/bin/sh -c 'exit 158' & wait $!; echo st=$?", "st=158\n"},
 	} {
 		out, _ := runBash(t, t.TempDir(), tc.src)
-		if got := pidRun.ReplaceAllString(out, "PID"); got != tc.want {
+		if got := pidRun.ReplaceAllString(out, " PID "); got != tc.want {
 			t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
 		}
 	}

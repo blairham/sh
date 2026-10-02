@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -3339,6 +3340,26 @@ func (sh Shell) executeLines(
 			// parse error, an EXIT trap it set fires after it, `-x` traces
 			// it, an option it sets is the grammar the string is read in, and
 			// a refused `-o nosuchopt` is reported instead of the error.
+			//
+			// And `-v` writes back what was read, which is all of it at once:
+			// the whole text and then one newline, added whether or not the
+			// text ended in one, before a line of it runs and before a refusal
+			// of it. So nothing is echoed a line at a time after this, and a
+			// `set -v` on the string's own first line echoes nothing — the
+			// read it would have reported has already happened. Measured
+			// 2026-10-02 on zsh 5.9.2 (`-fv -c`, through `sed -n l`, #5428):
+			//
+			//	echo a⏎echo b       echo a, echo b, a, b
+			//	echo a              echo a, a
+			//	echo a⏎             echo a, an empty line, a
+			//	echo a⏎if; then     echo a, if; then, the parse error
+			//	set -v⏎echo a       a
+			//	set +v⏎echo a       set +v, echo a, a
+			//	''                  an empty line
+			if r.Verbose() {
+				_, _ = io.WriteString(r.Err(), pr.text()+"\n")
+			}
+			echoed = verbosePos{line: math.MaxInt, off: len(pr.text()) + 1}
 			p := syntax.NewParser(pr.text(), pr.dialect)
 			p.Aliases, p.GlobalAliases, p.SuffixAliases = pr.aliases, pr.globalAliases, pr.suffixAliases
 			p.Parse()

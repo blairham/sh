@@ -14,7 +14,7 @@ filing the table as work.
     21 real results      <- the number the burndown moves
     487 differing lines
 
-**Since that commit, twelve files have become real results**, each verified
+**Since that commit, thirteen files have become real results**, each verified
 byte-identical in output and status under the reference's own driver:
 
     C02cond          59 of 59 chunks   82566556f   #5146
@@ -29,6 +29,7 @@ byte-identical in output and status under the reference's own driver:
     D01prompt        16 of 16          (#5150's closing PR)
     V09datetime      16 of 16          (#5160's closing PR; in the suite's image, see below)
     E03posix         18 of 18          5d1dc7eaa   #5157, on this Mac and in the suite's image
+    V06parameter      5 of 5           c368f04ea   #5159, on this Mac and in the suite's image
 
 `E03posix` was measured at `5d1dc7eaa`, 2026-10-02, under the reference's own
 driver run serially from `Test/`: 18 of 18 chunks and 510 driver lines with 0
@@ -40,7 +41,14 @@ named `zsh` reads strict 1/1, `of those` 0/1, `ref cannot run` 0/1 and line
 agreement 100.0%. The image row needed #5445: there the suite runs as root,
 and an `EUID` assignment that changed nothing passed a row the reference fails.
 
-So the count the burndown moves is **33** today. The roll-up figures above are left at the commit they were taken at
+`V06parameter` was measured at `c368f04ea` the same day and the same two
+ways: 5 of 5 chunks and 244 driver lines with 0 differing on this Mac and in
+the image, and strict 1/1, `ref cannot run` 0/1 and line agreement 100.0%
+through the harness. It was ungradeable until #5448 linked the reference's own
+modules where the driver looks for them, and its roots were #5453 (`eval`'s
+text in the four trace arrays) and #5457 (`hashlistall`).
+
+So the count the burndown moves is **34** today. The roll-up figures above are left at the commit they were taken at
 rather than adjusted by hand: the whole-suite run is CI's, and a line total
 edited in place is a number nobody can reproduce.
 
@@ -55,12 +63,12 @@ and carries 51. 436 + 51 = 487, and real results are 21 either way. A per-file
 sum that does not reconcile with the whole-suite run is a fault in one of
 them — see `instruments.md` §11 for the one it caught here.
 
-## Real results (21 at `37355aae5`, 33 today)
+## Real results (21 at `37355aae5`, 34 today)
 
 These carry a result rather than an agreed refusal. `C02cond`, `D09brace`,
 `V12zparseopts`, `V13zformat`, `C05debug`, `W01history`, `A02alias`,
-`B07emulate`, `V04features`, `D01prompt`, `V09datetime` and `E03posix` are the
-twenty-second through thirty-third and are listed here rather than below; every
+`B07emulate`, `V04features`, `D01prompt`, `V09datetime`, `E03posix` and
+`V06parameter` are the twenty-second through thirty-fourth and are listed here rather than below; every
 other entry is as measured at the heading's commit.
 
 `V09datetime` is a real result **in the suite's image and not on a Mac**, and
@@ -331,7 +339,7 @@ front can only move chunks up.
 
 | unreached | ref | ours | lines | file | today's front |
 |---:|---:|---:|---:|---|---|
-| 4 | 5 | 1 | 34 | `V06parameter` | Eval tracing — gradeable since #5159 linked the reference's modules; measured 2026-10-02 at `46059ce4d` |
+| 0 | 5 | 5 | 0 | `V06parameter` | *a real result at `c368f04ea` — see the list at the top (#5159)* |
 | 2 | 25 | 23 | 8 | `V10private` | typeset still works with zsh/param/private module loaded |
 | 3 | 5 | 2 | 53 | `E02xtrace` | xtrace with and without redirection |
 | 12 | 12 | 0 | 2 | `V07pcre` | nothing runs; the reference's own first chunk is `Testing PCRE multibyte with locale en_US.UTF-8` |

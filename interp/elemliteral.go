@@ -52,6 +52,10 @@ func (r *Runner) assignElemLiteral(a *syntax.Assign) {
 // distinction a scalar `a[0]+=Q` already draws against `a+=(Q)` — the
 // subscript is what says which of the two the operator means.
 func (r *Runner) spliceElemLiteral(a *syntax.Assign) {
+	if a.IndexRange != nil {
+		r.spliceElemLiteralOverAFlaggedSpan(a)
+		return
+	}
 	r.spliceWordsIntoElement(a, r.joinWord(a.Index), func() ([]string, bool) {
 		return r.literalWords(a.Name, a.Elems)
 	})

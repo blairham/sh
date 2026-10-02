@@ -13688,6 +13688,10 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// This is the switch the attribute exists to throw — the same text
 		// on an undeclared name falls through to the arithmetic reading.
 		r.assignAssocElement(a)
+	case a.Index != nil && a.IndexRange != nil:
+		// A pair whose ends carry flag groups names a span by them. See
+		// interp/flaggedpairassign.go.
+		r.assignFlaggedSpan(a)
 	case a.Index != nil && a.IndexFlags != nil:
 		// A flag group names the element instead of an expression naming it:
 		// `a[(r)y]=Q` replaces the element whose value is `y`, and

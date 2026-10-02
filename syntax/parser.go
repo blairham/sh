@@ -4147,6 +4147,15 @@ func (p *Parser) parseAssign(h assignHead) *Assign {
 			p.newWord(h.index, h.index[0].Pos, p.tok.End), true)
 		a.IndexFlags = p.assignIndexFlags(h.index)
 		a.IndexText = p.textBetween(h.from, h.to)
+		if p.dialect.ArraySubscriptFlags {
+			// The pair is asked about the way the read side asks it, and for
+			// its reason: the group at the front of `(r)q,(r)r` is the first
+			// end's and not the whole subscript's. See Assign.IndexRange.
+			if rng, isPair := p.subscriptRange(a.IndexText, h.index[0].Pos); isPair &&
+				(rng.Lo.Flags != nil || rng.Hi.Flags != nil) {
+				a.IndexRange = rng
+			}
+		}
 	} else if h.subscripted {
 		// `a[]=v`: brackets were written and they hold nothing. The spans
 		// came to none, so without this the assignment arrives looking

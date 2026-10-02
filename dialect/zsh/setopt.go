@@ -792,7 +792,17 @@ var zshOptions = []zshOption{
 	// and zsh.go for the measurement that put this shell on the other one.
 	switchBacked("cprecedences", false, cPrecedences, setCPrecedences),
 	recorded("cshjunkiehistory", false),
-	recorded("cshjunkieloops", false),
+	{
+		// CSH_JUNKIE_LOOPS: a loop's body may be a list closed by `end`, and
+		// the one-command body is gone. See
+		// syntax.Dialect.LoopBodyEndsInEnd for the rows (#5155).
+		base: "cshjunkieloops", def: false,
+		get: func(r *interp.Runner) bool { return r.LoopBodyEndsInEnd() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetLoopBodyEndsInEnd(on)
+			return 0
+		},
+	},
 	recorded("cshjunkiequotes", false),
 	nullCommandOption("cshnullcmd"),
 	recorded("cshnullglob", false),

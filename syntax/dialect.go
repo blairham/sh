@@ -1136,6 +1136,27 @@ type Dialect struct {
 	// body — and reading the two together is what made this look like a split
 	// between emulations before it was measured a separator apart.
 	ShortFormBody bool
+	// LoopBodyEndsInEnd reads a loop's body that is neither `do … done` nor
+	// a brace group as a list closed by `end`, the way `foreach`'s is — and
+	// takes the one-command body away. zsh's `cshjunkieloops`. Measured
+	// 2026-10-02 on zsh 5.9.2 under `eval` after the option, E01options'
+	// `CSH_JUNKIE_LOOPS option (for loop)` (#5155):
+	//
+	//	for f in a b; print $f; end        a, b
+	//	for f (a b) print $f; print x; end a, x, b, x
+	//	for ((i=0;i<2;i++)); print $i; end 0, 1
+	//	repeat 1; print r; print s; end    r, s
+	//	for f in a b; do print $f; done    a, b — the keyword body stands
+	//	for f in a b; { print $f }         a, b — and so does the brace one
+	//	for f (a b) print $f               parse error near `$f'
+	//	repeat 1 print r                   parse error near `r'
+	//	if true; then print t; end         parse error near `end' — loops only
+	//
+	// `while` and `until` take it too, and their condition list runs on to
+	// the `end` where a `;` keeps it going: `while ((i++ < 2)) print w$i;
+	// end` prints w1 and w2, and the same with a `;` before `print` never
+	// stops, the `print` being the condition.
+	LoopBodyEndsInEnd bool
 
 	// Repeat is `repeat N`, a loop over a count rather than over a list or a
 	// condition. One shell in the panel has it; the other four read the word

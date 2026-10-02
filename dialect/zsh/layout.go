@@ -46,6 +46,9 @@ func FunctionLayout() syntax.Layout {
 		CaseHeaderSuffix:          "",
 		CaseArmsOnOneLine:         true,
 		CasePatternsParenthesised: true,
+		// `c|d)` is listed `(c | d)`, and `(a|b)` as written. Measured
+		// 2026-10-02 (#5138).
+		CaseAlternativesSpaced: true,
 
 		// Three things this shell agrees with the other engine about, and
 		// three it does not — measured on zsh 5.9.2 through `typeset -f`

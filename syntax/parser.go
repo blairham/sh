@@ -3896,6 +3896,9 @@ func (p *Parser) parseSimple() Command {
 				// Falling through rather than looping is what keeps a word
 				// that names no alias from being offered here forever.
 			}
+			if !c.DeclaresByReservedWord && p.reservedDeclarationAssignment(c) {
+				c.DeclaresByReservedWord = true
+			}
 			if a, consumed := p.declarationArray(c); consumed {
 				if a != nil {
 					c.Assigns = append(c.Assigns, a)
@@ -4733,6 +4736,57 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 // replaced and is exactly what it must not be: it hands back the text with the
 // quotes taken off, so `'typeset'` and `typeset` are one word to it, and two
 // of the three columns that have the construct refuse the first (#3351).
+// reservedDeclarationAssignment reports whether the word at hand is an
+// assignment written as an operand of a reserved-word declaration. See
+// Dialect.DeclarationReservedWords for the measurement.
+//
+// Read off the spelling and not through isAssign, which can parse a
+// subscript: an unquoted name, then `=`, `+=` or a bracketed subscript whose
+// `]=` or `]+=` comes later in the word.
+func (p *Parser) reservedDeclarationAssignment(c *SimpleCmd) bool {
+	if len(c.Args) == 0 || !p.dialect.DeclarationReservedWords[c.Args[0].Literal()] ||
+		p.tok.Kind != TokWord || len(p.tok.Spans) == 0 {
+		return false
+	}
+	for _, sp := range c.Args[0].Spans {
+		// A reserved word is written as itself: a quoted or expanded
+		// spelling of one is a command word that names a builtin.
+		if sp.Kind != Literal || sp.Quoting != Unquoted {
+			return false
+		}
+	}
+	first := p.tok.Spans[0]
+	if first.Kind != Literal || first.Quoting != Unquoted {
+		return false
+	}
+	n := 0
+	for n < len(first.Value) && isNameByte(first.Value[n], n) {
+		n++
+	}
+	if n == len(first.Value) {
+		return false
+	}
+	switch rest := first.Value[n:]; {
+	case n > 0 && (strings.HasPrefix(rest, "=") || strings.HasPrefix(rest, "+=")):
+		return true
+	case rest[0] == '[':
+		// With or without a name in front of it: `typeset [a]=1` is listed
+		// with the blank too, where `typeset =x` is not. Measured
+		// 2026-10-02.
+		for i, sp := range p.tok.Spans {
+			v := sp.Value
+			if i == 0 {
+				v = rest
+			}
+			if sp.Kind == Literal && sp.Quoting == Unquoted &&
+				(strings.Contains(v, "]=") || strings.Contains(v, "]+=")) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (p *Parser) declarationWordWritten(spans []Span) bool {
 	if len(p.dialect.DeclarationUtilities) == 0 {
 		return false
@@ -7839,6 +7893,7 @@ func (p *Parser) parseCase() Command {
 			parenthesized = true
 			p.next()
 		}
+		it.Grouped = parenthesized && p.dialect.CasePatternListSpansBlanks
 		if !p.casePatterns(it, parenthesized) {
 			p.lex.inArgument, p.lex.inCaseParenList = saved, savedList
 			p.inCaseWord = false

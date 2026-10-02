@@ -6207,6 +6207,21 @@ type Dialect struct {
 	// Empty means none, which is dash: it has no array literal at all.
 	DeclarationUtilities map[string]bool
 
+	// DeclarationReservedWords are the declaration commands that are
+	// reserved words, whose assignments the grammar reads as assignments
+	// wherever they stand among the operands. What it changes here is the
+	// listing: one engine writes such a command back with a blank after it
+	// when it holds one — see SimpleCmd.DeclaresByReservedWord.
+	//
+	// Measured 2026-10-02 on zsh 5.9.2 through `which`: `typeset a=1`,
+	// `local d=2`, `export e=3`, `readonly j=5`, `integer k=6`, `float l=7`
+	// and `declare m=8` come back with the blank, and so do `typeset b=1 c`
+	// and `typeset c b=1` — once, at the end — while `typeset c d`,
+	// `typeset "a=1"`, `typeset $x=1`, `builtin typeset a=1` and `private
+	// q=(1)` come back without one: `private` takes an array operand
+	// (DeclarationUtilities) and is not a reserved word (#5138).
+	DeclarationReservedWords map[string]bool
+
 	// DeclarationArrayFromTheCommandWord is how the command word must be
 	// written for a `name=( … )` operand behind it to be an array literal.
 	//

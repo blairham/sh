@@ -233,6 +233,13 @@ type Layout struct {
 	// CasePatternsParenthesised writes an arm's pattern with the opening
 	// parenthesis that the grammar allows and most shells leave out.
 	CasePatternsParenthesised bool
+	// CaseAlternativesSpaced writes a blank on each side of the `|` between
+	// an arm's alternatives, as both listings do: `a|b)` comes back `a |
+	// b)` in bash 5.3.20's `declare -f` and `(a | b)` in zsh 5.9.2's
+	// `which`, measured 2026-10-02 (#5138). An arm one dialect read as a
+	// single pattern is written as it read it — see CaseItem.Grouped —
+	// which is what keeps zsh's `( a | b )` as `(a|b)`.
+	CaseAlternativesSpaced bool
 
 	// SubshellBodyOnItsOwnLines gives a `( … )` the shape a brace group
 	// gets: the parenthesis ends its line, the statements are indented one
@@ -820,16 +827,24 @@ type printer struct {
 	// caller that wants them rather than the text — see TranslatedStrings.
 	// Nil for every ordinary print.
 	translated *[]TranslatedString
+	// assignmentBlankAt is how much had been written when an assignment
+	// word's blank was, so that blank and no other can stand in for a
+	// separator. See endsInAnAssignmentsBlank.
+	assignmentBlankAt int
 }
 
 func (p *printer) str(s string) { p.b.WriteString(s) }
 
-// endsInABlank reports whether what has been written so far ends in a blank,
-// which is how a separator knows to stand down for one an assignment word
-// already carried. See Layout.BlankAfterAnAssignment.
-func (p *printer) endsInABlank() bool {
-	written := p.b.String()
-	return len(written) > 0 && written[len(written)-1] == ' '
+// endsInAnAssignmentsBlank reports whether the last thing written is the
+// blank an assignment word carries, which is how a separator knows to stand
+// down for it. See Layout.BlankAfterAnAssignment.
+//
+// The blank itself and not any blank: a word can end in one of its own, and
+// `echo a\  b` read as "the text ends in a blank" lost its separator and
+// came back `echo a\ b`, one argument where there were two. Measured
+// 2026-10-02, zsh 5.9.2 lists it with both (#5138).
+func (p *printer) endsInAnAssignmentsBlank() bool {
+	return p.assignmentBlankAt > 0 && p.b.Len() == p.assignmentBlankAt
 }
 
 // atLineStart reports whether what has been written so far ends a line.
@@ -1873,9 +1888,13 @@ func (p *printer) caseArms(x *CaseClause) {
 		if p.layout.CasePatternsParenthesised || p.caseBlanks {
 			p.str("(")
 		}
+		sep := "|"
+		if p.layout.CaseAlternativesSpaced && !it.Grouped {
+			sep = " | "
+		}
 		for i, pat := range it.Patterns {
 			if i > 0 {
-				p.str("|")
+				p.str(sep)
 			}
 			p.word(pat)
 		}
@@ -1945,7 +1964,7 @@ func patternsNeedTheParen(it *CaseItem) bool {
 func (p *printer) simple(c *SimpleCmd) {
 	first := true
 	sep := func() {
-		if !first && !p.endsInABlank() {
+		if !first && !p.endsInAnAssignmentsBlank() {
 			// Not where the last thing written already ended in one, which
 			// is Layout.BlankAfterAnAssignment's doing: the blank an
 			// assignment carries *is* the separator to whatever follows it,
@@ -2006,6 +2025,14 @@ func (p *printer) simple(c *SimpleCmd) {
 		sep()
 		p.assign(operands[next])
 	}
+	if p.layout.BlankAfterAnAssignment && c.DeclaresByReservedWord {
+		// Once, at the end, wherever the assignment stood among the
+		// operands: `typeset b=1 c` is listed `typeset b=1 c ` and `typeset
+		// c b=1` as `typeset c b=1 ` — and after a word ending in a blank of
+		// its own as well, `typeset a=x\ ` being `typeset a=x\  `. See
+		// Dialect.DeclarationReservedWords.
+		p.str(" ")
+	}
 	// A command that is nothing but redirections has no word for the blank
 	// to separate them from — see Layout.BlankBeforeAWordlessRedirection,
 	// which is where the two engines part.
@@ -2013,12 +2040,18 @@ func (p *printer) simple(c *SimpleCmd) {
 }
 
 func (p *printer) assign(a *Assign) {
-	if p.layout.BlankAfterAnAssignment {
+	if p.layout.BlankAfterAnAssignment && !a.Operand {
 		// Written by the one call that ends an assignment rather than at
-		// each of its four call sites — a prefix, an operand written between
-		// a command's words, one written after them, and a compound
-		// variable's own list — so a fifth cannot be added without it.
-		defer p.str(" ")
+		// each of its call sites — a prefix and a compound variable's own
+		// list — so another cannot be added without it.
+		//
+		// Not for an operand: the blank a declaration's assignment earns is
+		// the command's, written once at its end. See
+		// SimpleCmd.DeclaresByReservedWord.
+		defer func() {
+			p.str(" ")
+			p.assignmentBlankAt = p.b.Len()
+		}()
 	}
 	p.str(a.Name)
 	if a.Index != nil {

@@ -609,8 +609,13 @@ type SimpleCmd struct {
 	// Nothing that *runs* the command reads them. That is the point of the
 	// class: a word the grammar removes is a word the command cannot see.
 	Precommands []*Word
-	Start       Pos
-	Stop        Pos
+	// DeclaresByReservedWord says the command word is one of
+	// [Dialect.DeclarationReservedWords] and an operand is an assignment,
+	// which a listing marks with a blank at the end. A fact read off the
+	// words, so a tree printed and read again says it again.
+	DeclaresByReservedWord bool
+	Start                  Pos
+	Stop                   Pos
 }
 
 func (c *SimpleCmd) Pos() Pos     { return c.Start }
@@ -1001,6 +1006,13 @@ type CaseItem struct {
 	Term    Kind
 	TermPos Pos
 	Start   Pos
+	// Grouped says the arm's list was written inside its parenthesis in a
+	// dialect that reads that list as one pattern, which is how it is
+	// listed: zsh 5.9.2 writes `( a | b )` back as `(a|b)` and `c | d)` as
+	// `(c | d)`, and under `emulate sh`, where the parenthesis is only the
+	// arm's, `(one|two)` as `(one | two)`. Measured 2026-10-02 (#5138). See
+	// Dialect.CasePatternListSpansBlanks, the flag that option moves.
+	Grouped bool
 }
 
 func (i *CaseItem) Pos() Pos { return i.Start }

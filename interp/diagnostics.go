@@ -5470,6 +5470,16 @@ type Diagnostics struct {
 	// brace, and a parameter form a character stopped is that character
 	// standing where it should not. See syntax.Error.BraceNameStop.
 	UnmatchedBraceSubstAtStop string
+	// RawTextBraceRanOutInTheName is the sentence for a `${` that never
+	// closed in text read at expansion time — a here-document's body, a
+	// value the `(e)` flag reads again — where the text ran out before an
+	// operator: `${`, `${x`, `${#x`, `${(e)x`. Empty keeps the ordinary
+	// unterminated wording. Measured 2026-10-02 on zsh 5.9.2: `a='${';
+	// : ${(e)a}` and a body holding `${x` are `bad substitution`, where
+	// `${x:-` in either is `closing brace expected` and `eval ': ${x'` is
+	// `closing brace expected` too — the command line's reader does not
+	// part the two (#5138).
+	RawTextBraceRanOutInTheName string
 	// UnmatchedBraceSubstDropsTheNameNewline reports an unterminated `${x`
 	// one line earlier than the input ran out: the newline the parameter
 	// name stopped at is not counted.

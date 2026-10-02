@@ -1747,6 +1747,9 @@ func (r *Runner) waitNextJobs(args []string) ([]*Job, int) {
 				jobs = append(jobs, j)
 				continue
 			}
+			if code == jobIsTheSubshell {
+				continue
+			}
 			if code == jobSpecAmbiguous {
 				r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
 					"%[1]s: %[2]s: ambiguous job spec", "wait", strings.TrimPrefix(a, "%")))
@@ -1851,6 +1854,9 @@ func (r *Runner) interruptedWaitStatus(sig syscall.Signal, named bool) int {
 func (r *Runner) waitJobSpecNaming(spec string) (int, *Job) {
 	j, code := r.findJobQuietly(spec)
 	switch code {
+	case jobIsTheSubshell:
+		// Returned from at once. See subshellSelfLookup.
+		return 0, nil
 	case jobFound:
 		st, sig, hit, stopped := r.waitFor(j)
 		if r.unspecified {

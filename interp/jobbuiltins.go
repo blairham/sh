@@ -177,6 +177,12 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 		jobs = make([]*Job, 0, len(args))
 		for _, a := range args {
 			j, found := r.findJobQuietly(a)
+			if found == jobIsTheSubshell && form == jobsStateRow {
+				// The subshell itself, which a plain listing writes as
+				// nothing at 0 — `jobs -l` and `-p` miss it. See
+				// subshellSelfLookup.
+				continue
+			}
 			if found != jobFound {
 				badSpec, badLookup = a, found
 				break
@@ -1036,6 +1042,11 @@ func (r *Runner) findJob(spec, name string) (*Job, int) {
 // something else before the complaint — `jobs %1 %9` lists job 1 and reports
 // the bad spec after it, in every shell in the panel.
 func (r *Runner) reportJobLookup(spec string, code int, name string) int {
+	if code == jobIsTheSubshell {
+		// Missed by every verb but the two that pass over it. See
+		// subshellSelfLookup.
+		code = jobMissing
+	}
 	switch code {
 	case jobSpecAmbiguous:
 		r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
@@ -1136,6 +1147,11 @@ const (
 	// every verb but `kill`, which sends it nothing and succeeds. See
 	// Semantics.ACommandHoldsAJobSlot.
 	jobOnAnEmptySlot
+	// jobIsTheSubshell is a spec naming the `( … )` subshell this shell is,
+	// in the dialect where the subshell is a job of its own: a plain `jobs`
+	// lists it as nothing and `wait` returns at once, both at 0, and every
+	// other verb misses it as usual. See subshellSelfLookup.
+	jobIsTheSubshell
 )
 
 // findJobQuietly is findJob without the complaint, for a caller that words its
@@ -1149,6 +1165,9 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	switch text {
 	case "", "%", "+":
 		current, _ := r.markedEntries()
+		if current == nil && r.subshellSelfLookup(r.inheritedCurrentJob) {
+			return nil, jobIsTheSubshell
+		}
 		return r.markedLookup(current)
 	case "-":
 		// The runner-up rather than the job before this one in the table,
@@ -1156,11 +1175,20 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 		// markedJobs. Measured, the two agree in every column: `jobs %-`
 		// names exactly the job a listing puts `-` on.
 		_, previous := r.markedEntries()
+		if previous == nil && r.inheritedPreviousJob == 1 && r.subshellSelfLookup(1) {
+			// The `-` on 1, which is the subshell itself; a `-` on any
+			// other number naming nothing is still no previous job. See
+			// subshellSelfLookup.
+			return nil, jobIsTheSubshell
+		}
 		return r.markedLookup(previous)
 	}
 	n, ok := atoi(text)
 	if !ok {
 		return r.findJobByName(text)
+	}
+	if n == 1 && r.subshellSelfLookup(1) {
+		return nil, jobIsTheSubshell
 	}
 	if n != 0 && n == r.commandSlot {
 		return nil, jobOnAnEmptySlot
@@ -1220,4 +1248,28 @@ func (r *Runner) findJobByName(text string) (*Job, int) {
 		return nil, jobSpecUnanswered
 	}
 	return matches[len(matches)-1], jobFound
+}
+
+// subshellSelfLookup says a spec naming this number names the `( … )`
+// subshell this shell is: the subshell's own slot, 1, or a current-job number
+// it inherited that names no job here. Measured 2026-10-01 on zsh 5.9.2 under
+// `-f -c`, the subshell not the last command:
+//
+//	(jobs %1; echo u=$?; wait %1; echo w=$?); :      u=0, w=0
+//	(jobs -l %1; jobs -p %1; disown %1); :           %1: no such job, each
+//	(kill -0 %1); :                                  %1: no such job, 1
+//	sleep 3 & ( jobs %%; echo s=$?; jobs %-; …); :   s=0, then no previous job
+//	sleep 3 & sleep 3 & sleep 3 & ( jobs %%; … ); :  s=0, the `+` on 3,
+//	                                                 and `%-` on 2 is no
+//	                                                 previous job
+//	sleep 3 & sleep 3 & ( sleep 0.5 & jobs %-; … ); :
+//	                                                 0: the `-` on 1
+//	( jobs %%; echo s=$? ); :                        no current job, 127
+//	x=$(jobs %1; wait %1)                            0 and 0, in a substitution too
+//
+// So a plain `jobs` and `wait` pass over it and every other verb misses it.
+// The last command of a `-c` string is not forked there, and its markers move
+// as the shell's own do — see #5320; that route is not modeled here.
+func (r *Runner) subshellSelfLookup(num int) bool {
+	return r.ownJobsStartAtTwo && num != 0 && r.jobByNumber(num) == nil
 }

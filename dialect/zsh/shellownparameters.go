@@ -52,6 +52,7 @@ func markTheShellsOwnParameters(r *interp.Runner) {
 		// write is left alone.
 		r.SetDynamicDeclaration(name, interp.ProducedDeclaration{Integer: true, Base: 10})
 	}
+	guardIdentityAssignments(r)
 	r.MarkShellOwnParameter("IFS")
 	for _, pair := range builtInTies {
 		r.MarkShellOwnParameter(pair[0])

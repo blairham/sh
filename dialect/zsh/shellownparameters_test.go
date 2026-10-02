@@ -42,7 +42,9 @@ func TestTheShellsOwnStoredParametersDescribeThemselves(t *testing.T) {
 			"typeset -i10 UID\nvalue ok\n",
 		},
 		{"and the separator's does not", `typeset -p IFS`, "typeset IFS=$' \\t\\n\\C-@'\n"},
-		{"an assignment is still stored as written", `EGID=1+1; print -r -- $EGID`, "1+1\n"},
+		// An assignment of the id it already is is stored; one of another id
+		// is refused, which identityassign_test.go grades (#5142).
+		{"an assignment of the same id is stored", `x=$EGID; EGID=$x; [[ $EGID = $x ]] && print -r -- same`, "same\n"},
 		// The controls. A produced parameter was right throughout — that is
 		// what said the gap was the stored names' — and the one name this
 		// hook stores that the reference does *not* call special is the row

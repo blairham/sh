@@ -710,6 +710,26 @@ func (r *Runner) SetAssignmentAction(name string, act func(r *Runner, value stri
 	r.assignmentActions[name] = act
 }
 
+// SetAssignmentGuard says an assignment to name can be refused by what it
+// would change outside the shell: guard is asked with the value about to be
+// stored, and a refusal is the message the shell ends on, the value never
+// stored. Where the assignment is a prefix to a program, the program is not
+// run and the command fails instead — the program is a fork, and the shell
+// goes on. See Runner.prefixGuardRefuses.
+//
+// It exists for the names that say who the process is, which one shell lets
+// a script assign. Measured 2026-10-02 on zsh 5.9.2, not as root: `UID=$((UID
+// +1))` is `failed to change user ID: operation not permitted` and the shell
+// ends at 1, as does the same prefix on a builtin or a function, and on a
+// program it is the same sentence, status 1, the program not run and the
+// script going on.
+func (r *Runner) SetAssignmentGuard(name string, guard func(r *Runner, value string) (string, bool)) {
+	if r.assignmentGuards == nil {
+		r.assignmentGuards = map[string]func(*Runner, string) (string, bool){}
+	}
+	r.assignmentGuards[name] = guard
+}
+
 // SetUnsetAction says what else happens when `unset` takes an **ordinary**
 // variable away.
 //
@@ -1090,4 +1110,27 @@ func (r *Runner) SpecialParameter(name string) (string, bool) {
 		return r.optionLetters(), true
 	}
 	return r.specialParam(&syntax.ParamExpr{Name: name})
+}
+
+// prefixGuardRefuses asks the guard of each prefix a program is about to be
+// handed, and reports whether one refused. A refusal is said and the program
+// is not run, at status 1 — the program is a fork, so the shell goes on. See
+// SetAssignmentGuard.
+func (r *Runner) prefixGuardRefuses(prefixEnv []string) bool {
+	if len(r.assignmentGuards) == 0 {
+		return false
+	}
+	for _, kv := range prefixEnv {
+		name, value, _ := strings.Cut(kv, "=")
+		guard, ok := r.assignmentGuards[name]
+		if !ok {
+			continue
+		}
+		if msg, refused := guard(r, value); refused {
+			r.diagf("%s\n", msg)
+			r.status = 1
+			return true
+		}
+	}
+	return false
 }

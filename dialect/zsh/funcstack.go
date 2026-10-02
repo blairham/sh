@@ -40,17 +40,18 @@ import (
 // The rest agrees with `FUNCNAME` exactly: `[inner][outer]` for a nesting,
 // `[f]` for `zsh -c 'f(){ … }; f'`, innermost first in every case.
 //
-// One gap is deliberate and named here rather than papered over: real zsh
-// pushes an `(eval)` frame, so `eval` inside a function `f` reports
-// `[(eval)][f]` where this answers `[f]`. `eval` does not enter a frame in
-// this interpreter at all — it is not a unit anything else asks about either,
-// so inventing an entry here would make this parameter the only thing in the
-// shell that believes in a frame nothing pushed. See #1598.
+// Text handed to `eval` is a unit too, named `(eval)`, wherever it is a
+// place of its own — so `eval` inside a function `f` reports `[(eval)][f]`.
+// It is not a frame of the call stack, which nothing else treats it as; the
+// stack is read through interp.Runner.CallStackWithEvals, which weaves the
+// entries in where they were entered (#5159, measured there).
 func funcstackNames(r *interp.Runner) []string {
-	frames := r.CallStack()
+	frames := r.CallStackWithEvals()
 	out := make([]string, 0, len(frames))
 	for _, f := range frames {
 		switch {
+		case f.Eval:
+			out = append(out, f.Name)
 		case f.Operand != "":
 			out = append(out, f.File)
 		case f.Name != "":
@@ -69,7 +70,7 @@ func funcstackNames(r *interp.Runner) []string {
 // so the two arrays have to select the same frames or they stop lining up.
 // Measured on zsh 5.9.2 in every shape below — `${#funcstack}` and
 // `${#functrace}` are equal in all of them.
-func namesAUnit(f interp.Frame) bool { return f.Operand != "" || f.Name != "" }
+func namesAUnit(f interp.Frame) bool { return f.Eval || f.Operand != "" || f.Name != "" }
 
 // traceEntries walks the stack once and writes one element per unit
 // `$funcstack` names, so the three arrays that report on those units are the
@@ -83,7 +84,7 @@ func namesAUnit(f interp.Frame) bool { return f.Operand != "" || f.Name != "" }
 // wrong other. Spelling the selection once is what the callers differ *after*
 // — each says only how to write the element, never which frames there are.
 func traceEntries(r *interp.Runner, element func(frames []interp.Frame, i int) string) []string {
-	frames := r.CallStack()
+	frames := r.CallStackWithEvals()
 	out := make([]string, 0, len(frames))
 	for i, f := range frames {
 		if !namesAUnit(f) {
@@ -128,14 +129,21 @@ func traceEntries(r *interp.Runner, element func(frames []interp.Frame, i int) s
 // script.
 //
 // Top level is **empty**, not a one-element array: `${#functrace}` is 0 with
-// nothing called, the same place `${#funcstack}` is 0. So is the `eval` gap
-// funcstackNames records above — real zsh pushes an `(eval)` frame and this
-// shell has none — and it shows here as one *missing element* rather than as
-// a wrong one, which is the same deliberate difference and not a second.
+// nothing called, the same place `${#funcstack}` is 0.
+//
+// A call made from inside `eval`'s text is written as that text names itself,
+// `(eval)` and the text's own line: `f` on the third line of an `eval` is
+// `(eval):3`, the same wherever the `eval` stands (#5159).
 func functraceEntries(r *interp.Runner) []string {
 	return traceEntries(r, func(frames []interp.Frame, i int) string {
+		f := frames[i]
+		if i+1 < len(frames) && frames[i+1].Eval {
+			// Entered from `eval`'s text, which is named the way a
+			// diagnostic raised there names it: `(eval)` and the line of
+			// the text.
+			return frames[i+1].Name + ":" + strconv.Itoa(f.Line)
+		}
 		if enteredFromAFunctionBody(frames, i) {
-			f := frames[i]
 			return f.OuterFunc + ":" + strconv.Itoa(f.Line-f.OuterFuncLine)
 		}
 		return callSiteFileAndLine(r, frames, i)
@@ -165,8 +173,10 @@ func functraceEntries(r *interp.Runner) []string {
 // `$0`. unitFile is what keeps them apart — see enteredFromFile, which
 // measured the same split for `$functrace`.
 //
-// Empty at the top level, and short by the same `eval` frame, for the reasons
-// functraceEntries gives.
+// Empty at the top level, for the reason functraceEntries gives. A call made
+// from inside `eval`'s text is at the file's own line, the text's line one
+// being the line the `eval` stands on: `f` on the third line of an `eval` on
+// line 7 is at line 9 (#5159).
 func funcfiletraceEntries(r *interp.Runner) []string {
 	return traceEntries(r, func(frames []interp.Frame, i int) string {
 		return callSiteFileAndLine(r, frames, i)
@@ -218,7 +228,7 @@ func funcfiletraceEntries(r *interp.Runner) []string {
 func funcsourcetraceEntries(r *interp.Runner) []string {
 	return traceEntries(r, func(frames []interp.Frame, i int) string {
 		f := frames[i]
-		return unitFile(r, f) + ":" + strconv.Itoa(f.FuncLine)
+		return unitFile(r, f) + ":" + strconv.Itoa(f.FuncAbsLine)
 	})
 }
 
@@ -249,7 +259,7 @@ func enteredFromAFunctionBody(frames []interp.Frame, i int) bool {
 // arrays agree on every element `$functrace` writes this way and a second
 // copy would be free to stop agreeing.
 func callSiteFileAndLine(r *interp.Runner, frames []interp.Frame, i int) string {
-	return enteredFromFile(r, frames, i) + ":" + strconv.Itoa(frames[i].Line)
+	return enteredFromFile(r, frames, i) + ":" + strconv.Itoa(frames[i].AbsLine)
 }
 
 // enteredFromFile is the file a call was made in.
@@ -279,9 +289,12 @@ func enteredFromFile(r *interp.Runner, frames []interp.Frame, i int) string {
 	if i+1 < len(frames) {
 		return unitFile(r, frames[i+1])
 	}
-	if !frames[i].IsFunction() {
+	if !frames[i].IsFunction() && !frames[i].Eval {
 		return shellSelfName(r)
 	}
+	// A function, and `eval`'s text, entered from there are located at `$0`
+	// — measured, `zsh -f -c 'p(){…}<newline>eval p'` reports the `eval`'s
+	// own entry as `$0:2` in both `$functrace` and `$funcfiletrace`.
 	return r.Name
 }
 

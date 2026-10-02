@@ -144,9 +144,10 @@ func (r *Runner) RunFunctionBodyInPlace(ctx context.Context, name string) (bool,
 			r.frames[n-1].File, r.frames[n-1].NoFile = file, false
 		}
 		r.frames[n-1].FuncLine = defLine
+		r.frames[n-1].FuncAbsLine = defLine + origin.fileOffset
 		defer func() {
 			r.frames[n-1].File, r.frames[n-1].NoFile = saved.File, saved.NoFile
-			r.frames[n-1].FuncLine = saved.FuncLine
+			r.frames[n-1].FuncLine, r.frames[n-1].FuncAbsLine = saved.FuncLine, saved.FuncAbsLine
 		}()
 	}
 	defer r.openRuntimeFresh(fn.Body)()

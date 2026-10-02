@@ -56,6 +56,11 @@ type funcOrigin struct {
 	// definition line and from the body's offset **together**: move one
 	// without the other and the readings that were right stop being.
 	wrapperLines int
+	// fileOffset is the Runner.fileLineOffset the definition was read at:
+	// nothing in a file, and the `eval`'s line less one for a function
+	// defined in `eval`'s text where that text numbers from one. It moves
+	// only the file-counted readings — see Frame.AbsLine.
+	fileOffset int
 	// text is the source the definition was read out of, where that was not
 	// the script's own — see runningText. Unset for a function the script
 	// defined, which is quoted against the script's text wherever it is
@@ -75,7 +80,26 @@ type funcOrigin struct {
 // be the same answer — a nameless function's frame reports the file its
 // declaration would have reported had it been given a name.
 func (r *Runner) originHere() funcOrigin {
-	return funcOrigin{file: r.currentFile(), lineBase: r.lineBase, text: r.runText}
+	return funcOrigin{file: r.currentFile(), lineBase: r.lineBase, fileOffset: r.definitionFileOffset(), text: r.runText}
+}
+
+// definitionFileOffset is the file offset a body defined here is numbered at.
+//
+// It is the offset in force, except for a definition written directly in
+// `eval`'s text, which counts one further: the text's own commands are at
+// the `eval`'s line less one plus their line, while a function the text
+// defines is at the `eval`'s line plus its line. Measured 2026-10-02 on zsh
+// 5.9.2 (`-f`), from a script file: `eval 'g() { … }'` on line 2 puts `g` at
+// line 3, on line 4 at line 5, and `eval 'eval "g() { … }"'` on line 3 at line
+// 4 — one further for the definition and not for each `eval` — while `f`
+// called on the third line of an `eval` on line 7 is at line 9. A function
+// defined inside such a function is at its offset plus its line, with nothing
+// added (#5159).
+func (r *Runner) definitionFileOffset() int {
+	if n := len(r.evalUnits); n > 0 && r.evalUnits[n-1].depth == len(r.frames) && r.evalTextNumbersFromItself {
+		return r.fileLineOffset + 1
+	}
+	return r.fileLineOffset
 }
 
 // recordFunctionOrigin is the one write to the table, so that a new way of

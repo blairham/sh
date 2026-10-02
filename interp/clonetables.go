@@ -405,6 +405,7 @@ func (c *Runner) ownTables(r *Runner) {
 	// slices.Clone keeps a nil slice nil, so the same seeding trap applies as
 	// for the tables and the test seeds these too.
 	c.frames = slices.Clone(r.frames)
+	c.evalUnits = slices.Clone(r.evalUnits)
 	// And the record beside it, for the same reason and with the same shape:
 	// a call pushes into it and its return pops, so a subshell started inside
 	// a call would share the array and both would write [len-1]. Measured to

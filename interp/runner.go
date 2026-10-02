@@ -5183,6 +5183,17 @@ type Runner struct {
 	//
 	// Saved and restored beside the floor, for the floor's reasons.
 	evalTextNumbersFromItself bool
+	// evalUnits are the texts handed to `eval` that the shell is inside and
+	// that are places of their own, each with the number of frames that
+	// stood when it was entered. They are not frames — nothing else in the
+	// shell counts `eval` as a call — and one dialect lists them among the
+	// units it reports on. See CallStackWithEvals.
+	evalUnits []evalUnit
+	// fileLineOffset is how far the line numbering in force is from the
+	// file's own: zero in a file, and the line an `eval` stands on, less one,
+	// inside that `eval`'s text where the text numbers its lines from one.
+	// See Frame.AbsLine.
+	fileLineOffset int
 	// borrowed is the stack of text the shell is reading from somewhere
 	// other than the file it was handed: a file `.` read, or the string
 	// `eval` was given, innermost last.

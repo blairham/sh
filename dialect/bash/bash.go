@@ -1739,6 +1739,7 @@ func Semantics() interp.Semantics {
 	s.BraceRangePadsToEndpointWidth = interp.Yes
 	s.BraceRangeStepPadsTheRange = interp.No
 	s.BraceBodyIsACharacterClass = interp.No
+	s.ZeroSubscriptIsTheFirstElement = interp.No
 	s.BraceRangeStepSignHonored = interp.No
 	s.BraceRangeNegativeStepReverses = interp.No
 	// Braces finish before parameters begin, so a range cannot be built

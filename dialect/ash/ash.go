@@ -650,6 +650,7 @@ func Semantics() interp.Semantics {
 	// no option that would read it as a set of characters, so the answer is
 	// No rather than unmeasured.
 	s.BraceBodyIsACharacterClass = interp.No
+	s.ZeroSubscriptIsTheFirstElement = interp.No
 	// unanswered BraceRangeStepPadsTheRange: with no braces to expand there
 	// is no range to write a step in. Measured in the pinned alpine image —
 	// `echo {1..5..01}` is the six characters `{1..5..01}` — which is the

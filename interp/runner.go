@@ -2179,6 +2179,10 @@ type Runner struct {
 	// things (#1596).
 	expandingNestedInner bool
 
+	// readingARangeEnd counts the ends of a subscript pair being evaluated,
+	// which a subscript of 0 does not move. See Runner.rangeEndValue.
+	readingARangeEnd int
+
 	// flagWordBare is which of the words a flag group handed back are bare —
 	// empty fields a split or a nested list made, rather than empty values —
 	// passed from flaggedWords to expandFlagged and cleared there.

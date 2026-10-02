@@ -321,6 +321,7 @@ func Semantics() interp.Semantics {
 	// no option that would read it as a set of characters, so the answer is
 	// No rather than unmeasured.
 	s.BraceBodyIsACharacterClass = interp.No
+	s.ZeroSubscriptIsTheFirstElement = interp.No
 	// unanswered BraceRangeStepPadsTheRange: the same, and for the same
 	// reason as the line above — `echo {1..5..01}` is the word itself here,
 	// so no step is ever read and none of its zeros can pad anything.

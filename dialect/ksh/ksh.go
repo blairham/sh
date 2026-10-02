@@ -2263,6 +2263,7 @@ func Semantics() interp.Semantics {
 	s.BraceRangePadsToEndpointWidth = interp.No
 	s.BraceRangeStepPadsTheRange = interp.No
 	s.BraceBodyIsACharacterClass = interp.No
+	s.ZeroSubscriptIsTheFirstElement = interp.No
 	s.BraceRangeStepSignHonored = interp.Yes
 	s.BraceRangeNegativeStepReverses = interp.No
 	// It agrees with zsh on the one thing bash does not do at all: a

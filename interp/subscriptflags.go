@@ -159,6 +159,13 @@ func (r *Runner) searchSubscript(e *syntax.ParamExpr, search byte, src subscript
 	if search == 'i' || search == 'I' || r.subscriptIsReadAsItsIndex(e, src) {
 		return []string{itoa(at)}, true
 	}
+	if at == 0 && r.zeroSubscriptIsTheFirst() {
+		// The miss going back is the index 0, which names the first element
+		// where a subscript of 0 does. Measured on zsh 5.9.2 with
+		// `ksh_zero_subscript` on and `a=(p q r)`: `$a[(R)nf]` is `p`,
+		// `s=hello; $s[(R)z]` is `h`, while `$a[(I)nf]` is still 0.
+		at = 1
+	}
 	units := src.elems
 	if src.scalar {
 		units = r.units(src.elems[0])
@@ -1014,6 +1021,12 @@ func (r *Runner) flaggedTargetPlace(e *syntax.ParamExpr, endsTheLine bool) (flag
 	// first, which is what the read side answers and what an assignment
 	// cannot use. Refused by name rather than guessed at; see the issue the
 	// spec entry names.
+	if search == 'R' && r.zeroSubscriptIsTheFirst() {
+		// The same index 0, and on this side it writes the first element:
+		// `b=(p q r); b[(R)nf]=X` is `X q r` with `ksh_zero_subscript` on,
+		// where it is `assignment to invalid subscript range` without it.
+		return one(base, true)
+	}
 	refuse(letter, " where nothing matched")
 	return one(0, false)
 }
@@ -1119,6 +1132,9 @@ func (r *Runner) flaggedRangeSubscript(e *syntax.ParamExpr, src subscriptSource)
 	hi, ok := r.rangeEnd(e, e.IndexRange.Hi, src, false)
 	if !ok {
 		return nil, true
+	}
+	if e.IndexRange.Lo.Flags == nil && e.IndexRange.Hi.Flags == nil {
+		lo, hi = r.zeroPairIsTheFirst(lo, hi)
 	}
 	return r.rangeSpan(src, lo, hi), true
 }
@@ -1247,7 +1263,9 @@ func (r *Runner) endSubscriptValue(w *syntax.Word) (int, bool) {
 	// already taken the pair apart at the comma the source spelled, and a
 	// *third* one is refused before this, so anything left in an end arrived
 	// through a substitution. See Runner.subscriptExpression (#2160).
+	r.readingARangeEnd++
 	n, err := r.subscriptValueAsWritten("", text)
+	r.readingARangeEnd--
 	if err != nil {
 		r.diagf("%s\n", r.subscriptFailure(text, err))
 		r.expandErr = true

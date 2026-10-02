@@ -278,9 +278,6 @@ func autoloadMark(r *interp.Runner, names []string, opts autoloadOpts) int {
 		file, dirOfFile, absolute := autoloadAbsolute(name)
 		if absolute {
 			name = file[len(dirOfFile)+1:]
-			if dirOfFile == "" {
-				dirOfFile = "/"
-			}
 		}
 		if autoloadDefined(r, name) {
 			// Already a function, so there is nothing to mark: measured,

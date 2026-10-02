@@ -38,6 +38,13 @@ func TestAutoloadOfAnAbsolutePathDefinesItsBaseName(t *testing.T) {
 			`zmodload zsh/parameter; autoload -Uz $PWD/fns/myfn.zsh; print -r -- ${functions_source[myfn.zsh]}`,
 			"DIR/fns/myfn.zsh\n",
 		},
+		// Kept as written, not cleaned.
+		{
+			`zmodload zsh/parameter; autoload -Uz $PWD/fns//./myfn.zsh; functions myfn.zsh; print -r -- ${functions_source[myfn.zsh]}`,
+			"myfn.zsh () {\n\t# undefined\n\tbuiltin autoload -XUz DIR/fns//.\n}\nDIR/fns//./myfn.zsh\n",
+		},
+		// A trailing slash leaves no base name, and declares nothing.
+		{`autoload -Uz $PWD/fns/; print $?`, "0\n"},
 		{
 			`autoload -Uz $PWD/fns/nosuch; whence -w nosuch; nosuch; print $?`,
 			"nosuch: function\nzsh:1: nosuch: function definition file not found\n1\n",

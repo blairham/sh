@@ -324,8 +324,8 @@ type padder struct {
 // beside `b` is a line of 103 and a line of `2) b`, and so is every entry
 // under COLUMNS=1.
 //
-// Only against a known width: with none, the gutter alone is the column,
-// which is what an unset COLUMNS measured to.
+// With no limit the share comes back as the gutter alone, which is what an
+// unset COLUMNS measured to — so that case needs no rule of its own.
 func spreadColumns(width, cw int) (perRow, colWidth int, ok bool) {
 	usable := width - 1
 	perRow = usable / cw
@@ -371,7 +371,7 @@ func columnMenu(items []string, width int, pad padder) string {
 	plain, aligned := numberedCells(items, false), numberedCells(items, true)
 	cw := cellWidth(plain, pad)
 	perRow := max(1, width/cw)
-	if pad.spreads && width < math.MaxInt32 {
+	if pad.spreads {
 		var ok bool
 		if perRow, cw, ok = spreadColumns(width, cw); !ok {
 			return strings.Join(plain, "\n") + "\n"

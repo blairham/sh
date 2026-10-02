@@ -301,10 +301,38 @@ func cellWidth(cells []string, pad padder) int {
 type padder struct {
 	// width is the space one entry occupies, which the two layouts compute
 	// differently: the tab layout rounds up to a tab stop, and the space
-	// layout adds a fixed two-space gutter and does not round at all.
+	// layout adds a two-space gutter and then spreads the columns.
 	width func(longest int) int
 	// join renders one row from its cells.
 	join func(cells []string, width int) string
+	// spreads says the columns share out the width of the line between
+	// them rather than standing at the width of their widest entry. See
+	// spreadColumns.
+	spreads bool
+}
+
+// spreadColumns is the space layout's rule against a known width: as many
+// columns as the widest entry and its gutter fit into the line short of its
+// last character, each then widened to an equal share of that. Measured
+// 2026-10-02 on zsh 5.9.2 under COLUMNS=80, a lone entry of 5 to 14
+// characters takes 11, 11, 13, 13, 15, 15, 19, 19, 19, 19 columns — 79
+// shared between 7, 7, 6, 6, 5, 5, 4, 4, 4 and 4 — and `one two three` is
+// `1) one` and five spaces, where the bare gutter would leave four (#5138).
+//
+// It answers false when not even one column fits, and zsh then writes the
+// entries one to a line with no padding at all: an entry of 100 characters
+// beside `b` is a line of 103 and a line of `2) b`, and so is every entry
+// under COLUMNS=1.
+//
+// Only against a known width: with none, the gutter alone is the column,
+// which is what an unset COLUMNS measured to.
+func spreadColumns(width, cw int) (perRow, colWidth int, ok bool) {
+	usable := width - 1
+	perRow = usable / cw
+	if perRow == 0 {
+		return 0, 0, false
+	}
+	return perRow, usable / perRow, true
 }
 
 // tabPad separates entries with a tab and does not align them. The columns in
@@ -328,6 +356,7 @@ var spacePad = padder{
 		}
 		return b.String()
 	},
+	spreads: true,
 }
 
 // aligns reports whether this layout right-aligns the numbers in every column
@@ -342,6 +371,12 @@ func columnMenu(items []string, width int, pad padder) string {
 	plain, aligned := numberedCells(items, false), numberedCells(items, true)
 	cw := cellWidth(plain, pad)
 	perRow := max(1, width/cw)
+	if pad.spreads && width < math.MaxInt32 {
+		var ok bool
+		if perRow, cw, ok = spreadColumns(width, cw); !ok {
+			return strings.Join(plain, "\n") + "\n"
+		}
+	}
 	rows := (len(items) + perRow - 1) / perRow
 	cols := (len(items) + rows - 1) / rows
 

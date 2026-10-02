@@ -135,6 +135,20 @@ func TestSelectMenuLayouts(t *testing.T) {
 			"space columns fill downwards", SelectMenuColumns, twelve,
 			"1) 1    3) 3    5) 5    7) 7    9) 9    11) 11  \n2) 2    4) 4    6) 6    8) 8    10) 10  12) 12  \n",
 		},
+		// And the columns share out the line: 79 characters over the seven
+		// that `3) three` and its gutter fit, so each is 11 and not 10. See
+		// spreadColumns.
+		{
+			"space columns share out the line", SelectMenuColumns,
+			`select x in one two three; do break; done`,
+			"1) one     2) two     3) three   \n",
+		},
+		// Not one column fits, so no padding at all.
+		{
+			"space columns too wide for one", SelectMenuColumns,
+			`select x in ` + strings.Repeat("z", 100) + ` b; do break; done`,
+			"1) " + strings.Repeat("z", 100) + "\n2) b\n",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, errOut := answering(t, "COLUMNS=80; "+tc.src, "1\n", func(s *Semantics) {

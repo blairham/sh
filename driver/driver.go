@@ -2734,41 +2734,11 @@ func (sh Shell) run(in source) (status int) {
 }
 
 func (sh Shell) runInput(in source) int {
-	// Two names, because they are two questions. `name` is `$0` — the path
-	// the shell was invoked by — and `said` is what a diagnostic calls the
-	// shell, which one dialect answers with a fixed name instead. Folding
-	// them together shortened `$0` along with the diagnostic, which is a
-	// thing no shell in the panel does.
-	src, name, said, input, dg := in.src, in.name, in.diagName(), in.input, in.dg
-	// One dialect reads a command string whole before running any of it, and
-	// the rest run each line as they reach it. Parsing everything up front is
-	// how that is done: the failure is then reported before anything has run.
-	if in.wholeFirst {
-		d := sh.Dialect.On(in.programRoute())
-		// The letters a name may hold past ASCII, which the parse that runs
-		// is told by the runner and this one, made before there is a runner,
-		// has to be told the same way — or a `for ö in …` that runs is a
-		// parse error here first. See interp.NameLettersBeforeARunner.
-		d.NameTakesALetterPastASCII = interp.NameLettersBeforeARunner(&sh.Semantics, func(name string) (string, bool) {
-			return lookupEnv(sh.env(), name)
-		})
-		p := syntax.NewParser(src, d)
-		p.Parse()
-		if err := p.Err(); err != nil {
-			// Input that ends unfinished is a syntax error rather than a
-			// prompt when it did not come from a terminal. The whole
-			// diagnostic is the dialect's: its wording, whether it names
-			// where the script came from, and whether it echoes the line.
-			// Before the error, and whether or not there is one: a remark
-			// can accompany a fatal failure, which is measured — a here
-			// document with neither its delimiter nor its enclosing `}`
-			// produces both, warning first.
-			sh.sayRemarks(dg, said, p.Remarks(), 0, true)
-			sh.errf("%s", dg.ParseDiagnostic(said, input, err, src))
-			return dg.StatusForParseError(err)
-		}
-	}
-
+	// `name` is `$0` — the path the shell was invoked by — and not what a
+	// diagnostic calls the shell, which one dialect answers with a fixed name
+	// instead (source.diagName). Folding the two together shortened `$0`
+	// along with the diagnostic, which is a thing no shell in the panel does.
+	src, name, dg := in.src, in.name, in.dg
 	r := sh.newRunnerAs(name, in.params, dg, in.invocationRoute(), in.invocationEmulation())
 	if in.zero != "" {
 		// `$0` where it is not the name diagnostics use — see source.zero.
@@ -3333,9 +3303,26 @@ func (sh Shell) executeLines(
 	// in for a reserved word. Seeded with the runner's pointer instead, the
 	// two were already equal and the mode reached every later line and not
 	// the program's own.
+	//
+	// Except for a text read whole, where only that first turn hands it over.
+	// The whole of the text has been read by then, so a grammar option one
+	// of its lines sets reaches nothing later in it — only what is read after
+	// it, an `eval`'s string or a sourced file. Measured 2026-10-02 on zsh
+	// 5.9.2 (`/opt/homebrew/bin/zsh -f`), each pair as `-c` and then as the
+	// same two lines in a file (#5420):
+	//
+	//	setopt rcquotes / print -r -- 'a''b'          ab           a'b
+	//	unsetopt shortloops / for i in 1; print $i    1            parse error
+	//	setopt shglob / print @(a|b)                  no matches   parse error
+	//
+	// and an option a startup file sets does reach the text, because the
+	// file runs before the text is read: `.zshenv` holding `setopt rcquotes`
+	// makes the same `-c` print `a'b`, and `unsetopt rcquotes` on the
+	// string's first line then leaves it at that.
 	var dialect *syntax.Dialect
+	handed := false
 	for {
-		if r.Dialect != dialect && r.Dialect != nil {
+		if r.Dialect != dialect && r.Dialect != nil && (!in.wholeFirst || !handed) {
 			dialect = r.Dialect
 			// Still this program, so still this route. The replacement is
 			// a *language*, which does not carry how the text got here, and
@@ -3343,6 +3330,31 @@ func (sh Shell) executeLines(
 			// half way down a file the moment a builtin changed the grammar.
 			pr.setDialect(r.ParsingDialect(dialect.On(in.programRoute())))
 		}
+		if in.wholeFirst && !handed {
+			// The read itself: the whole text, in the grammar just handed
+			// over and with the aliases the program's parser will be given,
+			// before a line of it runs. Here rather than before the runner
+			// exists, because the startup files run first — measured on zsh
+			// 5.9.2, a `.zshenv` that echoes is heard before the string's
+			// parse error, an EXIT trap it set fires after it, `-x` traces
+			// it, an option it sets is the grammar the string is read in, and
+			// a refused `-o nosuchopt` is reported instead of the error.
+			p := syntax.NewParser(pr.text(), pr.dialect)
+			p.Aliases, p.GlobalAliases, p.SuffixAliases = pr.aliases, pr.globalAliases, pr.suffixAliases
+			p.Parse()
+			if err := p.Err(); err != nil {
+				// Input that ends unfinished is a syntax error rather than a
+				// prompt when it did not come from a terminal. The whole
+				// diagnostic is the dialect's. A remark can accompany a fatal
+				// failure, which is measured — a here document with neither
+				// its delimiter nor its enclosing `}` produces both, warning
+				// first.
+				sh.sayRemarks(in.dg, in.diagName(), p.Remarks(), 0, true)
+				sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
+				return in.dg.StatusForParseError(err), endingParseFailure
+			}
+		}
+		handed = true
 		// The shell is about to read the next unit of its program, which is
 		// one of the two moments a held signal waits for — and once more for
 		// the read that finds the end, which is why this is above the break

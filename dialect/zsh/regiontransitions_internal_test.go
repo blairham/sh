@@ -35,7 +35,8 @@ func TestRegionHighlightDrawsTheMeasuredTransitions(t *testing.T) {
 	}
 	const line = "abcdefgh"
 	for _, row := range rows {
-		r := &interp.Runner{}
+		dialect := Dialect()
+		r := &interp.Runner{Name: "zsh", Dialect: &dialect}
 		r.SetArray(zleRegion, row.Regions)
 		var b strings.Builder
 		at := 0

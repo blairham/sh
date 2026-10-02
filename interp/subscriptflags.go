@@ -1138,7 +1138,88 @@ func (r *Runner) rangeEnd(e *syntax.ParamExpr, end syntax.SubscriptEnd, src subs
 	// `${a[(k)q,3]}` and `${a[1,(k)r]}` are the spans `${a[(r)q,3]}` and
 	// `${a[1,(r)r]}` are. Neither is refused at the front, which is the
 	// other half of that — only the two index letters are.
-	return r.searchIndex(g, orderedSearchLetter(search), src), true
+	letter := orderedSearchLetter(search)
+	if !first && src.scalar {
+		return r.scalarSearchEnd(g, letter, r.units(src.elems[0]), src.elems[0]), true
+	}
+	return r.searchIndex(g, letter, src), true
+}
+
+// scalarSearchEnd is the subscript a search names as the *second* end of a
+// range over a string, by any of the four letters: where a match ends, not
+// where it begins. So the walk
+// is over the positions a match can end at, and each is taken where some
+// stretch of the string ending there matches the operand whole.
+//
+// Measured 2026-10-02 on zsh 5.9.2, `-f`, with `a=abcdefg`:
+//
+//	${a[(r)cd,(r)ef]}     cdef      the end is where `ef` ends
+//	${a[1,(r)c?e]}        abcde
+//	${a[1,(r)c*]}         abc       the first position a match ends at,
+//	${a[1,(r)c(d|de)]}    abcd      so the shortest
+//	${a[2,(r)*]}          empty     an empty match ends before the first
+//	${a[1,(R)c*]}         abcdefg   backward, the last position, so the
+//	${a[2,(R)??]}         bcdefg    longest
+//	${a[1,(Rn:2:)?]}      abcdef    the second match from the end
+//	${a[1,(rb:4:)?]}      abc       a start of 4 is a first end of 3: the
+//	${a[1,(Rb:4:)?]}      abc       stretch ending there may begin anywhere
+//	${a[1,(Rb:4:)d]}      empty     and backward from 3 nothing ends in d
+//	${a[1,(rb:-2:)?]}     abcde
+//	${a[(r)cd,(i)ef]}     cdef      and an index letter the same: what
+//	${a[2,(I)ef]}         bcdef     the end of a range reads is a position
+//
+// and the misses are scalarSearchIndex's: past the last character going
+// forward, before the first going back. The first end of a range keeps the
+// start of its match — `${a[(r)cd,-1]}` is `cdefg` (#5153).
+func (r *Runner) scalarSearchEnd(g *syntax.SubscriptFlags, search byte, chars []string, v string) int {
+	base, n := r.arrayBase(), len(chars)
+	back := search == 'R' || search == 'I'
+	miss := base + n
+	if back {
+		miss = base - 1
+	}
+	if n == 0 {
+		return base - 1
+	}
+	from, within := r.scalarSearchStart(g, n, back)
+	if !within {
+		return miss
+	}
+	offs := make([]int, n+1)
+	for i, c := range chars {
+		offs[i+1] = offs[i] + len(c)
+	}
+	operand := r.renderSubscript(g.Arg, searchKeepsEscape)
+	exact := strings.ContainsRune(g.Flags, 'e')
+	endsHere := func(end int) bool {
+		for start := end; start >= 0; start-- {
+			stretch := v[offs[start]:offs[end]]
+			if exact {
+				if stretch == operand {
+					return true
+				}
+				continue
+			}
+			if r.matchPatternR(operand, stretch, patternInAWord) {
+				return true
+			}
+		}
+		return false
+	}
+	want := r.searchNth(g)
+	step := 1
+	if back {
+		step = -1
+	}
+	for end := from; end >= 0 && end <= n; end += step {
+		if !endsHere(end) {
+			continue
+		}
+		if want--; want == 0 {
+			return base - 1 + end
+		}
+	}
+	return miss
 }
 
 // endSubscriptValue evaluates one end of a range that no group selected,

@@ -1771,6 +1771,13 @@ type Runner struct {
 	// one question and a second name for it is the one that would drift.
 	Route Route
 
+	// LastPart says the chunk the front end is about to hand RunPart is the
+	// last of its input: nothing follows it, so the chunk's last statement is
+	// the last thing this shell runs. Set by the front end, which is the one
+	// holding the input, and only on the route where the dialect it was
+	// measured in runs that statement differently. See unforkedtail.go.
+	LastPart bool
+
 	// InvocationEmulation is the emulation the shell was *started* in — an
 	// `--emulate` option, or the name it was invoked by — and empty where it
 	// was started as itself.
@@ -2989,6 +2996,16 @@ type Runner struct {
 	// subshellSelfWaited says a `wait` has reached the `( … )` this shell is,
 	// which no spec names after. See Runner.subshellSelfLookup.
 	subshellSelfWaited bool
+	// unforkedSelf says this shell is a `( … )` the dialect did not fork,
+	// because nothing in the program follows it: its markers move as the
+	// shell's own do, and the slot it holds, one, is the parentheses
+	// themselves. See unforkedtail.go.
+	unforkedSelf bool
+	// tailCmd is the command that is the last thing this shell runs, where the
+	// front end has said nothing follows — see LastPart and unforkedtail.go.
+	// A node rather than a flag, so that a stale value matches nothing: it is
+	// compared by identity at the one command it names.
+	tailCmd syntax.Command
 	// jobOrder is the order jobs became *notable*, oldest first: a job is
 	// appended when it enters the table and again, moved to the end, every
 	// time it stops. It is not the table's order, which is slot order, and
@@ -5217,6 +5234,9 @@ func (r *Runner) clone() *Runner {
 	r.streamLocks()
 	c := *r
 	c.inSubshell = true
+	// A clone is a fork until the one construct that knows otherwise says so,
+	// and nothing a fork runs is the shell's last. See unforkedtail.go.
+	c.tailCmd, c.unforkedSelf = nil, false
 	// And one boundary further from the shell that was started. The flag
 	// above cannot answer this: it is already true in a subshell of a
 	// subshell, and a dialect that names the count needs to tell those two
@@ -6231,6 +6251,11 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		r.started = r.Now()
 	}
 	r.programEnd = int(f.End().Line + 1)
+	// Taken rather than read, so that a chunk run from inside this one — a
+	// substitution's body, an `eval` — is never the last of the input
+	// itself. See LastPart.
+	last := r.LastPart
+	r.LastPart = false
 	// The substitution bodies this dialect reads with the line that holds
 	// them, read before any of that line runs. The cursor walks the list as
 	// the lines go by, because the unit is the logical line and not the file:
@@ -6289,6 +6314,10 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		// And how far the *reader* had got, which is the whole unit rather
 		// than this statement of it. See Runner.inputUnitLine.
 		r.inputUnitLine = r.inputUnitLineOf(f.Stmts, i)
+		if last && i == len(f.Stmts)-1 {
+			// The last thing this shell runs. See unforkedtail.go.
+			r.tailCmd = tailCommandOf(f.Stmts)
+		}
 		err := r.stmt(ctx, st)
 		if arg, ok := r.takeInputLevelArgument(); ok {
 			// The statement is over, so the line's own last argument is what

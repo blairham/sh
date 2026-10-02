@@ -2591,6 +2591,9 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 		// program would be changing *its* mask for everything it writes
 		// afterwards, so the decision belongs here rather than in interp.
 		r.SetUmask = setUmask
+		// And who it runs as, for the same reason again: `EUID=1` as root
+		// really is a different process afterwards. See identity.go.
+		r.ChangeIdentity = changeIdentity
 		// And for the same reason again, `suspend` may really stop it. A
 		// Runner embedded in some other program that could stop that program
 		// until somebody found it and continued it is a library that can be

@@ -333,6 +333,17 @@ type Runner struct {
 	// be a body's own.
 	SetUmask func(mask int) (old int, err error)
 
+	// ChangeIdentity makes this process become another user or group id, the
+	// way assigning zsh's `UID`, `EUID`, `GID` or `EGID` does. Nil — the
+	// default — means this Runner may not change who the process is, and the
+	// dialect answers the assignment without asking the system. See
+	// interp/identity.go.
+	//
+	// Opt-in for the reason SetUmask is, and with more at stake: an identity
+	// is the process's, so a Runner embedded in some other program that took
+	// it from the text it was handed would be changing who its *host* is.
+	ChangeIdentity func(which Identity, id int) error
+
 	// StartIgnoringInterrupts runs start — a process start — with SIGINT and
 	// SIGQUIT ignored for its length, so the child it starts inherits the
 	// ignore, and puts the process's own handling back afterwards. Nil — the

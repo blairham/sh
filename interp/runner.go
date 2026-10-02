@@ -1805,6 +1805,10 @@ type Runner struct {
 
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
+	// callEndedOnAReturn says the function call that last unwound ended on
+	// a `return` written in it rather than by running off its end. See
+	// Runner.forcedByATrapFunction.
+	callEndedOnAReturn bool
 	// locatesFunctions is whether a names-only function listing says where
 	// each function was defined — see Runner.LocatesFunctions.
 	locatesFunctions bool

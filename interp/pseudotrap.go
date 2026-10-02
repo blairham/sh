@@ -272,8 +272,10 @@ func (r *Runner) errTrapFiresHere(refuse bool) bool {
 // fires already settled by errTrapFiresHere.
 func (r *Runner) fireErrTrap(ctx context.Context) {
 	r.inErrTrap = true
-	r.runPseudoTrapBody(ctx, "ERR", *r.errTrap, r.status)
+	fname := r.trapFuncs["ERR"]
+	acted := r.runPseudoTrapBody(ctx, "ERR", *r.errTrap, r.status)
 	r.inErrTrap = false
+	r.forcedByATrapFunction(fname, acted)
 	// Recorded after the body rather than before it, because the body is
 	// statements and every statement clears this on the way in. What it
 	// means is "the failure the status now reports has been announced", and
@@ -958,4 +960,40 @@ func (r *Runner) tracesIntoFunctions() bool {
 func (r *Runner) debugActionArmingErrExitSkips() bool {
 	return r.ask(r.sem().DebugActionArmingErrExitSkipsTheCommand,
 		"a DEBUG action arming ERR_EXIT skipping the command it fired for")
+}
+
+// forcedByATrapFunction is what a handler spelled as a `TRAPZERR` function
+// does to the code it interrupted by returning a status that is not zero:
+// the code returns with that status, as though the `return` had been
+// written where the failure was — the function it happened in returns, a
+// sourced file stops, and at the top the shell exits. Only a `return` written
+// in the handler counts: a body that runs off its end on a failing command
+// lets the code carry on.
+//
+// Measured 2026-10-02 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin zsh -fc` and
+// the same as a script file:
+//
+//	f() { TRAPZERR() { print t; return 42 }; false; print B }; f; print W $?
+//	        t, W 42
+//	… return 1 …  and  … false; return …      t, W 1
+//	… return 0 …  and  … (exit 3) …  and no return at all      t, B, W 0
+//	g() { false; print B2 }; f() { TRAPZERR() { …; return 42 }; g; print B $? }; f
+//	        t, B 42: it is g that returns, and its 42 is not judged again
+//	TRAPZERR() { print t; return 42 }; false; print no
+//	        t, and the shell exits 42 — an EXIT trap still runs
+//	TRAPZERR() { print t; return 42 }; . ./f; print after $?
+//	        with f holding `false` and a print: t, after 42
+//	g() { return 3 }; f() { trap 'print t; g' ZERR; false; print B }; f
+//	        t, B: the return was g's, not the handler's
+//
+// A handler written as an action is not this: `return 42` in one is the
+// function's own `return`, which runs the way any `return` does.
+//
+// No dialect is asked. The convention is one dialect's own, and the
+// function spelling is how a script reaches this code at all.
+func (r *Runner) forcedByATrapFunction(fname string, status int) {
+	if fname == "" || !r.callEndedOnAReturn || status == 0 {
+		return
+	}
+	r.status, r.ctl = status, controlReturn
 }

@@ -2207,6 +2207,11 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// measured answer and is why this is set after it rather than instead of
 	// it (#4173).
 	r.line = calledAt
+	// Whether this call ended on a `return` of its own, which the handler
+	// spelled as a `TRAP…` function is judged by — see
+	// Runner.forcedByATrapFunction. The last call to unwind writes it, so
+	// read straight after a handler's call it is the handler's.
+	r.callEndedOnAReturn = r.ctl == controlReturn && !exitTrapReturned
 	if r.ctl == controlReturn && !exitTrapReturned {
 		// Not a `return` the *trap* wrote. That one belongs to the frame
 		// this call is returning into — see runFunctionExitTrap — so it is

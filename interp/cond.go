@@ -515,7 +515,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// costs nothing, since re-expanding the word to print it would run a
 		// substitution in it twice (#1915). ksh93 quotes the unexpanded value
 		// instead and is recorded rather than modeled.
-		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, pat)
+		r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.tracePattern(pat))
 		got := r.matchPatternR(pat, left, patternInACondition)
 		if x.Op == "!=" {
 			return !got, nil

@@ -120,6 +120,29 @@ func (r *Runner) forgetFunctionTrace(name string) {
 	delete(r.funcTraceMarks, name)
 }
 
+// redefinesTheRunningBody reports a definition of name written directly in
+// name's own body while it runs, which is the one definition that keeps the
+// mark. Measured 2026-10-01 on zsh 5.9.2, each with the mark set before the
+// call and `which` after it:
+//
+//	f() { f() { echo inner } }               kept, under -t and -T alike
+//	c() { c() { …C2 }; c() { …C3 } }         kept, by both
+//	f() { g }; g() { f() { echo X } }        cleared: g's body, not f's
+//	a() { () { a() { echo A2 } } }           cleared: a nameless body
+//	b() { eval 'b() { echo B2 }' }           cleared: text eval runs
+//	d() { unfunction d; d() { echo D2 } }    cleared, by the unfunction
+//	g() { h() { echo H } }, h marked         cleared: another name's
+//
+// So it is the innermost frame being the function itself, read the way a
+// location is, and not the name being anywhere on the stack.
+func (r *Runner) redefinesTheRunningBody(name string) bool {
+	n := len(r.frames)
+	if n == 0 || r.frames[n-1].Name != name || r.locationIsInsideEvalText() {
+		return false
+	}
+	return true
+}
+
 // functionsHoldingATraceMark is the population a listing narrowed by these
 // letters writes: the names holding **any** of them, in listing order.
 //

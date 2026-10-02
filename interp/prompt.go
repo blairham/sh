@@ -733,6 +733,15 @@ const (
 	// offset [Runner.locationNameAndLine] already computes for the prefix
 	// (#2928).
 	FieldLineNumber
+	// FieldFileLineNumber is the line being read counted in the *file* the
+	// source-file code names, where FieldLineNumber counts from the start of
+	// the unit: the two agree at a script's or a sourced file's top level and
+	// part inside a function and inside `eval`. Measured 2026-10-01, zsh 5.9.2
+	// over a script file: `print -P '%I:%i'` on the second line of a function
+	// written on line 3 draws `4:1`, and text `eval` runs on line 17 draws
+	// `18:0` on its first line and `19:1` on its second. See
+	// Runner.fileLineNow.
+	FieldFileLineNumber
 	// FieldEscape is the escape character itself, for the table row that
 	// spells it doubled.
 	FieldEscape
@@ -2035,6 +2044,8 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 			line = 0
 		}
 		return itoa(line), true
+	case FieldFileLineNumber:
+		return itoa(r.fileLineNow()), true
 	case FieldPromptArrayElement:
 		elems, _ := r.GetArray(promptArray)
 		n := promptCount(arg)

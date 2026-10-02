@@ -576,7 +576,7 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// and the line move together — the manual for the one option that turns
 	// this off names `$LINENO`, `%i` and `%N` in one sentence.
 	if !keepsCallersLocation {
-		r.borrowed = append(r.borrowed, borrowedText{sourced: s, callerLine: r.line})
+		r.borrowed = append(r.borrowed, borrowedText{sourced: s, callerLine: r.line, frames: len(r.frames)})
 		defer func() { r.borrowed = r.borrowed[:len(r.borrowed)-1] }()
 	}
 	switch {

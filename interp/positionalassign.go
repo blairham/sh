@@ -229,7 +229,15 @@ func (r *Runner) prefixAssignsPositional(ctx context.Context, a *syntax.Assign) 
 // assignPositional already owns rather than a second one beside it.
 func (r *Runner) setLoopName(name, value string) {
 	if n, ok := positionalAssignIndex(name); ok {
-		r.assignPositional(&syntax.Assign{Name: name, Value: literalWord(value)}, n)
+		// Quoted, because the value is a word the loop already expanded and
+		// must not be read a second time: `for 1 in 'a\\0b'` held `a\0b`
+		// here where zsh 5.9.2 holds the four bytes it was given, measured
+		// 2026-10-01 — an unquoted literal had its backslashes taken as
+		// escapes by the assignment's own expansion.
+		quoted := &syntax.Word{Spans: []syntax.Span{{
+			Kind: syntax.Literal, Quoting: syntax.SingleQuoted, Value: value,
+		}}}
+		r.assignPositional(&syntax.Assign{Name: name, Value: quoted}, n)
 		return
 	}
 	r.setVar(name, value)

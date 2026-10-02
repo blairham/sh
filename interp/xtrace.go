@@ -967,7 +967,87 @@ func (r *Runner) traceCaseArm(subject string, patterns []string) {
 	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
-	r.tracef("%scase %s (%s)\n", r.tracePrefix(), subject, strings.Join(patterns, " | "))
+	shown := make([]string, len(patterns))
+	for i, p := range patterns {
+		shown[i] = r.tracePattern(p)
+	}
+	r.tracef("%scase %s (%s)\n", r.tracePrefix(), subject, strings.Join(shown, " | "))
+}
+
+// tracePattern is how a pattern the matcher was handed is written in a trace:
+// as it stands, or with its text marked — Diagnostics.TracePatternEscapesLiterals.
+func (r *Runner) tracePattern(pat string) string {
+	if !r.diag().TracePatternEscapesLiterals {
+		return pat
+	}
+	return tracePatternLiteralsEscaped(pat)
+}
+
+// tracePatternLiteralsEscaped renders a matcher's pattern — a backslash before
+// each character that was quoted — the way the dialect that marks its text
+// writes one. Measured 2026-10-01 on zsh 5.9.2, a character at a time, each
+// written quoted (`[[ a == 'x?y' ]]`) and where it can be, bare:
+//
+//	\ marked when quoted     space # $ ( ) * < > ? [ \ ] ^ | ~
+//	marked first             =, however it arrived
+//	written bare however     ! " % & ' + , - . / : ; @ _ ` { }
+//	marked however written   space and $, which a bare pattern cannot hold
+//	                         live: `v='a b'; [[ a == $v ]]` is `a\ b`
+//	as $'…'                  tab, newline and return; other bytes as they are
+//	bare where live          # ^ ~ = <1-2> [!a-c], with or without extendedglob
+//
+// The matcher's own marks are a wider set and not this one — they include `-`
+// and `!`, which this writes bare, and leave out `>`, which it marks — so a
+// mark is read as "this was quoted" and the character is then written by the
+// table. `>` is the one the matcher's string cannot tell apart, since it never
+// marks one, and it is marked unless it closes a live `<`: `<1-2>'>'` is
+// `<1-2>\>` and `'<'1-2'>'` is `\<1-2\>`.
+func tracePatternLiteralsEscaped(pat string) string {
+	const marked = " #$()*<>?[\\]^|~"
+	var b strings.Builder
+	openRange := false
+	write := func(c byte, quoted bool, first bool) {
+		switch {
+		case c == '\t':
+			b.WriteString(`$'\t'`)
+		case c == '\n':
+			b.WriteString(`$'\n'`)
+		case c == '\r':
+			b.WriteString(`$'\r'`)
+		case c == ' ' || c == '$':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		case c == '>' && !quoted && openRange:
+			openRange = false
+			b.WriteByte(c)
+		case c == '>':
+			b.WriteString(`\>`)
+		case first && c == '=':
+			// Marked wherever it came from, a value included: `v='=x';
+			// [[ a == $v ]]` is `\=x`. A live one is an equals expansion
+			// and never reaches here, except under `unsetopt equals`, where
+			// zsh writes it bare and this does not (recorded, not modeled).
+			b.WriteString(`\=`)
+		case quoted && strings.IndexByte(marked, c) >= 0:
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		default:
+			if c == '<' && !quoted {
+				openRange = true
+			}
+			b.WriteByte(c)
+		}
+	}
+	for i := 0; i < len(pat); i++ {
+		first := b.Len() == 0
+		if pat[i] == '\\' && i+1 < len(pat) {
+			i++
+			write(pat[i], true, first)
+			continue
+		}
+		write(pat[i], false, first)
+	}
+	return b.String()
 }
 
 func (r *Runner) traceLine(line string, d Diagnostics) {

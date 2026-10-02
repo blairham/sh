@@ -5588,6 +5588,47 @@ func (r *Runner) locationNameAndLine(functionCounts bool) (name string, line int
 	return name, at, false
 }
 
+// fileLineNow is the line being read counted in the file the shell is
+// reading — the `%I` prompt code — where lineNow counts from the start of
+// whatever unit the line is in.
+//
+// A function body's lines are already the file's: r.line is the file's
+// numbering and only a location subtracts the function's origin. Text `eval`
+// runs is numbered from itself, so it sits at an offset from the line the
+// `eval` was written on — and an `eval` inside that text at a further one.
+// Measured 2026-10-01 on zsh 5.9.2 over a script file, with `eval` on line 3:
+//
+//	eval "print -P a:%I"                  a:4    3, then the text's line 1
+//	  eval \"print -P b:%I\"              b:5    on the text's line 2
+//	  eval \":<newline>print -P c:%I\""   c:7    on its line 3, and line 2
+//
+// which is the outermost `eval`'s line, plus one, plus how far *past its
+// first line* each text in the chain had read. A function called from the
+// text pushes a frame and is back in the file's own numbering — `f:8` for a
+// body line written on line 8, wherever the call came from.
+func (r *Runner) fileLineNow() int {
+	line := r.lineNow()
+	if !r.locationIsInsideEvalTextNumberedFromItself() {
+		return line
+	}
+	depth := len(r.frames)
+	sum := line - 1
+	outer := 0
+	for i := len(r.borrowed) - 1; i >= 0; i-- {
+		b := r.borrowed[i]
+		if !b.eval || b.frames != depth {
+			break
+		}
+		outer = b.callerLine
+		if i > 0 {
+			if p := r.borrowed[i-1]; p.eval && p.frames == depth {
+				sum += b.callerLine - 1
+			}
+		}
+	}
+	return outer + 1 + sum
+}
+
 // lineNow is the line to report or to hand `$LINENO`, which is r.line except
 // inside a `case` subject in the one dialect that has not advanced the line to
 // the `case` yet — see Semantics.CaseSubjectKeepsThePreviousLine and
@@ -5719,6 +5760,10 @@ type borrowedText struct {
 	// Diagnostics.BorrowedTextRendersTheCallStack, including the one where
 	// the `.` is inside a function and the line is the function's own.
 	callerLine int
+	// frames is how many frames stood when it was pushed, which is what says
+	// two `eval`s are one inside the other rather than one inside a function
+	// the other called. See Runner.fileLineNow.
+	frames int
 }
 
 // locationFileOrName is the name a diagnostic carries when nothing borrowed

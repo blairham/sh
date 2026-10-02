@@ -473,8 +473,9 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// both halves take a shadow: a function-local tie is gone on return,
 	// measured — `typeset -T L1 l1` inside a function leaves `$L1` unset
 	// after it and `${+l1}` 0.
+	scalarFresh := false
 	if !f.global {
-		scalarFresh, _ := r.shadowTypeset(scalar)
+		scalarFresh, _ = r.shadowTypeset(scalar)
 		arrayFresh, _ := r.shadowTypeset(array)
 		if r.unspecified {
 			return r.status
@@ -522,8 +523,18 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 		// exported global in the way, the array half is `array-local-tied`
 		// under `-xT` already, so nothing here is giving it the letter; this
 		// is only about what it inherits.
-		r.localExportAttribute(scalar, f.export)
-		r.localExportAttribute(array, false)
+		//
+		// **Only over a cell the shadow made.** A name this scope already
+		// holds is not inheriting anything: `typeset FOO=a:b; export FOO;
+		// typeset -T FOO foo` in a function lists `local -xT FOO` and types
+		// as `scalar-local-tied-export`, measured 2026-10-02 on zsh 5.9.2,
+		// where asking took the attribute off the scope's own local.
+		if scalarFresh {
+			r.localExportAttribute(scalar, f.export)
+		}
+		if arrayFresh {
+			r.localExportAttribute(array, false)
+		}
 		if r.unspecified {
 			return r.status
 		}
@@ -689,7 +700,13 @@ func (r *Runner) declareTie(builtin string, args []string, f declareFlags) int {
 	// the tie that has just arrived — the same rule an integer or a case
 	// attribute follows. This is what makes `PATH=…; typeset -T PATH path`
 	// give `path` the fields rather than emptying both.
-	if v, ok := r.getVar(scalar); ok {
+	//
+	// Not a cell the shadow has just made, though, which holds the empty
+	// string only because a new local starts there: `f(){ typeset -T S s;
+	// print ${#s} }` is 0 in zsh 5.9.2, measured 2026-10-02, exactly as at
+	// the top level, where reading the fresh local back split it into one
+	// empty element.
+	if v, ok := r.getVar(scalar); ok && !scalarFresh {
 		r.mirrorScalarToArray(scalar, v)
 		return 0
 	}

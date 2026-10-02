@@ -6,6 +6,7 @@ package zsh_test
 import (
 	"bytes"
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
@@ -15,8 +16,8 @@ import (
 
 // TestTheVisibleFlagReachesPastASCII pins `(V)` over a byte that begins no
 // character: `\M-` and the visible form of its low seven bits, every such
-// byte under a locale that counts characters and only 0x80 to 0x9f under one
-// that does not. Measured 2026-10-02 on zsh 5.9.2 (#5315).
+// byte under a locale that counts characters and, under one that does not,
+// every byte the C library does not class as printing. Measured 2026-10-02 on zsh 5.9.2 (#5315).
 func TestTheVisibleFlagReachesPastASCII(t *testing.T) {
 	for _, tc := range []struct{ locale, src, want string }{
 		{"en_US.UTF-8", `x=$'\x9b'; print -r -- ${(V)x}`, `\M-^[` + "\n"},
@@ -25,13 +26,31 @@ func TestTheVisibleFlagReachesPastASCII(t *testing.T) {
 		{"en_US.UTF-8", `x=$'\xe2\x82'; print -r -- ${(V)x}`, `\M-b\M-^B` + "\n"},
 		{"en_US.UTF-8", `x=é; print -r -- ${(V)x}`, "é\n"},
 		{"C", `x=$'\x9b'; print -r -- ${(V)x}`, `\M-^[` + "\n"},
-		{"C", `x=$'\xe1'; print -r -- ${(V)x}`, "\xe1\n"},
+		{"C", `x=$'\xe1'; print -r -- ${(V)x}`, cLocaleHighByte("\xe1", `\M-a`)},
+		// Latin-1's soft hyphen, which macOS's C locale classes as no
+		// printing character and glibc's classes as none of the high half
+		// either: `\M--` on both.
+		{"C", `x=$'\xad'; print -r -- ${(V)x}`, `\M--` + "\n"},
+		{"C", `x=$'\xff'; print -r -- ${(V)x}`, cLocaleHighByte("\xff", `\M-^?`)},
 	} {
 		got, _ := runZshUTF8Locale(t, tc.locale, tc.src)
 		if got != tc.want {
 			t.Errorf("%s %s\n got %q\nwant %q", tc.locale, tc.src, got, tc.want)
 		}
 	}
+}
+
+// cLocaleHighByte is what `(V)` writes under the C locale for a byte from
+// 0xa0 up other than 0xad, which is the C library's answer: macOS classes it
+// as printing and writes it as itself, and glibc does not and writes it
+// `\M-` and its low half. Measured 2026-10-02 on zsh 5.9.2 on this Mac and
+// inside `ghcr.io/blairham/sh/zsh@sha256:aab8255c…`, every byte from 0x80 to
+// 0xff.
+func cLocaleHighByte(raw, meta string) string {
+	if runtime.GOOS == "darwin" {
+		return raw + "\n"
+	}
+	return meta + "\n"
 }
 
 // runZshUTF8Locale is runZshUTF8 under a locale of the caller's choosing.

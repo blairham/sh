@@ -1977,7 +1977,7 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 		if r.terminalCapability == nil {
 			return "", false
 		}
-		return r.terminalCapability(arg), true
+		return r.terminalCapability(r, arg), true
 	case FieldEscape:
 		return string(st.Escape), true
 	case FieldUser:

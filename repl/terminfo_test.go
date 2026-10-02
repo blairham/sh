@@ -212,12 +212,16 @@ func TestTheExtendedSectionIsRead(t *testing.T) {
 }
 
 // The two booleans that are read from a string rather than from their own
-// slot.
+// slot — in the converted reading, and only there.
 //
 // Measured against zsh 5.9.2 with descriptions compiled for the purpose, and
 // it matters on real terminals in both directions: `ansi` stores `OTbs` and
 // spells `cub1` as `\e[D`, while `linux`, `hpterm`, `sun`, `aixterm`,
 // `cygwin` and `putty` leave the bit clear and spell `cub1` as a backspace.
+// The stored reading is the bit: over Homebrew's whole database, 2026-10-02,
+// `OTbs` enumerated before anything had set the terminal up differs from the
+// derived answer in 1,181 descriptions and agrees with the stored bit in all
+// of them.
 func TestTheDerivedBooleansComeFromTheStringTheyDescribe(t *testing.T) {
 	back := index(t, terminfoStringNames, "cub1")
 	newline := index(t, terminfoStringNames, "nel")
@@ -226,25 +230,162 @@ func TestTheDerivedBooleansComeFromTheStringTheyDescribe(t *testing.T) {
 	bits := make([]byte, max(bs, nl)+1)
 	bits[bs], bits[nl] = 1, 1
 	for _, tc := range []struct {
-		name       string
-		strs       map[int]string
-		bs, nl     string
-		storedOnly bool
+		name   string
+		strs   map[int]string
+		bs, nl string
 	}{
 		{name: "derived", strs: map[int]string{back: "\b", newline: "\n"}, bs: "yes", nl: "yes"},
 		{name: "overruled", strs: map[int]string{back: "\x1b[D", newline: "\r\n"}, bs: "no", nl: "no"},
 		{name: "nostrings", strs: map[int]string{}, bs: "yes", nl: "no"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			caps := capabilitiesByName(database(t, tc.name, terminfofixture.Description{
+			env := database(t, tc.name, terminfofixture.Description{
 				Name: tc.name, Bools: bits,
 				StrCount: max(back, newline) + 1, Strs: tc.strs,
-			}))
+			})
+			stored := capabilitiesByName(env)
+			if stored["OTbs"] != "yes" || stored["OTNL"] != "yes" {
+				t.Errorf("stored OTbs, OTNL = %q, %q, want the stored bits, yes and yes",
+					stored["OTbs"], stored["OTNL"])
+			}
+			caps := convertedByName(env)
 			if got := caps["OTbs"]; got != tc.bs {
-				t.Errorf("terminfo[OTbs] = %q, want %q", got, tc.bs)
+				t.Errorf("converted terminfo[OTbs] = %q, want %q", got, tc.bs)
 			}
 			if got := caps["OTNL"]; got != tc.nl {
-				t.Errorf("terminfo[OTNL] = %q, want %q", got, tc.nl)
+				t.Errorf("converted terminfo[OTNL] = %q, want %q", got, tc.nl)
+			}
+		})
+	}
+}
+
+// convertedByName is capabilitiesByName over the converted reading.
+func convertedByName(env func(string) string) map[string]string {
+	out := map[string]string{}
+	for _, c := range ConvertedCapabilities(TerminalCapabilities(env)) {
+		out[c.Terminfo] = c.Value
+	}
+	return out
+}
+
+// The converted reading's renames and fill-ins, each against the stored
+// reading of the same description, so that a row cannot pass by both
+// readings agreeing. Every row is a measurement of zsh 5.9.2 over Homebrew's
+// database or over a description compiled with `tic` for it, 2026-10-02; see
+// terminfoconverted.go.
+func TestTheConvertedReadingRenamesAndFillsIn(t *testing.T) {
+	str := func(name string) int { return index(t, terminfoStringNames, name) }
+	num := func(name string) int { return index(t, terminfoNumberNames, name) }
+	nums := func(set map[int]int) []int {
+		top := -1
+		for i := range set {
+			top = max(top, i)
+		}
+		out := make([]int, top+1)
+		for i := range out {
+			out[i] = terminfofixture.Absent
+		}
+		for i, v := range set {
+			out[i] = v
+		}
+		return out
+	}
+	const absent = "<absent>"
+	for _, tc := range []struct {
+		name string
+		strs map[string]string
+		nums map[string]int
+		// want is the converted reading, by name; absent says the name must
+		// not be there. stored is the stored reading the same way.
+		want, stored map[string]string
+	}{
+		{
+			name: "is3moves", strs: map[string]string{"is3": "\x1bA"},
+			want:   map[string]string{"is3": absent, "OTi2": "\x1bA"},
+			stored: map[string]string{"is3": "\x1bA", "OTi2": absent},
+		},
+		{
+			name: "is3stays", strs: map[string]string{"is3": "\x1bA", "OTi2": "\x1bB"},
+			want: map[string]string{"is3": "\x1bA", "OTi2": "\x1bB"},
+		},
+		{
+			name: "rs2alone", strs: map[string]string{"rs2": "\x1bC"},
+			want:   map[string]string{"rs2": absent, "OTrs": "\x1bC"},
+			stored: map[string]string{"rs2": "\x1bC", "OTrs": absent},
+		},
+		{
+			name: "rs2withrs1", strs: map[string]string{"rs1": "\x1bc", "rs2": "\x1bC"},
+			want: map[string]string{"rs2": "\x1bC", "OTrs": absent},
+		},
+		{
+			name: "rs2withrs3", strs: map[string]string{"rs2": "\x1bC", "rs3": "\x1bK"},
+			want: map[string]string{"rs2": "\x1bC", "OTrs": absent},
+		},
+		{
+			name: "rs2withstoredOTrs", strs: map[string]string{"rs2": "\x1bC", "OTrs": "\x1bD"},
+			want: map[string]string{"rs2": "\x1bC", "OTrs": "\x1bD"},
+		},
+		{
+			name: "bcfromcub1", strs: map[string]string{"cub1": "\x1bH"},
+			want:   map[string]string{"OTbc": "\x1bH", "cub1": "\x1bH"},
+			stored: map[string]string{"OTbc": absent},
+		},
+		{
+			name: "nobcfrombackspace", strs: map[string]string{"cub1": "\b"},
+			want: map[string]string{"OTbc": absent},
+		},
+		{
+			name: "storedbcbesidebackspace", strs: map[string]string{"cub1": "\b", "OTbc": "\x1bD"},
+			want: map[string]string{"OTbc": "\x1bD"},
+		},
+		{
+			name: "storedbcoverwritten", strs: map[string]string{"cub1": "\x1bE", "OTbc": "\x1bF"},
+			want: map[string]string{"OTbc": "\x1bE"},
+		},
+		{
+			name: "ugfromxmc", strs: map[string]string{"smul": "\x1bG"}, nums: map[string]int{"xmc": 3},
+			want:   map[string]string{"OTug": "3"},
+			stored: map[string]string{"OTug": absent},
+		},
+		{
+			name: "noug", strs: map[string]string{"rmul": "\x1bI"}, nums: map[string]int{"xmc": 2},
+			want: map[string]string{"OTug": absent},
+		},
+		{
+			name: "storeduguntouched", strs: map[string]string{"smul": "\x1bG"}, nums: map[string]int{"xmc": 3, "OTug": 5},
+			want: map[string]string{"OTug": "5"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			strs := map[int]string{}
+			top := 0
+			for name, v := range tc.strs {
+				strs[str(name)] = v
+				top = max(top, str(name))
+			}
+			byIndex := map[int]int{}
+			for name, v := range tc.nums {
+				byIndex[num(name)] = v
+			}
+			env := database(t, tc.name, terminfofixture.Description{
+				Name: tc.name, Nums: nums(byIndex), StrCount: top + 1, Strs: strs,
+			})
+			for label, pair := range map[string]struct {
+				got  map[string]string
+				want map[string]string
+			}{
+				"converted": {convertedByName(env), tc.want},
+				"stored":    {capabilitiesByName(env), tc.stored},
+			} {
+				for name, want := range pair.want {
+					got, ok := pair.got[name]
+					switch {
+					case want == absent && ok:
+						t.Errorf("%s terminfo[%s] = %q, want it absent", label, name, got)
+					case want != absent && (!ok || got != want):
+						t.Errorf("%s terminfo[%s] = %q (present %v), want %q", label, name, got, ok, want)
+					}
+				}
 			}
 		})
 	}

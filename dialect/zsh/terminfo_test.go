@@ -214,6 +214,46 @@ func TestATermWithNoDescriptionLeavesTheParameterEmpty(t *testing.T) {
 	}
 }
 
+// A generic description — `gn`, a kind of terminal rather than one — answers
+// as no description does. Measured 2026-10-02 on zsh 5.9.2 with
+// `TERM=unknown` and `TERM=ibm327x`, the two such descriptions in Homebrew's
+// database: `${#terminfo}` 0, `echoti bel` silent at 1, and the same under a
+// `$TERM` the database has never heard of.
+func TestAGenericDescriptionAnswersAsNoneDoes(t *testing.T) {
+	const boolGeneric = 6 // gn
+	bools := make([]byte, boolGeneric+1)
+	bools[boolGeneric] = 1
+	for _, tc := range []struct {
+		name  string
+		bools []byte
+		want  string
+	}{
+		{"generic", bools, "n=0 bel=0\nst=1\n"},
+		// The control: the same description with the bit clear answers.
+		{"specific", nil, "n=47 bel=1\n\ast=0\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := terminfofixture.Database(t, terminfofixture.Description{
+				Name: fixtureTerm, Bools: tc.bools, StrCount: 2,
+				Strs: map[int]string{1: "\a"},
+			})
+			out, _, err := preset.Combined(t, dialecttest.Base{
+				Dir: t.TempDir(),
+				Vars: map[string]string{
+					"PATH": t.TempDir(), "TERM": fixtureTerm, "TERMINFO": dir,
+					"HOME": t.TempDir(), "TERMINFO_DIRS": "",
+				},
+			}, `print -r -- "n=${#terminfo} bel=${+terminfo[bel]}"; echoti bel; print -r -- "st=$?"`)
+			if err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
 // `$termcap` is the same reading under termcap's two-letter codes.
 func TestTermcapIsTheSameValuesUnderTheOtherNames(t *testing.T) {
 	out, st := runZshTerminfo(t,

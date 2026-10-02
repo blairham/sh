@@ -21,8 +21,9 @@ import (
 // in this tree sits there: it is a statement about the terminal, and a
 // dialect that owned it would be a dialect the substrate had to know about.
 // This file is the two spellings — `$terminfo` keyed by terminfo's long
-// names, `$termcap` by termcap's two-letter codes — over one reading of the
-// description `$TERM` names.
+// names, `$termcap` by termcap's two-letter codes — over the description
+// `$TERM` names, in whichever of its two readings the shell is in; see
+// terminalsetup.go.
 //
 // # What #1388 fixed, and what #2076 fixed after it
 //
@@ -77,9 +78,9 @@ import (
 // load because their *parameters* are here, and a script that calls `echotc`
 // finds out where it called it.
 
-// capabilityTables is one reading of the terminal description, under both
-// name systems, kept for as long as the environment it was read from says the
-// same thing.
+// capabilityTables is the terminal description under both name systems, in
+// both of its readings, kept for as long as the environment it was read from
+// says the same thing.
 //
 // A cache rather than a read per expansion, because a produced association is
 // produced on every read and a prompt theme asks about capabilities in bulk:
@@ -91,12 +92,25 @@ import (
 // answered from the new one rather than from the old table. That is the same
 // rule SetDynamicAssocWriter exists for one layer up: a view that stops
 // tracking is worse than no view, because nothing about it says it stopped.
+//
+// What it does **not** hold is which of the two readings a script sees. That
+// is state of the shell's own, it differs between a shell and its subshells,
+// and it is kept in terminalSetupStore; see terminalSetup.
 type capabilityTables struct {
 	// A mutex rather than nothing, because a Runner's producers are shared
 	// with the subshells it spawns and two of those can read a parameter at
 	// once.
-	mu       sync.Mutex
-	from     string
+	mu   sync.Mutex
+	from string
+	// stored is the description as the file holds it, and converted is the
+	// reading repl.ConvertedCapabilities gives of it.
+	stored, converted *capabilityReading
+}
+
+// capabilityReading is one reading of a description: every capability by
+// terminfo name, the subset of those names that is *enumerated*, the termcap
+// spelling, and which section each came from.
+type capabilityReading struct {
 	terminfo interp.AssocArray
 	// listed is `$terminfo` again with the description's *extended* section
 	// left out: every name that can be read, minus the ones that are not
@@ -118,53 +132,79 @@ type capabilityTables struct {
 // repl reads them.
 var terminfoEnvironment = []string{"TERM", "TERMINFO", "TERMINFO_DIRS", "HOME"}
 
+// terminalUse is what a caller is about to do with the description, which is
+// what decides whether the shell sets its terminal up first. See
+// terminalSetup.
+type terminalUse uint8
+
+const (
+	// listingCapabilities enumerates a parameter, or matches a pattern
+	// subscript against it. It reaches the module and sets nothing up.
+	listingCapabilities terminalUse = iota
+	// readingCapability looks one capability up — an element of either
+	// parameter, `echoti` or `echotc`.
+	readingCapability
+	// drawingAttribute is the prompt writing one of its attribute codes.
+	drawingAttribute
+)
+
 // terminfoTable is every capability by its terminfo name — the *readable*
 // set, extended section included — and which section each came from, for
 // `echoti`, whose answer has to be the parameter's.
 func (c *capabilityTables) terminfoTable(r *interp.Runner) (
 	interp.AssocArray, map[string]repl.TerminalCapabilityKind,
 ) {
-	found, _, _, kinds := c.tables(r)
-	return found, kinds
+	reading := c.reading(r, readingCapability)
+	return reading.terminfo, reading.kinds
 }
 
 // listedTable is the enumerated subset: the same names without the
 // description's extended section. See registerCapabilityParameter.
 func (c *capabilityTables) listedTable(r *interp.Runner) interp.AssocArray {
-	_, listed, _, _ := c.tables(r)
-	return listed
+	return c.reading(r, listingCapabilities).listed
 }
 
 // readTable is the readable set alone, which is what one key is looked up in.
 func (c *capabilityTables) readTable(r *interp.Runner) interp.AssocArray {
-	found, _, _, _ := c.tables(r)
-	return found
+	return c.reading(r, readingCapability).terminfo
 }
 
 // termcapEntry is one capability by termcap code, and which section it came
 // from, for `echotc`.
 func (c *capabilityTables) termcapEntry(r *interp.Runner, code string) (string, repl.TerminalCapabilityKind, bool) {
-	byTermcap := c.termcapTable(r)
-	c.mu.Lock()
-	kind := c.termcapKinds[code]
-	c.mu.Unlock()
-	v, ok := byTermcap[code]
-	return v.Str, kind, ok
+	reading := c.reading(r, readingCapability)
+	v, ok := reading.termcap[code]
+	return v.Str, reading.termcapKinds[code], ok
 }
 
-// termcapTable is the `$termcap` half, read through the same cache.
+// termcapTable is the `$termcap` half for one key, read through the same
+// cache.
 func (c *capabilityTables) termcapTable(r *interp.Runner) interp.AssocArray {
-	_, _, byTermcap, _ := c.tables(r)
-	return byTermcap
+	return c.reading(r, readingCapability).termcap
 }
 
-// tables is the whole of one reading: every capability by terminfo name, the
-// subset of those names that is *enumerated*, the termcap spelling, and which
-// section each came from.
-func (c *capabilityTables) tables(r *interp.Runner) (
-	interp.AssocArray, interp.AssocArray, interp.AssocArray,
-	map[string]repl.TerminalCapabilityKind,
-) {
+// termcapListed is the `$termcap` half for an enumeration.
+func (c *capabilityTables) termcapListed(r *interp.Runner) interp.AssocArray {
+	return c.reading(r, listingCapabilities).termcap
+}
+
+// promptTable is the `$termcap` half the prompt's attribute codes are read
+// from.
+func (c *capabilityTables) promptTable(r *interp.Runner) interp.AssocArray {
+	return c.reading(r, drawingAttribute).termcap
+}
+
+// reading is the reading in force once use has had its effect on the shell.
+func (c *capabilityTables) reading(r *interp.Runner, use terminalUse) *capabilityReading {
+	stored, converted := c.readings(r)
+	if advanceTerminalSetup(r, use) {
+		return converted
+	}
+	return stored
+}
+
+// readings is both readings of the description the environment names.
+func (c *capabilityTables) readings(r *interp.Runner) (stored, converted *capabilityReading) {
 	env := func(name string) string {
 		value, _ := r.GetVar(name)
 		return value
@@ -177,10 +217,41 @@ func (c *capabilityTables) tables(r *interp.Runner) (
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.terminfo != nil && c.from == key {
-		return c.terminfo, c.listed, c.termcap, c.kinds
+	if c.stored != nil && c.from == key {
+		return c.stored, c.converted
 	}
 	caps := repl.TerminalCapabilities(env)
+	if genericDescription(caps) {
+		caps = nil
+	}
+	c.from = key
+	c.stored = newCapabilityReading(caps)
+	c.converted = newCapabilityReading(repl.ConvertedCapabilities(caps))
+	return c.stored, c.converted
+}
+
+// genericDescription says a description is marked generic — `gn`, a
+// description of a kind of terminal rather than of one — which answers
+// exactly as no description at all does.
+//
+// Measured 2026-10-02 on zsh 5.9.2 over Homebrew's database: `unknown` and
+// `ibm327x` are the two descriptions there carrying `gn`, and under either
+// `${#terminfo}` is 0, `echoti bel` is silent at 1 and `print -P %B` writes
+// no attribute, exactly as under a `$TERM` the database has never heard of;
+// `infocmp` prints both descriptions whole. Every other description agrees
+// with this reader's enumeration (#5315).
+func genericDescription(caps []repl.TerminalCapability) bool {
+	for _, c := range caps {
+		if c.Terminfo == "gn" && !c.Extended {
+			return c.Value == "yes"
+		}
+	}
+	return false
+}
+
+// newCapabilityReading files one list of capabilities under both name
+// systems.
+func newCapabilityReading(caps []repl.TerminalCapability) *capabilityReading {
 	kinds := make(map[string]repl.TerminalCapabilityKind, len(caps))
 	byTerminfo := make(interp.AssocArray, len(caps))
 	listed := make(interp.AssocArray, len(caps))
@@ -208,13 +279,17 @@ func (c *capabilityTables) tables(r *interp.Runner) (
 		}
 	}
 	// The termcap `me` is not the terminfo `sgr0` it is filed under, where
-	// the two differ; see termcapExitAttributes.
+	// the two differ; see termcapExitAttributes. In both readings, because a
+	// lookup answers it so in both: measured 2026-10-02, `${termcap[me]}` in
+	// an interactive shell, which never leaves the stored reading, is the
+	// derived `\e[0m` for `xterm-256color` and not its `sgr0`.
 	if sgr0, ok := byTerminfo["sgr0"]; ok {
 		byTermcap["me"] = interp.Scalar(termcapExitAttributes(sgr0.Str, byTerminfo["sgr"].Str, byTerminfo["rmacs"].Str))
 	}
-	c.from, c.terminfo, c.listed, c.termcap, c.kinds = key, byTerminfo, listed, byTermcap, kinds
-	c.termcapKinds = termcapKinds
-	return byTerminfo, listed, byTermcap, kinds
+	return &capabilityReading{
+		terminfo: byTerminfo, listed: listed, termcap: byTermcap,
+		kinds: kinds, termcapKinds: termcapKinds,
+	}
 }
 
 // registerTerminfoModules installs `$terminfo` and `$termcap`: two views over
@@ -225,8 +300,8 @@ func registerTerminfoModules(r *interp.Runner) {
 	// And the prompt's attribute codes read the same description, through
 	// the termcap names: see PromptStyle's SequenceCapabilities and
 	// promptCapability.
-	r.SetTerminalCapabilityReader(func(code string) string {
-		return promptCapability(tables.termcapTable(r), code)
+	r.SetTerminalCapabilityReader(func(r *interp.Runner, code string) string {
+		return promptCapability(tables.promptTable(r), code)
 	})
 	registerCapabilityParameter(r, "terminfo", "cols", "lines",
 		tables.listedTable, tables.readTable)
@@ -234,9 +309,12 @@ func registerTerminfoModules(r *interp.Runner) {
 	// are one table: an extended capability has no two-letter code, so the
 	// section that makes them differ is already absent from this half.
 	registerCapabilityParameter(r, "termcap", "co", "li",
-		tables.termcapTable, tables.termcapTable)
+		tables.termcapListed, tables.termcapTable)
 	registerEchoti(r, tables)
 	registerEchotc(r, tables)
+	// And `$TERM` itself, whose assignment sets an interactive shell's
+	// terminal up again: see terminalsetup.go.
+	r.SetAssignmentAction("TERM", terminalAssigned)
 }
 
 // registerCapabilityParameter installs one of them, with the two things a

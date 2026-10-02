@@ -683,6 +683,12 @@ func zmodloadSetLoaded(r *interp.Runner, module string, loaded bool) {
 		kept = append(kept, module)
 	}
 	r.SetArray(zmodloadStore, kept)
+	// Loading a capability module reaches it, which is half of what decides
+	// which reading of the terminal's description a script is handed. See
+	// terminalsetup.go.
+	if loaded && (module == "zsh/terminfo" || module == "zsh/termcap") {
+		advanceTerminalSetup(r, listingCapabilities)
+	}
 }
 
 // zmodloadFeatureStore is which of a module's features are switched on, for

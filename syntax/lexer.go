@@ -7744,26 +7744,6 @@ func bareSubscriptClose(s string, d Dialect, ends func(byte) bool) int {
 				continue
 			}
 		}
-		if c == '$' && i+1 < len(s) && s[i+1] == '{' {
-			// The same two rules Lexer.bareSubscript reads the subscript
-			// by — a braced expansion and a backslash — so the two scans
-			// agree where it closes (#5152).
-			if end := bracedExpansionEnd(s[i:]); end > 0 {
-				i += end - 1
-				continue
-			}
-		}
-		if c == '\\' && i+1 < len(s) && s[i+1] != '\n' {
-			i++
-			continue
-		}
-		if c == '[' && d.ArraySubscriptFlags {
-			if _, rest, isGroup := scanSubscriptFlags(s[i+1:]); isGroup {
-				depth++
-				i = len(s) - len(rest) - 1
-				continue
-			}
-		}
 		switch {
 		case c == '[':
 			depth++

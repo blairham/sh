@@ -17,6 +17,7 @@ func TestABareSubscriptHoldsWhatAQuotedOneHolds(t *testing.T) {
 		{`s=abc; print $s[(i)${(L)x}b]`, "2"},
 		{`s=abc; print $s[${(L)x}1]`, "a"},
 		{`a=(x y z); print "$a[${(L):-2}]"`, "y"},
+		{`s='a}b'; print $s[(i)${x:-"}"}]`, "2"},
 		{`s='a[b*c]'; print -R $s[(i)${(q)s[(r)\]]}]`, "6"},
 		{`s='a]b[c'; print -r -- $s[(r)\],(R)\[]`, "]b["},
 		{`s='a]b[c'; print -r -- $s[(r)\],(R)c]`, "]b[c"},

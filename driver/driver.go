@@ -29,10 +29,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/blairham/sh/internal/event"
@@ -1285,6 +1287,10 @@ type invocation struct {
 	// the descriptor instead. See Shell.invocationPrompts (#3195).
 	interactive        bool
 	interactiveWritten bool
+	// scriptSearch is the dialect's option for looking a script operand up
+	// along PATH, written on the invocation. See
+	// Semantics.ScriptSearchOptionName.
+	scriptSearch bool
 	// fromStdin is `-s`: the script arrives on standard input and every
 	// operand is a parameter, none of them a path. An option like any
 	// other, not a terminator — measured, all four shells still read
@@ -1758,7 +1764,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 		if sh.Semantics.LongOptionNamesASetOption == interp.Yes {
 			inv.opts = append(inv.opts,
 				optionSpec{spec: a[2:], isName: true, long: true, on: on})
-			sh.noteInteractivity(inv, a[2:], on)
+			sh.noteNamedOption(inv, a[2:], on)
 			return args, nil
 		}
 		// A word this front end could not place, and the last thing that can
@@ -1891,7 +1897,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 				case interp.Yes:
 					flush()
 					inv.opts = append(inv.opts, optionSpec{spec: rest, isName: true, on: on})
-					sh.noteInteractivity(inv, rest, on)
+					sh.noteNamedOption(inv, rest, on)
 					return args, nil
 				case interp.Unspecified:
 					return nil, fmt.Errorf("unknown option %q", a)
@@ -1911,7 +1917,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			// decides it: the name and the `-i` letter are one last-wins
 			// sequence, and the option list alone has lost the letter's place
 			// in it. See invocation.interactive.
-			sh.noteInteractivity(inv, args[0], on)
+			sh.noteNamedOption(inv, args[0], on)
 			args = args[1:]
 			// Whatever was welded behind the `o` is more option letters, and
 			// the loop reads them next. They land in a spec of their own,
@@ -2029,8 +2035,11 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	return in, nil
 }
 
-// noteInteractivity records what a `-o <name>` just said about being
-// interactive, where the dialect has a name for it.
+// noteNamedOption records what a `-o <name>` just said about being
+// interactive, or about looking for the script along PATH, where the dialect
+// has a name for either. Both are decided before a runner exists — the one
+// picks the route and the other finds the program — so the option list,
+// which is applied to a runner, is too late for them.
 //
 // The name is matched rather than resolved, because this front end has no
 // option table: which spellings mean this is the dialect's to declare, and
@@ -2043,8 +2052,15 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 // A dialect that declares neither reaches nothing here, which is bash 5.3.20
 // and BusyBox ash 1.37.0: both refuse the name outright, so a front end acting
 // on the spelling alone would act on a word those shells never grant.
-func (sh Shell) noteInteractivity(inv *invocation, name string, on bool) {
+func (sh Shell) noteNamedOption(inv *invocation, name string, on bool) {
+	if sh.Semantics.OptionNamesFoldCaseAndUnderscores {
+		name = strings.ReplaceAll(strings.ToLower(name), "_", "")
+	}
 	switch {
+	case sh.Semantics.ScriptSearchOptionName != "" && name == sh.Semantics.ScriptSearchOptionName:
+		inv.scriptSearch = on
+	case sh.Semantics.ScriptSearchOptionName != "" && name == "no"+sh.Semantics.ScriptSearchOptionName:
+		inv.scriptSearch = !on
 	case sh.Semantics.InteractiveOptionName != "" && name == sh.Semantics.InteractiveOptionName:
 		inv.interactive, inv.interactiveWritten = on, true
 	case sh.Semantics.NonInteractiveOptionName != "" && name == sh.Semantics.NonInteractiveOptionName:
@@ -2138,7 +2154,7 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 	// word that was typed stays `$0` and the path the search resolved is what
 	// a diagnostic names — see Shell.scriptOnPath and the two names it
 	// returns.
-	read, zero, b, found := sh.scriptOnPath(path)
+	read, zero, b, found := sh.scriptOnPath(path, inv.scriptSearch)
 	var err error
 	if !found {
 		// Through the gate: the program a shell was pointed at is an access
@@ -2214,8 +2230,23 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 // Semantics.ScriptOperandSearchedOnPath for the panel's row and for why the
 // candidate has to be readable — a mode-000 file on PATH is passed over and
 // the search goes on.
-func (sh Shell) scriptOnPath(operand string) (read, zero string, body []byte, found bool) {
-	if !sh.Semantics.ScriptOperandSearchedOnPath || strings.ContainsRune(operand, '/') {
+//
+// **The current directory comes first** in every column that searches: with
+// a file of the name both here and on PATH, `bash name`, `ksh name` and `zsh
+// -o pathscript name` all run the one here, measured 2026-10-02. What counts
+// as being here is where they part — see Semantics.ScriptSearchTakesTheFirstFile.
+func (sh Shell) scriptOnPath(operand string, optionSaysSearch bool) (read, zero string, body []byte, found bool) {
+	if !sh.Semantics.ScriptOperandSearchedOnPath && !optionSaysSearch || strings.ContainsRune(operand, '/') {
+		return operand, "", nil, false
+	}
+	if sh.Semantics.ScriptSearchTakesTheFirstFile {
+		return sh.firstScriptFile(operand)
+	}
+	if _, err := sh.readFile(operand); !errors.Is(err, fs.ErrNotExist) {
+		// Anything here at all, readable or not: bash 5.3.20 names a
+		// directory here `Is a directory` and a mode-000 file here
+		// `Permission denied`, both at 126, though PATH holds a script of
+		// the name. Read again, and worded, by the caller.
 		return operand, "", nil, false
 	}
 	list, _ := lookupEnv(sh.env(), "PATH")
@@ -2241,6 +2272,38 @@ func (sh Shell) scriptOnPath(operand string) (read, zero string, body []byte, fo
 	// Nothing on the list. Reported as the operand was written, and as a file
 	// that is not there rather than as a search that failed — measured, `bash
 	// nosuchname` is the same sentence `bash ./nosuchname` gets.
+	return operand, "", nil, false
+}
+
+// firstScriptFile is the search that stops at the first entry of the name
+// that is not a directory, here and then along PATH, and reads it or fails.
+// See Semantics.ScriptSearchTakesTheFirstFile.
+//
+// A failure is reported as the operand was written: zsh 5.9.2 says `can't
+// open input file: name` for a mode-000 file on PATH as it does for nothing
+// anywhere, so the read of the operand below, which finds nothing or the
+// same refusal here, words it.
+func (sh Shell) firstScriptFile(operand string) (read, zero string, body []byte, found bool) {
+	list, _ := lookupEnv(sh.env(), "PATH")
+	candidates := []string{operand}
+	for _, dir := range filepath.SplitList(list) {
+		if dir == "" {
+			dir = "."
+		}
+		candidates = append(candidates, filepath.Join(dir, operand))
+	}
+	for _, candidate := range candidates {
+		b, err := sh.readFile(candidate)
+		if err == nil {
+			// The typed word as `$0` either way: for the file here it is the
+			// path that was read as well.
+			return candidate, operand, b, true
+		}
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.EISDIR) {
+			continue
+		}
+		break
+	}
 	return operand, "", nil, false
 }
 

@@ -8226,6 +8226,15 @@ type Diagnostics struct {
 	// left over: `$((1 2))`. Same verb, and one shell puts it inside the
 	// reason — "operator expected at `2'".
 	ArithOperatorExpected string
+	// ArithBlamedTextShownTo is how many bytes of the text an arithmetic
+	// parse failure blames are shown before the rest is cut and `...`
+	// written in its place; zero shows it all. Measured 2026-10-02 on zsh
+	// 5.9.2: `(( 1 abcdefghijk ))` is ``operator expected at
+	// `abcdefghij...'``, `(( 1 abcdefghi ))` names `abcdefghi ` whole — ten
+	// bytes with the space — and `é€abcdef` is cut after `é€abcde`, which is
+	// bytes rather than characters. bash 5.3.20 names `abcdefghijk ` whole
+	// (#5138).
+	ArithBlamedTextShownTo int
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
 	DivisionByZero string
@@ -9805,8 +9814,18 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		return Wording(d.ArithError, "%[1]s: %[2]s",
 			d.arithBlamedText(expr), Wording(d.ArithUnclosedSubscript, "", sub), sub)
 	}
+	token := d.arithShownToken(se.Token)
 	return Wording(d.ArithError, "%[1]s: %[2]s",
-		d.arithBlamedText(expr), Wording(reason, fallback, se.Token), se.Token)
+		d.arithBlamedText(expr), Wording(reason, fallback, token), token)
+}
+
+// arithShownToken is the blamed text as far as the dialect shows it. See
+// ArithBlamedTextShownTo.
+func (d Diagnostics) arithShownToken(token string) string {
+	if n := d.ArithBlamedTextShownTo; n > 0 && len(token) > n {
+		return token[:n] + "..."
+	}
+	return token
 }
 
 // arithUnclosedSubscript reports the text a **bad subscript** refusal names,

@@ -20442,6 +20442,34 @@ type Semantics struct {
 	// what the search resolved. ksh93's execute-bit condition is recorded and
 	// not answered here; this is a switch and that is a second question.
 	ScriptOperandSearchedOnPath bool
+	// ScriptSearchOptionName is the option that turns the same search on
+	// for one invocation in a dialect that does not search by default —
+	// `zsh -o pathscript name`, which runs a script found on PATH that `zsh
+	// name` reports as `can't open input file`. Its `no` spelling turns it
+	// off, and the sign composes with the sense as it does for every option
+	// name. Read off the invocation rather than off the option table,
+	// because the operand is found before a runner exists. Measured
+	// 2026-10-02 on zsh 5.9.2, `--pathscript` and `-o pathscript` alike
+	// (#5138).
+	ScriptSearchOptionName string
+	// ScriptSearchTakesTheFirstFile makes the search stop at the first entry
+	// of the name that is not a directory — the current directory's, then
+	// each PATH directory's — and read that one or fail, rather than take
+	// any entry here and else the first readable one on PATH. Measured
+	// 2026-10-02 with a script of the name on PATH: zsh 5.9.2 `-o
+	// pathscript` passes over a directory here and runs the script, where
+	// bash 5.3.20 reports `Is a directory`; and a mode-000 file on PATH ahead
+	// of a readable one is `can't open input file` in zsh and runs the
+	// second in bash. Both take a file here over one on PATH.
+	ScriptSearchTakesTheFirstFile bool
+	// OptionNamesFoldCaseAndUnderscores reads an option name with its case
+	// folded and its underscores dropped, so `PATH_SCRIPT` is `pathscript`.
+	// Declared for the front end, which matches the few names it has to act
+	// on before a runner exists — InteractiveOptionName and
+	// ScriptSearchOptionName — and has no option table of its own to ask.
+	// Measured 2026-10-02 on zsh 5.9.2: `-o PATHSCRIPT` and `-o path_script`
+	// find a script on PATH as `-o pathscript` does (#5138).
+	OptionNamesFoldCaseAndUnderscores bool
 
 	// LogoutFile is the file in a person's home directory a *login* shell
 	// reads on its way out, as the counterpart of LoginStartupFiles.

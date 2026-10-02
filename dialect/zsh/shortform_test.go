@@ -4,6 +4,8 @@
 package zsh_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -161,6 +163,49 @@ func TestAnArmNotWrittenShortTakesTheLongForm(t *testing.T) {
 	} {
 		if _, err := syntax.Parse(src, zsh.Dialect()); err == nil {
 			t.Errorf("%q parsed, want a syntax error", src)
+		}
+	}
+}
+
+// TestARepeatCountIsNeverMatched: the count is expanded and then read as an
+// expression, and never matched against the filesystem, so `*` is a product.
+// Measured 2026-10-02 on zsh 5.9.2 beside a file named `2x2`, which a match
+// of `2*2` or `2?` would have found (#5138).
+func TestARepeatCountIsNeverMatched(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`repeat 2*2 print y`, "y\ny\ny\ny\n"},
+		{`repeat 2*2; do print y; done`, "y\ny\ny\ny\n"},
+		{`x='2*2'; repeat $~x print y`, "y\ny\ny\ny\n"},
+		{`repeat 2? print y`, "zsh:1: bad math expression: operand expected at end of string\n"},
+		// And the rest of the expansion still happens: the tilde is the
+		// home directory, cut where the arithmetic cuts what it names.
+		{`HOME=/abcdefghijklmn; repeat ~ print y`, "zsh:1: bad math expression: operand expected at `/abcdefghi...'\n"},
+	} {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "2x2"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, _ := runZsh(t, dir, tc.src)
+		if out != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
+// TestTheBlamedArithmeticTextIsCutAtTenBytes: past ten bytes the text a
+// parse failure names is cut and `...` written in its place. Measured
+// 2026-10-02 on zsh 5.9.2; bytes rather than characters, so `é€abcdef` keeps
+// `é€abcde` (#5138).
+func TestTheBlamedArithmeticTextIsCutAtTenBytes(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`(( 1 abcdefghijk ))`, "zsh:1: bad math expression: operator expected at `abcdefghij...'\n"},
+		{`(( 1 abcdefghi ))`, "zsh:1: bad math expression: operator expected at `abcdefghi '\n"},
+		{`(( 1 + @abcdefghijk ))`, "zsh:1: bad math expression: operand expected at `@abcdefghi...'\n"},
+		{`(( 1 é€abcdefghijk ))`, "zsh:1: bad math expression: operator expected at `é€abcde...'\n"},
+	} {
+		out, _ := runZsh(t, t.TempDir(), tc.src)
+		if out != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, out, tc.want)
 		}
 	}
 }

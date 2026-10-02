@@ -56,7 +56,14 @@ func (r *Runner) repeatCount(w *syntax.Word) (int64, bool) {
 		return 0, false
 	}
 	r.beginHeading()
-	fields := r.expandOneWord(w)
+	// Expanded but never matched: the count is an expression, so `*` is a
+	// product. Measured 2026-10-02 on zsh 5.9.2 beside a file named `2x2`:
+	// `repeat 2*2 print yeah` writes four lines, `repeat 2? …` is the
+	// arithmetic's `operand expected at end of string` rather than `no
+	// matches found`, and `x='2*2'; repeat $~x …` is four lines too (#5138).
+	// The parameter and the tilde are still expanded: `repeat ~ …` names
+	// the home directory in its arithmetic error.
+	fields := r.globFieldsUnlessSuppressed(r.expandOneWordFields(w), true)
 	if r.failedHeading() {
 		// The count is this loop's heading, so a failure in it costs the
 		// loop. Before the emptiness test below, which would otherwise read

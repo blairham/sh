@@ -141,3 +141,60 @@ func TestAScriptOperandWhoseContentIsNotShellText(t *testing.T) {
 		t.Errorf("status %d, want the file read rather than declined", code)
 	}
 }
+
+// The current directory comes first: with a file of the name both here and
+// on PATH, the one here runs. Measured 2026-10-02 on bash 5.3.20, ksh93u+ and
+// zsh 5.9.2 under `-o pathscript` (#5138). Before this the search looked
+// along PATH first and ran the other.
+//
+// And what counts as being here is where the two searches part: an entry of
+// any kind here stops the one search, so a directory is `Is a directory`,
+// while the other passes over a directory and goes on to PATH.
+func TestTheCurrentDirectoryComesFirst(t *testing.T) {
+	here, onPath := t.TempDir(), t.TempDir()
+	writeAt(t, filepath.Join(here, "both"), "echo HERE\n")
+	writeAt(t, filepath.Join(onPath, "both"), "echo PATH\n")
+	if err := os.Mkdir(filepath.Join(here, "adir"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeAt(t, filepath.Join(onPath, "adir"), "echo PATH\n")
+	t.Chdir(here)
+	for _, first := range []bool{false, true} {
+		sh := shell()
+		sh.Semantics.ScriptOperandSearchedOnPath = true
+		sh.Semantics.ScriptSearchTakesTheFirstFile = first
+		sh.Env = []string{"PATH=" + onPath}
+		if out, errs, code := runArgs(t, sh, "testsh", "both"); code != 0 || out != "HERE\n" {
+			t.Errorf("first file %v: got %q status %d stderr %q, want the file here", first, out, code, errs)
+		}
+		out, errs, code := runArgs(t, sh, "testsh", "adir")
+		if first && (code != 0 || out != "PATH\n") {
+			t.Errorf("first file: got %q status %d stderr %q, want the directory passed over", out, code, errs)
+		}
+		if !first && (code == 0 || out != "") {
+			t.Errorf("any entry: got %q status %d, want the directory here refused", out, code)
+		}
+	}
+}
+
+// The search that takes the first file stops at an unreadable one rather than
+// passing over it: zsh 5.9.2 `-o pathscript` reports `can't open input file`
+// for a mode-000 file on PATH ahead of a readable one, where bash runs the
+// second (TestAnUnreadableCandidateIsPassedOver). Measured 2026-10-02 (#5138).
+func TestTheFirstFileSearchStopsAtAnUnreadableOne(t *testing.T) {
+	first, second := t.TempDir(), t.TempDir()
+	writeAt(t, filepath.Join(first, "twice"), "echo MUST NOT RUN\n")
+	if err := os.Chmod(filepath.Join(first, "twice"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	writeAt(t, filepath.Join(second, "twice"), "echo SECOND\n")
+	t.Chdir(t.TempDir())
+	sh := shell()
+	sh.Semantics.ScriptOperandSearchedOnPath = true
+	sh.Semantics.ScriptSearchTakesTheFirstFile = true
+	sh.Env = []string{"PATH=" + first + string(os.PathListSeparator) + second}
+	out, _, code := runArgs(t, sh, "testsh", "twice")
+	if code == 0 || out != "" {
+		t.Errorf("got %q status %d, want the search to stop at the unreadable file", out, code)
+	}
+}

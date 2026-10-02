@@ -1167,6 +1167,12 @@ func Semantics() interp.Semantics {
 	// none, on a pipe and — measured through a pseudo-terminal — on a terminal
 	// too, where the shell would otherwise have prompted (#3195).
 	s.InteractiveOptionName = "interactive"
+	// `-o pathscript` looks the script operand up along PATH, stopping at
+	// the first entry of the name that is not a directory. Measured
+	// 2026-10-02 on 5.9.2 (#5138).
+	s.ScriptSearchOptionName = "pathscript"
+	s.ScriptSearchTakesTheFirstFile = true
+	s.OptionNamesFoldCaseAndUnderscores = true
 	s.NonInteractiveOptionName = "nointeractive"
 	// zsh has a history expander and starts a prompt with it on — measured
 	// 2026-09-15 through a pseudo-terminal with a two-row prompt, where
@@ -6027,7 +6033,10 @@ func Diagnostics() interp.Diagnostics {
 		ArithBadFloatConstant:     "bad floating point constant",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",
-		ArithUnmatchedCloseParen:  "bad math expression: unexpected ')'",
+		// And the text is cut at ten bytes: `(( 1 abcdefghijk ))` names
+		// `abcdefghij...'. Measured 2026-10-02 (#5138).
+		ArithBlamedTextShownTo:   10,
+		ArithUnmatchedCloseParen: "bad math expression: unexpected ')'",
 		// The output format's own two, neither of which opens with `bad math
 		// expression:` and neither of which names the text it refused —
 		// measured 2026-09-12, `zsh:1: bad output format specification` for

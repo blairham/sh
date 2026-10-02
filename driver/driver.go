@@ -866,6 +866,7 @@ func (sh Shell) listProgram(in source, r *interp.Runner, src string) int {
 	// run would. The runner is a parameter here, so it can be asked.
 	d.CharacterWidth = r.CharacterWidth
 	d.NameTakesALetterPastASCII = r.NameTakesALetterPastASCII
+	d.CharacterLength = r.CharacterLength
 	p := syntax.NewParser(src, d)
 	f := p.Parse()
 	err := p.Err()
@@ -2470,6 +2471,7 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 	// locale a line sets is in force for the next. See
 	// syntax.Dialect.NameTakesALetterPastASCII.
 	r.Dialect.NameTakesALetterPastASCII = r.NameTakesALetterPastASCII
+	r.Dialect.CharacterLength = r.CharacterLength
 	if !sh.KeepProcess {
 		// This is a shell, so `exec` may really replace it. interp will not
 		// reach for syscall.Exec itself — it is a library, and a Runner
@@ -2640,9 +2642,11 @@ func (sh Shell) runInput(in source) int {
 		// is told by the runner and this one, made before there is a runner,
 		// has to be told the same way — or a `for ö in …` that runs is a
 		// parse error here first. See interp.NameLettersBeforeARunner.
-		d.NameTakesALetterPastASCII = interp.NameLettersBeforeARunner(&sh.Semantics, func(name string) (string, bool) {
-			return lookupEnv(sh.env(), name)
-		})
+		lookup := func(name string) (string, bool) { return lookupEnv(sh.env(), name) }
+		d.NameTakesALetterPastASCII = interp.NameLettersBeforeARunner(&sh.Semantics, lookup)
+		// And how long a character is, for the delimiter a parameter flag
+		// may be written with. See interp.CharacterLengthBeforeARunner.
+		d.CharacterLength = interp.CharacterLengthBeforeARunner(&sh.Semantics, lookup)
 		p := syntax.NewParser(src, d)
 		p.Parse()
 		if err := p.Err(); err != nil {

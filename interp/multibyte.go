@@ -652,3 +652,59 @@ func NameLettersBeforeARunner(s *Semantics, lookup func(string) (string, bool)) 
 	}
 	return nil
 }
+
+// CharacterLength is what fills syntax.Dialect's field of the same name: how
+// many bytes the locale's character at the front of s takes. One for ASCII,
+// for a single-byte locale and for a sequence the encoding cannot decode; the
+// whole of a UTF-8 sequence where the locale is UTF-8 and the shell reads its
+// characters; and the pair CharacterWidth answers for the two-byte encodings.
+func (r *Runner) CharacterLength(s string) int {
+	if s == "" || s[0] < utf8.RuneSelf {
+		return 1
+	}
+	if r.localeEncoding() == localeUTF8 {
+		if !r.countsTheLocalesCharacters() {
+			return 1
+		}
+		if c, n := utf8.DecodeRuneInString(s); c != utf8.RuneError || n > 1 {
+			return n
+		}
+		return 1
+	}
+	next := byte(0)
+	if len(s) > 1 {
+		next = s[1]
+	}
+	return r.CharacterWidth(s[0], next)
+}
+
+// CharacterLengthBeforeARunner is Runner.CharacterLength for the parse a
+// front end makes before it has a runner, from the locale lookup names: the
+// whole of a UTF-8 sequence where the first of the three variables set names
+// a UTF-8 locale and the dialect decodes one, a byte otherwise. Nil where it
+// is a byte everywhere.
+func CharacterLengthBeforeARunner(s *Semantics, lookup func(string) (string, bool)) func(string) int {
+	if s == nil || s.MultibyteEncodingIsHonored != Yes {
+		return nil
+	}
+	for _, name := range localeVariables {
+		v, _ := lookup(name)
+		if v == "" {
+			continue
+		}
+		if !codesetIsUTF8(v) {
+			return nil
+		}
+		return utf8CharacterLength
+	}
+	return nil
+}
+
+// utf8CharacterLength is the length of the UTF-8 sequence at the front of s,
+// one for a byte that begins none.
+func utf8CharacterLength(s string) int {
+	if c, n := utf8.DecodeRuneInString(s); c != utf8.RuneError || n > 1 {
+		return n
+	}
+	return 1
+}

@@ -48,8 +48,8 @@ func (r *Runner) substituteModifier(value, rest string, global bool, e *syntax.P
 		r.reportBadSubstitution(e)
 		return "", false
 	}
-	delim := rest[0]
-	pattern, after, ok := scanDelimited(rest[1:], delim)
+	delim := modifierDelimiter(rest, r.modifierDelimitersAreCharacters(rest))
+	pattern, after, ok := scanDelimited(rest[len(delim):], delim)
 	if !ok {
 		r.reportBadSubstitution(e)
 		return "", false
@@ -106,13 +106,13 @@ func (r *Runner) repeatSubstitution(value string, global bool, _ *syntax.ParamEx
 // the field. The escapes are left in the text rather than resolved here,
 // because the replacement half has one more question to ask of them than the
 // pattern half does — see substituteLiteral.
-func scanDelimited(s string, delim byte) (text, rest string, found bool) {
+func scanDelimited(s, delim string) (text, rest string, found bool) {
 	for i := 0; i < len(s); i++ {
 		switch {
 		case s[i] == '\\' && i+1 < len(s):
 			i++
-		case s[i] == delim:
-			return s[:i], s[i+1:], true
+		case strings.HasPrefix(s[i:], delim):
+			return s[:i], s[i+len(delim):], true
 		}
 	}
 	return s, "", false

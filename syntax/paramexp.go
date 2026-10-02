@@ -1347,7 +1347,7 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 		}
 		i++
 		argMax := paramFlagArgs[c]
-		var open byte
+		var open string
 		for n := 0; n < argMax && i < len(src); n++ {
 			if n == 0 {
 				if src[i] == ')' {
@@ -1357,19 +1357,24 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 					e.FlagsErrPos = i + 3
 					return ""
 				}
-				open = src[i]
-			} else if src[i] != open {
+				open = src[i : i+p.flagDelimiterLength(src[i:])]
+			} else if !strings.HasPrefix(src[i:], open) {
 				// The optional later arguments arrive only behind the same
 				// delimiter again.
 				break
 			}
-			closing := matchingFlagDelimiter(open)
-			j := strings.IndexByte(src[i+1:], closing)
+			// A delimiter of more than one byte — the locale's character —
+			// closes itself; the bracket pairs are all one byte.
+			closing := open
+			if len(open) == 1 {
+				closing = string(matchingFlagDelimiter(open[0]))
+			}
+			j := strings.Index(src[i+len(open):], closing)
 			if j < 0 {
 				e.FlagsErrPos = i + 3
 				return ""
 			}
-			arg := src[i+1 : i+1+j]
+			arg := src[i+len(open) : i+len(open)+j]
 			switch c {
 			case 's':
 				e.SplitSep = arg
@@ -1399,7 +1404,7 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 					// measured the same way: `${(g:x:)v}` is `error in flags
 					// near position 6`, the position of the `x`, on the one
 					// shell that has the flag.
-					e.FlagsErrPos = i + 1 + k + 3
+					e.FlagsErrPos = i + len(open) + k + 3
 					return ""
 				}
 				// Unioned, as `Z`'s letters are. See EscapeOpts.
@@ -1413,14 +1418,14 @@ func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
 					// measured that way: `${(Z:x:)v}` is `error in flags
 					// near position 6`, the position of the `x`, on the one
 					// shell that has the flag.
-					e.FlagsErrPos = i + 1 + k + 3
+					e.FlagsErrPos = i + len(open) + k + 3
 					return ""
 				}
 				// Unioned rather than assigned: a second `Z` adds its
 				// letters to the first one's. See ShellSplitOpts.
 				e.ShellSplitOpts += arg
 			}
-			i += j + 2
+			i += len(open) + j + len(closing)
 		}
 	}
 	e.FlagsErrPos = len(src) + 2
@@ -1452,6 +1457,21 @@ func notAnEscapeOpt(r rune) bool {
 // matchingFlagDelimiter is the character that closes a flag argument: the
 // partner for the four matched pairs, and the same character again for
 // everything else.
+// flagDelimiterLength is how many bytes the delimiter at the front of s
+// takes: one, or the whole of a character of the locale's where the dialect
+// was handed a way to say so. Measured 2026-10-02 on zsh 5.9.2 under
+// `LC_ALL=en_US.UTF-8`, `foo=bar; ${(r£5££X£)foo}` is `barXX` and
+// `${(l«10««Y««HI«)foo}` is `YYYYHIbar` (#5153).
+func (p *Parser) flagDelimiterLength(s string) int {
+	if s[0] < 0x80 || p.dialect.CharacterLength == nil {
+		return 1
+	}
+	if n := p.dialect.CharacterLength(s); n > 1 && n <= len(s) {
+		return n
+	}
+	return 1
+}
+
 func matchingFlagDelimiter(open byte) byte {
 	switch open {
 	case '(':

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -73,14 +74,15 @@ func rangeSegmentIsAModifier(w *syntax.Word) bool {
 // a colon: `${x:s:Dir:OTHER:}` is one modifier, and splitting on colons first
 // turns it into four things none of which is one. Measured — every byte
 // serves as a delimiter, `/ | # , :` alike.
-func modifierSegments(firstText, restText string, hasRest bool) []string {
+func (r *Runner) modifierSegments(firstText, restText string, hasRest bool) []string {
 	text := firstText
 	if hasRest {
 		text += ":" + restText
 	}
+	wide := r.modifierDelimitersAreCharacters(text)
 	var segs []string
 	for {
-		seg, remainder, more := scanOneModifier(text)
+		seg, remainder, more := scanOneModifier(text, wide)
 		segs = append(segs, seg)
 		if !more {
 			return segs
@@ -146,7 +148,7 @@ func modifierText(w *syntax.Word) string {
 
 // scanOneModifier reads one modifier off the front of text, answering it, what
 // is left after its colon, and whether there was one.
-func scanOneModifier(text string) (seg, rest string, more bool) {
+func scanOneModifier(text string, wide bool) (seg, rest string, more bool) {
 	i := 0
 	if i+1 < len(text) && text[i] == 'g' {
 		i++
@@ -155,7 +157,7 @@ func scanOneModifier(text string) (seg, rest string, more bool) {
 		// A substitution: the delimiter is the byte after the letter, and the
 		// modifier runs to the closing delimiter of its second field. What
 		// follows that is the next modifier, after its colon.
-		end := endOfSubstitution(text, i+1)
+		end := endOfSubstitution(text, i+1, wide)
 		if end >= len(text) {
 			return text, "", false
 		}
@@ -176,16 +178,19 @@ func scanOneModifier(text string) (seg, rest string, more bool) {
 // endOfSubstitution is the offset just past a substitution body that begins
 // with its delimiter at from. It is len(text) where the body ran out, which
 // the parse of it reports.
-func endOfSubstitution(text string, from int) int {
-	delim := text[from]
-	i := from + 1
+//
+// wide says a delimiter past ASCII is the whole of the locale's character
+// rather than its first byte. See modifierDelimiter.
+func endOfSubstitution(text string, from int, wide bool) int {
+	delim := modifierDelimiter(text[from:], wide)
+	i := from + len(delim)
 	for fields := 0; fields < 2; fields++ {
 		for i < len(text) {
 			if text[i] == '\\' && i+1 < len(text) {
 				i += 2
 				continue
 			}
-			if text[i] == delim {
+			if strings.HasPrefix(text[i:], delim) {
 				break
 			}
 			i++
@@ -196,9 +201,30 @@ func endOfSubstitution(text string, from int) int {
 			// the first is not. Either way there is nothing after it.
 			return len(text)
 		}
-		i++
+		i += len(delim)
 	}
 	return i
+}
+
+// modifierDelimiter is the delimiter a substitution's body opens with: its
+// first byte, or — where wide says the locale's characters are read and that
+// byte begins one of more than one byte — the whole character. Measured
+// 2026-10-02 on zsh 5.9.2 under `LC_ALL=en_US.UTF-8`, `foo=picobarn;
+// ${foo:s£bar£rod£:s¥rod¥stick¥}` is `picostickn` (#5153).
+func modifierDelimiter(body string, wide bool) string {
+	if wide && body[0] >= utf8.RuneSelf {
+		if c, n := utf8.DecodeRuneInString(body); c != utf8.RuneError || n > 1 {
+			return body[:n]
+		}
+	}
+	return body[:1]
+}
+
+// modifierDelimitersAreCharacters reports whether a modifier list's
+// delimiters are read as the locale's characters: where the text holds a byte
+// past ASCII at all, and the locale's characters are what the shell counts.
+func (r *Runner) modifierDelimitersAreCharacters(text string) bool {
+	return !isASCII(text) && r.countsTheLocalesCharacters()
 }
 
 // applyModifiers runs a modifier list over a value, left to right.

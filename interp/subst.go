@@ -646,6 +646,7 @@ func (r *Runner) dialect() syntax.Dialect {
 	// kind of answer: the locale's, and the dialect's own option. See
 	// syntax.Dialect.NameTakesALetterPastASCII.
 	d.NameTakesALetterPastASCII = r.NameTakesALetterPastASCII
+	d.CharacterLength = r.CharacterLength
 	return d
 }
 

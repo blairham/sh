@@ -28,6 +28,8 @@ func TestKshZeroSubscriptNamesTheFirstElement(t *testing.T) {
 		{`setopt kshzerosubscript; a[(R)nf]=X; print -r -- $a`, "X q r s\n"},
 		{`setopt kshzerosubscript; unsetopt kshzerosubscript; print -r -- :$a[0]:`, "::\n"},
 		{`setopt kshzerosubscript; [[ -o kshzerosubscript ]] && print on`, "on\n"},
+		// Where arrays count from 0 there is nothing for it to move.
+		{`setopt ksharrays kshzerosubscript; print -r -- ${a[0]} ${a[1]}`, "p q\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), setup+tc.src)
 		if got != tc.want {

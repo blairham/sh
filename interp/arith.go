@@ -277,6 +277,8 @@ func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 // arithFloatConstant is the value a name stands for where the dialect reads
 // `inf` and `nan` as constants. See Semantics.ArithInfAndNaNAreConstants.
 func (r *Runner) arithFloatConstant(name string) (arithNum, bool) {
+	// The length first only because it is cheap: the fold below answers
+	// the same for any other length, so a mutant dropping it survives.
 	if len(name) != 3 || r.sem().ArithInfAndNaNAreConstants != Yes {
 		return arithNum{}, false
 	}
@@ -293,12 +295,15 @@ func (r *Runner) arithFloatConstant(name string) (arithNum, bool) {
 // one of the floating constants, which is no place to store anything:
 // measured 2026-10-02 on zsh 5.9.2, `(( NaN = 1 ))`, `(( Inf++ ))` and `$((
 // inf += 1 ))` are each `bad math expression: lvalue required` (#5145).
+//
+// With brackets after it the refusal is the one a read with brackets gets:
+// `(( Inf[1] = 2 ))` and `(( Inf[1]++ ))` are `bad base syntax`.
 func (r *Runner) constantIsNoPlace(p arithPlace) error {
-	if p.subscripted {
-		return nil
-	}
 	if _, constant := r.arithFloatConstant(p.name); !constant {
 		return nil
+	}
+	if p.subscripted {
+		return arithError{msg: Wording(r.diag().ArithBadBaseSyntax, "bad base syntax"), complete: true}
 	}
 	reason := r.diag().ArithAssignToNonPlace
 	if reason == "" {

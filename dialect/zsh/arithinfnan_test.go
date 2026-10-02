@@ -20,6 +20,7 @@ func TestInfAndNaNAreConstants(t *testing.T) {
 		{"an assignment is refused", "(( NaN = 1 )); print st=$?", "st=2\n", "zsh:1: bad math expression: lvalue required\n"},
 		{"an increment is refused", "(( Inf++ )); print st=$?", "st=2\n", "zsh:1: bad math expression: lvalue required\n"},
 		{"brackets after one", "(( Inf[1] )); print st=$?", "st=2\n", "zsh:1: bad base syntax\n"},
+		{"brackets after one, stored to", "(( Inf[1] = 2 )); print st=$?; (( Inf[1]++ )); print st=$?", "st=2\nst=2\n", "zsh:1: bad base syntax\nzsh:1: bad base syntax\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _, errs := runZshUTF8(t, c.src)

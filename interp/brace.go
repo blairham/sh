@@ -389,7 +389,7 @@ func (r *Runner) alternativesAcross(w *syntax.Word, open, close cursor, endpoint
 // option is on.
 func (r *Runner) braceCharacterClass(w *syntax.Word, open, close cursor) ([][]syntax.Span, bool) {
 	body := sliceSpansRead(w.Spans, next(open), close, r.braceScanReads())
-	text, ok := characterClassBody(body)
+	text, ok := r.characterClassBody(body)
 	if !ok {
 		// Nothing literal to read as characters.
 		return nil, false
@@ -444,11 +444,21 @@ func (r *Runner) braceCharacterClass(w *syntax.Word, open, close cursor) ([][]sy
 // question Semantics.BraceRangeEndpointsExpanded answers for a range and
 // would need its own answer for a class. Recorded on #5154 rather than
 // claimed as behavior; nothing in `D09brace.ztst` reaches it.
-func characterClassBody(body []syntax.Span) (string, bool) {
+//
+// A `$'…'` span is its value, as every other quoting is: `{$'\0'-$'\5'}` is
+// the six characters NUL to 5, measured 2026-10-02 on zsh 5.9.2 — the
+// E01options row `BRACE_CCL option starting from NUL` (#5155). The span keeps
+// the escape as written, so reading its value raw made the class the
+// backslash, the digits and everything between `0` and `\`.
+func (r *Runner) characterClassBody(body []syntax.Span) (string, bool) {
 	var b strings.Builder
 	for _, s := range body {
 		if s.Kind != syntax.Literal {
 			return "", false
+		}
+		if s.Quoting == syntax.DollarSingleQuoted {
+			b.WriteString(r.expandDollarSingle(s.Value))
+			continue
 		}
 		b.WriteString(s.Value)
 	}

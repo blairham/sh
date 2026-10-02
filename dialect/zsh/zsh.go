@@ -2647,6 +2647,9 @@ func Semantics() interp.Semantics {
 	// performs the expansion, so it reaches the question (#3968).
 	s.SubscriptQuotationEndsTheKey = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
+	// `cdablevars` reads the variable as a named directory. Measured
+	// 2026-10-02 on 5.9.2 (#5155).
+	s.CdVariableIsANamedDirectory = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.No

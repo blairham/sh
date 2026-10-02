@@ -539,7 +539,26 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("bsdecho", false),
+	{
+		// BSD_ECHO: `echo` interprets its backslash escapes only behind
+		// `-e`. Measured 2026-10-02 on zsh 5.9.2, E01options' `BSD_ECHO
+		// option` (#5155): with it on, `echo "a\nb"` writes the four
+		// characters and `echo -e "a\nb"` two lines; off again, the escape
+		// expands. The other side of interp.Semantics.EchoInterpretsEscapes,
+		// which this shell answers Yes — so the option is the axis read
+		// backwards, and it is read off the axis rather than a stored bit
+		// for the reason braceccl is.
+		base: "bsdecho", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.EchoInterpretsEscapes != interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.EchoInterpretsEscapes
+			}, answer(!on))
+			return 0
+		},
+	},
 	matchBacked("caseglob", true, interp.GlobFoldsCase, true),
 	// `casematch` is the `=~` operator's and **nothing else**, which is the
 	// whole reason it is not the same wire as bash's option of the same
@@ -581,7 +600,20 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("cdablevars", false),
+	{
+		// CDABLE_VARS: a `cd` operand that names no directory is tried as a
+		// named directory — `cd v` and `cd v/sub` where `v` holds an
+		// absolute path. The capability bash's `cdable_vars` moves, read
+		// the way Semantics.CdVariableIsANamedDirectory says this shell
+		// reads it. Measured 2026-10-02 on 5.9.2, E01options' `CDABLE_VARS
+		// option` (#5155).
+		base: "cdablevars", def: false,
+		get: func(r *interp.Runner) bool { return r.BareCdOperandCanNameAVariable() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetBareCdOperandCanNameAVariable(on)
+			return 0
+		},
+	},
 	recorded("cdsilent", false),
 	{
 		// CHASE_DOTS: a `..` in a `cd`'s destination is resolved against
@@ -760,7 +792,17 @@ var zshOptions = []zshOption{
 	// and zsh.go for the measurement that put this shell on the other one.
 	switchBacked("cprecedences", false, cPrecedences, setCPrecedences),
 	recorded("cshjunkiehistory", false),
-	recorded("cshjunkieloops", false),
+	{
+		// CSH_JUNKIE_LOOPS: a loop's body may be a list closed by `end`, and
+		// the one-command body is gone. See
+		// syntax.Dialect.LoopBodyEndsInEnd for the rows (#5155).
+		base: "cshjunkieloops", def: false,
+		get: func(r *interp.Runner) bool { return r.LoopBodyEndsInEnd() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetLoopBodyEndsInEnd(on)
+			return 0
+		},
+	},
 	recorded("cshjunkiequotes", false),
 	nullCommandOption("cshnullcmd"),
 	recorded("cshnullglob", false),

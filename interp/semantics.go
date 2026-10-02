@@ -1759,6 +1759,24 @@ type Semantics struct {
 	// axis produces.
 	EchoInterpretsEscapes Answer
 
+	// CdVariableIsANamedDirectory reads the variable a `cd` operand names,
+	// where the shell's option for that is on, as a named directory: the
+	// operand is a `~name` without its tilde. So the name is the operand's
+	// first component, only an absolute value counts, and the move is not
+	// announced. The other reading takes the whole operand as the name and
+	// any value, and prints the value it went to.
+	//
+	// Measured 2026-10-02 against a directory `tmpcd`, each with its own
+	// option on — zsh 5.9.2's `cdablevars`, bash 5.3.20's `cdable_vars`:
+	//
+	//	v=tmpcd; cd v           zsh: no such file or directory   bash: moves, prints tmpcd
+	//	v=$PWD/tmpcd; cd v      zsh: moves, silent               bash: moves, prints the value
+	//	v=$PWD/tmpcd; cd v/..   zsh: moves to $PWD               bash: no such file
+	//
+	// zsh Yes, bash No; read as `== Yes`, so a dialect without the option
+	// never reaches it (#5155).
+	CdVariableIsANamedDirectory Answer
+
 	// DollarSingleBackslashC is what `\c` means inside `$'…'`, and like the
 	// `\c` of a printf format it is three different things rather than a
 	// switch — see DollarSingleControlPolicy. Asked only for a `$'…'` that
@@ -29778,6 +29796,10 @@ func PosixSemantics() Semantics {
 		// targets this text, does. ksh93 and zsh are the departures.
 		PrefixExpandedBeforeADeclarationsOperand: No,
 		EchoInterpretsEscapes:                    No,
+		// The standard has no option that sends a `cd` operand to a
+		// variable, so there is no reading of one to take: No, which is
+		// bash 5.3.20's `cdable_vars` as well. See the field.
+		CdVariableIsANamedDirectory: No,
 		// POSIX has `echo` and `printf` exit greater than zero when "an
 		// error occurred", and a write that went nowhere is one; dash
 		// complies. zsh is the holdout, keeping status 0.

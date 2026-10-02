@@ -88,14 +88,34 @@ func TestTheOptionDecidesAShortBodyWrittenWithoutBraces(t *testing.T) {
 	}
 }
 
+// refusedUnderCshjunkieloops are the rows `emulate csh` refuses although its
+// `shortloops` is on: every loop whose body is one command or none, because
+// the mode turns `cshjunkieloops` on too and a loop's body must then be closed
+// by `end`. Measured 2026-10-02 on zsh 5.9.2, each row in a script file after
+// `emulate csh` and `setopt noexec`, with the stop-word row as the positive
+// control; the `if` rows parse there, the option being about loops (#5155).
+var refusedUnderCshjunkieloops = map[string]bool{
+	"a for's list and one command":                  true,
+	"a for's parenthesized list and one command":    true,
+	"a select's parenthesized list and one command": true,
+	"a count loop and one command":                  true,
+	"a while with a separator":                      true,
+	"a while with none":                             true,
+	"an until":                                      true,
+	"a for with a name and no list":                 true,
+	"a for with a list and no body":                 true,
+	"a while with nothing after it":                 true,
+	"a while with a condition and no body":          true,
+	"an until with nothing after it":                true,
+}
+
 // And through the emulations, which is the route #4817's `core` rows take:
 // `shortloops` is in emulationAlwaysReset and its per-emulation default is
 // off under `sh` and `ksh` and on under `csh`.
 //
-// Every row answers the same way in every mode, which is the measurement
-// rather than a consequence of the wiring: the reference's three emulations
-// agree on all twenty-five with the option held, so a table keyed on the mode
-// would be a hundred cells of the wrong question.
+// Every row answers the same way in every mode with the option held, which is
+// the measurement rather than a consequence of the wiring — except that `csh`
+// moves a second option, see refusedUnderCshjunkieloops.
 func TestAnEmulationReachesAShortBodyThroughTheOption(t *testing.T) {
 	for _, tc := range []struct {
 		mode string
@@ -111,6 +131,12 @@ func TestAnEmulationReachesAShortBodyThroughTheOption(t *testing.T) {
 				want := row.off
 				if tc.on {
 					want = row.on
+				}
+				if tc.mode == "csh" && refusedUnderCshjunkieloops[row.name] {
+					// `emulate csh` turns `cshjunkieloops` on as well, and a
+					// loop's body then has to be `end`-closed — see
+					// TestCshjunkieloopsClosesALoopBodyWithEnd.
+					want = true
 				}
 				if got := !parsesHere(t, r, row.src); got != want {
 					t.Errorf("%s: refused=%v, want %v", row.name, got, want)

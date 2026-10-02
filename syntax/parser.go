@@ -6377,7 +6377,7 @@ func (p *Parser) parseForArith(start Pos) Command {
 	// This header ends itself too, so where a body may be short it may also
 	// be one command, or nothing.
 	if p.shortFormBodyFollows() && !p.atWord("do") {
-		c.Body, c.Stop = p.shortFormBody()
+		c.Body, c.Stop = p.loopShortBody()
 		return c
 	}
 
@@ -6438,6 +6438,21 @@ func (p *Parser) braceLoopBody() (body []*Stmt, stop Pos) {
 	// runs through here too, and its answer is not this one's.
 	p.shortBodyBraced = true
 	return g.List, g.Stop
+}
+
+// loopShortBody is shortFormBody for a loop, which one option reads
+// differently: under it a body that is neither `do … done` nor a brace group
+// is a list closed by `end`, and the one-command body is gone. See
+// [Dialect.LoopBodyEndsInEnd].
+func (p *Parser) loopShortBody() (body []*Stmt, stop Pos) {
+	if !p.dialect.LoopBodyEndsInEnd || p.braceBodyFollows() {
+		return p.shortFormBody()
+	}
+	p.shortBodyBraced = false
+	body = p.parseBody()
+	stop = p.tok.End
+	p.expectWord("end")
+	return body, stop
 }
 
 // shortFormBody reads a body written where `do … done` stands, for a header
@@ -7182,7 +7197,7 @@ func (p *Parser) parseLoop() Command {
 	// nothing. The list is what decides — a `;` kept it going, so anything
 	// after one was tested rather than run.
 	if p.shortFormBodyFollows() && !p.atWord("do") {
-		c.Body, c.Stop = p.shortFormBody()
+		c.Body, c.Stop = p.loopShortBody()
 		return c
 	}
 	p.requireSep("do")
@@ -7252,7 +7267,7 @@ func (p *Parser) parseFor() Command {
 		return c
 	}
 	if p.shortFormBodyFollows() && !p.atWord("do") {
-		c.Body, c.Stop = p.shortFormBody()
+		c.Body, c.Stop = p.loopShortBody()
 		return c
 	}
 	p.expectWord("do")
@@ -7594,7 +7609,7 @@ func (p *Parser) shortBodyAfterHeader(headerEnded bool) (body []*Stmt, stop Pos,
 	if p.atWord("do") {
 		return nil, Pos{}, false
 	}
-	body, stop = p.shortFormBody()
+	body, stop = p.loopShortBody()
 	return body, stop, true
 }
 
@@ -7626,7 +7641,7 @@ func (p *Parser) parseRepeat() Command {
 		return c
 	}
 	if p.shortFormBodyFollows() && !p.atWord("do") {
-		c.Body, c.Stop = p.shortFormBody()
+		c.Body, c.Stop = p.loopShortBody()
 		return c
 	}
 	p.opensClause("do")
@@ -7750,7 +7765,7 @@ func (p *Parser) parseSelect() Command {
 		return c
 	}
 	if p.shortFormBodyFollows() && !p.atWord("do") {
-		c.Body, c.Stop = p.shortFormBody()
+		c.Body, c.Stop = p.loopShortBody()
 		return c
 	}
 	p.expectWord("do")

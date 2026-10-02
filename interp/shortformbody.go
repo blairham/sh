@@ -112,3 +112,20 @@ func (r *Runner) SetFunctionKeywordBodyIsOneCommandOrNone(on bool) {
 	d.FunctionKeywordBodyMustBeBraceGroup = !on
 	r.Dialect = &d
 }
+
+// LoopBodyEndsInEnd reports whether a loop's body that is neither `do … done`
+// nor a brace group is a list closed by `end`. See
+// syntax.Dialect.LoopBodyEndsInEnd.
+func (r *Runner) LoopBodyEndsInEnd() bool { return r.lang().LoopBodyEndsInEnd }
+
+// SetLoopBodyEndsInEnd moves it, for a dialect whose option namespace has a
+// name for the reading — zsh's `cshjunkieloops`. Copied and replaced for the
+// reason SetShortFormBodyIsOneCommandOrNone is.
+func (r *Runner) SetLoopBodyEndsInEnd(on bool) {
+	d := r.dialect()
+	if d.LoopBodyEndsInEnd == on {
+		return
+	}
+	d.LoopBodyEndsInEnd = on
+	r.Dialect = &d
+}

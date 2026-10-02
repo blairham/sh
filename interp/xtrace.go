@@ -1534,3 +1534,23 @@ func (r *Runner) traceWordLayout(d Diagnostics) syntax.Layout {
 	}
 	return l
 }
+
+// traceEmptyCommand is xtrace's line for a command that has nothing left to
+// run and nothing to assign. See Semantics.EmptyCommandTrace.
+func (r *Runner) traceEmptyCommand() {
+	if !r.tracing() {
+		return
+	}
+	var line string
+	switch r.sem().EmptyCommandTrace {
+	case EmptyCommandTracesThePrefix:
+		line = r.tracePrefix() + "\n"
+	case EmptyCommandTracesABareLine:
+		line = "\n"
+	default:
+		return
+	}
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	r.tracef("%s", line)
+}

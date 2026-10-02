@@ -4565,6 +4565,39 @@ type Semantics struct {
 	// dash, bash and zsh; ksh93 applies the change first, so the command
 	// that stops tracing leaves no trace of itself.
 	TraceShowsItsOwnDisabling Answer
+
+	// EmptyCommandTrace is what xtrace writes for a command with no words
+	// left and no assignment in front of it: a word that expanded away, a
+	// substitution that printed nothing, a bare redirection in a shell with
+	// no null command. Measured 2026-10-01, `e=; set -x; $e; :`, with `sed
+	// -n l`:
+	//
+	//	bash 5.3.20, ksh93u+          `+ :$`, nothing for the empty one
+	//	dash 0.5.12, BusyBox ash 1.37 `+ $` then `+ :$`: the prefix alone
+	//	zsh 5.9.2                     `$` then `+zsh:1> :$`: a bare newline,
+	//	                              no prefix at all
+	//
+	// and the same in each for `$(true)` after its own `+ true`, for `{ $e;
+	// }` and, in dash and ash, for `>/dev/null` and `$e >/dev/null`. zsh's
+	// bare redirection runs its null command and traces that instead; a
+	// line of modifiers with nothing behind them is zsh's empty command too.
+	// An assignment is not this: `v=1 $e` is `+ v=1` in dash and `+zsh:1>
+	// v=1 ` in zsh, the bare assignment's own line (#5326).
+	//
+	// The zero value is the first row, which is what this shell wrote for
+	// all of them before the axis, and every preset states its answer.
+	//
+	// unpinned zsh: the corpus has no row tracing an empty command; pinned
+	// by TestAnEmptyCommandIsTracedAsABareLine.
+	//
+	// unpinned dash: the same reach, pinned by TestAnEmptyCommandIsTracedAsThePrefix.
+	//
+	// unpinned ash: the same reach, pinned by TestAnEmptyCommandIsTracedAsThePrefix.
+	//
+	// unpinned bash: the same reach, pinned by TestAnEmptyCommandIsNotTraced.
+	//
+	// unpinned ksh: the same reach, pinned by TestAnEmptyCommandIsNotTraced.
+	EmptyCommandTrace EmptyCommandTraceForm
 	// UnsetPositionalIsAllowed lets `$1` expand to nothing under `set -u`
 	// rather than being an error. ksh93 alone, and quiet where it differs:
 	// a script that reads an argument it was not given carries on there and
@@ -36158,4 +36191,28 @@ func (r *Runner) emptyKeyInATableLiteral() EmptyKeyInATableLiteralPolicy {
 		r.unspecified = true
 	}
 	return p
+}
+
+// EmptyCommandTraceForm is what xtrace writes for a command with no words and
+// no assignments. See Semantics.EmptyCommandTrace.
+type EmptyCommandTraceForm uint8
+
+const (
+	// EmptyCommandTracesNothing is bash and ksh93, and the zero value.
+	EmptyCommandTracesNothing EmptyCommandTraceForm = iota
+	// EmptyCommandTracesThePrefix is dash and BusyBox ash: the prefix and
+	// the newline, and no word.
+	EmptyCommandTracesThePrefix
+	// EmptyCommandTracesABareLine is zsh: the newline alone.
+	EmptyCommandTracesABareLine
+)
+
+func (f EmptyCommandTraceForm) String() string {
+	switch f {
+	case EmptyCommandTracesThePrefix:
+		return "EmptyCommandTracesThePrefix"
+	case EmptyCommandTracesABareLine:
+		return "EmptyCommandTracesABareLine"
+	}
+	return "EmptyCommandTracesNothing"
 }

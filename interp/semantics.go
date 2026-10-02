@@ -25954,6 +25954,15 @@ type Semantics struct {
 	// builtin names to add rather than one to run, and dash and BusyBox ash
 	// have no `builtin` (#5377).
 	BuiltinNameIsLookedUpBeforeGlobbing Answer
+	// NameBeyondASCIIStaysOutOfTheEnvironment leaves an exported name
+	// holding a byte past ASCII out of a child's environment, though the
+	// shell itself lists it as exported. Measured 2026-10-02 under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=en_US.UTF-8`: zsh 5.9.2 runs `export ñ=1
+	// a=2; /usr/bin/env` and the child sees `a=2` alone while `typeset -p ñ`
+	// is `export ñ=1`; ksh93u+ 2012-08-01 hands the child both, which is the
+	// zero value. bash, dash and BusyBox ash have no such name to export
+	// (#5364).
+	NameBeyondASCIIStaysOutOfTheEnvironment Answer
 
 	// ExecTakesTheLoginLetter is `exec -l`, which puts a `-` on the front of
 	// the argv[0] the replacement sees — the mark `login` and every terminal

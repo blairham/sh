@@ -3102,6 +3102,10 @@ func Semantics() interp.Semantics {
 	// `hähä=3; echo $hähä` writes 3 under `LC_ALL=en_US.UTF-8` on 93u+
 	// 2012-08-01, measured 2026-10-02 (#5153).
 	s.NamesTakeTheLocalesLetters = interp.Yes
+	// An exported name past ASCII reaches a child here: measured 2026-10-02
+	// on ksh93u+ 2012-08-01, `export ñ=1 a=2; /usr/bin/env` lists both. See
+	// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment.
+	s.NameBeyondASCIIStaysOutOfTheEnvironment = interp.No
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+

@@ -186,6 +186,7 @@ ash   LongOptionNameIgnoresHyphens
 ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
 ash   MixedTableLiteral
+ash   NameBeyondASCIIStaysOutOfTheEnvironment
 ash   NamerefArrayRefusal
 ash   NamerefCycleIsRefused
 ash   NamerefDroppedByASubscriptedOperand
@@ -331,6 +332,7 @@ bash  IntegerPlusFormTakesAttributesOff
 bash  JobsListsWhatChangedSinceTheLastReport
 bash  LongOptionNameIgnoresHyphens
 bash  LongOptionValueIsANumber
+bash  NameBeyondASCIIStaysOutOfTheEnvironment
 bash  NumericTypeLetterPrecedence
 bash  NumericTypeLettersAreExclusive
 bash  PrintfFloatOperandIsEvaluatedTwice
@@ -537,6 +539,7 @@ dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
 dash  MixedTableLiteral
+dash  NameBeyondASCIIStaysOutOfTheEnvironment
 dash  NamerefArrayRefusal
 dash  NamerefCycleIsRefused
 dash  NamerefDroppedByASubscriptedOperand

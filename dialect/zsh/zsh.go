@@ -1188,6 +1188,9 @@ func Semantics() interp.Semantics {
 	// And `builtin`'s name is looked up before anything behind it is
 	// matched. See Semantics.BuiltinNameIsLookedUpBeforeGlobbing (#5377).
 	s.BuiltinNameIsLookedUpBeforeGlobbing = interp.Yes
+	// An exported name past ASCII reaches no child. See
+	// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment (#5364).
+	s.NameBeyondASCIIStaysOutOfTheEnvironment = interp.Yes
 	s.ScriptSearchOptionName = "pathscript"
 	// And sh and ksh emulation start with it on (#5383).
 	s.ScriptSearchUnderEmulation = "sh ksh"

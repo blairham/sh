@@ -1014,6 +1014,8 @@ func Semantics() interp.Semantics {
 	// `export -A h=(…)` beside `export s="1"`, and `readonly -p` the frozen
 	// array. See Semantics.CommandWordListingNeedsAKindLetter.
 	s.CommandWordListingNeedsAKindLetter = interp.No
+	// unanswered NameBeyondASCIIStaysOutOfTheEnvironment: a name here is
+	// ASCII under every locale, so there is no such name to export.
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes

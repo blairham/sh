@@ -10156,6 +10156,12 @@ func (r *Runner) environ() []string {
 		if !r.isExported(k) {
 			continue
 		}
+		if r.sem().NameBeyondASCIIStaysOutOfTheEnvironment == Yes && !isASCII(k) {
+			// Exported in the shell and left out of a child's environment,
+			// in the dialect that does. See
+			// Semantics.NameBeyondASCIIStaysOutOfTheEnvironment.
+			continue
+		}
 		if entry, compound := r.exportedCompound(k); compound {
 			// A name holding an array or a table has no environment
 			// representation, and the columns part over whether it reaches a

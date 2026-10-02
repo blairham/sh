@@ -66,6 +66,14 @@ type Shell struct {
 	// commands for the rest of the run.
 	Prelude string
 
+	// CommandStringParameter is the parameter a `-c` program's own text is
+	// stored in before it runs, where the shell keeps one: zsh's
+	// `ZSH_EXECUTION_STRING`. An ordinary scalar — measured on zsh 5.9.2, a
+	// script may assign it or unset it, an exported one from the
+	// environment keeps its export with the program's text in it, and on
+	// every other route it is not set at all (#5157). Empty is none.
+	CommandStringParameter string
+
 	// SystemStartupDirectory is where this machine keeps the startup files
 	// its administrator owns — `/etc` on every Unix anyone runs this on,
 	// except for zsh, which is where the field earns its keep. The empty
@@ -2696,6 +2704,9 @@ func (sh Shell) runInput(in source) int {
 		r.SetInteractiveJobNotices()
 	}
 	r.SetScriptFile(in.file)
+	if sh.CommandStringParameter != "" && in.input == commandStringLabel {
+		r.SetVar(sh.CommandStringParameter, in.src)
+	}
 	// On the route the program arrived by, because one grammar answer
 	// depends on it: the shell that ends an unterminated quote at the end of
 	// a command string refuses the same text in a file.

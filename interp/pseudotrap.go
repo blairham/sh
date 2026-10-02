@@ -273,7 +273,6 @@ func (r *Runner) errTrapFiresHere(refuse bool) bool {
 func (r *Runner) fireErrTrap(ctx context.Context) {
 	r.inErrTrap = true
 	fname := r.trapFuncs["ERR"]
-	r.callEndedOnAReturn = false
 	acted := r.runPseudoTrapBody(ctx, "ERR", *r.errTrap, r.status)
 	r.inErrTrap = false
 	r.forcedByATrapFunction(fname, acted)
@@ -965,9 +964,10 @@ func (r *Runner) debugActionArmingErrExitSkips() bool {
 
 // forcedByATrapFunction is what a handler spelled as a `TRAPZERR` function
 // does to the code it interrupted by returning a status that is not zero:
-// the function the failure happened in returns with that status, and where
-// there is no function the shell exits with it. Only a `return` written in
-// the handler counts — a body that runs off its end on a failing command
+// the code returns with that status, as though the `return` had been
+// written where the failure was — the function it happened in returns, a
+// sourced file stops, and at the top the shell exits. Only a `return` written
+// in the handler counts: a body that runs off its end on a failing command
 // lets the code carry on.
 //
 // Measured 2026-10-02 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin zsh -fc` and
@@ -981,6 +981,10 @@ func (r *Runner) debugActionArmingErrExitSkips() bool {
 //	        t, B 42: it is g that returns, and its 42 is not judged again
 //	TRAPZERR() { print t; return 42 }; false; print no
 //	        t, and the shell exits 42 — an EXIT trap still runs
+//	TRAPZERR() { print t; return 42 }; . ./f; print after $?
+//	        with f holding `false` and a print: t, after 42
+//	g() { return 3 }; f() { trap 'print t; g' ZERR; false; print B }; f
+//	        t, B: the return was g's, not the handler's
 //
 // A handler written as an action is not this: `return 42` in one is the
 // function's own `return`, which runs the way any `return` does.
@@ -991,10 +995,5 @@ func (r *Runner) forcedByATrapFunction(fname string, status int) {
 	if fname == "" || !r.callEndedOnAReturn || status == 0 || r.ctl != controlNone {
 		return
 	}
-	r.status = status
-	if r.currentFunctionFrameSerial() != 0 {
-		r.ctl = controlReturn
-		return
-	}
-	r.stopTheShellForExit()
+	r.status, r.ctl = status, controlReturn
 }

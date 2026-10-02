@@ -3,7 +3,11 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // A `TRAPZERR` function that returns a status other than zero makes the
 // function the failure happened in return with it, or the shell exit with it
@@ -26,9 +30,15 @@ func TestATrapZerrFunctionsReturnIsTheFunctions(t *testing.T) {
 		{"through a brace group", "fn1() { TRAPZERR() { print trap; return 42; }; { false; print in; }; print Broken; }; fn1; print W $?", "trap\nW 42\n", 0},
 		{"an action's return is the function's own", "fn1() { trap 'print trap; return 42' ZERR; false; print Broken; }; fn1; print Working $?", "trap\nWorking 42\n", 0},
 		{"at the top the shell exits with it", "trap 'print X' EXIT; TRAPZERR() { print trap; return 42; }; false; print no", "trap\nX\n", 42},
+		{"a sourced file stops", "TRAPZERR() { print trap; return 42; }; . ./srcf; print after $?", "trap\nafter 42\n", 0},
+		{"a function the action calls is not the handler", "g() { return 3; }; fn1() { trap 'print trap; g' ZERR; false; print Broken; }; fn1; print W $?", "trap\nBroken\nW 0\n", 0},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, st := runZshOnPath(t, t.TempDir(), c.src)
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "srcf"), []byte("false\nprint in $?\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out, st := runZshOnPath(t, dir, c.src)
 			if out != c.want || st != c.status {
 				t.Errorf("%s\n got %q, %d\nwant %q, %d", c.src, out, st, c.want, c.status)
 			}

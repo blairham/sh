@@ -24,6 +24,16 @@ func TestDisableRSwitchesADeclarationWord(t *testing.T) {
 			`zmodload zsh/parameter; disable -r typeset local; disable -r; print ${#reswords} $dis_reswords; whence -w typeset`,
 			"local\ntypeset\n29 typeset local\ntypeset: builtin\n",
 		},
+		// With both off there is nothing to run, and a quoted spelling is
+		// never the reserved word, so a disabled builtin stays disabled.
+		{
+			`disable -r typeset; disable typeset; eval "typeset x=1"; print $?`,
+			"(eval):1: command not found: typeset\n127\n",
+		},
+		{
+			`disable typeset; eval "\\typeset x=1; print -r -- \"[\$x]\""`,
+			"(eval):1: command not found: typeset\n[]\n",
+		},
 		{`disable -r nosuch; print $?`, "zsh:disable:1: no such hash table element: nosuch\n1\n"},
 		{`disable -r if; print $?`, "zsh:disable:1: -r if is not implemented yet\n2\n"},
 	} {

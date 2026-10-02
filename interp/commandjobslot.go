@@ -65,8 +65,8 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 		// slot — before the slot goes. See Runner.forget.
 		r.dropFinishedJobsWhereAnswered()
 		if r.marksByNumber && r.markCurrent != 0 && r.markCurrent == r.commandSlot &&
-			(r.jobByNumber(r.markPrevious) != nil || r.markPrevious != 0 && r.markPrevious == outerSlot ||
-				slices.Contains(r.outerSlots, r.markPrevious) && r.markPrevious != 0) {
+			(r.jobByNumber(r.markPrevious) != nil ||
+				r.markPrevious != 0 && slices.Contains(r.outerSlots, r.markPrevious)) {
 			// The `+` was on the command, and goes where `%-` was — where
 			// `%-` is a job. The `-` is left where it is, even on the
 			// number the command is letting go of: measured, `sleep 1 & {
@@ -80,29 +80,14 @@ func (r *Runner) holdACommandsJobSlot(nests bool) func() {
 			// on job 1. See Runner.forgetANumberNobodyHolds for where it is
 			// read again.
 			//
-			// The `-` is then chosen again from the jobs and the numbers
-			// still held — and, for a command inside another, from the
-			// number this one is letting go of, where the outer command's
-			// own is passed over. Measured the same day: after `f() { eval
-			// 'sleep 0 & wait' }; f`, `g() { eval 'wait %-' }; g` reads
-			// `%-: no such job` and `h() { wait %- }; h` reads `no previous
-			// job`, so the `-` is on the eval's number and not on f's.
-			released := r.commandSlot
+			// The `-` is then chosen again from the jobs and — for a command
+			// inside another — the numbers still held, this one's among them
+			// until it goes. Measured the same day: after `f() { eval 'sleep
+			// 0 & wait' }; f`, `g() { eval 'wait %%; wait %-' }; g` reads
+			// `%%: no such job` and then `%-: no such job`, so the `-` is on the
+			// eval's number.
 			r.markCurrent = r.markPrevious
 			r.markPrevious = r.highestJobBut(r.markCurrent, outerSlot != 0)
-			if outerSlot != 0 {
-				r.markPrevious = 0
-				for _, j := range r.jobs {
-					if j.num != r.markCurrent && j.num > r.markPrevious {
-						r.markPrevious = j.num
-					}
-				}
-				for _, n := range append([]int{released}, r.outerSlots...) {
-					if n != r.markCurrent && n != outerSlot && n > r.markPrevious {
-						r.markPrevious = n
-					}
-				}
-			}
 		}
 		r.commandSlotHeld, r.commandSlot, r.commandSerial = outerHeld, outerSlot, outerSerial
 		if outerSlot != 0 {

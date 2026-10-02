@@ -1304,7 +1304,7 @@ func (l *Lexer) atAssignValue() bool {
 		}
 		head = head[:i]
 	}
-	return isNameIn(head, l.dialect.DottedName)
+	return isNameInDialect(head, &l.dialect)
 }
 
 // arrayLiteralCouldStandHere reports whether an array literal may be written
@@ -2853,7 +2853,7 @@ func (l *Lexer) inAssignmentValue() bool {
 		}
 		head = head[:i]
 	}
-	return isNameIn(head, l.dialect.DottedName)
+	return isNameInDialect(head, &l.dialect)
 }
 
 // endOfInputBackslashSpan is what an unquoted backslash the input ends
@@ -7278,6 +7278,14 @@ func (l *Lexer) scanBareParam(q Quoting) []Span {
 		l.advance()
 	default:
 		for !l.eof() {
+			// A letter past ASCII, where the dialect lets a name hold one,
+			// taken whole. See Dialect.NameTakesALetterPastASCII.
+			if n := l.dialect.wideNameAt(l.src[l.off:]); n > 0 {
+				for range n {
+					l.advance()
+				}
+				continue
+			}
 			c := l.peek()
 			ok := c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
 				(c >= '0' && c <= '9' && l.off > begin)
@@ -7413,6 +7421,11 @@ func (l *Lexer) startsBareParam() bool { return l.startsBareParamAt(1) }
 // continuation standing between the two.
 func (l *Lexer) startsBareParamAt(n int) bool {
 	if isBareParam(l.peekAt(n)) {
+		return true
+	}
+	// A name that begins with a letter past ASCII, where the dialect lets a
+	// name hold one. See Dialect.NameTakesALetterPastASCII.
+	if l.off+n < len(l.src) && l.dialect.wideNameAt(l.src[l.off+n:]) > 0 {
 		return true
 	}
 	return l.dialect.BareParamFlags && bareFlagApplies(l.peekAt(n), l.peekAt(n+1))

@@ -8002,6 +8002,17 @@ type Dialect struct {
 	// which is one byte per character.
 	CharacterWidth func(b, next byte) int
 
+	// NameTakesALetterPastASCII says whether a character past ASCII may be
+	// part of a name — of an assignment, of a parameter, of an arithmetic
+	// variable — at any position in it. nil is the zero value and the
+	// portable answer: a name is ASCII letters, digits and the underscore.
+	//
+	// A function for the reason CharacterWidth above is one: what counts is
+	// the locale, which is a running shell's state and not the grammar's,
+	// and in one dialect an option as well. The interpreter fills it in; see
+	// interp.Semantics.NamesTakeTheLocalesLetters for what was measured.
+	NameTakesALetterPastASCII func(c rune) bool
+
 	// UnmatchedBlamesTheOutermost names the *enclosing* construct when the
 	// input runs out inside nested ones, where the default names the
 	// innermost.

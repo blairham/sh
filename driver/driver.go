@@ -865,6 +865,7 @@ func (sh Shell) listProgram(in source, r *interp.Runner, src string) int {
 	// The listing is a parse like any other and reads the same characters the
 	// run would. The runner is a parameter here, so it can be asked.
 	d.CharacterWidth = r.CharacterWidth
+	d.NameTakesALetterPastASCII = r.NameTakesALetterPastASCII
 	p := syntax.NewParser(src, d)
 	f := p.Parse()
 	err := p.Err()
@@ -2465,6 +2466,10 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 	// dialect over. A `LC_ALL=zh_TW.Big5` on line 1 is therefore in force when
 	// line 2 is read. See syntax.Dialect.CharacterWidth (#4235).
 	r.Dialect.CharacterWidth = r.CharacterWidth
+	// And the letters a name may hold past ASCII, for the same reason: the
+	// locale a line sets is in force for the next. See
+	// syntax.Dialect.NameTakesALetterPastASCII.
+	r.Dialect.NameTakesALetterPastASCII = r.NameTakesALetterPastASCII
 	if !sh.KeepProcess {
 		// This is a shell, so `exec` may really replace it. interp will not
 		// reach for syscall.Exec itself — it is a library, and a Runner
@@ -2630,7 +2635,15 @@ func (sh Shell) runInput(in source) int {
 	// the rest run each line as they reach it. Parsing everything up front is
 	// how that is done: the failure is then reported before anything has run.
 	if in.wholeFirst {
-		p := syntax.NewParser(src, sh.Dialect.On(in.programRoute()))
+		d := sh.Dialect.On(in.programRoute())
+		// The letters a name may hold past ASCII, which the parse that runs
+		// is told by the runner and this one, made before there is a runner,
+		// has to be told the same way — or a `for ö in …` that runs is a
+		// parse error here first. See interp.NameLettersBeforeARunner.
+		d.NameTakesALetterPastASCII = interp.NameLettersBeforeARunner(&sh.Semantics, func(name string) (string, bool) {
+			return lookupEnv(sh.env(), name)
+		})
+		p := syntax.NewParser(src, d)
 		p.Parse()
 		if err := p.Err(); err != nil {
 			// Input that ends unfinished is a syntax error rather than a

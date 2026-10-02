@@ -4780,6 +4780,18 @@ type Semantics struct {
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
 	// the others read 0, because `kill` succeeded.
 	SignalHandlerSeesEarlierStatus Answer
+	// NamesTakeTheLocalesLetters lets a name hold the locale's letters and
+	// digits past ASCII, at any position in it: `hähä=3; echo $hähä` writes
+	// 3. Measured 2026-10-02 under `env -i PATH=/usr/bin:/bin
+	// LC_ALL=en_US.UTF-8`: zsh 5.9.2 (`-f`) and ksh93u+ 2012-08-01 take it,
+	// and bash 5.3.20, dash and BusyBox ash 1.37.0 (`LC_ALL=C.UTF-8`) run
+	// `hähä=3` as a command and expand `$hä` followed by `hä`. Under
+	// `LC_ALL=C` neither of the first two takes it, so the locale decides
+	// too — see Runner.NameTakesALetterPastASCII. zsh's `posix_identifiers`
+	// moves it to No, and `١=5` (an Arabic-Indic digit) is a name there, so
+	// it is the locale's letters *and* digits. Read as `== Yes`: a vector
+	// that has not answered gets the portable names.
+	NamesTakeTheLocalesLetters Answer
 	// AHandlersErrorEnds is how far an error the shell reports and gives up
 	// over reaches when it happens inside a trap handler — an unset
 	// parameter under `set -u`, a division by zero: the handler alone, or
@@ -29730,6 +29742,11 @@ func PosixSemantics() Semantics {
 		// attribute, so the preset keeps the arithmetic it does describe.
 		LetReadsALeadingZeroAsDecimal:       No,
 		ArithmeticAssignmentDeclaresANumber: No,
+		// A name is the portable character set and no more: the standard's
+		// Name is underscores, digits and the alphabetics of that set. bash 5.3.20,
+		// dash and BusyBox ash 1.37.0 hold to it under a UTF-8 locale as
+		// well, measured 2026-10-02.
+		NamesTakeTheLocalesLetters: No,
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.

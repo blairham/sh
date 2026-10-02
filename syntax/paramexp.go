@@ -923,7 +923,7 @@ scan:
 	}
 
 	if e.Inner == nil {
-		e.Name, s = scanParamName(s, p.dialect.DottedName)
+		e.Name, s = scanParamName(s, &p.dialect)
 	}
 
 	// A length over `$!` is a shape one dialect will not have, even though
@@ -1577,7 +1577,7 @@ func setTestNameStarts(s string) bool {
 	return s != "" && (isNameStart(s[0]) || (s[0] >= '0' && s[0] <= '9'))
 }
 
-func scanParamName(s string, dot bool) (name, rest string) {
+func scanParamName(s string, d *Dialect) (name, rest string) {
 	if s == "" {
 		return "", ""
 	}
@@ -1592,10 +1592,7 @@ func scanParamName(s string, dot bool) (name, rest string) {
 		}
 		return s[:1], s[1:]
 	}
-	i := 0
-	for i < len(s) && nameByte(s[i], i, dot) {
-		i++
-	}
+	i := d.nameLength(s)
 	return s[:i], s[i:]
 }
 

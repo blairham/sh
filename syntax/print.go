@@ -1189,6 +1189,9 @@ func (p *printer) command(c Command) {
 		// itself a subshell needs the separation, `((` being arithmetic.
 		p.str("( ")
 		p.stmts(x.List)
+		// An empty list has nothing to terminate. Unreachable from the one
+		// grammar that asks for this — `()` is a nameless function there —
+		// and kept so that no other grammar can print `( ; )`.
 		if p.layout.SubshellTerminatesItsLastCommand && len(x.List) > 0 {
 			p.terminate()
 			p.str(")")

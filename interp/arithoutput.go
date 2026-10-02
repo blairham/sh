@@ -95,8 +95,11 @@ func (r *Runner) formatUnder(f *syntax.ArithOutput, n arithNum) string {
 // groupNumberText puts the separators into text that is already written in
 // decimal, which is the `[#_]` spelling and the base-ten one.
 //
-// Only the digits before any point are grouped: measured,
-// `$(( [#_3] 1234567.5 ))` is `1_234_567.5`.
+// The digits after a point are grouped too, counted from the point
+// rightward: measured 2026-10-02 on zsh 5.9.2, `$(( [#_] 1234.5678 ))` is
+// `1_234.567_8`, `$(( [#_] (5. ** 10) / 16. ))` is `610_351.562_5`, and
+// `$(( [#_3] 1234567.5 ))` is `1_234_567.5` because there is one digit after
+// the point (#5145). An exponent form — `1e+20` — is left whole.
 func groupNumberText(text string, group int) string {
 	if group <= 0 {
 		return text
@@ -114,5 +117,23 @@ func groupNumberText(text string, group int) string {
 		// nothing in it to group.
 		return sign + text
 	}
-	return sign + groupDigits(head, group) + tail
+	return sign + groupDigits(head, group) + groupFraction(tail, group)
+}
+
+// groupFraction groups the digits that follow a point, from the point
+// rightward, and leaves anything that is not a run of digits there alone.
+func groupFraction(tail string, group int) string {
+	if !strings.HasPrefix(tail, ".") || !isAllDigits(tail[1:]) || len(tail)-1 <= group {
+		return tail
+	}
+	digits := tail[1:]
+	var b strings.Builder
+	b.WriteByte('.')
+	for i := 0; i < len(digits); i += group {
+		if i > 0 {
+			b.WriteByte('_')
+		}
+		b.WriteString(digits[i:min(i+group, len(digits))])
+	}
+	return b.String()
 }

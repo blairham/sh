@@ -2767,6 +2767,9 @@ func Semantics() interp.Semantics {
 	// panel with a ceiling on it: a level of 1000 or more is refused with a
 	// warning and the count starts again. See interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelCountedToACeiling
+	// Read whole or not at all: `SHLVL=3x` is counted from nothing.
+	// Measured 2026-10-02 on 5.3.20 (#5145).
+	s.ShellLevelReading = interp.ShellLevelReadsTheWholeValue
 	// And a shell that replaces this process stands in its place rather than
 	// under it: measured 2026-09-18, `exec /usr/bin/env` from a script file
 	// under `env -i` hands over `SHLVL=0` where this shell holds 1, so the

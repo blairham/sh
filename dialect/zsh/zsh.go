@@ -3717,6 +3717,9 @@ func Semantics() interp.Semantics {
 	// 2026-09-16, zsh 5.9.2 takes an inherited 9999 to 10000 and says
 	// nothing. See interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelCounted
+	// Read from the front, in the base its prefix names: `SHLVL=1+RANDOM`
+	// is counted from 1. Measured 2026-10-02 on 5.9.2 (#5145).
+	s.ShellLevelReading = interp.ShellLevelReadsTheFrontInItsBase
 	// And a shell that replaces this process stands in its place: measured
 	// 2026-09-18, `exec /usr/bin/env` hands over `SHLVL=0` where this shell
 	// holds 1. With no floor, so an inherited `-1` reaches the replacement as

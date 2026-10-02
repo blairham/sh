@@ -1810,6 +1810,9 @@ type Runner struct {
 	// handlers do not catch. Cleared as a handler starts, which is the only
 	// place it is read. See Runner.handlerTakesItsError.
 	gaveUpOverAnUnsetParameter bool
+	// arithForcesFloat makes every operand arithmetic reads a float, which is
+	// zsh's `force_float`. See Runner.forcedFloat.
+	arithForcesFloat bool
 	// arithStoreRefusal, where it is set, is where failedSubscript leaves the
 	// sentence of an element store arithmetic is making, rather than writing
 	// it and giving up. See Runner.storePlace.

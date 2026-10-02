@@ -274,19 +274,33 @@ func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 	return v, err
 }
 
+// forcedFloat is an operand's value as a float where the runner's arithmetic
+// forces every one to be — zsh's `force_float` — and as it is otherwise.
+// Measured 2026-10-02 on zsh 5.9.2 under `setopt force_float`: `$(( 3/4 ))`
+// is 0.75, `$(( 3 ))` is `3.`, `x=5; $(( x/2 ))` is 2.5 and so is an integer
+// name's value, `(( z = 3 ))` declares `typeset -F z`, and a bitwise
+// operator still makes an integer of it: `$(( 1 << 2 ))` is 4 and `$(( ~0
+// ))` -1 (#5145).
+func (r *Runner) forcedFloat(n arithNum, err error) (arithNum, error) {
+	if err != nil || !r.arithForcesFloat || n.floatKind() {
+		return n, err
+	}
+	return floatNum(n.asFloat()), nil
+}
+
 func (r *Runner) evalNumNode(e syntax.ArithExpr) (arithNum, error) {
 	switch x := e.(type) {
 	case nil:
 		return intNum(0), nil
 
 	case *syntax.ArithNum:
-		return r.parseArithNum(x.Text, x.Tail)
+		return r.forcedFloat(r.parseArithNum(x.Text, x.Tail))
 
 	case *syntax.ArithVar:
-		return r.arithValueOf(x.Name)
+		return r.forcedFloat(r.arithValueOf(x.Name))
 
 	case *syntax.ArithIndex:
-		return r.arithElement(x)
+		return r.forcedFloat(r.arithElement(x))
 
 	case *syntax.ArithCharCode:
 		return intNum(r.charCode(x)), nil

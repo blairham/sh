@@ -6479,6 +6479,10 @@ type Semantics struct {
 	// See ShellLevelPolicy, which carries the panel and the reason the
 	// exporting half is the one that matters.
 	ShellLevel ShellLevelPolicy
+	// ShellLevelReading is how an inherited `$SHLVL` the shell counts from
+	// is read: the whole value, or as much of its front as is a number. See
+	// ShellLevelReading, the type, for the measurements.
+	ShellLevelReading ShellLevelReading
 
 	// ShellLevelExec is whether a shell that *replaces* this process counts
 	// one deeper than this one. A question beside ShellLevel rather than a

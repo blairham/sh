@@ -3008,6 +3008,9 @@ func Semantics() interp.Semantics {
 	// name the integer attribute, which is #3099's row and not this one.
 	// See interp.ShellLevelPolicy.
 	s.ShellLevel = interp.ShellLevelCounted
+	// Read whole or not at all: `SHLVL=3x` is counted from nothing.
+	// Measured 2026-10-02 on 93u+ 2012-08-01 (#5145).
+	s.ShellLevelReading = interp.ShellLevelReadsTheWholeValue
 	// And a shell that replaces this process counts one deeper, which is the
 	// other side of that split: measured 2026-09-18, `exec /usr/bin/env`
 	// hands over `SHLVL=1` untouched and the shell it starts reads 2.

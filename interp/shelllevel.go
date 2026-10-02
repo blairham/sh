@@ -65,8 +65,9 @@ import (
 // is a defect of its own and not a rule; the bash dialect here answers as
 // bash 5.3, which is the version it claims to be.)
 //
-// **Deliberately not modeled**, because each of the four columns reads
-// rubbish through a different C library call rather than through a rule:
+// **How the value is read is ShellLevelReading**, measured since. What follows
+// was the reason it was once left alone, and the rows still stand: each of
+// the four columns reads rubbish through a different C library call:
 // `2x` is 3 in zsh and BusyBox ash — as much of the front as is a number —
 // and 1 in bash and ksh93; `0x10` is 17 in zsh and ksh93, 1 in bash and
 // BusyBox ash; a leading blank is skipped by bash, zsh and ash and refuses
@@ -140,7 +141,7 @@ func (r *Runner) settleShellLevel() {
 		return
 	}
 	inherited, _ := r.inheritedValue(ShellLevelName)
-	level := readShellLevel(inherited) + 1
+	level := readShellLevelAs(r.sem().ShellLevelReading, inherited) + 1
 	if policy == ShellLevelCountedToACeiling {
 		if level < 0 {
 			level = 0
@@ -168,13 +169,89 @@ func (r *Runner) settleShellLevel() {
 	r.exported[ShellLevelName] = true
 }
 
+// ShellLevelReading is how an inherited `$SHLVL` is read before it is
+// counted from.
+//
+// Measured 2026-10-02 under `env -i PATH=/usr/bin:/bin SHLVL=…`, printing
+// the count a `-c` sees:
+//
+//	SHLVL      bash 5.3.20  ksh93u+  zsh 5.9.2  BusyBox ash 1.37.0
+//	1+RANDOM   1            1        2          2
+//	3x         1            1        4          4
+//	 2x        1            1        3          3
+//	2.5        1            1        3          3
+//	0x10       1            1        17         1
+//	08         1            1        1          9
+//
+// so bash and ksh93 read the whole value or nothing, and zsh and ash read
+// the front: zsh as C reads a number whose base its prefix names — a leading
+// `0` octal, `0x` hexadecimal — and ash in decimal. ash's 32-bit wrap of a
+// negative front (`-2x` is 4294967295 there) is not modeled.
+type ShellLevelReading int
+
+const (
+	// ShellLevelReadsTheWholeValue is bash and ksh93, and the zero value:
+	// blanks on either end, an optional sign and decimal digits, and
+	// anything else names no depth.
+	ShellLevelReadsTheWholeValue ShellLevelReading = iota
+	// ShellLevelReadsTheFrontInItsBase is zsh: as much of the front as is a
+	// number, in the base a `0` or `0x` names.
+	ShellLevelReadsTheFrontInItsBase
+	// ShellLevelReadsTheFrontInDecimal is BusyBox ash: as much of the front
+	// as is a decimal number.
+	ShellLevelReadsTheFrontInDecimal
+)
+
+// readShellLevelAs reads an inherited value the dialect's way.
+func readShellLevelAs(how ShellLevelReading, value string) int {
+	switch how {
+	case ShellLevelReadsTheFrontInItsBase:
+		return leadingNumber(value, true)
+	case ShellLevelReadsTheFrontInDecimal:
+		return leadingNumber(value, false)
+	}
+	return readShellLevel(value)
+}
+
+// leadingNumber is as much of the front of value as is a number — after
+// leading blanks, an optional sign and the digits — and 0 where there is
+// none. based says a leading `0x` is hexadecimal and a leading `0` octal.
+func leadingNumber(value string, based bool) int {
+	s := strings.TrimLeft(value, " \t\n\v\f\r")
+	neg := false
+	if s != "" && (s[0] == '+' || s[0] == '-') {
+		neg, s = s[0] == '-', s[1:]
+	}
+	base := 10
+	if based {
+		switch {
+		case len(s) > 1 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'):
+			base, s = 16, s[2:]
+		case len(s) > 0 && s[0] == '0':
+			base = 8
+		}
+	}
+	n := 0
+	for _, c := range []byte(s) {
+		d := digitValue(c)
+		if d < 0 || d >= base {
+			break
+		}
+		n = n*base + d
+	}
+	if neg {
+		n = -n
+	}
+	return n
+}
+
 // readShellLevel is the depth an inherited value names, and 0 for one that
 // names none.
 //
-// bash's reading, taken for every dialect that counts — see ShellLevelPolicy
-// for the three others and why they are not modeled. Blanks on either end
-// are allowed and nothing else is: the rest of the value must be an optional
-// sign and decimal digits, and a value that overflows an int names no depth.
+// bash's reading — see ShellLevelReading for the other two. Blanks on either
+// end are allowed and nothing else is: the rest of the value must be an
+// optional sign and decimal digits, and a value that overflows an int names
+// no depth.
 func readShellLevel(value string) int {
 	trimmed := strings.Trim(value, " \t\n\v\f\r")
 	if trimmed == "" {
@@ -278,7 +355,7 @@ func (r *Runner) replacedShellLevel(entry string) (string, bool) {
 	if r.sem().ShellLevelExec != ShellLevelExecNotCounted {
 		return "", false
 	}
-	level := readShellLevel(entry) - 1
+	level := readShellLevelAs(r.sem().ShellLevelReading, entry) - 1
 	if policy == ShellLevelCountedToACeiling && level < 0 {
 		level = 0
 	}

@@ -1365,7 +1365,22 @@ var zshOptions = []zshOption{
 	// `emulate ksh` printed 11 names where the reference prints 185 rows.
 	storeBacked("kshoptionprint", false),
 	recorded("kshtypeset", false),
-	recorded("kshzerosubscript", false),
+	{
+		// KSH_ZERO_SUBSCRIPT: a subscript of 0 is the first element. See
+		// [interp.Semantics.ZeroSubscriptIsTheFirstElement] for the rows.
+		// Read off the axis rather than a stored bit, for the reason
+		// braceccl is.
+		base: "kshzerosubscript", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.ZeroSubscriptIsTheFirstElement == interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ZeroSubscriptIsTheFirstElement
+			}, answer(on))
+			return 0
+		},
+	},
 	recorded("listambiguous", true),
 	recorded("listbeep", true),
 	recorded("listpacked", false),

@@ -18707,6 +18707,31 @@ type Semantics struct {
 	// axis is absent rather than false there.
 	ArrayBaseIsZero Answer
 
+	// ZeroSubscriptIsTheFirstElement reads a subscript of 0 as the first
+	// element where arrays count from 1. One shell has it and only behind
+	// an option, `ksh_zero_subscript`, so the axis is No everywhere and that
+	// shell's option turns it on. Measured 2026-10-02 on zsh 5.9.2 (`-f`,
+	// `LC_ALL=C`) with `a=(p q r s)` and `s=hello`, the option on:
+	//
+	//	${a[0]}  ${a[-0]}     p            off, both are empty
+	//	$s[0]                 h
+	//	a[0]=W                W q r s      off, an invalid subscript range
+	//	b=(); b[0]=n          n
+	//	${a[0]:-d}  ${+a[0]}  p  1
+	//	${a[0,0]}             p            a pair of zeros is the same one
+	//	${a[1,0]}  ${a[0,1]}  empty  p     and any other pair is unchanged
+	//	b[0,0]=W              W q r s
+	//	$((a[0]))             0            arithmetic is not reached
+	//
+	// So the rule is about a subscript that comes to zero, and a pair is
+	// that only where both of its ends do: an end of 0 is otherwise the
+	// range's own business, and `[1,0]` stays the empty span it is.
+	//
+	// Read and not asked, for BraceBodyIsACharacterClass's reason: every
+	// dialect answers No and what moves it is a session's option. Where
+	// arrays count from 0 the question cannot arise.
+	ZeroSubscriptIsTheFirstElement Answer
+
 	// BareSubscriptIsASubscript reads the `[…]` an *unbraced* `$name`
 	// carries as a subscript, rather than as three ordinary characters
 	// behind the parameter. `$a[1]` is an element where it says yes and

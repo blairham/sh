@@ -1060,8 +1060,8 @@ func (r *Runner) unsetSubscriptRange(name, sub string) (handled bool, code int) 
 	if !ok {
 		return false, 0
 	}
-	from, errLo := r.subscriptValue(lo)
-	to, errHi := r.subscriptValue(hi)
+	from, errLo := r.rangeEndValue(lo)
+	to, errHi := r.rangeEndValue(hi)
 	if errLo == nil && errHi == nil && from == to {
 		// The same subscript at both ends is that subscript under either
 		// reading, so there is nothing to ask and nothing to do differently.
@@ -1372,8 +1372,8 @@ func (r *Runner) subscriptSpan(text string, appended bool) (from, to int, outcom
 	if !ok {
 		return 0, 0, spanNotARange
 	}
-	from, errLo := r.subscriptValue(lo)
-	to, errHi := r.subscriptValue(hi)
+	from, errLo := r.rangeEndValue(lo)
+	to, errHi := r.rangeEndValue(hi)
 	if errLo == nil && errHi == nil && from == to {
 		return 0, 0, spanNotARange
 	}
@@ -3058,14 +3058,15 @@ func (r *Runner) rangeSubscript(src subscriptSource, idx, lo, hi string) ([]stri
 // badEnd is the end that would not evaluate, named so that a caller reporting
 // spanErr blames the half the shell blames rather than the whole pair.
 func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) (span []string, badEnd string, err error) {
-	from, err := r.subscriptValue(lo)
+	from, err := r.rangeEndValue(lo)
 	if err != nil {
 		return nil, lo, err
 	}
-	to, err := r.subscriptValue(hi)
+	to, err := r.rangeEndValue(hi)
 	if err != nil {
 		return nil, hi, err
 	}
+	from, to = r.zeroPairIsTheFirst(from, to)
 	return r.rangeSpan(subscriptSource{elems: elems, scalar: scalar}, from, to), "", nil
 }
 
@@ -3423,7 +3424,38 @@ func (r *Runner) subscriptValueAsWritten(written, text string) (int, error) {
 	if err := r.emptySubscriptText(text); err != nil {
 		return 0, err
 	}
-	return r.expressionValue(r.subscriptExpression(written, text))
+	n, err := r.expressionValue(r.subscriptExpression(written, text))
+	if err == nil && n == 0 && r.readingARangeEnd == 0 && r.zeroSubscriptIsTheFirst() {
+		return 1, nil
+	}
+	return n, err
+}
+
+// zeroSubscriptIsTheFirst reports whether a subscript that comes to 0 names
+// the first element: Semantics.ZeroSubscriptIsTheFirstElement, which can only
+// arise where arrays count from 1. Read and not asked — see the axis.
+func (r *Runner) zeroSubscriptIsTheFirst() bool {
+	return r.sem().ZeroSubscriptIsTheFirstElement == Yes && r.arrayBase() == 1
+}
+
+// rangeEndValue is subscriptValue for one end of a pair, which an end of 0
+// does not move: `${a[1,0]}` is the empty span with or without
+// ZeroSubscriptIsTheFirstElement. A pair is moved whole or not at all — see
+// zeroPairIsTheFirst.
+func (r *Runner) rangeEndValue(text string) (int, error) {
+	r.readingARangeEnd++
+	defer func() { r.readingARangeEnd-- }()
+	return r.subscriptValue(text)
+}
+
+// zeroPairIsTheFirst is a pair whose two ends both came to 0, which names the
+// first element where ZeroSubscriptIsTheFirstElement holds: `${a[0,0]}` is
+// `${a[1,1]}` there. Any other pair is left as it is.
+func (r *Runner) zeroPairIsTheFirst(from, to int) (int, int) {
+	if from == 0 && to == 0 && r.zeroSubscriptIsTheFirst() {
+		return 1, 1
+	}
+	return from, to
 }
 
 // subscriptExpression is the part of a subscript's text an expression reads,

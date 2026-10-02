@@ -3024,6 +3024,7 @@ func Semantics() interp.Semantics {
 	s.BraceRangePadsToEndpointWidth = interp.Yes
 	s.BraceRangeStepPadsTheRange = interp.Yes
 	s.BraceBodyIsACharacterClass = interp.No
+	s.ZeroSubscriptIsTheFirstElement = interp.No
 	s.BraceRangeStepSignHonored = interp.No
 	s.BraceRangeNegativeStepReverses = interp.Yes
 	// And the endpoints are read after the expansions in them: `n=3;

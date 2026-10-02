@@ -110,7 +110,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 		"ignorebraces", "ignoreclosebraces", "multifuncdef",
 		"sourcetrace", "evallineno", "numericglobsort", "aliasfuncdef",
 		"warncreateglobal", "warnnestedvar", "posixstrings", "shoptionletters",
-		"typesettounset",
+		"typesettounset", "kshzerosubscript",
 	} {
 		o, _, ok := resolveOptionName(base)
 		if !ok {
@@ -132,7 +132,7 @@ func TestTheOptionsSomethingReadsAreNotRecordedOnly(t *testing.T) {
 			recordedCount++
 		}
 	}
-	if want := 93; recordedCount != want {
+	if want := 92; recordedCount != want {
 		t.Errorf("%d recorded names, want %d — docs/spec/semantics.md publishes the count", recordedCount, want)
 	}
 }

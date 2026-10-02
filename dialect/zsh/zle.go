@@ -486,7 +486,47 @@ func zleBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		// `zle` with nothing at all: status 1 and not a word, measured.
 		return 1
 	}
-	return callWidget(r, ctx, rest[0], widgetCallArgs(rest[1:]))
+	args, asItself := widgetCallOptions(rest[1:])
+	if asItself {
+		// `-w`: the called widget sees its own name as `$WIDGET`, for the
+		// call alone. See widgetCallOptions.
+		was, _ := r.GetVar(zleWidget)
+		if insideWidget(r) {
+			r.SetVar(zleWidget, rest[0])
+			defer r.SetVar(zleWidget, was)
+		}
+	}
+	return callWidget(r, ctx, rest[0], widgetCallArgs(args))
+}
+
+// widgetCallOptions reads the `-N` and `-w` letters that may stand in front
+// of a called widget's arguments, alone or bundled, and reports whether `-w`
+// was among them. Measured 2026-10-02 through a pseudo-terminal against zsh
+// 5.9.2, from inside a widget named `outer`, an `inner` printing `$WIDGET`,
+// `$#` and its arguments (#5398):
+//
+//	zle inner -w            W=inner, 0 arguments — and outer's $WIDGET is
+//	                        outer again once it returns
+//	zle inner -Nw -- a b    W=inner, `a b`
+//	zle inner -N x          W=outer, `x`
+//	zle inner -wN           W=inner
+//	zle inner               W=outer
+//
+// `-N` clears the numeric argument, which this shell's editor has none of, so
+// it is read and does nothing. The other letters of that list are left to the
+// widget as operands, as before; see widgetCallArgs.
+func widgetCallOptions(args []string) (rest []string, asItself bool) {
+	for len(args) > 0 {
+		a := args[0]
+		if len(a) < 2 || a[0] != '-' || strings.Trim(a[1:], "Nw") != "" {
+			break
+		}
+		if strings.ContainsRune(a, 'w') {
+			asItself = true
+		}
+		args = args[1:]
+	}
+	return args, asItself
 }
 
 // widgetCallArgs is what a called widget is given, with the `--` that ends

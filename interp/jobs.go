@@ -1297,12 +1297,29 @@ func (r *Runner) waitOutPolledJob(j *Job) {
 // ambiguity is not reachable. If one ever gains one, the signal wants carrying
 // on the Job instead.
 func (r *Runner) noticeWaitedSignal(j *Job, status int) {
-	base := r.signalDeathStatus(0)
-	if r.unspecified {
+	// The signal the job recorded, where it recorded one: exact under every
+	// encoding, including the one where 143 is both `exit 143` and a TERM.
+	sig := j.EndSig
+	if sig == 0 {
+		base := r.signalDeathStatus(0)
+		if r.unspecified {
+			return
+		}
+		if base < 256 {
+			// Under the 128 encoding a status says nothing a job did not
+			// record: `exit 158` is that status as well as a USR1.
+			return
+		}
+		sig = status - base
+	}
+	if sig <= 0 || sig > maxNamedSignal {
 		return
 	}
-	sig := status - base
-	if sig <= 0 || sig > maxNamedSignal {
+	if quietSignal(syscall.Signal(sig)) ||
+		(syscall.Signal(sig) == syscall.SIGTERM && r.diag().WaitIsQuietForTerminate) {
+		// The deaths no column remarks on, and the one a dialect's `wait`
+		// keeps quiet where its foreground route speaks. See
+		// Diagnostics.WaitIsQuietForTerminate.
 		return
 	}
 	said := r.status

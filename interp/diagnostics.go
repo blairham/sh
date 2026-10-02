@@ -2955,6 +2955,14 @@ type Diagnostics struct {
 	// until that row is measured across its own surfaces (#4508).
 	JobSignaled string
 
+	// WaitIsQuietForTerminate keeps a named `wait` silent over a job a TERM
+	// ended, in the dialect that reports every other signal there. Measured
+	// 2026-10-02 on bash 5.3.20, `sh -c 'kill -SIG $$' & wait $!`: ALRM,
+	// USR2, SEGV, KILL and HUP each write the killed-command notice, TERM
+	// writes nothing and leaves 143, and PIPE is quiet as it is everywhere
+	// (#5389).
+	WaitIsQuietForTerminate bool
+
 	// JobUnknownCommand is printed in the command column of a job whose text
 	// the shell did not keep. No verbs.
 	//

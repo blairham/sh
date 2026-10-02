@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULfsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENR"
+const implementedParamFlags = "ULCfsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENR"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -624,10 +624,19 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 
 	// Rules 12, 13, 14 in the manual's order: case, prompt escapes, quoting.
+	//
+	// Each letter in the order it was written, so the last of `U`, `L` and
+	// `C` is what the value ends as: measured on zsh 5.9.2 with `a="xyZ
+	// abC"`, `${(CU)a}` is `XYZ ABC` and `${(UC)a}` is `Xyz Abc`.
 	for _, c := range e.Flags {
-		if c == 'U' || c == 'L' {
+		switch c {
+		case 'U', 'L':
 			for i, w := range words {
 				words[i] = r.convertCase(w, c == 'U')
+			}
+		case 'C':
+			for i, w := range words {
+				words[i] = r.capitalizedRuns(w)
 			}
 		}
 	}
@@ -1622,6 +1631,49 @@ func (r *Runner) convertCase(v string, upper bool) string {
 		convert = unicode.ToLower
 	}
 	return r.caseChanged(v, convert)
+}
+
+// capitalizedRuns is the `(C)` flag over one word: every run of letters and
+// digits begins with its first character in upper case and goes on in lower
+// case, and everything else separates the runs and is left alone. The runs
+// are not the words splitting makes. Measured 2026-10-02 on zsh 5.9.2 under
+// `LC_ALL=en_US.UTF-8`:
+//
+//	hELLO wORLD foo_bar 3abc a1b2 x-y    Hello World Foo_Bar 3abc A1b2 X-Y
+//	l'état c'est moi                     L'État C'Est Moi
+//	ǆemal ßtraße                         Ǆemal ßtraße — the upper case, not the
+//	                                     title case, and ß has none
+//
+// and under `LC_ALL=C` `éCOLE` is `éCole`: a character past ASCII is not a
+// letter there, so it separates and is not changed — the case maps' own
+// locale rule, caseFoldReachesBeyondASCII. A byte the locale cannot decode
+// separates too and is kept as it was.
+func (r *Runner) capitalizedRuns(v string) string {
+	wide := r.caseFoldReachesBeyondASCII(v)
+	var b strings.Builder
+	b.Grow(len(v))
+	inRun := false
+	for i := 0; i < len(v); {
+		c, size := utf8.DecodeRuneInString(v[i:])
+		if (c == utf8.RuneError && size <= 1) || (!wide && c >= utf8.RuneSelf) {
+			b.WriteString(v[i : i+size])
+			inRun = false
+			i += size
+			continue
+		}
+		switch {
+		case !unicode.IsLetter(c) && !unicode.IsDigit(c):
+			inRun = false
+			b.WriteRune(c)
+		case inRun:
+			b.WriteRune(unicode.ToLower(c))
+		default:
+			inRun = true
+			b.WriteRune(unicode.ToUpper(c))
+		}
+		i += size
+	}
+	return b.String()
 }
 
 // PromptExpand is the prompt-escape language over one string, for a builtin

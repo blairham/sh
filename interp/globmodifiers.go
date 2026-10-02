@@ -113,7 +113,13 @@ func (r *Runner) applyGlobModifier(value, seg string) (result string, applied, o
 		// subject is empty in the shell too — `*(N:s)` is `bad substitution`
 		// with nothing in front of it — so an empty node is the honest
 		// answer rather than a missing one.
+		// The text is the field's escaped form, which is what a quote in the
+		// replacement came to; the pattern reading takes the replacement as
+		// the qualifier's own reading leaves it, quotes removed. See
+		// Runner.substitutePattern.
+		r.modifierTextEscaped = true
 		out, ok := r.substituteModifier(value, rest, global, &syntax.ParamExpr{})
+		r.modifierTextEscaped = false
 		return out, true, ok
 	}
 }

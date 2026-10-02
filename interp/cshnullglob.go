@@ -49,3 +49,10 @@ func (r *Runner) beginGlobUnit() func() {
 		}
 	}
 }
+
+// SetHistSubstPattern turns one shell's `histsubstpattern` on and off: `:s`
+// reads its left half as a pattern. See Runner.substitutePattern.
+func (r *Runner) SetHistSubstPattern(on bool) { r.histSubstPattern = on }
+
+// HistSubstPattern reports it.
+func (r *Runner) HistSubstPattern() bool { return r.histSubstPattern }

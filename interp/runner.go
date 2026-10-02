@@ -4329,6 +4329,12 @@ type Runner struct {
 	// it is judged over. See interp/cshnullglob.go.
 	cshNullGlob bool
 	globUnit    *globUnit
+	// histSubstPattern is one dialect's `histsubstpattern`. See
+	// Runner.substitutePattern.
+	histSubstPattern bool
+	// modifierTextEscaped says the modifier being applied came from a glob
+	// qualifier, whose text is the field's escaped form.
+	modifierTextEscaped bool
 	// trapSnapshot is the listing the parent shell would have shown when
 	// this subshell began, kept for the dialects whose `trap` still shows
 	// it there, and dropped the moment this runner modifies any trap.

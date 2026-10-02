@@ -1149,7 +1149,16 @@ var zshOptions = []zshOption{
 	recorded("histreduceblanks", false),
 	recorded("histsavebycopy", true),
 	recorded("histsavenodups", false),
-	recorded("histsubstpattern", false),
+	{
+		// HIST_SUBST_PATTERN: `:s` reads its left half as a pattern. See
+		// interp.Runner.substitutePattern (#5155).
+		base: "histsubstpattern", def: false,
+		get: func(r *interp.Runner) bool { return r.HistSubstPattern() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetHistSubstPattern(on)
+			return 0
+		},
+	},
 	recorded("histverify", false),
 	// HUP: whether a session that is leaving sends SIGHUP to the jobs it is
 	// about to abandon, and says how many. Not recorded since #4509 — the

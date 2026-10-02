@@ -5432,6 +5432,9 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 // each of its elements. nil reads it afresh.
 func (r *Runner) replaceWithReading(value, pattern string, e *syntax.ParamExpr, cached *func(string) string) string {
 	pattern, e = r.readAnchor(pattern, e)
+	if e.Anchor == '#' && strings.HasPrefix(pattern, "%") && r.sem().ReplacementAnchorsCombine == Yes {
+		return r.replaceWhole(value, pattern[1:], e, cached)
+	}
 	if pattern == "" && e.Anchor == 0 && !r.emptyPatternFires(value) {
 		return value
 	}
@@ -9325,3 +9328,21 @@ func (r *Runner) DollarZeroName() string { return r.shellNameForZero() }
 // An empty name puts the shell back to answering with Runner.Name, which is
 // what `unset` of the parameter leaves behind.
 func (r *Runner) SetDollarZeroName(name string) { r.zeroNameOverride = name }
+
+// replaceWhole is `${v/#%pat/rep}` in the dialect that reads the two anchors
+// together: the replacement happens only where the pattern matches the whole
+// value. Measured 2026-10-02 on zsh 5.9.2: with `x=two.c`, `${x/#%t*.c/X}` is
+// `X`, with `x=atwo.c` it is the value unchanged, and `y=%two; ${y/#%two/X}`
+// is `%two`; bash 5.3.20 and ksh93u+ read the `%` as the pattern's own first
+// character, so the first is `two.c` and the last `X`. See
+// Semantics.ReplacementAnchorsCombine (#5155).
+//
+// The longest match at the start is the whole value whenever the whole value
+// matches, so this is the start anchor with every shorter match declined.
+func (r *Runner) replaceWhole(value, pattern string, e *syntax.ParamExpr, cached *func(string) string) string {
+	out := r.replaceWithReading(value, pattern, e, cached)
+	if !r.matchPatternR(pattern, value, patternInAWord) {
+		return value
+	}
+	return out
+}

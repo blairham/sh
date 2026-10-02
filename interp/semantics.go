@@ -10702,6 +10702,11 @@ type Semantics struct {
 	// see Runner.jobCommandOnOneLine for the rows (#5342). Read only where
 	// JobCommandIsReprinted is Yes.
 	JobCommandIsOneLineOfTheBodyLayout Answer
+	// ReplacementAnchorsCombine reads `${v/#%pat/rep}` as both anchors at
+	// once — the whole value must match — rather than as a start anchor over
+	// a pattern beginning with `%`. zsh Yes; bash 5.3.20 and ksh93u+ No. See
+	// Runner.replaceWhole for the rows (#5155).
+	ReplacementAnchorsCombine Answer
 
 	// JobsListNewestFirst puts the most recent job at the top of a `jobs`
 	// listing. True in dash and ksh93; bash and zsh list oldest first.

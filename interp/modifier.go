@@ -5,6 +5,7 @@ package interp
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -150,6 +151,16 @@ func modifierText(w *syntax.Word) string {
 // is left after its colon, and whether there was one.
 func scanOneModifier(text string, wide bool) (seg, rest string, more bool) {
 	i := 0
+	// The repeating prefixes, whose own delimiters are not a modifier's
+	// separator: `F:2:s/a/b/` is one modifier. See modifierRepeat.
+	switch {
+	case len(text) > 1 && text[0] == 'f':
+		i = 1
+	case len(text) > 2 && text[0] == 'F':
+		if end := strings.IndexByte(text[2:], text[1]); end >= 0 {
+			i = 2 + end + 1
+		}
+	}
 	if i+1 < len(text) && text[i] == 'g' {
 		i++
 	}
@@ -252,6 +263,11 @@ func (r *Runner) applyModifiers(value string, segs []string, e *syntax.ParamExpr
 // and it changes the answer only for `s` and `&`, where it means every
 // occurrence instead of the first.
 func (r *Runner) applyModifierSegment(value, seg string, e *syntax.ParamExpr) (string, bool) {
+	if times, rest, ok := modifierRepeat(seg); ok {
+		return r.repeatModifier(value, rest, times, func(v, seg string) (string, bool) {
+			return r.applyModifierSegment(v, seg, e)
+		})
+	}
 	global := false
 	if len(seg) > 1 && seg[0] == 'g' {
 		global, seg = true, seg[1:]
@@ -622,4 +638,53 @@ func (r *Runner) modifierCommandPath(value string) string {
 		}
 	}
 	return value
+}
+
+// modifierRepeat reads the two repeating prefixes on a modifier: `f`, which
+// applies what follows until it changes nothing, and `F:n:`, which applies it
+// n times, the delimiter being whatever byte follows the `F`. times is -1 for
+// `f`. Measured 2026-10-02 on zsh 5.9.2: with `x=aaa`, `${x:fs/a/b/}` is
+// `bbb`, `${x:F:2:s/a/b/}` is `bba` and `${x:fu}` is `AAA`; `abab` under
+// `:fs/ab/b/` is `bb`, and `a/b/c` under `:fh` is `.` (#5155).
+func modifierRepeat(seg string) (times int, rest string, ok bool) {
+	switch {
+	case len(seg) > 1 && seg[0] == 'f':
+		return -1, seg[1:], true
+	case len(seg) > 2 && seg[0] == 'F':
+		delim := seg[1]
+		end := strings.IndexByte(seg[2:], delim)
+		if end < 0 {
+			return 0, "", false
+		}
+		n, err := strconv.Atoi(seg[2 : 2+end])
+		if err != nil || n < 0 {
+			return 0, "", false
+		}
+		return n, seg[2+end+1:], true
+	}
+	return 0, "", false
+}
+
+// maxModifierRepeats bounds `f` over a modifier that never stops changing its
+// value — `${x:fs/a/aa/}`, which the reference runs forever.
+const maxModifierRepeats = 1 << 16
+
+// repeatModifier applies one modifier times times, or until it changes
+// nothing where times is -1.
+func (r *Runner) repeatModifier(value, seg string, times int, apply func(v, seg string) (string, bool)) (string, bool) {
+	limit := times
+	if limit < 0 {
+		limit = maxModifierRepeats
+	}
+	for range limit {
+		next, ok := apply(value, seg)
+		if !ok {
+			return "", false
+		}
+		if times < 0 && next == value {
+			break
+		}
+		value = next
+	}
+	return value, true
 }

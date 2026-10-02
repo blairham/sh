@@ -22,3 +22,14 @@ func TestABraceClassReadsADollarSingleSpanAsItsValue(t *testing.T) {
 		}
 	}
 }
+
+// TestBsdechoTakesEchosEscapesAway: with `bsdecho` on, `echo` interprets its
+// escapes only behind `-e`, and the option is scoped as the axis it reads is.
+// Measured 2026-10-02 on zsh 5.9.2, E01options' `BSD_ECHO option` (#5155).
+func TestBsdechoTakesEchosEscapesAway(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), `setopt bsdecho; echo "a\nb"; echo -e "c\nd"; [[ -o bsdecho ]] && echo on
+unsetopt bsdecho; echo "e\nf"; (setopt bsdecho); echo "g\nh"`)
+	if want := "a\\nb\nc\nd\non\ne\nf\ng\nh\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

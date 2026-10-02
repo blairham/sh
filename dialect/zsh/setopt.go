@@ -539,7 +539,26 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("bsdecho", false),
+	{
+		// BSD_ECHO: `echo` interprets its backslash escapes only behind
+		// `-e`. Measured 2026-10-02 on zsh 5.9.2, E01options' `BSD_ECHO
+		// option` (#5155): with it on, `echo "a\nb"` writes the four
+		// characters and `echo -e "a\nb"` two lines; off again, the escape
+		// expands. The other side of interp.Semantics.EchoInterpretsEscapes,
+		// which this shell answers Yes — so the option is the axis read
+		// backwards, and it is read off the axis rather than a stored bit
+		// for the reason braceccl is.
+		base: "bsdecho", def: false,
+		get: func(r *interp.Runner) bool {
+			return r.Semantics.EchoInterpretsEscapes != interp.Yes
+		},
+		set: func(r *interp.Runner, on bool) int {
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.EchoInterpretsEscapes
+			}, answer(!on))
+			return 0
+		},
+	},
 	matchBacked("caseglob", true, interp.GlobFoldsCase, true),
 	// `casematch` is the `=~` operator's and **nothing else**, which is the
 	// whole reason it is not the same wire as bash's option of the same

@@ -308,6 +308,33 @@ One divergence: an **empty** regular expression. zsh's engine refuses it
 regular-expression engine rather than this function, and it is the same
 answer `[[ x =~ '' ]]` gives. **#2043.**
 
+## `add-zle-hook-widget [ -L | -dD ] [ -Uzk ] hook widgetname`
+
+The hooks are `isearch-exit`, `isearch-update`, `line-pre-redraw`,
+`line-init`, `line-finish`, `history-line-set` and `keymap-select`, written
+with or without the `zle-` prefix. The widgets for each are kept in a zstyle
+on the context `zle-<hook>`, style `widgets`, which is what zshcontrib(1)
+says and what `zstyle -L` shows. Measured 2026-10-02 on zsh 5.9.2 under
+`-f -c` (#5393):
+
+| probe | zsh |
+| --- | --- |
+| the first registration of any hook | `zstyle zle-hook types` set to the seven hooks |
+| `add-zle-hook-widget line-init foo` | `zstyle zle-line-init widgets 1:foo` |
+| the same widget again | not added twice |
+| a widget already on `zle-line-init` (`zle -N zle-line-init myinit`) | kept as `0:user:myinit`, under a widget `user:myinit` |
+| the special widget afterwards | `zle -N zle-line-init azhw:zle-line-init` |
+| `-d line-init foo`, then a new widget | the next number is one past the highest — the gap stays |
+| `-D line-init 'q*'` | removes by pattern |
+| `-L` | the `widgets` styles, as `zstyle -L` writes them |
+| `-Uz keymap-select kk`, `kk` no widget | autoloaded with `-Uz` and made a widget |
+| an unknown hook, or one operand | the usage on standard error, status 1 |
+
+The dispatcher runs the widgets in numeric order, each as `zle <name> -Nw --
+"$@"`. **It is never reached here yet**: this shell's line editor does not
+call the special widgets at all, so registering works and nothing fires.
+That is #5398.
+
 ## What the four are worth, measured against a real startup file
 
 This machine's own `~/.zshrc` — Powerlevel10k, `zi` with turbo-mode

@@ -4780,6 +4780,23 @@ type Semantics struct {
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
 	// the others read 0, because `kill` succeeded.
 	SignalHandlerSeesEarlierStatus Answer
+	// ArithStoreRefusalIsAnError makes an element store the arithmetic
+	// refuses — a subscript before the first element — an arithmetic error,
+	// failing the expression the way `1/0` does; the other reading reports it
+	// and lets the expression go on with the value it was storing. Measured
+	// 2026-10-02 under `env -i PATH=/usr/bin:/bin`, with `a=(1)` in front:
+	//
+	//	                     zsh 5.9.2 a[0]     ksh93u+ a[-10]     bash 5.3.20 a[-10]
+	//	(( a[i] = 1 ))       complaint, st=2    complaint, ends    complaint, st=0
+	//	let 'a[i] = 1'       complaint, st=1    `let:` one, st=1   complaint, st=0
+	//	$(( a[i] = 5 ))      complaint, ends    complaint, ends    complaint, then 5
+	//
+	// so zsh and ksh93 answer each row the way they answer `1/0` in the same
+	// place, and bash goes on: `(( a[-10] = 0 ))` is 1 there and `(( b =
+	// a[-10] = 3 ))` leaves `b` at 3. An assignment outside arithmetic is
+	// not this question. Read rather than asked: unanswered keeps the
+	// refusal every other store makes.
+	ArithStoreRefusalIsAnError Answer
 	// PrintfQuoteOfNoArgumentIsEmpty makes a `%q` the operands have run out
 	// for write nothing at all, where the other reading quotes the empty
 	// string it stands for. Measured 2026-10-02 under `env -i

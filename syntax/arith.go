@@ -1027,10 +1027,19 @@ func (a *arithParser) expr() ArithExpr {
 		if !a.has(",") || !a.dial.ArithComma {
 			return x
 		}
+		at := a.off
 		a.off++
 		y := a.assign()
 		if y == nil {
-			a.p.fail("expected an expression after , in arithmetic")
+			if a.dial.ArithCommaMayEndTheExpression {
+				return x
+			}
+			// Nothing after the comma, which is an operand that ran out at
+			// the operator, worded the way any other is; where what follows
+			// was refused in words of its own — `3,, 4` — those stand, the
+			// first failure being the one reported. See
+			// [Dialect.ArithCommaMayEndTheExpression].
+			a.failArith(ErrArithOperandEnd, a.src[at:])
 			return x
 		}
 		x = &ArithBinary{Op: ",", X: x, Y: y}
@@ -1692,6 +1701,26 @@ func (a *arithParser) number(start Pos) ArithExpr {
 	return &ArithNum{Text: a.src[begin:a.off], Tail: a.src[begin:], Start: start, Stop: start}
 }
 
+// decimalDigitsGoOn reports whether the decimal digits at the cursor go on
+// into what makes them decimal whatever they begin with: a fraction or an
+// exponent where the dialect has floats, or the `#` that makes them a base.
+func (a *arithParser) decimalDigitsGoOn() bool {
+	j := a.off
+	for j < len(a.src) && a.src[j] >= '0' && a.src[j] <= '9' {
+		j++
+	}
+	if j >= len(a.src) {
+		return false
+	}
+	switch a.src[j] {
+	case '.', 'e', 'E':
+		return a.dial.ArithFloat
+	case '#':
+		return a.dial.ArithExplicitBase
+	}
+	return false
+}
+
 // numberInItsOwnBase reads a numeral the way the dialect that stops at a
 // character its base cannot use reads one — see
 // Dialect.ArithNumeralEndsAtABadDigit.
@@ -1709,12 +1738,19 @@ func (a *arithParser) numberInItsOwnBase() {
 	case a.dial.ArithBinaryLiteral && (a.hasPrefixAt("0b") || a.hasPrefixAt("0B")):
 		a.off += 2
 		base = 2
-	case a.dial.ArithLeadingZeroNamesOctalDigits && a.hasPrefixAt("0"):
+	case a.dial.ArithLeadingZeroNamesOctalDigits && a.hasPrefixAt("0") && !a.decimalDigitsGoOn():
 		// A leading zero names the base here too, which is the third way a
 		// numeral can carry its own. Not consumed, unlike the two prefixes
 		// above: the `0` is a digit of the number as well as the thing that
 		// says what base it is in, so `$(( 010 ))` is three octal digits and
 		// eight. See Dialect.ArithLeadingZeroNamesOctalDigits.
+		//
+		// Not where the digits go on into a fraction or an exponent, which
+		// is a float and decimal, nor into a `#`, which makes them a base
+		// written in decimal: measured 2026-10-02 on zsh 5.9.2 under
+		// `setopt octalzeroes`, `$(( 09.5 ))` is 9.5, `$(( 07.5 ))` 7.5,
+		// `$(( 01e2 ))` 100. and `$(( 08#77 ))` 63, where `$(( 010 ))` is 8
+		// (#5145).
 		base = 8
 	}
 	a.digitsIn(base)

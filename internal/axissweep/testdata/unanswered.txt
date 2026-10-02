@@ -34,6 +34,7 @@ ash   ArithDivisionByZeroYieldsAValue
 ash   ArithFloatOverflowIsZero
 ash   ArithIntegerOperatorRefusesFloat
 ash   ArithNounsetRefusalIsFatal
+ash   ArithStoreRefusalIsAnError
 ash   ArithSubscriptNameMustBeSet
 ash   ArithSubscriptSkippedWhenNameUnset
 ash   ArithWholeArraySubscriptIsReportedAsBad
@@ -361,6 +362,7 @@ dash  ArithNegativeExponentIsError
 dash  ArithNounsetRefusalIsFatal
 dash  ArithRecursedNameMustBeSet
 dash  ArithRecursionBound
+dash  ArithStoreRefusalIsAnError
 dash  ArithSubscriptNameMustBeSet
 dash  ArithSubscriptSkippedWhenNameUnset
 dash  ArithWholeArraySubscriptIsReportedAsBad

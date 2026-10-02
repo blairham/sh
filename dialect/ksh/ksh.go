@@ -401,6 +401,9 @@ func Dialect() syntax.Dialect {
 	// shell resumes after giving the reading up rather than about the scan.
 	// See the flag for the five rows.
 	d.ArithCommandScanIgnoresQuoting = true
+	// A sequence may end at its comma: `echo $(( 3, ))` writes 3. Measured
+	// 2026-10-02 on 93u+ 2012-08-01 (#5145).
+	d.ArithCommaMayEndTheExpression = true
 	// And the same at the `$((` fallback, which is a second field because
 	// the two scans were measured separately: `echo $(( '0)' + 1 ))` runs a
 	// command named `0)` here where the bash columns refuse the expression
@@ -3086,6 +3089,9 @@ func Semantics() interp.Semantics {
 	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+
 	// 2012-08-01 (#5153).
 	s.PrintfQuoteOfNoArgumentIsEmpty = interp.Yes
+	// An element store arithmetic refuses fails the expression, as `1/0`
+	// does. Measured 2026-10-02 on 93u+ 2012-08-01 (#5145).
+	s.ArithStoreRefusalIsAnError = interp.Yes
 	// unanswered ReadDelimiterIsTheLocalesCharacter: 93u+ 2012-08-01 follows
 	// neither reading of a delimiter of more than one byte — see the field —
 	// so the shell refuses by name rather than choosing one (#5153).

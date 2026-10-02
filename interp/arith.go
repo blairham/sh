@@ -1017,6 +1017,24 @@ func (r *Runner) arithAssignmentDeclaresANumber(name string) bool {
 	return !set
 }
 
+// arithAssignmentReplacesAnArray reports whether an assignment written in
+// arithmetic to a name holding an array — indexed or associative — replaces
+// it with a number declared the way a new name is, in the dialect whose
+// assignments declare one. Measured 2026-10-02 on zsh 5.9.2: `xarr=(); ((
+// xarr = 3 ))` leaves `integer 3`, `a=(1 2); (( a = 3 ))` and `typeset -A h;
+// (( h = 3 ))` the same, `(( xarr = 1.5 ))` a float, and `let xarr=3` and
+// `$(( xarr = 3 ))` the same as `(( ))`. Only an assignment: `xarr=(); ((
+// xarr++ ))` leaves an array holding 1, which is why the caller asks only
+// where an expression was assigned (#5145).
+func (r *Runner) arithAssignmentReplacesAnArray(name string) bool {
+	if r.sem().ArithmeticAssignmentDeclaresANumber != Yes {
+		return false
+	}
+	_, indexed := r.Arrays[name]
+	_, table := r.AssocArrays[name]
+	return indexed || table
+}
+
 // declareIntegerFromArithmetic gives a name the arithmetic just created the
 // integer attribute, and the output base a radix literal in the expression
 // wrote.
@@ -1273,7 +1291,7 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 		// empty expression names, so the pair goes to the element path with
 		// everything else and only a target with no brackets at all is here
 		// (#1764).
-		if r.arithAssignmentDeclaresANumber(p.name) {
+		if r.arithAssignmentDeclaresANumber(p.name) || (from != nil && r.arithAssignmentReplacesAnArray(p.name)) {
 			if v.floatKind() {
 				// **The value's type decides which attribute**, and a float
 				// value declares a float. See declareFloatFromArithmetic,
@@ -1422,7 +1440,35 @@ func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 	if sub == "" {
 		sub = r.formatNum(idx)
 	}
-	r.setArrayElem(p.name, idx.asInt(), sub, text)
+	return r.arithStoreElement(p.name, idx.asInt(), sub, text)
+}
+
+// arithStoreElement is setArrayElem for a store arithmetic makes, where a
+// refusal — a subscript before the first element — is the expression's to
+// answer: an arithmetic error in the dialect that reads it as one, and the
+// complaint with the expression going on in the other. See
+// Semantics.ArithStoreRefusalIsAnError.
+func (r *Runner) arithStoreElement(name string, idx int, sub, text string) error {
+	refused := ""
+	outer := r.arithStoreRefusal
+	r.arithStoreRefusal = &refused
+	r.setArrayElem(name, idx, sub, text)
+	r.arithStoreRefusal = outer
+	if refused == "" {
+		return nil
+	}
+	sentence := strings.TrimSuffix(refused, "\n")
+	// Read rather than asked: a vector that has not answered keeps the
+	// refusal as every other store reports one, which is the substrate's
+	// answer and the one it had before the question was put.
+	switch r.sem().ArithStoreRefusalIsAnError {
+	case Yes:
+		return arithError{msg: sentence, complete: true}
+	case No:
+		r.diagf("%s\n", sentence)
+		return nil
+	}
+	r.failedSubscript("%s", refused)
 	return nil
 }
 
@@ -1493,6 +1539,10 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 					"%[1]s needs a variable", x.Op),
 			}
 		}
+		place, err := r.settlePlaceIndex(place)
+		if err != nil {
+			return intNum(0), err
+		}
 		old, err := r.readPlace(place)
 		if err != nil {
 			return intNum(0), err
@@ -1537,6 +1587,38 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 	return intNum(0), arithError{msg: "unknown unary " + x.Op}
 }
 
+// settlePlaceIndex evaluates an indexed element's subscript once, for an
+// operator that reads the element and then writes it, and hands back the
+// place with the number in its subscript's stead — so a side effect in the
+// subscript happens once. Measured 2026-10-02, `array=(1); x=0; ((
+// array[++x]++ ))` leaves x at 1 in zsh 5.9.2, bash 5.3.20 and ksh93u+
+// 2012-08-01 alike, and `(( a[i++] += 10 ))` steps i once; here both read
+// the subscript twice (#5145).
+//
+// A key, a flag group and an empty pair are left as they are: none of them
+// is an expression this evaluates.
+func (r *Runner) settlePlaceIndex(p arithPlace) (arithPlace, error) {
+	if !p.subscripted || p.index == nil || p.flags != nil || p.empty {
+		return p, nil
+	}
+	if _, isTable := r.assocFor(p.name); isTable {
+		return p, nil
+	}
+	n, err := r.arithSubscriptIndex(&syntax.ArithIndex{
+		Name: p.name, Index: p.index, Sub: p.sub, SubMarked: p.subMarked,
+	})
+	if err != nil {
+		return p, err
+	}
+	text := r.formatNum(n)
+	var settled syntax.ArithExpr = &syntax.ArithNum{Text: strings.TrimPrefix(text, "-")}
+	if strings.HasPrefix(text, "-") {
+		settled = &syntax.ArithUnary{Op: "-", X: settled}
+	}
+	p.index = settled
+	return p, nil
+}
+
 // addNum steps a value by one, keeping it whichever kind it was.
 func (r *Runner) addNum(n arithNum, step float64) arithNum {
 	if n.floatKind() {
@@ -1560,6 +1642,11 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 		return intNum(0), err
 	}
 	if x.Op != "=" {
+		// The subscript once, for the read and the write both. See
+		// settlePlaceIndex.
+		if place, err = r.settlePlaceIndex(place); err != nil {
+			return intNum(0), err
+		}
 		old, err := r.readPlace(place)
 		if err != nil {
 			return intNum(0), err

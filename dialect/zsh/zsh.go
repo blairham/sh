@@ -1947,6 +1947,14 @@ func Semantics() interp.Semantics {
 	// (#3965).
 	s.KeyedLetterOverAFrozenNameHoldingAValueIsRefused = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
+	// Reached only once TYPESET_TO_UNSET has turned the field above off, and
+	// then a function's declaration hides the caller's value: measured
+	// 2026-10-02 on zsh 5.9.2, `-f`, `setopt typesettounset; g=1; f() { local
+	// g; echo ${g-UNSET}; }; f; echo $g` is `UNSET` then `1` under `emulate
+	// zsh`, `emulate sh` and `emulate ksh` alike, and so are `typeset g` and
+	// `local -x g` in the function and a `local g` in a function its caller
+	// had already given a local `g` (#5157).
+	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	// unanswered PrefixListingNamesADeclaredOnlyCompound: there is no
 	// `${!prefix@}` in this shell at all — `typeset -A q1; echo "${!q@}"` is
 	// `bad substitution` — so no listing of that shape ever reaches the axis

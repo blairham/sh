@@ -3574,7 +3574,7 @@ func (r *Runner) expressionFailure(text string, err error) string {
 		switch se.Kind {
 		case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator,
 			syntax.ErrArithBadOperator, syntax.ErrArithCharacterMissing,
-			syntax.ErrArithAssignToNonPlace, syntax.ErrArithUnmatchedCloseParen:
+			syntax.ErrArithAssignToNonPlace:
 			// Blamed on the text the caller names rather than on the text the
 			// parser was handed, which are the same everywhere but one.
 			return r.diag().arithParseFailure(se, text)

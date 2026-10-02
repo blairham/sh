@@ -816,6 +816,10 @@ func (r *Runner) killTarget(t string) (targets []jobProcess, named *Job, fromJob
 		return []jobProcess{{pid: n}}, nil, false, jobFound
 	}
 	j, code := r.findJobQuietly(t)
+	if code == jobIsTheSubshell {
+		// `kill` misses the subshell itself. See subshellSelfLookup.
+		code = jobMissing
+	}
 	if code == jobOnAnEmptySlot {
 		// The running command's slot: a job with nothing to reach, which
 		// `kill` sends nothing and succeeds at. See

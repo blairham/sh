@@ -5253,10 +5253,10 @@ func (l *Lexer) parseToClose(from int) (int, []Remark, bool, bool) {
 			l.lastBodyRanOut = sub.lex.incomplete
 			l.lastBodyWaitedForAThen = sub.refusedWaitingForAThen
 		}
-		if sub.err == nil && sub.at(TokEOF) && !sub.lex.incomplete && len(sub.lex.pending) == 0 && l.commentsExist() {
+		if sub.err == nil && sub.at(TokEOF) && !sub.lex.incomplete && l.commentsExist() {
 			// The read ran to the end of the text with every construct it
-			// opened closed and nothing owed — no here-document waiting for
-			// its delimiter, no quote left open. So every parenthesis it
+			// opened closed and nothing owed — no here-document body still
+			// being read, no quote left open. So every parenthesis it
 			// passed was one the grammar accounted for, and the body simply
 			// has not ended yet: the count starts where the text does, and
 			// finds nothing to close on. Counting from the front instead

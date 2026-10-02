@@ -61,5 +61,8 @@ func registerDisabledFunctions(r *interp.Runner) {
 		return rr.WithdrawnFunctionSourceFile(name), true
 	})
 	r.MarkReadonly("dis_functions_source")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("dis_functions_source")
 	hideModuleParameter(r, "dis_functions_source")
 }

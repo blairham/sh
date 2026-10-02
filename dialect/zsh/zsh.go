@@ -4687,6 +4687,9 @@ func Semantics() interp.Semantics {
 	// still agree and are the controls. See interp/fieldwidth.go, where the
 	// rest of the table is (#2859, #4798).
 	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterCombinesWithTheLeftJustification
+	// And the fill goes in after a value's leading blanks; see the axis.
+	s.ZeroFillKeepsLeadingBlanks = interp.Yes
+	s.ZeroFillGoesAfterAnIntegersSign = interp.Yes
 	// And where a declaration writes two of them, the name ends up with
 	// **neither** — silently, at 0, with the value unpadded. Measured
 	// 2026-09-27: `typeset -L5 -R5 v=7` and `typeset -Z5 -R5 v=7` both list
@@ -4823,7 +4826,11 @@ func Semantics() interp.Semantics {
 	// the set is its own field and not DeclareOptions over again — a shell
 	// that reused them would accept `integer -A m`, which is an associative
 	// array in no shell that has the word.
-	s.IntegerOptions = "gHhilprtux"
+	//
+	// And the three width letters, which `integer` takes as `typeset` does:
+	// `integer -Z 10 n=-42` is `-000000042` and `integer -L 6 n=-4` is
+	// `-4····`, measured 2026-10-02 (#5142).
+	s.IntegerOptions = "gHhiLlprRtuxZ"
 	// And `float` is the same word one letter along, with the same set
 	// narrowed the same way: measured 2026-09-16 under `-f`, a letter at a
 	// time against `float -X zz=1.5`, this shell's `float` refuses `-a`,
@@ -5648,13 +5655,10 @@ func Diagnostics() interp.Diagnostics {
 			// — so this list was one letter shorter than theirs and not the
 			// same list after all. `-t` was the last of it and left with
 			// #3101, so `local` has no row here at all now.
-			// `integer`'s own short list, and it is not typeset's: the
-			// letters typeset is missing that `integer` refuses outright —
-			// b, c, E and m — are bad options under this name and belong in
-			// neither field, while `-t`, `-L`, `-R` and `-Z` are letters
-			// this shell's `integer` really takes. `-h` was here too and is
-			// implemented now, in IntegerOptions above.
-			"integer": "LRZ",
+			// `integer`'s own short list is empty now: the letters typeset
+			// is missing that `integer` refuses outright — b, c, E and m —
+			// are bad options under this name and belong in neither field,
+			// and `-h`, `-L`, `-R` and `-Z` are in IntegerOptions above.
 			// `private`'s own two, and they are `local`'s missing letters
 			// rather than `typeset`'s: measured 2026-09-27 a letter at a
 			// time on zsh 5.9.2, `private -E v` and `private -m 'v*'` are

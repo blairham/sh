@@ -86,6 +86,9 @@ func registerHistoryParameter(r *interp.Runner) {
 	r.SetDynamicAssocElement("history", zshHistoryValue)
 	r.SetDynamicAssocKeyOrder("history", zshHistoryNewestFirst)
 	r.MarkReadonly("history")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("history")
 	// `association-readonly-hide-hideval-special`, which is the word every
 	// module parameter answers — see hideModuleParameter, where the pair is
 	// measured.

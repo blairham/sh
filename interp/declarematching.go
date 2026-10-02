@@ -477,6 +477,7 @@ func (r *Runner) matchedOperands(operands []string, local bool) []string {
 			if !local && r.producedParameter(name) {
 				continue
 			}
+
 			if assigned {
 				name += "=" + value
 			}

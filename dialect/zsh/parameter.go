@@ -132,6 +132,9 @@ func registerParameterModule(r *interp.Runner) {
 	// association with neither would take the assignment into a stored table
 	// and shadow itself.
 	r.MarkReadonly("builtins")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("builtins")
 	// And hidden with it, which is not decoration: readonly is an attribute,
 	// an attribute puts the name in the tables a listing walks, and a listing
 	// would then write out every builtin this shell has as an assignment
@@ -183,6 +186,9 @@ func registerParameterModule(r *interp.Runner) {
 	// variable: funcstack` and so is `unset funcstack`, and `typeset -p
 	// funcstack` writes nothing at all. This shell took all three (#4812).
 	r.MarkReadonly("funcstack")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("funcstack")
 	hideModuleParameter(r, "funcstack")
 	// And the same stack said the other way round: where each of those units
 	// was entered from. It is the parameter a `DEBUG` trap or a tracing
@@ -197,6 +203,9 @@ func registerParameterModule(r *interp.Runner) {
 	// 5.9.2: `${(t)functrace}` is `array-readonly-hide-hideval-special` and
 	// `typeset -p functrace` writes nothing.
 	r.MarkReadonly("functrace")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("functrace")
 	hideModuleParameter(r, "functrace")
 	// And the same call site written as a file and an absolute line, which is
 	// the field `$functrace` declines to give whenever the call was made
@@ -205,6 +214,9 @@ func registerParameterModule(r *interp.Runner) {
 	// (#4470).
 	r.SetDynamicArray("funcfiletrace", funcfiletraceEntries)
 	r.MarkReadonly("funcfiletrace")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("funcfiletrace")
 	hideModuleParameter(r, "funcfiletrace")
 	// And the third question about the same frames: where the unit running in
 	// each was *defined*. It is this shell's `${BASH_SOURCE[0]}`, so an absent
@@ -212,6 +224,9 @@ func registerParameterModule(r *interp.Runner) {
 	// (#4469). See funcsourcetraceEntries.
 	r.SetDynamicArray("funcsourcetrace", funcsourcetraceEntries)
 	r.MarkReadonly("funcsourcetrace")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("funcsourcetrace")
 	hideModuleParameter(r, "funcsourcetrace")
 	// All three carry the readonly-and-hidden pair for the reasons `functrace`
 	// records just above, measured the same way: `funcfiletrace=(a b)` and
@@ -228,6 +243,9 @@ func registerParameterModule(r *interp.Runner) {
 	// `read-only variable: reswords`, and a plain `typeset` writes
 	// `array readonly reswords` with no value.
 	r.MarkReadonly("reswords")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("reswords")
 	hideModuleParameter(r, "reswords")
 	r.SetDynamicAssoc("parameters", zshParametersView)
 	r.SetDynamicAssocElement("parameters", zshParameterValue)
@@ -237,6 +255,9 @@ func registerParameterModule(r *interp.Runner) {
 	// into a stored table that then shadows the producer. See MarkHidden's
 	// note above — an attribute puts the name in the tables a listing walks.
 	r.MarkReadonly("parameters")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("parameters")
 	hideModuleParameter(r, "parameters")
 	registerArgv(r)
 	registerTheSpecialParameterListing(r)
@@ -346,6 +367,7 @@ func registerEmptyParameters(r *interp.Runner) {
 			// assignment into a stored table and shadow itself, and readonly
 			// alone would put the name in the tables a listing walks.
 			r.MarkReadonly(p.name)
+			r.SetSilentToPrint(p.name)
 			hideModuleParameter(r, p.name)
 			continue
 		}

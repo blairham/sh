@@ -3971,6 +3971,9 @@ func Semantics() interp.Semantics {
 	// lay down and the value's leading zeros come off instead. See
 	// interp/fieldwidth.go for the value table (#2859).
 	s.DeclareZeroFillLetter = interp.DeclareZeroFillLetterRidesOnTheJustification
+	// And the leading blanks come off before the fill; see the axis.
+	s.ZeroFillKeepsLeadingBlanks = interp.No
+	s.ZeroFillGoesAfterAnIntegersSign = interp.No
 	// And where a declaration writes both justifications the **last** wins,
 	// across words as well as inside one — the opposite of the rank above
 	// and of zsh's answer to the same question. Measured the same day:

@@ -146,6 +146,38 @@ func (r *Runner) widthPadded(name, value string) string {
 	if !ok || w.width == 0 {
 		return value
 	}
+	_, float := r.floatPrecision[name]
+	if w.zeroFilling() && (r.integer[name] || float) && len(value) < w.width &&
+		r.sem().ZeroFillGoesAfterAnIntegersSign == Yes {
+		// A float the same way: `typeset -F 3 -Z 10 f=-3.14159` is
+		// `-00003.142`, measured the same day.
+		// An integer fills after its sign and its base, which are not
+		// digits of the number: measured 2026-10-02 on zsh 5.9.2 at width
+		// ten, `-42` is `-000000042`, `16#FF` is `16#00000FF` and `-16#FF`
+		// is `-16#0000FF` (#5142).
+		prefix := 0
+		if strings.HasPrefix(value, "-") {
+			prefix = 1
+		}
+		if at := strings.IndexByte(value[prefix:], '#'); at > 0 && isAllDigits(value[prefix:prefix+at]) {
+			prefix += at + 1
+		} else if rest := value[prefix:]; strings.HasPrefix(rest, "0x") || strings.HasPrefix(rest, "0X") {
+			// And the C spelling of the base: under `cbases`, `integer -Z 10
+			// -i 16 n=42` is `0x0000002A` and `n=-42` is `-0x000002A`.
+			prefix += 2
+		}
+		if prefix > 0 {
+			return value[:prefix] + strings.Repeat("0", w.width-len(value)) + value[prefix:]
+		}
+	}
+	if w.zeroFilling() && r.sem().ZeroFillKeepsLeadingBlanks == Yes && len(value) <= w.width {
+		// The fill goes in after the blanks the value begins with. See
+		// Semantics.ZeroFillKeepsLeadingBlanks.
+		rest := strings.TrimLeft(value, " \t")
+		if lead := value[:len(value)-len(rest)]; lead != "" && rest != "" && rest[0] >= '0' && rest[0] <= '9' {
+			return lead + strings.Repeat("0", w.width-len(value)) + rest
+		}
+	}
 	value = strings.TrimLeft(value, " \t")
 	if w.zeroFill && w.letter == 'L' {
 		// The zero-fill letter riding on the *left* justification has no

@@ -46,5 +46,8 @@ func registerUserDirs(r *interp.Runner) {
 	// name — a produced table without it takes an assignment into a stored
 	// table and shadows itself.
 	r.MarkReadonly("userdirs")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("userdirs")
 	hideModuleParameter(r, "userdirs")
 }

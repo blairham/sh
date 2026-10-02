@@ -1715,6 +1715,17 @@ var zshOptions = []zshOption{
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.JobSpecMissIsSilent
 			}, answer(on))
+			// A valueless declaration leaves the name unset, and the
+			// readonly attribute cannot be taken back off: measured
+			// 2026-10-02 on zsh 5.9.2, under the option `readonly x;
+			// print ${+x}` is 0 and `v=1; readonly v; typeset +r v` is
+			// `read-only variable: v` (#5142).
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ValuelessDeclarationLeavesTheNameUnset
+			}, answer(on))
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ReadonlyAttributeCanBeRemoved
+			}, answer(!on))
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.RedirectErrorOnSpecialBuiltinFatal
 			}, answer(on))

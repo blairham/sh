@@ -3711,6 +3711,8 @@ func Semantics() interp.Semantics {
 	// and bash-as-`sh` each answer `set: -A: invalid option` with the usage
 	// line, so the letter is refused before the question of what an empty
 	// prepend stores can be put.
+	// unanswered ZeroFillKeepsLeadingBlanks, ZeroFillGoesAfterAnIntegersSign:
+	// the same wall — there is no zero fill here to ask either question of.
 	// unanswered DeclareZeroFillLetter: there is no `Z` letter here under
 	// either reading. Measured 2026-09-18 on 5.3.20 and 3.2 alike, `declare
 	// -Z 4 d=7` is `declare: -Z: invalid option` with the usage line, so the

@@ -65,5 +65,8 @@ func zshUserGroupsView(*interp.Runner) interp.AssocArray {
 func registerUserGroups(r *interp.Runner) {
 	r.SetDynamicAssoc("usergroups", zshUserGroupsView)
 	r.MarkReadonly("usergroups")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("usergroups")
 	hideModuleParameter(r, "usergroups")
 }

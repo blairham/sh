@@ -71,6 +71,7 @@ func registerJobParameters(r *interp.Runner) {
 		// every job to reach the first.
 		r.SetDynamicAssocElement(p.name, p.value)
 		r.MarkReadonly(p.name)
+		r.SetSilentToPrint(p.name)
 		hideModuleParameter(r, p.name)
 	}
 }

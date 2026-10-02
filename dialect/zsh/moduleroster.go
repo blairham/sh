@@ -68,5 +68,8 @@ const zshModuleLoadedWord = "loaded"
 func registerModuleRoster(r *interp.Runner) {
 	r.SetDynamicAssoc("modules", zshModulesView)
 	r.MarkReadonly("modules")
+	// Silent to `-p`, as zsh/parameter's frozen tables are; see
+	// interp.Runner.SetSilentToPrint.
+	r.SetSilentToPrint("modules")
 	hideModuleParameter(r, "modules")
 }

@@ -2977,6 +2977,9 @@ type Runner struct {
 	// listsOneElementPerLine is `typeset -p1`, for the length of the command
 	// that wrote it. See Runner.readOptionNumber.
 	listsOneElementPerLine bool
+	// silentToPrint are the names a `-p` listing writes nothing for, named or
+	// whole. See Runner.SetSilentToPrint.
+	silentToPrint map[string]bool
 	// bodyHoldsNoSlot is the body of the nameless function being entered,
 	// which runs as that function and not as the brace group it is written
 	// as. See holdsAJobSlot.

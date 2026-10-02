@@ -5934,6 +5934,24 @@ type Semantics struct {
 	// … )` chunk whose expectation has no error output at all (#5140).
 	JobSpecMissIsSilent Answer
 
+	// ValuelessDeclarationLeavesTheNameUnset makes a declaration with no value
+	// that carries the export or the readonly attribute leave the name unset,
+	// whatever DeclaredNameWithoutValueIsEmpty says — the standard's reading
+	// of `export name` and `readonly name`, which zsh takes under
+	// POSIX_BUILTINS. Measured 2026-10-02 on zsh 5.9.2 under `setopt
+	// posixbuiltins`: `readonly RO`, `export EX`, `typeset -r R`, `typeset -x
+	// E`, `typeset -rx RX`, and a function's `local -r LR` and `local -x LX`
+	// each leave `${+name}` at 0, where `typeset X`, `typeset -i I`, `typeset
+	// -a A`, `typeset -u U`, `local L` and `local -i LI` each set it, as they
+	// do without the option; and `readonly -p` lists `readonly RO` with no
+	// value (#5142). A field of its own rather than DeclaredNameWithoutValue
+	// IsEmpty moved, because that one is TYPESET_TO_UNSET's and reaches every
+	// declaration.
+	//
+	// unpinned zsh: no corpus row declares a valueless name under the
+	// option; pinned by TestTypesetFrontsOfB02.
+	ValuelessDeclarationLeavesTheNameUnset Answer
+
 	// GetoptsTakesAPlusPrefixedOption reads a word beginning with `+` as an
 	// option word, exactly as a word beginning with `-`, and reports the
 	// letter with the sign still in front of it.
@@ -14440,6 +14458,44 @@ type Semantics struct {
 	// justification of its own, or a fill riding on one of the other two —
 	// see DeclareZeroFillLetterPolicy.
 	DeclareZeroFillLetter DeclareZeroFillLetterPolicy
+
+	// ZeroFillKeepsLeadingBlanks lays a zero fill down *after* the blanks a
+	// value begins with, where no answer — the other reading — takes the
+	// blanks off first. Measured 2026-10-02 at width six, `typeset -Z 6 z`
+	// then `z=VALUE`:
+	//
+	//	VALUE     zsh 5.9.2   ksh93u+
+	//	"  4"     "  0004"    000004
+	//	" 4"      " 00004"    000004
+	//	" 4 "     " 0004 "    000004
+	//	" -4"     "    -4"    "    -4"   a sign is no digit, in both
+	//
+	// Only where the first character after the blanks is a digit, which is
+	// the rule the fill already has. ksh93 also takes the trailing blanks
+	// off — `"4 "` is `000004` there and `00004·` here — which is recorded
+	// and not modeled. bash, dash and BusyBox ash have no zero fill.
+	//
+	// unpinned zsh: no corpus row assigns a blank-led value to a zero-filled
+	// name; pinned by TestTypesetFrontsOfB02.
+	//
+	// unpinned ksh: the same reach; pinned by
+	// TestAZeroFillTakesTheLeadingBlanksOff.
+	ZeroFillKeepsLeadingBlanks Answer
+
+	// ZeroFillGoesAfterAnIntegersSign fills an integer's zeros in after its
+	// sign and its output base, where no answer treats the sign as the
+	// non-digit it is and fills with blanks. Measured 2026-10-02 at width
+	// ten on zsh 5.9.2 — `integer -Z 10 n=-42` is `-000000042`, `typeset
+	// -i16 -Z 10 h=255` is `16#00000FF` and `h=-255` is `-16#0000FF` — and
+	// on ksh93u+, where `typeset -i n=-4; typeset -Z6 n` is `····-4`. A
+	// scalar's sign is blank-filled in both.
+	//
+	// unpinned zsh: no corpus row zero-fills a negative integer; pinned by
+	// TestTypesetFrontsOfB02.
+	//
+	// unpinned ksh: the same reach; pinned by
+	// TestAZeroFillTakesTheLeadingBlanksOff.
+	ZeroFillGoesAfterAnIntegersSign Answer
 
 	// WidthJustificationPrecedence is which of `L` and `R` a declaration
 	// writing both ends up with — see WidthJustificationPrecedencePolicy.
@@ -29736,6 +29792,9 @@ func PosixSemantics() Semantics {
 		// The standard has no `printf -v`, so nothing is stored a use at a
 		// time; the one column that does says so itself.
 		PrintfVTakesAnElementPerPass: No,
+		// No override of DeclaredNameWithoutValueIsEmpty: the one column
+		// with one reaches it through an option.
+		ValuelessDeclarationLeavesTheNameUnset: No,
 		// The standard has the name set to a question mark when the options
 		// run out.
 		GetoptsEndOfOptionsNamesIt: Yes,
@@ -31222,7 +31281,8 @@ func CoreSemantics() Semantics {
 		JobSpecMissIsSilent: No,
 		// And `printf -v` into an array stores one value, which is bash's;
 		// zsh says otherwise itself. Read rather than asked.
-		PrintfVTakesAnElementPerPass: No,
+		PrintfVTakesAnElementPerPass:           No,
+		ValuelessDeclarationLeavesTheNameUnset: No,
 		// `getopts` writes `?` into the name when it runs out of options,
 		// which is the standard's own words and six of the seven columns.
 		// The substrate answers it rather than refusing it because the run

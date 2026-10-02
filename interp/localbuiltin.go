@@ -114,8 +114,9 @@ func (f BareLocalListingForm) String() string {
 // attribute added to one listing cannot go missing from the other.
 //
 // The order is measured rather than chosen, a letter at a time, on zsh 5.9.2
-// with no startup files (2026-09-10): the type word, then the case, then
-// `local`, `readonly` and `exported`, then `unique`, and `tied` last of all.
+// with no startup files (2026-09-10, re-measured 2026-10-02): the type word,
+// then `local`, then the width, then the case, then `readonly` and
+// `exported`, then `unique`, and `tied` last of all.
 // Two combinations pin each seam — `array readonly unique`, `array exported
 // unique`, `array unique tied UT ut`, `array local tied LT lt`, `integer 16
 // readonly`, `array uppercase unique`.
@@ -138,14 +139,34 @@ func (r *Runner) attributeWordHead(d declaration, isLocal bool) string {
 	case d.float:
 		words = append(words, "float")
 	}
+	if isLocal {
+		// Before the case word and not after it, measured 2026-10-02 on zsh
+		// 5.9.2: `f() { local -u x=a; typeset +m x }; f` is `local uppercase
+		// x` (#5142).
+		words = append(words, "local")
+	}
+	// The width, after `local` and ahead of the case: `typeset -L 10 -F 3 f`
+	// is `float left justified 10 f`, `local -uL5` is `local left justified
+	// 5 uppercase`, `typeset -rL5` is `left justified 5 readonly`, `typeset
+	// -i16 -R6` is `integer 16 right justified 6`, and `typeset -ZL3` writes
+	// both, `left justified 3 zero filled 3`. A width no value has fixed yet
+	// writes no number: `typeset -L x` is `left justified x`. Same shell,
+	// same day (#5142).
+	for _, l := range d.widthLetters() {
+		word := map[string]string{"L": "left justified", "R": "right justified", "Z": "zero filled"}[l]
+		if word == "" {
+			continue
+		}
+		words = append(words, word)
+		if d.width.width != 0 {
+			words = append(words, strconv.Itoa(d.width.width))
+		}
+	}
 	if d.upper {
 		words = append(words, "uppercase")
 	}
 	if d.lower {
 		words = append(words, "lowercase")
-	}
-	if isLocal {
-		words = append(words, "local")
 	}
 	if d.readonly {
 		words = append(words, "readonly")

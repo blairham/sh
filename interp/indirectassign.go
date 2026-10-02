@@ -491,6 +491,16 @@ func (r *Runner) indirectSourceText(e *syntax.ParamExpr, words []string, set boo
 		(r.subscriptYieldsAList(e) || r.subscriptNamesNoElementAtAll(e)) {
 		words, set, _ = r.namedBase(e.Name, baseFlags(e.Flags))
 	}
+	if e.Inner == nil && e.Index == nil && e.Op == syntax.ParamNone && r.caseFoldsOnRead() {
+		// The name is read from what the parameter holds and not from how
+		// it is presented, in the dialect that presents on the read:
+		// measured 2026-10-02 on zsh 5.9.2, with `typeset -u n=abc`,
+		// `${(P)n}` is `$abc` and not `$ABC`, and with `typeset -R5 n=abc`
+		// it is `$abc` too, the blanks never having been stored (#5142).
+		if v, ok := r.Vars[r.throughNameref(e.Name)]; ok && !r.nameIsAnArray(e.Name) {
+			return v, true
+		}
+	}
 	return strings.Join(words, " "), set
 }
 

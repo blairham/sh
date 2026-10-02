@@ -3475,7 +3475,12 @@ func (r *Runner) unsetOneName(name string) {
 		r.exported = map[string]bool{}
 	}
 	r.exported[name] = false
-	if r.DeferredParameter(name) {
+	if r.DeferredParameter(name) && !r.localInTheInnermostScope(name) {
+		// Not where a local stands in front of it, which is the local's to
+		// lose: measured 2026-10-02 on zsh 5.9.2, `f() { typeset -h +g
+		// keymaps; unset keymaps }; f; readonly -p` lists nothing, the
+		// table still waiting for its module (#5142).
+		//
 		// A parameter nothing has referred to yet is removed **outright**:
 		// the registration goes with the name, so nothing answers for it
 		// afterwards and a listing reports a name it has never heard of.

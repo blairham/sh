@@ -64,6 +64,13 @@ func redrawn(listing string) string {
 			b.WriteString(name + "=<redrawn>\n")
 			continue
 		}
+		if strings.HasPrefix(line, "_=") {
+			// `$_` is the running command's last word, which is the word
+			// itself here: `_=typeset` against `_=local`, as in the
+			// reference (#5157).
+			b.WriteString("_=<the word>\n")
+			continue
+		}
 		b.WriteString(line)
 	}
 	return b.String()

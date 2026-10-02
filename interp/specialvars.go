@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // The parameters a shell provides without a script setting them.
@@ -1076,4 +1078,16 @@ func (r *Runner) SecondsFrom() float64 {
 // than an empty value.
 func (r *Runner) SetParameterTypeWord(word func(ParameterAttributes) string) {
 	r.parameterTypeWord = word
+}
+
+// SpecialParameter answers one of the parameters that are not variables —
+// `#`, `?`, `$`, `!`, `0`, `-`, `*` and `@` — as a plain `$name` would, with
+// `*` and `@` joined. For a dialect that lists them: a producer registered
+// under one of these names reads its value here rather than computing it a
+// second way.
+func (r *Runner) SpecialParameter(name string) (string, bool) {
+	if name == "-" {
+		return r.optionLetters(), true
+	}
+	return r.specialParam(&syntax.ParamExpr{Name: name})
 }

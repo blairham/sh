@@ -226,9 +226,9 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 		// hold two different `RANDOM`s. bash writes the last reading
 		// instead, which is the shape this branch has by construction. What
 		// the *bare* word writes is still open and is #2722.
-		return head + d.name
+		return head + r.listedName(d.name)
 	}
-	return head + d.name + "=" + r.listedDeclarationValue(d)
+	return head + r.listedName(d.name) + "=" + r.listedDeclarationValue(d)
 }
 
 // listStandingDeclaration writes one name back as a bare assignment, which is

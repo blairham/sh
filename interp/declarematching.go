@@ -517,15 +517,37 @@ func (r *Runner) producedParameter(name string) bool {
 // h=v; typeset -m h` writes `h=v` there, where the bare listing and `+m`
 // write the name with no value at all.
 func (r *Runner) matchedListing(patterns []string, namesOnly bool) int {
-	names := r.matchedNames(patterns)
+	names, produced, listing := r.matchedListedNames(patterns)
+	if r.unspecified {
+		return r.status
+	}
 	if namesOnly {
-		return r.declarationNameListing(names)
+		return r.declarationNameListingOf(names, produced, listing)
 	}
 	for _, name := range names {
-		d, _ := r.declarationOf(name)
-		r.printf("%s\n", name+"="+r.listedDeclarationValue(d))
+		d, _ := r.listedDeclarationOf(name, produced[name], listing)
+		r.printf("%s\n", r.listedName(name)+"="+r.listedDeclarationValue(d))
 	}
 	return 0
+}
+
+// matchedListedNames is matchedNames over what a whole-table listing walks,
+// the produced parameters included — the names a pattern *lists*, where
+// matchedNames is the names it may *assign* to. Measured 2026-10-01 on zsh
+// 5.9.2: `typeset +m '*'` names `0`, HISTCHARS, the prompts and RANDOM
+// exactly as a bare `typeset +` does (#5157).
+func (r *Runner) matchedListedNames(patterns []string) ([]string, map[string]bool, ProducedListing) {
+	all, produced, listing := r.listedNames()
+	var out []string
+	for _, pattern := range patterns {
+		o := r.patternOpts(pattern)
+		for _, name := range all {
+			if matchPattern(pattern, name, o) {
+				out = append(out, name)
+			}
+		}
+	}
+	return out, produced, listing
 }
 
 // declarationNameListing writes each name with its attribute words and no
@@ -562,7 +584,7 @@ func (r *Runner) declarationNameListingOf(names []string, produced map[string]bo
 			r.printf("%s\n", r.deferredParameterRow(d, locals[name]))
 			continue
 		}
-		r.printf("%s\n", r.attributeWordHead(d, locals[name])+name)
+		r.printf("%s\n", r.attributeWordHead(d, locals[name])+r.listedName(name))
 	}
 	return 0
 }
@@ -638,7 +660,7 @@ func (r *Runner) declarationFilteredNameListing(names []string, produced map[str
 		if !known || !keep(d) {
 			continue
 		}
-		r.printf("%s\n", name)
+		r.printf("%s\n", r.listedName(name))
 	}
 	return 0
 }

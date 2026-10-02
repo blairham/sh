@@ -47,7 +47,7 @@ import "github.com/blairham/sh/interp"
 // function call, a `shift`, a `set --`, a trap, a `source` with words. The
 // producer reads them where they are.
 func registerArgv(r *interp.Runner) {
-	r.SetDynamicArray("argv", func(rr *interp.Runner) []string { return rr.Params })
+	r.SetDynamicArray("argv", positionalParameters)
 	r.SetDynamicArrayWriter("argv", func(rr *interp.Runner, values []string) {
 		rr.Params = values
 	})

@@ -525,6 +525,9 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 	// which is measured: zsh 5.9.2's own bare `readonly` writes `ARGC=0` and
 	// `LINENO=1` in the same run, and refuses `unset LINENO` (#2519).
 	want := "LOGNAME=pinned\nOLDPWD=" + dir + "\nPWD=" + dir + "\nSHLVL=1\nV='a b'\n" +
+		// The parameters that are not names, which a bare `readonly` lists
+		// in that run ahead of `ARGC`, quoted as a value would be (#5157).
+		"!=0\n'#'=0\n'$'=" + strconv.Itoa(os.Getpid()) + "\n'*'=(  )\n-=569X\n'?'=0\n@=(  )\n" +
 		// `HISTCMD`, `TTYIDLE` and `ZSH_SUBSHELL` are on this side for the
 		// same reason `ARGC` is, and they arrive in this listing with the
 		// change that gave them a parameter at all: measured 2026-09-27 on

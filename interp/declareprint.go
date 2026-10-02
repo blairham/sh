@@ -945,12 +945,24 @@ func (r *Runner) plainAssignmentDeclaration(d declaration) string {
 		// ksh93 writes a bare `u` for `typeset -a u; typeset -a`, where the
 		// shell that declares a name *empty* instead has an empty array to
 		// print and writes `u=(  )`.
-		return d.name
+		return r.listedName(d.name)
 	}
 	if !d.hasValue && !d.isArr && !d.isAssoc {
-		return d.name
+		return r.listedName(d.name)
 	}
-	return d.name + "=" + r.listedDeclarationValue(d)
+	return r.listedName(d.name) + "=" + r.listedDeclarationValue(d)
+}
+
+// listedName is a name as a listing writes it: as it is, unless it is one of
+// the parameters that are not names at all, which are quoted the way a value
+// would be. Measured 2026-10-01 on zsh 5.9.2, the one shell that lists them:
+// `'#'=0`, `'$'`, `'*'` and `'?'`, where `!`, `-`, `0` and `@` stand bare —
+// the same characters `a='#'` against `a=!` quotes in a value (#5157).
+func (r *Runner) listedName(name string) string {
+	if isPlainName(name) {
+		return name
+	}
+	return r.declareQuoted(name, ListedValueAlone)
 }
 
 // listedDeclarationValue spells a declaration's value alone — no name, no

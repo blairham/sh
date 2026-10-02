@@ -4711,6 +4711,16 @@ func (r *Runner) joinsTheListBeforeAnOperator(e *syntax.ParamExpr, elems, mapped
 	if !r.keepsFieldsUnderAnOperator(e) {
 		return nil, false
 	}
+	if r.sem().OperatorDistributesOverTheFieldList == Yes {
+		// A dialect that has answered already gets no trial run of the
+		// joined reading: the operator's words are expanded by that run, so
+		// a substitution or an arithmetic side effect in the replacement
+		// would fire for a reading that is then thrown away. Measured
+		// 2026-10-02 on zsh 5.9.2, `i=0; c=(ab cd); x=(${c[@]/b/$((++i))})`
+		// leaves i at 1 — which is zi's scheduler, whose replacement calls
+		// a math function that appends to a queue (#5394).
+		return nil, false
+	}
 	joined := strings.Split(apply(strings.Join(elems, listBoundary)), listBoundary)
 	cut := replacementCut(e, elems, joined)
 	if slices.Equal(joined, mapped) && cut < 0 {
@@ -4790,7 +4800,11 @@ func (r *Runner) elementOpApplier(e *syntax.ParamExpr) func(string) string {
 		return func(v string) string { return r.trimWith(v, pattern, e) }
 	case syntax.ParamReplace:
 		pattern := r.patternOf(e.Arg)
-		return func(v string) string { return r.replaceWith(v, pattern, e) }
+		// The replacement too, once for the list, where the pattern reports
+		// nothing that would change it from one element to the next. See
+		// replaceWithReading.
+		reading := new(func(string) string)
+		return func(v string) string { return r.replaceWithReading(v, pattern, e, reading) }
 	default:
 		pattern := r.patternOf(e.Arg)
 		return func(v string) string { return r.changeCaseWith(v, pattern, e) }
@@ -5410,6 +5424,13 @@ func (r *Runner) armOrder() armOrder {
 // count, and cost four times the run time of a substitution over a long
 // value for the trouble.
 func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string {
+	return r.replaceWithReading(value, pattern, e, nil)
+}
+
+// replaceWithReading is replaceWith with somewhere to keep the replacement's
+// reading between calls, for a list that applies one expansion's operator to
+// each of its elements. nil reads it afresh.
+func (r *Runner) replaceWithReading(value, pattern string, e *syntax.ParamExpr, cached *func(string) string) string {
 	pattern, e = r.readAnchor(pattern, e)
 	if pattern == "" && e.Anchor == 0 && !r.emptyPatternFires(value) {
 		return value
@@ -5431,7 +5452,19 @@ func (r *Runner) replaceWith(value, pattern string, e *syntax.ParamExpr) string 
 	repl := r.replacementWord(e)
 	var out string
 	if !reportsAMatch(o) {
-		with := r.replacementFor(repl)
+		// Read once per expansion, whether or not anything matches —
+		// `s=xx; ${s/b/$(echo X >&2)}` writes X in bash 5.3.20, ksh93u+ and
+		// zsh 5.9.2 — and once for a whole list rather than once per
+		// element: `set -- ab cd ab; ${@/b/$(echo Z >&2)}` writes Z once in
+		// all three, measured 2026-10-02 (#5394). The list's applier hands
+		// in the reading it already made; see elementOpApplier.
+		if cached == nil {
+			cached = new(func(string) string)
+		}
+		if *cached == nil {
+			*cached = r.replacementFor(repl)
+		}
+		with := *cached
 		// The **first** match writes the record, measured: `v=hello;
 		// ${v//[lo]/X}` leaves `l` and not the `o` the last one matched. The
 		// replacement is still read once, which is why this branch and not

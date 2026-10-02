@@ -6231,10 +6231,15 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// saying so. (ksh93 reads through a NUL instead; seeing that difference
 	// takes a NUL in the input, which is also what it takes to care.)
 	delim := byte('\n')
+	// And where the first character is more than one byte, all of them, in
+	// the dialect that reads the locale's characters here. See
+	// Semantics.ReadDelimiterIsTheLocalesCharacter.
+	wideDelim := ""
 	if word, ok := optArg['d']; ok {
 		delim = 0
 		if word != "" {
 			delim = word[0]
+			wideDelim = r.readDelimiterCharacter(word)
 		}
 	}
 
@@ -6477,7 +6482,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// Runner.readDropsNul.
 		next = r.readNulFilter(next)
 	}
-	text, lits, end := readSegment(next, raw, delim, count, exact,
+	text, lits, end := readSegment(next, raw, delim, wideDelim, count, exact,
 		r.countsTheLocalesCharacters, r.readCharacterWidth)
 	if r.unspecified {
 		return 2
@@ -7308,7 +7313,10 @@ func (u *readUnits) add(c byte) {
 // what a reader with no way to put a byte back has instead of a lookahead: a
 // lead byte the next byte does not finish is a byte, and the newline that ends
 // the line is not eaten waiting for a character.
-func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact bool,
+//
+// wideDelim, where it is not empty, is a delimiter of more than one byte that
+// ends the read only whole and unescaped; delim is then not consulted.
+func readSegment(next func() (byte, int), raw bool, delim byte, wideDelim string, count int, exact bool,
 	chars func() bool, width func(b, next byte) int,
 ) (text string, literal []bool, end int) {
 	var b strings.Builder
@@ -7325,6 +7333,24 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 		if count >= 0 {
 			units.add(c)
 		}
+	}
+	// atWideDelim reports whether what was just written completes the wide
+	// delimiter, none of its bytes escaped, and takes it off the text.
+	atWideDelim := func() (string, bool) {
+		if wideDelim == "" {
+			return "", false
+		}
+		s := b.String()
+		if !strings.HasSuffix(s, wideDelim) {
+			return "", false
+		}
+		from := len(s) - len(wideDelim)
+		for _, at := range escapedAt {
+			if at >= from {
+				return "", false
+			}
+		}
+		return s[:from], true
 	}
 	for {
 		if count >= 0 && units.n >= count {
@@ -7373,7 +7399,7 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 			pending = true
 			continue
 		}
-		if c == delim {
+		if wideDelim == "" && c == delim {
 			return b.String(), literalMask(escapedAt, b.Len()), endDelim
 		}
 		if width != nil && c >= utf8.RuneSelf {
@@ -7388,7 +7414,28 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 			lead = c
 		}
 		write(c)
+		if text, ok := atWideDelim(); ok {
+			return text, literalMask(escapedAt, len(text)), endDelim
+		}
 	}
+}
+
+// readDelimiterCharacter is the delimiter `read -d` takes whole: the word's
+// first character where it is more than one byte of the locale's encoding and
+// the dialect reads it that way, and the empty string — the first byte alone —
+// otherwise. See Semantics.ReadDelimiterIsTheLocalesCharacter.
+func (r *Runner) readDelimiterCharacter(word string) string {
+	if word[0] < utf8.RuneSelf || !r.countsTheLocalesCharacters() {
+		return ""
+	}
+	c, n := utf8.DecodeRuneInString(word)
+	if (c == utf8.RuneError && n <= 1) || n < 2 {
+		return ""
+	}
+	if !r.ask(r.sem().ReadDelimiterIsTheLocalesCharacter, "`read -d` taking a delimiter of more than one byte whole") {
+		return ""
+	}
+	return word[:n]
 }
 
 // literalMask spreads escaped offsets into a mask aligned with the text, nil
@@ -7420,7 +7467,7 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 	r.settleBackgroundJobBeforeABlockingRead(in)
 	// No count, so nothing asks what a character is: readSegment puts the
 	// locale question only where a count has to land between characters.
-	text, _, end := readSegment(directByteSource(in), raw, '\n', -1, false,
+	text, _, end := readSegment(directByteSource(in), raw, '\n', "", -1, false,
 		r.countsTheLocalesCharacters, r.readCharacterWidth)
 	return text, end == endEOF
 }

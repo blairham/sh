@@ -6175,7 +6175,7 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 			// expression like any other.
 			return substring(value, r.numOf(e.Arg, e, e.Arg2), e, r)
 		}
-		out, ok := r.applyModifiers(value, modifierSegments(
+		out, ok := r.applyModifiers(value, r.modifierSegments(
 			modifierSource(e.ArgText, e.Arg), modifierSource(e.Arg2Text, e.Arg2), e.Arg2 != nil), e)
 		if !ok {
 			return ""
@@ -6190,7 +6190,7 @@ func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
 		sliced := substring(value, r.numOf(e.Arg, e, nil), &syntax.ParamExpr{
 			Name: e.Name, Op: e.Op, Arg: e.Arg,
 		}, r)
-		out, ok := r.applyModifiers(sliced, modifierSegments(modifierSource(e.Arg2Text, e.Arg2), "", false), e)
+		out, ok := r.applyModifiers(sliced, r.modifierSegments(modifierSource(e.Arg2Text, e.Arg2), "", false), e)
 		if !ok {
 			return ""
 		}

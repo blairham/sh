@@ -8013,6 +8013,14 @@ type Dialect struct {
 	// interp.Semantics.NamesTakeTheLocalesLetters for what was measured.
 	NameTakesALetterPastASCII func(c rune) bool
 
+	// CharacterLength is how many bytes the locale's character at the front
+	// of s takes, for the one place the grammar reads a *character* of any
+	// length rather than a byte or a pair: a parameter flag's delimiter,
+	// which may be `£` as well as `:`. nil means a byte, which is what a
+	// caller with no locale to offer has. Filled in by the interpreter for
+	// the reason CharacterWidth is.
+	CharacterLength func(s string) int
+
 	// UnmatchedBlamesTheOutermost names the *enclosing* construct when the
 	// input runs out inside nested ones, where the default names the
 	// innermost.

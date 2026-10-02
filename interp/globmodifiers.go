@@ -48,8 +48,9 @@ import "github.com/blairham/sh/syntax"
 // the only way this can fail, every other unreadable segment being a stop
 // rather than an error.
 func (r *Runner) applyGlobModifiers(value, text string) (string, bool) {
+	wide := r.modifierDelimitersAreCharacters(text)
 	for {
-		seg, rest, more := scanOneModifier(text)
+		seg, rest, more := scanOneModifier(text, wide)
 		next, applied, ok := r.applyGlobModifier(value, seg)
 		if !ok {
 			return "", false

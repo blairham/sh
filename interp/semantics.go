@@ -4780,6 +4780,20 @@ type Semantics struct {
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
 	// the others read 0, because `kill` succeeded.
 	SignalHandlerSeesEarlierStatus Answer
+	// ReadDelimiterIsTheLocalesCharacter makes `read -d` stop at the whole of
+	// a delimiter that is one character of the locale's encoding and more
+	// than one byte, where the other reading stops at its first byte and
+	// leaves the rest in the next record. Measured 2026-10-02 under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=en_US.UTF-8`, with `first£second£` read twice
+	// with `-d £`: zsh 5.9.2 (`-f`) reads `first` and `second`; bash 5.3.20
+	// and BusyBox ash 1.37.0 (`LC_ALL=C.UTF-8`) read `first` and `\243second`,
+	// the `£`'s second byte; and zsh under `LC_ALL=C` does what bash does.
+	// Asked only where the delimiter is such a character. ksh93u+ 2012-08-01
+	// follows neither reading — with `-d £` it stops at the second byte and
+	// keeps the first, with `-d é` over `aéb` it does not stop at all, and
+	// with `-d €` over `a€b` it stops at the character, all measured the
+	// same day — so it is left unanswered there.
+	ReadDelimiterIsTheLocalesCharacter Answer
 	// NamesTakeTheLocalesLetters lets a name hold the locale's letters and
 	// digits past ASCII, at any position in it: `hähä=3; echo $hähä` writes
 	// 3. Measured 2026-10-02 under `env -i PATH=/usr/bin:/bin

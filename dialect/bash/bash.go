@@ -2849,6 +2849,10 @@ func Semantics() interp.Semantics {
 	// interp.HandlerErrorReach (#5360).
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandlerUnlessAParameterIsUnset
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
+	// `read -d £` stops at the first byte of the `£`, under a UTF-8 locale
+	// too, and the second begins the next record. Measured 2026-10-02 on
+	// 5.3.20 (#5153).
+	s.ReadDelimiterIsTheLocalesCharacter = interp.No
 	// Reached only under `shopt -s lastpipe`: the last element is judged as a
 	// statement and then the pipeline is, so `true | false` and `true |
 	// /usr/bin/false` both write EE there.

@@ -567,6 +567,7 @@ dash  QuitResetRestoresTheDefault
 dash  ReadArrayDefault
 dash  ReadArrayTakesOneNameOnly
 dash  ReadCountJudgesTheNamesAfterTheFirst
+dash  ReadDelimiterIsTheLocalesCharacter
 dash  ReadEchoLettersWriteTheValues
 dash  ReadExactCountKeepsPartial
 dash  ReadPartialCountSucceeds
@@ -692,6 +693,7 @@ ksh   MixedTableLiteral
 ksh   NegatedTestRecordsThePostNegationStatus
 ksh   PrintfReportsAMissingHexDigit
 ksh   QuitResetRestoresTheDefault
+ksh   ReadDelimiterIsTheLocalesCharacter
 ksh   ReadEchoLettersWriteTheValues
 ksh   ReadonlyRecordsTheCompoundAttribute
 ksh   ReadonlyReferenceLetter

@@ -2043,7 +2043,7 @@ func (r *Runner) rangeModifiers(
 		if !reads() {
 			return nil, nil, false
 		}
-		return modifierSegments(
+		return r.modifierSegments(
 			modifierSource(e.ArgText, e.Arg),
 			modifierSource(e.Arg2Text, e.Arg2), e.Arg2 != nil), words, true
 	case e.Arg2 != nil && rangeSegmentIsAModifier(e.Arg2):
@@ -2051,7 +2051,7 @@ func (r *Runner) rangeModifiers(
 			return nil, nil, false
 		}
 		from := &syntax.ParamExpr{Name: e.Name, Op: e.Op, Arg: e.Arg}
-		return modifierSegments(modifierSource(e.Arg2Text, e.Arg2), "", false),
+		return r.modifierSegments(modifierSource(e.Arg2Text, e.Arg2), "", false),
 			sliceElems(words, r.numOf(e.Arg, e, nil), from, r), true
 	}
 	lenWord, mods, split := splitLengthFromModifiers(e.Arg2)

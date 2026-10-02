@@ -73,6 +73,11 @@ type arrayOperand struct {
 	// asked for it — an untraced command — or where the expansion failed, in
 	// which case the assignment is refused anyway.
 	expanded *expandedAssign
+	// seen says the utility has reached this operand's bare name, so the
+	// name is declared in its scope; applied says the elements were stored
+	// already, ahead of a later operand on the same name. See
+	// interp/arrayoperandorder.go.
+	seen, applied bool
 }
 
 // expandedArrayOperand is the element list already expanded for this operand,

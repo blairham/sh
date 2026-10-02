@@ -1730,6 +1730,17 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) int {
 	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		if len(r.arrayOperands) > 0 {
+			// An array literal written earlier on this line, on the name this
+			// operand reaches, is stored first; and a bare name is where one
+			// was written. See interp/arrayoperandorder.go.
+			if hasValue {
+				base, _, _ := strings.Cut(name, "[")
+				r.storeArrayOperandBefore(base)
+			} else {
+				r.noteArrayOperandName(name)
+			}
+		}
 		r.rereadingAQuotedLiteral = hasValue && r.operandHidesALiteral(name, value, f, false)
 		// A **member path** whose base is a reference is a member of the name
 		// the reference points at, and the whole operand is about that cell.

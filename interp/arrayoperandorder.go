@@ -177,3 +177,55 @@ func (r *Runner) containerLetterOverALiteral(argv []string, c *syntax.SimpleCmd)
 	}
 	return false
 }
+
+// An array literal and a later operand on the same name, in one declaration:
+// `typeset g=() g[1]=yes g[2]=no` holds `yes no`, and `typeset y=(a b)
+// y[1]=c` holds `c b` — the literal is stored where it was written, before
+// the operand after it. Measured 2026-10-02 on zsh 5.9.2, B02typeset's `can
+// set empty array` (#5142). The literal is otherwise stored once the utility
+// has run, so that it lands in the scope the utility made; here it is stored
+// as soon as the utility has declared its name and a later operand reaches
+// the same name, which is the same scope a moment earlier.
+
+// noteArrayOperandName records that the utility has reached the bare name an
+// array operand left in its place.
+func (r *Runner) noteArrayOperandName(name string) {
+	for i := range r.arrayOperands {
+		op := &r.arrayOperands[i]
+		if !op.seen && op.assign.Name == name {
+			op.seen = true
+			return
+		}
+	}
+}
+
+// storeArrayOperandBefore stores the array operand on base that the utility
+// has already declared and not yet stored, ahead of a later operand on the
+// same name.
+func (r *Runner) storeArrayOperandBefore(base string) {
+	for i := range r.arrayOperands {
+		op := &r.arrayOperands[i]
+		if !op.seen || op.applied || op.assign.Name != base {
+			continue
+		}
+		op.applied = true
+		declaring := r.writingADeclarationsOperand
+		r.writingADeclarationsOperand = true
+		if op.expanded != nil {
+			r.withPreparedValue(r.ctx, op.expanded)
+		} else {
+			r.assign(r.ctx, op.assign)
+		}
+		r.writingADeclarationsOperand = declaring
+	}
+}
+
+// arrayOperandApplied reports whether an array operand was stored already.
+func (r *Runner) arrayOperandApplied(a *syntax.Assign) bool {
+	for _, op := range r.arrayOperands {
+		if op.assign == a {
+			return op.applied
+		}
+	}
+	return false
+}

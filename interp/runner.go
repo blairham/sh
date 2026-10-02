@@ -12925,7 +12925,7 @@ func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
 	r.writingADeclarationsOperand = true
 	defer func() { r.writingADeclarationsOperand = declaring }()
 	for _, a := range c.Assigns {
-		if !a.Operand {
+		if !a.Operand || r.arrayOperandApplied(a) {
 			continue
 		}
 		if e := r.expandedArrayOperand(a); e != nil {

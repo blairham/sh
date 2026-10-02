@@ -1126,7 +1126,9 @@ func (r *Runner) runTrapHandler(ctx context.Context, cond, body string) {
 	// outer one back untouched. See Semantics.TrapReturnStatus.
 	outerTrap, outerIn, outerOwn := r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody
 	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outer, true, true
+	r.gaveUpOverAnUnsetParameter = false
 	r.runTrapBody(ctx, cond, body)
+	r.handlerTakesItsError(cond)
 	r.trapEntryStatus, r.inATrapAction, r.trapActionOwnBody = outerTrap, outerIn, outerOwn
 	if r.ctl == controlNone {
 		r.ctl = ctl

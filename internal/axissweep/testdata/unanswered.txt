@@ -470,6 +470,7 @@ dash  EmptyParamSubscriptIsAnError
 dash  EmptyReplacementPattern
 dash  EmptySubscriptTextIsAMathError
 dash  EmptySubscriptToAnAssignment
+dash  ErrTrapFiresForAnErrorTheShellGaveUpOver
 dash  ErrTrapRefiresForTheCommandItFiredInside
 dash  ErrTrapRunsInSubshells
 dash  ErrTrapRunsInsideFunctions

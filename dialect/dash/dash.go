@@ -1477,6 +1477,13 @@ func Semantics() interp.Semantics {
 	// and RETURN with it. Measured, and the refusal does not end the
 	// script — the status is 1 and the next command runs.
 	s.TrapHasErrCondition = interp.No
+	// An error inside a signal's handler ends the shell, as it does
+	// anywhere: measured 2026-10-02, `set -u; trap 'echo T1; : $nope; echo
+	// T2' USR1; kill -USR1 $$; echo after` writes T1 and the error and exits
+	// 2, and so does `: $((1/0))` in place of the read (#5360).
+	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheShell
+	// unanswered ErrTrapFiresForAnErrorTheShellGaveUpOver: there is no ERR
+	// condition to raise.
 	// unanswered FailingPipelineWhoseLastElementRanHere: every element of a
 	// pipeline is a subshell here and nothing moves one into this shell, so a
 	// pipeline is judged once by its status and the question is never put.

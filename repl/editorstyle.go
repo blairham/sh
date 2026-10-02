@@ -125,6 +125,17 @@ type EditorStyle struct {
 	// worst of the three things to do with it.
 	BracketedPaste bool
 
+	// BracketedPasteParameter names the array the two sequences are read
+	// from, at the start of every line, where the dialect keeps them in one.
+	// Empty is the two fixed sequences in paste.go.
+	//
+	// Measured 2026-10-02 on zsh 5.9.2 through a pseudo-terminal, assigning
+	// the parameter at one prompt and reading the bytes around the next line:
+	// two elements are the two sequences, the first written after the prompt
+	// and the second at the end of the line, either of them allowed to be
+	// empty; unset, a scalar, one element or three, and neither is written.
+	BracketedPasteParameter string
+
 	// PastedTextStyle is written before a run of text that arrived as a
 	// paste, and PastedTextStyleEnd after it. Empty draws the text like any
 	// other, which is what a dialect that does not mark a paste does.

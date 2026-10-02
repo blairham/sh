@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/interp"
 )
 
 // Bracketed paste, asserted on the bytes.
@@ -335,4 +337,52 @@ func TestABracketedPasteThroughATerminal(t *testing.T) {
 	// asked for.
 	waitFor(t, s.screen, pasteModeOff, "the request taken back")
 	s.end()
+}
+
+// The two sequences read out of a parameter, where the dialect keeps them in
+// one: two elements are the request and the taking-back, and anything else is
+// neither. Measured 2026-10-02 on zsh 5.9.2 through a pseudo-terminal; see
+// EditorStyle.BracketedPasteParameter.
+func TestTheBracketingIsReadOutOfItsParameter(t *testing.T) {
+	style := pasting
+	style.BracketedPasteParameter = "codes"
+	for _, c := range []struct {
+		name    string
+		set     func(r *interp.Runner)
+		on, off string
+	}{
+		{"two elements", func(r *interp.Runner) { r.SetArray("codes", []string{"XS", "XE"}) }, "XS", "XE\r"},
+		{"an empty request", func(r *interp.Runner) { r.SetArray("codes", []string{"", "XE"}) }, "", "XE\r"},
+		{"an empty taking-back", func(r *interp.Runner) { r.SetArray("codes", []string{"XS", ""}) }, "XS", ""},
+		{"unset", func(*interp.Runner) {}, "", ""},
+		{"one element", func(r *interp.Runner) { r.SetArray("codes", []string{"XS"}) }, "", ""},
+		{"three elements", func(r *interp.Runner) { r.SetArray("codes", []string{"XS", "XE", "X3"}) }, "", ""},
+		{"a scalar", func(r *interp.Runner) { r.SetVar("codes", "XS") }, "", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := &interp.Runner{}
+			c.set(r)
+			var out strings.Builder
+			e := Shell{Editor: style, Runner: r}.newEditor(t.Context(), &terminalState{})
+			e.in, e.out = typing("echo hi\r"), &out
+			if _, err := e.readLine(drawPrompt("$ ")); err != nil {
+				t.Fatal(err)
+			}
+			drawn := out.String()
+			if strings.Contains(drawn, pasteModeOn) || strings.Contains(drawn, "\x1b[?2004l") {
+				t.Errorf("the fixed sequences were written beside the parameter's: %q", drawn)
+			}
+			if c.on != "" && !strings.Contains(drawn, c.on+"$ ") {
+				t.Errorf("request %q not written before the prompt: %q", c.on, drawn)
+			}
+			if c.off != "" && !strings.HasSuffix(drawn, c.off) {
+				t.Errorf("taking-back %q not written at the end: %q", c.off, drawn)
+			}
+			for _, code := range []string{"XS", "XE", "X3"} {
+				if strings.Contains(drawn, code) && !strings.Contains(c.on+c.off, code) {
+					t.Errorf("%s written where it should not be: %q", code, drawn)
+				}
+			}
+		})
+	}
 }

@@ -47,6 +47,7 @@ func TestTypesetFrontsOfB02(t *testing.T) {
 			`setopt posixbuiltins; readonly x; print ${+x}; typeset -r y; print ${+y}; export z; print ${+z}; f() { local -r q; print ${+q} }; f`,
 			"0\n0\n0\n0\n",
 		},
+		{`setopt posixbuiltins; typeset X; print ${+X}; typeset -i I; print ${+I}; f() { local L; print ${+L} }; f`, "1\n1\n1\n"},
 		{`setopt posixbuiltins; [[ -o typesettounset ]] && echo on || echo off`, "off\n"},
 		{`setopt posixbuiltins; readonly r1; readonly -p`, "readonly r1\n"},
 		{`setopt posixbuiltins; v=1; readonly v; typeset +r v; echo $?`, "zsh:1: read-only variable: v\n"},

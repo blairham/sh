@@ -1341,6 +1341,12 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		}
 		return out
 	}
+	if r.declaredAndHoldingNothing(d) {
+		// A name the letters declared and nothing has given a value, in the
+		// mode where such a name is unset: `typeset -a a`, no `=( )`. See
+		// declaredAndHoldingNothing.
+		return head
+	}
 	if d.hidesTheValue {
 		// The whole of what `-H` does under this reading: the attributes
 		// still speak, the value does not — a scalar's, an array's and a table's alike. Measured
@@ -1819,4 +1825,30 @@ func floatNamedValue(v string) float64 {
 		return 0
 	}
 	return f
+}
+
+// declaredAndHoldingNothing says a name was declared by its letters and holds
+// no value, in a mode where a valueless declaration leaves the name unset —
+// so a listing writes the letters and the name and no `=`, and a pattern
+// listing passes over it.
+//
+// Measured 2026-10-01 on zsh 5.9.2 under `emulate sh` and `emulate ksh`, in a
+// function holding `local -t s; local -a a; local -i i; local x`:
+// `typeset -p` writes `typeset -t s`, `typeset -a a`, `typeset -i i` and
+// `typeset x`; a bare `typeset` writes `local tagged s`, `array local a`,
+// `integer local i` and `local x`; and `typeset -m 's|a|i|x'` and its `+m`
+// write nothing at all. Under its own mode every one of them holds an empty
+// value and lists with it, which is Semantics.DeclaredNameWithoutValueIsEmpty
+// (#5157).
+func (r *Runner) declaredAndHoldingNothing(d declaration) bool {
+	if r.sem().DeclaredNameWithoutValueIsEmpty != No || d.hidesTheValue || d.hasTie {
+		return false
+	}
+	switch {
+	case d.isAssoc:
+		return len(d.assoc) == 0 && d.declaredOnly
+	case d.isArr:
+		return len(d.arr) == 0 && d.declaredOnly
+	}
+	return d.unset || !d.hasValue
 }

@@ -542,9 +542,16 @@ func (r *Runner) matchedListedNames(patterns []string) ([]string, map[string]boo
 	for _, pattern := range patterns {
 		o := r.patternOpts(pattern)
 		for _, name := range all {
-			if matchPattern(pattern, name, o) {
-				out = append(out, name)
+			if !matchPattern(pattern, name, o) {
+				continue
 			}
+			if d, _ := r.listedDeclarationOf(name, produced[name], listing); !produced[name] && r.declaredAndHoldingNothing(d) {
+				// A pattern lists what holds a value, and a name the
+				// letters declared and nothing set does not. See
+				// declaredAndHoldingNothing.
+				continue
+			}
+			out = append(out, name)
 		}
 	}
 	return out, produced, listing

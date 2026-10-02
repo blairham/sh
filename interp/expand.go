@@ -1630,7 +1630,31 @@ func (r *Runner) conditionalFires(e *syntax.ParamExpr, value string, set bool) b
 		// refuses exactly as `${nope?m}` does.
 		return false
 	}
+	if set && r.declaredOnlyCompoundIsUnset(e) {
+		return true
+	}
 	return !r.listOfNoPositionalsIsSet(e, r.emptyWholeArrayIsSet(e, set))
+}
+
+// declaredOnlyCompoundIsUnset says the parameter is a whole array or table a
+// declaration's letters made and nothing has written to, in the mode where a
+// valueless declaration leaves its name unset. Measured 2026-10-01 on zsh
+// 5.9.2: `setopt typesettounset; typeset -a b; echo "[${b+set}]"` is `[]`
+// with the shell's own arrays, where this answered `[set]` and only a
+// `ksharrays` beside it had made the two agree (#5157). See
+// Semantics.DeclaredNameWithoutValueIsEmpty.
+func (r *Runner) declaredOnlyCompoundIsUnset(e *syntax.ParamExpr) bool {
+	if r.sem().DeclaredNameWithoutValueIsEmpty != No || !r.declaredOnlyCompound[e.Name] {
+		return false
+	}
+	if e.Index != nil && !wholeArraySubscript(r.subscriptText(e.Subscript())) {
+		return false
+	}
+	if a, ok := r.AssocArrays[e.Name]; ok {
+		return len(a) == 0
+	}
+	a, ok := r.Arrays[e.Name]
+	return ok && len(a) == 0
 }
 
 // emptyWholeArrayIsSet resolves Semantics.EmptyArrayIsSet for one colon-less

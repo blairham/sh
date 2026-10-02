@@ -228,6 +228,9 @@ func (r *Runner) attributeWordDeclaration(d declaration, isLocal bool) string {
 		// the *bare* word writes is still open and is #2722.
 		return head + r.listedName(d.name)
 	}
+	if r.declaredAndHoldingNothing(d) {
+		return head + r.listedName(d.name)
+	}
 	return head + r.listedName(d.name) + "=" + r.listedDeclarationValue(d)
 }
 

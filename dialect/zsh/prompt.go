@@ -319,6 +319,9 @@ func PromptStyle() interp.PromptStyle {
 		// it. Measured 2026-09-17 with nothing inherited, `-c` and `-i`
 		// alike. See interp.PromptStyle.DefaultTrace.
 		DefaultTrace: "+%N:%i> ",
+		// And the standard's prefix for a shell started as sh or ksh (#5336).
+		DefaultTraceUnderEmulation: "+ ",
+		TraceEmulations:            "sh ksh",
 		// Set and *empty* in a shell with nobody to prompt, which is a third
 		// answer rather than either of the other two: measured on `-c` and on
 		// a script file alike with nothing inherited, `${PS1+set}` is `set`

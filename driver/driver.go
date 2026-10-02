@@ -1423,8 +1423,15 @@ func (sh Shell) namesStartupOption(spelling string, borrowed bool) bool {
 // that point. The order is what makes it possible at all — this shell refuses
 // an `--emulate` that another option word came before.
 func (sh Shell) lettersAreBorrowed(inv *invocation) bool {
-	return inv.emulating &&
-		spelt(sh.Semantics.StartupFileOptions.LettersBorrowedUnderEmulation, inv.emulation)
+	mode := inv.emulation
+	if !inv.emulating {
+		// The mode argv[0] names, which borrows the letters as `--emulate`
+		// does: measured 2026-10-02 on zsh 5.9.2, a link named `sh` given
+		// `-fc 'print $-'` writes `f`, the noglob letter (#5336).
+		mode = inv.namedEmulation
+	}
+	return mode != "" &&
+		spelt(sh.Semantics.StartupFileOptions.LettersBorrowedUnderEmulation, mode)
 }
 
 // speltHere is spelt with the borrowed-letter rule applied: a one-letter
@@ -1550,13 +1557,13 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 	if len(args) > 0 {
 		args = args[1:]
 	}
-	rest, inv, err := sh.options(args)
+	// The mode argv[0] names, which the option words and the operand's
+	// search both need before the emulation itself is applied — see
+	// Shell.lettersAreBorrowed and Shell.searchesForTheScript.
+	rest, inv, err := sh.options(args, EmulationNamed(argv, sh.Semantics.EmulationOption))
 	if err != nil {
 		return sh, source{}, nil, err
 	}
-	// The mode argv[0] names, which the operand's search needs before the
-	// emulation itself is applied — see Shell.searchesForTheScript.
-	inv.namedEmulation = EmulationNamed(argv, sh.Semantics.EmulationOption)
 	if inv.version || inv.help {
 		// Nothing after it is read and nothing before it runs, so no gate is
 		// installed either: the route the rest of the vector would have
@@ -1629,8 +1636,8 @@ func (sh Shell) input(argv []string) (Shell, source, io.Closer, error) {
 // boundary the options may have asked for — and it has to be installed before
 // an operand is read rather than at each of the places an operand is read,
 // which is the shape of #472 one level up.
-func (sh Shell) options(args []string) ([]string, invocation, error) {
-	var inv invocation
+func (sh Shell) options(args []string, namedEmulation string) ([]string, invocation, error) {
+	inv := invocation{namedEmulation: namedEmulation}
 	for len(args) > 0 {
 		a := args[0]
 		switch {
@@ -3695,7 +3702,22 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 		sh.errf("%s: prelude: %v\n", name, err)
 		return usageStatus
 	}
+	sh.nameTheInvocation(r)
 	return 0
+}
+
+// nameTheInvocation writes the name the shell was invoked as into the
+// dialect's parameter for it, over whatever its prelude wrote there: the base
+// name of argv[0], a login shell's leading `-` taken off. See
+// interp.Semantics.InvocationNameParameter.
+func (sh Shell) nameTheInvocation(r *interp.Runner) {
+	param := sh.Semantics.InvocationNameParameter
+	if param == "" || r.Invocation == "" {
+		return
+	}
+	if name := strings.TrimPrefix(filepath.Base(r.Invocation), "-"); name != "" {
+		r.SetVar(param, name)
+	}
 }
 
 // sayRemarks writes what the parser had to say about input it accepted

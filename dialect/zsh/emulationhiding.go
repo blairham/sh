@@ -29,6 +29,15 @@ func hideTheParametersAnEmulationDoesNotHave(r *interp.Runner) {
 	if mode == "zsh" {
 		return
 	}
+	// notify is on at startup only where the shell starts as itself, and a
+	// later `emulate` does not touch it either way: measured 2026-10-02 on
+	// zsh 5.9.2, `[[ -o notify ]]` is off started as `sh`, `ksh` or `csh`
+	// and on started as `zsh`, and `emulate csh` from a zsh start leaves it
+	// on (#5336).
+	setOption(r, "notify", false)
+	if mode == "sh" || mode == "ksh" {
+		seedTheStandardsStartupValues(r)
+	}
 	for _, name := range parametersOnlyZshStartsWith {
 		r.ForgetParameter(name)
 	}
@@ -74,4 +83,21 @@ var parametersOnlyZshAndCshStartWith = [...]string{
 	"ARGC", "HISTCHARS", "MANPATH", "PROMPT", "PROMPT2", "PROMPT3", "PROMPT4",
 	"argv", "cdpath", "fignore", "fpath", "mailpath", "manpath", "module_path",
 	"path", "pipestatus", "prompt", "psvar", "status", "zsh_eval_context",
+}
+
+// seedTheStandardsStartupValues puts back the value a shell started as `sh`
+// or `ksh` seeds the standard's way rather than this shell's. Measured
+// 2026-10-02 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin` and `-fc`, by
+// `--emulate` and by the name alike: `IFS` is space, tab and newline with no
+// NUL, where started as itself or as `csh` it holds the four characters. A
+// later `emulate zsh` keeps it, so this is the startup and not the mode
+// (#5336). PS4 is the other, and it is the front end's — see
+// interp.PromptStyle.DefaultTraceUnderEmulation.
+//
+// Only over this shell's own defaults, so a value the environment handed in
+// is left as it came.
+func seedTheStandardsStartupValues(r *interp.Runner) {
+	if v, _ := r.GetVar("IFS"); v == " \t\n\x00" {
+		r.SetVar("IFS", " \t\n")
+	}
 }

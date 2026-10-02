@@ -1703,6 +1703,15 @@ var zshOptions = []zshOption{
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.GetoptsErrorEndsTheWord
 			}, answer(on))
+			// And `readonly -p` writes the standard's form: measured
+			// 2026-10-02 on zsh 5.9.2, `readonly foo=bar; readonly -p` is
+			// `readonly foo=bar` under the option and `typeset -r foo=bar`
+			// without it.
+			listing := interp.DeclareListingExportSpelled
+			if on {
+				listing = interp.DeclareListingCommandWord
+			}
+			setAxis(r, func(s *interp.Semantics) *interp.DeclarationListingForm { return &s.ReadonlyListing }, listing)
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.JobSpecMissIsSilent
 			}, answer(on))

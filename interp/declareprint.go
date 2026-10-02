@@ -901,6 +901,16 @@ func (r *Runner) listedDeclaration(form DeclarationListingForm, d declaration) s
 	return r.clusteredDeclaration(d)
 }
 
+// oneElementPerLine is a compound's value as `typeset -p1` writes it: each
+// element on a line of its own, two spaces in, and `()` for none. See
+// Runner.readOptionNumber.
+func oneElementPerLine(elems []string) string {
+	if len(elems) == 0 {
+		return "()"
+	}
+	return "(\n  " + strings.Join(elems, "\n  ") + "\n)"
+}
+
 // commandWordDeclaration is DeclareListingCommandWord — see the constant.
 //
 // The value is listedDeclarationValue's rather than declareQuoted's, which is
@@ -1336,6 +1346,9 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 			quoted[i] = r.declareQuoted(v, ListedValueInAList)
 		}
 		out := head + " " + d.tied.array + "=( " + strings.Join(quoted, " ") + " )"
+		if r.listsOneElementPerLine {
+			out = head + " " + d.tied.array + "=" + oneElementPerLine(quoted)
+		}
 		if d.tied.sep != defaultTieSeparator {
 			out += " " + r.tieSeparatorWord(d.tied.sep)
 		}
@@ -1356,13 +1369,16 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	}
 	switch {
 	case d.isAssoc:
-		if len(d.assoc) == 0 {
-			return head + "=( )"
-		}
 		pairs := make([]string, 0, len(d.assoc))
 		for _, k := range r.assocKeys(d.name, d.assoc) {
 			key := r.declarationTableKey(k)
 			pairs = append(pairs, "["+key+"]="+r.listedElement(d.assoc[k], ListedValueAlone))
+		}
+		if r.listsOneElementPerLine {
+			return head + "=" + oneElementPerLine(pairs)
+		}
+		if len(d.assoc) == 0 {
+			return head + "=( )"
 		}
 		return head + "=( " + strings.Join(pairs, " ") + " )"
 	case d.isArr:
@@ -1372,6 +1388,9 @@ func (r *Runner) exportSpelledDeclaration(d declaration) string {
 		quoted := make([]string, len(elems))
 		for i, v := range elems {
 			quoted[i] = r.declareQuoted(v, ListedValueInAList)
+		}
+		if r.listsOneElementPerLine {
+			return head + "=" + oneElementPerLine(quoted)
 		}
 		return head + "=( " + strings.Join(quoted, " ") + " )"
 	case d.hasValue:

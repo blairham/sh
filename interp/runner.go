@@ -2974,6 +2974,9 @@ type Runner struct {
 	// outermost first, where a holder nests — see Runner.holdACommandsJobSlot.
 	// They are taken as commandSlot is, and a marker can land on any of them.
 	outerSlots []int
+	// listsOneElementPerLine is `typeset -p1`, for the length of the command
+	// that wrote it. See Runner.readOptionNumber.
+	listsOneElementPerLine bool
 	// bodyHoldsNoSlot is the body of the nameless function being entered,
 	// which runs as that function and not as the brace group it is written
 	// as. See holdsAJobSlot.

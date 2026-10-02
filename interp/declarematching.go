@@ -172,7 +172,7 @@ func (r *Runner) declareMatchingKept(name string, patterns []string, f declareFl
 	if !f.globalOff {
 		f.global = true
 	}
-	operands := r.matchedOperands(patterns)
+	operands := r.matchedOperands(patterns, f.globalOff)
 	if len(operands) == 0 {
 		return 0
 	}
@@ -456,12 +456,25 @@ func (r *Runner) matchedNames(patterns []string) []string {
 // matchedOperands is matchedNames with each operand's `=value` half carried
 // over onto every name its pattern picked out — `typeset -m 'p*'=9` sets each
 // matching parameter to 9, which is measured.
-func (r *Runner) matchedOperands(operands []string) []string {
+//
+// local says the line makes a local of each match, which reaches every name
+// a whole-table listing writes — the tables this shell makes up on each read
+// and the parameters it produces, `argv` and `pipestatus` among them: there
+// is something for a local to stand in front of. Measured 2026-10-02 on zsh
+// 5.9.2, in a function, `typeset -h +g -m '*'` and then `typeset -p` of
+// `keymaps`, `argv` and `pipestatus` writes `typeset keymaps=”` and the
+// same for the other two, and after `unset -m '*'` a bare `typeset` lists
+// only what the function declared next (#5157).
+func (r *Runner) matchedOperands(operands []string, local bool) []string {
 	var out []string
 	for _, operand := range operands {
 		pattern, value, assigned := strings.Cut(operand, "=")
-		for _, name := range r.matchedNames([]string{pattern}) {
-			if r.producedParameter(name) {
+		names := r.matchedNames([]string{pattern})
+		if local {
+			names, _, _ = r.matchedListedNames([]string{pattern})
+		}
+		for _, name := range names {
+			if !local && r.producedParameter(name) {
 				continue
 			}
 			if assigned {

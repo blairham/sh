@@ -4644,7 +4644,12 @@ func Semantics() interp.Semantics {
 	// `-E` joins the four here rather than standing apart: it takes a number
 	// in exactly the shape `-F` does, attached or detached, and what it does
 	// with the number is FloatFormatLetterE's question and not this one.
-	s.DeclareOptionsTakingANumber = "EFLRZ"
+	s.DeclareOptionsTakingANumber = "EFLRZp"
+	// `-p` takes one too, which is the listing's layout and not an
+	// attribute: `-p1` writes an array or a table one element to a line,
+	// `-p0` is the plain `-p`, and anything else is refused. See
+	// Runner.readOptionNumber for the measurements.
+	//
 	// And the letter is a **format**: `%.*e` with n−1 places, so `typeset -E
 	// 3 a=3.14159` is `3.14e+00` where ksh93's same line is `3.14`. See
 	// interp/floatformat.go for the measurements (#2559).

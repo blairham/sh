@@ -1134,6 +1134,7 @@ func (r *Runner) numberEndsTheWord(c byte, rest string, later []string) bool {
 }
 
 func biDeclare(r *Runner, _ context.Context, args []string) int {
+	defer func() { r.listsOneElementPerLine = false }()
 	name := r.inBuiltin
 	if name == "" {
 		name = "declare"

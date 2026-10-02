@@ -14,7 +14,7 @@ import (
 // (`/opt/homebrew/bin/zsh -f`).
 func TestC04FuncdefFronts(t *testing.T) {
 	dir := t.TempDir()
-	for _, f := range []string{"yes", "no"} {
+	for _, f := range []string{"yes", "no", "nox"} {
 		if err := os.WriteFile(filepath.Join(dir, f), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -26,6 +26,8 @@ func TestC04FuncdefFronts(t *testing.T) {
 		{`command_not_found_handler() { x=set; return 127 }; nosuchcmd a; echo st=$?`, "st=127\n"},
 		{`command_not_found_handler() { print "Z=$ZSH_SUBSHELL fs=$funcstack" }; nosuch`, "Z=1 fs=command_not_found_handler\n"},
 		{`command_not_found_handler() { print H }; ./nosuchpath; echo st=$?`, "zsh:1: no such file or directory: ./nosuchpath\nst=127\n"},
+		// A name that is there and will not run is not handed over.
+		{`command_not_found_handler() { print H }; nox; echo st=$?`, "zsh:1: permission denied: nox\nst=126\n"},
 		{`command_not_found_handler() { print H:$1 }; f() { nosuchcmd x; echo st=$? }; f`, "H:nosuchcmd\nst=0\n"},
 		{`command_not_found_handler() { print H:$1 }; eval "nosuchcmd x"; echo st=$?`, "H:nosuchcmd\nst=0\n"},
 		// A nameless function lists as `() {` whichever word wrote it.

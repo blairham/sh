@@ -54,3 +54,30 @@ func TestNoSpecialWidgetsLeavesTheLineAlone(t *testing.T) {
 		t.Errorf("line = %q, %v, want abc", line, err)
 	}
 }
+
+// A pre-redraw widget that redraws — `zle -R` inside one — asks for no second
+// pre-redraw from inside itself, which would never end.
+func TestAPreRedrawThatRedrawsDoesNotRecur(t *testing.T) {
+	var out strings.Builder
+	calls := 0
+	e := Shell{}.newEditor(t.Context(), nil)
+	e.in, e.out = typing("a\n"), &out
+	e.specials = true
+	e.runFunc = func(name string, in Line, ed Actions) (Line, bool) {
+		if name != "zle-line-pre-redraw" {
+			return in, false
+		}
+		calls++
+		if calls > 10 {
+			t.Fatal("the pre-redraw widget recurred")
+		}
+		ed.Redisplay(in)
+		return in, true
+	}
+	if line, err := e.readLine(drawPrompt("$ ")); err != nil || line != "a" {
+		t.Errorf("line = %q, %v, want a", line, err)
+	}
+	if calls != 2 {
+		t.Errorf("pre-redraw ran %d times, want 2 — the key's redraw and the accept's", calls)
+	}
+}

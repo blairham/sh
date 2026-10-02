@@ -2639,6 +2639,9 @@ func (sh Shell) newRunnerAs(name string, params []string, dg interp.Diagnostics,
 		// for the throwing class it answers with a goroutine dump where every
 		// shell in the panel prints nothing. See fatalsignal.go.
 		watchFatalSignals(r)
+		// And the fork's half of an asynchronous list's dispositions, which
+		// only the process's owner may set. See fatalsignal.go.
+		r.StartIgnoringInterrupts = startIgnoringInterrupts
 	}
 	// The part of composing a shell that is not a field, applied here and
 	// *remembered*, because interp has one shell of its own to build: the

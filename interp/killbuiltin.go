@@ -821,6 +821,14 @@ func (r *Runner) killTarget(t string) (targets []jobProcess, named *Job, fromJob
 			targets, code := r.jobProcesses(j)
 			return targets, j, false, code
 		}
+		if j := r.jobOutlivingItsFirstProcess(n); j != nil {
+			// The pid `$!` gave, for a job whose first program has already
+			// gone and whose body runs on: in a real shell that number is
+			// the fork running the whole list, alive as long as the job is.
+			// See jobOutlivingItsFirstProcess (#5387).
+			targets, code := r.jobProcesses(j)
+			return targets, j, false, code
+		}
 		return []jobProcess{{pid: n}}, nil, false, jobFound
 	}
 	j, code := r.findJobQuietly(t)

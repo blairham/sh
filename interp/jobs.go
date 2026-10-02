@@ -135,7 +135,10 @@ type Job struct {
 	// procs is every process the job is made of *now*, which is not the same
 	// question as PID and is the one `kill %1` asks. See Job.took.
 	procsMu sync.Mutex
-	procs   []jobProcess
+	// firstGone says the process the job's PID names has been waited for,
+	// under procsMu. See Runner.jobOutlivingItsFirstProcess.
+	firstGone bool
+	procs     []jobProcess
 
 	// parts counts the pieces of the job that have still to start, and
 	// started is closed when the count reaches zero. A backgrounded pipeline
@@ -781,6 +784,12 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// A background job keeps the parent's trap listing in one shell fewer
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)
+	// And the two keyboard signals off, for what the job starts, where
+	// there is no job control to put it out of the keyboard's reach. See
+	// interp/asyncinterrupts.go (#5414).
+	if !r.monitor && !r.Interactive {
+		sub.asyncIgnoresInterrupts = true
+	}
 	sub.bg = job
 	// And somewhere for a signal aimed at the job to reach the body's own
 	// traps, which no process of the job's holds. See bodyinbox.go.
@@ -3060,6 +3069,31 @@ func (r *Runner) jobByIdent(n int) *Job {
 	return nil
 }
 
+// jobOutlivingItsFirstProcess is the running job whose `$!` is pid where that
+// process has already been waited for: a body that went on past its first
+// program, which is what a real shell's fork is.
+//
+// Measured 2026-10-02 on zsh 5.9.2, `/usr/bin/true && /bin/sleep 1 &
+// /bin/sleep 0.2; kill -TERM $!; wait $!; print $?` prints 143: the number
+// names the list, and the `sleep` still running in it is what the signal
+// reaches. Here it named the `true`, which was gone, so `kill` said `no such
+// process` and the wait reported 0. A pid the job is still running is left to
+// the kernel, which is the answer for it in every column.
+func (r *Runner) jobOutlivingItsFirstProcess(pid int) *Job {
+	for _, j := range r.jobs {
+		if j.PID != pid || j.Finished() {
+			continue
+		}
+		j.procsMu.Lock()
+		gone := j.firstGone
+		j.procsMu.Unlock()
+		if gone {
+			return j
+		}
+	}
+	return nil
+}
+
 // Forget drops a job the shell has finished with — one that has been resumed
 // into the foreground and ended, or reported as done.
 func (r *Runner) Forget(j *Job) { r.forget(j, false) }
@@ -3124,6 +3158,11 @@ func (j *Job) released(pid int) {
 	j.procsMu.Lock()
 	defer j.procsMu.Unlock()
 	j.procs = slices.DeleteFunc(j.procs, func(p jobProcess) bool { return p.pid == pid })
+	if pid == j.PID {
+		// The process `$!` names has been waited for while the job may run
+		// on. See Runner.jobOutlivingItsFirstProcess.
+		j.firstGone = true
+	}
 }
 
 // processes is what signaling this job has to reach, newest last.

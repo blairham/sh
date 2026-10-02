@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // trapOutcome is what reading trap's options decided: either a status to
@@ -434,7 +436,41 @@ func (r *Runner) trapActionRefused(body string) (int, bool) {
 // which is not always the way its `alias` does: zsh writes a tab as `$'a\tb'`
 // in an alias and as a plainly quoted `'a<tab>b'` in a trap.
 func (r *Runner) quotedTrapAction(action string) string {
+	if r.sem().TrapActionListedFromItsParse == Yes {
+		action = r.trapActionReprinted(action)
+	}
 	return r.quoteListedValue(r.sem().TrapQuoting, "`trap`", action, ListedValueAlone)
+}
+
+// trapActionReprinted is a trap's action written back from its parse, in the
+// arrangement the shell writes a function body in, one level out.
+//
+// Measured 2026-10-02 on zsh 5.9.2 under `-fc`, each set and then listed:
+//
+//	print E; trap                  $'print E\ntrap'
+//	if true; then print a; fi      $'if true\nthen\n\tprint a\nfi'
+//	x=1   y=2                      'x=1 y=2 '
+//	f() { print a }                $'f () {\n\tprint a\n}'
+//	  print a  # c                 'print a'
+//
+// which is the function listing's own layout, the trailing blank of an
+// assignment-only command included. An action that will not parse is listed
+// as it was written (#5409).
+func (r *Runner) trapActionReprinted(action string) string {
+	if strings.TrimSpace(action) == "" {
+		return action
+	}
+	f, err := syntax.Parse(action, r.dialect())
+	if err != nil || len(f.Stmts) == 0 {
+		return action
+	}
+	body := syntax.PrintWith(&syntax.Group{List: f.Stmts}, r.functionLayout)
+	body = strings.TrimSuffix(strings.TrimPrefix(body, "{\n"), "\n}")
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimPrefix(line, "\t")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // printedSignalName is how this dialect spells a signal when printing what

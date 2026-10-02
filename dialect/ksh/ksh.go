@@ -3109,6 +3109,10 @@ func Semantics() interp.Semantics {
 	// A bare `trap` inside the running EXIT trap lists it (nothing here,
 	// measured 2026-10-02). See Semantics.ExitTrapListedWhileItRuns.
 	s.ExitTrapListedWhileItRuns = interp.No
+	// A trap's action is listed as it was written: measured 2026-10-02 on
+	// ksh93u+, `trap 'echo E;   trap' USR1; trap` keeps the three blanks.
+	// See Semantics.TrapActionListedFromItsParse.
+	s.TrapActionListedFromItsParse = interp.No
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+

@@ -248,6 +248,12 @@ type Shell struct {
 	// dialect publishes it under the parameters its own shell names.
 	RunWidget func(*interp.Runner, context.Context, string, repl.Line) (repl.Line, bool)
 
+	// TransformTermcap is what the line editor writes in place of one of its
+	// terminal operations, named by termcap code with its count, where the
+	// session installed a transformation; false where it did not. From the
+	// Runner for the reason RunWidget is. See repl.Shell.TransformTermcap.
+	TransformTermcap func(r *interp.Runner, ctx context.Context, code, arg string) (string, bool)
+
 	// RunCompletion asks this dialect's own completion system what the word
 	// under the cursor could become — what a startup file's `compdef` rules
 	// and completion widgets have to say about it. Nil is a dialect with no

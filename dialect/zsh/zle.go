@@ -1696,3 +1696,35 @@ func forgetTransformation(r *interp.Runner, name string) {
 		}
 	}
 }
+
+// TransformTermcap is what the line editor writes in place of one of its
+// terminal operations: what the function `zle -T tc` named leaves in REPLY,
+// called with the termcap code and, for a counted one, the count. False where
+// no transformation is installed. See repl's termcaptransform.go for the
+// measurement.
+//
+// The status the function leaves is put back, because the editor calling it
+// is not a command and must not move `$?`.
+func TransformTermcap(r *interp.Runner, ctx context.Context, code, arg string) (string, bool) {
+	widget := ""
+	flat, _ := r.GetArray(zleTransform)
+	for i := 0; i+2 <= len(flat); i += 2 {
+		if flat[i] == zleTransformationName {
+			widget = flat[i+1]
+		}
+	}
+	if widget == "" {
+		return "", false
+	}
+	args := []string{code}
+	if arg != "" {
+		args = append(args, arg)
+	}
+	status := r.ExitStatus()
+	defer r.SetExitStatus(status)
+	if ok, _ := r.CallFunction(ctx, widget, args...); !ok {
+		return "", true
+	}
+	reply, _ := r.GetVar("REPLY")
+	return reply, true
+}

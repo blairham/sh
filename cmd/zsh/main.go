@@ -59,6 +59,7 @@ func shell() driver.Shell {
 		RunWidget:              zsh.RunWidget,
 		RunCompletion:          zsh.RunCompletion,
 		RunScheduled:           zsh.RunScheduled,
+		TransformTermcap:       zsh.TransformTermcap,
 		HighlightLine:          zsh.RegionHighlights,
 		StartLine:              zsh.ResetRegionHighlight,
 		// What the editor waits on beside the terminal, and what happens when

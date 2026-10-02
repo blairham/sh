@@ -280,6 +280,17 @@ func (sh Shell) highlighter(r *interp.Runner) repl.Highlighter {
 	})
 }
 
+// transformTermcap binds the dialect's termcap transformation to this runner,
+// and is nil for a dialect with none.
+func (sh Shell) transformTermcap(r *interp.Runner) func(context.Context, string, string) (string, bool) {
+	if sh.TransformTermcap == nil {
+		return nil
+	}
+	return func(ctx context.Context, code, arg string) (string, bool) {
+		return sh.TransformTermcap(r, ctx, code, arg)
+	}
+}
+
 // startLine binds the dialect's per-line reset to this runner, and is nil for
 // a dialect with none — repl skips the call rather than making an empty one.
 func (sh Shell) startLine(r *interp.Runner) func() {
@@ -532,6 +543,9 @@ func (sh Shell) frontEndWith(r *interp.Runner, name string, dg interp.Diagnostic
 		// this runner, for the reason the bindings are.
 		StartLine: sh.startLine(r),
 		RunWidget: sh.runWidget(r),
+		// And what stands in for the editor's terminal operations, bound to
+		// this runner for the same reason.
+		TransformTermcap: sh.transformTermcap(r),
 		// And how a key whose binding named a completion of the shell's own
 		// asks for the candidates. Bound to this runner for the reason the
 		// bindings are: the widget table is this session's.

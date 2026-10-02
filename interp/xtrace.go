@@ -1300,6 +1300,8 @@ func (r *Runner) NamedWord(s string) string {
 // whose characters are not counted, only 0x80 to 0x9f are.
 func (r *Runner) visibleWord(s string) string {
 	if isPrintableASCII(s) {
+		// The common case, answered without the walk; the walk gives the
+		// same text for it, so a mutant dropping this survives by design.
 		return s
 	}
 	chars := !isASCII(s) && r.countsTheLocalesCharacters()

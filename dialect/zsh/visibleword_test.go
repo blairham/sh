@@ -55,4 +55,11 @@ func TestPrintExpandsTabsByColumns(t *testing.T) {
 	if want := "one     ＺＳＨ  three\n"; out != want || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, want)
 	}
+	// And a leading tab under -x is counted from where its operand starts,
+	// which is after the columns of the operands before it: measured,
+	// `print -x4 ＺＳ $'\tb'` puts four spaces between the letters and b.
+	out, _, errs = runZshUTF8(t, "print -x4 ＺＳ $'\\tb'")
+	if want := "ＺＳ    b\n"; out != want || errs != "" {
+		t.Errorf("-x: got %q, %q, want %q", out, errs, want)
+	}
 }

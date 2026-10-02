@@ -1178,9 +1178,6 @@ func (r *Runner) scalarSearchEnd(g *syntax.SubscriptFlags, search byte, chars []
 	if back {
 		miss = base - 1
 	}
-	if n == 0 {
-		return base - 1
-	}
 	from, within := r.scalarSearchStart(g, n, back)
 	if !within {
 		return miss

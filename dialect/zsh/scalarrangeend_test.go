@@ -21,6 +21,7 @@ func TestASearchEndingARangeOverAString(t *testing.T) {
 		{"a start names the first end", "a=abcdefg; print ${a[1,(rb:4:)?]} ${a[1,(Rb:4:)??]} ${a[1,(Rb:4:)d]}x", "abc abc x\n"},
 		{"a start from the end", "a=abcdefg; print ${a[1,(rb:-2:)?]}", "abcde\n"},
 		{"exact", "a=abcdefg; print ${a[1,(re)cd]}", "abcd\n"},
+		{"exact is not a pattern", "a='ab*cd'; print ${a[1,(re)b*]} ${a[1,(r)b*]}", "ab* ab\n"},
 		{"an index letter names the end too", "a=abcdefg; print ${a[(r)cd,(i)ef]}", "cdef\n"},
 		{"the first end keeps the match's start", "a=abcdefg; print ${a[(r)cd,-1]}", "cdefg\n"},
 		{"misses", "a=abcdefg; print ${a[1,(r)zz]}x ${a[1,(R)zz]}x", "abcdefgx x\n"},

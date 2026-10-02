@@ -1811,7 +1811,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		// field: the two were `r.funcOrigins[name].file` spelled twice, and
 		// a call that answers its origin for itself needs them to be one.
 		File: origin.file, Name: name, Keyword: fn.Keyword,
-		FuncLine: defLine, outerParams: saved,
+		FuncLine: defLine, FuncAbsLine: defLine + origin.fileOffset, outerParams: saved,
 	})
 	defer r.popFrame()
 	// And the arguments, where a debugger has asked for them. After the
@@ -1903,9 +1903,10 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// this engine reported `line 1` (#2565). Where the dialect numbers
 	// `eval`'s text from one there was no offset in force to record, so the
 	// origin holds nothing and this is the zero it always was.
-	savedBase, savedText := r.lineBase, r.runText
+	savedBase, savedText, savedOffset := r.lineBase, r.runText, r.fileLineOffset
 	if numberFrom == nil {
 		r.lineBase = origin.bodyLineBase()
+		r.fileLineOffset = origin.fileOffset
 		// And the text the body was read from, on the same terms: a
 		// function defined in a sourced file quotes that file however it is
 		// called. See runningText.
@@ -1917,7 +1918,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// $LINENO)` written on line 2 is 2 on the reference, which is what the
 	// substitution itself answers there, and was 1 here because the offset
 	// the substitution was running under had been reset underneath it.
-	defer func() { r.lineBase, r.runText = savedBase, savedText }()
+	defer func() { r.lineBase, r.runText, r.fileLineOffset = savedBase, savedText, savedOffset }()
 	// This call's own serial, because the RETURN trap fires for the one
 	// function whose body set it and for nobody else — not a caller, and
 	// not a sibling entered after it returned.

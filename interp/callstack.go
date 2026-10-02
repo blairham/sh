@@ -88,6 +88,18 @@ type Frame struct {
 	// report where the shell *is* and where each frame was entered *from*.
 	FuncLine int
 
+	// AbsLine and FuncAbsLine are Line and FuncLine counted in the *file*:
+	// the same numbers wherever text numbers its lines the file's way, and
+	// greater by the line an `eval` stood on, less one, for a call made from
+	// inside `eval`'s text, or for a function defined there, where that text
+	// numbers its lines from one. One dialect reports both counts of the same
+	// call. See Runner.CallStackWithEvals.
+	AbsLine, FuncAbsLine int
+
+	// Eval marks the entry CallStackWithEvals adds for text handed to
+	// `eval`. Never on a frame of the call stack itself.
+	Eval bool
+
 	// NoFile marks a frame whose unit was read from no file at all: a
 	// function defined at the top level of `-c` or of standard input.
 	//
@@ -196,7 +208,7 @@ type Frame struct {
 // thing this cannot tell apart, which is the same seam innermostCall works
 // on.
 func (f Frame) IsFunction() bool {
-	return !f.Startup && f.Name != "" && f.Name != sourceFrameName
+	return !f.Startup && !f.Eval && f.Name != "" && f.Name != sourceFrameName
 }
 
 // CallStack is the frames a shell is currently inside, innermost first, with
@@ -245,6 +257,10 @@ func (r *Runner) SetScriptFile(path string) { r.scriptFile = path }
 // after the move would record the callee's.
 func (r *Runner) pushFrame(f Frame) {
 	f.Line = r.line
+	f.AbsLine = r.fileLineOffset + r.line
+	if f.FuncAbsLine == 0 {
+		f.FuncAbsLine = f.FuncLine
+	}
 	f.OuterFunc, f.OuterFuncLine = r.inFunc, r.funcLine
 	r.frameSerial++
 	f.serial = r.frameSerial

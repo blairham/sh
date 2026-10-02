@@ -606,6 +606,23 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		defer func() {
 			r.evalTextFloor, r.evalTextNumbersFromItself = outerFloor, outerOwn
 		}()
+		// And an entry among the units the shell is inside, taken at the
+		// caller's position. See interp/evalunits.go.
+		defer r.enterEvalUnit()()
+		// Where the text numbers its lines from one, its line one is the
+		// line the `eval` stands on, so a line of it is that far into the
+		// file. See Runner.fileLineOffset.
+		outerOffset := r.fileLineOffset
+		if r.evalTextNumbersFromItself {
+			r.fileLineOffset = outerOffset + r.line - 1
+		}
+		defer func() { r.fileLineOffset = outerOffset }()
+	}
+	if !s.eval {
+		// A file's lines are its own.
+		outerOffset := r.fileLineOffset
+		r.fileLineOffset = 0
+		defer func() { r.fileLineOffset = outerOffset }()
 	}
 	d := r.dialect().On(s.route())
 	// With this shell's alias tables, because borrowed text is text this

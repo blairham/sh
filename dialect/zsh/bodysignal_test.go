@@ -6,6 +6,8 @@ package zsh_test
 import (
 	"os"
 	"path/filepath"
+	"strconv"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -16,6 +18,8 @@ import (
 // number, no EXIT trap, and its program left running. Where a fork would have
 // exec'd the program instead, the program is what the signal reaches.
 // Measured 2026-10-02 on zsh 5.9.2 under `-f -c` (#5355).
+//
+// USR1's number is the platform's: 30 on macOS, 10 on Linux.
 //
 // The program writes a marker after a delay, so whether it outlived the
 // body is something the script can see rather than a process to look for.
@@ -36,7 +40,7 @@ func TestASignalLeftAtItsDefaultEndsABackgroundBody(t *testing.T) {
 		{
 			"the number is the signal's",
 			`{ ` + prog + `; print after } & /bin/sleep 0.2; kill -USR1 $!; wait $!; print $?` + after,
-			"158\nsurvived\n",
+			strconv.Itoa(128+int(syscall.SIGUSR1)) + "\nsurvived\n",
 		},
 		{
 			"a function is a body too",

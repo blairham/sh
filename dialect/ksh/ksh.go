@@ -2521,6 +2521,11 @@ func Semantics() interp.Semantics {
 	// the exec could not do.
 	s.ExecFailureOnAPathnameRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	// An `exec` of options alone runs nothing at 0 here, with its
+	// redirection made: measured 2026-10-02 on ksh93u+, `exec -c`, `exec -a
+	// x` and `exec --` are each `st=0`, and `exec -c >f` makes `f`. See
+	// Semantics.ExecOptionsRequireACommand.
+	s.ExecOptionsRequireACommand = interp.No
 	// `-a` and `-c`, and no `-l`: this shell reports the letter as an
 	// option it does not know and ends the script, `exec` being special.
 	s.ExecTakesTheLoginLetter = interp.No

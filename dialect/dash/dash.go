@@ -880,6 +880,8 @@ func Semantics() interp.Semantics {
 	// ways the same. This is the one column of the panel that reads the
 	// letter that way. See interp/exportprintoperand.go.
 	s.ExportOrReadonlyPrintWithOperands = interp.ExportPrintDropsTheOperands
+	// unanswered ExecOptionsRequireACommand: this `exec` reads no options,
+	// so a dash-word is the command and the question does not arise.
 	// unanswered CommandWordListingNeedsAKindLetter: this shell has no
 	// arrays, so every name a listing could write is a scalar and there is
 	// no kind to leave out or to ask a letter for.

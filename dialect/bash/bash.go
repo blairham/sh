@@ -2212,6 +2212,11 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecFailureOnAPathnameRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	// An `exec` of options alone runs nothing at 0 here, with its
+	// redirection made: measured 2026-10-02 on bash 5.3.20 and 3.2.57,
+	// `exec -c`, `exec -a x` and `exec --` are each `st=0`, and `exec -c >f`
+	// makes `f`. See Semantics.ExecOptionsRequireACommand.
+	s.ExecOptionsRequireACommand = interp.No
 	// Both letters, and `-l` reaches the name `-a` chose: `exec -l -a NAME`
 	// hands the replacement `-NAME`, where zsh hands it `NAME`.
 	s.ExecTakesTheLoginLetter = interp.Yes

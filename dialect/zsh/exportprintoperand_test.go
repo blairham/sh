@@ -80,3 +80,23 @@ func TestThePrintListingDeclaresNothing(t *testing.T) {
 		}
 	}
 }
+
+// TestPosixBuiltinsMakesThePrintLetterInert pins the option's reach into
+// that axis: under POSIX_BUILTINS, and so under `emulate sh`, the letter
+// beside operands goes inert and the operands are declared, the reading bash
+// and ksh93 have. Measured 2026-10-02 on zsh 5.9.2 under `-f`.
+func TestPosixBuiltinsMakesThePrintLetterInert(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"setopt posixbuiltins; X=1; export -p X; echo .; typeset -p X", ".\nexport X=1\n"},
+		{"setopt posixbuiltins; X=1; readonly -p X; echo .; X=2", ".\nzsh:1: read-only variable: X\n"},
+		{"setopt posixbuiltins; readonly -p Y=3; echo $Y", "3\n"},
+		// Without the option, the letter narrows.
+		{"X=1; export -p X; echo .", "typeset X=1\n.\n"},
+		{"X=1; readonly -p X; echo .; X=2; echo $X", "typeset X=1\n.\n2\n"},
+	} {
+		got, _ := runZsh(t, t.TempDir(), tc.src)
+		if got != tc.want {
+			t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
+		}
+	}
+}

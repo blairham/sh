@@ -1764,6 +1764,17 @@ var zshOptions = []zshOption{
 				listing = interp.DeclareListingCommandWord
 			}
 			setAxis(r, func(s *interp.Semantics) *interp.DeclarationListingForm { return &s.ReadonlyListing }, listing)
+			// And `-p` beside operands goes inert, as it is in bash and
+			// ksh93: measured 2026-10-02 on zsh 5.9.2, `X=1; export -p X`
+			// lists `typeset X=1` without the option and under it lists
+			// nothing and exports `X`, and `readonly -p X` freezes it.
+			printWithOperands := interp.ExportPrintNarrowsToTheOperands
+			if on {
+				printWithOperands = interp.ExportPrintLetterIsInert
+			}
+			setAxis(r, func(s *interp.Semantics) *interp.ExportPrintOperandPolicy {
+				return &s.ExportOrReadonlyPrintWithOperands
+			}, printWithOperands)
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.JobSpecMissIsSilent
 			}, answer(on))

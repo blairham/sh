@@ -90,5 +90,19 @@ func (r *Runner) readonlyAsTheDeclaration(_ context.Context, args []string, lett
 			return d.readonly && !d.isArr && !d.isAssoc
 		}), true
 	}
+	if f.print && len(args) > 0 {
+		// `-p` beside operands, asked the axis `export` asks: where the
+		// letter is inert the operands are frozen rather than listed.
+		// Measured 2026-10-02 on zsh 5.9.2, under POSIX_BUILTINS `X=1;
+		// readonly -p X` lists nothing and a later `X=2` is `read-only
+		// variable: X`. Where it narrows, the declaration's own `-p` already
+		// lists only the operands.
+		if _, lists := r.exportPrintWithOperands(args); !lists {
+			f.print = false
+		}
+		if r.unspecified {
+			return r.status, true
+		}
+	}
 	return r.declareNames(name, args, f), true
 }

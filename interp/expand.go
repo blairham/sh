@@ -7340,7 +7340,7 @@ func (r *Runner) reportRawTextRefusal(err error) {
 		r.diagf("%s\n", failure)
 		return
 	}
-	if se, ok := err.(*syntax.Error); ok && r.inHeredocBody && se.BraceParamFormUnclosed && !se.HoldsProgram {
+	if se, ok := err.(*syntax.Error); ok && r.inHeredocBody && se.BraceParamFormUnclosed {
 		// A parameter expansion that never closed is the expansion's own
 		// refusal rather than a sub-parse of the body, so it is located at
 		// the command's line and says nothing about a substitution. See

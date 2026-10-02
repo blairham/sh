@@ -970,16 +970,12 @@ func (r *Runner) defineFromText(name, body string, aliases syntax.Aliases) bool 
 	// the file's body at the exit, `autoload TRAPUSR1; trap` lists the
 	// stub, and `functions[TRAPUSR1]='print hi'; kill -USR1 $$` prints hi
 	//
-	// Not again for a name that is already the handler, which is what an
-	// autoloaded stub being replaced by the body it stood for is: the trap
-	// is armed already, and arming it from inside its own first run would
-	// run an EXIT handler twice.
-	//
-	// (#5147).
-	// The same for a stub replaced while it runs, where the call has set
-	// the handler it stands for aside — see callFuncInPlace — so the name
-	// is not bound at this moment and is bound again at the return.
-	if !r.isATrapFunction(name) && !r.redefinesTheRunningBody(name) {
+	// Not for a stub being replaced by the body it stood for while it
+	// runs, which is what an autoloaded handler's first call is: the trap
+	// is armed already — or, for a call the script makes, set aside until
+	// the return, see callFuncInPlace — and arming it from inside its own
+	// first run fired an EXIT handler twice (#5147).
+	if !r.redefinesTheRunningBody(name) {
 		r.bindTrapFunction(name, displaced)
 	}
 	return true

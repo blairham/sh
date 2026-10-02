@@ -134,6 +134,20 @@ type Job struct {
 
 	// procs is every process the job is made of *now*, which is not the same
 	// question as PID and is the one `kill %1` asks. See Job.took.
+	// elementsOf is the pipeline this job lists an element at a time, and
+	// elements what each element is doing, under elemMu: the elements end
+	// on goroutines of their own. Nil for every other job. See
+	// jobelements.go.
+	elementsOf *syntax.Pipeline
+	elemMu     sync.Mutex
+	elements   []jobElement
+	// fgPipeline says this job is the forked elements of a pipeline whose
+	// last element the shell runs itself, and elemsRunning how many of them
+	// have not ended. See Runner.pipelineJob.
+	fgPipeline   bool
+	elemsRunning int
+	elemsEnded   chan struct{}
+
 	procsMu sync.Mutex
 	// firstGone says the process the job's PID names has been waited for,
 	// under procsMu. See Runner.jobOutlivingItsFirstProcess.
@@ -246,6 +260,9 @@ func (j *Job) partStarted() {
 type jobPart struct {
 	job  *Job
 	once sync.Once
+	// elem is the element of a listed pipeline this piece is, counted from
+	// one, or zero. See jobelements.go.
+	elem int
 }
 
 // started says this piece of the job is as started as it is going to get.
@@ -253,7 +270,12 @@ func (p *jobPart) started() {
 	if p == nil {
 		return
 	}
-	p.once.Do(p.job.partStarted)
+	p.once.Do(func() {
+		if p.elem != 0 {
+			p.job.elementSettled(p.elem - 1)
+		}
+		p.job.partStarted()
+	})
 }
 
 // noteStopped records that this job's process stopped, and does it once.
@@ -506,6 +528,9 @@ func (r *Runner) settleBackgroundJobAtALoopsBackEdge() {
 // `zselect` that answers at once still lets the body go on to start the
 // process whose pid `$!` would rather report.
 func (r *Runner) SettleBeforeAWait() {
+	// A wait is where the shell notices what has ended. See
+	// Runner.noticeElementEnds.
+	r.noticeElementEnds()
 	if r.bg == nil && r.part == nil {
 		return
 	}
@@ -715,6 +740,9 @@ func (j *Job) finishRecording(status int, sig syscall.Signal, record func()) (fi
 // limitation worth stating rather than hiding, because the difference is
 // visible the moment anything tries to signal it.
 func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
+	// Starting a job is a moment the shell notices what has ended. See
+	// Runner.noticeElementEnds.
+	r.noticeElementEnds()
 	job := &Job{
 		done:     make(chan struct{}),
 		ready:    make(chan struct{}),
@@ -741,6 +769,9 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// be refusing to work.
 		Command: r.jobCommandText(st),
 	}
+	// And the elements of a pipeline, in the dialect that lists one a row
+	// at a time. See jobelements.go.
+	r.trackElements(job, st)
 
 	sub := r.clone()
 	if theForkIsTheParentheses(st) {
@@ -1225,10 +1256,13 @@ func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted, s
 		// ordinary shape: a script stops a job and then waits for it.
 		return 0, 0, false, true
 	}
-	sig, hit, gaveUp := r.awaitOrTrap(j.done, giveUp)
+	sig, hit, gaveUp := r.awaitOrTrap(j.waitChannel(), giveUp)
 	if hit {
 		return 0, sig, true, false
 	}
+	// A wait that returned is the shell noticing what has ended. See
+	// Runner.noticeElementEnds.
+	r.noticeElementEnds()
 	if gaveUp {
 		r.noticeStoppedJob(j)
 		return 0, 0, false, true
@@ -2952,6 +2986,11 @@ func appendBounded(list []*Job, j *Job) []*Job {
 func (r *Runner) noticeFinishedJobs() {
 	var ended []*Job
 	for _, j := range r.jobs {
+		if j.fgPipeline {
+			// Not a job the shell drops when it notices: a listing forgets
+			// it once it has shown it ended. See Runner.pipelineJob.
+			continue
+		}
 		if j.Finished() && !r.noticedJobs[j] {
 			ended = append(ended, j)
 		}
@@ -3218,6 +3257,11 @@ func (j *Job) processes() []jobProcess {
 func (r *Runner) tookJobProcess(pid int, ownGroup bool) {
 	if r.inJob != nil {
 		r.inJob.took(pid, ownGroup)
+		if r.jobElem != 0 {
+			// And the element of a listed pipeline it belongs to. See
+			// jobelements.go.
+			r.inJob.elementStarted(r.jobElem-1, pid)
+		}
 	}
 	// A piece of the job with a process of its own has started, whatever else
 	// it goes on to do.

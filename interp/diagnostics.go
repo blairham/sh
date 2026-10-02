@@ -2812,6 +2812,29 @@ type Diagnostics struct {
 	// what it does.
 	JobLine string
 
+	// JobElementLine is the row a `jobs` listing writes for each element of a
+	// backgrounded pipeline after the first, in the dialect that lists one an
+	// element at a time. Two verbs: the element's state and its command. The
+	// first element is written in JobLine with the job's number and marker,
+	// and every element's command but the last's is followed by
+	// JobElementJoin. Empty is a pipeline listed on one row, as typed.
+	//
+	// Measured 2026-10-02 on zsh 5.9.2, `/bin/sleep 0.3 | cat & jobs`:
+	//
+	//	[1]  + running    /bin/sleep 0.3 |·
+	//	       running    cat
+	//
+	// with a blank after the bar, and each element in its own state — a
+	// first element that has ended reads `done` or `exit 3` above a `running`
+	// one. See Runner.printJobElements (#5322).
+	JobElementLine string
+	// JobElementLineLong is that row as `jobs -l` writes it, with the
+	// element's own process id as a string: `jobs -p`, which names the group,
+	// writes the same width of blanks there.
+	JobElementLineLong string
+	// JobElementJoin is what follows each element's command but the last's.
+	JobElementJoin string
+
 	// JobLineLong is the same row as `jobs -l` writes it, with the process
 	// id in it. Five verbs: the number, the marker, the process id, the
 	// state and the command.

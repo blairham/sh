@@ -107,6 +107,16 @@ func (r *Runner) childReaped() {
 // sites: a background job waits inside its own cloned runner, so the lists
 // touched here are never another goroutine's.
 func (r *Runner) childWaitedFor() {
+	// Where the shell notices what else has ended, too. See
+	// Runner.noticeElementEnds.
+	r.noticeElementEnds()
+	r.childReapedWithoutNoticing()
+}
+
+// childReapedWithoutNoticing is childWaitedFor for a pipeline element's own
+// end, which is reached on the element's goroutine: the table a notice reads
+// is the shell's, and the shell notices for itself at its own next wait.
+func (r *Runner) childReapedWithoutNoticing() {
 	r.childReaped()
 	r.releaseSignalsHeldForInput()
 }

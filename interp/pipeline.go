@@ -4,9 +4,11 @@
 package interp
 
 import (
+	"cmp"
 	"context"
 	"io"
 	"os"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -407,6 +409,17 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			gates[i] = make(chan struct{})
 		}
 	}
+	// The job that lists this pipeline a row per element, if it is one.
+	var tracked *Job
+	if r.bg.tracksPipeline(p) {
+		tracked = r.bg
+	}
+	// And the job its forked elements make, where the shell runs the last
+	// one itself. See Runner.pipelineJob.
+	var fgJob *Job
+	if inCurrent && n > 1 {
+		fgJob = r.pipelineJob(p)
+	}
 	subs := make([]*Runner, last)
 	releaseFds := make([]func(), last)
 	// A backgrounded pipeline is one job made of several processes, and the
@@ -429,6 +442,16 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		}
 		if r.bg != nil {
 			sub.part = &jobPart{job: r.bg}
+		}
+		if r.bg.tracksPipeline(p) {
+			// The element of a pipeline the job lists a row at a time.
+			// See jobelements.go.
+			sub.jobElem = i + 1
+			sub.part.elem = i + 1
+		}
+		if fgJob != nil {
+			sub.inJob, sub.jobElem = fgJob, i+1
+			sub.part = &jobPart{job: fgJob, elem: i + 1}
 		}
 		// Every element runs at once, so each one's descriptors are its own
 		// copies rather than one table's. An element that closes a parked
@@ -525,6 +548,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	}
 
 	for i, cmd := range p.Cmds[:last] {
+		if listed := cmp.Or(tracked, fgJob); listed != nil && i > 0 {
+			// Starting an element is a moment the shell notices which of
+			// the ones before it have ended. See Runner.noticeElementEnds.
+			listed.noticeElementsBefore(i)
+		}
 		wg.Add(1)
 		// A failing status until this element has one of its own, so an
 		// element that stops without finishing is not read as having
@@ -573,12 +601,18 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// Every element is a fork of its own, and the shell reaps every
 			// one of them — a pipeline of two counts two. See
 			// Runner.childReaped.
-			r.childWaitedFor()
+			r.childReapedWithoutNoticing()
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)
 			}
 			statuses[i] = subs[i].status
 			signals[i] = subs[i].diedOfSig
+			if tracked != nil {
+				tracked.elementEnded(i, statuses[i], signals[i])
+			}
+			if fgJob != nil {
+				fgJob.pipelineElementEnded(i, statuses[i], signals[i])
+			}
 		}, func() {
 			// Done last, because it is what releases the shell to read
 			// everything above.
@@ -680,6 +714,16 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			start := time.Now()
 			serialBefore := r.stmtSerial
 			popOpen := r.openRuntime("|")
+			if tracked != nil {
+				outerElem := r.jobElem
+				r.jobElem = i + 1
+				defer func() { r.jobElem = outerElem }()
+			}
+			if fgJob != nil {
+				outerPending := r.pendingPipeJob
+				r.pendingPipeJob = fgJob
+				defer func() { r.pendingPipeJob = outerPending }()
+			}
 			errs[i] = r.command(ctx, p.Cmds[i])
 			popOpen()
 			hereBodyRan = r.stmtSerial != serialBefore
@@ -688,9 +732,22 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			}
 			statuses[i] = r.status
 			signals[i] = r.diedOfSig
+			if tracked != nil {
+				tracked.elementEnded(i, statuses[i], signals[i])
+			}
 		}()
 	}
 	wg.Wait()
+	// The forked elements have been reaped, which is a moment the shell
+	// notices what else has ended. See Runner.noticeElementEnds.
+	if last > 0 {
+		r.noticeElementEnds()
+	}
+	if fgJob != nil && slices.Contains(r.jobs, fgJob) {
+		// The pipeline is over, and the job its forked elements made goes
+		// with it. See Runner.pipelineJob.
+		r.forget(fgJob, false)
+	}
 	// Every element has been waited for, which is where a coprocess that
 	// ended is noticed. See Runner.retireCoproc for the measurements.
 	r.retireCoproc()

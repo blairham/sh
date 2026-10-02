@@ -119,6 +119,11 @@ const (
 	jobsStateRow jobsForm = iota
 	jobsLongRow
 	jobsPidsAlone
+	// jobsGroupRow is the long row with the process *group* in it, which is
+	// what one dialect's `-p` writes. It is jobsLongRow for a job of one
+	// process; a pipeline listed an element at a time leaves the id out of
+	// every row after the first. See Runner.printJobElements.
+	jobsGroupRow
 )
 
 func biJobs(r *Runner, _ context.Context, args []string) int {
@@ -307,10 +312,14 @@ func (r *Runner) printJobs(jobs []*Job, form jobsForm, wanted jobState, explicit
 			// names, so the listing can say what it always said. See
 			// jobident.go.
 			r.printf("%d\n", row.job.Ident())
-		case jobsLongRow:
-			r.printf("%s\n", r.jobLineLong(row.n, row.job, showBg))
+		case jobsLongRow, jobsGroupRow:
+			if !r.printJobElements(row.n, row.job, showBg, form) {
+				r.printf("%s\n", r.jobLineLong(row.n, row.job, showBg))
+			}
 		default:
-			r.printf("%s\n", r.jobLine(row.n, row.job, showBg))
+			if !r.printJobElements(row.n, row.job, showBg, form) {
+				r.printf("%s\n", r.jobLine(row.n, row.job, showBg))
+			}
 		}
 		if showDir {
 			r.printf("%s\n", r.jobDirectoryLine(row.job))
@@ -353,7 +362,7 @@ func (r *Runner) jobsForm(opts string) (jobsForm, int) {
 			if r.unspecified {
 				return form, 2
 			}
-			return jobsLongRow, 0
+			return jobsGroupRow, 0
 		}
 	}
 	return form, 0
@@ -497,7 +506,7 @@ func (r *Runner) jobRows(jobs []*Job, explicit bool) ([]jobRow, int) {
 		// Asked only where there is a finished job to leave out. A listing
 		// of running ones is the same in every shell, and refusing it
 		// because of a question nothing turned on would be refusing to work.
-		if j.Finished() {
+		if j.Finished() && !j.fgPipeline {
 			if !r.ask(r.sem().JobsListFinishedJobs, "a finished job appearing in a `jobs` listing") {
 				if r.unspecified {
 					return nil, 2
@@ -1208,13 +1217,16 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 		// unforkedtail.go.
 		return nil, jobMissing
 	}
-	if r.slotHeld(n) {
-		return nil, jobOnAnEmptySlot
-	}
 	for _, j := range r.jobs {
 		if j.num == n {
+			// Ahead of the slot test, because a pipeline's forked elements
+			// are a job under the slot its last element holds. See
+			// Runner.pipelineJob.
 			return j, jobFound
 		}
+	}
+	if r.slotHeld(n) {
+		return nil, jobOnAnEmptySlot
 	}
 	return nil, jobMissing
 }

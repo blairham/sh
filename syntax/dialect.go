@@ -3378,6 +3378,20 @@ type Dialect struct {
 	// measured and left (#3069).
 	ArithCommandScanIgnoresQuoting bool
 
+	// ArithBracketsMustBalance makes the scan for the closing `))` of an
+	// arithmetic command or a `$((` substitution count square brackets too,
+	// and gives up the arithmetic reading when they do not balance there — so
+	// the `((` is two subshells after all, and the `$((` a command
+	// substitution of a subshell: `print $(( a[1 ))` is `bad pattern: a[1`
+	// as well. Measured 2026-10-02 on zsh 5.9.2 under `-f`:
+	// `(( a[1 ))` is `bad pattern: a[1`, the glob refusal of a command word,
+	// `(( 1 ] ))` is `command not found: 1`, `(( [ ))` runs `[` and says `']'
+	// expected`, and `(( a[1]] ))` beside a file named `a1]` is `command not
+	// found: a1]`; a balanced `(( a[[1]] ))` is arithmetic. bash 5.3.20
+	// reads every one of those as arithmetic and refuses the expression, and
+	// ksh93u+ refuses `(( a[1 ))` as `syntax error: `)' unexpected` (#5378).
+	ArithBracketsMustBalance bool
+
 	// ArithSubstScanIgnoresQuoting is the same question at the `$((`
 	// fallback: whether the scan that decides between arithmetic and a
 	// command substitution holding a subshell sees a `)` written inside
@@ -5344,6 +5358,16 @@ type Dialect struct {
 	// written here. zsh's `lvalue required` and bash's `attempted assignment
 	// to non-variable` are the same reading (#4775, #4776).
 	ArithConditionalThenLevel ArithConditionalBranchLevel
+
+	// ArithConditionalThenLeftoverIsAnOperand blames an operand standing
+	// where a conditional's `:` belonged as the operand it is — `operator
+	// expected` at it — rather than as a missing colon. Measured 2026-10-02:
+	// zsh 5.9.2 says `operator expected at `abc : 3 '` for `$(( 1 ? 2 abc :
+	// 3 ))` and for `(3)` in that place, and `':' expected` for `;` or for
+	// nothing at all; bash 5.3.20 says `:' expected for conditional
+	// expression`, ksh93u+ its plain syntax error and dash `expecting ':'`
+	// for every one (#5378).
+	ArithConditionalThenLeftoverIsAnOperand bool
 
 	// ArithConditionalElseLevel is the level the **else** branch of
 	// `c ? t : e` is read at. See [Dialect.ArithConditionalThenLevel] for the

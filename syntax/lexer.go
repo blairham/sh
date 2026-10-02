@@ -7885,13 +7885,9 @@ func braceNameStop(body string) (stop string, prefixed bool) {
 // special parameter at most. See Error.BraceRanOutInTheName.
 func braceRanOutInTheName(body string, flags bool) bool {
 	if flags && strings.HasPrefix(body, "(") {
-		end := strings.IndexByte(body, ')')
-		if end < 0 {
-			// A flag group that never closed is the flag reader's refusal,
-			// and a different sentence.
-			return false
-		}
-		body = body[end+1:]
+		// A group that never closed leaves the `(` in front, which is no
+		// name, so it is not this: it is the flag reader's refusal.
+		body = body[strings.IndexByte(body, ')')+1:]
 	}
 	body = strings.TrimLeft(body, "#!^=~+")
 	return len(braceName(body)) == len(body)

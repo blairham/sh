@@ -240,8 +240,14 @@ func SubscriptExpressionEnd(text string) int {
 func topLevelByte(text, of string) (first, second int) {
 	depth := 0
 	first, second = -1, -1
-	for i := range len(text) {
+	for i := 0; i < len(text); i++ {
 		switch text[i] {
+		case '\\':
+			// A backslash keeps the character after it out of the count:
+			// `$s[(r)\],(R)c]` is the range from the first `]` to the last
+			// `c` in zsh 5.9.2, measured 2026-10-02, where counting the
+			// escaped bracket put the comma inside a nesting (#5152).
+			i++
 		case '(', '[':
 			depth++
 		case ')', ']':

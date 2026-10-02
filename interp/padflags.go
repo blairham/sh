@@ -81,8 +81,15 @@ func (r *Runner) padFlagged(e *syntax.ParamExpr, words []string) ([]string, bool
 	// out of the way entirely rather than halving the word for the other.
 	lp := r.paddingArgs(e, 'l', e.PadLeft)
 	rp := r.paddingArgs(e, 'r', e.PadRight)
+	// An empty element a nested expansion handed back is one unit wide here,
+	// though it prints as nothing. See Runner.padAGhost.
+	ghost := innerEmptiesSortLast(e)
 	out := make([]string, len(words))
 	for i, w := range words {
+		if ghost && w == "" {
+			out[i] = r.padAGhost(lw, rw, lp, rp)
+			continue
+		}
 		switch {
 		case lw > 0 && rw > 0:
 			// Both flags: the manual's rule, and measured on zsh 5.9.2 with
@@ -264,4 +271,24 @@ func (r *Runner) repeatFill(fill string, n int, keepRight bool) string {
 		b.WriteString(u[(start+i)%len(u)])
 	}
 	return b.String()
+}
+
+// padAGhost pads the empty element a nested expansion hands back, which
+// takes a unit of the field while printing as nothing. Measured 2026-10-01
+// and 2026-10-02 on zsh 5.9.2 under `LC_ALL=C` with `b=(x ” y)`:
+// `"${(@l:1:)${b[@]}}"` leaves it empty, `"${(@l:3:)${b[@]}}"` pads it to
+// two blanks, `"${(@r:2::-:)${b[@]}}"` to one `-`, and
+// `"${(@l:2::L:r:2::R:)${b[@]}}"` is `LLR` — the unit is the word's second
+// half. The same nesting rule as the sort key decides which empties these
+// are: see nestedSortKey (#5345).
+func (r *Runner) padAGhost(lw, rw int, lp, rp padding) string {
+	switch {
+	case lw > 0 && rw > 0:
+		return r.padLeftTo("", lw, lp) + r.padRightTo("", rw-1, rp)
+	case lw > 0:
+		return r.padLeftTo("", lw-1, lp)
+	case rw > 0:
+		return r.padRightTo("", rw-1, rp)
+	}
+	return ""
 }

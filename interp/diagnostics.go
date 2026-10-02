@@ -857,6 +857,10 @@ type Diagnostics struct {
 	// zsh 5.9.2 and bash 5.3.15 — and the substrate must not carry one
 	// shell's spelling as everybody's.
 	GlobNoMatch string
+	// CshNullGlobNoMatch is the sentence a word list under one shell's
+	// `cshnullglob` writes when none of its patterns matched: no verbs. See
+	// interp/cshnullglob.go.
+	CshNullGlobNoMatch string
 	// HashEmptyTable is what a bare `hash` says about the table this shell
 	// does not keep. bash announces it, on standard output; dash, ksh93, zsh
 	// and BusyBox ash print nothing, which the empty value means.

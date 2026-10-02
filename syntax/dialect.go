@@ -3392,6 +3392,17 @@ type Dialect struct {
 	// ksh93u+ refuses `(( a[1 ))` as `syntax error: `)' unexpected` (#5378).
 	ArithBracketsMustBalance bool
 
+	// QuotedNewlineIsUnmatched refuses a newline written inside quotes — `'…'`,
+	// `"…"`, `$'…'` and a backquoted substitution — as the quote that never
+	// closed, unless a backslash escapes it, and then it is the newline with
+	// the backslash gone. One shell's run-time option, `cshjunkiequotes`.
+	// Measured 2026-10-02 on zsh 5.9.2 from a script file: with it set,
+	// `print 'one⏎two'` is `unmatched '`, `"one⏎two"` is `unmatched "`, a
+	// newline in `$'…'` is `unmatched '` and in backquotes `` unmatched ` ``;
+	// `print 'three\⏎four'` prints the two lines, and so does `"five\⏎six"`,
+	// where without the option the second joins them.
+	QuotedNewlineIsUnmatched bool
+
 	// ArithSubstScanIgnoresQuoting is the same question at the `$((`
 	// fallback: whether the scan that decides between arithmetic and a
 	// command substitution holding a subshell sees a `)` written inside

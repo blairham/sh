@@ -1113,10 +1113,17 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			// Reporting it and then passing the pattern through was the same
 			// report-then-continue bug as the others, which is why neither
 			// route stops at the diagnostic.
-			if r.MatchOption(UnmatchedPatternIsError) ||
-				(axis && !r.MatchOption(UnmatchedPatternIsEmpty)) {
+			switch {
+			case r.globUnit != nil && r.cshNullGlob && !r.MatchOption(UnmatchedPatternIsEmpty):
+				// One pattern of several: deleted, and the unit decides.
+				// See interp/cshnullglob.go.
+				r.globUnit.missed = true
+			case r.MatchOption(UnmatchedPatternIsError) ||
+				(axis && !r.MatchOption(UnmatchedPatternIsEmpty)):
 				r.refuseUnmatchedPattern(globUnescape(whole))
 			}
+		} else if r.globUnit != nil {
+			r.globUnit.matched = true
 		}
 		r.globMissed = false
 	}()
@@ -1130,7 +1137,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			return nil, true
 		}
 		r.globMissed = true
-		return nil, r.MatchOption(UnmatchedPatternIsEmpty)
+		return nil, r.MatchOption(UnmatchedPatternIsEmpty) || (r.cshNullGlob && r.globUnit != nil)
 	}
 	if len(excl) > 0 && strings.HasSuffix(field, "/") {
 		// The left side ends at a `/`, so its last component is the empty

@@ -3478,6 +3478,19 @@ func (l *Lexer) scanSingle() (Span, bool) {
 			l.failUnmatched(open, "'", "'", "unterminated single quote")
 			return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
 		}
+		if l.peek() == '\n' && l.dialect.QuotedNewlineIsUnmatched {
+			// See Dialect.QuotedNewlineIsUnmatched: a newline the backslash
+			// before it escapes is a newline, and any other is the quote
+			// that never closed.
+			if v := b.String(); strings.HasSuffix(v, "\\") {
+				b.Reset()
+				b.WriteString(v[:len(v)-1])
+				b.WriteByte(l.advance())
+				continue
+			}
+			l.failUnmatched(open, "'", "'", "unterminated single quote")
+			return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
+		}
 		if l.peek() == '\'' {
 			if l.dialect.DoubledQuoteInSingleQuotesIsALiteralQuote && l.peekAt(1) == '\'' {
 				// A doubled quote is one quote and the run continues.
@@ -3911,6 +3924,18 @@ func (l *Lexer) scanDoubleEscaping(open Pos, closing bool, escapes escapeSet) []
 			out = append(out, l.scanBackticks(DoubleQuoted))
 			litPos = l.pos()
 
+		case c == '\\' && l.peekAt(1) == '\n' && closing && l.dialect.QuotedNewlineIsUnmatched:
+			// The escaped newline is kept rather than joined away. See
+			// Dialect.QuotedNewlineIsUnmatched.
+			l.advance()
+			if b.Len() == 0 {
+				litPos = l.pos()
+			}
+			b.WriteByte(l.advance())
+		case c == '\n' && closing && !l.inRawBody && l.dialect.QuotedNewlineIsUnmatched:
+			l.failUnmatched(open, "\"", "\"", "unterminated double quote")
+			flush()
+			return out
 		case c == '\\' && l.peekAt(1) == '\n':
 			l.advance()
 			l.advance()
@@ -3975,6 +4000,9 @@ func (l *Lexer) scanDollarSingle() (Span, bool) {
 		}
 		c := l.peek()
 		switch {
+		case c == '\n' && l.dialect.QuotedNewlineIsUnmatched:
+			l.failUnmatched(open, "'", "'", "unterminated single quote")
+			return Span{Kind: Literal, Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
 		case c == '\'':
 			l.advance()
 			return Span{Kind: Literal, Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
@@ -6207,6 +6235,12 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off], q), Quoting: q, Pos: open, Comments: l.bodyComments(CommandSubst)}
 		}
 		switch l.peek() {
+		case '\n':
+			if l.dialect.QuotedNewlineIsUnmatched {
+				l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
+				return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off], q), Quoting: q, Pos: open}
+			}
+			l.advance()
 		case '\\':
 			l.advance()
 			if !l.eof() {

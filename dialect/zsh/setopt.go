@@ -803,9 +803,29 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("cshjunkiequotes", false),
+	{
+		// CSH_JUNKIE_QUOTES: a newline inside quotes is the quote that never
+		// closed, unless a backslash escapes it. See
+		// syntax.Dialect.QuotedNewlineIsUnmatched for the rows (#5155).
+		base: "cshjunkiequotes", def: false,
+		get: func(r *interp.Runner) bool { return r.QuotedNewlineIsUnmatched() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetQuotedNewlineIsUnmatched(on)
+			return 0
+		},
+	},
 	nullCommandOption("cshnullcmd"),
-	recorded("cshnullglob", false),
+	{
+		// CSH_NULL_GLOB: an unmatched pattern is deleted, and the word list
+		// is an error only where none of its patterns matched. See
+		// interp/cshnullglob.go (#5155).
+		base: "cshnullglob", def: false,
+		get: func(r *interp.Runner) bool { return r.CshNullGlob() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetCshNullGlob(on)
+			return 0
+		},
+	},
 	{
 		// DEBUG_BEFORE_CMD: whether the DEBUG trap runs ahead of each
 		// command or behind it. On by default, and implemented rather than

@@ -400,9 +400,11 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 		var items []string
 		r.beginHeading()
 		if c.HasItems {
+			endGlobUnit := r.beginGlobUnit()
 			for _, w := range c.Items {
 				items = append(items, r.expandWord(w)...)
 			}
+			endGlobUnit()
 		} else {
 			// The list a loop over the parameters walks is fixed when the
 			// loop starts, which matters in the one dialect whose loop

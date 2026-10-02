@@ -8124,6 +8124,12 @@ type Diagnostics struct {
 	// sentence, which is ArithIllegalByte and a third thing, so `1 #` and
 	// `1 $` are what tell that column apart.
 	ArithBadOperator string
+	// ArithUnmatchedCloseParen is the reason when a `)` closing nothing is
+	// left over after a complete expression — `x="3)"; $(( x ))`. Measured
+	// 2026-10-02: zsh 5.9.2 `bad math expression: unexpected ')'`, ksh93u+
+	// `unbalanced parenthesis`. Empty falls back to ArithOperatorExpected,
+	// which is bash 5.3.20's `arithmetic syntax error in expression` for it.
+	ArithUnmatchedCloseParen string
 	// ArithConditionalThen and ArithConditionalElse are a conditional missing
 	// one of the two values it chooses between: `$(( 1 ? ))` and
 	// `$(( 1 ? 2 : ))`. No verbs. Empty falls through to the ordinary
@@ -9753,6 +9759,11 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 		}
 	case syntax.ErrArithOperator:
 		reason, fallback = d.ArithOperatorExpected, "operator expected"
+	case syntax.ErrArithUnmatchedCloseParen:
+		reason, fallback = d.ArithUnmatchedCloseParen, "operator expected"
+		if reason == "" {
+			reason = d.ArithOperatorExpected
+		}
 	case syntax.ErrArithBadOperator:
 		reason, fallback = d.ArithBadOperator, "operator expected"
 		if reason == "" {
@@ -9815,7 +9826,7 @@ func (d Diagnostics) arithUnclosedSubscript(expr string, se *syntax.Error) (stri
 		return "", false
 	}
 	switch se.Kind {
-	case syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+	case syntax.ErrArithOperator, syntax.ErrArithBadOperator, syntax.ErrArithUnmatchedCloseParen:
 	default:
 		// The two leftover-text kinds and nothing else: a refusal about an
 		// operand, a byte or a conditional is not about a subscript however
@@ -10172,7 +10183,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		syntax.ErrArithBadBaseSyntax, syntax.ErrArithMissingCloseParen,
 		syntax.ErrArithConditionalThen,
 		syntax.ErrArithConditionalColon, syntax.ErrArithConditionalElse,
-		syntax.ErrArithColonWithoutQuestion, syntax.ErrArithAssignToNonPlace:
+		syntax.ErrArithColonWithoutQuestion, syntax.ErrArithAssignToNonPlace,
+		syntax.ErrArithUnmatchedCloseParen:
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)

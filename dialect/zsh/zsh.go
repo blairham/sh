@@ -6024,6 +6024,7 @@ func Diagnostics() interp.Diagnostics {
 		ArithBadFloatConstant:     "bad floating point constant",
 		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",
+		ArithUnmatchedCloseParen:  "bad math expression: unexpected ')'",
 		// The output format's own two, neither of which opens with `bad math
 		// expression:` and neither of which names the text it refused —
 		// measured 2026-09-12, `zsh:1: bad output format specification` for

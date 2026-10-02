@@ -809,6 +809,10 @@ func (a *arithParser) leftoverKind() ErrorKind {
 	case c >= '0' && c <= '9', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z',
 		c == '_', c == '(', c == '$':
 		return ErrArithOperator
+	case c == ')':
+		// A parenthesis that closes nothing. See
+		// [ErrArithUnmatchedCloseParen].
+		return ErrArithUnmatchedCloseParen
 	case c == ':':
 		// A `:` reaches here only where the dialect does *not* take it as a
 		// math token, and it is text left over rather than a byte the reader

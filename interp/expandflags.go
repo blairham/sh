@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULCfsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENR"
+const implementedParamFlags = "ULC#fsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENR"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -637,6 +637,14 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 		case 'C':
 			for i, w := range words {
 				words[i] = r.capitalizedRuns(w)
+			}
+		case '#':
+			for i, w := range words {
+				n, ok := r.ArithValue(w)
+				if !ok {
+					return nil, false, false, false
+				}
+				words[i] = r.characterForCode(n)
 			}
 		}
 	}
@@ -1631,6 +1639,56 @@ func (r *Runner) convertCase(v string, upper bool) string {
 		convert = unicode.ToLower
 	}
 	return r.caseChanged(v, convert)
+}
+
+// characterForCode is the `(#)` flag over one word's value: the character
+// the number is the code of. Under a locale whose characters are counted that
+// is the character's UTF-8 encoding — and the encoding's original six-byte
+// reach, not only what Unicode assigns, since the value is not checked — and
+// otherwise the one byte. Measured 2026-10-02 on zsh 5.9.2:
+//
+//	65   A        233  é, and 351 under LC_ALL=C     128  302 200
+//	55296          ed a0 80, a surrogate encoded as it stands
+//	1114112        f4 90 80 80, past the last code point
+//	2147483647     fd bf bf bf bf bf
+//	4294967361     A: the value is taken as 32 bits
+//	-1  ff   -200  38   -256  00: a negative value is its low byte
+//	abc            NUL: the word is an expression, and an unset name is 0
+func (r *Runner) characterForCode(n int) string {
+	if n < 0 || !r.countsTheLocalesCharacters() {
+		return string([]byte{byte(n)})
+	}
+	u := uint32(n)
+	if u < utf8.RuneSelf {
+		return string([]byte{byte(u)})
+	}
+	// The original UTF-8 scheme: a lead byte saying how many continuation
+	// bytes follow, each carrying six bits. Past 31 bits the lead is the
+	// one that says five, with the low thirty bits behind it — measured,
+	// 2147483648 is fe 80 80 80 80 80.
+	var lead byte
+	var conts int
+	switch {
+	case u < 0x800:
+		lead, conts = 0xc0, 1
+	case u < 0x10000:
+		lead, conts = 0xe0, 2
+	case u < 0x200000:
+		lead, conts = 0xf0, 3
+	case u < 0x4000000:
+		lead, conts = 0xf8, 4
+	case u < 0x80000000:
+		lead, conts = 0xfc, 5
+	default:
+		lead, conts, u = 0xfe, 5, u&0x3fffffff
+	}
+	out := make([]byte, conts+1)
+	for i := conts; i > 0; i-- {
+		out[i] = 0x80 | byte(u&0x3f)
+		u >>= 6
+	}
+	out[0] = lead | byte(u)
+	return string(out)
 }
 
 // capitalizedRuns is the `(C)` flag over one word: every run of letters and

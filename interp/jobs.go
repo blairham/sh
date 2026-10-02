@@ -3066,6 +3066,37 @@ func (r *Runner) jobByIdent(n int) *Job {
 	return nil
 }
 
+// jobOutlivingItsFirstProcess is the running job whose `$!` is pid where that
+// process has already been waited for: a body that went on past its first
+// program, which is what a real shell's fork is.
+//
+// Measured 2026-10-02 on zsh 5.9.2, `/usr/bin/true && /bin/sleep 1 &
+// /bin/sleep 0.2; kill -TERM $!; wait $!; print $?` prints 143: the number
+// names the list, and the `sleep` still running in it is what the signal
+// reaches. Here it named the `true`, which was gone, so `kill` said `no such
+// process` and the wait reported 0. A pid the job is still running is left to
+// the kernel, which is the answer for it in every column.
+func (r *Runner) jobOutlivingItsFirstProcess(pid int) *Job {
+	for _, j := range r.jobs {
+		if j.PID != pid || j.Finished() {
+			continue
+		}
+		live := false
+		j.procsMu.Lock()
+		for _, p := range j.procs {
+			if p.pid == pid {
+				live = true
+				break
+			}
+		}
+		j.procsMu.Unlock()
+		if !live {
+			return j
+		}
+	}
+	return nil
+}
+
 // Forget drops a job the shell has finished with — one that has been resumed
 // into the foreground and ended, or reported as done.
 func (r *Runner) Forget(j *Job) { r.forget(j, false) }

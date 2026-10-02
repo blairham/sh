@@ -2642,11 +2642,9 @@ func (sh Shell) runInput(in source) int {
 		// is told by the runner and this one, made before there is a runner,
 		// has to be told the same way — or a `for ö in …` that runs is a
 		// parse error here first. See interp.NameLettersBeforeARunner.
-		lookup := func(name string) (string, bool) { return lookupEnv(sh.env(), name) }
-		d.NameTakesALetterPastASCII = interp.NameLettersBeforeARunner(&sh.Semantics, lookup)
-		// And how long a character is, for the delimiter a parameter flag
-		// may be written with. See interp.CharacterLengthBeforeARunner.
-		d.CharacterLength = interp.CharacterLengthBeforeARunner(&sh.Semantics, lookup)
+		d.NameTakesALetterPastASCII = interp.NameLettersBeforeARunner(&sh.Semantics, func(name string) (string, bool) {
+			return lookupEnv(sh.env(), name)
+		})
 		p := syntax.NewParser(src, d)
 		p.Parse()
 		if err := p.Err(); err != nil {

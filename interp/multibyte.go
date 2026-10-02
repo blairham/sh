@@ -666,38 +666,13 @@ func (r *Runner) CharacterLength(s string) int {
 		if !r.countsTheLocalesCharacters() {
 			return 1
 		}
-		if c, n := utf8.DecodeRuneInString(s); c != utf8.RuneError || n > 1 {
-			return n
-		}
-		return 1
+		return utf8CharacterLength(s)
 	}
 	next := byte(0)
 	if len(s) > 1 {
 		next = s[1]
 	}
 	return r.CharacterWidth(s[0], next)
-}
-
-// CharacterLengthBeforeARunner is Runner.CharacterLength for the parse a
-// front end makes before it has a runner, from the locale lookup names: the
-// whole of a UTF-8 sequence where the first of the three variables set names
-// a UTF-8 locale and the dialect decodes one, a byte otherwise. Nil where it
-// is a byte everywhere.
-func CharacterLengthBeforeARunner(s *Semantics, lookup func(string) (string, bool)) func(string) int {
-	if s == nil || s.MultibyteEncodingIsHonored != Yes {
-		return nil
-	}
-	for _, name := range localeVariables {
-		v, _ := lookup(name)
-		if v == "" {
-			continue
-		}
-		if !codesetIsUTF8(v) {
-			return nil
-		}
-		return utf8CharacterLength
-	}
-	return nil
 }
 
 // utf8CharacterLength is the length of the UTF-8 sequence at the front of s,

@@ -2356,6 +2356,19 @@ func (p *Parser) parsePipeline() Expr {
 	// other half and not only as input that ended.
 	depth := len(p.open)
 	for {
+		// Whether the bar behind this command was followed by nothing but
+		// `!`s, which in the one dialect that toggles there may end the
+		// pipeline. See Dialect.NegationAfterABarTogglesThePipeline.
+		toggledOnly := false
+		var lastBang Pos
+		if len(pl.Cmds) > 0 && p.dialect.NegationAfterABarTogglesThePipeline {
+			for p.atWord("!") {
+				pl.Negated = !pl.Negated
+				lastBang = p.tok.End
+				p.next()
+				toggledOnly = true
+			}
+		}
 		if len(pl.Cmds) > 0 && p.atWord("!") {
 			// Offered to the alias table first, as the `!` at the head is:
 			// where the dialect lets an alias replace a reserved word, `echo
@@ -2375,10 +2388,10 @@ func (p *Parser) parsePipeline() Expr {
 			// third command, after a newline, inside `if` and `eval`, and
 			// `! true | ! true`. It ran here as a command named `!` (#5256).
 			//
-			// ksh93 alone takes it, toggling the whole pipeline's negation.
-			// That reading is parked rather than modeled (#5272), so this refuses in
-			// every dialect — the ksh one included, which ran the `!` as a
-			// command and matched no shell either way.
+			// ksh93 alone takes it, toggling the whole pipeline's negation,
+			// which the loop's head reads where the dialect says so — see
+			// Dialect.NegationAfterABarTogglesThePipeline (#5272). Every other
+			// dialect refuses it here.
 			//
 			// Only the bare word: a quoted `"!"` and a glued `!true` are
 			// command names everywhere, and `echo | (! true)` and `echo | {
@@ -2395,6 +2408,17 @@ func (p *Parser) parsePipeline() Expr {
 			return pl
 		}
 		cmd := p.parseCommand()
+		if cmd == nil && toggledOnly && p.err == nil && !p.at(TokPipe) && !p.at(TokPipeAmp) {
+			// Nothing after the `!`s, which ends the pipeline there. The bar
+			// still has a reader, one that runs nothing: `echo hi | !` writes
+			// nothing in ksh93 and is 1, the empty element's 0 negated. It is
+			// written as `:`, so the tree prints as `! echo hi | :`, which is
+			// the same program in every dialect.
+			p.open = p.open[:depth]
+			colon := &Word{Spans: []Span{{Kind: Literal, Value: ":", Pos: lastBang}}, Start: lastBang, Stop: lastBang}
+			pl.Cmds = append(pl.Cmds, &SimpleCmd{Args: []*Word{colon}, Start: lastBang, Stop: lastBang})
+			return pl
+		}
 		if cmd == nil {
 			if len(pl.Cmds) == 0 {
 				if pl.Negated && p.err == nil {

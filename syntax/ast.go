@@ -243,7 +243,7 @@ type Pipeline struct {
 }
 
 func (p *Pipeline) Pos() Pos {
-	if len(p.Cmds) == 0 || p.Negated {
+	if len(p.Cmds) == 0 || (p.Negated && p.Bang.IsValid()) {
 		return p.Bang
 	}
 	return p.Cmds[0].Pos()

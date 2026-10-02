@@ -748,6 +748,23 @@ type Dialect struct {
 	// one, so `! ! !` and `!` are the same program and print back the same.
 	RepeatedNegationToggles bool
 
+	// NegationAfterABarTogglesThePipeline takes a `!` written after a pipe
+	// bar, where it inverts the negation of the **whole** pipeline, as one
+	// written in front of it does. ksh93 alone; the rest refuse the word
+	// there (#5256). Measured 2026-10-02 on ksh93u+ 2012-08-01 (`/bin/ksh`),
+	// script files (#5272):
+	//
+	//	echo | ! true            st=1     echo | ! false         st=0
+	//	echo | ! true | cat      st=1     echo | ! true | false  st=0
+	//	! true | ! true          st=0     echo | ! ! true        st=0
+	//	echo | !                 st=1     echo | ! | cat         `|' unexpected
+	//	if echo | ! true; …      the else branch
+	//	echo a | ! cat           prints a, st=1
+	//
+	// So each `!` toggles one flag on the pipeline, wherever it stands, and
+	// one with no command after it ends the pipeline there.
+	NegationAfterABarTogglesThePipeline bool
+
 	// PipeBothStreams enables `|&`, a pipe that carries the left command's
 	// standard error along with its standard output. Measured identical to
 	// writing `2>&1` as the left command's *last* redirection — not its

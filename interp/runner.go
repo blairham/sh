@@ -1750,6 +1750,16 @@ type Runner struct {
 	// one question and a second name for it is the one that would drift.
 	Route Route
 
+	// InvocationEmulation is the emulation the shell was *started* in — an
+	// `--emulate` option, or the name it was invoked by — and empty where it
+	// was started as itself.
+	//
+	// The front end's to say, for Route's reason, and read by a dialect as it
+	// registers: one shell creates fewer of its own parameters when it starts
+	// as another, which is a fact about startup and not about any `emulate`
+	// a script runs later. See the zsh dialect's hiddenUnderAnEmulation.
+	InvocationEmulation string
+
 	// continuePastFatal is one shell's switch for a fatal error costing the
 	// statement rather than the shell. See Runner.SetContinuesPastAFatalError.
 	continuePastFatal bool

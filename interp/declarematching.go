@@ -462,8 +462,7 @@ func (r *Runner) matchedNames(patterns []string) []string {
 // and the parameters it produces, `argv` and `pipestatus` among them: there
 // is something for a local to stand in front of. Measured 2026-10-02 on zsh
 // 5.9.2, in a function, `typeset -h +g -m '*'` and then `typeset -p` of
-// `keymaps`, `argv` and `pipestatus` writes `typeset keymaps=”` and the
-// same for the other two, and after `unset -m '*'` a bare `typeset` lists
+// `keymaps`, `argv` and `pipestatus` writes each as an empty plain scalar, and after `unset -m '*'` a bare `typeset` lists
 // only what the function declared next (#5157).
 func (r *Runner) matchedOperands(operands []string, local bool) []string {
 	var out []string

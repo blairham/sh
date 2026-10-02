@@ -731,7 +731,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// starting the job does not turn on the answer, and refusing to
 		// start one over a question about how it would be *printed* would
 		// be refusing to work.
-		Command: st.Text,
+		Command: r.jobCommandText(st),
 	}
 
 	sub := r.clone()
@@ -3230,4 +3230,31 @@ func (r *Runner) expectingAStop(named *Job, aims []jobProcess) {
 			}
 		}
 	}
+}
+
+// jobCommandText is what a `jobs` listing will write for a `&` statement: the
+// text as typed, or the statement reprinted where the dialect reprints it. See
+// Semantics.JobCommandIsReprinted.
+//
+// Read rather than asked, because starting a job is not the place to refuse a
+// script over how it would be listed — the reason the text is kept at all is
+// recorded beside the field it fills.
+func (r *Runner) jobCommandText(st *syntax.Stmt) string {
+	if r.sem().JobCommandIsReprinted != Yes || st.Expr == nil {
+		return st.Text
+	}
+	e := st.Expr
+	if p, ok := e.(*syntax.Pipeline); ok && p.Negated {
+		// The bang is the statement's status and not the job's command:
+		// `! /bin/sleep 1 &` lists as `/bin/sleep 1 &`.
+		cp := *p
+		cp.Negated = false
+		e = &cp
+	}
+	// The arrangement a script is written back in, whose statements share a
+	// line outside a declaration — `{ /bin/sleep 1; }` and `( a; b )` on one
+	// line, `if` and `for` across several — which is what a job is listed
+	// in. The file-level fields of it reach nothing here, a statement not
+	// being a file.
+	return syntax.PrintExprWith(e, r.scriptListingLayout)
 }

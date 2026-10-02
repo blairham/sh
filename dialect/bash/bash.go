@@ -3385,6 +3385,9 @@ func Semantics() interp.Semantics {
 
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.Yes
+	// Measured 2026-10-01: `(exit 4) &` lists as `( exit 4 ) &`. See
+	// Semantics.JobCommandIsReprinted.
+	s.JobCommandIsReprinted = interp.Yes
 
 	// Whether a backgrounded job is announced to whoever is typing.
 	// Whether `export -f` carries a function to a child.

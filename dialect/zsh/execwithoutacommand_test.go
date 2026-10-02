@@ -33,6 +33,9 @@ func TestAnExecOfOptionsAloneIsRefused(t *testing.T) {
 		// The controls: a lone dash, and a command behind the options.
 		{"exec -; echo st=$?", "st=0\n", 0},
 		{"exec -c echo ok", "ok\n", 0},
+		// `a` with text behind it takes that text as the name, so the next
+		// word is the command.
+		{"exec -az print ok", "ok\n", 0},
 	} {
 		got, status := runZsh(t, t.TempDir(), tc.src)
 		if got != tc.want || status != tc.status {

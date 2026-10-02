@@ -1086,6 +1086,7 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 			// A signal that ends the body, before anything it had queued:
 			// a process killed by one runs nothing more. See bodyinbox.go.
 			if name, sig := r.inbox.death(); sig != 0 {
+				r.diedAsAJob = true
 				r.signalDeath(name, sig)
 				return
 			}

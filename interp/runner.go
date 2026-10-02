@@ -4274,6 +4274,10 @@ type Runner struct {
 	// leaves a signal it aimed at the job, for the body's own traps. Nil
 	// everywhere else, a subshell of the body included. See bodyinbox.go.
 	inbox *bodyInbox
+	// diedAsAJob says the signal this runner died of was aimed at it as a
+	// background job, which the job's own notice reports rather than the
+	// parentheses that hold it. See bodyinbox.go.
+	diedAsAJob bool
 	// runningSimple is the simple command this runner is running, for a
 	// background body that has to know whether it is one a fork would have
 	// exec'd. See bodyInbox.reachedATail.

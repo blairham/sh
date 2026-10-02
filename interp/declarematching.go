@@ -550,21 +550,16 @@ func (r *Runner) matchedListedNames(patterns []string) ([]string, map[string]boo
 	return out, produced, listing
 }
 
-// declarationNameListing writes each name with its attribute words and no
-// value — `integer n`, `array tied FPATH fpath`.
+// declarationNameListingOf writes each name with its attribute words and no
+// value — `integer n`, `array tied FPATH fpath` — over names some of which
+// the dialect produces rather than stores, read the way the valued listing
+// reads them. See Runner.listedNames.
 //
 // The shape two commands share, which is why it is a function rather than a
 // branch: `typeset +m PAT` names the matches and a bare `typeset +` names the
 // whole table. Those reached the same rows by two routes before, and only one
 // of the routes existed — the plus form with no pattern wrote nothing at all
 // (#1576). Choosing the names is the caller's; writing them is here.
-func (r *Runner) declarationNameListing(names []string) int {
-	return r.declarationNameListingOf(names, nil, ProducedListingUnspecified)
-}
-
-// declarationNameListingOf is declarationNameListing over names some of which
-// the dialect produces rather than stores, read the way the valued listing
-// reads them. See Runner.listedNames.
 func (r *Runner) declarationNameListingOf(names []string, produced map[string]bool, listing ProducedListing) int {
 	locals := r.innermostLocalNames()
 	for _, name := range names {

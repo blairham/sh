@@ -135,6 +135,15 @@ const (
 )
 
 type Diagnostics struct {
+	// NamedByAnEmptyWord says the shell was started with an empty argv[0],
+	// which is a name and not the absence of one: where a diagnostic names
+	// the shell it names nothing, so `nosuchcmd` is `: line 1: nosuchcmd:
+	// command not found` in bash 5.3.20, `: nosuchcmd: not found` in ksh93u+
+	// and `: 1: nosuchcmd: not found` in dash, measured 2026-10-02 under
+	// `exec -a ''` (#5373). Off, an empty name is one nobody gave, and the
+	// diagnostic says `sh`. Set by the front end, which is the one place
+	// that saw the argument vector.
+	NamedByAnEmptyWord bool
 	// TiedNamesRequired, TieToItself, AlreadyTiedScalar and TieWithAValue are
 	// what `typeset -T` says when it cannot make a tie — see tiedscalar.go.
 	//
@@ -9587,7 +9596,7 @@ func (d Diagnostics) forBorrowed() Diagnostics {
 // SourceReport does it for the parse path, and Runner.locationPrefixNamed for the
 // run-time one.
 func (d Diagnostics) borrowedPrefix(shell, source string, line int) string {
-	if shell == "" {
+	if shell == "" && !d.NamedByAnEmptyWord {
 		shell = "sh"
 	}
 	return shell + ": " + source + ": " + d.locationOnly(line)
@@ -10656,7 +10665,7 @@ func (d Diagnostics) ScriptStatus(err error) int {
 // bare number writes the nought it has not left yet, which is what its own
 // location style already spells.
 func (d Diagnostics) invocationPrefix(shell string) string {
-	if shell == "" {
+	if shell == "" && !d.NamedByAnEmptyWord {
 		shell = "sh"
 	}
 	if d.InvocationNamesTheUnreadLine {
@@ -11107,7 +11116,7 @@ func (d Diagnostics) offendingLine(line int, err error, src string) string {
 // prefixWithoutLine is the location with no line in it, which one dialect
 // writes when a message comes from the first line of a function.
 func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
-	if name == "" {
+	if name == "" && !d.NamedByAnEmptyWord {
 		name = "sh"
 	}
 	name = d.withBuiltinInLocation(name, builtin, d.Location)
@@ -11202,7 +11211,7 @@ func namesEveryLine(style LocationStyle) LocationStyle {
 }
 
 func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) string {
-	if name == "" {
+	if name == "" && !d.NamedByAnEmptyWord {
 		name = "sh"
 	}
 	if d.BuiltinLocationIsTheSpeakersOnly {

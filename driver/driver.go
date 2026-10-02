@@ -989,10 +989,12 @@ func (sh Shell) withDefaults(argv []string) Shell {
 	// An empty argv[0] is a name and not the absence of one: measured
 	// 2026-10-02, `exec -a '' sh -c 'echo "x${0}x"'` writes `xx` in zsh
 	// 5.9.2, bash 5.3.20, ksh93u+ and dash alike. The three that name
-	// themselves in a diagnostic then name nothing — `: line 1: …` — which
-	// is #5373; the diagnostic prefix still falls back to `sh` here.
+	// themselves in a diagnostic then name nothing — `: line 1: …`.
 	if len(argv) > 0 {
 		sh.Name = argv[0]
+		// And a diagnostic names it too, empty or not. See
+		// interp.Diagnostics.NamedByAnEmptyWord (#5373).
+		sh.Diagnostics.NamedByAnEmptyWord = argv[0] == ""
 	}
 	if sh.Session == "" {
 		// One identity for the run, made here so that everything built from

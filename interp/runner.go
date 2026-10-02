@@ -6078,7 +6078,7 @@ func (r *Runner) name() string {
 	if n := r.diag().SelfName; n != "" && r.Route != RouteScriptFile {
 		return n
 	}
-	if r.Name == "" {
+	if r.Name == "" && !r.diag().NamedByAnEmptyWord {
 		return "sh"
 	}
 	return r.Name

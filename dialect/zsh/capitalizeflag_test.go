@@ -37,3 +37,13 @@ func TestTheCapitalizeFlagUnderTheCLocale(t *testing.T) {
 		t.Errorf("got %q, %q, want %q", out, errs, "éCole\n")
 	}
 }
+
+// A byte the locale cannot decode separates a run and is kept as it was,
+// byte for byte: measured, `a=$'\xff'abc; print -r ${(C)a}` writes 0377
+// and then `Abc`.
+func TestTheCapitalizeFlagKeepsAnUndecodedByte(t *testing.T) {
+	out, _, errs := runZshUTF8(t, `a=$'\xff'abc; print -r ${(C)a}`)
+	if out != "\xffAbc\n" || errs != "" {
+		t.Errorf("got %q, %q, want %q", out, errs, "\xffAbc\n")
+	}
+}

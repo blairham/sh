@@ -22,12 +22,18 @@ func (r *Runner) subscriptExpressionBeforeAnUnreadableByte(text string) (string,
 	if at < 0 {
 		return text, nil
 	}
+	if strings.TrimSpace(text[:at]) == "" {
+		// Refused under either answer, so nothing is asked: what the
+		// dialect that stops here adds is only its sentence, and a dialect
+		// that has not chosen leaves the byte to the arithmetic's own.
+		if r.sem().SubscriptExpressionStopsAtAnUnreadableByte == Yes {
+			return "", &syntax.Error{Kind: syntax.ErrArithOperand, Expr: text, Token: text[at:]}
+		}
+		return text, nil
+	}
 	if !r.ask(r.sem().SubscriptExpressionStopsAtAnUnreadableByte,
 		"a subscript's expression ending at a byte the arithmetic cannot read") {
 		return text, nil
-	}
-	if strings.TrimSpace(text[:at]) == "" {
-		return "", &syntax.Error{Kind: syntax.ErrArithOperand, Expr: text, Token: text[at:]}
 	}
 	return text[:at], nil
 }

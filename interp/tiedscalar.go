@@ -268,9 +268,11 @@ func (r *Runner) tieDeclaration(word string, args []string, f declareFlags,
 		// other attribute letter's is not.
 		return r.tieListing(f.remove), true
 	}
-	if f.remove {
+	if f.letterOff('T') {
 		// The plus form **with operands**, which is a refusal and not an
-		// untie — see Runner.refuseUntie.
+		// untie — see Runner.refuseUntie. The letter's own sign and not the
+		// last word's: `typeset +T -x s` is the same refusal in zsh 5.9.2
+		// (#5673).
 		return r.refuseUntie(word), true
 	}
 	// The export letter asks for `-g` as well, under the words that answer

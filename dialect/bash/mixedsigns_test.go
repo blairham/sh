@@ -11,8 +11,8 @@ import "testing"
 func TestALaterMinusWordStillAddsItsLetters(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		{`declare -x s=Ab; declare +x -i s=1+2; declare -p s`, "declare -i s=\"3\"\n"},
-		// The minus letter after the plus one is added. Letters that read
-		// the last word's sign rather than their own are #5673.
+		// The minus letter after the plus one is added. Every letter reads
+		// its own sign; see TestEachLetterTakesItsOwnSign (#5673).
 		{`declare +i -x s=1+2; declare -p s`, "declare -x s=\"1+2\"\n"},
 	} {
 		if out, st := runBash(t, t.TempDir(), c.src); out != c.want || st != 0 {

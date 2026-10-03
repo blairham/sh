@@ -349,6 +349,42 @@ func (f declareFlags) lastSign(c rune) (plus, written bool) {
 	return plus, written
 }
 
+// letterOff reports whether the letter c comes off on this line: its own sign,
+// and not the sign of the line's last option word, which is what f.remove
+// holds. `declare +t -x s` takes `t` off and adds `x` in bash 5.3.20 and zsh
+// 5.9, where reading the last word's sign added both (#5673). A letter not
+// written, or a sign the builtin's name settled, falls back to the word's.
+func (f declareFlags) letterOff(c rune) bool {
+	if f.signDecided {
+		return f.remove
+	}
+	if plus, written := f.lastSign(c); written {
+		return plus
+	}
+	return f.remove
+}
+
+// lettersOff is letterOff for a family of letters that make one attribute
+// between them — the width letters `LRZ`, the float letters `EF` — read off
+// the last of them written. `typeset -L 3 +x s` justifies and `typeset +Z 3 -x
+// s` does not in zsh 5.9.2, where the last word's sign did the opposite of
+// both (#5673).
+func (f declareFlags) lettersOff(set string) bool {
+	if f.signDecided {
+		return f.remove
+	}
+	off, written := f.remove, false
+	for i := 0; i < len(f.letters) && i < len(f.letterSigns); i++ {
+		if strings.IndexByte(set, f.letters[i]) >= 0 {
+			off, written = f.letterSigns[i] == '+', true
+		}
+	}
+	if !written {
+		return f.remove
+	}
+	return off
+}
+
 // onlyTakesAttributesAway reports whether every attribute letter this
 // declaration wrote was written under a **plus**.
 //
@@ -913,6 +949,7 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 		}
 	}
 	r.blockALaterPlus(&f)
+	r.aLetterUnderBothSigns(&f)
 	r.rankTheNumericLetters(&f)
 	rest = args[i:]
 	if code := r.refuseTheReferenceLetterInCompany(name, f); code != 0 {
@@ -1098,6 +1135,56 @@ func numericLetterCount(letters string) int {
 		}
 	}
 	return n
+}
+
+// aLetterUnderBothSigns settles a letter written under both signs on one
+// line, in the dialect where any plus takes it off: every occurrence becomes a
+// plus, so each reader of the letter's own sign sees the removal. Where the
+// last sign wins instead, nothing needs rewriting. See
+// Semantics.ALetterUnderBothSignsComesOff.
+//
+// And the two container letters, whose fields are read in many places as
+// "written", are dropped from the additions where their own sign is a plus on
+// a line that otherwise adds: `declare +a -x s=Bc` declares no array in bash
+// 5.3.20 or zsh 5.9. Their removal is read off the letters anyway (see
+// arrayAttributeRemoved).
+func (r *Runner) aLetterUnderBothSigns(f *declareFlags) {
+	if !strings.Contains(f.letterSigns, "+") || !strings.Contains(f.letterSigns, "-") {
+		return
+	}
+	asked, anyPlus := false, false
+	signs := []byte(f.letterSigns)
+	for i := 0; i < len(f.letters) && i < len(signs); i++ {
+		c := f.letters[i]
+		minus, plus := false, false
+		for j := 0; j < len(f.letters) && j < len(signs); j++ {
+			if f.letters[j] == c {
+				minus = minus || f.letterSigns[j] == '-'
+				plus = plus || f.letterSigns[j] == '+'
+			}
+		}
+		if !minus || !plus {
+			continue
+		}
+		if !asked {
+			asked = true
+			anyPlus = r.ask(r.sem().ALetterUnderBothSignsComesOff,
+				"a letter written under both signs on one declaration coming off")
+		}
+		if anyPlus {
+			signs[i] = '+'
+		}
+	}
+	f.letterSigns = string(signs)
+	if plus, written := f.lastSign('r'); written {
+		f.readonlyOff = plus
+	}
+	if f.array && f.letterOff('a') && !f.remove {
+		f.array = false
+	}
+	if f.assoc && f.letterOff('A') && !f.remove {
+		f.assoc = false
+	}
 }
 
 // minusWordsUnderALeadingPlus is the mirror of blockALaterPlus: where the
@@ -2101,6 +2188,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 					// mutant — the branch is written out because the two
 					// cases mean different things, not because they compile
 					// differently.
+					// The line's other letters land on the name itself where there
+					// is no target to carry them to, and the value is read through
+					// them: `declare +n -i s=1+2` is `declare -i s="3"` and
+					// `declare +n -x s=Bc` is exported, in bash 5.3.20, where this
+					// stored the text and dropped the letters (#5673).
+					r.applyAttributes(name, through)
 					r.setVarAs(name, value, assignedByDeclaration)
 				}
 				if r.unspecified || r.ctl == controlExit {
@@ -2742,7 +2835,11 @@ func (r *Runner) markDeclaredCompound(name string, fresh bool, f declareFlags, h
 	if !r.arrayAttributeRemoved(name, f) {
 		return false
 	}
-	if f.remove {
+	// A plus line declares no container, unless the container letter itself
+	// was written under a minus on it: `declare -a +x s` is an array in bash
+	// and zsh both (#5673).
+	addsAContainer := (f.array && !f.letterOff('a')) || (f.assoc && !f.letterOff('A'))
+	if f.remove && !addsAContainer {
 		return true
 	}
 	if r.typeLetterTakesTheCompoundLetter(f) {
@@ -3501,7 +3598,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		}
 	}
 	if f.widthLetter != 0 {
-		if f.remove {
+		if f.lettersOff("LRZ") {
 			if r.widthLettersAreSeparable() {
 				// Where the letters are two attributes rather than one, a
 				// plus form takes off the one it **names** and leaves the
@@ -3561,7 +3658,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		}
 	}
 	if f.float {
-		if f.remove {
+		if f.lettersOff("EF") {
 			// `typeset +F x` takes the attribute off and leaves the text the
 			// name is holding alone: measured, `typeset -F 3 x=1.5; typeset
 			// +F x` reads `1.500` still and lists as a plain `typeset
@@ -3646,10 +3743,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		// line was taking the attribute off.
 		// Unless the builtin's name settled the sign for the whole line,
 		// which is `integer`'s axis: see signDecided.
-		on := !f.remove
-		if plus, written := f.lastSign('x'); written && !f.signDecided {
-			on = !plus
-		}
+		on := !f.letterOff('x')
 		r.declarationExports(name, on || f.exportForced)
 	}
 	// The case attributes fold at assignment here, which is what bash and
@@ -3691,7 +3785,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.lowered == nil {
 			r.lowered = map[string]bool{}
 		}
-		if f.remove {
+		if f.letterOff('l') {
 			delete(r.lowered, name)
 		} else {
 			r.lowered[name] = true
@@ -3716,7 +3810,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.uppered == nil {
 			r.uppered = map[string]bool{}
 		}
-		if f.remove {
+		if f.letterOff('u') {
 			delete(r.uppered, name)
 		} else {
 			r.uppered[name] = true
@@ -3731,7 +3825,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.capitalized == nil {
 			r.capitalized = map[string]bool{}
 		}
-		if f.remove {
+		if f.letterOff('c') {
 			delete(r.capitalized, name)
 		} else {
 			r.capitalized[name] = true
@@ -3748,7 +3842,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.unique == nil {
 			r.unique = map[string]bool{}
 		}
-		if f.remove {
+		if f.letterOff('U') {
 			// `+U` drops the attribute and leaves the elements that are
 			// there alone: measured, `typeset -U c=(1 2 3 2)` is `1 2 3`,
 			// and `typeset +U c; c+=(1)` is `1 2 3 1` — the duplicate the
@@ -3776,7 +3870,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.traced == nil {
 			r.traced = map[string]bool{}
 		}
-		if f.remove {
+		if f.letterOff('t') {
 			// `+t` takes the letter off and leaves everything else standing:
 			// measured on all three shells with the attribute, `typeset -t
 			// T=1` then `typeset +t T` lists the plain form with the value
@@ -3790,7 +3884,7 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		if r.hidden == nil {
 			r.hidden = map[string]bool{}
 		}
-		if f.remove {
+		if f.letterOff('H') {
 			// `+H` takes the value back out of hiding and leaves everything
 			// else alone: measured, `typeset -iH n=5` lists as `typeset -i n`
 			// and `typeset +H n` lists as `typeset -i n=5`.
@@ -3815,7 +3909,7 @@ func (f declareFlags) namesANumericType(r *Runner) bool {
 	case f.integer:
 		return !f.integerComesOff(r)
 	case f.float:
-		return !f.remove
+		return !f.lettersOff("EF")
 	}
 	return false
 }

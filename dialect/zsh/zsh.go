@@ -4021,6 +4021,9 @@ func Semantics() interp.Semantics {
 	// `alias 'a b'=echo` is accepted in silence here and the name is listed
 	// back, where the two shells that check refuse it (#2413).
 	s.EarlierDeclarationLetterBlocksALaterPlus = interp.No
+	// A letter written under both signs: see
+	// interp.Semantics.ALetterUnderBothSignsComesOff (#5673).
+	s.ALetterUnderBothSignsComesOff = interp.No
 	// And the mirror, a minus word after a plus one: see
 	// interp.Semantics.EarlierPlusMakesALaterLetterARemoval (#5667).
 	s.EarlierPlusMakesALaterLetterARemoval = interp.No

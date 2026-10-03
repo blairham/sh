@@ -1931,8 +1931,12 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 	// the quoting hid names the builtin, and the claim belongs to the operand
 	// being read rather than to the call.
 	defer func(was bool) { r.rereadingAQuotedLiteral = was }(r.rereadingAQuotedLiteral)
+	defer func(was bool) { r.declarationEvaluatesItsValue = was }(r.declarationEvaluatesItsValue)
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		// This line's numeric letter is what evaluates the value, which is
+		// the question typedValueFatalf asks.
+		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
 		if !hasValue && f.plusBlocked && !r.literalOperands[name] {
 			// A line carrying a plus word declares nothing for a valueless
 			// operand over a name with no binding: not the letters a minus
@@ -5190,7 +5194,7 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 	p := syntax.NewParser("", r.dialect())
 	e := p.ParseArithFor(text, syntax.Pos{})
 	if err := p.Err(); err != nil {
-		r.mathFatalf("%s", r.diag().ParseFailure(err))
+		r.typedValueFatalf("%s", r.diag().ParseFailure(err))
 		return 0, false
 	}
 	v, err := r.evalArith(e)
@@ -5218,7 +5222,7 @@ func (r *Runner) integerNumber(text string) (int, bool) {
 		// mathFatalf rather than fatal: this is the evaluator's sentence
 		// raised through a builtin, and each column names the builtin for it
 		// exactly where it names one for `let`. See Runner.mathFatalf.
-		r.mathFatalf("%s", r.arithFailure(text, err))
+		r.typedValueFatalf("%s", r.arithFailure(text, err))
 		return 0, false
 	}
 	return v, true
@@ -5372,6 +5376,22 @@ func floatPlaces(prec int) int {
 	return prec
 }
 
+// typedValueFatalf is mathFatalf for a value a typed name would not take. Where
+// a declaration's own numeric letter is what evaluates it, one dialect ends
+// the script at 0 rather than the fatal status: `false; integer x=1/0` exits
+// 0 in zsh 5.9.2, where `integer x; x=1/0` exits 1 (#5677). The status is
+// carried the way a failed `case` subject's is, so an `always` half reads 0
+// and a subshell exits 0. See Semantics.DeclaredTypedValueFailureLeavesZero.
+func (r *Runner) typedValueFatalf(format string, args ...any) {
+	if r.declarationEvaluatesItsValue && r.ask(r.sem().DeclaredTypedValueFailureLeavesZero,
+		"a declaration's typed value that will not evaluate leaving 0") {
+		saved := r.failedExpansionStatus
+		r.failedExpansionStatus = failedExpansionLeavesZero
+		defer func() { r.failedExpansionStatus = saved }()
+	}
+	r.mathFatalf(format, args...)
+}
+
 // floatValue evaluates text as an arithmetic expression and answers the
 // float it comes to, which is what a float name stores rather than the
 // characters written: `typeset -F 3 x=1+2` is `3.000`.
@@ -5388,7 +5408,7 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 	p := syntax.NewParser("", r.dialect())
 	e := p.ParseArithFor(text, syntax.Pos{})
 	if err := p.Err(); err != nil {
-		r.mathFatalf("%s", r.diag().ParseFailure(err))
+		r.typedValueFatalf("%s", r.diag().ParseFailure(err))
 		return 0, false
 	}
 	v, err := r.evalNum(e)
@@ -5399,7 +5419,7 @@ func (r *Runner) floatValue(text string) (float64, bool) {
 		// and answering them differently here left ksh93's `float a=1/0` as a
 		// bare `divide by zero` where that shell writes `typeset: 1/0: divide
 		// by zero` (#3342).
-		r.mathFatalf("%s", r.arithFailure(text, err))
+		r.typedValueFatalf("%s", r.arithFailure(text, err))
 		return 0, false
 	}
 	return v.asFloat(), true

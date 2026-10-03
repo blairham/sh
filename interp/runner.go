@@ -3147,6 +3147,10 @@ type Runner struct {
 	// the words being expanded are a declaration's or a `case`'s. See
 	// Semantics.FailedExpansionInADeclarationOrCaseSetsNoStatus.
 	failedExpansionStatus failedExpansionStatus
+	// declarationEvaluatesItsValue says the value being stored is evaluated
+	// because the declaration storing it writes a numeric letter. See
+	// Runner.typedValueFatalf.
+	declarationEvaluatesItsValue bool
 	// fatalSetNoStatus records that a fatal error left `$?` alone under
 	// failedExpansionStatus, for an `always` half to read: the error still
 	// ends the construct with the fatal status. See tryClause.

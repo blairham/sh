@@ -1003,6 +1003,16 @@ func (r *Runner) caughtBorrowedError(s sourced) (int, bool) {
 	if s.fatalStatus != 0 {
 		status = s.fatalStatus
 	}
+	if s.eval && status == 0 {
+		// An error `eval` caught never answers 0, though the error itself
+		// left `$?` at 0 or kept a 0 standing: measured 2026-10-03 on zsh
+		// 5.9.2, `eval 'integer x=1/0'`, `eval 'case $((1/0)) in esac'` and
+		// `eval 'local x=$((1/0))'` all report 1, where `eval '(exit 3);
+		// local x=$((1/0))'` reports the 3 it kept (#5677). Not an axis:
+		// only the routes that set no status of their own can leave a 0
+		// here, and only zsh has them.
+		status = 1
+	}
 	return status, true
 }
 

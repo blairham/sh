@@ -40,6 +40,10 @@ import (
 // that the floor stops moving on its own.
 func testSemantics() Semantics {
 	s := PosixSemantics()
+	// A declaration's typed value that will not evaluate, at the fatal
+	// status. The suite that is about the other answer is dialect/zsh's
+	// typedvaluefailure_test.go (#5677).
+	s.DeclaredTypedValueFailureLeavesZero = No
 
 	// Arrays, subscripts and the expansions that read them. The standard has
 	// no arrays, so it answers none of this and every array test is refused

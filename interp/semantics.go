@@ -1831,6 +1831,29 @@ type Semantics struct {
 	//
 	// zsh Yes, every other dialect No; read as `== Yes` (#5657).
 	FailedExpansionInADeclarationOrCaseSetsNoStatus Answer
+	// DeclaredTypedValueFailureLeavesZero ends the script at 0, not at the
+	// fatal status, when a declaration's own numeric letter evaluates its value
+	// and the value will not evaluate: zsh. bash and ksh93 end at 1. Measured
+	// 2026-10-03 (#5677), zsh 5.9.2 under `-fc`, bash 5.3.20 and ksh93u+ under
+	// `-c`, each line followed by `; print after`:
+	//
+	//	                                 zsh 5.9.2   bash, ksh93
+	//	integer x=1/0 / typeset -i x=1/0     0           1
+	//	false; integer x=1/0                 0           1
+	//	float x=1/0, local -i x=1/0          0
+	//	integer x=a+                         0
+	//	integer x; x=1/0                     1           1
+	//	typeset -i x; typeset x=1/0          1
+	//	(integer x=1/0); print $?            0
+	//	{ integer x=1/0 } always { print $? }   0, and the script ends at 1
+	//
+	// A different rule from FailedExpansionInADeclarationOrCaseSetsNoStatus's,
+	// which leaves `$?` as it was: here the failure is the builtin's own
+	// evaluation and the status is 0 whatever came before. It is carried the
+	// way that axis carries a failed `case` subject, so the `always` and
+	// subshell rows follow from it. Asked only at the failure. See
+	// Runner.typedValueFatalf.
+	DeclaredTypedValueFailureLeavesZero Answer
 
 	// DollarSingleBackslashC is what `\c` means inside `$'…'`, and like the
 	// `\c` of a printf format it is three different things rather than a

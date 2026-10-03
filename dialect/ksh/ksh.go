@@ -2190,6 +2190,10 @@ func Semantics() interp.Semantics {
 	// And the mirror, a minus word after a plus one: see
 	// interp.Semantics.EarlierPlusMakesALaterLetterARemoval (#5667).
 	s.EarlierPlusMakesALaterLetterARemoval = interp.Yes
+	// A typed declaration whose own evaluation fails ends the script at the
+	// fatal status: see interp.Semantics.DeclaredTypedValueFailureLeavesZero
+	// (#5677).
+	s.DeclaredTypedValueFailureLeavesZero = interp.No
 	s.HeredocExpandsInTheCommandsProcess = interp.Yes
 	// A `( … )`'s body is **not**, and this is the column that makes it a
 	// second axis rather than a second reading of the line above. `n=0; (

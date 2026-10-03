@@ -151,6 +151,7 @@ func (r *Runner) trimReport(value, pattern string, e *syntax.ParamExpr, want str
 	if refused {
 		return ""
 	}
+	o.nth = r.matchIndexFlag(e)
 	lo, hi, m, ok := trimSpan(value, pattern, e.Op, o, r.armOrder(), searchingFlag(e))
 	if r.metABadExpansionPattern(bad, pattern) {
 		return ""

@@ -26,7 +26,7 @@ import (
 // `-` a `q` ate is not in Flags at all, the parser having taken it out into
 // QuoteModifier. `+` is deliberately absent — it is no flag on its own, and
 // the parser refuses every `+` a `q` could not take.
-const implementedParamFlags = "ULC#fsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENRX"
+const implementedParamFlags = "ULC#fsjF@kvP%qMuoOniaQbcwWA~Zze-lr0VtSmBENRXI"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -228,6 +228,15 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 			r.expandErr = true
 			return nil, false, false, false
 		}
+	}
+	if strings.ContainsRune(e.Flags, 'I') && e.Op == syntax.ParamReplace {
+		// `I` is carried for a searching trim, which is what reads it — see
+		// matchIndexFlag. Over a substitution it picks which match is
+		// replaced, and that half is not built: refused by name rather than
+		// answered with the first match at status 0.
+		r.diagf("${%s}: the (I) expansion flag is not implemented beside a substitution\n", e.Src)
+		r.expandErr = true
+		return nil, false, false, false
 	}
 	if reportsAboutTheMatch(e) && reportsAnElementOperator(e.Op) {
 		// The four reporting flags reach the trims and are refused over an

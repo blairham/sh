@@ -83,7 +83,7 @@ func (r *Runner) padFlagged(e *syntax.ParamExpr, words []string) ([]string, bool
 	rp := r.paddingArgs(e, 'r', e.PadRight)
 	// An empty element a nested expansion handed back is one unit wide here,
 	// though it prints as nothing. See Runner.padAGhost.
-	ghost := r.nestedEmptiesAreGhosts(e)
+	ghost := r.flagEmptiesAreGhosts(e, words)
 	out := make([]string, len(words))
 	for i, w := range words {
 		if ghost && w == "" {

@@ -118,7 +118,7 @@ func (r *Runner) orderWords(e *syntax.ParamExpr, words []string) []string {
 	// they were written in: `${(@oi)a}` on `(B a C b)` is `a B b C`, with the
 	// `B` still ahead of the `b`.
 	key := func(w string) string { return w }
-	if r.nestedEmptiesAreGhosts(e) {
+	if r.flagEmptiesAreGhosts(e, words) {
 		key = nestedSortKey
 	}
 	sort.SliceStable(words, func(i, j int) bool {
@@ -184,6 +184,29 @@ func innerEmptiesSortLast(e *syntax.ParamExpr) bool {
 		return false
 	}
 	return true
+}
+
+// flagEmptiesAreGhosts reports whether the empty words a flag group's sort and
+// pad read are ghosts: a nested list's (see nestedEmptiesAreGhosts), or the
+// empty fields an `=` split in the group itself made. Measured 2026-10-02 on
+// zsh 5.9.2 (`-f`, `LC_ALL=C`) with `IFS=:` and `u=a::b:`, quoted or not:
+//
+//	${(@o)=u}          a b "" ""    the empties sort last
+//	${(@O)=u}          "" "" b a
+//	${(@l:2:)=u}       " a" " " " b" " "   and pad one unit short
+//	${(@o)=u#a}        b "" "" ""   an operator runs before the split, so
+//	${(@l:2:)=u/a/x}   " x" " " " b" " "   what the split makes is still one
+//	${(@os.:.)u}       "" "" a b    where a letter split's are not ghosts
+//	e=; ${(@l:2:)=e}   "  "         and an empty value split is a value
+//
+// The last row is why words are asked: a value with nothing in it splits to
+// the one empty word, and that word is the value rather than a field the
+// split made — the same distinction `${(@q)=e}` draws by quoting it (#5426).
+func (r *Runner) flagEmptiesAreGhosts(e *syntax.ParamExpr, words []string) bool {
+	if e.SplitFlags%2 == 1 && !strings.ContainsAny(e.Flags, splitFlagLetters) {
+		return len(words) != 1 || words[0] != ""
+	}
+	return r.nestedEmptiesAreGhosts(e)
 }
 
 // nestedEmptiesAreGhosts reports whether the empty words e's inner hands back

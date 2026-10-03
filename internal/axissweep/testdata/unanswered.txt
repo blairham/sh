@@ -683,6 +683,7 @@ dash  WholeArraySubscriptThroughAReferenceToATable
 dash  WidthJustificationPrecedence
 dash  WidthLettersExcludeTheIntegerLetter
 dash  WidthNumberPrecedence
+dash  ReadWriteRedirectionTakesTheSubstitutionsEnd
 dash  WritingSubstitutionIsWaitedForAtTheCommand
 dash  ZeroFillGoesAfterAnIntegersSign
 dash  ZeroFillKeepsLeadingBlanks

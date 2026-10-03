@@ -11514,6 +11514,27 @@ type Semantics struct {
 	// the narrower claim, and a preset with no process substitution at all
 	// never reaches this.
 	WritingSubstitutionIsWaitedForAtTheCommand Answer
+	// ReadWriteRedirectionTakesTheSubstitutionsEnd makes `<>` whose target is
+	// a process substitution this command made take that substitution's own
+	// end of the pipe, in the direction the substitution has, rather than
+	// open its path for reading and writing.
+	//
+	// Measured 2026-10-02 on this Mac (#5514), `print a <> >(cat); echo st=$?`
+	// and its neighbors under `env -i`:
+	//
+	//	zsh 5.9.2    `a`, `st=0` — the write reaches the substitution, and
+	//	             `3<> >(cat)`, `0<> >(cat)` with `print -u0`, `exec 4<>
+	//	             >(cat)`, `<>>(cat)` and two of them on one command all
+	//	             do the same; `cat <> <(echo in)` reads `in`
+	//	bash 5.3.20  `/dev/fd/63: Permission denied`, `st=1`: the path is
+	//	             opened, and a pipe's end will not reopen for both
+	//	ksh93u+      a syntax error for `>(`; `<> <(…)` opens the path and is
+	//	             refused as bash's is
+	//
+	// The control is a substitution this command did not make: `x=>(cat);
+	// print a <> $x` is `bad file descriptor` in zsh, because that pipe is
+	// gone by the time the word is used, and the same here.
+	ReadWriteRedirectionTakesTheSubstitutionsEnd Answer
 
 	// SubstitutionPathPrefersProcSelfFd names a `<(cmd)` or a `>(cmd)` under
 	// /proc/self/fd where that directory is there, rather than under /dev/fd.

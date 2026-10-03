@@ -867,6 +867,18 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				return closers, nil
 			}
 			path := r.atDir(name)
+			if op == syntax.TokLessGreat {
+				if direction, ok := r.ownPipeDirection(path); ok &&
+					r.ask(r.sem().ReadWriteRedirectionTakesTheSubstitutionsEnd,
+						"`<>` onto a process substitution taking the substitution's own end") {
+					// The substitution's end in its own direction, which is
+					// what the read-and-write open stands for here. A pipe's
+					// end will not reopen for both, so asking for both is
+					// the refusal the other columns write. See
+					// Semantics.ReadWriteRedirectionTakesTheSubstitutionsEnd.
+					flags = direction
+				}
+			}
 			// `< /dev/stdin` and `< /dev/fd/0` are the command's own standard
 			// input, which is not the process's here: a here-string or a pipe
 			// into a function is a stream this shell holds and never put on

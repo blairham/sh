@@ -160,6 +160,10 @@ func Dialect() syntax.Dialect {
 	// rows, and for why this is a grammar flag and not the condition axis
 	// that answers zsh (#930).
 	d.ProcessSubstitutionOnlyWhereACommandTakesAWord = true
+	// And a substitution running against its redirection is refused the same
+	// way: `: <> >(cat)` is `>(' unexpected. See
+	// syntax.Dialect.ProcessSubstitutionAgainstTheRedirectionIsRefused (#5514).
+	d.ProcessSubstitutionAgainstTheRedirectionIsRefused = true
 	d.ParamIndirection = true
 	// And the prefix spelling: `${!ZQ_@}` is `ZQ_a ZQ_b` here, measured
 	// beside bash in the corpus. See
@@ -703,6 +707,8 @@ func Semantics() interp.Semantics {
 	s.JobSpecCommandWord = interp.JobSpecCommandWordIsNotOne
 
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
+	// `<>` onto a process substitution this command made: `<> <(…)` opens the path and is refused, as in bash; `<> >(…)` does not parse (#5514).
+	s.ReadWriteRedirectionTakesTheSubstitutionsEnd = interp.No
 	// And it names the path under /dev/fd wherever it runs, which is bash's
 	// answer again: measured 2026-09-21, `echo <(true)` is `/dev/fd/3` in
 	// the pinned Linux image, where /proc/self/fd exists and zsh prefers it

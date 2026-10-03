@@ -228,6 +228,7 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	r.procSubs = append(r.procSubs, procSubPipe{
 		path: ends.path, real: ends.real, fd: ends.fd, ident: ident, hold: ends.child,
 		body: body, captured: captured, keep: keep, began: began,
+		commandWrites: kind == syntax.ProcSubstOut,
 	})
 	return ends.path, true
 }
@@ -660,6 +661,22 @@ const procSubDirPrefix = "sh-procsub"
 // construct fail — a wrong answer to a question nobody asks rather than a
 // mechanism that stopped working. Widening the suppression to the loudest
 // oracle the filesystem has, for that, is a trade this does not make.
+// ownPipeDirection is the open flags a command's end of this command's own
+// substitution pipe has: write-only for `>(cmd)`, read-only for `<(cmd)`.
+// False for a path that is not one of them, and for `=(cmd)`'s regular file,
+// which opens like any other file.
+func (r *Runner) ownPipeDirection(path string) (int, bool) {
+	for _, p := range r.procSubs {
+		if p.path == path && !p.file {
+			if p.commandWrites {
+				return os.O_WRONLY, true
+			}
+			return os.O_RDONLY, true
+		}
+	}
+	return 0, false
+}
+
 func (r *Runner) ownPipe(path string) bool {
 	for _, p := range r.procSubs {
 		if p.path == path {
@@ -777,6 +794,11 @@ func (r *Runner) tempHome() string {
 // owns, and that goes away with it.
 type procSubPipe struct {
 	path string
+	// commandWrites says the command that names the path writes into it —
+	// `>(cmd)` — rather than reading from it. It is the direction a `<>`
+	// takes where the dialect hands it the substitution's own end. See
+	// Semantics.ReadWriteRedirectionTakesTheSubstitutionsEnd.
+	commandWrites bool
 	// began is this body's hold and its first command, for the order its
 	// trace lines arrive in — nil wherever nothing can observe it. See
 	// interp/procsubtracestart.go.

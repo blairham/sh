@@ -997,6 +997,8 @@ func Semantics() interp.Semantics {
 	// what makes `printf x | tee >(sleep 3) >/dev/null` take three seconds
 	// in this shell and none in bash and ksh93 (#2197).
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.Yes
+	// `<>` onto a process substitution this command made: `print a <> >(cat)` writes into the substitution, and `cat <> <(echo in)` reads from it (#5514).
+	s.ReadWriteRedirectionTakesTheSubstitutionsEnd = interp.Yes
 	// And it names the path after /proc/self/fd where that directory is
 	// there: measured 2026-09-21, `echo <(true)` is `/proc/self/fd/11` in
 	// the pinned Linux image and `/dev/fd/11` on the panel machine, while

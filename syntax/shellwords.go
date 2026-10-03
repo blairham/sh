@@ -98,10 +98,11 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 	rest := lex.off
 	lex.recorded = nil
 
-	if rest < len(src) {
+	for rest < len(src) {
 		tail := NewLexer(src[rest:], d)
 		tail.comments = opt.Comments
 		tail.noHeredocBodies = true
+		restarted := false
 		for {
 			t := tail.Next()
 			if t.Kind == TokEOF || t.End.Offset <= t.Pos.Offset && t.Kind != TokNewline {
@@ -110,6 +111,22 @@ func ShellWords(src string, d Dialect, opt ShellSplit) []string {
 			t.Pos.Offset += int32(rest)
 			t.End.Offset += int32(rest)
 			toks = append(toks, t)
+			if tail.err != nil {
+				// A second quote that never closes leaves the lexer in its
+				// error state, which reads one byte to a word from there on.
+				// The words after it are read afresh instead, as the first
+				// failure's are. Measured 2026-10-03 on zsh 5.9.2 under
+				// `cshjunkiequotes`: `${(@Z+n+)b}` with `b` holding `' s`,
+				// `" d` and `word` on three lines is `' s`, `" d` and `word`,
+				// where this split the last into four letters (#5151, a
+				// chunk of D04parameter.ztst).
+				rest = int(t.End.Offset)
+				restarted = true
+				break
+			}
+		}
+		if !restarted {
+			break
 		}
 	}
 

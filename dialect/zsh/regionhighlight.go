@@ -366,14 +366,16 @@ type regionChannelCodes struct {
 	start, end, def string
 	given           bool
 	extended        string
+	// bright is the parameter of the first of colors 8 to 15.
+	bright int
 }
 
 // readRegionCodes reads `zle_highlight`'s code fields, leaving the defaults
 // where a field is not there.
 func readRegionCodes(r *interp.Runner) regionCodes {
 	c := regionCodes{
-		fg: regionChannelCodes{start: "\x1b[3", end: "m", def: "9", extended: "38"},
-		bg: regionChannelCodes{start: "\x1b[4", end: "m", def: "9", extended: "48"},
+		fg: regionChannelCodes{start: "\x1b[3", end: "m", def: "9", extended: "38", bright: 90},
+		bg: regionChannelCodes{start: "\x1b[4", end: "m", def: "9", extended: "48", bright: 100},
 	}
 	fields, _ := r.GetArray("zle_highlight")
 	for _, f := range fields {
@@ -405,6 +407,11 @@ func (c regionChannelCodes) color(key string) string {
 		return "\x1b[" + c.extended + ";2;" + rgb + "m"
 	}
 	if n, _ := strconv.Atoi(key); n > 7 && !c.given {
+		if n < 16 {
+			// The bright half has a run of its own: measured on zsh 5.9.2,
+			// `fg=8` is `ESC[90m` and `bg=15` is `ESC[107m` (#5512).
+			return "\x1b[" + strconv.Itoa(c.bright+n-8) + "m"
+		}
 		return "\x1b[" + c.extended + ";5;" + key + "m"
 	}
 	return c.start + key + c.end

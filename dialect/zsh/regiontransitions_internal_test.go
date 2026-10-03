@@ -75,6 +75,12 @@ func TestZleHighlightCodesWriteTheColors(t *testing.T) {
 		{defaults, []string{"2 4 fg=1"}, "ab\x1b[31mcd\x1b[3Dmefgh"},
 		{defaults, []string{"2 4 bg=2"}, "ab\x1b[42mcd\x1b[4Gmefgh"},
 		{nil, []string{"2 4 fg=196"}, "ab\x1b[38;5;196mcd\x1b[39mefgh"},
+		// The bright half (#5512), and where it stops.
+		{nil, []string{"0 2 fg=7", "2 4 bg=7"}, "\x1b[37mab\x1b[39m\x1b[47mcd\x1b[49mefgh"},
+		{nil, []string{"0 2 fg=8", "2 4 bg=8"}, "\x1b[90mab\x1b[39m\x1b[100mcd\x1b[49mefgh"},
+		{nil, []string{"0 2 fg=15", "2 4 bg=15"}, "\x1b[97mab\x1b[39m\x1b[107mcd\x1b[49mefgh"},
+		{nil, []string{"0 2 fg=16", "2 4 bg=16"}, "\x1b[38;5;16mab\x1b[39m\x1b[48;5;16mcd\x1b[49mefgh"},
+		{custom, []string{"0 2 fg=12"}, "S|12|EabS|9|Ecdefgh"},
 		// Drawn from the same parse a read gives back: the two colors are one
 		// number, combined bit by bit. Measured the same day.
 		{nil, []string{"0 4 fg=red,fg=196"}, "\x1b[38;5;197mabcd\x1b[39mefgh"},

@@ -238,7 +238,11 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		r.line, r.locatedWithoutALine = commandLine, wasUnnumbered
 		r.heredocBodyLineShift = wasShift
 	}()
-	for _, rd := range rs {
+	trace := r.beginRedirTrace(rs)
+	for i, rd := range rs {
+		// The redirection before this one has been made. See redirTrace.
+		trace.flush()
+		last := i == len(rs)-1
 		// Every dialect reports a *simple* command at the line it began
 		// on — measured on a command split by backslashes, where the
 		// redirect is two physical lines below its command word and all
@@ -330,6 +334,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				// giveUpTheCommand.
 				return closers, nil
 			}
+			trace.hold(r, heredocTracePiece(rd, body), last, true)
 			// The descriptor it was written for, which this branch used to
 			// throw away: the body went to standard input whatever number
 			// stood in front of the operator, so `cat 3<<X` fed the document
@@ -428,6 +433,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// files in the shell that fans a target out, because the operator
 		// takes its csh reading when the word is not a number.
 		name := strings.Join(names, " ")
+		trace.hold(r, redirTracePiece(rd, name), last, false)
 
 		// `N<&M-` and `N>&M-` are the move operators: duplicate M onto N and
 		// close M, as one operator rather than as a duplication followed by a
@@ -1124,6 +1130,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 		}
 	}
+	trace.flush()
 	return closers, nil
 }
 

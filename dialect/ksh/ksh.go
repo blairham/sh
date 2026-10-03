@@ -1734,6 +1734,8 @@ func Semantics() interp.Semantics {
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.No
+	// See interp.Semantics.TraceRedirectionsOnALineOfTheirOwn (#5558).
+	s.TraceRedirectionsOnALineOfTheirOwn = interp.Yes
 	// ksh93 writes an assignment's line once it is made (#5546).
 	// See interp.Semantics.TraceLineFollowsTheStore.
 	s.TraceLineFollowsTheStore = interp.Yes

@@ -121,3 +121,44 @@ func TestAFloatNumeralTooLargeForADouble(t *testing.T) {
 		}
 	})
 }
+
+// The rest of C's range error, met by the same reader: a numeral below the
+// smallest normal double, and the same zero reached through `printf`.
+//
+// Measured 2026-10-03 on ksh93u+ 2012-08-01, the one column whose arithmetic
+// loses an overflowed numeral: `$(( 1e-320 ))` is `0` where zsh writes the
+// denormal, `$(( -0.0 ))` is `-0`, and `printf '[%f][%f]' 1e400 -1e400` is
+// `[-0.000000][0.000000]` in silence.
+func TestAFloatNumeralOutOfRangeIsLostEverywhereTheReaderIs(t *testing.T) {
+	carried := func(zero Answer) func(*Runner) {
+		return func(r *Runner) {
+			s := testSemantics()
+			s.ArithFloatOverflowIsZero = zero
+			s.ArithValuesAreCarriedInAFloat = Yes
+			s.PrintfNumberOperand = PrintfNumberArithmetic
+			s.PrintfReportsBadNumber = No
+			s.PrintfNonFiniteIsConverted = Yes
+			r.Semantics = &s
+			r.Diagnostics = &Diagnostics{ArithFloatDigits: 15, ArithInfinity: "inf", ArithNotANumber: "nan"}
+		}
+	}
+	floats := func(d *syntax.Dialect) { d.ArithFloat = true }
+	for _, tc := range []struct{ src, lost, kept string }{
+		// A whole value carried in a double is written as an integer, and a
+		// negative zero is still a zero with a sign.
+		{`echo $((-0.0))`, "-0", "-0"},
+		{`echo $((1e400))`, "-0", "inf"},
+		{`echo $((1e-320))`, "0", "9.99988867182683e-321"},
+		{`echo $((-1e-320))`, "-0", "-9.99988867182683e-321"},
+		{`printf '[%f][%f]' 1e400 -1e400`, "[-0.000000][0.000000]", "[inf][-inf]"},
+		{`printf '[%g][%g]' 1e-320 -1e-320`, "[0][-0]", "[9.99989e-321][-9.99989e-321]"},
+		{`printf '[%d]' 1e400`, "[0]", "[9223372036854775807]"},
+	} {
+		if got, st := runGrammar(t, tc.src, floats, carried(Yes)); strings.TrimSpace(got) != tc.lost || st != 0 {
+			t.Errorf("losing: %s = %q status %d, want %q and 0", tc.src, got, st, tc.lost)
+		}
+		if got, st := runGrammar(t, tc.src, floats, carried(No)); strings.TrimSpace(got) != tc.kept || st != 0 {
+			t.Errorf("keeping: %s = %q status %d, want %q and 0", tc.src, got, st, tc.kept)
+		}
+	}
+}

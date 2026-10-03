@@ -17,10 +17,8 @@ assignment/arithmetic-that-will-not-parse-in-a-command
 assoc/a-subscript-search-is-a-list-of-its-matches
 autoload/the-two-signs-of-x
 axis/a-whole-array-subscript-inside-an-expression
-axis/arith-float-overflow
 axis/debug-head-of-a-for-loop
 axis/debug-head-of-a-select
-axis/printf-an-evaluated-infinity-overflows
 axis/printf-c99-float-conversions
 axis/printf-non-finite-is-converted
 axis/trap-body-line-signal
@@ -121,7 +119,6 @@ pat/the-tilde-flag-in-a-group-decides-snippet-from-plugin
 pat/the-walk-reports-no-match
 pipe/both-streams-takes-no-blank-between-its-two-bytes
 print/a-dash-inside-a-bundle-is-an-inert-letter
-printf/a-range-error-keeps-the-value
 printf/a-second-dot-is-an-output-base
 printf/an-output-base-beside-a-precision
 printf/c-ignores-a-precision

@@ -2899,8 +2899,28 @@ func (r *Runner) readArithNum(s, tail string, written bool) (arithNum, error) {
 	if err != nil {
 		return intNum(0), arithError{msg: r.wordInvalidNumber(s), token: s, badNumeral: true}
 	}
+	if f != 0 && math.Abs(f) < minNormalFloat &&
+		r.ask(r.sem().ArithFloatOverflowIsZero, "a float numeral too large for a double") {
+		// The other half of C's range error, and the same axis because it is
+		// the same report: `strtod` sets ERANGE for a value below the
+		// smallest normal double as well, and the column that loses an
+		// overflowed numeral loses this one too — `$(( 1e-320 ))` is `0`
+		// in ksh93u+ where zsh writes the denormal. Go hands the denormal
+		// back with no error, so the range is found from the value. The
+		// zero is a positive one whichever reader met it: `$(( -1e-320 ))`
+		// is `-0`, the unary minus applied to it.
+		return floatNum(0), nil
+	}
 	return floatNum(f), nil
 }
+
+// minNormalFloat is the smallest normal double, below which C's `strtod`
+// reports a range error for a numeral that is not zero.
+const minNormalFloat = 2.2250738585072014e-308
+
+// negativeZero reports a zero carrying a sign, which every integer rendering
+// would lose: `$(( -0.0 ))` is `-0` in ksh93u+, whose every value is a double.
+func negativeZero(f float64) bool { return f == 0 && math.Signbit(f) }
 
 // overflowZero is the zero a numeral too large for a double comes to, in the
 // dialect where it comes to a zero at all.
@@ -3107,7 +3127,7 @@ func (r *Runner) formatNum(n arithNum) string {
 		digits = 17
 	}
 	out := strconv.FormatFloat(n.f, 'g', digits, 64)
-	if i, fits := intFromDouble(n.f); fits && itoa(i) != out &&
+	if i, fits := intFromDouble(n.f); fits && itoa(i) != out && !negativeZero(n.f) &&
 		r.ask(r.sem().ArithValuesAreCarriedInAFloat, "arithmetic carried in a float rather than the machine word") {
 		// The shell whose every arithmetic value is a C double writes one as
 		// an **integer** whenever a saturating `(intmax_t)` cast of it

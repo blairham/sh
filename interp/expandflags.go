@@ -63,6 +63,11 @@ func (r *Runner) expandFlagged(s syntax.Span, sp splitPolicy, head bool) ([]stri
 	if !ok {
 		return nil, true
 	}
+	for i, w := range words {
+		// A `:s` replacement's deferred expansions, now that the flags have
+		// run on its source. See pendingMark.
+		words[i] = r.resolvePending(w)
+	}
 	if !escaped {
 		// A `:s` replacement's live marks are read here, where the words
 		// are escaped, and nowhere further on. See liveMark.

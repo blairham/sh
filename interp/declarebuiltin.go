@@ -2114,6 +2114,15 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		// the operand because `name` is the redirected one by now — the cell
 		// the attributes are about to reach is the cell that has to go back.
 		// See declarationtakenback.go.
+		// A fresh local of one of the shell's own slots takes the slot's
+		// kind, as `local` does. See Runner.localSlotKind.
+		slot := ScalarParameter
+		if fresh {
+			slot = r.localSlotKind(name, df)
+		}
+		if slot == IntegerParameter {
+			df.integer, df.base, df.baseNamed = true, 10, true
+		}
 		held := r.holdTheDeclaration(name)
 		// The kind this line names takes the place of the kind the name had,
 		// in the one dialect that answers it that way. Ahead of both the
@@ -2341,6 +2350,8 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			if r.unspecified || r.ctl == controlExit {
 				return r.status
 			}
+		case hasValue && slot == ArrayParameter && valueTarget == "":
+			r.setArray(name, []string{value})
 		case hasValue:
 			r.setVarAs(r.orName(valueTarget, name), value, assignedByDeclaration)
 			if r.ctl == controlExit {

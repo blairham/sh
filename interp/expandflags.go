@@ -402,7 +402,20 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, sp splitPolicy, quoted bool,
 	}
 
 	if !set && e.Name != "" {
-		r.checkNounset(e)
+		if indirect != nil && indirect.set {
+			// The name a `(P)` resolved to is what is unset, and it is named
+			// as the text it came from, which for an array is its elements
+			// joined: measured 2026-10-03 on zsh 5.9.2, `setopt nounset;
+			// n=(a b); ${(P)n}` is `a b: parameter not set`, `s=a; ${(P)s}`
+			// is `a: …` and `n=(); ${(P)n}` is `: …`. An unset base is
+			// named as itself: `${(P)nope}` is `nope: …`.
+			saved := r.unboundByIndirection
+			r.unboundByIndirection = &indirect.text
+			r.checkNounset(e)
+			r.unboundByIndirection = saved
+		} else {
+			r.checkNounset(e)
+		}
 	}
 
 	// Rule 5: in double quotes the words are joined — with the `j`
@@ -1582,8 +1595,14 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		return sub, false, true, substitutedNothing(e, sub, fires)
 	case syntax.ParamError:
 		if fires {
+			subject := r.paramErrorSubject(e)
+			if indirect != nil && indirect.set {
+				// The resolved name, as the nounset refusal above names it:
+				// `n=(a b); ${(P)n:?boom}` is `a b: boom`.
+				subject = indirect.text
+			}
 			r.fatalParamError("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
-				r.paramErrorSubject(e), r.paramErrorWord(e, set)))
+				subject, r.paramErrorWord(e, set)))
 			return nil, false, false, false
 		}
 	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,

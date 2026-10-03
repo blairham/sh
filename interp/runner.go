@@ -3108,6 +3108,10 @@ type Runner struct {
 	// a double-quoted string is: a here-document body, an arithmetic
 	// expression. See expandRawSpansWith.
 	expandingRawText bool
+	// unboundByIndirection is the text a `(P)` resolved to, while the
+	// nounset check of that expansion runs, so its refusal names the
+	// parameter that is unset. See unboundSubject.
+	unboundByIndirection *string
 	// tailInALoop says the tail was handed on through the last pass of a
 	// loop. See TailExecWhereverLastOutsideALoop.
 	tailInALoop bool

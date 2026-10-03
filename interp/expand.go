@@ -1324,7 +1324,7 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 	// inside a brace that never closed, and inside this expansion's quoting
 	// if it had any. See Runner.inBraceOperand and substLevel (#3355).
 	defer r.inBraceOperand(s.Quoting)()
-	if splitFlagOn(s, sp) {
+	if a, written := splitFlagParity(s); written && sp != splitNever {
 		// A `${=spec}` whose word is what substituted splits the word as it
 		// expands rather than the text it came to, so the word's own quoting
 		// still protects: measured 2026-10-02 on zsh 5.9.2 with `set A 'b c'`
@@ -1340,7 +1340,12 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 		// which is the reading an `(A)` assignment's operand already has —
 		// see splittingTheAssignedWord — and the text is then not split a
 		// second time: see Runner.substitutedWordSplit (#5151).
-		defer r.splittingTheAssignedWord(true, s.Quoting != syntax.Unquoted)()
+		//
+		// A doubled `==` is the same question answered no, and it reaches
+		// the word the same way: under `emulate sh`, `p='1 2' q='3 4';
+		// ${==1:-$p $q}` is the one word `1 2 3 4` — neither the
+		// expansions nor the blank between them split.
+		defer r.splittingTheOperatorWord(a, s.Quoting != syntax.Unquoted)()
 		r.substitutedWordSplit = e
 		if s.Quoting != syntax.Unquoted {
 			defer r.withoutGlobbing()()

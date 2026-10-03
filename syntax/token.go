@@ -314,11 +314,6 @@ type Span struct {
 	// the mark does *not* promise — nothing here translates anything, and no
 	// message catalog is consulted.
 	Translated bool
-	// TildeLen is how many bytes at the front of Value a tilde expansion
-	// wrote, where the run-time expansion of a leading `~` replaced it: the
-	// directory is not text the word was written with, and a word whose
-	// text splits does not split it. Zero for every span nothing replaced.
-	TildeLen int
 
 	// CurrentShell says a command substitution was written `${ cmd;}`, which
 	// runs in the shell that read it rather than in a subshell — so what it

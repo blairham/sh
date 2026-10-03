@@ -61,6 +61,12 @@ type openTraceLine struct {
 // list carrying one is written the other way. No dialect that answers yes has
 // the construct, and that is why this falls back instead of modeling it.
 func (r *Runner) assignListIsWrittenAsItGoes(assigns []*syntax.Assign) bool {
+	if len(assigns) == 0 {
+		// No list and so no line: an empty command's bare line is written
+		// elsewhere, and asking here would write a second, prefixed one.
+		// See Semantics.EmptyCommandTrace.
+		return false
+	}
 	for _, a := range assigns {
 		if a.Members != nil {
 			return false

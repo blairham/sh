@@ -111,6 +111,23 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign) bool
 		if name, ok := r.prefixHoldableName(a); ok {
 			held.hold(r, name, joined)
 		}
+		if !frozen && r.tracing() && r.diag().TracePrefixAssignment == TracePrefixOwnLineBefore {
+			// Written as it is expanded, ahead of the refusal still to come,
+			// in the column that writes a line per entry in front of the
+			// command: measured 2026-10-02, `readonly r; set -x; a=1 r=2
+			// true` is `+ a=1`, the refusal, `+ true` in bash 5.3.20 (#5546).
+			// The walk behind this one does not write it again.
+			d := r.diag()
+			for _, w := range r.prefixTraceWords([]*syntax.Assign{a}, *d) {
+				r.awaitTraceTurn()
+				r.traceLine(w, *d)
+				r.releaseTraceTurn()
+			}
+			if r.prefixTracedEarly == nil {
+				r.prefixTracedEarly = map[*syntax.Assign]bool{}
+			}
+			r.prefixTracedEarly[a] = true
+		}
 		if frozen {
 			// Its value expanded and nothing behind it does: the refusal is
 			// the caller's next act.

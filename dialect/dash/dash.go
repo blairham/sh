@@ -234,6 +234,9 @@ func Semantics() interp.Semantics {
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.Yes
+	// dash writes a list's one line after every store (#5509, #5546).
+	// See interp.Semantics.TraceLineFollowsTheStore.
+	s.TraceLineFollowsTheStore = interp.Yes
 	// And a declaration utility's operand is reached before that prefix:
 	// measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo OP >&2)`
 	// writes `OP` and then `PRE` (#3814).

@@ -1213,6 +1213,9 @@ func Semantics() interp.Semantics {
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.No
+	// bash writes an assignment's line before its store (#5546).
+	// See interp.Semantics.TraceLineFollowsTheStore.
+	s.TraceLineFollowsTheStore = interp.No
 	// And a declaration utility's operand is reached **before** that prefix,
 	// which is the opposite half of the same sequence: measured 2026-09-19,
 	// `PRE=$(echo PRE >&2) export s=$(echo OP >&2)` writes `OP` and then

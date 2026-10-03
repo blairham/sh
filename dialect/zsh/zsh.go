@@ -2404,6 +2404,9 @@ func Semantics() interp.Semantics {
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.Yes
+	// zsh writes each word before its store (#5546).
+	// See interp.Semantics.TraceLineFollowsTheStore.
+	s.TraceLineFollowsTheStore = interp.No
 	// And yet the prefix is worked through **before** a declaration utility's
 	// operand, which is why the two are separate axes: this shell opens the
 	// redirections ahead of the prefix and still reaches the prefix ahead of

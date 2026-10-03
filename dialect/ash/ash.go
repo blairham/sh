@@ -417,6 +417,9 @@ func Semantics() interp.Semantics {
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.Yes
+	// BusyBox ash writes a list's one line after every store (#5509, #5546).
+	// See interp.Semantics.TraceLineFollowsTheStore.
+	s.TraceLineFollowsTheStore = interp.Yes
 	// And a declaration utility's operand is reached before that prefix, as
 	// in dash: measured 2026-09-19 in the digest-pinned image,
 	// `PRE=$(echo PRE >&2) export s=$(echo OP >&2)` writes `OP` and then

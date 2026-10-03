@@ -223,10 +223,25 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 			continue
 		}
 		joined := r.recordPrefixTraceValue(a, r.prefixExpansion(a))
+		if r.prefixWalkFailed(walk) {
+			// The value would not expand, and nothing of it is traced: the
+			// trace line expands PS4, which would take the failure off the
+			// record, and the shell gives up here. Measured 2026-10-02:
+			// `set -x; a=1 b=${x?boom} true; echo after` is `+ a=1` and the
+			// complaint, and ends, in bash 5.3.20; here it wrote `+ b=` and
+			// ran on to `after` (#5546).
+			break
+		}
 		if name, ok := r.prefixHoldableName(a); ok {
 			held.hold(r, name, joined)
 		}
 		if !traceEach {
+			continue
+		}
+		if r.prefixTracedEarly[a] {
+			// Written already, ahead of a refusal; it still counts as the
+			// prefix's lines being written.
+			wrote = true
 			continue
 		}
 		for _, w := range r.prefixTraceWords([]*syntax.Assign{a}, *d) {

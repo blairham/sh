@@ -4631,6 +4631,40 @@ type Semantics struct {
 	// Asked only for a subscripted assignment being traced, so the two
 	// columns with no subscript at all leave it unanswered.
 	TraceElementSubscriptIsEvaluated Answer
+
+	// TraceLineFollowsTheStore writes an assignment's trace line once the
+	// assignment has been made, so a store that is refused writes no line and
+	// one with a side effect writes it after the effect. Measured 2026-10-02
+	// under `-c` (#5546):
+	//
+	//	readonly r; set -x; a=1 r=2 c=3
+	//	        ksh93u+: `+ a=1`, the refusal
+	//	        bash 5.3.20: `+ a=1`, `+ r=2`, the refusal
+	//	x=0; function x.set { print -u2 SET; }; set -x; x=1
+	//	        ksh93u+: SET, then `+ x=1`
+	//
+	// It is why ksh93 can show a subscript as it resolved
+	// (TraceElementSubscriptIsEvaluated). dash and BusyBox ash write a list's
+	// one line once every assignment is made, which is this answer for the
+	// list; zsh writes each word before its store.
+	//
+	// Read rather than asked: tracing is not the place to refuse a script.
+	//
+	// unpinned ksh: no corpus row traces a refused store; pinned by
+	// TestATracedStoreFollowsTheAssignment.
+	//
+	// unpinned bash: the same reach, pinned by
+	// TestATracedStoreFollowsTheAssignment.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestATracedStoreFollowsTheAssignment.
+	//
+	// unpinned dash: a list is written once, after every store; pinned by
+	// TestATracedAssignmentThatFailsWritesNoLine.
+	//
+	// unpinned ash: the same, pinned by
+	// TestATracedAssignmentThatFailsWritesNoLine.
+	TraceLineFollowsTheStore Answer
 	// TraceShowsItsOwnDisabling prints `set +x` before acting on it. True in
 	// dash, bash and zsh; ksh93 applies the change first, so the command
 	// that stops tracing leaves no trace of itself.

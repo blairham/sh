@@ -380,3 +380,50 @@ func forkedBodyOf(st *syntax.Stmt) syntax.Command {
 	}
 	return p.Cmds[0]
 }
+
+// settleFrozenMarks moves a forked body's inherited `+` off a number no job
+// holds, where the body has a job for it to go to — which the shell does when
+// something reads the table: a listing, or a spec looked up by `jobs`,
+// `wait`, `kill` and the rest. `${jobstates}` reads the marks as they stand.
+//
+// The `+` goes to the `-` where that is a job, and to the highest job
+// otherwise; the `-` then goes to the highest other job, or — in parentheses,
+// which are a job of their own — to the parentheses themselves. Measured
+// 2026-10-02 on zsh 5.9.2 under `-f -c`, the parent holding n `sleep 2 &`
+// jobs and the body k of its own, `${(kv)jobstates}` before and after the
+// read (#5429):
+//
+//	( … ), n=3 k=1   2 -        → 2 +          and `jobs %-` is 0
+//	( … ), n=4 k=1   2          → 2 +          and `jobs %-` is 0
+//	( … ), n=4 k=2   2, 3 -     → 2 -, 3 +
+//	( … ), n=5 k=2   2, 3       → 2 -, 3 +
+//	( … ), n=5 k=3   2, 3, 4 -  → 3 -, 4 +
+//	{ … } | cat, n=2 k=1   1 -  → 1 +          and `jobs %-` is no previous job
+//	{ … } | cat, n=3 k=2   1, 2 - → 1 -, 2 +
+//
+// for `jobs`, `jobs %%`, `jobs %-`, `jobs %2` and `kill -0 %%` alike, where
+// a `:` moves nothing.
+func (r *Runner) settleFrozenMarks() {
+	if !r.ownJobsStartAtTwo && !r.marksFrozen {
+		return
+	}
+	if len(r.jobs) == 0 || r.inheritedCurrentJob == 0 || r.jobByNumber(r.inheritedCurrentJob) != nil {
+		// No `+` to move, or one on a job.
+		return
+	}
+	if r.ownJobsStartAtTwo && r.inheritedCurrentJob == 1 {
+		// Or one on the parentheses themselves: `sleep 2 & ( sleep 1 &
+		// jobs ) | cat` lists the body's job unmarked.
+		return
+	}
+	current := r.inheritedPreviousJob
+	if r.jobByNumber(current) == nil {
+		current = r.highestJobBut(0, false)
+	}
+	previous := r.highestJobBut(current, false)
+	if previous == 0 && r.ownJobsStartAtTwo {
+		// The parentheses, which `%-` then passes over at 0.
+		previous = 1
+	}
+	r.inheritedCurrentJob, r.inheritedPreviousJob = current, previous
+}

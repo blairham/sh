@@ -289,7 +289,13 @@ func (r *Runner) elementStateAs(j *Job, e jobElement, shown bool) string {
 //	true | { (true); jobs }             done
 //	true | { /bin/sleep 0.1 & jobs }    done
 //	true | { zselect -t 10; jobs }      done
-func (r *Runner) noticeElementEnds() {
+func (r *Runner) noticeElementEnds() { r.noticeElementEndsAs(true) }
+
+// noticeElementEndsAs is noticeElementEnds, told whether the ends are reaped
+// — a wait — or only seen, as starting a job sees them: measured 2026-10-02
+// on zsh 5.9.2, `echo | { /bin/sleep 0.3 & print ${(kv)jobstates} }` writes
+// the `echo` running where `jobs` in the same place writes it done.
+func (r *Runner) noticeElementEndsAs(reaped bool) {
 	for _, j := range r.jobs {
 		if j == nil || j.elementsOf == nil {
 			continue
@@ -297,9 +303,9 @@ func (r *Runner) noticeElementEnds() {
 		// A forked element of ours is a goroutine and not a process, so one
 		// that runs nothing but builtins can be behind the shell that is
 		// about to notice it: each is given until it settles.
-		j.noticeElements(len(j.elements), true)
+		j.noticeElements(len(j.elements), reaped)
 		j.elemMu.Lock()
-		all := j.fgPipeline && j.elemsRunning == 0
+		all := reaped && j.fgPipeline && j.elemsRunning == 0
 		j.elemMu.Unlock()
 		if all {
 			// The job's own status is not the pipeline's, which is still

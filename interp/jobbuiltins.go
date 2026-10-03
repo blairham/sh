@@ -155,6 +155,8 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// flag rather than the one `exit` reads: a listing suppresses the warning
 	// for the line after it, and not for a line after that.
 	r.tellingOfJobsAtExit = true
+	// And a listing reads it too. See Runner.settleFrozenMarks.
+	r.settleFrozenMarks()
 	form, code := r.jobsForm(opts)
 	if code != 0 {
 		return code
@@ -1174,6 +1176,9 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	if r.unspecified {
 		return nil, jobSpecUnanswered
 	}
+	// Reading a spec reads the table, which moves a frozen `+` that names no
+	// job. See Runner.settleFrozenMarks.
+	r.settleFrozenMarks()
 	text := strings.TrimPrefix(spec, "%")
 	switch text {
 	case "", "%", "+":

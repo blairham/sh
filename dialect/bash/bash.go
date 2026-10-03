@@ -3030,6 +3030,10 @@ func Semantics() interp.Semantics {
 	// And the mirror, a minus word after a plus one: see
 	// interp.Semantics.EarlierPlusMakesALaterLetterARemoval (#5667).
 	s.EarlierPlusMakesALaterLetterARemoval = interp.No
+	// A typed declaration whose own evaluation fails ends the script at the
+	// fatal status: see interp.Semantics.DeclaredTypedValueFailureLeavesZero
+	// (#5677).
+	s.DeclaredTypedValueFailureLeavesZero = interp.No
 	// A redirection that cannot be made is where bash parts from POSIX and
 	// from three of the panel: `exec 3>/nope/x; echo after` complains and
 	// prints `after` at status 0. It is the starting value rather than a

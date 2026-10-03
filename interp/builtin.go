@@ -7747,8 +7747,11 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		}
 		return status
 	}
+	defer func(was bool) { r.declarationEvaluatesItsValue = was }(r.declarationEvaluatesItsValue)
 	for _, a := range args {
 		name, value, hasValue, appends := declarationOperand(a)
+		// See declareNames: this line's numeric letter evaluates the value.
+		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
 		// The hide-in-scope letter asks for an ordinary local over the
 		// shell's own name, which is the one way past the second reason
 		// alone. Measured — see Runner.refusePrivateDeclaration. The bare

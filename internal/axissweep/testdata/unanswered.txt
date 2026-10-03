@@ -121,6 +121,7 @@ ash   DeclarePrintReportsAMissingFunctionName
 ash   DeclarePrintReportsAMissingName
 ash   DeclareTypeLetter
 ash   DeclareZeroFillLetter
+ash   DeclaredTypedValueFailureLeavesZero
 ash   DisownAlwaysFails
 ash   DisownRemovesTheJob
 ash   EarlierDeclarationLetterBlocksALaterPlus
@@ -473,6 +474,7 @@ dash  DeclarePrintReportsAMissingFunctionName
 dash  DeclarePrintReportsAMissingName
 dash  DeclareTypeLetter
 dash  DeclareZeroFillLetter
+dash  DeclaredTypedValueFailureLeavesZero
 dash  DisownAlwaysFails
 dash  DisownRemovesTheJob
 dash  DollarSingleBackslashC

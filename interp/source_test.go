@@ -70,6 +70,10 @@ func permissive() Semantics {
 	// something about *arrays* needs it answered, and the suite that is
 	// about the third answer sets it itself — see
 	// interp/indirectsubscriptflag_test.go (#4957).
+	// A declaration's typed value that will not evaluate, at the fatal
+	// status. The suite that is about the other answer is dialect/zsh's
+	// typedvaluefailure_test.go (#5677).
+	s.DeclaredTypedValueFailureLeavesZero = No
 	s.IndirectionIsTheSubscriptFlag = No
 	s.ExportedCompoundReachesAChildAsItsFirstValue = No
 	s.SubscriptedOperandCarriesTheAttributes = Yes

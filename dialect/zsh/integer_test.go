@@ -211,7 +211,9 @@ func TestIntegerIsADeclaringBuiltinHere(t *testing.T) {
 		t.Errorf("type -a integer = %q (status %d), want the reserved word and the builtin", out, st)
 	}
 	out, st = runZsh(t, dir, `integer n=*; echo "n=[$n]"`)
-	if !strings.Contains(out, "bad math expression: operand expected at `*'") || st != 1 {
+	// At 0: the declaration's own evaluation failing ends the script there
+	// (#5677).
+	if !strings.Contains(out, "bad math expression: operand expected at `*'") || st != 0 {
 		t.Errorf("integer n=* = %q (status %d), want the `*` to reach the arithmetic "+
 			"entire", out, st)
 	}

@@ -156,7 +156,10 @@ func TestFloatIsADeclarationHere(t *testing.T) {
 	// splits no unquoted parameter, so only the glob separates a declaring
 	// word from an ordinary one.
 	out, st := runZsh(t, dir, `float n=*; echo "n=[$n]"`)
-	if strings.Contains(out, "no matches found") || st == 0 {
+	// The arithmetic refuses the `*` and ends the script at 0, which is the
+	// declaration's own failure (#5677); a glob would have said `no matches`.
+	if strings.Contains(out, "no matches found") ||
+		!strings.Contains(out, "bad math expression") || st != 0 {
 		t.Errorf("float n=* = %q (status %d); the operand was globbed, so the word is not declaring", out, st)
 	}
 }

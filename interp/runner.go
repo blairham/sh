@@ -10246,6 +10246,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// by which time the shell has already read the field.
 		r.bg.settleStartedPID(cmd.Process.Pid, ownGroup)
 		r.tookJobProcess(cmd.Process.Pid, ownGroup)
+		r.programOfAJobStarted(cmd.Process.Pid)
 		r.status = r.waitForBackgroundProcess(cmd)
 		r.releasedJobProcess(cmd.Process.Pid)
 		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
@@ -10324,6 +10325,9 @@ func (r *Runner) waitForBackgroundProcess(cmd *exec.Cmd) int {
 	// was waited for. See Runner.programOfAJobReaped.
 	defer r.holdTheReapedWindowOpen()
 	defer r.programOfAJobReaped()
+	// Run first of the three: the window between the kernel's reaping and
+	// the signal above (#5651).
+	defer r.holdTheUnsaidWindowOpen()
 	if !r.monitor || r.WaitForCommand == nil || r.bg == nil {
 		if r.inbox != nil {
 			// A body that can be killed while it waits, and then stops

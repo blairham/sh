@@ -47,6 +47,38 @@ echo end`
 	}
 }
 
+// The same job seen in the earlier window: the kernel has reaped the program,
+// so `kill -0` already fails, and the goroutine has not yet said so (#5651).
+// Without the kernel's answer, `jobs` finds the job still running every time
+// the hook holds this window open.
+func TestAProgramTheKernelReapedIsNoticedBeforeTheGoroutineSaysSo(t *testing.T) {
+	beforeAJobsProgramIsSaidReaped = func() { time.Sleep(300 * time.Millisecond) }
+	t.Cleanup(func() { beforeAJobsProgramIsSaidReaped = nil })
+	const src = `/bin/sh -c 'exit 3' & p=$!
+/bin/sh -c 'i=0; while kill -0 $1 2>/dev/null && [ $i -lt 3000 ]; do /bin/sleep 0.01; i=$((i+1)); done' poll $p
+jobs
+echo end`
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sem := PosixSemantics()
+	sem.JobsListFinishedJobs = Yes
+	sem.JobsShowBackgroundCommand = Yes
+	out := &strings.Builder{}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+		Stdout: out, Stderr: out, Env: []string{"PATH=/usr/bin:/bin"},
+	})
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "Done") || strings.Contains(got, "Running") || !strings.HasSuffix(got, "end\n") {
+		t.Errorf("got %q, want the job listed as ended at 3", got)
+	}
+}
+
 // The wait is for a job whose program was its whole body, and only for that:
 // a function the job calls runs a program and goes on to the next, so that
 // program's end is not the job's. The second program here runs for seconds,
@@ -76,6 +108,38 @@ echo end`
 		t.Fatal(err)
 	}
 	if took := time.Since(begun); took > 3*time.Second || !strings.Contains(out.String(), "Running") {
+		t.Errorf("took %v and wrote %q, want the job listed running at once", took, out.String())
+	}
+}
+
+// The same, where the function's program has ended and nothing it does next
+// starts another at its own depth: it waits on a job of its own. A pid keyed
+// on any program the job ran would be the ended one, and `jobs` would wait
+// for the function to return (#5651).
+func TestAProgramAFunctionRanThatEndedIsNotTheJobsEnd(t *testing.T) {
+	const src = `f() { /bin/sh -c 'exit 0'; /bin/sleep 4 & wait; }
+f &
+/bin/sleep 0.3
+jobs
+kill %1
+echo end`
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sem := PosixSemantics()
+	sem.JobsListFinishedJobs = Yes
+	sem.JobsShowBackgroundCommand = Yes
+	out := &strings.Builder{}
+	r := newTestRunner(t, &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+		Stdout: out, Stderr: out, Env: []string{"PATH=/usr/bin:/bin"},
+	})
+	begun := time.Now()
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(begun); took > 2*time.Second || !strings.Contains(out.String(), "Running") {
 		t.Errorf("took %v and wrote %q, want the job listed running at once", took, out.String())
 	}
 }

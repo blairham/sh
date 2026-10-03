@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -157,6 +158,11 @@ type Job struct {
 	depthAtStart  int
 	programReaped chan struct{}
 	reapedOnce    sync.Once
+	// bodysProgram is the pid of the program that is the whole of the body,
+	// once it has started, and 0 before. Atomic because the table is read on
+	// the shell's goroutine while the job's own goroutine writes it. See
+	// Runner.awaitAReapedProgramsJob.
+	bodysProgram atomic.Int64
 
 	procsMu sync.Mutex
 	// firstGone says the process the job's PID names has been waited for,
@@ -3522,7 +3528,18 @@ func (r *Runner) awaitAReapedProgramsJob(j *Job) {
 	select {
 	case <-j.programReaped:
 		<-j.done
+		return
 	default:
+	}
+	// The kernel reaps before the goroutine can say so, and `kill -0`
+	// answers from the kernel. So a script can see the pid gone before
+	// programReaped is closed, and the signal alone left it a window to find
+	// the job still running (#5651). The body's own program gone means our
+	// waiter has reaped it, because only the parent reaps, and the job is as
+	// over as the signal would say. A reused pid answers as alive, which
+	// leaves the job to the signal, as before.
+	if pid := j.bodysProgram.Load(); pid > 0 && childIsGone(int(pid)) {
+		<-j.done
 	}
 }
 
@@ -3544,6 +3561,23 @@ func bodyIsOneSimpleCommand(st *syntax.Stmt) bool {
 // rather than waited for.
 var afterAJobsProgramIsReaped func()
 
+// beforeAJobsProgramIsSaidReaped is the same kind of hook for the window
+// before programReaped is closed. The kernel has reaped the program and the
+// goroutine has not said so yet, so the pid is gone while the signal is
+// still to come (#5651).
+var beforeAJobsProgramIsSaidReaped func()
+
+// programOfAJobStarted records the pid of the program a one-program job's
+// body runs, at the body's own depth, so that a program a function in the
+// body starts is never taken for it. See awaitAReapedProgramsJob.
+func (r *Runner) programOfAJobStarted(pid int) {
+	j := r.inJob
+	if j == nil || !j.oneProgram || r.depth != j.depthAtStart {
+		return
+	}
+	j.bodysProgram.Store(int64(pid))
+}
+
 // programOfAJobReaped says a program this runner started has been reaped,
 // which for the program that was the whole of a background job means the job
 // is over bar its goroutine returning. Said where the reaping is, so that the
@@ -3557,10 +3591,17 @@ func (r *Runner) programOfAJobReaped() {
 	j.reapedOnce.Do(func() { close(j.programReaped) })
 }
 
-// holdTheReapedWindowOpen is the test hook's door, kept apart from the signal
-// above so that a test removing the signal still has its window opened, and
-// opened only on a job's goroutine — held anywhere else it would give the job
-// the time to finish and close the window it is meant to open.
+// holdTheUnsaidWindowOpen is beforeAJobsProgramIsSaidReaped's door, kept apart
+// from the signal above so that a test removing the signal still has its window
+// opened, and opened only on a job's goroutine — held anywhere else it would
+// give the job the time to finish and close the window it is meant to open.
+func (r *Runner) holdTheUnsaidWindowOpen() {
+	if beforeAJobsProgramIsSaidReaped != nil && r.inJob != nil {
+		beforeAJobsProgramIsSaidReaped()
+	}
+}
+
+// holdTheReapedWindowOpen is the same door for afterAJobsProgramIsReaped.
 func (r *Runner) holdTheReapedWindowOpen() {
 	if afterAJobsProgramIsReaped != nil && r.inJob != nil {
 		afterAJobsProgramIsReaped()

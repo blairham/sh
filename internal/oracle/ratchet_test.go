@@ -14,15 +14,12 @@ import (
 // trip the ratchet, a listed failure does not, and a listed case the run did
 // not grade is left alone so that -only checks its own slice (#5710).
 func TestRatchetMovesOnlyOneWay(t *testing.T) {
-	rep := &Report{}
-	for _, m := range []Match{
+	rep := &Report{Matches: []Match{
 		{CaseID: "a/still-failing"},
 		{CaseID: "b/newly-failing"},
 		{CaseID: "c/newly-passing", OK: true},
 		{CaseID: "d/passing", OK: true},
-	} {
-		rep.Matches = append(rep.Matches, m)
-	}
+	}}
 	regressed, fixed := Ratchet(rep, []string{"a/still-failing", "c/newly-passing", "z/not-graded"})
 	if !reflect.DeepEqual(regressed, []string{"b/newly-failing"}) {
 		t.Errorf("regressed = %v", regressed)

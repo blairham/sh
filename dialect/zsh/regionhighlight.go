@@ -175,7 +175,7 @@ func (a regionAttrs) colored() bool { return a.fg != "" || a.bg != "" }
 // It reads the element the way it is read back — see regionelement.go — so
 // what is drawn is what a script finds in the array.
 func parseRegionElement(elem string, chars int) (regionLayer, bool) {
-	e := parseRegionText(elem, false)
+	e := parseRegionText(elem, 0)
 	// A `P` element counts a PREDISPLAY, which this shell does not have, so
 	// it must not be drawn somewhere plausible instead.
 	if e.predisplay {

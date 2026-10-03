@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -2153,4 +2154,22 @@ func zmodloadFeatureParameterFill(r *interp.Runner, opts zmodloadOpts, words []s
 // `region_highlight` element's `fg=#ff0000` reads back `fg=196`.
 func nearColorsLoaded(r *interp.Runner) bool {
 	return containsWord(zmodloadLoaded(r), "zsh/nearcolor")
+}
+
+// nearColorCount is what interp.Runner.SetNearestColors asks: 0 where
+// `zsh/nearcolor` is not loaded, and otherwise the terminal's own count of
+// colors, read from the stored reading of its description without moving
+// the shell's terminal setup (see terminalsetup.go) — and -1, which interp
+// maps onto no palette, where the description has no count. Measured on
+// zsh 5.9.2: which palette a triplet lands in follows `$TERM` (#5496).
+func nearColorCount(r *interp.Runner, tables *capabilityTables) int {
+	if !nearColorsLoaded(r) {
+		return 0
+	}
+	stored, _ := tables.readings(r)
+	n, err := strconv.Atoi(stored.terminfo["colors"].Str)
+	if err != nil || n <= 0 {
+		return -1
+	}
+	return n
 }

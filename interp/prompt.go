@@ -1992,11 +1992,17 @@ func (r *Runner) promptField(f PromptField, arg string, braced bool) (string, bo
 	st := r.promptStyle
 	switch f {
 	case FieldNearestColor:
-		if !r.NearestColors() {
+		colors := r.NearestColors()
+		if colors == 0 {
 			return "", false
 		}
 		if rgb, ok := directColor(arg); ok {
-			return strconv.Itoa(NearestPaletteColor(rgb[0], rgb[1], rgb[2])), true
+			if n, ok := NearestColor(colors, rgb[0], rgb[1], rgb[2]); ok {
+				return strconv.Itoa(n), true
+			}
+			// A terminal neither palette fits: the channel's default,
+			// measured — `%F{#ff0000}` is `ESC[39m` under TERM=xterm.
+			return "-1", true
 		}
 		return "", false
 	case FieldTerminalCapability:

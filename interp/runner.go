@@ -2230,7 +2230,7 @@ type Runner struct {
 	// terminalCapability is the reader SetTerminalCapabilityReader installs.
 	terminalCapability func(r *Runner, termcap string) string
 	// nearestColors is the predicate SetNearestColors installs.
-	nearestColors func(r *Runner) bool
+	nearestColors func(r *Runner) int
 	// listNulls is, per field the unquoted list path last produced, whether
 	// that field is one of the empty *elements* the list held rather than
 	// anything the splitter made. It is handed from elementFields to

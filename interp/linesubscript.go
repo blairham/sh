@@ -115,8 +115,71 @@ import (
 
 // subscriptCountsLines reports whether a subscript's flag group makes a
 // string's lines the units it counts through.
+//
+// `(w)` is the same reading with another separator, and `(f)` is the vendor
+// manual's shorthand for `(pws:\n:)`, so one walk answers both: see
+// Runner.wordSeparator for what `(w)` separates on.
 func subscriptCountsLines(g *syntax.SubscriptFlags) bool {
-	return g != nil && strings.ContainsRune(g.Flags, 'f')
+	return g != nil && strings.ContainsAny(g.Flags, "fw")
+}
+
+// wordSeparator is how many units of chars, starting at i, are one separator
+// of the words a `(f)` or `(w)` subscript counts through — 0 where none
+// starts there.
+//
+// `(f)` separates on a newline. `(w)` separates on the string an `(s:…:)`
+// argument names, read with print escapes only where a `p` was written in
+// front of the `s`, and otherwise on any one character of `$IFS`. Measured
+// 2026-10-02 on zsh 5.9.2 (`-f`, `LC_ALL=C`), which runs a separator the way
+// it runs a newline — a leading run separates nothing, a run in the middle
+// is one separator, a trailing run leaves one empty word — with
+// `s=$'a\tb c'`:
+//
+//	${s[(w)2]}           b        a tab and a space are both in $IFS
+//	${s[(ws: :)2]}       c        the argument replaces $IFS
+//	${s[(pws:\t:)2]}     b c      an escape read as one, behind a `p`
+//	${s[(wps:\t:)2]}     b c      the `p` anywhere in front of the `s`
+//	${s[(ws:\t:p)2]}     the whole value: two characters found nowhere,
+//	                     so one word, and the second clamps to it
+//	IFS=:; ${s[(w)1]}    the whole value again
+//	s=axybxyc; ${s[(ws.xy.)2]}  b   a separator of several characters
+//	s=$'foo\0bar'; ${s[(pws:\0:)2]}  bar
+//
+// and with `x=:` the argument `$x` is the two characters, `p` or not.
+func (r *Runner) wordSeparator(g *syntax.SubscriptFlags) func(chars []string, i int) int {
+	if !strings.ContainsRune(g.Flags, 'w') {
+		return func(chars []string, i int) int {
+			if chars[i] == "\n" {
+				return 1
+			}
+			return 0
+		}
+	}
+	if strings.ContainsRune(g.Flags, 's') {
+		sep := g.Sep
+		if precededByPrintFlag(g.Flags, 's') {
+			sep = r.flagArgEscapes(r, sep)
+		}
+		units := r.units(sep)
+		return func(chars []string, i int) int {
+			if len(units) == 0 || i+len(units) > len(chars) {
+				return 0
+			}
+			for j, u := range units {
+				if chars[i+j] != u {
+					return 0
+				}
+			}
+			return len(units)
+		}
+	}
+	ifs, _ := r.ifs()
+	return func(chars []string, i int) int {
+		if chars[i] != "" && strings.Contains(ifs, chars[i]) {
+			return 1
+		}
+		return 0
+	}
 }
 
 // scalarLines is the lines a `(f)` subscript counts through, with the
@@ -129,12 +192,16 @@ func subscriptCountsLines(g *syntax.SubscriptFlags) bool {
 // That line begins past the last character and *ends* where the line before
 // it ended — see the range rules above, which is the only place the
 // difference is visible.
-func scalarLines(chars []string) (lines []string, starts, ends []int) {
+func scalarLines(chars []string, sepAt func([]string, int) int) (lines []string, starts, ends []int) {
 	n := len(chars)
 	last := 0
 	for i := 0; i < n; {
-		for i < n && chars[i] == "\n" {
-			i++
+		for i < n {
+			k := sepAt(chars, i)
+			if k == 0 {
+				break
+			}
+			i += k
 		}
 		if i == n {
 			lines = append(lines, "")
@@ -143,7 +210,7 @@ func scalarLines(chars []string) (lines []string, starts, ends []int) {
 			break
 		}
 		start := i
-		for i < n && chars[i] != "\n" {
+		for i < n && sepAt(chars, i) == 0 {
 			i++
 		}
 		lines = append(lines, strings.Join(chars[start:i], ""))
@@ -202,7 +269,7 @@ func (r *Runner) lineSearchAt(g *syntax.SubscriptFlags, search byte, lines []str
 // lineSubscript answers a `(f)` subscript on a string, which is the only
 // target the letter says anything about.
 func (r *Runner) lineSubscript(e *syntax.ParamExpr, search byte, v string) ([]string, bool) {
-	lines, starts, _ := scalarLines(r.units(v))
+	lines, starts, _ := scalarLines(r.units(v), r.wordSeparator(e.IndexFlags))
 	if search == 0 {
 		idx, ok := r.lineSubscriptValue(e.Subscript())
 		if !ok {
@@ -227,7 +294,7 @@ func (r *Runner) lineSubscript(e *syntax.ParamExpr, search byte, v string) ([]st
 // lineRangeEnd is one end of a range whose group counts lines: where its line
 // begins at the front of the pair, and where that line ends at the back.
 func (r *Runner) lineRangeEnd(g *syntax.SubscriptFlags, end syntax.SubscriptEnd, search byte, v string, first bool) (int, bool) {
-	lines, starts, ends := scalarLines(r.units(v))
+	lines, starts, ends := scalarLines(r.units(v), r.wordSeparator(g))
 	base := r.arrayBase()
 	if search != 0 {
 		at, pos, found := r.lineSearchAt(g, search, lines, starts)
@@ -313,7 +380,7 @@ func (r *Runner) subscriptTargetIsAString(e *syntax.ParamExpr) bool {
 func (r *Runner) lineTargetSpan(e *syntax.ParamExpr, refuse func(flag, where string)) (flaggedTarget, bool) {
 	g := e.IndexFlags
 	v, _ := r.getVar(e.Name)
-	lines, starts, ends := scalarLines(r.units(v))
+	lines, starts, ends := scalarLines(r.units(v), r.wordSeparator(g))
 	base := r.arrayBase()
 	var at int
 	if search := lastOf(g.Flags, searchSubscriptFlags); search != 0 {

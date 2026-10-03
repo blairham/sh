@@ -305,25 +305,16 @@ func TestASubscriptSearchWithoutBraces(t *testing.T) {
 	}
 }
 
-// What is read and not carried is refused by name, and the refusal abandons
-// the word rather than answering with a plausible element.
-func TestASubscriptFlagThisImplementationDoesNotCarryIsRefusedByName(t *testing.T) {
-	for _, tc := range []struct{ src, names string }{
-		{`printf "[%s]" "${a[(w)beta]}"`, "(w)"},
-		{`printf "[%s]" "${a[(p)beta]}"`, "(p)"},
-		{`printf "[%s]" "${a[(s:,:)beta]}"`, "(s)"},
-		{`printf "[%s]" "${a[(rw)beta]}"`, "(w)"},
-	} {
-		out, status := runSub(t, subArray+tc.src)
-		if !strings.Contains(out, tc.names+" subscript flag is not implemented") {
-			t.Errorf("%s: output %q does not refuse %s by name", tc.src, out, tc.names)
-		}
-		if !strings.Contains(out, "a[") {
-			t.Errorf("%s: output %q does not name the subscript", tc.src, out)
-		}
-		if status == 0 {
-			t.Errorf("%s: status 0, want a failure", tc.src)
-		}
+// The three letters about a string's words say nothing to an array, whose
+// elements are read as they always were: measured on zsh 5.9.2 over this
+// array, `(w)beta`, `(p)beta` and `(s:,:)beta` are all empty — `beta` is 0 to
+// the arithmetic — and `(rw)beta` is the search alone. They were refused by
+// name until `(w)` was carried (#5152); every letter the grammar reads is
+// carried now.
+func TestTheWordLettersLeaveAnArrayAlone(t *testing.T) {
+	out, status := runSub(t, subArray+`printf "[%s]" "${a[(w)beta]}" "${a[(p)beta]}" "${a[(s:,:)beta]}" "${a[(rw)beta]}" "${a[(w)2]}"`)
+	if want := "[][][][beta][beta]"; out != want || status != 0 {
+		t.Errorf("= %q (status %d), want %q at 0", out, status, want)
 	}
 }
 
@@ -442,11 +433,6 @@ func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
 	// from an EXIT trap, because the refusal ends the script and a `printf`
 	// after it would never run.
 	for _, tc := range []struct{ name, src, why, kept string }{
-		{
-			"a letter this dialect does not carry",
-			`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(w)x]=Q`,
-			"(w) subscript flag is not implemented", "[x y]",
-		},
 		{
 			"a backward search that found nothing",
 			`b=(x y); trap 'printf "[%s]" "${b[*]}"' EXIT; b[(R)nomatch]=Q`,
@@ -771,19 +757,15 @@ func TestWhatIsNotAnAssociationSearch(t *testing.T) {
 	}
 }
 
-// The letters this still does not carry over an association are still refused
-// by name, and the guarantee that says so is asserted rather than assumed.
-func TestTheSubscriptFlagsStillUnbuiltOverAnAssociation(t *testing.T) {
-	for _, tc := range []struct{ src, names string }{
-		{`typeset -A m=(a 1); printf "[%s]" "${m[(w)a]}"`, "(w)"},
-	} {
-		out, status := runAssoc(t, tc.src)
-		if !strings.Contains(out, tc.names+" subscript flag is not implemented") {
-			t.Errorf("%s: output %q does not refuse %s by name", tc.src, out, tc.names)
-		}
-		if status == 0 {
-			t.Errorf("%s: status 0, want a failure", tc.src)
-		}
+// The word letters say nothing to an association, whose key reads as it
+// always did: measured on zsh 5.9.2, `(w)a`, `(p)a` and `(s:,:)a` over
+// `(a 1)` are all `1`, and `(wr)1` is the search alone. `(w)` was refused by
+// name here until it was carried (#5152).
+func TestTheWordLettersLeaveAnAssociationAlone(t *testing.T) {
+	const src = `typeset -A m=(a 1); printf "[%s]" "${m[(w)a]}" "${m[(p)a]}" "${m[(s:,:)a]}" "${m[(wr)1]}"`
+	out, status := runAssoc(t, src)
+	if want := "[1][1][1][1]"; out != want || status != 0 {
+		t.Errorf("%s = %q (status %d), want %q at 0", src, out, status, want)
 	}
 }
 

@@ -43,7 +43,7 @@ import (
 // the reason implementedParamFlags gives: the only thing worse than refusing
 // a flag is answering it wrong at status 0, and a subscript flag's wrong
 // answer is a plausible element rather than a visible failure.
-const implementedSubscriptFlags = "rRiIenbkKf"
+const implementedSubscriptFlags = "rRiIenbkKfwps"
 
 // searchSubscriptFlags are the six that select. Written in no particular
 // order; only which of them came last matters.

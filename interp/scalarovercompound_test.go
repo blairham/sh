@@ -101,6 +101,10 @@ func TestAScalarAssignedOverADeclaredEmptyArray(t *testing.T) {
 	} {
 		sem := scalarOverCompoundSem(c.replaces)
 		sem.DeclareOptions = "aAgilprux"
+		// The array of one, which is the listing this test is about; the
+		// scalar listing of the same state is
+		// Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
+		sem.ScalarHeldUnderTheArrayLetterListsAsAScalar = No
 		out, st := run(t, `typeset -a v; v=x; typeset -p v`, withSem(sem))
 		if got := strings.TrimSpace(out); got != c.want || st != 0 {
 			t.Errorf("replaces=%v: got %q status %d, want %q", c.replaces, got, st, c.want)

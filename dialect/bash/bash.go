@@ -2089,6 +2089,9 @@ func Semantics() interp.Semantics {
 	// `([0]="x" [k]="v" )`. Both hold in 5.3.15, in the same binary under
 	// argv[0] of `sh`, and in 3.2.57.
 	s.ScalarAssignedOverACompoundReplacesTheName = interp.No
+	// An array holding the scalar a plain store gave it: see
+	// interp.Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar (#5643).
+	s.ScalarHeldUnderTheArrayLetterListsAsAScalar = interp.No
 	// Nothing refuses the store ahead of that: a table takes it. Measured
 	// 2026-09-26 on 5.3.20, `declare -A h=([one]=1); h=string; declare -p h`
 	// is `declare -A h=([0]="string" [one]="1" )` at 0 with the line after it

@@ -6267,6 +6267,17 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		}
 		sc.declaredOnlyBefore[name] = r.declaredOnlyCompound[name]
 		setBool(&sc.heldAnElementBefore, name, r.compoundHeldAnElement[name])
+		setBool(&sc.scalarHeldBefore, name, r.scalarHeldUnderTheArrayLetter[name])
+		// And the local starts with no record of having held an element.
+		// Measured 2026-10-03 on ksh93u+, `typeset -a x; x[0]=p; unset
+		// 'x[0]'; function f { typeset -a x; typeset -p x; }; f` lists
+		// `typeset -a x`, where reading the caller's record wrote `([0]=)`;
+		// and `x=/q` on that local lists `typeset -a x=/q` (#5643). A local
+		// that keeps the outer value takes it back from the save — see
+		// Runner.restoreTheOuterBinding. The caller's
+		// scalarHeldUnderTheArrayLetter needs no clearing: the local's first
+		// write either sets it or clears it, and nothing reads it before.
+		delete(r.compoundHeldAnElement, name)
 	}
 	// And the other half of a tie the shell made for itself, which is one
 	// value under two names and so cannot have one of them saved alone. See

@@ -12926,6 +12926,53 @@ type Semantics struct {
 	// Not asked for the store that keeps `$a` answering for an array `a` —
 	// see assignedAsTheCompoundView, which is that write and no other.
 	ScalarAssignedOverACompoundReplacesTheName Answer
+	// ScalarHeldUnderTheArrayLetterListsAsAScalar lists an indexed array as a
+	// scalar when its only element came from a whole-name scalar store that
+	// landed while it had never held an element. The `-a` letter stays and the
+	// value is written bare: ksh93. bash lists the same state as the array of
+	// one.
+	//
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01 under `-c` (#5643):
+	//
+	//	typeset -a x; x=/y; typeset -p x              typeset -a x=/y
+	//	typeset -a x=(); x=/y; typeset -p x           typeset -a x=/y
+	//	typeset -a x; read x <<< /y; typeset -p x     typeset -a x=/y
+	//	typeset -a x; x=/y; x=w; typeset -p x         typeset -a x=w
+	//	typeset -a x; x=/y; x+=w; typeset -p x        typeset -a x=/yw
+	//	typeset -a x; x="a b"; typeset -p x           typeset -a x='a b'
+	//
+	// Any array write ends it, and so does a name that held an element first:
+	//
+	//	typeset -a x; x[0]=/y; typeset -p x           typeset -a x=(/y)
+	//	typeset -a x; x=/y; unset x[1]; typeset -p x  typeset -a x=(/y)
+	//	typeset -a x; x=/y; x+=(z); typeset -p x      typeset -a x=(/y z)
+	//	typeset -a x=(a); unset x[0]; x=/y; ...       typeset -a x=(/y)
+	//
+	// Reading the array (`${x[0]}`, `${#x[@]}`, which is 1) changes nothing.
+	// A function's own `typeset -a x; x[0]=q` leaves the caller's listing as
+	// it was. bash 5.3.20 lists `declare -a x; x=/y` as `declare -a
+	// x=([0]="/y")`. zsh replaces the array with the scalar
+	// (ScalarAssignedOverACompoundReplacesTheName), so it never holds this
+	// state.
+	//
+	// Left unmodeled:
+	//   - ksh lists the empty word as `typeset -C -a x=''` (`typeset -a x;
+	//     x=; typeset -p x`); this writes `typeset -a x=''`.
+	//   - ksh loses the value when a subshell writes to such an array. After
+	//     `typeset -a x; x=/y; (x[1]=z)`, the parent's x is empty: `typeset
+	//     -a x`, with `${#x[@]}` 0. The same happens with `(x=w)` or `(unset
+	//     x[0])`. That is ksh discarding data, and the parent here keeps
+	//     `/y`.
+	//
+	// unpinned ksh: no corpus row lists this state; pinned by
+	// TestAScalarStoreIntoAnEmptyArrayListsAsTheScalar.
+	//
+	// unpinned bash: likewise, pinned by
+	// TestAScalarStoreIntoAnEmptyArrayListsAsAnArray.
+	//
+	// unpinned zsh: zsh replaces the array before this is asked; pinned by
+	// TestAScalarStoreIntoAnEmptyArrayListsAsAnArray in dialect/zsh.
+	ScalarHeldUnderTheArrayLetterListsAsAScalar Answer
 
 	// ScalarStoredOverATableIsRefused ends the input rather than storing a
 	// scalar over a name that is holding a **table**, where the other reading

@@ -95,6 +95,7 @@ func (r *Runner) markCompoundVariable(name string) {
 	delete(r.AssocArrays, name)
 	delete(r.declaredOnlyCompound, name)
 	delete(r.compoundHeldAnElement, name)
+	delete(r.scalarHeldUnderTheArrayLetter, name)
 	delete(r.removed, name)
 }
 

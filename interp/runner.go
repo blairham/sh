@@ -1403,6 +1403,13 @@ type Runner struct {
 	// interp/compounddeclaredonly.go for both, and
 	// Runner.bareAssignmentValue for the listing that reads this one.
 	compoundHeldAnElement map[string]bool
+	// scalarHeldUnderTheArrayLetter are names whose indexed array held no
+	// element, and had never held one, when a whole-name scalar store landed
+	// on it. The name is still an array of one, but one listing writes it as
+	// the scalar it was given until an array write touches it. Every array
+	// write clears it in storeArray, and a scalar append keeps it. See
+	// Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
+	scalarHeldUnderTheArrayLetter map[string]bool
 
 	// declaredBare are names a declaration brought into being with no
 	// letters, no value and nothing in them — declared and unset at once.
@@ -11147,6 +11154,9 @@ type scope struct {
 	// caller's name reading as one that has lost its elements. See
 	// Runner.compoundHeldAnElement.
 	heldAnElementBefore map[string]bool
+	// scalarHeldBefore is the same save for
+	// Runner.scalarHeldUnderTheArrayLetter.
+	scalarHeldBefore map[string]bool
 	// memberNamespaces are the names whose **member** namespace this scope
 	// shadowed — every name under `c.` displaced along with `c` itself. It
 	// is read on the write path as well as on the exit: a member the body

@@ -2206,6 +2206,9 @@ func Semantics() interp.Semantics {
 	// *table* under the option refuses the store rather than taking its key
 	// `0` (#4618).
 	s.ScalarAssignedOverACompoundReplacesTheName = interp.Yes
+	// An array holding the scalar a plain store gave it: see
+	// interp.Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar (#5643).
+	s.ScalarHeldUnderTheArrayLetterListsAsAScalar = interp.No
 	// And with `ksharrays` off nothing refuses the store first, which is what
 	// makes the line above reachable for a table at all: `typeset -A h=(one
 	// 1); h=string` is `typeset h=string` at 0, and so is the `h+=string`

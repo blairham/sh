@@ -384,6 +384,9 @@ func (r *Runner) storeArray(name string, a Array) {
 	// holding before. The one chokepoint every indexed write reaches, which
 	// is what this note relies on — see compounddeclaredonly.go.
 	r.compoundWasAssigned(name)
+	// An array write, so the name is listed as the array it now is. See
+	// Runner.scalarHeldUnderTheArrayLetter.
+	delete(r.scalarHeldUnderTheArrayLetter, name)
 	if len(a) > 0 {
 		// And the third state, which only grows: an array that has held an
 		// element and lost every one of them is not an array that never held
@@ -816,9 +819,15 @@ func (r *Runner) appendScalarToArray(name string, a Array, value string) {
 		return
 	}
 	if !addsAnElement {
+		// The value joins the first element and the name is the same scalar
+		// held, longer: see Runner.scalarHeldUnderTheArrayLetter.
+		held := r.scalarHeldUnderTheArrayLetter[name]
 		// The subscript as written, for the complaint that names one — the
 		// base is never below the first element, so nothing can reach it.
 		r.appendArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
+		if held {
+			setBool(&r.scalarHeldUnderTheArrayLetter, name, true)
+		}
 		return
 	}
 	a[a.pastTheEnd()] = Scalar(value)
@@ -903,9 +912,18 @@ func (r *Runner) scalarOverCompound(name, value string, form assignForm) bool {
 		r.setAssocElem(name, "0", value)
 		return true
 	}
+	// An array that has never held an element, or that is already holding
+	// a scalar this way, keeps holding one: see
+	// Runner.scalarHeldUnderTheArrayLetter. Read before the store, which
+	// records the element.
+	held := r.scalarHeldUnderTheArrayLetter[name] ||
+		(len(r.Arrays[name]) == 0 && !r.compoundHeldAnElement[name])
 	// The subscript as written, for the complaint that names one — the base
 	// is never below the first element, so nothing can reach it.
 	r.setArrayElem(name, r.arrayBase(), strconv.Itoa(r.arrayBase()), value)
+	if held {
+		setBool(&r.scalarHeldUnderTheArrayLetter, name, true)
+	}
 	return true
 }
 

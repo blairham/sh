@@ -1598,6 +1598,8 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 		// name reading as one that has lost its elements.
 		setBool(&r.compoundHeldAnElement, name, sc.heldAnElementBefore[name])
 		delete(sc.heldAnElementBefore, name)
+		setBool(&r.scalarHeldUnderTheArrayLetter, name, sc.scalarHeldBefore[name])
+		delete(sc.scalarHeldBefore, name)
 	}
 	// And the frozen attribute, which goes both ways: a name the declaration
 	// shadowed is frozen again, so a function cannot thaw one for good, and

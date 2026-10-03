@@ -771,7 +771,12 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	// outside them is zero. See Semantics.ArithSubscriptNameMustBeSet.
 	r.arithSubscriptDepth++
 	defer func() { r.arithSubscriptDepth-- }()
-	if x.Index != nil || x.Empty {
+	// The dialect that takes the quoting off an indexed subscript takes it off
+	// here too, ahead of the tree the line's read made of it — which read
+	// `'2'` as a character's code: `a=(x y z); $(( a['2'] ))` reads element 2
+	// in ksh93u+, and so `z` (#5594). See Semantics.IndexedSubscriptKeepsItsQuoting.
+	unquote := strings.ContainsAny(x.SubMarked, `'\`) && !r.indexedSubscriptKeepsItsQuoting(x.SubMarked, x.Name)
+	if (x.Index != nil || x.Empty) && !unquote {
 		n, err := r.evalNum(x.Index)
 		return r.blamedOnTheSubscript(x, n, err)
 	}
@@ -779,6 +784,9 @@ func (r *Runner) arithSubscriptIndex(x *syntax.ArithIndex) (arithNum, error) {
 	// are what keep a value's own bracket or quote out of the reading, and
 	// they are no part of what a script wrote. See syntax.ArithValueMark.
 	marked := r.arithSubscriptRead(x.SubMarked, subscriptAsExpression)
+	if unquote {
+		marked = removeSubscriptQuoting(marked)
+	}
 	sub := stripArithValueMarks(marked)
 	// A byte the arithmetic cannot read ends the expression here as it does
 	// in every other subscript, in the dialect where it does: `$(( a[2@] ))`

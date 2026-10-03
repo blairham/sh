@@ -204,16 +204,15 @@ inner`)
 // complaint, not "not found" — saying otherwise would send somebody looking
 // for a file that is right there.
 //
-// zsh reports the parse error itself here — `badfn:1: parse error near 'fi'`
-// — where this says the definition was bad without saying why. Same status,
-// and the difference is recorded rather than hidden.
+// The parse error itself, as zsh 5.9.2 writes it — `badfn:1: parse error
+// near 'fi'` — at the function's name and the file's own line (#5148).
 func TestAFileThatIsNotAFunctionBodyIsItsOwnComplaint(t *testing.T) {
 	fp := fpathDir(t, map[string]string{"badfn": "if then fi fi\n"})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz badfn
 badfn 2>&1
 print -r -- "call st=$?"`)
-	want := "badfn:1: badfn: bad function definition\ncall st=1\n"
+	want := "badfn:1: parse error near `fi'\ncall st=1\n"
 	if out != want || st != 0 {
 		t.Errorf("a bad body = %q (status %d), want %q", out, st, want)
 	}

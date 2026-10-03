@@ -985,6 +985,9 @@ func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases b
 	if inner, lone := autoloadLoneDefinition(name, body); lone {
 		body = inner
 	}
+	if autoloadBodyRefused(r, name, body) {
+		return 1
+	}
 	if !zshDefineFromText(r, name, body, path, keepAliases) {
 		// The file is not something this shell can read as a body. Its own
 		// complaint rather than "not found", because the file *was* found
@@ -993,6 +996,42 @@ func autoloadDefineFile(r *interp.Runner, name, path, body string, keepAliases b
 		return 1
 	}
 	return 0
+}
+
+// autoloadBodyRefused reads a function file's text as the shell reads it now
+// and, where it will not parse, says so as the parser does, located at the
+// function's name and the file's own line. Measured 2026-10-02 on zsh 5.9.2
+// under `-f` (#5148):
+//
+//	if true; then      ff:2: parse error near `\n'
+//	echo a )           ff:1: parse error near `)'
+//	echo ok, }, echo b ff:2: parse error near `}'
+//	echo $(            ff:2: parse error near `$('
+//
+// and under `setopt ignorebraces` a file of `{ echo OK }` is `ff:3: parse
+// error near `\n'`, which is why the grammar asked is the runner's and not
+// the dialect's.
+func autoloadBodyRefused(r *interp.Runner, name, body string) bool {
+	d := Dialect()
+	if r.Dialect != nil {
+		d = *r.Dialect
+	}
+	p := syntax.NewParser(body, r.ParsingDialect(d))
+	p.Parse()
+	err := p.Err()
+	if err == nil {
+		return false
+	}
+	diag := Diagnostics()
+	if r.Diagnostics != nil {
+		diag = *r.Diagnostics
+	}
+	line := diag.ParseFailureLine(err)
+	if line < 1 {
+		line = 1
+	}
+	fmt.Fprintf(r.Stderr, "%s:%d: %s\n", name, line, diag.ParseFailure(err))
+	return true
 }
 
 // autoloadSubstitutionSwallowsTheCloser reports a `$( … )` in an autoload

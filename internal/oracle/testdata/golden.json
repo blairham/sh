@@ -116776,7 +116776,7 @@
     },
     "jobs/a-stopped-background-job-in-the-listing": {
       "ash": {
-        "Stdout": "[1]-  Running                    ",
+        "Stdout": "[1]+  Running                    ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -116797,14 +116797,14 @@
         "TimedOut": false
       },
       "bash32": {
-        "Stdout": "[1]-  Running                 sleep 0.8 \u0026",
+        "Stdout": "[1]+  Running                 sleep 0.8 \u0026",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "[1] - Running                    ",
+        "Stdout": "[1] + Running                    ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -118277,7 +118277,7 @@
       },
       "bash32": {
         "Stdout": "st=0",
-        "Stderr": "[1]-  Done                    sleep 0.8~[2]+  Done                    { sleep 0.4; kill -CONT $p; }",
+        "Stderr": "[1]-  Done                    sleep 0.8~[2]+  Done                    { read x \u003c f; sleep 0.25; kill -CONT $p; }",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -631,7 +631,17 @@ func (r *Runner) parseDeclareFlags(name string, args []string, known string) (re
 			break
 		}
 		attached := false
-		if letter, digits, ok := r.attachedOptionNumber(a, known); ok {
+		if word, code, handled := r.attachedNumberBeforeMoreLetters(name, &f, a, known); handled {
+			// `-Z3x`: a number on a letter with more of the word behind it.
+			// See attachedNumberBeforeMoreLetters. The letters left are read
+			// as a word of their own, so a number-taking letter among them
+			// still takes a detached number: ksh93 consumes the `4` of
+			// `typeset -Z3L 4 s=7` rather than naming it.
+			if code != 0 || r.unspecified {
+				return nil, f, code
+			}
+			a = word
+		} else if letter, digits, ok := r.attachedOptionNumber(a, known); ok {
 			// `-i16` and `-F3`, where the number rides on the letter. Read
 			// here rather than in the letter loop, which would otherwise
 			// reach the `1` and call it an unknown option — a true statement
@@ -1276,13 +1286,8 @@ func (r *Runner) blockALaterPlus(f *declareFlags) {
 // answered, and a plain `typeset -i n` or `typeset -irx v=1` must meet no
 // question at all — neither has a number in it to have a question about.
 //
-// A malformed attached number keeps its word: `-F3g` and `-i16x` reach here
-// with a rest that begins in a digit, which attachedOptionNumber has already
-// declined, and the letter loop goes on to refuse the digit as an option. zsh
-// refuses those two as well and says `bad precision value: 3g` where this
-// says the digit is a bad option, so the shapes agree on the refusal and
-// disagree on the sentence — recorded rather than modeled, since no script
-// writes either.
+// An attached number with more of the word behind it — `-F3g`, `-i16x` — is
+// attachedNumberBeforeMoreLetters', read before this is reached (#5685).
 func (r *Runner) numberEndsTheWord(c byte, rest string, later []string) bool {
 	if !declareOptionMayTakeANumber(c, r.sem().DeclareOptionsTakingANumber) {
 		return false

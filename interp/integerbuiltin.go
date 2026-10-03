@@ -408,6 +408,68 @@ func (r *Runner) attachedOptionNumber(word, known string) (letter byte, digits s
 	return letter, word[at:], true
 }
 
+// attachedNumberBeforeMoreLetters is a number written on its letter with more
+// of the option word behind it: `typeset -Z3x`, `-i16x`, `-F2x`. ksh93 ends
+// the number at the first character that is not a digit and reads the rest
+// of the word as more letters; zsh takes the rest of the word as the number
+// and refuses it in the letter's own words, declaring nothing, at 1. Measured
+// 2026-10-03 on ksh93u+ 2012-08-01 and zsh 5.9.2 (#5685):
+//
+//	typeset -Z3x s=7      typeset -x -Z 3 -R 3 s=007   bad width value: 3x
+//	typeset -i16x s=255   typeset -x -i 16 s=16#ff     bad base value: 16x
+//	typeset -F2x s=1      typeset -x -F 2 s=1.00       bad precision value: 2x
+//	typeset -R3l s=AB     typeset -l -R 3 s=' ab'
+//
+// It answers the word with the number taken out, for the letter loop to read
+// on, and handled true; or a status where the word was refused. It does not
+// handle a word whose number ends it, which is attachedOptionNumber's. Not
+// modeled: a second number-taking letter behind the first, whose answers in
+// ksh93 are not one rule (`-Z3L4` lists `-L 3`, `-i16Z3` is a usage error).
+// See Semantics.AttachedNumberEndsAtTheFirstNonDigit.
+func (r *Runner) attachedNumberBeforeMoreLetters(builtin string, f *declareFlags, word, known string) (string, int, bool) {
+	at := -1
+	for i := 1; i < len(word); i++ {
+		if word[i] >= '0' && word[i] <= '9' {
+			at = i
+			break
+		}
+	}
+	if at < 2 {
+		return word, 0, false
+	}
+	end := at
+	for end < len(word) && word[end] >= '0' && word[end] <= '9' {
+		end++
+	}
+	if end == len(word) {
+		return word, 0, false
+	}
+	letter := word[at-1]
+	kind := map[byte]string{
+		'i': "base", 'E': "precision", 'F': "precision",
+		'L': "width", 'R': "width", 'Z': "width",
+	}[letter]
+	if kind == "" || strings.IndexByte(known, letter) < 0 ||
+		!declareOptionMayTakeANumber(letter, r.sem().DeclareOptionsTakingANumber) ||
+		!r.declareOptionTakesANumber(letter) {
+		return word, 0, false
+	}
+	if !r.ask(r.sem().AttachedNumberEndsAtTheFirstNonDigit,
+		"a number attached to its letter ending where the digits do") {
+		if r.unspecified {
+			return word, r.status, true
+		}
+		r.diagf("%s\n", Wording(r.diag().DeclareAttachedNumberRefused, "%[1]s: bad %[2]s value: %[3]s",
+			r.builtinComplaintName(builtin), kind, word[at:]))
+		r.status = 1
+		return word, 1, true
+	}
+	if !r.readOptionNumber(builtin, f, letter, word[at:end]) {
+		return word, r.status, true
+	}
+	return word[:at] + word[end:], 0, true
+}
+
 // readOptionNumber takes the number an option letter named, under either
 // spelling, and reports whether the declaration goes on.
 func (r *Runner) readOptionNumber(builtin string, f *declareFlags, letter byte, written string) bool {

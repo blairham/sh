@@ -116,6 +116,7 @@ ash   DeclareListing
 ash   DeclareMappingLetter
 ash   DeclareMatchingLetter
 ash   DeclareNumberDetachedOnlyAtTheWordEnd
+ash   AttachedNumberEndsAtTheFirstNonDigit
 ash   DeclarePrintPerformsItsOperand
 ash   DeclarePrintReportsAMissingFunctionName
 ash   DeclarePrintReportsAMissingName
@@ -340,6 +341,7 @@ bash  DeclareHideValueLetter
 bash  DeclareMappingLetter
 bash  DeclareMatchingLetter
 bash  DeclareNumberDetachedOnlyAtTheWordEnd
+bash  AttachedNumberEndsAtTheFirstNonDigit
 bash  DeclareTypeLetter
 bash  DeclareZeroFillLetter
 bash  ExportThroughASubscriptedOperandRecordsTheLetter
@@ -469,6 +471,7 @@ dash  DeclareListing
 dash  DeclareMappingLetter
 dash  DeclareMatchingLetter
 dash  DeclareNumberDetachedOnlyAtTheWordEnd
+dash  AttachedNumberEndsAtTheFirstNonDigit
 dash  DeclarePrintPerformsItsOperand
 dash  DeclarePrintReportsAMissingFunctionName
 dash  DeclarePrintReportsAMissingName

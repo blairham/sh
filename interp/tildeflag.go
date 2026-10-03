@@ -127,8 +127,9 @@ func (r *Runner) substitutedFileValue(v string) string {
 // written because this package carries no user database, and anything past the
 // first slash is the tail.
 func (r *Runner) tildeValue(v string) string {
-	dir, tail, ok := r.tildeSplit(v)
+	dir, tail, ok, miss := r.tildeSplit(v)
 	if !ok {
+		r.refuseTilde(miss)
 		return v
 	}
 	return dir + tail
@@ -152,10 +153,12 @@ func (r *Runner) tildeValue(v string) string {
 //
 // ok is false where nothing expanded, which leaves the caller the word as
 // written: a `~user` this package has no database for, a `~-` in a shell with
-// no $OLDPWD, and a `~` in a run with no $HOME.
-func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
+// no $OLDPWD, and a `~` in a run with no $HOME. miss is set where the dialect
+// refuses what was left, which the caller reports once it has settled on
+// this reading; see tildeMiss.
+func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool, miss tildeMiss) {
 	if !strings.HasPrefix(v, "~") {
-		return "", "", false
+		return "", "", false, tildeMiss{}
 	}
 	rest := v[1:]
 	name := rest
@@ -167,9 +170,9 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 		// `~+` is $PWD and `~-` is $OLDPWD in three of the four, and only
 		// when the variable is set: a fresh shell's `~-` stays literal.
 		if dir, ok := r.tildeDirVar(name); ok {
-			return dir, tail, true
+			return dir, tail, true, tildeMiss{}
 		}
-		return "", "", false
+		return "", "", false, tildeMiss{}
 	case "":
 		// The one place a bare `~` becomes a home, which is why the column
 		// that answers it from a copy of HOME rather than from the variable
@@ -179,9 +182,9 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 		// columns do when there is no home to read at all.
 		home, ok := r.homeForAWrittenTilde()
 		if !ok {
-			return "", "", false
+			return "", "", false, tildeMiss{}
 		}
-		return home, tail, true
+		return home, tail, true, tildeMiss{}
 	}
 	// A **number** names an entry of the directory stack rather than a home,
 	// and is asked before the name tables below it for the reason the digits
@@ -190,15 +193,15 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 	// Runner.directoryStackTilde and Semantics.DirectoryStackParameter.
 	if dir, ok, bracketed := r.dynamicDirectoryTilde(name); bracketed {
 		if !ok {
-			return "", "", false
+			return "", "", false, tildeMiss{}
 		}
-		return dir, tail, true
+		return dir, tail, true, tildeMiss{}
 	}
 	if dir, ok, isIndex := r.directoryStackTilde(name); isIndex {
 		if !ok {
-			return "", "", false
+			return "", "", false, tildeMiss{}
 		}
-		return dir, tail, true
+		return dir, tail, true, tildeMiss{}
 	}
 	// What is left is a name, and two different things wear one. A **named
 	// directory** is this shell's own table — `hash -d name=dir` writes it —
@@ -206,17 +209,18 @@ func (r *Runner) tildeSplit(v string) (dir, tail string, ok bool) {
 	// `hash -d root=/tmp; print -r -- ~root` is `/tmp` where the same line
 	// without the assignment is `/var/root`.
 	if dir, ok := r.namedDir(name); ok {
-		return dir, tail, true
+		return dir, tail, true, tildeMiss{}
 	}
 	// And `~user` is the user database's answer, which this package does not
 	// read for itself: Runner.UserHomeDir carries it, and with no hook the
 	// word is left alone rather than guessed at.
 	if r.UserHomeDir != nil {
 		if dir, ok := r.UserHomeDir(name); ok {
-			return dir, tail, true
+			return dir, tail, true, tildeMiss{}
 		}
+		return "", "", false, r.unresolvedTilde(name)
 	}
-	return "", "", false
+	return "", "", false, tildeMiss{}
 }
 
 // directoryStackTilde resolves the numbered tilde — `~N`, `~+N` and `~-N` —
@@ -355,13 +359,82 @@ func (r *Runner) substitutedColonTildes(v string) string {
 			end = i + 1 + j
 		}
 		seg := v[i+1 : end]
-		if dir, tail, ok := r.tildeSplit(seg); ok {
+		if dir, tail, ok, miss := r.tildeSplit(seg); ok {
 			b.WriteString(dir)
 			b.WriteString(tail)
 		} else {
+			r.refuseTilde(miss)
 			b.WriteString(seg)
 		}
 		i = end - 1
 	}
 	return b.String()
+}
+
+// tildeMiss is a `~name` that named nothing, in a dialect that refuses one:
+// the name, held until the caller has chosen the reading it belongs to, since
+// a word's prefix is read under two sets of closing bytes before one is
+// taken. The zero value is no refusal.
+type tildeMiss struct {
+	name string
+}
+
+// unresolvedTilde is the refusal for a name neither the named directories nor
+// the user database answered, where Semantics.UnresolvedTildeIsAnError says
+// so and an unmatched pattern is an error too: `nonomatch` leaves the word as
+// written. Measured 2026-10-03 on zsh 5.9.2 under -f:
+//
+//	print ~nosuch; print after       no such user or named directory: nosuch,
+//	                                 status 1, and the script stops
+//	print ~no.such ~no-such ~9a      each refused: a name is letters, digits,
+//	                                 `.`, `_` and `-`
+//	print ~no@such ~a,b ~a=b         each as written, being no name at all
+//	setopt nonomatch; print ~nosuch  ~nosuch, and on
+//	setopt nullglob; print ~nosuch   refused all the same
+//
+// A number is a directory stack entry rather than a name and is not refused
+// here. Read as `== Yes`, so a dialect that leaves the word never reaches the
+// pattern axis.
+func (r *Runner) unresolvedTilde(name string) tildeMiss {
+	if r.sem().UnresolvedTildeIsAnError != Yes || r.sem().GlobNoMatchIsError != Yes ||
+		!tildeLooksUpTheName(name) {
+		return tildeMiss{}
+	}
+	return tildeMiss{name: name}
+}
+
+// tildeLooksUpTheName reports whether a tilde prefix is a name the lookup is
+// asked about: letters, digits, `.`, `_` and `-`, a byte past ASCII counting
+// as a letter (`~é` is refused, measured), and not a directory stack index.
+func tildeLooksUpTheName(name string) bool {
+	digits := strings.TrimLeft(name, "+-")
+	if len(name)-len(digits) <= 1 && strings.Trim(digits, "0123456789") == "" {
+		// Empty, or a stack index: `~1`, `~+2`, `~-0`.
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c >= 0x80 || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+			c == '.' || c == '_' || c == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// refuseTilde reports a tilde the dialect refuses and ends what a failed
+// expansion ends. It reports whether there was one.
+func (r *Runner) refuseTilde(m tildeMiss) bool {
+	if m.name == "" {
+		return false
+	}
+	if r.ctl == controlExit || r.ctl == controlAbandon {
+		// Refused already: an assignment's value is read for its tilde
+		// twice, and the refusal leaves the tilde there to be read again.
+		return true
+	}
+	r.diagf("no such user or named directory: %s\n", m.name)
+	r.failedExpansion()
+	return true
 }

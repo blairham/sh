@@ -1923,9 +1923,9 @@ func (r *Runner) expandAssignValueMarked(w *syntax.Word) string {
 // unquoted colon, which is what makes `PATH=~/bin:~/sbin` and `M=a:~/b` work.
 // Unanimous across the panel.
 //
-// The same limits as the leading tilde: `~user` needs a user database this
-// package does not carry and is left as written, and so is a tilde whose
-// segment runs off the span into an expansion — `a:~$x` keeps its tilde in
+// The same limits as the leading tilde: `~user` is the user database's answer
+// through Runner.UserHomeDir, and a tilde whose segment runs off the span into
+// an expansion is left as written — `a:~$x` keeps its tilde in
 // three of the four shells, and the fourth's answer needs the expansion's
 // value, which does not exist yet.
 func (r *Runner) expandColonTildes(w *syntax.Word) {
@@ -1978,6 +1978,18 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 				if dir, ok := r.tildeDirVar(v[j+2 : k]); ok {
 					b.WriteString(dir)
 					j = k - 1
+				}
+			default:
+				// And a name, through the lookup the leading position
+				// uses. Unanimous: `x=a:~root:~root/b` is `/var/root`
+				// twice in bash 5.3.20, ksh93, dash and zsh 5.9.2, and
+				// BusyBox ash names its own root's home (#5646).
+				dir, _, ok, miss := r.tildeSplit(v[j+1 : k])
+				if ok {
+					b.WriteString(dir)
+					j = k - 1
+				} else if r.refuseTilde(miss) {
+					return
 				}
 			}
 		}
@@ -7808,6 +7820,9 @@ func (r *Runner) expandTildeLen(w *syntax.Word) int {
 		return 0
 	}
 	h := r.wordTildeHead(w.Spans)
+	if r.refuseTilde(h.miss) {
+		return 0
+	}
 	h.apply(w.Spans, 0)
 	if !h.moved {
 		return 0
@@ -7824,7 +7839,11 @@ func (r *Runner) expandTildeIn(w *syntax.Word, ends string) {
 	if !tildeOpensTheWord(w) {
 		return
 	}
-	r.tildeHead(w.Spans, 0, ends).apply(w.Spans, 0)
+	h := r.tildeHead(w.Spans, 0, ends)
+	if r.refuseTilde(h.miss) {
+		return
+	}
+	h.apply(w.Spans, 0)
 }
 
 // tildeOpensTheWord reports whether the word begins with a `~` that is written
@@ -7857,6 +7876,9 @@ type tildeHead struct {
 	// the byte that closed it, and that byte's offset in the span. With no
 	// closing byte they name the end of the last span the prefix reached.
 	span, off int
+	// miss is a name the dialect refuses, which is reported only once the
+	// reading it belongs to is the one taken. See tildeMiss.
+	miss tildeMiss
 }
 
 // same reports whether two readings of one word's prefix came to the same
@@ -7997,9 +8019,15 @@ func (r *Runner) tildeHead(spans []syntax.Span, start int, ends string) tildeHea
 	if r.unspecified {
 		return tildeHead{}
 	}
-	dir, _, ok := r.tildeSplit(b.String())
+	dir, _, ok, miss := r.tildeSplit(b.String())
 	if !ok {
-		return tildeHead{}
+		if ran {
+			// A prefix cut short by a quote or an expansion is not the name
+			// the shell refusing one would look up: zsh reads `~ro"o"t` as
+			// `~root`. Left as written rather than refused for a part.
+			return tildeHead{}
+		}
+		return tildeHead{miss: miss}
 	}
 	return tildeHead{dir: dir, moved: true, span: span, off: off}
 }

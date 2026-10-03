@@ -53,7 +53,9 @@ func (r *Runner) expandAssignmentShapedWord(w *syntax.Word) {
 	// in the first span at all: `$e=~` and `'--opt'=~` both expand in zsh
 	// with the option on, measured.
 	rest := w.Spans[span:]
-	r.tildeHead(rest, eq+1, tildeEndsAtASlashOrColon).apply(rest, eq+1)
+	if h := r.tildeHead(rest, eq+1, tildeEndsAtASlashOrColon); !r.refuseTilde(h.miss) {
+		h.apply(rest, eq+1)
+	}
 	// And the colons, through the one helper an assignment's value uses. The
 	// **whole** word's, not the value's: `a:~/b=~` expands both tildes in zsh
 	// with the option on and `a:~/b=c` expands neither, so a qualifying word

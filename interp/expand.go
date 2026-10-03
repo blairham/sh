@@ -3142,7 +3142,7 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 // questions, and zsh answers no to both while everything else answers yes.
 func (r *Runner) expansionResult(v string, unquoted bool, glob, split Answer, axis string) (string, bool) {
 	if !unquoted {
-		return globEscape(stripLiveMarks(v)), false
+		return globEscape(v), false
 	}
 	// Both axes are asked only when the value could actually differ: a result
 	// with no separator in it is not split either way, and one with no

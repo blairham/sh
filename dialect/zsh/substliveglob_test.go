@@ -20,6 +20,8 @@ func TestASubstitutionsReplacementKeepsItsPatternCharacters(t *testing.T) {
 		{`[[ xay = ${s:s/Q/?/} ]] && print match; case xby in ${s:s/Q/?/}) print arm;; esac`, "match\narm\n"},
 		// Quoted, in the replacement or around the expansion, it is text.
 		{`print "${s:s/Q/?/}" ${s:s/Q/\?/} ${s:s/Q/'?'/} ${s:s/Q/"?"/}`, "x?y x?y x?y x?y\n"},
+		// A nested one is not the expansion being expanded, and holds text.
+		{`: ${x::=${s:s/Q/?/}}; print -r -- $x ${#${s:s/Q/?/}}`, "x?y 3\n"},
 		{`v=${s:s/Q/?/}; print -r -- $v ${(c)#s:s/Q/?/} ${(b)s:s/Q/?/}`, "x?y 3 x\\?y\n"},
 	} {
 		got, _ := runZsh(t, t.TempDir(), setup+tc.src)

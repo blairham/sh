@@ -27,7 +27,7 @@ func TestAPipelineIsListedAnElementAtATime(t *testing.T) {
 		{
 			"jobs -p names the group once",
 			"/bin/sleep 0.3 | cat & jobs -p",
-			"[1]  + P running    /bin/sleep 0.3 | \n             running    cat\n",
+			"[1]  + P running    /bin/sleep 0.3 | \n<pid width>running    cat\n",
 		},
 		{
 			"an element that exited",
@@ -97,12 +97,21 @@ func TestAPipelineIsListedAnElementAtATime(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got := pidsInRows.ReplaceAllString(runZshC(c.src), "${1}P$2")
+			got = pidWideIndent.ReplaceAllString(got, "<pid width>")
 			if got != c.want {
 				t.Errorf("%s\ngot  %q\nwant %q", c.src, got, c.want)
 			}
 		})
 	}
 }
+
+// pidWideIndent masks the indent of a row that lines up past a process id —
+// `jobs -p`'s continuation row — whose width is the id's: seven columns, the
+// id's digits and a blank. Masking the id alone left the indent saying how
+// many digits it had, and the row failed on a runner that handed out a
+// four-digit pid where the expectation was written for five (#5475). No
+// other row here starts with more than seven blanks.
+var pidWideIndent = regexp.MustCompile(`(?m)^ {11,}`)
 
 // pidsInRows masks a process id where a row or a `$jobstates` value has one.
 var pidsInRows = regexp.MustCompile(`(\]  [+-] |       |:)[0-9]{3,}( |=)`)

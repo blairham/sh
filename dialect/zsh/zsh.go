@@ -2267,6 +2267,8 @@ func Semantics() interp.Semantics {
 	// one rule with the search operand's, which is why both go through
 	// Runner.searchOperand.
 	s.SubscriptIsAQuotingContext = interp.No
+	// An indexed subscript keeps its quoting for the arithmetic: `${a['2']}` is `bad math expression` (#5562).
+	s.IndexedSubscriptKeepsItsQuoting = interp.Yes
 	// And a backslash in a pattern reaches only a metacharacter here: before
 	// anything else it is a literal backslash, so a raw `bet\\a` matches the
 	// five characters and not `beta`. The set is this shell's pattern

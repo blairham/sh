@@ -410,6 +410,8 @@ func Semantics() interp.Semantics {
 	// `${m["k"]}` reads it back. zsh takes the subscript as written and
 	// stores under the three characters.
 	s.SubscriptIsAQuotingContext = interp.Yes
+	// An indexed subscript keeps its quoting for the arithmetic: `${a['2']}` is `'2': arithmetic syntax error` (#5562).
+	s.IndexedSubscriptKeepsItsQuoting = interp.Yes
 	// `unset` of a name a *calling* function made local takes the binding
 	// away here, so the next scope out answers for the rest of the script:
 	// the panel's other three leave the name unset until the call that

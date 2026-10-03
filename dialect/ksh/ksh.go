@@ -791,6 +791,8 @@ func Semantics() interp.Semantics {
 	// An associative array's subscript is a quoting context here, as it is
 	// in bash: `m["k"]=W` stores under `k`.
 	s.SubscriptIsAQuotingContext = interp.Yes
+	// An indexed subscript keeps its quoting for the arithmetic: `${a['2']}` is `z`: the quoting comes off first (#5562).
+	s.IndexedSubscriptKeepsItsQuoting = interp.No
 	// bash's answer on the other join, against its own on the one above:
 	// `IFS=-; a=(x y z); v=${a[@]}` is `x y z` here where zsh gives
 	// `x-y-z`. The two axes partition the panel differently, which is why

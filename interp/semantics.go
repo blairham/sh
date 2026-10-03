@@ -19256,6 +19256,39 @@ type Semantics struct {
 	// arrays, which is why the axis is absent there rather than false.
 	SubscriptIsAQuotingContext Answer
 
+	// IndexedSubscriptKeepsItsQuoting reads an **indexed** array's subscript
+	// the way the inside of `$(( ))` is read: expanded as a double-quoted
+	// string and only then taken as an expression, so an apostrophe, and a
+	// backslash in front of an ordinary character, stay characters of the
+	// expression and the arithmetic refuses them. bash and zsh. ksh93
+	// removes the quoting first, as it does for a key.
+	//
+	// Measured 2026-10-03, `a=(x y z)` under `-c` (#5562):
+	//
+	//	written          bash 5.3.20                  zsh 5.9.2        ksh93u+
+	//	${a['2']}        '2': arithmetic syntax error  bad math expr.   z
+	//	a['1']=Q         the same refusal              the same         x Q z
+	//	${#a['1']}       refused                       refused          1
+	//	${a[\1]}        refused                       refused          y
+	//	${a["2"]}        z                             y                z
+	//	${a[$i]}, i=1    y                             x                y
+	//
+	// The double-quoted and bare rows are the controls: a double quotation
+	// is quoting there in every column, which is what "as a double-quoted
+	// string" means, and a substitution is performed either way. Only an
+	// indexed array asks — an associative subscript is a key and is
+	// SubscriptIsAQuotingContext's.
+	//
+	// unpinned zsh: no corpus row puts a quote in an indexed subscript;
+	// pinned by TestAQuotedIndexedSubscriptIsRefused.
+	//
+	// unpinned bash: likewise, pinned by
+	// TestAQuotedIndexedSubscriptIsArithmeticText.
+	//
+	// unpinned ksh: likewise, pinned by
+	// TestAQuotedIndexedSubscriptLosesItsQuoting.
+	IndexedSubscriptKeepsItsQuoting Answer
+
 	// PatternEscapeReaches is the set of characters a backslash escapes
 	// inside a pattern. Empty means **every** character, which is bash's
 	// answer, bash 3.2's, bash as `sh`'s, dash's and ksh93's: `bet\a` matches

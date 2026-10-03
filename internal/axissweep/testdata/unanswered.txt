@@ -273,6 +273,7 @@ ash   SubscriptBeforeTheFirstElementNeedsAnElement
 ash   SubscriptBeforeTheFirstElementRead
 ash   SubscriptBeforeTheFirstElementRefusesTheLength
 ash   SubscriptExpressionStopsAtASeparator
+ash   IndexedSubscriptKeepsItsQuoting
 ash   SubscriptIsAQuotingContext
 ash   SubscriptedArrayLiteral
 ash   SubscriptedAssignmentPrefix
@@ -643,6 +644,7 @@ dash  SubscriptBeforeTheFirstElementNeedsAnElement
 dash  SubscriptBeforeTheFirstElementRead
 dash  SubscriptBeforeTheFirstElementRefusesTheLength
 dash  SubscriptExpressionStopsAtASeparator
+dash  IndexedSubscriptKeepsItsQuoting
 dash  SubscriptIsAQuotingContext
 dash  SubscriptedArrayLiteral
 dash  SubscriptedAssignmentPrefix

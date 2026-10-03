@@ -2055,6 +2055,12 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	if !r.namesTheOtherArray(s.Param) || r.refusesAListAsAName(s.Param) {
 		return nil, true
 	}
+	if refused, empty := r.undeclaredIndirection(s.Param); refused {
+		return nil, true
+	} else if empty {
+		// Left to the scalar path, which answers it with nothing.
+		return nil, false
+	}
 	r.referredToParameter(s.Param.Name)
 	if r.refuseAbsentParameter(s.Param) {
 		// Before every shape below, because the shape that loses the read is
@@ -3516,6 +3522,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		return ""
 	}
 	if !r.namesTheOtherArray(e) || r.refusesAListAsAName(e) {
+		return ""
+	}
+	if refused, empty := r.undeclaredIndirection(e); refused || empty {
 		return ""
 	}
 	r.referredToParameter(e.Name)

@@ -2399,6 +2399,9 @@ func Semantics() interp.Semantics {
 	// never runs when one fails: measured 2026-09-18, `w=$(echo S >&2) f >
 	// /nope/x` writes the file complaint alone (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
+	// Whether a command's trace line waits for its redirections. See
+	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
+	s.TraceLineFollowsTheRedirections = interp.Yes
 	// And yet the prefix is worked through **before** a declaration utility's
 	// operand, which is why the two are separate axes: this shell opens the
 	// redirections ahead of the prefix and still reaches the prefix ahead of

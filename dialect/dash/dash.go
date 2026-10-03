@@ -229,6 +229,9 @@ func Semantics() interp.Semantics {
 	// The redirections are opened first: measured 2026-09-18, `w=$(echo S
 	// >&2) f > /nope/x` writes the file complaint alone, at 2 (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
+	// Whether a command's trace line waits for its redirections. See
+	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
+	s.TraceLineFollowsTheRedirections = interp.Yes
 	// And a declaration utility's operand is reached before that prefix:
 	// measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo OP >&2)`
 	// writes `OP` and then `PRE` (#3814).

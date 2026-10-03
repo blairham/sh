@@ -1658,6 +1658,10 @@ func (r *Runner) tracef(format string, args ...any) {
 	// writes and of every runner it clones. See
 	// interp/procsubtracestart.go.
 	defer r.bodyTraceStart.mark()
+	if r.traceTo != nil {
+		_, _ = fmt.Fprintf(r.traceTo, format, args...)
+		return
+	}
 	if r.traceSink != nil {
 		if w := r.traceSink(r); w != nil {
 			_, _ = fmt.Fprintf(w, format, args...)

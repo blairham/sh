@@ -45,19 +45,20 @@ type Report struct {
 	Against string
 	Matches []Match
 	Passed  int
-	// SameStatus counts cases that agree about what *happened* — the same
-	// exit status — while disagreeing about the words. Diagnostics are not
-	// specified by anything and no two shells word them alike, so an
-	// exact-output score understates behavioral agreement and this says by
-	// how much.
+	// WordingOnly counts cases that agree about everything but the words:
+	// the same exit status *and* the same standard output, with only standard
+	// error differing. Diagnostics are not specified by anything and no two
+	// shells word them alike, so an exact-output score understates behavioral
+	// agreement and this says by how much.
 	//
-	// Now that the two streams are recorded apart, a finer claim than this
-	// one is available to whatever grades a refusal rather than its wording:
-	// same status, same standard output, and a non-empty standard error on
-	// both sides is "it complained, on stderr, and exited nonzero" stated
-	// precisely rather than approximated. Nothing here makes that judgment
-	// yet; the record now carries what it would need.
-	SameStatus int
+	// It used to be the status alone, and that counted real divergence as
+	// wording. A brace range that did not expand, an `$_` holding the wrong
+	// word and a `~-` that stayed literal all exit 0 on both sides, and all
+	// three were scored behavioral passes while printing something else on
+	// standard output — 312 of the 778 non-exact cases across the five
+	// dialect binaries on 2026-10-03. Standard output is behavior; only
+	// standard error is wording.
+	WordingOnly int
 
 	// Relaxed counts the passes that needed Case.GradedOnRefusal. It is not a
 	// second score but a discount on the first one, and it is printed for
@@ -207,6 +208,13 @@ func sameOutcome(want, got Result) bool {
 	return want.Status == got.Status && want.Signal == got.Signal && want.TimedOut == got.TimedOut
 }
 
+// wordingOnly reports whether two runs differ in nothing a script can act on:
+// the same outcome and the same standard output, so that what is left is the
+// wording of a diagnostic. See Report.WordingOnly.
+func wordingOnly(want, got Result) bool {
+	return want.Stdout == got.Stdout && sameOutcome(want, got)
+}
+
 func RunConformance(ctx context.Context, path, against string, args []string, cases []Case) (*Report, error) {
 	if path == "" {
 		return &Report{NotBuilt: true}, nil
@@ -269,21 +277,27 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		}
 		want := Exec(ctx, ref, c)
 		got := Exec(ctx, ours, c)
-		ok, relaxed := verdict(c, want, got)
-		rep.Matches = append(rep.Matches, Match{CaseID: c.ID, Want: want, Got: got, OK: ok, Relaxed: relaxed})
-		rep.Total++
-		switch {
-		case ok:
-			rep.Passed++
-			if relaxed {
-				rep.Relaxed++
-			}
-		case sameOutcome(want, got):
-			rep.SameStatus++
-		}
+		rep.add(c, want, got)
 	}
 	sort.Slice(rep.Matches, func(i, j int) bool { return rep.Matches[i].CaseID < rep.Matches[j].CaseID })
 	return rep, nil
+}
+
+// add grades one case into the report. It is the whole of the tally, so that
+// a test of the counts is a test of the counts RunConformance reports.
+func (r *Report) add(c Case, want, got Result) {
+	ok, relaxed := verdict(c, want, got)
+	r.Matches = append(r.Matches, Match{CaseID: c.ID, Want: want, Got: got, OK: ok, Relaxed: relaxed})
+	r.Total++
+	switch {
+	case ok:
+		r.Passed++
+		if relaxed {
+			r.Relaxed++
+		}
+	case wordingOnly(want, got):
+		r.WordingOnly++
+	}
 }
 
 // Summary renders the report.
@@ -299,11 +313,11 @@ func (r *Report) Summary(verbose bool) string {
 	if r.Total > 0 {
 		pct = 100 * float64(r.Passed) / float64(r.Total)
 	}
-	fmt.Fprintf(&b, "conformance against %s: %d/%d (%.0f%%)\n", r.Against, r.Passed, r.Total, pct)
-	if r.SameStatus > 0 {
-		behav := 100 * float64(r.Passed+r.SameStatus) / float64(r.Total)
-		fmt.Fprintf(&b, "  plus %d agreeing on the exit status but not the wording — %.0f%% behavioral\n",
-			r.SameStatus, behav)
+	fmt.Fprintf(&b, "conformance against %s: %d/%d (%.1f%%)\n", r.Against, r.Passed, r.Total, pct)
+	if r.WordingOnly > 0 {
+		behav := 100 * float64(r.Passed+r.WordingOnly) / float64(r.Total)
+		fmt.Fprintf(&b, "  plus %d agreeing on the status and standard output but not the wording — %.1f%% behavioral\n",
+			r.WordingOnly, behav)
 	}
 	if r.Relaxed > 0 {
 		// Said in the summary and not only under -v, because this is the part

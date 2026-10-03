@@ -1412,7 +1412,50 @@ func (r *Runner) substitutedWordFields(s syntax.Span, sp splitPolicy, head bool)
 	// So the fields go back marked and the enclosing word matches them, in
 	// the one place it matches every other field.
 	defer r.splittingTheSubstitutedWord(s, sp)()
-	return r.tildeFlagFields(s, head, r.expandWordEscaped(e.Arg)), true
+	fields := r.tildeFlagFields(s, head, r.expandWordEscaped(e.Arg))
+	// And the boundaries its own blanks leave at either end, which the
+	// fields cannot carry: `x${u:- p }y` is three words. See
+	// substitutedWordEdges.
+	r.listEdges = r.substitutedWordEdges(e.Arg)
+	return fields, true
+}
+
+// substitutedWordEdges is the boundary the literal text at either end of a
+// substituted word leaves when it splits: a word opening on IFS white space
+// finishes the field in front of the expansion, and one closing on a
+// separator opens the field behind it. These are the edges an unquoted `$v`
+// holding the same text leaves (interp/splitawayedge.go), read off the
+// word's own literal ends, since only those are split here.
+//
+// Measured 2026-10-03, `printf '<%s>' x${u:- p }y` and the rest:
+//
+//	                      bash 5.3   dash   zsh shwordsplit   zsh
+//	x${u:- p }y           x p y      x p y  x p y             `x p y` one
+//	x${u:-p }y            xp y       xp y   xp y
+//	x${u:- p}y            x py       x py   x py
+//	x${u:- }y             x y        x y    x y
+//	x${v:+ p }y, v=1      x p y      x p y  x p y
+//	v=' p '; x${u:-$v}y   xpy        x p y  xpy
+//
+// The last row is not this: the blanks there are a nested expansion's, not
+// the word's own, and are left as they were.
+func (r *Runner) substitutedWordEdges(w *syntax.Word) listEdges {
+	if w == nil || len(w.Spans) == 0 {
+		return listEdges{}
+	}
+	ifs, set := r.ifs()
+	var edges listEdges
+	first, last := w.Spans[0], w.Spans[len(w.Spans)-1]
+	if r.splitWordLiterals.splits(r, first, first.Value) && leadingSeparatorEdge(first.Value, nil, ifs, set) {
+		edges.lead = true
+	}
+	if t := last.Value; t != "" && r.splitWordLiterals.splits(r, last, t) {
+		// The split's own answer, because whether a closing separator is
+		// absorbed or writes an empty field is the dialect's: zsh's
+		// `x${u:-p:}y` under `IFS=:` is `xp`, `y` with the field written.
+		_, edges.openEnd = r.splitFieldsAskEdge(t, nil, ifs, set)
+	}
+	return edges
 }
 
 // splittingTheSubstitutedWord arms the literal text of the word a `-` or `+`

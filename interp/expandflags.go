@@ -2217,7 +2217,15 @@ func (r *Runner) modifiedElements(words []string, e *syntax.ParamExpr) ([]string
 		return nil, false
 	}
 	out := make([]string, 0, len(sliced))
-	for _, w := range sliced {
+	savedHead := r.liveMarksAtHead
+	defer func() { r.liveMarksAtHead = savedHead }()
+	for i, w := range sliced {
+		if i > 0 {
+			// Every element after the first is a field of its own, and so
+			// at a head, whatever stood in front of the expansion. See
+			// headTokenMark: x${a:s/A/~/} over (A A) is x~ and then $HOME.
+			r.liveMarksAtHead = true
+		}
 		got, applied := r.applyModifiers(w, segs, e)
 		if !applied {
 			// The list is refused as a whole, the way it is for a scalar:

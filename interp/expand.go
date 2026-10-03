@@ -2017,13 +2017,13 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, l
 	// is going to read would be answered as `$a[@]` rather than as `$a`
 	// followed by three characters. See baresubscript.go.
 	s, tail := r.unreadBareSubscript(r.indirectionReadAsTheSubscriptFlag(s))
-	savedLive := r.liveMarksFor
+	savedLive, savedHead := r.liveMarksFor, r.liveMarksAtHead
 	if sp != splitNever {
 		// Only where the fields are going on to be words; see liveMark.
-		r.liveMarksFor = s.Param
+		r.liveMarksFor, r.liveMarksAtHead = s.Param, head
 	}
 	parts, ok := r.expandAtList(s, sp, head)
-	r.liveMarksFor = savedLive
+	r.liveMarksFor, r.liveMarksAtHead = savedLive, savedHead
 	if ok {
 		marks := listMarks{nulls: r.listNulls, edges: r.listEdges}
 		r.listNulls, r.listEdges = nil, listEdges{}
@@ -3107,10 +3107,10 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy, head bool) (text stri
 		// parameter behind and hands the brackets back as text. See
 		// baresubscript.go.
 		s, tail := r.unreadBareSubscript(r.indirectionReadAsTheSubscriptFlag(s))
-		savedLive := r.liveMarksFor
-		r.liveMarksFor = s.Param
+		savedLive, savedHead := r.liveMarksFor, r.liveMarksAtHead
+		r.liveMarksFor, r.liveMarksAtHead = s.Param, head
 		v := r.expandParam(s.Param)
-		r.liveMarksFor = savedLive
+		r.liveMarksFor, r.liveMarksAtHead = savedLive, savedHead
 		text, split := r.expansionResult(v, unquoted, r.globSubstAnswer(s),
 			splitFlagAnswer(s, sp, r.sem().SplitParamExpansion),
 			"splitting an unquoted parameter expansion")

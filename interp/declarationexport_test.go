@@ -29,13 +29,13 @@ func TestADeclarationThatAssignsClearingTheExportAttributeIsAnAxis(t *testing.T)
 	const probe = `export FOO=bar; typeset FOO=baz; ` +
 		`/usr/bin/env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"`
 	out, st := exportResetRun(t, probe, func(s *Semantics) {
-		s.DeclarationAssignmentClearsTheExportAttribute = Yes
+		s.DeclarationAssignmentResetsTheAttributes = Yes
 	})
 	if st != 0 || out != "(none)\nread=[baz]\n" {
 		t.Errorf("got %q status %d, want the attribute off and the value kept", out, st)
 	}
 	out, st = exportResetRun(t, probe, func(s *Semantics) {
-		s.DeclarationAssignmentClearsTheExportAttribute = No
+		s.DeclarationAssignmentResetsTheAttributes = No
 	})
 	if st != 0 || out != "FOO=baz\nread=[baz]\n" {
 		t.Errorf("got %q status %d, want the child told the new value", out, st)
@@ -49,7 +49,7 @@ func TestNamingTheAttributeOnTheDeclarationAnswersItOutright(t *testing.T) {
 		out, st := exportResetRun(t,
 			`export FOO=bar; typeset -x FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
 			func(s *Semantics) {
-				s.DeclarationAssignmentClearsTheExportAttribute = answer
+				s.DeclarationAssignmentResetsTheAttributes = answer
 				s.DeclareOptions = "x"
 			})
 		if st != 0 || out != "FOO=baz\n" {
@@ -64,7 +64,7 @@ func TestAValuelessDeclarationDoesNotAskAboutTheExportAttribute(t *testing.T) {
 	for _, answer := range []Answer{Yes, No} {
 		out, st := exportResetRun(t,
 			`export FOO=bar; typeset FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
-			func(s *Semantics) { s.DeclarationAssignmentClearsTheExportAttribute = answer })
+			func(s *Semantics) { s.DeclarationAssignmentResetsTheAttributes = answer })
 		if st != 0 || out != "FOO=bar\n" {
 			t.Errorf("answer %v: got %q status %d, want the attribute left alone", answer, out, st)
 		}
@@ -76,7 +76,7 @@ func TestAPlainAssignmentDoesNotAskAboutTheExportAttribute(t *testing.T) {
 	// the attribute off for one.
 	out, st := exportResetRun(t,
 		`export FOO=bar; FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
-		func(s *Semantics) { s.DeclarationAssignmentClearsTheExportAttribute = Yes })
+		func(s *Semantics) { s.DeclarationAssignmentResetsTheAttributes = Yes })
 	if st != 0 || out != "FOO=baz\n" {
 		t.Errorf("got %q status %d, want a plain assignment to ask nothing", out, st)
 	}
@@ -85,7 +85,7 @@ func TestAPlainAssignmentDoesNotAskAboutTheExportAttribute(t *testing.T) {
 func TestClearingTheExportAttributeIsAResetAndNotARefusal(t *testing.T) {
 	out, st := exportResetRun(t,
 		`export FOO=bar; typeset FOO=baz; export FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
-		func(s *Semantics) { s.DeclarationAssignmentClearsTheExportAttribute = Yes })
+		func(s *Semantics) { s.DeclarationAssignmentResetsTheAttributes = Yes })
 	if st != 0 || out != "FOO=baz\n" {
 		t.Errorf("got %q status %d, want naming the attribute again to put it back", out, st)
 	}
@@ -96,13 +96,13 @@ func TestReadonlyAsksTheSameQuestionAsTypeset(t *testing.T) {
 	// it resets the attribute where `typeset`'s does.
 	out, st := exportResetRun(t,
 		`export FOO=bar; readonly FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"`,
-		func(s *Semantics) { s.DeclarationAssignmentClearsTheExportAttribute = Yes })
+		func(s *Semantics) { s.DeclarationAssignmentResetsTheAttributes = Yes })
 	if st != 0 || out != "(none)\nread=[baz]\n" {
 		t.Errorf("got %q status %d, want the attribute off through readonly too", out, st)
 	}
 	out, st = exportResetRun(t,
 		`export FOO=bar; readonly FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
-		func(s *Semantics) { s.DeclarationAssignmentClearsTheExportAttribute = Yes })
+		func(s *Semantics) { s.DeclarationAssignmentResetsTheAttributes = Yes })
 	if st != 0 || out != "FOO=bar\n" {
 		t.Errorf("got %q status %d, want a valueless readonly to ask nothing", out, st)
 	}
@@ -113,7 +113,7 @@ func TestExportItselfNeverAsksTheQuestion(t *testing.T) {
 	// it is the same case as `typeset -x` by another spelling.
 	out, st := exportResetRun(t,
 		`export FOO=bar; export FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
-		func(s *Semantics) { s.DeclarationAssignmentClearsTheExportAttribute = Yes })
+		func(s *Semantics) { s.DeclarationAssignmentResetsTheAttributes = Yes })
 	if st != 0 || out != "FOO=baz\n" {
 		t.Errorf("got %q status %d, want export to keep what it names", out, st)
 	}
@@ -128,7 +128,7 @@ func TestAnImportedNameIsResetTheSameWay(t *testing.T) {
 			sem := CoreSemantics()
 			sem.DeclaredNameWithoutValueIsEmpty = No
 			sem.TypesetLocalNeedsKeywordFunction = No
-			sem.DeclarationAssignmentClearsTheExportAttribute = Yes
+			sem.DeclarationAssignmentResetsTheAttributes = Yes
 			r.Semantics = &sem
 			r.Env = append(r.Env, "IMPORTED=arrived")
 		})
@@ -146,7 +146,7 @@ func TestAScopedDeclarationAsksTheOtherAxisInstead(t *testing.T) {
 		`export FOO=bar; f() { typeset FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; `+
 			`/usr/bin/env | grep '^FOO=' || echo "(none)"`,
 		func(s *Semantics) {
-			s.DeclarationAssignmentClearsTheExportAttribute = Yes
+			s.DeclarationAssignmentResetsTheAttributes = Yes
 			s.LocalInheritsTheExportAttribute = No
 		})
 	if st != 0 || out != "(none)\nFOO=bar\n" {
@@ -160,7 +160,7 @@ func TestAScopedDeclarationAsksTheOtherAxisInstead(t *testing.T) {
 		`export FOO=bar; f() { typeset FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; `+
 			`/usr/bin/env | grep '^FOO=' || echo "(none)"`,
 		func(s *Semantics) {
-			s.DeclarationAssignmentClearsTheExportAttribute = Yes
+			s.DeclarationAssignmentResetsTheAttributes = Yes
 			s.LocalInheritsTheExportAttribute = Yes
 		})
 	if st != 0 || out != "FOO=baz\nFOO=bar\n" {
@@ -174,7 +174,7 @@ func TestAScopedDeclarationAsksTheOtherAxisInstead(t *testing.T) {
 		func(s *Semantics) {
 			s.DeclaredNameWithoutValueIsEmpty = No
 			s.TypesetLocalNeedsKeywordFunction = Yes
-			s.DeclarationAssignmentClearsTheExportAttribute = Yes
+			s.DeclarationAssignmentResetsTheAttributes = Yes
 			s.LocalInheritsTheExportAttribute = No
 		})
 	if st != 0 || out != "(none)\nread=[baz]\n" {
@@ -188,7 +188,7 @@ func TestAnUnansweredExportResetIsRefused(t *testing.T) {
 	_, st := axisRun(t, `export FOO=bar; typeset FOO=baz`, func(s *Semantics) {
 		s.DeclaredNameWithoutValueIsEmpty = No
 		s.TypesetLocalNeedsKeywordFunction = No
-		s.DeclarationAssignmentClearsTheExportAttribute = Unspecified
+		s.DeclarationAssignmentResetsTheAttributes = Unspecified
 	})
 	if st != 2 {
 		t.Errorf("status %d, want the unanswered axis refused", st)

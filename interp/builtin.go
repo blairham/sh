@@ -3916,6 +3916,17 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 					return r.status
 				}
 			} else {
+				// The attribute word resets the value attributes as a
+				// declaration does, and keeps the one it names: `typeset -i
+				// s=1; export s=2+3` is `typeset -x s=2+3` in the shell
+				// that resets. No scope is taken here, so the binding is
+				// never fresh. See Runner.declarationAssignmentResets.
+				if letters {
+					r.declarationAssignmentResets(name, false, true, true)
+					if r.unspecified {
+						return r.status
+					}
+				}
 				r.setVarAs(r.orName(valueTarget, name), value, assignedByDeclaration)
 			}
 			if r.ctl == controlExit {
@@ -8455,7 +8466,7 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 				if !letters {
 					continue
 				}
-				r.declarationAssignmentExport(name, false)
+				r.declarationAssignmentResets(name, fresh, false, false)
 				if r.unspecified {
 					return r.status
 				}
@@ -8479,7 +8490,7 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 					// operand is finished. See the tail of this loop.
 					continue
 				}
-				r.declarationAssignmentExport(name, false)
+				r.declarationAssignmentResets(name, fresh, false, false)
 				if r.unspecified {
 					return r.status
 				}
@@ -8488,6 +8499,16 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 				}
 				continue
 			}
+			if letters {
+				// `readonly` is one shell's `typeset -r` and resets here
+				// where that shell's `typeset` does, ahead of the store:
+				// `typeset -i s=1; readonly s=2+3` holds `2+3`. See
+				// declarationAssignmentResets.
+				r.declarationAssignmentResets(name, fresh, false, true)
+				if r.unspecified {
+					return r.status
+				}
+			}
 			r.setVarAs(r.orName(valueTarget, name), value, assignedByDeclaration)
 			if r.ctl == controlExit {
 				// See biExport.
@@ -8495,14 +8516,6 @@ func biReadonly(r *Runner, ctx context.Context, args []string) int {
 			}
 			if !letters {
 				continue
-			}
-			// `readonly` is one shell's `typeset -r` and behaves like it
-			// here: an assignment through it resets the export attribute
-			// where that shell's `typeset` does. See
-			// declarationAssignmentExport.
-			r.declarationAssignmentExport(name, false)
-			if r.unspecified {
-				return r.status
 			}
 		}
 		if !letters {

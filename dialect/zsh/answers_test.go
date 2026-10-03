@@ -129,7 +129,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
 		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.No},
 		{"ReadonlyDeclaresALocal", s.ReadonlyDeclaresALocal, interp.Yes},
-		{"DeclarationAssignmentClearsTheExportAttribute", s.DeclarationAssignmentClearsTheExportAttribute, interp.No},
+		{"DeclarationAssignmentResetsTheAttributes", s.DeclarationAssignmentResetsTheAttributes, interp.No},
 		{"UnsetSubscriptOnAScalarIsAnError", s.UnsetSubscriptOnAScalarIsAnError, interp.No},
 		{"StdinOptionNamesTheOperands", s.StdinOptionNamesTheOperands, interp.Yes},
 		{"HangupIsAnOrderlyExit", s.HangupIsAnOrderlyExit, interp.Yes},

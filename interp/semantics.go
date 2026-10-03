@@ -13664,39 +13664,53 @@ type Semantics struct {
 	// TestALocalHidesTheCallersValueUnderTypesetToUnset.
 	ValuelessDeclarationHidesTheOuterValue Answer
 
-	// DeclarationAssignmentClearsTheExportAttribute takes the export
-	// attribute off a name a declaration utility assigns to. ksh93 does;
-	// bash 5.3, bash 3.2, bash as `sh` and zsh keep it, and dash has no
-	// declaration utility to ask with.
+	// DeclarationAssignmentResetsTheAttributes resets the attributes a name
+	// carries when a declaration utility assigns to it: the name keeps the
+	// value, the declaration's own letters land afresh, and the rest are gone.
+	// ksh93 does this. bash 5.3, bash 3.2, bash as `sh` and zsh keep every
+	// attribute, and dash has no declaration utility to ask with.
 	//
 	//	export FOO=bar; typeset FOO=baz; env | grep '^FOO='
 	//
 	// One shell tells the child nothing and goes on telling it nothing: the
-	// name keeps its value and is simply no longer exported, which
-	// `export -p` and `typeset -p` both confirm. `export FOO` afterwards
-	// puts the attribute back, so it is a reset rather than a refusal.
+	// name keeps its value and is simply no longer exported, which `export
+	// -p` and `typeset -p` both confirm. `export FOO` afterwards puts the
+	// attribute back, so it is a reset rather than a refusal.
 	//
-	// Asked only where the name being assigned was already exported, where
-	// the declaration does not name the attribute itself, and where the
-	// declaration did *not* take a scope. The scoped half is
-	// LocalInheritsTheExportAttribute, which is the same shell's answer
-	// arrived at from the other side and already takes the attribute off for
-	// the function's duration — the two must not both fire, or a keyword
-	// function would leave the caller's name unexported, which it does not.
+	// **It is every value attribute, not only the export one** (#5647).
+	// Measured 2026-10-03 on ksh93u+ 2012-08-01 under `-c`, one letter at a
+	// time, `typeset -<letter> s=1; typeset s=7; typeset -p s`:
 	//
-	// The value on the line is what asks it. A valueless `typeset FOO`
-	// leaves the attribute alone, and so do the valueless declarations that
-	// change the value anyway — `typeset -i FOO` stores 0 and `typeset -u
-	// FOO` folds what is there, and a child is told about both. `readonly
-	// FOO=baz` clears it, because in the shell that does this `readonly` is
-	// that shell's `typeset -r`; `export FOO=baz` does not, because it names
-	// the attribute. A plain `FOO=baz` does not either, in any shell — this
-	// is a declaration utility's doing and not an assignment's.
+	//	-x -i -t -H -Z3 -L4 -R4 -F2 -E, -i 16     s=7
+	//	-l, -u                                    typeset -l s=7, typeset -u s=7
+	//	-lx, -ux, -lt                             typeset -x -l s=7 and so on
+	//	-ix, -xt                                  s=7
+	//
+	// It happens before the value is read: `typeset -i s=1; typeset s=2+3`
+	// holds the four characters `2+3`. **A case letter already on the name
+	// keeps every attribute**, export included, while one on the declaration
+	// does not: `typeset -x s=1; typeset -l s=B` is `typeset -l s=b`. The
+	// kind stays (`-a`, `-A`, a reference), and so does a freeze, which
+	// refuses the line first. `readonly s=2+3` and `export s=2+3` over `-i`
+	// reset too, keeping only the letter they name: `typeset -r s=2+3` and
+	// `typeset -x s=2+3`. bash 5.3.20 answers `declare -i s=1; declare
+	// s=2+3` with `declare -i s="5"`, and zsh 5.9 with `typeset -i s=5`.
+	//
+	// Not where the declaration made the binding, which starts with nothing.
+	// It does apply to a second declaration of a local: `function f {
+	// typeset -x s=2; typeset s=3; env; }` shows no `s` there. An append
+	// takes off only the export attribute, as it always did. Nothing measured
+	// says it drops a value attribute (`typeset -p s+=5` over `-Z3` keeps
+	// it), and `typeset s+=5` itself is refused there. A valueless `typeset
+	// FOO`, or a plain `FOO=baz`, resets nothing in any shell.
 	//
 	// The preset is no: POSIX has an exported name keep the attribute for
 	// the life of the shell, and the two other shells with the builtin
 	// agree.
-	DeclarationAssignmentClearsTheExportAttribute Answer
+	//
+	// Left unmodeled: `typeset -l s=A; typeset +l s=B` folds `B` before the
+	// letter comes off there (`s=b`), and this stores `B` (#5663).
+	DeclarationAssignmentResetsTheAttributes Answer
 
 	// LocalInheritsTheExportAttribute gives a local declaration the export
 	// attribute of the name it shadows, so a child sees the local's value
@@ -31388,7 +31402,7 @@ func PosixSemantics() Semantics {
 		// assigns rather than one that shadows: the attribute belongs to
 		// the name, so an assignment through a declaration utility leaves
 		// it where it was. Both other shells with the builtin agree.
-		DeclarationAssignmentClearsTheExportAttribute: No,
+		DeclarationAssignmentResetsTheAttributes: No,
 		// POSIX has `trap` save the action and execute it when the
 		// condition arises, so the text is not read until then. Six of the
 		// seven columns agree; zsh alone reads it as the trap is set, and
@@ -34527,10 +34541,14 @@ const (
 	// passed over per DeclarePrintReportsAMissingName. zsh 5.9.2, where
 	// `typeset -p s=5` is `no such variable: s` at 1 and leaves `s` unset.
 	DeclarePrintOperandIsANameAlone
-	// DeclarePrintOperandIsAssignedPlainly performs every operand carrying a
-	// value as a *bare* assignment — no attribute letter of the line lands
-	// and no scope is taken — and then lists the name it wrote. ksh93u+.
-	DeclarePrintOperandIsAssignedPlainly
+	// DeclarePrintOperandIsDeclaredWithoutLetters performs every operand
+	// carrying a value as a declaration with no letters, and then lists the
+	// name it wrote. No attribute letter of the line lands. The name takes a
+	// scope where a plain `typeset` would, and loses the attributes a plain
+	// `typeset name=value` takes off (DeclarationAssignmentResetsTheAttributes).
+	// The store itself is a bare assignment's, refusal wording included.
+	// ksh93u+. See interp/declareprintoperand.go.
+	DeclarePrintOperandIsDeclaredWithoutLetters
 	// DeclarePrintOperandIsDeclaredWhereItIsALiteral performs only the
 	// operand the parser kept apart as an array literal, as a declaration
 	// carrying the line's value-shaping letters, and reads every other shape

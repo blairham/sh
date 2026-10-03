@@ -159,8 +159,8 @@ func (r *Runner) declarePrintPerformsItsOperands(name string, args []string, f d
 		if code, done := r.declarePrintDeclaresItsLiterals(name, args, f); done {
 			return code, true
 		}
-	case DeclarePrintOperandIsAssignedPlainly:
-		if code, done := r.declarePrintAssignsItsOperands(args); done {
+	case DeclarePrintOperandIsDeclaredWithoutLetters:
+		if code, done := r.declarePrintAssignsItsOperands(name, args); done {
 			return code, true
 		}
 		args = plainlyAssignedListingNames(args, r.literalOperands)
@@ -203,15 +203,35 @@ func (r *Runner) declarePrintDeclaresItsLiterals(name string, args []string, f d
 }
 
 // declarePrintAssignsItsOperands performs each operand that carries a value as
-// a bare assignment, which is the whole of what the column reading them that
-// way does with the line's letters: nothing.
-func (r *Runner) declarePrintAssignsItsOperands(args []string) (int, bool) {
+// a declaration with no letters: the line's letters do nothing. The name takes
+// the scope a plain `typeset` would take, so in a keyword function it is a
+// local of its own, starting empty. A plain value then drops the attributes a
+// plain `typeset name=value` drops. Measured 2026-10-03 on ksh93u+ 2012-08-01
+// under `-c` (#5647):
+//
+//	typeset -x s=1; typeset -p s=5; typeset -p s              s=5, s=5 (and not exported)
+//	typeset -i s=1; typeset -p s=2+3; typeset -p s            s=2+3, s=2+3
+//	typeset -lx s=A; typeset -p s=B                           typeset -x -l s=b
+//	typeset -x s=1; function f { typeset -p s=5; }; f; ...    s=5, then typeset -x s=1
+//	typeset -x s=1; function f { typeset -p s+=5 >/dev/null;
+//	  echo "[$s]"; }; f                                       [5]
+//	typeset -i s=1; typeset -p s+=5 >/dev/null; typeset -p s  typeset -i s=6
+//
+// The store itself is still a bare assignment's: the refusal over a frozen
+// name carries no builtin name, as the rows at the top of this file say.
+func (r *Runner) declarePrintAssignsItsOperands(builtin string, args []string) (int, bool) {
 	for _, a := range args {
 		if r.literalOperands[a] {
 			// The parenthesized operands are landed by
 			// Runner.assignOperands after this builtin returns, carrying
 			// none of the line's letters — this loop never recorded one —
-			// which is the same bare store the words below make.
+			// which is the same bare store the words below make. The name
+			// is declared and reset first, as a word's is below:
+			// `typeset -x s=1; typeset -p s=(a b)` lists `typeset -a s=(a
+			// b)`, with no `-x`.
+			if code, done := r.declarePrintDeclaresTheName(builtin, a, false); done {
+				return code, true
+			}
 			continue
 		}
 		base, value, hasValue, appends := declarationOperand(a)
@@ -224,7 +244,13 @@ func (r *Runner) declarePrintAssignsItsOperands(args []string) (int, bool) {
 			// reading Runner.builtinNames makes of the same two shapes.
 			continue
 		}
-		switch name, subs, subscripted := r.operandSubscripts(r.inBuiltin, base); {
+		name, subs, subscripted := r.operandSubscripts(r.inBuiltin, base)
+		if !subscripted {
+			if code, done := r.declarePrintDeclaresTheName(builtin, base, appends); done {
+				return code, true
+			}
+		}
+		switch {
 		case subscripted:
 			r.declareElement(name, subs[:len(subs)-1], subs[len(subs)-1], value, appends, declareFlags{}, true)
 		case appends:
@@ -244,6 +270,29 @@ func (r *Runner) declarePrintAssignsItsOperands(args []string) (int, bool) {
 			r.setVarAs(base, value, assignedAlone)
 		}
 		if r.unspecified || r.ctl == controlExit {
+			return r.status, true
+		}
+	}
+	return 0, false
+}
+
+// declarePrintDeclaresTheName is the declaration half of a performed operand:
+// the name declared with no letters and no value, which takes the scope a
+// plain `typeset` takes (a keyword function's local starts empty, with none of
+// the caller's attributes) and changes nothing at the top level. Then, unless
+// the operand appends, the reset a plain `typeset name=value` makes. Through
+// declareNames rather than a shorter path beside it, so a local here is the
+// local `typeset` makes and not a second copy of the rule.
+func (r *Runner) declarePrintDeclaresTheName(builtin, name string, appends bool) (int, bool) {
+	if code := r.declareNames(builtin, []string{name}, declareFlags{}); code != 0 {
+		return code, true
+	}
+	if r.unspecified || r.ctl == controlExit {
+		return r.status, true
+	}
+	if !appends {
+		r.declarationAssignmentResets(name, false, false, true)
+		if r.unspecified {
 			return r.status, true
 		}
 	}

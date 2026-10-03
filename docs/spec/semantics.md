@@ -28718,9 +28718,11 @@ variable table exactly as the bare word does, and `local -I zz` over an unset
 `+I` asks for the same thing as `-I`, measured — there is no spelling that
 turns inheritance off for one declaration.
 
-**`DeclarationAssignmentClearsTheExportAttribute`** — bash no · dash absent · ksh93 yes · zsh no
+**`DeclarationAssignmentResetsTheAttributes`** — bash no · dash absent · ksh93 yes · zsh no
 
-Takes the export attribute off a name a declaration utility assigns to.
+Resets the attributes a name carries when a declaration utility assigns to
+it. This was `DeclarationAssignmentClearsTheExportAttribute` until #5647
+measured that the export attribute is only one of them.
 
     export FOO=bar; typeset FOO=baz; env | grep '^FOO='
 
@@ -28741,11 +28743,29 @@ shell that does this `readonly` *is* its `typeset -r`; `export FOO=baz`
 does not, because it names the attribute; and a plain `FOO=baz` does not
 in any shell, which is the boundary the axis is drawn at.
 
-Asked only where the name was already exported, where the declaration
-does not name the attribute itself, and where the declaration did **not**
-take a scope. The scoped half is `LocalInheritsTheExportAttribute` below
-— the same shell's answer arrived at from the other side — and the two
-must not both fire: in a keyword function the attribute comes back on
+**Every value attribute goes with it** (#5647), measured on ksh93u+
+2012-08-01 a letter at a time as `typeset -<letter> s=1; typeset s=7`:
+
+    -x -i -t -H -Z3 -L4 -R4 -F2 -E, -i 16, -ix, -xt   s=7
+    -l, -u                                             the letter kept
+    -lx, -ux, -lt                                      every letter kept
+
+It happens before the value is read: `typeset -i s=1; typeset s=2+3`
+holds `2+3`. A case letter **already on the name** keeps everything,
+while one on the declaration does not: `typeset -x s=1; typeset -l s=B`
+is `typeset -l s=b`. The declaration's own letters land afresh, so
+`readonly s=2+3` over `-i` is `typeset -r s=2+3` and `export s=2+3` is
+`typeset -x s=2+3`. The kind (`-a`, `-A`, a reference) stays. bash and
+zsh keep `-i` and evaluate the `2+3`. An append still takes off only the
+export attribute. A `-p` listing whose operand assigns resets the same
+way: `typeset -x s=1; typeset -p s=5` is `s=5`, not exported.
+
+Not asked where this very declaration made the binding. The first
+version of this exempted any name the running scope had shadowed, which
+was too wide: a second declaration of a local resets too, so `function f
+{ typeset -x s=2; typeset s=3; env; }` shows no `s`. The binding a declaration makes is
+`LocalInheritsTheExportAttribute`'s, below: the same shell's answer
+arrived at from the other side. The two must not both fire on it: in a keyword function the attribute comes back on
 return, and in a function whose declarations reach the caller it is gone
 for good.
 

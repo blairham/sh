@@ -1236,7 +1236,7 @@ func Semantics() interp.Semantics {
 	// `typeset -p s=5` writes `s=5` and leaves 5 behind, carrying none of
 	// the line's letters — measured 2026-09-20 on ksh93u+ 2012-08-01. See
 	// interp/declareprintoperand.go.
-	s.DeclarePrintPerformsItsOperand = interp.DeclarePrintOperandIsAssignedPlainly
+	s.DeclarePrintPerformsItsOperand = interp.DeclarePrintOperandIsDeclaredWithoutLetters
 	// The `-p` letter on `export` and `readonly` is inert once operands are
 	// written, which is bash's answer and not this shell's reading of
 	// `typeset -p`: measured 2026-09-20 on ksh93u+ 2012-08-01, `export -p
@@ -2143,7 +2143,7 @@ func Semantics() interp.Semantics {
 	// FOO=baz` leaves this shell holding `baz` and telling no child about
 	// it, where the other two hand `baz` over; `export FOO` afterwards puts
 	// the attribute back.
-	s.DeclarationAssignmentClearsTheExportAttribute = interp.Yes
+	s.DeclarationAssignmentResetsTheAttributes = interp.Yes
 	s.FatalErrorStatusIsOne = interp.Yes
 	// A loop variable that is not a name parses here and ends the script when
 	// the loop is reached, at 1. The same for `select`: re-measured on 93u+

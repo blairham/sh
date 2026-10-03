@@ -17236,6 +17236,29 @@ type Semantics struct {
 	// is for.
 	AliasListingQuotesTheName Answer
 
+	// AliasListingWalksTheTable writes a bare `alias` listing in the order the
+	// shell's own table holds its entries rather than sorted by name.
+	//
+	// dash and BusyBox ash. The order is not insertion and not the name's, and
+	// it is fully determined by the names and the order they were defined in:
+	// fitted to measurements 2026-10-03, on dash 0.5.12 and on BusyBox ash in
+	// the pinned image, over five sets of sixty to seventy random names each
+	// and agreeing on every line, an entry's place is its *bucket* —
+	//
+	//	(16 × first byte + the sum of every byte) mod 39
+	//
+	// in ascending order, and within one bucket the order the names were
+	// first defined in. A redefinition keeps its place (`alias u=1 N=1;
+	// alias u=2` still lists u first, both in bucket 0) and an `unalias`
+	// followed by a definition takes a new one at the end of its bucket. So
+	// `alias aa=1 ab=2 zz=3` lists zz, aa, ab — buckets 12, 30 and 31 — and
+	// `alias -g G=x; alias r=y; alias -s t=z` in the shells that refuse the
+	// letters lists t, r, G (corpus rows alias/operands-as-patterns and
+	// alias/the-two-kinds-are-two-namespaces).
+	//
+	// The other four sort by name, which is the base.
+	AliasListingWalksTheTable Answer
+
 	// TrapQuoting is that same question asked of `trap`, and it is a
 	// separate field because the dialects do not all answer the two alike.
 	//
@@ -32451,6 +32474,10 @@ func PosixSemantics() Semantics {
 		// operand, so the base reads nothing joined to the option; bash 5.x
 		// and ksh93 override.
 		KillReadsASignalJoinedToItsOption: No,
+		// The standard leaves the order of a bare `alias` listing unspecified;
+		// four of the six sort by name, so the base does and dash and ash,
+		// which walk their table, override.
+		AliasListingWalksTheTable: No,
 		// And so nothing joined to it that is a number either; dash and
 		// ksh93 override.
 		KillJoinsANumberToTheNameOption: No,

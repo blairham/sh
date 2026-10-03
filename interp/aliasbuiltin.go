@@ -48,6 +48,10 @@ type aliasDef struct {
 	// letter only narrows a *listing* down to the marked entries. See
 	// Semantics.AliasHasExportOption.
 	exported bool
+	// defined orders the entry among the others by when its name was first
+	// defined: a redefinition keeps it, and a removal loses it. Read only by
+	// a listing that walks the table — see Semantics.AliasListingWalksTheTable.
+	defined int
 }
 
 // AliasKind is which aliases a definition, a lookup or a listing is about.
@@ -653,10 +657,20 @@ func (r *Runner) defineAlias(name, value string, kind AliasKind) {
 	// exported. See Runner.markedAliasNames.
 	exported := r.aliases[name].exported || r.markedAliases[name]
 	delete(r.markedAliases, name)
+	old, held := r.aliases[name]
+	defined := old.defined
+	if !held {
+		// One past the latest standing entry rather than a counter on the
+		// Runner, so a cloned table needs nothing beside it to stay ordered.
+		for _, a := range r.aliases {
+			defined = max(defined, a.defined+1)
+		}
+	}
 	r.aliases[name] = aliasDef{
 		value:    value,
 		global:   kind == AliasGlobalKind,
 		exported: exported,
+		defined:  defined,
 	}
 }
 
@@ -834,7 +848,33 @@ func (r *Runner) aliasNames(kind AliasKind) []string {
 		}
 	}
 	sort.Strings(names)
+	if kind != AliasSuffixKind && r.sem().AliasListingWalksTheTable == Yes {
+		// Read rather than asked: a sorted listing and a walked one agree on
+		// every table of one entry, and every path that enumerates aliases
+		// comes through here. See Semantics.AliasListingWalksTheTable.
+		sort.SliceStable(names, func(i, j int) bool {
+			bi, bj := aliasTableBucket(names[i]), aliasTableBucket(names[j])
+			if bi != bj {
+				return bi < bj
+			}
+			return r.aliases[names[i]].defined < r.aliases[names[j]].defined
+		})
+	}
 	return names
+}
+
+// aliasTableBucket is where a walked listing places a name: sixteen times its
+// first byte plus the sum of all its bytes, modulo 39. Fitted to measurements;
+// see Semantics.AliasListingWalksTheTable.
+func aliasTableBucket(name string) int {
+	if name == "" {
+		return 0
+	}
+	h := 16 * int(name[0])
+	for i := 0; i < len(name); i++ {
+		h += int(name[i])
+	}
+	return h % 39
 }
 
 func biUnalias(r *Runner, _ context.Context, args []string) int {

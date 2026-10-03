@@ -10542,9 +10542,10 @@ func (d Diagnostics) ForStdin() Diagnostics {
 // `h() { cd /x; }; h` is `h:cd: …`.
 //
 // Held rather than re-derived, because the route's own field is already
-// written over by the time a diagnostic is located. One route is taken per
-// session — an interactive shell reading standard input takes the prompt's
-// and not both — so there is nothing to stack.
+// written over by the time a diagnostic is located. Nothing stacks two
+// routes: with a guard that kept the first call's answer taken out, `-fis`
+// over the same body still wrote `g:cd:1:`, so the guard was removed rather
+// than left untested.
 func (d *Diagnostics) keepBodyLocation() {
 	d.bodyLocation, d.bodyBuiltinLocation, d.bodyLocationKept = d.Location, d.BuiltinLocation, true
 }

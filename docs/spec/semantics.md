@@ -24695,6 +24695,18 @@ rather than the digits it read, so `$(( big ))` quotes the blank before
 the `))` too — which is why `syntax.ArithNum` records the tail and the
 evaluator does not go looking for it.
 
+The same reading takes `printf`'s integer operands in zsh, whose
+`PrintfNumberOperand` is its arithmetic. Measured 2026-10-03: `printf
+'[%d]' 99999999999999999999` is `[-8446744073709551617]` with `zsh:1:
+number truncated after 19 digits: 99999999999999999999` at 0, the
+location leaving `printf` out because the sentence is the evaluator's,
+and a leading minus negates the same value under the same sentence. The
+value is kept as an integer on that route: -8446744073709551617 is not a
+double, and the float the rest of that reading carries would round its
+last digit. ksh93's `printf` reaches its double instead, through
+`ArithValuesAreCarriedInAFloat`, and clamps it with its own `overflow
+exception` warning.
+
 **`ArithStoredNumeralPastTheWordIsRefused`** — bash no · dash yes ·
 ksh93 not asked · zsh no
 

@@ -215,9 +215,15 @@ func (r *Runner) referenceNode(text string, outer *syntax.ParamExpr, src string)
 			// threw the reference's half away, which is the whole of what
 			// the text said.
 			e.Leading = append(append([]syntax.LeadingIndex(nil), e.Leading...),
-				syntax.LeadingIndex{Index: e.Index, Flags: e.IndexFlags})
+				syntax.LeadingIndex{Index: e.Index, Flags: e.IndexFlags, Range: e.IndexRange, Text: e.IndexText})
 		}
-		e.Index, e.IndexFlags = outer.Index, outer.IndexFlags
+		// The whole of the outer subscript, its pair included: a grammar
+		// that separates a written pair keeps it in IndexRange, and taking
+		// the word alone read `[1,3]` as the arithmetic comma — measured on
+		// zsh 5.9.2, `abc=quick; foo=abc; ${${(P)foo}[1,3]}` is `qui`, and
+		// this answered `i`, the third character (#5151).
+		e.Index, e.IndexFlags, e.IndexRange = outer.Index, outer.IndexFlags, outer.IndexRange
+		e.IndexText, e.IndexDots = outer.IndexText, outer.IndexDots
 	}
 	if outer != nil {
 		e.Length = outer.Length

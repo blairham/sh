@@ -1201,6 +1201,13 @@ type Runner struct {
 	// declaration inside some other command's expansion cannot reach it.
 	// Read by Runner.privateKindWouldChange.
 	privateDeclarationRan bool
+	// refusedLineKeptItsLiterals says the declaration builtin on the command
+	// line now being finished refused one of its letters and still declared
+	// its array-literal operands, so the operand store that runs after it
+	// must store them although its status is not 0. Cleared before the call
+	// and put back after it, the way privateDeclarationRan is. See
+	// interp/refusedlineliterals.go.
+	refusedLineKeptItsLiterals bool
 	// privateDeclared says this shell has taken a private shadow at least
 	// once, and it is the whole of what a shell without the word pays: one
 	// bool compared against false at each function call, and nothing at all
@@ -9732,7 +9739,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.hideLetterWritten = false
 		outerRanAWord := r.commandRanAWord
 		r.commandRanAWord = false
+		outerKeptLiterals := r.refusedLineKeptItsLiterals
+		r.refusedLineKeptItsLiterals = false
 		st := r.callBuiltin(ctx, argv[0], fn, argv[1:])
+		keptLiterals := r.refusedLineKeptItsLiterals
+		r.refusedLineKeptItsLiterals = outerKeptLiterals
 		if !r.commandRanAWord {
 			r.reportExitValue(st)
 		}
@@ -9744,7 +9755,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		r.commandWordWasWritten = outerWritten
 		r.inBuiltin = outer
 		fatal := false
-		if st == 0 && !locks {
+		// A refused letter stops the builtin and not, in every dialect, the
+		// array literals written behind it: see interp/refusedlineliterals.go.
+		if (st == 0 || keptLiterals) && !locks {
 			// A `-g` declaration's array literal lands on the shell's own
 			// cell, under whatever local or call prefix is standing on the
 			// name. Around the operand assignment rather than inside the
@@ -9782,6 +9795,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				// fatal in one dialect too, and the status they report is the
 				// one the corpus pins.
 				fatal = true
+			case keptLiterals:
+				// The refusal's own status stands over whatever the
+				// literals did: the line has already failed.
 			case r.assignFailed, r.lettersRefusedTheOperand:
 				// A refused operand is the declaration's own failure, and
 				// biDeclare cannot see it: the operand assignments land after

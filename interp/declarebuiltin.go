@@ -1324,6 +1324,7 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 	if known == "" {
 		known = declareOptionLetters
 	}
+	written := args
 	args, f, code := r.parseDeclareFlags(name, args, known)
 	if code != 0 {
 		// A bad option ends the script where the dialect counts `typeset`
@@ -1333,7 +1334,9 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		if r.ask(r.sem().TypesetBadOptionFatal, "a bad `typeset` option ending the script") {
 			r.status = code
 			r.fatalUsageQuiet()
+			return code
 		}
+		r.refusedLineDeclaresItsLiterals(written, known, name != "export" && name != "readonly")
 		return code
 	}
 	return r.declareNames(name, args, f)

@@ -3753,6 +3753,9 @@ func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
 	}
 	args, opts, code := r.builtinOptions("export", args, letters)
 	if code != 0 {
+		if r.ctl != controlExit {
+			r.refusedLineDeclaresItsLiterals(written, letters, false)
+		}
 		return code
 	}
 	if r.exported == nil {
@@ -7596,6 +7599,9 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 	if known := r.localDeclarationOptions(); known != "" {
 		rest, flags, code := r.parseDeclareFlags(word, args, known)
 		if code != 0 {
+			if r.ctl != controlExit {
+				r.refusedLineDeclaresItsLiterals(args, known, true)
+			}
 			return code
 		}
 		args, f = rest, flags

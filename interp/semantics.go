@@ -15218,6 +15218,24 @@ type Semantics struct {
 	// refusal has happened, so a shell with no `typeset` never meets it.
 	TypesetBadOptionFatal Answer
 
+	// RefusedDeclarationKeepsItsArrayLiterals declares and stores a
+	// declaration's array-literal operands although one of its letters was
+	// refused, with the letters the line could read.
+	//
+	// Measured 2026-10-03: `typeset -U a=(1 1 2)` is `-U: invalid option` at
+	// 2 on bash 5.3.20 and leaves `declare -a a=([0]="1" [1]="1" [2]="2")`
+	// behind, where zsh 5.9.2 says `bad option: -Q` for `typeset -Q a=(1)`
+	// at 1 and `a` does not exist. ksh93 is not a third answer — the refusal
+	// ends the script there first. Asked only where a letter was refused
+	// and the line carries an array literal. See
+	// interp/refusedlineliterals.go for the rest of the panel.
+	//
+	// unpinned dash: there is no array literal, so the question cannot be
+	// put; the preset's No is the standard's, which has neither.
+	//
+	// unpinned ash: the same as dash — BusyBox ash has no array literal.
+	RefusedDeclarationKeepsItsArrayLiterals Answer
+
 	// SignAloneIsAnOptionWord reads a declaration's `-` or `+` written with
 	// no letters after it as an option word rather than as an operand.
 	//
@@ -31946,6 +31964,9 @@ func PosixSemantics() Semantics {
 		BareDeclarationListing: DeclareListingCommandWord,
 		BareLocalListing:       BareLocalListsNothing,
 		TypesetBadOptionFatal:  No,
+		// POSIX has no array literal, so a refused letter has nothing
+		// behind it to keep.
+		RefusedDeclarationKeepsItsArrayLiterals: No,
 		// POSIX has no `typeset`, so nothing in the standard reads a lone
 		// sign as an option word and an operand is what is left. It is also
 		// the answer that declares nothing behind a script's back.

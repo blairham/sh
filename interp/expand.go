@@ -5226,7 +5226,9 @@ func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) i
 	// parentheses are the expression's grouping rather than a pattern group
 	// that the dialect with glob qualifiers would read as a list.
 	restore := r.withoutGlobbing()
+	endText := r.readingQuotedText()
 	marked := r.rangeSegmentText(w)
+	endText()
 	restore()
 	// The marks are the evaluator's alone. Everything below shows the text
 	// instead, and one printed into a log is a stray NUL — the same carve-out
@@ -7450,9 +7452,7 @@ func (r *Runner) expandRawSpans(text string) (out, head string, ok bool) {
 func (r *Runner) expandRawSpansWith(text string, hook func(literal bool, part string) string) (out, head string, ok bool) {
 	// Text read the way a double-quoted string is, which one refusal words
 	// differently from the same expansion unquoted. See refusesAListAsAName.
-	saved := r.expandingRawText
-	r.expandingRawText = true
-	defer func() { r.expandingRawText = saved }()
+	defer r.readingQuotedText()()
 	spans, ok := r.rawSpans(text)
 	if !ok {
 		return "", "", false
@@ -9670,4 +9670,13 @@ func spansCopiedForTildes(w *syntax.Word) *syntax.Word {
 		}
 	}
 	return w
+}
+
+// readingQuotedText marks the expansions run until the returned call as part
+// of a text read the way a double-quoted string is: a here-document body, or
+// an arithmetic expression. See Runner.expandingRawText.
+func (r *Runner) readingQuotedText() func() {
+	saved := r.expandingRawText
+	r.expandingRawText = true
+	return func() { r.expandingRawText = saved }
 }

@@ -543,6 +543,9 @@ func (r *Runner) assocKeyRead(e *syntax.ParamExpr) string {
 }
 
 func (r *Runner) assocKeyIn(w *syntax.Word, inDoubleQuotes bool) string {
+	// A key is read as a double-quoted string is, as far as one refusal's
+	// wording goes. See readingQuotedText.
+	defer r.readingQuotedText()()
 	r.expandSubscriptTilde(w)
 	quoted := r.expandKeyQuoted(w)
 	keep := keyKeepsEscape

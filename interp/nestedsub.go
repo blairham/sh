@@ -364,6 +364,12 @@ func (r *Runner) nestedLengthReference(e *syntax.ParamExpr) (string, bool) {
 //	${${(P)v}}  ${${(P)v}[1]}  ${#${(P)v}}  x=${${(P)v}}
 //	                         parameter name reference used with array, st 1
 //	"${${(P)v}}"  "${${(P)v}:-z}"          bad substitution, st 1
+//	$(( ${#${(P)v}} )), `(( … ))`, `${s:${#${(P)v}}}`, an index or a key
+//	                                      bad substitution: each is read as a
+//	                                      quoted string is; `(( … ))` goes on
+//	                                      to the next line
+//	${u:-${${(P)v}}}  case, [[ ]], for, a redirection target
+//	                                      the first sentence, as a word
 //	the same in a here-document           bad substitution, and the next
 //	                                      line runs
 //	v=(x1); ${${(P)v}[1,2]}  ab            one element is a name
@@ -386,11 +392,13 @@ func (r *Runner) refusesAListAsAName(e *syntax.ParamExpr) bool {
 	if !isList || len(words) < 2 {
 		return false
 	}
-	if r.inDoubleQuotedSpan() || r.expandingRawText {
+	if r.inDoubleQuotedSpan() || r.expandingRawText || e.InsideASubscript {
 		r.diagf("%s\n", "bad substitution")
 	} else {
 		r.diagf("%s\n", "parameter name reference used with array")
 	}
-	r.fatalExpansionQuiet()
+	// A failed expansion, which is what decides what it ends: the shell on
+	// a command line, and only the arithmetic command inside `(( ))`.
+	r.expandErr = true
 	return true
 }

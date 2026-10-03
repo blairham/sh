@@ -592,7 +592,7 @@ func (p *Parser) slice(from, to Pos) string {
 
 func (p *Parser) next() {
 	if p.tok.Kind != TokEOF && p.tok.Text != "" {
-		p.lastText = p.tok.Text
+		p.lastText = firstLineOf(withoutContinuations(p.tok.Text))
 	}
 	// Whatever parsePipeline offered to the alias table, it offered the
 	// token that is about to stop being current. Cleared here rather than
@@ -8346,4 +8346,44 @@ func (p *Parser) hiddenFromTheScriptsRead(span Span) bool {
 		}
 	}
 	return false
+}
+
+// withoutContinuations is a token's text with each backslash-newline the
+// lexer stepped over taken out, as a diagnostic quoting the token names it.
+// Measured 2026-10-03 on zsh 5.9.2 under -fc: the refusal of `if a\⏎b`
+// names ab and that of `$\⏎(` names $( (#5151, a chunk of D04parameter.ztst).
+// A backslash-newline inside single quotes is text and stays, and the text is
+// then named up to its first newline: `(echo 'a\⏎b'` names 'a\. See
+// firstLineOf.
+func withoutContinuations(text string) string {
+	if !strings.Contains(text, "\\\n") {
+		return text
+	}
+	var b strings.Builder
+	single := false
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		switch {
+		case c == '\'':
+			single = !single
+		case c == '\\' && !single && i+1 < len(text):
+			if text[i+1] == '\n' {
+				i++
+				continue
+			}
+			b.WriteByte(c)
+			i++
+			c = text[i]
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// firstLineOf is text up to its first newline.
+func firstLineOf(text string) string {
+	if i := strings.IndexByte(text, '\n'); i >= 0 {
+		return text[:i]
+	}
+	return text
 }

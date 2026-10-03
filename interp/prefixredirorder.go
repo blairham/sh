@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"slices"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -238,7 +239,7 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(assigns []*syntax.Assign, wa
 		if !traceEach {
 			continue
 		}
-		if r.prefixTracedEarly[a] {
+		if slices.Contains(r.prefixTracedEarly, a) {
 			// Written already, ahead of a refusal; it still counts as the
 			// prefix's lines being written.
 			wrote = true

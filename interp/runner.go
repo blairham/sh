@@ -2052,8 +2052,9 @@ type Runner struct {
 	prefixTraceValues  []string
 	// prefixTracedEarly are the prefix entries already written by the
 	// frozen-name walk, ahead of its refusal. See
-	// Runner.expandThePrefixUpToTheFrozenName.
-	prefixTracedEarly map[*syntax.Assign]bool
+	// Runner.expandThePrefixUpToTheFrozenName. A slice, on the terms
+	// prefixTraceAssigns gives.
+	prefixTracedEarly []*syntax.Assign
 	// prefixTraceJoins is the third, and it holds what an **appending**
 	// entry came to: the name's value at the moment this entry expanded,
 	// with the expansion behind it. Recorded rather than derived again,

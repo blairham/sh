@@ -123,10 +123,7 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign) bool
 				r.traceLine(w, *d)
 				r.releaseTraceTurn()
 			}
-			if r.prefixTracedEarly == nil {
-				r.prefixTracedEarly = map[*syntax.Assign]bool{}
-			}
-			r.prefixTracedEarly[a] = true
+			r.prefixTracedEarly = append(r.prefixTracedEarly, a)
 		}
 		if frozen {
 			// Its value expanded and nothing behind it does: the refusal is

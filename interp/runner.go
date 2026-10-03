@@ -14110,7 +14110,12 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// same way, as the identical text inside `$(( ))`. It used to be a
 		// wording of our own that named the array rather than the expression,
 		// and it carried on to the next command.
-		text := r.joinWord(a.Index)
+		var text string
+		if r.indexedSubscriptKeepsItsQuoting(a.IndexText, a.Name) {
+			text = r.expandArithText(a.IndexText, arithTextWritten)
+		} else {
+			text = r.joinWord(a.Index)
+		}
 		// What a refusal quotes back is the subscript as it was *written*,
 		// which is not the text the arithmetic reads: `i=-9; a[$i]=q` is
 		// `a[$i]: bad array subscript` in the column that names it. Only the

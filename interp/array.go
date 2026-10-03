@@ -2520,7 +2520,12 @@ func (r *Runner) subscriptOver(e *syntax.ParamExpr, src subscriptSource) ([]stri
 		}
 		return r.flaggedRangeSubscript(e, src)
 	}
-	written := r.subscriptTextAsWritten(e.Subscript())
+	var written string
+	if r.indexedSubscriptKeepsItsQuoting(e.IndexText, src.name) {
+		written = r.expandArithText(e.IndexText, arithTextWritten)
+	} else {
+		written = r.subscriptTextAsWritten(e.Subscript())
+	}
 	idx := trimSubscript(written)
 	if r.wholeArrayIndex(e) {
 		if e.Length || e.Indirect {

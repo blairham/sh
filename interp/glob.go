@@ -1656,6 +1656,16 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		if !filterListing && len(ignore) > 0 && r.ignoredName(w, ignore) {
 			continue
 		}
+		if r.markDirs {
+			// One shell's `markdirs`: a directory the pattern produced is
+			// written with a slash after it — even one the pattern already
+			// ended in. Measured 2026-10-02 on zsh 5.9.2, `setopt markdirs;
+			// print tmp*` is `tmpcd/ tmpfile1 tmpfile2` beside a directory
+			// `tmpcd`, and `print */` is `tmpcd//` (#5155).
+			if fi, err := r.stat(d); err == nil && fi.IsDir() {
+				w += "/"
+			}
+		}
 		out = append(out, w)
 		if ordered {
 			paths = append(paths, d)

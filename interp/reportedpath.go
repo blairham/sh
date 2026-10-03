@@ -46,6 +46,12 @@ func (r *Runner) resolvedPathFor(name, resolved string) string {
 	if !strings.ContainsRune(name, '/') {
 		return resolved
 	}
+	// A name with a slash the path walk answered for, under `pathdirs`, is
+	// reported as the copy found there, as a bare name is. See
+	// Runner.searchesTheSlashedName.
+	if r.searchesTheSlashedName(name) && resolved != "" && resolved != r.absolute(name) {
+		return resolved
+	}
 	if !r.ask(r.sem().APathnameOperandIsReportedAbsolute,
 		"a pathname operand written back as an absolute path by a builtin asked where a command is") {
 		return name

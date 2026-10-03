@@ -608,6 +608,17 @@ func autoloadResolveNow(r *interp.Runner, ctx context.Context, opts autoloadOpts
 		// a pending stub any more. See autoloadRunResolved for what the
 		// answer decides.
 		stub := autoloadPending(r, name)
+		if !opts.kshStyle && !opts.zshParse && kshAutoloadOn(r) {
+			// Neither letter was given, so the option decides — as the
+			// function is loaded, not as it was marked. Measured 2026-10-02
+			// on zsh 5.9.2 with `fpath=(.)` and a file `foo` holding `echo foo
+			// loaded; foo() { echo foo run $*; }`: `autoload foo; setopt
+			// kshautoload; foo a` writes both lines, `setopt kshautoload;
+			// autoload foo; unsetopt kshautoload; foo a` writes the first
+			// alone, and `-z` under the option writes the first alone too
+			// (#5155).
+			opts.kshStyle = true
+		}
 		if opts.kshStyle {
 			return autoloadKshStyle(r, ctx, name, names, opts, stub)
 		}
@@ -1489,3 +1500,9 @@ const autoloadStore = ".zsh.autoload"
 // declaration resolved it to. Kept beside autoloadStore and for the same
 // reasons, a subshell's own copy among them.
 const autoloadPathStore = ".zsh.autoload.path"
+
+// kshAutoloadOn reports the `kshautoload` option.
+func kshAutoloadOn(r *interp.Runner) bool {
+	o, inverted, ok := resolveOptionName("kshautoload")
+	return ok && o.get(r) != inverted
+}

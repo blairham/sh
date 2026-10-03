@@ -208,8 +208,17 @@ __dirs_cdopts() {
 	__DIRS_OPTS=$__DIRS_OPTS$__o
 	return 0
 }
+__dirs_minus() {
+	# pushdminus swaps what a + and a - count from.
+	if [[ -o pushdminus ]]; then
+		case $1 in
+		+*) __spec=-${1#+} ;;
+		-*) __spec=+${1#-} ;;
+		esac
+	fi
+}
 pushd() {
-	local __old=$PWD __spec= __DIRS_OPTS= __target=
+	local __old=$PWD __spec= __DIRS_OPTS= __target= __d __gone=
 	while [ $# -gt 0 ]; do
 		case $1 in
 		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
@@ -219,8 +228,13 @@ pushd() {
 		esac
 	done
 	if [ -n "$__spec" ]; then
+		__dirs_minus "$__spec"
 		__dirs_rotate "$__spec" ${__DIRS_OPTS:+-$__DIRS_OPTS}
 		return $?
+	fi
+	if [ $# -eq 0 ] && [[ -o pushdtohome ]]; then
+		# pushdtohome: no operand is the home directory, pushed as one.
+		set -- "$HOME"
 	fi
 	if [ $# -eq 0 ]; then
 		if [ ${#dirstack[@]} -eq 0 ]; then
@@ -239,6 +253,18 @@ pushd() {
 	__target=$1
 	set -- ${dirstack[@]+"${dirstack[@]}"}
 	cd ${__DIRS_OPTS:+-$__DIRS_OPTS} "$__target" || return 1
+	if [[ -o pushdignoredups ]]; then
+		# The first entry naming where the shell now is goes, and only
+		# the first.
+		for __d in "$@"; do
+			shift
+			if [ -z "$__gone" ] && [ "$__d" = "$PWD" ]; then
+				__gone=1
+				continue
+			fi
+			set -- "$@" "$__d"
+		done
+	fi
 	dirstack=("$__old" "$@")
 }
 popd() {
@@ -257,6 +283,7 @@ popd() {
 	set -- "$PWD" ${dirstack[@]+"${dirstack[@]}"}
 	__i=0
 	if [ -n "$__spec" ]; then
+		__dirs_minus "$__spec"
 		case $__spec in
 		+*) __i=${__spec#+} ;;
 		*)  __i=$(( $# - 1 - ${__spec#-} )) ;;

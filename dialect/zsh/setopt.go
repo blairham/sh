@@ -1296,7 +1296,9 @@ var zshOptions = []zshOption{
 			return 0
 		},
 	},
-	recorded("kshautoload", false),
+	// KSH_AUTOLOAD: read by autoload as a function is loaded. See
+	// kshAutoloadOn (#5155).
+	storeBacked("kshautoload", false),
 	{
 		// KSH_GLOB: the quantified group spellings, and — measured, and the
 		// half this wires — **where a bare group may open once `shglob` has
@@ -1504,7 +1506,16 @@ var zshOptions = []zshOption{
 		},
 	},
 	recorded("mailwarning", false),
-	recorded("markdirs", false),
+	{
+		// MARK_DIRS: a directory a pattern produces is written with a slash.
+		// See interp.Runner.SetMarkDirs (#5155).
+		base: "markdirs", def: false,
+		get: func(r *interp.Runner) bool { return r.MarkDirs() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetMarkDirs(on)
+			return 0
+		},
+	},
 	recorded("menucomplete", false),
 	// The switch job control really is: the same one `set -m` moves, so the
 	// two spellings are one state read and written through one seam. Granted
@@ -1697,7 +1708,16 @@ var zshOptions = []zshOption{
 		},
 	},
 	recorded("overstrike", false),
-	recorded("pathdirs", false),
+	{
+		// PATH_DIRS: a command word with a slash in it is looked for down
+		// the path too. See interp.Runner.SetPathDirs (#5155).
+		base: "pathdirs", def: false,
+		get: func(r *interp.Runner) bool { return r.PathDirs() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetPathDirs(on)
+			return 0
+		},
+	},
 	recorded("pathscript", false),
 	setOptBacked("pipefail", false, "pipefail", false),
 	// `posixaliases` keeps a **reserved word** out of alias expansion, which
@@ -1881,6 +1901,14 @@ var zshOptions = []zshOption{
 			setAxis(r, func(s *interp.Semantics) *interp.Answer {
 				return &s.DotMissingFileFatal
 			}, answer(on))
+			// And `exec` stops reaching the shell's own commands: measured
+			// 2026-10-02 on zsh 5.9.2, with a function `f`, `setopt
+			// posixbuiltins; (exec f)` is `command not found: f` at 127,
+			// `(exec print hi)` the same for `print`, and `exec cat` runs
+			// the file over a function of that name (#5155).
+			setAxis(r, func(s *interp.Semantics) *interp.Answer {
+				return &s.ExecReachesTheShellsOwnCommands
+			}, answer(!on))
 			// And the roster goes: the standard's rule replaces this shell's
 			// own list rather than standing beside it (#5136). Measured
 			// 2026-10-01 on zsh 5.9.2, `( x=43; x=v CMD; print "x=$x" >
@@ -2108,9 +2136,27 @@ var zshOptions = []zshOption{
 		},
 	},
 	recorded("printeightbit", false),
-	recorded("printexitvalue", false),
+	{
+		// PRINT_EXIT_VALUE: a failed builtin or function call says so. See
+		// interp.Runner.reportExitValue (#5155).
+		base: "printexitvalue", def: false,
+		get: func(r *interp.Runner) bool { return r.PrintExitValue() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetPrintExitValue(on)
+			return 0
+		},
+	},
 	recorded("privileged", false),
-	recorded("promptbang", false),
+	{
+		// PROMPT_BANG: a `!` in a prompt is the history number. See
+		// interp.promptBangText (#5155).
+		base: "promptbang", def: false,
+		get: func(r *interp.Runner) bool { return r.PromptBang() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetPromptBang(on)
+			return 0
+		},
+	},
 	// PROMPT_CR and PROMPT_SP are read by the line editor every time it
 	// draws a prompt — `repl.EditorStyle` names them and `Shell.dialectOption`
 	// asks this namespace for their state — so neither is `recorded`, which
@@ -2123,13 +2169,22 @@ var zshOptions = []zshOption{
 	// are measured as ones a bare `emulate` leaves alone — so the workaround
 	// is no longer buying anything and the entries can say what is true.
 	storeBacked("promptcr", true),
-	recorded("promptpercent", true),
+	{
+		// PROMPT_PERCENT: a prompt's `%` escapes are drawn. See
+		// interp.Runner.SetPromptPercent (#5155).
+		base: "promptpercent", def: true,
+		get: func(r *interp.Runner) bool { return r.PromptPercent() },
+		set: func(r *interp.Runner, on bool) int {
+			r.SetPromptPercent(on)
+			return 0
+		},
+	},
 	storeBacked("promptsp", true),
 	recorded("promptsubst", false),
-	recorded("pushdignoredups", false),
-	recorded("pushdminus", false),
+	storeBacked("pushdignoredups", false),
+	storeBacked("pushdminus", false),
 	recorded("pushdsilent", false),
-	recorded("pushdtohome", false),
+	storeBacked("pushdtohome", false),
 	{
 		// RC_EXPAND_PARAM: whether a parameter expansion that writes no `^`
 		// of its own distributes over the word it stands in. `a=(1 2);

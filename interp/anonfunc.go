@@ -108,9 +108,13 @@ func (r *Runner) anonFunc(ctx context.Context, c *syntax.AnonFunc) error {
 		decl := &syntax.FuncDecl{
 			Name: name, Keyword: c.Keyword, Body: c.Body, Start: c.Start,
 		}
-		return r.callFuncInPlace(ctx, decl, name, args, &inPlaceCall{
+		err := r.callFuncInPlace(ctx, decl, name, args, &inPlaceCall{
 			origin: r.originHere(), numberFrom: r.anonBodyNumberedFrom(c),
 		})
+		if err == nil {
+			r.reportExitValue(r.status)
+		}
+		return err
 	})
 }
 

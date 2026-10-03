@@ -1046,6 +1046,13 @@ func RenderPromptValue(st PromptStyle, r *Runner, text string, field PromptResol
 		visual := &promptVisualState{}
 		if r != nil {
 			visual = &r.promptVisual
+			if r.promptPercentOff {
+				// Every `%` is itself, which the walker reads `%%` as.
+				v = strings.ReplaceAll(v, "%", "%%")
+			}
+			if r.promptBang {
+				v = promptBangText(v)
+			}
 		}
 		return expandPromptStyle(st, v, field, quantity, visual)
 	}

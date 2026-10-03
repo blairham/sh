@@ -4405,6 +4405,24 @@ type Runner struct {
 	// modifierTextEscaped says the modifier being applied came from a glob
 	// qualifier, whose text is the field's escaped form.
 	modifierTextEscaped bool
+	// markDirs is one dialect's `markdirs`. See Runner.SetMarkDirs.
+	markDirs bool
+	// pathDirs is one dialect's `pathdirs`. See Runner.SetPathDirs.
+	pathDirs bool
+	// printExitValue is one dialect's `printexitvalue`. See
+	// Runner.reportExitValue.
+	printExitValue bool
+	// commandRanAWord records that `command` ran the words behind it rather
+	// than describing them, which takes its own `printexitvalue` report
+	// away: what ran reports for itself, or — an external command — not at
+	// all. See Runner.reportExitValue.
+	commandRanAWord bool
+	// promptBang is one dialect's `promptbang`. See promptBangText.
+	promptBang bool
+	// promptPercentOff is one dialect's `promptpercent` turned off — the
+	// zero value is the option on, which is that dialect's default. See
+	// Runner.SetPromptPercent.
+	promptPercentOff bool
 	// trapSnapshot is the listing the parent shell would have shown when
 	// this subshell began, kept for the dialects whose `trap` still shows
 	// it there, and dropped the moment this runner modifies any trap.
@@ -7867,6 +7885,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 				sourceClosedAt = recordASourceClosedSubscript(sourceClosedAt, w, argv)
 				continue
 			}
+			if r.operandsKeepTheirAssignments && r.sem().TheFirstUnquotedEqualsInAWordOpensATildeContext == Yes {
+				// One shell's `kshtypeset` beside its `magicequalsubst`: an
+				// assignment-shaped argument of *any* command is expanded as
+				// an assignment's value and not split. Measured 2026-10-02
+				// on zsh 5.9.2, `print -l split=$(echo maybe not)` writes one
+				// line with both options on and two with either off, and
+				// `x$(echo a b)` beside it is still two (#5155).
+				argv = append(argv, r.expandAssignArg(w))
+				continue
+			}
 		}
 		// An appending operand, `typeset x+=v`. A second reading beside
 		// assignShaped rather than a loosening of it — see
@@ -8969,7 +8997,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// command inside it was handed, the caller reads what the call was.
 		// Unanimous across bash, ksh93 and zsh, and #3134's first defect.
 		defer r.underscoreAcrossAFunctionCall(beforeLastArg, beforeLastArgSet)()
-		return r.callFunc(ctx, fn, argv[1:])
+		err := r.callFunc(ctx, fn, argv[1:])
+		// Not for the call a trap makes to its `TRAP…` function: measured,
+		// `TRAPUSR1(){ false }` reports nothing when the signal arrives,
+		// where `trap false USR1` reports the line.
+		if _, _, trapCall := r.trapFunctionCondition(argv[0]); err == nil && (!trapCall || !r.inTrapBody) {
+			r.reportExitValue(r.status)
+		}
+		return err
 	}
 
 	// A builtin runs in this shell, which is the whole reason it is one:
@@ -9263,7 +9298,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 		// exempts it from the rule that a kind change forgets the attribute.
 		outerHideRan := r.hideLetterWritten
 		r.hideLetterWritten = false
+		outerRanAWord := r.commandRanAWord
+		r.commandRanAWord = false
 		st := r.callBuiltin(ctx, argv[0], fn, argv[1:])
+		if !r.commandRanAWord {
+			r.reportExitValue(st)
+		}
+		r.commandRanAWord = outerRanAWord
 		privateRan := r.privateDeclarationRan
 		r.privateDeclarationRan = outerPrivateRan
 		hideRan := r.hideLetterWritten

@@ -173,6 +173,13 @@ func (r *Runner) expandWordFieldsTracked(w *syntax.Word, track bool) ([]string, 
 	// inside this word inherits it. See interp/equalscontextposition.go.
 	outside, restorePosition := r.spendTheEqualsContextPosition()
 	defer restorePosition()
+	// The tilde passes rewrite the spans they expand, so they are given a
+	// copy: the word belongs to the parsed program, and a function's body is
+	// expanded again on its next call. Writing into the tree kept the first
+	// call's home directory — `f(){ print ~ }; f; HOME=/y; f` printed the
+	// old one twice — and kept a magicequalsubst reading after the option
+	// went off (#5155).
+	w = spansCopiedForTildes(w)
 	r.expandTilde(w)
 	// And the tildes a word that merely *looks* like an assignment gets in
 	// one column. Beside expandTilde because it is the other half of the same
@@ -1147,6 +1154,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 		return nil, nil, ""
 	}
 	w = r.wordForRun(w)
+	w = spansCopiedForTildes(w)
 	r.expandTilde(w)
 	// The word is recorded here for the same reason expandOneWordFields
 	// records its own: a diagnostic raised inside the expansion names the
@@ -1200,12 +1208,21 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields, words []stri
 		text, split := r.expandSpan(s, splitAlways, head)
 		release()
 		b.WriteString(text)
-		// And never splits, whatever the span asked for. That is the whole
-		// of the difference from the fields view below.
-		u.text(text, segProduced)
-		if text != "" || s.Quoting != syntax.Unquoted {
-			u.any = true
-			u.keepOpen()
+		// And never splits, whatever the span asked for — except a command
+		// substitution, which is split in the shell that reads the words
+		// view: measured 2026-10-02 on zsh 5.9.2, `cat <$(echo f1 f2)` reads
+		// both files and `echo hi >$(echo o1 o2)` fills both, where `x="f1
+		// f2"; cat <$x` is one name (#5155). The fields view below is the
+		// other reading's and is untouched.
+		if split && s.Kind == syntax.CommandSubst && s.Quoting == syntax.Unquoted {
+			ifs, set := r.ifs()
+			r.addSpan(&u, s, r.splitFieldsAsk(text, ifs, set), listMarks{}, false)
+		} else {
+			u.text(text, segProduced)
+			if text != "" || s.Quoting != syntax.Unquoted {
+				u.any = true
+				u.keepOpen()
+			}
 		}
 		if !split {
 			f.text(text, segProduced)
@@ -9380,4 +9397,18 @@ func (r *Runner) replaceWhole(value, pattern string, e *syntax.ParamExpr, cached
 		return value
 	}
 	return out
+}
+
+// spansCopiedForTildes is w with its own copy of the spans where a literal in
+// it holds a `~`, which is the one thing the tilde passes rewrite in place,
+// and w itself otherwise.
+func spansCopiedForTildes(w *syntax.Word) *syntax.Word {
+	for _, sp := range w.Spans {
+		if sp.Kind == syntax.Literal && strings.IndexByte(sp.Value, '~') >= 0 {
+			c := *w
+			c.Spans = slices.Clone(w.Spans)
+			return &c
+		}
+	}
+	return w
 }

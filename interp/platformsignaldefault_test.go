@@ -35,6 +35,16 @@ func TestTheDefaultActionOfASharedSignalIsThePlatformsOwn(t *testing.T) {
 	default:
 		t.Skipf("no measured default action for IO on %s", runtime.GOOS)
 	}
+	// In a process of its own, because on the kernel that discards IO this
+	// case sends a real SIGIO to the process it runs in, and the arrival is
+	// not done when kill(2) returns. In the test binary it landed on the next
+	// case's runner, which had just trapped IO, and that handler ran twice:
+	// measured 2026-10-02 on macOS, 3 failures in 9000 paired runs under load
+	// and 0 in 18000 runs of the next case alone (#5459). The quiet-table
+	// helper is the existing way to run a case in a child of this binary.
+	if measuredInAQuietDescriptorTable(t) {
+		return
+	}
 
 	out, errs, st := killRun(t, "kill -s IO $$\necho after\n", killSem(), Diagnostics{})
 	if errs != "" {

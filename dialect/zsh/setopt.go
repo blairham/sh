@@ -1323,15 +1323,19 @@ var zshOptions = []zshOption{
 		// are refused where a word begins and taken inside one, in one shell
 		// in one state.
 		//
-		// **What it does not reach yet** is the rest of the name: the `@(…)`,
-		// `+(…)` and `!(…)` spellings, which this option also brings in the
-		// reference. That is a row of #4814 and is measured where it lands;
-		// until then `kshglob` is more than the nothing it was and less than
-		// the whole of what zsh means by it.
+		// And the rest of the name: the `@(…)`, `+(…)`, `?(…)`, `*(…)` and
+		// `!(…)` spellings, which match at run time — `setopt kshglob; case
+		// b in @(a|b))` on one line of a `-c` string matches — so the
+		// setter moves interp.QuantifiedGroupsEverywhere, which reaches the
+		// matcher as well as the grammar (#5422).
 		base: "kshglob", def: false,
 		get: kshGlobOn,
 		set: func(r *interp.Runner, on bool) int {
 			setBareGroupGrammar(r, shGlobOn(r), on)
+			// And the quantified spellings themselves, `@(…)`, `+(…)`,
+			// `?(…)`, `*(…)` and `!(…)`, in the grammar and the matcher
+			// alike (#5422).
+			r.SetMatchOption(interp.QuantifiedGroupsEverywhere, on)
 			return 0
 		},
 	},

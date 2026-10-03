@@ -25,8 +25,15 @@ import "strings"
 // shaped like one, where a `:` ends the name as well: `x=~"root":~"root"` is
 // two homes (#5655).
 const (
-	tildeThroughMark      = ""
-	tildeThroughColonMark = ""
+	tildeThroughMark      = "\uf8fb"
+	tildeThroughColonMark = "\uf8fa"
+	// tildeThroughWrittenMark opens a name that ends at tildeThroughEndMark,
+	// placed where the word writes the closing byte, or at the end of the
+	// text where it writes none — the dialect of
+	// Semantics.TildeNameEndsOnlyAtAWrittenSlash. A name holding a `/`
+	// there is no name, and the word stands as written.
+	tildeThroughWrittenMark = "\uf8f9"
+	tildeThroughEndMark     = "\uf8f8"
 )
 
 // resolveTildesThrough reads every marked tilde in s, which is in the escaped
@@ -38,8 +45,9 @@ func (r *Runner) resolveTildesThrough(s string, escaped bool) string {
 // resolveTildesThroughWith is resolveTildesThrough with the escape a
 // directory takes in the escaped form named.
 func (r *Runner) resolveTildesThroughWith(s string, escaped bool, escape func(string) string) string {
-	if !strings.Contains(s, tildeThroughMark) && !strings.Contains(s, tildeThroughColonMark) {
-		return s
+	if !strings.Contains(s, tildeThroughMark) && !strings.Contains(s, tildeThroughColonMark) &&
+		!strings.Contains(s, tildeThroughWrittenMark) {
+		return strings.ReplaceAll(s, tildeThroughEndMark, "")
 	}
 	var b strings.Builder
 	for {
@@ -54,9 +62,26 @@ func (r *Runner) resolveTildesThroughWith(s string, escaped bool, escape func(st
 			continue
 		}
 		end := tildeThroughNameEnd(s, ends, escaped)
+		after := end
+		if ends == "" {
+			// The written kind: up to its end mark, which is taken out.
+			end = len(s)
+			if k := strings.Index(s, tildeThroughEndMark); k >= 0 {
+				end, after = k, k+len(tildeThroughEndMark)
+			} else {
+				after = end
+			}
+		}
 		name := s[1:end]
 		if escaped {
 			name = globUnescape(name)
+		}
+		if ends == "" && strings.ContainsRune(name, '/') {
+			// A slash the word did not write is part of the name, and a name
+			// with one in it names nothing.
+			b.WriteString(s[:end])
+			s = s[after:]
+			continue
 		}
 		dir, _, ok, miss := r.tildeSplit("~" + name)
 		if !ok {
@@ -69,6 +94,10 @@ func (r *Runner) resolveTildesThroughWith(s string, escaped bool, escape func(st
 			dir = escape(dir)
 		}
 		b.WriteString(dir)
+		if ends == "" {
+			s = s[after:]
+			continue
+		}
 		s = s[end:]
 	}
 }
@@ -76,16 +105,17 @@ func (r *Runner) resolveTildesThroughWith(s string, escaped bool, escape func(st
 // nextTildeThroughMark finds the next mark of either kind, with the bytes
 // that end the name it opens and the mark's own length.
 func nextTildeThroughMark(s string) (at int, ends string, n int) {
-	i := strings.Index(s, tildeThroughMark)
-	j := strings.Index(s, tildeThroughColonMark)
-	switch {
-	case i < 0 && j < 0:
-		return -1, "", 0
-	case j < 0 || (i >= 0 && i < j):
-		return i, tildeEndsAtASlash, len(tildeThroughMark)
-	default:
-		return j, tildeEndsAtASlashOrColon, len(tildeThroughColonMark)
+	at, n = -1, 0
+	for _, m := range []struct{ mark, ends string }{
+		{tildeThroughMark, tildeEndsAtASlash},
+		{tildeThroughColonMark, tildeEndsAtASlashOrColon},
+		{tildeThroughWrittenMark, ""},
+	} {
+		if i := strings.Index(s, m.mark); i >= 0 && (at < 0 || i < at) {
+			at, ends, n = i, m.ends, len(m.mark)
+		}
 	}
+	return at, ends, n
 }
 
 // tildeThroughNameEnd is where the name after the tilde at s[0] ends: the first

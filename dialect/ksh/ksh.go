@@ -1474,6 +1474,12 @@ func Semantics() interp.Semantics {
 	// unlike bash it does not care what else the word holds: `echo ~:x"y"` is
 	// the home and a colon here where bash keeps the tilde.
 	s.TildeColonEndsAnOrdinaryWordsPrefix = interp.TildeColonAlwaysEndsAPrefix
+	// A tilde's name is read through quotes and expansions, as far as a slash
+	// the word writes. See Semantics.TildeNameEndsOnlyAtAWrittenSlash, which
+	// carries the measurement, and the table on
+	// Semantics.TildePrefixStopsAtAQuoteOrAnExpansion it corrects (#5689).
+	s.TildePrefixStopsAtAQuoteOrAnExpansion = interp.No
+	s.TildeNameEndsOnlyAtAWrittenSlash = interp.Yes
 	// This shell has `$_`, and the row that said it did not was measured
 	// through a `;`-list — the one shape where a shell with the parameter
 	// and a shell without it give the same empty answer. `echo one two`

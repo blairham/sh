@@ -19347,13 +19347,21 @@ type Semantics struct {
 	//	the controls, where the prefix *is* plain and every column expands:
 	//	~/bar  ~/"bar"  ~/$x  ~
 	//
-	// Six of the seven answer yes throughout. zsh answers no throughout — it
-	// takes the quotes off and looks the name up, so `~\chet` is an error
-	// there rather than a word. ksh93 is yes on the first eight rows and no
-	// on the last three, which is a split between its reading of a backslash
-	// and its reading of a quoted span that no second axis would pay for: the
-	// yes answer is right for it six rows out of eleven and the no answer
-	// three, so it takes yes and the three are recorded here.
+	// Five of the seven answer yes throughout. zsh and ksh93 answer no: they
+	// take the quotes off and look the name up. The ksh93 column read "as
+	// written" on the first rows only because `chet` is no user on the
+	// measuring machine — a probe that could not tell the two answers apart,
+	// since an unknown name stands as written in ksh93 either way. Measured
+	// again 2026-10-03 with a user that exists, ksh93u+ 2012-08-01:
+	//
+	//	~\root/bar  ~"root"/bar  ~ro"o"t  ~$USER  ~"$x"  ~${x}/q   root's home
+	//	~"/bar"  ~'/'bar  ~$e/x (e=)           the home
+	//	~"-"  ~"+"                              $OLDPWD, $PWD
+	//	~\/bar  ~root\/x  ~\-                   as written
+	//	~$y (y=/yy)  ~$y (y=root/x)            as written
+	//
+	// The last two rows are where ksh93 parts from zsh, and
+	// TildeNameEndsOnlyAtAWrittenSlash is that difference (#5689).
 	//
 	// It is asked of the **word** and not of the tilde, which is why it lives
 	// beside expandTilde rather than inside tildeSplit: what decides is
@@ -19362,6 +19370,26 @@ type Semantics struct {
 	// `~+`, `~-` and `~user` spellings all take it together — the row with
 	// `~\-` is the one that says so (#4156).
 	TildePrefixStopsAtAQuoteOrAnExpansion Answer
+
+	// TildeNameEndsOnlyAtAWrittenSlash says that a tilde prefix read through
+	// quotes and expansions (TildePrefixStopsAtAQuoteOrAnExpansion answering
+	// no) ends only at a `/` the word writes — bare, single- or
+	// double-quoted — and not at one an expansion produces or a backslash
+	// quotes, so such a `/` lands inside the name and the word stands as
+	// written; and that a backslash-quoted `-` is not the `-` of `~-`.
+	// Measured 2026-10-03, with `y=root/x m=-` and OLDPWD set:
+	//
+	//	word             ksh93u+          zsh 5.9.2
+	//	~$y              ~root/x          root's home, then /x
+	//	~$(echo root/x)  ~root/x          root's home, then /x
+	//	~root\/x  ~\/bar ~root/x, ~/bar    root's home /x, the home /bar
+	//	~\-  ~\-/x        ~-, ~-/x         the directory
+	//	~"-"  ~$m        $OLDPWD          the directory
+	//	~"root/x"        root's home /x   the same
+	//
+	// ksh93 Yes; zsh No. Read as `== Yes`, and only once the prefix is read
+	// through, so the dialects that stop at a quote never reach it (#5689).
+	TildeNameEndsOnlyAtAWrittenSlash Answer
 
 	// TildeColonEndsAnOrdinaryWordsPrefix says whether a colon closes a tilde
 	// prefix in an **ordinary word**, the way a slash does.
@@ -32147,6 +32175,8 @@ func PosixSemantics() Semantics {
 		// quoting half outright, and the three POSIX columns extend it to an
 		// expansion. zsh is the one column that overrides it.
 		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
+		// Not reached where the prefix stops at a quote. See the field.
+		TildeNameEndsOnlyAtAWrittenSlash: No,
 		// And a word that merely looks like an assignment is not a tilde
 		// context. XCU 2.6.1 gives the expansion to the assignments in front
 		// of a command and to nothing else, which is what dash, ksh93,
@@ -32486,6 +32516,8 @@ func CoreSemantics() Semantics {
 		// it: `~$USER` is an ordinary thing to write, so a refusal would be
 		// the substrate refusing it. zsh is the holdout and says so itself.
 		TildePrefixStopsAtAQuoteOrAnExpansion: Yes,
+		// Not reached where the prefix stops at a quote. See the field.
+		TildeNameEndsOnlyAtAWrittenSlash: No,
 		// And a word that merely looks like an assignment is not a tilde
 		// context: six of the seven columns leave `make FOO=~/x` alone, and
 		// the seventh does it only outside POSIX mode. Answered here for the

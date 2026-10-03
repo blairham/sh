@@ -918,6 +918,18 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// place that saw one, and it is gone by the time anything asks the job.
 	// See Job.EndSig for why the status cannot be asked instead.
 	endSig := syscall.Signal(0)
+	// The job's ending, once: from the body's end, or earlier, from a fatal
+	// signal the body was sent while it waits on a pipeline or a `( … )` of
+	// its own — see abandonOnDeath.
+	var endOnce sync.Once
+	ended := func(status int, sig syscall.Signal) {
+		endOnce.Do(func() {
+			r.jobReaped(job, status, sig)
+			r.notifyJobEnded(notifyEnded)
+			noteJobEnded(endedNote)
+		})
+	}
+	r.abandonOnDeath(job, ended)
 	r.spawn(func() {
 		// Errors inside a background job are reported where the job runs;
 		// there is nowhere to return them to.
@@ -942,18 +954,12 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// the finish rather than after it, because the finish is what
 		// releases a `wait` for this job and the arrival has to be there
 		// before the script gets past that. See Runner.jobReaped.
-		r.jobReaped(job, status, endSig)
 		// And the shell around this one is poked, so that a dialect which
-		// reports a finished job the moment it ends can look again. Here
-		// rather than anywhere the shell's own goroutine runs, because this
-		// is the only place that knows the job has ended *while the shell is
-		// doing something else* — which is the whole of the difference. What
-		// it says is "look again" and nothing more; whether anything is said
-		// on the screen is asked where the looking happens. See
-		// Runner.notifyJobEnded.
-		r.notifyJobEnded(notifyEnded)
-		// And the shell itself, where it is blocked rather than idle.
-		noteJobEnded(endedNote)
+		// reports a finished job the moment it ends can look again — and the
+		// shell itself, where it is blocked rather than idle. Both are inside
+		// ended, which a fatal signal can reach before the body is done. See
+		// Runner.notifyJobEnded and abandonOnDeath.
+		ended(status, endSig)
 		// After the job is finished rather than before it, so nothing can
 		// observe a pipe that has ended while the job that was writing to
 		// it is still marked as running.

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -2395,6 +2396,12 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 	} else {
 		fails = r.ask(r.sem().BuiltinWriteErrorFailsTheCommand,
 			"a builtin's failed write failing the command")
+		if only := r.sem().BuiltinWriteErrorFailsOnlyThese; fails && only != "" &&
+			!slices.Contains(strings.Fields(only), name) {
+			// A builtin outside the dialect's list keeps its own status and
+			// says nothing. See Semantics.BuiltinWriteErrorFailsOnlyThese.
+			fails = false
+		}
 	}
 	// The builtin's own complaint comes first where both are said. Measured
 	// 2026-09-12 on the one dialect that has both sentences, writing into a

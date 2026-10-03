@@ -5,10 +5,12 @@ package ksh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/blairham/sh/interp"
 )
@@ -129,7 +131,8 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if !opts.raw {
 		expanded, stopped := expandPrintEscapes(text)
 		if stopped {
-			_, _ = io.WriteString(out, expanded)
+			_, err := io.WriteString(out, expanded)
+			recordPrintWriteError(r, err)
 			return 0
 		}
 		text = expanded
@@ -137,8 +140,24 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 	if opts.newline {
 		text += "\n"
 	}
-	_, _ = io.WriteString(out, text)
+	_, err := io.WriteString(out, text)
+	recordPrintWriteError(r, err)
 	return 0
+}
+
+// recordPrintWriteError hands a failed write to the shell, which decides what
+// it costs: `print hi >&-` is 1 here as `echo hi >&-` is (measured 2026-10-03
+// on ksh93u+), and it was 0 while this builtin dropped the error.
+//
+// A broken pipe is left out. `print -p` into a coprocess that has already
+// ended answers 0 and the shell lives, measured 2026-09-13 (see the ksh test
+// TestAnOutputDuplicationDoesNotRetireAnUnnamedCoprocess), and handing EPIPE
+// over would make it the SIGPIPE death an untrapped pipe write is.
+func recordPrintWriteError(r *interp.Runner, err error) {
+	if errors.Is(err, syscall.EPIPE) {
+		return
+	}
+	r.BuiltinWriteFailed(err)
 }
 
 // readPrintOptions reads the leading option words. A code of -1 means run;

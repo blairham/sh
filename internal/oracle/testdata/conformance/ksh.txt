@@ -131,9 +131,6 @@ read/interrupted-by-a-trapped-signal
 read/keys-attached-count-must-be-a-number
 readonly/a-declarations-own-array-value-survives-its-flag
 redir/a-wide-duplication-target-with-a-leading-zero
-redir/export-writing-to-a-closed-descriptor
-redir/pwd-writing-to-a-closed-descriptor
-redir/readonly-writing-to-a-closed-descriptor
 redirection/a-script-file-of-its-own-takes-a-number-in-one-shell
 set/listed-value-with-a-byte-above-ascii
 socket/a-message-across-a-unix-socket

@@ -2784,6 +2784,24 @@ type Semantics struct {
 	// write; see BrokenPipeWriteErrorFailsTheCommand for the other errno,
 	// which two dialects answer the opposite way round.
 	BuiltinWriteErrorFailsTheCommand Answer
+	// BuiltinWriteErrorFailsOnlyThese narrows the axis above to the builtins
+	// named, space-separated: a failed write into a closed descriptor fails
+	// these and leaves every other builtin at its own status, in silence.
+	// Empty means every builtin, which is what bash, dash and ash do.
+	//
+	// ksh93 is the narrow one. Measured 2026-10-03 on ksh93u+ with
+	// `( cmd >&- ) 2>e >/dev/null; echo "st=$?"`: `echo hi`, `print hi` and
+	// `printf hi` are 1, and `pwd`, `export`, `readonly`, `typeset`, `set`,
+	// `alias`, `trap`, `umask`, `type`, `whence`, `kill -l`, `ulimit` and
+	// `command -v` — every builtin whose output is a listing or an answer —
+	// are 0, with nothing written to the error stream by any of them. So a
+	// failed write fails the commands whose output *is* their job, and only
+	// those (corpus rows redir/pwd-writing-to-a-closed-descriptor and its
+	// export and readonly neighbors).
+	//
+	// Read only where the axis above has already said Yes and the write was
+	// into a closed descriptor; a broken pipe is the other axis's question.
+	BuiltinWriteErrorFailsOnlyThese string
 
 	// BrokenPipeWriteErrorFailsTheCommand is the same question for a write
 	// into a **broken pipe** with SIGPIPE disarmed — a reader that has gone,

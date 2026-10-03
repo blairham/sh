@@ -51,6 +51,9 @@ type Line struct {
 	// Cursor is how many characters of Buffer are before the cursor.
 	Cursor int
 
+	// Last is the widget the keystroke before this one ran. See LastWidget.
+	Last LastWidget
+
 	// Accept says the widget asked for the line to be committed, which is
 	// what `zle accept-line` inside a widget means. It is a *request* carried
 	// back rather than something the widget did, because an accept is the
@@ -204,4 +207,27 @@ func (s Shell) shellCompletion(ctx context.Context) func(string, Completion) []C
 		}
 		return matches
 	}
+}
+
+// LastWidget is the widget a keystroke ran, as the editor knows it: one of its
+// own actions, a function of the shell's, or the ending of a line. Which name
+// each is called by is the dialect's — this package has no names for its
+// actions — so the three are carried apart and the dialect spells them.
+//
+// It is what a shell that tells a widget "the widget before you" needs. zsh's
+// `$LASTWIDGET` is that, measured 2026-10-02 on zsh 5.9.2 through a
+// pseudo-terminal: a widget bound to a key reads `self-insert` after a typed
+// character, `backward-char` after the left arrow, its own name after itself,
+// and `accept-line` as the first key of a new line.
+type LastWidget struct {
+	// Widget is the editor's action, where it was one.
+	Widget Widget
+	// Function is the name of the shell's widget, where it was one of those.
+	Function string
+	// Accepted is the line ending — the key that committed the line before
+	// this one.
+	Accepted bool
+	// Known says any of the three holds. The zero value is a session no key
+	// has been pressed in.
+	Known bool
 }

@@ -275,6 +275,9 @@ func (e *editor) readByte() (byte, keyRead) {
 		if b[0] == ctrlC {
 			return 0, keyAbandoned
 		}
+		if e.keyBytes != nil {
+			e.keyBytes = append(e.keyBytes, b[0])
+		}
 		return b[0], keyContinues
 	}
 }

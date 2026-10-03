@@ -1852,6 +1852,9 @@ func Semantics() interp.Semantics {
 	// An array letter given a plain word: see
 	// interp.Semantics.ArrayLetterWithAWordDeclaresAScalar (#5630).
 	s.ArrayLetterWithAWordDeclaresAScalar = interp.Yes
+	// A `-p` listing whose first option word is plus-signed: see
+	// interp.Semantics.PlusSignedPrintListsNoValues (#5642).
+	s.PlusSignedPrintListsNoValues = interp.Yes
 	// A frozen name refuses a declaration's array literal here, which is the
 	// answer every column but one gives: measured 2026-09-12, `readonly q=1;
 	// typeset -g q=(b)` is `q: is read only` at 1, where zsh replaces the

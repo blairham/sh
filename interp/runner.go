@@ -1168,6 +1168,11 @@ type Runner struct {
 	// interp/localbuiltin.go. Not cloned, for the reason above it: it is
 	// live only inside one listing.
 	listingIsALocalsOwn bool
+	// listingWithoutValues is set while a `-p` listing whose first option
+	// word was plus-signed writes its rows, in the dialect that writes them
+	// without values. See Semantics.PlusSignedPrintListsNoValues. Not cloned,
+	// for the reason above it: it is live only inside one listing.
+	listingWithoutValues bool
 
 	// declaringPrivate is set while a declaration word that makes **private**
 	// bindings is running, and is read in Runner.shadow — the one place a

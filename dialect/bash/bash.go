@@ -1967,6 +1967,9 @@ func Semantics() interp.Semantics {
 	// An array letter given a plain word: see
 	// interp.Semantics.ArrayLetterWithAWordDeclaresAScalar (#5630).
 	s.ArrayLetterWithAWordDeclaresAScalar = interp.No
+	// A `-p` listing whose first option word is plus-signed: see
+	// interp.Semantics.PlusSignedPrintListsNoValues (#5642).
+	s.PlusSignedPrintListsNoValues = interp.No
 	// `readonly -a a` freezes the name and records no kind: it lists as
 	// `declare -r a`, with no `a` in the cluster.
 	s.ReadonlyRecordsTheCompoundAttribute = interp.No

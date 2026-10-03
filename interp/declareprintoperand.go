@@ -90,6 +90,10 @@ import "strings"
 //     The append is performed here for that reason and its name is left out
 //     of the listing.
 type heldListing struct {
+	// withoutValues is Runner.listingWithoutValues as the listing's own
+	// command set it, carried for the same reason as builtin below: the
+	// command has put the flag back before the held rows are written.
+	withoutValues bool
 	// names is what the listing will walk, in the order the operands were
 	// written — the whole operand word in the column that reads one as a
 	// name, and the assigned variable's own name in the column that performs
@@ -292,7 +296,10 @@ func (r *Runner) holdTheListing(names []string) {
 	if len(names) == 0 {
 		return
 	}
-	r.heldListing = heldListing{names: names, builtin: r.inBuiltin, held: true}
+	r.heldListing = heldListing{
+		names: names, builtin: r.inBuiltin, held: true,
+		withoutValues: r.listingWithoutValues,
+	}
 }
 
 // listingHeldForItsOperands writes a listing that was held back, now that the
@@ -307,9 +314,9 @@ func (r *Runner) listingHeldForItsOperands() (int, bool) {
 	if !held.held {
 		return 0, false
 	}
-	outer := r.inBuiltin
-	r.inBuiltin = held.builtin
-	defer func() { r.inBuiltin = outer }()
+	outer, outerWithout := r.inBuiltin, r.listingWithoutValues
+	r.inBuiltin, r.listingWithoutValues = held.builtin, held.withoutValues
+	defer func() { r.inBuiltin, r.listingWithoutValues = outer, outerWithout }()
 	return r.declarePrint(held.names), true
 }
 

@@ -123,6 +123,10 @@ func (r *Runner) refuseAbsentParameter(e *syntax.ParamExpr) bool {
 	if _, held := r.getVar(e.Name); held {
 		return false
 	}
+	// A gap of this shell's own and not a reading of any other, so it is a
+	// failure wherever it is met, a `case` pattern included: an empty value
+	// handed on there is what the refusal exists to prevent.
+	defer r.failureSetsItsStatus()()
 	r.fatalExpansion("%s: %s\n", e.Name, reason)
 	return true
 }
@@ -241,6 +245,7 @@ func (r *Runner) refuseAbsentElement(e *syntax.ParamExpr, key string) bool {
 	if e.SetTest {
 		return false
 	}
+	defer r.failureSetsItsStatus()() // as refuseAbsentParameter's
 	r.fatalExpansion("%s[%s]: %s\n", e.Name, key, reason)
 	return true
 }

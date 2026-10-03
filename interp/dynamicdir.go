@@ -96,7 +96,12 @@ func (r *Runner) dynamicDirectoryTilde(name string) (dir string, ok, bracketed b
 	// routes glob.go asks, in the same order — and left as written where
 	// `nonomatch` says so.
 	axis := r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error")
-	if r.MatchOption(UnmatchedPatternIsError) || (axis && !r.MatchOption(UnmatchedPatternIsEmpty)) {
+	if (r.MatchOption(UnmatchedPatternIsError) || (axis && !r.MatchOption(UnmatchedPatternIsEmpty))) &&
+		r.ctl != controlExit && r.ctl != controlAbandon {
+		// Refused once: an assignment's value is read for its tilde twice,
+		// and the refusal leaves the tilde there to be read again (#5657).
+		// See Runner.refuseTilde, which guards the other refusal the same
+		// way.
 		r.diagf("no directory expansion: ~%s\n", name)
 		r.failedExpansion()
 	}

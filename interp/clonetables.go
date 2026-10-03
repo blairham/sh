@@ -336,6 +336,10 @@ func (c *Runner) ownTables(r *Runner) {
 	// A subshell reads its own subscripts: the held values are one read's,
 	// and the parent's read is not the child's. See holdSubscriptValues.
 	c.subscriptValuesHeld = nil
+	// And the subshell's commands are its own: a failure inside a `$(…)` in a
+	// `case` subject is a command's and sets its status. See
+	// Runner.failedExpansionStatus.
+	c.failedExpansionStatus = failedExpansionSetsTheStatus
 	// absentElements travels with DynamicAssocs and the two tables beside
 	// it — the keyed reading and the writer — and copying some of that group
 	// and not the rest would be the split dynamicWriters describes below: a subshell owning the producer while sharing the sentence a key

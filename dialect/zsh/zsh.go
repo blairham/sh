@@ -2742,6 +2742,9 @@ func Semantics() interp.Semantics {
 	// A `~name` naming nothing is refused, as an unmatched pattern is.
 	// See the field (#5646).
 	s.UnresolvedTildeIsAnError = interp.Yes
+	// A failed expansion in a declaration's words or a `case` leaves `$?`
+	// alone. See the field (#5657).
+	s.FailedExpansionInADeclarationOrCaseSetsNoStatus = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"
 	s.EchoLastEscapeFlagWins = interp.No

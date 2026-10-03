@@ -46,9 +46,17 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 	// at all, and a redirection written between the halves instead is a
 	// syntax error there.
 	return r.withRedirs(ctx, c.Redirs, func() error {
+		setNoStatusBefore := r.fatalSetNoStatus
+		r.fatalSetNoStatus = false
 		if err := r.runList(ctx, c.Try); err != nil {
 			return err
 		}
+		// An error that left `$?` alone is seen as such by the always half,
+		// and still leaves the fatal status once the construct is done:
+		// measured, `{ local x=$((1/0)); } always { print $?; }` prints 0 and
+		// exits 1 in zsh 5.9.2 (#5657).
+		setNoStatus := r.fatalSetNoStatus
+		r.fatalSetNoStatus = setNoStatusBefore
 		if r.trapInterrupt && r.ctl == controlExit {
 			// Interrupted by a TRAP function: the always half runs, with
 			// the status the interruption left, and then fails. See
@@ -116,6 +124,9 @@ func (r *Runner) tryClause(ctx context.Context, c *syntax.TryClause) error {
 			// out-ranks is dropped.
 			r.ctl, r.ctlDepth, r.abandon, r.abandonLine = ctl, ctlDepth, abandon, abandonLine
 			r.errexitStopped = errexitStopped
+		}
+		if setNoStatus && tryErrored && wantsError {
+			status = r.fatalStatus()
 		}
 		// Whichever transfer won, the status is the try half's — and what
 		// produced it travels with it, the way a subshell's does: a try half

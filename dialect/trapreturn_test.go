@@ -4,7 +4,13 @@
 package dialect_test
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/blairham/sh/dialect/ash"
 	"github.com/blairham/sh/dialect/bash"
@@ -98,31 +104,113 @@ func trapReturnPresets() []struct {
 // the whole reason this one waits rather than signaling itself.
 //
 // "Before it can end" is an ordering and not a pause, and it is kept in both
-// directions with two FIFOs. The subshell opens `ready` before anything else,
-// so the signal cannot arrive before the subshell has started. The job sends
-// it only once that open has happened. The subshell then waits in `cat` on
-// `go`, which the job opens only after its `kill` has returned, so the
-// subshell cannot exit first. The first version used two sleeps, 0.1s and
-// 0.5s. Under load the gap between them closed, and ash's column wrote
-// `entry 0 exit 0` (#5570). A one-way FIFO was not enough here: the job's
-// `kill` beat the subshell's start, the action ran at the boundary between
-// commands, and its `return` left the job blocked for good.
+// directions with two FIFOs. The job waits on `ready` until the subshell has
+// started, and only then sends the signal. The subshell waits on `go`, which
+// the job writes only after its `kill` has returned, so the subshell cannot
+// exit first. The first version used two sleeps, 0.1s and 0.5s. Under load
+// the gap between them closed, and ash's column wrote `entry 0 exit 0`
+// (#5570).
+//
+// **Each waiter holds its FIFO open read-write, and the other side writes a
+// line**, rather than the waiter opening it for reading and the other side
+// opening it for writing and closing it at once (`: >ready`). That second
+// handshake hung the dash column on the macOS runner for the full ten minutes
+// (#5697). The goroutine dump showed the subshell already past `: >ready`
+// and waiting in `cat go`, with the job's `/bin/cat ready` still alive, so the
+// job never reached its `kill` and nobody ever wrote `go`. That a reader can
+// miss a writer that opened and closed while it was still waking up in open(2)
+// is an inference from the dump, not reproduced locally (0 stuck in 100 tries
+// on an idle machine). The new handshake has no such window: `exec 3<>` never
+// waits on a FIFO and keeps a reader open for as long as the waiter lives, so
+// the writer's open waits only until the waiter exists, and the line sits in
+// the FIFO until it is read, whoever got there first.
+//
+// `exec 3<>` and `<&3`, and not `head <>fifo`: ksh93u+ hangs on the second
+// spelling when the writer is a background job, and takes the first.
 //
 // The wait is in an external program and not a `read`, because ksh93 runs
 // the action at once when the signal interrupts a `read` in its own process
 // (`entry 0`). It waits for a child, as the others do. Measured 2026-10-03,
-// five runs each with this probe: the table above. BusyBox ash, in the
-// pinned alpine digest, gave `entry 4 exit 4` three times out of three.
+// five runs each with this probe under `env -i PATH=/usr/bin:/bin`: the table
+// above, and BusyBox ash 1.37.0 in the pinned alpine digest five of five.
 //
-// `/bin/cat` and `/usr/bin/mkfifo` by path because the harness runs with no
-// PATH of its own.
+// `/usr/bin/head` and `/usr/bin/mkfifo` by path because the harness runs with
+// no PATH of its own.
 const trapReturnProbe = "/usr/bin/mkfifo go ready\n" +
 	"f() { return $1; }\n" +
-	"h() { ( /bin/cat ready; kill -USR1 $$; : >go ) & ( : >ready; /bin/cat go; exit 4 ); return 7; }\n" +
+	trapReturnHandshake +
 	"trap 'printf \"entry %s \" \"$?\"; f 123; return' USR1\n" +
 	"h\n" +
 	"printf 'exit %s\\n' \"$?\"\n" +
 	"wait 2>/dev/null\n"
+
+// trapReturnHandshake is `h`: a job that signals the shell while the
+// foreground subshell is certainly running, and a subshell that cannot exit
+// until the signal has been sent. Shared by both probes in this file.
+const trapReturnHandshake = "h() { ( exec 3<>ready; /usr/bin/head -n 1 <&3 >/dev/null; kill -USR1 $$; echo x >go ) & " +
+	"( echo x >ready; exec 3<>go; /usr/bin/head -n 1 <&3 >/dev/null; exit 4 ); return 7; }\n"
+
+// trapReturnDeadline is how long the probe may take before the test gives up on
+// it. A run that works takes milliseconds; a handshake that cannot complete is
+// a test that fails here in seconds rather than one that holds the package
+// until `go test`'s ten-minute timeout (#5697).
+const trapReturnDeadline = 30 * time.Second
+
+// runTrapReturnProbe runs the probe with a deadline. On expiry it writes a line
+// into both FIFOs, which releases whichever side is still waiting, gives the
+// run a few seconds to finish so nothing it started is left behind, and fails.
+func runTrapReturnProbe(t *testing.T, p dialecttest.Preset, src string) string {
+	t.Helper()
+	dir := t.TempDir()
+	var buf lockedOutput
+	r := p.Runner(dialecttest.Base{Dir: dir, Stdout: &buf, Stderr: &buf})
+	f := p.ParseThrough(t, r, src)
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.Run(context.Background(), f)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("err %v: %s", err, buf.String())
+		}
+		return buf.String()
+	case <-time.After(trapReturnDeadline):
+	}
+	for _, name := range []string{"ready", "go"} {
+		if w, err := os.OpenFile(filepath.Join(dir, name), os.O_RDWR, 0); err == nil {
+			_, _ = w.WriteString("x\n")
+			_ = w.Close()
+		}
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+	}
+	t.Fatalf("the probe did not finish within %v; a FIFO handshake never completed. Output so far: %q",
+		trapReturnDeadline, buf.String())
+	return ""
+}
+
+// lockedOutput is the probe's stdout and stderr, written from the job's
+// goroutine and the shell's at once.
+type lockedOutput struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *lockedOutput) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedOutput) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 func TestEachDialectAnswersTheTrapReturnAxis(t *testing.T) {
 	for _, p := range trapReturnPresets() {
@@ -139,11 +227,7 @@ func TestEachDialectAnswersTheTrapReturnAxis(t *testing.T) {
 func TestTheTrapReturnStatusInEveryDialect(t *testing.T) {
 	for _, p := range trapReturnPresets() {
 		t.Run(p.Name, func(t *testing.T) {
-			out, _, err := p.Combined(t, dialecttest.Base{Dir: t.TempDir()}, trapReturnProbe)
-			if err != nil {
-				t.Fatalf("err %v: %s", err, out)
-			}
-			if out != p.want {
+			if out := runTrapReturnProbe(t, p.Preset, trapReturnProbe); out != p.want {
 				t.Errorf("wrote %q, want %q", out, p.want)
 			}
 		})
@@ -161,8 +245,11 @@ func TestTheTrapReturnStatusInEveryDialect(t *testing.T) {
 // answer 1 — the second case here — which is what says this belongs to the
 // trap and not to `return`.
 func TestHowFarTheTrapReturnReadingReaches(t *testing.T) {
-	const called = "inner() { /usr/bin/false; return; }\n" +
-		"h() { ( /bin/sleep 0.1; kill -USR1 $$ ) & ( /bin/sleep 0.5; exit 4 ); return 7; }\n" +
+	// The same handshake as the probe above, where this used two sleeps and
+	// was open to the reordering #5570 found there.
+	const called = "/usr/bin/mkfifo go ready\n" +
+		"inner() { /usr/bin/false; return; }\n" +
+		trapReturnHandshake +
 		"trap 'inner; printf \"inner=%s \" \"$?\"' USR1\n" +
 		"h\n" +
 		"printf 'exit %s' \"$?\"\n" +
@@ -174,18 +261,14 @@ func TestHowFarTheTrapReturnReadingReaches(t *testing.T) {
 			if p.reading == interp.TrapReturnIsZero {
 				want = "inner=0 exit 7"
 			}
-			out, _, err := p.Combined(t, dialecttest.Base{}, called)
-			if err != nil {
-				t.Fatalf("err %v: %s", err, out)
-			}
-			if out != want {
+			if out := runTrapReturnProbe(t, p.Preset, called); out != want {
 				t.Errorf("called from the action: wrote %q, want %q", out, want)
 			}
 			// And the same function with no trap anywhere is the ordinary
 			// reading in every column, which is the control: without it a
 			// shell that always answered the function's last command would
 			// pass the row above for four of the five.
-			out, _, err = p.Combined(t, dialecttest.Base{}, noTrap)
+			out, _, err := p.Combined(t, dialecttest.Base{}, noTrap)
 			if err != nil {
 				t.Fatalf("err %v: %s", err, out)
 			}

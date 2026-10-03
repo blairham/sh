@@ -3682,7 +3682,18 @@ func (r *Runner) clearAttributes(name string) {
 }
 
 // biExport marks a name for the environment, and assigns when given a value.
-func biExport(r *Runner, _ context.Context, args []string) int {
+func biExport(r *Runner, _ context.Context, args []string) (endStatus int) {
+	// The words as written, before the loop below narrows them: an operand
+	// it drops as no name still counts against the status.
+	written := args
+	defer func() {
+		// The status a restricted refusal of an operand ends the script on,
+		// for the operands this loop declares itself. See
+		// Runner.restrictedRefusalStatus.
+		if st, ok := r.restrictedRefusalStatus(written, declareFlags{export: true, global: true}, false); ok {
+			endStatus = st
+		}
+	}()
 	// `-f` and `-n` are offered only where the dialect has them. Where it
 	// does not, each goes through the ordinary unknown-option path and gets
 	// that shell's own refusal, which in two of them ends the script.
@@ -7512,7 +7523,15 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 // why this saves the outer value on a stack rather than creating a new
 // environment — there is only ever one set of variables, and `local` says
 // which of them to put back.
-func biLocal(r *Runner, _ context.Context, args []string) int {
+func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
+	written := args
+	defer func() {
+		// See biExport. Every operand of a `local` this loop declares is a
+		// binding of its own.
+		if st, ok := r.restrictedRefusalStatus(written, declareFlags{}, true); ok {
+			endStatus = st
+		}
+	}()
 	word := r.localDeclarationWord()
 	// Asked here rather than at the prefix, so that a shell which never
 	// finds this builtin through `command` is never asked — see biCommand.

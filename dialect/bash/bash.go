@@ -1475,6 +1475,8 @@ func Semantics() interp.Semantics {
 	// readonly here, so the readonly machinery refuses `local PATH` itself
 	// (`local: PATH: readonly variable`, the function going on) and takes
 	// `export PATH` at 0; the question is never asked.
+	// unanswered RestrictedRefusalEndsWithTheBuiltinsStatus: the same reason;
+	// no refusal of a frozen name ends a bash script.
 	// And none of the ten refusals ends the script: every one of them reports
 	// 1 — or an assignment's 0 — and the line after it runs. Measured with
 	// `echo tail` behind each.

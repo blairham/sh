@@ -187,6 +187,67 @@ func (r *Runner) restrictedDeclarationRefused(name string, f declareFlags, assig
 	return r.refuseReadonly(name, assignedByDeclaration)
 }
 
+// restrictedRefusalStatus is the status a script ends with when restricted
+// mode has refused one of a declaration builtin's operands, in the dialect
+// that takes it from the builtin and not from the refusal. The second result
+// reports whether there was such a refusal to answer for.
+//
+// Measured 2026-10-02 on zsh 5.9.2 under `-f`, `set -r` in front of each and
+// the shell's own exit status read (#5515):
+//
+//	export PATH                  0      PATH=/x (an assignment)     1
+//	export PATH=/x               0      ksh93u+'s `typeset PATH=/x` 1
+//	false; export PATH=/x        0
+//	export PATH nosuch           0      a name nothing holds
+//	export PATH SHELL            0      a second frozen name
+//	x=1; export PATH x           1      a name that holds a value
+//	export PATH 1bad             1      a word that is no name
+//	typeset PATH=/x HOME=2       1
+//	f(){ local PATH x }; f       0      a fresh local, whatever x holds
+//
+// So the refusal sets no failing status of its own. The script ends on the
+// status the builtin went on to reach: each later operand that is no name,
+// or that names a value outside a fresh local, fails, and nothing else does.
+// The earlier operands were declared normally and add nothing.
+//
+// What is not modeled: zsh *lists* a later operand that is already the
+// function's own local (`f(){ local HOME; local PATH HOME }` writes
+// `HOME=”`). Those operands score 0 here, which matches that row's status.
+// ksh93 ends at 1 for every row above, which is the readonly path's status
+// and needs nothing from here. See
+// Semantics.RestrictedRefusalEndsWithTheBuiltinsStatus.
+func (r *Runner) restrictedRefusalStatus(args []string, f declareFlags, local bool) (int, bool) {
+	refused := r.restrictedRefusedOperand
+	if refused == "" {
+		return 0, false
+	}
+	r.restrictedRefusedOperand = ""
+	if r.ctl != controlExit {
+		return 0, false
+	}
+	if !r.ask(r.sem().RestrictedRefusalEndsWithTheBuiltinsStatus,
+		"the status a restricted refusal in a declaration ends the script with") {
+		return 0, false
+	}
+	status, after := 0, false
+	for _, a := range args {
+		name, _, _, _ := declarationOperand(a)
+		if !after {
+			after = name == refused
+			continue
+		}
+		switch {
+		case !isNameLike(name):
+			status = 1
+		case r.restrictedFrozen[name]:
+		case !r.declarationMakesABinding(name, f, local) && r.nameIsSet(name):
+			status = 1
+		}
+	}
+	r.status = status
+	return status, true
+}
+
 // declarationMakesABinding reports whether a declaration of name would make a
 // binding of its own in the running function, without making it.
 //

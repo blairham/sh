@@ -17,7 +17,7 @@ func TestAnUnsetIndirectionNamesWhatItResolvedTo(t *testing.T) {
 		{`(n=(a b); print ${(P)n:?boom}); echo st=$?`, "zsh:1: a b: boom\nst=1\n"},
 		{`(setopt nounset; print ${(P)nope}); echo st=$?`, "zsh:1: nope: parameter not set\nst=1\n"},
 		// And it is the resolved name for that expansion only.
-		{`(n=(a b); print ${(P)n}.; setopt nounset; print $zz); echo st=$?`, ".\nzsh:1: zz: parameter not set\nst=1\n"},
+		{`(n=(a b); print ${(P)n}.; setopt nounset; print ${zz[1]}); echo st=$?`, ".\nzsh:1: zz[1]: parameter not set\nst=1\n"},
 		// The control: a resolved name that is set.
 		{`setopt nounset; n=(a b); a=1; print ${(P)n}`, "1\n"},
 	} {

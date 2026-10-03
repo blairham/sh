@@ -3,7 +3,10 @@
 
 package zsh_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Each letter on a declaration takes its own sign, not the last word's.
 // Measured 2026-10-03 on zsh 5.9.2 under `-fc` (#5673).
@@ -48,5 +51,16 @@ func TestALetterUnderBothSignsTakesTheLast(t *testing.T) {
 		if out, st := runZsh(t, t.TempDir(), c.src); out != c.want || st != 0 {
 			t.Errorf("%s\n got %q at %d, want %q", c.src, out, st, c.want)
 		}
+	}
+}
+
+// The tie letter's plus form is a refusal that ends the script, and it is the
+// letter's own sign that asks for it: `typeset +T -x s=Bc` refused the tie as
+// a minus one ("-T requires names of scalar and array") and ran on. Measured
+// 2026-10-03 on zsh 5.9.2 under `-fc` (#5673).
+func TestAPlusTieLetterBeforeAMinusWordIsRefused(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `typeset +T -x s=Bc; echo after`)
+	if !strings.Contains(out, "use unset to remove tied variables") || strings.Contains(out, "after") || st != 1 {
+		t.Errorf("got %q at %d, want the untie refusal ending the script at 1", out, st)
 	}
 }

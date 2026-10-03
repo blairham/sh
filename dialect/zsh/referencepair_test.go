@@ -15,6 +15,9 @@ func TestAPairOnAParameterReferenceIsARange(t *testing.T) {
 		{`print -r -- ${${(P)foo}[1,3]} ${${(P)bar[1,3]}[1,3]}`, "qui qui\n"},
 		{`print -r -- ${${(P)v}[2,3]} ${#${(P)v}[2,3]} ${${(P)w}[2,3]}`, "q r 2 q r\n"},
 		{`print -r -- ${${(P)foo}[(r)q*,3]}`, "qui\n"},
+		// And a reference that is itself a pair keeps its own range as the
+		// link in front of the outer subscript.
+		{`x='a[2,3]'; y='a[(r)q,3]'; print -r -- ${${(P)x}[2]} ${${(P)x}[1]} ${${(P)y}[2]}`, "r q r\n"},
 		// The control: one subscript was always right.
 		{`print -r -- ${${(P)foo}[2]}`, "u\n"},
 	} {

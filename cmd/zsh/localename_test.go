@@ -82,3 +82,21 @@ func TestAnExportedNamePastASCIIReachesNoChild(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A locale the machine has no data for is not in force: the shell stays in
+// the one it was in, which at startup is C. Measured 2026-10-02 on zsh 5.9.2
+// under `env -i PATH=/usr/bin:/bin`, on macOS and on glibc (#5503). The name
+// is one no machine has, so this holds wherever the front end can ask; it
+// would not on musl, which loads any name, and CI has no musl runner.
+func TestALocaleTheMachineLacksIsNotInForce(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"at startup", "x=é; print ${#x}; hähä=3 2>/dev/null; print $hähä", "2\nähä\n"},
+		{"after an installed locale", "x=é; LC_ALL=en_US.UTF-8; print ${#x}; LC_ALL=xx_XX.UTF-8; print ${#x}", "1\n1\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := runZshInLocale(t, "xx_XX.UTF-8", c.src); got != c.want {
+				t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+			}
+		})
+	}
+}

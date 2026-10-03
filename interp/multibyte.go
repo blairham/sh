@@ -66,6 +66,10 @@ var localeVariables = [...]string{"LC_ALL", "LC_CTYPE", "LANG"}
 // `RADIXCHAR`, `CRNCYSTR` and `YESEXPR` where they were, and each of the other
 // four moves its own keys and nothing else.
 func (r *Runner) LocaleFor(category string) string {
+	if category == "LC_CTYPE" && r.LocaleCharset != nil {
+		name, _ := r.ctypeInForce()
+		return name
+	}
 	for _, name := range [...]string{"LC_ALL", category, "LANG"} {
 		if v, _ := r.getVar(name); v != "" {
 			return v
@@ -150,8 +154,11 @@ const (
 //
 // # A locale the platform does not have
 //
-// The encoding is read off the variable, not off the platform, and that is
-// deliberate — see the note on the run above. Where the two part company is a
+// This section is the library's reading, with Runner.LocaleCharset nil: the
+// encoding is read off the variable, not off the platform. A front end that is
+// a shell fills the hook in and asks the platform instead (#5503), which is
+// what localeloaded.go describes; the measurement below is why. Where the two
+// readings part company is a
 // machine whose locale set does not hold the name: bash calls setlocale, it
 // fails, bash warns and stays in C, and we carry on reading the name. Measured
 // 2026-09-23 in `debian:sid-slim` at the digest the suite is graded at, with
@@ -173,6 +180,16 @@ const (
 // ksh93 and zsh refuse it and stay in C. Refusing it is ksh93's and zsh's
 // answer and also dash's, and it is the reading that needs no guess.
 func (r *Runner) localeEncoding() localeEncoding {
+	if r.LocaleCharset != nil {
+		name, codeset := r.ctypeInForce()
+		switch {
+		case name == "":
+			return localeUnnamed
+		case codesetIsUTF8("." + codeset):
+			return localeUTF8
+		}
+		return localeSingleByte
+	}
 	for _, name := range localeVariables {
 		v, _ := r.getVar(name)
 		if v == "" {
@@ -242,6 +259,10 @@ func codesetIsUTF8(locale string) bool {
 func (r *Runner) localeIsC() bool {
 	if r.localeEncoding() == localeUnnamed {
 		return !r.unsetLocaleIsUnicodeAware()
+	}
+	if r.LocaleCharset != nil {
+		name, _ := r.ctypeInForce()
+		return name == "C" || name == "POSIX"
 	}
 	for _, name := range localeVariables {
 		if v, ok := r.getVar(name); ok && v != "" {

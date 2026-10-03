@@ -93,7 +93,7 @@ func (r *Runner) substituteModifier(value, rest string, global bool, e *syntax.P
 			return out, true
 		}
 	}
-	return substituteLiteral(value, pattern, with, global), true
+	return r.substituteReplacement(value, pattern, with, global), true
 }
 
 // substitutePattern is `:s` under one shell's `histsubstpattern`, where the
@@ -144,7 +144,7 @@ func (r *Runner) repeatSubstitution(value string, global bool, _ *syntax.ParamEx
 	if !r.lastSubst.set {
 		return value, true
 	}
-	return substituteLiteral(value, r.lastSubst.pattern, r.lastSubst.with, global), true
+	return r.substituteReplacement(value, r.lastSubst.pattern, r.lastSubst.with, global), true
 }
 
 // scanDelimited reads up to the next unescaped delim, answering the field as
@@ -287,4 +287,150 @@ func withoutQuotes(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// substituteReplacement is substituteLiteral with the replacement's
+// expansions run, which is what the modifier does to a replacement written in
+// an unquoted parameter expansion.
+//
+// The replacement is not expanded where it was written. It is spliced into
+// the value first, `&` and all, and only then are its `$`s expanded, against
+// the text that now follows them. So a bare name reads on into the value.
+// Measured 2026-10-03 on zsh 5.9.2 under `-f -c`, with `b=Q`:
+//
+//	s=xa.y; ${s:s/a/$b/}            xQ.y
+//	s=xay;  ${s:s/a/$b/}            x        the name read is `by`
+//	s=xay;  by=W; ${s:s/a/$b/}      xW
+//	s=xay;  ${s:s/a/${b}/}          xQy
+//	s=xa2y; set -- … l; ${s:s/a/$1/}  xly    `$12`
+//	s=xa1y; set -- P; ${s:s/a/$/}   xPy      and a lone `$` too
+//	s=xa.y; ${s:s/a/$/}             x$.y     but not before a `.`
+//	s=xa.y; ${s:s/a/$b&/}           x.y      the `&` is `a` first: `$ba`
+//	s=xa.y; b='&'; ${s:s/a/$b/}     x&.y     an expanded `&` is text
+//	s=xay;  ${s:s/a/$(echo C)/}     xCy
+//	s=xay;  ${s:s/a/'q'/}  ${s:s/a/x"$b"x/}  xqy  xx   the quotes go
+//	s=xay;  ${s:s/a/\$b/}  ${s:s/a/'$b'/}  x$by  x$by  and protect
+//	s='xa$c'; c=Z; ${s:s/a/${b}/}   xQ$c     the value's own `$` is text
+//	s=xa.y; ${s:s/a/$b/}; b=R; ${s:&}  xQ.y, xR.y  expanded when used
+//
+// **Only where the expansion is the whole word.** With anything else in the
+// word, a `.` or even `""` beside it, nothing is expanded and the quotes
+// still go: `${s:s/a/$b/}.` is `x$b.y.` and `${s:s/a/'q'/}.` is `xqy.`. In a
+// double-quoted expansion nothing is expanded and only the double quotes go:
+// `"${s:s/a/$b/}"` is `x$by` and `"${s:s/a/"q"/}"` is `xqy`, where
+// `"${s:s/a/'q'/}"` keeps its `'q'`. A glob qualifier's `:s` keeps its own
+// reading.
+func (r *Runner) substituteReplacement(value, pattern, with string, global bool) string {
+	if pattern == "" || r.modifierTextEscaped || !strings.ContainsAny(with, `$'"`) {
+		return substituteLiteral(value, pattern, with, global)
+	}
+	quoted := r.inDoubleQuotedSpan()
+	expand := !quoted && r.expansionIsTheWholeWord()
+	n := 1
+	if global {
+		n = -1
+	}
+	// The spliced text as source for a double-quoted word: every byte is
+	// escaped where the quotes would read it, except a `$` the replacement
+	// wrote, which is left to begin an expansion.
+	var src strings.Builder
+	literal := func(c byte) {
+		if c == '$' || c == '\\' || c == '"' || c == '`' {
+			src.WriteByte('\\')
+		}
+		src.WriteByte(c)
+	}
+	literals := func(t string) {
+		for i := 0; i < len(t); i++ {
+			literal(t[i])
+		}
+	}
+	rest := value
+	for n != 0 {
+		i := strings.Index(rest, pattern)
+		if i < 0 {
+			break
+		}
+		literals(rest[:i])
+		r.spliceReplacement(with, pattern, quoted, expand, literal, literals, &src)
+		rest = rest[i+len(pattern):]
+		n--
+	}
+	literals(rest)
+	if !expand {
+		return unescapeSpliced(src.String())
+	}
+	f, err := syntax.Parse(`"`+src.String()+`"`, r.dialect())
+	if err != nil || len(f.Stmts) != 1 {
+		return substituteLiteral(value, pattern, withoutQuotes(with), global)
+	}
+	p, ok := f.Stmts[0].Expr.(*syntax.Pipeline)
+	if !ok || len(p.Cmds) != 1 {
+		return substituteLiteral(value, pattern, withoutQuotes(with), global)
+	}
+	c, ok := p.Cmds[0].(*syntax.SimpleCmd)
+	if !ok || len(c.Args) != 1 {
+		return substituteLiteral(value, pattern, withoutQuotes(with), global)
+	}
+	return r.joinWord(c.Args[0])
+}
+
+// spliceReplacement writes one copy of the replacement into src: `&` as the
+// matched text, a backslash protecting the byte after it, a single-quoted
+// run as text, double quotes dropped, and an unquoted `$` left to expand
+// unless the whole expansion is double-quoted.
+func (r *Runner) spliceReplacement(with, matched string, quoted, expand bool, literal func(byte), literals func(string), src *strings.Builder) {
+	for i := 0; i < len(with); i++ {
+		c := with[i]
+		switch {
+		case c == '\\' && i+1 < len(with):
+			i++
+			literal(with[i])
+		case c == '&':
+			literals(matched)
+		case c == '"':
+		case c == '\'' && !quoted:
+			j := strings.IndexByte(with[i+1:], '\'')
+			if j < 0 {
+				literals(with[i+1:])
+				return
+			}
+			literals(with[i+1 : i+1+j])
+			i += j + 1
+		case c == '$' && expand:
+			src.WriteByte('$')
+		default:
+			literal(c)
+		}
+	}
+}
+
+// unescapeSpliced takes the escapes spliceReplacement wrote back out, for an
+// expansion where nothing is expanded.
+func unescapeSpliced(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			i++
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// expansionIsTheWholeWord reports whether the expansion being run is the
+// only thing in its word.
+func (r *Runner) expansionIsTheWholeWord() bool {
+	w := r.expandingWord
+	return w != nil && len(w.Spans) == 1
+}
+
+// inDoubleQuotedSpan reports whether the expansion being run was written
+// inside double quotes.
+func (r *Runner) inDoubleQuotedSpan() bool {
+	w := r.expandingWord
+	if w == nil || r.expandingSpan < 0 || r.expandingSpan >= len(w.Spans) {
+		return false
+	}
+	return w.Spans[r.expandingSpan].Quoting == syntax.DoubleQuoted
 }

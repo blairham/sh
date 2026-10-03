@@ -196,7 +196,13 @@ func (r *Runner) EditingMode() EditingMode {
 	if r.editingMode != editingModeUnchosen {
 		return r.editingMode
 	}
-	if r.Interactive && r.sem().InteractiveSelectsEmacs == Yes {
+	if (r.Interactive || r.atInvocation) && r.sem().InteractiveSelectsEmacs == Yes {
+		// And while the invocation's own words are being read, which is
+		// before the shell has decided it is not interactive: measured
+		// 2026-10-03 on bash 5.3.20, `bash -co` lists emacs on with
+		// standard input on /dev/null, `bash +o emacs -co` lists it off and
+		// `bash -o vi -co` lists vi — while `bash -c 'set -o'` from the
+		// same place lists both off.
 		return EditingModeEmacs
 	}
 	return EditingModeNone
@@ -1407,6 +1413,16 @@ func (r *Runner) ListShellOptions(reissuable bool) {
 		return
 	}
 	r.shellOptionListing(r, reissuable)
+}
+
+// ListSetOptions writes the `set -o` listing, or the `set +o` one where
+// reissuable is set, for the front end: one dialect reads an invocation's
+// `-o` with no word after it as exactly that request. See
+// Semantics.InvocationBareOListsTheOptions.
+func (r *Runner) ListSetOptions(reissuable bool) {
+	r.atInvocation = true
+	defer func() { r.atInvocation = false }()
+	r.listOptions(reissuable)
 }
 
 // ApplyNamedOption is SetNamedOption from inside a running script: a

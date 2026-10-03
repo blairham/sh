@@ -3713,6 +3713,18 @@ func Semantics() interp.Semantics {
 	// among them, so a `--name` word here is a name bash looks up in a table
 	// of its own rather than in the option namespace.
 	s.LongOptionNamesASetOption = interp.No
+	// The two of those seventeen that are `set -o` names under another
+	// spelling. Measured 2026-10-03 on 5.3.20: `--posix` is posix on and a
+	// later `set +o posix` turns it off, and `--verbose` answers `hvBc`.
+	s.LongOptionsNamingSetOptions = "posix verbose"
+	// And `-o` with nothing behind it is the listing, written in the order
+	// the bundle was read — `bash -cecho hi` lists errexit and hashall on and
+	// then refuses the space. Measured 2026-10-03 on 5.3.20.
+	s.InvocationBareOListsTheOptions = interp.Yes
+	// Which is refused at 1 and with no usage block, because errexit was
+	// already on when the space was read: `bash -e -q` is the same, `bash -q
+	// -e` is the usage error at 2. Measured 2026-10-03 on 5.3.20.
+	s.InvocationLetterRefusedUnderErrexitFails = interp.Yes
 	// unanswered LongOptionNameIgnoresHyphens: the fold is a rule of the
 	// `--name` spelling, and the axis above says this shell has no such
 	// spelling. There is no site here to put the question to.

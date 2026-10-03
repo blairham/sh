@@ -5329,6 +5329,12 @@ type Diagnostics struct {
 	// and a serviceable default for a shell that has named none.
 	InvocationMissingOptionArgument string
 
+	// InvocationMissingOptionArgumentStatus is the status that refusal exits
+	// with. Zero means 2, the usage status the other columns share; zsh's is
+	// 1, measured 2026-10-03 for both `zsh -c` and `zsh -o` with nothing
+	// behind them, against 2 from bash 5.3.20, ksh93u+ and dash.
+	InvocationMissingOptionArgumentStatus int
+
 	// InvocationUsage is the shell's own usage block, written under a `set`
 	// option the invocation was refused. Two verbs: the name the shell was
 	// invoked by, and that name's last path element.
@@ -10694,6 +10700,12 @@ func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
 // vector. See Diagnostics.InvocationMissingOptionArgument.
 func (d Diagnostics) MissingOptionArgument(spelling string) string {
 	return Wording(d.InvocationMissingOptionArgument, "%[1]s requires an argument", spelling)
+}
+
+// MissingOptionArgumentStatus is the status MissingOptionArgument's refusal
+// exits with. See Diagnostics.InvocationMissingOptionArgumentStatus.
+func (d Diagnostics) MissingOptionArgumentStatus() int {
+	return orDefault(d.InvocationMissingOptionArgumentStatus, 2)
 }
 
 // ScriptOperandNamesItself answers whether a script operand that would not run

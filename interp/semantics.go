@@ -15812,6 +15812,55 @@ type Semantics struct {
 	// axes were one until zsh was asked (#3129).
 	LongOptionNamesASetOption Answer
 
+	// LongOptionsNamingSetOptions is the handful of `set -o` names a shell
+	// also takes as a `--name` word at its invocation, space-separated, for
+	// a shell that has such words without having the whole second spelling
+	// LongOptionNamesASetOption describes. Each is the name turned on, and
+	// nothing else about it is read: there is no `--noname`.
+	//
+	// bash's are `posix` and `verbose`, both listed among the GNU long
+	// options in its own usage block. Measured 2026-10-03 on bash 5.3.20:
+	// `bash --posix -c 'shopt -o posix'` reports it on and a later `set +o
+	// posix` turns it off again, and `bash --verbose -c 'echo $-'` echoes
+	// the line and answers `hvBc`. Ours refused both as invalid options,
+	// usage block and all. `--restricted` is in the same block and is not
+	// here: it is a mode with its own refusals, not a name to move.
+	//
+	// Empty is none, which is every other column.
+	LongOptionsNamingSetOptions string
+
+	// InvocationBareOListsTheOptions reads an invocation's `-o` with no word
+	// behind it as the `set -o` listing, written to standard output before
+	// the shell goes on, rather than as an option missing its argument.
+	//
+	// Yes in bash, measured 2026-10-03 on 5.3.20: `bash -ex -o` writes the
+	// table at 0, `bash -co` writes it and *then* complains that `-c` has no
+	// command string, and the listing reads the state the letters before it
+	// left — `-cecho hi` lists errexit and hashall on, `e` and `h` having
+	// been read before the `o`. No in zsh, which refuses with `string
+	// expected after -o` at 1. ksh93 and dash list too, and are unanswered
+	// here only because nothing has needed them yet; unanswered is the
+	// refusal this front end always gave.
+	InvocationBareOListsTheOptions Answer
+
+	// InvocationLetterRefusedUnderErrexitFails answers an invocation option
+	// letter the shell does not have, read while errexit is already on, as an
+	// ordinary failure — status 1, the sentence alone, and no usage block —
+	// rather than as the usage error the same letter is otherwise.
+	//
+	// Yes in bash, measured 2026-10-03 on 5.3.20 with `-c :` behind each:
+	//
+	//	-q -e            -q: invalid option, usage block, status 2
+	//	-e -q   -eq      -q: invalid option, nothing else, status 1
+	//	-o errexit -q    the same, status 1
+	//	-e -o nosuch     nosuch: invalid option name, status 2
+	//
+	// So it is the letter's refusal and errexit's order that decide it, and a
+	// refused *name* is untouched. `-cecho hi` is where it shows: the space
+	// is refused after `e` was read, and bash exits 1 having written one line.
+	// Unanswered is the usage error, which is every other column.
+	InvocationLetterRefusedUnderErrexitFails Answer
+
 	// SetLongOptionWord is what the `set` builtin does with a word that
 	// begins with `--` and is not a bare `--`.
 	//

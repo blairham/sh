@@ -271,6 +271,57 @@ Measured and not modeled: `bash -e /nope/x.sh` exits **1** where the same
 invocation without the letter exits 127, so errexit renumbers a script that
 would not open.
 
+### A missing command string is judged after the options too
+
+The same rule reaches `-c` with no operand behind it. Measured 2026-10-03 with
+standard input on `/dev/null`:
+
+| written | bash 5.3.20 | zsh 5.9.2 | ksh93u+ | dash |
+| --- | --- | --- | --- | --- |
+| `-c` | the operand, 2 | the operand, **1** | the operand, 2 | the operand, 2 |
+| `-cq` | the letter, 2 | the letter, 1 | the letter, 2 | the letter, 2 |
+| `-c -o nosuch` | the option, 2 | the option, 1 | the option, 2 | the option, 2 |
+
+So the missing string is carried the way a script that will not open is, and
+raised at the same point. zsh's 1 is
+`Diagnostics.InvocationMissingOptionArgumentStatus`, and it holds for `zsh -o`
+with nothing behind it as well.
+
+### `-o` with nothing behind it, and `-cecho hi`
+
+`bash -co` writes the whole `set -o` table to standard output and *then* says
+`-c: option requires an argument` at 2; `bash -ex -o` writes the table and
+runs at 0. The table reads the state the bundle has reached — `bash -cecho hi`
+lists errexit and hashall on, because `e` and `h` were read before the `o` —
+and emacs reads on in it, because the shell has not yet decided it is not
+interactive: `bash -c 'set -o'` from the same place lists emacs off, `bash +o
+emacs -co` lists it off and `bash -o vi -co` lists vi. zsh refuses the bare
+letter with `string expected after -o` at 1. ksh93, dash and BusyBox ash list
+too, from states that are not the ones a script sees (ksh93 has braceexpand
+and trackall off there; dash and ash show errexit and noglob on with neither
+asked for), so they are left unanswered and refused. See
+`Semantics.InvocationBareOListsTheOptions`.
+
+The rest of `-cecho hi` is a refusal of the space after the `o`, and in bash
+it is not the usage error a refused letter usually is. With errexit already on
+when the letter is read, the letter is an ordinary failure:
+
+    -q -e -c :        -q: invalid option, usage block, status 2
+    -e -q -c :        -q: invalid option, nothing else, status 1
+    -o errexit -q     the same, status 1
+    -e -o nosuch      nosuch: invalid option name, status 2
+
+zsh, ksh93, dash and ash answer `-e -q` exactly as they answer `-q`. See
+`Semantics.InvocationLetterRefusedUnderErrexitFails`.
+
+### bash's `--posix` and `--verbose`
+
+Two of bash's seventeen GNU long options are `set -o` names under another
+spelling: `bash --posix -c 'shopt -o posix'` reports it on, a later `set +o
+posix` turns it off, and `bash --verbose -c 'echo $-'` echoes the line and
+answers `hvBc`. Measured 2026-10-03 on 5.3.20. See
+`Semantics.LongOptionsNamingSetOptions`.
+
 ### `--help`
 
 bash is the one column in the panel whose `--help` this front end had to

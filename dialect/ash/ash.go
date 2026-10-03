@@ -1188,6 +1188,15 @@ func Semantics() interp.Semantics {
 	// also the probe that showed the seam above is the *spelling* refused
 	// rather than the `-o` route (#2629).
 	s.SetOLetterAttachesItsName = interp.No
+	// unanswered InvocationBareOListsTheOptions: it does list — `ash -o` with
+	// standard input on /dev/null writes the table at 0 — but the states the
+	// table shows are not the shell's: errexit, noglob and ignoreeof read on
+	// with none of them asked for, where `ash -c 'set -o'` lists them off.
+	// Measured 2026-10-03. Nothing here models a listing of state the shell
+	// does not hold, so the front end goes on refusing the bare letter.
+	// `ash -e -q` is `illegal option -q` at 2, exactly as `ash -q` is.
+	// Measured 2026-10-03 in the pinned BusyBox image.
+	s.InvocationLetterRefusedUnderErrexitFails = interp.No
 	// Measured 2026-09-16 on BusyBox 1.37.0: `sh --xtrace -c 'echo ran'`
 	// prints `ran` untraced at 0, and so does `--zzznosuch`. The word is
 	// neither read as a name nor refused — it is dropped — so the answer to

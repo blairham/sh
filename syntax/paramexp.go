@@ -2118,9 +2118,19 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos, q Quoting) 
 	case ParamReplace, ParamElementReplace:
 		// The separator is an unquoted slash, so a slash inside quotes or
 		// after a backslash belongs to the pattern.
-		if i := indexUnquoted(rest, '/', p.dialect.DollarSingleQuote); i >= 0 {
-			e.Arg = p.patternFrom(rest[:i], start)
-			e.Arg2 = p.wordFrom(rest[i+1:], start, Unquoted)
+		i := indexUnquoted(rest, '/', p.dialect.DollarSingleQuote)
+		if p.dialect.ReplacementSlashIgnoresQuotes {
+			i = indexUnescaped(rest, '/')
+		}
+		if i >= 0 {
+			pattern, replacement := rest[:i], rest[i+1:]
+			if p.dialect.ReplacementSlashIgnoresQuotes {
+				// The cut can fall inside a quote. See the field.
+				ds := p.dialect.DollarSingleQuote
+				pattern, replacement = quoteLeftOpenIsText(pattern, ds), closeQuoteLeftOpen(replacement, ds)
+			}
+			e.Arg = p.patternFrom(pattern, start)
+			e.Arg2 = p.wordFrom(replacement, start, Unquoted)
 			// And the same text read as content of the quoting around the
 			// expansion, where that could come to something else. See
 			// ParamExpr.Arg2Enclosed.
@@ -2792,4 +2802,60 @@ func markInsideASubscript(w *Word, quoted bool) {
 			s.Param.IndexFlags.PatternSpendsAnEscapedQuote = true
 		}
 	}
+}
+
+// indexUnescaped is the first c in s that no backslash protects.
+func indexUnescaped(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case c:
+			return i
+		}
+	}
+	return -1
+}
+
+// openQuoteAt is the offset of a quote in s that nothing closes, or -1. A
+// `$'…'` is one construct, read whole where the dialect has it, so its `\'`
+// closes nothing.
+func openQuoteAt(s string, dollarSingle bool) int {
+	open := -1
+	var quote byte
+	for i := 0; i < len(s); i++ {
+		switch ch := s[i]; {
+		case ch == '\\' && quote != '\'':
+			i++
+		case quote == 0 && dollarSingle && ch == '$' && i+1 < len(s) && s[i+1] == '\'':
+			if end := endOfDollarSingle(s, i+1); end < len(s) {
+				i = end
+			} else {
+				return i + 1
+			}
+		case quote != 0:
+			if ch == quote {
+				quote, open = 0, -1
+			}
+		case ch == '\'' || ch == '"':
+			quote, open = ch, i
+		}
+	}
+	return open
+}
+
+// quoteLeftOpenIsText escapes a quote nothing closes, so it is the character.
+func quoteLeftOpenIsText(s string, dollarSingle bool) string {
+	if i := openQuoteAt(s, dollarSingle); i >= 0 {
+		return s[:i] + "\\" + s[i:]
+	}
+	return s
+}
+
+// closeQuoteLeftOpen closes a quote nothing closes at the end of s.
+func closeQuoteLeftOpen(s string, dollarSingle bool) string {
+	if i := openQuoteAt(s, dollarSingle); i >= 0 {
+		return s + string(s[i])
+	}
+	return s
 }

@@ -3426,6 +3426,23 @@ type Dialect struct {
 	// where without the option the second joins them.
 	QuotedNewlineIsUnmatched bool
 
+	// ReplacementSlashIgnoresQuotes finds the `/` that ends a replacement's
+	// pattern without regard to quotes, a backslash being the only thing that
+	// protects one. Each half is then read with whatever quote it was cut
+	// in the middle of: an unclosed quote in the pattern is that character,
+	// and one in the replacement runs to its end. One shell's reading, under
+	// every emulation. Measured 2026-10-03 on zsh 5.9.2 under `-f`:
+	//
+	//	x=a/b;    ${x//'/'/X}  ${x//"/"/X}  ${x//$'/'/X}   a/b, no match
+	//	x="a'b";  ${x//'/'/X}                              a/Xb
+	//	x='a"b';  ${x//"/"/X}                              a/Xb
+	//	x=a/b;    ${x//\//X}                               aXb
+	//	x=ab;     ${x//b/'/'}                              a/
+	//
+	// bash 5.3 and ksh93u+ answer aXb for the first row. The test zsh's own
+	// suite marks as failing (users/28784) is this reading (#5151).
+	ReplacementSlashIgnoresQuotes bool
+
 	// ArithSubstScanIgnoresQuoting is the same question at the `$((`
 	// fallback: whether the scan that decides between arithmetic and a
 	// command substitution holding a subshell sees a `)` written inside
